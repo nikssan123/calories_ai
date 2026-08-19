@@ -99,7 +99,14 @@ describe('buildProgress', () => {
     expect(progress.weight.current_kg).toBeNull();
     expect(progress.weight.change_7d_kg).toBeNull();
     expect(progress.protein.days_logged).toBe(0);
-    expect(progress.exercise).toEqual({ sessions: 0, total_kcal: 0 });
+    expect(progress.exercise.sessions).toBe(0);
+    expect(progress.exercise.total_kcal).toBe(0);
+    // A rest day is a real zero, so the burn series is filled rather than null.
+    expect(progress.exercise.series).toHaveLength(30);
+    expect(progress.exercise.series.every((p) => p.value === 0)).toBe(true);
+    // Food is the opposite: no log is missing data, not a zero-calorie day.
+    expect(progress.calories.series.every((p) => p.value === null)).toBe(true);
+    expect(progress.protein.series.every((p) => p.value === null)).toBe(true);
   });
 
   it('averages only the days that were logged', async () => {
@@ -156,6 +163,12 @@ describe('buildProgress', () => {
       ctx: user.ctx,
     });
     const progress = await buildProgress(user.id, user.ctx, 30);
-    expect(progress.exercise).toEqual({ sessions: 1, total_kcal: 250 });
+    expect(progress.exercise.sessions).toBe(1);
+    expect(progress.exercise.total_kcal).toBe(250);
+    expect(progress.exercise.series.at(-1)).toEqual({
+      local_date: today,
+      value: 250,
+      average: expect.any(Number),
+    });
   });
 });

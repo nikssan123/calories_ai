@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import type { ChatAction, ChatMessage, DaySummary, OnboardingState } from '@ct/shared';
 import { api } from '@/lib/api';
+import { ChatActionCard } from '@/components/ChatCard';
 import { Composer, type ComposerPayload } from '@/components/Composer';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/components/AuthGate';
@@ -55,14 +56,7 @@ export default function JournalPage() {
         ]);
         if (cancelled) return;
         setOnboarding(state);
-        setBubbles(
-          history.messages.map((m: ChatMessage) => ({
-            key: m.id,
-            role: m.role,
-            content: m.content,
-            photoUrl: m.photo_id ? api.photoUrl(m.photo_id) : undefined,
-          })),
-        );
+        setBubbles(history.messages.map(toBubble));
         setDay(today);
       } catch (e) {
         if (!cancelled) toast.error((e as Error).message);
@@ -223,6 +217,21 @@ export default function JournalPage() {
 }
 
 /**
+ * A stored message as a bubble. `actions` comes back from the server with the
+ * turn, so a reopened conversation still shows the cards it was answered with
+ * rather than degrading to plain text.
+ */
+function toBubble(message: ChatMessage): Bubble {
+  return {
+    key: message.id,
+    role: message.role,
+    content: message.content,
+    photoUrl: message.photo_id ? api.photoUrl(message.photo_id) : undefined,
+    actions: message.actions,
+  };
+}
+
+/**
  * Re-reads the conversation after a send failed at the transport. Returns the
  * server's version of it when this turn is present there, and null when the
  * request really never arrived.
@@ -234,12 +243,7 @@ async function reconcile(
     const [history, today] = await Promise.all([api.history(40), api.day()]);
     if (!history.messages.some((m) => !known.has(m.id))) return null;
     return {
-      bubbles: history.messages.map((m: ChatMessage) => ({
-        key: m.id,
-        role: m.role,
-        content: m.content,
-        photoUrl: m.photo_id ? api.photoUrl(m.photo_id) : undefined,
-      })),
+      bubbles: history.messages.map(toBubble),
       day: today,
     };
   } catch {
@@ -374,23 +378,7 @@ function Bubble({ bubble }: { bubble: Bubble }) {
       {bubble.actions && bubble.actions.length > 0 && (
         <div className="flex flex-col gap-1.5">
           {bubble.actions.map((action, i) => (
-            <div
-              key={`${action.entry_id}-${i}`}
-              className="bg-card flex items-center gap-2 rounded-xl px-3 py-2"
-            >
-              <span
-                className="size-1.5 shrink-0 rounded-full"
-                style={{
-                  background:
-                    action.kind === 'exercise_logged'
-                      ? 'var(--exercise)'
-                      : action.kind === 'food_deleted'
-                        ? 'var(--destructive)'
-                        : 'var(--calories)',
-                }}
-              />
-              <span className="text-footnote">{action.summary}</span>
-            </div>
+            <ChatActionCard key={`${action.entry_id ?? action.kind}-${i}`} action={action} />
           ))}
         </div>
       )}

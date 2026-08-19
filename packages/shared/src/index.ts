@@ -184,8 +184,91 @@ export const OnboardingState = z.object({
 });
 export type OnboardingState = z.infer<typeof OnboardingState>;
 
+/** Declared here rather than with Progress: the chat cards below build on it. */
+export const TrendPoint = z.object({
+  local_date: z.string(),
+  value: z.number().nullable(),
+  /** 7-day rolling mean; the number §12 says to lead with. */
+  average: z.number().nullable(),
+});
+export type TrendPoint = z.infer<typeof TrendPoint>;
+
 export const ChatRole = z.enum(['user', 'assistant']);
 export type ChatRole = z.infer<typeof ChatRole>;
+
+/**
+ * The visual half of a turn.
+ *
+ * Every number a card displays is put there by the server from the database —
+ * the model chooses *what* to show and never *what it says*. A model that could
+ * fill in the points of its own chart could draw a weight loss that did not
+ * happen, and a chart is believed far more readily than a sentence.
+ */
+export const ChatCard = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('food'),
+    entry_id: z.string().uuid(),
+    meal: Meal,
+    description: z.string(),
+    confidence: Confidence,
+    items: z.array(z.object({ name: z.string(), quantity: z.string().nullable() })),
+    ...Nutrition.shape,
+  }),
+  z.object({
+    type: z.literal('exercise'),
+    entry_id: z.string().uuid(),
+    description: z.string(),
+    confidence: Confidence,
+    kcal_burned: z.number(),
+    duration_min: z.number().nullable(),
+    distance_km: z.number().nullable(),
+  }),
+  z.object({
+    type: z.literal('weight'),
+    weight_kg: z.number(),
+    change_7d_kg: z.number().nullable(),
+    series: z.array(TrendPoint),
+  }),
+  /** Requested by the model via `show_chart`; the series is read from Postgres. */
+  z.object({
+    type: z.literal('trend'),
+    metric: z.enum(['calories', 'protein', 'weight', 'exercise']),
+    title: z.string(),
+    caption: z.string().nullable(),
+    unit: z.string(),
+    /** Reference line — the target for the metric, where it has one. */
+    target: z.number().nullable(),
+    average: z.number().nullable(),
+    series: z.array(TrendPoint),
+  }),
+  /** Requested by the model via `show_day`. A day at a glance, mid-conversation. */
+  z.object({
+    type: z.literal('day'),
+    local_date: z.string(),
+    caption: z.string().nullable(),
+    consumed: Nutrition,
+    targets: Targets,
+    burned_kcal: z.number(),
+  }),
+]);
+export type ChatCard = z.infer<typeof ChatCard>;
+
+/** What the model actually did this turn, so the UI can render cards instead of prose. */
+export const ChatAction = z.object({
+  kind: z.enum([
+    'food_logged',
+    'food_updated',
+    'food_deleted',
+    'exercise_logged',
+    'weight_logged',
+    'card_shown',
+  ]),
+  entry_id: z.string().uuid().nullable(),
+  summary: z.string(),
+  /** Absent for actions with nothing to draw — a deletion is a line of text. */
+  card: ChatCard.nullable().default(null),
+});
+export type ChatAction = z.infer<typeof ChatAction>;
 
 export const ChatMessage = z.object({
   id: z.string().uuid(),
@@ -193,19 +276,17 @@ export const ChatMessage = z.object({
   content: z.string(),
   photo_id: z.string().uuid().nullable(),
   created_at: z.string(),
+  /**
+   * Stored with the message rather than returned only live, so reopening the app
+   * does not silently downgrade a conversation full of cards into plain text.
+   */
+  actions: z.array(ChatAction).default([]),
 });
 export type ChatMessage = z.infer<typeof ChatMessage>;
 
-/** What the model actually did this turn, so the UI can render cards instead of prose. */
-export const ChatAction = z.object({
-  kind: z.enum(['food_logged', 'food_updated', 'food_deleted', 'exercise_logged', 'weight_logged']),
-  entry_id: z.string().uuid().nullable(),
-  summary: z.string(),
-});
-export type ChatAction = z.infer<typeof ChatAction>;
-
 export const ChatResponse = z.object({
   message: ChatMessage,
+  /** The same array as `message.actions`, kept for callers holding the response. */
   actions: z.array(ChatAction),
   /** Always echoed back so the dashboard updates without a second round trip. */
   day: DaySummary,
@@ -219,14 +300,6 @@ export const ChatRequest = z.object({
   photo_media_type: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif']).optional(),
 });
 export type ChatRequest = z.infer<typeof ChatRequest>;
-
-export const TrendPoint = z.object({
-  local_date: z.string(),
-  value: z.number().nullable(),
-  /** 7-day rolling mean; the number §12 says to lead with. */
-  average: z.number().nullable(),
-});
-export type TrendPoint = z.infer<typeof TrendPoint>;
 
 export const Progress = z.object({
   weight: z.object({
@@ -247,20 +320,16 @@ export const Progress = z.object({
     target_g: z.number(),
     days_target_hit: z.number(),
     days_logged: z.number(),
+    series: z.array(TrendPoint),
   }),
-  exercise: z.object({ sessions: z.number(), total_kcal: z.number() }),
+  exercise: z.object({
+    sessions: z.number(),
+    total_kcal: z.number(),
+    /** Per-day burn. A rest day is 0 here, not null — it is data, not a gap. */
+    series: z.array(TrendPoint),
+  }),
 });
 export type Progress = z.infer<typeof Progress>;
-
-/** Rounds an estimate the way §5 asks for: useful, not falsely precise. */
-export function roundEstimate(kcal: number): number {
-  return kcal >= 100 ? Math.round(kcal / 10) * 10 : Math.round(kcal);
-}
-
-export function formatKcal(kcal: number, confidence: Confidence = 'medium'): string {
-  const n = Math.round(kcal).toLocaleString('en-US');
-  return confidence === 'high' ? `${n} kcal` : `~${n} kcal`;
-}
 
 // ---- Adaptive targets ------------------------------------------------------
 

@@ -107,13 +107,41 @@ export async function buildProgress(
   const averageProtein = mean(loggedDays.map((t) => Number(t.protein_g)));
   const daysTargetHit = loggedDays.filter((t) => Number(t.protein_g) >= targets.protein_g).length;
 
-  const calorieSeries: TrendPoint[] = window.map((date, index) => {
-    const value = totalsByDate.has(date) ? Math.round(Number(totalsByDate.get(date)!.kcal)) : null;
+  /**
+   * Calories and protein share this shape exactly: an unlogged day is a null
+   * rather than a zero, and the rolling mean skips those gaps rather than
+   * averaging them in — a day nobody logged is missing data, and counting it as
+   * zero would drag every average down and invent a deficit that never existed.
+   */
+  const nutritionSeries = (field: 'kcal' | 'protein_g'): TrendPoint[] =>
+    window.map((date, index) => {
+      const raw = totalsByDate.get(date);
+      const value = raw ? Math.round(Number(raw[field])) : null;
+      const priorWindow = window
+        .slice(Math.max(0, index - 6), index + 1)
+        .map((d) => (totalsByDate.get(d) ? Number(totalsByDate.get(d)![field]) : null))
+        .filter((v): v is number => v !== null && v > 0);
+      return { local_date: date, value: value === 0 ? null : value, average: mean(priorWindow) };
+    });
+
+  const calorieSeries = nutritionSeries('kcal');
+  const proteinSeries = nutritionSeries('protein_g');
+
+  // Exercise is the opposite case: a day with no session really is a zero-burn
+  // day, so the gaps are filled and the rolling mean counts them.
+  const burnByDate = new Map<string, number>();
+  for (const entry of exercise) {
+    burnByDate.set(entry.local_date, (burnByDate.get(entry.local_date) ?? 0) + entry.kcal_burned);
+  }
+  const exerciseSeries: TrendPoint[] = window.map((date, index) => {
     const priorWindow = window
       .slice(Math.max(0, index - 6), index + 1)
-      .map((d) => (totalsByDate.get(d) ? Number(totalsByDate.get(d)!.kcal) : null))
-      .filter((v): v is number => v !== null && v > 0);
-    return { local_date: date, value: value === 0 ? null : value, average: mean(priorWindow) };
+      .map((d) => burnByDate.get(d) ?? 0);
+    return {
+      local_date: date,
+      value: Math.round(burnByDate.get(date) ?? 0),
+      average: mean(priorWindow),
+    };
   });
 
   const weightByDate = new Map(weights.map((w) => [w.local_date, w.weight_kg]));
@@ -154,10 +182,12 @@ export async function buildProgress(
       target_g: targets.protein_g,
       days_target_hit: daysTargetHit,
       days_logged: loggedDays.length,
+      series: proteinSeries,
     },
     exercise: {
       sessions: exercise.length,
       total_kcal: Math.round(exercise.reduce((sum, e) => sum + e.kcal_burned, 0)),
+      series: exerciseSeries,
     },
   };
 }

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import type { ChatAction } from '@ct/shared';
 import { query } from '../src/db.ts';
 import { insertMessage, listMessages } from '../src/services/chat.ts';
 import { createUser, type TestUser } from './helpers/factories.ts';
@@ -65,5 +66,71 @@ describe('listMessages', () => {
   it('never returns another account’s conversation', async () => {
     const other = await createUser();
     expect(await listMessages(other.id)).toEqual([]);
+  });
+});
+
+/**
+ * Cards are stored with the turn so a reload does not silently downgrade a
+ * conversation full of charts into plain text. Rows outlive the code that wrote
+ * them, so the read path treats what is on disk as untrusted.
+ */
+describe('stored actions', () => {
+  const foodAction: ChatAction = {
+    kind: 'food_logged',
+    entry_id: '11111111-1111-4111-8111-111111111111',
+    summary: 'lunch: Chicken and rice — 620 kcal',
+    card: {
+      type: 'food',
+      entry_id: '11111111-1111-4111-8111-111111111111',
+      meal: 'lunch',
+      description: 'Chicken and rice',
+      confidence: 'medium',
+      items: [{ name: 'Chicken', quantity: '200g' }],
+      kcal: 620,
+      protein_g: 62,
+      carbs_g: 50,
+      fat_g: 8,
+    },
+  };
+
+  it('round-trips a card through the database', async () => {
+    const written = await insertMessage(user.id, 'assistant', 'Logged.', null, null, [foodAction]);
+    expect(written.actions).toEqual([foodAction]);
+
+    const [read] = await listMessages(user.id);
+    expect(read!.actions).toEqual([foodAction]);
+  });
+
+  it('defaults to an empty list for a message that carried none', async () => {
+    await insertMessage(user.id, 'user', 'hello');
+    const [read] = await listMessages(user.id);
+    expect(read!.actions).toEqual([]);
+  });
+
+  /**
+   * The forward-compatibility case: a card shape dropped in a later release
+   * leaves old rows on disk in a shape the current client cannot draw. Losing
+   * that one card is correct; losing the turn, or throwing mid-conversation,
+   * is not.
+   */
+  it('drops a card it can no longer read without losing the rest of the turn', async () => {
+    await insertMessage(user.id, 'assistant', 'Here you go.', null, null, [foodAction]);
+    await query(
+      `UPDATE chat_messages
+          SET actions = actions || $2::jsonb
+        WHERE user_id = $1`,
+      [user.id, JSON.stringify([{ kind: 'from_the_future', entry_id: null, summary: 'gone' }])],
+    );
+
+    const [read] = await listMessages(user.id);
+    expect(read!.actions).toEqual([foodAction]);
+  });
+
+  it('reads a row written before the column existed as no actions', async () => {
+    await insertMessage(user.id, 'assistant', 'Older turn.');
+    await query('UPDATE chat_messages SET actions = NULL WHERE user_id = $1', [user.id]);
+
+    const [read] = await listMessages(user.id);
+    expect(read!.actions).toEqual([]);
   });
 });

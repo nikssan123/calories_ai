@@ -129,8 +129,15 @@ describe('runTurn', () => {
 
     expect(response.day.consumed.kcal).toBe(640);
     expect(response.actions).toEqual([
-      { kind: 'food_logged', entry_id: expect.any(String), summary: expect.stringContaining('lunch') },
+      {
+        kind: 'food_logged',
+        entry_id: expect.any(String),
+        summary: expect.stringContaining('lunch'),
+        card: expect.objectContaining({ type: 'food', kcal: 640 }),
+      },
     ]);
+    // Same array on the message, which is what a reload will read back.
+    expect(response.message.actions).toEqual(response.actions);
 
     // The tools that ran are recorded on the message for later debugging.
     const row = await queryOne<{ tool_trace: any }>(

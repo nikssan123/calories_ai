@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { SdkMcpToolDefinition } from '@anthropic-ai/claude-agent-sdk';
-import type { ChatAction } from '@ct/shared';
+import type { ChatAction, ChatCard } from '@ct/shared';
 import { buildNutritionServer, SERVER_NAME, type ToolContext } from '../src/ai/tools.ts';
 import { getFoodEntry, listExerciseEntries, listWeights } from '../src/services/log.ts';
+import { currentLocalDate } from '../src/services/summary.ts';
 import { targetsForDate } from '../src/services/targets.ts';
+import { addDays } from '../src/time.ts';
 import { getUser } from '../src/services/user.ts';
 import { addMeal, addWeight, createUser, setUserTargets, type TestUser } from './helpers/factories.ts';
 
@@ -152,8 +154,18 @@ describe('log_food', () => {
       meal: 'lunch', when: null, items: [ITEM], note: 'tasty', confidence: 'high',
     });
     expect(actions).toEqual([
-      { kind: 'food_logged', entry_id: expect.any(String), summary: expect.stringContaining('lunch') },
+      {
+        kind: 'food_logged',
+        entry_id: expect.any(String),
+        summary: expect.stringContaining('lunch'),
+        card: expect.objectContaining({ type: 'food', meal: 'lunch' }),
+      },
     ]);
+    // The card carries what the database returned, not what the model asked for.
+    const card = actions[0]!.card as Extract<ChatCard, { type: 'food' }>;
+    expect(card.entry_id).toBe(actions[0]!.entry_id);
+    expect(card.kcal).toBe(330);
+    expect(card.items).toEqual([{ name: 'Chicken breast', quantity: '~200g' }]);
   });
 });
 
@@ -454,5 +466,149 @@ describe('get_progress', () => {
   it('caps the window at a year', async () => {
     const { json } = await call('get_progress', { days: 10_000 });
     expect(json.calories.target_kcal).toBe(2200);
+  });
+});
+
+/**
+ * The display tools. What matters is not that a card appears, but that the
+ * numbers on it came from the database — the model supplies a choice of metric
+ * and nothing else, so there is no path by which it draws a figure it made up.
+ *
+ * These windows end at the real today rather than the fixture's frozen clock,
+ * because "the last 30 days" is anchored to now by definition. The tool context
+ * is rebuilt on the same clock so a log with `when: null` lands inside the
+ * window it is about to be plotted in.
+ */
+describe('the display tools', () => {
+  let realToday: string;
+
+  beforeEach(async () => {
+    build({ now: new Date() });
+    realToday = await currentLocalDate(user.ctx);
+  });
+
+  describe('show_chart', () => {
+    it('plots the calorie series that is actually logged', async () => {
+      await addMeal(user, { date: realToday, kcal: 1800, protein_g: 120 });
+
+      const { json } = await call('show_chart', { metric: 'calories', days: 30, caption: null });
+      expect(json).toEqual({ shown: 'calories', days: 30 });
+
+      const card = actions[0]!.card as Extract<ChatCard, { type: 'trend' }>;
+      expect(actions[0]!.kind).toBe('card_shown');
+      expect(card).toMatchObject({ type: 'trend', metric: 'calories', unit: 'kcal', target: 2200 });
+      expect(card.series).toHaveLength(30);
+      expect(card.series.at(-1)).toMatchObject({ local_date: realToday, value: 1800 });
+    });
+
+    it('gives every metric real points rather than an empty chart', async () => {
+      await addMeal(user, { date: realToday, kcal: 1800, protein_g: 120 });
+      await addWeight(user, realToday, 82);
+      await call('log_exercise', {
+        description: '5km run', duration_min: 30, distance_km: 5,
+        kcal_burned: 300, when: null, confidence: 'low',
+      });
+
+      for (const metric of ['calories', 'protein', 'weight', 'exercise'] as const) {
+        actions.length = 0;
+        await call('show_chart', { metric, days: 30, caption: null });
+        const card = actions[0]!.card as Extract<ChatCard, { type: 'trend' }>;
+        expect(card.metric).toBe(metric);
+        expect(card.series.some((p) => p.value !== null), `${metric} has no points`).toBe(true);
+      }
+    });
+
+    it('carries the caption the model wrote, and null when it wrote none', async () => {
+      await call('show_chart', { metric: 'weight', days: 30, caption: 'Down 1.2kg this month.' });
+      expect(actions[0]!.card).toMatchObject({ caption: 'Down 1.2kg this month.' });
+
+      actions.length = 0;
+      await call('show_chart', { metric: 'weight', days: 30, caption: null });
+      expect(actions[0]!.card).toMatchObject({ caption: null });
+    });
+
+    it('clamps the window rather than trusting the model with it', async () => {
+      await call('show_chart', { metric: 'calories', days: 10_000, caption: null });
+      expect((actions[0]!.card as Extract<ChatCard, { type: 'trend' }>).series).toHaveLength(365);
+
+      actions.length = 0;
+      await call('show_chart', { metric: 'calories', days: 1, caption: null });
+      expect((actions[0]!.card as Extract<ChatCard, { type: 'trend' }>).series).toHaveLength(7);
+    });
+  });
+
+  describe('show_day', () => {
+    it('draws the day from the log, defaulting to today', async () => {
+      await addMeal(user, { date: realToday, kcal: 1450, protein_g: 96 });
+
+      const { json } = await call('show_day', { date: null, caption: null });
+      expect(json).toEqual({ shown: realToday });
+      expect(actions[0]!.card).toMatchObject({
+        type: 'day',
+        local_date: realToday,
+        consumed: expect.objectContaining({ kcal: 1450 }),
+        targets: expect.objectContaining({ kcal: 2200 }),
+        burned_kcal: 0,
+      });
+    });
+
+    it('draws a past day when asked for one', async () => {
+      await addMeal(user, { date: '2026-03-08', kcal: 900 });
+      await call('show_day', { date: '2026-03-08', caption: 'Your lightest day.' });
+      expect(actions[0]!.card).toMatchObject({
+        local_date: '2026-03-08',
+        caption: 'Your lightest day.',
+        consumed: expect.objectContaining({ kcal: 900 }),
+      });
+    });
+
+    it('rejects a date it cannot trust instead of guessing', async () => {
+      const { isError, text } = await call('show_day', { date: 'last tuesday', caption: null });
+      expect(isError).toBe(true);
+      expect(text).toContain('YYYY-MM-DD');
+      expect(actions).toHaveLength(0);
+    });
+  });
+});
+
+describe('cards on the logging tools', () => {
+  it('draws the burn with the distance and duration it was based on', async () => {
+    await call('log_exercise', {
+      description: '5km run', duration_min: 28, distance_km: 5,
+      kcal_burned: 320.4, when: null, confidence: 'low',
+    });
+    expect(actions[0]!.card).toMatchObject({
+      type: 'exercise',
+      description: '5km run',
+      kcal_burned: 320,
+      duration_min: 28,
+      distance_km: 5,
+      confidence: 'low',
+    });
+  });
+
+  it('shows a weigh-in against its trend, not as a number on its own', async () => {
+    build({ now: new Date() });
+    const today = await currentLocalDate(user.ctx);
+    await addWeight(user, addDays(today, -9), 84);
+    await addWeight(user, addDays(today, -1), 82.6);
+    await call('log_weight', { weight_kg: 82.1, when: null });
+
+    const card = actions[0]!.card as Extract<ChatCard, { type: 'weight' }>;
+    expect(card.type).toBe('weight');
+    expect(card.weight_kg).toBe(82.1);
+    expect(card.series.some((p) => p.value !== null)).toBe(true);
+  });
+
+  it('leaves a deletion with nothing to draw', async () => {
+    const entry = await addMeal(user, { date: TODAY, kcal: 500 });
+    await call('delete_entry', { entry_id: entry.id, kind: 'food' });
+    expect(actions[0]).toMatchObject({ kind: 'food_deleted', card: null });
+  });
+
+  it('keeps the display tools out of the read-only set', () => {
+    build({}, true);
+    expect([...tools.keys()]).not.toContain('show_chart');
+    expect([...tools.keys()]).not.toContain('show_day');
   });
 });

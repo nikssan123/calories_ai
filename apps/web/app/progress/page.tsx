@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Progress, TrendPoint } from '@ct/shared';
+import type { Progress } from '@ct/shared';
 import { api } from '@/lib/api';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
+import { Sparkline } from '@/components/Sparkline';
 import { WeeklyReview } from '@/components/WeeklyReview';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -112,7 +113,7 @@ export default function ProgressPage() {
                       </span>
                     )}
                   </div>
-                  <Sparkline points={progress.weight.series} accessor="average" stroke="var(--foreground)" />
+                  <Sparkline points={progress.weight.series} stroke="var(--foreground)" className="mt-4" />
                 </>
               )}
             </div>
@@ -178,9 +179,9 @@ export default function ProgressPage() {
               </div>
               <Sparkline
                 points={progress.calories.series}
-                accessor="average"
                 stroke="var(--calories)"
                 target={progress.calories.target_kcal}
+                className="mt-4"
               />
             </div>
           </InsetGroup>
@@ -243,71 +244,3 @@ function Stat({ label, value, unit }: { label: string; value: string; unit: stri
   );
 }
 
-/** Minimal inline chart — no dependency, and trivially replaced in React Native. */
-function Sparkline({
-  points,
-  accessor,
-  stroke,
-  target,
-}: {
-  points: TrendPoint[];
-  accessor: 'value' | 'average';
-  stroke: string;
-  target?: number;
-}) {
-  const values = points.map((p) => p[accessor]);
-  const present = values.filter((v): v is number => v !== null);
-  if (present.length < 2) return null;
-
-  const width = 320;
-  const height = 72;
-  const lo = Math.min(...present, ...(target ? [target] : []));
-  const hi = Math.max(...present, ...(target ? [target] : []));
-  // Pad the domain so the trace sits in the body of the chart rather than
-  // hugging an edge — a flat series against a distant target looks broken
-  // otherwise.
-  const pad = (hi - lo || Math.abs(hi) * 0.1 || 1) * 0.18;
-  const min = lo - pad;
-  const max = hi + pad;
-  const span = max - min || 1;
-
-  const x = (i: number) => (i / Math.max(1, points.length - 1)) * width;
-  const y = (v: number) => height - ((v - min) / span) * (height - 10) - 5;
-
-  // Skip gaps rather than drawing a line through days with no data.
-  let path = '';
-  let penDown = false;
-  points.forEach((point, i) => {
-    const v = point[accessor];
-    if (v === null) {
-      penDown = false;
-      return;
-    }
-    path += `${penDown ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)} `;
-    penDown = true;
-  });
-
-  return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="mt-4 w-full" role="img" aria-hidden="true">
-      {target !== undefined && (
-        <line
-          x1="0"
-          x2={width}
-          y1={y(target)}
-          y2={y(target)}
-          className="stroke-border"
-          strokeDasharray="3 5"
-          strokeWidth="1.5"
-        />
-      )}
-      <path
-        d={path.trim()}
-        fill="none"
-        stroke={stroke}
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}

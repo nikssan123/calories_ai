@@ -98,14 +98,21 @@ export async function runTurn(input: RunTurnInput): Promise<ChatResponse> {
   // The user's message is persisted only now, so a failed turn doesn't leave a
   // dangling prompt in the conversation.
   await insertMessage(input.userId, 'user', input.text, input.photo?.id ?? null, null);
-  const assistantMessage = await insertMessage(input.userId, 'assistant', outcome.text, null, {
-    session_id: outcome.sessionId,
-    num_turns: outcome.numTurns,
-    cost_usd: outcome.costUsd,
-    model: outcome.model,
-    kind: request.kind,
-    tools: actions.map((a) => a.kind),
-  });
+  const assistantMessage = await insertMessage(
+    input.userId,
+    'assistant',
+    outcome.text,
+    null,
+    {
+      session_id: outcome.sessionId,
+      num_turns: outcome.numTurns,
+      cost_usd: outcome.costUsd,
+      model: outcome.model,
+      kind: request.kind,
+      tools: actions.map((a) => a.kind),
+    },
+    actions,
+  );
 
   // Re-read the day: tools may have written to it, and the client should not
   // have to make a second request to see the result.

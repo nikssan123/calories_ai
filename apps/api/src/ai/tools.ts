@@ -1,6 +1,15 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
-import type { ChatAction, Confidence, EntrySource, Meal } from '@ct/shared';
+import type {
+  ChatAction,
+  ChatCard,
+  Confidence,
+  EntrySource,
+  ExerciseEntry,
+  FoodEntry,
+  Meal,
+  Progress,
+} from '@ct/shared';
 import { query } from '../db.ts';
 import { addDays, type DayContext, inferMeal, localDateFor, resolveWhen } from '../time.ts';
 import {
@@ -105,6 +114,95 @@ function pickTotals(entry: { kcal: number; protein_g: number; carbs_g: number; f
   };
 }
 
+/**
+ * Cards are built here, from the entry the database just returned, rather than
+ * from the arguments the model passed in. The two differ more often than it
+ * looks — the meal is inferred from the clock when the model leaves it null,
+ * quantities round, and an update returns the merged entry rather than the
+ * patch — and a card showing the request instead of the result would be a
+ * confident picture of something that did not happen.
+ */
+function foodCard(entry: FoodEntry): ChatCard {
+  return {
+    type: 'food',
+    entry_id: entry.id,
+    meal: entry.meal,
+    description: entry.description,
+    confidence: entry.confidence,
+    items: entry.items.map((item) => ({
+      name: item.name,
+      quantity:
+        item.quantity_desc ?? (item.quantity_g === null ? null : `${Math.round(item.quantity_g)}g`),
+    })),
+    ...pickTotals(entry),
+  };
+}
+
+function exerciseCard(entry: ExerciseEntry): ChatCard {
+  return {
+    type: 'exercise',
+    entry_id: entry.id,
+    description: entry.description,
+    confidence: entry.confidence,
+    kcal_burned: Math.round(entry.kcal_burned),
+    duration_min: entry.duration_min,
+    distance_km: entry.distance_km,
+  };
+}
+
+/** Turns a metric name into a plottable card, with real points behind it. */
+function trendCard(
+  metric: 'calories' | 'protein' | 'weight' | 'exercise',
+  days: number,
+  caption: string | null,
+  progress: Progress,
+): Extract<ChatCard, { type: 'trend' }> {
+  const base = { type: 'trend' as const, metric, caption };
+  const window = `last ${days} days`;
+
+  switch (metric) {
+    case 'weight':
+      return {
+        ...base,
+        title: `Weight · ${window}`,
+        unit: 'kg',
+        target: null,
+        average: progress.weight.average_7d_kg,
+        series: progress.weight.series,
+      };
+    case 'protein':
+      return {
+        ...base,
+        title: `Protein · ${window}`,
+        unit: 'g',
+        target: progress.protein.target_g,
+        average: progress.protein.average_g,
+        series: progress.protein.series,
+      };
+    case 'exercise':
+      return {
+        ...base,
+        title: `Exercise · ${window}`,
+        unit: 'kcal',
+        target: null,
+        average:
+          progress.exercise.series.length === 0
+            ? null
+            : Math.round(progress.exercise.total_kcal / progress.exercise.series.length),
+        series: progress.exercise.series,
+      };
+    case 'calories':
+      return {
+        ...base,
+        title: `Calories · ${window}`,
+        unit: 'kcal',
+        target: progress.calories.target_kcal,
+        average: progress.calories.average_kcal,
+        series: progress.calories.series,
+      };
+  }
+}
+
 export interface ServerOptions {
   /**
    * Drop every write tool. The weekly review reads the same data through the
@@ -144,6 +242,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         kind: 'food_logged',
         entry_id: entry.id,
         summary: `${entry.meal}: ${entry.description} — ${Math.round(entry.kcal)} kcal`,
+        card: foodCard(entry),
       });
 
       const day = await buildDaySummary(tc.userId, entry.local_date);
@@ -190,6 +289,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         kind: 'food_updated',
         entry_id: entry.id,
         summary: `Updated ${entry.description} — now ${Math.round(entry.kcal)} kcal`,
+        card: foodCard(entry),
       });
 
       const day = await buildDaySummary(tc.userId, entry.local_date);
@@ -237,6 +337,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         kind: 'exercise_logged',
         entry_id: entry.id,
         summary: `${entry.description} — ~${Math.round(entry.kcal_burned)} kcal`,
+        card: exerciseCard(entry),
       });
       return ok({
         entry_id: entry.id,
@@ -261,10 +362,19 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         resolveWhen(args.when ?? undefined, tc.now, tc.ctx),
         tc.ctx,
       );
+      // §12 again: a single weigh-in means very little on its own, so the card
+      // shows it against the trend rather than as a number to react to.
+      const trend = await buildProgress(tc.userId, tc.ctx, 30);
       tc.actions.push({
         kind: 'weight_logged',
         entry_id: entry.id,
         summary: `Weight ${entry.weight_kg} kg on ${entry.local_date}`,
+        card: {
+          type: 'weight',
+          weight_kg: entry.weight_kg,
+          change_7d_kg: trend.weight.change_7d_kg,
+          series: trend.weight.series,
+        },
       });
       return ok(entry);
     },
@@ -291,6 +401,8 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         kind: 'food_deleted',
         entry_id: args.entry_id,
         summary: `Removed ${existing?.description ?? 'entry'}`,
+        // Nothing to draw: the entry it referred to no longer exists.
+        card: null,
       });
       return ok({ deleted: true });
     },
@@ -488,9 +600,87 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
     { annotations: { readOnlyHint: true }, alwaysLoad: true },
   );
 
+  /**
+   * The display tools.
+   *
+   * They take no data — only a choice of what to draw — and the series is read
+   * from Postgres here. That asymmetry is the whole design: the model is good
+   * at knowing when a picture answers better than a paragraph, and a model that
+   * could also supply the points could draw a weight loss that never happened.
+   * A wrong sentence invites argument; a wrong chart is just believed.
+   */
+  const showChart = tool(
+    'show_chart',
+    'Draw a chart in the conversation. Use it when the answer is about a shape over time — "am I on track?", "how has my weight moved?", "have I been eating more at weekends?" — where a trend line says it better than a sentence. The data is read from the log; you choose only the metric and the window. Say your point in words too: the chart supports the answer, it is not the answer. Do not call this for a single day or when the user asked something a number answers.',
+    {
+      metric: z
+        .enum(['calories', 'protein', 'weight', 'exercise'])
+        .describe('Which series to plot.'),
+      days: z.number().nullable().default(null).describe('Window size in days. Null means 30.'),
+      caption: z
+        .string()
+        .nullable()
+        .default(null)
+        .describe('One short line under the title saying what it shows. Null for none.'),
+    },
+    async (args) => {
+      const days = Math.min(Math.max(args.days ?? 30, 7), 365);
+      const progress = await buildProgress(tc.userId, tc.ctx, days);
+      const card = trendCard(args.metric, days, args.caption, progress);
+
+      tc.actions.push({
+        kind: 'card_shown',
+        entry_id: null,
+        summary: card.title,
+        card,
+      });
+      // Deliberately terse: the numbers went to the user, not to the model. The
+      // model already has get_progress when it needs to reason about them.
+      return ok({ shown: args.metric, days });
+    },
+    { annotations: { readOnlyHint: true }, alwaysLoad: true },
+  );
+
+  const showDay = tool(
+    'show_day',
+    'Draw one day as a card — calories against target, macros, and any burn. Use it when the user asks how a day went, or after a log when the state of the day is the point rather than the meal. Do not call it after every single log; the app already shows the running total.',
+    {
+      date: z
+        .string()
+        .nullable()
+        .default(null)
+        .describe('YYYY-MM-DD. Null means today.'),
+      caption: z.string().nullable().default(null).describe('One short line under the title.'),
+    },
+    async (args) => {
+      const date = args.date ?? localDateFor(tc.now, tc.ctx);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail('date must be YYYY-MM-DD.');
+
+      const day = await buildDaySummary(tc.userId, date);
+      tc.actions.push({
+        kind: 'card_shown',
+        entry_id: null,
+        summary: `${date} — ${day.consumed.kcal} of ${day.targets.kcal} kcal`,
+        card: {
+          type: 'day',
+          local_date: day.local_date,
+          caption: args.caption,
+          consumed: day.consumed,
+          targets: day.targets,
+          burned_kcal: day.burned_kcal,
+        },
+      });
+      return ok({ shown: date });
+    },
+    { annotations: { readOnlyHint: true }, alwaysLoad: true },
+  );
+
   const reads = [getDay, searchHistory, getProgress];
+  const shows = [showChart, showDay];
   const writes = [logFood, updateFood, logExercise, logWeightTool, deleteEntry, setProfile];
-  const tools = options.readOnly ? reads : [...writes, ...reads];
+  // The display tools stay out of the read-only set: the weekly review renders
+  // as markdown on its own screen, where a chat card has nowhere to appear.
+  const tools = options.readOnly ? reads : [...writes, ...reads, ...shows];
 
   return {
     server: createSdkMcpServer({ name: SERVER_NAME, version: '1.0.0', tools }),
