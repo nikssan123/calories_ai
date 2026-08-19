@@ -11,13 +11,61 @@ const OPTIONS = {} as any;
 
 describe('executeAgent', () => {
   it('collects the final text and the run metadata', async () => {
-    scriptAgent({ text: 'Added to lunch — ~620 kcal.', sessionId: 's1', numTurns: 3, costUsd: 0.04 });
-
-    expect(await executeAgent('log it', OPTIONS)).toEqual({
+    scriptAgent({
       text: 'Added to lunch — ~620 kcal.',
       sessionId: 's1',
       numTurns: 3,
       costUsd: 0.04,
+      durationMs: 2400,
+    });
+
+    expect(await executeAgent('log it', OPTIONS)).toMatchObject({
+      text: 'Added to lunch — ~620 kcal.',
+      sessionId: 's1',
+      numTurns: 3,
+      costUsd: 0.04,
+      // The SDK prices its own turns, so nothing downstream re-derives this.
+      costSource: 'reported',
+      durationMs: 2400,
+    });
+  });
+
+  it('sums modelUsage across every model a turn touched', async () => {
+    scriptAgent({
+      modelUsage: {
+        'claude-sonnet-5': { inputTokens: 1200, outputTokens: 300, cacheReadInputTokens: 8000 },
+        // A compaction pass or subagent shows up as a second model on the same
+        // turn; attributing it all to the routed model would understate cost.
+        'claude-haiku-4-5': { inputTokens: 400, outputTokens: 50, cacheCreationInputTokens: 900 },
+      },
+    });
+
+    const { usage } = await executeAgent('log it', OPTIONS);
+    expect(usage).toMatchObject({
+      inputTokens: 1600,
+      outputTokens: 350,
+      cacheReadTokens: 8000,
+      cacheWriteTokens: 900,
+    });
+    expect(Object.keys(usage!.byModel!)).toEqual(['claude-sonnet-5', 'claude-haiku-4-5']);
+  });
+
+  /**
+   * A crash or startup-error result carries zeroed `modelUsage`. Recording a
+   * narrower real number beats recording a zero that reads as "this was free".
+   */
+  it('falls back to the main-loop usage block when modelUsage is empty', async () => {
+    scriptAgent({
+      modelUsage: {},
+      usage: { input_tokens: 700, output_tokens: 90, cache_read_input_tokens: 2000 },
+    });
+
+    const { usage } = await executeAgent('log it', OPTIONS);
+    expect(usage).toMatchObject({
+      inputTokens: 700,
+      outputTokens: 90,
+      cacheReadTokens: 2000,
+      cacheWriteTokens: 0,
     });
   });
 

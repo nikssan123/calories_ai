@@ -4,6 +4,7 @@ import { insertMessage } from '../services/chat.ts';
 import { applyAdaptiveTargets } from '../services/adaptive.ts';
 import { buildReviewStats, reviewWeekFor, saveReview } from '../services/reviews.ts';
 import { getUser, getUserContext } from '../services/user.ts';
+import { recordUsage } from '../services/usage.ts';
 import { localDateFor } from '../time.ts';
 import { MAX_TURNS } from './client.ts';
 import { createProvider, type AgentRequest } from './providers/index.ts';
@@ -59,6 +60,7 @@ export async function generateWeeklyReview(
   // Deliberately no `resume`: a review must not inherit — or pollute — the
   // journal's conversation. `recentReviewPrompt` carries it back the other way.
   const outcome = await provider.run(request, null);
+  await recordUsage({ userId: id, kind: 'review', outcome });
   if (outcome.error) throw new Error(outcome.error);
 
   const content = outcome.text || fallbackReview(stats);

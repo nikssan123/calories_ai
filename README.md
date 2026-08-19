@@ -160,7 +160,7 @@ pnpm test              # the API suite
 pnpm test:coverage     # the same, with a coverage report and thresholds
 ```
 
-Everything under `apps/api` is covered: 100% of lines, ~99% of statements and functions.
+Everything under `apps/api` is covered: ~99% of lines, ~98% of statements and functions.
 The suite runs against a real Postgres rather than mocks, because most of what could go
 wrong here is a query — `apps/api/src/env.ts` forces a `_test` suffix onto the database
 name whenever `NODE_ENV=test`, so `pnpm test` cannot empty your development database even
@@ -312,6 +312,68 @@ throttle the dashboard polling the app does normally.
 The chat limits exist because turns are spent from your Claude subscription's budget. The
 password limits exist because those are the only routes an anonymous caller can make burn
 CPU (scrypt, deliberately) and the only ones where guessing pays.
+
+## Admin and what it costs to run
+
+`/admin` is a read-only window onto the database, the account actions support
+actually gets asked for, and — the reason it exists — a cost report.
+
+Who gets in is config, not a column: `ADMIN_EMAILS` in `.env`, and if that is
+unset, the oldest account. A personal install therefore needs no configuration,
+and admin is never something a row in the database can quietly acquire. Every
+`/admin` route answers 404 rather than 403 to everyone else, so an ordinary
+account cannot learn the panel is mounted.
+
+**Read-only means read-only.** There is no route that takes SQL. The browser
+reads from an allowlist of tables, and `password_hash` and `token_hash` are
+withheld from the response rather than hidden in the markup. The write side is
+six named actions: reset a password, revoke every session, suspend or restore
+an account, delete one (typing its email to confirm), publish this week's
+review, and re-run the adaptive pass.
+
+Suspending an account revokes its sessions *and* refuses its next login with a
+sentence — without the second half a suspended user signs in successfully and
+then gets a 401 on everything, which looks like a broken server.
+
+### The cost report
+
+Every agent run writes a row to `ai_usage`: tokens in and out, cache reads and
+writes kept apart, the model, the wall clock, and what it cost. Failed turns are
+recorded too — a turn that burns tokens and then errors is the most expensive
+kind, and averaging it away would flatter every figure.
+
+Cost comes from three places, and the panel says which:
+
+| | Where the number comes from |
+|---|---|
+| `reported` | Claude Code priced the turn itself. Always fresher than a rate card. |
+| `estimated` | Priced here, from `ai/pricing.ts`. |
+| `unknown` | Tokens counted, no rate available. `0` means unpriced, **not** free. |
+
+**On the default subscription nothing here is billed.** The figure is what the
+same tokens would cost at API rates — which is exactly the number the viability
+question wants, because a product pays API rates. The panel says so above the
+numbers, since it is otherwise the sort of thing someone reads as their bill.
+
+The headline is cost per active user per month, built from observed per-user
+spend rather than dividing the total by the headcount — a fortnight where one
+account did all the logging would otherwise report a per-user cost an order of
+magnitude too low. It is shown next to the heaviest single user, because the
+mean is not what sizes the worst case, and next to the assumption it rests on:
+that new users behave like current ones, which for a tracker used by its own
+author is the thing most likely to be wrong.
+
+The OpenAI-compatible path returns tokens but never a price, and the endpoint
+behind it might be OpenAI, Groq, or a local Ollama — so there is no rate card
+that could be right. Set `OPENAI_PRICE_INPUT` and `OPENAI_PRICE_OUTPUT` (USD per
+million) to cost it; leave them unset and the panel reports the share of turns
+it could not price rather than quietly counting them as free.
+
+Cache tokens are tracked apart from plain input because they bill at a tenth
+(reads) and 1.25× (writes) of the input rate. The journal's system prompt is
+half stable and half today's numbers, so that line is a real part of the bill
+rather than a rounding error — folding it into input would misprice a turn by
+more than the turn costs.
 
 ## Migrating to React Native
 

@@ -13,6 +13,7 @@ import {
   emailInUse,
   getUser,
 } from '../services/user.ts';
+import { isAdmin, isDisabled } from '../services/admin.ts';
 
 /**
  * Password endpoints are the one place an anonymous caller can burn CPU on this
@@ -50,6 +51,9 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       profile: userId ? await getUser(userId) : null,
       signup_allowed: await signupAllowed(),
       has_accounts: (await countAccounts()) > 0,
+      // Carried on the session status so the app can decide whether to render
+      // the admin link without a second round trip on every page.
+      is_admin: userId ? await isAdmin(userId) : false,
     };
   });
 
@@ -81,6 +85,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       profile: await getUser(userId),
       signup_allowed: false,
       has_accounts: true,
+      is_admin: await isAdmin(userId),
     };
   });
 
@@ -94,6 +99,13 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     // Deliberately identical for unknown email and wrong password.
     if (!userId) return reply.status(401).send({ error: 'Incorrect email or password.' });
 
+    // Checked after the password, so this reveals nothing to someone guessing.
+    // Without it a suspended user would sign in successfully and then get a 401
+    // on every subsequent request, which looks like a broken server.
+    if (await isDisabled(userId)) {
+      return reply.status(403).send({ error: 'This account has been suspended.' });
+    }
+
     const { token, expiresAt } = await createSession(userId);
     setSessionCookie(reply, token, expiresAt);
 
@@ -102,6 +114,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       profile: await getUser(userId),
       signup_allowed: false,
       has_accounts: true,
+      is_admin: await isAdmin(userId),
     };
   });
 
@@ -114,6 +127,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       profile: null,
       signup_allowed: await signupAllowed(),
       has_accounts: (await countAccounts()) > 0,
+      is_admin: false,
     };
   });
 }

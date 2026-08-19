@@ -31,6 +31,7 @@ describe('GET /auth/me', () => {
       profile: null,
       signup_allowed: true,
       has_accounts: false,
+      is_admin: false,
     });
   });
 

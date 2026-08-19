@@ -12,6 +12,11 @@ export interface ScriptedRun {
   sessionId?: string;
   numTurns?: number;
   costUsd?: number;
+  /** Per-model token counts, as the SDK's `modelUsage` reports them. */
+  modelUsage?: Record<string, Partial<ScriptedModelUsage>>;
+  /** The narrower main-loop block. Read only when `modelUsage` is empty. */
+  usage?: Record<string, number>;
+  durationMs?: number;
   /** Anything but 'success' surfaces as "the agent stopped early". */
   subtype?: 'success' | 'error_max_turns' | 'error_during_execution';
   /** Throw instead of streaming, to exercise the failure paths. */
@@ -20,6 +25,14 @@ export interface ScriptedRun {
   chunksOnly?: string[];
   /** Runs before the result is emitted; receives the options the SDK was given. */
   act?: (options: any) => Promise<void> | void;
+}
+
+export interface ScriptedModelUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  costUSD: number;
 }
 
 export interface AgentCall {
@@ -79,6 +92,30 @@ export async function* runScripted(args: any): AsyncGenerator<any> {
     session_id: sessionId,
     num_turns: run.numTurns ?? 2,
     total_cost_usd: run.costUsd ?? 0.01,
+    duration_ms: run.durationMs ?? 1200,
+    usage: {
+      input_tokens: 0,
+      output_tokens: 0,
+      cache_read_input_tokens: 0,
+      cache_creation_input_tokens: 0,
+      ...run.usage,
+    },
+    // Shaped like the real `modelUsage`: keyed by model, camelCase fields.
+    // Defaulted rather than left empty so every turn the suite runs also
+    // exercises the usage-recording path.
+    modelUsage: Object.fromEntries(
+      Object.entries(run.modelUsage ?? { 'claude-sonnet-5': {} }).map(([model, usage]) => [
+        model,
+        {
+          inputTokens: 1000,
+          outputTokens: 200,
+          cacheReadInputTokens: 0,
+          cacheCreationInputTokens: 0,
+          costUSD: 0.01,
+          ...usage,
+        },
+      ]),
+    ),
     result: run.text ?? 'Logged.',
   };
 }

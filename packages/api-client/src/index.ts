@@ -1,6 +1,9 @@
 import type {
   AdaptiveProposal,
+  AdminOverview,
+  AdminUser,
   AuthStatus,
+  CostReport,
   ChatRequest,
   ChatResponse,
   Credentials,
@@ -16,6 +19,9 @@ import type {
   RepeatRequest,
   ReviewStats,
   SignupRequest,
+  TablePage,
+  TableSummary,
+  UsageTurn,
   WeeklyReview,
   WeightEntry,
 } from '@ct/shared';
@@ -149,6 +155,74 @@ export function createApiClient({ baseUrl, token, fetchImpl }: ApiClientOptions)
     runReview: () => request<WeeklyReview>('/reviews/run', { method: 'POST' }),
 
     photoUrl: (photoId: string) => `${root}/photos/${photoId}`,
+
+    // ---- Admin ----
+    //
+    // Every one of these 404s for a non-admin, which is also what the panel
+    // relies on: it never has to reason about a partially-permitted state.
+
+    admin: {
+      overview: () => request<AdminOverview>('/admin/overview'),
+
+      migrations: () =>
+        request<{ migrations: Array<{ name: string; applied_at: string }> }>('/admin/migrations'),
+
+      tables: () => request<{ tables: TableSummary[] }>('/admin/tables'),
+
+      table: (table: string, options: { limit?: number; offset?: number; userId?: string } = {}) => {
+        const params = new URLSearchParams();
+        if (options.limit) params.set('limit', String(options.limit));
+        if (options.offset) params.set('offset', String(options.offset));
+        if (options.userId) params.set('user_id', options.userId);
+        const qs = params.toString();
+        return request<TablePage>(`/admin/tables/${table}${qs ? `?${qs}` : ''}`);
+      },
+
+      users: (limit = 100) => request<{ users: AdminUser[] }>(`/admin/users?limit=${limit}`),
+
+      user: (id: string) => request<AdminUser>(`/admin/users/${id}`),
+
+      costs: (days = 30) => request<CostReport>(`/admin/costs?days=${days}`),
+
+      turns: (options: { limit?: number; userId?: string } = {}) => {
+        const params = new URLSearchParams();
+        if (options.limit) params.set('limit', String(options.limit));
+        if (options.userId) params.set('user_id', options.userId);
+        const qs = params.toString();
+        return request<{ turns: UsageTurn[] }>(`/admin/costs/turns${qs ? `?${qs}` : ''}`);
+      },
+
+      signOutUser: (id: string) =>
+        request<{ revoked: number }>(`/admin/users/${id}/sign-out`, { method: 'POST' }),
+
+      resetPassword: (id: string, password: string) =>
+        request<{ ok: true }>(`/admin/users/${id}/password`, {
+          method: 'POST',
+          body: JSON.stringify({ password }),
+        }),
+
+      setDisabled: (id: string, disabled: boolean) =>
+        request<{ ok: true; disabled: boolean }>(`/admin/users/${id}/disabled`, {
+          method: 'POST',
+          body: JSON.stringify({ disabled }),
+        }),
+
+      /** Irreversible. `confirmEmail` must match the account's own address. */
+      deleteUser: (id: string, confirmEmail: string) =>
+        request<{ ok: true }>(`/admin/users/${id}`, {
+          method: 'DELETE',
+          body: JSON.stringify({ confirm_email: confirmEmail }),
+        }),
+
+      runReview: (id: string) =>
+        request<WeeklyReview>(`/admin/users/${id}/review`, { method: 'POST' }),
+
+      runAdaptive: (id: string) =>
+        request<{ proposal: AdaptiveProposal; applied: boolean }>(
+          `/admin/users/${id}/adaptive`,
+          { method: 'POST' },
+        ),
+    },
   };
 }
 

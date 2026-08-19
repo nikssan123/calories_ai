@@ -7,6 +7,7 @@ import { buildDaySummary } from '../services/summary.ts';
 import { latestWeight } from '../services/log.ts';
 import { latestReview } from '../services/reviews.ts';
 import { missingProfileFields } from '../services/user.ts';
+import { recordUsage } from '../services/usage.ts';
 import { MAX_TURNS } from './client.ts';
 import { createProvider, type AgentMessage, type AgentRequest } from './providers/index.ts';
 import { dayContextPrompt, onboardingPrompt, recentReviewPrompt, STABLE_SYSTEM_PROMPT } from './prompt.ts';
@@ -82,6 +83,11 @@ export async function runTurn(input: RunTurnInput): Promise<ChatResponse> {
     await saveSessionId(input.userId, null);
     outcome = await provider.run(request, null);
   }
+
+  // Before the error check: a turn that spent tokens and then failed is exactly
+  // the turn the cost report must not lose.
+  await recordUsage({ userId: input.userId, kind: request.kind, outcome });
+
   if (outcome.error) throw new Error(outcome.error);
   if (!outcome.text) outcome.text = 'Logged.';
 

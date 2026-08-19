@@ -60,6 +60,8 @@ export interface Env {
   secureCookies: boolean;
   uploadDir: string;
   agentCwd: string;
+  /** Lower-cased emails granted the admin panel. Empty means "the first account". */
+  adminEmails: string[];
   isTest: boolean;
 }
 
@@ -76,6 +78,17 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
     allowSignup: (source.ALLOW_SIGNUP ?? 'true') !== 'false',
     /** Session cookies must be Secure once served over HTTPS. */
     secureCookies: (source.SECURE_COOKIES ?? 'false') === 'true',
+    /**
+     * Who can open the admin panel. Deliberately config rather than a column:
+     * on a self-hosted single-user install there is nothing to configure (the
+     * fallback in `services/admin.ts` grants it to the first account), and on a
+     * real deployment admin is a deploy-time decision rather than something a
+     * row in the database can quietly acquire.
+     */
+    adminEmails: (source.ADMIN_EMAILS ?? '')
+      .split(',')
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean),
     /**
      * Forced under test for the same reason the database name is: the suite
      * writes and deletes meal photos, and an UPLOAD_DIR set in .env would aim

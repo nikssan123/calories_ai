@@ -169,6 +169,8 @@ export const AuthStatus = z.object({
   signup_allowed: z.boolean(),
   /** False on a brand-new server, so the form can open on "create account". */
   has_accounts: z.boolean(),
+  /** Whether this account may open /admin. Decided by ADMIN_EMAILS on the API. */
+  is_admin: z.boolean(),
 });
 export type AuthStatus = z.infer<typeof AuthStatus>;
 
@@ -389,3 +391,172 @@ export const RepeatRequest = z.object({
   eaten_at: z.string().optional(),
 });
 export type RepeatRequest = z.infer<typeof RepeatRequest>;
+
+// ---- Admin -----------------------------------------------------------------
+
+/**
+ * The admin panel's contract. It lives here for the same reason everything else
+ * does — the panel is a client of the API like any other, and putting its types
+ * anywhere else would let the two drift.
+ */
+
+export const AdminOverview = z.object({
+  users: z.object({
+    total: z.number(),
+    onboarded: z.number(),
+    disabled: z.number(),
+    active_7d: z.number(),
+  }),
+  data: z.object({
+    food_entries: z.number(),
+    exercise_entries: z.number(),
+    weight_entries: z.number(),
+    chat_messages: z.number(),
+    photos: z.number(),
+    reviews: z.number(),
+  }),
+  storage: z.object({
+    database_bytes: z.number(),
+    uploads_bytes: z.number(),
+    photo_count: z.number(),
+  }),
+  config: z.object({
+    provider: z.string(),
+    auth: z.string(),
+    signup_allowed: z.boolean(),
+    secure_cookies: z.boolean(),
+    admin_source: z.enum(['env', 'first-account']),
+    openai_rate: z.object({ input: z.number(), output: z.number() }).nullable(),
+  }),
+});
+export type AdminOverview = z.infer<typeof AdminOverview>;
+
+export const AdminUser = z.object({
+  id: z.string().uuid(),
+  email: z.string().nullable(),
+  display_name: z.string().nullable(),
+  timezone: z.string(),
+  is_setup_complete: z.boolean(),
+  /** ISO timestamp when the account was suspended, or null. */
+  disabled_at: z.string().nullable(),
+  created_at: z.string(),
+  last_seen_at: z.string().nullable(),
+  food_entries: z.number(),
+  chat_messages: z.number(),
+  last_entry_at: z.string().nullable(),
+  ai_turns: z.number(),
+  ai_cost_usd: z.number(),
+});
+export type AdminUser = z.infer<typeof AdminUser>;
+
+export const TableSummary = z.object({
+  name: z.string(),
+  rows: z.number(),
+  bytes: z.number(),
+});
+export type TableSummary = z.infer<typeof TableSummary>;
+
+export const TablePage = z.object({
+  table: z.string(),
+  columns: z.array(z.string()),
+  rows: z.array(z.record(z.string(), z.unknown())),
+  total: z.number(),
+  limit: z.number(),
+  offset: z.number(),
+  /** Columns deliberately withheld — password hashes, session tokens. */
+  redacted: z.array(z.string()),
+});
+export type TablePage = z.infer<typeof TablePage>;
+
+/** How much to trust a cost figure. See `ai_usage.cost_source`. */
+export const COST_SOURCES = ['reported', 'estimated', 'unknown'] as const;
+export const CostSource = z.enum(COST_SOURCES);
+export type CostSource = z.infer<typeof CostSource>;
+
+export const CostTotals = z.object({
+  turns: z.number(),
+  failed_turns: z.number(),
+  cost_usd: z.number(),
+  input_tokens: z.number(),
+  output_tokens: z.number(),
+  cache_read_tokens: z.number(),
+  cache_write_tokens: z.number(),
+  avg_cost_usd: z.number(),
+  p95_duration_ms: z.number().nullable(),
+  active_users: z.number(),
+});
+export type CostTotals = z.infer<typeof CostTotals>;
+
+export const CostByKind = CostTotals.extend({
+  kind: z.string(),
+  model: z.string(),
+});
+export type CostByKind = z.infer<typeof CostByKind>;
+
+export const CostDay = z.object({
+  date: z.string(),
+  turns: z.number(),
+  cost_usd: z.number(),
+  active_users: z.number(),
+});
+export type CostDay = z.infer<typeof CostDay>;
+
+export const CostByUser = z.object({
+  user_id: z.string().nullable(),
+  email: z.string().nullable(),
+  turns: z.number(),
+  cost_usd: z.number(),
+  last_turn_at: z.string().nullable(),
+});
+export type CostByUser = z.infer<typeof CostByUser>;
+
+/**
+ * The viability numbers. `cost_per_user_month_usd` is the headline; the
+ * projection is that figure multiplied out, which is only as good as the
+ * window it was measured over — hence `window_days` travelling with it.
+ */
+export const Economics = z.object({
+  window_days: z.number(),
+  active_users: z.number(),
+  cost_usd: z.number(),
+  turns: z.number(),
+  cost_per_turn_usd: z.number(),
+  cost_per_user_month_usd: z.number(),
+  heaviest_user_month_usd: z.number(),
+  turns_per_user_day: z.number(),
+  projection: z.array(z.object({ users: z.number(), monthly_usd: z.number() })),
+  /** 0–1. Anything above zero means the headline is an undercount. */
+  unpriced_share: z.number(),
+});
+export type Economics = z.infer<typeof Economics>;
+
+export const UsageTurn = z.object({
+  id: z.string().uuid(),
+  user_id: z.string().nullable(),
+  email: z.string().nullable(),
+  occurred_at: z.string(),
+  provider: z.string(),
+  kind: z.string(),
+  model: z.string(),
+  input_tokens: z.number(),
+  output_tokens: z.number(),
+  cache_read_tokens: z.number(),
+  cache_write_tokens: z.number(),
+  cost_usd: z.number(),
+  cost_source: CostSource,
+  duration_ms: z.number().nullable(),
+  num_turns: z.number(),
+  ok: z.boolean(),
+  error: z.string().nullable(),
+});
+export type UsageTurn = z.infer<typeof UsageTurn>;
+
+export const CostReport = z.object({
+  days: z.number(),
+  totals: CostTotals,
+  by_kind: z.array(CostByKind),
+  by_day: z.array(CostDay),
+  by_user: z.array(CostByUser),
+  economics: Economics,
+});
+export type CostReport = z.infer<typeof CostReport>;

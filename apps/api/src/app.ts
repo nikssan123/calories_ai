@@ -4,7 +4,9 @@ import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import { registerRoutes } from './routes/index.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
+import { registerAdminRoutes } from './routes/admin.ts';
 import { resolveSession, SESSION_COOKIE } from './services/auth.ts';
+import { isDisabled } from './services/admin.ts';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -49,7 +51,11 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
   /** Resolve the session on every request; route guards decide what to do with it. */
   app.addHook('onRequest', async (request) => {
     const token = request.cookies[SESSION_COOKIE];
-    request.userId = token ? await resolveSession(token) : null;
+    const userId = token ? await resolveSession(token) : null;
+    // A suspended account is treated as signed out rather than having its
+    // sessions merely revoked, so a cookie minted before the suspension — or
+    // one from a device that never came back — stops working immediately.
+    request.userId = userId && (await isDisabled(userId)) ? null : userId;
   });
 
   const PUBLIC_PREFIXES = ['/health', '/auth/'];
@@ -63,6 +69,7 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
   });
 
   await registerAuthRoutes(app);
+  await registerAdminRoutes(app);
   await registerRoutes(app);
 
   return app;

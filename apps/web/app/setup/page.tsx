@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Check } from 'lucide-react';
+import Link from 'next/link';
+import { Check, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ActivityLevel, DaySummary, Goal, Profile, Sex } from '@ct/shared';
 import { api } from '@/lib/api';
@@ -47,7 +48,7 @@ const GOAL_LABELS: Record<Goal, string> = {
 };
 
 export default function SetupPage() {
-  const { signOut } = useAuth();
+  const { isAdmin, signOut } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [day, setDay] = useState<DaySummary | null>(null);
   const [saving, setSaving] = useState(false);
@@ -277,6 +278,16 @@ export default function SetupPage() {
             {profile.email ?? '—'}
           </span>
         </InsetRow>
+        {/* The sidebar carries this from `lg` up; on a phone there is no
+            sidebar, so the account group is where it can live. */}
+        {isAdmin && (
+          <Link
+            href="/admin"
+            className="flex items-center gap-2 px-4 py-3 text-[15px] text-[var(--calories)]"
+          >
+            <Shield size={16} /> Admin
+          </Link>
+        )}
         <button
           type="button"
           onClick={() => void signOut()}

@@ -84,6 +84,43 @@ export interface AgentRequest {
   maxTurns: number;
 }
 
+/**
+ * Tokens a turn consumed, normalised across providers.
+ *
+ * Cache reads and writes are kept apart from `inputTokens` rather than folded
+ * in, because they bill at a tenth and 1.25x of the input rate respectively —
+ * summing them would misprice a turn by more than the turn costs. Both
+ * providers already report them separately.
+ */
+export interface TokenUsage {
+  /** Uncached input. Excludes both cache figures below. */
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  /**
+   * Per-model split, when the provider gives one. A single turn can touch
+   * several models — a subagent, a compaction pass — and the panel needs to
+   * show that rather than attributing it all to the requested model.
+   */
+  byModel?: Record<string, TokenUsage & { costUsd?: number }>;
+}
+
+export const EMPTY_USAGE: TokenUsage = {
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheReadTokens: 0,
+  cacheWriteTokens: 0,
+};
+
+/**
+ * How much to trust `costUsd`. A provider that priced the turn itself is
+ * authoritative; one we priced from a rate card is an estimate that ages; and
+ * `unknown` means the tokens are real but nobody could put a price on them —
+ * which is emphatically not the same as free.
+ */
+export type CostSource = 'reported' | 'estimated' | 'unknown';
+
 export interface Outcome {
   text: string;
   /** The model that actually ran, so a turn can be costed against its own rates. */
@@ -92,6 +129,11 @@ export interface Outcome {
   sessionId: string | null;
   numTurns: number;
   costUsd: number;
+  /** Whether `costUsd` was priced by the provider, by us, or not at all. */
+  costSource?: CostSource;
+  usage?: TokenUsage;
+  /** Wall-clock time inside the provider, for the latency half of viability. */
+  durationMs?: number;
   error?: string;
   /** The resumed session is gone; the caller may retry without one. */
   staleSession?: boolean;

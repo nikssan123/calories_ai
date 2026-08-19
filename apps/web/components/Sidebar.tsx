@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ChartLine, Flame, LogOut, MessageSquareText, User } from 'lucide-react';
+import { ChartLine, Flame, LogOut, MessageSquareText, Shield, User } from 'lucide-react';
 import { useAuth } from '@/components/AuthGate';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/utils';
@@ -20,7 +20,7 @@ const TABS = [
  */
 export function Sidebar() {
   const pathname = usePathname();
-  const { profile, signOut } = useAuth();
+  const { profile, isAdmin, signOut } = useAuth();
 
   if (pathname === '/login') return null;
 
@@ -63,6 +63,32 @@ export function Sidebar() {
             );
           })}
         </ul>
+
+        {/* Kept out of TABS: admin is not a peer of the four product screens,
+            and most accounts never see it. */}
+        {isAdmin && (
+          <ul className="border-border mt-3 space-y-0.5 border-t pt-3">
+            <li>
+              <Link
+                href="/admin"
+                aria-current={pathname === '/admin' ? 'page' : undefined}
+                className={cn(
+                  'flex items-center gap-3 rounded-xl px-3 py-2 text-[15px] transition-colors',
+                  pathname === '/admin'
+                    ? 'bg-card text-foreground font-medium shadow-sm'
+                    : 'text-muted-foreground hover:bg-card/60 hover:text-foreground',
+                )}
+              >
+                <Shield
+                  size={19}
+                  strokeWidth={pathname === '/admin' ? 2.3 : 1.9}
+                  style={pathname === '/admin' ? { color: 'var(--calories)' } : undefined}
+                />
+                Admin
+              </Link>
+            </li>
+          </ul>
+        )}
       </nav>
 
       <button

@@ -7,6 +7,8 @@ import { api } from '@/lib/api';
 
 interface AuthValue {
   profile: Profile | null;
+  /** Whether this account may open /admin. Decided by the API, never the client. */
+  isAdmin: boolean;
   loading: boolean;
   refresh: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -14,6 +16,7 @@ interface AuthValue {
 
 const AuthContext = createContext<AuthValue>({
   profile: null,
+  isAdmin: false,
   loading: true,
   refresh: async () => {},
   signOut: async () => {},
@@ -36,7 +39,13 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     try {
       setStatus(await api.me());
     } catch {
-      setStatus({ authenticated: false, profile: null, signup_allowed: true, has_accounts: false });
+      setStatus({
+        authenticated: false,
+        profile: null,
+        signup_allowed: true,
+        has_accounts: false,
+        is_admin: false,
+      });
     } finally {
       setLoading(false);
     }
@@ -54,7 +63,13 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     await api.logout();
-    setStatus({ authenticated: false, profile: null, signup_allowed: true, has_accounts: false });
+    setStatus({
+      authenticated: false,
+      profile: null,
+      signup_allowed: true,
+      has_accounts: false,
+      is_admin: false,
+    });
     router.replace('/login');
   }, [router]);
 
@@ -64,7 +79,13 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ profile: status?.profile ?? null, loading, refresh, signOut }}
+      value={{
+        profile: status?.profile ?? null,
+        isAdmin: status?.is_admin ?? false,
+        loading,
+        refresh,
+        signOut,
+      }}
     >
       {children}
     </AuthContext.Provider>

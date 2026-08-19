@@ -1,5 +1,14 @@
 import { z } from 'zod';
-import type { AgentRequest, AiProvider, Outcome, ToolDefinition, TurnKind } from './types.ts';
+import { openAiRate, priceUsage } from '../pricing.ts';
+import {
+  EMPTY_USAGE,
+  type AgentRequest,
+  type AiProvider,
+  type Outcome,
+  type TokenUsage,
+  type ToolDefinition,
+  type TurnKind,
+} from './types.ts';
 
 /**
  * OpenAI, and anything speaking its Chat Completions dialect — Groq, Together,
@@ -20,6 +29,12 @@ interface OpenAiConfig {
   model: string;
   /** Per-turn-kind overrides, each falling back to `model`. */
   models: Record<TurnKind, string>;
+  /**
+   * USD per million tokens, or null when nobody configured it. Null is a real
+   * state, not a zero: the tokens still get recorded and the admin panel says
+   * the price is unconfigured, because a made-up rate is worse than a blank.
+   */
+  rate: ReturnType<typeof openAiRate>;
 }
 
 export function readOpenAiConfig(source: NodeJS.ProcessEnv = process.env): OpenAiConfig {
@@ -47,6 +62,7 @@ export function readOpenAiConfig(source: NodeJS.ProcessEnv = process.env): OpenA
       setup: source.OPENAI_MODEL_SETUP ?? base,
       review: source.OPENAI_MODEL_REVIEW ?? base,
     },
+    rate: openAiRate(source),
   };
 }
 
@@ -81,7 +97,16 @@ export function createOpenAiProvider(): AiProvider {
     },
 
     async run(request: AgentRequest): Promise<Outcome> {
-      const outcome: Outcome = { text: '', sessionId: null, numTurns: 0, costUsd: 0 };
+      const usage: TokenUsage = { ...EMPTY_USAGE };
+      const startedAt = Date.now();
+      const outcome: Outcome = {
+        text: '',
+        sessionId: null,
+        numTurns: 0,
+        costUsd: 0,
+        costSource: 'unknown',
+        usage,
+      };
 
       const messages: ChatMessage[] = [
         { role: 'system', content: request.systemPrompt },
@@ -96,15 +121,31 @@ export function createOpenAiProvider(): AiProvider {
       const model = config.models[request.kind];
       outcome.model = model;
 
+      /**
+       * A turn is several round trips, and each one bills. Settling up only at
+       * the end — including on the error paths — is what stops a tool loop that
+       * failed halfway from looking free.
+       */
+      const settle = (): Outcome => {
+        outcome.durationMs = Date.now() - startedAt;
+        usage.byModel = { [model]: { ...usage, byModel: undefined } };
+        if (config.rate) {
+          outcome.costUsd = priceUsage(usage, config.rate);
+          outcome.costSource = 'estimated';
+        }
+        return outcome;
+      };
+
       try {
         for (let turn = 0; turn < request.maxTurns; turn++) {
           outcome.numTurns = turn + 1;
           const reply = await callApi(config, model, messages, toolSpecs);
+          accumulate(usage, reply.usage);
 
           const calls = reply.tool_calls ?? [];
           if (calls.length === 0) {
             outcome.text = (reply.content ?? '').trim();
-            return outcome;
+            return settle();
           }
 
           // Push the assistant's tool-call turn before the results, or the next
@@ -123,10 +164,10 @@ export function createOpenAiProvider(): AiProvider {
         // Out of turns with tools still in flight. The writes already happened,
         // so this is a truncated reply rather than a failed one.
         outcome.error = `The agent stopped early (max turns: ${request.maxTurns}).`;
-        return outcome;
+        return settle();
       } catch (error) {
         outcome.error = error instanceof Error ? error.message : String(error);
-        return outcome;
+        return settle();
       }
     },
   };
@@ -181,12 +222,33 @@ async function runTool(byName: Map<string, ToolDefinition>, call: ToolCall): Pro
   }
 }
 
+/**
+ * Adds one response's token counts onto the running total for the turn.
+ *
+ * `prompt_tokens` includes cached tokens in this dialect, unlike Anthropic's,
+ * so the cached portion is subtracted back out — otherwise a cache hit would be
+ * charged at the full input rate, which is ten times what it costs.
+ */
+function accumulate(usage: TokenUsage, reported: ApiUsage | undefined): void {
+  if (!reported) return;
+  const cached = reported.prompt_tokens_details?.cached_tokens ?? 0;
+  usage.inputTokens += Math.max(0, (reported.prompt_tokens ?? 0) - cached);
+  usage.cacheReadTokens += cached;
+  usage.outputTokens += reported.completion_tokens ?? 0;
+}
+
+interface ApiUsage {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  prompt_tokens_details?: { cached_tokens?: number };
+}
+
 async function callApi(
   config: OpenAiConfig,
   model: string,
   messages: ChatMessage[],
   tools: ReturnType<typeof toFunctionSpec>[],
-): Promise<{ content: string | null; tool_calls?: ToolCall[] }> {
+): Promise<{ content: string | null; tool_calls?: ToolCall[]; usage?: ApiUsage }> {
   const response = await fetch(`${config.baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -207,8 +269,10 @@ async function callApi(
 
   const body = (await response.json()) as {
     choices?: { message?: { content: string | null; tool_calls?: ToolCall[] } }[];
+    usage?: ApiUsage;
   };
   const message = body.choices?.[0]?.message;
   if (!message) throw new Error('OpenAI returned no choices.');
-  return message;
+  // Usage is reported per response, not per choice, so it rides along here.
+  return { ...message, usage: body.usage };
 }
