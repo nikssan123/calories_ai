@@ -207,8 +207,10 @@ export default function JournalPage() {
           </div>
         </main>
 
-        <div className="shrink-0">
-          <div className="mx-auto w-full max-w-2xl lg:px-8 lg:pb-4">
+        {/* The gutter goes outside the column, matching <main> above — with it
+            inside, the composer rendered 64px narrower than the messages. */}
+        <div className="shrink-0 lg:px-8 lg:pb-4">
+          <div className="mx-auto w-full max-w-2xl">
             <Composer onSend={(p) => void send(p)} disabled={busy} />
           </div>
         </div>

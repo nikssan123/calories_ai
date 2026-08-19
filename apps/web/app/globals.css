@@ -60,6 +60,11 @@
 
   /* Translucent material for the header and tab bar. */
   --material: rgba(249, 249, 251, 0.82);
+
+  /* Scrollbar thumb. Tinted like --border rather than a flat grey, so a gutter
+     that does appear reads as the same hairline family as everything else. */
+  --scrollbar-thumb: rgba(60, 60, 67, 0.26);
+  --scrollbar-thumb-hover: rgba(60, 60, 67, 0.45);
 }
 
 .dark {
@@ -98,6 +103,9 @@
   --brand-purple: #c489f7;
 
   --material: rgba(28, 28, 30, 0.78);
+
+  --scrollbar-thumb: rgba(235, 235, 245, 0.22);
+  --scrollbar-thumb-hover: rgba(235, 235, 245, 0.4);
 }
 
 /* Honour the OS setting as well as the .dark class. */
@@ -129,6 +137,8 @@
     --exercise: #66d4cf;
     --brand-purple: #c489f7;
     --material: rgba(28, 28, 30, 0.78);
+    --scrollbar-thumb: rgba(235, 235, 245, 0.22);
+    --scrollbar-thumb-hover: rgba(235, 235, 245, 0.4);
   }
 }
 
@@ -202,6 +212,48 @@
   h1,
   h2 {
     letter-spacing: -0.022em;
+  }
+
+  /*
+   * Scrollbars. macOS hides them until you scroll, so this changes nothing for
+   * most users here — but with "Show scroll bars: Always", and on every other
+   * platform, the default is a wide opaque gutter that cuts a grey stripe down
+   * the day rail and through the inset cards. Thin, tinted and trackless keeps
+   * the chrome deferential where it is painted at all.
+   */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+
+  /*
+   * Safari before 18.2 has no `scrollbar-color`. Chromium ignores these
+   * pseudo-elements as soon as `scrollbar-width` is honoured, so the two blocks
+   * can never both apply and there is no need to keep them in sync visually.
+   */
+  @supports not (scrollbar-color: transparent) {
+    ::-webkit-scrollbar {
+      width: 11px;
+      height: 11px;
+    }
+
+    ::-webkit-scrollbar-track,
+    ::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+
+    /* A transparent border plus `content-box` clipping is what insets the thumb
+       from the edge — there is no padding property on a scrollbar. */
+    ::-webkit-scrollbar-thumb {
+      background-color: var(--scrollbar-thumb);
+      background-clip: content-box;
+      border: 3px solid transparent;
+      border-radius: 999px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background-color: var(--scrollbar-thumb-hover);
+    }
   }
 }
 

@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { ArrowUp, Camera, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 export interface ComposerPayload {
   text: string;
@@ -119,7 +120,17 @@ export function Composer({
   }
 
   return (
-    <div className="material border-border border-t px-3 py-2.5">
+    <div
+      className={cn(
+        // Phone: a translucent bar welded to the bottom edge of the screen, with
+        // the conversation scrolling under its blur.
+        'border-border max-lg:material px-3 py-2.5 max-lg:border-t',
+        // Desktop: nothing is welded to anything. The bar floated in the middle
+        // of the window trailing a hairline off into empty space, so from `lg`
+        // up it stops pretending to be chrome and becomes a card of its own.
+        'lg:bg-card lg:focus-within:border-ring lg:rounded-[1.75rem] lg:border lg:px-2.5 lg:py-2 lg:shadow-sm lg:transition-colors',
+      )}
+    >
       {photo && (
         <div className="relative mb-2 ml-11 w-fit">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -182,7 +193,12 @@ export function Composer({
           rows={1}
           placeholder="Two eggs and toast…"
           disabled={disabled}
-          className="border-input bg-card placeholder:text-muted-foreground focus:border-ring max-h-33 min-h-9 flex-1 resize-none rounded-[1.125rem] border px-3.5 py-[0.4375rem] text-base leading-6 outline-none disabled:opacity-60"
+          className={cn(
+            'border-input bg-card placeholder:text-muted-foreground focus:border-ring max-h-33 min-h-9 flex-1 resize-none rounded-[1.125rem] border px-3.5 py-[0.4375rem] text-base leading-6 outline-none disabled:opacity-60',
+            // A bordered field inside the bordered desktop card is one box too
+            // many; there, the card itself is the field and takes the focus ring.
+            'lg:border-transparent lg:bg-transparent lg:px-1 lg:focus:border-transparent',
+          )}
         />
 
         <Button
