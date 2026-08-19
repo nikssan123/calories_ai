@@ -60,6 +60,11 @@ services:
       # Close registration once your own account exists. The very first account
       # is always permitted regardless, or the deployment would be unusable.
       ALLOW_SIGNUP: ${ALLOW_SIGNUP:-false}
+      # Who may open /admin, comma-separated. Empty falls back to the oldest
+      # account, which is right for a personal install; naming addresses here
+      # replaces that fallback rather than adding to it, so an address that does
+      # not match an existing account leaves nobody holding the panel.
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       # Optional: bill per token instead of using the subscription login below.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
 
