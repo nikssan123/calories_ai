@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readEnv, required, testDatabaseUrl } from '../src/env.ts';
+import { applyFileEnv, readEnv, required, testDatabaseUrl } from '../src/env.ts';
 
 const BASE = { DATABASE_URL: 'postgres://ct:ct@localhost:5433/calorytracker' };
 
@@ -74,11 +74,45 @@ describe('readEnv', () => {
     expect(readEnv({ ...BASE }).uploadDir).toMatch(/uploads$/);
   });
 
+  /**
+   * The upload-directory half of the same guarantee the _test database gives.
+   * .env sets UPLOAD_DIR for development, and honouring it under test pointed
+   * the suite — which writes and deletes photos — at the real uploads folder.
+   */
+  it('ignores UPLOAD_DIR under test, whatever .env says', () => {
+    const env = readEnv({ ...BASE, NODE_ENV: 'test', UPLOAD_DIR: './uploads' });
+    expect(env.uploadDir).toContain('.test-uploads');
+  });
+
   it('honours an explicit UPLOAD_DIR', () => {
     expect(readEnv({ ...BASE, UPLOAD_DIR: './custom' }).uploadDir).toMatch(/custom$/);
   });
 
   it('reads PORT as a number', () => {
     expect(readEnv({ ...BASE, PORT: '5000' }).port).toBe(5000);
+  });
+});
+
+/**
+ * `.env` used to be loaded over process.env, which made the file outrank the
+ * shell: `PORT=4300 pnpm dev:api` bound 4000 anyway and died with EADDRINUSE.
+ */
+describe('applyFileEnv', () => {
+  it('fills in variables the environment has not set', () => {
+    const target: NodeJS.ProcessEnv = {};
+    applyFileEnv(target, { PORT: '4000' });
+    expect(target.PORT).toBe('4000');
+  });
+
+  it('leaves a variable the environment already set alone', () => {
+    const target: NodeJS.ProcessEnv = { PORT: '4300' };
+    applyFileEnv(target, { PORT: '4000' });
+    expect(target.PORT).toBe('4300');
+  });
+
+  it('treats an empty string as set, so a deliberate blank is not overwritten', () => {
+    const target: NodeJS.ProcessEnv = { ALLOW_SIGNUP: '' };
+    applyFileEnv(target, { ALLOW_SIGNUP: 'true' });
+    expect(target.ALLOW_SIGNUP).toBe('');
   });
 });

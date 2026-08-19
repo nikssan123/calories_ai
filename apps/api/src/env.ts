@@ -8,8 +8,27 @@ import { config } from 'dotenv';
 // apps/api and miss the root file.
 const apiRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = resolve(apiRoot, '..', '..');
+
+/**
+ * Files are merged into their own object rather than straight into process.env,
+ * so a real environment variable still outranks both — the dotenv convention.
+ * Loading them with `override` against process.env instead made the .env file
+ * win over the shell, which silently ignored anything passed per-invocation:
+ * `PORT=4300 pnpm dev:api` bound 4000 anyway and died with EADDRINUSE.
+ */
+const fromFiles: Record<string, string> = {};
 for (const candidate of [join(repoRoot, '.env'), join(apiRoot, '.env')]) {
-  if (existsSync(candidate)) config({ path: candidate, override: true, quiet: true });
+  if (existsSync(candidate)) {
+    config({ path: candidate, override: true, quiet: true, processEnv: fromFiles });
+  }
+}
+applyFileEnv(process.env, fromFiles);
+
+/** Files fill in only what the surrounding environment has not already set. */
+export function applyFileEnv(target: NodeJS.ProcessEnv, fromFiles: Record<string, string>): void {
+  for (const [key, value] of Object.entries(fromFiles)) {
+    target[key] ??= value;
+  }
 }
 
 export function required(source: NodeJS.ProcessEnv, name: string): string {
@@ -57,7 +76,12 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
     allowSignup: (source.ALLOW_SIGNUP ?? 'true') !== 'false',
     /** Session cookies must be Secure once served over HTTPS. */
     secureCookies: (source.SECURE_COOKIES ?? 'false') === 'true',
-    uploadDir: resolve(apiRoot, source.UPLOAD_DIR ?? (isTest ? './.test-uploads' : './uploads')),
+    /**
+     * Forced under test for the same reason the database name is: the suite
+     * writes and deletes meal photos, and an UPLOAD_DIR set in .env would aim
+     * that at the developer's real uploads folder.
+     */
+    uploadDir: resolve(apiRoot, isTest ? './.test-uploads' : (source.UPLOAD_DIR ?? './uploads')),
     /**
      * Working directory for the spawned agent process. Deliberately its own empty
      * directory: the agent has no file tools, and its cwd should not be the folder
