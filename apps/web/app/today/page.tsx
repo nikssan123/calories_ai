@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, RotateCcw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { DaySummary, FoodEntry, Meal } from '@ct/shared';
+import type { DaySummary, ExerciseEntry, FoodEntry, Meal } from '@ct/shared';
 import { api } from '@/lib/api';
 import { CalorieRing } from '@/components/CalorieRing';
 import { MacroBars } from '@/components/MacroBars';
@@ -46,6 +46,32 @@ export default function TodayPage() {
     );
     try {
       await api.deleteFoodEntry(entry.id);
+      toast.success(`Removed ${entry.description}`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+    void load(offset);
+  }
+
+  /**
+   * Exercise has no expand-to-edit affordance the way food does — there are no
+   * items under it — so the burn is corrected in the journal and removed here.
+   * Totals are adjusted optimistically because they head the section.
+   */
+  async function removeExercise(entry: ExerciseEntry) {
+    const burn = Math.round(entry.kcal_burned);
+    setDay((prev) =>
+      prev
+        ? {
+            ...prev,
+            exercise_entries: prev.exercise_entries.filter((e) => e.id !== entry.id),
+            burned_kcal: prev.burned_kcal - burn,
+            net_kcal: prev.net_kcal + burn,
+          }
+        : prev,
+    );
+    try {
+      await api.deleteExerciseEntry(entry.id);
       toast.success(`Removed ${entry.description}`);
     } catch (e) {
       toast.error((e as Error).message);
@@ -120,6 +146,11 @@ export default function TodayPage() {
               </span>{' '}
               of {day.targets.kcal.toLocaleString()} kcal
             </p>
+            {day.burned_kcal > 0 && (
+              <p className="tnum text-footnote text-muted-foreground mt-1">
+                net {day.net_kcal.toLocaleString()} kcal after exercise
+              </p>
+            )}
           </div>
 
           <MacroBars consumed={day.consumed} targets={day.targets} />
@@ -184,6 +215,15 @@ export default function TodayPage() {
                   <span className="tnum text-muted-foreground text-[15px]">
                     ~{Math.round(entry.kcal_burned)}
                   </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => void removeExercise(entry)}
+                    aria-label={`Delete ${entry.description}`}
+                    className="text-muted-foreground hover:text-destructive -mr-2 size-8 shrink-0 rounded-full"
+                  >
+                    <Trash2 size={15} />
+                  </Button>
                 </InsetRow>
               ))}
             </InsetGroup>

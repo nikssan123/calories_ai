@@ -305,6 +305,20 @@ function StatusBar({
           }}
         />
       </div>
+      {/*
+        §9: the bar tracks the plain target, so a run never quietly enlarges the
+        budget. But logging one has to visibly change this screen — otherwise the
+        only feedback is a chat bubble — so the burn and the net sit under it.
+      */}
+      {day.burned_kcal > 0 && (
+        <p className="tnum text-footnote text-muted-foreground mt-1.5">
+          <span className="text-[var(--exercise)]">
+            −{day.burned_kcal.toLocaleString()} burned
+          </span>
+          {' · net '}
+          {day.net_kcal.toLocaleString()} kcal
+        </p>
+      )}
     </header>
   );
 }

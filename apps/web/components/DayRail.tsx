@@ -41,6 +41,11 @@ export function DayRail({ day }: { day: DaySummary | null }) {
               </span>{' '}
               of {day.targets.kcal.toLocaleString()} kcal
             </p>
+            {day.burned_kcal > 0 && (
+              <p className="tnum text-footnote text-muted-foreground mt-1">
+                net {day.net_kcal.toLocaleString()} kcal after exercise
+              </p>
+            )}
           </div>
 
           <MacroBars consumed={day.consumed} targets={day.targets} className="mt-6" />
