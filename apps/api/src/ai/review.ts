@@ -1,16 +1,14 @@
-import type { Options } from '@anthropic-ai/claude-agent-sdk';
 import type { ReviewStats, WeeklyReview } from '@ct/shared';
 import { query } from '../db.ts';
-import { env } from '../env.ts';
 import { insertMessage } from '../services/chat.ts';
 import { applyAdaptiveTargets } from '../services/adaptive.ts';
 import { buildReviewStats, reviewWeekFor, saveReview } from '../services/reviews.ts';
 import { getUser, getUserContext } from '../services/user.ts';
 import { localDateFor } from '../time.ts';
-import { executeAgent } from './agent.ts';
-import { AUTH_HELP, EFFORT, hasSubscriptionAuth, MAX_TURNS, MODEL } from './client.ts';
+import { MAX_TURNS } from './client.ts';
+import { createProvider, type AgentRequest } from './providers/index.ts';
 import { REVIEW_SYSTEM_PROMPT, reviewTaskPrompt } from './prompt.ts';
-import { buildNutritionServer, SERVER_NAME } from './tools.ts';
+import { buildNutritionServer } from './tools.ts';
 
 /**
  * Generates one weekly review and publishes it into the journal.
@@ -29,8 +27,6 @@ export async function generateWeeklyReview(
   userId: string,
   options: GenerateOptions = {},
 ): Promise<WeeklyReview> {
-  if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) throw new Error(AUTH_HELP);
-
   const { userId: id, ...ctx } = await getUserContext(userId);
   const today = options.today ?? localDateFor(new Date(), ctx);
   const week = reviewWeekFor(today);
@@ -40,27 +36,29 @@ export async function generateWeeklyReview(
   const profile = await getUser(id);
 
   // Read tools only. A review that could log food would eventually log food.
-  const { server, toolNames } = buildNutritionServer(
-    { userId: id, ctx, now: new Date(), photoId: null, actions: [] },
-    { readOnly: true },
-  );
+  const toolContext = { userId: id, ctx, now: new Date(), photoId: null, actions: [] };
+  const { tools, toolNames } = buildNutritionServer(toolContext, { readOnly: true });
 
-  const agentOptions: Options = {
+  const provider = createProvider(toolContext);
+  const authError = provider.checkAuth();
+  if (authError) throw new Error(authError);
+
+  const request: AgentRequest = {
+    kind: 'review',
     systemPrompt: REVIEW_SYSTEM_PROMPT,
-    mcpServers: { [SERVER_NAME]: server },
-    allowedTools: toolNames,
-    tools: [],
-    settingSources: [],
-    permissionMode: 'bypassPermissions',
-    model: MODEL,
-    effort: EFFORT,
+    text: reviewTaskPrompt(stats, profile),
+    photo: null,
+    tools,
+    toolNames,
+    // A review is a single self-contained question; there is no thread to replay.
+    history: [],
+    readOnly: true,
     maxTurns: MAX_TURNS,
-    cwd: env.agentCwd,
   };
 
   // Deliberately no `resume`: a review must not inherit — or pollute — the
   // journal's conversation. `recentReviewPrompt` carries it back the other way.
-  const outcome = await executeAgent(reviewTaskPrompt(stats, profile), agentOptions, null);
+  const outcome = await provider.run(request, null);
   if (outcome.error) throw new Error(outcome.error);
 
   const content = outcome.text || fallbackReview(stats);

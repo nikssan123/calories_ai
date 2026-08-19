@@ -31,6 +31,109 @@ packages/
   api-client/  fetch-only client. No node imports, so RN can use it as-is.
 ```
 
+## Getting started
+
+**Prerequisites**
+
+- **An AI provider.** By default that is **a Claude Code subscription**, signed in
+  on this machine — the journal runs on the subscription you already pay for, with
+  no API key and no per-token billing. If you don't have it yet, install it and run
+  `claude` once to sign in: <https://claude.com/claude-code>
+  Prefer an API key, or use OpenAI or an OpenAI-compatible service instead? See
+  [Choosing an AI provider](#choosing-an-ai-provider) — it is two lines in `.env`.
+- **Node 22+**, **pnpm**, and **Docker** — Postgres runs in a container, the app
+  itself runs on the host.
+
+**Setup**
+
+```bash
+pnpm setup     # deps, .env, Postgres, migrations
+pnpm dev       # API on :4000, web on :3000
+```
+
+`pnpm setup` is safe to re-run and never overwrites an existing `.env`. It checks
+its prerequisites first, so a missing Docker daemon or an old Node fails with a
+sentence telling you what to fix rather than a stack trace three steps later.
+
+Open <http://localhost:3000>, create an account, and the journal will interview you.
+Then optionally `pnpm seed -- --email=you@example.com` for 21 days of demo history.
+
+**Other scripts:** `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm db:reset` (drop
+the volume and start over). Don't run `build` while `dev` is running — they share
+`apps/web/.next` and will corrupt each other.
+
+## Choosing an AI provider
+
+The journal talks to a provider through one small interface (`apps/api/src/ai/providers/`),
+so which service answers is a config change, not a code change. Set `AI_PROVIDER`
+in `.env` to `anthropic` (the default) or `openai`.
+
+Both providers share the same tool handlers, so a meal is logged identically
+whichever one ran the turn.
+
+### anthropic — your Claude Code subscription (default)
+
+Built on the **Claude Agent SDK**, which reads the OAuth credentials `claude`
+writes to `~/.claude/.credentials.json`. There is no API key and no per-token
+billing — the subscription you already pay for covers it.
+
+This works because the Agent SDK spawns the signed-in `claude` binary rather than
+calling an HTTP endpoint. Two consequences worth knowing:
+
+- Rate limits are shared with your own Claude Code usage. A heavy session at the
+  terminal and a meal log compete for the same budget.
+- Anthropic's docs say third-party developers may not *offer* claude.ai login for
+  their products. A tool only you use isn't that, but it is their line to draw — if
+  this ever becomes something other people sign into, move it to an API key.
+
+Setting `ANTHROPIC_API_KEY` overrides the subscription and bills per token instead.
+
+### openai — an API key
+
+**A ChatGPT subscription does not cover this.** ChatGPT Plus/Pro and the OpenAI
+API are separate products with separate billing; there is no supported way to
+spend a ChatGPT subscription on API calls. This path is metered per token.
+
+```bash
+# .env
+AI_PROVIDER=openai
+OPENAI_API_KEY=sk-...        # https://platform.openai.com/api-keys
+OPENAI_MODEL=gpt-4o          # whatever your account can see
+```
+
+Then `pnpm dev` as usual. Nothing else changes.
+
+Because this provider speaks the Chat Completions dialect over plain `fetch` and
+adds no dependency, **any OpenAI-compatible endpoint works** — Groq, Together,
+OpenRouter, a local Ollama. Point `OPENAI_BASE_URL` at it and use its key:
+
+```bash
+OPENAI_BASE_URL=http://localhost:11434/v1
+```
+
+Those vendors' line-ups are uneven — several cannot see an image at all — so each
+kind of turn can take its own model, falling back to `OPENAI_MODEL`:
+
+```bash
+OPENAI_MODEL=deepseek-chat            # the floor, and the high-volume logging path
+OPENAI_MODEL_VISION=qwen-vl-max       # photo turns
+OPENAI_MODEL_REVIEW=deepseek-reasoner # once a week, so worth the good model
+OPENAI_MODEL_SETUP=                   # the onboarding interview
+```
+
+The trade-off against the Claude path is that OpenAI has no server-side
+conversation store, so this provider replays the recent transcript on every turn
+and drives the tool-calling loop itself. Expect slightly more input tokens per
+message, and note that `cost_usd` is recorded as 0 because the API does not
+return a price.
+
+### Adding another provider
+
+Implement `AiProvider` from `apps/api/src/ai/providers/types.ts` — `checkAuth()`
+and `run()` — and add a case to the factory in `providers/index.ts`. The interface
+is deliberately neutral about whether you keep conversation state (`needsHistory`)
+and hands you the tool definitions already built, so a new provider is one file.
+
 ## Phone and desktop are different layouts, not one scaled
 
 Below `lg` it is a phone: single column, bottom tab bar, the day on its own tab.
@@ -50,26 +153,6 @@ typing indicator and as the macros. `components/Logo.tsx` draws it from the
 tokens so it follows the in-app theme toggle; `public/logo.svg`, `app/icon.svg`
 and `app/apple-icon.png` are the same geometry with the colours baked in.
 
-## Running it
-
-Needs Docker (for Postgres), Node 22+, pnpm, and a signed-in Claude Code
-(`claude`) on the same machine.
-
-```bash
-pnpm install
-cp .env.example .env
-pnpm db:up                    # Postgres on :5433
-pnpm migrate
-pnpm dev                      # API on :4000, web on :3000
-```
-
-Open http://localhost:3000, create an account, and the journal will interview you.
-Then optionally `pnpm seed -- --email=you@example.com` for 21 days of demo history.
-
-Other scripts: `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm db:reset` (drop the
-volume and start over). Don't run `build` while `dev` is running — they share
-`apps/web/.next` and will corrupt each other.
-
 ## Tests
 
 ```bash
@@ -82,7 +165,7 @@ The suite runs against a real Postgres rather than mocks, because most of what c
 wrong here is a query — `apps/api/src/env.ts` forces a `_test` suffix onto the database
 name whenever `NODE_ENV=test`, so `pnpm test` cannot empty your development database even
 if `DATABASE_URL` points straight at it. The database is created and migrated on first
-run; you need `pnpm db:up` and nothing else.
+run; if you have run `pnpm setup` there is nothing else to do.
 
 The Agent SDK's `query` is the only thing stubbed. `tool` and `createSdkMcpServer` stay
 real, so the in-process MCP server under test is the one that ships and the tool handlers
@@ -100,22 +183,6 @@ Writing these found two real bugs, which is roughly what they were for:
   anchors its word boundaries to the first and last alternative only — and "after**noon**"
   ends in "noon".
 - The adaptive window included today, a partial day, biasing every weekly target downward.
-
-## The AI runs on your Claude Code subscription
-
-The journal is built on the **Claude Agent SDK**, which reads the OAuth credentials
-`claude` writes to `~/.claude/.credentials.json`. There is no API key and no
-per-token billing.
-
-Two consequences worth knowing:
-
-- Rate limits are shared with your own Claude Code usage. A heavy session at the
-  terminal and a meal log compete for the same budget.
-- Anthropic's docs say third-party developers may not *offer* claude.ai login for
-  their products. A tool only you use isn't that, but it is their line to draw — if
-  this ever becomes something other people sign into, move it to an API key.
-
-Setting `ANTHROPIC_API_KEY` overrides the subscription and bills per token instead.
 
 ## Accounts
 

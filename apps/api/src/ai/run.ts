@@ -1,18 +1,16 @@
-import type { Options, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { ChatAction, ChatResponse, Profile } from '@ct/shared';
 import { queryOne, query as sql } from '../db.ts';
-import { env } from '../env.ts';
 import type { DayContext } from '../time.ts';
 import { localDateFor } from '../time.ts';
-import { insertMessage } from '../services/chat.ts';
+import { insertMessage, listMessages } from '../services/chat.ts';
 import { buildDaySummary } from '../services/summary.ts';
 import { latestWeight } from '../services/log.ts';
 import { latestReview } from '../services/reviews.ts';
 import { missingProfileFields } from '../services/user.ts';
-import { executeAgent } from './agent.ts';
-import { AUTH_HELP, EFFORT, hasSubscriptionAuth, MAX_TURNS, MODEL } from './client.ts';
+import { MAX_TURNS } from './client.ts';
+import { createProvider, type AgentMessage, type AgentRequest } from './providers/index.ts';
 import { dayContextPrompt, onboardingPrompt, recentReviewPrompt, STABLE_SYSTEM_PROMPT } from './prompt.ts';
-import { buildNutritionServer, SERVER_NAME, type ToolContext } from './tools.ts';
+import { buildNutritionServer, type ToolContext } from './tools.ts';
 
 export interface RunTurnInput {
   userId: string;
@@ -23,11 +21,8 @@ export interface RunTurnInput {
 }
 
 export async function runTurn(input: RunTurnInput): Promise<ChatResponse> {
-  if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) throw new Error(AUTH_HELP);
-
   const now = new Date();
   const today = localDateFor(now, input.ctx);
-  const day = await buildDaySummary(input.userId, today);
 
   const actions: ChatAction[] = [];
   const toolContext: ToolContext = {
@@ -38,7 +33,13 @@ export async function runTurn(input: RunTurnInput): Promise<ChatResponse> {
     actions,
   };
 
-  const { server, toolNames } = buildNutritionServer(toolContext);
+  // Built before any database work so a misconfigured provider fails fast.
+  const provider = createProvider(toolContext);
+  const authError = provider.checkAuth();
+  if (authError) throw new Error(authError);
+
+  const day = await buildDaySummary(input.userId, today);
+  const { tools, toolNames } = buildNutritionServer(toolContext);
 
   // Setup mode is additive: the agent keeps every logging capability while it
   // collects the missing profile values.
@@ -54,35 +55,32 @@ export async function runTurn(input: RunTurnInput): Promise<ChatResponse> {
   const review = needsOnboarding ? null : await latestReview(input.userId);
   const reviewContext = review ? `\n\n---\n\n${recentReviewPrompt(review, today)}` : '';
 
-  const options: Options = {
-    // A plain string means "no Claude Code preset" — the agent gets this prompt
-    // and nothing else. The volatile half (today's numbers, entry ids) is
-    // regenerated every turn.
-    systemPrompt: `${STABLE_SYSTEM_PROMPT}\n\n---\n\n${dayContextPrompt(input.profile, day)}${onboarding}${reviewContext}`,
-    mcpServers: { [SERVER_NAME]: server },
-    allowedTools: toolNames,
-    // Strip every built-in. The agent cannot read files, run bash, or search the
-    // web — it has the nutrition tools and nothing more.
-    tools: [],
-    // Do not load ~/.claude or the repo's CLAUDE.md, skills, or settings. This
-    // agent must not inherit the developer's Claude Code configuration.
-    settingSources: [],
-    // There is no terminal to approve anything; every tool is pre-approved above.
-    permissionMode: 'bypassPermissions',
-    model: MODEL,
-    effort: EFFORT,
+  const request: AgentRequest = {
+    // Photo first: a turn with an image needs a model that can see, whatever
+    // else is going on. Setup outranks a plain log because it happens once and
+    // is the first thing a new account experiences.
+    kind: input.photo ? 'photo_log' : needsOnboarding ? 'setup' : 'text_log',
+    // The stable half is the system prompt; the volatile half (today's numbers,
+    // entry ids) is regenerated every turn.
+    systemPrompt: `${STABLE_SYSTEM_PROMPT}\n\n---\n\n${dayContextPrompt(input.profile, day, currentWeight)}${onboarding}${reviewContext}`,
+    text: input.text,
+    photo: input.photo ? { mediaType: input.photo.mediaType, base64: input.photo.base64 } : null,
+    tools,
+    toolNames,
+    // Providers that keep no session of their own get the transcript replayed.
+    history: provider.needsHistory ? await loadHistory(input.userId) : [],
+    readOnly: false,
     maxTurns: MAX_TURNS,
-    cwd: env.agentCwd,
   };
 
   const sessionId = await loadSessionId(input.userId);
 
-  let outcome = await executeAgent(promptStream(input), options, sessionId);
+  let outcome = await provider.run(request, sessionId);
   if (outcome.staleSession) {
     // The stored session is gone (cleared cache, another machine). Start a new
     // one — the nutrition data lives in Postgres, so only chat continuity is lost.
     await saveSessionId(input.userId, null);
-    outcome = await executeAgent(promptStream(input), options, null);
+    outcome = await provider.run(request, null);
   }
   if (outcome.error) throw new Error(outcome.error);
   if (!outcome.text) outcome.text = 'Logged.';
@@ -98,6 +96,8 @@ export async function runTurn(input: RunTurnInput): Promise<ChatResponse> {
     session_id: outcome.sessionId,
     num_turns: outcome.numTurns,
     cost_usd: outcome.costUsd,
+    model: outcome.model,
+    kind: request.kind,
     tools: actions.map((a) => a.kind),
   });
 
@@ -108,30 +108,10 @@ export async function runTurn(input: RunTurnInput): Promise<ChatResponse> {
   return { message: assistantMessage, actions, day: updatedDay };
 }
 
-/**
- * Streaming input mode. A single message, closed immediately — it is the only
- * way to attach an image, and it terminates the turn cleanly.
- */
-async function* promptStream(input: RunTurnInput): AsyncGenerator<SDKUserMessage> {
-  const content: SDKUserMessage['message']['content'] = [];
-
-  if (input.photo) {
-    content.push({
-      type: 'image',
-      source: {
-        type: 'base64',
-        media_type: input.photo.mediaType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
-        data: input.photo.base64,
-      },
-    });
-  }
-  content.push({ type: 'text', text: input.text });
-
-  yield {
-    type: 'user',
-    message: { role: 'user', content },
-    parent_tool_use_id: null,
-  };
+/** Prior turns for providers that cannot remember the conversation themselves. */
+async function loadHistory(userId: string): Promise<AgentMessage[]> {
+  const messages = await listMessages(userId, 30);
+  return messages.map((m) => ({ role: m.role as AgentMessage['role'], content: m.content }));
 }
 
 async function loadSessionId(userId: string): Promise<string | null> {

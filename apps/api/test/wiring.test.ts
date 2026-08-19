@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { authDescription, AUTH_HELP, EFFORT, MAX_TURNS, MODEL, hasSubscriptionAuth } from '../src/ai/client.ts';
+import { authDescription, AUTH_HELP, MAX_TURNS, MODELS, hasSubscriptionAuth } from '../src/ai/client.ts';
 import { ensureDirectories, env } from '../src/env.ts';
 import { anonymousApp } from './helpers/factories.ts';
 
@@ -15,10 +15,26 @@ afterEach(() => {
 });
 
 describe('agent client', () => {
-  it('pins the model and the reasoning effort', () => {
-    expect(MODEL).toBe('claude-opus-5');
-    expect(EFFORT).toBe('high');
+  it('routes each kind of turn to its own model', () => {
+    expect(MODELS.text_log.model).toBe('claude-haiku-4-5');
+    expect(MODELS.photo_log.model).toBe('claude-sonnet-5');
+    expect(MODELS.setup.model).toBe('claude-sonnet-5');
+    expect(MODELS.review.model).toBe('claude-opus-5');
     expect(MAX_TURNS).toBeGreaterThan(1);
+  });
+
+  /**
+   * The highest-volume path in the app. `effort` is rejected with a 400 on
+   * Haiku 4.5, so sending it would break every text meal log.
+   */
+  it('sends no effort for the model that rejects it', () => {
+    expect(MODELS.text_log.effort).toBeUndefined();
+  });
+
+  it('pins effort everywhere it is accepted', () => {
+    for (const kind of ['photo_log', 'setup', 'review'] as const) {
+      expect(MODELS[kind].effort).toBeDefined();
+    }
   });
 
   it('prefers an API key when one is set', () => {
