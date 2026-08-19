@@ -271,6 +271,7 @@ export interface CreateExerciseInput {
   description: string;
   performedAt: Date;
   durationMin?: number | null;
+  distanceKm?: number | null;
   kcalBurned: number;
   confidence: Confidence;
   source: EntrySource;
@@ -280,8 +281,8 @@ export interface CreateExerciseInput {
 export async function createExerciseEntry(input: CreateExerciseInput): Promise<ExerciseEntry> {
   const row = await queryOne<any>(
     `INSERT INTO exercise_entries
-       (user_id, description, performed_at, local_date, duration_min, kcal_burned, confidence, source)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       (user_id, description, performed_at, local_date, duration_min, distance_km, kcal_burned, confidence, source)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
      RETURNING *`,
     [
       input.userId,
@@ -289,6 +290,7 @@ export async function createExerciseEntry(input: CreateExerciseInput): Promise<E
       input.performedAt.toISOString(),
       localDateFor(input.performedAt, input.ctx),
       input.durationMin ?? null,
+      input.distanceKm ?? null,
       input.kcalBurned,
       input.confidence,
       input.source,
@@ -331,6 +333,7 @@ function toExerciseEntry(row: any): ExerciseEntry {
     performed_at: new Date(row.performed_at).toISOString(),
     local_date: row.local_date,
     duration_min: row.duration_min === null ? null : Number(row.duration_min),
+    distance_km: row.distance_km === null ? null : Number(row.distance_km),
     kcal_burned: Number(row.kcal_burned),
     confidence: row.confidence,
     source: row.source,

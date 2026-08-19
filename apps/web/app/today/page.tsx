@@ -170,9 +170,14 @@ export default function TodayPage() {
                 <InsetRow key={entry.id}>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[15px]">{entry.description}</p>
-                    {entry.duration_min !== null && (
+                    {(entry.distance_km !== null || entry.duration_min !== null) && (
                       <p className="text-footnote text-muted-foreground">
-                        {Math.round(entry.duration_min)} min
+                        {[
+                          entry.distance_km !== null ? `${entry.distance_km} km` : null,
+                          entry.duration_min !== null ? `${Math.round(entry.duration_min)} min` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
                       </p>
                     )}
                   </div>

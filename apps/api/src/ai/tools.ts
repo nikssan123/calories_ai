@@ -205,10 +205,17 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
 
   const logExercise = tool(
     'log_exercise',
-    'Record an activity and its estimated burn. Exercise burn is inherently uncertain — prefer conservative estimates and set confidence to "low" unless the user gave real data from a device.',
+    'Record an activity and its estimated burn. Exercise burn is inherently uncertain — prefer conservative estimates and set confidence to "low" unless the user gave real data from a device. For anything covering ground, fill in distance_km: it is the assumption the user is most likely to correct.',
     {
       description: z.string().describe('e.g. "5km run", "45 min weight training".'),
       duration_min: z.number().nullable().default(null),
+      distance_km: z
+        .number()
+        .nullable()
+        .default(null)
+        .describe(
+          'Distance covered, for a walk, run, ride or swim. Send the figure you actually based the burn on, including when you estimated it yourself from a described route. Null for activities that do not cover ground.',
+        ),
       kcal_burned: z.number().describe('Estimated calories burned.'),
       when: whenField,
       confidence: confidenceField,
@@ -219,6 +226,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         description: args.description,
         performedAt: resolveWhen(args.when ?? undefined, tc.now, tc.ctx),
         durationMin: args.duration_min,
+        distanceKm: args.distance_km,
         kcalBurned: args.kcal_burned,
         confidence: args.confidence as Confidence,
         source: 'text',
@@ -230,7 +238,11 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         entry_id: entry.id,
         summary: `${entry.description} — ~${Math.round(entry.kcal_burned)} kcal`,
       });
-      return ok({ entry_id: entry.id, kcal_burned: entry.kcal_burned });
+      return ok({
+        entry_id: entry.id,
+        kcal_burned: entry.kcal_burned,
+        distance_km: entry.distance_km,
+      });
     },
     { alwaysLoad: true },
   );
@@ -319,6 +331,8 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         exercise: day.exercise_entries.map((e) => ({
           id: e.id,
           description: e.description,
+          duration_min: e.duration_min,
+          distance_km: e.distance_km,
           kcal_burned: Math.round(e.kcal_burned),
         })),
       });

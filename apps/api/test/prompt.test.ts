@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DaySummary, Profile, ReviewStats, WeeklyReview } from '@ct/shared';
+import type { DaySummary, Profile, ReviewStats, WeeklyReview, WeightEntry } from '@ct/shared';
 import {
   dayContextPrompt,
   onboardingPrompt,
@@ -60,6 +60,7 @@ const day: DaySummary = {
       performed_at: '2026-03-10T16:00:00.000Z',
       local_date: '2026-03-10',
       duration_min: 28,
+      distance_km: 5,
       kcal_burned: 300,
       confidence: 'low',
       source: 'text',
@@ -68,11 +69,28 @@ const day: DaySummary = {
   weight: null,
 };
 
+const weight: WeightEntry = {
+  id: '44444444-4444-4444-4444-444444444444',
+  measured_at: '2026-03-08T06:00:00.000Z',
+  local_date: '2026-03-08',
+  weight_kg: 84.2,
+};
+
 describe('STABLE_SYSTEM_PROMPT', () => {
   it('states the rules the product depends on', () => {
     expect(STABLE_SYSTEM_PROMPT).toContain('assume, don’t interrogate'.replace('’', "'"));
     expect(STABLE_SYSTEM_PROMPT).toMatch(/update_food_entry/);
     expect(STABLE_SYSTEM_PROMPT).toMatch(/Never invent a number/);
+  });
+
+  it('tells the agent how to handle an activity it has to estimate', () => {
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/# Exercise/);
+    // Burn scales with bodyweight and distance; both must be named, or the
+    // model falls back to a generic body and a route it never states.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/bodyweight/);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/distance_km/);
+    // It has no map — `tools: []` strips every built-in, web search included.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/no map and cannot look it up/);
   });
 
   it('is a constant, so it stays in the prompt cache', () => {
@@ -83,7 +101,7 @@ describe('STABLE_SYSTEM_PROMPT', () => {
 
 describe('dayContextPrompt', () => {
   it('gives the numbers and the remaining budget', () => {
-    const prompt = dayContextPrompt(profile, day);
+    const prompt = dayContextPrompt(profile, day, weight);
     expect(prompt).toContain('1840 / 2200 kcal (360 left)');
     expect(prompt).toContain('120 / 160 g (40 short)');
     expect(prompt).toContain('Europe/Sofia');
@@ -91,19 +109,41 @@ describe('dayContextPrompt', () => {
   });
 
   it('says "over" once the target is passed', () => {
-    const over = dayContextPrompt(profile, { ...day, consumed: { ...day.consumed, kcal: 2500 } });
+    const over = dayContextPrompt(profile, { ...day, consumed: { ...day.consumed, kcal: 2500 } }, weight);
     expect(over).toContain('(300 over)');
   });
 
   it('drops the protein hint once the target is met', () => {
-    const met = dayContextPrompt(profile, { ...day, consumed: { ...day.consumed, protein_g: 170 } });
+    const met = dayContextPrompt(profile, { ...day, consumed: { ...day.consumed, protein_g: 170 } }, weight);
     expect(met).not.toContain('short');
   });
 
   it('lists the entry ids the agent needs to correct anything', () => {
-    const prompt = dayContextPrompt(profile, day);
+    const prompt = dayContextPrompt(profile, day, weight);
     expect(prompt).toContain('[22222222-2222-2222-2222-222222222222] lunch: Chicken and rice');
     expect(prompt).toContain('[33333333-3333-3333-3333-333333333333] exercise: 5km run');
+  });
+
+  it('gives the body stats that exercise burn is estimated from', () => {
+    const prompt = dayContextPrompt(profile, day, weight);
+    expect(prompt).toContain('84.2 kg (weighed 2026-03-08)');
+    expect(prompt).toContain('180 cm');
+  });
+
+  it('omits the body line while the stats are still unknown', () => {
+    const bare = dayContextPrompt({ ...profile, height_cm: null }, day, null);
+    expect(bare).not.toContain('Their body');
+  });
+
+  it('shows the distance and duration behind a burn, so both can be corrected', () => {
+    const prompt = dayContextPrompt(profile, day, weight);
+    expect(prompt).toContain('exercise: 5km run (5 km, 28 min) — 300 kcal');
+  });
+
+  it('lists exercise ids even on a day with no food logged', () => {
+    const prompt = dayContextPrompt(profile, { ...day, food_entries: [] }, weight);
+    expect(prompt).toContain('use these ids');
+    expect(prompt).toContain('[33333333-3333-3333-3333-333333333333]');
   });
 
   it('says so plainly when nothing has been logged', () => {
@@ -113,7 +153,7 @@ describe('dayContextPrompt', () => {
       burned_kcal: 0,
       food_entries: [],
       exercise_entries: [],
-    });
+    }, weight);
     expect(empty).toContain('none logged');
     expect(empty).not.toContain('use these ids');
   });

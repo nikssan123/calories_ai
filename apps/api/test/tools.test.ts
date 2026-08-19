@@ -222,6 +222,34 @@ describe('log_exercise', () => {
     expect(entries[0]).toMatchObject({ description: '5km run', duration_min: 28 });
     expect(actions[0]!.kind).toBe('exercise_logged');
   });
+
+  it('stores the distance the burn was estimated from', async () => {
+    const { json } = await call('log_exercise', {
+      description: 'Walk through town',
+      duration_min: 45,
+      distance_km: 3.6,
+      kcal_burned: 150,
+      when: null,
+      confidence: 'low',
+    });
+    expect(json.distance_km).toBe(3.6);
+
+    const entries = await listExerciseEntries(user.id, { localDate: TODAY });
+    expect(entries[0]).toMatchObject({ distance_km: 3.6 });
+  });
+
+  it('leaves distance null for an activity that covers no ground', async () => {
+    await call('log_exercise', {
+      description: '45 min weight training',
+      duration_min: 45,
+      distance_km: null,
+      kcal_burned: 200,
+      when: null,
+      confidence: 'low',
+    });
+    const entries = await listExerciseEntries(user.id, { localDate: TODAY });
+    expect(entries[0]!.distance_km).toBeNull();
+  });
 });
 
 describe('log_weight', () => {

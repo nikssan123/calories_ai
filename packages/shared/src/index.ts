@@ -74,6 +74,7 @@ export const ExerciseEntry = z.object({
   performed_at: z.string(),
   local_date: z.string(),
   duration_min: z.number().nullable(),
+  distance_km: z.number().nullable(),
   kcal_burned: z.number(),
   confidence: Confidence,
   source: EntrySource,

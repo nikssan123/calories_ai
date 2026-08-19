@@ -31,6 +31,18 @@ Break each meal into its component items. One item per distinct food, with its o
 
 Infer the meal from what they said or from the time of day. Don't ask which meal it was.
 
+# Exercise
+
+Log deliberate activity with log_exercise. Everyday movement — the walk to the shop, a day spent on their feet — is already priced into their activity level and therefore into their target, so logging it counts it twice.
+
+Burn is a rougher number than food, so be explicit about the arithmetic rather than just the result. State the distance, the pace or the duration you assumed. "~4 km at an easy pace, about 45 min" is something they can correct; "a walk" is not.
+
+For anything that covers ground, work from distance and their bodyweight, which is in the day context below: walking costs roughly 0.5 kcal per kg per km, running about twice that. Put the figure you used in distance_km even when you estimated it yourself, so it is the one value they have to fix.
+
+When a route is given as places rather than a distance — "from the Sea Garden to the cathedral" — estimate the distance from what you know of the area, say the number you used, and set confidence to "low". You have no map and cannot look it up, so if the places mean nothing to you, ask how far it was or how long it took. That is a question where the answer genuinely changes the result.
+
+Exercise never raises the day's eating budget — it is reported beside food, not netted off the target. Don't tell them they have earned anything back.
+
 # Corrections
 
 When the user corrects an estimate, call update_food_entry on the existing entry. Do not log a second entry to compensate — the log must reflect what they ate, not the history of your guesses. To find the entry they mean, call get_day first if you don't already have its id in context.
@@ -60,7 +72,11 @@ Do not narrate your own corrections or mistakes. If you got something wrong and 
 Do the thing they asked for and stop. Don't add entries they didn't mention, don't volunteer analysis they didn't request, and don't ask follow-up questions when the task is already complete.`;
 
 /** Volatile half — recomputed each turn, deliberately after the cache breakpoint. */
-export function dayContextPrompt(profile: Profile, day: DaySummary): string {
+export function dayContextPrompt(
+  profile: Profile,
+  day: DaySummary,
+  weight: WeightEntry | null,
+): string {
   const { date, time, weekday } = localPartsFor(new Date(), profile.timezone);
   const remaining = day.targets.kcal - day.consumed.kcal;
   const proteinLeft = day.targets.protein_g - day.consumed.protein_g;
@@ -68,6 +84,22 @@ export function dayContextPrompt(profile: Profile, day: DaySummary): string {
   const lines = [
     `Current date and time for the user: ${weekday} ${date}, ${time} (${profile.timezone}).`,
     `Their day rolls over at ${String(profile.day_start_hour).padStart(2, '0')}:00, so anything eaten before then counts toward the previous day.`,
+  ];
+
+  // Exercise burn scales with bodyweight, and the latest weigh-in is often on an
+  // earlier day than this one — so it comes from the weight history rather than
+  // from `day.weight`, which is null on any day they did not step on the scale.
+  const body = [
+    weight ? `${weight.weight_kg} kg (weighed ${weight.local_date})` : null,
+    profile.height_cm ? `${profile.height_cm} cm` : null,
+  ].filter((part): part is string => part !== null);
+  if (body.length > 0) {
+    lines.push(
+      `Their body: ${body.join(', ')}. Use this for anything that scales with body size, exercise burn above all.`,
+    );
+  }
+
+  lines.push(
     ``,
     `Today so far (${day.local_date}):`,
     `- Food: ${Math.round(day.consumed.kcal)} / ${day.targets.kcal} kcal (${remaining >= 0 ? `${remaining} left` : `${Math.abs(remaining)} over`})`,
@@ -75,18 +107,26 @@ export function dayContextPrompt(profile: Profile, day: DaySummary): string {
     `- Carbs: ${Math.round(day.consumed.carbs_g)} / ${day.targets.carbs_g} g`,
     `- Fat: ${Math.round(day.consumed.fat_g)} / ${day.targets.fat_g} g`,
     `- Exercise: ${day.burned_kcal > 0 ? `${day.burned_kcal} kcal burned across ${day.exercise_entries.length} session(s)` : 'none logged'}`,
-  ];
+  );
 
-  if (day.food_entries.length > 0) {
+  if (day.food_entries.length > 0 || day.exercise_entries.length > 0) {
     lines.push('', "Today's entries (use these ids when correcting or deleting):");
-    for (const entry of day.food_entries) {
-      lines.push(
-        `- [${entry.id}] ${entry.meal}: ${entry.description} — ${Math.round(entry.kcal)} kcal, ${Math.round(entry.protein_g)}g protein`,
-      );
-    }
+  }
+  for (const entry of day.food_entries) {
+    lines.push(
+      `- [${entry.id}] ${entry.meal}: ${entry.description} — ${Math.round(entry.kcal)} kcal, ${Math.round(entry.protein_g)}g protein`,
+    );
   }
   for (const entry of day.exercise_entries) {
-    lines.push(`- [${entry.id}] exercise: ${entry.description} — ${Math.round(entry.kcal_burned)} kcal`);
+    // Distance and duration are the assumptions behind the burn, so they are
+    // shown too: a correction usually lands on one of them, not on the kcal.
+    const detail = [
+      entry.distance_km !== null ? `${entry.distance_km} km` : null,
+      entry.duration_min !== null ? `${Math.round(entry.duration_min)} min` : null,
+    ].filter((part): part is string => part !== null);
+    lines.push(
+      `- [${entry.id}] exercise: ${entry.description}${detail.length > 0 ? ` (${detail.join(', ')})` : ''} — ${Math.round(entry.kcal_burned)} kcal`,
+    );
   }
 
   return lines.join('\n');
