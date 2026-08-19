@@ -3,6 +3,8 @@
 @import 'shadcn/tailwind.css';
 
 @custom-variant dark (&:is(.dark *));
+/* `keyboard:` styles apply only while the software keyboard is up. */
+@custom-variant keyboard (&:is(html[data-keyboard='open'] *));
 
 /*
  * Apple HIG-derived tokens. Three ideas do most of the work:
@@ -169,6 +171,12 @@
 }
 
 @layer base {
+  :root {
+    /* Written by <KeyboardInset>: the slice of the viewport the software
+       keyboard covers. Zero until it opens, so CSS alone stays correct. */
+    --keyboard-inset: 0px;
+  }
+
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -180,6 +188,14 @@
     background: var(--background);
     color: var(--foreground);
     font-family: var(--font-sans);
+  }
+
+  /* Nothing outside the shell scrolls, so iOS has no reason to shift the
+     layout viewport out from under the keyboard. */
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
   }
 
   /* Apple sets tighter tracking as type gets larger. */
@@ -220,4 +236,10 @@
   background-color: var(--material);
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
+}
+
+/* The app shell owns exactly the viewport the user can actually see. `dvh`
+   tracks the browser chrome but not the keyboard, hence the subtraction. */
+@utility h-shell {
+  height: calc(100dvh - var(--keyboard-inset));
 }

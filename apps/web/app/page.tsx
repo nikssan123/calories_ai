@@ -74,6 +74,16 @@ export default function JournalPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [bubbles]);
 
+  // Opening the keyboard shortens the shell, which would otherwise leave the
+  // conversation scrolled to where its bottom used to be.
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const stickToBottom = () => bottomRef.current?.scrollIntoView({ block: 'end' });
+    viewport.addEventListener('resize', stickToBottom);
+    return () => viewport.removeEventListener('resize', stickToBottom);
+  }, []);
+
 
   const send = useCallback(async (payload: ComposerPayload) => {
     const localKey = `local-${Date.now()}`;

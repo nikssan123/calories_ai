@@ -59,95 +59,97 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6 py-12">
-      <div className="mb-8">
-        <Logo size={46} className="mb-5" />
-        <h1 className="text-large-title">
-          {mode === 'signup' ? 'Create your account' : 'Welcome back'}
-        </h1>
-        <p className="text-muted-foreground mt-2 text-[15px]">
-          {mode === 'signup'
-            ? 'Then tell the journal a little about yourself and it will work out your targets.'
-            : 'Sign in to pick up where you left off.'}
-        </p>
-      </div>
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center px-6 py-12">
+        <div className="mb-8">
+          <Logo size={46} className="mb-5" />
+          <h1 className="text-large-title">
+            {mode === 'signup' ? 'Create your account' : 'Welcome back'}
+          </h1>
+          <p className="text-muted-foreground mt-2 text-[15px]">
+            {mode === 'signup'
+              ? 'Then tell the journal a little about yourself and it will work out your targets.'
+              : 'Sign in to pick up where you left off.'}
+          </p>
+        </div>
 
-      <form onSubmit={submit} className="space-y-4">
-        {mode === 'signup' && (
+        <form onSubmit={submit} className="space-y-4">
+          {mode === 'signup' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="name" className="text-footnote text-muted-foreground">
+                Name (optional)
+              </Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoComplete="name"
+                className="bg-card h-12 rounded-xl border-0 text-[15px]"
+              />
+            </div>
+          )}
+
           <div className="space-y-1.5">
-            <Label htmlFor="name" className="text-footnote text-muted-foreground">
-              Name (optional)
+            <Label htmlFor="email" className="text-footnote text-muted-foreground">
+              Email
             </Label>
             <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoComplete="name"
+              id="email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
               className="bg-card h-12 rounded-xl border-0 text-[15px]"
             />
           </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="password" className="text-footnote text-muted-foreground">
+              Password
+            </Label>
+            <Input
+              id="password"
+              type="password"
+              required
+              minLength={8}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+              className="bg-card h-12 rounded-xl border-0 text-[15px]"
+            />
+            {mode === 'signup' && (
+              <p className="text-footnote text-muted-foreground">At least 8 characters.</p>
+            )}
+          </div>
+
+          <Button
+            type="submit"
+            disabled={busy || !email || password.length < 8}
+            className="h-12 w-full rounded-2xl text-[15px] font-semibold"
+          >
+            {busy ? 'Just a moment…' : mode === 'signup' ? 'Create account' : 'Sign in'}
+          </Button>
+        </form>
+
+        {(signupAllowed || mode === 'signup') && (
+          <button
+            type="button"
+            onClick={() => setMode((m) => (m === 'signup' ? 'signin' : 'signup'))}
+            className="text-muted-foreground mt-6 text-center text-sm"
+          >
+            {mode === 'signup' ? (
+              <>
+                Already have an account? <span className="text-foreground font-medium">Sign in</span>
+              </>
+            ) : (
+              <>
+                New here? <span className="text-foreground font-medium">Create an account</span>
+              </>
+            )}
+          </button>
         )}
-
-        <div className="space-y-1.5">
-          <Label htmlFor="email" className="text-footnote text-muted-foreground">
-            Email
-          </Label>
-          <Input
-            id="email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-            className="bg-card h-12 rounded-xl border-0 text-[15px]"
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="password" className="text-footnote text-muted-foreground">
-            Password
-          </Label>
-          <Input
-            id="password"
-            type="password"
-            required
-            minLength={8}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-            className="bg-card h-12 rounded-xl border-0 text-[15px]"
-          />
-          {mode === 'signup' && (
-            <p className="text-footnote text-muted-foreground">At least 8 characters.</p>
-          )}
-        </div>
-
-        <Button
-          type="submit"
-          disabled={busy || !email || password.length < 8}
-          className="h-12 w-full rounded-2xl text-[15px] font-semibold"
-        >
-          {busy ? 'Just a moment…' : mode === 'signup' ? 'Create account' : 'Sign in'}
-        </Button>
-      </form>
-
-      {(signupAllowed || mode === 'signup') && (
-        <button
-          type="button"
-          onClick={() => setMode((m) => (m === 'signup' ? 'signin' : 'signup'))}
-          className="text-muted-foreground mt-6 text-center text-sm"
-        >
-          {mode === 'signup' ? (
-            <>
-              Already have an account? <span className="text-foreground font-medium">Sign in</span>
-            </>
-          ) : (
-            <>
-              New here? <span className="text-foreground font-medium">Create an account</span>
-            </>
-          )}
-        </button>
-      )}
+      </div>
     </div>
   );
 }

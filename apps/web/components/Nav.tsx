@@ -18,8 +18,10 @@ export function Nav() {
   // The sign-in screen is not part of the tabbed app.
   if (pathname === '/login') return null;
 
+  // While the keyboard is up the screen is tiny; the tab bar would eat a fifth
+  // of it to show tabs nobody is aiming at.
   return (
-    <nav className="material border-border sticky bottom-0 z-30 border-t pb-[env(safe-area-inset-bottom)] lg:hidden">
+    <nav className="material border-border keyboard:hidden sticky bottom-0 z-30 border-t pb-[env(safe-area-inset-bottom)] lg:hidden">
       <ul className="flex">
         {TABS.map(({ href, label, Icon }) => {
           const active = pathname === href;
