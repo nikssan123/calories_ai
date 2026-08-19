@@ -30,33 +30,42 @@ export const AUTH_HELP =
 /**
  * One model per kind of turn.
  *
- * Running everything on Opus measured at ~$0.058 a turn, which is ~$7 a month
- * for someone logging four meals a day — more than a €4 subscription nets after
- * VAT and the store's cut. Routing by turn kind is what makes the arithmetic
- * work, and it costs nothing in quality where quality is visible: the expensive
- * models stay on the rare turns.
+ * The agent runs on a Claude Code subscription, so there is no per-token bill to
+ * optimise against — but the subscription's rate limits are shared with your own
+ * terminal usage, and a meal log competes with them. So the split is by where
+ * capability actually pays: the frequent, well-specified turn takes Sonnet, and
+ * the rare or genuinely hard ones take Opus.
+ *
+ * If this ever moves to a metered API key, revisit this table first — that is
+ * where the economics live.
  */
 export interface ModelChoice {
   model: string;
   /**
-   * Reasoning depth, where the model accepts it. Pinned rather than defaulted so
-   * a Claude Code release cannot silently move the cost of every meal log.
+   * Reasoning depth. Pinned rather than defaulted so a Claude Code release
+   * cannot silently move the cost and latency of every meal log.
    *
-   * Omitted for Haiku: `effort` is rejected with a 400 on Haiku 4.5, so sending
-   * it would break the highest-volume path in the app.
+   * Optional because not every model accepts it — Haiku 4.5 rejects `effort`
+   * with a 400. Nothing here uses Haiku today, but the provider omits the key
+   * entirely when this is unset, so adding a cheaper tier later cannot break the
+   * highest-volume path.
    */
   effort?: 'low' | 'medium' | 'high';
 }
 
 export const MODELS: Record<TurnKind, ModelChoice> = {
-  // ~70% of turns. Structured extraction from a short sentence — a small model
-  // does this well, at a fifth of Opus's price on both input and output.
-  text_log: { model: 'claude-haiku-4-5' },
-  // Needs high-resolution vision (2576px long edge) to read portion sizes.
-  photo_log: { model: 'claude-sonnet-5', effort: 'medium' },
-  // Once per account, and the first impression. Worth the better model.
-  setup: { model: 'claude-sonnet-5', effort: 'high' },
-  // Once a week. The only long-form writing in the product; cost is negligible.
+  // ~70% of turns, and the most predictable: turning "two eggs and toast" into
+  // items with macros is structured extraction, not reasoning. Sonnet does it
+  // well and leaves subscription headroom for everything else.
+  text_log: { model: 'claude-sonnet-5', effort: 'high' },
+  // The hardest task in the product — estimating a portion from plate and
+  // cutlery cues. Opus 5's high-resolution vision is the point of paying here.
+  photo_log: { model: 'claude-opus-5', effort: 'high' },
+  // Once per account, and the first thing a new user experiences. It has to map
+  // vague answers ("pretty active") onto enums without interrogating anyone.
+  setup: { model: 'claude-opus-5', effort: 'high' },
+  // Once a week. The only long-form writing in the product, and the one output
+  // the user actually reads end to end.
   review: { model: 'claude-opus-5', effort: 'high' },
 };
 

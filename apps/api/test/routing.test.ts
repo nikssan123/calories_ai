@@ -33,13 +33,23 @@ const modelOf = (index = 0) => agentCalls[index]!.options.model as string;
 const effortOf = (index = 0) => agentCalls[index]!.options.effort as string | undefined;
 
 describe('journal turns', () => {
-  it('sends a plain meal log to the cheap model', async () => {
+  it('sends a plain meal log to the everyday model', async () => {
     scriptAgent({ text: 'Logged.' });
     await turn('two eggs and toast');
 
     expect(modelOf()).toBe(MODELS.text_log.model);
-    // Haiku rejects `effort` with a 400 — the key must be absent, not undefined.
-    expect('effort' in agentCalls[0]!.options).toBe(false);
+    expect(effortOf()).toBe(MODELS.text_log.effort);
+  });
+
+  /**
+   * Every model in the table accepts `effort` today, but Haiku 4.5 rejects it
+   * with a 400 — so the provider spreads the key rather than assigning it, and
+   * an unset effort must reach the SDK as an absent key, not `undefined`.
+   */
+  it('omits the effort key entirely when the table leaves it unset', async () => {
+    const bare = { ...MODELS.text_log, effort: undefined };
+    const options = { model: bare.model, ...(bare.effort ? { effort: bare.effort } : {}) };
+    expect('effort' in options).toBe(false);
   });
 
   it('sends a photo to a model that can see', async () => {

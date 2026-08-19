@@ -16,26 +16,19 @@ afterEach(() => {
 
 describe('agent client', () => {
   it('routes each kind of turn to its own model', () => {
-    expect(MODELS.text_log.model).toBe('claude-haiku-4-5');
-    expect(MODELS.photo_log.model).toBe('claude-sonnet-5');
-    expect(MODELS.setup.model).toBe('claude-sonnet-5');
+    expect(MODELS.text_log.model).toBe('claude-sonnet-5');
+    expect(MODELS.photo_log.model).toBe('claude-opus-5');
+    expect(MODELS.setup.model).toBe('claude-opus-5');
     expect(MODELS.review.model).toBe('claude-opus-5');
     expect(MAX_TURNS).toBeGreaterThan(1);
   });
 
-  /**
-   * The highest-volume path in the app. `effort` is rejected with a 400 on
-   * Haiku 4.5, so sending it would break every text meal log.
-   */
-  it('sends no effort for the model that rejects it', () => {
-    expect(MODELS.text_log.effort).toBeUndefined();
-  });
-
-  it('pins effort everywhere it is accepted', () => {
-    for (const kind of ['photo_log', 'setup', 'review'] as const) {
-      expect(MODELS[kind].effort).toBeDefined();
+  it('pins reasoning effort on every kind', () => {
+    for (const kind of ['text_log', 'photo_log', 'setup', 'review'] as const) {
+      expect(MODELS[kind].effort).toBe('high');
     }
   });
+
 
   it('prefers an API key when one is set', () => {
     const original = process.env.ANTHROPIC_API_KEY;
