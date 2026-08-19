@@ -1,0 +1,125 @@
+# Production stack for the always-on host. Mirrors how the trading bot is hosted
+# on this VPS: no published ports, containers join the shared external `web`
+# network under explicit aliases, and the Caddy that already runs there
+# terminates TLS and routes eat.webwork.bg to the web container.
+#
+# Create the shared network once per host, before the first `up`:
+#   docker network create web
+#
+#   docker compose -f docker-compose.prod.yml up -d
+
+# Pinned so it can never collide with docker-compose.yml in this same directory.
+name: calorytracker
+
+networks:
+  # Shared with the other projects on this host. Only the web container joins it.
+  web:
+    external: true
+    name: web
+  # Private to this stack: Postgres and the API are never reachable from `web`.
+  internal:
+    driver: bridge
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: calorytracker-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ct}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-calorytracker}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ct} -d ${POSTGRES_DB:-calorytracker}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    image: calorytracker-api:latest
+    container_name: calorytracker-api
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+
+    environment:
+      TZ: ${TZ:-Europe/Sofia}
+      PORT: 4000
+      DATABASE_URL: postgres://${POSTGRES_USER:-ct}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-calorytracker}
+      # Served over HTTPS by Caddy, so session cookies must carry Secure.
+      SECURE_COOKIES: "true"
+      # Close registration once your own account exists. The very first account
+      # is always permitted regardless, or the deployment would be unusable.
+      ALLOW_SIGNUP: ${ALLOW_SIGNUP:-false}
+      # Optional: bill per token instead of using the subscription login below.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+
+    volumes:
+      # Claude's OAuth token, written once by `claude login`. A named volume so
+      # the login survives image rebuilds — same approach as the trading bot.
+      - claude-home:/home/node
+      # Meal photos are on disk, not in Postgres; they must outlive the image.
+      - uploads:/app/apps/api/uploads
+
+    # Deliberately NOT on `web`. The API holds the database credentials and runs
+    # an agent; nothing on the shared network needs to reach it directly.
+    networks: [internal]
+
+    # Claude Code can spike well past its usual footprint. Without a cap an
+    # unlucky spike gets a neighbouring project's container OOM-killed instead.
+    mem_limit: 2g
+    memswap_limit: 2g
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+    image: calorytracker-web:latest
+    container_name: calorytracker-web
+    restart: unless-stopped
+    depends_on: [api]
+
+    environment:
+      TZ: ${TZ:-Europe/Sofia}
+      NODE_ENV: production
+      # Server-side only: the browser calls the Next proxy at /api on its own
+      # origin, which forwards here over the private network.
+      API_INTERNAL_URL: http://api:4000
+
+    # The only container on the shared network. The alias is spelled out because
+    # `web` is far too generic for a network shared with other projects.
+    networks:
+      internal:
+      web:
+        aliases: [calorytracker-web]
+
+    # No published port: Caddy reaches it over `web`, so the VPS never opens a
+    # port to the internet for this. Uncomment only for local debugging.
+    # ports:
+    #   - "127.0.0.1:3000:3000"
+
+    mem_limit: 512m
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  pgdata:
+  claude-home:
+  uploads:

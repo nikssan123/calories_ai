@@ -1,0 +1,218 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Apple HIG-derived tokens. Three ideas do most of the work:
+ *   Clarity   — one accent per meaning, system colours, generous negative space.
+ *   Deference — chrome is translucent and recedes; the log is the interface.
+ *   Depth     — grouped cards float on a recessed grouped background.
+ */
+
+:root {
+  --radius: 0.875rem;
+
+  /* iOS systemGroupedBackground: content sits on a slightly recessed ground. */
+  --background: #f2f2f7;
+  --foreground: #000000;
+
+  --card: #ffffff;
+  --card-foreground: #000000;
+  --popover: #ffffff;
+  --popover-foreground: #000000;
+
+  /* Monochrome primary keeps the macro hues legible as the only real colour. */
+  --primary: #1c1c1e;
+  --primary-foreground: #ffffff;
+
+  --secondary: #e9e9ef;
+  --secondary-foreground: #1c1c1e;
+
+  --muted: #e9e9ef;
+  --muted-foreground: #8e8e93; /* systemGray */
+
+  --accent: #e9e9ef;
+  --accent-foreground: #1c1c1e;
+
+  --destructive: #ff3b30;
+  --destructive-foreground: #ffffff;
+
+  /* iOS separator: a tinted hairline, not a solid grey line. */
+  --border: rgba(60, 60, 67, 0.13);
+  --input: rgba(60, 60, 67, 0.16);
+  --ring: rgba(0, 122, 255, 0.5);
+
+  /* Semantic nutrition colours — iOS system palette, light variants.
+     Indigo carries calories and every interactive accent; the macros are spaced
+     around the wheel so no two read as the same colour in a row of bars. */
+  --calories: #5e5ce6;
+  --protein: #34c759;
+  --carbs: #32ade6;
+  --fat: #ff2d55;
+  --exercise: #00c7be;
+
+  /* Translucent material for the header and tab bar. */
+  --material: rgba(249, 249, 251, 0.82);
+}
+
+.dark {
+  --background: #000000;
+  --foreground: #ffffff;
+
+  --card: #1c1c1e; /* secondarySystemGroupedBackground */
+  --card-foreground: #ffffff;
+  --popover: #1c1c1e;
+  --popover-foreground: #ffffff;
+
+  --primary: #ffffff;
+  --primary-foreground: #000000;
+
+  --secondary: #2c2c2e;
+  --secondary-foreground: #ffffff;
+
+  --muted: #2c2c2e;
+  --muted-foreground: #98989f;
+
+  --accent: #2c2c2e;
+  --accent-foreground: #ffffff;
+
+  --destructive: #ff453a;
+  --destructive-foreground: #ffffff;
+
+  --border: rgba(84, 84, 88, 0.5);
+  --input: rgba(84, 84, 88, 0.65);
+  --ring: rgba(10, 132, 255, 0.6);
+
+  --calories: #7d7aff;
+  --protein: #30d158;
+  --carbs: #64d2ff;
+  --fat: #ff375f;
+  --exercise: #66d4cf;
+
+  --material: rgba(28, 28, 30, 0.78);
+}
+
+/* Honour the OS setting as well as the .dark class. */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --background: #000000;
+    --foreground: #ffffff;
+    --card: #1c1c1e;
+    --card-foreground: #ffffff;
+    --popover: #1c1c1e;
+    --popover-foreground: #ffffff;
+    --primary: #ffffff;
+    --primary-foreground: #000000;
+    --secondary: #2c2c2e;
+    --secondary-foreground: #ffffff;
+    --muted: #2c2c2e;
+    --muted-foreground: #98989f;
+    --accent: #2c2c2e;
+    --accent-foreground: #ffffff;
+    --destructive: #ff453a;
+    --destructive-foreground: #ffffff;
+    --border: rgba(84, 84, 88, 0.5);
+    --input: rgba(84, 84, 88, 0.65);
+    --ring: rgba(10, 132, 255, 0.6);
+    --calories: #7d7aff;
+    --protein: #30d158;
+    --carbs: #64d2ff;
+    --fat: #ff375f;
+    --exercise: #66d4cf;
+    --material: rgba(28, 28, 30, 0.78);
+  }
+}
+
+@theme inline {
+  /*
+   * Tailwind v4 only generates a utility when a --color-* token exists, so every
+   * semantic token above has to be mapped here. Without this, `bg-card` and
+   * friends silently produce no CSS at all.
+   */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-calories: var(--calories);
+  --color-protein: var(--protein);
+  --color-carbs: var(--carbs);
+  --color-fat: var(--fat);
+  --color-exercise: var(--exercise);
+  --color-material: var(--material);
+
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Segoe UI', system-ui,
+    sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* The tab bar is fixed; keep iOS from rubber-banding the whole document. */
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+  }
+
+  /* Apple sets tighter tracking as type gets larger. */
+  h1,
+  h2 {
+    letter-spacing: -0.022em;
+  }
+}
+
+@utility text-large-title {
+  font-size: 2.125rem; /* 34px — iOS Large Title */
+  line-height: 2.5rem;
+  font-weight: 700;
+  letter-spacing: -0.028em;
+}
+
+@utility text-title-2 {
+  font-size: 1.375rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.022em;
+}
+
+@utility text-footnote {
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+  letter-spacing: -0.006em;
+}
+
+/* Numerals that don't jitter as totals tick up during a log. */
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/* Translucent material used by the header and tab bar. */
+@utility material {
+  background-color: var(--material);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+}

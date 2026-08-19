@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // Targets browser and React Native runtimes; both provide fetch/Headers.
+    "lib": ["ES2023", "DOM"]
+  },
+  "include": ["src"]
+}

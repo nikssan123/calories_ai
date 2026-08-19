@@ -1,0 +1,28 @@
+# Local development: Postgres only. The app runs on the host via `pnpm dev`.
+#
+# The project name is pinned because docker-compose.prod.yml sits in this same
+# directory — without it both files derive the same name and a `down -v` on one
+# deletes the other's volumes.
+name: calorytracker-dev
+
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: ct-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ct
+      POSTGRES_PASSWORD: ct
+      POSTGRES_DB: calorytracker
+    ports:
+      - "5433:5432"
+    volumes:
+      - ct-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ct -d calorytracker"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  ct-pgdata:
