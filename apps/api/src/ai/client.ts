@@ -28,5 +28,12 @@ export const AUTH_HELP =
 
 export const MODEL = 'claude-opus-5';
 
+/**
+ * Reasoning depth. `high` is also the SDK's own default, but the default is the
+ * harness's to change — pinning it keeps a Claude Code release from silently
+ * moving the cost and latency of every meal log.
+ */
+export const EFFORT = 'high' as const;
+
 /** Tool-call round trips per turn. A meal log needs 2–3; the cap is a runaway guard. */
 export const MAX_TURNS = 12;

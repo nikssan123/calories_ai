@@ -7,7 +7,7 @@ import { localDateFor } from '../time.ts';
 import { buildDaySummary } from '../services/summary.ts';
 import { latestWeight } from '../services/log.ts';
 import { missingProfileFields } from '../services/user.ts';
-import { AUTH_HELP, hasSubscriptionAuth, MAX_TURNS, MODEL } from './client.ts';
+import { AUTH_HELP, EFFORT, hasSubscriptionAuth, MAX_TURNS, MODEL } from './client.ts';
 import { dayContextPrompt, onboardingPrompt, STABLE_SYSTEM_PROMPT } from './prompt.ts';
 import { buildNutritionServer, SERVER_NAME, type ToolContext } from './tools.ts';
 
@@ -62,6 +62,7 @@ export async function runTurn(input: RunTurnInput): Promise<ChatResponse> {
     // There is no terminal to approve anything; every tool is pre-approved above.
     permissionMode: 'bypassPermissions',
     model: MODEL,
+    effort: EFFORT,
     maxTurns: MAX_TURNS,
     cwd: env.agentCwd,
   };
