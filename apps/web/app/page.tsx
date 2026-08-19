@@ -38,6 +38,11 @@ export default function JournalPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   // Guards the one-time setup kickoff against re-renders and StrictMode.
   const kickedOff = useRef(false);
+  // Lets `send` see the messages it started from without depending on them.
+  const bubblesRef = useRef<Bubble[]>([]);
+  useEffect(() => {
+    bubblesRef.current = bubbles;
+  }, [bubbles]);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,6 +92,9 @@ export default function JournalPage() {
 
   const send = useCallback(async (payload: ComposerPayload) => {
     const localKey = `local-${Date.now()}`;
+    // Ids the server had already given us. Anything outside this set afterwards
+    // arrived during this turn, which is clock-free evidence that it landed.
+    const known = new Set(bubblesRef.current.map((b) => b.key));
     // Render the user's message immediately — a multi-second wait before
     // anything appears would break the "continuous conversation" feel.
     setBubbles((prev) => [
@@ -126,15 +134,26 @@ export default function JournalPage() {
         }
       }
     } catch (e) {
-      const message = (e as Error).message;
-      setBubbles((prev) =>
-        prev.map((b) =>
-          b.key === `${localKey}-reply`
-            ? { ...b, content: message, pending: false, failed: true }
-            : b,
-        ),
-      );
-      toast.error(message);
+      // A lost response is not a lost turn. The server commits the message and
+      // the reply together at the very end, so a connection that dies while
+      // waiting — a phone changing network, a screen locking mid-upload — leaves
+      // the meal logged but the answer undelivered. Ask what actually happened
+      // before calling it a failure, or the obvious retry logs the meal twice.
+      const landed = await reconcile(known);
+      if (landed) {
+        setBubbles(landed.bubbles);
+        setDay(landed.day);
+      } else {
+        const message = (e as Error).message;
+        setBubbles((prev) =>
+          prev.map((b) =>
+            b.key === `${localKey}-reply`
+              ? { ...b, content: message, pending: false, failed: true }
+              : b,
+          ),
+        );
+        toast.error(message);
+      }
     } finally {
       setBusy(false);
     }
@@ -199,6 +218,32 @@ export default function JournalPage() {
       <DayRail day={day} />
     </div>
   );
+}
+
+/**
+ * Re-reads the conversation after a send failed at the transport. Returns the
+ * server's version of it when this turn is present there, and null when the
+ * request really never arrived.
+ */
+async function reconcile(
+  known: Set<string>,
+): Promise<{ bubbles: Bubble[]; day: DaySummary } | null> {
+  try {
+    const [history, today] = await Promise.all([api.history(40), api.day()]);
+    if (!history.messages.some((m) => !known.has(m.id))) return null;
+    return {
+      bubbles: history.messages.map((m: ChatMessage) => ({
+        key: m.id,
+        role: m.role,
+        content: m.content,
+        photoUrl: m.photo_id ? api.photoUrl(m.photo_id) : undefined,
+      })),
+      day: today,
+    };
+  } catch {
+    // The network is still down; report the original failure.
+    return null;
+  }
 }
 
 /** Compact always-visible answer to "how am I doing today?" (§25). */

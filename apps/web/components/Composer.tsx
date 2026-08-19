@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { ArrowUp, Camera, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 
 export interface ComposerPayload {
@@ -12,6 +13,63 @@ export interface ComposerPayload {
 }
 
 const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
+
+/**
+ * Long edge to downscale to before upload. A phone camera produces a 12MP file
+ * that base64s to several megabytes, and the upload is the fragile half of the
+ * turn: it goes up a phone uplink, and the connection has to survive both it and
+ * the agent's reply. The vision model reads a photo at 2576px on the long edge,
+ * so everything above this is paid for twice — once on the wire, once in the
+ * model's own downscale — and buys no accuracy on portion sizes.
+ */
+const MAX_EDGE = 2576;
+const JPEG_QUALITY = 0.82;
+
+/**
+ * Re-encodes an oversized photo, and falls back to the untouched file whenever
+ * the browser cannot: an unreadable image here would mean no meal logged, and
+ * sending too many bytes is far better than sending none.
+ */
+async function prepare(
+  file: File,
+): Promise<{ dataUrl: string; mediaType: (typeof ACCEPTED)[number] } | null> {
+  const mediaType = ACCEPTED.find((t) => t === file.type);
+  if (!mediaType) return null;
+
+  try {
+    // `from-image` applies the EXIF rotation that phones rely on; without it a
+    // portrait photo reaches the model on its side.
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    try {
+      const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
+      if (scale < 1) {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(bitmap.width * scale);
+        canvas.height = Math.round(bitmap.height * scale);
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+          return { dataUrl: canvas.toDataURL('image/jpeg', JPEG_QUALITY), mediaType: 'image/jpeg' };
+        }
+      }
+    } finally {
+      bitmap.close();
+    }
+  } catch {
+    // No createImageBitmap, a codec the canvas cannot read, a tainted canvas.
+  }
+
+  return { dataUrl: await readDataUrl(file), mediaType };
+}
+
+function readDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error('Could not read the photo.'));
+    reader.readAsDataURL(file);
+  });
+}
 
 export function Composer({
   onSend,
@@ -44,15 +102,20 @@ export function Composer({
     if (textRef.current) textRef.current.style.height = 'auto';
   }
 
-  function onPickFile(event: React.ChangeEvent<HTMLInputElement>) {
+  async function onPickFile(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
-    const mediaType = ACCEPTED.find((t) => t === file.type);
-    if (!mediaType) return;
 
-    const reader = new FileReader();
-    reader.onload = () => setPhoto({ dataUrl: String(reader.result), mediaType });
-    reader.readAsDataURL(file);
+    const prepared = await prepare(file);
+    // Mostly unreachable — Safari converts an iPhone's HEIC on the way out of
+    // the picker — but dropping the file without a word would look like the
+    // camera button is simply broken.
+    if (!prepared) {
+      toast.error('That image format is not supported. Try a JPEG or PNG.');
+      if (fileRef.current) fileRef.current.value = '';
+      return;
+    }
+    setPhoto(prepared);
   }
 
   return (
@@ -91,8 +154,13 @@ export function Composer({
           ref={fileRef}
           type="file"
           accept={ACCEPTED.join(',')}
-          capture="environment"
-          onChange={onPickFile}
+          /*
+           * Deliberately no `capture`: it forces the camera and hides everything
+           * else, so a meal already photographed — or a screenshot of a menu, or
+           * a packet's nutrition label — could not be logged at all. Without it
+           * the phone offers its own picker, camera included.
+           */
+          onChange={(e) => void onPickFile(e)}
           className="hidden"
         />
 
