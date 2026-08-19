@@ -108,6 +108,80 @@ describe('GET /progress', () => {
   });
 });
 
+describe('GET /progress/exercise', () => {
+  it('defaults to a 30-day window and clamps like /progress', async () => {
+    const response = await app.inject({ method: 'GET', url: '/progress/exercise', ...auth() });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().series).toHaveLength(30);
+    expect(response.json()).toMatchObject({ days: 30, sessions: 0, total_kcal: 0 });
+
+    const long = await app.inject({ method: 'GET', url: '/progress/exercise?days=9999', ...auth() });
+    expect(long.json().series).toHaveLength(365);
+  });
+
+  it('needs a session', async () => {
+    const anon = await anonymousApp();
+    expect((await anon.inject({ method: 'GET', url: '/progress/exercise' })).statusCode).toBe(401);
+    await anon.close();
+  });
+});
+
+describe('GET /calendar', () => {
+  it('defaults to the five weeks ending today', async () => {
+    const response = await app.inject({ method: 'GET', url: '/calendar', ...auth() });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().days).toHaveLength(35);
+    expect(response.json().to).toBe(today);
+  });
+
+  it('returns the range it was asked for', async () => {
+    await addMeal(user, { date: '2026-03-10', kcal: 1900 });
+    const response = await app.inject({
+      method: 'GET',
+      url: '/calendar?from=2026-03-01&to=2026-03-31',
+      ...auth(),
+    });
+    const body = response.json();
+    expect(body).toMatchObject({ from: '2026-03-01', to: '2026-03-31' });
+    expect(body.days).toHaveLength(31);
+    expect(body.days.find((d: any) => d.local_date === '2026-03-10')).toMatchObject({
+      kcal: 1900,
+      logged: true,
+    });
+  });
+
+  it('ignores bounds that are not plain dates rather than passing them to SQL', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: `/calendar?from=${encodeURIComponent("2026-03-01'; DROP TABLE users; --")}`,
+      ...auth(),
+    });
+    expect(response.statusCode).toBe(200);
+    // Fell back to the default window rather than honouring the input.
+    expect(response.json().days).toHaveLength(35);
+  });
+
+  it('rejects a backwards range', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/calendar?from=2026-03-31&to=2026-03-01',
+      ...auth(),
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toContain('after');
+  });
+
+  it('refuses a range longer than a year', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/calendar?from=2020-01-01&to=2026-01-01',
+      ...auth(),
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toContain('year');
+  });
+});
+
 describe('food entry routes', () => {
   it('reads one entry, and 404s on another account’s', async () => {
     const mine = await addMeal(user, { date: today, kcal: 500 });

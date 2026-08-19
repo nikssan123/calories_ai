@@ -17,6 +17,7 @@ import {
   updateFoodEntry,
 } from '../services/log.ts';
 import { buildFullReviewStats, latestReview, listReviews } from '../services/reviews.ts';
+import { buildCalendar, buildExerciseSummary } from '../services/calendar.ts';
 import { buildDaySummary, buildProgress, currentLocalDate } from '../services/summary.ts';
 import { calculateTargets, setTargets, targetsForDate } from '../services/targets.ts';
 import {
@@ -26,7 +27,7 @@ import {
   missingProfileFields,
   updateUser,
 } from '../services/user.ts';
-import { localDateFor } from '../time.ts';
+import { addDays, dateRange, localDateFor } from '../time.ts';
 
 /**
  * Ceilings on the two routes that spend money. Everything else is a database
@@ -89,6 +90,30 @@ export async function registerRoutes(app: FastifyInstance) {
     const { userId, ...ctx } = await getUserContext(request.userId!);
     const days = Math.min(Math.max(Number((request.query as any)?.days ?? 30), 7), 365);
     return buildProgress(userId, ctx, days);
+  });
+
+  app.get('/progress/exercise', async (request) => {
+    const { userId, ...ctx } = await getUserContext(request.userId!);
+    const days = Math.min(Math.max(Number((request.query as any)?.days ?? 30), 7), 365);
+    return buildExerciseSummary(userId, ctx, days);
+  });
+
+  /**
+   * A window of days for the History grid. Bounded at a year: the grid is drawn
+   * a month at a time, and an unbounded range is a full table scan per cell.
+   */
+  app.get('/calendar', async (request, reply) => {
+    const { userId, ...ctx } = await getUserContext(request.userId!);
+    const q = request.query as any;
+    const today = await currentLocalDate(ctx);
+    const to = isDate(q?.to) ? q.to : today;
+    const from = isDate(q?.from) ? q.from : addDays(to, -34);
+
+    if (from > to) return reply.status(400).send({ error: '`from` is after `to`.' });
+    if (dateRange(from, to).length > 366) {
+      return reply.status(400).send({ error: 'Range is longer than a year.' });
+    }
+    return buildCalendar(userId, from, to);
   });
 
   // ---- Manual corrections from the Today screen -----------------------------
@@ -280,6 +305,11 @@ export async function registerRoutes(app: FastifyInstance) {
     if (!photo) return reply.status(404).send({ error: 'Photo not found' });
     return reply.type(photo.mediaType).send(photo.bytes);
   });
+}
+
+/** A calendar bound is only trusted when it is exactly a plain ISO date. */
+function isDate(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
 function stripDataUrl(value: string): string {

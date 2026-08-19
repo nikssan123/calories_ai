@@ -331,6 +331,58 @@ export const Progress = z.object({
 });
 export type Progress = z.infer<typeof Progress>;
 
+// ---- Calendar --------------------------------------------------------------
+
+/**
+ * One cell of the History grid. `target_kcal` travels per day because targets
+ * are effective-from rows — colouring a March day against today's target would
+ * misreport every day before the last adaptive change.
+ */
+export const CalendarDay = z.object({
+  local_date: z.string(),
+  kcal: z.number(),
+  protein_g: z.number(),
+  target_kcal: z.number(),
+  burned_kcal: z.number(),
+  weight_kg: z.number().nullable(),
+  /** Distinguishes a day at zero from a day nobody logged. */
+  logged: z.boolean(),
+});
+export type CalendarDay = z.infer<typeof CalendarDay>;
+
+export const Calendar = z.object({
+  from: z.string(),
+  to: z.string(),
+  days: z.array(CalendarDay),
+});
+export type Calendar = z.infer<typeof Calendar>;
+
+// ---- Exercise --------------------------------------------------------------
+
+export const ExerciseSummary = z.object({
+  days: z.number(),
+  sessions: z.number(),
+  total_kcal: z.number(),
+  /** Null rather than 0 when nothing in the window covered ground. */
+  total_distance_km: z.number().nullable(),
+  total_duration_min: z.number().nullable(),
+  active_days: z.number(),
+  /** Per-day burn, so the chart can show the shape of a training week. */
+  series: z.array(TrendPoint),
+  entries: z.array(ExerciseEntry),
+});
+export type ExerciseSummary = z.infer<typeof ExerciseSummary>;
+
+/** Rounds an estimate the way §5 asks for: useful, not falsely precise. */
+export function roundEstimate(kcal: number): number {
+  return kcal >= 100 ? Math.round(kcal / 10) * 10 : Math.round(kcal);
+}
+
+export function formatKcal(kcal: number, confidence: Confidence = 'medium'): string {
+  const n = Math.round(kcal).toLocaleString('en-US');
+  return confidence === 'high' ? `${n} kcal` : `~${n} kcal`;
+}
+
 // ---- Adaptive targets ------------------------------------------------------
 
 /**

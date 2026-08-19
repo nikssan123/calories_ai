@@ -1,6 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { ChevronLeft, ChevronRight, RotateCcw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { DaySummary, ExerciseEntry, FoodEntry, Meal } from '@ct/shared';
@@ -20,15 +22,48 @@ const MEAL_LABEL: Record<Meal, string> = {
   snack: 'Snacks',
 };
 
+/**
+ * `useSearchParams` opts a client component into request-time rendering, which
+ * Next refuses to prerender without a boundary. The skeleton is the same one
+ * the data fetch shows, so a deep link does not flash a different empty state.
+ */
 export default function TodayPage() {
-  const [day, setDay] = useState<DaySummary | null>(null);
-  const [offset, setOffset] = useState(0);
-  const [loading, setLoading] = useState(true);
+  return (
+    <Suspense fallback={<TodaySkeleton />}>
+      <TodayView />
+    </Suspense>
+  );
+}
 
-  const load = useCallback(async (dayOffset: number) => {
+function TodaySkeleton() {
+  return (
+    <div className="flex flex-col items-center gap-6 px-4 py-8">
+      <Skeleton className="size-44 rounded-full" />
+      <Skeleton className="h-12 w-full rounded-2xl" />
+    </div>
+  );
+}
+
+function TodayView() {
+  const [day, setDay] = useState<DaySummary | null>(null);
+  // The date being shown, or null for "whatever the server calls today". Held
+  // as a date rather than an offset so History can link straight to a day.
+  const [date, setDate] = useState<string | null>(null);
+  const [today, setToday] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const requested = useSearchParams().get('date');
+
+  useEffect(() => {
+    if (requested && /^\d{4}-\d{2}-\d{2}$/.test(requested)) setDate(requested);
+  }, [requested]);
+
+  const load = useCallback(async (target: string | null) => {
     try {
-      const base = await api.day();
-      setDay(dayOffset === 0 ? base : await api.day(shiftDate(base.local_date, dayOffset)));
+      const summary = await api.day(target ?? undefined);
+      setDay(summary);
+      // Today is whatever the server says when asked without a date; it honours
+      // day_start_hour, so it is not always the browser's calendar date.
+      if (target === null) setToday(summary.local_date);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -37,8 +72,18 @@ export default function TodayPage() {
   }, []);
 
   useEffect(() => {
-    void load(offset);
-  }, [load, offset]);
+    void load(date);
+  }, [load, date]);
+
+  // Resolved once from a dateless fetch, so the header and the next-day guard
+  // both work on the first paint of a deep link.
+  useEffect(() => {
+    if (today === null && date !== null) void api.day().then((d) => setToday(d.local_date));
+  }, [today, date]);
+
+  const isToday = day !== null && today !== null && day.local_date === today;
+  const step = (days: number) =>
+    setDate((current) => shiftDate(current ?? day?.local_date ?? today ?? '', days));
 
   async function removeEntry(entry: FoodEntry) {
     setDay((prev) =>
@@ -50,7 +95,7 @@ export default function TodayPage() {
     } catch (e) {
       toast.error((e as Error).message);
     }
-    void load(offset);
+    void load(date);
   }
 
   /**
@@ -76,7 +121,7 @@ export default function TodayPage() {
     } catch (e) {
       toast.error((e as Error).message);
     }
-    void load(offset);
+    void load(date);
   }
 
   /** Clones a past entry to now — which is today, so jump back there to show it. */
@@ -84,8 +129,8 @@ export default function TodayPage() {
     try {
       const copy = await api.repeatFoodEntry(entry.id);
       toast.success(`Logged ${copy.description} — ${Math.round(copy.kcal)} kcal`);
-      setOffset(0);
-      void load(0);
+      setDate(null);
+      void load(null);
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -102,23 +147,27 @@ export default function TodayPage() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setOffset((o) => o - 1)}
+          onClick={() => step(-1)}
           aria-label="Previous day"
           className="text-muted-foreground rounded-full"
         >
           <ChevronLeft size={22} />
         </Button>
-        <div className="text-center">
-          <h1 className="text-title-2">{offset === 0 ? 'Today' : formatDay(day?.local_date)}</h1>
-          {offset === 0 && day && (
+        {/* Stepping one day at a time made "how did last month go?" a dozen
+            taps; the header is the way into the month grid. */}
+        <Link href="/history" className="rounded-xl px-3 text-center transition-colors active:bg-muted/60">
+          <h1 className="text-title-2">{isToday ? 'Today' : formatDay(day?.local_date)}</h1>
+          {isToday && day ? (
             <p className="text-footnote text-muted-foreground">{formatDay(day.local_date)}</p>
+          ) : (
+            <p className="text-footnote text-muted-foreground">View calendar</p>
           )}
-        </div>
+        </Link>
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setOffset((o) => Math.min(0, o + 1))}
-          disabled={offset === 0}
+          onClick={() => step(1)}
+          disabled={isToday}
           aria-label="Next day"
           className="text-muted-foreground rounded-full disabled:opacity-25"
         >
@@ -239,7 +288,7 @@ export default function TodayPage() {
           )}
 
           {/* Repeating logs at the current time, so it only belongs on today. */}
-          {offset === 0 && <RepeatMeals onLogged={() => void load(0)} />}
+          {isToday && <RepeatMeals onLogged={() => void load(null)} />}
           </div>
         </div>
       )}

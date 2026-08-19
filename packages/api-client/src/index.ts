@@ -1,5 +1,6 @@
 import type {
   AdaptiveProposal,
+  Calendar,
   AdminOverview,
   AdminUser,
   AuthStatus,
@@ -8,6 +9,7 @@ import type {
   ChatResponse,
   Credentials,
   DaySummary,
+  ExerciseSummary,
   FoodEntry,
   Meal,
   MealTemplate,
@@ -96,6 +98,11 @@ export function createApiClient({ baseUrl, token, fetchImpl }: ApiClientOptions)
     day: (date?: string) => request<DaySummary>(`/day${date ? `?date=${date}` : ''}`),
 
     progress: (days = 30) => request<Progress>(`/progress?days=${days}`),
+
+    exercise: (days = 30) => request<ExerciseSummary>(`/progress/exercise?days=${days}`),
+
+    calendar: (from: string, to: string) =>
+      request<Calendar>(`/calendar?from=${from}&to=${to}`),
 
     profile: () => request<Profile>('/profile'),
 

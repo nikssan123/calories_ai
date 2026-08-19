@@ -2,15 +2,27 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ChartLine, Flame, LogOut, MessageSquareText, Shield, User } from 'lucide-react';
+import {
+  CalendarDays,
+  ChartLine,
+  Flame,
+  LogOut,
+  MessageSquareText,
+  PersonStanding,
+  Shield,
+  User,
+} from 'lucide-react';
 import { useAuth } from '@/components/AuthGate';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/utils';
 
+/** A vertical list has room for History, which the phone's bottom bar does not. */
 const TABS = [
   { href: '/', label: 'Journal', Icon: MessageSquareText },
   { href: '/today', label: 'Today', Icon: Flame },
+  { href: '/history', label: 'History', Icon: CalendarDays },
   { href: '/progress', label: 'Progress', Icon: ChartLine },
+  { href: '/exercise', label: 'Exercise', Icon: PersonStanding },
   { href: '/setup', label: 'You', Icon: User },
 ] as const;
 

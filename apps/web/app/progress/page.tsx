@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ArrowDown, ArrowUp } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowDown, ArrowUp, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Progress } from '@ct/shared';
 import { api } from '@/lib/api';
@@ -210,16 +211,25 @@ export default function ProgressPage() {
             </InsetRow>
           </InsetGroup>
 
+          {/* Exercise has its own tab now; this is the pointer, not the data. */}
           <InsetGroup
             title="Exercise"
             footer="Ask the journal anything about this data — “why haven’t I lost weight this week?”"
           >
-            <InsetRow className="py-4">
-              <span className="tnum text-large-title">{progress.exercise.sessions}</span>
-              <span className="text-muted-foreground text-sm">
-                sessions · ~{progress.exercise.total_kcal.toLocaleString()} kcal over {days} days
-              </span>
-            </InsetRow>
+            <Link href="/exercise" className="block transition-colors active:bg-muted/60">
+              <InsetRow className="py-4">
+                <div className="flex-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="tnum text-large-title">{progress.exercise.sessions}</span>
+                    <span className="text-muted-foreground text-sm">
+                      sessions · ~{progress.exercise.total_kcal.toLocaleString()} kcal over {days}{' '}
+                      days
+                    </span>
+                  </div>
+                </div>
+                <ChevronRight size={18} className="text-muted-foreground shrink-0" />
+              </InsetRow>
+            </Link>
           </InsetGroup>
 
           <div className="lg:col-span-2">
