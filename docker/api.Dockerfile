@@ -23,6 +23,18 @@ COPY packages/api-client/package.json  packages/api-client/
 # resolving different versions than were tested.
 RUN pnpm install --frozen-lockfile --filter @ct/api... --prod=false
 
+# The Agent SDK ships a complete Claude Code binary but does not link it onto
+# PATH, so `claude` is unavailable for the one-time `claude auth login` that
+# writes the subscription credentials. Symlink the copy that is already here
+# rather than installing a second one — the CLI package is ~100MB.
+#
+# The path is version- and arch-specific, so resolve it at build time; the
+# --version call makes the build fail loudly if the layout ever changes rather
+# than shipping a dangling symlink that only bites at login time.
+RUN ln -sf "$(find /app/node_modules/.pnpm -type f -name claude -path '*claude-agent-sdk-*' | head -1)" \
+        /usr/local/bin/claude \
+ && claude --version
+
 COPY tsconfig.base.json ./
 COPY packages/ packages/
 COPY apps/api/ apps/api/

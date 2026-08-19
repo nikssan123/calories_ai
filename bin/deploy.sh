@@ -264,7 +264,7 @@ if [[ -n "$HEALTH" ]]; then
     case "$HEALTH" in
         *claude-code-subscription*|*anthropic-api-key*) ;;
         *) warn "the agent has no credentials — chat will 503 until you run:
-      cd $REPO && $COMPOSE run --rm api pnpm exec claude login"; FAIL=1 ;;
+      cd $REPO && $COMPOSE run --rm api claude auth login"; FAIL=1 ;;
     esac
 else
     warn "API did not answer /health"; FAIL=1

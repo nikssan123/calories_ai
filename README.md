@@ -210,9 +210,10 @@ docker network create web        # only if this host has never run the bot/site_
 docker compose -f docker-compose.prod.yml build
 docker compose -f docker-compose.prod.yml up -d db
 
-# The agent runs on the Claude Code subscription, so log in once. The token lives
-# in the claude-home volume and survives rebuilds.
-docker compose -f docker-compose.prod.yml run --rm api pnpm exec claude login
+# The agent runs on the Claude Code subscription, so sign in once. The token
+# lives in the claude-home volume and survives rebuilds. Note `auth login`, and
+# note that this is interactive — it prints a URL to open.
+docker compose -f docker-compose.prod.yml run --rm api claude auth login
 
 docker compose -f docker-compose.prod.yml up -d
 docker compose -f docker-compose.prod.yml logs -f api
