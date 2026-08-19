@@ -66,9 +66,40 @@ pnpm dev                      # API on :4000, web on :3000
 Open http://localhost:3000, create an account, and the journal will interview you.
 Then optionally `pnpm seed -- --email=you@example.com` for 21 days of demo history.
 
-Other scripts: `pnpm typecheck`, `pnpm build`, `pnpm db:reset` (drop the volume and
-start over). Don't run `build` while `dev` is running — they share `apps/web/.next`
-and will corrupt each other.
+Other scripts: `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm db:reset` (drop the
+volume and start over). Don't run `build` while `dev` is running — they share
+`apps/web/.next` and will corrupt each other.
+
+## Tests
+
+```bash
+pnpm test              # the API suite
+pnpm test:coverage     # the same, with a coverage report and thresholds
+```
+
+Everything under `apps/api` is covered: 100% of lines, ~99% of statements and functions.
+The suite runs against a real Postgres rather than mocks, because most of what could go
+wrong here is a query — `apps/api/src/env.ts` forces a `_test` suffix onto the database
+name whenever `NODE_ENV=test`, so `pnpm test` cannot empty your development database even
+if `DATABASE_URL` points straight at it. The database is created and migrated on first
+run; you need `pnpm db:up` and nothing else.
+
+The Agent SDK's `query` is the only thing stubbed. `tool` and `createSdkMcpServer` stay
+real, so the in-process MCP server under test is the one that ships and the tool handlers
+are called exactly as the model would call them.
+
+Two things are deliberately not covered. `src/index.ts` is process wiring — `listen()`,
+signal handlers, one log line — with nothing reachable without starting a real server. And
+`apps/web` has no tests at all: it holds no business logic (that was the point of the
+API-client split), and the React/Next scaffolding needed to assert on it would cost more
+than it caught. If that stops being true, `apps/web/lib` is where to start.
+
+Writing these found two real bugs, which is roughly what they were for:
+
+- `resolveWhen('this afternoon')` returned 13:00. The pattern `/\blunch|midday|noon\b/`
+  anchors its word boundaries to the first and last alternative only — and "after**noon**"
+  ends in "noon".
+- The adaptive window included today, a partial day, biasing every weekly target downward.
 
 ## The AI runs on your Claude Code subscription
 
@@ -116,11 +147,15 @@ and CLAUDE.md out of the nutrition agent.
 
 `search_food_history` is what makes "my usual breakfast" work — it looks up what you
 actually ate before and reuses those quantities, so personal memory falls out of the
-logging you already did rather than being a separate feature.
+logging you already did rather than being a separate feature. The Today screen has the
+same thing as a button: `GET /history/meals` collapses your entries by description so
+the list is *the eight things you eat* rather than the last eight things you ate, and
+`POST /entries/food/:id/repeat` clones one to now. The clone is a new entry with its own
+items, so correcting it later touches only today.
 
-The system prompt is assembled in three parts: a stable half, a volatile half with
-today's numbers and entry ids, and — only while the profile is incomplete — an
-onboarding brief.
+The system prompt is assembled in four parts: a stable half, a volatile half with
+today's numbers and entry ids, — only while the profile is incomplete — an
+onboarding brief, and — for ten days after one is published — last week's review.
 
 ## First run
 
@@ -136,8 +171,80 @@ When the last value lands, targets are recalculated, the account is marked onboa
 and the status bar stops flagging the target as a placeholder. The Setup screen remains
 for editing any of it later.
 
-Model lives in `apps/api/src/ai/client.ts` (`claude-opus-5`). Effort is managed by the
-Agent SDK harness rather than set per request.
+Model lives in `apps/api/src/ai/client.ts` (`claude-opus-5`). Effort is pinned to `high`
+rather than left to the SDK default, so a Claude Code release cannot silently move the
+cost and latency of every meal log.
+
+## Targets adapt to you, not to a formula
+
+Mifflin-St Jeor predicts what a population of people your size burns. After a fortnight
+of logging there is something better available: what *you* burn, read off the only
+experiment that matters.
+
+```
+TDEE = mean daily intake − (weight change per day × 7,700 kcal/kg)
+```
+
+Eat 2,000 while losing 0.5 kg a week and you were burning about 2,550. `services/adaptive.ts`
+solves that every Monday and writes a new `targets` row — which is why `targets` was
+versioned by `effective_from` from the start, and why every entry carries a `confidence`
+flag: days built from vague restaurant estimates are weighted at half a day of weighed,
+packaged food.
+
+The arithmetic is three lines. The guardrails are the feature, because a tracker that
+moves your target on a fortnight of water weight is worse than one that never moves it:
+
+- **Ten logged days and four weigh-ins**, spanning at least ten days. Below that the
+  estimate is noise.
+- **±200 kcal per pass**, scaled by data quality, so successive weeks converge instead of
+  oscillating. Under 40 kcal it does nothing at all.
+- **±35% of the formula's prediction.** A fortnight can imply a maintenance of 900 or
+  5,000; anything that far out is disbelieved rather than acted on.
+- **A number you set by hand is never touched.**
+- **The window ends yesterday.** Today is a partial day nearly every time the pass runs,
+  and counting it dragged the mean — and the target — down every single week.
+
+It calibrates against *logged* intake rather than true intake, so a consistent
+under-logger converges on a target that works for the way they log. That is deliberate:
+the useful number is the one that produces the intended trend.
+
+`GET /targets/adaptive` returns what it would do right now without doing it, which is what
+the Progress screen shows — an unexplained calorie target is one people ignore.
+
+## Weekly reviews
+
+Monday morning, in your own timezone, the journal posts a short read on the week. Every
+number in it is computed in SQL (`services/reviews.ts`); the agent is handed those stats
+and writes the prose. A model asked to both recall and narrate will get one of them
+wrong, and it is always the recall.
+
+The adaptive pass runs *first*, so the review explains a target that has already changed
+rather than proposing one that might not stick. The review agent gets the read tools only
+— one that could log food would eventually log food — and runs in its own session so it
+neither inherits nor pollutes the journal's conversation. `recentReviewPrompt` carries it
+back the other way, so "why did my target go up?" has an answer.
+
+There is no cron and no queue. The API ticks hourly and asks each user's own clock whether
+their week has turned over — one process serves every timezone. The window is "Monday, from
+08:00 onward" rather than "at 08:00", so a process that was down at eight catches up at
+nine; the review is written once and found thereafter, so every later tick is a no-op.
+`POST /reviews/run` generates one on demand.
+
+## Rate limits
+
+Two kinds of route have a ceiling, and nothing else does — a blanket limit would only
+throttle the dashboard polling the app does normally.
+
+| Route | Limit | Keyed by |
+|---|---|---|
+| `POST /chat` | 40 / hour | account |
+| `POST /reviews/run` | 5 / day | account |
+| `POST /auth/login` | 10 / 15 min | IP |
+| `POST /auth/signup` | 5 / hour | IP |
+
+The chat limits exist because turns are spent from your Claude subscription's budget. The
+password limits exist because those are the only routes an anonymous caller can make burn
+CPU (scrypt, deliberately) and the only ones where guessing pays.
 
 ## Migrating to React Native
 
@@ -253,6 +360,11 @@ Two things to know:
   also means rolling the code back does *not* undo a migration — restore from
   `.deploy-backups/` on the host if a schema change is the problem. The script
   says so explicitly when the deploy included one.
+- **Two things are backed up, not one.** Meal photos are files in the `uploads`
+  volume rather than rows in Postgres, so a pg_dump on its own would restore a
+  database full of `photos` rows pointing at files that no longer exist. The
+  script tars the volume through a throwaway container — which works whether or
+  not the stack is up — and refuses to deploy if either backup fails.
 - **Both images compile their code in**, so unlike the bot nothing is live
   without a rebuild. Anything under `packages/` rebuilds both.
 
@@ -270,6 +382,10 @@ Social features, barcode scanning, Apple Health, recipe databases, micronutrient
 payments. See §21 of the product plan. (§21 also ruled out multiple users — that one
 was overridden on purpose.)
 
-Weekly reviews, adaptive targets, and notifications are v2 — the schema supports them
-today (`targets` is versioned by `effective_from`, and every entry carries a
-`confidence` flag so uncertain days can be weighted down), but nothing computes them yet.
+Weekly reviews and adaptive targets were v2 and are now built — see the two sections
+above. Notifications are not: the review lands in the journal and waits to be read,
+because a nutrition app that pushes at you is a different and worse product.
+
+Streaming the chat turn is the obvious next thing. `POST /chat` awaits the whole agent
+loop and returns one JSON blob, but `ai/agent.ts` already iterates the SDK's messages —
+the hard half of an SSE endpoint is written.

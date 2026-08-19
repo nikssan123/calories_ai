@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RotateCcw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { DaySummary, FoodEntry, Meal } from '@ct/shared';
 import { api } from '@/lib/api';
 import { CalorieRing } from '@/components/CalorieRing';
 import { MacroBars } from '@/components/MacroBars';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
+import { RepeatMeals } from '@/components/RepeatMeals';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -50,6 +51,18 @@ export default function TodayPage() {
       toast.error((e as Error).message);
     }
     void load(offset);
+  }
+
+  /** Clones a past entry to now — which is today, so jump back there to show it. */
+  async function repeatEntry(entry: FoodEntry) {
+    try {
+      const copy = await api.repeatFoodEntry(entry.id);
+      toast.success(`Logged ${copy.description} — ${Math.round(copy.kcal)} kcal`);
+      setOffset(0);
+      void load(0);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
   }
 
   const byMeal = MEAL_ORDER.map((meal) => ({
@@ -132,7 +145,12 @@ export default function TodayPage() {
               }
             >
               {entries.map((entry) => (
-                <EntryRow key={entry.id} entry={entry} onDelete={() => void removeEntry(entry)} />
+                <EntryRow
+                  key={entry.id}
+                  entry={entry}
+                  onDelete={() => void removeEntry(entry)}
+                  onRepeat={() => void repeatEntry(entry)}
+                />
               ))}
             </InsetGroup>
           ))}
@@ -174,6 +192,9 @@ export default function TodayPage() {
               </InsetRow>
             </InsetGroup>
           )}
+
+          {/* Repeating logs at the current time, so it only belongs on today. */}
+          {offset === 0 && <RepeatMeals onLogged={() => void load(0)} />}
           </div>
         </div>
       )}
@@ -181,7 +202,15 @@ export default function TodayPage() {
   );
 }
 
-function EntryRow({ entry, onDelete }: { entry: FoodEntry; onDelete: () => void }) {
+function EntryRow({
+  entry,
+  onDelete,
+  onRepeat,
+}: {
+  entry: FoodEntry;
+  onDelete: () => void;
+  onRepeat: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const approx = entry.confidence !== 'high';
 
@@ -225,10 +254,14 @@ function EntryRow({ entry, onDelete }: { entry: FoodEntry; onDelete: () => void 
               </li>
             ))}
           </ul>
-          <div className="flex items-center gap-3 pt-1">
+          <div className="flex items-center gap-2 pt-1">
             <p className="text-footnote text-muted-foreground flex-1">
               To change this, say so in the journal — “there was more rice”.
             </p>
+            <Button variant="ghost" size="sm" onClick={onRepeat} className="h-8 gap-1.5 px-2">
+              <RotateCcw size={15} />
+              Log again
+            </Button>
             <Button
               variant="ghost"
               size="sm"

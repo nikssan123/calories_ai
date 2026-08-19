@@ -1,16 +1,22 @@
 import type {
+  AdaptiveProposal,
   AuthStatus,
   ChatRequest,
   ChatResponse,
   Credentials,
   DaySummary,
   FoodEntry,
+  Meal,
+  MealTemplate,
   OnboardingState,
   Profile,
   ProfileUpdate,
   Progress,
   ChatMessage,
+  RepeatRequest,
+  ReviewStats,
   SignupRequest,
+  WeeklyReview,
   WeightEntry,
 } from '@ct/shared';
 
@@ -104,6 +110,43 @@ export function createApiClient({ baseUrl, token, fetchImpl }: ApiClientOptions)
         method: 'POST',
         body: JSON.stringify({ weight_kg, measured_at }),
       }),
+
+    // ---- Repeat a meal ----
+
+    /** The things this user actually eats, most-repeated first. */
+    mealTemplates: (options: {
+      query?: string;
+      meal?: Meal;
+      days?: number;
+      limit?: number;
+    } = {}) => {
+      const params = new URLSearchParams();
+      if (options.query) params.set('query', options.query);
+      if (options.meal) params.set('meal', options.meal);
+      if (options.days) params.set('days', String(options.days));
+      if (options.limit) params.set('limit', String(options.limit));
+      const qs = params.toString();
+      return request<{ meals: MealTemplate[] }>(`/history/meals${qs ? `?${qs}` : ''}`);
+    },
+
+    /** Clones a past entry to now. The copy is independent of the original. */
+    repeatFoodEntry: (entryId: string, payload: RepeatRequest = {}) =>
+      request<FoodEntry>(`/entries/food/${entryId}/repeat`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+
+    // ---- Adaptive targets & weekly reviews ----
+
+    adaptiveTargets: () => request<AdaptiveProposal>('/targets/adaptive'),
+
+    reviews: (limit = 12) => request<{ reviews: WeeklyReview[] }>(`/reviews?limit=${limit}`),
+
+    latestReview: () => request<WeeklyReview>('/reviews/latest'),
+
+    reviewPreview: () => request<ReviewStats>('/reviews/preview'),
+
+    runReview: () => request<WeeklyReview>('/reviews/run', { method: 'POST' }),
 
     photoUrl: (photoId: string) => `${root}/photos/${photoId}`,
   };

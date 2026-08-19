@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import type { Progress, TrendPoint } from '@ct/shared';
 import { api } from '@/lib/api';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
+import { WeeklyReview } from '@/components/WeeklyReview';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -219,6 +220,10 @@ export default function ProgressPage() {
               </span>
             </InsetRow>
           </InsetGroup>
+
+          <div className="lg:col-span-2">
+            <WeeklyReview />
+          </div>
         </div>
       )}
       </div>

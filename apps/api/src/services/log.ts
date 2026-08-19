@@ -89,6 +89,8 @@ interface ListFoodOptions {
   from?: string;
   to?: string;
   entryId?: string;
+  /** Fetch a specific set of entries, items and all, in one round trip. */
+  entryIds?: string[];
   limit?: number;
 }
 
@@ -102,6 +104,11 @@ export async function listFoodEntries(
   if (options.entryId) {
     params.push(options.entryId);
     conditions.push(`e.id = $${params.length}`);
+  }
+  if (options.entryIds) {
+    if (options.entryIds.length === 0) return [];
+    params.push(options.entryIds);
+    conditions.push(`e.id = ANY($${params.length}::uuid[])`);
   }
   if (options.localDate) {
     params.push(options.localDate);

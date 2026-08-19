@@ -1,9 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { ChatRequest, ProfileUpdate } from '@ct/shared';
-import { query } from '../db.ts';
+import { ChatRequest, Meal, ProfileUpdate, RepeatRequest } from '@ct/shared';
 import { AUTH_HELP, authDescription, hasSubscriptionAuth } from '../ai/client.ts';
+import { generateWeeklyReview } from '../ai/review.ts';
 import { runTurn } from '../ai/run.ts';
+import { proposeTargets } from '../services/adaptive.ts';
+import { listMessages } from '../services/chat.ts';
+import { mealTemplates, repeatFoodEntry } from '../services/history.ts';
 import { savePhoto, readPhoto } from '../services/photos.ts';
 import {
   deleteExerciseEntry,
@@ -13,6 +16,7 @@ import {
   logWeight,
   updateFoodEntry,
 } from '../services/log.ts';
+import { buildFullReviewStats, latestReview, listReviews } from '../services/reviews.ts';
 import { buildDaySummary, buildProgress, currentLocalDate } from '../services/summary.ts';
 import { calculateTargets, setTargets, targetsForDate } from '../services/targets.ts';
 import {
@@ -24,6 +28,13 @@ import {
 } from '../services/user.ts';
 import { localDateFor } from '../time.ts';
 
+/**
+ * Ceilings on the two routes that spend money. Everything else is a database
+ * read and needs no limit — throttling the dashboard would only break polling.
+ */
+const CHAT_LIMIT = { max: 40, timeWindow: '1 hour' };
+const REVIEW_LIMIT = { max: 5, timeWindow: '1 day' };
+
 export async function registerRoutes(app: FastifyInstance) {
   app.get('/health', async () => ({
     ok: true,
@@ -32,7 +43,7 @@ export async function registerRoutes(app: FastifyInstance) {
 
   // ---- The core loop -------------------------------------------------------
 
-  app.post('/chat', async (request, reply) => {
+  app.post('/chat', { config: { rateLimit: CHAT_LIMIT } }, async (request, reply) => {
     const parsed = ChatRequest.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid request' });
@@ -53,14 +64,7 @@ export async function registerRoutes(app: FastifyInstance) {
     }
 
     try {
-      const result = await runTurn({
-        userId,
-        ctx,
-        profile,
-        text: parsed.data.text,
-        photo,
-      });
-      return result;
+      return await runTurn({ userId, ctx, profile, text: parsed.data.text, photo });
     } catch (error) {
       request.log.error({ err: error }, 'chat turn failed');
       return reply.status(502).send({ error: (error as Error).message });
@@ -68,25 +72,8 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   app.get('/chat/history', async (request) => {
-    const userId = request.userId!;
-    const limit = Math.min(Number((request.query as any)?.limit ?? 50), 200);
-    const rows = await query<any>(
-      `SELECT id, role, content, photo_id, created_at FROM (
-         SELECT id, role, content, photo_id, created_at
-           FROM chat_messages WHERE user_id = $1
-       ORDER BY created_at DESC LIMIT $2
-       ) recent ORDER BY created_at ASC`,
-      [userId, limit],
-    );
-    return {
-      messages: rows.map((r) => ({
-        id: r.id,
-        role: r.role,
-        content: r.content,
-        photo_id: r.photo_id,
-        created_at: new Date(r.created_at).toISOString(),
-      })),
-    };
+    const limit = Number((request.query as any)?.limit ?? 50);
+    return { messages: await listMessages(request.userId!, Number.isFinite(limit) ? limit : 50) };
   });
 
   // ---- Today / Progress ----------------------------------------------------
@@ -107,7 +94,7 @@ export async function registerRoutes(app: FastifyInstance) {
   // ---- Manual corrections from the Today screen -----------------------------
 
   const FoodPatch = z.object({
-    meal: z.enum(['breakfast', 'lunch', 'dinner', 'snack']).optional(),
+    meal: Meal.optional(),
     description: z.string().min(1).optional(),
     eaten_at: z.string().optional(),
   });
@@ -147,6 +134,38 @@ export async function registerRoutes(app: FastifyInstance) {
     const entry = await getFoodEntry(userId, (request.params as any).id);
     if (!entry) return reply.status(404).send({ error: 'Entry not found' });
     return entry;
+  });
+
+  // ---- Repeat a meal -------------------------------------------------------
+
+  /** The things this user actually eats, most-repeated first. */
+  app.get('/history/meals', async (request) => {
+    const { userId, ...ctx } = await getUserContext(request.userId!);
+    const q = request.query as any;
+    const meal = Meal.safeParse(q?.meal);
+
+    return {
+      meals: await mealTemplates(userId, ctx, {
+        query: q?.query || null,
+        meal: meal.success ? meal.data : null,
+        daysBack: clampNumber(q?.days, 90, 1, 365),
+        limit: clampNumber(q?.limit, 12, 1, 50),
+      }),
+    };
+  });
+
+  /** Clones a past entry to now. The copy is independent of the original. */
+  app.post('/entries/food/:id/repeat', async (request, reply) => {
+    const { userId, ...ctx } = await getUserContext(request.userId!);
+    const parsed = RepeatRequest.safeParse(request.body ?? {});
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid repeat request' });
+
+    const entry = await repeatFoodEntry(userId, (request.params as any).id, ctx, {
+      meal: parsed.data.meal,
+      eatenAt: parsed.data.eaten_at ? new Date(parsed.data.eaten_at) : undefined,
+    });
+    if (!entry) return reply.status(404).send({ error: 'Entry not found' });
+    return reply.status(201).send(entry);
   });
 
   // ---- Weight --------------------------------------------------------------
@@ -211,6 +230,48 @@ export async function registerRoutes(app: FastifyInstance) {
     return { complete: profile.is_setup_complete && missing.length === 0, missing };
   });
 
+  /**
+   * What the adaptive pass would do right now, without doing it. The Progress
+   * screen shows this so the next target change is never a surprise.
+   */
+  app.get('/targets/adaptive', async (request) => {
+    const { userId, ...ctx } = await getUserContext(request.userId!);
+    return proposeTargets(userId, ctx);
+  });
+
+  // ---- Weekly reviews ------------------------------------------------------
+
+  app.get('/reviews', async (request) => {
+    const limit = clampNumber((request.query as any)?.limit, 12, 1, 52);
+    return { reviews: await listReviews(request.userId!, limit) };
+  });
+
+  app.get('/reviews/latest', async (request, reply) => {
+    const review = await latestReview(request.userId!);
+    if (!review) return reply.status(404).send({ error: 'No review yet' });
+    return review;
+  });
+
+  /** The numbers a review would be written from. Cheap; no model involved. */
+  app.get('/reviews/preview', async (request) => {
+    const { userId, ...ctx } = await getUserContext(request.userId!);
+    const { stats } = await buildFullReviewStats(userId, ctx);
+    return stats;
+  });
+
+  /** Generate this week's review now rather than waiting for Monday. */
+  app.post('/reviews/run', { config: { rateLimit: REVIEW_LIMIT } }, async (request, reply) => {
+    if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) {
+      return reply.status(503).send({ error: AUTH_HELP });
+    }
+    try {
+      return await generateWeeklyReview(request.userId!);
+    } catch (error) {
+      request.log.error({ err: error }, 'weekly review failed');
+      return reply.status(502).send({ error: (error as Error).message });
+    }
+  });
+
   // ---- Photos --------------------------------------------------------------
 
   app.get('/photos/:id', async (request, reply) => {
@@ -224,4 +285,10 @@ export async function registerRoutes(app: FastifyInstance) {
 function stripDataUrl(value: string): string {
   const comma = value.indexOf(',');
   return value.startsWith('data:') && comma !== -1 ? value.slice(comma + 1) : value;
+}
+
+function clampNumber(raw: unknown, fallback: number, min: number, max: number): number {
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.trunc(value)));
 }

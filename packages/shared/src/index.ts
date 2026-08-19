@@ -88,13 +88,20 @@ export const WeightEntry = z.object({
 });
 export type WeightEntry = z.infer<typeof WeightEntry>;
 
+/** Which pass produced a target row: the profile formula, the weekly adaptive
+ * pass, or the user typing a number. */
+export const TARGET_SOURCES = ['calculated', 'adaptive', 'manual'] as const;
+export const TargetSource = z.enum(TARGET_SOURCES);
+export type TargetSource = z.infer<typeof TargetSource>;
+
 export const Targets = z.object({
   kcal: z.number(),
   protein_g: z.number(),
   carbs_g: z.number(),
   fat_g: z.number(),
-  /** True once the user (or adaptive targets) has overridden the calculated values. */
+  /** True once the user has overridden the calculated values. */
   is_custom: z.boolean(),
+  source: TargetSource.default('calculated'),
 });
 export type Targets = z.infer<typeof Targets>;
 
@@ -251,3 +258,133 @@ export function formatKcal(kcal: number, confidence: Confidence = 'medium'): str
   const n = Math.round(kcal).toLocaleString('en-US');
   return confidence === 'high' ? `${n} kcal` : `~${n} kcal`;
 }
+
+// ---- Adaptive targets ------------------------------------------------------
+
+/**
+ * What the last N days of logging plus the weight trend say the user's real
+ * maintenance is. Mifflin-St Jeor predicts a population; this measures a person.
+ *
+ * It calibrates against *logged* intake, not true intake, so a consistent
+ * under-logger converges on a target that works for the way they log. That is a
+ * feature: the number that matters is the one that produces the intended weight
+ * trend.
+ */
+export const TdeeEstimate = z.object({
+  /** kcal/day the data implies, before the goal delta is applied. */
+  observed_tdee_kcal: z.number(),
+  /** What the profile formula predicts, for comparison. */
+  predicted_tdee_kcal: z.number(),
+  /** Confidence-weighted mean of logged intake over the window. */
+  mean_intake_kcal: z.number(),
+  /** Regression slope of bodyweight over the window. Negative is loss. */
+  weight_change_kg_per_week: z.number(),
+  window_days: z.number(),
+  days_logged: z.number(),
+  weigh_ins: z.number(),
+  /** 0-1. Drives how far the target is allowed to move this week. */
+  quality: z.number(),
+});
+export type TdeeEstimate = z.infer<typeof TdeeEstimate>;
+
+export const ADAPTIVE_BLOCKERS = [
+  'not_enough_logged_days',
+  'not_enough_weigh_ins',
+  'weigh_in_span_too_short',
+  'custom_targets',
+  'estimate_out_of_range',
+  'change_too_small',
+] as const;
+export const AdaptiveBlocker = z.enum(ADAPTIVE_BLOCKERS);
+export type AdaptiveBlocker = z.infer<typeof AdaptiveBlocker>;
+
+/** The result of the adaptive pass, whether or not it can act. */
+export const AdaptiveProposal = z.object({
+  eligible: z.boolean(),
+  /** Populated when `eligible` is false. */
+  blocked_by: AdaptiveBlocker.nullable(),
+  /** Null when there was not enough data to estimate at all. */
+  estimate: TdeeEstimate.nullable(),
+  current: Targets,
+  /** The targets that would be written. Equal to `current` when not eligible. */
+  proposed: Targets,
+  /** Signed kcal difference, proposed minus current. */
+  delta_kcal: z.number(),
+  /** One sentence, suitable for the `reason` column and for the UI. */
+  explanation: z.string(),
+});
+export type AdaptiveProposal = z.infer<typeof AdaptiveProposal>;
+
+// ---- Weekly review ---------------------------------------------------------
+
+/** The deterministic half of a review: computed in SQL, never by the model. */
+export const ReviewStats = z.object({
+  week_start: z.string(),
+  week_end: z.string(),
+  days_logged: z.number(),
+  mean_kcal: z.number().nullable(),
+  mean_protein_g: z.number().nullable(),
+  target_kcal: z.number(),
+  target_protein_g: z.number(),
+  /** Days within ±10% of the calorie target. */
+  days_on_target: z.number(),
+  days_protein_hit: z.number(),
+  /** Same fields for the week before, so the review can say "up from". */
+  previous_mean_kcal: z.number().nullable(),
+  previous_days_logged: z.number(),
+  weight_start_kg: z.number().nullable(),
+  weight_end_kg: z.number().nullable(),
+  weight_change_kg: z.number().nullable(),
+  exercise_sessions: z.number(),
+  exercise_kcal: z.number(),
+  /** Most-logged foods this week, by number of entries they appear in. */
+  top_foods: z.array(z.object({ name: z.string(), times: z.number(), kcal: z.number() })),
+  /** Highest and lowest calorie days, for "the weekend is where it goes". */
+  highest_day: z.object({ local_date: z.string(), kcal: z.number() }).nullable(),
+  lowest_day: z.object({ local_date: z.string(), kcal: z.number() }).nullable(),
+  adaptive: AdaptiveProposal.nullable(),
+});
+export type ReviewStats = z.infer<typeof ReviewStats>;
+
+export const WeeklyReview = z.object({
+  id: z.string().uuid(),
+  week_start: z.string(),
+  week_end: z.string(),
+  content: z.string(),
+  stats: ReviewStats,
+  message_id: z.string().uuid().nullable(),
+  created_at: z.string(),
+});
+export type WeeklyReview = z.infer<typeof WeeklyReview>;
+
+// ---- Repeat a meal ---------------------------------------------------------
+
+/**
+ * A meal the user has eaten before, collapsed across repeats. `times` is what
+ * makes the list useful: the point is to surface the eight things someone
+ * actually eats, not their last eight entries.
+ */
+export const MealTemplate = z.object({
+  /** The most recent entry with this description — the one that gets cloned. */
+  entry_id: z.string().uuid(),
+  description: z.string(),
+  meal: Meal,
+  times: z.number(),
+  last_eaten: z.string(),
+  ...Nutrition.shape,
+  items: z.array(z.object({
+    name: z.string(),
+    quantity_g: z.number().nullable(),
+    quantity_desc: z.string().nullable(),
+    kcal: z.number(),
+  })),
+});
+export type MealTemplate = z.infer<typeof MealTemplate>;
+
+export const RepeatRequest = z.object({
+  /** Defaults to the meal slot inferred from the time it is being logged. */
+  meal: Meal.optional(),
+  /** ISO timestamp. Defaults to now. */
+  eaten_at: z.string().optional(),
+});
+export type RepeatRequest = z.infer<typeof RepeatRequest>;

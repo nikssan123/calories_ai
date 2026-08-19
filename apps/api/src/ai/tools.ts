@@ -105,7 +105,15 @@ function pickTotals(entry: { kcal: number; protein_g: number; carbs_g: number; f
   };
 }
 
-export function buildNutritionServer(tc: ToolContext) {
+export interface ServerOptions {
+  /**
+   * Drop every write tool. The weekly review reads the same data through the
+   * same code path as the journal, but must not be able to change it.
+   */
+  readOnly?: boolean;
+}
+
+export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {}) {
   const logFood = tool(
     'log_food',
     'Record one meal in the nutrition log. Call it once per meal — a message describing breakfast and lunch is two calls. Break the meal into one item per distinct food so individual parts can be corrected later.',
@@ -466,21 +474,15 @@ export function buildNutritionServer(tc: ToolContext) {
     { annotations: { readOnlyHint: true }, alwaysLoad: true },
   );
 
-  const tools = [
-    logFood,
-    updateFood,
-    logExercise,
-    logWeightTool,
-    deleteEntry,
-    setProfile,
-    getDay,
-    searchHistory,
-    getProgress,
-  ];
+  const reads = [getDay, searchHistory, getProgress];
+  const writes = [logFood, updateFood, logExercise, logWeightTool, deleteEntry, setProfile];
+  const tools = options.readOnly ? reads : [...writes, ...reads];
 
   return {
     server: createSdkMcpServer({ name: SERVER_NAME, version: '1.0.0', tools }),
     /** Fully-qualified names, so every tool is pre-approved and never prompts. */
     toolNames: tools.map((t) => `mcp__${SERVER_NAME}__${t.name}`),
+    /** The definitions themselves, so a handler can be called without an agent. */
+    tools,
   };
 }

@@ -1,63 +1,26 @@
-import cookie from '@fastify/cookie';
-import cors from '@fastify/cors';
-import Fastify from 'fastify';
+import { buildApp } from './app.ts';
 import { ensureDirectories, env } from './env.ts';
 import { pool } from './db.ts';
-import { registerRoutes } from './routes/index.ts';
-import { registerAuthRoutes } from './routes/auth.ts';
-import { purgeExpiredSessions, resolveSession, SESSION_COOKIE } from './services/auth.ts';
+import { startScheduler } from './scheduler.ts';
+import { purgeExpiredSessions } from './services/auth.ts';
 import { authDescription, AUTH_HELP, hasSubscriptionAuth } from './ai/client.ts';
-
-declare module 'fastify' {
-  interface FastifyRequest {
-    /** Set by the session hook; null when the request is anonymous. */
-    userId: string | null;
-  }
-}
-
-const app = Fastify({
-  logger: { level: process.env.LOG_LEVEL ?? 'info' },
-  // Meal photos arrive as base64 in the JSON body.
-  bodyLimit: 25 * 1024 * 1024,
-});
 
 await ensureDirectories();
 
-await app.register(cors, {
-  // Credentials mode requires an explicit origin rather than a wildcard.
-  origin: (origin, callback) => callback(null, origin ?? true),
-  credentials: true,
-});
-await app.register(cookie);
-
-app.decorateRequest('userId', null);
-
-/** Resolve the session on every request; route guards decide what to do with it. */
-app.addHook('onRequest', async (request) => {
-  const token = request.cookies[SESSION_COOKIE];
-  request.userId = token ? await resolveSession(token) : null;
-});
-
-const PUBLIC_PREFIXES = ['/health', '/auth/'];
-
-app.addHook('onRequest', async (request, reply) => {
-  if (request.method === 'OPTIONS') return;
-  if (PUBLIC_PREFIXES.some((prefix) => request.url.startsWith(prefix))) return;
-  if (request.userId === null) {
-    return reply.status(401).send({ error: 'Not signed in.' });
-  }
-});
-
-await registerAuthRoutes(app);
-await registerRoutes(app);
+const app = await buildApp();
 
 // Expired rows are harmless but unbounded; clear them out periodically.
 const purgeTimer = setInterval(() => void purgeExpiredSessions(), 6 * 60 * 60 * 1000);
 purgeTimer.unref();
 
+// Weekly reviews. The tick is hourly and asks each user's own clock whether
+// their week has turned over, so one process serves every timezone.
+const stopScheduler = startScheduler(app.log);
+
 const shutdown = async (signal: string) => {
   app.log.info(`${signal} received, shutting down`);
   clearInterval(purgeTimer);
+  stopScheduler();
   await app.close();
   await pool.end();
   process.exit(0);

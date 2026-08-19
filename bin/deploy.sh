@@ -15,8 +15,10 @@
 #   * Unlike the bot, nothing here is bind-mounted: both images compile their code
 #     in, so any change to apps/ or packages/ needs a rebuild.
 #   * The state worth protecting is Postgres and the uploaded photos, and neither
-#     lives in git. This script pg_dumps the database before it touches anything,
-#     which is the one thing that makes a bad deploy recoverable.
+#     lives in git. This script backs up both before it touches anything, which is
+#     the one thing that makes a bad deploy recoverable. The photos matter as much
+#     as the rows: a `photos` row whose file has gone points at nothing, and the
+#     meal it belongs to renders as a broken image forever.
 #   * Migrations run in the API container's start command, so schema and code ship
 #     together and there is no window where new code serves an old schema. That
 #     also means a rollback past a migration is NOT automatic — see the warning
@@ -152,13 +154,18 @@ cd "$REPO" 2>/dev/null || die "$REPO does not exist on this host.
 
 CURRENT="$(git rev-parse HEAD)"
 
-# ---- 1. back up the database before touching anything ---------------------------
+# ---- 1. back up the state before touching anything ------------------------------
 #
 # This is the whole safety net. Code rolls back with --ref; a migration that ate
-# data does not, so the dump is taken every time and kept for the last ten deploys.
+# data does not, so both backups are taken every time and the last ten kept.
+#
+# Two stores, not one. Meal photos are files in the `uploads` volume rather than
+# rows in Postgres, so a pg_dump on its own restores a database full of `photos`
+# rows pointing at files that no longer exist.
 if [[ "$DRY" != 1 ]]; then
     STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
     mkdir -p .deploy-backups
+
     if $COMPOSE ps --status running --services 2>/dev/null | grep -qx db; then
         # --clean so the dump can be restored over a live database.
         if $COMPOSE exec -T db pg_dump -U "${POSTGRES_USER:-ct}" --clean \
@@ -173,6 +180,29 @@ if [[ "$DRY" != 1 ]]; then
         ls -1t .deploy-backups/db-*.sql.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
     else
         warn "database is not running — nothing to back up (first deploy?)"
+    fi
+
+    # The volume is read through a throwaway container rather than the API, so
+    # this works whether or not the stack is up, and never writes to the volume.
+    # docker-compose.prod.yml pins `name: calorytracker`, so the volume compose
+    # creates for `uploads` is always this. Overridable for an unusual host.
+    UPLOADS_VOLUME="${UPLOADS_VOLUME:-calorytracker_uploads}"
+
+    if docker volume inspect "$UPLOADS_VOLUME" >/dev/null 2>&1; then
+        if docker run --rm \
+                -v "$UPLOADS_VOLUME:/data:ro" \
+                -v "$PWD/.deploy-backups:/backup" \
+                alpine:3 tar czf "/backup/uploads-$STAMP.tar.gz" -C /data . 2>/dev/null; then
+            say "backed up photos to .deploy-backups/uploads-$STAMP.tar.gz ($(du -h ".deploy-backups/uploads-$STAMP.tar.gz" | cut -f1))"
+        else
+            rm -f ".deploy-backups/uploads-$STAMP.tar.gz"
+            die "photo backup failed — refusing to deploy without one.
+      The photos are not in the database dump; losing them cannot be undone.
+      Check: docker volume inspect $UPLOADS_VOLUME"
+        fi
+        ls -1t .deploy-backups/uploads-*.tar.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
+    else
+        warn "no $UPLOADS_VOLUME volume yet — no photos to back up (first deploy?)"
     fi
 fi
 

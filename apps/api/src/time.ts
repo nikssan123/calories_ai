@@ -97,11 +97,14 @@ function namedHour(text: string): number | null {
     if (meridiem === 'am' && h === 12) h = 0;
     return h;
   }
-  if (/\bbreakfast|this morning|morning\b/.test(text)) return 8;
-  if (/\blunch|midday|noon\b/.test(text)) return 13;
+  // Each alternation is grouped so the word boundaries apply to every branch.
+  // Without the group, `\blunch|midday|noon\b` anchors only the first and last
+  // alternative — and "afternoon" ends in "noon", so it read as lunchtime.
+  if (/\b(?:breakfast|this morning|morning)\b/.test(text)) return 8;
+  if (/\b(?:lunch|midday|noon)\b/.test(text)) return 13;
   if (/\bafternoon\b/.test(text)) return 16;
-  if (/\bdinner|tonight|this evening|evening\b/.test(text)) return 19;
-  if (/\blate night|midnight\b/.test(text)) return 23;
+  if (/\b(?:dinner|tonight|this evening|evening)\b/.test(text)) return 19;
+  if (/\b(?:late night|midnight)\b/.test(text)) return 23;
   return null;
 }
 

@@ -15,6 +15,14 @@ import {
 } from '../services/user.ts';
 
 /**
+ * Password endpoints are the one place an anonymous caller can burn CPU on this
+ * server (scrypt, deliberately) and the one place guessing pays. Both are keyed
+ * by IP, since by definition there is no session yet.
+ */
+const LOGIN_LIMIT = { max: 10, timeWindow: '15 minutes' };
+const SIGNUP_LIMIT = { max: 5, timeWindow: '1 hour' };
+
+/**
  * Signup is open by default so the first account can be created, and can be
  * closed with ALLOW_SIGNUP=false once you've made yours.
  */
@@ -45,7 +53,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post('/auth/signup', async (request, reply) => {
+  app.post('/auth/signup', { config: { rateLimit: SIGNUP_LIMIT } }, async (request, reply) => {
     const parsed = SignupRequest.safeParse(request.body);
     if (!parsed.success) {
       return reply
@@ -76,7 +84,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post('/auth/login', async (request, reply) => {
+  app.post('/auth/login', { config: { rateLimit: LOGIN_LIMIT } }, async (request, reply) => {
     const parsed = Credentials.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Enter an email and password.' });

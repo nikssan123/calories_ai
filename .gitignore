@@ -7,3 +7,8 @@ uploads/
 .env.local
 .DS_Store
 .agent-workspace/
+# Database dumps and photo archives taken by bin/deploy.sh on the host.
+.deploy-backups/
+# Test artefacts: the suite's own upload directory and coverage output.
+.test-uploads/
+coverage/

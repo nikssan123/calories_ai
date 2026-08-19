@@ -1,35 +1,44 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { pool, query } from './db.ts';
+import type pg from 'pg';
+import { isEntrypoint, runAsScript } from './cli.ts';
+import { pool } from './db.ts';
 
 const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
 
-async function main() {
-  await query(`
+export interface MigrationResult {
+  applied: string[];
+  alreadyApplied: number;
+}
+
+/**
+ * Applies every unapplied migration, each in its own transaction. Exported so
+ * the test suite can build a schema without shelling out.
+ */
+export async function runMigrations(target: pg.Pool = pool): Promise<MigrationResult> {
+  await target.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       name TEXT PRIMARY KEY,
       applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `);
 
-  const applied = new Set(
-    (await query<{ name: string }>('SELECT name FROM schema_migrations')).map((r) => r.name),
-  );
+  const { rows } = await target.query<{ name: string }>('SELECT name FROM schema_migrations');
+  const applied = new Set(rows.map((r) => r.name));
   const files = (await readdir(migrationsDir)).filter((f) => f.endsWith('.sql')).sort();
 
-  let ran = 0;
+  const ran: string[] = [];
   for (const file of files) {
     if (applied.has(file)) continue;
     const sql = await readFile(join(migrationsDir, file), 'utf8');
-    const client = await pool.connect();
+    const client = await target.connect();
     try {
       await client.query('BEGIN');
       await client.query(sql);
       await client.query('INSERT INTO schema_migrations (name) VALUES ($1)', [file]);
       await client.query('COMMIT');
-      console.log(`applied ${file}`);
-      ran += 1;
+      ran.push(file);
     } catch (error) {
       await client.query('ROLLBACK');
       throw new Error(`Migration ${file} failed: ${(error as Error).message}`);
@@ -38,11 +47,19 @@ async function main() {
     }
   }
 
-  console.log(ran === 0 ? 'database already up to date' : `applied ${ran} migration(s)`);
-  await pool.end();
+  return { applied: ran, alreadyApplied: applied.size };
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+/**
+ * The CLI body. It does not close the pool — that belongs to the entrypoint
+ * below, so importing this module from a test stays inert.
+ */
+export async function main(): Promise<void> {
+  const { applied } = await runMigrations();
+  for (const file of applied) console.log(`applied ${file}`);
+  console.log(
+    applied.length === 0 ? 'database already up to date' : `applied ${applied.length} migration(s)`,
+  );
+}
+
+if (isEntrypoint(import.meta.url)) void runAsScript(main, () => pool.end());

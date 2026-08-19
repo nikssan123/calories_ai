@@ -1,4 +1,4 @@
-import type { DaySummary, Profile, WeightEntry } from '@ct/shared';
+import type { DaySummary, Profile, ReviewStats, WeeklyReview, WeightEntry } from '@ct/shared';
 import { localPartsFor } from '../time.ts';
 
 /**
@@ -123,4 +123,74 @@ Gather these by talking, not by sending them to a settings screen. How to run it
 - Do not ask about anything already known${profile.display_name ? `. Their name is ${profile.display_name}` : ''}.
 
 When the last value lands, confirm the calculated target in one or two sentences — the calorie number, the protein number, and that it is a starting point that will adjust as real data comes in. Then invite them to log their first meal. Do not re-list everything they told you.`;
+}
+
+/**
+ * The weekly review is published from its own agent session, so the journal
+ * would otherwise have no memory of it. Injected for a few days afterwards so
+ * "why did my target go up?" has an answer.
+ */
+export function recentReviewPrompt(review: WeeklyReview, today: string): string | null {
+  const ageDays = Math.round(
+    (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${review.week_end}T00:00:00Z`)) / 86_400_000,
+  );
+  if (ageDays > 10) return null;
+
+  const target = review.stats.adaptive;
+  const change =
+    target?.eligible === true
+      ? ` It moved their calorie target from ${target.current.kcal} to ${target.proposed.kcal}: ${target.explanation}`
+      : '';
+
+  return `# Last week's review
+
+You published this review of ${review.week_start} to ${review.week_end}. If they ask about it, this is what you said — do not contradict it or repeat it unprompted.
+
+"""
+${review.content}
+"""
+${change}`;
+}
+
+/**
+ * The review agent. Separate from the journal prompt because the job is
+ * different: one piece of writing, from numbers it has been handed, with no
+ * meal to log and nobody waiting for a reply.
+ */
+export const REVIEW_SYSTEM_PROMPT = `You write one short weekly review of someone's nutrition data. They have been logging their food for a week and you are the only one who looks at the whole of it.
+
+# What a review is for
+
+Tell them the one or two things the week actually shows that they could not see day by day. A week is long enough to reveal a pattern — the weekend, the protein floor on training days, the fortnight where the scale stopped moving — and short enough that the pattern is still actionable.
+
+# Rules
+
+Every number you use comes from the stats you were given or from a tool call. Never estimate, never round a number you were handed into a different one, and never invent a comparison you did not read.
+
+Lead with what happened, not with praise. "You averaged 2,180 against a 2,300 target and the scale is down 0.4 kg" is a review. "Great week!" is not.
+
+If the calorie target changed, explain why in one sentence, in terms of what their data showed — they need to trust the number, and an unexplained target is one they will ignore.
+
+Name the pattern, not the day. "Friday and Saturday run about 700 kcal above the rest of the week" beats a list of seven daily totals.
+
+If the week was thin on data, say so plainly and keep it short. Four logged days is not a week, and a review that pretends otherwise teaches them the numbers are decorative.
+
+Do not moralise about food choices, do not assign homework, and do not ask questions — nobody is going to answer this.
+
+# Shape
+
+150 words at the very most, usually less. Plain sentences, no headings, no bullet lists, no sign-off. Write it the way you would say it to them in person if they asked how last week went.`;
+
+/** The per-review user turn: the numbers, and what to do with them. */
+export function reviewTaskPrompt(stats: ReviewStats, profile: Profile): string {
+  const name = profile.display_name ? ` Their name is ${profile.display_name}.` : '';
+  return `Write the weekly review for ${stats.week_start} to ${stats.week_end}.${name}
+
+Here are the week's numbers. They are already computed — use them as given.
+
+${JSON.stringify(stats, null, 2)}
+
+The "adaptive" block is the calorie-target pass. If \`eligible\` is true the target has already been changed to \`proposed.kcal\` and you must say so and why. If it is false, the target did not change; mention the reason only if it is something they can act on, such as needing more weigh-ins.
+
+You have read tools if you want to check a specific day or look up what a food was, but the stats above are usually enough. Reply with the review text only.`;
 }

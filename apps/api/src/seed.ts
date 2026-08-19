@@ -5,66 +5,55 @@
  *   pnpm --filter @ct/api seed          # add demo data
  *   pnpm --filter @ct/api seed -- --reset  # wipe all logged data first
  */
+import { isEntrypoint, runAsScript } from './cli.ts';
 import { pool, query, queryOne } from './db.ts';
 import { getUserContext } from './services/user.ts';
 import { createExerciseEntry, createFoodEntry, logWeight } from './services/log.ts';
-import { addDays, localDateFor } from './time.ts';
+import { addDays, type DayContext, localDateFor } from './time.ts';
 
-const DAYS = 21;
+export const DEFAULT_SEED_DAYS = 21;
 
-async function main() {
-  const reset = process.argv.includes('--reset');
+export interface SeedOptions {
+  days?: number;
+  /** Starting weight in kg; it trends down across the window. */
+  startWeightKg?: number;
+  /** Fixed jitter source, so a test can seed the same history twice. */
+  random?: () => number;
+  /** Anchor for "now". Tests pass a fixed instant. */
+  now?: Date;
+}
 
-  // Seed the account whose email is given, else the only account there is.
-  const emailArg = process.argv.find((a) => a.startsWith('--email='))?.slice('--email='.length);
-  const target = await queryOne<{ id: string; email: string | null }>(
-    emailArg
-      ? 'SELECT id, email FROM users WHERE lower(email) = lower($1)'
-      : 'SELECT id, email FROM users ORDER BY created_at ASC LIMIT 1',
-    emailArg ? [emailArg] : [],
-  );
-  if (!target) {
-    console.error(
-      emailArg
-        ? `No account with email ${emailArg}.`
-        : 'No users yet — create an account in the app first, then re-run seed.',
-    );
-    process.exit(1);
-  }
-  console.log(`seeding ${target.email ?? target.id}`);
+/**
+ * Writes `days` of history ending yesterday. Extracted from the CLI so tests can
+ * build a realistic window — the adaptive pass needs a fortnight of intake and
+ * weigh-ins before it will say anything, and hand-rolling that in every test
+ * would be worse than sharing this.
+ */
+export async function seedHistory(
+  userId: string,
+  ctx: DayContext,
+  options: SeedOptions = {},
+): Promise<number> {
+  const days = options.days ?? DEFAULT_SEED_DAYS;
+  const random = options.random ?? Math.random;
+  const startWeight = options.startWeightKg ?? 83.6;
+  const now = options.now ?? new Date();
 
-  const { userId, ...ctx } = await getUserContext(target.id);
+  for (let daysAgo = days; daysAgo >= 1; daysAgo--) {
+    const at = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+    const jitter = () => (random() - 0.5) * 2;
+    const hourOf = (hour: number) => {
+      const out = new Date(at);
+      out.setHours(hour, Math.floor(random() * 50), 0, 0);
+      return out;
+    };
 
-  if (reset) {
-    // food_items and chat rows cascade from their parents.
-    await query('DELETE FROM food_entries WHERE user_id = $1', [userId]);
-    await query('DELETE FROM exercise_entries WHERE user_id = $1', [userId]);
-    await query('DELETE FROM weight_entries WHERE user_id = $1', [userId]);
-    await query('DELETE FROM chat_messages WHERE user_id = $1', [userId]);
-    console.log('cleared existing log data');
-  }
-
-  const today = localDateFor(new Date(), ctx);
-  const existing = await query<{ n: string }>(
-    'SELECT count(*) AS n FROM food_entries WHERE user_id = $1',
-    [userId],
-  );
-  if (Number(existing[0]!.n) > 0 && !reset) {
-    console.log('data already present — pass --reset to replace it');
-    await pool.end();
-    return;
-  }
-
-  for (let daysAgo = DAYS; daysAgo >= 1; daysAgo--) {
-    const at = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
-    const jitter = () => (Math.random() - 0.5) * 2;
-
-    await logWeight(userId, round1(83.6 - (DAYS - daysAgo) * 0.055 + jitter() * 0.2), at, ctx);
+    await logWeight(userId, round1(startWeight - (days - daysAgo) * 0.055 + jitter() * 0.2), at, ctx);
 
     await createFoodEntry({
       userId,
       meal: 'breakfast',
-      eatenAt: hourOf(at, 8),
+      eatenAt: hourOf(8),
       description: 'Eggs, toast and feta',
       confidence: 'medium',
       source: 'text',
@@ -79,7 +68,7 @@ async function main() {
     await createFoodEntry({
       userId,
       meal: 'lunch',
-      eatenAt: hourOf(at, 13),
+      eatenAt: hourOf(13),
       description: 'Chicken, rice and salad',
       confidence: 'low',
       source: 'text',
@@ -94,7 +83,7 @@ async function main() {
     await createFoodEntry({
       userId,
       meal: 'dinner',
-      eatenAt: hourOf(at, 19),
+      eatenAt: hourOf(19),
       description: 'Salmon, potatoes and greens',
       confidence: 'medium',
       source: 'text',
@@ -108,11 +97,11 @@ async function main() {
 
     // Vary the afternoon snack so adherence isn't identical every day — the
     // Progress screen is only interesting if some days miss.
-    const scale = 0.5 + Math.random() * 0.9;
+    const scale = 0.5 + random() * 0.9;
     await createFoodEntry({
       userId,
       meal: 'snack',
-      eatenAt: hourOf(at, 16),
+      eatenAt: hourOf(16),
       description: 'Protein shake and fruit',
       confidence: 'high',
       source: 'quick',
@@ -126,15 +115,7 @@ async function main() {
           carbs_g: round1(18 * scale),
           fat_g: round1(8 * scale),
         },
-        {
-          name: 'Banana',
-          quantity_g: 120,
-          quantity_desc: '1 medium',
-          kcal: 107,
-          protein_g: 1.3,
-          carbs_g: 27,
-          fat_g: 0.4,
-        },
+        { name: 'Banana', quantity_g: 120, quantity_desc: '1 medium', kcal: 107, protein_g: 1.3, carbs_g: 27, fat_g: 0.4 },
       ],
       ctx,
     });
@@ -144,7 +125,7 @@ async function main() {
       await createExerciseEntry({
         userId,
         description: daysAgo % 4 === 0 ? '45 min weight training' : '5km run',
-        performedAt: hourOf(at, 18),
+        performedAt: hourOf(18),
         durationMin: daysAgo % 4 === 0 ? 45 : 28,
         kcalBurned: daysAgo % 4 === 0 ? 260 : 310,
         confidence: 'low',
@@ -154,21 +135,65 @@ async function main() {
     }
   }
 
-  console.log(`seeded ${DAYS} days of history up to ${addDays(today, -1)}`);
-  await pool.end();
+  return days;
 }
 
-function hourOf(date: Date, hour: number): Date {
-  const out = new Date(date);
-  out.setHours(hour, Math.floor(Math.random() * 50), 0, 0);
-  return out;
+/** Removes everything this user has logged, leaving the account itself intact. */
+export async function clearUserData(userId: string): Promise<void> {
+  // food_items and chat rows cascade from their parents.
+  await query('DELETE FROM food_entries WHERE user_id = $1', [userId]);
+  await query('DELETE FROM exercise_entries WHERE user_id = $1', [userId]);
+  await query('DELETE FROM weight_entries WHERE user_id = $1', [userId]);
+  await query('DELETE FROM chat_messages WHERE user_id = $1', [userId]);
+}
+
+/**
+ * The CLI body. It neither exits the process nor closes the pool — those belong
+ * to the entrypoint below, so importing this module stays inert.
+ */
+export async function main(argv: string[] = process.argv): Promise<void> {
+  const reset = argv.includes('--reset');
+
+  // Seed the account whose email is given, else the only account there is.
+  const emailArg = argv.find((a) => a.startsWith('--email='))?.slice('--email='.length);
+  const target = await queryOne<{ id: string; email: string | null }>(
+    emailArg
+      ? 'SELECT id, email FROM users WHERE lower(email) = lower($1)'
+      : 'SELECT id, email FROM users ORDER BY created_at ASC LIMIT 1',
+    emailArg ? [emailArg] : [],
+  );
+  if (!target) {
+    throw new Error(
+      emailArg
+        ? `No account with email ${emailArg}.`
+        : 'No users yet — create an account in the app first, then re-run seed.',
+    );
+  }
+  console.log(`seeding ${target.email ?? target.id}`);
+
+  const { userId, ...ctx } = await getUserContext(target.id);
+
+  if (reset) {
+    await clearUserData(userId);
+    console.log('cleared existing log data');
+  }
+
+  const today = localDateFor(new Date(), ctx);
+  const existing = await query<{ n: string }>(
+    'SELECT count(*) AS n FROM food_entries WHERE user_id = $1',
+    [userId],
+  );
+  if (Number(existing[0]!.n) > 0 && !reset) {
+    console.log('data already present — pass --reset to replace it');
+    return;
+  }
+
+  const days = await seedHistory(userId, ctx);
+  console.log(`seeded ${days} days of history up to ${addDays(today, -1)}`);
 }
 
 function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (isEntrypoint(import.meta.url)) void runAsScript(main, () => pool.end());

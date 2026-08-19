@@ -149,3 +149,19 @@ function toProfile(row: any): Profile {
     is_setup_complete: row.is_setup_complete,
   };
 }
+
+/**
+ * Accounts the weekly scheduler should consider: real (email-bearing) users who
+ * have finished setup. The pre-account placeholder row is excluded — it has no
+ * owner to write a review for.
+ */
+export async function listActiveUsers(): Promise<
+  Array<{ id: string; timezone: string; day_start_hour: number }>
+> {
+  return query<{ id: string; timezone: string; day_start_hour: number }>(
+    `SELECT id, timezone, day_start_hour
+       FROM users
+      WHERE email IS NOT NULL AND is_setup_complete = TRUE
+   ORDER BY created_at ASC`,
+  );
+}
