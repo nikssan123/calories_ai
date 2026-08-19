@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Nutrition">
+  <title>Nutrition</title>
+  <!--
+    A progress ring that is also a speech bubble. The ring opens at 10 o'clock,
+    the way the day's calories are still open; the three dots are at once a
+    typing indicator and the macros — protein, carbs, fat.
+
+    Colours are the iOS system palette the app is built from: the ring runs from
+    systemIndigo (the app's --calories accent) towards systemPurple, and the dark
+    variants swap in below. Keep this file in step with components/Logo.tsx.
+  -->
+  <style>
+    .s0 { stop-color: #5e5ce6 } /* systemIndigo — the app's --calories */
+    .s1 { stop-color: #a75cf0 } /* systemPurple, pulled back so indigo still leads */
+    .protein { fill: #34c759 }
+    .carbs   { fill: #32ade6 }
+    .fat     { fill: #ff2d55 }
+    @media (prefers-color-scheme: dark) {
+      .s0 { stop-color: #7d7aff }
+      .s1 { stop-color: #c489f7 }
+      .protein { fill: #30d158 }
+      .carbs   { fill: #64d2ff }
+      .fat     { fill: #ff375f }
+    }
+  </style>
+  <defs>
+    <!-- userSpaceOnUse so the ring and the tail share one continuous ramp. -->
+    <linearGradient id="nutrition-mark" gradientUnits="userSpaceOnUse" x1="8.5" y1="6.8" x2="55.5" y2="57.2">
+      <stop offset="0" class="s0" />
+      <stop offset="1" class="s1" />
+    </linearGradient>
+  </defs>
+  <path d="M27.28 50.76Q19.36 54.29 14.51 56.45A1.9 1.9 0 0 0 11.49 54.15Q12.17 48.71 13.29 39.83Z" fill="url(#nutrition-mark)" />
+  <path d="M32 10.3A20 20 0 1 1 14.68 20.3" fill="none" stroke="url(#nutrition-mark)" stroke-width="7.6" stroke-linecap="round" />
+  <circle cx="24" cy="30.3" r="3" class="protein" />
+  <circle cx="32" cy="30.3" r="3" class="carbs" />
+  <circle cx="40" cy="30.3" r="3" class="fat" />
+</svg>

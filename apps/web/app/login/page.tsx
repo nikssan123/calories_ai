@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthGate';
+import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -60,6 +61,7 @@ export default function LoginPage() {
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-sm flex-col justify-center px-6 py-12">
       <div className="mb-8">
+        <Logo size={46} className="mb-5" />
         <h1 className="text-large-title">
           {mode === 'signup' ? 'Create your account' : 'Welcome back'}
         </h1>

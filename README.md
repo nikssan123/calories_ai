@@ -44,6 +44,12 @@ every interactive accent; the macros are spaced around the wheel (green protein,
 cyan carbs, pink fat, teal exercise) so no two read alike in a row of bars. Changing
 the accent is one token — `--calories`, in both the light and dark blocks.
 
+The logo is a progress ring that is also a speech bubble: it opens at 10 o'clock
+the way the day's calories are still open, and its three dots read at once as a
+typing indicator and as the macros. `components/Logo.tsx` draws it from the
+tokens so it follows the in-app theme toggle; `public/logo.svg`, `app/icon.svg`
+and `app/apple-icon.png` are the same geometry with the colours baked in.
+
 ## Running it
 
 Needs Docker (for Postgres), Node 22+, pnpm, and a signed-in Claude Code

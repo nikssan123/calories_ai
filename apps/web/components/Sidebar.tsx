@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChartLine, Flame, LogOut, MessageSquareText, User } from 'lucide-react';
 import { useAuth } from '@/components/AuthGate';
+import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/utils';
 
 const TABS = [
@@ -26,8 +27,11 @@ export function Sidebar() {
   return (
     <aside className="border-border bg-card/40 hidden w-60 shrink-0 flex-col border-r lg:flex">
       <div className="px-5 pt-6 pb-4">
-        <p className="text-title-2">Nutrition</p>
-        <p className="text-footnote text-muted-foreground mt-0.5 truncate">
+        <div className="flex items-center gap-2.5">
+          <Logo size={26} />
+          <p className="text-title-2">Nutrition</p>
+        </div>
+        <p className="text-footnote text-muted-foreground mt-1 truncate">
           {profile?.display_name || profile?.email || ''}
         </p>
       </div>
