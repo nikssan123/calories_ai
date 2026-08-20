@@ -22,6 +22,9 @@ interface Bubble {
   actions?: ChatAction[];
 }
 
+/** Near enough to the end that a new message should still carry the view. */
+const NEAR_BOTTOM_PX = 64;
+
 const PROMPTS = [
   'Two eggs, toast and coffee',
   'Chicken and rice for lunch',
@@ -41,7 +44,18 @@ export function Journal() {
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLElement>(null);
+  const columnRef = useRef<HTMLDivElement>(null);
+  // Whether the conversation is parked at its end. Everything that grows it
+  // follows it down while this holds, and nothing does once the reader has
+  // scrolled back through history.
+  const pinned = useRef(true);
+  // Where our own scrolling last left the view. A scroll event still reporting
+  // that position is the tail of that scroll rather than the reader moving —
+  // a distinction that matters because the event is delivered after layout, by
+  // which time a photo may already have grown the column underneath it. Read
+  // naively that looks exactly like someone scrolling away from the end.
+  const settledAt = useRef(-1);
   // Guards the one-time setup kickoff against re-renders and StrictMode.
   const kickedOff = useRef(false);
   // Lets `send` see the messages it started from without depending on them.
@@ -74,19 +88,49 @@ export function Journal() {
     };
   }, []);
 
+  const stickToBottom = useCallback(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    pinned.current = true;
+    // scrollTop rather than scrollIntoView, which aligns the last element with
+    // the bottom of the scrollport and so leaves the column's own bottom
+    // padding below the fold — short of the end by exactly that much, every
+    // time. Instant rather than smooth for the same reason: an animation spends
+    // its frames somewhere that is not the end, and every later growth then has
+    // to fight it.
+    scroller.scrollTop = scroller.scrollHeight;
+    settledAt.current = scroller.scrollTop;
+  }, []);
+
+  // Reaching the end is not one scroll but a series. A photo has no height
+  // until it decodes and a card none until its images do, so the column keeps
+  // growing under a scroll that has already finished — which is what leaves a
+  // freshly opened journal parked just above the message it was opened to read.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [bubbles]);
+    const column = columnRef.current;
+    if (!column) return;
+    const observer = new ResizeObserver(() => {
+      if (pinned.current) stickToBottom();
+    });
+    observer.observe(column);
+    return () => observer.disconnect();
+  }, [stickToBottom]);
+
+  useEffect(() => {
+    if (pinned.current) stickToBottom();
+  }, [bubbles, stickToBottom]);
 
   // Opening the keyboard shortens the shell, which would otherwise leave the
   // conversation scrolled to where its bottom used to be.
   useEffect(() => {
     const viewport = window.visualViewport;
     if (!viewport) return;
-    const stickToBottom = () => bottomRef.current?.scrollIntoView({ block: 'end' });
-    viewport.addEventListener('resize', stickToBottom);
-    return () => viewport.removeEventListener('resize', stickToBottom);
-  }, []);
+    const follow = () => {
+      if (pinned.current) stickToBottom();
+    };
+    viewport.addEventListener('resize', follow);
+    return () => viewport.removeEventListener('resize', follow);
+  }, [stickToBottom]);
 
 
   const send = useCallback(async (payload: ComposerPayload) => {
@@ -94,6 +138,9 @@ export function Journal() {
     // Ids the server had already given us. Anything outside this set afterwards
     // arrived during this turn, which is clock-free evidence that it landed.
     const known = new Set(bubblesRef.current.map((b) => b.key));
+    // Sending is a request to be at the end of the conversation, wherever the
+    // reader had scrolled back to.
+    pinned.current = true;
     // Render the user's message immediately — a multi-second wait before
     // anything appears would break the "continuous conversation" feel.
     setBubbles((prev) => [
@@ -173,8 +220,16 @@ export function Journal() {
       <div className="flex min-w-0 flex-1 flex-col">
         <StatusBar day={day} loading={loading} setupPending={onboarding?.complete === false} />
 
-        <main className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-5 lg:px-8 lg:py-8">
-          <div className="mx-auto w-full max-w-2xl space-y-5">
+        <main
+          ref={scrollerRef}
+          onScroll={(event) => {
+            const el = event.currentTarget;
+            if (el.scrollTop === settledAt.current) return;
+            pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX;
+          }}
+          className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-5 lg:px-8 lg:py-8"
+        >
+          <div ref={columnRef} className="mx-auto w-full max-w-2xl space-y-5">
         {loading && <ChatSkeleton />}
 
         {!loading && bubbles.length === 0 && onboarding?.complete && (
@@ -202,7 +257,6 @@ export function Journal() {
           {bubbles.map((bubble) => (
             <Bubble key={bubble.key} bubble={bubble} />
           ))}
-          <div ref={bottomRef} />
           </div>
         </main>
 
