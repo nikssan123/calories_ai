@@ -9,12 +9,12 @@ import { InsetGroup } from '@/components/InsetGroup';
 import { Pantry } from '@/components/kitchen/Pantry';
 import { Brief } from '@/components/kitchen/Brief';
 import { ImportRecipe } from '@/components/kitchen/ImportRecipe';
-import { LibraryCard } from '@/components/kitchen/LibraryCard';
-import { RecipeCard } from '@/components/kitchen/RecipeCard';
+import { RecipeTile } from '@/components/kitchen/RecipeTile';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { foodEmoji } from '@/lib/foodEmoji';
 
 /**
  * Cook — what you could make, from what you have, that fits what is left.
@@ -35,6 +35,13 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
  * could not get back past it; they are two tabs of one result area instead, in
  * a grid rather than a column, so a wide screen shows six recipes instead of
  * one and a half.
+ *
+ * What is in that grid is a tile and nothing more. Cards used to carry the
+ * method in an accordion, a servings stepper and two buttons, which made every
+ * one of them a small form and made opening one shove its neighbour down the
+ * page. Choosing and cooking are different activities: this screen is for
+ * choosing, and a recipe's own page — /cook/library/[slug] for the shelf,
+ * /cook/recipe/[id] for an idea — is for the rest.
  *
  * The budget line under the ask is doing more work than it looks like it is —
  * it is the reason the suggestions are any good, and saying it out loud is what
@@ -116,6 +123,36 @@ export default function CookPage() {
         protein: Math.max(0, Math.round(day.targets.protein_g - day.consumed.protein_g)),
       }
     : null;
+
+  /*
+   * Saving is the one thing still done from the grid, because it is the one
+   * thing you do *while* choosing rather than after. Both write through
+   * optimistically and put the flag back if the request fails — a bookmark that
+   * silently did not save is worse than one that visibly bounces.
+   */
+  async function toggleLibrarySaved(slug: string, next: boolean) {
+    const flip = (value: boolean) =>
+      setLibrary((prev) => prev?.map((r) => (r.slug === slug ? { ...r, saved: value } : r)) ?? prev);
+    flip(next);
+    try {
+      await api.saveLibraryRecipe(slug, next);
+    } catch (e) {
+      flip(!next);
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function toggleRecipeSaved(id: string, next: boolean) {
+    const flip = (value: boolean) =>
+      setRecipes((prev) => prev.map((r) => (r.id === id ? { ...r, saved: value } : r)));
+    flip(next);
+    try {
+      await api.saveRecipe(id, next);
+    } catch (e) {
+      flip(!next);
+      toast.error((e as Error).message);
+    }
+  }
 
   async function suggest() {
     setThinking(true);
@@ -242,24 +279,32 @@ export default function CookPage() {
                 </p>
               </div>
             ) : (
-              <div className="grid gap-3 lg:grid-cols-2">
+              <div className="grid items-stretch gap-3 lg:grid-cols-2 xl:grid-cols-3">
                 {recipes.map((recipe) => (
-                  <RecipeCard
+                  <RecipeTile
                     key={recipe.id}
-                    recipe={recipe}
-                    onCooked={() => {
-                      // The day moved, so the budget line under the ask has to.
-                      void load();
-                    }}
+                    href={`/cook/recipe/${recipe.id}`}
+                    title={recipe.title}
+                    summary={recipe.summary}
+                    kcal={recipe.kcal}
+                    protein_g={recipe.protein_g}
+                    servingLabel="per portion"
+                    emoji={foodEmoji(recipe.title)}
+                    needs={recipe.ingredients.filter((i) => i.missing).map((i) => i.name)}
+                    minutes={recipe.minutes}
+                    steps={recipe.steps.length}
+                    saved={recipe.saved}
+                    onToggleSave={() => void toggleRecipeSaved(recipe.id, !recipe.saved)}
                   />
                 ))}
               </div>
             )}
           </>
         ) : library === null ? (
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
             <Skeleton className="h-72 w-full rounded-[var(--radius)]" />
             <Skeleton className="h-72 w-full rounded-[var(--radius)]" />
+            <Skeleton className="hidden h-72 w-full rounded-[var(--radius)] xl:block" />
           </div>
         ) : library.length === 0 ? (
           <p className="text-muted-foreground px-1 py-8 text-center text-body font-medium">
@@ -267,20 +312,22 @@ export default function CookPage() {
           </p>
         ) : (
           <>
-            <div className="grid items-start gap-3 lg:grid-cols-2">
+            <div className="grid items-stretch gap-3 lg:grid-cols-2 xl:grid-cols-3">
               {library.map((recipe) => (
-                <LibraryCard
+                <RecipeTile
                   key={recipe.slug}
-                  recipe={recipe}
-                  onCooked={() => void load()}
-                  onAdapted={(adapted, note) => {
-                    setRecipes((prev) => [...adapted, ...prev]);
-                    setMessage(note);
-                    // The adaptation is the answer to a question just asked, so
-                    // show it. A tab switch replaces the scroll gymnastics this
-                    // used to need to get back up the page.
-                    setTab('ideas');
-                  }}
+                  href={`/cook/library/${recipe.slug}`}
+                  title={recipe.title}
+                  summary={recipe.summary}
+                  kcal={recipe.kcal}
+                  protein_g={recipe.protein_g}
+                  servingLabel={`per ${recipe.serving_size ?? 'portion'}`}
+                  photo={recipe.image_path}
+                  fitsToday={recipe.fits_today}
+                  have={recipe.have}
+                  steps={recipe.steps.length}
+                  saved={recipe.saved}
+                  onToggleSave={() => void toggleLibrarySaved(recipe.slug, !recipe.saved)}
                 />
               ))}
             </div>

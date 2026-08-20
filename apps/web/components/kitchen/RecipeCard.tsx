@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Bookmark, ChevronDown, Clock, Users } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowUpRight, Bookmark, ChevronDown, Clock, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Recipe } from '@ct/shared';
 import { api } from '@/lib/api';
@@ -10,7 +11,15 @@ import { formatServings, scale, Servings } from '@/components/kitchen/Servings';
 import { cn } from '@/lib/utils';
 
 /**
- * One idea, as a card.
+ * One idea, as a card, inside the conversation.
+ *
+ * Cook itself no longer uses this — its grid holds <RecipeTile>, which is a
+ * thing to choose rather than a thing to operate, and sends you to the recipe's
+ * own page for the rest. The journal is the one place where the fuller card is
+ * still right: it arrives in a single column mid-conversation as the answer to
+ * a question just asked, so expanding it pushes nothing sideways, and sending
+ * someone to another screen for a tap this card can take itself would be the
+ * long way round.
  *
  * The two things it has to get across before anything else are what it costs
  * against today and what you would have to go out for. Everything below the
@@ -170,6 +179,15 @@ export function RecipeCard({
         <Button onClick={() => void cook()} disabled={cooking} className="h-11 w-full rounded-full">
           {cooking ? 'Logging…' : `I ate this · ${Math.round(eaten.kcal)} kcal`}
         </Button>
+        {/* The way out of the thread and onto the page built for cooking from,
+            for the times the answer is "yes, tonight" rather than "yes, now". */}
+        <Link
+          href={`/cook/recipe/${recipe.id}`}
+          className="text-footnote text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 font-semibold"
+        >
+          Open the full recipe
+          <ArrowUpRight size={13} />
+        </Link>
       </div>
     </article>
   );
