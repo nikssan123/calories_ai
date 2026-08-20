@@ -230,6 +230,17 @@ describe('cookLibraryRecipe', () => {
     expect(entry!.items[0]!.quantity_desc).toBe('2 × 1 serving');
   });
 
+  /**
+   * Half a portion is what is left at nine o'clock, and the stepper on the card
+   * offers it — so the arithmetic has to survive a fraction rather than
+   * rounding it to a whole serving nobody ate.
+   */
+  it('handles half a serving', async () => {
+    const entry = await cookLibraryRecipe(user.id, 'trout', { portions: 0.5, ctx: user.ctx });
+    expect(Math.round(entry!.kcal)).toBe(96);
+    expect(entry!.items[0]!.quantity_desc).toBe('0.5 × 1 serving');
+  });
+
   it('returns null for a recipe that is not there', async () => {
     expect(await cookLibraryRecipe(user.id, 'nope', { ctx: user.ctx })).toBeNull();
   });

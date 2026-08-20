@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import type { Recipe } from '@ct/shared';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { formatServings, scale, Servings } from '@/components/kitchen/Servings';
 import { cn } from '@/lib/utils';
 
 /**
@@ -26,13 +27,24 @@ export function RecipeCard({
   const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState(recipe.saved);
   const [cooking, setCooking] = useState(false);
+  // Defaults to the whole dish. A generated recipe is usually written for one,
+  // and when it is not, the person who asked for four portions meant to cook
+  // four — how much of it they then eat is what the stepper is for.
+  const [servings, setServings] = useState(1);
 
   const missing = recipe.ingredients.filter((i) => i.missing);
+
+  const eaten = {
+    kcal: scale(recipe.kcal, servings),
+    protein_g: scale(recipe.protein_g, servings),
+    carbs_g: scale(recipe.carbs_g, servings),
+    fat_g: scale(recipe.fat_g, servings),
+  };
 
   async function cook() {
     setCooking(true);
     try {
-      const entry = await api.cookRecipe(recipe.id);
+      const entry = await api.cookRecipe(recipe.id, { portions: servings });
       toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
       onCooked();
     } catch (e) {
@@ -79,12 +91,11 @@ export function RecipeCard({
         )}
 
         <div className="text-footnote text-muted-foreground mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="tnum text-foreground font-medium">
-            {Math.round(recipe.kcal)} kcal
-          </span>
-          <Macro label="P" value={recipe.protein_g} color="var(--protein)" />
-          <Macro label="C" value={recipe.carbs_g} color="var(--carbs)" />
-          <Macro label="F" value={recipe.fat_g} color="var(--fat)" />
+          <span className="tnum text-foreground font-medium">{Math.round(eaten.kcal)} kcal</span>
+          <Macro label="P" value={eaten.protein_g} color="var(--protein)" />
+          <Macro label="C" value={eaten.carbs_g} color="var(--carbs)" />
+          <Macro label="F" value={eaten.fat_g} color="var(--fat)" />
+          <span>{servings === 1 ? 'per portion' : `for ${formatServings(servings)} portions`}</span>
           {recipe.minutes !== null && (
             <span className="inline-flex items-center gap-1">
               <Clock size={11} />
@@ -124,7 +135,7 @@ export function RecipeCard({
         <div className="border-border space-y-3 border-t px-4 py-3.5">
           <div>
             <p className="text-footnote text-muted-foreground font-semibold tracking-wide uppercase">
-              Ingredients
+              Ingredients · makes {recipe.portions}
             </p>
             <ul className="mt-1.5 space-y-1">
               {recipe.ingredients.map((item, index) => (
@@ -154,13 +165,10 @@ export function RecipeCard({
         </div>
       )}
 
-      <div className="border-border border-t p-3">
-        <Button
-          onClick={() => void cook()}
-          disabled={cooking}
-          className="h-10 w-full rounded-xl"
-        >
-          {cooking ? 'Logging…' : 'I cooked this'}
+      <div className="border-border space-y-3 border-t p-3">
+        <Servings value={servings} onChange={setServings} unit="portion" />
+        <Button onClick={() => void cook()} disabled={cooking} className="h-10 w-full rounded-xl">
+          {cooking ? 'Logging…' : `I ate this · ${Math.round(eaten.kcal)} kcal`}
         </Button>
       </div>
     </article>

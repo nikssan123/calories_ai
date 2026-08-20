@@ -225,6 +225,16 @@ describe('cookRecipe', () => {
     expect(entry!.items[0]!.quantity_g).toBe(75);
   });
 
+  /** The stepper offers halves, so the ingredient scaling has to take one. */
+  it('handles half a portion', async () => {
+    const { recipes } = await suggestProposing(recipeArgs({ portions: 2 }));
+    const entry = await cookRecipe(user.id, recipes[0]!.id, { portions: 0.5, ctx: user.ctx });
+
+    // 1200 kcal for the dish, over two portions, half of one eaten.
+    expect(Math.round(entry!.kcal)).toBe(300);
+    expect(entry!.items[0]!.quantity_g).toBe(75);
+  });
+
   it('keeps the written amounts when the whole thing is eaten', async () => {
     const { recipes } = await suggestProposing(recipeArgs());
     const entry = await cookRecipe(user.id, recipes[0]!.id, { ctx: user.ctx });

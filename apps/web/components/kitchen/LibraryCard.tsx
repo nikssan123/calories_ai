@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import type { LibraryRecipe } from '@ct/shared';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { formatServings, scale, Servings } from '@/components/kitchen/Servings';
 import { cn } from '@/lib/utils';
 
 /**
@@ -30,11 +31,21 @@ export function LibraryCard({
   const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState(recipe.saved);
   const [cooking, setCooking] = useState(false);
+  const [servings, setServings] = useState(1);
+
+  // The published figures are per serving, so everything on the card is one
+  // multiplication away from what this person is about to eat.
+  const eaten = {
+    kcal: scale(recipe.kcal, servings),
+    protein_g: scale(recipe.protein_g, servings),
+    carbs_g: scale(recipe.carbs_g, servings),
+    fat_g: scale(recipe.fat_g, servings),
+  };
 
   async function cook() {
     setCooking(true);
     try {
-      const entry = await api.cookLibraryRecipe(recipe.slug);
+      const entry = await api.cookLibraryRecipe(recipe.slug, { portions: servings });
       toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
       onCooked();
     } catch (e) {
@@ -86,11 +97,15 @@ export function LibraryCard({
         <h3 className="text-[17px] leading-snug font-medium">{recipe.title}</h3>
 
         <div className="text-footnote text-muted-foreground mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="tnum text-foreground font-medium">{Math.round(recipe.kcal)} kcal</span>
-          <Macro label="P" value={recipe.protein_g} color="var(--protein)" />
-          <Macro label="C" value={recipe.carbs_g} color="var(--carbs)" />
-          <Macro label="F" value={recipe.fat_g} color="var(--fat)" />
-          <span>per {recipe.serving_size ?? 'portion'}</span>
+          <span className="tnum text-foreground font-medium">{Math.round(eaten.kcal)} kcal</span>
+          <Macro label="P" value={eaten.protein_g} color="var(--protein)" />
+          <Macro label="C" value={eaten.carbs_g} color="var(--carbs)" />
+          <Macro label="F" value={eaten.fat_g} color="var(--fat)" />
+          <span>
+            {servings === 1
+              ? `per ${recipe.serving_size ?? 'portion'}`
+              : `for ${formatServings(servings)} × ${recipe.serving_size ?? 'portion'}`}
+          </span>
         </div>
 
         {/* The whole reason this list is in this order. */}
@@ -168,9 +183,14 @@ export function LibraryCard({
         </div>
       )}
 
-      <div className="border-border border-t p-3">
+      <div className="border-border space-y-3 border-t p-3">
+        <Servings
+          value={servings}
+          onChange={setServings}
+          unit={recipe.serving_size ?? 'portion'}
+        />
         <Button onClick={() => void cook()} disabled={cooking} className="h-10 w-full rounded-xl">
-          {cooking ? 'Logging…' : `I cooked this · ${Math.round(recipe.kcal)} kcal`}
+          {cooking ? 'Logging…' : `I ate this · ${Math.round(eaten.kcal)} kcal`}
         </Button>
       </div>
     </article>
