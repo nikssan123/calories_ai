@@ -1,4 +1,12 @@
-import type { Confidence, FoodEntry, Meal, Recipe, RecipeContext, RecipeIngredient } from '@ct/shared';
+import type {
+  Confidence,
+  FoodEntry,
+  Meal,
+  Recipe,
+  RecipeContext,
+  RecipeIngredient,
+  RecipeOrigin,
+} from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import { createFoodEntry } from './log.ts';
 import { type DayContext, inferMeal } from '../time.ts';
@@ -22,6 +30,10 @@ export interface SaveRecipeInput {
   ingredients: RecipeIngredient[];
   confidence: Confidence;
   generatedFor: RecipeContext | null;
+  /** Invented from the pantry, reworked from the library, or brought by the user. */
+  origin?: RecipeOrigin;
+  /** The library slug an adaptation started from. */
+  adaptedFrom?: string | null;
 }
 
 /**
@@ -40,8 +52,9 @@ export async function saveRecipe(input: SaveRecipeInput): Promise<Recipe> {
   const row = await queryOne<any>(
     `INSERT INTO recipes
        (user_id, title, summary, portions, minutes, steps, ingredients,
-        kcal, protein_g, carbs_g, fat_g, confidence, generated_for)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        kcal, protein_g, carbs_g, fat_g, confidence, generated_for,
+        origin, adapted_from)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
      RETURNING *`,
     [
       input.userId,
@@ -57,6 +70,8 @@ export async function saveRecipe(input: SaveRecipeInput): Promise<Recipe> {
       perPortion.fat_g,
       input.confidence,
       input.generatedFor ? JSON.stringify(input.generatedFor) : null,
+      input.origin ?? 'invented',
+      input.adaptedFrom ?? null,
     ],
   );
   return toRecipe(row);
@@ -206,6 +221,8 @@ function toRecipe(row: any): Recipe {
     fat_g: Number(row.fat_g),
     confidence: row.confidence,
     generated_for: row.generated_for,
+    origin: row.origin,
+    adapted_from: row.adapted_from,
     saved: row.saved,
     cooked_at: row.cooked_at ? new Date(row.cooked_at).toISOString() : null,
     created_at: new Date(row.created_at).toISOString(),

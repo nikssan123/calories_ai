@@ -323,7 +323,39 @@ export async function listExerciseEntries(
     `SELECT * FROM exercise_entries WHERE ${conditions.join(' AND ')} ORDER BY performed_at ASC`,
     params,
   );
-  return rows.map(toExerciseEntry);
+  const entries = rows.map(toExerciseEntry);
+
+  /*
+   * Sets for the whole page in one query rather than one per entry. Most
+   * entries have none — a run has nothing to put in them — so this is skipped
+   * entirely unless something counted turns up in the range.
+   */
+  const ids = entries.map((e) => e.id);
+  if (ids.length === 0) return entries;
+
+  const sets = await query<any>(
+    `SELECT entry_id, name, position, set_number, reps, weight_kg, duration_sec, distance_m
+       FROM exercise_sets WHERE entry_id = ANY($1::uuid[])
+   ORDER BY position, set_number`,
+    [ids],
+  );
+  if (sets.length === 0) return entries;
+
+  const byEntry = new Map<string, ExerciseEntry['sets']>();
+  for (const row of sets) {
+    const list = byEntry.get(row.entry_id) ?? [];
+    list.push({
+      name: row.name,
+      position: Number(row.position),
+      set_number: Number(row.set_number),
+      reps: row.reps === null ? null : Number(row.reps),
+      weight_kg: row.weight_kg === null ? null : Number(row.weight_kg),
+      duration_sec: row.duration_sec === null ? null : Number(row.duration_sec),
+      distance_m: row.distance_m === null ? null : Number(row.distance_m),
+    });
+    byEntry.set(row.entry_id, list);
+  }
+  return entries.map((e) => ({ ...e, sets: byEntry.get(e.id) ?? [] }));
 }
 
 function toExerciseEntry(row: any): ExerciseEntry {
@@ -337,6 +369,10 @@ function toExerciseEntry(row: any): ExerciseEntry {
     kcal_burned: Number(row.kcal_burned),
     confidence: row.confidence,
     source: row.source,
+    category: row.category ?? null,
+    detail: row.detail ?? 'estimated',
+    // Filled by the caller above where there are any; a described run has none.
+    sets: [],
   };
 }
 

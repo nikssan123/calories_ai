@@ -12,7 +12,9 @@ import type {
   ChatResponse,
   Credentials,
   DaySummary,
+  ExerciseEntry,
   ExerciseSummary,
+  ExerciseType,
   FoodEntry,
   Meal,
   MealTemplate,
@@ -28,6 +30,8 @@ import type {
   Progress,
   ChatMessage,
   Recipe,
+  RecipeBrief,
+  RecipeImportRequest,
   RecipeSuggestRequest,
   RepeatRequest,
   ReviewStats,
@@ -38,6 +42,7 @@ import type {
   UsageTurn,
   WeeklyReview,
   WeightEntry,
+  WorkoutRequest,
 } from '@ct/shared';
 import { SESSION_TRANSPORT_HEADER } from '@ct/shared';
 
@@ -240,6 +245,24 @@ export function createApiClient({
         body: JSON.stringify(payload),
       }),
 
+    // ---- Workouts ----
+
+    /** Built-in exercises plus anything this account has invented. */
+    exerciseTypes: (category?: string) =>
+      request<{ types: ExerciseType[] }>(
+        `/exercise/types${category ? `?category=${encodeURIComponent(category)}` : ''}`,
+      ),
+
+    /**
+     * Logs a counted session in one request. No model call behind it — the card
+     * collected everything, and this is arithmetic over what was typed.
+     */
+    logWorkout: (payload: WorkoutRequest) =>
+      request<ExerciseEntry>('/exercise/workout', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+
     // ---- The kitchen ----
 
     /** Everything the user says is in their kitchen, staples last. */
@@ -270,6 +293,22 @@ export function createApiClient({
       request<PantryScanProposal>('/pantry/scan', {
         method: 'POST',
         body: JSON.stringify({ photo_base64: photoBase64, photo_media_type: mediaType }),
+      }),
+
+    /**
+     * Rework a library recipe into one this person can actually cook tonight.
+     */
+    adaptLibraryRecipe: (slug: string, payload: RecipeBrief = {}) =>
+      request<{ recipes: Recipe[]; message: string }>(`/library/${slug}/adapt`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+
+    /** Price a recipe the user brought and save it as theirs. */
+    importRecipe: (payload: RecipeImportRequest) =>
+      request<{ recipes: Recipe[]; message: string }>('/recipes/import', {
+        method: 'POST',
+        body: JSON.stringify(payload),
       }),
 
     /** Ideas for what to cook, from the pantry and what is left of today. */

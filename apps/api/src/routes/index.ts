@@ -1,6 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { ChatRequest, DeleteAccountRequest, Meal, ProfileUpdate, RepeatRequest } from '@ct/shared';
+import {
+  ChatRequest,
+  DeleteAccountRequest,
+  Meal,
+  ProfileUpdate,
+  RepeatRequest,
+  WorkoutRequest,
+} from '@ct/shared';
 import { AUTH_HELP, authDescription, hasSubscriptionAuth } from '../ai/client.ts';
 import { env } from '../env.ts';
 import { generateWeeklyReview } from '../ai/review.ts';
@@ -42,6 +49,8 @@ import {
   setWeeklyReviewEmails,
   updateUser,
 } from '../services/user.ts';
+import { listExerciseTypes, logWorkout } from '../services/workouts.ts';
+import { messageActions, replaceActions } from '../services/chat.ts';
 import { addDays, dateRange, localDateFor } from '../time.ts';
 import { stripDataUrl } from './body.ts';
 import { CHAT_LIMIT, DELETE_ACCOUNT_LIMIT, REVIEW_LIMIT } from './limits.ts';
@@ -200,6 +209,79 @@ export async function registerRoutes(app: FastifyInstance) {
       eatenAt: parsed.data.eaten_at ? new Date(parsed.data.eaten_at) : undefined,
     });
     if (!entry) return reply.status(404).send({ error: 'Entry not found' });
+    return reply.status(201).send(entry);
+  });
+
+  // ---- Workouts ------------------------------------------------------------
+
+  /**
+   * The exercise catalogue: built-ins plus whatever this account has invented.
+   * A plain database read — the picker has to be instant, and nothing here
+   * needs a model.
+   */
+  app.get('/exercise/types', async (request) => {
+    const category = (request.query as any)?.category ?? null;
+    return { types: await listExerciseTypes(request.userId!, category) };
+  });
+
+  /**
+   * A session, counted rather than described.
+   *
+   * No rate limit and no model call: the card collected everything already, and
+   * this is arithmetic over what the user typed. That is the whole reason the
+   * card exists rather than three more turns of conversation.
+   */
+  app.post('/exercise/workout', async (request, reply) => {
+    const { userId, ...ctx } = await getUserContext(request.userId!);
+    const parsed = WorkoutRequest.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid workout' });
+    }
+
+    const entry = await logWorkout({
+      userId,
+      category: parsed.data.category,
+      exercises: parsed.data.exercises,
+      durationMin: parsed.data.duration_min ?? null,
+      performedAt: parsed.data.performed_at ? new Date(parsed.data.performed_at) : undefined,
+      ctx,
+    });
+
+    /*
+     * Turn the question that prompted this into a receipt. Answering a card
+     * has to change it, or reopening the app shows the same question again and
+     * invites logging the session twice.
+     */
+    if (parsed.data.message_id) {
+      const existing = await messageActions(userId, parsed.data.message_id);
+      if (existing) {
+        await replaceActions(
+          userId,
+          parsed.data.message_id,
+          existing.map((action) =>
+            action.card?.type === 'workout_prompt'
+              ? {
+                  kind: 'exercise_logged' as const,
+                  entry_id: entry.id,
+                  summary: `${entry.description} — ~${Math.round(entry.kcal_burned)} kcal`,
+                  card: {
+                    type: 'exercise' as const,
+                    entry_id: entry.id,
+                    description: entry.description,
+                    confidence: entry.confidence,
+                    kcal_burned: Math.round(entry.kcal_burned),
+                    duration_min: entry.duration_min,
+                    distance_km: entry.distance_km,
+                    category: entry.category,
+                    sets: entry.sets,
+                  },
+                }
+              : action,
+          ),
+        );
+      }
+    }
+
     return reply.status(201).send(entry);
   });
 

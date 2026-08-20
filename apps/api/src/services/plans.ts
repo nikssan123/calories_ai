@@ -39,8 +39,16 @@ export interface PlanLimits {
  * cost panel rather than estimated here:
  *
  *   pantry_scan   ~$0.04   Sonnet, one vision turn, ~1k output tokens
- *   recipe        ~$0.21   Opus, ~5k output tokens — three recipes with method
+ *   recipe        ~$0.22   Opus, ~5k output tokens — three recipes with method
+ *   ...adapting   ~$0.15   one recipe instead of three, so less to write
+ *   ...importing  ~$0.09   one recipe, and the method came with it
  *   text_log      ~$0.05   the journal, for comparison
+ *
+ * Asking in the journal costs both: ~$0.30 and about 75 seconds, because the
+ * chat turn waits on a full recipe run inside its own tool call. That is the
+ * most expensive single thing a user can do, and it is charged against the same
+ * daily budget as the Cook tab — see `RecipeBudgetError`, which is enforced in
+ * the engine precisely so all four doors share one allowance.
  *
  * A recipe run is therefore about four times the most expensive journal turn
  * and five times a scan, which is what the ceilings below are built around. Two

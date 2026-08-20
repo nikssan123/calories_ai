@@ -35,8 +35,17 @@ export const REVIEW_LIMIT = planLimit((l) => l.reviewsPerDay, '1 day');
 /** Fridge photos: vision, and discretionary. */
 export const SCAN_LIMIT = planLimit((l) => l.fridgeScansPerDay, '1 day');
 
-/** Recipe generation — the most expensive single call in the product. */
-export const RECIPE_LIMIT = planLimit((l) => l.recipeRunsPerDay, '1 day');
+/**
+ * A burst guard on the recipe routes, not the recipe budget.
+ *
+ * The budget itself lives in `ai/recipes.ts`, counted off the cost ledger,
+ * because there are four ways to start a run — suggest, adapt, import, and the
+ * journal's tool — and this plugin keeps a separate bucket per route config. A
+ * per-route daily ceiling of one therefore meant four, which is not a limit.
+ * What is left here is what a per-route limiter is actually good for: stopping
+ * a stuck client from firing the same expensive request in a loop.
+ */
+export const RECIPE_BURST = { max: 6, timeWindow: '1 minute' };
 
 /**
  * Not about money, and deliberately not a plan limit: this one verifies a

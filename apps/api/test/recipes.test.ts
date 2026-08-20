@@ -3,6 +3,8 @@ import { queryOne } from '../src/db.ts';
 import { suggestRecipes } from '../src/ai/recipes.ts';
 import { cookRecipe, getRecipe, listRecipes, setRecipeSaved } from '../src/services/recipes.ts';
 import { addPantryItems } from '../src/services/pantry.ts';
+import { updateUser } from '../src/services/user.ts';
+import { seedLibrary } from '../src/seed-library.ts';
 import { buildDaySummary } from '../src/services/summary.ts';
 import { agentCalls, scriptAgent, systemPromptOf } from './helpers/agent-mock.ts';
 import { addDays, localDateFor } from '../src/time.ts';
@@ -18,7 +20,10 @@ import { addMeal, createUser, setUserTargets, type TestUser } from './helpers/fa
 let user: TestUser;
 
 beforeEach(async () => {
-  user = await createUser();
+  // On a paid plan because the daily recipe budget is not what these tests are
+  // about, and a free account gets one run a day — several of them below
+  // generate twice. The budget itself is covered in plans.test.ts.
+  user = await createUser({ plan: 'pro' });
   await setUserTargets(user, '2026-01-01', { kcal: 2200, protein_g: 160 });
 });
 
@@ -184,6 +189,138 @@ describe('the recipe prompt', () => {
       user.id,
     ]);
     expect(row!.kind).toBe('recipe');
+  });
+});
+
+describe('the brief', () => {
+  it('carries the constraints it was given', async () => {
+    await suggestProposing(recipeArgs());
+    // Baseline: nothing asked for, nothing stated.
+    expect(String(agentCalls.at(-1)!.prompt)).not.toContain('## For this one');
+
+    const tools = await import('../src/ai/tools.ts');
+    const spy = vi.spyOn(tools, 'buildNutritionServer');
+    scriptAgent({
+      text: 'ok',
+      act: async () => {
+        const built = spy.mock.results.at(-1)!.value as ReturnType<typeof tools.buildNutritionServer>;
+        await built.tools.find((t) => t.name === 'propose_recipe')!.handler(recipeArgs() as never, {});
+      },
+    });
+    await suggestRecipes(user.id, {
+      minutes: 20,
+      portions: 4,
+      proteinMin: 40,
+      kcalMax: 600,
+    });
+
+    const prompt = String(agentCalls.at(-1)!.prompt);
+    expect(prompt).toContain('about 20 minutes');
+    expect(prompt).toContain('Cook 4 portions');
+    expect(prompt).toContain('At least 40g protein');
+    expect(prompt).toContain('No more than 600 kcal');
+  });
+
+  /**
+   * The one section where being helpful about everything else is no excuse. It
+   * is stated as a boundary rather than a preference, and it has to be there
+   * whether or not the user thought to mention it in this particular request.
+   */
+  it('states what they do not eat as a hard limit', async () => {
+    await updateUser(user.id, { diet: 'vegetarian', avoids: ['mushrooms', 'shellfish'] });
+    await suggestProposing(recipeArgs());
+
+    const prompt = String(agentCalls.at(-1)!.prompt);
+    expect(prompt).toContain('Hard limits');
+    expect(prompt).toContain('They are vegetarian');
+    expect(prompt).toContain('mushrooms, shellfish');
+  });
+
+  it('says nothing about diet when there is nothing to say', async () => {
+    await suggestProposing(recipeArgs());
+    expect(String(agentCalls.at(-1)!.prompt)).not.toContain('Hard limits');
+  });
+});
+
+describe('adapting a library recipe', () => {
+  beforeEach(async () => {
+    await seedLibrary([
+      {
+        slug: 'baked-trout',
+        title: 'Baked Trout',
+        summary: 'A quick fish supper.',
+        category: 'Main dish',
+        portions: 4,
+        serving_size: '1 fillet',
+        ingredients: [{ text: '4 trout fillets', note: null }],
+        steps: ['Bake it.'],
+        keywords: ['trout fillet'],
+        kcal: 192,
+        protein_g: 25.6,
+        carbs_g: 4,
+        fat_g: 8,
+        food_groups: [],
+        image_path: '/recipes/baked-trout.jpg',
+        source: 'USDA MyPlate Kitchen',
+        source_url: 'https://example.test/baked-trout',
+        rating: 4.2,
+        rating_count: 10,
+      },
+    ]);
+  });
+
+  it('hands the model the original to work from', async () => {
+    const tools = await import('../src/ai/tools.ts');
+    const spy = vi.spyOn(tools, 'buildNutritionServer');
+    scriptAgent({
+      text: 'Swapped the trout for chicken.',
+      act: async () => {
+        const built = spy.mock.results.at(-1)!.value as ReturnType<typeof tools.buildNutritionServer>;
+        await built.tools.find((t) => t.name === 'propose_recipe')!.handler(recipeArgs() as never, {});
+      },
+    });
+
+    const { recipes } = await suggestRecipes(user.id, { job: { kind: 'adapt', slug: 'baked-trout' } });
+
+    const prompt = String(agentCalls.at(-1)!.prompt);
+    expect(prompt).toContain('Rework this recipe');
+    expect(prompt).toContain('Baked Trout');
+    expect(prompt).toContain('4 trout fillets');
+    expect(prompt).toContain('Keep it recognisably the same dish');
+
+    // Origin is stamped by the server, never by the model.
+    expect(recipes[0]).toMatchObject({ origin: 'adapted', adapted_from: 'baked-trout' });
+  });
+
+  /** Fail before a token is spent, not halfway through. */
+  it('refuses a recipe that is not in the library', async () => {
+    await expect(
+      suggestRecipes(user.id, { job: { kind: 'adapt', slug: 'nope' } }),
+    ).rejects.toThrow('No such recipe');
+    expect(agentCalls).toHaveLength(0);
+  });
+});
+
+describe('importing a recipe', () => {
+  it('prices what the user brought and marks it as theirs', async () => {
+    const tools = await import('../src/ai/tools.ts');
+    const spy = vi.spyOn(tools, 'buildNutritionServer');
+    scriptAgent({
+      text: 'About 600 kcal a portion.',
+      act: async () => {
+        const built = spy.mock.results.at(-1)!.value as ReturnType<typeof tools.buildNutritionServer>;
+        await built.tools.find((t) => t.name === 'propose_recipe')!.handler(recipeArgs() as never, {});
+      },
+    });
+
+    const { recipes } = await suggestRecipes(user.id, {
+      job: { kind: 'import', text: "Nan's chicken pie. Chicken, pastry, an onion. Bake it." },
+    });
+
+    const prompt = String(agentCalls.at(-1)!.prompt);
+    expect(prompt).toContain('This is their recipe, not yours to improve');
+    expect(prompt).toContain("Nan's chicken pie");
+    expect(recipes[0]).toMatchObject({ origin: 'imported', adapted_from: null });
   });
 });
 

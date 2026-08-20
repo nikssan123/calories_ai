@@ -1,6 +1,12 @@
 import { tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
-import type { Confidence, PantryFind, Recipe, RecipeContext } from '@ct/shared';
+import type {
+  Confidence,
+  PantryFind,
+  Recipe,
+  RecipeContext,
+  RecipeOrigin,
+} from '@ct/shared';
 import { saveRecipe } from '../services/recipes.ts';
 import { itemShape } from './shapes.ts';
 
@@ -28,10 +34,23 @@ export interface KitchenCollector {
   note: string | null;
   /** The budget the recipes are being written against; stamped onto each. */
   generatedFor: RecipeContext | null;
+  /**
+   * Where this run's recipes came from, stamped on at insert.
+   *
+   * Set by the caller rather than passed as a tool argument, so the model has
+   * no say in it: origin is a claim about how much to trust the numbers, and
+   * only the server knows which job it asked for.
+   */
+  origin: RecipeOrigin;
+  adaptedFrom: string | null;
 }
 
-export function emptyCollector(generatedFor: RecipeContext | null = null): KitchenCollector {
-  return { recipes: [], found: [], note: null, generatedFor };
+export function emptyCollector(
+  generatedFor: RecipeContext | null = null,
+  origin: RecipeOrigin = 'invented',
+  adaptedFrom: string | null = null,
+): KitchenCollector {
+  return { recipes: [], found: [], note: null, generatedFor, origin, adaptedFrom };
 }
 
 const ok = (payload: unknown) => ({
@@ -119,6 +138,8 @@ export function buildKitchenTools(tc: KitchenToolContext) {
         })),
         confidence: args.confidence as Confidence,
         generatedFor: tc.kitchen.generatedFor,
+        origin: tc.kitchen.origin,
+        adaptedFrom: tc.kitchen.adaptedFrom,
       });
 
       tc.kitchen.recipes.push(recipe);

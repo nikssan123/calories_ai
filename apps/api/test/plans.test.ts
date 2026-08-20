@@ -142,6 +142,63 @@ describe('per-plan ceilings', () => {
     }
   });
 
+  /**
+   * One budget across every door into the kitchen. Per-route buckets meant a
+   * free account got its daily allowance once for /recipes/suggest, again for
+   * an adaptation, again for an import, and again through the journal.
+   */
+  it('spends one recipe budget across suggest, adapt and import', async () => {
+    const { recordUsage } = await import('../src/services/usage.ts');
+    const { seedLibrary } = await import('../src/seed-library.ts');
+    // A real slug: the adapt route validates the recipe exists before it looks
+    // at the budget, so a made-up one would 404 and prove nothing.
+    await seedLibrary([
+      {
+        slug: 'baked-trout',
+        title: 'Baked Trout',
+        summary: null,
+        category: 'Main dish',
+        portions: 4,
+        serving_size: '1 fillet',
+        ingredients: [{ text: '4 trout fillets', note: null }],
+        steps: ['Bake it.'],
+        keywords: ['trout'],
+        kcal: 192,
+        protein_g: 25.6,
+        carbs_g: 4,
+        fat_g: 8,
+        food_groups: [],
+        image_path: '/recipes/baked-trout.jpg',
+        source: 'USDA MyPlate Kitchen',
+        source_url: 'https://example.test/baked-trout',
+        rating: 4,
+        rating_count: 10,
+      },
+    ]);
+    const limit = limitsFor('free').recipeRunsPerDay;
+    for (let i = 0; i < limit; i++) {
+      await recordUsage({
+        userId: user.id,
+        kind: 'recipe',
+        outcome: { text: 'x', sessionId: null, numTurns: 1, costUsd: 0.2, model: 'claude-opus-5' } as never,
+      });
+    }
+
+    for (const [url, payload] of [
+      ['/recipes/suggest', {}],
+      ['/library/baked-trout/adapt', {}],
+      ['/recipes/import', { text: 'A recipe long enough to pass validation, with steps.' }],
+    ] as const) {
+      const response = await app.inject({
+        method: 'POST',
+        url,
+        headers: { cookie },
+        payload,
+      });
+      expect(response.statusCode, url).toBe(429);
+    }
+  });
+
   it('caps recipe runs too', async () => {
     const tools = await import('../src/ai/tools.ts');
     const spy = vi.spyOn(tools, 'buildNutritionServer');

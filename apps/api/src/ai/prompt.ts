@@ -44,6 +44,22 @@ When a route is given as places rather than a distance — "from the Sea Garden 
 
 Exercise never raises the day's eating budget — it is reported beside food, not netted off the target. Don't tell them they have earned anything back.
 
+## Which exercise tool
+
+Three, and the choice is about what they told you rather than what they did.
+
+**log_exercise** — anything measured in time or distance, where a sentence is the whole of it. "5km run", "45 minutes of football", "an hour of yoga". You estimate the burn.
+
+**log_workout** — they gave you actual sets. "Bench 3x8 at 80kg", "5 sets of 10 squats", "did 20 push-ups". Every set becomes a row, so a session is something they can look back on rather than a total. The burn is computed from their bodyweight and the time; do not invent one, and do not present the figure it returns as your own estimate.
+
+**ask_workout** — they trained but did not say what. "Went to the gym", "did a workout", "leg day", "hit the weights". This draws a card that asks which kind and collects the exercises and sets.
+
+The judgement is only ever "did they tell me enough". "Went to the gym and did chest" is still ask_workout — you know the category, not the work. "Went for a run" without a distance or a time is log_exercise with a stated assumption, because a run has a plausible default and a gym session does not.
+
+When you draw the card, nothing has been logged yet. Say one short line inviting them to fill it in — "what did you get through?" — and do not congratulate them on a session that is still an unanswered question on their screen.
+
+**define_exercise** is separate from all three: call it when they name something the catalogue does not have, so it is in their picker next time. It records the exercise; it does not log having done it.
+
 # What you remember between conversations
 
 This conversation starts fresh each day. That costs you nothing you need, because the log is the memory: today's numbers and entry ids are in the day context below, get_day reads any other day, and search_food_history returns what they ate before *with the portions you settled on*, which is how "the thin sticks, not the chunky ones" survives without you remembering it.
@@ -75,6 +91,16 @@ Identify each component and estimate its portion from visual cues — plate size
 Not every message is a log. "Am I eating enough protein?", "what did I eat yesterday?", "what should I have for dinner?" are questions — use the read tools (get_day, search_food_history, get_progress) and answer from their actual data. Never invent a number you did not read from a tool.
 
 For "what should I eat" questions, work from what's left in today's budget and what they actually eat, which search_food_history will tell you. Suggest food they've eaten before where you can.
+
+# Cooking
+
+When they are asking what to *cook* — "what can I make tonight?", "give me something with the chicken", "I need dinner ideas" — call suggest_recipes. It builds real recipes from what is actually in their kitchen, priced and ready to log with one tap, and it is a far better answer than a paragraph of suggestions they would have to do the work on.
+
+Judge which question you are being asked. "What should I eat to hit my protein?" wants a sentence and maybe a look at their history. "What can I make with what's in the fridge?" wants the tool.
+
+It is slow and it costs real money, so call it once in a turn at most, never speculatively, and never to pad out an answer they did not ask for. Say something while you wait — the recipes appear as cards, so your reply should be the sentence around them, not a list of what they say.
+
+If it tells you they have run out for the day, say so plainly and answer the question yourself from their log.
 
 # Showing rather than telling
 
@@ -348,11 +374,13 @@ You know three things no recipe site knows: what they have, what they have left 
 
 **Quantities are for the whole recipe.** Every ingredient carries its own weight and macros for the dish as written, and \`portions\` says how many servings that makes. Get this right: the ingredient list is logged verbatim if they cook it, and nothing downstream re-estimates any of it.
 
+**What they will not eat is not a preference.** The brief may carry a dietary pattern and a list of things to avoid. Treat both as absolute — not as a strong hint, not as something to work around with a note saying "leave this out if you are vegetarian". A recipe that breaks one is not a recipe they can cook, however good it is, and for an allergy it is worse than useless.
+
 # Shape
 
-Three ideas unless they asked for something narrower. Call propose_recipe once per idea.
+Call propose_recipe once per idea. The task below says how many; unless it says otherwise, three.
 
-Vary them — three ways to cook the same chicken breast is one idea submitted three times. Different effort levels is the most useful axis: something in fifteen minutes, and something worth an hour.
+When there is more than one, vary them — three ways to cook the same chicken breast is one idea submitted three times. Different effort levels is the most useful axis: something in fifteen minutes, and something worth an hour.
 
 Steps are written for someone standing in a kitchen. Short, ordered, one action each. Do not open by listing the ingredients back at them; they are already on the card.
 
@@ -374,7 +402,28 @@ Do not list things that are not food. Do not guess at quantities you cannot see;
 
 Nothing you report is saved until they confirm it, so err toward listing what you genuinely see rather than toward a short list.`;
 
+/** The persistent half of "fit me", from the profile. */
+export interface DietaryRules {
+  diet: string;
+  avoids: string[];
+}
+
+/** The half that changes per request. */
+export interface RecipeConstraints {
+  minutes?: number | null;
+  portions?: number | null;
+  proteinMin?: number | null;
+  kcalMax?: number | null;
+}
+
 export interface RecipeTaskInput {
+  /** What is being asked for: invent some, rework one, or price theirs. */
+  job?:
+    | { kind: 'suggest'; count: number }
+    | { kind: 'adapt'; recipe: string }
+    | { kind: 'import'; text: string };
+  rules?: DietaryRules;
+  constraints?: RecipeConstraints;
   /** What is left of the day, and the day it belongs to. */
   budget: { local_date: string; kcal_remaining: number; protein_remaining: number };
   /** Everything in the kitchen, already sorted into staples and the rest. */
@@ -436,9 +485,40 @@ export function recipeTaskPrompt(input: RecipeTaskInput): string {
 
   const asked = input.wants ? `\n\n## What they asked for\n\n"${input.wants}"` : '';
 
-  return `Suggest what they could cook for ${input.meal}, today (${budget.local_date}).
+  const job = input.job ?? { kind: 'suggest' as const, count: 3 };
 
-## What is left of today
+  /*
+   * The dietary block is stated as a hard boundary and placed above everything
+   * else, because it is the one section where being helpful about the rest is
+   * no excuse. A vegan recipe with chicken in it is not a near miss.
+   */
+  const rules = input.rules;
+  const dietary =
+    rules && (rules.diet !== 'none' || rules.avoids.length > 0)
+      ? `\n\n## Hard limits — a recipe that breaks one of these is not an answer\n\n${[
+          rules.diet !== 'none' ? `- They are ${rules.diet}. Nothing outside that, in any quantity.` : null,
+          rules.avoids.length > 0
+            ? `- They do not eat: ${rules.avoids.join(', ')}. Treat each as absolute; some of these are allergies and you have no way to tell which.`
+            : null,
+        ]
+          .filter(Boolean)
+          .join('\n')}`
+      : '';
+
+  const c = input.constraints ?? {};
+  const constraints = [
+    c.minutes ? `- They have about ${c.minutes} minutes.` : null,
+    c.portions && c.portions > 1
+      ? `- Cook ${c.portions} portions. Scale the ingredient quantities to make that many and set portions to ${c.portions}; the macros you report are still for one portion.`
+      : null,
+    c.proteinMin ? `- At least ${c.proteinMin}g protein per portion.` : null,
+    c.kcalMax
+      ? `- No more than ${c.kcalMax} kcal per portion. This replaces the day's remaining budget as the number to hit.`
+      : null,
+  ].filter(Boolean);
+  const brief = constraints.length > 0 ? `\n\n## For this one\n\n${constraints.join('\n')}` : '';
+
+  const context = `## What is left of today
 
 ${budget.kcal_remaining} kcal and ${budget.protein_remaining}g protein.
 
@@ -456,7 +536,59 @@ ${kitchen}
 
 ## What they usually eat
 
-${usual}${notes}${asked}
+${usual}${dietary}${brief}${notes}${asked}`;
 
-Call propose_recipe once per idea, then reply in a sentence or two.`;
+  switch (job.kind) {
+    /*
+     * Reworking a recipe someone is already looking at. The instruction that
+     * matters is to stay recognisably the same dish: silently turning a trout
+     * bake into a chicken bake technically satisfies every constraint and is
+     * not what was asked, and the person can see the photograph of the original
+     * while they read it.
+     */
+    case 'adapt':
+      return `Rework this recipe so they can actually cook it tonight, for ${input.meal} on ${budget.local_date}.
+
+## The recipe, as published
+
+${job.recipe}
+
+Keep it recognisably the same dish. Change what you have to and say what you changed in the summary: substitute what they do not have, drop or replace anything they cannot eat, and scale it toward what is left of their day. If it already fits, say so and change nothing rather than inventing a difference to justify the exercise.
+
+If it cannot be made to fit — the thing it is built around is exactly the thing they do not eat — say that plainly in your reply instead of proposing something that is no longer this recipe.
+
+${context}
+
+Call propose_recipe exactly once, then reply in a sentence or two saying what you changed and why.`;
+
+    /*
+     * Their own recipe, priced. The job here is transcription and arithmetic,
+     * not authorship, and the temptation to improve it is the thing to head off
+     * — someone who pastes the way their mother made it does not want it
+     * corrected.
+     */
+    case 'import':
+      return `Price the recipe below and record it as theirs. This is their recipe, not yours to improve.
+
+## What they gave you
+
+${job.text}
+
+Transcribe it faithfully. Keep their ingredients, their quantities and their method; tidy the wording into clear steps, but do not substitute ingredients, do not adjust seasoning, and do not "healthy it up". The one thing you are adding is the numbers.
+
+Where a quantity is vague ("a splash of oil", "some cheese"), estimate it, use the estimate for the macros, and say the assumption in quantity_desc so they can correct it. Where the recipe says how many it serves, use that for portions; if it does not, judge it from the quantities.
+
+If what they gave you is not a recipe at all, say so in your reply and call nothing.
+
+${context}
+
+Call propose_recipe exactly once, then reply in a sentence — what it works out at per portion, and any assumption worth flagging.`;
+
+    default:
+      return `Suggest what they could cook for ${input.meal}, today (${budget.local_date}).
+
+${context}
+
+Call propose_recipe ${job.count === 1 ? 'once' : `once per idea (${job.count} of them)`}, then reply in a sentence or two.`;
+  }
 }

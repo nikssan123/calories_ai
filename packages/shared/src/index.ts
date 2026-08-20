@@ -39,6 +39,16 @@ export type Goal = z.infer<typeof Goal>;
  * `free` is deliberately generous — the daily journal is the habit the product
  * lives on and must never be the thing someone hits a wall in.
  */
+/**
+ * A dietary pattern. Four, because these are the ones that change what an
+ * ingredient list may contain and that a recipe writer can actually honour.
+ * Anything narrower — an allergy, a dislike, half a religious observance —
+ * belongs in `avoids`, where it can be said in the user's own words.
+ */
+export const DIETS = ['none', 'vegetarian', 'vegan', 'pescatarian'] as const;
+export const Diet = z.enum(DIETS);
+export type Diet = z.infer<typeof Diet>;
+
 export const PLANS = ['free', 'pro'] as const;
 export const PlanName = z.enum(PLANS);
 export type PlanName = z.infer<typeof PlanName>;
@@ -81,6 +91,52 @@ export const FoodEntry = z.object({
 });
 export type FoodEntry = z.infer<typeof FoodEntry>;
 
+/**
+ * What kind of session it was. Five, because these are the distinctions that
+ * change what the app should ask you next: a strength session wants sets and a
+ * load, a run wants a distance, and a yoga class wants neither.
+ */
+export const EXERCISE_CATEGORIES = ['strength', 'cardio', 'class', 'sport', 'flexibility'] as const;
+export const ExerciseCategory = z.enum(EXERCISE_CATEGORIES);
+export type ExerciseCategory = z.infer<typeof ExerciseCategory>;
+
+/** What one set of an exercise is measured in — and so which fields to draw. */
+export const EXERCISE_TRACKS = ['reps', 'duration', 'distance'] as const;
+export const ExerciseTracks = z.enum(EXERCISE_TRACKS);
+export type ExerciseTracks = z.infer<typeof ExerciseTracks>;
+
+/**
+ * An exercise the app knows about. Built in, or invented for one account the
+ * moment they mentioned something the catalogue had never heard of — nobody
+ * should have to pick "Other" because their gym does an exercise this app has
+ * not been told about.
+ */
+export const ExerciseType = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  category: ExerciseCategory,
+  emoji: z.string(),
+  tracks: ExerciseTracks,
+  /** True when this account invented it rather than it shipping with the app. */
+  custom: z.boolean(),
+});
+export type ExerciseType = z.infer<typeof ExerciseType>;
+
+/**
+ * One set. "3×8 at 80kg" is three of these, not one saying three — the last set
+ * is where the reps drop, and a count throws away the only record of that.
+ */
+export const ExerciseSet = z.object({
+  name: z.string(),
+  position: z.number().int(),
+  set_number: z.number().int(),
+  reps: z.number().int().nullable(),
+  weight_kg: z.number().nullable(),
+  duration_sec: z.number().int().nullable(),
+  distance_m: z.number().int().nullable(),
+});
+export type ExerciseSet = z.infer<typeof ExerciseSet>;
+
 export const ExerciseEntry = z.object({
   id: z.string().uuid(),
   description: z.string(),
@@ -91,8 +147,58 @@ export const ExerciseEntry = z.object({
   kcal_burned: z.number(),
   confidence: Confidence,
   source: EntrySource,
+  category: ExerciseCategory.nullable(),
+  /**
+   * Whether the numbers were read off a sentence or filled in by a person.
+   * `counted` means the burn is arithmetic over the sets below rather than a
+   * guess about them, which is worth saying out loud on the card.
+   */
+  detail: z.enum(['estimated', 'counted']),
+  sets: z.array(ExerciseSet).default([]),
 });
 export type ExerciseEntry = z.infer<typeof ExerciseEntry>;
+
+/** One exercise within a session, as the card submits it. */
+export const WorkoutExercise = z.object({
+  name: z.string().min(1).max(80),
+  type_id: z.string().uuid().nullable().optional(),
+  sets: z
+    .array(
+      z.object({
+        reps: z.number().int().min(1).max(1000).nullable().optional(),
+        weight_kg: z.number().min(0).max(500).nullable().optional(),
+        duration_sec: z.number().int().min(1).max(86400).nullable().optional(),
+        distance_m: z.number().int().min(1).max(500000).nullable().optional(),
+      }),
+    )
+    .min(1)
+    .max(30),
+});
+export type WorkoutExercise = z.infer<typeof WorkoutExercise>;
+
+/**
+ * A finished session, submitted in one go.
+ *
+ * Deliberately one request rather than a conversation. Asking "which exercise?
+ * how many sets? how heavy?" as three chat turns would be three model calls and
+ * the better part of a minute to log something the user already knows; the card
+ * collects it all and posts once, and the model is not involved at all.
+ */
+export const WorkoutRequest = z.object({
+  category: ExerciseCategory,
+  exercises: z.array(WorkoutExercise).min(1).max(20),
+  /** Total session time, if they know it. Otherwise estimated from the sets. */
+  duration_min: z.number().min(1).max(600).nullable().optional(),
+  /** ISO instant. Defaults to now; the card carries the one the agent meant. */
+  performed_at: z.string().optional(),
+  /**
+   * The chat message whose question this answers. Given it, the server rewrites
+   * that message's card into a receipt — otherwise reopening the app shows a
+   * question that was answered days ago.
+   */
+  message_id: z.string().uuid().optional(),
+});
+export type WorkoutRequest = z.infer<typeof WorkoutRequest>;
 
 export const WeightEntry = z.object({
   id: z.string().uuid(),
@@ -157,6 +263,14 @@ export const Profile = z.object({
   is_setup_complete: z.boolean(),
   /** Read-only here — a plan changes by paying, never by PATCHing a profile. */
   plan: PlanName,
+  /**
+   * What the kitchen must never suggest. Held on the profile rather than as a
+   * standing note because it is true of every meal this person will ever eat,
+   * and a fact that permanent should not depend on having mentioned it in a
+   * chat once.
+   */
+  diet: Diet,
+  avoids: z.array(z.string()),
   /**
    * Monday's review, in the inbox. The only notification this server sends that
    * is a matter of taste — everything else is about the account itself and is
@@ -306,6 +420,197 @@ export const OnboardingState = z.object({
 });
 export type OnboardingState = z.infer<typeof OnboardingState>;
 
+// ---- Kitchen ---------------------------------------------------------------
+
+/**
+ * The kitchen: what you have, and what you could cook with it.
+ *
+ * The premise is the intersection nothing else can reach — a recipe site knows
+ * good recipes, but it does not know that there is chicken in your fridge, that
+ * you have 74g of protein left today, and that you cook the same eight things.
+ */
+
+/**
+ * One thing in the kitchen.
+ *
+ * `last_seen_at` is carried all the way to the client rather than being cleaned
+ * up on the server, because the screen has to be able to say "three weeks ago"
+ * out loud. A pantry that presents stale items as current is worse than no
+ * pantry: it builds a meal on an ingredient that was thrown out.
+ */
+export const PantryItem = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  /** The amount in the user's own words. Never a tracked count. */
+  quantity_desc: z.string().nullable(),
+  /** Assumed always present, and exempt from ageing. */
+  is_staple: z.boolean(),
+  last_seen_at: z.string(),
+  source: z.enum(['typed', 'photo']),
+});
+export type PantryItem = z.infer<typeof PantryItem>;
+
+/** Adding or refreshing an item. Matching is on the name, case-insensitively. */
+export const PantryItemInput = z.object({
+  name: z.string().min(1).max(80),
+  quantity_desc: z.string().max(120).nullable().optional(),
+  is_staple: z.boolean().optional(),
+  source: z.enum(['typed', 'photo']).optional(),
+});
+export type PantryItemInput = z.infer<typeof PantryItemInput>;
+
+export const PantryAddRequest = z.object({
+  items: z.array(PantryItemInput).min(1).max(60),
+});
+export type PantryAddRequest = z.infer<typeof PantryAddRequest>;
+
+export const PantryUpdate = z.object({
+  name: z.string().min(1).max(80).optional(),
+  quantity_desc: z.string().max(120).nullable().optional(),
+  is_staple: z.boolean().optional(),
+  /** Bump `last_seen_at` to now — "yes, still there". */
+  seen: z.boolean().optional(),
+});
+export type PantryUpdate = z.infer<typeof PantryUpdate>;
+
+/**
+ * What the model thinks it saw in a fridge photo.
+ *
+ * Deliberately not a `PantryItem`: nothing is written until the user says so.
+ * A photo shows the front row of one shelf, and the difference between "the
+ * model read this" and "the user owns this" is the whole reason the scan
+ * proposes instead of saving.
+ */
+export const PantryFind = z.object({
+  name: z.string(),
+  quantity_desc: z.string().nullable(),
+  /** How sure the model is it identified this correctly. */
+  confidence: Confidence,
+});
+export type PantryFind = z.infer<typeof PantryFind>;
+
+export const PantryScanProposal = z.object({
+  found: z.array(PantryFind),
+  /** One line on what the photo showed, including what it could not make out. */
+  note: z.string().nullable(),
+  /** Names already in the pantry, so the screen can show what is merely a refresh. */
+  already_known: z.array(z.string()),
+});
+export type PantryScanProposal = z.infer<typeof PantryScanProposal>;
+
+/**
+ * An ingredient with its macros already settled.
+ *
+ * The same shape as a logged `FoodItem` minus its database identity, which is
+ * what makes "I cooked this" a single hand-off: the array goes straight into a
+ * food entry with nothing re-estimated on the way.
+ */
+export const RecipeIngredient = z.object({
+  name: z.string(),
+  quantity_g: z.number().nullable(),
+  quantity_desc: z.string().nullable(),
+  /** True when this is not in the pantry and has to be bought. */
+  missing: z.boolean().default(false),
+  ...Nutrition.shape,
+});
+export type RecipeIngredient = z.infer<typeof RecipeIngredient>;
+
+/** Where a generated recipe came from, which is how much to trust its numbers. */
+export const RECIPE_ORIGINS = ['invented', 'adapted', 'imported'] as const;
+export const RecipeOrigin = z.enum(RECIPE_ORIGINS);
+export type RecipeOrigin = z.infer<typeof RecipeOrigin>;
+
+/** The budget a recipe was written against, so it can explain itself later. */
+export const RecipeContext = z.object({
+  local_date: z.string(),
+  kcal_remaining: z.number(),
+  protein_remaining: z.number(),
+});
+export type RecipeContext = z.infer<typeof RecipeContext>;
+
+export const Recipe = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  /** One line on why this, right now. */
+  summary: z.string().nullable(),
+  portions: z.number().int(),
+  minutes: z.number().int().nullable(),
+  steps: z.array(z.string()),
+  ingredients: z.array(RecipeIngredient),
+  /** Per portion — the figure the card prints, and what cooking one logs. */
+  ...Nutrition.shape,
+  confidence: Confidence,
+  generated_for: RecipeContext.nullable(),
+  origin: RecipeOrigin,
+  /** The library recipe an adaptation started from, if it was one. */
+  adapted_from: z.string().nullable(),
+  saved: z.boolean(),
+  cooked_at: z.string().nullable(),
+  created_at: z.string(),
+});
+export type Recipe = z.infer<typeof Recipe>;
+
+/**
+ * What you need from the kitchen this time.
+ *
+ * The persistent half of "fit me" lives on the profile — `diet` and `avoids`
+ * are true of every meal. This is the half that changes: how long you have
+ * tonight, what you are trying to hit, how many portions you want to end up
+ * with. All of it optional, because the useful default is still "just tell me
+ * what I could cook".
+ */
+export const RecipeBrief = z.object({
+  /**
+   * Anything not covered by a field — "something one-pan", "use up the
+   * spinach". Free text, because the interesting constraints never were an
+   * enum anyone could write.
+   */
+  wants: z.string().max(300).optional(),
+  /** Which meal it is for. Null infers from the time of day. */
+  meal: Meal.nullable().optional(),
+  /** Minutes available, start to plate. */
+  minutes: z.number().int().min(5).max(240).nullable().optional(),
+  /**
+   * How many servings to cook. More than one is batch prep: the ingredient
+   * quantities scale and the macros stay per portion, so cooking four and
+   * eating one logs the same figure it always did.
+   */
+  portions: z.number().int().min(1).max(12).nullable().optional(),
+  /** A floor on protein per portion, for a day that needs it. */
+  protein_min: z.number().min(0).max(300).nullable().optional(),
+  /**
+   * A ceiling on calories per portion. Overrides the day's remaining budget,
+   * which is otherwise what the kitchen aims at.
+   */
+  kcal_max: z.number().min(50).max(3000).nullable().optional(),
+});
+export type RecipeBrief = z.infer<typeof RecipeBrief>;
+
+/** The original ask: invent something from the kitchen. */
+export const RecipeSuggestRequest = RecipeBrief;
+export type RecipeSuggestRequest = z.infer<typeof RecipeSuggestRequest>;
+
+/**
+ * Bring your own recipe and have it priced.
+ *
+ * Text rather than a URL, deliberately. Someone pasting the thing they already
+ * cook is using their own recipe; a server that fetched and stored arbitrary
+ * pages would be doing something else entirely.
+ */
+export const RecipeImportRequest = RecipeBrief.extend({
+  text: z.string().min(20).max(6000),
+});
+export type RecipeImportRequest = z.infer<typeof RecipeImportRequest>;
+
+
+/** Logging a recipe as eaten. Portions defaults to one — the card's figure. */
+export const CookRequest = z.object({
+  portions: z.number().positive().max(20).optional(),
+  meal: Meal.optional(),
+  eaten_at: z.string().optional(),
+});
+export type CookRequest = z.infer<typeof CookRequest>;
+
 /** Declared here rather than with Progress: the chat cards below build on it. */
 export const TrendPoint = z.object({
   local_date: z.string(),
@@ -344,6 +649,9 @@ export const ChatCard = z.discriminatedUnion('type', [
     kcal_burned: z.number(),
     duration_min: z.number().nullable(),
     distance_km: z.number().nullable(),
+    category: ExerciseCategory.nullable().default(null),
+    /** The sets, when there were any. A strength card is a table, not a total. */
+    sets: z.array(ExerciseSet).default([]),
   }),
   z.object({
     type: z.literal('weight'),
@@ -362,6 +670,39 @@ export const ChatCard = z.discriminatedUnion('type', [
     target: z.number().nullable(),
     average: z.number().nullable(),
     series: z.array(TrendPoint),
+  }),
+  /**
+   * Recipes the model asked the kitchen for, mid-conversation.
+   *
+   * The whole `Recipe` rather than a summary, because the card in the journal
+   * is the same card as on the Cook tab — servings stepper, cook button and
+   * all. Answering "what can I make tonight?" with a teaser that sends someone
+   * to another screen to act on it would be a worse answer than the sentence.
+   */
+  z.object({
+    type: z.literal('recipes'),
+    recipes: z.array(Recipe),
+  }),
+  /**
+   * The one card that asks instead of reporting.
+   *
+   * Every other card here is a receipt — a picture of something that already
+   * happened. This one is a question with the answer still missing, because
+   * "went to the gym" is not a loggable fact and the three things needed to
+   * make it one are things the user knows and the model would only guess at.
+   *
+   * Asking them in chat would be three more model calls and most of a minute.
+   * The card collects the lot and posts once to `/exercise/workout`, so the
+   * conversation carries the question and the arithmetic stays out of it.
+   */
+  z.object({
+    type: z.literal('workout_prompt'),
+    /** Where the agent thinks it should open, from what they already said. */
+    suggested_category: ExerciseCategory.nullable(),
+    /** The instant to log against, so a session mentioned late still lands right. */
+    performed_at: z.string(),
+    /** What the agent understood, echoed so the question does not feel blind. */
+    heard: z.string().nullable(),
   }),
   /** Requested by the model via `show_day`. A day at a glance, mid-conversation. */
   z.object({
@@ -384,6 +725,8 @@ export const ChatAction = z.object({
     'exercise_logged',
     'weight_logged',
     'card_shown',
+    'recipes_suggested',
+    'workout_asked',
   ]),
   entry_id: z.string().uuid().nullable(),
   summary: z.string(),
@@ -653,147 +996,6 @@ export const RepeatRequest = z.object({
   eaten_at: z.string().optional(),
 });
 export type RepeatRequest = z.infer<typeof RepeatRequest>;
-
-// ---- Kitchen ---------------------------------------------------------------
-
-/**
- * The kitchen: what you have, and what you could cook with it.
- *
- * The premise is the intersection nothing else can reach — a recipe site knows
- * good recipes, but it does not know that there is chicken in your fridge, that
- * you have 74g of protein left today, and that you cook the same eight things.
- */
-
-/**
- * One thing in the kitchen.
- *
- * `last_seen_at` is carried all the way to the client rather than being cleaned
- * up on the server, because the screen has to be able to say "three weeks ago"
- * out loud. A pantry that presents stale items as current is worse than no
- * pantry: it builds a meal on an ingredient that was thrown out.
- */
-export const PantryItem = z.object({
-  id: z.string().uuid(),
-  name: z.string(),
-  /** The amount in the user's own words. Never a tracked count. */
-  quantity_desc: z.string().nullable(),
-  /** Assumed always present, and exempt from ageing. */
-  is_staple: z.boolean(),
-  last_seen_at: z.string(),
-  source: z.enum(['typed', 'photo']),
-});
-export type PantryItem = z.infer<typeof PantryItem>;
-
-/** Adding or refreshing an item. Matching is on the name, case-insensitively. */
-export const PantryItemInput = z.object({
-  name: z.string().min(1).max(80),
-  quantity_desc: z.string().max(120).nullable().optional(),
-  is_staple: z.boolean().optional(),
-  source: z.enum(['typed', 'photo']).optional(),
-});
-export type PantryItemInput = z.infer<typeof PantryItemInput>;
-
-export const PantryAddRequest = z.object({
-  items: z.array(PantryItemInput).min(1).max(60),
-});
-export type PantryAddRequest = z.infer<typeof PantryAddRequest>;
-
-export const PantryUpdate = z.object({
-  name: z.string().min(1).max(80).optional(),
-  quantity_desc: z.string().max(120).nullable().optional(),
-  is_staple: z.boolean().optional(),
-  /** Bump `last_seen_at` to now — "yes, still there". */
-  seen: z.boolean().optional(),
-});
-export type PantryUpdate = z.infer<typeof PantryUpdate>;
-
-/**
- * What the model thinks it saw in a fridge photo.
- *
- * Deliberately not a `PantryItem`: nothing is written until the user says so.
- * A photo shows the front row of one shelf, and the difference between "the
- * model read this" and "the user owns this" is the whole reason the scan
- * proposes instead of saving.
- */
-export const PantryFind = z.object({
-  name: z.string(),
-  quantity_desc: z.string().nullable(),
-  /** How sure the model is it identified this correctly. */
-  confidence: Confidence,
-});
-export type PantryFind = z.infer<typeof PantryFind>;
-
-export const PantryScanProposal = z.object({
-  found: z.array(PantryFind),
-  /** One line on what the photo showed, including what it could not make out. */
-  note: z.string().nullable(),
-  /** Names already in the pantry, so the screen can show what is merely a refresh. */
-  already_known: z.array(z.string()),
-});
-export type PantryScanProposal = z.infer<typeof PantryScanProposal>;
-
-/**
- * An ingredient with its macros already settled.
- *
- * The same shape as a logged `FoodItem` minus its database identity, which is
- * what makes "I cooked this" a single hand-off: the array goes straight into a
- * food entry with nothing re-estimated on the way.
- */
-export const RecipeIngredient = z.object({
-  name: z.string(),
-  quantity_g: z.number().nullable(),
-  quantity_desc: z.string().nullable(),
-  /** True when this is not in the pantry and has to be bought. */
-  missing: z.boolean().default(false),
-  ...Nutrition.shape,
-});
-export type RecipeIngredient = z.infer<typeof RecipeIngredient>;
-
-/** The budget a recipe was written against, so it can explain itself later. */
-export const RecipeContext = z.object({
-  local_date: z.string(),
-  kcal_remaining: z.number(),
-  protein_remaining: z.number(),
-});
-export type RecipeContext = z.infer<typeof RecipeContext>;
-
-export const Recipe = z.object({
-  id: z.string().uuid(),
-  title: z.string(),
-  /** One line on why this, right now. */
-  summary: z.string().nullable(),
-  portions: z.number().int(),
-  minutes: z.number().int().nullable(),
-  steps: z.array(z.string()),
-  ingredients: z.array(RecipeIngredient),
-  /** Per portion — the figure the card prints, and what cooking one logs. */
-  ...Nutrition.shape,
-  confidence: Confidence,
-  generated_for: RecipeContext.nullable(),
-  saved: z.boolean(),
-  cooked_at: z.string().nullable(),
-  created_at: z.string(),
-});
-export type Recipe = z.infer<typeof Recipe>;
-
-export const RecipeSuggestRequest = z.object({
-  /**
-   * Anything the user wants to steer with — "something quick", "no oven". Free
-   * text, because the useful constraints are not an enum anyone could write.
-   */
-  wants: z.string().max(300).optional(),
-  /** Which meal it is for. Null infers from the time of day. */
-  meal: Meal.nullable().optional(),
-});
-export type RecipeSuggestRequest = z.infer<typeof RecipeSuggestRequest>;
-
-/** Logging a recipe as eaten. Portions defaults to one — the card's figure. */
-export const CookRequest = z.object({
-  portions: z.number().positive().max(20).optional(),
-  meal: Meal.optional(),
-  eaten_at: z.string().optional(),
-});
-export type CookRequest = z.infer<typeof CookRequest>;
 
 // ---- The recipe library ----------------------------------------------------
 

@@ -1,10 +1,12 @@
-import type { Meal, Recipe, RecipeContext } from '@ct/shared';
+import type { Meal, Recipe, RecipeContext, RecipeOrigin } from '@ct/shared';
+import { queryOne } from '../db.ts';
 import { mealTemplates } from '../services/history.ts';
 import { listNotes } from '../services/notes.ts';
 import { listPantry, ageInDays } from '../services/pantry.ts';
 import { buildDaySummary } from '../services/summary.ts';
-import { recordUsage } from '../services/usage.ts';
-import { getUserContext } from '../services/user.ts';
+import { limitsFor } from '../services/plans.ts';
+import { recordUsage, turnsInLastDay } from '../services/usage.ts';
+import { getUser, getUserContext } from '../services/user.ts';
 import { inferMeal, localDateFor } from '../time.ts';
 import { MAX_TURNS } from './client.ts';
 import { emptyCollector } from './kitchen.ts';
@@ -27,8 +29,50 @@ export interface SuggestOptions {
   meal?: Meal | null;
   /** Anything the user typed to steer it: "something quick", "no oven". */
   wants?: string | null;
+  /** Per-request constraints from the brief. */
+  minutes?: number | null;
+  portions?: number | null;
+  proteinMin?: number | null;
+  kcalMax?: number | null;
+  /**
+   * What is being asked for. Absent means the original job: invent three from
+   * the kitchen. The other two arrive with a seed — a library recipe to rework,
+   * or text the user brought — and produce exactly one recipe.
+   */
+  job?: RecipeJob;
   /** Overrides "now". Tests and backfills use it. */
   now?: Date;
+}
+
+export type RecipeJob =
+  | { kind: 'suggest'; count?: number }
+  | { kind: 'adapt'; slug: string }
+  | { kind: 'import'; text: string };
+
+/**
+ * One engine, three ways in.
+ *
+ * Inventing from the pantry, reworking a library recipe and pricing one the
+ * user brought are the same run with a different brief: the same tools, the
+ * same rules about budget and quantities, the same cacheable system prompt.
+ * Only the task turn differs, which is why they are not three functions —
+ * three functions would be three places for the dietary limits to be forgotten.
+ */
+/**
+ * Raised when an account has spent its recipe generations for the day.
+ *
+ * A typed error rather than a boolean return, because every caller has to react
+ * to it and none of them can sensibly carry on: the route answers 429, and the
+ * journal tool tells the model to say so and answer from the log instead.
+ */
+export class RecipeBudgetError extends Error {
+  constructor(
+    readonly allowed: number,
+    readonly used: number,
+  ) {
+    super(`That is all ${allowed} recipe suggestions for today.`);
+    this.name = 'RecipeBudgetError';
+  }
 }
 
 export async function suggestRecipes(
@@ -39,12 +83,36 @@ export async function suggestRecipes(
   const now = options.now ?? new Date();
   const today = localDateFor(now, ctx);
 
-  const [day, pantry, usual, notes] = await Promise.all([
+  const job: RecipeJob = options.job ?? { kind: 'suggest' };
+
+  const [day, pantry, usual, notes, profile] = await Promise.all([
     buildDaySummary(id, today),
     listPantry(id),
     mealTemplates(id, ctx, { limit: 8 }, today),
     listNotes(id),
+    getUser(id),
   ]);
+
+  /*
+   * An adaptation needs the recipe it is adapting, and it has to exist before a
+   * single token is spent — a run that discovers halfway through that there is
+   * nothing to rework has already cost the money.
+   */
+  const seed = job.kind === 'adapt' ? await librarySeed(job.slug) : null;
+  if (job.kind === 'adapt' && !seed) throw new Error('No such recipe in the library.');
+
+  /*
+   * One budget, checked here rather than at the routes.
+   *
+   * There are four ways to start a recipe run — suggest, adapt, import, and the
+   * journal's tool — and @fastify/rate-limit keeps a separate bucket per route
+   * config, so a per-route ceiling of one a day quietly meant four. The ledger
+   * is the only place that sees all of them, and it counts what was actually
+   * spent rather than what was asked for, which is the number that matters.
+   */
+  const allowed = limitsFor(profile.plan).recipeRunsPerDay;
+  const used = await turnsInLastDay(id, 'recipe');
+  if (used >= allowed) throw new RecipeBudgetError(allowed, used);
 
   /*
    * What is left, floored at zero.
@@ -61,7 +129,13 @@ export async function suggestRecipes(
     protein_remaining: Math.max(0, Math.round(day.targets.protein_g - day.consumed.protein_g)),
   };
 
-  const kitchen = emptyCollector(generatedFor);
+  const origin: RecipeOrigin =
+    job.kind === 'suggest' ? 'invented' : job.kind === 'adapt' ? 'adapted' : 'imported';
+  const kitchen = emptyCollector(
+    generatedFor,
+    origin,
+    job.kind === 'adapt' ? job.slug : null,
+  );
   const toolContext: ToolContext = { userId: id, ctx, now, photoId: null, actions: [], kitchen };
 
   const provider = createProvider(toolContext);
@@ -96,6 +170,19 @@ export async function suggestRecipes(
       notes: notes.map((n) => n.note),
       meal: options.meal ?? inferMeal(now, ctx.timezone),
       wants: options.wants ?? null,
+      rules: { diet: profile.diet, avoids: profile.avoids },
+      constraints: {
+        minutes: options.minutes ?? null,
+        portions: options.portions ?? null,
+        proteinMin: options.proteinMin ?? null,
+        kcalMax: options.kcalMax ?? null,
+      },
+      job:
+        job.kind === 'adapt'
+          ? { kind: 'adapt', recipe: seed! }
+          : job.kind === 'import'
+            ? { kind: 'import', text: job.text }
+            : { kind: 'suggest', count: job.count ?? 3 },
     }),
     photo: null,
     tools,
@@ -133,4 +220,29 @@ export async function suggestRecipes(
   }
 
   return { recipes: kitchen.recipes, message: outcome.text?.trim() || '' };
+}
+
+/** The library recipe an adaptation starts from, rendered for the prompt. */
+async function librarySeed(slug: string): Promise<string | null> {
+  const row = await queryOne<any>(
+    `SELECT title, summary, portions, serving_size, ingredients, steps,
+            kcal, protein_g, carbs_g, fat_g
+       FROM library_recipes WHERE slug = $1`,
+    [slug],
+  );
+  if (!row) return null;
+
+  const ingredients = (row.ingredients as Array<{ text: string; note: string | null }>)
+    .map((i) => `- ${i.text}${i.note ? ` (${i.note})` : ''}`)
+    .join('\n');
+  const steps = (row.steps as string[]).map((s, i) => `${i + 1}. ${s}`).join('\n');
+
+  return `**${row.title}** — makes ${row.portions}, one serving is ${row.serving_size ?? 'a portion'}
+Published nutrition per serving: ${Math.round(Number(row.kcal))} kcal, ${Math.round(Number(row.protein_g))}g protein, ${Math.round(Number(row.carbs_g))}g carbs, ${Math.round(Number(row.fat_g))}g fat.
+${row.summary ? `\n${row.summary}\n` : ''}
+Ingredients:
+${ingredients}
+
+Method:
+${steps}`;
 }

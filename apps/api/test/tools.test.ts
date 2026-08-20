@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SdkMcpToolDefinition } from '@anthropic-ai/claude-agent-sdk';
 import type { ChatAction, ChatCard } from '@ct/shared';
 import { buildNutritionServer, SERVER_NAME, type ToolContext } from '../src/ai/tools.ts';
@@ -793,5 +793,121 @@ describe('cards on the logging tools', () => {
     build({}, true);
     expect([...tools.keys()]).not.toContain('show_chart');
     expect([...tools.keys()]).not.toContain('show_day');
+  });
+});
+
+/**
+ * Answering "what can I cook?" inside the conversation.
+ *
+ * The tool runs a whole second agent, which is why the scripting below is
+ * nested: the outer call is the journal's, the scripted run is the kitchen's.
+ */
+describe('suggest_recipes', () => {
+  const RECIPE = {
+    title: 'Chicken and rice',
+    summary: null,
+    portions: 1,
+    minutes: 25,
+    steps: ['Cook it.'],
+    ingredients: [
+      {
+        name: 'Chicken breast',
+        quantity_g: 200,
+        quantity_desc: '1 breast',
+        kcal: 330,
+        protein_g: 62,
+        carbs_g: 0,
+        fat_g: 7,
+        missing: false,
+      },
+    ],
+    confidence: 'medium',
+  };
+
+  /** Scripts the kitchen run that happens inside the tool call. */
+  async function scriptKitchen() {
+    const toolsModule = await import('../src/ai/tools.ts');
+    const spy = vi.spyOn(toolsModule, 'buildNutritionServer');
+    const { scriptAgent } = await import('./helpers/agent-mock.ts');
+    scriptAgent({
+      text: 'Built around the chicken.',
+      act: async () => {
+        const built = spy.mock.results.at(-1)!.value as ReturnType<
+          typeof toolsModule.buildNutritionServer
+        >;
+        await built.tools.find((t) => t.name === 'propose_recipe')!.handler(RECIPE as never, {});
+      },
+    });
+  }
+
+  it('is on the journal and nowhere near the review', () => {
+    build();
+    expect(tools.has('suggest_recipes')).toBe(true);
+    build({}, true);
+    expect(tools.has('suggest_recipes')).toBe(false);
+  });
+
+  it('draws the recipes as a card the user can act on', async () => {
+    build();
+    await scriptKitchen();
+
+    const result = await call('suggest_recipes', { wants: 'something with the chicken' });
+
+    expect(result.isError).toBe(false);
+    expect(result.json.suggested).toEqual([
+      { title: 'Chicken and rice', kcal: 330, protein_g: 62, minutes: 25, missing: [] },
+    ]);
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({
+      kind: 'recipes_suggested',
+      summary: 'Chicken and rice',
+      card: { type: 'recipes' },
+    });
+    // The whole recipe travels on the card, so the journal renders the same
+    // thing the Cook tab does rather than a teaser.
+    const card = actions[0]!.card as Extract<typeof actions[0]['card'], { type: 'recipes' }>;
+    expect(card.recipes[0]).toMatchObject({ title: 'Chicken and rice', kcal: 330 });
+  });
+
+  /**
+   * The hole this closes: the route limiter counts requests to
+   * `/recipes/suggest`, and a run started from a journal tool never goes there.
+   * Without a ceiling of its own, the chat box is an unmetered way to spend the
+   * most expensive call in the product.
+   */
+  it('refuses once the day’s recipe budget is gone', async () => {
+    const { limitsFor } = await import('../src/services/plans.ts');
+    const { recordUsage } = await import('../src/services/usage.ts');
+    const spent = limitsFor('free').recipeRunsPerDay;
+
+    for (let i = 0; i < spent; i++) {
+      await recordUsage({
+        userId: user.id,
+        kind: 'recipe',
+        outcome: { text: 'x', sessionId: null, numTurns: 1, costUsd: 0.2, model: 'claude-opus-5' } as never,
+      });
+    }
+
+    build();
+    const result = await call('suggest_recipes', {});
+
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain(`all ${spent} recipe suggestions`);
+    expect(actions).toEqual([]);
+  });
+
+  it('lets a paid account past the free ceiling', async () => {
+    const { recordUsage } = await import('../src/services/usage.ts');
+    const { query } = await import('../src/db.ts');
+    await query('UPDATE users SET plan = $1 WHERE id = $2', ['pro', user.id]);
+    await recordUsage({
+      userId: user.id,
+      kind: 'recipe',
+      outcome: { text: 'x', sessionId: null, numTurns: 1, costUsd: 0.2, model: 'claude-opus-5' } as never,
+    });
+
+    build();
+    await scriptKitchen();
+    expect((await call('suggest_recipes', {})).isError).toBe(false);
   });
 });

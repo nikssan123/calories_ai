@@ -1,15 +1,17 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import {
   CookRequest,
   PantryAddRequest,
   PantryUpdate,
   PhotoMediaType,
+  RecipeBrief,
+  RecipeImportRequest,
   RecipeSuggestRequest,
 } from '@ct/shared';
 import { AUTH_HELP, hasSubscriptionAuth } from '../ai/client.ts';
 import { scanFridgePhoto } from '../ai/pantry.ts';
-import { suggestRecipes } from '../ai/recipes.ts';
+import { RecipeBudgetError, suggestRecipes } from '../ai/recipes.ts';
 import {
   addPantryItems,
   deletePantryItem,
@@ -26,7 +28,7 @@ import {
 import { cookRecipe, getRecipe, listRecipes, setRecipeSaved } from '../services/recipes.ts';
 import { getUserContext } from '../services/user.ts';
 import { stripDataUrl } from './body.ts';
-import { RECIPE_LIMIT, SCAN_LIMIT } from './limits.ts';
+import { RECIPE_BURST, SCAN_LIMIT } from './limits.ts';
 
 /**
  * The kitchen: what you have, and what you could cook with it.
@@ -40,6 +42,34 @@ const PhotoBody = z.object({
   photo_base64: z.string().min(1),
   photo_media_type: PhotoMediaType.default('image/jpeg'),
 });
+
+/**
+ * Turns whatever the engine threw into a reply.
+ *
+ * The budget is a 429 with the same shape the rate limiter produces, because
+ * from the client's side it is the same event — you have had your allowance —
+ * and it should not matter which of the two noticed.
+ */
+function recipeFailure(error: unknown, reply: FastifyReply) {
+  if (error instanceof RecipeBudgetError) {
+    return reply.status(429).send({ error: error.message, limit: error.allowed });
+  }
+  const message = (error as Error).message;
+  if (message.includes('No such recipe')) return reply.status(404).send({ error: message });
+  return reply.status(502).send({ error: message });
+}
+
+/** The brief, as the engine wants it. One place, so no route drops a field. */
+function brief(body: RecipeBrief) {
+  return {
+    meal: body.meal ?? null,
+    wants: body.wants ?? null,
+    minutes: body.minutes ?? null,
+    portions: body.portions ?? null,
+    proteinMin: body.protein_min ?? null,
+    kcalMax: body.kcal_max ?? null,
+  };
+}
 
 export async function registerKitchenRoutes(app: FastifyInstance) {
   // ---- The pantry ----------------------------------------------------------
@@ -107,7 +137,7 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
 
   // ---- Recipes -------------------------------------------------------------
 
-  app.post('/recipes/suggest', { config: { rateLimit: RECIPE_LIMIT } }, async (request, reply) => {
+  app.post('/recipes/suggest', { config: { rateLimit: RECIPE_BURST } }, async (request, reply) => {
     const parsed = RecipeSuggestRequest.safeParse(request.body ?? {});
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid request' });
     if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) {
@@ -115,13 +145,10 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
     }
 
     try {
-      return await suggestRecipes(request.userId!, {
-        meal: parsed.data.meal ?? null,
-        wants: parsed.data.wants ?? null,
-      });
+      return await suggestRecipes(request.userId!, brief(parsed.data));
     } catch (error) {
       request.log.error({ err: error }, 'recipe suggestion failed');
-      return reply.status(502).send({ error: (error as Error).message });
+      return recipeFailure(error, reply);
     }
   });
 
@@ -152,6 +179,64 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
     );
     if (!recipe) return reply.status(404).send({ error: 'No such recipe' });
     return recipe;
+  });
+
+  /**
+   * Rework a library recipe so this person can actually cook it.
+   *
+   * Costs the same as inventing one from nothing, so it takes the same ceiling.
+   * What it buys over a plain suggestion is a starting point somebody already
+   * chose — the photograph they liked is the reason they pressed the button.
+   */
+  app.post(
+    '/library/:slug/adapt',
+    { config: { rateLimit: RECIPE_BURST } },
+    async (request, reply) => {
+      const parsed = RecipeBrief.safeParse(request.body ?? {});
+      if (!parsed.success) return reply.status(400).send({ error: 'Invalid request' });
+      if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) {
+        return reply.status(503).send({ error: AUTH_HELP });
+      }
+
+      try {
+        return await suggestRecipes(request.userId!, {
+          ...brief(parsed.data),
+          job: { kind: 'adapt', slug: (request.params as any).slug },
+        });
+      } catch (error) {
+        request.log.error({ err: error }, 'recipe adaptation failed');
+        return recipeFailure(error, reply);
+      }
+    },
+  );
+
+  /**
+   * Price a recipe the user brought.
+   *
+   * Text only, and deliberately: somebody pasting the thing they already cook
+   * is using their own recipe, where a server that fetched and stored arbitrary
+   * pages would be doing something else entirely.
+   */
+  app.post('/recipes/import', { config: { rateLimit: RECIPE_BURST } }, async (request, reply) => {
+    const parsed = RecipeImportRequest.safeParse(request.body);
+    if (!parsed.success) {
+      return reply
+        .status(400)
+        .send({ error: parsed.error.issues[0]?.message ?? 'Paste the recipe first' });
+    }
+    if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) {
+      return reply.status(503).send({ error: AUTH_HELP });
+    }
+
+    try {
+      return await suggestRecipes(request.userId!, {
+        ...brief(parsed.data),
+        job: { kind: 'import', text: parsed.data.text },
+      });
+    } catch (error) {
+      request.log.error({ err: error }, 'recipe import failed');
+      return recipeFailure(error, reply);
+    }
   });
 
   // ---- The starter library -------------------------------------------------

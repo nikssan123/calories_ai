@@ -33,6 +33,40 @@ export async function insertMessage(
   return toMessage(row, await photoSecret(row));
 }
 
+/**
+ * Replaces a message's cards, once one of them has been answered.
+ *
+ * The workout card is the only one in the app that asks a question, and a
+ * question is a thing that stops being one. Without this, filling it in would
+ * log the session and then leave the same unanswered card sitting in the
+ * conversation forever — reappearing every time the app reopened, inviting the
+ * user to log it a second time.
+ *
+ * Scoped by user, and a no-op when the message is not theirs.
+ */
+export async function replaceActions(
+  userId: string,
+  messageId: string,
+  actions: ChatAction[],
+): Promise<boolean> {
+  const row = await queryOne<{ id: string }>(
+    'UPDATE chat_messages SET actions = $1 WHERE id = $2 AND user_id = $3 RETURNING id',
+    [JSON.stringify(actions), messageId, userId],
+  );
+  return row !== null;
+}
+
+export async function messageActions(
+  userId: string,
+  messageId: string,
+): Promise<ChatAction[] | null> {
+  const row = await queryOne<{ actions: ChatAction[] | null }>(
+    'SELECT actions FROM chat_messages WHERE id = $1 AND user_id = $2',
+    [messageId, userId],
+  );
+  return row ? (row.actions ?? []) : null;
+}
+
 export async function listMessages(userId: string, limit = 50): Promise<ChatMessage[]> {
   const rows = await query<any>(
     `SELECT id, role, content, photo_id, created_at, actions FROM (

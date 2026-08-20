@@ -139,6 +139,8 @@ function exerciseCard(entry: ExerciseEntry): ChatCard {
     kcal_burned: Math.round(entry.kcal_burned),
     duration_min: entry.duration_min,
     distance_km: entry.distance_km,
+    category: entry.category,
+    sets: entry.sets,
   };
 }
 
@@ -360,6 +362,158 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         kcal_burned: entry.kcal_burned,
         distance_km: entry.distance_km,
       });
+    },
+    { alwaysLoad: true },
+  );
+
+  const categoryField = z
+    .enum(['strength', 'cardio', 'class', 'sport', 'flexibility'])
+    .describe(
+      'strength = sets and reps against a load; cardio = running, cycling, swimming, machines; class = HIIT, spin, CrossFit, anything an instructor ran; sport = a game or a climb; flexibility = yoga, pilates, stretching.',
+    );
+
+  /**
+   * The counted path. `log_exercise` above estimates a burn from a sentence,
+   * which is right for "5km run"; this one is for work measured in sets, where
+   * the load is the point and the burn is the number nobody came for.
+   */
+  const logWorkout = tool(
+    'log_workout',
+    'Record a training session where the user told you the actual sets — "bench 3x8 at 80kg", "5 sets of 10 squats". One call per session, with every exercise in it. Use log_exercise instead for anything measured in time or distance, and ask_workout when they said they trained but not what they did.',
+    {
+      category: categoryField,
+      when: whenField,
+      duration_min: z
+        .number()
+        .nullable()
+        .default(null)
+        .describe('Total session time if they said. Null to estimate it from the sets.'),
+      exercises: z
+        .array(
+          z.object({
+            name: z.string().describe('The exercise, as they said it — "Bench press", "Bulgarian split squat".'),
+            sets: z
+              .array(
+                z.object({
+                  reps: z.number().nullable().default(null),
+                  weight_kg: z.number().nullable().default(null).describe('Load per set. Null for bodyweight.'),
+                  duration_sec: z.number().nullable().default(null).describe('For a held exercise like a plank.'),
+                  distance_m: z.number().nullable().default(null),
+                }),
+              )
+              .min(1)
+              .describe('One entry per set actually performed. "3x8" is three entries of 8, not one saying 3.'),
+          }),
+        )
+        .min(1),
+    },
+    async (args) => {
+      const { logWorkout: write } = await import('../services/workouts.ts');
+      const entry = await write({
+        userId: tc.userId,
+        category: args.category as never,
+        exercises: args.exercises as never,
+        durationMin: args.duration_min,
+        performedAt: resolveWhen(args.when ?? undefined, tc.now, tc.ctx),
+        ctx: tc.ctx,
+      });
+
+      tc.actions.push({
+        kind: 'exercise_logged',
+        entry_id: entry.id,
+        summary: `${entry.description} — ~${Math.round(entry.kcal_burned)} kcal`,
+        card: exerciseCard(entry),
+      });
+      return ok({
+        entry_id: entry.id,
+        local_date: entry.local_date,
+        sets_recorded: entry.sets.length,
+        duration_min: entry.duration_min,
+        kcal_burned: entry.kcal_burned,
+        // Said back so the model does not report a burn it invented: this
+        // figure came from bodyweight, time and a MET, not from the sentence.
+        burn_note: 'Computed from their bodyweight and the time, not estimated by you.',
+      });
+    },
+    { alwaysLoad: true },
+  );
+
+  /**
+   * "Went to the gym" is not a loggable fact, and the three things that would
+   * make it one — which kind, which exercises, how many — are things the user
+   * knows and the model would only guess at.
+   *
+   * Asking in conversation would be three more turns and most of a minute for
+   * something they could tap out in fifteen seconds. So the tool draws a card
+   * that collects the lot and posts it itself, and the model's part ends here.
+   */
+  const askWorkout = tool(
+    'ask_workout',
+    'Draw the workout card when they say they trained but not what they did — "went to the gym", "did a workout", "leg day". It asks them which kind and collects the exercises and sets. Do not call it when they already told you enough to log: a run with a distance goes to log_exercise, and named sets go to log_workout.',
+    {
+      category: categoryField
+        .nullable()
+        .default(null)
+        .describe('Where to open the card, if they hinted. Null to let them choose.'),
+      when: whenField,
+      heard: z
+        .string()
+        .nullable()
+        .default(null)
+        .describe('What you understood, in a few words — "gym session this morning". Shown on the card so the question does not feel blind.'),
+    },
+    async (args) => {
+      tc.actions.push({
+        kind: 'workout_asked',
+        entry_id: null,
+        summary: args.heard ?? 'Workout',
+        card: {
+          type: 'workout_prompt',
+          suggested_category: (args.category as never) ?? null,
+          performed_at: resolveWhen(args.when ?? undefined, tc.now, tc.ctx).toISOString(),
+          heard: args.heard,
+        },
+      });
+      // Nothing is logged yet, and saying so keeps the model from congratulating
+      // them on a session that is still an unanswered question on their screen.
+      return ok({
+        asked: true,
+        logged: false,
+        note: 'The card is on their screen and fills itself in. Say one short line inviting them to fill it, and do not claim anything has been recorded.',
+      });
+    },
+    { alwaysLoad: true },
+  );
+
+  /**
+   * Nobody should have to pick "Other" because their gym does an exercise this
+   * app has not been told about.
+   */
+  const defineExercise = tool(
+    'define_exercise',
+    'Teach the app an exercise it does not know, so it appears in their picker from now on. Call it when they mention something specific that is not already in the catalogue — a machine, a variation, a named movement. Do not call it for one-off phrasings of something that already exists ("chest day" is not an exercise).',
+    {
+      name: z.string().describe('The exercise, properly capitalised — "Bulgarian split squat".'),
+      category: categoryField,
+      emoji: z.string().describe('One emoji for it. Reuse the obvious one: 🏋️ barbell work, 🦵 legs, 💪 arms and shoulders, 🤸 bodyweight, 🏃 cardio, 🧘 mobility.'),
+      tracks: z
+        .enum(['reps', 'duration', 'distance'])
+        .describe('What one set is measured in, which decides the fields they get: reps and a load, a clock, or a distance.'),
+      met: z
+        .number()
+        .describe('Metabolic equivalent. Roughly: 3 easy, 5 ordinary weights, 8 hard, 10+ flat out. Match a similar exercise rather than agonising.'),
+    },
+    async (args) => {
+      const { defineExerciseType } = await import('../services/workouts.ts');
+      const type = await defineExerciseType({
+        userId: tc.userId,
+        name: args.name,
+        category: args.category as never,
+        emoji: args.emoji,
+        tracks: args.tracks as never,
+        met: args.met,
+      });
+      return ok({ exercise: type.name, id: type.id, already_known: !type.custom });
     },
     { alwaysLoad: true },
   );
@@ -741,12 +895,107 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
     };
   }
 
+  /**
+   * "What can I make tonight?" — answered in the conversation.
+   *
+   * The Cook tab was the only door to the kitchen, which is the wrong shape for
+   * a product whose front page is a chat box: the question arrives in the
+   * journal far more often than anyone goes looking for a tab.
+   *
+   * Two things about it are unusual and deliberate. It runs a whole second
+   * agent inside a tool call, which is why it is slow and why its cost is
+   * recorded separately under `recipe` — the journal turn is Sonnet and this is
+   * Opus, and folding them into one figure would misprice both. And it enforces
+   * its own ceiling, because the route limiter counts requests to
+   * `/recipes/suggest` and this request never goes there.
+   */
+  const suggestRecipesTool = tool(
+    'suggest_recipes',
+    'Answer "what can I cook?" / "what should I make for dinner?" with real recipes built from what is in their kitchen and what is left of their day. Use it when they are asking what to cook, not when they are asking what they ate or how they are doing. It is slow and it costs money, so call it once per conversation turn at most, and not at all if they only wanted a sentence of advice.',
+    {
+      wants: z
+        .string()
+        .nullable()
+        .default(null)
+        .describe('What they asked for in their own words — "something quick", "use up the spinach". Null if they just asked what to cook.'),
+      meal: mealField.nullable().default(null).describe('Null to infer from the time of day.'),
+      minutes: z
+        .number()
+        .nullable()
+        .default(null)
+        .describe('Minutes they have, if they said. Null if they did not.'),
+      portions: z
+        .number()
+        .nullable()
+        .default(null)
+        .describe('How many servings to cook, if they want to batch it. Null means one.'),
+      protein_min: z.number().nullable().default(null).describe('A protein floor, if they asked for one.'),
+      kcal_max: z.number().nullable().default(null).describe('A calorie ceiling, if they asked for one.'),
+    },
+    async (args) => {
+      /*
+       * Imported at call time, not at the top of the file. `ai/recipes.ts`
+       * builds its tools through `buildNutritionServer`, so a static import
+       * here would be a cycle evaluated at module load — and this one is
+       * genuinely lazy anyway, since most journal turns never reach it.
+       */
+      const { suggestRecipes, RecipeBudgetError } = await import('./recipes.ts');
+
+      let recipes, message;
+      try {
+        // The ceiling is enforced inside the engine, so this tool shares one
+        // budget with the three routes rather than having a fourth of its own.
+        ({ recipes, message } = await suggestRecipes(tc.userId, {
+          meal: (args.meal as Meal | null) ?? null,
+          wants: args.wants,
+          minutes: args.minutes,
+          portions: args.portions,
+          proteinMin: args.protein_min,
+          kcalMax: args.kcal_max,
+          now: tc.now,
+        }));
+      } catch (error) {
+        if (error instanceof RecipeBudgetError) {
+          return fail(
+            `They have used all ${error.allowed} recipe suggestions for today. Tell them so plainly, and answer from what you already know — search_food_history will tell you what they usually eat.`,
+          );
+        }
+        throw error;
+      }
+
+      tc.actions.push({
+        kind: 'recipes_suggested',
+        entry_id: null,
+        summary: recipes.map((r) => r.title).join(', '),
+        card: { type: 'recipes', recipes },
+      });
+
+      // Terse on purpose, as with the display tools: the recipes went to the
+      // user's screen as cards. What the model gets back is enough to write a
+      // sentence around them and nothing it would be tempted to recite.
+      return ok({
+        suggested: recipes.map((r) => ({
+          title: r.title,
+          kcal: Math.round(r.kcal),
+          protein_g: Math.round(r.protein_g),
+          minutes: r.minutes,
+          missing: r.ingredients.filter((i) => i.missing).map((i) => i.name),
+        })),
+        your_note_to_them: message,
+      });
+    },
+    { alwaysLoad: true },
+  );
+
   const reads = [getDay, searchHistory, getProgress];
   const shows = [showChart, showDay];
   const writes = [
     logFood,
     updateFood,
     logExercise,
+    logWorkout,
+    askWorkout,
+    defineExercise,
     logWeightTool,
     deleteEntry,
     setProfile,
@@ -754,6 +1003,9 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
     // are writes, and the read-only review agent cannot touch them.
     remember,
     forget,
+    // A write in the sense that matters here: it spends money and it stores
+    // recipes. The read-only review agent must not be able to reach it.
+    suggestRecipesTool,
   ];
   // The display tools stay out of the read-only set: the weekly review renders
   // as markdown on its own screen, where a chat card has nowhere to appear.

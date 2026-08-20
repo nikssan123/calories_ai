@@ -19,6 +19,27 @@ export interface RecordUsageInput {
   outcome: Outcome;
 }
 
+/**
+ * How many turns of a kind this account has run recently.
+ *
+ * The route limiter cannot see a recipe run started from inside a journal tool
+ * — it counts requests to `/recipes/suggest`, and this one never goes there. So
+ * the ceiling is enforced against the cost ledger instead, which is the more
+ * honest instrument anyway: it counts what was actually spent rather than what
+ * was asked for, and it already records every run from every entry point.
+ *
+ * A rolling window rather than a calendar day, because there is no timezone
+ * involved and "three in the last day" is what a person means by the limit.
+ */
+export async function turnsInLastDay(userId: string, kind: TurnKind): Promise<number> {
+  const row = await queryOne<{ n: string }>(
+    `SELECT count(*) AS n FROM ai_usage
+      WHERE user_id = $1 AND kind = $2 AND occurred_at > now() - interval '1 day'`,
+    [userId, kind],
+  );
+  return Number(row?.n ?? 0);
+}
+
 export async function recordUsage(input: RecordUsageInput): Promise<void> {
   const { outcome } = input;
   const usage = outcome.usage ?? {

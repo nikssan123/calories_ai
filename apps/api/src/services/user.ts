@@ -30,6 +30,8 @@ export async function updateUser(userId: string, patch: ProfileUpdate): Promise<
     timezone: patch.timezone,
     day_start_hour: patch.day_start_hour,
     notify_weekly_review: patch.notify_weekly_review,
+    diet: patch.diet,
+    avoids: patch.avoids,
   };
 
   const sets: string[] = ['updated_at = now()'];
@@ -267,6 +269,8 @@ function toProfile(row: any): Profile {
     is_setup_complete: row.is_setup_complete,
     notify_weekly_review: row.notify_weekly_review,
     plan: row.plan,
+    diet: row.diet,
+    avoids: row.avoids ?? [],
   };
 }
 
