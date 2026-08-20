@@ -67,7 +67,7 @@ export function OverviewPanel() {
       </StatGrid>
 
       <InsetGroup title="Rows">
-        <div className="divide-border grid grid-cols-2 divide-x divide-y lg:grid-cols-3">
+        <div className="divide-border grid grid-cols-2 divide-x-2 divide-y-2 lg:grid-cols-3">
           <Stat label="Food entries" value={compactNumber(data.food_entries)} />
           <Stat label="Exercise" value={compactNumber(data.exercise_entries)} />
           <Stat label="Weigh-ins" value={compactNumber(data.weight_entries)} />
@@ -110,7 +110,7 @@ export function OverviewPanel() {
       >
         {migrations.map((migration) => (
           <InsetRow key={migration.name}>
-            <span className="flex-1 truncate text-[15px]">{migration.name}</span>
+            <span className="flex-1 truncate text-body">{migration.name}</span>
             <span className="text-muted-foreground text-footnote tnum">
               {timestamp(migration.applied_at)}
             </span>
@@ -124,8 +124,8 @@ export function OverviewPanel() {
 function ConfigRow({ label, value }: { label: string; value: string }) {
   return (
     <InsetRow>
-      <span className="flex-1 text-[15px]">{label}</span>
-      <span className="text-muted-foreground text-[15px]">{value}</span>
+      <span className="flex-1 text-body">{label}</span>
+      <span className="text-muted-foreground text-body">{value}</span>
     </InsetRow>
   );
 }

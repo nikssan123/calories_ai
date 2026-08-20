@@ -22,7 +22,7 @@ export function ThemeToggle({ className }: { className?: string }) {
     <div
       role="radiogroup"
       aria-label="Theme"
-      className={cn('bg-muted/70 grid grid-cols-3 gap-1 rounded-[12px] p-1', className)}
+      className={cn('bg-muted border-border grid grid-cols-3 gap-1 rounded-full border-2 p-1', className)}
     >
       {OPTIONS.map(({ value, label, Icon }) => {
         const active = theme === value;
@@ -34,15 +34,15 @@ export function ThemeToggle({ className }: { className?: string }) {
             aria-checked={active}
             onClick={() => setTheme(value)}
             className={cn(
-              'flex items-center justify-center gap-1.5 rounded-[9px] py-2 text-[13px] font-medium',
+              'flex items-center justify-center gap-1.5 rounded-full py-2 text-[13px] font-bold',
               'transition-[background-color,color,transform] duration-[var(--dur-quick)]',
               'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none active:scale-95',
               active
-                ? 'bg-card text-foreground shadow-[0_1px_2px_rgba(23,22,20,0.08)]'
+                ? 'bg-card text-foreground border-border chunk-sm border-2'
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >
-            <Icon size={15} strokeWidth={active ? 2.3 : 1.9} />
+            <Icon size={15} strokeWidth={active ? 2.6 : 2.1} />
             {label}
           </button>
         );

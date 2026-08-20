@@ -56,8 +56,9 @@ export function Sparkline({
       y1={y(reference)}
       y2={y(reference)}
       className="stroke-border"
-      strokeDasharray="3 5"
-      strokeWidth="1.5"
+      strokeDasharray="2 6"
+      strokeWidth="2"
+      strokeLinecap="round"
     />
   );
 
@@ -65,7 +66,7 @@ export function Sparkline({
     // Leave a hairline of gap between bars, but never let them vanish on a
     // 365-day window — below about a pixel the chart reads as an empty box.
     const slot = width / points.length;
-    const barWidth = Math.max(1, slot * 0.62);
+    const barWidth = Math.max(1.5, slot * 0.66);
 
     return (
       <svg
@@ -87,7 +88,7 @@ export function Sparkline({
               // Nothing shorter than a hairline, so a light day still registers
               // as a day rather than as a gap.
               height={Math.max(v > 0 ? 1.5 : 0, height - 5 - top).toFixed(1)}
-              rx={Math.min(1.5, barWidth / 2)}
+              rx={Math.min(3, barWidth / 2)}
               fill={stroke}
               opacity={v > 0 ? 1 : 0}
             />
@@ -122,7 +123,7 @@ export function Sparkline({
         d={path.trim()}
         fill="none"
         stroke={stroke}
-        strokeWidth="2.5"
+        strokeWidth="3.5"
         strokeLinecap="round"
         strokeLinejoin="round"
       />

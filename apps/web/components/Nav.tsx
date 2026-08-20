@@ -36,7 +36,7 @@ export function Nav() {
   // While the keyboard is up the screen is tiny; the tab bar would eat a fifth
   // of it to show tabs nobody is aiming at.
   return (
-    <nav className="material border-border keyboard:hidden sticky bottom-0 z-30 border-t pb-[env(safe-area-inset-bottom)] lg:hidden">
+    <nav className="material border-border keyboard:hidden sticky bottom-0 z-30 border-t-2 pb-[env(safe-area-inset-bottom)] lg:hidden">
       <ul className="flex">
         {TABS.map(({ href, label, Icon }) => {
           const active = pathname === href;
@@ -46,19 +46,34 @@ export function Nav() {
                 href={href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex flex-col items-center gap-1 px-0.5 py-2 transition-colors',
-                  active ? 'text-[var(--calories-text)]' : 'text-muted-foreground hover:text-foreground',
+                  'flex flex-col items-center gap-0.5 px-0.5 pt-1.5 pb-2 transition-colors',
+                  active
+                    ? 'text-[var(--calories-text)]'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                {/* The lift is small on purpose: it should register as the tab
-                    answering you, not as the bar rearranging itself. */}
-                <Icon
-                  size={22}
-                  strokeWidth={active ? 2.4 : 1.9}
-                  className="transition-transform duration-[var(--dur-spring)] ease-[var(--ease-spring)]"
-                  style={{ transform: active ? 'scale(1.08)' : 'scale(1)' }}
-                />
-                <span className="w-full truncate text-center text-[10px] font-medium tracking-tight">
+                {/*
+                  The active tab wears a tinted lozenge rather than simply
+                  changing colour. With six of them the bar is tight, and a
+                  filled shape is the only difference a thumb can find at a
+                  glance in a row that narrow — colour alone reads as noise.
+                */}
+                <span
+                  className={cn(
+                    'flex h-8 w-[calc(100%-4px)] max-w-14 items-center justify-center rounded-full transition-[background-color,transform] duration-[var(--dur-spring)] ease-[var(--ease-spring)]',
+                    active
+                      ? 'scale-100 bg-[color-mix(in_oklch,var(--calories),transparent_84%)]'
+                      : 'scale-90 bg-transparent',
+                  )}
+                >
+                  <Icon size={21} strokeWidth={active ? 2.6 : 2.1} />
+                </span>
+                <span
+                  className={cn(
+                    'w-full truncate text-center text-[10px] tracking-tight',
+                    active ? 'font-extrabold' : 'font-bold',
+                  )}
+                >
                   {label}
                 </span>
               </Link>

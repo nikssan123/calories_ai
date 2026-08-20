@@ -88,7 +88,7 @@ export function CostPanel() {
               key={w}
               value={String(w)}
               aria-label={`${w} days`}
-              className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-7 rounded-md px-2.5 text-xs font-medium transition-colors"
+              className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-8 rounded-full px-3.5 text-xs font-bold transition-colors"
             >
               {w}d
             </ToggleGroupItem>
@@ -100,8 +100,8 @@ export function CostPanel() {
 
       {noData ? (
         <div className="bg-card rounded-2xl px-4 py-8 text-center">
-          <p className="text-[15px] font-medium">No turns recorded in this window.</p>
-          <p className="text-muted-foreground mt-1 text-[15px]">
+          <p className="text-body font-medium">No turns recorded in this window.</p>
+          <p className="text-muted-foreground mt-1 text-body">
             Log a meal through the journal and the numbers appear here.
           </p>
         </div>
@@ -135,7 +135,7 @@ export function CostPanel() {
             title="If it were a product"
             footer="Mean spend per active user, multiplied out. Assumes new users behave like current ones — which for a tracker used by its own author is the assumption most likely to be wrong."
           >
-            <div className="divide-border grid grid-cols-3 divide-x">
+            <div className="divide-border grid grid-cols-3 divide-x-2">
               {economics.projection.map((tier) => (
                 <Stat
                   key={tier.users}
@@ -177,7 +177,7 @@ export function CostPanel() {
             title="Tokens"
             footer="Cache reads bill at a tenth of the input rate and writes at 1.25x, so they are tracked apart — folding them into input would misprice a turn by more than the turn costs."
           >
-            <div className="divide-border grid grid-cols-2 divide-x lg:grid-cols-4">
+            <div className="divide-border grid grid-cols-2 divide-x-2 lg:grid-cols-4">
               <Stat label="Input" value={compactNumber(totals.input_tokens)} />
               <Stat label="Output" value={compactNumber(totals.output_tokens)} />
               <Stat label="Cache read" value={compactNumber(totals.cache_read_tokens)} />
@@ -270,7 +270,7 @@ function Caveats({ report }: { report: CostReport }) {
 
   return (
     <div className="bg-card space-y-3 rounded-2xl px-4 py-3.5">
-      <p className="text-[15px]">
+      <p className="text-body">
         <span className="font-medium">These are API-rate prices, not a bill.</span>{' '}
         <span className="text-muted-foreground">
           Running on a Claude Code subscription, no one is charged per token — this is what the
@@ -293,7 +293,7 @@ function Caveats({ report }: { report: CostReport }) {
  */
 function DailyChart({ days }: { days: CostReport['by_day'] }) {
   if (days.length === 0) {
-    return <p className="text-muted-foreground px-4 py-6 text-center text-[15px]">No turns yet.</p>;
+    return <p className="text-muted-foreground px-4 py-6 text-center text-body">No turns yet.</p>;
   }
   const peak = Math.max(...days.map((d) => d.cost_usd), 0.000001);
 

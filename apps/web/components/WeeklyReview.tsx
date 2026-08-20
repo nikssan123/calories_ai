@@ -53,18 +53,18 @@ export function WeeklyReview() {
   const change = review?.stats.adaptive ?? adaptive;
 
   return (
-    <InsetGroup title={review ? 'Last week' : 'Weekly review'}>
+    <InsetGroup title={review ? '📅  Last week' : '📅  Weekly review'}>
       {review ? (
         <div className="space-y-3 px-4 py-4">
-          <p className="text-footnote text-muted-foreground">
+          <p className="text-footnote text-muted-foreground font-bold">
             {formatRange(review.week_start, review.week_end)}
           </p>
-          <p className="text-[15px] leading-relaxed whitespace-pre-line">{review.content}</p>
+          <p className="text-body leading-relaxed whitespace-pre-line">{review.content}</p>
           {change?.eligible && <TargetChange proposal={change} tense="past" />}
         </div>
       ) : (
         <div className="space-y-3 px-4 py-4">
-          <p className="text-[15px]">
+          <p className="text-body font-medium">
             Every Monday morning you'll get a short read on how the week went — what the
             numbers actually showed, and whether your target needs to move. No lectures,
             just the picture.
@@ -83,9 +83,9 @@ export function WeeklyReview() {
       )}
 
       {adaptive && !adaptive.eligible && (
-        <div className="border-border bg-muted/40 border-t px-4 py-3">
-          <p className="text-footnote text-muted-foreground">
-            <span className="text-foreground font-medium">
+        <div className="border-border bg-muted/40 border-t-2 px-4 py-3">
+          <p className="text-footnote text-muted-foreground font-medium">
+            <span className="text-foreground font-extrabold">
               Target {adaptive.current.kcal.toLocaleString()} kcal.
             </span>{' '}
             {adaptive.explanation}
@@ -106,13 +106,13 @@ function TargetChange({
   tense: 'past' | 'future';
 }) {
   return (
-    <div className="bg-muted/50 rounded-xl px-3 py-2.5">
-      <div className="tnum flex items-center gap-2 text-[15px] font-medium">
+    <div className="bg-muted border-border rounded-2xl border-2 px-3.5 py-3">
+      <div className="tnum flex items-center gap-2 text-body font-bold">
         <span className="text-muted-foreground">{proposal.current.kcal.toLocaleString()}</span>
         <ArrowRight size={14} className="text-muted-foreground" />
         <span className="text-[var(--calories-text)]">{proposal.proposed.kcal.toLocaleString()} kcal</span>
       </div>
-      <p className="text-footnote text-muted-foreground mt-1">
+      <p className="text-footnote text-muted-foreground mt-1.5 font-medium">
         {tense === 'future' ? 'Next review will apply this. ' : ''}
         {proposal.explanation}
       </p>

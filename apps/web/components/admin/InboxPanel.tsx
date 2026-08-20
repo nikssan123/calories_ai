@@ -74,7 +74,7 @@ export function InboxPanel() {
         }
       >
         {emails.length === 0 ? (
-          <div className="text-muted-foreground flex items-center gap-2.5 px-4 py-8 text-[15px]">
+          <div className="text-muted-foreground flex items-center gap-2.5 px-4 py-8 text-body">
             <Mail size={17} /> No messages.
           </div>
         ) : (
@@ -99,7 +99,7 @@ export function InboxPanel() {
                     />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-baseline gap-2">
-                        <span className="truncate text-[15px] font-medium">
+                        <span className="truncate text-body font-medium">
                           {email.from_name ?? email.from_email}
                         </span>
                         {email.user_id && (
@@ -124,7 +124,7 @@ export function InboxPanel() {
                 </button>
 
                 {expanded && (
-                  <div className="border-border space-y-3 border-t px-4 py-3.5">
+                  <div className="border-border space-y-3 border-t-2 px-4 py-3.5">
                     <dl className="text-[13px]">
                       <Row label="From">
                         {email.from_name ? `${email.from_name} <${email.from_email}>` : email.from_email}
@@ -141,7 +141,7 @@ export function InboxPanel() {
                         The body could not be fetched: {email.body_error}
                       </p>
                     ) : (
-                      <pre className="bg-muted/60 max-h-96 overflow-auto rounded-xl p-3 text-[13px] leading-relaxed whitespace-pre-wrap">
+                      <pre className="bg-muted border-border max-h-96 overflow-auto rounded-2xl border-2 p-3 text-[13px] leading-relaxed whitespace-pre-wrap">
                         {email.text_body ?? htmlToText(email.html_body) ?? '(empty message)'}
                       </pre>
                     )}

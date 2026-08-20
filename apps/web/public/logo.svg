@@ -13,26 +13,26 @@
     /* The ring ramps the accent (--calories) into jade (--logo-ramp), and the
        three dots are the app's own protein, carbs and fat hues, so the mark is
        made of the same palette it introduces. The dark variants lift the accent
-       a long way, because a forest green that reads as structure on paper is
-       nearly invisible on ink.
+       a long way, because a grass green that reads as bright on paper is nearly
+       invisible on ink.
 
        This note is a CSS comment rather than the XML one above because a double
        hyphen is legal here and forbidden there — and an SVG served as a favicon
        is parsed strictly, so an XML comment naming a custom property silently
        breaks the whole file. */
-    .s0 { stop-color: #0f7b5c } /* forest */
-    .s1 { stop-color: #12a594 } /* jade, pulled back so forest still leads */
-    .track   { stroke: #0f7b5c }
-    .protein { fill: #f59e0b }
-    .carbs   { fill: #3b82f6 }
-    .fat     { fill: #8b5cf6 }
+    .s0 { stop-color: #12b76a } /* grass */
+    .s1 { stop-color: #23d3b0 } /* jade, pulled back so grass still leads */
+    .track   { stroke: #12b76a }
+    .protein { fill: #ffa51f }
+    .carbs   { fill: #3b9eff }
+    .fat     { fill: #b06bff }
     @media (prefers-color-scheme: dark) {
-      .s0 { stop-color: #34d9a4 }
-      .s1 { stop-color: #2dd4bf }
-      .track   { stroke: #34d9a4 }
-      .protein { fill: #fbbf24 }
-      .carbs   { fill: #5d9bff }
-      .fat     { fill: #a78bfa }
+      .s0 { stop-color: #3ddc97 }
+      .s1 { stop-color: #2ee6c4 }
+      .track   { stroke: #3ddc97 }
+      .protein { fill: #ffbe4d }
+      .carbs   { fill: #6fb4ff }
+      .fat     { fill: #bc9bff }
     }
   </style>
   <defs>

@@ -233,9 +233,14 @@ export function Journal() {
         {loading && <ChatSkeleton />}
 
         {!loading && bubbles.length === 0 && onboarding?.complete && (
-          <div className="pt-12">
+          <div className="pt-10">
+            {/* The one place in the app with room for a mascot, and the one
+                screen that otherwise offers a new account a wall of text. */}
+            <span aria-hidden className="animate-bob mb-3 block text-[44px] leading-none">
+              🍽️
+            </span>
             <h1 className="text-large-title">What have you eaten today?</h1>
-            <p className="text-muted-foreground mt-2 text-[15px] leading-relaxed">
+            <p className="text-muted-foreground mt-3 text-body leading-relaxed">
               Type it or take a photo — whatever's easiest. No forms, nothing to search for.
               Say what happened and I'll work out the rest.
             </p>
@@ -245,7 +250,7 @@ export function Journal() {
                   key={prompt}
                   type="button"
                   onClick={() => void send({ text: prompt })}
-                  className="bg-card text-secondary-foreground rounded-full px-3.5 py-2 text-sm transition-transform active:scale-95"
+                  className="bg-card border-border chunk-press text-secondary-foreground rounded-full border-2 px-4 py-2 text-sm font-bold [--chunk-depth:3px]"
                 >
                   {prompt}
                 </button>
@@ -255,7 +260,13 @@ export function Journal() {
         )}
 
           {bubbles.map((bubble) => (
-            <Bubble key={bubble.key} bubble={bubble} />
+            <Bubble
+              key={bubble.key}
+              bubble={bubble}
+              // The workout card logs without going through `send`, so the day
+              // beside the conversation has to be told to re-read itself.
+              onLogged={() => void api.day().then(setDay).catch(() => {})}
+            />
           ))}
           </div>
         </main>
@@ -323,7 +334,7 @@ function StatusBar({
 }) {
   if (loading || !day) {
     return (
-      <header className="material border-border shrink-0 border-b px-4 py-3 xl:hidden">
+      <header className="material border-border shrink-0 border-b-2 px-4 py-3 xl:hidden">
         <Skeleton className="h-4 w-40" />
       </header>
     );
@@ -331,8 +342,8 @@ function StatusBar({
 
   if (setupPending) {
     return (
-      <header className="material border-border shrink-0 border-b px-4 py-3 xl:hidden">
-        <p className="text-footnote text-muted-foreground">
+      <header className="material border-border shrink-0 border-b-2 px-4 py-3 xl:hidden">
+        <p className="text-footnote text-muted-foreground font-medium">
           Setting up — your target is a placeholder until we finish.
         </p>
       </header>
@@ -345,23 +356,23 @@ function StatusBar({
   const over = remaining < 0;
 
   return (
-    <header className="material border-border shrink-0 border-b px-4 py-2.5 xl:hidden">
+    <header className="material border-border shrink-0 border-b-2 px-4 py-2.5 xl:hidden">
       <div className="flex items-baseline justify-between">
-        <p className="text-figure text-[15px]">
+        <p className="text-figure text-body">
           {Math.round(consumed.kcal).toLocaleString()}
-          <span className="text-muted-foreground font-normal">
+          <span className="text-muted-foreground text-footnote font-semibold">
             {' '}
             / {targets.kcal.toLocaleString()} kcal
           </span>
         </p>
         {/* Ink rather than red — see the note on --destructive in globals.css. */}
-        <p className={cn('tnum text-footnote', over ? 'text-foreground font-semibold' : 'text-muted-foreground')}>
+        <p className={cn('tnum text-footnote font-bold', over ? 'text-foreground' : 'text-muted-foreground')}>
           {over
             ? `${Math.abs(remaining).toLocaleString()} over`
             : `${remaining.toLocaleString()} left`}
         </p>
       </div>
-      <div className="bg-muted mt-2 h-[5px] overflow-hidden rounded-full">
+      <div className="bg-muted border-border mt-2 h-2.5 overflow-hidden rounded-full border">
         <div
           className="h-full rounded-full"
           style={{
@@ -377,8 +388,8 @@ function StatusBar({
         only feedback is a chat bubble — so the burn and the net sit under it.
       */}
       {day.burned_kcal > 0 && (
-        <p className="tnum text-footnote text-muted-foreground mt-1.5">
-          <span className="text-[var(--exercise)]">
+        <p className="tnum text-footnote text-muted-foreground mt-1.5 font-semibold">
+          <span className="font-bold text-[var(--exercise-text)]">
             −{day.burned_kcal.toLocaleString()} burned
           </span>
           {' · net '}
@@ -389,7 +400,7 @@ function StatusBar({
   );
 }
 
-function Bubble({ bubble }: { bubble: Bubble }) {
+function Bubble({ bubble, onLogged }: { bubble: Bubble; onLogged: () => void }) {
   if (bubble.role === 'user') {
     return (
       <div className="flex justify-end">
@@ -399,11 +410,11 @@ function Bubble({ bubble }: { bubble: Bubble }) {
             <img
               src={bubble.photoUrl}
               alt="Logged meal"
-              className="max-h-72 rounded-2xl object-cover"
+              className="border-border chunk max-h-72 rounded-2xl border-2 object-cover"
             />
           )}
           {bubble.content && (
-            <p className="bg-primary text-primary-foreground rounded-[1.25rem] rounded-br-md px-3.5 py-2 text-[15px] leading-relaxed">
+            <p className="bg-primary text-primary-foreground chunk [--chunk-color:var(--calories-deep)] [--chunk-depth:3px] rounded-[1.375rem] rounded-br-lg px-4 py-2.5 text-body leading-relaxed font-semibold">
               {bubble.content}
             </p>
           )}
@@ -415,20 +426,24 @@ function Bubble({ bubble }: { bubble: Bubble }) {
   return (
     <div className="max-w-[92%] space-y-2.5">
       {bubble.pending ? (
-        <div className="flex gap-1.5 py-1.5" aria-label="Thinking">
-          {[0, 1, 2].map((i) => (
+        <div className="flex gap-2 py-2" aria-label="Thinking">
+          {[
+            'var(--protein)',
+            'var(--carbs)',
+            'var(--fat)',
+          ].map((color, i) => (
             <span
-              key={i}
-              className="bg-muted-foreground/60 size-2 animate-bounce rounded-full"
-              style={{ animationDelay: `${i * 140}ms`, animationDuration: '1s' }}
+              key={color}
+              className="size-2.5 animate-bounce rounded-full"
+              style={{ background: color, animationDelay: `${i * 140}ms`, animationDuration: '1s' }}
             />
           ))}
         </div>
       ) : (
         <p
           className={cn(
-            'text-[15px] leading-relaxed whitespace-pre-wrap',
-            bubble.failed && 'text-destructive',
+            'text-body leading-relaxed whitespace-pre-wrap',
+            bubble.failed && 'text-destructive font-semibold',
           )}
         >
           {bubble.content}
@@ -438,7 +453,16 @@ function Bubble({ bubble }: { bubble: Bubble }) {
       {bubble.actions && bubble.actions.length > 0 && (
         <div className="flex flex-col gap-1.5">
           {bubble.actions.map((action, i) => (
-            <ChatActionCard key={`${action.entry_id ?? action.kind}-${i}`} action={action} />
+            <ChatActionCard
+              key={`${action.entry_id ?? action.kind}-${i}`}
+              action={action}
+              // The workout card posts its own answer, and the server rewrites
+              // this message's card into a receipt — so it has to know which
+              // message it is sitting on. An optimistic bubble has no server id
+              // yet, but it also cannot be carrying a card the model drew.
+              messageId={bubble.key}
+              onLogged={onLogged}
+            />
           ))}
         </div>
       )}
@@ -450,7 +474,7 @@ function ChatSkeleton() {
   return (
     <div className="space-y-5 pt-4">
       <div className="flex justify-end">
-        <Skeleton className="h-10 w-48 rounded-[1.25rem]" />
+        <Skeleton className="h-11 w-48 rounded-[1.375rem]" />
       </div>
       <div className="space-y-2">
         <Skeleton className="h-4 w-full" />

@@ -1,10 +1,35 @@
 import type { Metadata, Viewport } from 'next';
+import { Baloo_2, Nunito } from 'next/font/google';
 import './globals.css';
 import { AppFrame } from '@/components/AppFrame';
 import { AuthGate } from '@/components/AuthGate';
 import { Toaster } from '@/components/ui/sonner';
 import { THEME_INIT_SCRIPT, ThemeSync } from '@/components/ThemeSync';
 import { KeyboardInset } from '@/components/KeyboardInset';
+
+/*
+ * Two rounded faces, loaded as variables and referenced from --font-sans and
+ * --font-display in globals.css.
+ *
+ * Nunito reads at 13px without turning to mush, which the app needs because
+ * half of it is small print under a number. Baloo is there for the shouting —
+ * headings, the ring's figure, the landing headline — where its heavier, wider
+ * bowls do the work a thick outline does elsewhere in the system.
+ */
+const nunito = Nunito({
+  subsets: ['latin'],
+  variable: '--font-nunito',
+  display: 'swap',
+  // The body runs at 500 and figures at 800, so the whole range has to ship.
+  weight: ['400', '500', '600', '700', '800'],
+});
+
+const baloo = Baloo_2({
+  subsets: ['latin'],
+  variable: '--font-baloo',
+  display: 'swap',
+  weight: ['600', '700', '800'],
+});
 
 const DESCRIPTION =
   'Say what you ate. No forms, no food database, no barcodes — describe the meal in your own words and the day adds itself up.';
@@ -30,8 +55,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f6f4f1' },
-    { media: '(prefers-color-scheme: dark)', color: '#121110' },
+    { media: '(prefers-color-scheme: light)', color: '#fff6ec' },
+    { media: '(prefers-color-scheme: dark)', color: '#1a1512' },
   ],
   width: 'device-width',
   initialScale: 1,
@@ -47,7 +72,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     // Browser extensions commonly inject attributes onto <body>, which would
     // otherwise surface as a hydration mismatch in development.
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={`${nunito.variable} ${baloo.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>

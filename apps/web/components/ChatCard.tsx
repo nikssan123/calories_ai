@@ -1,7 +1,11 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import type { ChatAction, ChatCard as Card } from '@ct/shared';
+import { RecipeCard } from '@/components/kitchen/RecipeCard';
+import { WorkoutCard } from '@/components/workout/WorkoutCard';
 import { Sparkline } from '@/components/Sparkline';
+import { exerciseEmoji, foodEmoji } from '@/lib/foodEmoji';
 import { cn } from '@/lib/utils';
 
 /**
@@ -12,32 +16,50 @@ import { cn } from '@/lib/utils';
  * the sentence next to it turns a conversation into a dashboard, which is the
  * thing this product is not.
  *
- * What they do get is the entrance. A card is the moment the agent hands a
- * understood meal back to you, so it lands with a little weight instead of
- * simply appearing — see `animate-land` in globals.css.
+ * What they do get is the entrance, and a face. A card is the moment the agent
+ * hands an understood meal back to you, so it drops in and bounces once instead
+ * of simply appearing (`animate-land` in globals.css) and it arrives wearing a
+ * picture of the food — see lib/foodEmoji. Between them those two are most of
+ * what makes a reply feel like an answer rather than a receipt.
  */
-export function ChatActionCard({ action }: { action: ChatAction }) {
+export function ChatActionCard({
+  action,
+  messageId,
+  onLogged,
+}: {
+  action: ChatAction;
+  /** The message this card sits on — the workout card answers onto it. */
+  messageId?: string;
+  onLogged?: () => void;
+}) {
   if (!action.card) return <Chip action={action} />;
-  return <CardBody card={action.card} />;
+  return <CardBody card={action.card} messageId={messageId} onLogged={onLogged} />;
 }
 
 /** Actions with nothing to draw — a deletion — stay a line of text. */
 function Chip({ action }: { action: ChatAction }) {
   return (
-    <div className="bg-card animate-land flex items-center gap-2 rounded-[calc(var(--radius)-4px)] px-3 py-2 shadow-[0_1px_2px_rgba(23,22,20,0.05)]">
+    <div className="bg-card border-border chunk animate-land flex items-center gap-2 rounded-full border-2 px-3.5 py-1.5 [--chunk-depth:2px]">
       <span
-        className="size-1.5 shrink-0 rounded-full"
+        className="size-2 shrink-0 rounded-full"
         style={{
-          background:
-            action.kind === 'food_deleted' ? 'var(--destructive)' : 'var(--calories)',
+          background: action.kind === 'food_deleted' ? 'var(--destructive)' : 'var(--calories)',
         }}
       />
-      <span className="text-footnote">{action.summary}</span>
+      <span className="text-footnote font-semibold">{action.summary}</span>
     </div>
   );
 }
 
-function CardBody({ card }: { card: Card }) {
+function CardBody({
+  card,
+  messageId,
+  onLogged,
+}: {
+  card: Card;
+  messageId?: string;
+  onLogged?: () => void;
+}) {
   switch (card.type) {
     case 'food':
       return <FoodCard card={card} />;
@@ -49,7 +71,42 @@ function CardBody({ card }: { card: Card }) {
       return <TrendCard card={card} />;
     case 'day':
       return <DayCard card={card} />;
+    case 'recipes':
+      return <RecipesCard card={card} />;
+    case 'workout_prompt':
+      // Needs a real message id to answer onto. An optimistic bubble has none
+      // yet, but it also cannot be carrying a card the model drew.
+      return messageId ? (
+        <WorkoutCard card={card} messageId={messageId} onLogged={() => onLogged?.()} />
+      ) : null;
   }
+}
+
+/**
+ * Recipes, answered in the conversation.
+ *
+ * The one card that breaks the compactness rule above, and it earns it: these
+ * are not a picture of something that already happened, they are the thing the
+ * user has to act on. A summary here would send someone to another tab to do
+ * the one tap the card could have taken itself, so it is the same card as on
+ * Cook — servings stepper, cook button and all.
+ */
+function RecipesCard({ card }: { card: Extract<Card, { type: 'recipes' }> }) {
+  const router = useRouter();
+  return (
+    <div className="animate-land space-y-2">
+      {card.recipes.map((recipe) => (
+        <RecipeCard
+          key={recipe.id}
+          recipe={recipe}
+          // The journal owns the day summary above the thread, and it re-reads
+          // it on navigation; refreshing is the cheapest way to keep the ring
+          // honest without threading a callback through every card.
+          onCooked={() => router.refresh()}
+        />
+      ))}
+    </div>
+  );
 }
 
 const MEAL_LABEL: Record<string, string> = {
@@ -63,7 +120,7 @@ function Shell({ children, className }: { children: React.ReactNode; className?:
   return (
     <div
       className={cn(
-        'bg-card animate-land rounded-[var(--radius)] px-4 py-3.5 shadow-[0_1px_2px_rgba(23,22,20,0.05)]',
+        'bg-card border-border chunk animate-land rounded-[var(--radius)] border-2 px-4 py-3.5',
         className,
       )}
     >
@@ -75,9 +132,9 @@ function Shell({ children, className }: { children: React.ReactNode; className?:
 function FoodCard({ card }: { card: Extract<Card, { type: 'food' }> }) {
   const approx = card.confidence !== 'high';
   const macros = [
-    { value: card.protein_g, label: 'P', color: 'var(--protein)' },
-    { value: card.carbs_g, label: 'C', color: 'var(--carbs)' },
-    { value: card.fat_g, label: 'F', color: 'var(--fat)' },
+    { value: card.protein_g, label: 'P', color: 'var(--protein)', text: 'var(--protein-text)' },
+    { value: card.carbs_g, label: 'C', color: 'var(--carbs)', text: 'var(--carbs-text)' },
+    { value: card.fat_g, label: 'F', color: 'var(--fat)', text: 'var(--fat-text)' },
   ];
   // Macro split by energy, not by grams — 30g of fat is more than twice the
   // calories of 30g of carbohydrate, so a gram-weighted bar misreads the meal.
@@ -86,22 +143,30 @@ function FoodCard({ card }: { card: Extract<Card, { type: 'food' }> }) {
 
   return (
     <Shell>
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="min-w-0 flex-1 truncate text-[15px] font-medium">{card.description}</p>
-        <span className="text-figure shrink-0 text-[15px]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          {/* Sized to sit on the same baseline block as the description, so a
+              one-line and a two-line card do not stagger their pictures. */}
+          <span aria-hidden className="shrink-0 text-[22px] leading-none">
+            {foodEmoji(card.description, card.meal)}
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-body font-bold">{card.description}</p>
+            <p className="text-footnote text-muted-foreground font-semibold">
+              {MEAL_LABEL[card.meal] ?? card.meal}
+              {card.confidence === 'low' && ' · rough estimate'}
+            </p>
+          </div>
+        </div>
+        <span className="text-figure shrink-0 text-body">
           {approx && '~'}
           {card.kcal.toLocaleString()}
-          <span className="text-muted-foreground text-footnote font-normal"> kcal</span>
+          <span className="text-muted-foreground text-footnote font-semibold"> kcal</span>
         </span>
       </div>
 
-      <p className="text-footnote text-muted-foreground mt-0.5">
-        {MEAL_LABEL[card.meal] ?? card.meal}
-        {card.confidence === 'low' && ' · rough estimate'}
-      </p>
-
       {total > 0 && (
-        <div className="bg-muted mt-2.5 flex h-[5px] gap-px overflow-hidden rounded-full">
+        <div className="bg-muted border-border mt-3 flex h-2.5 gap-px overflow-hidden rounded-full border">
           {energy.map((value, i) => (
             <div
               key={macros[i]!.label}
@@ -113,15 +178,16 @@ function FoodCard({ card }: { card: Extract<Card, { type: 'food' }> }) {
 
       <div className="mt-2 flex gap-3">
         {macros.map((macro) => (
-          <span key={macro.label} className="tnum text-footnote">
-            <span style={{ color: macro.color }}>{Math.round(macro.value)}</span>
+          <span key={macro.label} className="tnum text-footnote font-bold">
+            {/* The text cut, not the fill: mango at 13px on white is 2:1. */}
+            <span style={{ color: macro.text }}>{Math.round(macro.value)}</span>
             <span className="text-muted-foreground">{macro.label}</span>
           </span>
         ))}
       </div>
 
       {card.items.length > 1 && (
-        <p className="text-footnote text-muted-foreground mt-2 truncate">
+        <p className="text-footnote text-muted-foreground mt-2 truncate font-medium">
           {card.items
             .map((item) => (item.quantity ? `${item.name} ${item.quantity}` : item.name))
             .join(' · ')}
@@ -139,31 +205,91 @@ function ExerciseCard({ card }: { card: Extract<Card, { type: 'exercise' }> }) {
 
   return (
     <Shell>
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="min-w-0 flex-1 truncate text-[15px] font-medium">{card.description}</p>
-        <span className="text-figure shrink-0 text-[15px] text-[var(--exercise)]">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <span aria-hidden className="shrink-0 text-[22px] leading-none">
+            {exerciseEmoji(card.description)}
+          </span>
+          <p className="min-w-0 flex-1 truncate text-body font-bold">{card.description}</p>
+        </div>
+        <span className="text-figure shrink-0 text-body text-[var(--exercise-text)]">
           −{card.kcal_burned.toLocaleString()}
-          <span className="text-muted-foreground text-footnote font-normal"> kcal</span>
+          <span className="text-muted-foreground text-footnote font-semibold"> kcal</span>
         </span>
       </div>
-      <p className="text-footnote text-muted-foreground mt-0.5">
+      <p className="text-footnote text-muted-foreground mt-1.5 font-medium">
         {detail.length > 0 ? detail.join(' · ') : 'Burn is an estimate'}
         {/* §9 restated where the burn is: it is not a credit to spend. */}
         {' · not added to your budget'}
       </p>
+
+      {/*
+        The sets, where there were any.
+        
+        A strength session summed to one calorie figure is the least interesting
+        thing about it — the number nobody trained for. What was actually done
+        is the load and the reps, so the card shows those and lets the burn stay
+        the small print it deserves to be.
+      */}
+      {card.sets.length > 0 && (
+        <div className="mt-2.5 space-y-1">
+          {groupSets(card.sets).map((group) => (
+            <div key={group.name} className="flex items-baseline justify-between gap-3">
+              <span className="text-footnote min-w-0 flex-1 truncate">{group.name}</span>
+              <span className="text-footnote text-muted-foreground shrink-0 tabular-nums">
+                {group.detail}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </Shell>
   );
+}
+
+/**
+ * Sets, collapsed into the line a person would say out loud.
+ *
+ * "3 × 8 at 80kg" when they are all alike, and the honest "8, 8, 6 at 80kg"
+ * when they are not — because the set where the reps dropped is the most
+ * informative thing in the session, and averaging it away would hide exactly
+ * the detail the sets were stored to keep.
+ */
+function groupSets(sets: Extract<Card, { type: 'exercise' }>['sets']) {
+  const byName = new Map<string, typeof sets>();
+  for (const set of sets) {
+    byName.set(set.name, [...(byName.get(set.name) ?? []), set]);
+  }
+
+  return [...byName].map(([name, group]) => {
+    const reps = group.map((s) => s.reps).filter((r): r is number => r !== null);
+    const weights = [...new Set(group.map((s) => s.weight_kg).filter((w): w is number => w !== null))];
+    const seconds = group.map((s) => s.duration_sec).filter((d): d is number => d !== null);
+
+    if (reps.length > 0) {
+      const same = new Set(reps).size === 1;
+      const count = same ? `${reps.length} × ${reps[0]}` : reps.join(', ');
+      const load = weights.length === 1 ? ` at ${weights[0]}kg` : weights.length > 1 ? ` at ${weights.join('/')}kg` : '';
+      return { name, detail: `${count}${load}` };
+    }
+    if (seconds.length > 0) {
+      const total = seconds.reduce((a, b) => a + b, 0);
+      return { name, detail: `${Math.round(total / 60)} min` };
+    }
+    return { name, detail: `${group.length} sets` };
+  });
 }
 
 function WeightCard({ card }: { card: Extract<Card, { type: 'weight' }> }) {
   return (
     <Shell>
       <div className="flex items-baseline gap-2.5">
-        <span className="text-figure text-[22px]">{card.weight_kg} kg</span>
+        <span aria-hidden className="text-[22px] leading-none">⚖️</span>
+        <span className="text-figure text-[24px]">{card.weight_kg} kg</span>
         {card.change_7d_kg !== null && card.change_7d_kg !== 0 && (
           <span
             className={cn(
-              'tnum text-footnote font-medium',
+              'tnum text-footnote font-bold',
               card.change_7d_kg < 0 ? 'text-[var(--positive)]' : 'text-muted-foreground',
             )}
           >
@@ -195,11 +321,11 @@ function TrendCard({ card }: { card: Extract<Card, { type: 'trend' }> }) {
   return (
     <Shell>
       <div className="flex items-baseline justify-between gap-3">
-        <p className="min-w-0 flex-1 truncate text-[15px] font-medium">{card.title}</p>
+        <p className="min-w-0 flex-1 truncate text-body font-bold">{card.title}</p>
         {card.average !== null && (
-          <span className="tnum text-muted-foreground shrink-0 text-footnote">
+          <span className="tnum text-muted-foreground shrink-0 text-footnote font-semibold">
             avg{' '}
-            <span className="text-foreground font-semibold">
+            <span className="text-foreground font-extrabold">
               {card.average.toLocaleString()}
             </span>{' '}
             {card.unit}
@@ -218,13 +344,13 @@ function TrendCard({ card }: { card: Extract<Card, { type: 'trend' }> }) {
       ) : (
         // Better an empty state than an axis with one point on it pretending
         // to be a trend.
-        <p className="text-footnote text-muted-foreground mt-2">
+        <p className="text-footnote text-muted-foreground mt-2 font-medium">
           Not enough logged days yet to draw a trend.
         </p>
       )}
 
       {card.caption && (
-        <p className="text-footnote text-muted-foreground mt-2">{card.caption}</p>
+        <p className="text-footnote text-muted-foreground mt-2 font-medium">{card.caption}</p>
       )}
     </Shell>
   );
@@ -235,17 +361,17 @@ function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
   const over = remaining < 0;
   const pct = Math.min(100, (card.consumed.kcal / Math.max(1, card.targets.kcal)) * 100);
   const macros = [
-    { key: 'protein_g', label: 'Protein', color: 'var(--protein)' },
-    { key: 'carbs_g', label: 'Carbs', color: 'var(--carbs)' },
-    { key: 'fat_g', label: 'Fat', color: 'var(--fat)' },
+    { key: 'protein_g', label: 'Protein', color: 'var(--protein-text)' },
+    { key: 'carbs_g', label: 'Carbs', color: 'var(--carbs-text)' },
+    { key: 'fat_g', label: 'Fat', color: 'var(--fat-text)' },
   ] as const;
 
   return (
     <Shell>
       <div className="flex items-baseline justify-between gap-3">
-        <p className="tnum text-[15px] font-medium">
+        <p className="text-figure text-body">
           {card.consumed.kcal.toLocaleString()}
-          <span className="text-muted-foreground font-normal">
+          <span className="text-muted-foreground text-footnote font-semibold">
             {' '}
             / {card.targets.kcal.toLocaleString()} kcal
           </span>
@@ -253,8 +379,8 @@ function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
         {/* Ink, not red: over target is information, not a telling-off. */}
         <span
           className={cn(
-            'tnum text-footnote shrink-0',
-            over ? 'text-foreground font-semibold' : 'text-muted-foreground',
+            'tnum text-footnote shrink-0 font-bold',
+            over ? 'text-foreground' : 'text-muted-foreground',
           )}
         >
           {over
@@ -263,7 +389,7 @@ function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
         </span>
       </div>
 
-      <div className="bg-muted mt-2 h-[5px] overflow-hidden rounded-full">
+      <div className="bg-muted border-border mt-2.5 h-2.5 overflow-hidden rounded-full border">
         <div
           className="h-full rounded-full"
           style={{
@@ -276,7 +402,7 @@ function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
 
       <div className="mt-2.5 flex gap-3">
         {macros.map(({ key, label, color }) => (
-          <span key={key} className="tnum text-footnote">
+          <span key={key} className="tnum text-footnote font-bold">
             <span style={{ color }}>{Math.round(card.consumed[key])}</span>
             <span className="text-muted-foreground">
               /{card.targets[key]} {label}
@@ -287,13 +413,13 @@ function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
 
       {card.burned_kcal > 0 && (
         <p className="tnum text-footnote text-muted-foreground mt-2">
-          <span className="text-[var(--exercise)]">−{card.burned_kcal} burned</span>
+          <span className="font-bold text-[var(--exercise-text)]">−{card.burned_kcal} burned</span>
           {' · '}
           {formatDate(card.local_date)}
         </p>
       )}
       {card.caption && (
-        <p className="text-footnote text-muted-foreground mt-2">{card.caption}</p>
+        <p className="text-footnote text-muted-foreground mt-2 font-medium">{card.caption}</p>
       )}
     </Shell>
   );

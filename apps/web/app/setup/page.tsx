@@ -8,6 +8,7 @@ import type { ActivityLevel, DaySummary, Goal, Profile, Sex } from '@ct/shared';
 import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthGate';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { DietRules } from '@/components/kitchen/DietRules';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,8 +34,8 @@ import { cn } from '@/lib/utils';
  * has to look like a field. This is the quietest treatment that still does.
  */
 const FIELD =
-  'h-9 rounded-[10px] border-0 bg-muted/70 px-3 text-[15px] shadow-none ' +
-  'transition-colors duration-[var(--dur-quick)] hover:bg-muted';
+  'h-10 rounded-full border-2 border-border bg-muted px-3.5 text-body font-semibold shadow-none ' +
+  'transition-colors duration-[var(--dur-quick)] hover:bg-secondary';
 
 /** Inputs keep their own focus ring; wrappers get it via focus-within. */
 const FIELD_INPUT = `${FIELD} text-right focus-visible:ring-2 focus-visible:ring-ring`;
@@ -128,19 +129,19 @@ export default function SetupPage() {
       <div className="mx-auto w-full max-w-4xl space-y-7">
       <div>
         <h1 className="text-large-title">You</h1>
-        <p className="text-muted-foreground mt-1 text-[15px]">
+        <p className="text-muted-foreground mt-1.5 text-body font-medium">
           Enough to work out a starting target. It adjusts as real data comes in.
         </p>
       </div>
 
       {day && (
-        <div className="bg-card rounded-2xl p-5 text-center">
-          <p className="text-footnote text-muted-foreground">Your daily target</p>
-          <p className="tnum mt-1 text-4xl font-semibold tracking-tight">
+        <div className="bg-card border-border chunk rounded-[var(--radius)] border-2 p-5 text-center">
+          <p className="text-eyebrow text-muted-foreground">Your daily target</p>
+          <p className="text-figure mt-1.5 text-[2.75rem] leading-none">
             {day.targets.kcal.toLocaleString()}
-            <span className="text-muted-foreground ml-1.5 text-lg font-normal">kcal</span>
+            <span className="text-muted-foreground ml-1.5 text-lg font-bold">kcal</span>
           </p>
-          <div className="mt-3 flex justify-center gap-4 text-footnote">
+          <div className="text-footnote mt-4 flex flex-wrap justify-center gap-2">
             <MacroChip label="Protein" value={day.targets.protein_g} color="var(--protein)" />
             <MacroChip label="Carbs" value={day.targets.carbs_g} color="var(--carbs)" />
             <MacroChip label="Fat" value={day.targets.fat_g} color="var(--fat)" />
@@ -151,7 +152,7 @@ export default function SetupPage() {
       <div className="grid gap-7 lg:grid-cols-2 lg:items-start">
       <InsetGroup title="About you">
         <InsetRow>
-          <span className="flex-1 text-[15px]">Name</span>
+          <span className="flex-1 text-body">Name</span>
           <Input
             value={profile.display_name ?? ''}
             onChange={(e) => patch('display_name', e.target.value || null)}
@@ -161,7 +162,7 @@ export default function SetupPage() {
         </InsetRow>
 
         <InsetRow>
-          <span className="flex-1 text-[15px]">Sex</span>
+          <span className="flex-1 text-body">Sex</span>
           <Select
             value={profile.sex ?? ''}
             onValueChange={(v) => patch('sex', (v || null) as Sex | null)}
@@ -184,7 +185,7 @@ export default function SetupPage() {
         </InsetRow>
 
         <InsetRow>
-          <span className="flex-1 text-[15px]">Date of birth</span>
+          <span className="flex-1 text-body">Date of birth</span>
           <Input
             type="date"
             value={profile.birth_date ?? ''}
@@ -196,7 +197,7 @@ export default function SetupPage() {
         </InsetRow>
 
         <InsetRow>
-          <span className="flex-1 text-[15px]">Height</span>
+          <span className="flex-1 text-body">Height</span>
           <NumberField
             value={profile.height_cm}
             onChange={(v) => patch('height_cm', v)}
@@ -205,7 +206,7 @@ export default function SetupPage() {
         </InsetRow>
 
         <InsetRow>
-          <span className="flex-1 text-[15px]">Target weight</span>
+          <span className="flex-1 text-body">Target weight</span>
           <NumberField
             value={profile.target_weight_kg}
             onChange={(v) => patch('target_weight_kg', v)}
@@ -225,10 +226,10 @@ export default function SetupPage() {
                 type="button"
                 onClick={() => patch('goal', goal)}
                 className={cn(
-                  'rounded-xl py-2.5 text-sm font-medium transition-all active:scale-95',
+                  'chunk-press rounded-2xl border-2 py-2.5 text-sm font-bold [--chunk-depth:3px]',
                   active
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted/60 text-muted-foreground',
+                    ? 'bg-primary text-primary-foreground border-transparent [--chunk-color:var(--calories-deep)]'
+                    : 'bg-muted text-muted-foreground border-border hover:text-foreground',
                 )}
               >
                 {GOAL_LABELS[goal]}
@@ -237,7 +238,7 @@ export default function SetupPage() {
           })}
         </div>
         <InsetRow>
-          <span className="flex-1 text-[15px]">Activity</span>
+          <span className="flex-1 text-body">Activity</span>
           <Select
             value={profile.activity_level ?? ''}
             onValueChange={(v) => patch('activity_level', (v || null) as ActivityLevel | null)}
@@ -263,7 +264,7 @@ export default function SetupPage() {
         footer="Food eaten before the day starts counts toward the previous day — so a 1am snack lands on the evening it belongs to."
       >
         <InsetRow>
-          <span className="shrink-0 text-[15px]">Time zone</span>
+          <span className="shrink-0 text-body">Time zone</span>
           <Input
             value={profile.timezone}
             onChange={(e) => patch('timezone', e.target.value)}
@@ -271,7 +272,7 @@ export default function SetupPage() {
           />
         </InsetRow>
         <InsetRow>
-          <span className="flex-1 text-[15px]">Day starts at</span>
+          <span className="flex-1 text-body">Day starts at</span>
           <Select
             value={String(profile.day_start_hour)}
             onValueChange={(v) => patch('day_start_hour', Number(v))}
@@ -292,6 +293,8 @@ export default function SetupPage() {
         </InsetRow>
       </InsetGroup>
 
+      <DietRules profile={profile} onChange={setProfile} />
+
       <InsetGroup title="Appearance" footer="System follows your device, including its light and dark schedule.">
         <div className="p-3">
           <ThemeToggle />
@@ -302,8 +305,8 @@ export default function SetupPage() {
 
       <InsetGroup title="Account">
         <InsetRow>
-          <span className="flex-1 text-[15px]">Signed in as</span>
-          <span className="text-muted-foreground truncate text-[15px]">
+          <span className="flex-1 text-body">Signed in as</span>
+          <span className="text-muted-foreground truncate text-body">
             {profile.email ?? '—'}
           </span>
         </InsetRow>
@@ -312,7 +315,7 @@ export default function SetupPage() {
         {isAdmin && (
           <Link
             href="/admin"
-            className="flex items-center gap-2 px-4 py-3 text-[15px] text-[var(--calories-text)]"
+            className="flex items-center gap-2 px-4 py-3 text-body text-[var(--calories-text)]"
           >
             <Shield size={16} /> Admin
           </Link>
@@ -320,7 +323,7 @@ export default function SetupPage() {
         <button
           type="button"
           onClick={() => void signOut()}
-          className="text-destructive w-full px-4 py-3 text-left text-[15px]"
+          className="text-destructive w-full px-4 py-3 text-left text-body"
         >
           Sign out
         </button>
@@ -334,7 +337,7 @@ export default function SetupPage() {
         onClick={() => void save()}
         disabled={saving || !dirty}
         size="lg"
-        className="h-12 w-full rounded-2xl text-[15px] font-semibold transition-transform active:scale-[0.98] lg:w-56"
+        className="h-12 w-full rounded-2xl text-body font-semibold transition-transform active:scale-[0.98] lg:w-56"
       >
         {saving ? 'Saving…' : dirty ? 'Save' : (
           <>
@@ -412,15 +415,15 @@ function EmailSettings({
       {profile.email_verified ? (
         <InsetRow>
           <BadgeCheck size={17} className="text-[var(--calories-text)]" />
-          <span className="flex-1 text-[15px]">Address confirmed</span>
+          <span className="flex-1 text-body">Address confirmed</span>
         </InsetRow>
       ) : (
         <div className="flex flex-col gap-2.5 px-4 py-3.5">
           <div className="flex items-center gap-3">
             <Mail size={17} className="text-muted-foreground" />
-            <span className="flex-1 text-[15px]">Address not confirmed</span>
+            <span className="flex-1 text-body">Address not confirmed</span>
           </div>
-          <p className="text-muted-foreground text-[13px] leading-relaxed">
+          <p className="text-muted-foreground text-[13px] leading-relaxed font-medium">
             Until you confirm {profile.email}, a forgotten password cannot be reset — there would
             be no way to know the mailbox is yours.
           </p>
@@ -428,7 +431,7 @@ function EmailSettings({
             variant="outline"
             onClick={() => void resend()}
             disabled={sending}
-            className="h-9 self-start rounded-[10px] text-[13px]"
+            className="h-9 self-start rounded-full text-[13px]"
           >
             {sending ? 'Sending…' : 'Send the link again'}
           </Button>
@@ -437,8 +440,10 @@ function EmailSettings({
 
       <InsetRow>
         <div className="flex-1">
-          <p className="text-[15px]">Weekly review</p>
-          <p className="text-muted-foreground text-[13px]">Last week, summarised, on Monday.</p>
+          <p className="text-body">Weekly review</p>
+          <p className="text-muted-foreground text-[13px] font-medium">
+            Last week, summarised, on Monday.
+          </p>
         </div>
         <Switch
           checked={profile.notify_weekly_review}
@@ -489,15 +494,15 @@ function DeleteAccount({ email }: { email: string | null }) {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="text-destructive w-full px-4 py-3 text-left text-[15px]"
+          className="text-destructive w-full px-4 py-3 text-left text-body"
         >
           Delete account
         </button>
       ) : (
         <div className="flex flex-col gap-3 px-4 py-3.5">
-          <p className="text-muted-foreground text-[13px] leading-relaxed">
+          <p className="text-muted-foreground text-[13px] leading-relaxed font-medium">
             This erases every meal, photo, weight and conversation on{' '}
-            <span className="text-foreground font-medium">{email}</span>, on every device, and
+            <span className="text-foreground font-extrabold">{email}</span>, on every device, and
             cannot be undone. Enter your password to confirm.
           </p>
           <Input
@@ -540,10 +545,10 @@ function DeleteAccount({ email }: { email: string | null }) {
 
 function MacroChip({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <span className="flex items-center gap-1.5">
-      <span className="size-2 rounded-full" style={{ background: color }} />
-      <span className="text-muted-foreground">{label}</span>
-      <span className="tnum font-medium">{value}g</span>
+    <span className="bg-muted border-border flex items-center gap-1.5 rounded-full border-2 px-2.5 py-1">
+      <span className="size-2.5 rounded-full" style={{ background: color }} />
+      <span className="text-muted-foreground font-semibold">{label}</span>
+      <span className="text-figure">{value}g</span>
     </span>
   );
 }
@@ -588,7 +593,7 @@ function NumberField({
         // Without this, scrolling the page over a focused number input silently
         // edits the value.
         onWheel={(e) => e.currentTarget.blur()}
-        className="tnum h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-right text-[15px] shadow-none focus-visible:ring-0 dark:bg-transparent"
+        className="text-figure h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-right text-body shadow-none focus-visible:ring-0 dark:bg-transparent"
       />
       <span className="text-muted-foreground text-footnote shrink-0">{unit}</span>
     </label>

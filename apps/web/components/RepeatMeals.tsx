@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { InsetGroup } from '@/components/InsetGroup';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { foodEmoji } from '@/lib/foodEmoji';
 
 /**
  * The eight things you actually eat.
@@ -63,22 +64,25 @@ export function RepeatMeals({ onLogged }: { onLogged: () => void }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search your meals"
-          className="bg-muted/60 h-10 rounded-xl border-0 text-[15px]"
+          className="bg-muted/60 border-border h-10 rounded-full border-2 px-4 text-body"
         />
       </div>
 
       {meals === null ? (
-        <div className="text-muted-foreground px-4 py-4 text-[15px]">Loading…</div>
+        <div className="text-muted-foreground px-4 py-4 text-body">Loading…</div>
       ) : meals.length === 0 ? (
-        <div className="text-muted-foreground px-4 py-4 text-[15px]">
+        <div className="text-muted-foreground px-4 py-4 text-body">
           Nothing matching “{query}”.
         </div>
       ) : (
         meals.map((template) => (
           <div key={template.entry_id} className="flex items-center gap-3 px-4 py-3">
+            <span aria-hidden className="shrink-0 text-[20px] leading-none">
+              {foodEmoji(template.description)}
+            </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[15px]">{template.description}</p>
-              <p className="tnum text-footnote text-muted-foreground">
+              <p className="truncate text-body font-semibold">{template.description}</p>
+              <p className="tnum text-footnote text-muted-foreground font-medium">
                 {Math.round(template.kcal)} kcal · {Math.round(template.protein_g)}g protein
                 {template.times > 1 && (
                   <span className="inline-flex items-center gap-1">

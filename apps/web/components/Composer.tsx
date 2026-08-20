@@ -81,9 +81,9 @@ export function Composer({
       onClick={onClick}
       disabled={disabled}
       aria-label="Add a photo"
-      className="text-muted-foreground size-9 shrink-0 rounded-full"
+      className="text-muted-foreground size-10 shrink-0 rounded-full"
     >
-      <Camera size={22} strokeWidth={1.9} />
+      <Camera size={22} strokeWidth={2.2} />
     </Button>
   );
 
@@ -92,24 +92,28 @@ export function Composer({
       className={cn(
         // Phone: a translucent bar welded to the bottom edge of the screen, with
         // the conversation scrolling under its blur.
-        'border-border max-lg:material px-3 py-2.5 max-lg:border-t',
+        'border-border max-lg:material px-3 py-2.5 max-lg:border-t-2',
         // Desktop: nothing is welded to anything. The bar floated in the middle
         // of the window trailing a hairline off into empty space, so from `lg`
         // up it stops pretending to be chrome and becomes a card of its own.
-        'lg:bg-card lg:focus-within:border-ring lg:rounded-[1.75rem] lg:border lg:px-2.5 lg:py-2 lg:shadow-sm lg:transition-colors',
+        'lg:bg-card lg:border-border lg:focus-within:border-ring lg:chunk lg:rounded-[1.75rem] lg:border-2 lg:px-2.5 lg:py-2 lg:transition-colors',
       )}
     >
       {photo && (
         <div className="relative mb-2 ml-11 w-fit">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={photo.dataUrl} alt="Selected meal" className="h-20 w-20 rounded-xl object-cover" />
+          <img
+            src={photo.dataUrl}
+            alt="Selected meal"
+            className="border-border chunk h-20 w-20 rounded-2xl border-2 object-cover"
+          />
           <button
             type="button"
             aria-label="Remove photo"
             onClick={() => setPhoto(null)}
-            className="bg-foreground/70 text-background absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full backdrop-blur"
+            className="bg-foreground text-background border-card absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full border-2"
           >
-            <X size={12} strokeWidth={3} />
+            <X size={13} strokeWidth={3.2} />
           </button>
         </div>
       )}
@@ -188,7 +192,7 @@ export function Composer({
           placeholder="Two eggs and toast…"
           disabled={disabled}
           className={cn(
-            'border-input bg-card placeholder:text-muted-foreground focus:border-ring max-h-33 min-h-9 flex-1 resize-none rounded-[1.125rem] border px-3.5 py-[0.4375rem] text-base leading-6 outline-none disabled:opacity-60',
+            'border-input bg-card placeholder:text-muted-foreground focus:border-ring max-h-33 min-h-10 flex-1 resize-none rounded-[1.25rem] border-2 px-4 py-[0.5rem] text-base leading-6 font-medium outline-none disabled:opacity-60',
             // A bordered field inside the bordered desktop card is one box too
             // many; there, the card itself is the field and takes the focus ring.
             'lg:border-transparent lg:bg-transparent lg:px-1 lg:focus:border-transparent',
@@ -201,9 +205,11 @@ export function Composer({
           onClick={submit}
           disabled={!canSend}
           aria-label="Send"
-          className="size-9 shrink-0 rounded-full transition-transform active:scale-90 disabled:opacity-30"
+          // The default variant already brings the ledge and the press; all
+          // this adds is the shape and a deeper travel to suit the size.
+          className="size-10 shrink-0 rounded-full disabled:opacity-30"
         >
-          <ArrowUp size={20} strokeWidth={2.6} />
+          <ArrowUp size={21} strokeWidth={3} />
         </Button>
       </div>
     </div>

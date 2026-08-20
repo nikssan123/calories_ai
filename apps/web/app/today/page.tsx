@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ChevronLeft, ChevronRight, RotateCcw, Trash2 } from 'lucide-react';
@@ -13,6 +13,10 @@ import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { RepeatMeals } from '@/components/RepeatMeals';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { exerciseEmoji, foodEmoji } from '@/lib/foodEmoji';
+
+/** The `?date=` the calendar links here with. Anything else is ignored. */
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const MEAL_ORDER: Meal[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 const MEAL_LABEL: Record<Meal, string> = {
@@ -20,6 +24,14 @@ const MEAL_LABEL: Record<Meal, string> = {
   lunch: 'Lunch',
   dinner: 'Dinner',
   snack: 'Snacks',
+};
+
+/** The section headings get a picture too, so the day skims as a menu. */
+const MEAL_EMOJI: Record<Meal, string> = {
+  breakfast: '🌅',
+  lunch: '🥪',
+  dinner: '🌙',
+  snack: '🍪',
 };
 
 /**
@@ -45,29 +57,54 @@ function TodaySkeleton() {
 }
 
 function TodayView() {
-  const [day, setDay] = useState<DaySummary | null>(null);
-  // The date being shown, or null for "whatever the server calls today". Held
-  // as a date rather than an offset so History can link straight to a day.
-  const [date, setDate] = useState<string | null>(null);
-  const [today, setToday] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const requested = useSearchParams().get('date');
 
+  const [day, setDay] = useState<DaySummary | null>(null);
+  /*
+   * The date being shown, or null for "whatever the server calls today". Held
+   * as a date rather than an offset so History can link straight to a day.
+   *
+   * Seeded from the query during render rather than in an effect. As an effect
+   * it was a tick too late: the first commit had already fired a dateless fetch
+   * for today, so a deep link raced its own request for the day it had asked
+   * for — and lost often enough that `/today?date=…` looked simply ignored.
+   */
+  const [date, setDate] = useState<string | null>(() =>
+    requested && ISO_DATE.test(requested) ? requested : null,
+  );
+  const [today, setToday] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Later changes to the query still have to land — History links here with
+  // `next/link`, which swaps the parameter without remounting this component.
   useEffect(() => {
-    if (requested && /^\d{4}-\d{2}-\d{2}$/.test(requested)) setDate(requested);
+    if (requested && ISO_DATE.test(requested)) setDate(requested);
   }, [requested]);
 
+  /*
+   * Which fetch is allowed to publish its result.
+   *
+   * Stepping through days quickly issues overlapping requests, and they do not
+   * come back in the order they were sent. Without this the day on screen is
+   * whichever response happened to be slowest rather than the one that was
+   * asked for last.
+   */
+  const latest = useRef(0);
+
   const load = useCallback(async (target: string | null) => {
+    const seq = ++latest.current;
     try {
       const summary = await api.day(target ?? undefined);
+      if (seq !== latest.current) return;
       setDay(summary);
       // Today is whatever the server says when asked without a date; it honours
       // day_start_hour, so it is not always the browser's calendar date.
       if (target === null) setToday(summary.local_date);
     } catch (e) {
+      if (seq !== latest.current) return;
       toast.error((e as Error).message);
     } finally {
-      setLoading(false);
+      if (seq === latest.current) setLoading(false);
     }
   }, []);
 
@@ -155,12 +192,17 @@ function TodayView() {
         </Button>
         {/* Stepping one day at a time made "how did last month go?" a dozen
             taps; the header is the way into the month grid. */}
-        <Link href="/history" className="rounded-xl px-3 text-center transition-colors active:bg-muted/60">
+        <Link
+          href="/history"
+          className="active:bg-muted/60 rounded-2xl px-4 py-1 text-center transition-colors"
+        >
           <h1 className="text-title-2">{isToday ? 'Today' : formatDay(day?.local_date)}</h1>
           {isToday && day ? (
-            <p className="text-footnote text-muted-foreground">{formatDay(day.local_date)}</p>
+            <p className="text-footnote text-muted-foreground font-semibold">
+              {formatDay(day.local_date)}
+            </p>
           ) : (
-            <p className="text-footnote text-muted-foreground">View calendar</p>
+            <p className="text-footnote text-muted-foreground font-semibold">View calendar</p>
           )}
         </Link>
         <Button
@@ -189,14 +231,14 @@ function TodayView() {
               target={day.targets.kcal}
               burned={day.burned_kcal}
             />
-            <p className="tnum text-muted-foreground mt-4 text-[15px]">
-              <span className="text-foreground font-semibold">
+            <p className="tnum text-muted-foreground mt-5 text-body font-medium">
+              <span className="text-foreground font-extrabold">
                 {Math.round(day.consumed.kcal).toLocaleString()}
               </span>{' '}
               of {day.targets.kcal.toLocaleString()} kcal
             </p>
             {day.burned_kcal > 0 && (
-              <p className="tnum text-footnote text-muted-foreground mt-1">
+              <p className="tnum text-footnote text-muted-foreground mt-1 font-semibold">
                 net {day.net_kcal.toLocaleString()} kcal after exercise
               </p>
             )}
@@ -207,19 +249,24 @@ function TodayView() {
 
           <div className="mt-7 space-y-7 lg:mt-0">
           {byMeal.length === 0 && day.exercise_entries.length === 0 && (
-            <p className="text-muted-foreground py-10 text-center text-[15px]">
-              Nothing logged yet.
-              <br />
-              Tell the journal what you ate.
-            </p>
+            <div className="py-10 text-center">
+              <span aria-hidden className="animate-bob mb-3 block text-[40px] leading-none">
+                🍽️
+              </span>
+              <p className="text-muted-foreground text-body font-medium">
+                Nothing logged yet.
+                <br />
+                Tell the journal what you ate.
+              </p>
+            </div>
           )}
 
           {byMeal.map(({ meal, entries }) => (
             <InsetGroup
               key={meal}
-              title={MEAL_LABEL[meal]}
+              title={`${MEAL_EMOJI[meal]}  ${MEAL_LABEL[meal]}`}
               trailing={
-                <span className="tnum text-footnote text-muted-foreground">
+                <span className="tnum text-footnote text-muted-foreground font-bold">
                   {Math.round(entries.reduce((sum, e) => sum + e.kcal, 0))} kcal
                 </span>
               }
@@ -237,9 +284,9 @@ function TodayView() {
 
           {day.exercise_entries.length > 0 && (
             <InsetGroup
-              title="Exercise"
+              title="🏃  Exercise"
               trailing={
-                <span className="tnum text-footnote text-[var(--exercise)]">
+                <span className="tnum text-footnote font-bold text-[var(--exercise-text)]">
                   −{day.burned_kcal} kcal
                 </span>
               }
@@ -248,10 +295,13 @@ function TodayView() {
             >
               {day.exercise_entries.map((entry) => (
                 <InsetRow key={entry.id}>
+                  <span aria-hidden className="shrink-0 text-[20px] leading-none">
+                    {exerciseEmoji(entry.description)}
+                  </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[15px]">{entry.description}</p>
+                    <p className="truncate text-body font-semibold">{entry.description}</p>
                     {(entry.distance_km !== null || entry.duration_min !== null) && (
-                      <p className="text-footnote text-muted-foreground">
+                      <p className="text-footnote text-muted-foreground font-medium">
                         {[
                           entry.distance_km !== null ? `${entry.distance_km} km` : null,
                           entry.duration_min !== null ? `${Math.round(entry.duration_min)} min` : null,
@@ -261,7 +311,7 @@ function TodayView() {
                       </p>
                     )}
                   </div>
-                  <span className="tnum text-muted-foreground text-[15px]">
+                  <span className="tnum text-body font-bold text-[var(--exercise-text)]">
                     ~{Math.round(entry.kcal_burned)}
                   </span>
                   <Button
@@ -279,10 +329,10 @@ function TodayView() {
           )}
 
           {day.weight && (
-            <InsetGroup title="Weight">
+            <InsetGroup title="⚖️  Weight">
               <InsetRow>
-                <span className="flex-1 text-[15px]">Weighed</span>
-                <span className="tnum text-[15px] font-medium">{day.weight.weight_kg} kg</span>
+                <span className="flex-1 text-body font-semibold">Weighed</span>
+                <span className="text-figure text-body">{day.weight.weight_kg} kg</span>
               </InsetRow>
             </InsetGroup>
           )}
@@ -313,16 +363,20 @@ function EntryRow({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors active:bg-muted/60"
+        className="active:bg-muted/60 flex w-full items-center gap-3 px-4 py-3 text-left transition-colors"
       >
+        <span aria-hidden className="shrink-0 text-[20px] leading-none">
+          {foodEmoji(entry.description, entry.meal)}
+        </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px]">{entry.description}</p>
-          <p className="tnum text-footnote text-muted-foreground">
-            {Math.round(entry.protein_g)}P · {Math.round(entry.carbs_g)}C · {Math.round(entry.fat_g)}F
+          <p className="truncate text-body font-semibold">{entry.description}</p>
+          <p className="tnum text-footnote text-muted-foreground font-medium">
+            {Math.round(entry.protein_g)}P · {Math.round(entry.carbs_g)}C ·{' '}
+            {Math.round(entry.fat_g)}F
             {entry.confidence === 'low' && ' · rough estimate'}
           </p>
         </div>
-        <span className="tnum text-[15px] font-medium">
+        <span className="text-figure text-body">
           {approx && '~'}
           {Math.round(entry.kcal)}
         </span>
@@ -332,7 +386,7 @@ function EntryRow({
         <div className="bg-muted/40 space-y-2 px-4 py-3">
           <ul className="space-y-1.5">
             {entry.items.map((item) => (
-              <li key={item.id} className="flex justify-between gap-3 text-footnote">
+              <li key={item.id} className="text-footnote flex justify-between gap-3 font-medium">
                 <span className="min-w-0 flex-1 truncate">
                   {item.name}
                   {(item.quantity_desc || item.quantity_g !== null) && (
@@ -349,7 +403,7 @@ function EntryRow({
             ))}
           </ul>
           <div className="flex items-center gap-2 pt-1">
-            <p className="text-footnote text-muted-foreground flex-1">
+            <p className="text-footnote text-muted-foreground flex-1 font-medium">
               To change this, say so in the journal — “there was more rice”.
             </p>
             <Button variant="ghost" size="sm" onClick={onRepeat} className="h-8 gap-1.5 px-2">

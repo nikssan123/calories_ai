@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { Bookmark, ChevronDown } from 'lucide-react';
+import { Bookmark, ChevronDown, Loader2, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { LibraryRecipe } from '@ct/shared';
+import type { LibraryRecipe, Recipe } from '@ct/shared';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { formatServings, scale, Servings } from '@/components/kitchen/Servings';
@@ -24,13 +24,17 @@ import { cn } from '@/lib/utils';
 export function LibraryCard({
   recipe,
   onCooked,
+  onAdapted,
 }: {
   recipe: LibraryRecipe;
   onCooked: () => void;
+  /** Hands back the reworked recipe, which belongs to the user rather than here. */
+  onAdapted: (recipes: Recipe[], message: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState(recipe.saved);
   const [cooking, setCooking] = useState(false);
+  const [adapting, setAdapting] = useState(false);
   const [servings, setServings] = useState(1);
 
   // The published figures are per serving, so everything on the card is one
@@ -55,6 +59,18 @@ export function LibraryCard({
     }
   }
 
+  async function adapt() {
+    setAdapting(true);
+    try {
+      const { recipes, message } = await api.adaptLibraryRecipe(recipe.slug);
+      onAdapted(recipes, message);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setAdapting(false);
+    }
+  }
+
   async function toggleSaved() {
     const next = !saved;
     setSaved(next);
@@ -67,7 +83,7 @@ export function LibraryCard({
   }
 
   return (
-    <article className="bg-card overflow-hidden rounded-[var(--radius)] shadow-[0_1px_2px_rgba(23,22,20,0.05)]">
+    <article className="bg-card overflow-hidden rounded-[var(--radius)] border-border chunk border-2">
       {recipe.image_path && (
         <div className="bg-muted relative aspect-[16/10] w-full">
           <img
@@ -94,10 +110,10 @@ export function LibraryCard({
       )}
 
       <div className="px-4 pt-3.5 pb-3">
-        <h3 className="text-[17px] leading-snug font-medium">{recipe.title}</h3>
+        <h3 className="font-[family-name:var(--font-display)] text-[18px] leading-snug font-extrabold">{recipe.title}</h3>
 
         <div className="text-footnote text-muted-foreground mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="tnum text-foreground font-medium">{Math.round(eaten.kcal)} kcal</span>
+          <span className="text-figure text-foreground">{Math.round(eaten.kcal)} kcal</span>
           <Macro label="P" value={eaten.protein_g} color="var(--protein)" />
           <Macro label="C" value={eaten.carbs_g} color="var(--carbs)" />
           <Macro label="F" value={eaten.fat_g} color="var(--fat)" />
@@ -125,7 +141,7 @@ export function LibraryCard({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="border-border text-footnote text-muted-foreground hover:text-foreground flex w-full items-center justify-between border-t px-4 py-2.5"
+        className="border-border text-footnote text-muted-foreground hover:text-foreground flex w-full items-center justify-between border-t-2 px-4 py-2.5"
         aria-expanded={open}
       >
         {open ? 'Hide the recipe' : `How to make it · ${recipe.steps.length} steps`}
@@ -133,18 +149,18 @@ export function LibraryCard({
       </button>
 
       {open && (
-        <div className="border-border space-y-3 border-t px-4 py-3.5">
+        <div className="border-border space-y-3 border-t-2 px-4 py-3.5">
           {recipe.summary && (
-            <p className="text-muted-foreground text-[15px] leading-snug">{recipe.summary}</p>
+            <p className="text-muted-foreground text-body leading-snug">{recipe.summary}</p>
           )}
 
           <div>
-            <p className="text-footnote text-muted-foreground font-semibold tracking-wide uppercase">
+            <p className="text-eyebrow text-muted-foreground">
               Ingredients · makes {recipe.portions}
             </p>
             <ul className="mt-1.5 space-y-1">
               {recipe.ingredients.map((item, index) => (
-                <li key={index} className="text-[15px] leading-snug">
+                <li key={index} className="text-body leading-snug">
                   {item.text}
                   {item.note && <span className="text-muted-foreground"> ({item.note})</span>}
                 </li>
@@ -154,7 +170,7 @@ export function LibraryCard({
 
           <ol className="space-y-2">
             {recipe.steps.map((step, index) => (
-              <li key={index} className="flex gap-2.5 text-[15px] leading-snug">
+              <li key={index} className="flex gap-2.5 text-body leading-snug">
                 <span className="text-muted-foreground tnum text-footnote mt-0.5 shrink-0">
                   {index + 1}
                 </span>
@@ -183,15 +199,37 @@ export function LibraryCard({
         </div>
       )}
 
-      <div className="border-border space-y-3 border-t p-3">
+      <div className="border-border space-y-3 border-t-2 p-3">
         <Servings
           value={servings}
           onChange={setServings}
           unit={recipe.serving_size ?? 'portion'}
         />
-        <Button onClick={() => void cook()} disabled={cooking} className="h-10 w-full rounded-xl">
-          {cooking ? 'Logging…' : `I ate this · ${Math.round(eaten.kcal)} kcal`}
-        </Button>
+        <div className="flex gap-2">
+          {/* Secondary, because most of the time the recipe is fine as written
+              and the adaptation costs a model call. It earns its place next to
+              the log button rather than above it. */}
+          <Button
+            variant="secondary"
+            onClick={() => void adapt()}
+            disabled={adapting}
+            className="h-10 flex-1 gap-1.5 rounded-xl"
+          >
+            {adapting ? (
+              <Loader2 size={15} className="animate-spin" />
+            ) : (
+              <Wand2 size={15} />
+            )}
+            {adapting ? 'Reworking…' : 'Make it fit me'}
+          </Button>
+          <Button
+            onClick={() => void cook()}
+            disabled={cooking}
+            className="h-10 flex-1 rounded-xl"
+          >
+            {cooking ? 'Logging…' : `I ate this · ${Math.round(eaten.kcal)}`}
+          </Button>
+        </div>
       </div>
     </article>
   );
@@ -200,7 +238,7 @@ export function LibraryCard({
 function Macro({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <span className="tnum inline-flex items-center gap-1">
-      <span className="size-1.5 rounded-full" style={{ background: color }} />
+      <span className="size-2 rounded-full" style={{ background: color }} />
       {Math.round(value)}g {label}
     </span>
   );

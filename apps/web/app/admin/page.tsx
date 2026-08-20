@@ -55,7 +55,7 @@ export default function AdminPage() {
           </p>
         </div>
 
-        <div className="bg-muted flex gap-0.5 rounded-xl p-0.5">
+        <div className="bg-card border-border chunk-sm flex gap-1 rounded-full border-2 p-1">
           {TABS.map((entry) => (
             <button
               key={entry.id}
@@ -63,9 +63,9 @@ export default function AdminPage() {
               onClick={() => setTab(entry.id)}
               aria-current={tab === entry.id ? 'page' : undefined}
               className={cn(
-                'flex-1 rounded-lg px-3 py-1.5 text-[14px] font-medium transition-colors',
+                'flex-1 rounded-full px-3 py-1.5 text-[14px] font-bold transition-colors',
                 tab === entry.id
-                  ? 'bg-card text-foreground shadow-sm'
+                  ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:text-foreground',
               )}
             >

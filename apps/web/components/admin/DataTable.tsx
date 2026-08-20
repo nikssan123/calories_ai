@@ -25,22 +25,22 @@ export function DataTable({
       <div className="overflow-x-auto">
         <table className="w-full min-w-max border-collapse text-left">
           <thead>
-            <tr className="border-border border-b">
+            <tr className="border-border border-b-2">
               {columns.map((column) => (
                 <th
                   key={column}
-                  className="text-footnote text-muted-foreground px-3 py-2 font-medium tracking-wide whitespace-nowrap uppercase"
+                  className="text-eyebrow text-muted-foreground px-3 py-2 whitespace-nowrap"
                 >
                   {column}
                 </th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-border divide-y">{children}</tbody>
+          <tbody className="divide-border divide-y-2">{children}</tbody>
         </table>
       </div>
       {isEmpty && (
-        <p className="text-muted-foreground px-4 py-6 text-center text-[15px]">
+        <p className="text-muted-foreground px-4 py-6 text-center text-body">
           {empty ?? 'Nothing here yet.'}
         </p>
       )}

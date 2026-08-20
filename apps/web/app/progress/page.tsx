@@ -63,14 +63,14 @@ export default function ProgressPage() {
             const next = Number(values[0]);
             if (Number.isFinite(next)) setDays(next);
           }}
-          className="bg-muted rounded-lg p-0.5"
+          className="bg-card border-border chunk-sm rounded-full border-2 p-1"
         >
           {WINDOWS.map((w) => (
             <ToggleGroupItem
               key={w}
               value={String(w)}
               aria-label={`${w} days`}
-              className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-7 rounded-md px-2.5 text-xs font-medium transition-colors"
+              className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-8 rounded-full px-3.5 text-xs font-bold transition-colors"
             >
               {w}d
             </ToggleGroupItem>
@@ -86,20 +86,20 @@ export default function ProgressPage() {
       ) : (
         <div className="grid gap-7 lg:grid-cols-2 lg:items-start">
           {/* §12: lead with the trend, not any individual day. */}
-          <InsetGroup title="Weight" className="lg:row-span-2">
+          <InsetGroup title="⚖️  Weight" className="lg:row-span-2">
             <div className="px-4 pt-4 pb-2">
               {progress.weight.current_kg === null ? (
-                <p className="text-muted-foreground py-2 text-[15px]">
+                <p className="text-muted-foreground py-2 text-body font-medium">
                   No weigh-ins yet. Log one below, or just tell the journal.
                 </p>
               ) : (
                 <>
                   <div className="flex items-baseline gap-3">
-                    <span className="tnum text-large-title">{progress.weight.current_kg} kg</span>
+                    <span className="text-figure text-large-title">{progress.weight.current_kg} kg</span>
                     {progress.weight.change_7d_kg !== null && progress.weight.change_7d_kg !== 0 && (
                       <span
                         className={cn(
-                          'tnum flex items-center gap-0.5 text-sm font-medium',
+                          'tnum flex items-center gap-0.5 text-sm font-bold',
                           progress.weight.change_7d_kg < 0
                             ? 'text-[var(--positive)]'
                             : 'text-[var(--calories-text)]',
@@ -119,7 +119,7 @@ export default function ProgressPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-3 divide-x divide-border">
+            <div className="divide-border grid grid-cols-3 divide-x-2">
               <Stat
                 label="7-day avg"
                 value={progress.weight.average_7d_kg === null ? '—' : `${progress.weight.average_7d_kg}`}
@@ -154,27 +154,27 @@ export default function ProgressPage() {
                 onChange={(e) => setWeightInput(e.target.value)}
                 onWheel={(e) => e.currentTarget.blur()}
                 placeholder="Log today's weight"
-                className="bg-muted/60 h-10 rounded-xl border-0 text-[15px]"
+                className="bg-muted/60 border-border h-11 rounded-full border-2 px-4 text-body"
               />
               <Button
                 type="submit"
                 disabled={!weightInput || saving}
-                className="h-10 rounded-xl px-5"
+                className="h-11 rounded-full px-6"
               >
                 Save
               </Button>
             </form>
           </InsetGroup>
 
-          <InsetGroup title="Calories">
+          <InsetGroup title="🔥  Calories">
             <div className="px-4 pt-4 pb-3">
               <div className="flex items-baseline gap-2">
-                <span className="tnum text-large-title">
+                <span className="text-figure text-large-title">
                   {progress.calories.average_kcal === null
                     ? '—'
                     : progress.calories.average_kcal.toLocaleString()}
                 </span>
-                <span className="text-muted-foreground text-sm">
+                <span className="text-muted-foreground text-sm font-medium">
                   avg/day · target {progress.calories.target_kcal.toLocaleString()}
                 </span>
               </div>
@@ -187,21 +187,21 @@ export default function ProgressPage() {
             </div>
           </InsetGroup>
 
-          <InsetGroup title="Protein">
+          <InsetGroup title="💪  Protein">
             <InsetRow className="py-4">
               <div className="flex-1">
                 <div className="flex items-baseline gap-2">
-                  <span className="tnum text-large-title">
+                  <span className="text-figure text-large-title">
                     {progress.protein.average_g === null ? '—' : `${progress.protein.average_g}g`}
                   </span>
-                  <span className="text-muted-foreground text-sm">
+                  <span className="text-muted-foreground text-sm font-medium">
                     avg/day · target {progress.protein.target_g}g
                   </span>
                 </div>
                 {progress.protein.days_logged > 0 && (
-                  <p className="text-muted-foreground mt-1.5 text-footnote">
+                  <p className="text-muted-foreground text-footnote mt-1.5 font-medium">
                     Hit the target on{' '}
-                    <span className="text-foreground font-medium">
+                    <span className="text-foreground font-extrabold">
                       {progress.protein.days_target_hit} of {progress.protein.days_logged}
                     </span>{' '}
                     logged days.
@@ -213,15 +213,15 @@ export default function ProgressPage() {
 
           {/* Exercise has its own tab now; this is the pointer, not the data. */}
           <InsetGroup
-            title="Exercise"
+            title="🏃  Exercise"
             footer="Ask the journal anything about this data — “why haven’t I lost weight this week?”"
           >
             <Link href="/exercise" className="block transition-colors active:bg-muted/60">
               <InsetRow className="py-4">
                 <div className="flex-1">
                   <div className="flex items-baseline gap-2">
-                    <span className="tnum text-large-title">{progress.exercise.sessions}</span>
-                    <span className="text-muted-foreground text-sm">
+                    <span className="text-figure text-large-title">{progress.exercise.sessions}</span>
+                    <span className="text-muted-foreground text-sm font-medium">
                       sessions · ~{progress.exercise.total_kcal.toLocaleString()} kcal over {days}{' '}
                       days
                     </span>
@@ -245,10 +245,12 @@ export default function ProgressPage() {
 function Stat({ label, value, unit }: { label: string; value: string; unit: string }) {
   return (
     <div className="px-3 py-3 text-center">
-      <p className="text-footnote text-muted-foreground">{label}</p>
-      <p className="tnum mt-0.5 font-semibold">
+      <p className="text-footnote text-muted-foreground font-semibold">{label}</p>
+      <p className="text-figure mt-0.5">
         {value}
-        {value !== '—' && <span className="text-muted-foreground text-xs font-normal"> {unit}</span>}
+        {value !== '—' && (
+          <span className="text-muted-foreground text-xs font-semibold"> {unit}</span>
+        )}
       </p>
     </div>
   );

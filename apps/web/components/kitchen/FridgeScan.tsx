@@ -93,9 +93,9 @@ export function FridgeScan({ onSaved }: { onSaved: () => void }) {
 
   if (proposal && proposal.found.length > 0) {
     return (
-      <div className="border-border border-t px-4 py-3">
+      <div className="border-border border-t-2 px-4 py-3">
         <div className="flex items-baseline justify-between gap-3">
-          <p className="text-[15px] font-medium">What I can see</p>
+          <p className="text-body font-medium">What I can see</p>
           <button
             type="button"
             onClick={() => setProposal(null)}
@@ -120,7 +120,7 @@ export function FridgeScan({ onSaved }: { onSaved: () => void }) {
                 onClick={() => toggle(find)}
                 aria-pressed={on}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] transition-colors',
+                  'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-footnote transition-colors',
                   // Kept off a solid accent fill: --calories is a deep forest in
                   // light mode and a bright mint in dark, so no single text
                   // colour reads on both. A ring carries the same signal and
@@ -146,7 +146,7 @@ export function FridgeScan({ onSaved }: { onSaved: () => void }) {
         <Button
           onClick={() => void save()}
           disabled={saving}
-          className="mt-3 h-10 w-full rounded-xl"
+          className="mt-3 h-11 w-full rounded-full"
         >
           {saving ? 'Adding…' : `Add ${chosen.size} to my kitchen`}
         </Button>
@@ -155,7 +155,7 @@ export function FridgeScan({ onSaved }: { onSaved: () => void }) {
   }
 
   return (
-    <div className="border-border border-t px-4 py-3">
+    <div className="border-border border-t-2 px-4 py-3">
       <input
         ref={fileRef}
         type="file"
@@ -175,7 +175,7 @@ export function FridgeScan({ onSaved }: { onSaved: () => void }) {
         variant="secondary"
         disabled={scanning}
         onClick={() => (hasCameraApp ? cameraRef : fileRef).current?.click()}
-        className="h-10 w-full gap-2 rounded-xl"
+        className="h-11 w-full gap-2 rounded-full"
       >
         {scanning ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
         {scanning ? 'Reading the photo…' : 'Scan my fridge'}

@@ -39,10 +39,10 @@ export function Sidebar() {
   if (pathname === '/login') return null;
 
   return (
-    <aside className="border-border bg-card/40 hidden w-60 shrink-0 flex-col border-r lg:flex">
+    <aside className="border-border hidden w-64 shrink-0 flex-col border-r-2 lg:flex">
       <div className="px-5 pt-6 pb-4">
         <div className="flex items-center gap-2.5">
-          <Logo size={26} />
+          <Logo size={30} />
           <p className="text-title-2">Day So Far</p>
         </div>
         <p className="text-footnote text-muted-foreground mt-1 truncate">
@@ -60,15 +60,15 @@ export function Sidebar() {
                   href={href}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'flex items-center gap-3 rounded-xl px-3 py-2 text-[15px] transition-colors',
+                    'flex items-center gap-3 rounded-2xl border-2 px-3 py-2 text-body transition-colors',
                     active
-                      ? 'bg-card text-foreground font-medium shadow-sm'
-                      : 'text-muted-foreground hover:bg-card/60 hover:text-foreground',
+                      ? 'chunk border-border bg-card text-foreground font-extrabold [--chunk-depth:3px]'
+                      : 'text-muted-foreground hover:bg-card/70 hover:text-foreground border-transparent font-bold',
                   )}
                 >
                   <Icon
-                    size={19}
-                    strokeWidth={active ? 2.3 : 1.9}
+                    size={20}
+                    strokeWidth={active ? 2.6 : 2.1}
                     style={active ? { color: 'var(--calories-text)' } : undefined}
                   />
                   {label}
@@ -81,21 +81,21 @@ export function Sidebar() {
         {/* Kept out of TABS: admin is not a peer of the four product screens,
             and most accounts never see it. */}
         {isAdmin && (
-          <ul className="border-border mt-3 space-y-0.5 border-t pt-3">
+          <ul className="border-border mt-3 space-y-0.5 border-t-2 pt-3">
             <li>
               <Link
                 href="/admin"
                 aria-current={pathname === '/admin' ? 'page' : undefined}
                 className={cn(
-                  'flex items-center gap-3 rounded-xl px-3 py-2 text-[15px] transition-colors',
+                  'flex items-center gap-3 rounded-2xl border-2 px-3 py-2 text-body transition-colors',
                   pathname === '/admin'
-                    ? 'bg-card text-foreground font-medium shadow-sm'
-                    : 'text-muted-foreground hover:bg-card/60 hover:text-foreground',
+                    ? 'chunk border-border bg-card text-foreground font-extrabold [--chunk-depth:3px]'
+                    : 'text-muted-foreground hover:bg-card/70 hover:text-foreground border-transparent font-bold',
                 )}
               >
                 <Shield
-                  size={19}
-                  strokeWidth={pathname === '/admin' ? 2.3 : 1.9}
+                  size={20}
+                  strokeWidth={pathname === '/admin' ? 2.6 : 2.1}
                   style={pathname === '/admin' ? { color: 'var(--calories-text)' } : undefined}
                 />
                 Admin
@@ -108,9 +108,9 @@ export function Sidebar() {
       <button
         type="button"
         onClick={() => void signOut()}
-        className="text-muted-foreground hover:text-foreground m-3 flex items-center gap-3 rounded-xl px-3 py-2 text-[15px] transition-colors"
+        className="text-muted-foreground hover:text-foreground m-3 flex items-center gap-3 rounded-2xl px-3 py-2 text-body font-bold transition-colors"
       >
-        <LogOut size={19} strokeWidth={1.9} />
+        <LogOut size={20} strokeWidth={2.1} />
         Sign out
       </button>
     </aside>

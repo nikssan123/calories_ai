@@ -91,22 +91,21 @@ function Section({
  */
 function pill(variant: 'primary' | 'secondary', className?: string) {
   return cn(
-    'inline-flex items-center justify-center gap-1.5 rounded-full font-medium whitespace-nowrap',
-    'transition-[background-color,transform] duration-200 active:scale-[0.97]',
+    'chunk-press inline-flex items-center justify-center gap-1.5 rounded-full border-2 font-extrabold whitespace-nowrap',
     variant === 'primary'
-      ? 'bg-primary text-primary-foreground hover:bg-primary/85'
-      : 'border-border bg-card text-foreground hover:bg-muted border',
+      ? 'bg-primary text-primary-foreground border-transparent [--chunk-color:var(--calories-deep)] hover:bg-[color-mix(in_oklch,var(--primary),#fff_12%)]'
+      : 'border-border bg-card text-foreground hover:bg-muted',
     className,
   );
 }
 
-/** A hairline-separated list of claims. Used wherever the honest small print is
-    the selling point rather than the fine print. */
+/** A separated list of claims. Used wherever the honest small print is the
+    selling point rather than the fine print. */
 function Points({ items, className }: { items: string[]; className?: string }) {
   return (
-    <ul className={cn('divide-border divide-y', className)}>
+    <ul className={cn('divide-border divide-y-2', className)}>
       {items.map((item) => (
-        <li key={item} className="text-muted-foreground py-3 text-[15px] leading-relaxed">
+        <li key={item} className="text-muted-foreground py-3 text-body leading-relaxed font-medium">
           {item}
         </li>
       ))}
@@ -118,11 +117,11 @@ function Points({ items, className }: { items: string[]; className?: string }) {
 
 function Header({ start }: { start: Cta }) {
   return (
-    <header className="material border-border/60 sticky top-0 z-40 border-b">
+    <header className="material border-border sticky top-0 z-40 border-b-2">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center px-6">
         <a href="#top" className="flex items-center gap-2.5">
           <Logo size={26} />
-          <span className="text-[17px] font-semibold tracking-tight">Day So Far</span>
+          <span className="font-[family-name:var(--font-display)] text-[19px] font-extrabold tracking-[-0.01em]">Day So Far</span>
         </a>
 
         <nav className="text-muted-foreground ml-auto hidden items-center gap-7 text-sm md:flex">
@@ -184,15 +183,15 @@ function Hero({ start }: { start: Cta }) {
 
           <Reveal delay={170}>
             <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-              <Link href={start.href} className={pill('primary', 'h-12 px-6 text-[15px]')}>
+              <Link href={start.href} className={pill('primary', 'h-12 px-6 text-body')}>
                 {start.label}
               </Link>
-              <a href="#how" className={pill('secondary', 'h-12 px-6 text-[15px]')}>
+              <a href="#how" className={pill('secondary', 'h-12 px-6 text-body')}>
                 See how it works
               </a>
             </div>
 
-            <p className="text-footnote text-muted-foreground mt-5">
+            <p className="text-footnote text-muted-foreground mt-5 font-semibold">
               No ads, no trackers, nothing sold on.
             </p>
 
@@ -240,9 +239,19 @@ function ThreeWaysIn() {
       <div className="mt-12 grid gap-10 sm:grid-cols-3 sm:gap-8">
         {WAYS.map(({ Icon, title, body }, i) => (
           <Reveal key={title} delay={i * 80}>
-            <Icon size={24} strokeWidth={1.9} style={{ color: 'var(--calories-text)' }} />
-            <h3 className="mt-4 text-[17px] font-semibold tracking-tight">{title}</h3>
-            <p className="text-muted-foreground mt-2 text-[15px] leading-relaxed">{body}</p>
+            {/* The icon sits on a tinted disc rather than floating: three bare
+                line icons on an empty ground was the most "dashboard" moment
+                left on the page. */}
+            <span
+              className="flex size-12 items-center justify-center rounded-2xl"
+              style={{ background: 'color-mix(in oklch, var(--calories), transparent 86%)' }}
+            >
+              <Icon size={24} strokeWidth={2.4} style={{ color: 'var(--calories-text)' }} />
+            </span>
+            <h3 className="font-[family-name:var(--font-display)] mt-4 text-[19px] font-extrabold tracking-[-0.01em]">
+              {title}
+            </h3>
+            <p className="text-muted-foreground mt-2 text-body leading-relaxed">{body}</p>
           </Reveal>
         ))}
       </div>
@@ -266,43 +275,43 @@ function Corrections() {
           <h2 className="text-section-title text-balance">
             Change your mind. It changes the entry.
           </h2>
-          <p className="text-muted-foreground mt-5 text-[17px] leading-relaxed">
+          <p className="text-muted-foreground mt-5 text-[17px] leading-relaxed font-medium">
             “Actually there were three eggs.” The meal you already logged is corrected in
             place — not appended to, not logged twice, and never left for you to go and fix
             on a screen somewhere else.
           </p>
-          <p className="text-muted-foreground mt-4 text-[17px] leading-relaxed">
+          <p className="text-muted-foreground mt-4 text-[17px] leading-relaxed font-medium">
             It can do that because a meal is stored item by item rather than as one number.
             Correcting the eggs leaves the toast alone.
           </p>
         </Reveal>
 
         <Reveal delay={100}>
-          <div className="bg-card rounded-2xl px-5 py-4 shadow-sm">
-            <p className="text-footnote text-muted-foreground font-medium tracking-wide uppercase">
+          <div className="bg-card border-border chunk rounded-[var(--radius)] border-2 px-5 py-4">
+            <p className="text-eyebrow text-muted-foreground">
               Breakfast · one entry
             </p>
 
-            <ul className="divide-border mt-2 divide-y">
+            <ul className="divide-border mt-2 divide-y-2">
               {ITEMS.map((item) => (
                 <li
                   key={item.name}
                   className="grid grid-cols-[1fr_auto_4.5rem] items-baseline gap-3 py-3"
                 >
-                  <span className="truncate text-[15px]">{item.name}</span>
-                  <span className="tnum text-footnote text-muted-foreground">
+                  <span className="truncate text-body font-semibold">{item.name}</span>
+                  <span className="tnum text-footnote text-muted-foreground font-semibold">
                     {item.after ? (
                       <>
                         <s>{item.before}</s>{' '}
-                        <span className="font-medium text-[var(--calories-text)]">{item.after}</span>
+                        <span className="font-extrabold text-[var(--calories-text)]">{item.after}</span>
                       </>
                     ) : (
                       item.before
                     )}
                   </span>
-                  <span className="tnum text-right text-[15px]">
+                  <span className="tnum text-right text-body">
                     {item.after ? (
-                      <span className="font-medium text-[var(--calories-text)]">{item.kcalAfter}</span>
+                      <span className="font-extrabold text-[var(--calories-text)]">{item.kcalAfter}</span>
                     ) : (
                       item.kcal
                     )}
@@ -311,11 +320,11 @@ function Corrections() {
               ))}
             </ul>
 
-            <div className="border-border flex items-baseline justify-between border-t pt-3">
-              <span className="text-[15px] font-medium">Total</span>
-              <span className="tnum text-[15px]">
+            <div className="border-border flex items-baseline justify-between border-t-2 pt-3">
+              <span className="text-body font-bold">Total</span>
+              <span className="tnum text-body">
                 <s className="text-muted-foreground">407</s>{' '}
-                <span className="font-semibold">479 kcal</span>
+                <span className="text-figure">479 kcal</span>
               </span>
             </div>
           </div>
@@ -341,7 +350,7 @@ function AdaptiveTarget() {
         <h2 className="text-section-title max-w-2xl text-balance">
           Your target learns what you actually burn.
         </h2>
-        <p className="text-muted-foreground mt-5 max-w-2xl text-[17px] leading-relaxed">
+        <p className="text-muted-foreground mt-5 max-w-2xl text-[17px] leading-relaxed font-medium">
           Every calculator on the internet predicts what a population of people your size
           burns. After a fortnight of logging there is something better available: what{' '}
           <em className="text-foreground not-italic">you</em> burn, read off the only
@@ -351,8 +360,8 @@ function AdaptiveTarget() {
 
       <div className="mt-12 grid gap-6 lg:grid-cols-2">
         <Reveal>
-          <div className="bg-card h-full rounded-2xl p-6 shadow-sm sm:p-7">
-            <p className="text-footnote text-muted-foreground font-medium tracking-wide uppercase">
+          <div className="bg-card border-border chunk h-full rounded-[var(--radius)] border-2 p-6 sm:p-7">
+            <p className="text-eyebrow text-muted-foreground">
               Every Monday
             </p>
             {/* Broken by hand rather than left to wrap, so the minus sign starts
@@ -365,7 +374,7 @@ function AdaptiveTarget() {
                 &minus; (weight change per day &times; 7,700 kcal/kg)
               </span>
             </p>
-            <p className="text-muted-foreground mt-5 text-[15px] leading-relaxed">
+            <p className="text-muted-foreground mt-5 text-body leading-relaxed">
               Eat 2,000 while losing half a kilo a week and you were burning about 2,550. The
               arithmetic is three lines. What takes the work is knowing when not to believe it.
             </p>
@@ -373,8 +382,8 @@ function AdaptiveTarget() {
         </Reveal>
 
         <Reveal delay={100}>
-          <div className="bg-card h-full rounded-2xl p-6 pb-3 shadow-sm sm:p-7 sm:pb-4">
-            <p className="text-footnote text-muted-foreground font-medium tracking-wide uppercase">
+          <div className="bg-card border-border chunk h-full rounded-[var(--radius)] border-2 p-6 pb-3 sm:p-7 sm:pb-4">
+            <p className="text-eyebrow text-muted-foreground">
               Before it moves anything
             </p>
             <Points items={GUARDRAILS} className="mt-1" />
@@ -395,32 +404,32 @@ function WeeklyRead() {
           <h2 className="text-section-title text-balance">
             Monday morning, a short read on the week.
           </h2>
-          <p className="text-muted-foreground mt-5 text-[17px] leading-relaxed">
+          <p className="text-muted-foreground mt-5 text-[17px] leading-relaxed font-medium">
             Every number in it is computed in SQL. The model is handed those numbers and
             writes the prose — because anything asked to both recall and narrate will get one
             of them wrong, and it is always the recall.
           </p>
-          <p className="text-muted-foreground mt-4 text-[17px] leading-relaxed">
+          <p className="text-muted-foreground mt-4 text-[17px] leading-relaxed font-medium">
             It runs after the target has already moved, so it explains a change rather than
             proposing one. An unexplained calorie target is one people ignore.
           </p>
         </Reveal>
 
         <Reveal delay={100}>
-          <div className="bg-card space-y-3 rounded-2xl px-5 py-5 shadow-sm">
+          <div className="bg-card border-border chunk space-y-3 rounded-[var(--radius)] border-2 px-5 py-5">
             <p className="text-footnote text-muted-foreground">11 – 17 August</p>
-            <p className="text-[15px] leading-relaxed">
+            <p className="text-body leading-relaxed">
               You averaged 2,180 calories against a target of 2,290, and protein held above
               150g on six days of seven. Weight is down 0.4 kg over the fortnight — close to
               the half-kilo a week you asked for, and steadier than the week before.
             </p>
-            <p className="text-[15px] leading-relaxed">
+            <p className="text-body leading-relaxed">
               Your target goes up today. You have been eating below the old number and losing
               at the rate you wanted, which means the old number was too low.
             </p>
 
-            <div className="bg-muted/50 rounded-xl px-3 py-2.5">
-              <div className="tnum flex items-center gap-2 text-[15px] font-medium">
+            <div className="bg-muted border-border rounded-2xl border-2 px-3.5 py-3">
+              <div className="tnum flex items-center gap-2 text-body font-bold">
                 <span className="text-muted-foreground">2,290</span>
                 <ArrowRight size={14} className="text-muted-foreground" />
                 <span className="text-[var(--calories-text)]">2,480 kcal</span>
@@ -469,8 +478,8 @@ function Details() {
       <div className="mt-12 grid gap-x-12 gap-y-10 sm:grid-cols-2">
         {DETAILS.map(({ title, body }, i) => (
           <Reveal key={title} delay={(i % 2) * 80}>
-            <h3 className="text-[17px] font-semibold tracking-tight">{title}</h3>
-            <p className="text-muted-foreground mt-2 text-[15px] leading-relaxed">{body}</p>
+            <h3 className="font-[family-name:var(--font-display)] text-[19px] font-extrabold tracking-[-0.01em]">{title}</h3>
+            <p className="text-muted-foreground mt-2 text-body leading-relaxed">{body}</p>
           </Reveal>
         ))}
       </div>
@@ -490,16 +499,17 @@ function Privacy() {
             // The mark's own forest-into-jade ramp, pinned rather than taken
             // from the tokens: `--calories` lifts to mint in dark mode, and
             // white on that is barely 2:1. The jade end stops short of the
-            // `--logo-ramp` value for the same reason — white on #12a594 is
-            // 3.1:1, and the body copy runs the width of the panel. Every stop
-            // here clears 4.7:1.
-            background: 'linear-gradient(140deg, #0b6349 0%, #0f7b5c 45%, #0e8174 100%)',
+            // `--logo-ramp` value for the same reason — white on #23d3b0 is
+            // under 2:1, and the body copy runs the width of the panel. These
+            // are the new grass-and-jade hues walked down until every stop
+            // clears 4.7:1 against white.
+            background: 'linear-gradient(140deg, #0a6b41 0%, #0b7d4c 45%, #0a7a68 100%)',
           }}
         >
           <h2 className="text-section-title max-w-xl text-balance text-white">
             Your meals stay yours.
           </h2>
-          <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-white/80">
+          <p className="mt-5 max-w-xl text-[17px] leading-relaxed font-medium text-white/85">
             There is no third-party sign-in, no analytics, no advertising and nothing to
             sell. Your meals are rows in a database that exists to answer one question —
             what did you eat today — and nothing else.
@@ -517,11 +527,11 @@ function Closing({ start }: { start: Cta }) {
     <Section className="text-center">
       <Reveal>
         <h2 className="text-section-title text-balance">Start with breakfast.</h2>
-        <p className="text-muted-foreground mx-auto mt-5 max-w-md text-[17px] leading-relaxed">
+        <p className="text-muted-foreground mx-auto mt-5 max-w-md text-[17px] leading-relaxed font-medium">
           It takes about a minute. The journal asks you a few things — your height, your
           weight, what you are aiming at — and works the rest out from there.
         </p>
-        <Link href={start.href} className={pill('primary', 'mt-8 h-12 px-6 text-[15px]')}>
+        <Link href={start.href} className={pill('primary', 'mt-8 h-12 px-6 text-body')}>
           {start.label}
         </Link>
         <StoreLinks className="mt-5" />
@@ -532,11 +542,11 @@ function Closing({ start }: { start: Cta }) {
 
 function Footer() {
   return (
-    <footer className="border-border border-t px-6 py-10">
+    <footer className="border-border border-t-2 px-6 py-10">
       <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-5 sm:flex-row sm:justify-between">
         <div className="flex items-center gap-2.5">
           <Logo size={22} />
-          <span className="text-sm font-medium">Day So Far</span>
+          <span className="text-sm font-bold">Day So Far</span>
         </div>
         <nav className="text-muted-foreground flex items-center gap-6 text-sm">
           <Link href="/login" className="hover:text-foreground transition-colors">

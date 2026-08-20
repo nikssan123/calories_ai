@@ -92,14 +92,14 @@ export function Pantry({
             if (e.key === 'Enter') void add();
           }}
           placeholder="Add ingredients, separated by commas"
-          className="bg-muted/60 h-10 rounded-xl border-0 text-[15px]"
+          className="bg-muted/60 border-border h-11 rounded-full border-2 px-4 text-body"
         />
         <Button
           size="icon"
           variant="secondary"
           disabled={!draft.trim() || busy}
           onClick={() => void add()}
-          className="size-10 shrink-0 rounded-xl"
+          className="size-11 shrink-0 rounded-full"
           aria-label="Add to your kitchen"
         >
           <Plus size={18} />
@@ -109,7 +109,7 @@ export function Pantry({
       <FridgeScan onSaved={onChanged} />
 
       {fresh.length === 0 ? (
-        <p className="text-muted-foreground px-4 py-4 text-[15px]">
+        <p className="text-muted-foreground px-4 py-4 text-body">
           Nothing here yet. Add a few things, or photograph your fridge.
         </p>
       ) : (
@@ -119,7 +119,7 @@ export function Pantry({
           return (
             <div key={item.id} className="flex items-center gap-3 px-4 py-3">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[15px]">
+                <p className="truncate text-body">
                   {item.name}
                   {item.quantity_desc && (
                     <span className="text-muted-foreground"> · {item.quantity_desc}</span>
@@ -128,7 +128,7 @@ export function Pantry({
                 <p
                   className={cn(
                     'text-footnote',
-                    stale ? 'text-[var(--fat)]' : 'text-muted-foreground',
+                    stale ? 'text-[var(--fat-text)]' : 'text-muted-foreground',
                   )}
                 >
                   {describeAge(days)}
@@ -178,7 +178,7 @@ export function Pantry({
                   key={item.id}
                   type="button"
                   onClick={() => void remove(item)}
-                  className="bg-muted/60 text-footnote hover:bg-muted rounded-full px-2.5 py-1"
+                  className="bg-muted border-border text-footnote hover:bg-secondary rounded-full border-2 px-3 py-1 font-semibold"
                   aria-label={`Remove ${item.name}`}
                 >
                   {item.name}

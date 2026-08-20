@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ChefHat, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { DaySummary, LibraryRecipe, PantryItem, Recipe } from '@ct/shared';
+import type { DaySummary, LibraryRecipe, PantryItem, Recipe, RecipeBrief } from '@ct/shared';
 import { api } from '@/lib/api';
 import { InsetGroup } from '@/components/InsetGroup';
 import { Pantry } from '@/components/kitchen/Pantry';
+import { Brief } from '@/components/kitchen/Brief';
+import { ImportRecipe } from '@/components/kitchen/ImportRecipe';
 import { LibraryCard } from '@/components/kitchen/LibraryCard';
 import { RecipeCard } from '@/components/kitchen/RecipeCard';
 import { Button } from '@/components/ui/button';
@@ -30,6 +32,7 @@ export default function CookPage() {
   const [librarySearch, setLibrarySearch] = useState('');
   const [message, setMessage] = useState('');
   const [wants, setWants] = useState('');
+  const [brief, setBrief] = useState<RecipeBrief>({});
   const [thinking, setThinking] = useState(false);
 
   const [refreshKey, setRefreshKey] = useState(0);
@@ -93,7 +96,7 @@ export default function CookPage() {
   async function suggest() {
     setThinking(true);
     try {
-      const result = await api.suggestRecipes({ wants: wants.trim() || undefined });
+      const result = await api.suggestRecipes({ ...brief, wants: wants.trim() || undefined });
       setRecipes(result.recipes);
       setMessage(result.message);
       setWants('');
@@ -124,12 +127,12 @@ export default function CookPage() {
                 if (e.key === 'Enter' && !thinking) void suggest();
               }}
               placeholder="Anything in particular? (optional)"
-              className="bg-muted/60 h-10 rounded-xl border-0 text-[15px]"
+              className="bg-muted/60 border-border h-11 rounded-full border-2 px-4 text-body"
             />
             <Button
               onClick={() => void suggest()}
               disabled={thinking}
-              className="h-11 w-full gap-2 rounded-xl"
+              className="h-11 w-full gap-2 rounded-full"
             >
               {thinking ? <Loader2 size={16} className="animate-spin" /> : <ChefHat size={16} />}
               {thinking ? 'Thinking…' : 'Give me some ideas'}
@@ -142,12 +145,21 @@ export default function CookPage() {
               </p>
             )}
           </div>
+
+          <Brief value={brief} onChange={setBrief} />
+          <ImportRecipe
+            onImported={(recipe) => {
+              setRecipes((prev) => [recipe, ...prev]);
+              setMessage('');
+              void load();
+            }}
+          />
         </InsetGroup>
 
-        {message && <p className="text-muted-foreground px-1 text-[15px]">{message}</p>}
+        {message && <p className="text-muted-foreground px-1 text-body">{message}</p>}
 
         {recipes.length > 0 && (
-          <div className="space-y-3">
+          <div data-recipes className="space-y-3">
             {recipes.map((recipe) => (
               <RecipeCard
                 key={recipe.id}
@@ -175,7 +187,7 @@ export default function CookPage() {
               value={librarySearch}
               onChange={(e) => setLibrarySearch(e.target.value)}
               placeholder="Search the recipe library"
-              className="bg-muted/60 h-10 rounded-xl border-0 text-[15px]"
+              className="bg-muted/60 border-border h-11 rounded-full border-2 px-4 text-body"
             />
           </div>
         </InsetGroup>
@@ -186,13 +198,28 @@ export default function CookPage() {
             <Skeleton className="h-72 w-full rounded-2xl" />
           </div>
         ) : library.length === 0 ? (
-          <p className="text-muted-foreground px-1 text-[15px]">
+          <p className="text-muted-foreground px-1 text-body">
             Nothing matching &ldquo;{librarySearch}&rdquo;.
           </p>
         ) : (
           <div className="space-y-3">
             {library.map((recipe) => (
-              <LibraryCard key={recipe.slug} recipe={recipe} onCooked={() => void load()} />
+              <LibraryCard
+                key={recipe.slug}
+                recipe={recipe}
+                onCooked={() => void load()}
+                onAdapted={(adapted, note) => {
+                  setRecipes((prev) => [...adapted, ...prev]);
+                  setMessage(note);
+                  // Adapted recipes are the answer to a question just asked, so
+                  // they belong at the top of the page rather than below the
+                  // shelf the button was pressed on.
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                  document
+                    .querySelector('[data-recipes]')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }}
+              />
             ))}
           </div>
         )}

@@ -39,13 +39,13 @@ export function Servings({
   return (
     <div className={cn('flex items-center justify-between gap-3', className)}>
       <div className="min-w-0">
-        <p className="text-[15px]">How much did you have?</p>
+        <p className="text-body">How much did you have?</p>
         <p className="text-footnote text-muted-foreground truncate">
           {formatServings(value)} × {unit}
         </p>
       </div>
 
-      <div className="bg-muted/60 flex shrink-0 items-center rounded-full">
+      <div className="bg-muted border-border flex shrink-0 items-center rounded-full border-2">
         <button
           type="button"
           onClick={() => step(-SERVING_STEP)}
@@ -56,7 +56,7 @@ export function Servings({
           <Minus size={15} />
         </button>
         <span
-          className="tnum w-10 text-center text-[15px] font-medium"
+          className="text-figure w-10 text-center text-body"
           aria-live="polite"
           aria-label={`${formatServings(value)} servings`}
         >

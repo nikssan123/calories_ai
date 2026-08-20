@@ -148,8 +148,9 @@ export function HeroDemo({ className }: { className?: string }) {
       role="img"
       aria-label={CAPTION}
       className={cn(
-        'bg-card border-border/70 overflow-hidden rounded-[2rem] border',
-        'shadow-[0_50px_100px_-45px_rgb(0_0_0/0.4)] dark:shadow-[0_50px_100px_-45px_rgb(0_0_0/0.9)]',
+        'bg-card border-border overflow-hidden rounded-[2rem] border-2',
+        'shadow-[0_10px_0_0_var(--chunk),0_50px_100px_-45px_rgb(0_0_0/0.35)]',
+        'dark:shadow-[0_10px_0_0_var(--chunk),0_50px_100px_-45px_rgb(0_0_0/0.9)]',
         className,
       )}
     >
@@ -171,7 +172,7 @@ export function HeroDemo({ className }: { className?: string }) {
             {stage === AT['thinking-1'] && <Thinking />}
             {replied1 && (
               <Assistant>
-                <p className="text-[15px] leading-relaxed">{FIRST.reply}</p>
+                <p className="text-body leading-relaxed">{FIRST.reply}</p>
                 <div
                   className="rounded-2xl"
                   // A one-shot ring the moment the entry is corrected. The card
@@ -190,7 +191,7 @@ export function HeroDemo({ className }: { className?: string }) {
             {stage === AT['thinking-2'] && <Thinking />}
             {replied2 && (
               <Assistant>
-                <p className="text-[15px] leading-relaxed">{SECOND.reply}</p>
+                <p className="text-body leading-relaxed">{SECOND.reply}</p>
               </Assistant>
             )}
           </div>
@@ -228,7 +229,7 @@ function useTypewriter(text: string) {
 function UserBubble({ children }: { children: React.ReactNode }) {
   return (
     <div className="animate-in fade-in-0 slide-in-from-bottom-2 flex justify-end duration-500 ease-out">
-      <p className="bg-primary text-primary-foreground max-w-[85%] rounded-[1.25rem] rounded-br-md px-3.5 py-2 text-[15px] leading-relaxed">
+      <p className="bg-primary text-primary-foreground chunk [--chunk-color:var(--calories-deep)] [--chunk-depth:3px] max-w-[85%] rounded-[1.375rem] rounded-br-lg px-4 py-2.5 text-body leading-relaxed font-semibold">
         {children}
       </p>
     </div>
@@ -249,7 +250,7 @@ function Thinking() {
       {[0, 1, 2].map((i) => (
         <span
           key={i}
-          className="bg-muted-foreground/60 size-2 animate-bounce rounded-full"
+          className="bg-muted-foreground/60 size-2.5 animate-bounce rounded-full"
           style={{ animationDelay: `${i * 140}ms`, animationDuration: '1s' }}
         />
       ))}
@@ -260,11 +261,11 @@ function Thinking() {
 /** The composer, with its keyboard held by someone else. */
 function FakeComposer({ draft }: { draft: string }) {
   return (
-    <div className="border-border bg-card flex items-end gap-2 rounded-[1.75rem] border px-2.5 py-2 shadow-sm">
+    <div className="border-border bg-card chunk flex items-end gap-2 rounded-[1.75rem] border-2 px-2.5 py-2">
       <span className="text-muted-foreground flex size-9 shrink-0 items-center justify-center">
         <Camera size={22} strokeWidth={1.9} />
       </span>
-      <p className="min-h-9 min-w-0 flex-1 px-1 py-[0.4375rem] text-[15px] leading-6">
+      <p className="min-h-9 min-w-0 flex-1 px-1 py-[0.4375rem] text-body leading-6">
         {draft ? (
           <>
             {draft}
@@ -276,7 +277,7 @@ function FakeComposer({ draft }: { draft: string }) {
       </p>
       <span
         className={cn(
-          'bg-primary text-primary-foreground flex size-9 shrink-0 items-center justify-center rounded-full transition-opacity duration-300',
+          'bg-primary text-primary-foreground chunk [--chunk-color:var(--calories-deep)] [--chunk-depth:3px] flex size-10 shrink-0 items-center justify-center rounded-full transition-opacity duration-300',
           draft ? 'opacity-100' : 'opacity-30',
         )}
       >
@@ -291,9 +292,9 @@ function StatusStrip({ consumed, className }: { consumed: number; className?: st
   const pct = Math.min(100, (consumed / TARGETS.kcal) * 100);
 
   return (
-    <header className={cn('border-border shrink-0 border-b px-4 py-2.5', className)}>
+    <header className={cn('border-border shrink-0 border-b-2 px-4 py-2.5', className)}>
       <div className="flex items-baseline justify-between">
-        <p className="text-figure text-[15px]">
+        <p className="text-figure text-body">
           {consumed.toLocaleString()}
           <span className="text-muted-foreground font-normal">
             {' '}
@@ -304,7 +305,7 @@ function StatusStrip({ consumed, className }: { consumed: number; className?: st
           {(TARGETS.kcal - consumed).toLocaleString()} left
         </p>
       </div>
-      <div className="bg-muted mt-2 h-[5px] overflow-hidden rounded-full">
+      <div className="bg-muted border-border mt-2 h-2.5 overflow-hidden rounded-full border">
         <div
           className="h-full rounded-full"
           style={{
@@ -322,7 +323,7 @@ function DayRail({ consumed }: { consumed: Nutrition | null }) {
   const totals = consumed ?? NOTHING;
 
   return (
-    <aside className="border-border hidden flex-col items-center border-l px-5 py-7 lg:flex">
+    <aside className="border-border hidden flex-col items-center border-l-2 px-5 py-7 lg:flex">
       <CalorieRing consumed={totals.kcal} target={TARGETS.kcal} size={148} strokeWidth={12} />
       <p className="tnum text-muted-foreground mt-3 text-sm">
         <span className="text-figure text-foreground">{totals.kcal.toLocaleString()}</span> of{' '}
@@ -332,7 +333,7 @@ function DayRail({ consumed }: { consumed: Nutrition | null }) {
       <MacroBars consumed={totals} targets={TARGETS} className="mt-6 w-full" />
 
       <div className="mt-7 w-full">
-        <h3 className="text-footnote text-muted-foreground mb-2 font-medium tracking-wide uppercase">
+        <h3 className="text-eyebrow text-muted-foreground mb-2">
           Today
         </h3>
         {consumed ? (

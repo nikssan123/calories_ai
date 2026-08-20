@@ -68,11 +68,11 @@ export default function LoginPage() {
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center px-6 py-12">
         <div className="mb-8">
-          <Logo size={46} className="mb-5" />
+          <Logo size={52} className="mb-5" />
           <h1 className="text-large-title">
             {mode === 'signup' ? 'Create your account' : 'Welcome back'}
           </h1>
-          <p className="text-muted-foreground mt-2 text-[15px]">
+          <p className="text-muted-foreground mt-2 text-body">
             {mode === 'signup'
               ? 'Then tell the journal a little about yourself and it will work out your targets.'
               : 'Sign in to pick up where you left off.'}
@@ -90,7 +90,7 @@ export default function LoginPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoComplete="name"
-                className="bg-card h-12 rounded-xl border-0 text-[15px]"
+                className="bg-card border-border chunk h-12 rounded-[1.125rem] border-2 text-body"
               />
             </div>
           )}
@@ -106,7 +106,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
-              className="bg-card h-12 rounded-xl border-0 text-[15px]"
+              className="bg-card border-border chunk h-12 rounded-[1.125rem] border-2 text-body"
             />
           </div>
 
@@ -122,7 +122,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-              className="bg-card h-12 rounded-xl border-0 text-[15px]"
+              className="bg-card border-border chunk h-12 rounded-[1.125rem] border-2 text-body"
             />
             {mode === 'signup' ? (
               <p className="text-footnote text-muted-foreground">At least 8 characters.</p>
@@ -141,7 +141,7 @@ export default function LoginPage() {
           <Button
             type="submit"
             disabled={busy || !email || password.length < 8}
-            className="h-12 w-full rounded-2xl text-[15px] font-semibold"
+            className="h-12 w-full rounded-2xl text-base font-extrabold"
           >
             {busy ? 'Just a moment…' : mode === 'signup' ? 'Create account' : 'Sign in'}
           </Button>

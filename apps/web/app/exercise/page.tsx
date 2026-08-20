@@ -9,6 +9,7 @@ import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { Sparkline } from '@/components/Sparkline';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { exerciseEmoji } from '@/lib/foodEmoji';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 /**
@@ -62,14 +63,14 @@ export default function ExercisePage() {
               const next = Number(values[0]);
               if (Number.isFinite(next)) setDays(next);
             }}
-            className="bg-muted rounded-lg p-0.5"
+            className="bg-card border-border chunk-sm rounded-full border-2 p-1"
           >
             {WINDOWS.map((w) => (
               <ToggleGroupItem
                 key={w}
                 value={String(w)}
                 aria-label={`${w} days`}
-                className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-7 rounded-md px-2.5 text-xs font-medium transition-colors"
+                className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-8 rounded-full px-3.5 text-xs font-bold transition-colors"
               >
                 {w}d
               </ToggleGroupItem>
@@ -84,11 +85,16 @@ export default function ExercisePage() {
           </div>
         ) : summary.sessions === 0 ? (
           <InsetGroup>
-            <p className="text-muted-foreground px-4 py-12 text-center text-[15px]">
-              Nothing logged in the last {days} days.
-              <br />
-              Tell the journal — “went for a 5km run”.
-            </p>
+            <div className="px-4 py-12 text-center">
+              <span aria-hidden className="animate-bob mb-3 block text-[40px] leading-none">
+                🏃
+              </span>
+              <p className="text-muted-foreground text-body font-medium">
+                Nothing logged in the last {days} days.
+                <br />
+                Tell the journal — “went for a 5km run”.
+              </p>
+            </div>
           </InsetGroup>
         ) : (
           /* grid-cols-1 is not the default it looks like: an implicit column
@@ -97,11 +103,11 @@ export default function ExercisePage() {
              untruncated line. That floor was pushing the phone layout wider
              than the screen and turning on sideways scrolling. */
           <div className="grid grid-cols-1 gap-7 lg:grid-cols-2 lg:items-start">
-            <InsetGroup title="Consistency">
+            <InsetGroup title="🔁  Consistency">
               <div className="px-4 pt-4 pb-3">
                 <div className="flex items-baseline gap-2">
-                  <span className="tnum text-large-title">{summary.active_days}</span>
-                  <span className="text-muted-foreground text-sm">
+                  <span className="text-figure text-large-title">{summary.active_days}</span>
+                  <span className="text-muted-foreground text-sm font-medium">
                     active of {summary.days} days · {summary.sessions} session
                     {summary.sessions === 1 ? '' : 's'}
                   </span>
@@ -115,7 +121,7 @@ export default function ExercisePage() {
                 />
               </div>
 
-              <div className="divide-border grid grid-cols-3 divide-x">
+              <div className="divide-border grid grid-cols-3 divide-x-2">
                 <Stat label="Burned" value={summary.total_kcal.toLocaleString()} unit="kcal" />
                 <Stat
                   label="Distance"
@@ -135,14 +141,17 @@ export default function ExercisePage() {
             </InsetGroup>
 
             <InsetGroup
-              title="Sessions"
+              title="🏃  Sessions"
               footer="Burn is an estimate and is never netted off your calorie target. Correct one in the journal — “that run was closer to 7km”."
             >
               {summary.entries.map((entry) => (
                 <InsetRow key={entry.id}>
+                  <span aria-hidden className="shrink-0 text-[20px] leading-none">
+                    {exerciseEmoji(entry.description)}
+                  </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[15px]">{entry.description}</p>
-                    <p className="text-footnote text-muted-foreground">
+                    <p className="truncate text-body font-semibold">{entry.description}</p>
+                    <p className="text-footnote text-muted-foreground font-medium">
                       {[
                         formatDate(entry.local_date),
                         entry.distance_km !== null ? `${entry.distance_km} km` : null,
@@ -154,7 +163,7 @@ export default function ExercisePage() {
                         .join(' · ')}
                     </p>
                   </div>
-                  <span className="tnum shrink-0 text-[15px] text-[var(--exercise)]">
+                  <span className="text-figure shrink-0 text-body text-[var(--exercise-text)]">
                     −{Math.round(entry.kcal_burned)}
                   </span>
                   <Button
@@ -179,11 +188,11 @@ export default function ExercisePage() {
 function Stat({ label, value, unit }: { label: string; value: string; unit: string }) {
   return (
     <div className="px-3 py-3 text-center">
-      <p className="text-footnote text-muted-foreground">{label}</p>
-      <p className="tnum mt-0.5 font-semibold">
+      <p className="text-footnote text-muted-foreground font-semibold">{label}</p>
+      <p className="text-figure mt-0.5">
         {value}
         {value !== '—' && unit && (
-          <span className="text-muted-foreground text-xs font-normal"> {unit}</span>
+          <span className="text-muted-foreground text-xs font-semibold"> {unit}</span>
         )}
       </p>
     </div>

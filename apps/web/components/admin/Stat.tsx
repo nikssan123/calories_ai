@@ -22,24 +22,24 @@ export function Stat({
 }) {
   return (
     <div className={cn('px-4 py-3', className)}>
-      <p className="text-footnote text-muted-foreground font-medium tracking-wide uppercase">
+      <p className="text-eyebrow text-muted-foreground">
         {label}
       </p>
       <p
         className={cn(
-          'tnum mt-1 text-2xl font-semibold',
+          'text-figure mt-1 text-2xl',
           tone === 'accent' && 'text-[var(--calories-text)]',
-          tone === 'warn' && 'text-[var(--fat)]',
+          tone === 'warn' && 'text-[var(--fat-text)]',
         )}
       >
         {value}
       </p>
-      {hint && <p className="text-footnote text-muted-foreground mt-1">{hint}</p>}
+      {hint && <p className="text-footnote text-muted-foreground mt-1 font-medium">{hint}</p>}
     </div>
   );
 }
 
-/** A responsive grid of `Stat`s sharing hairline separators, iOS-style. */
+/** A responsive grid of `Stat`s sharing the same outlined slab. */
 export function StatGrid({
   columns = 3,
   children,
@@ -50,7 +50,7 @@ export function StatGrid({
   return (
     <div
       className={cn(
-        'bg-card divide-border grid divide-x divide-y overflow-hidden rounded-2xl',
+        'bg-card divide-border border-border chunk grid divide-x-2 divide-y-2 overflow-hidden rounded-2xl border-2',
         columns === 2 && 'grid-cols-2',
         columns === 3 && 'grid-cols-2 sm:grid-cols-3',
         columns === 4 && 'grid-cols-2 lg:grid-cols-4',

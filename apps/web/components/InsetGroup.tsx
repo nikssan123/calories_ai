@@ -1,11 +1,16 @@
 import { cn } from '@/lib/utils';
 
 /**
- * A titled section of rows on a floating card.
+ * A titled section of rows on a card.
  *
- * The card carries a shadow barely above the threshold of visibility — enough
- * that it reads as sitting on the warm ground rather than being cut out of it,
- * not so much that a screen of six of them looks embossed.
+ * The card used to carry a shadow barely above the threshold of visibility, on
+ * the theory that a screen of six of them would otherwise look embossed. That
+ * was the right call for a system built out of hairlines; it is the wrong one
+ * here. Now it has a real outline and a real ledge, and six of them stacked
+ * read as six objects — which is what they are.
+ *
+ * The title is set as an eyebrow: small, heavy, letterspaced caps. At this
+ * weight the caps need the tracking or they clot.
  */
 export function InsetGroup({
   title,
@@ -21,21 +26,19 @@ export function InsetGroup({
   children: React.ReactNode;
 }) {
   return (
-    <section className={cn('space-y-2.5', className)}>
+    <section className={cn('space-y-2', className)}>
       {(title || trailing) && (
-        <header className="flex items-baseline justify-between px-1">
-          {title && (
-            <h2 className="text-footnote text-muted-foreground font-semibold tracking-wide uppercase">
-              {title}
-            </h2>
-          )}
+        <header className="flex items-baseline justify-between gap-3 px-1.5">
+          {title && <h2 className="text-eyebrow text-muted-foreground">{title}</h2>}
           {trailing}
         </header>
       )}
-      <div className="bg-card divide-border divide-y overflow-hidden rounded-[var(--radius)] shadow-[0_1px_2px_rgba(23,22,20,0.05)]">
+      <div className="bg-card border-border divide-border chunk divide-y-2 overflow-hidden rounded-[var(--radius)] border-2">
         {children}
       </div>
-      {footer && <p className="text-footnote text-muted-foreground px-1">{footer}</p>}
+      {footer && (
+        <p className="text-footnote text-muted-foreground px-1.5 pt-0.5 font-medium">{footer}</p>
+      )}
     </section>
   );
 }

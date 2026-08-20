@@ -10,201 +10,240 @@
  * ---------------------------------------------------------------------------
  * Design tokens.
  *
- * Three rules hold the whole system together:
+ * Four rules hold the whole system together:
  *
- *   1. The accent is the only deep, low-chroma colour on screen. Forest sits at
- *      roughly the visual weight of the ink around it, so it reads as
- *      structure — the ring, the active tab, a call to action. The four macro
- *      hues are all lighter and more saturated, so they read as data. That
- *      weight split, not hue alone, is what keeps five colours legible in one
- *      view, and it is the rule to check any new colour against.
+ *   1. Nothing here is a hairline. Cards carry a 2px outline and sit on a solid
+ *      ledge of shadow — `chunk` below — so every surface has an edge you could
+ *      pick up. That single decision is most of what separates this from a
+ *      dashboard: thin strokes and floating rectangles read as instrumentation,
+ *      chunky ones read as objects.
  *
- *   2. The ground is warm, near-monochrome and low-contrast, so a conversation
- *      stays readable for a long sitting and the accent stays loud where it
- *      does appear.
+ *   2. Colour is loud, and it is loud in one direction. The macros are candy —
+ *      mango, sky, grape, bubblegum — and the accent is a bright grass green.
+ *      Because saturated colour is now everywhere, contrast can no longer come
+ *      from hue, so every colour carries two cuts: a fill (`--protein`) for
+ *      shapes and a darkened text cut (`--protein-text`) for anything that has
+ *      to be *read*. Never set type in a fill.
  *
- *   3. Going over target is not an alarm. The ring turns to ink, not to red —
- *      the signal is unmissable but it is not a telling-off. `--destructive` is
- *      reserved for genuinely destructive controls (delete), where red is the
- *      right word. Retention research is blunt about punitive feedback in food
- *      tracking, and this is the one place the design could have moralised.
+ *   3. Things move like they have weight. One spring with real overshoot for
+ *      anything reporting a number, one pop for anything you touched, and a
+ *      press that actually sinks the button into its own shadow. Motion is the
+ *      cheapest playfulness there is and the easiest to overdo, so it is
+ *      rationed to those three.
+ *
+ *   4. Going over target is still not an alarm. The ring turns to ink, not to
+ *      red — the signal is unmissable but it is not a telling-off.
+ *      `--destructive` is reserved for genuinely destructive controls (delete),
+ *      where red is the right word. Retention research is blunt about punitive
+ *      feedback in food tracking, and a bouncier app has *more* room to get
+ *      this wrong, not less: a sad trombone is still a sad trombone.
  * ---------------------------------------------------------------------------
  */
 
 :root {
-  --radius: 1rem; /* 16px — the hybrid's card radius */
+  --radius: 1.5rem; /* 24px — cards are properly round now */
 
-  /* Warm greige ground with white cards floating on it. */
-  --background: #f6f4f1;
-  --foreground: #171614; /* warm near-black, never pure #000 */
+  /* Warm cream ground with white cards sitting on it. */
+  --background: #fff6ec;
+  --foreground: #31261e; /* warm brown-black, never a neutral grey */
 
   --card: #ffffff;
-  --card-foreground: #171614;
+  --card-foreground: #31261e;
   --popover: #ffffff;
-  --popover-foreground: #171614;
+  --popover-foreground: #31261e;
 
-  --primary: #171614;
-  --primary-foreground: #faf9f7;
-
-  --secondary: #ebe8e3;
-  --secondary-foreground: #171614;
-
-  --muted: #ebe8e3;
   /*
-   * Secondary text. The warm grey this replaced (#8a857e) measured 3.4:1 on the
-   * sidebar's ground — under the 4.5:1 body-text floor, and it showed: the nav
-   * labels read as disabled rather than merely secondary. Still clearly a step
-   * below --foreground, now at 5.2:1. The dark theme's equivalent was already
-   * at 6.3:1 and is unchanged.
+   * The call to action is the bright green itself, with ink on top rather than
+   * white. A dark label on a saturated fill is the chunky idiom — and it is the
+   * only way this green passes at button sizes (5.6:1 against 2.6:1 for white).
    */
-  --muted-foreground: #6b665f;
+  --primary: #12b76a;
+  --primary-foreground: #31261e;
 
-  --accent: #ebe8e3;
-  --accent-foreground: #171614;
+  --secondary: #f5ebdd;
+  --secondary-foreground: #31261e;
+
+  --muted: #f3e8d9;
+  /* Secondary text. Clearly a step below --foreground, and still 4.9:1 on the
+     cream ground and 5.4:1 on a white card. */
+  --muted-foreground: #77685b;
+
+  --accent: #f5ebdd;
+  --accent-foreground: #31261e;
 
   /* Delete affordances only — never the over-target state. */
-  --destructive: #d7382a;
+  --destructive: #ce3527;
   --destructive-foreground: #ffffff;
 
-  /* Hairlines tinted with the ground's warmth rather than a neutral grey. */
-  --border: rgba(23, 22, 20, 0.1);
-  --input: rgba(23, 22, 20, 0.14);
-  --ring: rgba(15, 123, 92, 0.45);
-
-  /* Nutrition hues. Persimmon leads; the macros are spaced far enough around
-     the wheel that no two read alike in a row of bars, and all of them stay
-     cool so the accent owns "energy" by itself. */
-  --calories: #0f7b5c; /* forest — fills, arcs, bars, solid buttons */
-  --protein: #f59e0b;
-  --carbs: #3b82f6;
-  --fat: #8b5cf6;
-  --exercise: #b03a70;
+  /*
+   * Solid warm tan rather than tinted ink. At 2px an alpha border turns grey
+   * and drags the whole page cold, which is exactly the "tech" look this
+   * palette is running from.
+   */
+  --border: #eadcc9;
+  --input: #e0cfb8;
+  --ring: rgba(18, 183, 106, 0.55);
 
   /*
-   * The text-and-icon cut of the accent. Forest measures 4.8:1 here, so it
-   * needs no darkening and the two values currently coincide. The token stays
-   * split anyway: a brighter accent would fail at 10px — persimmon, which this
-   * replaced, managed only 2.75:1 — and swapping one value is a great deal
-   * safer than re-auditing every label in the app.
+   * Nutrition hues, candy cut. Each is spaced far enough around the wheel that
+   * no two read alike in a row of bars, and each has a darkened text cut for
+   * numerals and labels — see rule 2.
    */
-  --calories-text: #0f7b5c;
+  --calories: #12b76a; /* grass — fills, arcs, bars, solid buttons */
+  --calories-text: #07804f; /* 5.0:1 on white, 4.7:1 on cream */
+  --calories-deep: #0a7a48; /* the ledge under a green button */
+
+  --protein: #ffa51f; /* mango */
+  --protein-text: #a85a08;
+  --carbs: #3b9eff; /* sky */
+  --carbs-text: #1a66c2;
+  --fat: #b06bff; /* grape */
+  --fat-text: #7c3ee0;
+  --exercise: #ff5fa2; /* bubblegum */
+  --exercise-text: #c13a7a;
 
   /*
    * "Good news" — a weight trend heading the right way, a finished setup, a
-   * boolean that is true. Four places used --protein for this, which read
-   * correctly only for as long as protein happened to be green; the moment it
-   * became amber they all started warning about good news. Semantic colour and
-   * macro colour are different jobs and should never share a token again.
-   *
-   * It resolves to the accent because the app has exactly one positive signal
-   * and no reason to carry a second green. Give it its own hue only if that
-   * stops being true.
+   * boolean that is true. Semantic colour and macro colour are different jobs
+   * and must never share a token: the moment protein became mango, every
+   * --protein used for "good" started warning about good news instead.
    */
   --positive: var(--calories-text);
 
   /* The logo ring ramps the accent into jade. Named for its role rather than
      its hue, because only the mark uses it and the hue may well move again. */
-  --logo-ramp: #12a594;
+  --logo-ramp: #23d3b0;
 
   /* Translucent material for the header and tab bar. */
-  --material: rgba(250, 249, 246, 0.82);
-
-  --scrollbar-thumb: rgba(23, 22, 20, 0.22);
-  --scrollbar-thumb-hover: rgba(23, 22, 20, 0.4);
+  --material: rgba(255, 246, 236, 0.85);
 
   /*
-   * Motion. One spring for anything that reports a number changing — the ring,
-   * the bars, a card landing — and one plain ease for chrome that should not
-   * draw attention to itself. The overshoot is the entire "feels alive" brief;
-   * it is worth having exactly one of it rather than a curve per component.
+   * The ledge. A solid offset shadow — no blur — is what makes a surface read
+   * as a physical slab rather than a floating pane, and what gives a button
+   * somewhere to sink to when it is pressed. Kept as alpha so one value works
+   * over cream, over white, and over a photo.
    */
-  --ease-spring: cubic-bezier(0.34, 1.5, 0.64, 1);
+  --chunk: rgba(49, 38, 30, 0.14);
+
+  --scrollbar-thumb: rgba(49, 38, 30, 0.24);
+  --scrollbar-thumb-hover: rgba(49, 38, 30, 0.42);
+
+  /*
+   * Motion. One spring with real overshoot for anything reporting a number
+   * changing — the ring, the bars, a card landing — one sharper pop for
+   * anything that has just been touched, and one plain ease for chrome that
+   * should not draw attention to itself. The overshoot is the entire brief; it
+   * is worth having exactly three of these rather than a curve per component.
+   */
+  --ease-spring: cubic-bezier(0.2, 1.7, 0.4, 1);
+  --ease-pop: cubic-bezier(0.3, 2.2, 0.5, 1);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --dur-spring: 780ms;
-  --dur-quick: 220ms;
+  --dur-spring: 700ms;
+  --dur-quick: 180ms;
 }
 
 .dark {
-  --background: #121110;
-  --foreground: #f5f3ef;
+  --background: #1a1512;
+  --foreground: #f7efe6;
 
-  --card: #1c1a18;
-  --card-foreground: #f5f3ef;
-  --popover: #1c1a18;
-  --popover-foreground: #f5f3ef;
+  --card: #241d19;
+  --card-foreground: #f7efe6;
+  --popover: #241d19;
+  --popover-foreground: #f7efe6;
 
-  --primary: #f5f3ef;
-  --primary-foreground: #121110;
+  --primary: #3ddc97;
+  --primary-foreground: #1a1512;
 
-  --secondary: #262421;
-  --secondary-foreground: #f5f3ef;
+  --secondary: #322822;
+  --secondary-foreground: #f7efe6;
 
-  --muted: #262421;
-  --muted-foreground: #9a948c;
+  --muted: #322822;
+  --muted-foreground: #a79a8d;
 
-  --accent: #262421;
-  --accent-foreground: #f5f3ef;
+  --accent: #322822;
+  --accent-foreground: #f7efe6;
 
-  --destructive: #ff5a4d;
-  --destructive-foreground: #121110;
+  --destructive: #ff6a5c;
+  --destructive-foreground: #1a1512;
 
-  --border: rgba(245, 243, 239, 0.12);
-  --input: rgba(245, 243, 239, 0.17);
-  --ring: rgba(52, 217, 164, 0.5);
+  /* Lifted well clear of --card. On paper an outline can be a tint of the ink
+     it sits on; on a dark ground it has to be lighter than the surface or the
+     2px edge that carries this whole system simply is not there. */
+  --border: #4d3d33;
+  --input: #5c4a3e;
+  --ring: rgba(61, 220, 151, 0.55);
 
-  /* Lifted a step so each hue keeps its chroma against a dark ground. Forest
-     has to lift furthest: a deep green that reads as structure on paper is
-     nearly invisible on ink, so on dark it becomes a jade. */
-  --calories: #34d9a4;
-  --protein: #fbbf24;
-  --carbs: #5d9bff;
-  --fat: #a78bfa;
-  --exercise: #f08bb4;
+  /* Lifted a step so each hue keeps its chroma against a dark ground. The
+     greens have to lift furthest: a grass green that reads as bright on paper
+     is nearly invisible on ink, so on dark it becomes a mint. All four macros
+     clear 7:1 here, so the fill and the text cut can be the same value. */
+  --calories: #3ddc97;
+  --calories-text: #3ddc97;
+  --calories-deep: #17945f;
 
-  --calories-text: #34d9a4;
+  --protein: #ffbe4d;
+  --protein-text: #ffbe4d;
+  --carbs: #6fb4ff;
+  --carbs-text: #6fb4ff;
+  --fat: #bc9bff;
+  --fat-text: #bc9bff;
+  --exercise: #ff8fbe;
+  --exercise-text: #ff8fbe;
+
   --positive: var(--calories-text);
 
-  --logo-ramp: #2dd4bf;
+  --logo-ramp: #2ee6c4;
 
-  --material: rgba(28, 26, 24, 0.8);
+  --material: rgba(36, 29, 25, 0.85);
 
-  --scrollbar-thumb: rgba(245, 243, 239, 0.2);
-  --scrollbar-thumb-hover: rgba(245, 243, 239, 0.38);
+  /* Opaque black. The ledge works by being darker than everything around it,
+     and on a #1a1512 ground half-black is only a few percent darker — the slabs
+     read as flat until this is pushed most of the way down. */
+  --chunk: rgba(0, 0, 0, 0.88);
+
+  --scrollbar-thumb: rgba(247, 239, 230, 0.22);
+  --scrollbar-thumb-hover: rgba(247, 239, 230, 0.4);
 }
 
 /* Honour the OS setting as well as the .dark class. */
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
-    --background: #121110;
-    --foreground: #f5f3ef;
-    --card: #1c1a18;
-    --card-foreground: #f5f3ef;
-    --popover: #1c1a18;
-    --popover-foreground: #f5f3ef;
-    --primary: #f5f3ef;
-    --primary-foreground: #121110;
-    --secondary: #262421;
-    --secondary-foreground: #f5f3ef;
-    --muted: #262421;
-    --muted-foreground: #9a948c;
-    --accent: #262421;
-    --accent-foreground: #f5f3ef;
-    --destructive: #ff5a4d;
-    --destructive-foreground: #121110;
-    --border: rgba(245, 243, 239, 0.12);
-    --input: rgba(245, 243, 239, 0.17);
-    --ring: rgba(52, 217, 164, 0.5);
-    --calories: #34d9a4;
-    --calories-text: #34d9a4;
+    --background: #1a1512;
+    --foreground: #f7efe6;
+    --card: #241d19;
+    --card-foreground: #f7efe6;
+    --popover: #241d19;
+    --popover-foreground: #f7efe6;
+    --primary: #3ddc97;
+    --primary-foreground: #1a1512;
+    --secondary: #322822;
+    --secondary-foreground: #f7efe6;
+    --muted: #322822;
+    --muted-foreground: #a79a8d;
+    --accent: #322822;
+    --accent-foreground: #f7efe6;
+    --destructive: #ff6a5c;
+    --destructive-foreground: #1a1512;
+    --border: #4d3d33;
+    --input: #5c4a3e;
+    --ring: rgba(61, 220, 151, 0.55);
+    --calories: #3ddc97;
+    --calories-text: #3ddc97;
+    --calories-deep: #17945f;
     --positive: var(--calories-text);
-    --protein: #fbbf24;
-    --carbs: #5d9bff;
-    --fat: #a78bfa;
-    --exercise: #f08bb4;
-    --logo-ramp: #2dd4bf;
-    --material: rgba(28, 26, 24, 0.8);
-    --scrollbar-thumb: rgba(245, 243, 239, 0.2);
-    --scrollbar-thumb-hover: rgba(245, 243, 239, 0.38);
+    --protein: #ffbe4d;
+    --protein-text: #ffbe4d;
+    --carbs: #6fb4ff;
+    --carbs-text: #6fb4ff;
+    --fat: #bc9bff;
+    --fat-text: #bc9bff;
+    --exercise: #ff8fbe;
+    --exercise-text: #ff8fbe;
+    --logo-ramp: #2ee6c4;
+    --material: rgba(36, 29, 25, 0.85);
+    --chunk: rgba(0, 0, 0, 0.88);
+    --scrollbar-thumb: rgba(247, 239, 230, 0.22);
+    --scrollbar-thumb-hover: rgba(247, 239, 230, 0.4);
   }
 }
 
@@ -238,17 +277,44 @@
   --color-calories-text: var(--calories-text);
   --color-positive: var(--positive);
   --color-protein: var(--protein);
+  --color-protein-text: var(--protein-text);
   --color-carbs: var(--carbs);
+  --color-carbs-text: var(--carbs-text);
   --color-fat: var(--fat);
+  --color-fat-text: var(--fat-text);
   --color-exercise: var(--exercise);
+  --color-exercise-text: var(--exercise-text);
   --color-material: var(--material);
 
+  /*
+   * Tailwind's stock radii are tuned for a 6px-corner world. Everything in this
+   * app is one to two steps rounder, and overriding the scale here rounds every
+   * `rounded-lg` already written rather than requiring 200 edits.
+   */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+  --radius-3xl: 1.875rem;
+
   --ease-spring: var(--ease-spring);
+  --ease-pop: var(--ease-pop);
   --ease-out: var(--ease-out);
 
+  /*
+   * Nunito for everything, Baloo for the shouting. Both are rounded-terminal
+   * faces, which is what stops the app reading as a piece of instrumentation
+   * before a single word has been parsed. The system stack behind them is
+   * rounded too — `ui-rounded` picks up SF Pro Rounded on Apple platforms — so
+   * a failed font load degrades to something in the same family rather than to
+   * Helvetica.
+   */
   --font-sans:
-    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Segoe UI', system-ui,
+    var(--font-nunito), ui-rounded, 'SF Pro Rounded', 'Segoe UI Variable Display', system-ui,
     sans-serif;
+  --font-display:
+    var(--font-baloo), var(--font-nunito), ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
 }
 
 @layer base {
@@ -269,6 +335,12 @@
     background: var(--background);
     color: var(--foreground);
     font-family: var(--font-sans);
+    /*
+     * Rounded faces have open counters and look thin next to a grotesque at the
+     * same weight, so the whole app runs one step up from regular. Everything
+     * that reads as "medium" elsewhere is semibold here.
+     */
+    font-weight: 500;
   }
 
   /* Nothing outside the shell scrolls, so iOS has no reason to shift the
@@ -279,10 +351,14 @@
     overflow: hidden;
   }
 
-  /* Apple sets tighter tracking as type gets larger. */
+  /* Headings are set in the display face and set heavy. Rounded type at 800
+     is chunky rather than shouty — the weight is doing what a thick outline
+     does elsewhere in the system. */
   h1,
   h2 {
-    letter-spacing: -0.022em;
+    font-family: var(--font-display);
+    font-weight: 800;
+    letter-spacing: -0.01em;
   }
 
   /*
@@ -313,8 +389,8 @@
    * Scrollbars. macOS hides them until you scroll, so this changes nothing for
    * most users here — but with "Show scroll bars: Always", and on every other
    * platform, the default is a wide opaque gutter that cuts a grey stripe down
-   * the day rail and through the inset cards. Thin, tinted and trackless keeps
-   * the chrome deferential where it is painted at all.
+   * the day rail and through the cards. Thin, tinted and trackless keeps the
+   * chrome deferential where it is painted at all.
    */
   * {
     scrollbar-width: thin;
@@ -352,30 +428,130 @@
   }
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * The ledge.
+ *
+ * `chunk` draws a solid, unblurred offset shadow under a surface. `chunk-press`
+ * adds the half of it that matters: on press the element travels exactly the
+ * depth of its own shadow and the shadow goes to zero, so the thing lands flush
+ * with the page instead of sliding around on top of it. Depth and colour are
+ * custom properties, so a green button can sit on a dark green ledge and a card
+ * on a tan one without either needing its own utility.
+ * ---------------------------------------------------------------------------
+ */
+/*
+ * Tailwind composes rings out of box-shadow, so a utility that sets box-shadow
+ * outright would silently delete every focus ring it lands on. Each of these
+ * re-declares the ring slots ahead of its own ledge; the fallbacks cover the
+ * case where Tailwind has not registered the properties at all.
+ */
+@utility chunk {
+  box-shadow:
+    var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
+    var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000),
+    0 var(--chunk-depth, 4px) 0 0 var(--chunk-color, var(--chunk));
+}
+
+@utility chunk-sm {
+  box-shadow:
+    var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
+    var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000),
+    0 var(--chunk-depth, 2px) 0 0 var(--chunk-color, var(--chunk));
+}
+
+@utility chunk-press {
+  box-shadow:
+    var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
+    var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000),
+    0 var(--chunk-depth, 4px) 0 0 var(--chunk-color, var(--chunk));
+  transition:
+    transform var(--dur-quick) var(--ease-out),
+    box-shadow var(--dur-quick) var(--ease-out),
+    background-color var(--dur-quick) var(--ease-out);
+
+  &:active:not(:disabled):not([data-disabled]) {
+    transform: translateY(var(--chunk-depth, 4px));
+    box-shadow:
+      var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
+      var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000),
+      0 0 0 0 var(--chunk-color, var(--chunk));
+  }
+}
+
+/* Reserves the travel so a pressable control does not shift its neighbours. */
+@utility chunk-slot {
+  margin-bottom: var(--chunk-depth, 4px);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Type scale.
+ *
+ * Everything is a step heavier and a shade larger than the equivalent in a
+ * grotesque, because rounded faces carry less ink at the same nominal weight.
+ * ---------------------------------------------------------------------------
+ */
+
 @utility text-large-title {
-  font-size: 2.125rem; /* 34px — iOS Large Title */
+  font-family: var(--font-display);
+  font-size: 2.25rem; /* 36px */
   line-height: 2.5rem;
-  font-weight: 700;
-  letter-spacing: -0.028em;
+  font-weight: 800;
+  letter-spacing: -0.015em;
 }
 
 @utility text-title-2 {
-  font-size: 1.375rem;
+  font-family: var(--font-display);
+  font-size: 1.4375rem; /* 23px */
   line-height: 1.75rem;
-  font-weight: 600;
-  letter-spacing: -0.022em;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
+/* The app's default reading size. Named rather than spelled `text-body` at
+   108 call sites, so the scale can move in one place. */
+@utility text-body {
+  font-size: 1rem; /* 16px */
+  line-height: 1.5rem;
+}
+
+/* Deliberately carries no weight of its own: it is combined with `font-medium`
+   and `font-semibold` at dozens of call sites, and two utilities both declaring
+   font-weight resolve by stylesheet order rather than by class order. */
 @utility text-footnote {
-  font-size: 0.8125rem;
+  font-size: 0.8125rem; /* 13px */
   line-height: 1.125rem;
-  letter-spacing: -0.006em;
+  letter-spacing: 0;
 }
 
 /* Numerals that don't jitter as totals tick up during a log. */
 @utility tnum {
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum';
+}
+
+/*
+ * Figures. Every number that reports progress — the ring's centre, a meal's
+ * kcal, a macro total — is set in the display face at 800, so a column of them
+ * lines up and a glance can compare them without reading.
+ */
+@utility text-figure {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/* A small all-caps section label. Bolder and wider than the old one: at this
+   size the letterspacing is what stops 800-weight rounded caps clotting. */
+@utility text-eyebrow {
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 /* Translucent material used by the header and tab bar. */
@@ -417,30 +593,52 @@
 }
 
 /*
- * Marketing type. Apple tightens tracking as type grows and lets the largest
- * sizes run fluid, because the same headline has to hold a 375px phone and a
- * 27" display without a breakpoint jump in the middle.
+ * Marketing type. The largest sizes run fluid, because the same headline has to
+ * hold a 375px phone and a 27" display without a breakpoint jump in the middle.
  */
 @utility text-display {
-  font-size: clamp(2.5rem, 7vw, 4.25rem);
-  line-height: 1.04;
-  font-weight: 600;
-  letter-spacing: -0.038em;
+  font-family: var(--font-display);
+  font-size: clamp(2.75rem, 7.5vw, 4.75rem);
+  line-height: 1.02;
+  font-weight: 800;
+  letter-spacing: -0.025em;
 }
 
 @utility text-section-title {
-  font-size: clamp(1.75rem, 4vw, 2.5rem);
-  line-height: 1.12;
-  font-weight: 600;
-  letter-spacing: -0.03em;
+  font-family: var(--font-display);
+  font-size: clamp(1.875rem, 4.2vw, 2.75rem);
+  line-height: 1.1;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
-/* Body copy that sits under display type: one step up from the app's 15px. */
+/* Body copy that sits under display type: one step up from the app's 16px. */
 @utility text-lede {
-  font-size: clamp(1.0625rem, 1.5vw, 1.1875rem);
+  font-size: clamp(1.125rem, 1.5vw, 1.25rem);
   line-height: 1.6;
-  letter-spacing: -0.011em;
+  font-weight: 500;
+  letter-spacing: -0.005em;
 }
+
+/*
+ * Toasts. Sonner draws its own element, so the only way to bring it into the
+ * system is to reach for its data attribute — a 1px bordered card sliding in
+ * over a page of outlined slabs is the sort of small inconsistency that reads
+ * as a bug rather than as a style.
+ */
+@layer base {
+  [data-sonner-toast] {
+    border-width: 2px !important;
+    box-shadow: 0 5px 0 0 var(--chunk) !important;
+    font-weight: 600;
+  }
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Motion.
+ * ---------------------------------------------------------------------------
+ */
 
 /*
  * A one-shot ring on an entry the agent has just corrected. It has to be an
@@ -449,36 +647,27 @@
  */
 @keyframes entry-touched {
   from {
-    box-shadow: 0 0 0 2px color-mix(in oklch, var(--calories), transparent 20%);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--calories), transparent 15%);
   }
   to {
-    box-shadow: 0 0 0 2px color-mix(in oklch, var(--calories), transparent 100%);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--calories), transparent 100%);
   }
 }
 
 /*
- * Figures. Every number that reports progress — the ring's centre, a meal's
- * kcal, a macro total — is set in one weight and one tracking, so a column of
- * them lines up and a glance can compare them without reading.
- */
-@utility text-figure {
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum';
-}
-
-/*
- * A card arriving in the journal. This is the moment the whole redesign is
- * for: the agent has understood a meal and is handing it back, so the card
- * settles in with a little weight rather than simply existing.
+ * A card arriving in the journal. This is the moment the whole design is for:
+ * the agent has understood a meal and is handing it back, so the card drops in
+ * and bounces once rather than simply existing.
  */
 @keyframes land {
-  from {
+  0% {
     opacity: 0;
-    transform: translateY(8px) scale(0.97);
+    transform: translateY(-14px) scale(0.94);
   }
-  to {
+  60% {
+    opacity: 1;
+  }
+  100% {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
@@ -488,11 +677,73 @@
   animation: land var(--dur-spring) var(--ease-spring) both;
 }
 
+/* The acknowledgement: something you touched answering back. */
+@keyframes pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@utility animate-pop {
+  animation: pop 420ms var(--ease-pop);
+}
+
+/* Idle personality — used sparingly, and never on more than one thing at once. */
+@keyframes wiggle {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-7deg);
+  }
+  75% {
+    transform: rotate(7deg);
+  }
+}
+
+@utility animate-wiggle {
+  animation: wiggle 620ms var(--ease-out);
+}
+
+/* The empty-state mascot and the thinking dots: a slow, weighted hover. */
+@keyframes bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@utility animate-bob {
+  animation: bob 2.6s ease-in-out infinite;
+}
+
+/* One piece of confetti, thrown from the origin and tumbling as it falls. */
+@keyframes confetti-fly {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--dx, 0px), var(--dy, 90px)) rotate(var(--dr, 360deg)) scale(0.6);
+  }
+}
+
 @layer base {
   /*
    * The spring is decoration, not information — every animated value is also
    * present as text. Anyone who has asked for less motion gets the end state
-   * immediately.
+   * immediately, and the celebration never fires at all.
    */
   @media (prefers-reduced-motion: reduce) {
     *,

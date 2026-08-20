@@ -79,7 +79,7 @@ export default function HistoryPage() {
             >
               <ChevronLeft size={20} />
             </Button>
-            <span className="min-w-36 text-center text-[15px] font-medium">
+            <span className="min-w-36 text-center text-body font-medium">
               {month ? monthLabel(month) : ''}
             </span>
             <Button
@@ -98,16 +98,16 @@ export default function HistoryPage() {
           <Skeleton className="h-80 w-full rounded-2xl" />
         ) : (
           <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-8">
-            <div className="bg-card rounded-2xl p-3 sm:p-4">
-              <div className="text-footnote text-muted-foreground mb-1 grid grid-cols-7 gap-1">
+            <div className="bg-card border-border chunk rounded-[var(--radius)] border-2 p-3 sm:p-4">
+              <div className="text-footnote text-muted-foreground mb-1 grid grid-cols-7 gap-1.5">
                 {WEEKDAYS.map((label, i) => (
-                  <div key={i} className="py-1 text-center font-medium">
+                  <div key={i} className="py-1 text-center font-bold">
                     {label}
                   </div>
                 ))}
               </div>
 
-              <div className="grid grid-cols-7 gap-1">
+              <div className="grid grid-cols-7 gap-1.5">
                 {cells.map((date, i) =>
                   date === null ? (
                     <div key={`pad-${i}`} />
@@ -133,17 +133,17 @@ export default function HistoryPage() {
                 {selectedDay && selectedDay.logged ? (
                   <div className="space-y-3 px-4 py-3.5">
                     <div className="flex items-baseline justify-between gap-3">
-                      <span className="tnum text-large-title">
+                      <span className="text-figure text-large-title">
                         {selectedDay.kcal.toLocaleString()}
                       </span>
-                      <span className="text-muted-foreground text-sm">
+                      <span className="text-muted-foreground text-sm font-medium">
                         of {selectedDay.target_kcal.toLocaleString() || '—'} kcal
                       </span>
                     </div>
-                    <div className="text-footnote text-muted-foreground flex flex-wrap gap-x-3 gap-y-1">
+                    <div className="text-footnote text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 font-semibold">
                       <span className="tnum">{selectedDay.protein_g}g protein</span>
                       {selectedDay.burned_kcal > 0 && (
-                        <span className="tnum text-[var(--exercise)]">
+                        <span className="tnum text-[var(--exercise-text)]">
                           −{selectedDay.burned_kcal} burned
                         </span>
                       )}
@@ -153,20 +153,20 @@ export default function HistoryPage() {
                     </div>
                     <Link
                       href={`/today?date=${selected}`}
-                      className="text-[var(--calories-text)] inline-block text-[15px]"
+                      className="inline-block text-body font-bold text-[var(--calories-text)]"
                     >
                       Open in Today →
                     </Link>
                   </div>
                 ) : (
-                  <p className="text-muted-foreground px-4 py-6 text-center text-[15px]">
+                  <p className="text-muted-foreground px-4 py-6 text-center text-body font-medium">
                     Nothing logged{selectedDay ? ' that day' : ' yet'}.
                   </p>
                 )}
               </InsetGroup>
 
-              <InsetGroup title="This month">
-                <div className="divide-border grid grid-cols-3 divide-x">
+              <InsetGroup title="📆  This month">
+                <div className="divide-border grid grid-cols-3 divide-x-2">
                   <Stat label="Logged" value={`${logged.length}`} unit="days" />
                   <Stat
                     label="Avg intake"
@@ -241,18 +241,18 @@ function DayCell({
         }
         aria-pressed={selected}
         className={cn(
-          'relative flex aspect-square w-full flex-col items-center justify-center rounded-xl',
+          'relative flex aspect-square w-full flex-col items-center justify-center rounded-2xl',
           'transition-transform duration-[var(--dur-quick)] ease-[var(--ease-spring)]',
           'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
-          logged && 'group-hover:scale-110',
-          selected && 'ring-foreground ring-2',
+          logged && 'chunk-sm group-hover:scale-110 group-active:scale-95',
+          selected && 'ring-foreground/70 ring-2',
         )}
         style={{ background: tone.background }}
       >
-        <span className={cn('tnum text-[13px]', tone.text)}>{Number(date.slice(8))}</span>
+        <span className={cn('tnum text-[13px] font-bold', tone.text)}>{Number(date.slice(8))}</span>
         {logged && day!.burned_kcal > 0 && (
           <span
-            className="absolute bottom-1 size-[5px] rounded-full"
+            className="absolute bottom-1 size-[6px] rounded-full"
             style={{ background: 'var(--exercise)' }}
           />
         )}
@@ -288,28 +288,28 @@ function DayHoverCard({
       className={cn(
         'pointer-events-none absolute left-1/2 z-30 w-max max-w-[13rem] -translate-x-1/2',
         placeAbove ? 'bottom-full mb-2' : 'top-full mt-2',
-        'bg-popover text-popover-foreground ring-border rounded-[12px] px-3 py-2 shadow-lg ring-1',
+        'bg-popover text-popover-foreground border-border chunk rounded-2xl border-2 px-3.5 py-2.5',
         'origin-center scale-95 opacity-0 transition-[opacity,transform]',
         'duration-[var(--dur-quick)] ease-[var(--ease-spring)]',
         'group-hover:scale-100 group-hover:opacity-100',
         'group-focus-within:scale-100 group-focus-within:opacity-100',
       )}
     >
-      <p className="text-footnote text-muted-foreground">{formatFullDate(date)}</p>
+      <p className="text-footnote text-muted-foreground font-bold">{formatFullDate(date)}</p>
 
       <p className="mt-0.5 flex items-baseline gap-1">
         <span className={cn('text-figure text-[17px]', over && 'text-foreground')}>
           {day.kcal.toLocaleString()}
         </span>
-        <span className="text-footnote text-muted-foreground">
+        <span className="text-footnote text-muted-foreground font-semibold">
           {day.target_kcal > 0 ? `of ${day.target_kcal.toLocaleString()} kcal` : 'kcal'}
         </span>
       </p>
 
-      <div className="text-footnote text-muted-foreground mt-1 flex flex-wrap gap-x-2.5 gap-y-0.5">
+      <div className="text-footnote text-muted-foreground mt-1 flex flex-wrap gap-x-2.5 gap-y-0.5 font-semibold">
         <span className="tnum">{day.protein_g}g protein</span>
         {day.burned_kcal > 0 && (
-          <span className="tnum text-[var(--exercise)]">−{day.burned_kcal} burned</span>
+          <span className="tnum text-[var(--exercise-text)]">−{day.burned_kcal} burned</span>
         )}
         {day.weight_kg !== null && <span className="tnum">{day.weight_kg} kg</span>}
       </div>
@@ -355,7 +355,7 @@ function Legend() {
     { label: 'No target', ratio: null },
   ];
   return (
-    <div className="text-footnote text-muted-foreground mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 px-1">
+    <div className="text-footnote text-muted-foreground mt-3.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 px-1 font-semibold">
       {swatches.map(({ label, ratio }) => (
         <span key={label} className="flex items-center gap-1.5">
           <span
@@ -366,7 +366,7 @@ function Legend() {
         </span>
       ))}
       <span className="flex items-center gap-1.5">
-        <span className="size-1.5 rounded-full" style={{ background: 'var(--exercise)' }} />
+        <span className="size-2 rounded-full" style={{ background: 'var(--exercise)' }} />
         Exercise
       </span>
     </div>
@@ -376,10 +376,12 @@ function Legend() {
 function Stat({ label, value, unit }: { label: string; value: string; unit: string }) {
   return (
     <div className="px-3 py-3 text-center">
-      <p className="text-footnote text-muted-foreground">{label}</p>
-      <p className="tnum mt-0.5 font-semibold">
+      <p className="text-footnote text-muted-foreground font-semibold">{label}</p>
+      <p className="text-figure mt-0.5">
         {value}
-        {value !== '—' && <span className="text-muted-foreground text-xs font-normal"> {unit}</span>}
+        {value !== '—' && (
+          <span className="text-muted-foreground text-xs font-semibold"> {unit}</span>
+        )}
       </p>
     </div>
   );
