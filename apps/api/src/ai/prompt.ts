@@ -615,7 +615,8 @@ export interface RecipeTaskInput {
   job?:
     | { kind: 'suggest'; count: number }
     | { kind: 'adapt'; recipe: string }
-    | { kind: 'import'; text: string };
+    | { kind: 'import'; text: string }
+    | { kind: 'plan'; days: PlanDay[]; batch: boolean; servings: number };
   rules?: DietaryRules;
   constraints?: RecipeConstraints;
   /** What is left of the day, and the day it belongs to. */
@@ -630,6 +631,14 @@ export interface RecipeTaskInput {
   /** Which meal this is for, and anything they asked for in their own words. */
   meal: string;
   wants: string | null;
+}
+
+/** One night of a planned week: the date, its name, and what it has to fit. */
+export interface PlanDay {
+  local_date: string;
+  weekday: string;
+  kcal_target: number;
+  protein_target: number;
 }
 
 /**
@@ -777,6 +786,54 @@ If what they gave you is not a recipe at all, say so in your reply and call noth
 ${context}
 
 Call propose_recipe exactly once, then reply in a sentence — what it works out at per portion, and any assumption worth flagging.`;
+
+    /*
+     * The week. One run rather than seven, because the constraint that makes a
+     * plan good is the one no single-night run can see: seven dinners have to
+     * be different from each other, and a batch has to land on the nights that
+     * follow it.
+     */
+    case 'plan': {
+      const nights = job.days
+        .map(
+          (d) =>
+            `- ${d.weekday} ${d.local_date} — aim for roughly ${d.kcal_target} kcal and ${d.protein_target}g protein at dinner`,
+        )
+        .join('\n');
+
+      const perNight = job.servings;
+      return `Plan their dinners for the week. ${job.days.length} nights, listed below.
+
+## The nights
+
+${nights}
+
+Call propose_recipe once per distinct dish, in the order the nights run. ## How to count portions
+
+They are cooking for ${perNight} ${perNight === 1 ? 'person' : 'people'}, so one night is ${perNight} ${perNight === 1 ? 'portion' : 'portions'}.
+
+**portions = ${perNight} × the number of nights that dish covers.** One night is ${perNight}. Two nights is ${perNight * 2}. Three is ${perNight * 3}. Get this wrong and the plan puts the dish on the wrong number of evenings, so do the multiplication rather than writing down how many nights you meant.
+
+${
+        job.batch
+          ? `Batch cooking is welcome and is most of the reason to plan a week at all. Where one cook should cover more than one night, scale the ingredients and set portions by the arithmetic above, then say in the summary which nights it is for. Do not propose a dish for a night an earlier batch already covers — skip that night entirely, and the plan will read the batch as filling it. Two or three batches across the week is a good week; seven separate cooks is not.`
+          : `They do not want to batch cook, so every night gets its own dish and portions is always ${perNight}.`
+      }
+
+Vary the week. Seven variations on chicken and rice is not a plan, and neither is seven dishes that each need a separate shop. Repeat an ingredient deliberately — a bunch of coriander bought on Monday should turn up again on Thursday — and vary the protein, the method and the effort across the days.
+
+Put the quick things on the nights people are tired and the longer cook where it fits. If you have no way to know which those are, put the longest cook at a weekend.
+
+Name what has to be bought. Most of a week's ingredients will not be in the kitchen below and that is expected, not a problem — mark them missing and move on. The shopping list is built from exactly those flags, so an ingredient wrongly marked as present is one they will not have on Wednesday.
+
+## What each night's numbers mean
+
+The targets above are for dinner alone, not for the whole day: they are what is usually left after breakfast and lunch. Aim near them rather than under — a plan that leaves someone hungry at nine is a plan they abandon on Tuesday.
+
+${context}
+
+When you are done, reply in one or two sentences about the shape of the week — what it leans on, what needs buying. Not a list of the dishes; they are on the cards.`;
+    }
 
     default:
       return `Suggest what they could cook for ${input.meal}, today (${budget.local_date}).

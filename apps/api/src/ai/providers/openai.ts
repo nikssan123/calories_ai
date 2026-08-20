@@ -71,6 +71,10 @@ export function readOpenAiConfig(source: NodeJS.ProcessEnv = process.env): OpenA
       // deployment that pointed its review model at something expensive should
       // not find it spending that on a one-line message nobody asked for.
       nudge: source.OPENAI_MODEL_NUDGE ?? base,
+      // Follows the recipe slot: it is the same job at seven times the size, so
+      // a deployment that chose a model good at writing recipes has already
+      // made this decision.
+      meal_plan: source.OPENAI_MODEL_PLAN ?? source.OPENAI_MODEL_RECIPE ?? base,
     },
     rate: openAiRate(source),
   };

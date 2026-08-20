@@ -5,13 +5,13 @@ import { listNotes } from '../services/notes.ts';
 import { listPantry, ageInDays } from '../services/pantry.ts';
 import { buildDaySummary } from '../services/summary.ts';
 import { limitsFor } from '../services/plans.ts';
-import { recordUsage, turnsInLastDay } from '../services/usage.ts';
+import { recordUsage, turnsInLastDay, turnsInLastWeek } from '../services/usage.ts';
 import { getUser, getUserContext } from '../services/user.ts';
 import { inferMeal, localDateFor } from '../time.ts';
 import { MAX_TURNS } from './client.ts';
 import { emptyCollector } from './kitchen.ts';
 import { createProvider, type AgentRequest } from './providers/index.ts';
-import { RECIPE_SYSTEM_PROMPT, recipeTaskPrompt } from './prompt.ts';
+import { RECIPE_SYSTEM_PROMPT, recipeTaskPrompt, type PlanDay } from './prompt.ts';
 import { buildNutritionServer } from './tools.ts';
 import type { ToolContext } from './tools.ts';
 
@@ -47,16 +47,23 @@ export interface SuggestOptions {
 export type RecipeJob =
   | { kind: 'suggest'; count?: number }
   | { kind: 'adapt'; slug: string }
-  | { kind: 'import'; text: string };
+  | { kind: 'import'; text: string }
+  /**
+   * A week of dinners in one run. Here rather than in a function of its own for
+   * the reason the other three are: a fourth entry point would be a fourth
+   * place for the dietary limits, the budget rules and the ingredient-quantity
+   * contract to be forgotten.
+   */
+  | { kind: 'plan'; days: PlanDay[]; batch: boolean; servings: number };
 
 /**
- * One engine, three ways in.
+ * One engine, four ways in.
  *
- * Inventing from the pantry, reworking a library recipe and pricing one the
- * user brought are the same run with a different brief: the same tools, the
- * same rules about budget and quantities, the same cacheable system prompt.
- * Only the task turn differs, which is why they are not three functions —
- * three functions would be three places for the dietary limits to be forgotten.
+ * Inventing from the pantry, reworking a library recipe, pricing one the user
+ * brought and planning a week are the same run with a different brief: the same
+ * tools, the same rules about budget and quantities, the same cacheable system
+ * prompt. Only the task turn differs, which is why they are not four functions
+ * — four functions would be four places for the dietary limits to be forgotten.
  */
 /**
  * Raised when an account has spent its recipe generations for the day.
@@ -69,8 +76,13 @@ export class RecipeBudgetError extends Error {
   constructor(
     readonly allowed: number,
     readonly used: number,
+    readonly period: 'day' | 'week' = 'day',
   ) {
-    super(`That is all ${allowed} recipe suggestions for today.`);
+    super(
+      period === 'week'
+        ? `That is all ${allowed} meal ${allowed === 1 ? 'plan' : 'plans'} for this week.`
+        : `That is all ${allowed} recipe suggestions for today.`,
+    );
     this.name = 'RecipeBudgetError';
   }
 }
@@ -104,15 +116,26 @@ export async function suggestRecipes(
   /*
    * One budget, checked here rather than at the routes.
    *
-   * There are four ways to start a recipe run — suggest, adapt, import, and the
-   * journal's tool — and @fastify/rate-limit keeps a separate bucket per route
-   * config, so a per-route ceiling of one a day quietly meant four. The ledger
-   * is the only place that sees all of them, and it counts what was actually
-   * spent rather than what was asked for, which is the number that matters.
+   * There are five ways to start a recipe run — suggest, adapt, import, plan,
+   * and the journal's tool — and @fastify/rate-limit keeps a separate bucket per
+   * route config, so a per-route ceiling of one a day quietly meant four. The
+   * ledger is the only place that sees all of them, and it counts what was
+   * actually spent rather than what was asked for, which is the number that
+   * matters.
+   *
+   * A plan is counted apart, weekly, against its own allowance: it costs
+   * several times a three-recipe run, so charging it to the daily recipe budget
+   * would mean one plan eats a free account's whole day of cooking — and
+   * recording it as a `recipe` would hide the most expensive thing in the
+   * product inside the second most expensive.
    */
-  const allowed = limitsFor(profile.plan).recipeRunsPerDay;
-  const used = await turnsInLastDay(id, 'recipe');
-  if (used >= allowed) throw new RecipeBudgetError(allowed, used);
+  const limits = limitsFor(profile.plan);
+  const allowed = job.kind === 'plan' ? limits.mealPlansPerWeek : limits.recipeRunsPerDay;
+  const used =
+    job.kind === 'plan'
+      ? await turnsInLastWeek(id, 'meal_plan')
+      : await turnsInLastDay(id, 'recipe');
+  if (used >= allowed) throw new RecipeBudgetError(allowed, used, job.kind === 'plan' ? 'week' : 'day');
 
   /*
    * What is left, floored at zero.
@@ -129,8 +152,10 @@ export async function suggestRecipes(
     protein_remaining: Math.max(0, Math.round(day.targets.protein_g - day.consumed.protein_g)),
   };
 
+  // A planned week is invented from the kitchen exactly as a suggestion is —
+  // same job, seven times over — so it carries the same claim about its numbers.
   const origin: RecipeOrigin =
-    job.kind === 'suggest' ? 'invented' : job.kind === 'adapt' ? 'adapted' : 'imported';
+    job.kind === 'adapt' ? 'adapted' : job.kind === 'import' ? 'imported' : 'invented';
   const kitchen = emptyCollector(
     generatedFor,
     origin,
@@ -145,7 +170,7 @@ export async function suggestRecipes(
   const { tools, toolNames } = buildNutritionServer(toolContext, { toolset: 'kitchen' });
 
   const request: AgentRequest = {
-    kind: 'recipe',
+    kind: job.kind === 'plan' ? 'meal_plan' : 'recipe',
     // Wholly stable: the pantry and the day's numbers ride in the user turn, so
     // there is nothing volatile to keep out of the cache — the same shape the
     // review has, and the reason both leave the dynamic half empty.
@@ -182,7 +207,9 @@ export async function suggestRecipes(
           ? { kind: 'adapt', recipe: seed! }
           : job.kind === 'import'
             ? { kind: 'import', text: job.text }
-            : { kind: 'suggest', count: job.count ?? 3 },
+            : job.kind === 'plan'
+              ? { kind: 'plan', days: job.days, batch: job.batch, servings: job.servings }
+              : { kind: 'suggest', count: job.count ?? 3 },
     }),
     photo: null,
     tools,
@@ -202,7 +229,7 @@ export async function suggestRecipes(
   // Before the error check, exactly as the journal does it: a run that spent
   // tokens on two good recipes and then timed out is precisely the kind of cost
   // that must not go unrecorded.
-  await recordUsage({ userId: id, kind: 'recipe', outcome });
+  await recordUsage({ userId: id, kind: job.kind === 'plan' ? 'meal_plan' : 'recipe', outcome });
   if (outcome.error) throw new Error(outcome.error);
 
   /*

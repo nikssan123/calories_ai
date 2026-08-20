@@ -81,6 +81,12 @@ export const MODELS: Record<TurnKind, ModelChoice> = {
   // to spend more: this runs unprompted, so its cost is the app's, not a
   // request somebody chose to make.
   nudge: { model: 'claude-sonnet-5', effort: 'high' },
+  // A week of dinners in one run, and the largest output the product produces.
+  // Where the review goes, for the same reason: it is read end to end, it is
+  // the thing people would pay for, and the constraint that makes it good —
+  // seven dishes that vary, share a shop and land a batch on the right night —
+  // is exactly the kind a smaller model drops halfway through.
+  meal_plan: { model: 'claude-opus-5', effort: 'high' },
 };
 
 /** Back-compat for anything still asking for "the" model. */

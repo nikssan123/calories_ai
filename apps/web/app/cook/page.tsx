@@ -1,11 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { ChefHat, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { CalendarDays, ChefHat, ChevronRight, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { DaySummary, LibraryRecipe, PantryItem, Recipe, RecipeBrief } from '@ct/shared';
 import { api } from '@/lib/api';
-import { InsetGroup } from '@/components/InsetGroup';
+import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { Pantry } from '@/components/kitchen/Pantry';
 import { Brief } from '@/components/kitchen/Brief';
 import { ImportRecipe } from '@/components/kitchen/ImportRecipe';
@@ -213,6 +214,29 @@ export default function CookPage() {
           </div>
 
           <Brief value={brief} onChange={setBrief} />
+
+          {/*
+            * The other question this screen does not answer.
+            *
+            * "What do I cook tonight" and "what are we eating this week" are
+            * different jobs with different costs, and folding the week into
+            * this button would make the cheap question pay for the expensive
+            * one. A row rather than a nav item: it belongs to the kitchen, and
+            * it is not somewhere anybody goes every day.
+            */}
+          <Link href="/plan" className="active:bg-muted/60 block transition-colors">
+            <InsetRow className="py-3.5">
+              <CalendarDays size={17} className="text-muted-foreground shrink-0" />
+              <div className="flex-1">
+                <p className="text-body">Plan this week</p>
+                <p className="text-muted-foreground text-[13px] font-medium">
+                  Seven dinners and the shopping list they add up to.
+                </p>
+              </div>
+              <ChevronRight size={18} className="text-muted-foreground shrink-0" />
+            </InsetRow>
+          </Link>
+
           <ImportRecipe
             onImported={(recipe) => {
               setRecipes((prev) => [recipe, ...prev]);

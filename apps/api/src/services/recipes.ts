@@ -256,6 +256,16 @@ function scaleQuality(source: DietQuality, share: number): DietQuality {
   };
 }
 
+/**
+ * A `recipes` row as a `Recipe`. Exported under a name that says it is the row
+ * mapper, so the meal planner can read recipes in bulk without duplicating the
+ * column handling — the nullable quality panel above all, where `Number(null)`
+ * would silently turn "not estimated" into zero.
+ */
+export function toRecipeRow(row: any): Recipe {
+  return toRecipe(row);
+}
+
 function toRecipe(row: any): Recipe {
   return {
     id: row.id,

@@ -42,6 +42,13 @@ export interface PlanLimits {
    * turn them off entirely for a plan, gets made without touching the sender.
    */
   nudgesPerWeek: number;
+  /**
+   * Weeks of dinners planned. Weekly rather than daily because that is the unit
+   * it produces, and the single most expensive call in the product — several
+   * times the ~$0.22 a three-recipe run costs. Pro-shaped, and the ceiling says
+   * so: one a week is exactly enough to plan the week you are in.
+   */
+  mealPlansPerWeek: number;
 }
 
 /*
@@ -94,6 +101,9 @@ const LIMITS: Record<PlanName, PlanLimits> = {
     recipeRunsPerDay: 1,
     pantryItems: 60,
     nudgesPerWeek: 1,
+    // Enough to see what a planned week is and want another. Not enough to run
+    // the household on for nothing.
+    mealPlansPerWeek: 1,
   },
   pro: {
     chatTurnsPerHour: 200,
@@ -105,6 +115,8 @@ const LIMITS: Record<PlanName, PlanLimits> = {
     // would pay for, and the once-a-week rule is about what is welcome rather
     // than about what it costs.
     nudgesPerWeek: 1,
+    // Room to change your mind, and to plan next week before this one ends.
+    mealPlansPerWeek: 4,
   },
 };
 

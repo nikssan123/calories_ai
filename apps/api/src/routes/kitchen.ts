@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import {
   CookRequest,
+  MealPlanBrief,
   PantryAddRequest,
   PantryUpdate,
   PhotoMediaType,
@@ -11,7 +12,15 @@ import {
 } from '@ct/shared';
 import { AUTH_HELP, hasSubscriptionAuth } from '../ai/client.ts';
 import { scanFridgePhoto } from '../ai/pantry.ts';
+import { generateMealPlan } from '../ai/plan.ts';
 import { RecipeBudgetError, suggestRecipes } from '../ai/recipes.ts';
+import {
+  cookSlot,
+  getMealPlan,
+  planWeekFor,
+  shoppingListFor,
+  updateSlot,
+} from '../services/mealPlans.ts';
 import {
   addPantryItems,
   deletePantryItem,
@@ -27,6 +36,7 @@ import {
 } from '../services/library.ts';
 import { cookRecipe, getRecipe, listRecipes, setRecipeSaved } from '../services/recipes.ts';
 import { getUserContext } from '../services/user.ts';
+import { localDateFor } from '../time.ts';
 import { stripDataUrl } from './body.ts';
 import { RECIPE_BURST, SCAN_LIMIT } from './limits.ts';
 
@@ -316,4 +326,103 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
     if (!entry) return reply.status(404).send({ error: 'No such recipe' });
     return reply.status(201).send(entry);
   });
+
+  // ---- The week ahead ------------------------------------------------------
+
+  /**
+   * Plan the week.
+   *
+   * The most expensive call in the product, and the only one whose ceiling is
+   * weekly — so it carries the same burst limit as a recipe run and its real
+   * allowance is enforced in the engine, where the ledger can see it.
+   */
+  app.post('/plan', { config: { rateLimit: RECIPE_BURST } }, async (request, reply) => {
+    if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) {
+      return reply.status(503).send({ error: AUTH_HELP });
+    }
+
+    const parsed = MealPlanBrief.safeParse(request.body ?? {});
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid request' });
+
+    try {
+      const { plan, message } = await generateMealPlan(request.userId!, { brief: parsed.data });
+      return reply.status(201).send({ plan, message });
+    } catch (error) {
+      return recipeFailure(error, reply);
+    }
+  });
+
+  /**
+   * This week's plan, or the one for a week they name.
+   *
+   * 200 with a null plan rather than a 404: "you have not planned this week" is
+   * an ordinary state of the screen, not a missing resource, and a 404 would
+   * make every client special-case its own empty page.
+   */
+  app.get('/plan', async (request, reply) => {
+    const { userId, ...ctx } = await getUserContext(request.userId!);
+    const asked = (request.query as any)?.week_start;
+    const weekStart = ISO_DATE.test(String(asked ?? ''))
+      ? planWeekFor(String(asked))
+      : planWeekFor(localDateFor(new Date(), ctx));
+
+    void reply;
+    return { plan: await getMealPlan(userId, weekStart), week_start: weekStart };
+  });
+
+  /** Swapping a night for another recipe, or clearing it because they are out. */
+  app.patch('/plan/slots/:id', async (request, reply) => {
+    const parsed = SlotUpdate.safeParse(request.body ?? {});
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid request' });
+
+    // A slot may only point at a recipe this account owns. Without this check
+    // the id in the body is a way to read anybody's recipe through their plan.
+    if (parsed.data.recipe_id) {
+      const recipe = await getRecipe(request.userId!, parsed.data.recipe_id);
+      if (!recipe) return reply.status(404).send({ error: 'No such recipe' });
+    }
+
+    const plan = await updateSlot(request.userId!, (request.params as any).id, {
+      recipeId: parsed.data.recipe_id,
+      portions: parsed.data.portions ?? undefined,
+    });
+    if (!plan) return reply.status(404).send({ error: 'No such night in your plan' });
+    return plan;
+  });
+
+  /** Cooking a planned night. `cookRecipe` unchanged, plus a stamp on the slot. */
+  app.post('/plan/slots/:id/cook', async (request, reply) => {
+    const { userId, ...ctx } = await getUserContext(request.userId!);
+    const parsed = CookRequest.safeParse(request.body ?? {});
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid request' });
+
+    const entry = await cookSlot(userId, (request.params as any).id, ctx, {
+      portions: parsed.data.portions,
+      eatenAt: parsed.data.eaten_at ? new Date(parsed.data.eaten_at) : undefined,
+    });
+    if (!entry) return reply.status(404).send({ error: 'Nothing to cook on that night' });
+    return reply.status(201).send(entry);
+  });
+
+  /** Derived on every read — see `shoppingListFor` for why it is never stored. */
+  app.get('/plan/shopping-list', async (request, reply) => {
+    const { userId, ...ctx } = await getUserContext(request.userId!);
+    const asked = (request.query as any)?.week_start;
+    const weekStart = ISO_DATE.test(String(asked ?? ''))
+      ? planWeekFor(String(asked))
+      : planWeekFor(localDateFor(new Date(), ctx));
+
+    const list = await shoppingListFor(userId, weekStart);
+    if (!list) return reply.status(404).send({ error: 'No plan for that week yet' });
+    return list;
+  });
 }
+
+/** Anything else in `week_start` is ignored rather than argued with. */
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+const SlotUpdate = z.object({
+  /** Null clears the night. Omitted leaves it alone. */
+  recipe_id: z.string().uuid().nullable().optional(),
+  portions: z.number().int().min(1).max(12).optional(),
+});

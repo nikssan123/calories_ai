@@ -40,6 +40,21 @@ export async function turnsInLastDay(userId: string, kind: TurnKind): Promise<nu
   return Number(row?.n ?? 0);
 }
 
+/**
+ * The same count over a week. For the ceilings that are weekly rather than
+ * daily, which so far means the meal plan — a rolling window rather than a
+ * calendar week, so nobody gets two plans by asking on Sunday night and again
+ * on Monday morning.
+ */
+export async function turnsInLastWeek(userId: string, kind: TurnKind): Promise<number> {
+  const row = await queryOne<{ n: string }>(
+    `SELECT count(*) AS n FROM ai_usage
+      WHERE user_id = $1 AND kind = $2 AND occurred_at > now() - interval '7 days'`,
+    [userId, kind],
+  );
+  return Number(row?.n ?? 0);
+}
+
 export async function recordUsage(input: RecordUsageInput): Promise<void> {
   const { outcome } = input;
   const usage = outcome.usage ?? {

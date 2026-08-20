@@ -33,6 +33,9 @@ import type {
   RecipeBrief,
   RecipeImportRequest,
   RecipeSuggestRequest,
+  MealPlan,
+  MealPlanBrief,
+  ShoppingList,
   RepeatRequest,
   ReviewStats,
   SignupRequest,
@@ -337,6 +340,43 @@ export function createApiClient({
         method: 'POST',
         body: JSON.stringify(payload),
       }),
+
+    // ---- The week ahead ----
+
+    /** Generates a week of dinners. The most expensive call in the product. */
+    planWeek: (payload: MealPlanBrief = {}) =>
+      request<{ plan: MealPlan; message: string }>('/plan', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+
+    /**
+     * This week's plan. `plan` is null when there is not one — an ordinary
+     * state of the screen rather than a missing resource.
+     */
+    mealPlan: (weekStart?: string) =>
+      request<{ plan: MealPlan | null; week_start: string }>(
+        `/plan${weekStart ? `?week_start=${encodeURIComponent(weekStart)}` : ''}`,
+      ),
+
+    /** Swap a night for another recipe, or pass null to clear it. */
+    updateSlot: (id: string, patch: { recipe_id?: string | null; portions?: number }) =>
+      request<MealPlan>(`/plan/slots/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      }),
+
+    cookSlot: (id: string, payload: CookRequest = {}) =>
+      request<FoodEntry>(`/plan/slots/${id}/cook`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+
+    /** Derived on every read, so it can never be stale. */
+    shoppingList: (weekStart?: string) =>
+      request<ShoppingList>(
+        `/plan/shopping-list${weekStart ? `?week_start=${encodeURIComponent(weekStart)}` : ''}`,
+      ),
 
     // ---- The starter library ----
 

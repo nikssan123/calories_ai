@@ -1155,6 +1155,85 @@ export const Nudge = z.object({
 });
 export type Nudge = z.infer<typeof Nudge>;
 
+// ---- The week ahead --------------------------------------------------------
+
+/**
+ * One dinner in a planned week.
+ *
+ * `recipe` is nullable and that is a feature rather than a loose end: a night
+ * somebody is eating out is a real answer, and a plan that cannot express it
+ * would have to be lied to.
+ */
+export const MealPlanSlot = z.object({
+  id: z.string().uuid(),
+  local_date: z.string(),
+  /** Which day of the week it is, so a card need not compute it. */
+  weekday: z.string(),
+  recipe: Recipe.nullable(),
+  /**
+   * How many portions this cook makes. More than one is the batch — the same
+   * cook filling more than one night — and `covers` below says which.
+   */
+  portions: z.number().int(),
+  /**
+   * The other dates this slot's cook is meant to cover, empty for most slots.
+   * Derived from the batch rather than stored, so swapping one night cannot
+   * leave another pointing at a meal that is no longer being made.
+   */
+  covers: z.array(z.string()),
+  cooked_at: z.string().nullable(),
+});
+export type MealPlanSlot = z.infer<typeof MealPlanSlot>;
+
+/** What the week was asked for. The persistent half still lives on the profile. */
+export const MealPlanBrief = z.object({
+  wants: z.string().max(300).optional(),
+  /** Minutes available on an ordinary weeknight. */
+  minutes: z.number().int().min(5).max(240).nullable().optional(),
+  /** How many people each dinner feeds. */
+  servings: z.number().int().min(1).max(8).nullable().optional(),
+  /** Whether to let one cook cover more than one night. */
+  batch: z.boolean().optional(),
+});
+export type MealPlanBrief = z.infer<typeof MealPlanBrief>;
+
+export const MealPlan = z.object({
+  id: z.string().uuid(),
+  week_start: z.string(),
+  brief: MealPlanBrief.nullable(),
+  slots: z.array(MealPlanSlot),
+  created_at: z.string(),
+});
+export type MealPlan = z.infer<typeof MealPlan>;
+
+/**
+ * The shopping list, derived and never stored.
+ *
+ * A stored list drifts out of date the moment a slot is swapped, and a shopping
+ * list that is wrong in one line is a shopping list nobody trusts in any line.
+ * It is cheap to recompute — the ingredients are already in the slots.
+ */
+export const ShoppingItem = z.object({
+  name: z.string(),
+  /** Summed where the quantities are weights; null where they never were. */
+  quantity_g: z.number().nullable(),
+  /** The amounts as each recipe wrote them, for anything not weighed. */
+  quantity_descs: z.array(z.string()),
+  /** Which nights need it, so a part-week shop is possible. */
+  for_dates: z.array(z.string()),
+  /** True when nothing in the pantry covers it. */
+  missing: z.boolean(),
+});
+export type ShoppingItem = z.infer<typeof ShoppingItem>;
+
+export const ShoppingList = z.object({
+  week_start: z.string(),
+  items: z.array(ShoppingItem),
+  /** Names dropped because the pantry already has them, so the omission is visible. */
+  have_already: z.array(z.string()),
+});
+export type ShoppingList = z.infer<typeof ShoppingList>;
+
 // ---- Repeat a meal ---------------------------------------------------------
 
 /**
