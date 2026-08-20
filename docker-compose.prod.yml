@@ -89,6 +89,18 @@ services:
       # means POST /email/inbound refuses everything, which is the only safe
       # default for a public endpoint whose whole authentication is a signature.
       RESEND_WEBHOOK_SECRET: ${RESEND_WEBHOOK_SECRET:-}
+      # Signing in with Google. Both halves or the button is not offered at all,
+      # which is the right default here: this stack has no way to guess a client
+      # registered against its own callback URL. The OAuth client in the Google
+      # console must list https://daysofar.com/api/auth/google/callback among its
+      # redirect URIs — the *web* address, because the callback's job is to set
+      # the session cookie and a cookie set on api.daysofar.com never reaches the
+      # app. That URL is also what APP_URL derives by default, so the third
+      # variable stays empty unless the web app moves somewhere APP_URL does not
+      # describe.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
       # Caddy reaches this over the private Docker network, so X-Forwarded-For is
       # believed only when the immediate peer is a private address. Without it
       # the rate limiter sees Caddy on every request and buckets the whole
