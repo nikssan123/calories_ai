@@ -31,6 +31,7 @@ export function createAnthropicProvider(toolContext: ToolContext): AiProvider {
       // per-turn tool context, and only this provider speaks MCP.
       const { server, toolNames } = buildNutritionServer(toolContext, {
         readOnly: request.readOnly,
+        toolset: request.toolset,
       });
 
       const choice = MODELS[request.kind];

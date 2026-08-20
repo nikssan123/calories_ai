@@ -43,19 +43,8 @@ import {
   updateUser,
 } from '../services/user.ts';
 import { addDays, dateRange, localDateFor } from '../time.ts';
-
-/**
- * Ceilings on the two routes that spend money. Everything else is a database
- * read and needs no limit — throttling the dashboard would only break polling.
- */
-const CHAT_LIMIT = { max: 40, timeWindow: '1 hour' };
-const REVIEW_LIMIT = { max: 5, timeWindow: '1 day' };
-
-/**
- * Not about money: this one verifies a password, which is deliberately slow,
- * and is the only irreversible thing an account can do to itself.
- */
-const DELETE_ACCOUNT_LIMIT = { max: 5, timeWindow: '15 minutes' };
+import { stripDataUrl } from './body.ts';
+import { CHAT_LIMIT, DELETE_ACCOUNT_LIMIT, REVIEW_LIMIT } from './limits.ts';
 
 export async function registerRoutes(app: FastifyInstance) {
   app.get('/health', async () => ({
@@ -534,11 +523,6 @@ export async function registerRoutes(app: FastifyInstance) {
 /** A calendar bound is only trusted when it is exactly a plain ISO date. */
 function isDate(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
-}
-
-function stripDataUrl(value: string): string {
-  const comma = value.indexOf(',');
-  return value.startsWith('data:') && comma !== -1 ? value.slice(comma + 1) : value;
 }
 
 function clampNumber(raw: unknown, fallback: number, min: number, max: number): number {

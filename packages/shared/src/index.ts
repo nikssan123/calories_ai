@@ -30,6 +30,19 @@ export const GOALS = ['lose', 'maintain', 'gain'] as const;
 export const Goal = z.enum(GOALS);
 export type Goal = z.infer<typeof Goal>;
 
+/**
+ * What an account is entitled to.
+ *
+ * There is no billing behind this yet, and that is the point: the routes that
+ * cost money read their ceilings from the plan from the first commit, so
+ * gating a feature later is setting a number rather than auditing every route.
+ * `free` is deliberately generous — the daily journal is the habit the product
+ * lives on and must never be the thing someone hits a wall in.
+ */
+export const PLANS = ['free', 'pro'] as const;
+export const PlanName = z.enum(PLANS);
+export type PlanName = z.infer<typeof PlanName>;
+
 /** Macros in grams + energy in kcal. Shared by items, entries and daily totals. */
 export const Nutrition = z.object({
   kcal: z.number(),
@@ -142,6 +155,8 @@ export const Profile = z.object({
   /** §"Day boundaries": 4 means 1am counts toward the previous day. */
   day_start_hour: z.number().int().min(0).max(12),
   is_setup_complete: z.boolean(),
+  /** Read-only here — a plan changes by paying, never by PATCHing a profile. */
+  plan: PlanName,
   /**
    * Monday's review, in the inbox. The only notification this server sends that
    * is a matter of taste — everything else is about the account itself and is
@@ -157,6 +172,8 @@ export const ProfileUpdate = Profile.omit({
   // Proved by clicking a link, never by asking to be believed.
   email_verified: true,
   is_setup_complete: true,
+  // Granted by a payment, never by the client claiming it.
+  plan: true,
 }).partial();
 export type ProfileUpdate = z.infer<typeof ProfileUpdate>;
 
@@ -408,11 +425,20 @@ export const ChatResponse = z.object({
 });
 export type ChatResponse = z.infer<typeof ChatResponse>;
 
+/**
+ * What the API will accept as an image. Named because two routes take a photo —
+ * a meal for the journal, a fridge for the kitchen — and the day they disagree
+ * about which formats are allowed is a bug nobody would look for.
+ */
+export const PHOTO_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
+export const PhotoMediaType = z.enum(PHOTO_MEDIA_TYPES);
+export type PhotoMediaType = z.infer<typeof PhotoMediaType>;
+
 export const ChatRequest = z.object({
   text: z.string().min(1).max(4000),
   /** Data URL or base64 payload of a meal photo. */
   photo_base64: z.string().optional(),
-  photo_media_type: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif']).optional(),
+  photo_media_type: PhotoMediaType.optional(),
 });
 export type ChatRequest = z.infer<typeof ChatRequest>;
 
@@ -627,6 +653,147 @@ export const RepeatRequest = z.object({
   eaten_at: z.string().optional(),
 });
 export type RepeatRequest = z.infer<typeof RepeatRequest>;
+
+// ---- Kitchen ---------------------------------------------------------------
+
+/**
+ * The kitchen: what you have, and what you could cook with it.
+ *
+ * The premise is the intersection nothing else can reach — a recipe site knows
+ * good recipes, but it does not know that there is chicken in your fridge, that
+ * you have 74g of protein left today, and that you cook the same eight things.
+ */
+
+/**
+ * One thing in the kitchen.
+ *
+ * `last_seen_at` is carried all the way to the client rather than being cleaned
+ * up on the server, because the screen has to be able to say "three weeks ago"
+ * out loud. A pantry that presents stale items as current is worse than no
+ * pantry: it builds a meal on an ingredient that was thrown out.
+ */
+export const PantryItem = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  /** The amount in the user's own words. Never a tracked count. */
+  quantity_desc: z.string().nullable(),
+  /** Assumed always present, and exempt from ageing. */
+  is_staple: z.boolean(),
+  last_seen_at: z.string(),
+  source: z.enum(['typed', 'photo']),
+});
+export type PantryItem = z.infer<typeof PantryItem>;
+
+/** Adding or refreshing an item. Matching is on the name, case-insensitively. */
+export const PantryItemInput = z.object({
+  name: z.string().min(1).max(80),
+  quantity_desc: z.string().max(120).nullable().optional(),
+  is_staple: z.boolean().optional(),
+  source: z.enum(['typed', 'photo']).optional(),
+});
+export type PantryItemInput = z.infer<typeof PantryItemInput>;
+
+export const PantryAddRequest = z.object({
+  items: z.array(PantryItemInput).min(1).max(60),
+});
+export type PantryAddRequest = z.infer<typeof PantryAddRequest>;
+
+export const PantryUpdate = z.object({
+  name: z.string().min(1).max(80).optional(),
+  quantity_desc: z.string().max(120).nullable().optional(),
+  is_staple: z.boolean().optional(),
+  /** Bump `last_seen_at` to now — "yes, still there". */
+  seen: z.boolean().optional(),
+});
+export type PantryUpdate = z.infer<typeof PantryUpdate>;
+
+/**
+ * What the model thinks it saw in a fridge photo.
+ *
+ * Deliberately not a `PantryItem`: nothing is written until the user says so.
+ * A photo shows the front row of one shelf, and the difference between "the
+ * model read this" and "the user owns this" is the whole reason the scan
+ * proposes instead of saving.
+ */
+export const PantryFind = z.object({
+  name: z.string(),
+  quantity_desc: z.string().nullable(),
+  /** How sure the model is it identified this correctly. */
+  confidence: Confidence,
+});
+export type PantryFind = z.infer<typeof PantryFind>;
+
+export const PantryScanProposal = z.object({
+  found: z.array(PantryFind),
+  /** One line on what the photo showed, including what it could not make out. */
+  note: z.string().nullable(),
+  /** Names already in the pantry, so the screen can show what is merely a refresh. */
+  already_known: z.array(z.string()),
+});
+export type PantryScanProposal = z.infer<typeof PantryScanProposal>;
+
+/**
+ * An ingredient with its macros already settled.
+ *
+ * The same shape as a logged `FoodItem` minus its database identity, which is
+ * what makes "I cooked this" a single hand-off: the array goes straight into a
+ * food entry with nothing re-estimated on the way.
+ */
+export const RecipeIngredient = z.object({
+  name: z.string(),
+  quantity_g: z.number().nullable(),
+  quantity_desc: z.string().nullable(),
+  /** True when this is not in the pantry and has to be bought. */
+  missing: z.boolean().default(false),
+  ...Nutrition.shape,
+});
+export type RecipeIngredient = z.infer<typeof RecipeIngredient>;
+
+/** The budget a recipe was written against, so it can explain itself later. */
+export const RecipeContext = z.object({
+  local_date: z.string(),
+  kcal_remaining: z.number(),
+  protein_remaining: z.number(),
+});
+export type RecipeContext = z.infer<typeof RecipeContext>;
+
+export const Recipe = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  /** One line on why this, right now. */
+  summary: z.string().nullable(),
+  portions: z.number().int(),
+  minutes: z.number().int().nullable(),
+  steps: z.array(z.string()),
+  ingredients: z.array(RecipeIngredient),
+  /** Per portion — the figure the card prints, and what cooking one logs. */
+  ...Nutrition.shape,
+  confidence: Confidence,
+  generated_for: RecipeContext.nullable(),
+  saved: z.boolean(),
+  cooked_at: z.string().nullable(),
+  created_at: z.string(),
+});
+export type Recipe = z.infer<typeof Recipe>;
+
+export const RecipeSuggestRequest = z.object({
+  /**
+   * Anything the user wants to steer with — "something quick", "no oven". Free
+   * text, because the useful constraints are not an enum anyone could write.
+   */
+  wants: z.string().max(300).optional(),
+  /** Which meal it is for. Null infers from the time of day. */
+  meal: Meal.nullable().optional(),
+});
+export type RecipeSuggestRequest = z.infer<typeof RecipeSuggestRequest>;
+
+/** Logging a recipe as eaten. Portions defaults to one — the card's figure. */
+export const CookRequest = z.object({
+  portions: z.number().positive().max(20).optional(),
+  meal: Meal.optional(),
+  eaten_at: z.string().optional(),
+});
+export type CookRequest = z.infer<typeof CookRequest>;
 
 // ---- Admin -----------------------------------------------------------------
 

@@ -61,6 +61,11 @@ export function readOpenAiConfig(source: NodeJS.ProcessEnv = process.env): OpenA
       photo_log: source.OPENAI_MODEL_VISION ?? base,
       setup: source.OPENAI_MODEL_SETUP ?? base,
       review: source.OPENAI_MODEL_REVIEW ?? base,
+      // A fridge photo needs the vision slot, not the base model: on a
+      // deployment pointed at a vendor whose default cannot see, this is the
+      // difference between a scan and a confidently empty list.
+      pantry_scan: source.OPENAI_MODEL_VISION ?? base,
+      recipe: source.OPENAI_MODEL_RECIPE ?? source.OPENAI_MODEL_REVIEW ?? base,
     },
     rate: openAiRate(source),
   };

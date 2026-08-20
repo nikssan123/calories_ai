@@ -2,19 +2,28 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ChartLine, Flame, MessageSquareText, PersonStanding, User } from 'lucide-react';
+import { ChartLine, ChefHat, Flame, MessageSquareText, PersonStanding, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
- * Five is the ceiling for a bottom bar, and this is exactly five — so History
- * is reached by tapping the date on Today rather than taking a slot. The
- * sidebar has no such constraint and lists it outright.
+ * Six, which is one past where a bottom bar is usually said to stop.
+ *
+ * It was five, and Cook was worth the sixth slot rather than worth demoting
+ * something for: every other tab is somewhere you go to look at what you have
+ * already done, and this is the only one that tells you what to do next. The
+ * cost is real — the targets narrow, and the labels are tight on a small phone
+ * — so seven is not available, and anything else earns its place by replacing
+ * one of these.
+ *
+ * History is still not here. It is reached by tapping the date on Today, and
+ * the sidebar, which has no such constraint, lists it outright.
  */
 const TABS = [
   { href: '/', label: 'Journal', Icon: MessageSquareText },
   { href: '/today', label: 'Today', Icon: Flame },
   { href: '/progress', label: 'Progress', Icon: ChartLine },
   { href: '/exercise', label: 'Exercise', Icon: PersonStanding },
+  { href: '/cook', label: 'Cook', Icon: ChefHat },
   { href: '/setup', label: 'You', Icon: User },
 ] as const;
 

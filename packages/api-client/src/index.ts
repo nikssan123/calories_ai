@@ -6,6 +6,7 @@ import type {
   AdminOverview,
   AdminUser,
   AuthStatus,
+  CookRequest,
   CostReport,
   ChatRequest,
   ChatResponse,
@@ -16,10 +17,17 @@ import type {
   Meal,
   MealTemplate,
   OnboardingState,
+  PantryItem,
+  PantryItemInput,
+  PantryScanProposal,
+  PantryUpdate,
+  PhotoMediaType,
   Profile,
   ProfileUpdate,
   Progress,
   ChatMessage,
+  Recipe,
+  RecipeSuggestRequest,
   RepeatRequest,
   ReviewStats,
   SignupRequest,
@@ -227,6 +235,65 @@ export function createApiClient({
     /** Clones a past entry to now. The copy is independent of the original. */
     repeatFoodEntry: (entryId: string, payload: RepeatRequest = {}) =>
       request<FoodEntry>(`/entries/food/${entryId}/repeat`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+
+    // ---- The kitchen ----
+
+    /** Everything the user says is in their kitchen, staples last. */
+    pantry: () => request<{ items: PantryItem[] }>('/pantry'),
+
+    /**
+     * Adds or refreshes items. Matching is on the name, case-insensitively, so
+     * sending something already there refreshes how recently it was seen rather
+     * than duplicating it — which is what makes this the right endpoint for the
+     * confirmed output of a scan.
+     */
+    addPantryItems: (items: PantryItemInput[]) =>
+      request<{ items: PantryItem[] }>('/pantry', {
+        method: 'POST',
+        body: JSON.stringify({ items }),
+      }),
+
+    updatePantryItem: (id: string, patch: PantryUpdate) =>
+      request<PantryItem>(`/pantry/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+
+    deletePantryItem: (id: string) => request<void>(`/pantry/${id}`, { method: 'DELETE' }),
+
+    /**
+     * Reads a fridge photo into a list to confirm. Writes nothing: post what
+     * survives the user's editing to `addPantryItems`.
+     */
+    scanFridge: (photoBase64: string, mediaType?: PhotoMediaType) =>
+      request<PantryScanProposal>('/pantry/scan', {
+        method: 'POST',
+        body: JSON.stringify({ photo_base64: photoBase64, photo_media_type: mediaType }),
+      }),
+
+    /** Ideas for what to cook, from the pantry and what is left of today. */
+    suggestRecipes: (payload: RecipeSuggestRequest = {}) =>
+      request<{ recipes: Recipe[]; message: string }>('/recipes/suggest', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+
+    recipes: (options: { limit?: number; savedOnly?: boolean } = {}) => {
+      const params = new URLSearchParams();
+      if (options.limit) params.set('limit', String(options.limit));
+      if (options.savedOnly) params.set('saved', 'true');
+      const qs = params.toString();
+      return request<{ recipes: Recipe[] }>(`/recipes${qs ? `?${qs}` : ''}`);
+    },
+
+    recipe: (id: string) => request<Recipe>(`/recipes/${id}`),
+
+    saveRecipe: (id: string, saved: boolean) =>
+      request<Recipe>(`/recipes/${id}`, { method: 'PATCH', body: JSON.stringify({ saved }) }),
+
+    /** Logs a recipe as eaten. Answers with the entry, so the day updates at once. */
+    cookRecipe: (id: string, payload: CookRequest = {}) =>
+      request<FoodEntry>(`/recipes/${id}/cook`, {
         method: 'POST',
         body: JSON.stringify(payload),
       }),

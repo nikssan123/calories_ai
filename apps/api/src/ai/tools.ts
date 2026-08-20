@@ -26,6 +26,9 @@ import { getUser, markOnboarded, missingProfileFields, updateUser } from '../ser
 import { addNote, forgetNote, MAX_NOTE_LENGTH } from '../services/notes.ts';
 import { calculateTargets, setTargets, targetsForDate } from '../services/targets.ts';
 import { latestWeight } from '../services/log.ts';
+import { buildKitchenTools, emptyCollector, type KitchenCollector } from './kitchen.ts';
+import type { ToolsetName } from './providers/types.ts';
+import { itemShape } from './shapes.ts';
 
 /**
  * §17 in the plan splits the AI into logging / analysis / coaching. That split is
@@ -47,25 +50,13 @@ export interface ToolContext {
   photoId: string | null;
   /** Collected during the turn and returned to the client for rendering. */
   actions: ChatAction[];
+  /**
+   * Filled by the kitchen toolset — recipes proposed, ingredients spotted. The
+   * journal never sets it, and the kitchen tools are the only readers, so a
+   * journal turn carries nothing extra for it.
+   */
+  kitchen?: KitchenCollector;
 }
-
-const itemShape = {
-  name: z.string().describe('The food, as the user would say it. "Chicken breast", not "Poultry, broilers".'),
-  quantity_g: z
-    .number()
-    .nullable()
-    .default(null)
-    .describe('Estimated weight in grams. Null for things not sensibly weighed, like a black coffee.'),
-  quantity_desc: z
-    .string()
-    .nullable()
-    .default(null)
-    .describe('The assumption in plain words — "1 medium banana", "2 slices", "a large handful".'),
-  kcal: z.number().describe('Estimated calories for this item at this quantity.'),
-  protein_g: z.number(),
-  carbs_g: z.number(),
-  fat_g: z.number(),
-};
 
 const FoodItemSchema = z.object(itemShape);
 type FoodItemInput = z.infer<typeof FoodItemSchema>;
@@ -210,6 +201,12 @@ export interface ServerOptions {
    * same code path as the journal, but must not be able to change it.
    */
   readOnly?: boolean;
+  /**
+   * Which set of tools the run gets. `kitchen` replaces the nutrition tools
+   * outright rather than adding to them: a recipe agent holding `log_food`
+   * would eventually log food, and a fridge photo is not a meal.
+   */
+  toolset?: ToolsetName;
 }
 
 export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {}) {
@@ -721,6 +718,28 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
     },
     { annotations: { readOnlyHint: true }, alwaysLoad: true },
   );
+
+  /*
+   * The kitchen gets its own tools and none of these.
+   *
+   * Built after the nutrition tools rather than instead of them so this
+   * function keeps one signature and one return shape — the Anthropic provider
+   * rebuilds the server from here on every run and should not have to know
+   * which kind of run it is beyond passing the option through. The unused
+   * definitions above cost a closure allocation and nothing else; they are
+   * never handed to a model.
+   */
+  if (options.toolset === 'kitchen') {
+    const { tools } = buildKitchenTools({
+      userId: tc.userId,
+      kitchen: tc.kitchen ?? emptyCollector(),
+    });
+    return {
+      server: createSdkMcpServer({ name: SERVER_NAME, version: '1.0.0', tools }),
+      toolNames: tools.map((t) => `mcp__${SERVER_NAME}__${t.name}`),
+      tools,
+    };
+  }
 
   const reads = [getDay, searchHistory, getProgress];
   const shows = [showChart, showDay];

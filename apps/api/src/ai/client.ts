@@ -67,6 +67,14 @@ export const MODELS: Record<TurnKind, ModelChoice> = {
   // Once a week. The only long-form writing in the product, and the one output
   // the user actually reads end to end.
   review: { model: 'claude-opus-5', effort: 'high' },
+  // Reading a fridge photo. Cheaper than photo_log on purpose: the job is
+  // naming what is on a shelf, not estimating how much of it is on a plate, and
+  // the user confirms the list before a single recipe is built on it. If real
+  // scans come back poor this is a one-word change.
+  pantry_scan: { model: 'claude-sonnet-5', effort: 'high' },
+  // The suggestions themselves. Occasional, read end to end, and the thing
+  // people would actually pay for — so it goes where the review goes.
+  recipe: { model: 'claude-opus-5', effort: 'high' },
 };
 
 /** Back-compat for anything still asking for "the" model. */

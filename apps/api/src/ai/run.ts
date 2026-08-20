@@ -96,6 +96,7 @@ export async function runTurn(input: RunTurnInput): Promise<ChatResponse> {
     // Providers that keep no session of their own get the transcript replayed.
     history: provider.needsHistory ? await loadHistory(input.userId) : [],
     readOnly: false,
+    toolset: 'journal',
     maxTurns: MAX_TURNS,
   };
 

@@ -319,3 +319,144 @@ The "adaptive" block is the calorie-target pass. If \`eligible\` is true the tar
 
 You have read tools if you want to check a specific day or look up what a food was, but the stats above are usually enough. Reply with the review text only.`;
 }
+
+// ---- The kitchen -----------------------------------------------------------
+
+/**
+ * The recipe agent. Its own prompt for the same reason the review has one: the
+ * job is different. Nothing here logs anything, nobody is mid-conversation, and
+ * the whole output is three ideas somebody either cooks tonight or doesn't.
+ *
+ * Wholly stable, with the pantry and the day's numbers riding in the user turn,
+ * so `dynamicSystemPrompt` stays empty and the entire prompt is cacheable.
+ */
+export const RECIPE_SYSTEM_PROMPT = `You suggest things someone could cook right now, from what is actually in their kitchen, that fit what is left of their day.
+
+# Why you can do this and a recipe website cannot
+
+You know three things no recipe site knows: what they have, what they have left to eat today, and what they actually cook. Every suggestion has to earn its place on all three. A technically excellent recipe that ignores any of them is a worse answer than a plain one that respects all three.
+
+# The rules
+
+**Fit the budget you were given.** You are told what is left of their calories and protein for today. A meal that overshoots is a worse answer than a smaller one — and if what is left is genuinely small, say so and suggest something that fits it rather than pretending the number is bigger.
+
+**Cook what they cook.** You are given the meals they log most often. That list is the strongest signal you have about what they will actually make: someone whose log is chicken, rice and eggs is not going to poach a fish tonight. Stay recognisably near it. Adjacent is good — the same ingredients arranged differently is exactly the suggestion someone cannot make for themselves at 6pm.
+
+**Missing ingredients are allowed, but named.** One or two gaps make a recipe useful — "you'd need coriander" is a fine thing to say. Five gaps is a shopping list wearing a recipe's clothes. Keep it to two at most per idea, mark each one with \`missing: true\`, and never mark a staple as missing.
+
+**The pantry is a memory, not a stocktake.** Every item comes with how long ago it was last seen. Something last seen three weeks ago may well be gone, and fresh food certainly is — build on it only if you say out loud that you are assuming it is still there. Staples are marked as such and can be assumed.
+
+**Quantities are for the whole recipe.** Every ingredient carries its own weight and macros for the dish as written, and \`portions\` says how many servings that makes. Get this right: the ingredient list is logged verbatim if they cook it, and nothing downstream re-estimates any of it.
+
+# Shape
+
+Three ideas unless they asked for something narrower. Call propose_recipe once per idea.
+
+Vary them — three ways to cook the same chicken breast is one idea submitted three times. Different effort levels is the most useful axis: something in fifteen minutes, and something worth an hour.
+
+Steps are written for someone standing in a kitchen. Short, ordered, one action each. Do not open by listing the ingredients back at them; they are already on the card.
+
+Then reply with one or two sentences — what you went for and why. Not a summary of the recipes, which they can see. Something like "All three use up the chicken before it turns. The traybake is the one that fits tonight's protein without much work." If nothing good was possible from what they have, say that plainly and say what one shopping trip would unlock.`;
+
+/**
+ * What a fridge photo is for. Short because the job is: the model is naming
+ * things on a shelf, and every extra instruction is a chance to invent one.
+ */
+export const PANTRY_SCAN_PROMPT = `You are looking at a photo of someone's fridge, freezer, or cupboard, and listing what you can see so they can confirm it.
+
+Call note_pantry_items exactly once, with everything you can identify.
+
+Name things the way someone would write them on a shopping list — "chicken breast", "cheddar", "spring onions". Not brand names, unless the brand is the only way to say what it is.
+
+Be honest about what you cannot see. A jar at the back with its label turned away is not identified; a shelf hidden behind a milk bottle is not empty. Set confidence to "low" for anything you are inferring from a shape or a colour through packaging, and put what you could not make out in the note — the person reading it is standing in front of the actual fridge and can settle it in a second, but only if you tell them there is something to settle.
+
+Do not list things that are not food. Do not guess at quantities you cannot see; null is a perfectly good answer for how much there is.
+
+Nothing you report is saved until they confirm it, so err toward listing what you genuinely see rather than toward a short list.`;
+
+export interface RecipeTaskInput {
+  /** What is left of the day, and the day it belongs to. */
+  budget: { local_date: string; kcal_remaining: number; protein_remaining: number };
+  /** Everything in the kitchen, already sorted into staples and the rest. */
+  staples: string[];
+  fresh: Array<{ name: string; quantity_desc: string | null; days_ago: number }>;
+  /** What they log most often, so a suggestion lands near what they cook. */
+  usual: Array<{ description: string; times: number; kcal: number; protein_g: number }>;
+  /** Standing instructions — where "I don't eat pork" already lives. */
+  notes: string[];
+  /** Which meal this is for, and anything they asked for in their own words. */
+  meal: string;
+  wants: string | null;
+}
+
+/**
+ * The per-run user turn: everything the agent needs, handed over rather than
+ * fetched. It has no read tools at all — the same trade the review makes, and
+ * for the same reasons. A tool round trip costs a model call, the four things
+ * it would go looking for are known before the run starts, and a fixed input is
+ * one that can be asserted on in a test.
+ */
+export function recipeTaskPrompt(input: RecipeTaskInput): string {
+  const { budget } = input;
+
+  const kitchen = [
+    input.fresh.length === 0
+      ? 'Nothing recorded beyond the staples.'
+      : input.fresh
+          .map((item) => {
+            const amount = item.quantity_desc ? ` (${item.quantity_desc})` : '';
+            // Ages in words rather than dates: "9 days ago" is a judgement the
+            // model can make about whether spinach still exists. A timestamp is
+            // arithmetic it would have to do first and could get wrong.
+            const age =
+              item.days_ago === 0
+                ? 'seen today'
+                : item.days_ago === 1
+                  ? 'seen yesterday'
+                  : `last seen ${item.days_ago} days ago`;
+            return `- ${item.name}${amount} — ${age}`;
+          })
+          .join('\n'),
+  ].join('');
+
+  const staples =
+    input.staples.length === 0
+      ? 'None recorded — assume only salt and pepper.'
+      : input.staples.join(', ');
+
+  const usual =
+    input.usual.length === 0
+      ? 'Nothing logged often enough to tell yet — keep the suggestions simple and mainstream.'
+      : input.usual
+          .map((m) => `- ${m.description} (${m.times}×, ~${m.kcal} kcal, ${m.protein_g}g protein)`)
+          .join('\n');
+
+  const notes =
+    input.notes.length === 0 ? '' : `\n\n## Standing instructions\n\n${input.notes.map((n) => `- ${n}`).join('\n')}`;
+
+  const asked = input.wants ? `\n\n## What they asked for\n\n"${input.wants}"` : '';
+
+  return `Suggest what they could cook for ${input.meal}, today (${budget.local_date}).
+
+## What is left of today
+
+${budget.kcal_remaining} kcal and ${budget.protein_remaining}g protein.
+
+${
+    budget.kcal_remaining < 400
+      ? 'That is a small budget. Do not pretend otherwise — suggest something that genuinely fits it, and say that it is a light meal.'
+      : 'Aim the main suggestion at most of this, not all of it: they may still want something else later.'
+  }
+
+## In their kitchen
+
+Staples (assume present): ${staples}
+
+${kitchen}
+
+## What they usually eat
+
+${usual}${notes}${asked}
+
+Call propose_recipe once per idea, then reply in a sentence or two.`;
+}

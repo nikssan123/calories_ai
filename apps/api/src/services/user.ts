@@ -1,4 +1,4 @@
-import type { Profile, ProfileUpdate } from '@ct/shared';
+import type { PlanName, Profile, ProfileUpdate } from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import type { DayContext } from '../time.ts';
 import { hashPassword, verifyPassword } from './auth.ts';
@@ -156,18 +156,26 @@ export interface EmailRecipient {
 export interface AccountGate {
   disabled: boolean;
   verified: boolean;
+  /**
+   * What this account is entitled to. Read here rather than in the routes that
+   * need it for the same reason as the two above — it is the same row, and the
+   * rate limiter has to know the ceiling before the handler runs.
+   */
+  plan: PlanName;
 }
 
 export async function accountGate(userId: string): Promise<AccountGate> {
-  const row = await queryOne<{ disabled_at: string | null; email_verified_at: string | null }>(
-    'SELECT disabled_at, email_verified_at FROM users WHERE id = $1',
-    [userId],
-  );
+  const row = await queryOne<{
+    disabled_at: string | null;
+    email_verified_at: string | null;
+    plan: PlanName;
+  }>('SELECT disabled_at, email_verified_at, plan FROM users WHERE id = $1', [userId]);
   return {
     disabled: row?.disabled_at != null,
     // A missing row is treated as unverified, but the session hook will already
     // have failed to resolve it — this is belt and braces, not a live path.
     verified: row?.email_verified_at != null,
+    plan: row?.plan ?? 'free',
   };
 }
 
@@ -258,6 +266,7 @@ function toProfile(row: any): Profile {
     day_start_hour: Number(row.day_start_hour),
     is_setup_complete: row.is_setup_complete,
     notify_weekly_review: row.notify_weekly_review,
+    plan: row.plan,
   };
 }
 

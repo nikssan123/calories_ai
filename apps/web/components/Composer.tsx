@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, Camera, ImageIcon, X } from 'lucide-react';
 import { toast } from 'sonner';
+import type { PhotoMediaType } from '@ct/shared';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -10,93 +11,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { PHOTO_ACCEPT, preparePhoto, type PreparedPhoto, useHasCameraApp } from '@/lib/image';
 import { cn } from '@/lib/utils';
 
 export interface ComposerPayload {
   text: string;
   photoBase64?: string;
-  photoMediaType?: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+  photoMediaType?: PhotoMediaType;
   photoPreview?: string;
-}
-
-const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
-
-/**
- * Long edge to downscale to before upload. A phone camera produces a 12MP file
- * that base64s to several megabytes, and the upload is the fragile half of the
- * turn: it goes up a phone uplink, and the connection has to survive both it and
- * the agent's reply. The vision model reads a photo at 2576px on the long edge,
- * so everything above this is paid for twice — once on the wire, once in the
- * model's own downscale — and buys no accuracy on portion sizes.
- */
-const MAX_EDGE = 2576;
-const JPEG_QUALITY = 0.82;
-
-/**
- * Re-encodes an oversized photo, and falls back to the untouched file whenever
- * the browser cannot: an unreadable image here would mean no meal logged, and
- * sending too many bytes is far better than sending none.
- */
-async function prepare(
-  file: File,
-): Promise<{ dataUrl: string; mediaType: (typeof ACCEPTED)[number] } | null> {
-  const mediaType = ACCEPTED.find((t) => t === file.type);
-  if (!mediaType) return null;
-
-  try {
-    // `from-image` applies the EXIF rotation that phones rely on; without it a
-    // portrait photo reaches the model on its side.
-    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-    try {
-      const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-      if (scale < 1) {
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(bitmap.width * scale);
-        canvas.height = Math.round(bitmap.height * scale);
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-          return { dataUrl: canvas.toDataURL('image/jpeg', JPEG_QUALITY), mediaType: 'image/jpeg' };
-        }
-      }
-    } finally {
-      bitmap.close();
-    }
-  } catch {
-    // No createImageBitmap, a codec the canvas cannot read, a tainted canvas.
-  }
-
-  return { dataUrl: await readDataUrl(file), mediaType };
-}
-
-function readDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error("I couldn't read that photo — mind trying again?"));
-    reader.readAsDataURL(file);
-  });
-}
-
-/**
- * Whether the device has a camera app to hand the photo off to. Only a phone or
- * a tablet does: a desktop browser ignores `capture` and opens the same file
- * dialog either way, so offering the choice there would be two menu items that
- * do the same thing. Starts false so the server-rendered markup is the plain
- * button, and settles on the first client effect.
- */
-function useHasCameraApp() {
-  const [hasCameraApp, setHasCameraApp] = useState(false);
-
-  useEffect(() => {
-    const media = window.matchMedia('(pointer: coarse)');
-    const apply = () => setHasCameraApp(media.matches);
-    apply();
-    media.addEventListener('change', apply);
-    return () => media.removeEventListener('change', apply);
-  }, []);
-
-  return hasCameraApp;
 }
 
 export function Composer({
@@ -107,7 +29,7 @@ export function Composer({
   disabled: boolean;
 }) {
   const [text, setText] = useState('');
-  const [photo, setPhoto] = useState<{ dataUrl: string; mediaType: (typeof ACCEPTED)[number] } | null>(
+  const [photo, setPhoto] = useState<PreparedPhoto | null>(
     null,
   );
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -140,7 +62,7 @@ export function Composer({
     input.value = '';
     if (!file) return;
 
-    const prepared = await prepare(file);
+    const prepared = await preparePhoto(file);
     // Mostly unreachable — Safari converts an iPhone's HEIC on the way out of
     // the picker — but dropping the file without a word would look like the
     // camera button is simply broken.
@@ -228,7 +150,7 @@ export function Composer({
         <input
           ref={cameraRef}
           type="file"
-          accept={ACCEPTED.join(',')}
+          accept={PHOTO_ACCEPT}
           // `environment` is the rear camera — the one pointed at the plate.
           capture="environment"
           onChange={(e) => void onPickFile(e)}
@@ -237,7 +159,7 @@ export function Composer({
         <input
           ref={libraryRef}
           type="file"
-          accept={ACCEPTED.join(',')}
+          accept={PHOTO_ACCEPT}
           /*
            * Deliberately no `capture` here: this is the half of the choice that
            * has to reach everything already on the phone — a meal photographed

@@ -10,6 +10,8 @@ import {
   recentUsage,
   recordUsage,
 } from '../src/services/usage.ts';
+import { MODELS } from '../src/ai/client.ts';
+import type { TurnKind } from '../src/ai/providers/types.ts';
 import { runTurn } from '../src/ai/run.ts';
 import { getUser } from '../src/services/user.ts';
 import { scriptAgent } from './helpers/agent-mock.ts';
@@ -46,6 +48,32 @@ const OUTCOME = {
 async function rows() {
   return query<any>('SELECT * FROM ai_usage ORDER BY occurred_at ASC');
 }
+
+/**
+ * Every turn kind must be storable.
+ *
+ * Table-driven over `MODELS` rather than listing the kinds, because the failure
+ * this guards against is adding a kind and forgetting the migration that widens
+ * the CHECK constraint. `recordUsage` swallows its own write failures by design
+ * — so that a broken cost write can never take down the turn it is measuring —
+ * which means the symptom in production is not an error. It is an expensive new
+ * feature that costs real money and records nothing at all.
+ */
+describe('the kinds the table accepts', () => {
+  it('stores a row for every turn kind the router knows about', async () => {
+    const kinds = Object.keys(MODELS) as TurnKind[];
+
+    for (const kind of kinds) {
+      await recordUsage({ userId: user.id, kind, outcome: { ...OUTCOME, model: MODELS[kind].model } });
+    }
+
+    const rows = await query<{ kind: string }>(
+      'SELECT kind FROM ai_usage WHERE user_id = $1',
+      [user.id],
+    );
+    expect(rows.map((r) => r.kind).sort()).toEqual([...kinds].sort());
+  });
+});
 
 describe('recordUsage', () => {
   it('writes one row per turn with the tokens split by kind', async () => {

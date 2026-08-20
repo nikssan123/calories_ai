@@ -1,7 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MODELS } from '../src/ai/client.ts';
 import { readOpenAiConfig } from '../src/ai/providers/openai.ts';
 import { generateWeeklyReview } from '../src/ai/review.ts';
+import { scanFridgePhoto } from '../src/ai/pantry.ts';
+import { suggestRecipes } from '../src/ai/recipes.ts';
 import { runTurn } from '../src/ai/run.ts';
 import { getUser } from '../src/services/user.ts';
 import { agentCalls, scriptAgent } from './helpers/agent-mock.ts';
@@ -112,6 +114,63 @@ describe('weekly review', () => {
   });
 });
 
+/**
+ * The kitchen's two turns sit at opposite ends of the routing table, and the
+ * reasoning is what these pin: a fridge photo is recognition with a human
+ * confirming the answer, while a recipe is the output someone would pay for.
+ */
+describe('the kitchen', () => {
+  it('reads a fridge on the cheaper vision model than a plate', async () => {
+    scriptAgent({ text: 'Eggs and not much else.' });
+    await scanFridgePhoto(user.id, { mediaType: 'image/jpeg', base64: 'iVBORw0KGgo=' });
+
+    expect(modelOf()).toBe(MODELS.pantry_scan.model);
+    // The point of the split. If these ever converge, the confirmation step has
+    // stopped paying for itself and the comment in client.ts is wrong.
+    expect(MODELS.pantry_scan.model).not.toBe(MODELS.photo_log.model);
+  });
+
+  it('writes recipes on the best model, like the review', async () => {
+    const tools = await import('../src/ai/tools.ts');
+    const spy = vi.spyOn(tools, 'buildNutritionServer');
+
+    scriptAgent({
+      text: 'Three ideas.',
+      act: async () => {
+        const built = spy.mock.results.at(-1)!.value as ReturnType<typeof tools.buildNutritionServer>;
+        await built.tools.find((t) => t.name === 'propose_recipe')!.handler(
+          {
+            title: 'Omelette',
+            summary: null,
+            portions: 1,
+            minutes: 10,
+            steps: ['Beat the eggs.'],
+            ingredients: [
+              {
+                name: 'Eggs',
+                quantity_g: 100,
+                quantity_desc: '2',
+                kcal: 150,
+                protein_g: 12,
+                carbs_g: 1,
+                fat_g: 11,
+                missing: false,
+              },
+            ],
+            confidence: 'medium',
+          } as never,
+          {},
+        );
+      },
+    });
+
+    await suggestRecipes(user.id);
+
+    expect(modelOf()).toBe(MODELS.recipe.model);
+    expect(modelOf()).toBe(MODELS.review.model);
+  });
+});
+
 describe('OpenAI-compatible providers', () => {
   const BASE = { OPENAI_API_KEY: 'sk-test' };
 
@@ -122,6 +181,8 @@ describe('OpenAI-compatible providers', () => {
       photo_log: 'gpt-4o',
       setup: 'gpt-4o',
       review: 'gpt-4o',
+      pantry_scan: 'gpt-4o',
+      recipe: 'gpt-4o',
     });
   });
 
@@ -144,5 +205,39 @@ describe('OpenAI-compatible providers', () => {
     expect(config.models.photo_log).toBe('qwen-vl-max');
     expect(config.models.review).toBe('deepseek-reasoner');
     expect(config.models.setup).toBe('deepseek-chat');
+  });
+
+  /**
+   * A fridge scan is a vision turn and has to follow the vision slot. On a
+   * deployment pointed at a vendor whose default model cannot see, the
+   * difference between reading this from OPENAI_MODEL and from
+   * OPENAI_MODEL_VISION is a scan that works and one that confidently returns
+   * an empty fridge.
+   */
+  it('sends a fridge scan to the model that can see', () => {
+    const config = readOpenAiConfig({
+      ...BASE,
+      OPENAI_MODEL: 'deepseek-chat',
+      OPENAI_MODEL_VISION: 'qwen-vl-max',
+    });
+    expect(config.models.pantry_scan).toBe('qwen-vl-max');
+  });
+
+  /** Recipes fall in with the review before falling back to the base model. */
+  it('routes recipes to the review model unless given one of their own', () => {
+    const shared = readOpenAiConfig({
+      ...BASE,
+      OPENAI_MODEL: 'deepseek-chat',
+      OPENAI_MODEL_REVIEW: 'deepseek-reasoner',
+    });
+    expect(shared.models.recipe).toBe('deepseek-reasoner');
+
+    const own = readOpenAiConfig({
+      ...BASE,
+      OPENAI_MODEL: 'deepseek-chat',
+      OPENAI_MODEL_REVIEW: 'deepseek-reasoner',
+      OPENAI_MODEL_RECIPE: 'kimi-k2',
+    });
+    expect(own.models.recipe).toBe('kimi-k2');
   });
 });

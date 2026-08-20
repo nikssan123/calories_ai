@@ -61,8 +61,23 @@ export interface AgentMessage {
  *     so quality matters and cost does not.
  *   - `review` runs once a week — 1/120th the volume of logging. Paying top rate
  *     for the one piece of writing the user actually reads is nearly free.
+ *   - `pantry_scan` reads a fridge photo. Vision, but naming what is on a shelf
+ *     is recognition rather than measurement, and the user confirms the list
+ *     before anything uses it — that confirmation is what buys a cheaper model
+ *     here than `photo_log`, which has no such safety net.
+ *   - `recipe` writes the suggestions. Occasional, read end to end, and the
+ *     reason anyone would pay: it sits with `review` on the side of the table
+ *     where quality is visible and volume is not the problem.
  */
-export type TurnKind = 'text_log' | 'photo_log' | 'setup' | 'review';
+export type TurnKind =
+  | 'text_log'
+  | 'photo_log'
+  | 'setup'
+  | 'review'
+  | 'pantry_scan'
+  | 'recipe';
+
+export type ToolsetName = 'journal' | 'kitchen';
 
 export interface AgentRequest {
   /** Which model tier this turn warrants. See `TurnKind`. */
@@ -94,6 +109,17 @@ export interface AgentRequest {
   history: AgentMessage[];
   /** Drop every write tool — the weekly review reads but must not mutate. */
   readOnly: boolean;
+  /**
+   * Which set of tools this run gets. `journal` is the nutrition log; `kitchen`
+   * swaps in the pantry and recipe tools and nothing else.
+   *
+   * It has to travel on the request rather than being assembled by the caller
+   * because the Anthropic provider rebuilds the MCP server itself — the server
+   * closes over the per-turn tool context — so a tool list handed in from
+   * outside would be invisible to it. The OpenAI provider reads `tools`
+   * directly and needs only to be given the right ones.
+   */
+  toolset: ToolsetName;
   maxTurns: number;
 }
 

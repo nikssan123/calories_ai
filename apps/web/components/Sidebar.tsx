@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   CalendarDays,
   ChartLine,
+  ChefHat,
   Flame,
   LogOut,
   MessageSquareText,
@@ -23,6 +24,7 @@ const TABS = [
   { href: '/history', label: 'History', Icon: CalendarDays },
   { href: '/progress', label: 'Progress', Icon: ChartLine },
   { href: '/exercise', label: 'Exercise', Icon: PersonStanding },
+  { href: '/cook', label: 'Cook', Icon: ChefHat },
   { href: '/setup', label: 'You', Icon: User },
 ] as const;
 

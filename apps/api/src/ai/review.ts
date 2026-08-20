@@ -57,6 +57,7 @@ export async function generateWeeklyReview(
     // A review is a single self-contained question; there is no thread to replay.
     history: [],
     readOnly: true,
+    toolset: 'journal',
     maxTurns: MAX_TURNS,
   };
 

@@ -2,10 +2,11 @@ import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
-import { EMAIL_UNVERIFIED } from '@ct/shared';
+import { EMAIL_UNVERIFIED, type PlanName } from '@ct/shared';
 import { registerRoutes } from './routes/index.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
 import { registerAdminRoutes } from './routes/admin.ts';
+import { registerKitchenRoutes } from './routes/kitchen.ts';
 import { env } from './env.ts';
 import { bearerToken, resolveSession, SESSION_COOKIE } from './services/auth.ts';
 import { accountGate } from './services/user.ts';
@@ -20,6 +21,16 @@ declare module 'fastify' {
      * questions are one database read.
      */
     emailVerified: boolean;
+    /**
+     * What this account is entitled to, from the same read as the two above.
+     *
+     * It has to be resolved this early rather than in the handlers that care:
+     * the per-plan rate limits are evaluated before a route body ever runs, so
+     * a plan fetched inside the handler would arrive after the decision it was
+     * meant to inform. Anonymous requests read `free`, which costs nothing —
+     * every route that consults it demands a session anyway.
+     */
+    plan: PlanName;
   }
 }
 
@@ -91,6 +102,7 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
 
   app.decorateRequest('userId', null);
   app.decorateRequest('emailVerified', false);
+  app.decorateRequest('plan', 'free');
 
   /** Resolve the session on every request; route guards decide what to do with it. */
   app.addHook('onRequest', async (request) => {
@@ -107,6 +119,7 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
     // one from a device that never came back — stops working immediately.
     request.userId = gate?.disabled ? null : userId;
     request.emailVerified = gate?.verified ?? false;
+    request.plan = gate?.plan ?? 'free';
   });
 
   // `/photos/` is public because a signed URL carries its own authorisation and
@@ -164,6 +177,7 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
 
   await registerAuthRoutes(app);
   await registerAdminRoutes(app);
+  await registerKitchenRoutes(app);
   await registerRoutes(app);
 
   return app;
