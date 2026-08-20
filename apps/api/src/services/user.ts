@@ -145,6 +145,32 @@ export interface EmailRecipient {
   notifyWeeklyReview: boolean;
 }
 
+/**
+ * What the session hook needs to know about an account, in one read.
+ *
+ * Folded into a single query rather than two calls because this runs on *every*
+ * request: asking separately whether an account is suspended and whether its
+ * address is proved would double the per-request round trips to answer one
+ * question — may this request proceed.
+ */
+export interface AccountGate {
+  disabled: boolean;
+  verified: boolean;
+}
+
+export async function accountGate(userId: string): Promise<AccountGate> {
+  const row = await queryOne<{ disabled_at: string | null; email_verified_at: string | null }>(
+    'SELECT disabled_at, email_verified_at FROM users WHERE id = $1',
+    [userId],
+  );
+  return {
+    disabled: row?.disabled_at != null,
+    // A missing row is treated as unverified, but the session hook will already
+    // have failed to resolve it — this is belt and braces, not a live path.
+    verified: row?.email_verified_at != null,
+  };
+}
+
 export async function getEmailRecipient(userId: string): Promise<EmailRecipient | null> {
   const row = await queryOne<any>(
     `SELECT id, email, display_name, timezone, email_verified_at, notify_weekly_review

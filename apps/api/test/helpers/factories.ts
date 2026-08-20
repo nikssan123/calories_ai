@@ -73,6 +73,31 @@ export async function appFor(user: TestUser): Promise<{ app: FastifyInstance; co
   return { app, cookie: `ct_session=${token}` };
 }
 
+/**
+ * Confirms an account's address without going through the email.
+ *
+ * For the many tests whose subject is something else entirely and which only
+ * need to get past the verification gate — `createUser` is already confirmed,
+ * but an account created through `POST /auth/signup` deliberately is not.
+ */
+export async function confirmEmail(userId: string): Promise<void> {
+  await query('UPDATE users SET email_verified_at = now() WHERE id = $1', [userId]);
+}
+
+/**
+ * The six digits from the confirmation email that was just sent.
+ *
+ * Read from the captured message rather than from the database, because the
+ * database only has the hash — and because taking it from the email is the same
+ * path a person takes, so a template that stopped printing the code would fail
+ * these tests rather than quietly passing them.
+ */
+export function codeFromEmail(text: string): string {
+  const match = /\b(\d{6})\b/.exec(text);
+  if (!match) throw new Error(`No six-digit code in the email:\n${text}`);
+  return match[1]!;
+}
+
 export async function anonymousApp(): Promise<FastifyInstance> {
   const app = await buildApp({ logger: false });
   await app.ready();

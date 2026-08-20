@@ -50,7 +50,9 @@ export type Block =
   /** Someone else's words — in practice the journal's own prose. */
   | { kind: 'quote'; text: string }
   /** Small print attached to the block above it. */
-  | { kind: 'note'; text: string };
+  | { kind: 'note'; text: string }
+  /** A short code, sized to be read off one screen and typed into another. */
+  | { kind: 'code'; value: string };
 
 export interface EmailContent {
   /** The subject, reused as the document title. */
@@ -223,6 +225,20 @@ ${block.items
   </tr>
 </table>`;
 
+    case 'code':
+      /*
+       * Big, spaced, and selectable. The whole job of this block is to be read
+       * off a phone and typed into a laptop, so the letterspacing is doing real
+       * work — six digits run together are misread, and a wrong digit costs one
+       * of five attempts. `user-select:all` makes one tap grab the lot on the
+       * clients that honour it, and costs nothing on the ones that do not.
+       */
+      return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 20px;">
+  <tr><td class="ct-tint" style="background-color:${PALETTE.tint};border-radius:12px;padding:18px 28px;">
+    <div class="ct-ink" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:32px;font-weight:600;letter-spacing:0.22em;color:${PALETTE.ink};user-select:all;">${escapeHtml(block.value)}</div>
+  </td></tr>
+</table>`;
+
     case 'quote':
       return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 20px;">
   <tr><td style="border-left:3px solid ${PALETTE.accent};padding:2px 0 2px 16px;">
@@ -259,6 +275,11 @@ function renderText(content: EmailContent): string {
       case 'text':
       case 'note':
         parts.push(wrap(block.text), '');
+        break;
+      case 'code':
+        // Indented so it stands out in a plain-text client the way the tinted
+        // card does in an HTML one.
+        parts.push(`    ${block.value}`, '');
         break;
       case 'button':
         parts.push(`${block.label}: ${block.url}`, '');

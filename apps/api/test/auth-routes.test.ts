@@ -194,6 +194,12 @@ describe('bearer sessions', () => {
       payload: CREDENTIALS,
       headers: BEARER,
     });
+    // A brand-new account is unconfirmed, and every route but /auth/ answers
+    // 403 until it is. These tests are about how the session is carried, not
+    // about the gate, so step over it.
+    await query('UPDATE users SET email_verified_at = now() WHERE lower(email) = lower($1)', [
+      CREDENTIALS.email,
+    ]);
     return response.json().token;
   }
 

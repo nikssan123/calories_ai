@@ -236,11 +236,28 @@ export const PasswordReset = z.object({
 });
 export type PasswordReset = z.infer<typeof PasswordReset>;
 
-/** Proving an address, from the link in the confirmation email. */
-export const EmailVerification = z.object({
-  token: z.string().min(1).max(400),
-});
+/**
+ * Proving an address — by the code, or by the link.
+ *
+ * Two ways into the same token row, and exactly one of them per request. The
+ * code is for reading mail on a phone while signed in on a laptop; the link is
+ * for the reverse. Spending either spends both.
+ */
+export const EmailVerification = z.union([
+  z.object({ code: z.string().regex(/^\s*\d{6}\s*$/, 'Enter the six digits from the email.') }),
+  z.object({ token: z.string().min(1).max(400) }),
+]);
 export type EmailVerification = z.infer<typeof EmailVerification>;
+
+/**
+ * What a 403 says when the session is fine but the address is not proved.
+ *
+ * A string the client matches on, rather than a status code it has to guess at:
+ * an unverified account must be sent to the confirmation screen, not signed out
+ * and dropped at the login form, and only a distinguishable error tells it which
+ * of the two a 403 means.
+ */
+export const EMAIL_UNVERIFIED = 'email_unverified';
 
 /**
  * What an endpoint that must not reveal anything says. Both password reset and

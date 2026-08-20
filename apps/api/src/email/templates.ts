@@ -45,25 +45,36 @@ const IF_NOT_YOU =
 
 // ---- Verification ----------------------------------------------------------
 
-export function verifyEmail(input: { name: string | null; url: string }): EmailMessage {
+export function verifyEmail(input: {
+  name: string | null;
+  url: string;
+  code: string;
+}): EmailMessage {
   return {
     template: 'verify_email',
     category: 'account',
     ...renderEmail({
-      subject: 'Confirm your email address',
-      preheader: 'One tap, and your account is set up for password resets.',
+      // The code is in the subject line as well as the body, because a subject
+      // is the part you can read from a notification without unlocking anything.
+      subject: `${input.code} is your Day So Far confirmation code`,
+      preheader: `Enter ${input.code} to finish setting up your account.`,
       heading: 'Confirm your email',
       blocks: [
         { kind: 'text', text: greeting(input.name) },
         {
           kind: 'text',
-          text:
-            'Welcome to Day So Far. Confirming this address is what lets you get back ' +
-            'in if you ever forget your password, and it is the only thing standing ' +
-            'between you and a working account.',
+          text: 'Welcome to Day So Far. Enter this code to finish setting up your account:',
+        },
+        { kind: 'code', value: input.code },
+        {
+          kind: 'note',
+          text: 'The code lasts 24 hours and works five times at most. Asking for a new one replaces it.',
+        },
+        {
+          kind: 'text',
+          text: 'Reading this on the same device you signed up on? The button does the same job without the typing.',
         },
         { kind: 'button', label: 'Confirm email', url: input.url },
-        { kind: 'note', text: 'The link works for 24 hours. Everything else in the app already works — this is not a gate.' },
         {
           kind: 'text',
           text: 'If you did not create an account, nothing has been set up in your name; ignore this and the address will be released.',
