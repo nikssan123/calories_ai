@@ -54,10 +54,8 @@ describe('POST /auth/signup', () => {
     await signUp();
 
     expect(mailbox()).toHaveLength(1);
-    expect(lastEmail()).toMatchObject({
-      to: CREDENTIALS.email,
-      subject: 'Confirm your email address',
-    });
+    expect(lastEmail()!.to).toBe(CREDENTIALS.email);
+    expect(lastEmail()!.subject).toMatch(/^\d{6} is your Day So Far confirmation code$/);
   });
 
   it('creates the account unconfirmed, and does not gate anything on it', async () => {
@@ -72,7 +70,8 @@ describe('POST /auth/signup', () => {
     await signUp({ 'user-agent': CHROME });
 
     // "We noticed a sign-in" as the opening message of a new account is absurd.
-    expect(mailbox().map((m) => m.subject)).toEqual(['Confirm your email address']);
+    expect(mailbox()).toHaveLength(1);
+    expect(lastEmail()!.subject).toMatch(/confirmation code$/);
     expect(await query('SELECT 1 FROM known_devices')).toHaveLength(1);
   });
 
@@ -399,7 +398,8 @@ describe('POST /auth/verify/resend', () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(lastEmail()).toMatchObject({ to: user.email, subject: 'Confirm your email address' });
+      expect(lastEmail()!.to).toBe(user.email);
+      expect(lastEmail()!.subject).toMatch(/confirmation code$/);
     } finally {
       await signedIn.close();
     }

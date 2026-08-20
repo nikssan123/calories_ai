@@ -1,7 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { WeeklyReview } from '@ct/shared';
 import { env } from '../env.ts';
-import { issueToken, TOKEN_TTL_MINUTES } from '../services/tokens.ts';
+import { issueToken, issueVerification, TOKEN_TTL_MINUTES } from '../services/tokens.ts';
 import { findRecipientByEmail, getEmailRecipient } from '../services/user.ts';
 import { sendEmail, type SendResult } from './send.ts';
 import * as templates from './templates.ts';
@@ -44,7 +44,7 @@ export async function sendVerificationEmail(
   if (!recipient) return SKIPPED('no address');
   if (recipient.verified) return SKIPPED('already verified');
 
-  const { token } = await issueToken(userId, 'email_verification', recipient.email);
+  const { token, code } = await issueVerification(userId, recipient.email);
   return sendEmail({
     to: recipient.email,
     userId,
@@ -52,6 +52,7 @@ export async function sendVerificationEmail(
     message: templates.verifyEmail({
       name: recipient.displayName,
       url: `${env.appUrl}/verify?token=${encodeURIComponent(token)}`,
+      code,
     }),
   });
 }

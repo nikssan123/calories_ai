@@ -79,11 +79,28 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     if (loading || !status) return;
     if (!status.authenticated && !isPublic) router.replace('/login');
     if (status.authenticated && onLogin) router.replace('/');
+    /*
+     * Signed in, but the address is unproved.
+     *
+     * Held at `/verify` until the code is entered, which mirrors the API: every
+     * route but `/auth/` answers 403 for this session, so any other screen would
+     * render as a wall of failed requests. Not sent to `/login` — the session is
+     * perfectly good, and bouncing them to a sign-in form they have already
+     * passed is the single most confusing thing this could do.
+     */
+    if (
+      status.authenticated &&
+      status.profile &&
+      !status.profile.email_verified &&
+      pathname !== '/verify'
+    ) {
+      router.replace('/verify');
+    }
     // Deliberately no redirect away from the emailed routes for a signed-in
     // visitor: confirming an address or unsubscribing is just as valid with a
     // session as without one, and a reset link should still work on the laptop
     // where you are already logged in.
-  }, [loading, status, onLogin, isPublic, router]);
+  }, [loading, status, onLogin, isPublic, pathname, router]);
 
   const signOut = useCallback(async () => {
     // Logout answers with the signed-out status rather than a bare ack, so the

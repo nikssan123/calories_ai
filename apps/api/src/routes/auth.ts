@@ -22,7 +22,7 @@ import {
   SESSION_COOKIE,
 } from '../services/auth.ts';
 import { rememberDevice } from '../services/devices.ts';
-import { consumeToken } from '../services/tokens.ts';
+import { consumeCode, consumeToken } from '../services/tokens.ts';
 import {
   authenticate,
   countAccounts,
@@ -300,8 +300,43 @@ export async function registerAuthRoutes(app: FastifyInstance) {
    */
   app.post('/auth/verify', { config: { rateLimit: TOKEN_LIMIT } }, async (request, reply) => {
     const parsed = EmailVerification.safeParse(request.body);
-    if (!parsed.success) return reply.status(400).send({ error: 'That link is not valid.' });
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Enter the six digits from the email.' });
+    }
 
+    /*
+     * The code path. Scoped to the session, and it has to be: six digits are not
+     * unique across accounts the way a 256-bit token is, so a code can only be
+     * checked against the one account already claiming to hold it.
+     */
+    if ('code' in parsed.data) {
+      if (request.userId === null) {
+        return reply
+          .status(401)
+          .send({ error: 'Sign in first, then enter the code from the email.' });
+      }
+
+      const result = await consumeCode(request.userId, parsed.data.code);
+      if (!result.ok) {
+        // How many tries are left is told plainly rather than hidden. Whoever is
+        // typing already knows whether they are guessing, and someone copying a
+        // code across from a phone deserves to know the field is about to burn.
+        return reply.status(400).send(
+          result.reason === 'wrong'
+            ? {
+                error: `That code is not right. ${result.remaining} ${
+                  result.remaining === 1 ? 'try' : 'tries'
+                } left.`,
+              }
+            : { error: 'That code has expired or been used up. Ask for a new one.' },
+        );
+      }
+
+      await markEmailVerified(request.userId, result.email);
+      return { ok: true as const, message: 'Your email address is confirmed.' };
+    }
+
+    // The link path, which needs no session — it is opened wherever it is opened.
     const claim = await consumeToken(parsed.data.token, 'email_verification');
     if (!claim) {
       return reply
@@ -324,7 +359,24 @@ export async function registerAuthRoutes(app: FastifyInstance) {
   app.post('/auth/verify/resend', { config: { rateLimit: EMAIL_LIMIT } }, async (request, reply) => {
     if (request.userId === null) return reply.status(401).send({ error: 'Not signed in.' });
 
-    await sendVerificationEmail(request.userId, request.log);
-    return { ok: true as const, message: 'Check your inbox for the confirmation link.' };
+    const result = await sendVerificationEmail(request.userId, request.log);
+
+    /*
+     * The one place a delivery failure is worth reporting.
+     *
+     * Everywhere else this server sends mail, failing quietly is right — the
+     * user was doing something else and the email was incidental. Here it is
+     * the entire point: someone is sitting behind a gate waiting for a code,
+     * and answering "check your inbox" when we know nothing was sent leaves
+     * them clicking the button forever. The provider's own words are kept out
+     * of it; what they need to know is that it did not work and why it might be.
+     */
+    if (result.status === 'failed') {
+      return reply.status(502).send({
+        error: 'We could not send the code. Check the address is right, or try again shortly.',
+      });
+    }
+
+    return { ok: true as const, message: 'Check your inbox for the confirmation code.' };
   });
 }

@@ -225,12 +225,30 @@ the substantive half — someone resetting a password they did not choose to cha
 telling you they think somebody else is inside, and leaving that session alive would
 make the reset theatre. It deliberately does not sign you back in.
 
-**Email confirmation is soft.** Signing up sends a link, but nothing in the product
-waits for it and no screen is gated on it. Two things do depend on it: a password can
-only be reset to a mailbox someone has proved they can read, and the weekly review
-email is not sent to an unproved address — a recurring message to an address that was
-typed in by mistake is how a sending domain loses its reputation. Accounts that existed
-before this shipped are grandfathered in by the migration.
+**Email confirmation is required.** Signing up creates the account and signs you in —
+it has to, because the six-digit code is only meaningful against the account that was
+issued it — but every route outside `/auth/` answers `403 email_unverified` until the
+code is entered, and the web app holds you at `/verify`. Accounts that existed before
+this shipped are grandfathered in by the migration; locking them out retroactively
+would prove nothing about addresses that have been receiving mail for months.
+
+The email carries a **code and a link**, two ways into the same token row, so spending
+either spends both. The code is for signing up on a laptop and reading the mail on a
+phone; the link is for the reverse. The code is scoped to the session and survives five
+wrong guesses before it burns — a million possibilities is ample against a person and
+nothing against a script, and the route's IP rate limit is the wrong instrument since an
+attacker with addresses to spare walks straight past it.
+
+Two things stay open to an unconfirmed account. Everything under `/auth/`, so you can
+read your session, ask for another code, and sign out. And `DELETE /account` — someone
+whose code never arrived, most likely because they mistyped their own address, must not
+be stranded with an account they can neither use nor be rid of. It is safe to allow
+because that route re-checks the password before it destroys anything.
+
+**Without a mail provider this is a hard gate.** With no `RESEND_API_KEY` the code is
+written to the API log rather than sent, which is fine on a laptop — you read it from
+the log — and is *not* fine on a deployment where other people sign up. If you run this
+for anyone but yourself, configure Resend.
 
 ## Email
 
@@ -245,7 +263,7 @@ Resend's sandbox sender usable for testing the whole flow before you own a domai
 
 | Message | When | Category |
 |---|---|---|
-| Confirm your email | Signup, and on request | account |
+| Confirmation code | Signup, and on request | account |
 | Reset your password | `/auth/password/forgot` | security |
 | Your password was changed | After a reset, self-service or by an admin | security |
 | New sign-in | A sign-in from a client this account has not used | security |
@@ -255,7 +273,8 @@ Resend's sandbox sender usable for testing the whole flow before you own a domai
 
 Only the last one has an unsubscribe link, and that is the whole distinction: the
 others are about the account itself and are not something to have an opinion about
-receiving. `notify_weekly_review` on the user row is the only preference, editable from
+receiving. The confirmation code is the one message the product genuinely cannot work
+without — see [Accounts](#accounts). `notify_weekly_review` on the user row is the only preference, editable from
 the setup screen or from the link in the footer — which is signed rather than stored,
 so it still works from a two-year-old email and needs no session.
 

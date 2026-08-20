@@ -141,6 +141,13 @@ export function createApiClient({
     verifyEmail: (token: string) =>
       request<Acknowledged>('/auth/verify', { method: 'POST', body: JSON.stringify({ token }) }),
 
+    /**
+     * Confirms an address with the six-digit code. Needs the session, because a
+     * short code is only meaningful against the account that was issued it.
+     */
+    verifyEmailCode: (code: string) =>
+      request<Acknowledged>('/auth/verify', { method: 'POST', body: JSON.stringify({ code }) }),
+
     /** Another confirmation link, for the one that went to spam. */
     resendVerification: () => request<Acknowledged>('/auth/verify/resend', { method: 'POST' }),
 

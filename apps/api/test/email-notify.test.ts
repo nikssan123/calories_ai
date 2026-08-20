@@ -67,17 +67,23 @@ function review(overrides: Partial<WeeklyReview> = {}): WeeklyReview {
 }
 
 describe('sendVerificationEmail', () => {
-  it('emails a link that carries a token the app can spend', async () => {
+  it('emails a code and a link, both against one row', async () => {
     const user = await unverified();
     expect(await sendVerificationEmail(user.id)).toMatchObject({ status: 'sent' });
 
-    const link = lastEmail()!.text.match(/\/verify\?token=(\S+)/);
-    expect(link).not.toBeNull();
+    const message = lastEmail()!;
+    const code = /\b(\d{6})\b/.exec(message.text)?.[1];
+    expect(code).toBeDefined();
+    expect(message.text).toMatch(/\/verify\?token=\S+/);
+    // The code leads the subject: a subject is the part you can read off a
+    // notification without unlocking anything.
+    expect(message.subject).toBe(`${code} is your Day So Far confirmation code`);
+
+    // One row, two ways in — which is what makes spending either spend both.
     const rows = await query('SELECT 1 FROM auth_tokens WHERE purpose = $1', [
       'email_verification',
     ]);
     expect(rows).toHaveLength(1);
-    expect(lastEmail()!.subject).toBe('Confirm your email address');
   });
 
   it('does nothing for an address that is already confirmed', async () => {

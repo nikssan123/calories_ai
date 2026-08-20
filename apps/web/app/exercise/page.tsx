@@ -91,7 +91,12 @@ export default function ExercisePage() {
             </p>
           </InsetGroup>
         ) : (
-          <div className="grid gap-7 lg:grid-cols-2 lg:items-start">
+          /* grid-cols-1 is not the default it looks like: an implicit column
+             is `auto`, whose floor is the widest thing inside — and a session
+             description is set to truncate, so its min-content is the whole
+             untruncated line. That floor was pushing the phone layout wider
+             than the screen and turning on sideways scrolling. */
+          <div className="grid grid-cols-1 gap-7 lg:grid-cols-2 lg:items-start">
             <InsetGroup title="Consistency">
               <div className="px-4 pt-4 pb-3">
                 <div className="flex items-baseline gap-2">

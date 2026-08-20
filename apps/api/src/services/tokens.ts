@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { query, queryOne } from '../db.ts';
 
 /**
@@ -110,6 +110,110 @@ export async function consumeToken(
  * Kept for a week after expiry rather than deleted on use, so "that link has
  * already been used" stays answerable for as long as anyone is likely to ask.
  */
+// ---- Codes -----------------------------------------------------------------
+
+/**
+ * Wrong guesses a single code will tolerate before it is spent.
+ *
+ * Six digits is a million possibilities — ample against a person typing, and
+ * nothing at all against a script. The route's rate limit is keyed by IP and an
+ * attacker with addresses to spare walks straight past it, so the real ceiling
+ * has to live on the row being attacked. Five is generous for a code someone is
+ * copying across from another device and useless to anyone brute-forcing it.
+ */
+export const MAX_CODE_ATTEMPTS = 5;
+
+const CODE_DIGITS = 6;
+
+/**
+ * A code, and a link, for the same verification.
+ *
+ * Two ways into one row, so spending either spends both — which is what stops
+ * "click the link, then be asked for the code it already used" from being a
+ * state anyone can reach. The code is for the common case of reading mail on a
+ * phone while signed in on a laptop; the link is for the reverse.
+ */
+export async function issueVerification(
+  userId: string,
+  email: string,
+): Promise<{ token: string; code: string; expiresAt: Date }> {
+  const token = randomBytes(TOKEN_BYTES).toString('base64url');
+  // `randomInt` rather than `Math.random`: this is a credential, and a modulo of
+  // a weak PRNG is exactly how a "random" code turns out to be predictable.
+  const code = String(randomInt(0, 10 ** CODE_DIGITS)).padStart(CODE_DIGITS, '0');
+  const expiresAt = new Date(
+    Date.now() + TOKEN_TTL_MINUTES.email_verification * 60 * 1000,
+  );
+
+  // Supersede first, for the reason `issueToken` does: three impatient clicks
+  // must not leave three live codes, and the newest is the one people will type.
+  await query(
+    `UPDATE auth_tokens SET used_at = now()
+      WHERE user_id = $1 AND purpose = 'email_verification' AND used_at IS NULL`,
+    [userId],
+  );
+  await query(
+    `INSERT INTO auth_tokens (user_id, purpose, token_hash, code_hash, email, expires_at)
+     VALUES ($1,'email_verification',$2,$3,$4,$5)`,
+    [userId, hashToken(token), hashToken(code), email, expiresAt.toISOString()],
+  );
+
+  return { token, code, expiresAt };
+}
+
+export type CodeResult =
+  | { ok: true; email: string }
+  /** Wrong, and how many tries are left. Told plainly — see the route. */
+  | { ok: false; reason: 'wrong'; remaining: number }
+  /** Out of guesses, or expired, or never issued. One answer for all three. */
+  | { ok: false; reason: 'spent' };
+
+/**
+ * Spends a code, for the user who is holding the session.
+ *
+ * Scoped by user, unlike `consumeToken`, and that is not a detail: six digits
+ * are not unique across accounts the way 256 bits are, so a global lookup would
+ * let anyone guessing find *somebody's* live code eventually. Tying it to the
+ * session means a guess is aimed at one account and counted against one row.
+ */
+export async function consumeCode(userId: string, code: string): Promise<CodeResult> {
+  const live = await queryOne<{ id: string; email: string; code_hash: string; attempts: number }>(
+    `SELECT id, email, code_hash, attempts FROM auth_tokens
+      WHERE user_id = $1 AND purpose = 'email_verification'
+        AND code_hash IS NOT NULL AND used_at IS NULL AND expires_at > now()
+   ORDER BY created_at DESC LIMIT 1`,
+    [userId],
+  );
+  if (!live) return { ok: false, reason: 'spent' };
+
+  if (live.code_hash !== hashToken(code.trim())) {
+    // Counted in the database rather than in memory, so concurrent guesses
+    // cannot both read "4 used" and each spend a fifth.
+    const row = await queryOne<{ attempts: number }>(
+      'UPDATE auth_tokens SET attempts = attempts + 1 WHERE id = $1 RETURNING attempts',
+      [live.id],
+    );
+    const attempts = row?.attempts ?? MAX_CODE_ATTEMPTS;
+    if (attempts >= MAX_CODE_ATTEMPTS) {
+      // Burn it. A code that has been guessed at five times is a code somebody
+      // is working on, and the owner can have a fresh one for the asking.
+      await query('UPDATE auth_tokens SET used_at = now() WHERE id = $1', [live.id]);
+      return { ok: false, reason: 'spent' };
+    }
+    return { ok: false, reason: 'wrong', remaining: MAX_CODE_ATTEMPTS - attempts };
+  }
+
+  // Right answer. Claim it the same way the link path does — conditionally, so
+  // two requests arriving together cannot both win.
+  const claimed = await queryOne<{ email: string }>(
+    `UPDATE auth_tokens SET used_at = now()
+      WHERE id = $1 AND used_at IS NULL
+      RETURNING email`,
+    [live.id],
+  );
+  return claimed ? { ok: true, email: claimed.email } : { ok: false, reason: 'spent' };
+}
+
 export async function purgeExpiredTokens(): Promise<void> {
   await query("DELETE FROM auth_tokens WHERE expires_at < now() - interval '7 days'");
 }

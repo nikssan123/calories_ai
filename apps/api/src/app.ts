@@ -2,17 +2,24 @@ import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
+import { EMAIL_UNVERIFIED } from '@ct/shared';
 import { registerRoutes } from './routes/index.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
 import { registerAdminRoutes } from './routes/admin.ts';
 import { env } from './env.ts';
 import { bearerToken, resolveSession, SESSION_COOKIE } from './services/auth.ts';
-import { isDisabled } from './services/admin.ts';
+import { accountGate } from './services/user.ts';
 
 declare module 'fastify' {
   interface FastifyRequest {
     /** Set by the session hook; null when the request is anonymous. */
     userId: string | null;
+    /**
+     * Whether this account has proved its address. Resolved alongside the
+     * session because the guard below runs on every request and the two
+     * questions are one database read.
+     */
+    emailVerified: boolean;
   }
 }
 
@@ -83,6 +90,7 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
   );
 
   app.decorateRequest('userId', null);
+  app.decorateRequest('emailVerified', false);
 
   /** Resolve the session on every request; route guards decide what to do with it. */
   app.addHook('onRequest', async (request) => {
@@ -93,10 +101,12 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
     // not — the explicit credential is the one that expresses an intent.
     const token = bearerToken(request.headers.authorization) ?? request.cookies[SESSION_COOKIE];
     const userId = token ? await resolveSession(token) : null;
+    const gate = userId ? await accountGate(userId) : null;
     // A suspended account is treated as signed out rather than having its
     // sessions merely revoked, so a cookie minted before the suspension — or
     // one from a device that never came back — stops working immediately.
-    request.userId = userId && (await isDisabled(userId)) ? null : userId;
+    request.userId = gate?.disabled ? null : userId;
+    request.emailVerified = gate?.verified ?? false;
   });
 
   // `/photos/` is public because a signed URL carries its own authorisation and
@@ -107,11 +117,48 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
   // to be left alone is how a sender earns a spam complaint.
   const PUBLIC_PREFIXES = ['/health', '/auth/', '/photos/', '/email/'];
 
+  /**
+   * The one thing an unconfirmed account may still do: leave.
+   *
+   * Everything else waits for the code, but refusing this would strand someone
+   * with an account they can neither use nor be rid of — over a typo in their
+   * own address, which is the likeliest reason the code never arrived. Both
+   * app stores also require deletion to be reachable from inside the product,
+   * and "reachable unless you mistyped your email" is not that.
+   *
+   * It is safe to allow because it proves who is asking on its own terms: the
+   * route re-checks the password before it destroys anything.
+   */
+  function escapeHatch(request: FastifyRequest): boolean {
+    return request.method === 'DELETE' && request.url.split('?')[0] === '/account';
+  }
+
   app.addHook('onRequest', async (request, reply) => {
     if (request.method === 'OPTIONS') return;
     if (PUBLIC_PREFIXES.some((prefix) => request.url.startsWith(prefix))) return;
     if (request.userId === null) {
       return reply.status(401).send({ error: 'Not signed in.' });
+    }
+
+    /*
+     * A session, but an address nobody has proved.
+     *
+     * The account exists and is signed in — it has to be, or there would be no
+     * way to scope the six-digit code to it — but nothing else in the product
+     * opens until the code is entered. Everything needed to *get past* this
+     * lives under `/auth/`, which is public and so never reaches here: reading
+     * the session, submitting the code, asking for another, signing out.
+     *
+     * 403 with a machine-readable `code`, not a bare 401. The client has a
+     * perfectly good session and must not throw it away and bounce to the sign-
+     * in screen — it needs to show the verification screen instead, and it can
+     * only tell the two apart if this says which one it is.
+     */
+    if (!request.emailVerified && !escapeHatch(request)) {
+      return reply.status(403).send({
+        error: 'Confirm your email address to continue.',
+        code: EMAIL_UNVERIFIED,
+      });
     }
   });
 
