@@ -3,7 +3,13 @@ import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { query } from '../src/db.ts';
 import { env } from '../src/env.ts';
-import { readPhoto, savePhoto } from '../src/services/photos.ts';
+import {
+  readPhoto,
+  readPhotoById,
+  savePhoto,
+  signPhotoUrl,
+  verifyPhotoUrl,
+} from '../src/services/photos.ts';
 import { createUser, type TestUser } from './helpers/factories.ts';
 
 const PIXEL =
@@ -82,5 +88,81 @@ describe('readPhoto', () => {
     const saved = await savePhoto(user.id, 'image/png', PIXEL);
     await query('UPDATE photos SET media_type = $1 WHERE id = $2', ['text/html', saved.id]);
     expect(await readPhoto(user.id, saved.id)).toBeNull();
+  });
+});
+
+describe('signed photo URLs', () => {
+  const SECRET = 'test-signing-secret';
+
+  function parse(url: string): { path: string; exp: string; sig: string } {
+    const [path, search] = url.split('?');
+    const params = new URLSearchParams(search);
+    return { path: path!, exp: params.get('exp')!, sig: params.get('sig')! };
+  }
+
+  it('signs a path the client can join to its own base', async () => {
+    const saved = await savePhoto(user.id, 'image/png', PIXEL);
+    const { path, exp, sig } = parse(signPhotoUrl(saved.id, SECRET));
+
+    expect(path).toBe(`/photos/${saved.id}`);
+    expect(Number(exp) * 1000).toBeGreaterThan(Date.now());
+    expect(sig).toMatch(/^[\w-]+$/);
+  });
+
+  it('verifies a signature it just produced', () => {
+    const { exp, sig } = parse(signPhotoUrl('photo-1', SECRET));
+    expect(verifyPhotoUrl('photo-1', exp, sig, SECRET)).toBe(true);
+  });
+
+  it('refuses a signature made for a different photo', () => {
+    const { exp, sig } = parse(signPhotoUrl('photo-1', SECRET));
+    expect(verifyPhotoUrl('photo-2', exp, sig, SECRET)).toBe(false);
+  });
+
+  it('refuses a signature made with a different secret', () => {
+    const { exp, sig } = parse(signPhotoUrl('photo-1', SECRET));
+    expect(verifyPhotoUrl('photo-1', exp, sig, 'rotated-secret')).toBe(false);
+  });
+
+  /** The expiry is signed, so extending it invalidates the signature — which is
+      the only thing stopping a link from being made permanent by its holder. */
+  it('refuses an expiry edited to a later time', () => {
+    const { exp, sig } = parse(signPhotoUrl('photo-1', SECRET));
+    const later = String(Number(exp) + 86_400);
+    expect(verifyPhotoUrl('photo-1', later, sig, SECRET)).toBe(false);
+  });
+
+  it('refuses a link that has expired', () => {
+    const signedAt = Date.now() - 8 * 24 * 60 * 60 * 1000;
+    const { exp, sig } = parse(signPhotoUrl('photo-1', SECRET, signedAt));
+    expect(verifyPhotoUrl('photo-1', exp, sig, SECRET)).toBe(false);
+  });
+
+  it('accepts a link that has not expired yet', () => {
+    const signedAt = Date.now() - 6 * 24 * 60 * 60 * 1000;
+    const { exp, sig } = parse(signPhotoUrl('photo-1', SECRET, signedAt));
+    expect(verifyPhotoUrl('photo-1', exp, sig, SECRET)).toBe(true);
+  });
+
+  it.each([
+    ['no expiry', undefined, 'whatever'],
+    ['no signature', '99999999999', undefined],
+    ['a non-numeric expiry', 'soon', 'whatever'],
+    ['an expiry that is not an integer', '1.5e30', 'whatever'],
+    ['a signature of the wrong length', '99999999999', 'short'],
+  ])('refuses %s', (_label, exp, sig) => {
+    expect(verifyPhotoUrl('photo-1', exp, sig, SECRET)).toBe(false);
+  });
+});
+
+describe('readPhotoById', () => {
+  it('returns the bytes without a user to scope by', async () => {
+    const saved = await savePhoto(user.id, 'image/png', PIXEL);
+    const photo = await readPhotoById(saved.id);
+    expect(photo!.bytes.equals(Buffer.from(PIXEL, 'base64'))).toBe(true);
+  });
+
+  it('returns null for an id that does not exist', async () => {
+    expect(await readPhotoById('00000000-0000-0000-0000-000000000000')).toBeNull();
   });
 });

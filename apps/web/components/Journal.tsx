@@ -231,7 +231,7 @@ function toBubble(message: ChatMessage): Bubble {
     key: message.id,
     role: message.role,
     content: message.content,
-    photoUrl: message.photo_id ? api.photoUrl(message.photo_id) : undefined,
+    photoUrl: message.photo_url ? api.photoUrl(message.photo_url) : undefined,
     actions: message.actions,
   };
 }

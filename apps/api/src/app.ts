@@ -63,7 +63,10 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
     request.userId = userId && (await isDisabled(userId)) ? null : userId;
   });
 
-  const PUBLIC_PREFIXES = ['/health', '/auth/'];
+  // `/photos/` is public because a signed URL carries its own authorisation and
+  // an <img> cannot send a session — the route checks the signature itself, and
+  // still demands a session when there isn't one.
+  const PUBLIC_PREFIXES = ['/health', '/auth/', '/photos/'];
 
   app.addHook('onRequest', async (request, reply) => {
     if (request.method === 'OPTIONS') return;

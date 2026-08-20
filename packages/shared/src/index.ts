@@ -293,6 +293,16 @@ export const ChatMessage = z.object({
   role: ChatRole,
   content: z.string(),
   photo_id: z.string().uuid().nullable(),
+  /**
+   * A signed, time-limited path to the photo — join it to the client's own API
+   * base and it can go straight into an `<img>` or `<Image>`.
+   *
+   * Minted per response rather than stored, because an image element fetches on
+   * its own and cannot be given an Authorization header. Without this the photo
+   * route is reachable from the browser (which attaches its cookie unbidden)
+   * and from nowhere else.
+   */
+  photo_url: z.string().nullable().default(null),
   created_at: z.string(),
   /**
    * Stored with the message rather than returned only live, so reopening the app

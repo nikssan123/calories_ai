@@ -574,3 +574,58 @@ describe('GET /photos/:id', () => {
     expect((await app.inject({ method: 'GET', url: `/photos/${photo.id}`, ...auth() })).statusCode).toBe(404);
   });
 });
+
+/**
+ * The path React Native depends on. `<Image>` fetches on its own and cannot be
+ * given an Authorization header, so a photo has to be reachable with the proof
+ * carried in the URL — and must stay unreachable without it.
+ */
+describe('GET /photos/:id — signed links', () => {
+  async function signedUrlFor(userId: string): Promise<string> {
+    const { savePhoto } = await import('../src/services/photos.ts');
+    const photo = await savePhoto(userId, 'image/png', 'iVBORw0KGgo=');
+    await insertMessage(userId, 'user', 'here it is', photo.id);
+
+    const history = await app.inject({ method: 'GET', url: '/chat/history', ...auth() });
+    const message = history.json().messages.find((m: any) => m.photo_id === photo.id);
+    return message.photo_url;
+  }
+
+  it('hands the conversation a link that works with no session', async () => {
+    const url = await signedUrlFor(user.id);
+    expect(url).toMatch(/^\/photos\/[\w-]+\?exp=\d+&sig=[\w-]+$/);
+
+    // Deliberately no cookie and no bearer: this is what the phone sends.
+    const response = await app.inject({ method: 'GET', url });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('image/png');
+  });
+
+  it('still refuses an unsigned request from nobody', async () => {
+    const { savePhoto } = await import('../src/services/photos.ts');
+    const photo = await savePhoto(user.id, 'image/png', 'iVBORw0KGgo=');
+    const response = await app.inject({ method: 'GET', url: `/photos/${photo.id}` });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('refuses a tampered signature', async () => {
+    const url = await signedUrlFor(user.id);
+    const response = await app.inject({ method: 'GET', url: `${url}x` });
+    expect(response.statusCode).toBe(403);
+  });
+
+  it('refuses a link whose expiry has been pushed out', async () => {
+    const url = await signedUrlFor(user.id);
+    const stretched = url.replace(/exp=(\d+)/, (_m, exp) => `exp=${Number(exp) + 86_400}`);
+    const response = await app.inject({ method: 'GET', url: stretched });
+    expect(response.statusCode).toBe(403);
+  });
+
+  it('leaves a message without a photo unsigned', async () => {
+    await insertMessage(user.id, 'assistant', 'no photo here');
+    const history = await app.inject({ method: 'GET', url: '/chat/history', ...auth() });
+    const message = history.json().messages.at(-1);
+    expect(message.photo_id).toBeNull();
+    expect(message.photo_url).toBeNull();
+  });
+});

@@ -1,5 +1,7 @@
 import { ChatAction, type ChatMessage } from '@ct/shared';
 import { query, queryOne } from '../db.ts';
+import { signPhotoUrl } from './photos.ts';
+import { getSecret, PHOTO_URL_SECRET } from './secrets.ts';
 
 /**
  * The conversation is a view over the nutrition data, not the source of truth —
@@ -28,7 +30,7 @@ export async function insertMessage(
       actions.length > 0 ? JSON.stringify(actions) : null,
     ],
   );
-  return toMessage(row);
+  return toMessage(row, await photoSecret(row));
 }
 
 export async function listMessages(userId: string, limit = 50): Promise<ChatMessage[]> {
@@ -40,15 +42,24 @@ export async function listMessages(userId: string, limit = 50): Promise<ChatMess
      ) recent ORDER BY created_at ASC`,
     [userId, Math.min(Math.max(limit, 1), 200)],
   );
-  return rows.map(toMessage);
+  // Fetched once for the whole page rather than per row, and skipped entirely
+  // for a conversation with no photos in it.
+  const secret = rows.some((row) => row.photo_id) ? await getSecret(PHOTO_URL_SECRET) : null;
+  return rows.map((row) => toMessage(row, secret));
 }
 
-function toMessage(row: any): ChatMessage {
+/** The signing key, read only when this row actually has a photo to sign. */
+async function photoSecret(row: { photo_id: string | null }): Promise<string | null> {
+  return row.photo_id ? getSecret(PHOTO_URL_SECRET) : null;
+}
+
+function toMessage(row: any, photoSecret: string | null): ChatMessage {
   return {
     id: row.id,
     role: row.role,
     content: row.content,
     photo_id: row.photo_id,
+    photo_url: row.photo_id && photoSecret ? signPhotoUrl(row.photo_id, photoSecret) : null,
     created_at: new Date(row.created_at).toISOString(),
     actions: parseActions(row.actions),
   };

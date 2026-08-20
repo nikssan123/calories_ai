@@ -188,7 +188,12 @@ export function createApiClient({
 
     runReview: () => request<WeeklyReview>('/reviews/run', { method: 'POST' }),
 
-    photoUrl: (photoId: string) => `${root}/photos/${photoId}`,
+    /**
+     * Absolute URL for the signed `photo_url` on a ChatMessage. The server
+     * returns a path because it does not know the host it is reached by, so
+     * joining it to this client's own base is the last step.
+     */
+    photoUrl: (signedPath: string) => `${root}${signedPath}`,
 
     // ---- Admin ----
     //

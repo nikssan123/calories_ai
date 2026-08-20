@@ -7,7 +7,8 @@ import { runTurn } from '../ai/run.ts';
 import { proposeTargets } from '../services/adaptive.ts';
 import { listMessages } from '../services/chat.ts';
 import { mealTemplates, repeatFoodEntry } from '../services/history.ts';
-import { savePhoto, readPhoto } from '../services/photos.ts';
+import { savePhoto, readPhoto, readPhotoById, verifyPhotoUrl } from '../services/photos.ts';
+import { getSecret, PHOTO_URL_SECRET } from '../services/secrets.ts';
 import {
   deleteExerciseEntry,
   deleteFoodEntry,
@@ -299,9 +300,31 @@ export async function registerRoutes(app: FastifyInstance) {
 
   // ---- Photos --------------------------------------------------------------
 
+  /**
+   * Two ways in, because an image element cannot send a header.
+   *
+   * A signed URL authorises itself and needs no session — that is the only path
+   * React Native has, since `<Image>` does its own fetching. An unsigned request
+   * still works for the browser, whose cookie rides along on the `<img>` fetch
+   * without being asked. This route is therefore public in `app.ts` and does its
+   * own checking; neither branch may serve a photo the caller has no claim to.
+   */
   app.get('/photos/:id', async (request, reply) => {
-    const userId = request.userId!;
-    const photo = await readPhoto(userId, (request.params as any).id);
+    const photoId = (request.params as any).id as string;
+    const { exp, sig } = (request.query as any) ?? {};
+
+    if (sig !== undefined) {
+      const secret = await getSecret(PHOTO_URL_SECRET);
+      if (!verifyPhotoUrl(photoId, exp, sig, secret)) {
+        return reply.status(403).send({ error: 'This photo link has expired.' });
+      }
+      const photo = await readPhotoById(photoId);
+      if (!photo) return reply.status(404).send({ error: 'Photo not found' });
+      return reply.type(photo.mediaType).send(photo.bytes);
+    }
+
+    if (request.userId === null) return reply.status(401).send({ error: 'Not signed in.' });
+    const photo = await readPhoto(request.userId, photoId);
     if (!photo) return reply.status(404).send({ error: 'Photo not found' });
     return reply.type(photo.mediaType).send(photo.bytes);
   });
