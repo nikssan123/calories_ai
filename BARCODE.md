@@ -157,6 +157,110 @@ Last on purpose. The card handles the common case with no model call and no wait
 this is the fallback for the portions a picker cannot express — not the primary path. Built
 first, it would put a paid turn in front of every scan of a cereal box.
 
+## Telling people about it
+
+The landing page currently sells the opposite of this feature, in two strings, one of
+which is also what unfurls when somebody pastes the link.
+
+### Undoing the promise
+
+`apps/web/app/layout.tsx:35` — the `DESCRIPTION` constant, which feeds the meta
+description, the Open Graph card and the Twitter card from one place:
+
+> Say what you ate. No forms, no food database, **no barcodes** — describe the meal in
+> your own words and the day adds itself up.
+
+`apps/web/components/landing/Landing.tsx:179` — the hero lede, saying it again with a
+sharper edge: *"no barcode to hunt for"*.
+
+The instinct is to delete both. It is the wrong instinct, because the claim underneath is
+still true and it is still the good one. What the page is selling is not the absence of a
+scanner — it is the absence of *hunting*: the search box, the forty results for "chicken
+breast", the picking. A scanner that reads a packet in one motion is on the same side of
+that argument. It is the search box it replaces, not the sentence.
+
+So keep the shape — three refusals and a promise — and swap out the one clause you are
+about to contradict:
+
+> A calorie journal you talk to. No forms, no database to search, no forty results for
+> "chicken breast" — describe the meal in your own words and the day adds itself up.
+
+One edit in each file, and `DESCRIPTION` carries itself to all three social surfaces.
+
+### A fourth way in
+
+`ThreeWaysIn` (`Landing.tsx:230`) is a `WAYS` array of three under the headline *"Three
+ways in. None of them is a form."*, laid out on `sm:grid-cols-3`. A scan is a fourth way
+in, and it breaks both the headline and the grid.
+
+The cheap option is to fold it into the camera card, which already says "the back of a
+packet" (`Landing.tsx:221`) and is halfway there. Don't. Phase 3 puts the scanner in the
+`Composer` dropdown as a peer of Camera and Photo Library, and something that is a peer
+in the product should be a peer on the page; buried in the photo card it reads as a
+footnote to a feature rather than a feature.
+
+So: four cards, "Four ways in", `sm:grid-cols-2 lg:grid-cols-4`, and `ScanBarcode` from
+lucide, which is already a dependency.
+
+```tsx
+{
+  Icon: ScanBarcode,
+  title: 'Or scan the packet',
+  body: 'Point at the barcode and the label comes back. You say how much of it you ate — and if nobody has catalogued it, photograph the panel instead.',
+}
+```
+
+That sentence is doing two jobs on purpose. It says the scan produces a candidate and not
+a log, which is the decision the whole plan rests on, and it puts the miss path in the
+shop window rather than in the FAQ.
+
+### The band that is actually worth writing
+
+Every calorie app has a scanner. None of them has a good answer for the own-brand oat
+milk that nobody has ever catalogued, and that is most of a real trolley. The claim worth
+making is the one from the top of this document: *"Couldn't find it — snap the label
+instead."*
+
+A band of its own, in the two-column shape `Corrections` and `WeeklyRead` already use —
+prose left, card right. The card animates the miss: a barcode, then "Not in the
+catalogue", then the label photo resolving into the same item row a hit would have
+produced. The prose says plainly that a scanner is only as good as its worst case, and
+that this one's worst case is a feature the app already had.
+
+Place it after `ThreeWaysIn` and before `Corrections`. It is a story about getting food
+in, so it belongs beside the other ways in.
+
+And leave the hero alone. The headline is "Just say what you ate"; the scan is a
+shortcut into that same conversation. Promote it to the top of the page and the product
+becomes another tracker with a slightly better search box, which is a category it loses.
+
+### Attribution, which is a licence question before it is a copy question
+
+ODbL requires a visible "Data from Open Food Facts" wherever OFF data is shown. The
+product card carries it (Phase 3). The landing page only inherits the obligation if its
+demo card shows a real product — so invent one, the way `HeroDemo`, `Corrections` and
+`WeeklyRead` already invent everything they display. Plausible numbers, no real GTIN, no
+obligation, and nothing on the page that goes stale when a crowd-sourced row is edited.
+
+### Sequencing
+
+None of this ships before Phase 3. Phases 1 and 2 are a route nobody can reach from the
+UI, and "scan the packet" on the landing page with no scanner in the composer is a
+promise that arrives before the thing it promises. The copy change is part of Phase 3's
+diff, not a follow-up to it.
+
+### The other two surfaces
+
+`README.md:723` still lists barcode scanning under "Not built (deliberately)". When it is
+built it comes out of that list and gets a section, the way weekly reviews and adaptive
+targets did.
+
+`StoreLinks` (`StoreLinks.tsx:16`) has `href: null` on both stores. Whenever those
+listings do exist, "barcode scanner" is one of the highest-volume queries in the stores'
+nutrition category and belongs in the subtitle and the keyword field — even though it has
+no business in the hero headline. Different surfaces, different jobs: a store listing is
+answering a search, the landing page is making an argument.
+
 ## What will bite
 
 **Open Food Facts energy fields are inconsistent.** `energy-kcal_100g` is frequently absent
