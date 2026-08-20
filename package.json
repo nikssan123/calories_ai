@@ -16,6 +16,7 @@
     "test:coverage": "pnpm --filter @ct/api test:coverage",
     "build": "pnpm -r build",
     "seed": "pnpm --filter @ct/api seed",
+    "seed:library": "pnpm --filter @ct/api seed:library",
     "db:reset": "bash scripts/db-reset.sh"
   },
   "devDependencies": {

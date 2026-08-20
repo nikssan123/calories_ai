@@ -795,6 +795,71 @@ export const CookRequest = z.object({
 });
 export type CookRequest = z.infer<typeof CookRequest>;
 
+// ---- The recipe library ----------------------------------------------------
+
+/**
+ * A recipe somebody else wrote, shipped with the app.
+ *
+ * The cold start for Cook. A generated recipe needs a stocked kitchen and a
+ * model call; this needs neither, so there is something real on the screen the
+ * first time anyone opens the tab — and the ranking still answers the app's
+ * question rather than a recipe site's, because it is ordered by what you have
+ * and what is left of your day.
+ *
+ * Source: USDA MyPlate Kitchen, a work of the US government and therefore in
+ * the public domain. `source_url` travels with every recipe so the attribution
+ * is in the data and not only in a comment.
+ */
+
+/** One line of the ingredient list, as a cook reads it. */
+export const LibraryIngredient = z.object({
+  text: z.string(),
+  note: z.string().nullable(),
+});
+export type LibraryIngredient = z.infer<typeof LibraryIngredient>;
+
+export const LibraryRecipe = z.object({
+  slug: z.string(),
+  title: z.string(),
+  summary: z.string().nullable(),
+  category: z.string(),
+  portions: z.number().int(),
+  /** What one portion is, in the source's words — "1/8 of recipe". */
+  serving_size: z.string().nullable(),
+  ingredients: z.array(LibraryIngredient),
+  steps: z.array(z.string()),
+  /**
+   * Per portion, as published. Unlike a generated recipe these are measured for
+   * the finished dish rather than summed from priced ingredients, so there is
+   * no per-ingredient breakdown to show — and inventing one to sit beside
+   * measured numbers would be worse than not having it.
+   */
+  ...Nutrition.shape,
+  image_path: z.string().nullable(),
+  source: z.string(),
+  source_url: z.string().nullable(),
+  rating: z.number().nullable(),
+  saved: z.boolean(),
+  /**
+   * Why this one is being shown, resolved per request against the kitchen and
+   * the day. `have` names the pantry items it would use, which is the sentence
+   * the card actually wants to say.
+   */
+  have: z.array(z.string()),
+  missing: z.number().int(),
+  /** Whether one portion fits inside what is left of today. */
+  fits_today: z.boolean(),
+});
+export type LibraryRecipe = z.infer<typeof LibraryRecipe>;
+
+export const LibraryQuery = z.object({
+  q: z.string().max(80).optional(),
+  category: z.string().max(40).optional(),
+  saved: z.boolean().optional(),
+  limit: z.number().int().min(1).max(60).optional(),
+});
+export type LibraryQuery = z.infer<typeof LibraryQuery>;
+
 // ---- Admin -----------------------------------------------------------------
 
 /**

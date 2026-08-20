@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import { seedLibrary } from '../src/seed-library.ts';
 import { addPantryItems, listPantry } from '../src/services/pantry.ts';
 import { limitsFor } from '../src/services/plans.ts';
 import { listRecipes } from '../src/services/recipes.ts';
@@ -180,6 +181,76 @@ describe('recipes', () => {
   });
 });
 
+describe('the starter library', () => {
+  beforeEach(async () => {
+    await seedLibrary([
+      {
+        slug: 'baked-trout',
+        title: 'Baked Trout',
+        summary: 'A quick fish supper.',
+        category: 'Main dish',
+        portions: 4,
+        serving_size: '1 fillet',
+        ingredients: [{ text: '4 trout fillets', note: null }],
+        steps: ['Bake it.'],
+        keywords: ['trout fillet', 'lime juice'],
+        kcal: 192,
+        protein_g: 25.6,
+        carbs_g: 4,
+        fat_g: 8,
+        food_groups: ['protein-foods'],
+        image_path: '/recipes/baked-trout.jpg',
+        source: 'USDA MyPlate Kitchen',
+        source_url: 'https://example.test/baked-trout',
+        rating: 4.2,
+        rating_count: 120,
+      },
+    ]);
+  });
+
+  it('lists recipes with their photo and provenance', async () => {
+    const response = await get('/library');
+    expect(response.statusCode).toBe(200);
+    expect(response.json().recipes[0]).toMatchObject({
+      slug: 'baked-trout',
+      kcal: 192,
+      image_path: '/recipes/baked-trout.jpg',
+      source: 'USDA MyPlate Kitchen',
+      source_url: 'https://example.test/baked-trout',
+      saved: false,
+    });
+  });
+
+  /** The line the card leads with, and the only one a recipe site cannot print. */
+  it('says which of your own ingredients it would use', async () => {
+    await addPantryItems(user.id, 'free', [{ name: 'Trout fillets' }]);
+    const recipe = (await get('/library')).json().recipes[0];
+    expect(recipe.have).toEqual(['Trout fillets']);
+    expect(recipe.missing).toBe(1);
+  });
+
+  it('saves and unsaves', async () => {
+    expect((await send('PATCH', '/library/baked-trout', { saved: true })).statusCode).toBe(204);
+    expect((await get('/library?saved=true')).json().recipes).toHaveLength(1);
+
+    await send('PATCH', '/library/baked-trout', { saved: false });
+    expect((await get('/library?saved=true')).json().recipes).toHaveLength(0);
+  });
+
+  it('logs one as eaten and answers with the entry', async () => {
+    const response = await send('POST', '/library/baked-trout/cook', {});
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({ description: 'Baked Trout', source: 'quick' });
+    expect((await get('/day')).json().consumed.kcal).toBe(192);
+  });
+
+  it('404s on a recipe that is not in the library', async () => {
+    expect((await get('/library/nope')).statusCode).toBe(404);
+    expect((await send('POST', '/library/nope/cook', {})).statusCode).toBe(404);
+    expect((await send('PATCH', '/library/nope', { saved: true })).statusCode).toBe(404);
+  });
+});
+
 describe('signed out', () => {
   it('refuses every kitchen route without a session', async () => {
     for (const [method, url] of [
@@ -188,6 +259,7 @@ describe('signed out', () => {
       ['POST', '/pantry/scan'],
       ['POST', '/recipes/suggest'],
       ['GET', '/recipes'],
+      ['GET', '/library'],
     ] as const) {
       const response = await app.inject({ method, url, payload: {} } as never);
       expect(response.statusCode).toBe(401);

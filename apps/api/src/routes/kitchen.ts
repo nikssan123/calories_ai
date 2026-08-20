@@ -17,6 +17,12 @@ import {
   PantryFullError,
   updatePantryItem,
 } from '../services/pantry.ts';
+import {
+  cookLibraryRecipe,
+  getLibraryRecipe,
+  listLibrary,
+  setLibrarySaved,
+} from '../services/library.ts';
 import { cookRecipe, getRecipe, listRecipes, setRecipeSaved } from '../services/recipes.ts';
 import { getUserContext } from '../services/user.ts';
 import { stripDataUrl } from './body.ts';
@@ -146,6 +152,61 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
     );
     if (!recipe) return reply.status(404).send({ error: 'No such recipe' });
     return recipe;
+  });
+
+  // ---- The starter library -------------------------------------------------
+
+  /**
+   * A hundred real recipes, ranked by what is in the kitchen and what is left
+   * of the day. No model call and no rate limit: it is a database read, and it
+   * is what makes Cook worth opening before anyone has typed anything.
+   */
+  app.get('/library', async (request) => {
+    const { userId, ...ctx } = await getUserContext(request.userId!);
+    const q = request.query as any;
+    return {
+      recipes: await listLibrary(userId, ctx, {
+        q: q?.q ?? null,
+        category: q?.category ?? null,
+        savedOnly: q?.saved === 'true',
+        limit: Number(q?.limit ?? 12),
+      }),
+    };
+  });
+
+  app.get('/library/:slug', async (request, reply) => {
+    const { userId, ...ctx } = await getUserContext(request.userId!);
+    const recipe = await getLibraryRecipe(userId, (request.params as any).slug, ctx);
+    if (!recipe) return reply.status(404).send({ error: 'No such recipe' });
+    return recipe;
+  });
+
+  app.patch('/library/:slug', async (request, reply) => {
+    const parsed = z.object({ saved: z.boolean() }).safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid update' });
+
+    const found = await setLibrarySaved(
+      request.userId!,
+      (request.params as any).slug,
+      parsed.data.saved,
+    );
+    if (!found) return reply.status(404).send({ error: 'No such recipe' });
+    return reply.status(204).send();
+  });
+
+  app.post('/library/:slug/cook', async (request, reply) => {
+    const { userId, ...ctx } = await getUserContext(request.userId!);
+    const parsed = CookRequest.safeParse(request.body ?? {});
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid request' });
+
+    const entry = await cookLibraryRecipe(userId, (request.params as any).slug, {
+      portions: parsed.data.portions,
+      meal: parsed.data.meal,
+      eatenAt: parsed.data.eaten_at ? new Date(parsed.data.eaten_at) : undefined,
+      ctx,
+    });
+    if (!entry) return reply.status(404).send({ error: 'No such recipe' });
+    return reply.status(201).send(entry);
   });
 
   /**

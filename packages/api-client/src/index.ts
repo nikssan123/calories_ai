@@ -16,6 +16,7 @@ import type {
   FoodEntry,
   Meal,
   MealTemplate,
+  LibraryRecipe,
   OnboardingState,
   PantryItem,
   PantryItemInput,
@@ -294,6 +295,34 @@ export function createApiClient({
     /** Logs a recipe as eaten. Answers with the entry, so the day updates at once. */
     cookRecipe: (id: string, payload: CookRequest = {}) =>
       request<FoodEntry>(`/recipes/${id}/cook`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+
+    // ---- The starter library ----
+
+    /**
+     * A hundred real recipes, already ranked by what is in the kitchen and what
+     * is left of today. No model call behind it — this is the answer when
+     * someone opens Cook for the first time.
+     */
+    library: (options: { q?: string; category?: string; savedOnly?: boolean; limit?: number } = {}) => {
+      const params = new URLSearchParams();
+      if (options.q) params.set('q', options.q);
+      if (options.category) params.set('category', options.category);
+      if (options.savedOnly) params.set('saved', 'true');
+      if (options.limit) params.set('limit', String(options.limit));
+      const qs = params.toString();
+      return request<{ recipes: LibraryRecipe[] }>(`/library${qs ? `?${qs}` : ''}`);
+    },
+
+    libraryRecipe: (slug: string) => request<LibraryRecipe>(`/library/${slug}`),
+
+    saveLibraryRecipe: (slug: string, saved: boolean) =>
+      request<void>(`/library/${slug}`, { method: 'PATCH', body: JSON.stringify({ saved }) }),
+
+    cookLibraryRecipe: (slug: string, payload: CookRequest = {}) =>
+      request<FoodEntry>(`/library/${slug}/cook`, {
         method: 'POST',
         body: JSON.stringify(payload),
       }),

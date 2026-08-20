@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ChefHat, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { DaySummary, PantryItem, Recipe } from '@ct/shared';
+import type { DaySummary, LibraryRecipe, PantryItem, Recipe } from '@ct/shared';
 import { api } from '@/lib/api';
 import { InsetGroup } from '@/components/InsetGroup';
 import { Pantry } from '@/components/kitchen/Pantry';
+import { LibraryCard } from '@/components/kitchen/LibraryCard';
 import { RecipeCard } from '@/components/kitchen/RecipeCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,15 +26,20 @@ export default function CookPage() {
   const [items, setItems] = useState<PantryItem[] | null>(null);
   const [day, setDay] = useState<DaySummary | null>(null);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [library, setLibrary] = useState<LibraryRecipe[] | null>(null);
+  const [librarySearch, setLibrarySearch] = useState('');
   const [message, setMessage] = useState('');
   const [wants, setWants] = useState('');
   const [thinking, setThinking] = useState(false);
+
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const load = useCallback(async () => {
     try {
       const [pantry, summary] = await Promise.all([api.pantry(), api.day()]);
       setItems(pantry.items);
       setDay(summary);
+      setRefreshKey((k) => k + 1);
     } catch (e) {
       toast.error((e as Error).message);
       setItems([]);
@@ -52,10 +58,30 @@ export default function CookPage() {
     }
   }, []);
 
+  /**
+   * The library is reloaded whenever the kitchen or the day changes, because its
+   * whole order depends on both — a shelf that still says "uses your spinach"
+   * after the spinach was deleted is worse than an unsorted one.
+   */
+  const loadLibrary = useCallback(async (search: string) => {
+    try {
+      const { recipes } = await api.library({ q: search || undefined, limit: 12 });
+      setLibrary(recipes);
+    } catch (e) {
+      toast.error((e as Error).message);
+      setLibrary([]);
+    }
+  }, []);
+
   useEffect(() => {
     void load();
     void loadRecipes();
   }, [load, loadRecipes]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => void loadLibrary(librarySearch), librarySearch ? 250 : 0);
+    return () => clearTimeout(timer);
+  }, [loadLibrary, librarySearch, refreshKey]);
 
   const remaining = day
     ? {
@@ -131,6 +157,42 @@ export default function CookPage() {
                   void load();
                 }}
               />
+            ))}
+          </div>
+        )}
+
+        {/*
+          The cold start, and the reason this screen is worth opening on day
+          one. Asking costs a model call and needs a stocked kitchen; these are
+          here already, ordered by what you have and what is left of the day.
+        */}
+        <InsetGroup
+          title="Ideas to start from"
+          footer="Real recipes from the USDA's public-domain collection, sorted by how much of one you already have."
+        >
+          <div className="p-3">
+            <Input
+              value={librarySearch}
+              onChange={(e) => setLibrarySearch(e.target.value)}
+              placeholder="Search the recipe library"
+              className="bg-muted/60 h-10 rounded-xl border-0 text-[15px]"
+            />
+          </div>
+        </InsetGroup>
+
+        {library === null ? (
+          <div className="space-y-3">
+            <Skeleton className="h-72 w-full rounded-2xl" />
+            <Skeleton className="h-72 w-full rounded-2xl" />
+          </div>
+        ) : library.length === 0 ? (
+          <p className="text-muted-foreground px-1 text-[15px]">
+            Nothing matching &ldquo;{librarySearch}&rdquo;.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {library.map((recipe) => (
+              <LibraryCard key={recipe.slug} recipe={recipe} onCooked={() => void load()} />
             ))}
           </div>
         )}
