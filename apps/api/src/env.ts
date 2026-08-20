@@ -164,10 +164,11 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
     trustProxy: source.TRUST_PROXY ? source.TRUST_PROXY.trim() : false,
     email: {
       /**
-       * No key means no mail provider, and that is a supported way to run this:
-       * the server logs what it would have sent and carries on. Nothing in the
-       * product is gated on an email arriving, so a personal install needs a
-       * Resend account only if it wants one.
+       * No key means no mail provider: the server logs what it would have sent
+       * and carries on. That is still workable on a laptop — the confirmation
+       * code appears in the log, which is where you are already looking — but it
+       * is no longer merely a convenience to configure this. Signing up now
+       * requires the code, so a deployment anyone else signs up on needs Resend.
        *
        * Forced off under test so a real key in the developer's .env can never
        * make the suite send mail to anyone.
@@ -181,7 +182,14 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
        */
       from: source.EMAIL_FROM ?? 'Day So Far <onboarding@resend.dev>',
       replyTo: source.EMAIL_REPLY_TO ?? null,
-      redirectTo: source.EMAIL_REDIRECT_TO ?? null,
+      /**
+       * Forced off under test alongside the API key, and for the same reason the
+       * database name gains a `_test` suffix: a value a developer set in their
+       * own .env must not change what the suite asserts. Without this, setting
+       * EMAIL_REDIRECT_TO — which is the recommended way to work on email
+       * locally — rewrites every recipient and subject line the tests check.
+       */
+      redirectTo: isTest ? null : (source.EMAIL_REDIRECT_TO ?? null),
       // Forced off under test for the same reason the API key is: a real secret
       // in the developer's .env must not let the suite accept a live webhook.
       webhookSecret: isTest ? null : (source.RESEND_WEBHOOK_SECRET ?? null),
