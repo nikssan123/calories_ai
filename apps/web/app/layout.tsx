@@ -1,16 +1,31 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
-import { Nav } from '@/components/Nav';
-import { Sidebar } from '@/components/Sidebar';
+import { AppFrame } from '@/components/AppFrame';
 import { AuthGate } from '@/components/AuthGate';
 import { Toaster } from '@/components/ui/sonner';
 import { THEME_INIT_SCRIPT, ThemeSync } from '@/components/ThemeSync';
 import { KeyboardInset } from '@/components/KeyboardInset';
 
+const DESCRIPTION =
+  'Say what you ate. No forms, no food database, no barcodes — describe the meal in your own words and the day adds itself up.';
+
 export const metadata: Metadata = {
   title: 'Nutrition',
-  description: 'What did I eat and how am I doing today?',
+  description: DESCRIPTION,
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Nutrition' },
+  // `/` is the landing page to anyone not signed in, so it is a link people
+  // paste at each other; without this it unfurls as a bare URL.
+  openGraph: {
+    type: 'website',
+    siteName: 'Nutrition',
+    title: 'Nutrition — just say what you ate',
+    description: DESCRIPTION,
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Nutrition — just say what you ate',
+    description: DESCRIPTION,
+  },
 };
 
 export const viewport: Viewport = {
@@ -40,19 +55,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeSync />
         <KeyboardInset />
         <AuthGate>
-          {/*
-            One shell, two shapes. Below `lg` it is a phone: a single column with
-            the tab bar at the bottom. From `lg` up the sidebar takes over
-            navigation and the content area gets the full window to lay itself
-            out in — each screen decides its own desktop composition.
-          */}
-          <div className="bg-background h-shell flex w-full overflow-hidden">
-            <Sidebar />
-            <div className="border-border mx-auto flex h-full w-full max-w-lg min-w-0 flex-col overflow-hidden sm:border-x lg:mx-0 lg:max-w-none lg:border-x-0">
-              {children}
-              <Nav />
-            </div>
-          </div>
+          <AppFrame>{children}</AppFrame>
         </AuthGate>
         <Toaster position="top-center" />
       </body>

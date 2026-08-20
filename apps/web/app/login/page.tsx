@@ -21,6 +21,11 @@ export default function LoginPage() {
   const { refresh } = useAuth();
 
   useEffect(() => {
+    // The landing page's primary CTA asks for the sign-up form by name. Read
+    // straight off `location` rather than through `useSearchParams`, which
+    // would need a Suspense boundary around the whole screen to say one word.
+    if (new URLSearchParams(window.location.search).get('mode') === 'signup') setMode('signup');
+
     void (async () => {
       try {
         const status = await api.me();

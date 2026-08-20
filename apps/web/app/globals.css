@@ -7,138 +7,167 @@
 @custom-variant keyboard (&:is(html[data-keyboard='open'] *));
 
 /*
- * Apple HIG-derived tokens. Three ideas do most of the work:
- *   Clarity   — one accent per meaning, system colours, generous negative space.
- *   Deference — chrome is translucent and recedes; the log is the interface.
- *   Depth     — grouped cards float on a recessed grouped background.
+ * ---------------------------------------------------------------------------
+ * Design tokens.
+ *
+ * Three rules hold the whole system together:
+ *
+ *   1. Persimmon is the only warm hue in the app. Calories, the active tab and
+ *      every call to action are #FF5F3D; protein, carbs, fat and exercise are
+ *      all cool. That is what lets one saturated orange carry the identity
+ *      without competing with anything — spend the boldness in one place and
+ *      keep everything around it quiet.
+ *
+ *   2. The ground is warm, near-monochrome and low-contrast, so a conversation
+ *      stays readable for a long sitting and the accent stays loud where it
+ *      does appear.
+ *
+ *   3. Going over target is not an alarm. The ring turns to ink, not to red —
+ *      the signal is unmissable but it is not a telling-off. `--destructive` is
+ *      reserved for genuinely destructive controls (delete), where red is the
+ *      right word. Retention research is blunt about punitive feedback in food
+ *      tracking, and this is the one place the design could have moralised.
+ * ---------------------------------------------------------------------------
  */
 
 :root {
-  --radius: 0.875rem;
+  --radius: 1rem; /* 16px — the hybrid's card radius */
 
-  /* iOS systemGroupedBackground: content sits on a slightly recessed ground. */
-  --background: #f2f2f7;
-  --foreground: #000000;
+  /* Warm greige ground with white cards floating on it. */
+  --background: #f6f4f1;
+  --foreground: #171614; /* warm near-black, never pure #000 */
 
   --card: #ffffff;
-  --card-foreground: #000000;
+  --card-foreground: #171614;
   --popover: #ffffff;
-  --popover-foreground: #000000;
+  --popover-foreground: #171614;
 
-  /* Monochrome primary keeps the macro hues legible as the only real colour. */
-  --primary: #1c1c1e;
-  --primary-foreground: #ffffff;
+  --primary: #171614;
+  --primary-foreground: #faf9f7;
 
-  --secondary: #e9e9ef;
-  --secondary-foreground: #1c1c1e;
+  --secondary: #ebe8e3;
+  --secondary-foreground: #171614;
 
-  --muted: #e9e9ef;
-  --muted-foreground: #8e8e93; /* systemGray */
+  --muted: #ebe8e3;
+  --muted-foreground: #8a857e;
 
-  --accent: #e9e9ef;
-  --accent-foreground: #1c1c1e;
+  --accent: #ebe8e3;
+  --accent-foreground: #171614;
 
-  --destructive: #ff3b30;
+  /* Delete affordances only — never the over-target state. */
+  --destructive: #d7382a;
   --destructive-foreground: #ffffff;
 
-  /* iOS separator: a tinted hairline, not a solid grey line. */
-  --border: rgba(60, 60, 67, 0.13);
-  --input: rgba(60, 60, 67, 0.16);
-  --ring: rgba(0, 122, 255, 0.5);
+  /* Hairlines tinted with the ground's warmth rather than a neutral grey. */
+  --border: rgba(23, 22, 20, 0.1);
+  --input: rgba(23, 22, 20, 0.14);
+  --ring: rgba(255, 95, 61, 0.45);
 
-  /* Semantic nutrition colours — iOS system palette, light variants.
-     Indigo carries calories and every interactive accent; the macros are spaced
-     around the wheel so no two read as the same colour in a row of bars. */
-  --calories: #5e5ce6;
-  --protein: #34c759;
-  --carbs: #32ade6;
-  --fat: #ff2d55;
-  --exercise: #00c7be;
+  /* Nutrition hues. Persimmon leads; the macros are spaced far enough around
+     the wheel that no two read alike in a row of bars, and all of them stay
+     cool so the accent owns "energy" by itself. */
+  --calories: #ff5f3d; /* persimmon */
+  --protein: #2ba84a;
+  --carbs: #3b82f6;
+  --fat: #8b5cf6;
+  --exercise: #0fb5ae;
 
-  /* The logo's ring runs from --calories into systemPurple; nothing else uses it. */
-  --brand-purple: #a75cf0;
+  /* The logo ring ramps persimmon into marigold — the one place the warm
+     family is allowed to widen. Nothing else uses it. */
+  --brand-ember: #ff9f1c;
 
   /* Translucent material for the header and tab bar. */
-  --material: rgba(249, 249, 251, 0.82);
+  --material: rgba(250, 249, 246, 0.82);
 
-  /* Scrollbar thumb. Tinted like --border rather than a flat grey, so a gutter
-     that does appear reads as the same hairline family as everything else. */
-  --scrollbar-thumb: rgba(60, 60, 67, 0.26);
-  --scrollbar-thumb-hover: rgba(60, 60, 67, 0.45);
+  --scrollbar-thumb: rgba(23, 22, 20, 0.22);
+  --scrollbar-thumb-hover: rgba(23, 22, 20, 0.4);
+
+  /*
+   * Motion. One spring for anything that reports a number changing — the ring,
+   * the bars, a card landing — and one plain ease for chrome that should not
+   * draw attention to itself. The overshoot is the entire "feels alive" brief;
+   * it is worth having exactly one of it rather than a curve per component.
+   */
+  --ease-spring: cubic-bezier(0.34, 1.5, 0.64, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-spring: 780ms;
+  --dur-quick: 220ms;
 }
 
 .dark {
-  --background: #000000;
-  --foreground: #ffffff;
+  --background: #121110;
+  --foreground: #f5f3ef;
 
-  --card: #1c1c1e; /* secondarySystemGroupedBackground */
-  --card-foreground: #ffffff;
-  --popover: #1c1c1e;
-  --popover-foreground: #ffffff;
+  --card: #1c1a18;
+  --card-foreground: #f5f3ef;
+  --popover: #1c1a18;
+  --popover-foreground: #f5f3ef;
 
-  --primary: #ffffff;
-  --primary-foreground: #000000;
+  --primary: #f5f3ef;
+  --primary-foreground: #121110;
 
-  --secondary: #2c2c2e;
-  --secondary-foreground: #ffffff;
+  --secondary: #262421;
+  --secondary-foreground: #f5f3ef;
 
-  --muted: #2c2c2e;
-  --muted-foreground: #98989f;
+  --muted: #262421;
+  --muted-foreground: #9a948c;
 
-  --accent: #2c2c2e;
-  --accent-foreground: #ffffff;
+  --accent: #262421;
+  --accent-foreground: #f5f3ef;
 
-  --destructive: #ff453a;
-  --destructive-foreground: #ffffff;
+  --destructive: #ff5a4d;
+  --destructive-foreground: #121110;
 
-  --border: rgba(84, 84, 88, 0.5);
-  --input: rgba(84, 84, 88, 0.65);
-  --ring: rgba(10, 132, 255, 0.6);
+  --border: rgba(245, 243, 239, 0.12);
+  --input: rgba(245, 243, 239, 0.17);
+  --ring: rgba(255, 122, 92, 0.5);
 
-  --calories: #7d7aff;
-  --protein: #30d158;
-  --carbs: #64d2ff;
-  --fat: #ff375f;
-  --exercise: #66d4cf;
-  --brand-purple: #c489f7;
+  /* Lifted a step so each hue keeps its chroma against a dark ground. */
+  --calories: #ff7a5c;
+  --protein: #3cc463;
+  --carbs: #5d9bff;
+  --fat: #a78bfa;
+  --exercise: #2dd4cb;
 
-  --material: rgba(28, 28, 30, 0.78);
+  --brand-ember: #ffb347;
 
-  --scrollbar-thumb: rgba(235, 235, 245, 0.22);
-  --scrollbar-thumb-hover: rgba(235, 235, 245, 0.4);
+  --material: rgba(28, 26, 24, 0.8);
+
+  --scrollbar-thumb: rgba(245, 243, 239, 0.2);
+  --scrollbar-thumb-hover: rgba(245, 243, 239, 0.38);
 }
 
 /* Honour the OS setting as well as the .dark class. */
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
-    --background: #000000;
-    --foreground: #ffffff;
-    --card: #1c1c1e;
-    --card-foreground: #ffffff;
-    --popover: #1c1c1e;
-    --popover-foreground: #ffffff;
-    --primary: #ffffff;
-    --primary-foreground: #000000;
-    --secondary: #2c2c2e;
-    --secondary-foreground: #ffffff;
-    --muted: #2c2c2e;
-    --muted-foreground: #98989f;
-    --accent: #2c2c2e;
-    --accent-foreground: #ffffff;
-    --destructive: #ff453a;
-    --destructive-foreground: #ffffff;
-    --border: rgba(84, 84, 88, 0.5);
-    --input: rgba(84, 84, 88, 0.65);
-    --ring: rgba(10, 132, 255, 0.6);
-    --calories: #7d7aff;
-    --protein: #30d158;
-    --carbs: #64d2ff;
-    --fat: #ff375f;
-    --exercise: #66d4cf;
-    --brand-purple: #c489f7;
-    --material: rgba(28, 28, 30, 0.78);
-    --scrollbar-thumb: rgba(235, 235, 245, 0.22);
-    --scrollbar-thumb-hover: rgba(235, 235, 245, 0.4);
+    --background: #121110;
+    --foreground: #f5f3ef;
+    --card: #1c1a18;
+    --card-foreground: #f5f3ef;
+    --popover: #1c1a18;
+    --popover-foreground: #f5f3ef;
+    --primary: #f5f3ef;
+    --primary-foreground: #121110;
+    --secondary: #262421;
+    --secondary-foreground: #f5f3ef;
+    --muted: #262421;
+    --muted-foreground: #9a948c;
+    --accent: #262421;
+    --accent-foreground: #f5f3ef;
+    --destructive: #ff5a4d;
+    --destructive-foreground: #121110;
+    --border: rgba(245, 243, 239, 0.12);
+    --input: rgba(245, 243, 239, 0.17);
+    --ring: rgba(255, 122, 92, 0.5);
+    --calories: #ff7a5c;
+    --protein: #3cc463;
+    --carbs: #5d9bff;
+    --fat: #a78bfa;
+    --exercise: #2dd4cb;
+    --brand-ember: #ffb347;
+    --material: rgba(28, 26, 24, 0.8);
+    --scrollbar-thumb: rgba(245, 243, 239, 0.2);
+    --scrollbar-thumb-hover: rgba(245, 243, 239, 0.38);
   }
 }
 
@@ -174,6 +203,9 @@
   --color-fat: var(--fat);
   --color-exercise: var(--exercise);
   --color-material: var(--material);
+
+  --ease-spring: var(--ease-spring);
+  --ease-out: var(--ease-out);
 
   --font-sans:
     -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Segoe UI', system-ui,
@@ -294,4 +326,69 @@
    tracks the browser chrome but not the keyboard, hence the subtraction. */
 @utility h-shell {
   height: calc(100dvh - var(--keyboard-inset));
+}
+
+/*
+ * The app shell owns the viewport and nothing outside it scrolls — but the
+ * landing page is a document, not an app. <Landing> sets this attribute while
+ * it is mounted (the same trick <KeyboardInset> uses for its inset) so the page
+ * scrolls natively and mobile browser chrome can collapse out of the way.
+ */
+@layer base {
+  html[data-scroll='document'],
+  html[data-scroll='document'] body {
+    height: auto;
+    overflow: visible;
+    overscroll-behavior-y: auto;
+  }
+
+  html[data-scroll='document'] {
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html[data-scroll='document'] {
+      scroll-behavior: auto;
+    }
+  }
+}
+
+/*
+ * Marketing type. Apple tightens tracking as type grows and lets the largest
+ * sizes run fluid, because the same headline has to hold a 375px phone and a
+ * 27" display without a breakpoint jump in the middle.
+ */
+@utility text-display {
+  font-size: clamp(2.5rem, 7vw, 4.25rem);
+  line-height: 1.04;
+  font-weight: 600;
+  letter-spacing: -0.038em;
+}
+
+@utility text-section-title {
+  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  line-height: 1.12;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+/* Body copy that sits under display type: one step up from the app's 15px. */
+@utility text-lede {
+  font-size: clamp(1.0625rem, 1.5vw, 1.1875rem);
+  line-height: 1.6;
+  letter-spacing: -0.011em;
+}
+
+/*
+ * A one-shot ring on an entry the agent has just corrected. It has to be an
+ * animation rather than a transition, because the card is not remounted when
+ * the numbers change — that is the whole claim being made.
+ */
+@keyframes entry-touched {
+  from {
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--calories), transparent 20%);
+  }
+  to {
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--calories), transparent 100%);
+  }
 }

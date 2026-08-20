@@ -55,7 +55,8 @@ pnpm dev       # API on :4000, web on :3000
 its prerequisites first, so a missing Docker daemon or an old Node fails with a
 sentence telling you what to fix rather than a stack trace three steps later.
 
-Open <http://localhost:3000>, create an account, and the journal will interview you.
+Open <http://localhost:3000>. Signed out you get the landing page; create an
+account from it and the journal will interview you.
 Then optionally `pnpm seed -- --email=you@example.com` for 21 days of demo history.
 
 **Other scripts:** `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm db:reset` (drop
@@ -146,6 +147,25 @@ Colour lives in `app/globals.css` as iOS system tokens. Indigo carries calories 
 every interactive accent; the macros are spaced around the wheel (green protein,
 cyan carbs, pink fat, teal exercise) so no two read alike in a row of bars. Changing
 the accent is one token — `--calories`, in both the light and dark blocks.
+
+## The landing page
+
+`/` is two screens at one address: the journal for an account, and the landing page
+for anyone without a session. `AuthGate` treats it as public rather than bouncing
+strangers to `/login`, `AppFrame` hands it the window bare — no sidebar, no tab bar,
+and the document scrolls itself so mobile browser chrome can collapse — and
+`components/landing/` holds the page.
+
+It is built from the app's own `CalorieRing`, `ChatActionCard` and `MacroBars`
+rather than screenshots, so the product shot cannot drift away from the product.
+`HeroDemo` plays a scripted two-turn conversation through them: a meal is logged,
+then corrected, and the *same* entry card changes its numbers in place — which is
+the thing worth advertising and the thing a still image cannot show. It pauses when
+scrolled off screen, and `prefers-reduced-motion` gets the finished conversation
+with no animation at all.
+
+The CTA reads `signup_allowed` off the session check, so a server with registration
+closed offers a stranger "Sign in" instead of a wall.
 
 The logo is a progress ring that is also a speech bubble: it opens at 10 o'clock
 the way the day's calories are still open, and its three dots read at once as a
