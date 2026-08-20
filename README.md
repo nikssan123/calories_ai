@@ -1,4 +1,4 @@
-# Nutrition
+# Day So Far
 
 An AI-first calorie tracker. You say what you ate; it produces structured nutrition data.
 
@@ -167,11 +167,15 @@ with no animation at all.
 The CTA reads `signup_allowed` off the session check, so a server with registration
 closed offers a stranger "Sign in" instead of a wall.
 
-The logo is a progress ring that is also a speech bubble: it opens at 10 o'clock
-the way the day's calories are still open, and its three dots read at once as a
-typing indicator and as the macros. `components/Logo.tsx` draws it from the
-tokens so it follows the in-app theme toggle; `public/logo.svg`, `app/icon.svg`
-and `app/apple-icon.png` are the same geometry with the colours baked in.
+The logo is a progress ring that is also a speech bubble, and it is the name
+drawn: a faint track carries the whole day, the solid arc is the part of it that
+has been logged, and the arc stops where you have got to — the day so far —
+running out into the bubble's tail, because what moves it is always something you
+said. The three dots read at once as a typing indicator and as the macros.
+`components/Logo.tsx` draws it from the tokens so it follows the in-app theme
+toggle; `public/logo.svg`, `app/icon.svg` and `app/apple-icon.png` are the same
+geometry with the colours baked in — the last on a filled tile, since a home
+screen icon has no page behind it to sit on.
 
 ## Tests
 

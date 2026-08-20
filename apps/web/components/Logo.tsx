@@ -3,9 +3,13 @@
 import { useId } from 'react';
 
 /**
- * The app mark: a progress ring that is also a speech bubble. The ring opens at
- * 10 o'clock the way the day's calories are still open, and the three dots read
- * at once as a typing indicator and as the macros — protein, carbs, fat.
+ * The app mark: the day as a ring, and a speech bubble.
+ *
+ * A faint track carries the whole day. The solid arc is the part of it that has
+ * been logged and it stops where you have got to — the day so far — ending in a
+ * bubble's tail, because what moves the arc is always something you said. The
+ * three dots read at once as a typing indicator and as the macros: protein,
+ * carbs, fat.
  *
  * Colours come from the theme tokens (via `style`, since presentation
  * attributes don't resolve `var()`), so the mark follows the in-app light/dark
@@ -23,7 +27,7 @@ export function Logo({ size = 28, className }: { size?: number; className?: stri
       viewBox="0 0 64 64"
       fill="none"
       role="img"
-      aria-label="Nutrition"
+      aria-label="Day So Far"
       className={className}
     >
       <defs>
@@ -41,14 +45,26 @@ export function Logo({ size = 28, className }: { size?: number; className?: stri
         </linearGradient>
       </defs>
 
+      {/* The hours still to come. Tinted with the accent rather than greyed, so
+          it belongs to the mark; at favicon sizes it drops out of sight and
+          leaves the arc reading as the ring it always was. */}
+      <circle
+        cx="32"
+        cy="30.3"
+        r="20"
+        fill="none"
+        strokeWidth="7"
+        strokeOpacity="0.2"
+        style={{ stroke: 'var(--calories)' }}
+      />
       {/* The bubble's tail, hung off the lower-left of the ring. */}
       <path
         d="M27.28 50.76Q19.36 54.29 14.51 56.45A1.9 1.9 0 0 0 11.49 54.15Q12.17 48.71 13.29 39.83Z"
         fill={`url(#${gradient})`}
       />
-      {/* 300° of ring — a day in progress, not a closed circle. */}
+      {/* 243° of it — a day in progress, running out into the tail. */}
       <path
-        d="M32 10.3A20 20 0 1 1 14.68 20.3"
+        d="M32 10.3A20 20 0 1 1 14.18 39.38"
         fill="none"
         stroke={`url(#${gradient})`}
         strokeWidth="7"

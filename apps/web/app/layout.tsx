@@ -10,20 +10,20 @@ const DESCRIPTION =
   'Say what you ate. No forms, no food database, no barcodes — describe the meal in your own words and the day adds itself up.';
 
 export const metadata: Metadata = {
-  title: 'Nutrition',
+  title: 'Day So Far',
   description: DESCRIPTION,
-  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Nutrition' },
+  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Day So Far' },
   // `/` is the landing page to anyone not signed in, so it is a link people
   // paste at each other; without this it unfurls as a bare URL.
   openGraph: {
     type: 'website',
-    siteName: 'Nutrition',
-    title: 'Nutrition — just say what you ate',
+    siteName: 'Day So Far',
+    title: 'Day So Far — just say what you ate',
     description: DESCRIPTION,
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Nutrition — just say what you ate',
+    title: 'Day So Far — just say what you ate',
     description: DESCRIPTION,
   },
 };

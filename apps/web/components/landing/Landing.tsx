@@ -121,7 +121,7 @@ function Header({ start }: { start: Cta }) {
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center px-6">
         <a href="#top" className="flex items-center gap-2.5">
           <Logo size={26} />
-          <span className="text-[17px] font-semibold tracking-tight">Nutrition</span>
+          <span className="text-[17px] font-semibold tracking-tight">Day So Far</span>
         </a>
 
         <nav className="text-muted-foreground ml-auto hidden items-center gap-7 text-sm md:flex">
@@ -528,13 +528,13 @@ function Footer() {
       <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-5 sm:flex-row sm:justify-between">
         <div className="flex items-center gap-2.5">
           <Logo size={22} />
-          <span className="text-sm font-medium">Nutrition</span>
+          <span className="text-sm font-medium">Day So Far</span>
         </div>
         <nav className="text-muted-foreground flex items-center gap-6 text-sm">
           <Link href="/login" className="hover:text-foreground transition-colors">
             Sign in
           </Link>
-          <span>© {new Date().getFullYear()} Nutrition</span>
+          <span>© {new Date().getFullYear()} Day So Far</span>
         </nav>
       </div>
     </footer>

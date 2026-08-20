@@ -1,26 +1,35 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Nutrition">
-  <title>Nutrition</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Day So Far">
+  <title>Day So Far</title>
   <!--
-    A progress ring that is also a speech bubble. The ring opens at 10 o'clock,
-    the way the day's calories are still open; the three dots are at once a
-    typing indicator and the macros — protein, carbs, fat.
+    The day as a ring, and a speech bubble. The faint track is the whole day;
+    the solid arc is the part of it that has been logged, stopping where you
+    have got to and running out into the bubble's tail, because what moves the
+    arc is always something you said. The three dots are at once a typing
+    indicator and the macros: protein, carbs, fat.
 
-    The ring ramps the accent (--calories) into jade (--logo-ramp); the three
-    macro dots are the app's own protein, carbs and fat hues, so the mark is
-    made of the same palette it introduces. Dark variants swap in below — the
-    accent lifts a long way there, because a forest green that reads as
-    structure on paper is nearly invisible on ink. Keep this file in step with
-    components/Logo.tsx.
+    Keep this file in step with components/Logo.tsx.
   -->
   <style>
-    .s0 { stop-color: #0f7b5c } /* forest — the app's --calories */
+    /* The ring ramps the accent (--calories) into jade (--logo-ramp), and the
+       three dots are the app's own protein, carbs and fat hues, so the mark is
+       made of the same palette it introduces. The dark variants lift the accent
+       a long way, because a forest green that reads as structure on paper is
+       nearly invisible on ink.
+
+       This note is a CSS comment rather than the XML one above because a double
+       hyphen is legal here and forbidden there — and an SVG served as a favicon
+       is parsed strictly, so an XML comment naming a custom property silently
+       breaks the whole file. */
+    .s0 { stop-color: #0f7b5c } /* forest */
     .s1 { stop-color: #12a594 } /* jade, pulled back so forest still leads */
+    .track   { stroke: #0f7b5c }
     .protein { fill: #f59e0b }
     .carbs   { fill: #3b82f6 }
     .fat     { fill: #8b5cf6 }
     @media (prefers-color-scheme: dark) {
       .s0 { stop-color: #34d9a4 }
       .s1 { stop-color: #2dd4bf }
+      .track   { stroke: #34d9a4 }
       .protein { fill: #fbbf24 }
       .carbs   { fill: #5d9bff }
       .fat     { fill: #a78bfa }
@@ -28,13 +37,14 @@
   </style>
   <defs>
     <!-- userSpaceOnUse so the ring and the tail share one continuous ramp. -->
-    <linearGradient id="nutrition-mark" gradientUnits="userSpaceOnUse" x1="8.5" y1="6.8" x2="55.5" y2="57.2">
+    <linearGradient id="day-mark" gradientUnits="userSpaceOnUse" x1="8.5" y1="6.8" x2="55.5" y2="57.2">
       <stop offset="0" class="s0" />
       <stop offset="1" class="s1" />
     </linearGradient>
   </defs>
-  <path d="M27.28 50.76Q19.36 54.29 14.51 56.45A1.9 1.9 0 0 0 11.49 54.15Q12.17 48.71 13.29 39.83Z" fill="url(#nutrition-mark)" />
-  <path d="M32 10.3A20 20 0 1 1 14.68 20.3" fill="none" stroke="url(#nutrition-mark)" stroke-width="7" stroke-linecap="round" />
+  <circle cx="32" cy="30.3" r="20" fill="none" class="track" stroke-width="7" stroke-opacity="0.2" />
+  <path d="M27.28 50.76Q19.36 54.29 14.51 56.45A1.9 1.9 0 0 0 11.49 54.15Q12.17 48.71 13.29 39.83Z" fill="url(#day-mark)" />
+  <path d="M32 10.3A20 20 0 1 1 14.18 39.38" fill="none" stroke="url(#day-mark)" stroke-width="7" stroke-linecap="round" />
   <circle cx="24" cy="30.3" r="2.8" class="protein" />
   <circle cx="32" cy="30.3" r="2.8" class="carbs" />
   <circle cx="40" cy="30.3" r="2.8" class="fat" />
