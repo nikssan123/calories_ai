@@ -84,8 +84,10 @@ export function LibraryCard({
 
   return (
     <article className="bg-card overflow-hidden rounded-[var(--radius)] border-border chunk border-2">
+      {/* Shallower than it was: these sit two-up in a grid now, and a 16:10
+          photo on a full-width card made one recipe the whole screen. */}
       {recipe.image_path && (
-        <div className="bg-muted relative aspect-[16/10] w-full">
+        <div className="bg-muted relative aspect-[16/9] w-full">
           <img
             src={recipe.image_path}
             alt={recipe.title}

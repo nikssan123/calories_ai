@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PantryItem } from '@ct/shared';
 import { api } from '@/lib/api';
@@ -19,6 +19,13 @@ import { FridgeScan } from '@/components/kitchen/FridgeScan';
  * ten-second pass before asking for ideas. Ages are shown out loud, a stale item
  * is one tap from confirmed or gone, and staples fold away because "do you still
  * have salt" is not a question worth anyone's screen space.
+ *
+ * It folds away too, and that is the important part. The kitchen is a
+ * *precondition* for the question this screen exists to answer, not the answer
+ * — but it was the first thing on the page and it held the top third of the
+ * screen open permanently, so the recipes started below the fold. Stocked, it
+ * is one line you can tap. Empty, it opens itself, because on day one the list
+ * is the only thing to do here.
  */
 
 /** Past this many days an item is old enough to be worth a second look. */
@@ -37,6 +44,18 @@ export function Pantry({
 
   const staples = items.filter((i) => i.is_staple);
   const fresh = items.filter((i) => !i.is_staple);
+  const staleCount = fresh.filter((i) => daysSince(i.last_seen_at) >= STALE_DAYS).length;
+
+  /*
+   * Open when there is nothing to show, shut once there is. Held as state
+   * rather than derived so that opening it to add one thing does not slam it
+   * shut again the moment the item lands.
+   */
+  const [open, setOpen] = useState(items.length === 0);
+  const empty = items.length === 0;
+  useEffect(() => {
+    if (empty) setOpen(true);
+  }, [empty]);
 
   async function add() {
     const name = draft.trim();
@@ -81,9 +100,45 @@ export function Pantry({
 
   return (
     <InsetGroup
-      title="Your kitchen"
-      footer="A rough list is plenty — it only has to be close enough to cook from."
+      title="🧺  Your kitchen"
+      footer={open ? 'A rough list is plenty — it only has to be close enough to cook from.' : undefined}
     >
+      {/*
+        The summary line. It is the whole component when the kitchen is stocked,
+        and it says what is in there rather than just "Your kitchen", so folding
+        it away costs no information — the count and the number of things worth
+        re-checking are the only two facts the collapsed state has to carry.
+      */}
+      {!empty && (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="active:bg-muted/60 flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors"
+        >
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-body font-semibold">
+              {fresh.length} {fresh.length === 1 ? 'thing' : 'things'}
+              {staples.length > 0 && ` and ${staples.length} staples`}
+            </span>
+            {staleCount > 0 && !open && (
+              <span className="text-footnote block font-semibold text-[var(--fat-text)]">
+                {staleCount} worth checking you still have
+              </span>
+            )}
+          </span>
+          <ChevronDown
+            size={18}
+            className={cn(
+              'text-muted-foreground shrink-0 transition-transform duration-[var(--dur-quick)]',
+              open && 'rotate-180',
+            )}
+          />
+        </button>
+      )}
+
+      {!open ? null : (
+      <>
       <div className="flex items-center gap-2 p-3">
         <Input
           value={draft}
@@ -187,6 +242,8 @@ export function Pantry({
             </div>
           )}
         </div>
+      )}
+      </>
       )}
     </InsetGroup>
   );
