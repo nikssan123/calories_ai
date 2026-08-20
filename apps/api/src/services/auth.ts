@@ -79,6 +79,21 @@ export async function destroySession(token: string): Promise<void> {
   await query('DELETE FROM auth_sessions WHERE token_hash = $1', [hashToken(token)]);
 }
 
+/**
+ * Signs an account out everywhere.
+ *
+ * Called on a password reset, where it is the substantive half of the action:
+ * changing the password stops the next sign-in, but only this stops the person
+ * who is already inside.
+ */
+export async function destroyAllSessions(userId: string): Promise<number> {
+  const rows = await query<{ id: string }>(
+    'DELETE FROM auth_sessions WHERE user_id = $1 RETURNING id',
+    [userId],
+  );
+  return rows.length;
+}
+
 export async function purgeExpiredSessions(): Promise<void> {
   await query('DELETE FROM auth_sessions WHERE expires_at <= now()');
 }

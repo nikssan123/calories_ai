@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { query } from './db.ts';
 import { hasSubscriptionAuth } from './ai/client.ts';
 import { generateWeeklyReview } from './ai/review.ts';
+import { sendWeeklyReviewEmail } from './email/notify.ts';
 import { reviewForWeek, reviewWeekFor } from './services/reviews.ts';
 import { listActiveUsers } from './services/user.ts';
 import { localDateFor, localPartsFor } from './time.ts';
@@ -66,6 +67,23 @@ export async function runDueReviews(
       await generateWeeklyReview(user.id, { today });
       result.generated.push(user.id);
       logger?.info({ userId: user.id, week: week.start }, 'weekly review published');
+
+      /*
+       * And then tell them it exists.
+       *
+       * This is the one notification the product sends because it wants to
+       * rather than because something happened to the account, and it is worth
+       * sending for a specific reason: a weekly review nobody opens is a
+       * week of someone's logging spent on nothing. It is also the one
+       * notification with an unsubscribe link, which is the deal.
+       *
+       * Inside the same try as the generation, and after it, so an email
+       * failure is reported against the user it belongs to — but the review
+       * itself is already committed by this point and stays published either
+       * way. Sending is keyed on the week, so a later tick will not send twice.
+       */
+      const published = await reviewForWeek(user.id, week.start);
+      if (published) await sendWeeklyReviewEmail(user.id, published, logger);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       result.failed.push({ userId: user.id, error: message });

@@ -15,6 +15,7 @@ import { savePhoto } from '../src/services/photos.ts';
 import { verifyPassword } from '../src/services/auth.ts';
 import { recordUsage } from '../src/services/usage.ts';
 import { scriptAgent } from './helpers/agent-mock.ts';
+import { emailTo, mailbox } from './helpers/email.ts';
 import {
   addMeal,
   addWeight,
@@ -492,6 +493,59 @@ describe('actions', () => {
 
     it('returns null rather than throwing for a missing account', async () => {
       expect(await deleteAccount('00000000-0000-0000-0000-000000000000')).toBeNull();
+    });
+  });
+
+  /**
+   * Everything an administrator can do here happens to someone who is not in
+   * the room. Each of these actions is silent from the inside — the app simply
+   * starts behaving differently — so each of them says so.
+   */
+  describe('telling the account what was done to it', () => {
+    it('reports a password an administrator set', async () => {
+      await post(`/admin/users/${member.id}/password`, { password: 'a-new-password' });
+
+      // From the owner's side this is indistinguishable from being compromised
+      // until somebody says otherwise.
+      expect(emailTo(member.email)).toMatchObject({ subject: 'Your password was changed' });
+    });
+
+    it('reports a suspension, and says the data is untouched', async () => {
+      await post(`/admin/users/${member.id}/disabled`, { disabled: true });
+
+      const message = emailTo(member.email)!;
+      expect(message.subject).toBe('Your account has been suspended');
+      expect(message.text).toContain('Nothing has been deleted');
+    });
+
+    it('reports being let back in', async () => {
+      await post(`/admin/users/${member.id}/disabled`, { disabled: true });
+      await post(`/admin/users/${member.id}/disabled`, { disabled: false });
+
+      expect(mailbox().at(-1)).toMatchObject({ subject: 'Your account is active again' });
+    });
+
+    it('sends the same deletion receipt an owner would get', async () => {
+      await addMeal(member, { date: '2026-03-01', kcal: 500 });
+
+      await app.inject({
+        method: 'DELETE',
+        url: `/admin/users/${member.id}`,
+        headers: { cookie },
+        payload: { confirm_email: member.email },
+      });
+
+      const message = emailTo(member.email)!;
+      expect(message.subject).toBe('Your account has been deleted');
+      expect(message.text).toContain('1 entry');
+    });
+
+    it('says nothing when the action did not happen', async () => {
+      const missing = '00000000-0000-0000-0000-000000000000';
+      await post(`/admin/users/${missing}/disabled`, { disabled: true });
+      await post(`/admin/users/${missing}/password`, { password: 'a-new-password' });
+
+      expect(mailbox()).toHaveLength(0);
     });
   });
 

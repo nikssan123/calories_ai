@@ -4,12 +4,14 @@ import { ChatRequest, DeleteAccountRequest, Meal, ProfileUpdate, RepeatRequest }
 import { AUTH_HELP, authDescription, hasSubscriptionAuth } from '../ai/client.ts';
 import { generateWeeklyReview } from '../ai/review.ts';
 import { runTurn } from '../ai/run.ts';
+import { sendAccountDeletedEmail } from '../email/notify.ts';
+import { verifyUnsubscribe } from '../email/unsubscribe.ts';
 import { deleteAccount } from '../services/admin.ts';
 import { proposeTargets } from '../services/adaptive.ts';
 import { listMessages } from '../services/chat.ts';
 import { mealTemplates, repeatFoodEntry } from '../services/history.ts';
 import { savePhoto, readPhoto, readPhotoById, verifyPhotoUrl } from '../services/photos.ts';
-import { getSecret, PHOTO_URL_SECRET } from '../services/secrets.ts';
+import { EMAIL_UNSUBSCRIBE_SECRET, getSecret, PHOTO_URL_SECRET } from '../services/secrets.ts';
 import { SESSION_COOKIE } from '../services/auth.ts';
 import {
   deleteExerciseEntry,
@@ -29,6 +31,7 @@ import {
   getUserContext,
   markOnboarded,
   missingProfileFields,
+  setWeeklyReviewEmails,
   updateUser,
 } from '../services/user.ts';
 import { addDays, dateRange, localDateFor } from '../time.ts';
@@ -288,8 +291,32 @@ export async function registerRoutes(app: FastifyInstance) {
       return reply.status(403).send({ error: 'That password is not correct.' });
     }
 
+    // Read before the row is destroyed, because the confirmation goes to an
+    // address that is about to stop existing as far as this database is
+    // concerned.
+    const recipient = { email: profile.email, name: profile.display_name };
+
     const summary = await deleteAccount(userId);
     if (!summary) return reply.status(404).send({ error: 'Account not found' });
+
+    /*
+     * A receipt, and the last thing this address ever hears from us.
+     *
+     * Sent after the deletion rather than before, so it can only ever describe
+     * something that actually happened — and deliberately not allowed to affect
+     * the outcome: an account that has been erased stays erased whether or not
+     * the email about it made it out of the building.
+     */
+    await sendAccountDeletedEmail(
+      {
+        email: recipient.email,
+        name: recipient.name,
+        // Counts, not paths — for the same reason the response below carries
+        // counts: the server's own disk layout is nobody else's business.
+        counts: { ...summary, photos: summary.photos.length },
+      },
+      request.log,
+    );
 
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
     // Counts, not the file paths the admin view gets: the server's own layout
@@ -378,6 +405,34 @@ export async function registerRoutes(app: FastifyInstance) {
     const photo = await readPhoto(request.userId, photoId);
     if (!photo) return reply.status(404).send({ error: 'Photo not found' });
     return reply.type(photo.mediaType).send(photo.bytes);
+  });
+
+  // ---- Email preferences ---------------------------------------------------
+
+  /**
+   * Unsubscribing, from the link at the bottom of the email.
+   *
+   * Public, and it has to be. Whoever is following this link is reading their
+   * mail, not using the app, and quite possibly on a device that has never had
+   * a session here — a sign-in wall between someone and the "stop emailing me"
+   * button is the single most reliable way to convert an unsubscribe into a
+   * spam report. The HMAC in the query string is what stands in for the
+   * session, and all it can buy is silence.
+   *
+   * POST rather than GET because a link preview fetcher would otherwise
+   * unsubscribe people who merely received the email — and because RFC 8058
+   * one-click, which is what Gmail's own button posts, requires it.
+   */
+  app.post('/email/unsubscribe', async (request, reply) => {
+    const { u, s } = (request.query as any) ?? {};
+    const secret = await getSecret(EMAIL_UNSUBSCRIBE_SECRET);
+
+    if (!verifyUnsubscribe(u, s, secret)) {
+      return reply.status(403).send({ error: 'That unsubscribe link is not valid.' });
+    }
+
+    await setWeeklyReviewEmails(u as string, false);
+    return { ok: true as const, message: 'You will not get the weekly review by email again.' };
   });
 }
 

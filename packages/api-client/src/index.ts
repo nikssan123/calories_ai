@@ -1,5 +1,6 @@
 import type {
   AccountDeletion,
+  Acknowledged,
   AdaptiveProposal,
   Calendar,
   AdminOverview,
@@ -114,6 +115,44 @@ export function createApiClient({
       request<AuthStatus>('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
 
     logout: () => request<AuthStatus>('/auth/logout', { method: 'POST' }),
+
+    /**
+     * Asks for a reset link. Resolves the same way whether or not the address
+     * has an account — the API will not say, and neither will this.
+     */
+    forgotPassword: (email: string) =>
+      request<Acknowledged>('/auth/password/forgot', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      }),
+
+    /**
+     * Spends the link. Signs every device out, including this one, and does not
+     * sign the caller back in — send them to the login screen afterwards.
+     */
+    resetPassword: (token: string, password: string) =>
+      request<Acknowledged>('/auth/password/reset', {
+        method: 'POST',
+        body: JSON.stringify({ token, password }),
+      }),
+
+    /** Confirms an address from the emailed link. Needs no session. */
+    verifyEmail: (token: string) =>
+      request<Acknowledged>('/auth/verify', { method: 'POST', body: JSON.stringify({ token }) }),
+
+    /** Another confirmation link, for the one that went to spam. */
+    resendVerification: () => request<Acknowledged>('/auth/verify/resend', { method: 'POST' }),
+
+    /**
+     * Turns off the weekly review email from the link in its own footer. Takes
+     * a signature rather than a session: whoever is clicking it is in their
+     * mail client, not signed in here.
+     */
+    unsubscribe: (userId: string, signature: string) =>
+      request<Acknowledged>(
+        `/email/unsubscribe?u=${encodeURIComponent(userId)}&s=${encodeURIComponent(signature)}`,
+        { method: 'POST' },
+      ),
 
     /** Irreversible, and takes every other signed-in device with it. */
     deleteAccount: (password: string) =>

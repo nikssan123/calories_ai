@@ -125,6 +125,12 @@ export type DaySummary = z.infer<typeof DaySummary>;
 export const Profile = z.object({
   id: z.string().uuid(),
   email: z.string().nullable(),
+  /**
+   * Whether the address has been proved. Nothing is gated on it — the app works
+   * either way — but a password reset can only ever reach a mailbox someone can
+   * actually open, so the setup screen offers to send the link again.
+   */
+  email_verified: z.boolean(),
   display_name: z.string().nullable(),
   sex: Sex.nullable(),
   birth_date: z.string().nullable(),
@@ -136,12 +142,20 @@ export const Profile = z.object({
   /** §"Day boundaries": 4 means 1am counts toward the previous day. */
   day_start_hour: z.number().int().min(0).max(12),
   is_setup_complete: z.boolean(),
+  /**
+   * Monday's review, in the inbox. The only notification this server sends that
+   * is a matter of taste — everything else is about the account itself and is
+   * not something to have an opinion about receiving.
+   */
+  notify_weekly_review: z.boolean(),
 });
 export type Profile = z.infer<typeof Profile>;
 
 export const ProfileUpdate = Profile.omit({
   id: true,
   email: true,
+  // Proved by clicking a link, never by asking to be believed.
+  email_verified: true,
   is_setup_complete: true,
 }).partial();
 export type ProfileUpdate = z.infer<typeof ProfileUpdate>;
@@ -202,6 +216,43 @@ export const DeleteAccountRequest = z.object({
   password: z.string().min(1).max(200),
 });
 export type DeleteAccountRequest = z.infer<typeof DeleteAccountRequest>;
+
+/**
+ * Asking for a reset link.
+ *
+ * The response is the same whether or not the address has an account, which is
+ * why this schema is so thin: anything richer would be a way to ask the server
+ * who has registered.
+ */
+export const PasswordResetRequest = z.object({
+  email: z.string().email().max(254),
+});
+export type PasswordResetRequest = z.infer<typeof PasswordResetRequest>;
+
+/** Spending the link. The token is the proof, so no session is involved. */
+export const PasswordReset = z.object({
+  token: z.string().min(1).max(400),
+  password: z.string().min(8).max(200),
+});
+export type PasswordReset = z.infer<typeof PasswordReset>;
+
+/** Proving an address, from the link in the confirmation email. */
+export const EmailVerification = z.object({
+  token: z.string().min(1).max(400),
+});
+export type EmailVerification = z.infer<typeof EmailVerification>;
+
+/**
+ * What an endpoint that must not reveal anything says. Both password reset and
+ * "send me another confirmation link" answer with this and nothing else — the
+ * message is written for someone who is looking at the screen, and says the
+ * same thing to someone probing for registered addresses.
+ */
+export const Acknowledged = z.object({
+  ok: z.literal(true),
+  message: z.string(),
+});
+export type Acknowledged = z.infer<typeof Acknowledged>;
 
 /** What was destroyed, so the confirmation can say it rather than imply it. */
 export const AccountDeletion = z.object({

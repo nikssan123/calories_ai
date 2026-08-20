@@ -12,6 +12,13 @@ import { queryOne } from '../db.ts';
 /** Signs photo URLs, so a native client can load an image without a session. */
 export const PHOTO_URL_SECRET = 'photo_url';
 
+/**
+ * Signs unsubscribe links. Deliberately not a row in `auth_tokens`: an
+ * unsubscribe link sits in an inbox for years and must still work, and the only
+ * thing it can do is switch off a notification the recipient did not want.
+ */
+export const EMAIL_UNSUBSCRIBE_SECRET = 'email_unsubscribe';
+
 const cache = new Map<string, string>();
 
 export async function getSecret(name: string): Promise<string> {

@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { usePathname, useRouter } from 'next/navigation';
 import type { AuthStatus, Profile } from '@ct/shared';
 import { api } from '@/lib/api';
+import { isEmailedRoute } from '@/lib/routes';
 
 interface AuthValue {
   /** Whether there is a session at all. `profile` is null for other reasons too. */
@@ -43,9 +44,16 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const onLogin = pathname === '/login';
-  // The landing page lives at `/`, so an anonymous visitor there is not lost —
-  // they are exactly where they are supposed to be.
-  const isPublic = onLogin || pathname === '/';
+  /*
+   * The landing page lives at `/`, so an anonymous visitor there is not lost —
+   * they are exactly where they are supposed to be.
+   *
+   * The three routes after it are reached from a link in an email, by someone
+   * who by definition cannot sign in (or does not want to). Bouncing them to
+   * `/login` would strip the token out of the URL on the way, which turns
+   * "reset my password" into a loop with no exit.
+   */
+  const isPublic = onLogin || pathname === '/' || isEmailedRoute(pathname);
 
   const refresh = useCallback(async () => {
     try {
@@ -71,6 +79,10 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     if (loading || !status) return;
     if (!status.authenticated && !isPublic) router.replace('/login');
     if (status.authenticated && onLogin) router.replace('/');
+    // Deliberately no redirect away from the emailed routes for a signed-in
+    // visitor: confirming an address or unsubscribing is just as valid with a
+    // session as without one, and a reset link should still work on the laptop
+    // where you are already logged in.
   }, [loading, status, onLogin, isPublic, router]);
 
   const signOut = useCallback(async () => {

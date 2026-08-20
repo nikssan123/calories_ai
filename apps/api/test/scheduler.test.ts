@@ -3,6 +3,7 @@ import { isReviewTime, REVIEW_HOUR, runDueReviews, startScheduler, tick } from '
 import { listReviews, reviewWeekFor, saveReview } from '../src/services/reviews.ts';
 import { localDateFor } from '../src/time.ts';
 import { scriptAgent } from './helpers/agent-mock.ts';
+import { mailbox } from './helpers/email.ts';
 import { addMeal, createUser, type TestUser } from './helpers/factories.ts';
 
 /**
@@ -165,6 +166,64 @@ describe('runDueReviews', () => {
     scriptAgent({ text: 'Los Angeles.' });
     await runDueReviews(new Date('2026-03-16T15:30:00Z'));
     expect((await listReviews(la.id))[0]!.content).toBe('Los Angeles.');
+  });
+});
+
+/**
+ * The review lands in the inbox as well as in the app. It is the one
+ * notification the product sends because it wants to rather than because
+ * something happened to the account, so the guards around it matter more than
+ * the sending does.
+ */
+describe('the weekly review email', () => {
+  it('goes out with the review it announces', async () => {
+    scriptAgent({ text: 'A steady week.' });
+    await runDueReviews(MONDAY_MORNING);
+
+    expect(mailbox()).toHaveLength(1);
+    expect(mailbox()[0]).toMatchObject({ to: user.email, subject: 'Your week: 9–15 March' });
+    expect(mailbox()[0]!.text).toContain('> A steady week.');
+  });
+
+  it('is sent once, however many times the tick runs that day', async () => {
+    scriptAgent({ text: 'A steady week.' });
+    await runDueReviews(MONDAY_MORNING);
+    await runDueReviews(new Date('2026-03-16T09:30:00Z'));
+    await runDueReviews(new Date('2026-03-16T13:30:00Z'));
+
+    // The second tick finds the review already written and stops before the
+    // send; the key in `email_deliveries` is what makes that belt-and-braces.
+    expect(mailbox()).toHaveLength(1);
+  });
+
+  it('is not sent to an account that turned it off', async () => {
+    const quiet = await createUser({ notify_weekly_review: false });
+    await addMeal(quiet, { date: '2026-03-11', kcal: 2000 });
+    scriptAgent({ text: 'One.' }, { text: 'Two.' });
+
+    const result = await runDueReviews(MONDAY_MORNING);
+
+    // Still written — the screen is not a subscription.
+    expect(result.generated).toHaveLength(2);
+    expect(await listReviews(quiet.id)).toHaveLength(1);
+    expect(mailbox().map((message) => message.to)).toEqual([user.email]);
+  });
+
+  it('does not fail the review when the provider does', async () => {
+    const { setTransport } = await import('../src/email/transport.ts');
+    setTransport({
+      name: 'broken',
+      send: async () => {
+        throw new Error('provider on fire');
+      },
+    });
+    scriptAgent({ text: 'A steady week.' });
+
+    const result = await runDueReviews(MONDAY_MORNING);
+
+    expect(result.generated).toEqual([user.id]);
+    expect(result.failed).toEqual([]);
+    expect(await listReviews(user.id)).toHaveLength(1);
   });
 });
 

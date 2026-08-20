@@ -1,7 +1,9 @@
 # Production stack for the always-on host. Mirrors how the trading bot is hosted
 # on this VPS: no published ports, containers join the shared external `web`
 # network under explicit aliases, and the Caddy that already runs there
-# terminates TLS and routes eat.webwork.bg to the web container.
+# terminates TLS. Caddy routes daysofar.com to the web container and
+# api.daysofar.com to the api container — the phone apps carry a bearer token
+# and call the API directly rather than through the web app's proxy.
 #
 # Create the shared network once per host, before the first `up`:
 #   docker network create web
@@ -12,11 +14,13 @@
 name: calorytracker
 
 networks:
-  # Shared with the other projects on this host. Only the web container joins it.
+  # Shared with the other projects on this host. The web and api containers join
+  # it so Caddy can route to each on its own hostname.
   web:
     external: true
     name: web
-  # Private to this stack: Postgres and the API are never reachable from `web`.
+  # Private to this stack. Postgres is only ever on here, so nothing outside the
+  # stack can reach the database however it is addressed.
   internal:
     driver: bridge
 
@@ -67,6 +71,25 @@ services:
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       # Optional: bill per token instead of using the subscription login below.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Where a link in an email has to point. This is the *web* address, not
+      # the API's: a mail client cannot do anything useful with api.daysofar.com.
+      APP_URL: ${APP_URL:-https://daysofar.com}
+      # Transactional email. Leave RESEND_API_KEY unset and the server logs each
+      # message instead of sending it — the deployment stays fully working, it
+      # just stops being able to reset a forgotten password. EMAIL_FROM must be
+      # on a domain verified with Resend; the sandbox sender only ever delivers
+      # to the address that owns the account.
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-Day So Far <hello@daysofar.com>}
+      EMAIL_REPLY_TO: ${EMAIL_REPLY_TO:-}
+      # Caddy reaches this over the private Docker network, so X-Forwarded-For is
+      # believed only when the immediate peer is a private address. Without it
+      # the rate limiter sees Caddy on every request and buckets the whole
+      # internet together; with a bare "true" any caller could name its own IP.
+      TRUST_PROXY: "uniquelocal"
+      # Browser origins allowed to call this API with credentials. The native
+      # apps are absent on purpose: they send no Origin and CORS never applies.
+      WEB_ORIGINS: ${WEB_ORIGINS:-https://daysofar.com}
 
     volumes:
       # Claude's OAuth token, written once by `claude login`. A named volume so
@@ -75,9 +98,19 @@ services:
       # Meal photos are on disk, not in Postgres; they must outlive the image.
       - uploads:/app/apps/api/uploads
 
-    # Deliberately NOT on `web`. The API holds the database credentials and runs
-    # an agent; nothing on the shared network needs to reach it directly.
-    networks: [internal]
+    # On `web` so Caddy can route api.daysofar.com straight here. The mobile
+    # apps hold a bearer token and call the API directly — the Next proxy is a
+    # cookie relay for the browser and forwards no Authorization header, so
+    # there is no route to this service through the web container.
+    #
+    # The database stays off `web` regardless. What this does expose is the API
+    # itself to the other containers on that shared network, which is the same
+    # reach the public internet now has: every route but /health, /auth/ and
+    # signed /photos/ requires a session.
+    networks:
+      internal:
+      web:
+        aliases: [calorytracker-api]
 
     # Claude Code can spike well past its usual footprint. Without a cap an
     # unlucky spike gets a neighbouring project's container OOM-killed instead.

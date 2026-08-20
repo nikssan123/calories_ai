@@ -219,6 +219,59 @@ an httpOnly cookie. No third-party auth service.
 - Upgrading from the single-user build: the first signup adopts the existing
   credential-less row, so nothing already logged is orphaned.
 
+**Forgotten passwords** work the way you would expect: `/reset` emails a single-use
+link that lives for an hour, and spending it signs every device out. That last part is
+the substantive half — someone resetting a password they did not choose to change is
+telling you they think somebody else is inside, and leaving that session alive would
+make the reset theatre. It deliberately does not sign you back in.
+
+**Email confirmation is soft.** Signing up sends a link, but nothing in the product
+waits for it and no screen is gated on it. Two things do depend on it: a password can
+only be reset to a mailbox someone has proved they can read, and the weekly review
+email is not sent to an unproved address — a recurring message to an address that was
+typed in by mistake is how a sending domain loses its reputation. Accounts that existed
+before this shipped are grandfathered in by the migration.
+
+## Email
+
+Transactional email goes through [Resend](https://resend.com), over one `POST` with
+`fetch` rather than their SDK — this project builds HTML with strings, and the SDK
+brings a React renderer with it.
+
+**It is optional.** With no `RESEND_API_KEY` the server writes each message to its log
+instead of sending it, including reset links, which is exactly what you want on a
+laptop. Set `EMAIL_REDIRECT_TO` to send everything to one address instead, which makes
+Resend's sandbox sender usable for testing the whole flow before you own a domain.
+
+| Message | When | Category |
+|---|---|---|
+| Confirm your email | Signup, and on request | account |
+| Reset your password | `/auth/password/forgot` | security |
+| Your password was changed | After a reset, self-service or by an admin | security |
+| New sign-in | A sign-in from a client this account has not used | security |
+| Your account has been deleted | Deletion, by the owner or an admin | account |
+| Your account has been suspended / is active again | An admin toggling access | account |
+| Your week | Monday, with the weekly review | product |
+
+Only the last one has an unsubscribe link, and that is the whole distinction: the
+others are about the account itself and are not something to have an opinion about
+receiving. `notify_weekly_review` on the user row is the only preference, editable from
+the setup screen or from the link in the footer — which is signed rather than stored,
+so it still works from a two-year-old email and needs no session.
+
+The **new sign-in** alert is fingerprinted on the user agent alone, not the address.
+Home broadband, mobile data and a train's wifi are the same laptop, and an alert that
+fires on every commute is one people filter — which costs it its value on the day it
+matters. `known_devices` is separate from `auth_sessions` for the same reason: signing
+out and back in must not report itself as a new device.
+
+Everything sent is recorded in `email_deliveries`, because a self-hosted install has no
+provider dashboard and "did the reset email actually go out?" is the first question
+asked when someone cannot get in. Its unique `idempotency_key` is also what stops the
+hourly review tick emailing Monday twice. Sending can never fail the thing that caused
+it: `sendEmail` records the failure and returns, so nobody's signup 500s because Resend
+is having an afternoon.
+
 ## How the AI layer works
 
 One agent, two groups of tools. The plan's logging / analysis / coaching split is
@@ -321,6 +374,10 @@ their week has turned over — one process serves every timezone. The window is 
 nine; the review is written once and found thereafter, so every later tick is a no-op.
 `POST /reviews/run` generates one on demand.
 
+Publishing it also emails it, unless the account has turned that off — see
+[Email](#email). The send is keyed on the week, so the re-entrant tick cannot deliver
+Monday twice, and a provider failure is logged without touching the published review.
+
 ## Rate limits
 
 Two kinds of route have a ceiling, and nothing else does — a blanket limit would only
@@ -332,10 +389,20 @@ throttle the dashboard polling the app does normally.
 | `POST /reviews/run` | 5 / day | account |
 | `POST /auth/login` | 10 / 15 min | IP |
 | `POST /auth/signup` | 5 / hour | IP |
+| `POST /auth/password/forgot` | 5 / hour | IP |
+| `POST /auth/verify/resend` | 5 / hour | account |
+| `POST /auth/password/reset` | 20 / hour | IP |
+| `POST /auth/verify` | 20 / hour | IP |
+| `DELETE /account` | 5 / 15 min | account |
 
 The chat limits exist because turns are spent from your Claude subscription's budget. The
 password limits exist because those are the only routes an anonymous caller can make burn
 CPU (scrypt, deliberately) and the only ones where guessing pays.
+
+The two email routes are protecting something else again: not this server, but the
+address on the other end. Without a ceiling, `/auth/password/forgot` is a machine for
+mailing a stranger fifty reset links over your sending domain — which costs you the
+domain and costs the caller nothing.
 
 ## Admin and what it costs to run
 

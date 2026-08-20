@@ -1,6 +1,11 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { generateWeeklyReview } from '../ai/review.ts';
+import {
+  sendAccountDeletedEmail,
+  sendAccountStatusEmail,
+  sendPasswordChangedEmail,
+} from '../email/notify.ts';
 import { applyAdaptiveTargets } from '../services/adaptive.ts';
 import {
   appliedMigrations,
@@ -143,8 +148,15 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Password must be 8–200 characters.' });
     }
-    const ok = await resetPassword((request.params as any).id, parsed.data.password);
+    const id = (request.params as any).id as string;
+    const ok = await resetPassword(id, parsed.data.password);
     if (!ok) return reply.status(404).send({ error: 'User not found' });
+
+    // The same notice a self-service reset sends, and needed more here: this is
+    // someone else changing the password on your account and signing you out of
+    // every device, which from the owner's side is indistinguishable from being
+    // compromised until somebody says otherwise.
+    await sendPasswordChangedEmail(id, new Date(), request.log);
     return { ok: true };
   });
 
@@ -163,6 +175,11 @@ export async function registerAdminRoutes(app: FastifyInstance) {
 
     const ok = await setDisabled(id, parsed.data.disabled);
     if (!ok) return reply.status(404).send({ error: 'User not found' });
+
+    // Suspension is otherwise silent from the inside: the app simply stops
+    // letting you in, with a message that reads like a bug. Both directions are
+    // announced, because being let back in is news too.
+    await sendAccountStatusEmail(id, parsed.data.disabled, request.log);
     return { ok: true, disabled: parsed.data.disabled };
   });
 
@@ -192,7 +209,22 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: "That email doesn't match this account." });
     }
 
-    return { ok: true, deleted: await deleteAccount(id) };
+    const summary = await deleteAccount(id);
+    // The same receipt someone gets when they close their own account. An
+    // administrator deleting it does not make the owner less entitled to know
+    // what happened to their year of meals.
+    if (summary) {
+      await sendAccountDeletedEmail(
+        {
+          email: user.email!,
+          name: user.display_name,
+          counts: { ...summary, photos: summary.photos.length },
+        },
+        request.log,
+      );
+    }
+
+    return { ok: true, deleted: summary };
   });
 
   /** Generate this user's weekly review now. Spends a turn, so it is a POST. */

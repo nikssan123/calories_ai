@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/components/AuthGate';
 import { Nav } from '@/components/Nav';
 import { Sidebar } from '@/components/Sidebar';
+import { isEmailedRoute } from '@/lib/routes';
 
 /**
  * The app shell — or, for the landing page, nothing at all.
@@ -20,7 +21,16 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const { authenticated } = useAuth();
   const pathname = usePathname();
 
-  if (pathname === '/' && !authenticated) return <>{children}</>;
+  /*
+   * No chrome for a visitor with no session.
+   *
+   * The landing page draws its own, and the routes reached from an email have
+   * nowhere to navigate *to* — offering tabs to someone who is here to reset a
+   * password just means five links that bounce them to the sign-in screen they
+   * could not use. A signed-in visitor keeps the shell, because for them these
+   * are ordinary pages within the app.
+   */
+  if (!authenticated && (pathname === '/' || isEmailedRoute(pathname))) return <>{children}</>;
 
   return (
     <div className="bg-background h-shell flex w-full overflow-hidden">

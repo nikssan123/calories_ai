@@ -29,6 +29,7 @@ export async function updateUser(userId: string, patch: ProfileUpdate): Promise<
     goal: patch.goal,
     timezone: patch.timezone,
     day_start_hour: patch.day_start_hour,
+    notify_weekly_review: patch.notify_weekly_review,
   };
 
   const sets: string[] = ['updated_at = now()'];
@@ -126,6 +127,88 @@ export async function authenticate(email: string, password: string): Promise<str
   return (await verifyPassword(password, user.password_hash)) ? user.id : null;
 }
 
+/**
+ * Everything a message to this account needs, in one read.
+ *
+ * Together rather than in pieces because the caller is always about to make one
+ * decision from all of it: whether to send, in what language of time, and to
+ * whom. Null when there is no address to write to — the pre-accounts
+ * placeholder row, or an account already deleted.
+ */
+export interface EmailRecipient {
+  userId: string;
+  email: string;
+  displayName: string | null;
+  timezone: string;
+  /** Product email goes only to an address someone has proved they can read. */
+  verified: boolean;
+  notifyWeeklyReview: boolean;
+}
+
+export async function getEmailRecipient(userId: string): Promise<EmailRecipient | null> {
+  const row = await queryOne<any>(
+    `SELECT id, email, display_name, timezone, email_verified_at, notify_weekly_review
+       FROM users WHERE id = $1 AND email IS NOT NULL`,
+    [userId],
+  );
+  return row ? toRecipient(row) : null;
+}
+
+/** The same, found by address. For flows that start before there is a session. */
+export async function findRecipientByEmail(email: string): Promise<EmailRecipient | null> {
+  const row = await queryOne<any>(
+    `SELECT id, email, display_name, timezone, email_verified_at, notify_weekly_review
+       FROM users WHERE lower(email) = lower($1)`,
+    [email],
+  );
+  return row ? toRecipient(row) : null;
+}
+
+function toRecipient(row: any): EmailRecipient {
+  return {
+    userId: row.id,
+    email: row.email,
+    displayName: row.display_name,
+    timezone: row.timezone,
+    verified: row.email_verified_at !== null,
+    notifyWeeklyReview: row.notify_weekly_review,
+  };
+}
+
+/**
+ * Records that this address has been proved.
+ *
+ * Scoped to the address the link was issued for, not just the user: someone who
+ * requests a link, changes their email, then clicks the old link has proved
+ * only that they can read the *old* mailbox, which is not the claim being made.
+ * The mismatch makes it a no-op rather than an error — there is nothing useful
+ * to tell them, and the state they wanted is one click away.
+ */
+export async function markEmailVerified(userId: string, email: string): Promise<boolean> {
+  const row = await queryOne<{ id: string }>(
+    `UPDATE users SET email_verified_at = COALESCE(email_verified_at, now()), updated_at = now()
+      WHERE id = $1 AND lower(email) = lower($2)
+      RETURNING id`,
+    [userId, email],
+  );
+  return row !== null;
+}
+
+/** Replaces the password. Signing other sessions out is the caller's job. */
+export async function setPassword(userId: string, password: string): Promise<void> {
+  await query('UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2', [
+    await hashPassword(password),
+    userId,
+  ]);
+}
+
+export async function setWeeklyReviewEmails(userId: string, enabled: boolean): Promise<void> {
+  await query('UPDATE users SET notify_weekly_review = $1, updated_at = now() WHERE id = $2', [
+    enabled,
+    userId,
+  ]);
+}
+
 export async function countAccounts(): Promise<number> {
   const row = await queryOne<{ n: string }>(
     'SELECT count(*) AS n FROM users WHERE email IS NOT NULL',
@@ -137,6 +220,7 @@ function toProfile(row: any): Profile {
   return {
     id: row.id,
     email: row.email ?? null,
+    email_verified: row.email_verified_at !== null,
     display_name: row.display_name,
     sex: row.sex,
     birth_date: row.birth_date ? String(row.birth_date).slice(0, 10) : null,
@@ -147,6 +231,7 @@ function toProfile(row: any): Profile {
     timezone: row.timezone,
     day_start_hour: Number(row.day_start_hour),
     is_setup_complete: row.is_setup_complete,
+    notify_weekly_review: row.notify_weekly_review,
   };
 }
 

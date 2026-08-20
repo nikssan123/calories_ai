@@ -3,14 +3,19 @@ import { ensureDirectories, env } from './env.ts';
 import { pool } from './db.ts';
 import { startScheduler } from './scheduler.ts';
 import { purgeExpiredSessions } from './services/auth.ts';
+import { purgeExpiredTokens } from './services/tokens.ts';
 import { authDescription, AUTH_HELP, hasSubscriptionAuth } from './ai/client.ts';
 
 await ensureDirectories();
 
 const app = await buildApp();
 
-// Expired rows are harmless but unbounded; clear them out periodically.
-const purgeTimer = setInterval(() => void purgeExpiredSessions(), 6 * 60 * 60 * 1000);
+// Expired rows are harmless but unbounded; clear them out periodically. Spent
+// reset and confirmation links go the same way, on the same schedule.
+const purgeTimer = setInterval(() => {
+  void purgeExpiredSessions();
+  void purgeExpiredTokens();
+}, 6 * 60 * 60 * 1000);
 purgeTimer.unref();
 
 // Weekly reviews. The tick is hourly and asks each user's own clock whether

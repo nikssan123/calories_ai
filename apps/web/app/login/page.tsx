@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -123,8 +124,17 @@ export default function LoginPage() {
               autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
               className="bg-card h-12 rounded-xl border-0 text-[15px]"
             />
-            {mode === 'signup' && (
+            {mode === 'signup' ? (
               <p className="text-footnote text-muted-foreground">At least 8 characters.</p>
+            ) : (
+              // Under the field it belongs to, not buried at the bottom of the
+              // screen: someone who needs this link is looking at the password
+              // box wondering why it will not work.
+              <div className="pt-0.5 text-right">
+                <Link href="/reset" className="text-footnote text-muted-foreground">
+                  Forgot your password?
+                </Link>
+              </div>
             )}
           </div>
 

@@ -1,6 +1,8 @@
 import { afterAll, beforeEach, vi } from 'vitest';
 import { pool, query } from '../../src/db.ts';
 import { resetAgent } from './agent-mock.ts';
+import { resetMailbox } from './email.ts';
+import { forgetSecrets } from '../../src/services/secrets.ts';
 
 /**
  * The Agent SDK is replaced everywhere. `tool` and `createSdkMcpServer` stay
@@ -33,6 +35,11 @@ async function truncateAll(): Promise<void> {
 
 beforeEach(async () => {
   resetAgent();
+  resetMailbox();
+  // `app_secrets` is truncated with everything else, so a cached signing key
+  // would outlive the row it came from — harmless until a test asserts that a
+  // signature made in one case is rejected in the next.
+  forgetSecrets();
   await truncateAll();
 });
 

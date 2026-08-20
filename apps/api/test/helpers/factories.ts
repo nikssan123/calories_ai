@@ -39,6 +39,9 @@ export async function createUser(overrides: Record<string, unknown> = {}): Promi
     day_start_hour: DEFAULT_CTX.dayStartHour,
     is_setup_complete: true,
     onboarding_completed_at: new Date().toISOString(),
+    // Confirmed, like every account that existed when the email migration ran.
+    // A test about what happens *before* confirmation overrides this to null.
+    email_verified_at: new Date().toISOString(),
     ...overrides,
   };
 

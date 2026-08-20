@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Check, Shield } from 'lucide-react';
+import { BadgeCheck, Check, Mail, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ActivityLevel, DaySummary, Goal, Profile, Sex } from '@ct/shared';
 import { api } from '@/lib/api';
@@ -12,6 +12,7 @@ import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -297,6 +298,8 @@ export default function SetupPage() {
         </div>
       </InsetGroup>
 
+      <EmailSettings profile={profile} onChange={setProfile} />
+
       <InsetGroup title="Account">
         <InsetRow>
           <span className="flex-1 text-[15px]">Signed in as</span>
@@ -341,6 +344,109 @@ export default function SetupPage() {
       </Button>
       </div>
     </div>
+  );
+}
+
+/**
+ * What the product will and will not put in your inbox.
+ *
+ * Two rows, and the split between them is the substance of the section: the
+ * address is a *capability* — an unconfirmed one means a forgotten password is
+ * unrecoverable, which is worth saying plainly rather than badging quietly —
+ * while the weekly review is a preference, and the only one there is. Emails
+ * about the account itself are not listed as a choice because they are not one,
+ * and a switch that pretends otherwise is worse than no switch.
+ */
+function EmailSettings({
+  profile,
+  onChange,
+}: {
+  profile: Profile;
+  onChange: (profile: Profile) => void;
+}) {
+  const [sending, setSending] = useState(false);
+
+  // No address means the pre-accounts placeholder row, which nothing can be
+  // sent to and which has no preference worth showing.
+  if (!profile.email) return null;
+
+  async function resend() {
+    setSending(true);
+    try {
+      const result = await api.resendVerification();
+      toast.success(result.message);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  /*
+   * Saved on the spot rather than gathered up by the Save button at the bottom
+   * of the screen. A switch reads as the change itself — the classic bug is
+   * someone flipping it, navigating away, and being surprised by next Monday's
+   * email. The optimistic flip is reverted if the write fails, so the control
+   * never shows a state the server does not hold.
+   */
+  async function setWeekly(enabled: boolean) {
+    const previous = profile.notify_weekly_review;
+    onChange({ ...profile, notify_weekly_review: enabled });
+    try {
+      onChange(await api.updateProfile({ notify_weekly_review: enabled }));
+    } catch (e) {
+      onChange({ ...profile, notify_weekly_review: previous });
+      toast.error((e as Error).message);
+    }
+  }
+
+  return (
+    <InsetGroup
+      title="Email"
+      footer={
+        profile.notify_weekly_review
+          ? 'The weekly review arrives on Monday mornings. Emails about your account — a password change, a sign-in from a device we have not seen — are always sent.'
+          : 'Emails about your account — a password change, a sign-in from a device we have not seen — are always sent.'
+      }
+    >
+      {profile.email_verified ? (
+        <InsetRow>
+          <BadgeCheck size={17} className="text-[var(--calories-text)]" />
+          <span className="flex-1 text-[15px]">Address confirmed</span>
+        </InsetRow>
+      ) : (
+        <div className="flex flex-col gap-2.5 px-4 py-3.5">
+          <div className="flex items-center gap-3">
+            <Mail size={17} className="text-muted-foreground" />
+            <span className="flex-1 text-[15px]">Address not confirmed</span>
+          </div>
+          <p className="text-muted-foreground text-[13px] leading-relaxed">
+            Until you confirm {profile.email}, a forgotten password cannot be reset — there would
+            be no way to know the mailbox is yours.
+          </p>
+          <Button
+            variant="outline"
+            onClick={() => void resend()}
+            disabled={sending}
+            className="h-9 self-start rounded-[10px] text-[13px]"
+          >
+            {sending ? 'Sending…' : 'Send the link again'}
+          </Button>
+        </div>
+      )}
+
+      <InsetRow>
+        <div className="flex-1">
+          <p className="text-[15px]">Weekly review</p>
+          <p className="text-muted-foreground text-[13px]">Last week, summarised, on Monday.</p>
+        </div>
+        <Switch
+          checked={profile.notify_weekly_review}
+          onCheckedChange={(checked) => void setWeekly(checked)}
+          aria-label="Email me the weekly review"
+        />
+      </InsetRow>
+    </InsetGroup>
   );
 }
 

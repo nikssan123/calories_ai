@@ -62,7 +62,39 @@ export interface Env {
   agentCwd: string;
   /** Lower-cased emails granted the admin panel. Empty means "the first account". */
   adminEmails: string[];
+  /** Where the browser reaches this deployment. Every link in an email is built from it. */
+  appUrl: string;
+  /**
+   * Browser origins allowed to call this API cross-origin with credentials.
+   * Native apps are not listed and do not need to be — they send no Origin.
+   */
+  webOrigins: string[];
+  /**
+   * Which peers may be believed when they set `X-Forwarded-For`: false for none,
+   * or anything proxy-addr understands — a CIDR, or one of its named ranges.
+   *
+   * Named ranges rather than a bare `true`, because `true` trusts the entire
+   * forwarded chain and lets any caller prepend an address of its choosing,
+   * which for a rate limiter keyed on IP means picking your own bucket.
+   */
+  trustProxy: boolean | string;
+  email: EmailEnv;
   isTest: boolean;
+}
+
+export interface EmailEnv {
+  /** Absent means no provider: mail is written to the log instead of sent. */
+  apiKey: string | null;
+  /** The From header, as `Name <address@domain>` or a bare address. */
+  from: string;
+  replyTo: string | null;
+  /**
+   * Sends every message here instead of to the real recipient, with the intended
+   * address in the subject. Resend will only deliver to your own address until a
+   * domain is verified, and this makes that limitation usable rather than
+   * confusing — set it and the whole flow can be exercised for real.
+   */
+  redirectTo: string | null;
 }
 
 export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
@@ -102,6 +134,49 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
      * ENOENT, which the SDK reports as a confusing "binary failed to launch".
      */
     agentCwd: resolve(apiRoot, './.agent-workspace'),
+    /**
+     * The public address of the web app, which is what a link in an email has to
+     * point at — the API's own origin is behind a proxy and means nothing to a
+     * mail client. Trailing slash trimmed here so every caller can concatenate.
+     */
+    appUrl: (source.APP_URL ?? 'http://localhost:3000').replace(/\/+$/, ''),
+    /**
+     * Defaults to the dev web server so a local checkout needs no configuration.
+     * A deployment must name its real origins: once the API answers on its own
+     * public hostname, reflecting whatever Origin arrives would let any site on
+     * the internet make credentialed requests with a signed-in user's cookie.
+     */
+    webOrigins: (source.WEB_ORIGINS ?? 'http://localhost:3000')
+      .split(',')
+      .map((origin) => origin.trim().replace(/\/+$/, ''))
+      .filter(Boolean),
+    /**
+     * Off by default: with nothing in front, `X-Forwarded-For` is written by
+     * whoever is calling, and believing it would make the rate limiter trivially
+     * evadable. Behind Caddy on a private Docker network this is `uniquelocal`.
+     */
+    trustProxy: source.TRUST_PROXY ? source.TRUST_PROXY.trim() : false,
+    email: {
+      /**
+       * No key means no mail provider, and that is a supported way to run this:
+       * the server logs what it would have sent and carries on. Nothing in the
+       * product is gated on an email arriving, so a personal install needs a
+       * Resend account only if it wants one.
+       *
+       * Forced off under test so a real key in the developer's .env can never
+       * make the suite send mail to anyone.
+       */
+      apiKey: isTest ? null : (source.RESEND_API_KEY ?? null),
+      /**
+       * Resend's shared sandbox sender is the default because it works with a
+       * fresh account and no DNS: it will deliver to the address that owns the
+       * account and refuse everything else, which is exactly the right shape for
+       * trying this out. Set your own once a domain is verified.
+       */
+      from: source.EMAIL_FROM ?? 'Day So Far <onboarding@resend.dev>',
+      replyTo: source.EMAIL_REPLY_TO ?? null,
+      redirectTo: source.EMAIL_REDIRECT_TO ?? null,
+    },
     isTest,
   };
 }
