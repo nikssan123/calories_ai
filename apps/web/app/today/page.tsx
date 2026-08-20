@@ -9,6 +9,7 @@ import type { DaySummary, ExerciseEntry, FoodEntry, Meal } from '@ct/shared';
 import { api } from '@/lib/api';
 import { CalorieRing } from '@/components/CalorieRing';
 import { MacroBars } from '@/components/MacroBars';
+import { DietQuality } from '@/components/DietQuality';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { RepeatMeals } from '@/components/RepeatMeals';
 import { Button } from '@/components/ui/button';
@@ -245,6 +246,8 @@ function TodayView() {
           </div>
 
           <MacroBars consumed={day.consumed} targets={day.targets} />
+
+          <DietQuality quality={day.quality} />
           </div>
 
           <div className="mt-7 space-y-7 lg:mt-0">

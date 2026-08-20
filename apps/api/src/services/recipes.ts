@@ -1,5 +1,6 @@
 import type {
   Confidence,
+  DietQuality,
   FoodEntry,
   Meal,
   Recipe,
@@ -52,9 +53,10 @@ export async function saveRecipe(input: SaveRecipeInput): Promise<Recipe> {
   const row = await queryOne<any>(
     `INSERT INTO recipes
        (user_id, title, summary, portions, minutes, steps, ingredients,
-        kcal, protein_g, carbs_g, fat_g, confidence, generated_for,
+        kcal, protein_g, carbs_g, fat_g,
+        fiber_g, sodium_mg, sat_fat_g, sugar_g, confidence, generated_for,
         origin, adapted_from)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
      RETURNING *`,
     [
       input.userId,
@@ -68,6 +70,10 @@ export async function saveRecipe(input: SaveRecipeInput): Promise<Recipe> {
       perPortion.protein_g,
       perPortion.carbs_g,
       perPortion.fat_g,
+      perPortion.fiber_g,
+      perPortion.sodium_mg,
+      perPortion.sat_fat_g,
+      perPortion.sugar_g,
       input.confidence,
       input.generatedFor ? JSON.stringify(input.generatedFor) : null,
       input.origin ?? 'invented',
@@ -173,6 +179,10 @@ export async function cookRecipe(
       protein_g: round1(ingredient.protein_g * share),
       carbs_g: round1(ingredient.carbs_g * share),
       fat_g: round1(ingredient.fat_g * share),
+      // Scaled where present, left null where it never was — the whole reason
+      // the ingredient list and a food item are the same shape is that this
+      // hand-off invents nothing, and inventing a zero here would be inventing.
+      ...scaleQuality(ingredient, share),
     })),
     ctx: options.ctx,
   });
@@ -183,8 +193,18 @@ export async function cookRecipe(
   return entry;
 }
 
+/**
+ * The macros always add up; the quality panel adds up only where it was
+ * estimated.
+ *
+ * A recipe whose ingredients were priced before these fields existed — or whose
+ * writer honestly could not judge the sodium in one of them — sums to null
+ * rather than to the total of the ingredients that did carry a figure. Half a
+ * dish's fiber printed as the dish's fiber is worse than no figure at all,
+ * because the card gives no hint that anything is missing.
+ */
 export function totalNutrition(ingredients: RecipeIngredient[]) {
-  return ingredients.reduce(
+  const macros = ingredients.reduce(
     (sum, i) => ({
       kcal: sum.kcal + i.kcal,
       protein_g: sum.protein_g + i.protein_g,
@@ -193,18 +213,48 @@ export function totalNutrition(ingredients: RecipeIngredient[]) {
     }),
     { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
   );
+
+  const total = (field: keyof DietQuality): number | null => {
+    if (ingredients.length === 0) return null;
+    if (ingredients.some((i) => i[field] === null || i[field] === undefined)) return null;
+    return ingredients.reduce((sum, i) => sum + (i[field] as number), 0);
+  };
+
+  return {
+    ...macros,
+    fiber_g: total('fiber_g'),
+    sodium_mg: total('sodium_mg'),
+    sat_fat_g: total('sat_fat_g'),
+    sugar_g: total('sugar_g'),
+  };
 }
 
-function dividePortions(total: ReturnType<typeof totalNutrition>, portions: number) {
+export function dividePortions(total: ReturnType<typeof totalNutrition>, portions: number) {
+  const share = (value: number | null) => (value === null ? null : round1(value / portions));
   return {
     kcal: round1(total.kcal / portions),
     protein_g: round1(total.protein_g / portions),
     carbs_g: round1(total.carbs_g / portions),
     fat_g: round1(total.fat_g / portions),
+    fiber_g: share(total.fiber_g),
+    sodium_mg: share(total.sodium_mg),
+    sat_fat_g: share(total.sat_fat_g),
+    sugar_g: share(total.sugar_g),
   };
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
+
+function scaleQuality(source: DietQuality, share: number): DietQuality {
+  const scale = (value: number | null | undefined) =>
+    value === null || value === undefined ? null : round1(value * share);
+  return {
+    fiber_g: scale(source.fiber_g),
+    sodium_mg: scale(source.sodium_mg),
+    sat_fat_g: scale(source.sat_fat_g),
+    sugar_g: scale(source.sugar_g),
+  };
+}
 
 function toRecipe(row: any): Recipe {
   return {
@@ -219,6 +269,10 @@ function toRecipe(row: any): Recipe {
     protein_g: Number(row.protein_g),
     carbs_g: Number(row.carbs_g),
     fat_g: Number(row.fat_g),
+    fiber_g: nullableNumber(row.fiber_g),
+    sodium_mg: nullableNumber(row.sodium_mg),
+    sat_fat_g: nullableNumber(row.sat_fat_g),
+    sugar_g: nullableNumber(row.sugar_g),
     confidence: row.confidence,
     generated_for: row.generated_for,
     origin: row.origin,
@@ -228,3 +282,6 @@ function toRecipe(row: any): Recipe {
     created_at: new Date(row.created_at).toISOString(),
   };
 }
+
+const nullableNumber = (value: unknown) =>
+  value === null || value === undefined ? null : Number(value);

@@ -58,9 +58,9 @@ export async function seedHistory(
       confidence: 'medium',
       source: 'text',
       items: [
-        { name: 'Eggs', quantity_g: 100, quantity_desc: '2 large', kcal: 143, protein_g: 12.6, carbs_g: 0.7, fat_g: 9.9 },
-        { name: 'Bread', quantity_g: 60, quantity_desc: '2 slices', kcal: 158, protein_g: 5.2, carbs_g: 29, fat_g: 2 },
-        { name: 'Feta', quantity_g: 40, quantity_desc: null, kcal: 106, protein_g: 5.7, carbs_g: 1.6, fat_g: 8.6 },
+        { name: 'Eggs', quantity_g: 100, quantity_desc: '2 large', kcal: 143, protein_g: 12.6, carbs_g: 0.7, fat_g: 9.9, fiber_g: 0, sodium_mg: 142, sat_fat_g: 3.1, sugar_g: 0.4 },
+        { name: 'Bread', quantity_g: 60, quantity_desc: '2 slices', kcal: 158, protein_g: 5.2, carbs_g: 29, fat_g: 2, fiber_g: 3.6, sodium_mg: 300, sat_fat_g: 0.4, sugar_g: 3 },
+        { name: 'Feta', quantity_g: 40, quantity_desc: null, kcal: 106, protein_g: 5.7, carbs_g: 1.6, fat_g: 8.6, fiber_g: 0, sodium_mg: 460, sat_fat_g: 6, sugar_g: 1.7 },
       ],
       ctx,
     });
@@ -73,9 +73,9 @@ export async function seedHistory(
       confidence: 'low',
       source: 'text',
       items: [
-        { name: 'Chicken breast', quantity_g: 200, quantity_desc: '~200g', kcal: 330, protein_g: 62, carbs_g: 0, fat_g: 7.2 },
-        { name: 'Cooked rice', quantity_g: 180, quantity_desc: '~180g', kcal: 234, protein_g: 4.9, carbs_g: 50.4, fat_g: 0.5 },
-        { name: 'Salad with olive oil', quantity_g: 110, quantity_desc: 'side salad', kcal: 115, protein_g: 1.2, carbs_g: 4, fat_g: 10.6 },
+        { name: 'Chicken breast', quantity_g: 200, quantity_desc: '~200g', kcal: 330, protein_g: 62, carbs_g: 0, fat_g: 7.2, fiber_g: 0, sodium_mg: 130, sat_fat_g: 2.1, sugar_g: 0 },
+        { name: 'Cooked rice', quantity_g: 180, quantity_desc: '~180g', kcal: 234, protein_g: 4.9, carbs_g: 50.4, fat_g: 0.5, fiber_g: 0.7, sodium_mg: 2, sat_fat_g: 0.1, sugar_g: 0.1 },
+        { name: 'Salad with olive oil', quantity_g: 110, quantity_desc: 'side salad', kcal: 115, protein_g: 1.2, carbs_g: 4, fat_g: 10.6, fiber_g: 1.8, sodium_mg: 20, sat_fat_g: 1.5, sugar_g: 2.2 },
       ],
       ctx,
     });
@@ -88,9 +88,9 @@ export async function seedHistory(
       confidence: 'medium',
       source: 'text',
       items: [
-        { name: 'Salmon fillet', quantity_g: 180, quantity_desc: '~180g', kcal: 374, protein_g: 36.5, carbs_g: 0, fat_g: 24.5 },
-        { name: 'Potatoes', quantity_g: 250, quantity_desc: '~250g', kcal: 215, protein_g: 5, carbs_g: 49, fat_g: 0.3 },
-        { name: 'Green beans', quantity_g: 150, quantity_desc: 'a big handful', kcal: 52, protein_g: 2.7, carbs_g: 10.5, fat_g: 0.2 },
+        { name: 'Salmon fillet', quantity_g: 180, quantity_desc: '~180g', kcal: 374, protein_g: 36.5, carbs_g: 0, fat_g: 24.5, fiber_g: 0, sodium_mg: 105, sat_fat_g: 5, sugar_g: 0 },
+        { name: 'Potatoes', quantity_g: 250, quantity_desc: '~250g', kcal: 215, protein_g: 5, carbs_g: 49, fat_g: 0.3, fiber_g: 5, sodium_mg: 15, sat_fat_g: 0.1, sugar_g: 2 },
+        { name: 'Green beans', quantity_g: 150, quantity_desc: 'a big handful', kcal: 52, protein_g: 2.7, carbs_g: 10.5, fat_g: 0.2, fiber_g: 4.7, sodium_mg: 9, sat_fat_g: 0.1, sugar_g: 5 },
       ],
       ctx,
     });
@@ -114,8 +114,12 @@ export async function seedHistory(
           protein_g: round1(38 * scale),
           carbs_g: round1(18 * scale),
           fat_g: round1(8 * scale),
+          fiber_g: 0,
+          sodium_mg: round1(190 * scale),
+          sat_fat_g: round1(3 * scale),
+          sugar_g: round1(15 * scale),
         },
-        { name: 'Banana', quantity_g: 120, quantity_desc: '1 medium', kcal: 107, protein_g: 1.3, carbs_g: 27, fat_g: 0.4 },
+        { name: 'Banana', quantity_g: 120, quantity_desc: '1 medium', kcal: 107, protein_g: 1.3, carbs_g: 27, fat_g: 0.4, fiber_g: 3.1, sodium_mg: 1, sat_fat_g: 0.1, sugar_g: 14.4 },
       ],
       ctx,
     });

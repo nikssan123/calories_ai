@@ -94,6 +94,10 @@ function toItems(items: FoodItemInput[]) {
     protein_g: i.protein_g,
     carbs_g: i.carbs_g,
     fat_g: i.fat_g,
+    fiber_g: i.fiber_g,
+    sodium_mg: i.sodium_mg,
+    sat_fat_g: i.sat_fat_g,
+    sugar_g: i.sugar_g,
   }));
 }
 
@@ -553,7 +557,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
 
   const remember = tool(
     'remember',
-    'Save a standing instruction the user gives you about how to log or how to talk to them — "don\'t log my commute walk", "I use a small plate", "skip the remaining-budget line". Only for things that apply from now on. A one-off correction to a meal is not a note: fix the entry instead, where the number itself is the record.',
+    'Save a standing instruction the user gives you about how to log or how to talk to them — "don\'t log my commute walk", "I use a small plate", "skip the remaining-budget line". Only for things that apply from now on. A one-off correction to a meal is not a note: fix the entry instead, where the number itself is the record. Nor is a recipe they want kept — that is `import_recipe`, which prices it so it can actually be cooked and logged.',
     {
       note: z
         .string()
@@ -987,6 +991,87 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
     { alwaysLoad: true },
   );
 
+  /**
+   * "Save this — it's how I make it."
+   *
+   * The journal could suggest a recipe and could not keep one. Asked to save a
+   * dish somebody already cooks, the only tool that fit at all was `remember`,
+   * so the answer came back as a standing note: "I'll reference it for nutrients
+   * next time." True of what it did, and not at all what was asked — a note is
+   * a sentence in the prompt, not a recipe you can scale and log in a tap.
+   *
+   * The Cook tab has had the paste-a-recipe form since the kitchen shipped.
+   * This is the same engine behind the same budget, reached from the place
+   * people actually mention their own cooking.
+   */
+  const importRecipeTool = tool(
+    'import_recipe',
+    'Save a recipe the user brought — their own, a family one, something they pasted or dictated — as one of their recipes, priced per portion so it can be logged in one tap afterwards. Use it whenever they ask you to save, keep, add or remember a recipe, or hand you a dish with its ingredients and method. This, not `remember`: a note cannot be scaled, priced or cooked. Needs a real recipe to work from — at least a list of ingredients — so ask for the method if all you have is a name. It is slow and it costs money, so call it once per turn at most.',
+    {
+      text: z
+        .string()
+        .describe(
+          'The recipe as they gave it: title, ingredients and method, in their own words. Pass everything they said about it — do not summarise it, and do not invent quantities they did not give.',
+        ),
+      portions: z
+        .number()
+        .nullable()
+        .default(null)
+        .describe('How many portions it makes, if they said. Null to let the recipe speak for itself.'),
+    },
+    async (args) => {
+      // Lazy for the same reason as suggest_recipes: `ai/recipes.ts` builds its
+      // tools through this module, so a static import here is a load-time cycle.
+      const { suggestRecipes, RecipeBudgetError } = await import('./recipes.ts');
+
+      const text = args.text.trim();
+      if (text.length < 20) {
+        return fail(
+          'That is not enough to price. Ask them for the ingredients and roughly how it is made, then call this again.',
+        );
+      }
+
+      let recipes, message;
+      try {
+        ({ recipes, message } = await suggestRecipes(tc.userId, {
+          portions: args.portions,
+          now: tc.now,
+          job: { kind: 'import', text },
+        }));
+      } catch (error) {
+        if (error instanceof RecipeBudgetError) {
+          return fail(
+            `They have used all ${error.allowed} recipe runs for today, so this one cannot be saved yet. Tell them plainly, and that it will work again tomorrow.`,
+          );
+        }
+        throw error;
+      }
+
+      const [saved] = recipes;
+      if (!saved) return fail("That did not come back as a recipe. Ask them to say how it's made.");
+
+      tc.actions.push({
+        kind: 'recipes_suggested',
+        entry_id: null,
+        summary: saved.title,
+        card: { type: 'recipes', recipes },
+      });
+
+      // Terse, as with the other card tools: it is already on their screen.
+      return ok({
+        saved: {
+          title: saved.title,
+          portions: saved.portions,
+          kcal_per_portion: Math.round(saved.kcal),
+          protein_g_per_portion: Math.round(saved.protein_g),
+        },
+        where_it_lives: 'Cook, under "For you" — and it can be logged from there or from here.',
+        your_note_to_them: message,
+      });
+    },
+    { alwaysLoad: true },
+  );
+
   const reads = [getDay, searchHistory, getProgress];
   const shows = [showChart, showDay];
   const writes = [
@@ -1003,9 +1088,10 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
     // are writes, and the read-only review agent cannot touch them.
     remember,
     forget,
-    // A write in the sense that matters here: it spends money and it stores
-    // recipes. The read-only review agent must not be able to reach it.
+    // Writes in the sense that matters here: they spend money and they store
+    // recipes. The read-only review agent must not be able to reach either.
     suggestRecipesTool,
+    importRecipeTool,
   ];
   // The display tools stay out of the read-only set: the weekly review renders
   // as markdown on its own screen, where a chat card has nowhere to appear.

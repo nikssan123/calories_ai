@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ArrowDown, ArrowUp, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Progress } from '@ct/shared';
+import { QUALITY_COVERAGE_FLOOR } from '@ct/shared';
 import { api } from '@/lib/api';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { Sparkline } from '@/components/Sparkline';
@@ -210,6 +211,73 @@ export default function ProgressPage() {
               </div>
             </InsetRow>
           </InsetGroup>
+
+          {progress.quality.days_measured > 0 && (
+            <InsetGroup
+              title="🥦  Diet quality"
+              footer={
+                progress.quality.coverage < QUALITY_COVERAGE_FLOOR
+                  ? `Averaged over ${progress.quality.days_measured} day${progress.quality.days_measured === 1 ? '' : 's'} — ${Math.round(progress.quality.coverage * 100)}% of what you logged carries these figures.`
+                  : undefined
+              }
+            >
+              {/*
+               * Fiber gets the line, and the other three get a row of figures.
+               * Fiber is the only floor here and the only one whose shape over
+               * time tells you anything — a ceiling is a question about a week,
+               * not a curve to watch. Four sparklines would be a dashboard
+               * nobody opens twice.
+               */}
+              <div className="px-4 pt-4 pb-3">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-figure text-large-title">
+                    {progress.quality.average.fiber_g === null
+                      ? '—'
+                      : `${progress.quality.average.fiber_g}g`}
+                  </span>
+                  <span className="text-muted-foreground text-sm font-medium">
+                    fiber avg/day · aim for {progress.quality.targets.fiber_g.value}g
+                  </span>
+                </div>
+                <Sparkline
+                  points={progress.quality.fiber_series}
+                  stroke="var(--calories)"
+                  target={progress.quality.targets.fiber_g.value}
+                  className="mt-4"
+                />
+              </div>
+
+              <div className="divide-border grid grid-cols-3 divide-x-2">
+                <Stat
+                  label="Sodium"
+                  value={
+                    progress.quality.average.sodium_mg === null
+                      ? '—'
+                      : progress.quality.average.sodium_mg.toLocaleString()
+                  }
+                  unit="mg"
+                />
+                <Stat
+                  label="Sat fat"
+                  value={
+                    progress.quality.average.sat_fat_g === null
+                      ? '—'
+                      : `${progress.quality.average.sat_fat_g}`
+                  }
+                  unit="g"
+                />
+                <Stat
+                  label="Sugar"
+                  value={
+                    progress.quality.average.sugar_g === null
+                      ? '—'
+                      : `${progress.quality.average.sugar_g}`
+                  }
+                  unit="g"
+                />
+              </div>
+            </InsetGroup>
+          )}
 
           {/* Exercise has its own tab now; this is the pointer, not the data. */}
           <InsetGroup

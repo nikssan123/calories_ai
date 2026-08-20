@@ -33,6 +33,19 @@ const profile: Profile = {
 const day: DaySummary = {
   local_date: '2026-03-10',
   consumed: { kcal: 1840, protein_g: 120, carbs_g: 180, fat_g: 60 },
+  quality: {
+    fiber_g: 19,
+    sodium_mg: 1400,
+    sat_fat_g: 18,
+    sugar_g: 44,
+    coverage: 1,
+    targets: {
+      fiber_g: { value: 31, direction: 'floor' },
+      sodium_mg: { value: 2300, direction: 'ceiling' },
+      sat_fat_g: { value: 24, direction: 'ceiling' },
+      sugar_g: { value: 55, direction: 'ceiling' },
+    },
+  },
   burned_kcal: 300,
   net_kcal: 1540,
   targets: { kcal: 2200, protein_g: 160, carbs_g: 220, fat_g: 70, is_custom: false, source: 'calculated' },
@@ -52,6 +65,10 @@ const day: DaySummary = {
       protein_g: 42,
       carbs_g: 60,
       fat_g: 20,
+      fiber_g: 6,
+      sodium_mg: 480,
+      sat_fat_g: 5,
+      sugar_g: 3,
     },
   ],
   exercise_entries: [
@@ -85,6 +102,19 @@ describe('STABLE_SYSTEM_PROMPT', () => {
     expect(STABLE_SYSTEM_PROMPT).toContain('Days other than today');
     expect(STABLE_SYSTEM_PROMPT).toMatch(/ordinary, not an exception/);
     expect(STABLE_SYSTEM_PROMPT).toContain('days_ago');
+  });
+
+  it('says null and zero are different answers for the quality panel', () => {
+    // The one instruction the whole feature rests on. Without it the model
+    // fills the fields in to be helpful and every day total becomes a fiction
+    // that looks exactly like a fact.
+    expect(STABLE_SYSTEM_PROMPT).toContain('Diet quality');
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/null means "not estimated"/i);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/fiber is a floor/i);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/ceilings/i);
+    // And restated here specifically, because a salty dinner is where a
+    // no-judgement rule stated once, far above, quietly stops applying.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/no-judgement rule applies here/i);
   });
 
   it('is warm about the person and silent about the food', () => {
@@ -164,6 +194,33 @@ describe('dayContextPrompt', () => {
     expect(prompt).toContain('exercise: 5km run (5 km, 28 min) — 300 kcal');
   });
 
+  it('gives the quality panel with its direction and its coverage', () => {
+    const prompt = dayContextPrompt(profile, day, weight);
+    expect(prompt).toContain('fiber 19 / 31 g (floor)');
+    expect(prompt).toContain('sodium 1400 / 2300 mg (ceiling)');
+  });
+
+  it('warns when the panel only speaks for part of the day', () => {
+    const partial = dayContextPrompt(
+      profile,
+      { ...day, quality: { ...day.quality, coverage: 0.4 } },
+      weight,
+    );
+    expect(partial).toContain("40% of today's calories");
+    expect(partial).toContain('partial');
+  });
+
+  it('says nothing at all about quality when nothing was estimated', () => {
+    // Not a zeroed line: "fiber 0g" is a false premise the model would then
+    // comment on, and the comment would be about missing data.
+    const none = dayContextPrompt(
+      profile,
+      { ...day, quality: { ...day.quality, fiber_g: null } },
+      weight,
+    );
+    expect(none).not.toContain('Diet quality');
+  });
+
   it('lists exercise ids even on a day with no food logged', () => {
     const prompt = dayContextPrompt(profile, { ...day, food_entries: [] }, weight);
     expect(prompt).toContain('use these ids');
@@ -174,6 +231,13 @@ describe('dayContextPrompt', () => {
     const empty = dayContextPrompt(profile, {
       ...day,
       consumed: { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+      quality: {
+        ...day.quality,
+        fiber_g: null,
+        sodium_mg: null,
+        sat_fat_g: null,
+        sugar_g: null,
+      },
       burned_kcal: 0,
       food_entries: [],
       exercise_entries: [],

@@ -46,6 +46,7 @@ export function Landing() {
         <ThreeWaysIn />
         <Corrections />
         <AdaptiveTarget />
+        <BeyondCalories />
         <WeeklyRead />
         <Details />
         <Privacy />
@@ -387,6 +388,107 @@ function AdaptiveTarget() {
               Before it moves anything
             </p>
             <Points items={GUARDRAILS} className="mt-1" />
+          </div>
+        </Reveal>
+      </div>
+    </Section>
+  );
+}
+
+/* ---------------------------------------------------------- beyond calories */
+
+/**
+ * The four figures, drawn rather than described.
+ *
+ * Static markup rather than the real `DietQuality` component: this is a
+ * picture of a day, not a day, and wiring a live component to invented numbers
+ * is how a landing page ends up shipping a second, subtly different copy of
+ * the thing it is advertising.
+ */
+const PANEL = [
+  { label: 'Fiber', emoji: '🌱', value: '31', target: '/31g', pct: 100, floor: true },
+  { label: 'Sodium', emoji: '🧂', value: '1,590', target: '/2,300mg', pct: 69, floor: false },
+  { label: 'Sat fat', emoji: '🧈', value: '18', target: '/24g', pct: 75, floor: false },
+  { label: 'Sugar', emoji: '🍬', value: '44', target: '/55g', pct: 80, floor: false },
+];
+
+function BeyondCalories() {
+  return (
+    <Section id="quality">
+      <Reveal>
+        <h2 className="text-section-title max-w-2xl text-balance">
+          Two identical days can be very different dinners.
+        </h2>
+        <p className="text-muted-foreground mt-5 max-w-2xl text-[17px] leading-relaxed font-medium">
+          Hitting 2,100 calories and 150g of protein is the same number whether it came from
+          lentils or from a bag of crisps and a shake. So the same estimate that prices your
+          meal also reads its fiber, sodium, saturated fat and sugar &mdash; per item, beside
+          the macros, from the sentence you already typed.
+        </p>
+      </Reveal>
+
+      <div className="mt-12 grid gap-6 lg:grid-cols-2">
+        <Reveal>
+          <div className="bg-card border-border chunk h-full rounded-[var(--radius)] border-2 p-6 sm:p-7">
+            <p className="text-eyebrow text-muted-foreground">A Tuesday</p>
+            <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-5">
+              {PANEL.map(({ label, emoji, value, target, pct, floor }) => (
+                <div key={label} className="space-y-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span aria-hidden className="text-[11px] leading-none">
+                      {emoji}
+                    </span>
+                    <span className="text-footnote text-muted-foreground font-semibold">
+                      {label}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-1">
+                    <span
+                      className="text-figure text-footnote leading-none"
+                      style={floor ? { color: 'var(--calories-text)' } : undefined}
+                    >
+                      {value}
+                    </span>
+                    <span className="tnum text-footnote text-muted-foreground font-semibold">
+                      {target}
+                    </span>
+                  </div>
+                  <div className="bg-muted border-border h-1.5 overflow-hidden rounded-full border">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${pct}%`,
+                        background: floor ? 'var(--calories)' : 'var(--muted-foreground)',
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="text-muted-foreground mt-6 text-body leading-relaxed">
+              Fiber is a floor to reach. The other three are ceilings to stay under, and they
+              are drawn differently because they are not the same kind of number &mdash;
+              nothing here throws a party for hitting your sodium.
+            </p>
+          </div>
+        </Reveal>
+
+        <Reveal delay={100}>
+          <div className="bg-card border-border chunk h-full rounded-[var(--radius)] border-2 p-6 sm:p-7">
+            <p className="text-eyebrow text-muted-foreground">And when it does not know</p>
+            <p className="mt-4 text-[19px] font-extrabold tracking-[-0.01em] font-[family-name:var(--font-display)]">
+              &ldquo;Only 40% of today&rsquo;s calories carry these figures.&rdquo;
+            </p>
+            <p className="text-muted-foreground mt-4 text-body leading-relaxed">
+              Nobody can judge the sodium in a dish they were told nothing about, and a total
+              that quietly leaves out half your day is worse than no total at all &mdash; it
+              looks exactly like a fact. So an un-estimated item is recorded as unknown, never
+              as a zero, and the day says out loud how much of itself it actually measured.
+            </p>
+            <p className="text-muted-foreground mt-4 text-body leading-relaxed">
+              The same reason a guess is marked as a guess. A number you can trust is worth
+              more than a number that is always there.
+            </p>
           </div>
         </Reveal>
       </div>

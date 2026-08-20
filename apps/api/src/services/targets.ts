@@ -1,4 +1,11 @@
-import type { ActivityLevel, Goal, Sex, Targets, TargetSource } from '@ct/shared';
+import type {
+  ActivityLevel,
+  Goal,
+  QualityTargets,
+  Sex,
+  Targets,
+  TargetSource,
+} from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 
 const ACTIVITY_MULTIPLIER: Record<ActivityLevel, number> = {
@@ -64,6 +71,35 @@ export function macrosFor(
   const fat_g = Math.round((kcal * 0.28) / 9);
   const carbs_g = Math.max(0, Math.round((kcal - protein_g * 4 - fat_g * 9) / 4));
   return { protein_g, carbs_g, fat_g };
+}
+
+/**
+ * The diet-quality panel that goes with an energy target.
+ *
+ * Derived, never stored: these are a deterministic function of the calorie
+ * number with nothing personal in them, so keeping a row per user would only
+ * create a copy that could disagree with the target it was computed from.
+ *
+ * Three of the four are ceilings and one is a floor, and each says so in its
+ * own shape rather than leaving a screen to remember which is which. The
+ * figures are the ordinary population guidance:
+ *
+ * - fiber   14 g per 1000 kcal, which is where every dietary guideline lands.
+ * - sodium  2300 mg flat, and flat on purpose — salt intake does not scale with
+ *           appetite, and scaling it would hand a bigger allowance to exactly
+ *           the person eating the most processed food.
+ * - sat fat under 10% of energy.
+ * - sugar   under 10% of energy, counting what is added rather than what is in
+ *           a piece of fruit. Nothing here can tell those apart, which is why
+ *           this is the softest of the four and the prompt says so.
+ */
+export function qualityTargetsFor(kcal: number): QualityTargets {
+  return {
+    fiber_g: { value: Math.round((kcal / 1000) * 14), direction: 'floor' },
+    sodium_mg: { value: 2300, direction: 'ceiling' },
+    sat_fat_g: { value: Math.round((kcal * 0.1) / 9), direction: 'ceiling' },
+    sugar_g: { value: Math.round((kcal * 0.1) / 4), direction: 'ceiling' },
+  };
 }
 
 export function calculateTargets(inputs: TargetInputs): Targets {

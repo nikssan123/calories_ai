@@ -1,4 +1,12 @@
-import type { Confidence, EntrySource, ExerciseEntry, FoodEntry, Meal, WeightEntry } from '@ct/shared';
+import type {
+  Confidence,
+  DietQuality,
+  EntrySource,
+  ExerciseEntry,
+  FoodEntry,
+  Meal,
+  WeightEntry,
+} from '@ct/shared';
 import { query, queryOne, transaction } from '../db.ts';
 import { type DayContext, localDateFor } from '../time.ts';
 
@@ -15,6 +23,37 @@ export interface FoodItemInput {
   protein_g: number;
   carbs_g: number;
   fat_g: number;
+  /**
+   * The diet-quality panel, and optional in a way the macros are not: omitting
+   * one writes NULL, which means "nobody estimated this" and is a different
+   * claim from zero. Every path that has a figure passes it; nothing invents
+   * one to avoid the null.
+   */
+  fiber_g?: number | null;
+  sodium_mg?: number | null;
+  sat_fat_g?: number | null;
+  sugar_g?: number | null;
+}
+
+/** The column list and the values, kept together so the two INSERTs cannot drift. */
+const ITEM_COLUMNS =
+  'name, quantity_g, quantity_desc, kcal, protein_g, carbs_g, fat_g, fiber_g, sodium_mg, sat_fat_g, sugar_g, position';
+
+function itemValues(item: FoodItemInput, position: number): unknown[] {
+  return [
+    item.name,
+    item.quantity_g ?? null,
+    item.quantity_desc ?? null,
+    item.kcal,
+    item.protein_g,
+    item.carbs_g,
+    item.fat_g,
+    item.fiber_g ?? null,
+    item.sodium_mg ?? null,
+    item.sat_fat_g ?? null,
+    item.sugar_g ?? null,
+    position,
+  ];
 }
 
 export interface CreateFoodInput {
@@ -55,20 +94,9 @@ export async function createFoodEntry(input: CreateFoodInput): Promise<FoodEntry
 
     for (const [index, item] of input.items.entries()) {
       await client.query(
-        `INSERT INTO food_items
-           (entry_id, name, quantity_g, quantity_desc, kcal, protein_g, carbs_g, fat_g, position)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-        [
-          id,
-          item.name,
-          item.quantity_g ?? null,
-          item.quantity_desc ?? null,
-          item.kcal,
-          item.protein_g,
-          item.carbs_g,
-          item.fat_g,
-          index,
-        ],
+        `INSERT INTO food_items (entry_id, ${ITEM_COLUMNS})
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        [id, ...itemValues(item, index)],
       );
     }
     return id;
@@ -135,7 +163,9 @@ export async function listFoodEntries(
                   'id', i.id, 'entry_id', i.entry_id, 'name', i.name,
                   'quantity_g', i.quantity_g, 'quantity_desc', i.quantity_desc,
                   'kcal', i.kcal, 'protein_g', i.protein_g,
-                  'carbs_g', i.carbs_g, 'fat_g', i.fat_g
+                  'carbs_g', i.carbs_g, 'fat_g', i.fat_g,
+                  'fiber_g', i.fiber_g, 'sodium_mg', i.sodium_mg,
+                  'sat_fat_g', i.sat_fat_g, 'sugar_g', i.sugar_g
                 ) ORDER BY i.position
               ) FILTER (WHERE i.id IS NOT NULL),
               '[]'
@@ -143,7 +173,14 @@ export async function listFoodEntries(
             COALESCE(SUM(i.kcal), 0)      AS kcal,
             COALESCE(SUM(i.protein_g), 0) AS protein_g,
             COALESCE(SUM(i.carbs_g), 0)   AS carbs_g,
-            COALESCE(SUM(i.fat_g), 0)     AS fat_g
+            COALESCE(SUM(i.fat_g), 0)     AS fat_g,
+            -- No COALESCE on these four: SUM over nothing but NULLs is NULL,
+            -- which is the answer. An entry logged before the columns existed
+            -- has no fiber figure, and a zero would claim it had none.
+            SUM(i.fiber_g)   AS fiber_g,
+            SUM(i.sodium_mg) AS sodium_mg,
+            SUM(i.sat_fat_g) AS sat_fat_g,
+            SUM(i.sugar_g)   AS sugar_g
        FROM food_entries e
        LEFT JOIN food_items i ON i.entry_id = e.id
       WHERE ${conditions.join(' AND ')}
@@ -177,11 +214,29 @@ function toFoodEntry(row: any): FoodEntry {
       protein_g: Number(i.protein_g),
       carbs_g: Number(i.carbs_g),
       fat_g: Number(i.fat_g),
+      ...quality(i),
     })),
     kcal: Number(row.kcal),
     protein_g: Number(row.protein_g),
     carbs_g: Number(row.carbs_g),
     fat_g: Number(row.fat_g),
+    ...quality(row),
+  };
+}
+
+/**
+ * The quality panel off a row, preserving the null.
+ *
+ * `Number(null)` is 0, so the usual `Number(row.x)` would quietly turn every
+ * un-estimated figure into a claim that the food had none of it.
+ */
+function quality(row: any): DietQuality {
+  const num = (value: unknown) => (value === null || value === undefined ? null : Number(value));
+  return {
+    fiber_g: num(row.fiber_g),
+    sodium_mg: num(row.sodium_mg),
+    sat_fat_g: num(row.sat_fat_g),
+    sugar_g: num(row.sugar_g),
   };
 }
 
@@ -236,20 +291,9 @@ export async function updateFoodEntry(
       await client.query('DELETE FROM food_items WHERE entry_id = $1', [entryId]);
       for (const [index, item] of input.items.entries()) {
         await client.query(
-          `INSERT INTO food_items
-             (entry_id, name, quantity_g, quantity_desc, kcal, protein_g, carbs_g, fat_g, position)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-          [
-            entryId,
-            item.name,
-            item.quantity_g ?? null,
-            item.quantity_desc ?? null,
-            item.kcal,
-            item.protein_g,
-            item.carbs_g,
-            item.fat_g,
-            index,
-          ],
+          `INSERT INTO food_items (entry_id, ${ITEM_COLUMNS})
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+          [entryId, ...itemValues(item, index)],
         );
       }
     }

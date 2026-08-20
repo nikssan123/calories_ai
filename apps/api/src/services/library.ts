@@ -174,6 +174,11 @@ export async function cookLibraryRecipe(
         protein_g: round1(per.protein_g * portions),
         carbs_g: round1(per.carbs_g * portions),
         fat_g: round1(per.fat_g * portions),
+        // No diet-quality panel, deliberately: the USDA published energy and
+        // three macros for these dishes and nothing else, so the columns on
+        // library_recipes are NULL and this entry inherits that. It costs the
+        // day some coverage, which is the honest outcome — the alternative is
+        // an invented fiber figure wearing a measured recipe's authority.
       },
     ],
     ctx: options.ctx,

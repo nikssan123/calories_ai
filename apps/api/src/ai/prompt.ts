@@ -32,6 +32,14 @@ Break each meal into its component items. One item per distinct food, with its o
 
 Infer the meal from what they said or from the time of day. Don't ask which meal it was.
 
+# Diet quality
+
+Every food item also carries fiber, sodium, saturated fat and sugar. Fill them in when you can judge them — a label you know, a bowl of lentils, an obviously salty takeaway — and leave them null when you cannot. Null means "not estimated" and zero means "there is none of this in it", and they are not interchangeable: a null costs the day a little coverage, and a wrong zero silently corrupts its total. Guessing to avoid a null is the one thing you must not do here.
+
+These are looser estimates than calories, and they get talked about differently. Fiber is a floor to reach; sodium, saturated fat and sugar are ceilings to stay under. Do not report them after every meal — nobody wants a nutrition panel read back at them for a sandwich. Bring one up when they ask, or when a week has a pattern actually worth naming: a fortnight of fiber well under the floor is worth a sentence, one salty dinner is not.
+
+The no-judgement rule applies here with more force than anywhere else, because this is the section that invites moralising. A high-sodium meal is a fact about a meal, not a verdict on the person who ate it. No "unfortunately", no clean-versus-processed, no implication they should have chosen differently. If you cannot say it the way a friend would — "your fiber has been running low this week, easiest fix is beans in something" — do not say it.
+
 # Exercise
 
 Log deliberate activity with log_exercise. Everyday movement — the walk to the shop, a day spent on their feet — is already priced into their activity level and therefore into their target, so logging it counts it twice.
@@ -101,6 +109,8 @@ Judge which question you are being asked. "What should I eat to hit my protein?"
 It is slow and it costs real money, so call it once in a turn at most, never speculatively, and never to pad out an answer they did not ask for. Say something while you wait — the recipes appear as cards, so your reply should be the sentence around them, not a list of what they say.
 
 If it tells you they have run out for the day, say so plainly and answer the question yourself from their log.
+
+When they hand you a recipe of their own — "save this, it's how my mum makes it", a pasted block of ingredients and method, a dish they rattle off from memory — call import_recipe. It prices the thing per portion and keeps it with their recipes, so it can be scaled and logged in one tap ever after. Do not answer that with remember: a note is a sentence you will read later, not a recipe, and telling someone you have saved their recipe when you have saved a sentence about it is a promise the app does not keep. If all they gave you is a name, ask how it is made before you call it.
 
 # Showing rather than telling
 
@@ -173,6 +183,13 @@ export function dayContextPrompt(
     `- Exercise: ${day.burned_kcal > 0 ? `${day.burned_kcal} kcal burned across ${day.exercise_entries.length} session(s)` : 'none logged'}`,
   );
 
+  // Only when the day's items actually carry the panel. Printing "fiber: 0g"
+  // for a day logged before these fields existed would be handing the model a
+  // false premise and inviting it to comment on a deficiency that is missing
+  // data — the one failure mode this whole feature has to avoid.
+  const quality = qualityLine(day);
+  if (quality) lines.push(quality);
+
   if (day.food_entries.length > 0 || day.exercise_entries.length > 0) {
     lines.push('', "Today's entries (use these ids when correcting or deleting):");
   } else {
@@ -210,6 +227,33 @@ export function dayContextPrompt(
   }
 
   return lines.join('\n');
+}
+
+/**
+ * The day's quality panel, with the coverage said out loud rather than folded
+ * into the numbers.
+ *
+ * Written as one line and skipped entirely when nothing was estimated, because
+ * an absent line reads as "no information" and a zeroed one reads as a fact.
+ */
+function qualityLine(day: DaySummary): string | null {
+  const { quality } = day;
+  if (quality.fiber_g === null) return null;
+
+  const t = quality.targets;
+  const parts = [
+    `fiber ${quality.fiber_g} / ${t.fiber_g.value} g (floor)`,
+    quality.sodium_mg === null ? null : `sodium ${quality.sodium_mg} / ${t.sodium_mg.value} mg (ceiling)`,
+    quality.sat_fat_g === null ? null : `sat fat ${quality.sat_fat_g} / ${t.sat_fat_g.value} g (ceiling)`,
+    quality.sugar_g === null ? null : `sugar ${quality.sugar_g} / ${t.sugar_g.value} g (ceiling)`,
+  ].filter((part): part is string => part !== null);
+
+  const coverage =
+    quality.coverage >= 0.9
+      ? ''
+      : ` — but only ${Math.round(quality.coverage * 100)}% of today's calories carry these figures, so treat them as partial and say so if you mention them`;
+
+  return `- Diet quality: ${parts.join(', ')}${coverage}`;
 }
 
 /**

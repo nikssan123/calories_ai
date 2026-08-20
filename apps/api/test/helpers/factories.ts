@@ -114,6 +114,15 @@ export interface MealSpec {
   fat_g?: number;
   confidence?: Confidence;
   hour?: number;
+  /**
+   * The diet-quality panel. Left off by default, which is the interesting
+   * default: an un-estimated meal is what most of the log looks like, and a
+   * fixture that always carries fiber would never exercise the coverage path.
+   */
+  fiber_g?: number;
+  sodium_mg?: number;
+  sat_fat_g?: number;
+  sugar_g?: number;
 }
 
 /**
@@ -132,6 +141,10 @@ export async function addMeal(user: TestUser, spec: MealSpec) {
       protein_g: spec.protein_g ?? Math.round(spec.kcal * 0.075),
       carbs_g: spec.carbs_g ?? Math.round(spec.kcal * 0.1),
       fat_g: spec.fat_g ?? Math.round(spec.kcal * 0.03),
+      fiber_g: spec.fiber_g ?? null,
+      sodium_mg: spec.sodium_mg ?? null,
+      sat_fat_g: spec.sat_fat_g ?? null,
+      sugar_g: spec.sugar_g ?? null,
     },
   ];
   return createFoodEntry({

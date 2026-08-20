@@ -35,4 +35,39 @@ export const itemShape = {
   protein_g: z.number(),
   carbs_g: z.number(),
   fat_g: z.number(),
+
+  /*
+   * The diet-quality panel. Nullable and defaulted to null on purpose: null is
+   * "I do not know", zero is "there is none of this in it", and a model that
+   * treats the two as interchangeable produces day totals that look complete
+   * and are not. Filling these in badly is worse than leaving them out.
+   */
+  fiber_g: z
+    .number()
+    .nullable()
+    .default(null)
+    .describe(
+      'Grams of fiber. Estimate it for whole foods you know — vegetables, fruit, beans, wholegrains, nuts — and for packaged food with a label. Null if you genuinely cannot tell.',
+    ),
+  sodium_mg: z
+    .number()
+    .nullable()
+    .default(null)
+    .describe(
+      'Milligrams of sodium. Estimate it for packaged and processed food, restaurant and takeaway meals, cured meat, cheese, bread and anything obviously salted. A plain unsalted whole food is close to zero and that is a real zero, not a null. Null for a home-cooked dish where the seasoning is unknown.',
+    ),
+  sat_fat_g: z
+    .number()
+    .nullable()
+    .default(null)
+    .describe(
+      'Grams of saturated fat. Estimate it wherever you estimated fat at all — the split between saturated and unsaturated follows from what the food is. Null only if the fat figure itself was a guess at a dish you could not identify.',
+    ),
+  sugar_g: z
+    .number()
+    .nullable()
+    .default(null)
+    .describe(
+      'Grams of total sugars, including what is naturally in fruit and milk. Estimate it for anything sweet, any packaged food, and any fruit. Null when the carbohydrate is plainly all starch and the sugar figure would be noise.',
+    ),
 };

@@ -62,6 +62,30 @@ export const Nutrition = z.object({
 });
 export type Nutrition = z.infer<typeof Nutrition>;
 
+/**
+ * The four figures that say something about the quality of food rather than its
+ * quantity. Estimated per item, exactly where the macros are.
+ *
+ * Every one of them is nullable, and null is a real answer rather than a gap to
+ * be filled with a zero: it means nobody ever estimated this, which is true of
+ * every item logged before these fields existed and of anything the model
+ * genuinely cannot judge. A zero is a claim — "this has no fiber" — and a plate
+ * of pasta reported as zero-fiber is a worse day total than one reported as
+ * partly unknown.
+ *
+ * Deliberately not folded into `Nutrition`. That shape is also a day's totals
+ * and the shape `Targets` is built around, so widening it would force four more
+ * fields into every literal that adds up a day, for nothing: a target has no
+ * business carrying a nullable sodium figure.
+ */
+export const DietQuality = z.object({
+  fiber_g: z.number().nullable(),
+  sodium_mg: z.number().nullable(),
+  sat_fat_g: z.number().nullable(),
+  sugar_g: z.number().nullable(),
+});
+export type DietQuality = z.infer<typeof DietQuality>;
+
 export const FoodItem = z.object({
   id: z.string().uuid(),
   entry_id: z.string().uuid(),
@@ -71,6 +95,7 @@ export const FoodItem = z.object({
   /** What the AI actually assumed, in words — "1 medium banana", "2 slices". */
   quantity_desc: z.string().nullable(),
   ...Nutrition.shape,
+  ...DietQuality.shape,
 });
 export type FoodItem = z.infer<typeof FoodItem>;
 
@@ -88,6 +113,8 @@ export const FoodEntry = z.object({
   photo_id: z.string().uuid().nullable(),
   items: z.array(FoodItem),
   ...Nutrition.shape,
+  /** Summed over the items that carry them; null when none of them did. */
+  ...DietQuality.shape,
 });
 export type FoodEntry = z.infer<typeof FoodEntry>;
 
@@ -226,12 +253,78 @@ export const Targets = z.object({
 export type Targets = z.infer<typeof Targets>;
 
 /**
+ * Which way a quality target points.
+ *
+ * Stated rather than left implicit, because the four are not all the same kind
+ * of number and a screen that treats them alike is actively misleading: more
+ * fiber is better and more sodium is not. Nothing should ever throw confetti
+ * for reaching a sodium target the way `MacroBars` does for protein.
+ */
+export const QUALITY_DIRECTIONS = ['floor', 'ceiling'] as const;
+export const QualityDirection = z.enum(QUALITY_DIRECTIONS);
+export type QualityDirection = z.infer<typeof QualityDirection>;
+
+export const QualityTarget = z.object({
+  value: z.number(),
+  direction: QualityDirection,
+});
+export type QualityTarget = z.infer<typeof QualityTarget>;
+
+/**
+ * Derived from the calorie target rather than stored against the user. There is
+ * nothing personal in them to version — they are the same function of the same
+ * number for everybody — so a `targets` row would only be a copy that could go
+ * stale the day the arithmetic changed.
+ */
+export const QualityTargets = z.object({
+  fiber_g: QualityTarget,
+  sodium_mg: QualityTarget,
+  sat_fat_g: QualityTarget,
+  sugar_g: QualityTarget,
+});
+export type QualityTargets = z.infer<typeof QualityTargets>;
+
+/**
+ * A day's diet quality, and how much of the day it actually speaks for.
+ *
+ * `coverage` is the share of the day's calories that came from items carrying
+ * the figures. It travels with the sums rather than being worked out by each
+ * screen, because a total without it is a lie by omission: 12g of fiber across
+ * a day where only breakfast was ever estimated is not a 12g day, and no amount
+ * of care in the UI can recover that once the number has been handed over bare.
+ *
+ * Below roughly 0.6 the honest thing to print is "partly measured", not a
+ * total — the same posture as weighting an adaptive target by how much data
+ * stands behind it.
+ */
+/**
+ * Below this, a day's quality figures are a fragment rather than a total, and
+ * every surface says "partly measured" instead of printing a number.
+ *
+ * 0.6 is a judgement, not a derivation: roughly "two of the three meals are
+ * accounted for", which is where a fiber total starts being worth reading. Here
+ * rather than in the API so the web, the agent and the nudge triggers cannot
+ * each quietly pick their own threshold.
+ */
+export const QUALITY_COVERAGE_FLOOR = 0.6;
+
+export const DayQuality = z.object({
+  /** Null where nothing logged that day carried the figure at all. */
+  ...DietQuality.shape,
+  /** 0-1. */
+  coverage: z.number(),
+  targets: QualityTargets,
+});
+export type DayQuality = z.infer<typeof DayQuality>;
+
+/**
  * §9: food and exercise are reported separately. `net` is derived for callers that
  * want it, but the UI leads with food vs target.
  */
 export const DaySummary = z.object({
   local_date: z.string(),
   consumed: Nutrition,
+  quality: DayQuality,
   burned_kcal: z.number(),
   net_kcal: z.number(),
   targets: Targets,
@@ -328,6 +421,13 @@ export const AuthStatus = z.object({
   has_accounts: z.boolean(),
   /** Whether this account may open /admin. Decided by ADMIN_EMAILS on the API. */
   is_admin: z.boolean(),
+  /**
+   * Whether this deployment has a Google client configured. The sign-in screen
+   * asks before it offers the button: a self-hosted install that has not set
+   * one up should show an email form and nothing else, rather than a second
+   * option that fails the moment it is pressed.
+   */
+  google_enabled: z.boolean(),
   /**
    * The raw session token, returned by signup and login only to a client that
    * asked for it with SESSION_TRANSPORT_HEADER. Absent everywhere else — the
@@ -512,6 +612,7 @@ export const RecipeIngredient = z.object({
   /** True when this is not in the pantry and has to be bought. */
   missing: z.boolean().default(false),
   ...Nutrition.shape,
+  ...DietQuality.shape,
 });
 export type RecipeIngredient = z.infer<typeof RecipeIngredient>;
 
@@ -539,6 +640,7 @@ export const Recipe = z.object({
   ingredients: z.array(RecipeIngredient),
   /** Per portion — the figure the card prints, and what cooking one logs. */
   ...Nutrition.shape,
+  ...DietQuality.shape,
   confidence: Confidence,
   generated_for: RecipeContext.nullable(),
   origin: RecipeOrigin,
@@ -811,6 +913,24 @@ export const Progress = z.object({
     total_kcal: z.number(),
     /** Per-day burn. A rest day is 0 here, not null — it is data, not a gap. */
     series: z.array(TrendPoint),
+  }),
+  /**
+   * Diet quality over the window. Daily means rather than totals, because a
+   * fortnight of fiber is not a number anybody has an intuition for.
+   *
+   * One series and it is fiber's, not four: fiber is the floor and the one
+   * whose shape over time is worth looking at. Sodium, saturated fat and sugar
+   * are ceilings, and a ceiling is a question about a week rather than a line
+   * to watch day by day — four lines here would be a dashboard nobody reads.
+   */
+  quality: z.object({
+    average: DietQuality,
+    targets: QualityTargets,
+    /** 0-1 across the whole window; the averages mean little when it is low. */
+    coverage: z.number(),
+    /** Days in the window whose panel was estimated at all. */
+    days_measured: z.number(),
+    fiber_series: z.array(TrendPoint),
   }),
 });
 export type Progress = z.infer<typeof Progress>;
