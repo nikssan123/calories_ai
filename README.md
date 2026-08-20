@@ -537,8 +537,10 @@ VPS as the trading bot and using the same pattern: its own compose stack in
 `/srv/calorytracker`, joined to the shared external `web` network, fronted by the
 Caddy that `site_maker` owns. Nothing publishes a port.
 
-`eat.webwork.bg` still resolves to the same host and is the address this was first
-deployed under; `daysofar.com` is the one the product is named for and the one every
+`daysofar.com` is the only host that serves the app. `eat.webwork.bg`, the address
+this was first deployed under, is a 301 to it: serving the same pages on a second
+hostname split the search index and — because a session cookie is scoped to the
+host that set it — left anyone who signed in there a stranger on the domain every
 link in an email points at.
 
 ```
@@ -566,14 +568,17 @@ Only the Next.js container is reachable, and it proxies to the API internally.
 ### Reverse proxy
 
 The routes live in the **site_maker** repo, not this one:
-`site_maker/caddy/Caddyfile`. Three hostnames land here — `daysofar.com` and
-`api.daysofar.com` to the web and api containers, plus the original
-`eat.webwork.bg`, which must stay more specific than the `*.webwork.bg` wildcard
-or requests fall through to the hosting app-runner and get a "domain not found"
-page. Reload Caddy there after changing it.
+`site_maker/caddy/Caddyfile`. Four hostnames land here: `daysofar.com` and
+`api.daysofar.com` to the web and api containers, and `www.daysofar.com` plus the
+original `eat.webwork.bg` redirecting to the first. The `eat.webwork.bg` block
+stays even though it only redirects — it must remain more specific than the
+`*.webwork.bg` wildcard, or requests fall through to the hosting app-runner and
+get a "domain not found" page. Reload Caddy there after changing it.
 
-A hostname added here also has to be added to `WEB_ORIGINS`, or the browser's
-credentialed requests to the API are refused by CORS.
+Adding a hostname that *serves* the app rather than redirecting means adding it to
+`WEB_ORIGINS` too, or the browser's credentialed requests to the API are refused by
+CORS — and it means a second session cookie jar, which is the reason there is only
+one such hostname.
 
 ### First-time setup on the host
 
