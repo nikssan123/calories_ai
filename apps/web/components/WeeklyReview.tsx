@@ -109,7 +109,7 @@ function TargetChange({
       <div className="tnum flex items-center gap-2 text-[15px] font-medium">
         <span className="text-muted-foreground">{proposal.current.kcal.toLocaleString()}</span>
         <ArrowRight size={14} className="text-muted-foreground" />
-        <span className="text-[var(--calories)]">{proposal.proposed.kcal.toLocaleString()} kcal</span>
+        <span className="text-[var(--calories-text)]">{proposal.proposed.kcal.toLocaleString()} kcal</span>
       </div>
       <p className="text-footnote text-muted-foreground mt-1">
         {tense === 'future' ? 'Next review will apply this. ' : ''}

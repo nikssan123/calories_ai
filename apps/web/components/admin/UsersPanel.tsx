@@ -93,7 +93,7 @@ export function UsersPanel() {
                 {disabled ? (
                   <span className="text-[var(--fat)]">Suspended</span>
                 ) : user.is_setup_complete ? (
-                  <span className="text-[var(--protein)]">Onboarded</span>
+                  <span className="text-[var(--positive)]">Onboarded</span>
                 ) : (
                   <span className="text-muted-foreground">In setup</span>
                 )}

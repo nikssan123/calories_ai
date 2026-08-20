@@ -67,7 +67,7 @@ export function Sidebar() {
                   <Icon
                     size={19}
                     strokeWidth={active ? 2.3 : 1.9}
-                    style={active ? { color: 'var(--calories)' } : undefined}
+                    style={active ? { color: 'var(--calories-text)' } : undefined}
                   />
                   {label}
                 </Link>
@@ -94,7 +94,7 @@ export function Sidebar() {
                 <Shield
                   size={19}
                   strokeWidth={pathname === '/admin' ? 2.3 : 1.9}
-                  style={pathname === '/admin' ? { color: 'var(--calories)' } : undefined}
+                  style={pathname === '/admin' ? { color: 'var(--calories-text)' } : undefined}
                 />
                 Admin
               </Link>

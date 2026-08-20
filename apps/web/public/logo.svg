@@ -5,22 +5,25 @@
     the way the day's calories are still open; the three dots are at once a
     typing indicator and the macros — protein, carbs, fat.
 
-    Colours are the iOS system palette the app is built from: the ring runs from
-    systemIndigo (the app's --calories accent) towards systemPurple, and the dark
-    variants swap in below. Keep this file in step with components/Logo.tsx.
+    The ring ramps the accent (--calories) into jade (--logo-ramp); the three
+    macro dots are the app's own protein, carbs and fat hues, so the mark is
+    made of the same palette it introduces. Dark variants swap in below — the
+    accent lifts a long way there, because a forest green that reads as
+    structure on paper is nearly invisible on ink. Keep this file in step with
+    components/Logo.tsx.
   -->
   <style>
-    .s0 { stop-color: #5e5ce6 } /* systemIndigo — the app's --calories */
-    .s1 { stop-color: #a75cf0 } /* systemPurple, pulled back so indigo still leads */
-    .protein { fill: #34c759 }
-    .carbs   { fill: #32ade6 }
-    .fat     { fill: #ff2d55 }
+    .s0 { stop-color: #0f7b5c } /* forest — the app's --calories */
+    .s1 { stop-color: #12a594 } /* jade, pulled back so forest still leads */
+    .protein { fill: #f59e0b }
+    .carbs   { fill: #3b82f6 }
+    .fat     { fill: #8b5cf6 }
     @media (prefers-color-scheme: dark) {
-      .s0 { stop-color: #7d7aff }
-      .s1 { stop-color: #c489f7 }
-      .protein { fill: #30d158 }
-      .carbs   { fill: #64d2ff }
-      .fat     { fill: #ff375f }
+      .s0 { stop-color: #34d9a4 }
+      .s1 { stop-color: #2dd4bf }
+      .protein { fill: #fbbf24 }
+      .carbs   { fill: #5d9bff }
+      .fat     { fill: #a78bfa }
     }
   </style>
   <defs>

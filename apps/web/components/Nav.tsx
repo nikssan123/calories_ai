@@ -38,10 +38,17 @@ export function Nav() {
                 aria-current={active ? 'page' : undefined}
                 className={cn(
                   'flex flex-col items-center gap-1 px-0.5 py-2 transition-colors',
-                  active ? 'text-[var(--calories)]' : 'text-muted-foreground hover:text-foreground',
+                  active ? 'text-[var(--calories-text)]' : 'text-muted-foreground hover:text-foreground',
                 )}
               >
-                <Icon size={22} strokeWidth={active ? 2.4 : 1.9} />
+                {/* The lift is small on purpose: it should register as the tab
+                    answering you, not as the bar rearranging itself. */}
+                <Icon
+                  size={22}
+                  strokeWidth={active ? 2.4 : 1.9}
+                  className="transition-transform duration-[var(--dur-spring)] ease-[var(--ease-spring)]"
+                  style={{ transform: active ? 'scale(1.08)' : 'scale(1)' }}
+                />
                 <span className="w-full truncate text-center text-[10px] font-medium tracking-tight">
                   {label}
                 </span>

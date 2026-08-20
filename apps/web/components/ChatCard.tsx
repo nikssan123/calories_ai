@@ -5,12 +5,16 @@ import { Sparkline } from '@/components/Sparkline';
 import { cn } from '@/lib/utils';
 
 /**
- * The visual half of a turn.
+ * The visual half of a turn — and the thing this app should be recognised by.
  *
- * These sit inside the conversation, so they are deliberately quieter than the
- * cards on Today or Progress: no headings, one accent, and never taller than
- * the reply they belong to. A card that outweighs the sentence next to it turns
- * a conversation into a dashboard, which is the thing this product is not.
+ * These sit inside the conversation, so they stay compact: no headings, one
+ * accent, and never taller than the reply they belong to. A card that outweighs
+ * the sentence next to it turns a conversation into a dashboard, which is the
+ * thing this product is not.
+ *
+ * What they do get is the entrance. A card is the moment the agent hands a
+ * understood meal back to you, so it lands with a little weight instead of
+ * simply appearing — see `animate-land` in globals.css.
  */
 export function ChatActionCard({ action }: { action: ChatAction }) {
   if (!action.card) return <Chip action={action} />;
@@ -20,7 +24,7 @@ export function ChatActionCard({ action }: { action: ChatAction }) {
 /** Actions with nothing to draw — a deletion — stay a line of text. */
 function Chip({ action }: { action: ChatAction }) {
   return (
-    <div className="bg-card flex items-center gap-2 rounded-xl px-3 py-2">
+    <div className="bg-card animate-land flex items-center gap-2 rounded-[calc(var(--radius)-4px)] px-3 py-2 shadow-[0_1px_2px_rgba(23,22,20,0.05)]">
       <span
         className="size-1.5 shrink-0 rounded-full"
         style={{
@@ -56,7 +60,16 @@ const MEAL_LABEL: Record<string, string> = {
 };
 
 function Shell({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn('bg-card rounded-2xl px-3.5 py-3', className)}>{children}</div>;
+  return (
+    <div
+      className={cn(
+        'bg-card animate-land rounded-[var(--radius)] px-4 py-3.5 shadow-[0_1px_2px_rgba(23,22,20,0.05)]',
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
 }
 
 function FoodCard({ card }: { card: Extract<Card, { type: 'food' }> }) {
@@ -75,7 +88,7 @@ function FoodCard({ card }: { card: Extract<Card, { type: 'food' }> }) {
     <Shell>
       <div className="flex items-baseline justify-between gap-3">
         <p className="min-w-0 flex-1 truncate text-[15px] font-medium">{card.description}</p>
-        <span className="tnum shrink-0 text-[15px] font-semibold">
+        <span className="text-figure shrink-0 text-[15px]">
           {approx && '~'}
           {card.kcal.toLocaleString()}
           <span className="text-muted-foreground text-footnote font-normal"> kcal</span>
@@ -88,7 +101,7 @@ function FoodCard({ card }: { card: Extract<Card, { type: 'food' }> }) {
       </p>
 
       {total > 0 && (
-        <div className="bg-muted mt-2.5 flex h-1.5 overflow-hidden rounded-full">
+        <div className="bg-muted mt-2.5 flex h-[5px] gap-px overflow-hidden rounded-full">
           {energy.map((value, i) => (
             <div
               key={macros[i]!.label}
@@ -128,7 +141,7 @@ function ExerciseCard({ card }: { card: Extract<Card, { type: 'exercise' }> }) {
     <Shell>
       <div className="flex items-baseline justify-between gap-3">
         <p className="min-w-0 flex-1 truncate text-[15px] font-medium">{card.description}</p>
-        <span className="tnum shrink-0 text-[15px] font-semibold text-[var(--exercise)]">
+        <span className="text-figure shrink-0 text-[15px] text-[var(--exercise)]">
           −{card.kcal_burned.toLocaleString()}
           <span className="text-muted-foreground text-footnote font-normal"> kcal</span>
         </span>
@@ -146,12 +159,12 @@ function WeightCard({ card }: { card: Extract<Card, { type: 'weight' }> }) {
   return (
     <Shell>
       <div className="flex items-baseline gap-2.5">
-        <span className="tnum text-[22px] font-semibold">{card.weight_kg} kg</span>
+        <span className="text-figure text-[22px]">{card.weight_kg} kg</span>
         {card.change_7d_kg !== null && card.change_7d_kg !== 0 && (
           <span
             className={cn(
               'tnum text-footnote font-medium',
-              card.change_7d_kg < 0 ? 'text-[var(--protein)]' : 'text-muted-foreground',
+              card.change_7d_kg < 0 ? 'text-[var(--positive)]' : 'text-muted-foreground',
             )}
           >
             {card.change_7d_kg > 0 ? '+' : '−'}
@@ -237,10 +250,11 @@ function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
             / {card.targets.kcal.toLocaleString()} kcal
           </span>
         </p>
+        {/* Ink, not red: over target is information, not a telling-off. */}
         <span
           className={cn(
             'tnum text-footnote shrink-0',
-            over ? 'text-destructive' : 'text-muted-foreground',
+            over ? 'text-foreground font-semibold' : 'text-muted-foreground',
           )}
         >
           {over
@@ -249,12 +263,13 @@ function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
         </span>
       </div>
 
-      <div className="bg-muted mt-2 h-1 overflow-hidden rounded-full">
+      <div className="bg-muted mt-2 h-[5px] overflow-hidden rounded-full">
         <div
           className="h-full rounded-full"
           style={{
             width: `${pct}%`,
-            background: over ? 'var(--destructive)' : 'var(--calories)',
+            background: over ? 'var(--foreground)' : 'var(--calories)',
+            transition: 'width var(--dur-spring) var(--ease-spring)',
           }}
         />
       </div>

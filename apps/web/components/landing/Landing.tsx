@@ -488,7 +488,7 @@ function OpenSource() {
             // The mark's indigo-to-purple ramp, pinned dark rather than taken
             // from the tokens: `--calories` lightens in dark mode, and white
             // text on it would fall under 4.5:1 exactly where it matters most.
-            background: 'linear-gradient(135deg, #4b49c4 0%, #7f45c0 100%)',
+            background: 'linear-gradient(135deg, #0b6349 0%, #12a594 100%)',
           }}
         >
           <h2 className="text-section-title max-w-xl text-balance text-white">
@@ -503,7 +503,7 @@ function OpenSource() {
             href={REPO}
             target="_blank"
             rel="noreferrer"
-            className="mt-8 inline-flex h-11 items-center gap-1.5 rounded-full bg-white px-5 text-[15px] font-medium text-[#1c1c1e] transition-transform active:scale-[0.97]"
+            className="mt-8 inline-flex h-11 items-center gap-1.5 rounded-full bg-white px-5 text-[15px] font-medium text-[#171614] transition-transform active:scale-[0.97]"
           >
             Read the source
             <ArrowUpRight size={17} strokeWidth={2.2} />

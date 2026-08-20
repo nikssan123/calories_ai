@@ -118,6 +118,8 @@ export default function HistoryPage() {
                       day={byDate.get(date)}
                       selected={date === selected}
                       onSelect={() => setSelected(date)}
+                      // The top row has no room above it inside the card.
+                      placeAbove={i >= 7}
                     />
                   ),
                 )}
@@ -151,7 +153,7 @@ export default function HistoryPage() {
                     </div>
                     <Link
                       href={`/today?date=${selected}`}
-                      className="text-[var(--calories)] inline-block text-[15px]"
+                      className="text-[var(--calories-text)] inline-block text-[15px]"
                     >
                       Open in Today →
                     </Link>
@@ -195,63 +197,162 @@ export default function HistoryPage() {
 }
 
 /**
- * One cell. The fill says how the day went at a glance and the number is there
- * for when a glance is not enough — an unlogged day gets neither, because an
- * empty day and a day at zero calories are different facts and colouring them
- * the same would make a forgotten week look like a starved one.
+ * One cell.
+ *
+ * The fill says how the day went at a glance; the hover card is there for when
+ * a glance is not enough. An unlogged day gets neither, because an empty day
+ * and a day at zero calories are different facts and colouring them the same
+ * would make a forgotten week look like a starved one.
+ *
+ * A logged day whose target is unknown still gets a fill — a neutral one. The
+ * grid's first job is "did I log?", and that answer does not depend on having
+ * a target to judge the day against. Before this, a month logged before any
+ * target existed rendered completely blank, which read as never having used
+ * the app at all.
  */
 function DayCell({
   date,
   day,
   selected,
   onSelect,
+  placeAbove,
 }: {
   date: string;
   day: CalendarDay | undefined;
   selected: boolean;
   onSelect: () => void;
+  placeAbove: boolean;
 }) {
-  const ratio = day && day.logged && day.target_kcal > 0 ? day.kcal / day.target_kcal : null;
-  const tone = toneFor(ratio);
+  const logged = day?.logged ?? false;
+  const ratio = logged && day!.target_kcal > 0 ? day!.kcal / day!.target_kcal : null;
+  const tone = toneFor(logged ? ratio : undefined);
 
   return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-label={`${date}${day?.logged ? `, ${day.kcal} kcal` : ', nothing logged'}`}
-      aria-pressed={selected}
-      className={cn(
-        'relative flex aspect-square flex-col items-center justify-center rounded-xl transition-transform active:scale-95',
-        selected && 'ring-foreground ring-2',
-      )}
-      style={{ background: tone.background }}
-    >
-      <span className={cn('tnum text-[13px]', tone.text)}>{Number(date.slice(8))}</span>
-      {day && day.burned_kcal > 0 && (
-        <span
-          className="absolute bottom-1 size-1 rounded-full"
-          style={{ background: 'var(--exercise)' }}
-        />
-      )}
-    </button>
+    <div className="group relative hover:z-20 focus-within:z-20">
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-label={
+          logged
+            ? `${formatFullDate(date)}, ${day!.kcal} kcal${
+                day!.target_kcal > 0 ? ` of ${day!.target_kcal}` : ''
+              }`
+            : `${formatFullDate(date)}, nothing logged`
+        }
+        aria-pressed={selected}
+        className={cn(
+          'relative flex aspect-square w-full flex-col items-center justify-center rounded-xl',
+          'transition-transform duration-[var(--dur-quick)] ease-[var(--ease-spring)]',
+          'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none',
+          logged && 'group-hover:scale-110',
+          selected && 'ring-foreground ring-2',
+        )}
+        style={{ background: tone.background }}
+      >
+        <span className={cn('tnum text-[13px]', tone.text)}>{Number(date.slice(8))}</span>
+        {logged && day!.burned_kcal > 0 && (
+          <span
+            className="absolute bottom-1 size-[5px] rounded-full"
+            style={{ background: 'var(--exercise)' }}
+          />
+        )}
+      </button>
+
+      {logged && <DayHoverCard date={date} day={day!} placeAbove={placeAbove} />}
+    </div>
   );
 }
 
-function toneFor(ratio: number | null): { background: string; text: string } {
-  if (ratio === null) return { background: 'transparent', text: 'text-muted-foreground' };
-  // Over target is the one state that gets its own hue: everything else is a
-  // depth of the same accent, so the grid reads as one scale plus an exception.
-  if (ratio > 1.05) return { background: 'color-mix(in oklch, var(--destructive) 22%, transparent)', text: 'text-foreground' };
-  if (ratio >= 0.85) return { background: 'color-mix(in oklch, var(--calories) 34%, transparent)', text: 'text-foreground' };
-  if (ratio >= 0.6) return { background: 'color-mix(in oklch, var(--calories) 20%, transparent)', text: 'text-foreground' };
-  return { background: 'color-mix(in oklch, var(--calories) 10%, transparent)', text: 'text-foreground' };
+/**
+ * What that square actually was.
+ *
+ * Pointer-events are off so the card can never sit between the cursor and the
+ * cell it describes, and it opens on `group-focus-within` as well as hover so
+ * the keyboard reaches it. Rows after the first open upward, which keeps the
+ * card off the cursor; the top row has nowhere to go but down.
+ */
+function DayHoverCard({
+  date,
+  day,
+  placeAbove,
+}: {
+  date: string;
+  day: CalendarDay;
+  placeAbove: boolean;
+}) {
+  const over = day.target_kcal > 0 && day.kcal > day.target_kcal;
+
+  return (
+    <div
+      role="tooltip"
+      className={cn(
+        'pointer-events-none absolute left-1/2 z-30 w-max max-w-[13rem] -translate-x-1/2',
+        placeAbove ? 'bottom-full mb-2' : 'top-full mt-2',
+        'bg-popover text-popover-foreground ring-border rounded-[12px] px-3 py-2 shadow-lg ring-1',
+        'origin-center scale-95 opacity-0 transition-[opacity,transform]',
+        'duration-[var(--dur-quick)] ease-[var(--ease-spring)]',
+        'group-hover:scale-100 group-hover:opacity-100',
+        'group-focus-within:scale-100 group-focus-within:opacity-100',
+      )}
+    >
+      <p className="text-footnote text-muted-foreground">{formatFullDate(date)}</p>
+
+      <p className="mt-0.5 flex items-baseline gap-1">
+        <span className={cn('text-figure text-[17px]', over && 'text-foreground')}>
+          {day.kcal.toLocaleString()}
+        </span>
+        <span className="text-footnote text-muted-foreground">
+          {day.target_kcal > 0 ? `of ${day.target_kcal.toLocaleString()} kcal` : 'kcal'}
+        </span>
+      </p>
+
+      <div className="text-footnote text-muted-foreground mt-1 flex flex-wrap gap-x-2.5 gap-y-0.5">
+        <span className="tnum">{day.protein_g}g protein</span>
+        {day.burned_kcal > 0 && (
+          <span className="tnum text-[var(--exercise)]">−{day.burned_kcal} burned</span>
+        )}
+        {day.weight_kg !== null && <span className="tnum">{day.weight_kg} kg</span>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The fill for one day.
+ *
+ * The steps mix the accent into `--card` rather than into `transparent`, which
+ * matters more than it looks. Fading a *deep* colour to transparent drains its
+ * chroma before its lightness, so forest at 10% arrives as a grey smudge and
+ * the whole scale reads as four shades of nothing. Mixing into the card keeps
+ * every step on the accent's hue, and it stays correct in dark mode, where the
+ * card is near-black and the same percentages walk the other way.
+ */
+function toneFor(ratio: number | null | undefined): { background: string; text: string } {
+  // undefined — nothing logged. Left blank on purpose.
+  if (ratio === undefined) return { background: 'transparent', text: 'text-muted-foreground' };
+  // null — logged, but against no target we can hold it to. Neutral rather
+  // than absent: it happened, we just have nothing to grade it against.
+  if (ratio === null)
+    return { background: 'color-mix(in oklch, var(--foreground) 9%, var(--card))', text: 'text-foreground' };
+  // Over target is the one state that steps outside the scale — but it steps
+  // to ink rather than to red. A month grid is exactly where a wall of red
+  // squares would read as a verdict on the person rather than on the data.
+  if (ratio > 1.05)
+    return { background: 'color-mix(in oklch, var(--foreground) 26%, var(--card))', text: 'text-foreground' };
+  if (ratio >= 0.85)
+    return { background: 'color-mix(in oklch, var(--calories) 55%, var(--card))', text: 'text-foreground' };
+  if (ratio >= 0.6)
+    return { background: 'color-mix(in oklch, var(--calories) 28%, var(--card))', text: 'text-foreground' };
+  return { background: 'color-mix(in oklch, var(--calories) 12%, var(--card))', text: 'text-foreground' };
 }
 
 function Legend() {
-  const swatches = [
+  const swatches: Array<{ label: string; ratio: number | null }> = [
     { label: 'Under', ratio: 0.5 },
     { label: 'On target', ratio: 0.95 },
     { label: 'Over', ratio: 1.2 },
+    // Logged before any target existed — see toneFor.
+    { label: 'No target', ratio: null },
   ];
   return (
     <div className="text-footnote text-muted-foreground mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 px-1">

@@ -155,7 +155,7 @@ function CellValue({ value }: { value: unknown }) {
     return <span className="text-muted-foreground">null</span>;
   }
   if (typeof value === 'boolean') {
-    return <span className={value ? 'text-[var(--protein)]' : 'text-muted-foreground'}>{String(value)}</span>;
+    return <span className={value ? 'text-[var(--positive)]' : 'text-muted-foreground'}>{String(value)}</span>;
   }
   if (typeof value === 'number') return <span className="tnum">{value}</span>;
   if (typeof value === 'object') {

@@ -101,8 +101,8 @@ export default function ProgressPage() {
                         className={cn(
                           'tnum flex items-center gap-0.5 text-sm font-medium',
                           progress.weight.change_7d_kg < 0
-                            ? 'text-[var(--protein)]'
-                            : 'text-[var(--calories)]',
+                            ? 'text-[var(--positive)]'
+                            : 'text-[var(--calories-text)]',
                         )}
                       >
                         {progress.weight.change_7d_kg < 0 ? (

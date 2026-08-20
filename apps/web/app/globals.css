@@ -12,11 +12,12 @@
  *
  * Three rules hold the whole system together:
  *
- *   1. Persimmon is the only warm hue in the app. Calories, the active tab and
- *      every call to action are #FF5F3D; protein, carbs, fat and exercise are
- *      all cool. That is what lets one saturated orange carry the identity
- *      without competing with anything — spend the boldness in one place and
- *      keep everything around it quiet.
+ *   1. The accent is the only deep, low-chroma colour on screen. Forest sits at
+ *      roughly the visual weight of the ink around it, so it reads as
+ *      structure — the ring, the active tab, a call to action. The four macro
+ *      hues are all lighter and more saturated, so they read as data. That
+ *      weight split, not hue alone, is what keeps five colours legible in one
+ *      view, and it is the rule to check any new colour against.
  *
  *   2. The ground is warm, near-monochrome and low-contrast, so a conversation
  *      stays readable for a long sitting and the accent stays loud where it
@@ -49,7 +50,14 @@
   --secondary-foreground: #171614;
 
   --muted: #ebe8e3;
-  --muted-foreground: #8a857e;
+  /*
+   * Secondary text. The warm grey this replaced (#8a857e) measured 3.4:1 on the
+   * sidebar's ground — under the 4.5:1 body-text floor, and it showed: the nav
+   * labels read as disabled rather than merely secondary. Still clearly a step
+   * below --foreground, now at 5.2:1. The dark theme's equivalent was already
+   * at 6.3:1 and is unchanged.
+   */
+  --muted-foreground: #6b665f;
 
   --accent: #ebe8e3;
   --accent-foreground: #171614;
@@ -61,20 +69,42 @@
   /* Hairlines tinted with the ground's warmth rather than a neutral grey. */
   --border: rgba(23, 22, 20, 0.1);
   --input: rgba(23, 22, 20, 0.14);
-  --ring: rgba(255, 95, 61, 0.45);
+  --ring: rgba(15, 123, 92, 0.45);
 
   /* Nutrition hues. Persimmon leads; the macros are spaced far enough around
      the wheel that no two read alike in a row of bars, and all of them stay
      cool so the accent owns "energy" by itself. */
-  --calories: #ff5f3d; /* persimmon */
-  --protein: #2ba84a;
+  --calories: #0f7b5c; /* forest — fills, arcs, bars, solid buttons */
+  --protein: #f59e0b;
   --carbs: #3b82f6;
   --fat: #8b5cf6;
-  --exercise: #0fb5ae;
+  --exercise: #b03a70;
 
-  /* The logo ring ramps persimmon into marigold — the one place the warm
-     family is allowed to widen. Nothing else uses it. */
-  --brand-ember: #ff9f1c;
+  /*
+   * The text-and-icon cut of the accent. Forest measures 4.8:1 here, so it
+   * needs no darkening and the two values currently coincide. The token stays
+   * split anyway: a brighter accent would fail at 10px — persimmon, which this
+   * replaced, managed only 2.75:1 — and swapping one value is a great deal
+   * safer than re-auditing every label in the app.
+   */
+  --calories-text: #0f7b5c;
+
+  /*
+   * "Good news" — a weight trend heading the right way, a finished setup, a
+   * boolean that is true. Four places used --protein for this, which read
+   * correctly only for as long as protein happened to be green; the moment it
+   * became amber they all started warning about good news. Semantic colour and
+   * macro colour are different jobs and should never share a token again.
+   *
+   * It resolves to the accent because the app has exactly one positive signal
+   * and no reason to carry a second green. Give it its own hue only if that
+   * stops being true.
+   */
+  --positive: var(--calories-text);
+
+  /* The logo ring ramps the accent into jade. Named for its role rather than
+     its hue, because only the mark uses it and the hue may well move again. */
+  --logo-ramp: #12a594;
 
   /* Translucent material for the header and tab bar. */
   --material: rgba(250, 249, 246, 0.82);
@@ -120,16 +150,21 @@
 
   --border: rgba(245, 243, 239, 0.12);
   --input: rgba(245, 243, 239, 0.17);
-  --ring: rgba(255, 122, 92, 0.5);
+  --ring: rgba(52, 217, 164, 0.5);
 
-  /* Lifted a step so each hue keeps its chroma against a dark ground. */
-  --calories: #ff7a5c;
-  --protein: #3cc463;
+  /* Lifted a step so each hue keeps its chroma against a dark ground. Forest
+     has to lift furthest: a deep green that reads as structure on paper is
+     nearly invisible on ink, so on dark it becomes a jade. */
+  --calories: #34d9a4;
+  --protein: #fbbf24;
   --carbs: #5d9bff;
   --fat: #a78bfa;
-  --exercise: #2dd4cb;
+  --exercise: #f08bb4;
 
-  --brand-ember: #ffb347;
+  --calories-text: #34d9a4;
+  --positive: var(--calories-text);
+
+  --logo-ramp: #2dd4bf;
 
   --material: rgba(28, 26, 24, 0.8);
 
@@ -158,13 +193,15 @@
     --destructive-foreground: #121110;
     --border: rgba(245, 243, 239, 0.12);
     --input: rgba(245, 243, 239, 0.17);
-    --ring: rgba(255, 122, 92, 0.5);
-    --calories: #ff7a5c;
-    --protein: #3cc463;
+    --ring: rgba(52, 217, 164, 0.5);
+    --calories: #34d9a4;
+    --calories-text: #34d9a4;
+    --positive: var(--calories-text);
+    --protein: #fbbf24;
     --carbs: #5d9bff;
     --fat: #a78bfa;
-    --exercise: #2dd4cb;
-    --brand-ember: #ffb347;
+    --exercise: #f08bb4;
+    --logo-ramp: #2dd4bf;
     --material: rgba(28, 26, 24, 0.8);
     --scrollbar-thumb: rgba(245, 243, 239, 0.2);
     --scrollbar-thumb-hover: rgba(245, 243, 239, 0.38);
@@ -198,6 +235,8 @@
   --color-ring: var(--ring);
 
   --color-calories: var(--calories);
+  --color-calories-text: var(--calories-text);
+  --color-positive: var(--positive);
   --color-protein: var(--protein);
   --color-carbs: var(--carbs);
   --color-fat: var(--fat);
@@ -244,6 +283,30 @@
   h1,
   h2 {
     letter-spacing: -0.022em;
+  }
+
+  /*
+   * Number spinners.
+   *
+   * The little up/down widget is drawn by the browser rather than by us, and it
+   * behaves like it: it ignores the theme, it only appears on hover so the row
+   * shifts under the cursor as you reach for it, and in a field that carries
+   * its unit inside — "182 cm" — it wedges itself between the two.
+   *
+   * Nothing is lost by removing it. Arrow keys still step the value, which is
+   * the only way anyone actually uses it, and both number inputs in this app
+   * are settings you type once rather than nudge.
+   */
+  input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
   }
 
   /*
@@ -390,5 +453,55 @@
   }
   to {
     box-shadow: 0 0 0 2px color-mix(in oklch, var(--calories), transparent 100%);
+  }
+}
+
+/*
+ * Figures. Every number that reports progress — the ring's centre, a meal's
+ * kcal, a macro total — is set in one weight and one tracking, so a column of
+ * them lines up and a glance can compare them without reading.
+ */
+@utility text-figure {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/*
+ * A card arriving in the journal. This is the moment the whole redesign is
+ * for: the agent has understood a meal and is handing it back, so the card
+ * settles in with a little weight rather than simply existing.
+ */
+@keyframes land {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@utility animate-land {
+  animation: land var(--dur-spring) var(--ease-spring) both;
+}
+
+@layer base {
+  /*
+   * The spring is decoration, not information — every animated value is also
+   * present as text. Anyone who has asked for less motion gets the end state
+   * immediately.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }

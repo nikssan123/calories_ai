@@ -28,7 +28,7 @@ export function Stat({
       <p
         className={cn(
           'tnum mt-1 text-2xl font-semibold',
-          tone === 'accent' && 'text-[var(--calories)]',
+          tone === 'accent' && 'text-[var(--calories-text)]',
           tone === 'warn' && 'text-[var(--fat)]',
         )}
       >

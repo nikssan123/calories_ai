@@ -293,26 +293,27 @@ function StatusBar({
   return (
     <header className="material border-border shrink-0 border-b px-4 py-2.5 xl:hidden">
       <div className="flex items-baseline justify-between">
-        <p className="tnum text-[15px] font-semibold">
+        <p className="text-figure text-[15px]">
           {Math.round(consumed.kcal).toLocaleString()}
           <span className="text-muted-foreground font-normal">
             {' '}
             / {targets.kcal.toLocaleString()} kcal
           </span>
         </p>
-        <p className={cn('tnum text-footnote', over ? 'text-destructive' : 'text-muted-foreground')}>
+        {/* Ink rather than red — see the note on --destructive in globals.css. */}
+        <p className={cn('tnum text-footnote', over ? 'text-foreground font-semibold' : 'text-muted-foreground')}>
           {over
             ? `${Math.abs(remaining).toLocaleString()} over`
             : `${remaining.toLocaleString()} left`}
         </p>
       </div>
-      <div className="bg-muted mt-2 h-1 overflow-hidden rounded-full">
+      <div className="bg-muted mt-2 h-[5px] overflow-hidden rounded-full">
         <div
           className="h-full rounded-full"
           style={{
             width: `${pct}%`,
-            background: over ? 'var(--destructive)' : 'var(--calories)',
-            transition: 'width 700ms cubic-bezier(0.34, 1.4, 0.64, 1)',
+            background: over ? 'var(--foreground)' : 'var(--calories)',
+            transition: 'width var(--dur-spring) var(--ease-spring)',
           }}
         />
       </div>

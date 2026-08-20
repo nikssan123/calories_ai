@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import type { ActivityLevel, DaySummary, Goal, Profile, Sex } from '@ct/shared';
 import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthGate';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +22,21 @@ import {
 import { cn } from '@/lib/utils';
 
 /** §10: short setup. Enough to establish a starting target, nothing more. */
+
+/*
+ * Every editable value in these rows wears the same shell.
+ *
+ * They used to be transparent and borderless, which looked tidy on a mockup and
+ * was unusable in practice: an empty height field rendered as the word "cm"
+ * floating in white space with nothing to say it could be typed into. A field
+ * has to look like a field. This is the quietest treatment that still does.
+ */
+const FIELD =
+  'h-9 rounded-[10px] border-0 bg-muted/70 px-3 text-[15px] shadow-none ' +
+  'transition-colors duration-[var(--dur-quick)] hover:bg-muted';
+
+/** Inputs keep their own focus ring; wrappers get it via focus-within. */
+const FIELD_INPUT = `${FIELD} text-right focus-visible:ring-2 focus-visible:ring-ring`;
 
 const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
   sedentary: 'Desk job, little exercise',
@@ -139,7 +155,7 @@ export default function SetupPage() {
             value={profile.display_name ?? ''}
             onChange={(e) => patch('display_name', e.target.value || null)}
             placeholder="Optional"
-            className="h-8 w-40 border-0 bg-transparent p-0 text-right text-[15px] shadow-none focus-visible:ring-0 dark:bg-transparent"
+            className={cn(FIELD_INPUT, 'w-44')}
           />
         </InsetRow>
 
@@ -149,8 +165,10 @@ export default function SetupPage() {
             value={profile.sex ?? ''}
             onValueChange={(v) => patch('sex', (v || null) as Sex | null)}
           >
-            <SelectTrigger className="h-8 w-32 border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent">
-              <SelectValue placeholder="—">
+            <SelectTrigger className={cn(FIELD, 'w-auto gap-2 pr-2.5')}>
+              {/* Without flex-none the value stretches to fill the trigger and
+                  strands itself in the middle of the row. */}
+              <SelectValue placeholder="—" className="flex-none">
                 {(value) => SEX_LABELS[value as Sex] ?? '—'}
               </SelectValue>
             </SelectTrigger>
@@ -170,7 +188,9 @@ export default function SetupPage() {
             type="date"
             value={profile.birth_date ?? ''}
             onChange={(e) => patch('birth_date', e.target.value || null)}
-            className="h-8 w-40 border-0 bg-transparent p-0 text-right text-[15px] shadow-none focus-visible:ring-0 dark:bg-transparent"
+            // The native picker is drawn by the browser, not by us; it reads
+            // `color-scheme` off <html>, which <ThemeSync> now sets.
+            className={cn(FIELD_INPUT, 'w-44')}
           />
         </InsetRow>
 
@@ -221,8 +241,8 @@ export default function SetupPage() {
             value={profile.activity_level ?? ''}
             onValueChange={(v) => patch('activity_level', (v || null) as ActivityLevel | null)}
           >
-            <SelectTrigger className="h-8 max-w-[13rem] border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent">
-              <SelectValue placeholder="—">
+            <SelectTrigger className={cn(FIELD, 'w-auto gap-2 pr-2.5')}>
+              <SelectValue placeholder="—" className="flex-none">
                 {(value) => ACTIVITY_SHORT[value as ActivityLevel] ?? '—'}
               </SelectValue>
             </SelectTrigger>
@@ -246,7 +266,7 @@ export default function SetupPage() {
           <Input
             value={profile.timezone}
             onChange={(e) => patch('timezone', e.target.value)}
-            className="h-8 min-w-0 flex-1 border-0 bg-transparent p-0 text-right text-[15px] shadow-none focus-visible:ring-0 dark:bg-transparent"
+            className={cn(FIELD_INPUT, 'min-w-0 flex-1')}
           />
         </InsetRow>
         <InsetRow>
@@ -255,8 +275,8 @@ export default function SetupPage() {
             value={String(profile.day_start_hour)}
             onValueChange={(v) => patch('day_start_hour', Number(v))}
           >
-            <SelectTrigger className="h-8 w-24 border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent">
-              <SelectValue>
+            <SelectTrigger className={cn(FIELD, 'tnum w-auto gap-2 pr-2.5')}>
+              <SelectValue className="flex-none">
                 {(value) => `${String(value).padStart(2, '0')}:00`}
               </SelectValue>
             </SelectTrigger>
@@ -271,6 +291,12 @@ export default function SetupPage() {
         </InsetRow>
       </InsetGroup>
 
+      <InsetGroup title="Appearance" footer="System follows your device, including its light and dark schedule.">
+        <div className="p-3">
+          <ThemeToggle />
+        </div>
+      </InsetGroup>
+
       <InsetGroup title="Account">
         <InsetRow>
           <span className="flex-1 text-[15px]">Signed in as</span>
@@ -283,7 +309,7 @@ export default function SetupPage() {
         {isAdmin && (
           <Link
             href="/admin"
-            className="flex items-center gap-2 px-4 py-3 text-[15px] text-[var(--calories)]"
+            className="flex items-center gap-2 px-4 py-3 text-[15px] text-[var(--calories-text)]"
           >
             <Shield size={16} /> Admin
           </Link>
@@ -337,20 +363,38 @@ function NumberField({
   unit: string;
   step?: string;
 }) {
+  // The unit sits inside the field rather than beside it, so an empty value
+  // still shows something shaped like an input instead of a stray "cm".
+  //
+  // A <label> rather than a <span>: the pill has padding and a unit in it, and
+  // clicking either of those should put the caret in the field the way it does
+  // on every other input. Wrapping is what buys that, with no id to keep unique.
+  //
+  // items-center, not items-baseline. Baseline is the tempting choice for a
+  // value beside its unit, but baseline-aligned flex items are packed to the
+  // *start* of the cross axis — in a fixed-height pill that lifts the whole
+  // group to the top and the number sits high in the field. The two sizes are
+  // close enough that centring reads as aligned anyway.
   return (
-    <span className="flex items-baseline gap-1">
+    <label
+      className={cn(
+        FIELD,
+        'focus-within:ring-ring inline-flex w-32 cursor-text items-center justify-end gap-1.5 focus-within:ring-2',
+      )}
+    >
       <Input
         type="number"
         step={step}
         inputMode="decimal"
         value={value ?? ''}
+        placeholder="—"
         onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
         // Without this, scrolling the page over a focused number input silently
         // edits the value.
         onWheel={(e) => e.currentTarget.blur()}
-        className="tnum h-8 w-20 border-0 bg-transparent p-0 text-right text-[15px] shadow-none focus-visible:ring-0 dark:bg-transparent"
+        className="tnum h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-right text-[15px] shadow-none focus-visible:ring-0 dark:bg-transparent"
       />
-      <span className="text-muted-foreground text-footnote">{unit}</span>
-    </span>
+      <span className="text-muted-foreground text-footnote shrink-0">{unit}</span>
+    </label>
   );
 }

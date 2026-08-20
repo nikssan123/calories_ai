@@ -37,7 +37,7 @@ export function Logo({ size = 28, className }: { size?: number; className?: stri
           y2="57.2"
         >
           <stop offset="0" style={{ stopColor: 'var(--calories)' }} />
-          <stop offset="1" style={{ stopColor: 'var(--brand-purple)' }} />
+          <stop offset="1" style={{ stopColor: 'var(--logo-ramp)' }} />
         </linearGradient>
       </defs>
 
