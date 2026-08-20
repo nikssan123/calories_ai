@@ -514,21 +514,84 @@ more than the turn costs.
 
 Unchanged: `apps/api`, `packages/shared`, `packages/api-client`.
 
-Replaced: `apps/web` becomes `apps/mobile`. Screens map one to one (Login, Journal,
-Today, Progress, Setup), and the state each one holds is already local to the
-component. Three things need real work:
+Replaced: `apps/web` becomes `apps/mobile`, and the state each screen holds is already
+local to the component. Not every page comes along: `cook`, `exercise` and `history` are
+product screens and need porting, but `verify`, `unsubscribe` and `reset` are landing
+places for links in an email, and `admin` is an operator tool. Those four stay on the web
+and should never ship in the app.
 
-- **Styling.** The UI is shadcn/Tailwind; RN needs its own. The design tokens in
-  `app/globals.css` are already iOS system colours, so they port as constants.
-- **Camera.** `expo-image-picker` replaces the `<input type="file">` in
-  `Composer.tsx`, producing the same base64 payload the API already takes.
-- **Session.** Cookies are awkward on RN — construct the client with a bearer token
-  from secure storage instead. The API would need to accept `Authorization: Bearer`
-  alongside the cookie, which is a few lines in the session hook.
+**Session is done.** It was the piece that blocked everything else, so it was built
+first, and a native client can sign in against the API as it stands today. The API
+resolves `Authorization: Bearer` alongside the cookie, the header winning when a request
+carries both, and returns the raw token from signup and login only to a client that asks
+with `x-session-transport: bearer` — never to a browser, where the cookie is httpOnly
+precisely so script cannot read it. `createApiClient` takes `sessionTransport: 'bearer'`
+and accepts `token` as a *function*, read per request, because a native app builds its
+client before anyone has signed in. Meal photos are reachable too: a signed `photo_url`
+authorises itself and needs no session, which is the only path RN has, since `<Image>`
+does its own fetching.
 
-One caveat: the Agent SDK spawns a local `claude` process, so the API must run on a
-machine with Claude Code installed. A phone talks to that machine over the network; it
-cannot host the agent itself.
+**Camera.** `expo-image-picker` replaces the `<input type="file">` in `Composer.tsx` and
+`kitchen/FridgeScan.tsx`, producing the same base64 payload the API already takes.
+
+**Styling.** This is the real remaining work, and the brief is to carry the existing
+design across rather than to reach for whatever RN makes easy. The chunky, candy-coloured,
+overshooting look *is* the product's personality — a flatter, more platform-native
+rendering of the same screens would be a different app. Fortunately the design is built
+almost entirely out of transform, opacity and solid colour, which is what RN is good at.
+
+What ports directly:
+
+- **The palette.** Every token in `globals.css` is flat hex or rgba, so `:root` and
+  `.dark` become two theme objects. They stay two hand-tuned sets rather than one computed
+  from the other — the dark macros are lifted for chroma against ink, and the greens move
+  furthest, so deriving them would lose the thing that makes them work.
+- **The three easings.** `--ease-spring`, `--ease-pop` and `--ease-out` are cubic-béziers,
+  and Reanimated's `Easing.bezier` takes the same four numbers. Use them verbatim rather
+  than retuning to `withSpring`: matching the web is the point, and the overshoot is the
+  entire brief.
+- **`land`, `pop`, `wiggle`, `bob`, `confetti-fly`** are transform and opacity only.
+- **`CalorieRing`** via `react-native-svg`, including `strokeDasharray`. The second offset
+  track that gives the dial its ledge is just another circle.
+
+What has to be rebuilt rather than translated:
+
+- **The ledge.** `--chunk` is a solid, *zero-blur*, offset shadow. iOS can express that
+  with `shadowRadius: 0`; Android has only `elevation`, which is always blurred and always
+  centred. So the shadow route splits the platforms on the one decision the whole design
+  rests on. Don't fake it twice — render the ledge as a real `View`: same radius, `--chunk`
+  colour, offset four pixels down, card on top. That is what the CSS is imitating anyway,
+  it is identical on both platforms, and it makes the press fall out for free, since
+  translating the card down by the depth consumes the ledge exactly the way `:active` does.
+  `chunk-slot`'s reserved travel becomes the wrapper's padding, and one `<Chunk>` component
+  replaces four `@utility` blocks.
+- **`entry-touched`** animates box-shadow spread, which RN cannot animate at all. It
+  becomes an overlay `View` with an animated border and opacity — same one-shot ring on a
+  card the agent has just corrected, different mechanism.
+- **Reduced motion.** The CSS kills every animation from one `prefers-reduced-motion`
+  block. RN has no such switch: `AccessibilityInfo.isReduceMotionEnabled()` has to be
+  consulted per component. Write that hook before the first animated component, not after
+  the fortieth — the celebration must never fire for someone who asked for less motion, and
+  a rule that has to be remembered forty times is a rule that will be missed.
+- **`--material`**, the translucent header and tab bar, wants `expo-blur` on iOS. Android
+  blur is weak and expensive, so it should fall back to a near-opaque solid.
+- **Fonts.** Baloo 2 and Nunito come from `@expo-google-fonts/*`, with one trap: RN does
+  not synthesise weights across a family. The type scale leans on 800, so the ExtraBold
+  faces must be bundled and referenced *by face name* — `fontWeight: '800'` on its own
+  silently renders regular.
+
+One open decision, best made at scaffold time: NativeWind, keeping the Tailwind class
+names so the port of the component tree is mechanical and the palette has one home, versus
+StyleSheet and a theme object. `apps/web` is on Tailwind v4 — `@theme inline`,
+`@custom-variant`, `@utility` — so this turns on how completely the current NativeWind
+handles v4, which is worth checking against its docs rather than assuming. Either way the
+ledge, the press, the ring and the reduced-motion hook are purpose-built native components;
+nothing is gained by forcing them through utility classes.
+
+One caveat that is not a blocker: the Agent SDK spawns a local `claude` process, so the API
+must run on a machine with Claude Code installed. In production it already does, and a
+phone simply talks to `api.daysofar.com`. Only local development needs care — a device on
+the LAN needs the machine's address, never `localhost`.
 
 ## Deploying to a server
 
