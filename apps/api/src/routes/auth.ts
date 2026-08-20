@@ -22,6 +22,16 @@ import {
   SESSION_COOKIE,
 } from '../services/auth.ts';
 import { rememberDevice } from '../services/devices.ts';
+import {
+  authorizeUrl,
+  beginHandshake,
+  exchangeCode,
+  GOOGLE_PROVIDER,
+  GoogleAuthError,
+  sameSecret,
+  type Handshake,
+} from '../services/google.ts';
+import { signInWithProvider } from '../services/identities.ts';
 import { consumeCode, consumeToken } from '../services/tokens.ts';
 import {
   authenticate,
@@ -62,6 +72,15 @@ const EMAIL_LIMIT = { max: 5, timeWindow: '1 hour' };
 const TOKEN_LIMIT = { max: 20, timeWindow: '1 hour' };
 
 /**
+ * The Google handshake. Both ends of it are anonymous GETs that a browser walks
+ * into by following a redirect, so the ceiling is generous — a person who
+ * changes their mind twice and starts again should never meet it — but the
+ * callback spends a request against Google's token endpoint, and an endpoint
+ * that makes an outbound call on an anonymous caller's say-so needs a lid.
+ */
+const OAUTH_LIMIT = { max: 30, timeWindow: '15 minutes' };
+
+/**
  * Signup is open by default so the first account can be created, and can be
  * closed with ALLOW_SIGNUP=false once you've made yours.
  */
@@ -96,6 +115,68 @@ function requestToken(request: FastifyRequest): string | undefined {
   return bearerToken(request.headers.authorization) ?? request.cookies[SESSION_COOKIE];
 }
 
+const NO_GOOGLE = 'Google sign-in is not configured on this server.';
+
+/**
+ * The half-finished handshake, parked in the browser between the two halves of
+ * the flow.
+ *
+ * A cookie rather than a row, because the whole of it is worthless the moment
+ * the browser loses it: there is nothing to clean up, nothing to expire on a
+ * schedule, and an abandoned sign-in leaves no trace in the database. httpOnly,
+ * so the page's own scripts cannot read the state they would need to forge a
+ * callback.
+ */
+const OAUTH_COOKIE = 'ct_oauth';
+
+/**
+ * Ten minutes. Long enough to find the right Google account, type a password
+ * and answer a second factor; short enough that a laptop left open in a café
+ * does not still hold a live half-handshake at closing time.
+ */
+const HANDSHAKE_MINUTES = 10;
+
+interface StoredHandshake extends Handshake {
+  /** The browser's timezone, if it sent one. Empty means "we never asked". */
+  timezone: string;
+}
+
+function packHandshake(value: StoredHandshake): string {
+  return Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
+}
+
+/**
+ * Anything unreadable is treated as absent rather than as an error. A truncated
+ * cookie, one left over from an older version of this format, or one somebody
+ * typed in by hand all mean the same thing to the caller — start again — and
+ * distinguishing them would only produce a message nobody can act on.
+ */
+function readHandshake(request: FastifyRequest): StoredHandshake | null {
+  const raw = request.cookies[OAUTH_COOKIE];
+  if (!raw) return null;
+
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
+    const { state, verifier, nonce, timezone } = (parsed ?? {}) as Record<string, unknown>;
+    if (typeof state !== 'string' || typeof verifier !== 'string' || typeof nonce !== 'string') {
+      return null;
+    }
+    return { state, verifier, nonce, timezone: typeof timezone === 'string' ? timezone : '' };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Back to the sign-in screen with a word for what happened, which the page
+ * turns into a sentence. A code rather than the sentence itself: the copy
+ * belongs with the rest of the copy, and a message assembled here would be the
+ * one string in the product that cannot be changed without a deploy of the API.
+ */
+function backToLogin(reply: FastifyReply, reason: string) {
+  return reply.redirect(`${env.appUrl}/login?error=${encodeURIComponent(reason)}`);
+}
+
 export async function registerAuthRoutes(app: FastifyInstance) {
   app.get('/auth/me', async (request) => {
     const userId = request.userId;
@@ -107,6 +188,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       // Carried on the session status so the app can decide whether to render
       // the admin link without a second round trip on every page.
       is_admin: userId ? await isAdmin(userId) : false,
+      google_enabled: env.google !== null,
     };
   });
 
@@ -148,6 +230,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       signup_allowed: false,
       has_accounts: true,
       is_admin: await isAdmin(userId),
+      google_enabled: env.google !== null,
       token: tokenForBody(request, token),
     };
   });
@@ -195,6 +278,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       signup_allowed: false,
       has_accounts: true,
       is_admin: await isAdmin(userId),
+      google_enabled: env.google !== null,
       token: tokenForBody(request, token),
     };
   });
@@ -209,6 +293,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       signup_allowed: await signupAllowed(),
       has_accounts: (await countAccounts()) > 0,
       is_admin: false,
+      google_enabled: env.google !== null,
     };
   });
 
@@ -379,4 +464,131 @@ export async function registerAuthRoutes(app: FastifyInstance) {
 
     return { ok: true as const, message: 'Check your inbox for the confirmation code.' };
   });
+
+  // ---- Signing in with Google ---------------------------------------------
+
+  /**
+   * Sends the browser to Google.
+   *
+   * A plain GET that answers with a redirect, rather than JSON the page then
+   * acts on, because this has to survive being a link: a full navigation from
+   * an `<a href>` is what lets the browser accept the state cookie set here and
+   * hand it back on the way in, and it is what makes the button work with
+   * scripts still loading.
+   *
+   * `tz` is the browser's own timezone, carried along for the same reason the
+   * password sign-up form sends one — if this turns out to be a new account,
+   * its first day boundary should already be right rather than guessed at UTC
+   * and corrected the next morning.
+   */
+  app.get('/auth/google/start', { config: { rateLimit: OAUTH_LIMIT } }, async (request, reply) => {
+    const google = env.google;
+    if (!google) return reply.status(404).send({ error: NO_GOOGLE });
+
+    const handshake = beginHandshake();
+    const query = request.query as Record<string, unknown>;
+    const timezone = typeof query.tz === 'string' ? query.tz.slice(0, 60) : '';
+
+    reply.setCookie(OAUTH_COOKIE, packHandshake({ ...handshake, timezone }), {
+      httpOnly: true,
+      /**
+       * Lax, and it has to be exactly that. The callback is a cross-site
+       * top-level navigation from Google's servers: `strict` would withhold the
+       * cookie on precisely that request and every sign-in would fail its own
+       * state check, while `none` would offer it to any site that can make the
+       * browser issue a request.
+       */
+      sameSite: 'lax',
+      secure: env.secureCookies,
+      path: '/',
+      maxAge: HANDSHAKE_MINUTES * 60,
+    });
+
+    return reply.redirect(authorizeUrl(google, handshake));
+  });
+
+  /**
+   * Where Google sends them back.
+   *
+   * Every exit from here is a redirect to a page, never a JSON error, because
+   * the caller is a browser mid-navigation with nothing to render a status code
+   * — whoever is at the keyboard should end up either signed in or back at the
+   * sign-in screen being told what went wrong, and never looking at a stack of
+   * curly braces.
+   */
+  app.get(
+    '/auth/google/callback',
+    { config: { rateLimit: OAUTH_LIMIT } },
+    async (request, reply) => {
+      const google = env.google;
+      if (!google) return reply.status(404).send({ error: NO_GOOGLE });
+
+      const handshake = readHandshake(request);
+      // Spent either way: it is good for one attempt, and leaving it behind on
+      // a failure is what turns a stale tab into a replay.
+      reply.clearCookie(OAUTH_COOKIE, { path: '/' });
+
+      const query = request.query as Record<string, unknown>;
+      /*
+       * Google reports a refusal in the query string rather than by failing the
+       * request, and `access_denied` is not an error at all — it is somebody
+       * pressing Cancel, which deserves a quiet return to the sign-in screen
+       * rather than a red message about something having gone wrong.
+       */
+      if (typeof query.error === 'string') {
+        return backToLogin(reply, query.error === 'access_denied' ? 'cancelled' : 'google');
+      }
+      // No cookie means the handshake expired, or the browser threw it away, or
+      // this is a callback nobody here started.
+      if (!handshake) return backToLogin(reply, 'expired');
+      if (typeof query.state !== 'string' || !sameSecret(query.state, handshake.state)) {
+        return backToLogin(reply, 'state');
+      }
+      if (typeof query.code !== 'string' || !query.code) return backToLogin(reply, 'google');
+
+      let identity;
+      try {
+        identity = await exchangeCode(google, query.code, handshake);
+      } catch (error) {
+        // The detail is for the log — it is about our client registration or
+        // Google's mood, and there is nothing in it a person can act on.
+        request.log.warn({ err: error }, 'Google sign-in did not complete');
+        const unverified = error instanceof GoogleAuthError && error.code === 'unverified_email';
+        return backToLogin(reply, unverified ? 'google_unverified' : 'google');
+      }
+
+      const result = await signInWithProvider(GOOGLE_PROVIDER, identity, {
+        allowSignup: await signupAllowed(),
+        timezone: handshake.timezone,
+      });
+      if (!result.ok) return backToLogin(reply, 'closed');
+
+      // After the account is resolved rather than before, for the reason the
+      // password path checks it after the password: it is the same answer
+      // either way, and this ordering tells an outsider nothing.
+      if (await isDisabled(result.userId)) return backToLogin(reply, 'suspended');
+
+      const { token, expiresAt } = await createSession(result.userId);
+      setSessionCookie(reply, token, expiresAt);
+
+      const device = await rememberDevice(result.userId, request.headers['user-agent'], request.ip);
+      // The same alert the password path sends, and suppressed on a brand-new
+      // account for the same reason: the first device is not news.
+      if (device.isNew && result.outcome !== 'created') {
+        await sendNewSignInEmail(
+          result.userId,
+          { device: device.label, ip: request.ip, at: new Date() },
+          request.log,
+        );
+      }
+
+      /*
+       * Home, not `/login`. The redirect goes to the *app*, which is a
+       * different origin from this API in every deployment that has a proxy in
+       * front — and the session cookie just set travels back through that same
+       * proxy, which is why `redirectUri` points there in the first place.
+       */
+      return reply.redirect(`${env.appUrl}/`);
+    },
+  );
 }

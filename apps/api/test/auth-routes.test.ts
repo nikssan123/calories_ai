@@ -32,6 +32,8 @@ describe('GET /auth/me', () => {
       signup_allowed: true,
       has_accounts: false,
       is_admin: false,
+      // Null under test unless a case sets it — see `auth-google.test.ts`.
+      google_enabled: false,
     });
   });
 

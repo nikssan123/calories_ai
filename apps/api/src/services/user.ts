@@ -72,8 +72,9 @@ export async function markOnboarded(userId: string): Promise<void> {
 // ---- Accounts --------------------------------------------------------------
 
 export async function findUserByEmail(email: string) {
-  return queryOne<{ id: string; password_hash: string | null }>(
-    'SELECT id, password_hash FROM users WHERE lower(email) = lower($1)',
+  return queryOne<{ id: string; password_hash: string | null; email_verified: boolean }>(
+    `SELECT id, password_hash, (email_verified_at IS NOT NULL) AS email_verified
+       FROM users WHERE lower(email) = lower($1)`,
     [email],
   );
 }
@@ -86,14 +87,21 @@ export async function emailInUse(email: string): Promise<boolean> {
  * Creates an account. As a one-time upgrade path from the single-user build, an
  * existing credential-less user row is adopted by the first signup rather than
  * orphaning whatever was already logged against it.
+ *
+ * A null password is not a missing argument, it is an account that signs in
+ * with Google and has no password at all. `authenticate` already refuses a row
+ * with no hash, so such an account simply has no password door — which is the
+ * point of it. It can grow one later through the reset flow, which proves the
+ * mailbox rather than the old password and so works perfectly well for someone
+ * who never had one.
  */
 export async function createAccount(
   email: string,
-  password: string,
+  password: string | null,
   displayName: string | null,
   timezone: string,
 ): Promise<string> {
-  const passwordHash = await hashPassword(password);
+  const passwordHash = password === null ? null : await hashPassword(password);
 
   const orphan = await queryOne<{ id: string }>(
     `SELECT id FROM users WHERE email IS NULL
@@ -228,6 +236,18 @@ export async function markEmailVerified(userId: string, email: string): Promise<
     [userId, email],
   );
   return row !== null;
+}
+
+/**
+ * Takes the password away, leaving the account reachable only by its linked
+ * provider — or by the reset flow, which needs no password to start.
+ *
+ * Signing existing sessions out is the caller's job, and a caller that does not
+ * do it has achieved nothing: this closes the front door on someone who is
+ * already inside the house.
+ */
+export async function clearPassword(userId: string): Promise<void> {
+  await query('UPDATE users SET password_hash = NULL, updated_at = now() WHERE id = $1', [userId]);
 }
 
 /** Replaces the password. Signing other sessions out is the caller's job. */

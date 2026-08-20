@@ -49,6 +49,20 @@ async function forward(request: Request, path: string[]) {
       headers: { 'content-type': responseType },
     });
 
+    /*
+     * Relay a redirect rather than swallowing it.
+     *
+     * Everything else here is a fetch from the page, which never redirects. The
+     * Google sign-in handshake is the exception and is nothing but redirects:
+     * the browser navigates to `/api/auth/google/start`, and a 302 that arrives
+     * with its Location stripped is a blank page instead of Google's consent
+     * screen. `redirect: 'manual'` above is what leaves the 3xx intact for this
+     * to forward — following it here would send the API's request to Google
+     * rather than the person's browser.
+     */
+    const location = response.headers.get('location');
+    if (location) out.headers.set('location', location);
+
     // Relay Set-Cookie so login and logout actually take effect in the browser.
     // getSetCookie() preserves multiple cookies, which .get() would collapse.
     for (const value of response.headers.getSetCookie?.() ?? []) {

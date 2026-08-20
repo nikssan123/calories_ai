@@ -42,6 +42,7 @@ import { buildDaySummary, buildProgress, currentLocalDate } from '../services/su
 import { calculateTargets, setTargets, targetsForDate } from '../services/targets.ts';
 import {
   authenticate,
+  findUserByEmail,
   getUser,
   getUserContext,
   markOnboarded,
@@ -360,12 +361,34 @@ export async function registerRoutes(app: FastifyInstance) {
 
     const userId = request.userId!;
     const profile = await getUser(userId);
-    // No email means no password to check against — the pre-accounts placeholder
-    // row, and later a provider-only sign-in. Refusing is the safe answer while
-    // there is no second way to prove who is asking.
+    // No email means no password to check against — the pre-accounts
+    // placeholder row. Refusing is the safe answer while there is no second way
+    // to prove who is asking.
     if (!profile.email) {
       return reply.status(400).send({ error: 'This account cannot be deleted from here.' });
     }
+
+    /*
+     * An account that signs in with Google has no password to re-check, and
+     * that must not leave it undeletable — both app stores require this to be
+     * reachable from inside the product, and "unless you signed in with Google"
+     * is not an exemption they grant.
+     *
+     * The way out is the one that already exists. "Forgot your password" needs
+     * no old password to start and proves the mailbox instead, which is a
+     * stronger claim than the session this request already has. So the answer
+     * says so plainly rather than refusing, and the door it points at is one
+     * step away.
+     */
+    const account = await findUserByEmail(profile.email);
+    if (!account?.password_hash) {
+      return reply.status(400).send({
+        error:
+          'This account signs in with Google and has no password to confirm with. ' +
+          'Set one first from “Forgot your password?”, then come back.',
+      });
+    }
+
     if ((await authenticate(profile.email, parsed.data.password)) !== userId) {
       return reply.status(403).send({ error: 'That password is not correct.' });
     }

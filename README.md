@@ -211,7 +211,7 @@ Writing these found two real bugs, which is roughly what they were for:
 ## Accounts
 
 Email and password, hashed with node's built-in scrypt, with server-side sessions in
-an httpOnly cookie. No third-party auth service.
+an httpOnly cookie — plus an optional Google button. No third-party auth service.
 
 - The first account is always allowed. Set `ALLOW_SIGNUP=false` afterwards to close
   registration.
@@ -249,6 +249,55 @@ because that route re-checks the password before it destroys anything.
 written to the API log rather than sent, which is fine on a laptop — you read it from
 the log — and is *not* fine on a deployment where other people sign up. If you run this
 for anyone but yourself, configure Resend.
+
+### Signing in with Google
+
+Off unless configured, and configuring it takes four values in one place:
+
+1. In the [Google Cloud console](https://console.cloud.google.com/apis/credentials),
+   create an **OAuth client ID** of type *Web application*.
+2. Add an **authorised redirect URI**. It has to be byte-identical to what the server
+   sends, which is `APP_URL` + `/api/auth/google/callback`:
+   `http://localhost:3000/api/auth/google/callback` locally,
+   `https://daysofar.com/api/auth/google/callback` deployed.
+3. Fill in the consent screen. The only scopes asked for are `openid email profile`,
+   which are non-sensitive, so it needs no Google review.
+4. Put the client id and secret in `.env` and restart the API:
+
+```
+GOOGLE_CLIENT_ID=1234-abc.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-...
+```
+
+The sign-in screen asks `/auth/me` whether a client is configured and only draws the
+button if one is, so an install without these looks exactly as it did before.
+
+**The redirect points at the web app, not at the API.** That is deliberate rather than
+incidental: the callback's job is to set the session cookie, and a cookie set on
+`api.daysofar.com` is one the browser will never send to `daysofar.com`. So Google
+returns to the Next proxy — the one origin the browser talks to — which forwards to the
+API and relays the `Set-Cookie` back. Set `GOOGLE_REDIRECT_URI` if your deployment is
+shaped differently.
+
+**What happens to an address that already has an account**, which is the part worth
+knowing before you turn this on:
+
+- *Already linked* — signed in. The link is keyed on Google's own account id, not on the
+  email, so somebody who changes the address on their Google account keeps their journal.
+- *Existing account, address confirmed* — linked, password untouched. Two parties agree
+  the same person owns the address, so both doors now open the same room.
+- *Existing account, address never confirmed* — linked, and **the password is destroyed
+  along with any session opened with it**. Only one party has proved anything, and it is
+  the one at the door: without this, registering with somebody else's address and waiting
+  for them to press the Google button is a way to hold a key to their diary. Nothing is
+  lost, because an unconfirmed account cannot reach a single route in the product — and
+  if it was the same person all along, "forgot your password" mints them a new one.
+- *No account* — created, confirmed, and with no password at all. `ALLOW_SIGNUP=false`
+  closes this door exactly as it closes the form's.
+
+An account with no password cannot confirm `DELETE /account`, which asks for one. It is
+not stranded: the reset flow needs no old password, so setting one is a single step, and
+the route says so rather than refusing flatly.
 
 ## Email
 

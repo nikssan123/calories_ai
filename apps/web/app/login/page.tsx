@@ -6,10 +6,31 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthGate';
+import { GoogleMark } from '@/components/GoogleMark';
 import { Logo } from '@/components/Logo';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
+
+/**
+ * What the API's callback puts in `?error=` when the Google handshake does not
+ * end in a session, in words.
+ *
+ * The sentences live here rather than on the server for the reason every other
+ * piece of copy does — but the mapping earns its keep in a second way: these
+ * arrive by redirect, from a page nobody was looking at, so each one has to say
+ * what happened *and* what to do next. "Try again" is doing real work.
+ */
+const SIGN_IN_ERRORS: Record<string, string> = {
+  google: 'Google could not sign you in. Try again, or use your email and password.',
+  google_unverified:
+    'Google has not confirmed the address on that account, so it cannot be used to sign in here.',
+  expired: 'That sign-in took too long. Start it again from this page.',
+  state: 'That sign-in could not be verified. Start it again from this page.',
+  closed: 'Sign-ups are closed on this server.',
+  suspended: 'This account has been suspended.',
+};
 
 export default function LoginPage() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
@@ -18,6 +39,11 @@ export default function LoginPage() {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [signupAllowed, setSignupAllowed] = useState(true);
+  const [googleEnabled, setGoogleEnabled] = useState(false);
+  // Sent along to the API so a brand-new Google account starts its days in the
+  // right place, exactly as the sign-up form's `timezone` field does. Empty
+  // until the effect runs, which keeps the server-rendered href identical.
+  const [timezone, setTimezone] = useState('');
   const router = useRouter();
   const { refresh } = useAuth();
 
@@ -25,12 +51,33 @@ export default function LoginPage() {
     // The landing page's primary CTA asks for the sign-up form by name. Read
     // straight off `location` rather than through `useSearchParams`, which
     // would need a Suspense boundary around the whole screen to say one word.
-    if (new URLSearchParams(window.location.search).get('mode') === 'signup') setMode('signup');
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('mode') === 'signup') setMode('signup');
+    setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+
+    /*
+     * A failed Google sign-in comes back as a redirect carrying a reason, and
+     * the reason is stripped from the URL as soon as it has been read: without
+     * that, refreshing the page — the very first thing someone does after a
+     * sign-in fails — replays the same complaint about something that is no
+     * longer happening. Cancelling is not reported at all; a person who pressed
+     * "cancel" knows what they did and is looking at the form they wanted.
+     */
+    const failure = params.get('error');
+    if (failure) {
+      if (failure !== 'cancelled') {
+        toast.error(SIGN_IN_ERRORS[failure] ?? 'Something went wrong signing in. Try again.');
+      }
+      params.delete('error');
+      const rest = params.toString();
+      window.history.replaceState(null, '', rest ? `/login?${rest}` : '/login');
+    }
 
     void (async () => {
       try {
         const status = await api.me();
         setSignupAllowed(status.signup_allowed);
+        setGoogleEnabled(status.google_enabled);
         // Only a server with no accounts at all opens on "create account";
         // otherwise a returning user lands on the sign-in form.
         if (!status.has_accounts) setMode('signup');
@@ -78,6 +125,34 @@ export default function LoginPage() {
               : 'Sign in to pick up where you left off.'}
           </p>
         </div>
+
+        {googleEnabled && (
+          <div className="mb-6">
+            {/*
+              * A link, not a button with an onClick. The whole handshake is a
+              * chain of full-page navigations, and starting it with `fetch`
+              * would ask the browser to follow a cross-origin redirect to
+              * Google's consent screen inside an XHR — which it will not do.
+              */}
+            <a
+              href={`/api/auth/google/start${timezone ? `?tz=${encodeURIComponent(timezone)}` : ''}`}
+              className={cn(
+                buttonVariants({ variant: 'outline' }),
+                'h-12 w-full gap-2.5 rounded-2xl text-base font-extrabold',
+              )}
+            >
+              <GoogleMark className="size-5" />
+              Continue with Google
+            </a>
+
+            {/* The line that says "or", which is the whole reason it is here. */}
+            <div className="mt-6 flex items-center gap-3">
+              <span className="bg-border h-0.5 flex-1 rounded-full" />
+              <span className="text-muted-foreground text-footnote">or</span>
+              <span className="bg-border h-0.5 flex-1 rounded-full" />
+            </div>
+          </div>
+        )}
 
         <form onSubmit={submit} className="space-y-4">
           {mode === 'signup' && (

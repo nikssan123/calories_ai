@@ -65,6 +65,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         signup_allowed: true,
         has_accounts: false,
         is_admin: false,
+        google_enabled: false,
       });
     } finally {
       setLoading(false);

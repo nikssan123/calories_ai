@@ -79,7 +79,30 @@ export interface Env {
    */
   trustProxy: boolean | string;
   email: EmailEnv;
+  /**
+   * Google sign-in, or null when this deployment has not configured it. Null is
+   * the honest default: OAuth needs a client registered against *this* server's
+   * callback URL, so unlike a provider key there is nothing sensible to fall
+   * back to, and the button must not be offered where pressing it 400s.
+   */
+  google: GoogleEnv | null;
   isTest: boolean;
+}
+
+export interface GoogleEnv {
+  clientId: string;
+  clientSecret: string;
+  /**
+   * Where Google sends the browser back, which has to be byte-identical to the
+   * entry in the Cloud console or the handshake fails before it starts.
+   *
+   * It points at the *web* app rather than at this API, and that is the whole
+   * design: the callback sets the session cookie, and a cookie set on the API's
+   * own hostname is one the browser will never send to the app. So the reply
+   * goes back through the Next proxy, which is already the one origin the
+   * browser talks to.
+   */
+  redirectUri: string;
 }
 
 export interface EmailEnv {
@@ -106,6 +129,7 @@ export interface EmailEnv {
 export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const isTest = source.NODE_ENV === 'test' || source.VITEST === 'true';
   const databaseUrl = required(source, 'DATABASE_URL');
+  const appUrl = (source.APP_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
 
   return {
     databaseUrl: isTest
@@ -145,7 +169,7 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
      * point at — the API's own origin is behind a proxy and means nothing to a
      * mail client. Trailing slash trimmed here so every caller can concatenate.
      */
-    appUrl: (source.APP_URL ?? 'http://localhost:3000').replace(/\/+$/, ''),
+    appUrl,
     /**
      * Defaults to the dev web server so a local checkout needs no configuration.
      * A deployment must name its real origins: once the API answers on its own
@@ -162,6 +186,12 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
      * evadable. Behind Caddy on a private Docker network this is `uniquelocal`.
      */
     trustProxy: source.TRUST_PROXY ? source.TRUST_PROXY.trim() : false,
+    /**
+     * Forced off under test for the reason the API key above is: a developer
+     * with a real client in their .env must not have the suite behave
+     * differently from anyone else's. The cases that exercise this set it.
+     */
+    google: isTest ? null : googleEnv(source, appUrl),
     email: {
       /**
        * No key means no mail provider: the server logs what it would have sent
@@ -195,6 +225,26 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
       webhookSecret: isTest ? null : (source.RESEND_WEBHOOK_SECRET ?? null),
     },
     isTest,
+  };
+}
+
+/**
+ * Both halves or nothing.
+ *
+ * A client id without its secret is not a half-working integration, it is a
+ * sign-in button that fails at the token exchange — after the person has
+ * already picked an account and granted consent, which is the worst possible
+ * place to discover a missing variable.
+ */
+function googleEnv(source: NodeJS.ProcessEnv, appUrl: string): GoogleEnv | null {
+  const clientId = source.GOOGLE_CLIENT_ID?.trim();
+  const clientSecret = source.GOOGLE_CLIENT_SECRET?.trim();
+  if (!clientId || !clientSecret) return null;
+
+  return {
+    clientId,
+    clientSecret,
+    redirectUri: source.GOOGLE_REDIRECT_URI?.trim() || `${appUrl}/api/auth/google/callback`,
   };
 }
 
