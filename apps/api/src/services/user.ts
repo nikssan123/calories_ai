@@ -30,6 +30,7 @@ export async function updateUser(userId: string, patch: ProfileUpdate): Promise<
     timezone: patch.timezone,
     day_start_hour: patch.day_start_hour,
     notify_weekly_review: patch.notify_weekly_review,
+    notify_nudges: patch.notify_nudges,
     diet: patch.diet,
     avoids: patch.avoids,
   };
@@ -153,6 +154,7 @@ export interface EmailRecipient {
   /** Product email goes only to an address someone has proved they can read. */
   verified: boolean;
   notifyWeeklyReview: boolean;
+  notifyNudges: boolean;
 }
 
 /**
@@ -191,7 +193,7 @@ export async function accountGate(userId: string): Promise<AccountGate> {
 
 export async function getEmailRecipient(userId: string): Promise<EmailRecipient | null> {
   const row = await queryOne<any>(
-    `SELECT id, email, display_name, timezone, email_verified_at, notify_weekly_review
+    `SELECT id, email, display_name, timezone, email_verified_at, notify_weekly_review, notify_nudges
        FROM users WHERE id = $1 AND email IS NOT NULL`,
     [userId],
   );
@@ -201,7 +203,7 @@ export async function getEmailRecipient(userId: string): Promise<EmailRecipient 
 /** The same, found by address. For flows that start before there is a session. */
 export async function findRecipientByEmail(email: string): Promise<EmailRecipient | null> {
   const row = await queryOne<any>(
-    `SELECT id, email, display_name, timezone, email_verified_at, notify_weekly_review
+    `SELECT id, email, display_name, timezone, email_verified_at, notify_weekly_review, notify_nudges
        FROM users WHERE lower(email) = lower($1)`,
     [email],
   );
@@ -216,6 +218,7 @@ function toRecipient(row: any): EmailRecipient {
     timezone: row.timezone,
     verified: row.email_verified_at !== null,
     notifyWeeklyReview: row.notify_weekly_review,
+    notifyNudges: row.notify_nudges,
   };
 }
 
@@ -265,6 +268,13 @@ export async function setWeeklyReviewEmails(userId: string, enabled: boolean): P
   ]);
 }
 
+export async function setNudgeEmails(userId: string, enabled: boolean): Promise<void> {
+  await query('UPDATE users SET notify_nudges = $1, updated_at = now() WHERE id = $2', [
+    enabled,
+    userId,
+  ]);
+}
+
 export async function countAccounts(): Promise<number> {
   const row = await queryOne<{ n: string }>(
     'SELECT count(*) AS n FROM users WHERE email IS NOT NULL',
@@ -288,6 +298,7 @@ function toProfile(row: any): Profile {
     day_start_hour: Number(row.day_start_hour),
     is_setup_complete: row.is_setup_complete,
     notify_weekly_review: row.notify_weekly_review,
+    notify_nudges: row.notify_nudges,
     plan: row.plan,
     diet: row.diet,
     avoids: row.avoids ?? [],

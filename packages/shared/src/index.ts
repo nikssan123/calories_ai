@@ -370,6 +370,12 @@ export const Profile = z.object({
    * not something to have an opinion about receiving.
    */
   notify_weekly_review: z.boolean(),
+  /**
+   * Opt-in, unlike the review above, because a nudge arrives unprompted. It
+   * governs the email only — the in-app message is always written, since a
+   * message waiting in the journal is not an interruption.
+   */
+  notify_nudges: z.boolean(),
 });
 export type Profile = z.infer<typeof Profile>;
 
@@ -1090,6 +1096,64 @@ export const WeeklyReview = z.object({
   created_at: z.string(),
 });
 export type WeeklyReview = z.infer<typeof WeeklyReview>;
+
+// ---- Nudges ----------------------------------------------------------------
+
+/**
+ * The four things worth speaking first about.
+ *
+ * Every one of them is a pattern over days rather than a fact about today,
+ * which is exactly why the app has to raise them — nobody notices a fortnight
+ * of flat weight from inside it, and the journal only ever sees one turn.
+ *
+ * Deliberately short, and it should stay short. Each entry here is a licence to
+ * interrupt somebody, and a list of twenty is a notification stream.
+ */
+export const NUDGE_KINDS = [
+  /** Nothing logged for several days, after a stretch of logging regularly. */
+  'dormant',
+  /** Goal is to lose, a fortnight of data, and the scale has not moved. */
+  'stalled',
+  /** Protein under target every logged day of the week. */
+  'protein_short',
+  /** Fiber under its floor all week, on a week that was actually measured. */
+  'quality_short',
+] as const;
+export const NudgeKind = z.enum(NUDGE_KINDS);
+export type NudgeKind = z.infer<typeof NudgeKind>;
+
+/**
+ * The deterministic half of a nudge: which pattern fired and the numbers behind
+ * it. Same split as the weekly review, for the same reason — the model decides
+ * how to word it and never whether to send it.
+ */
+export const NudgeStats = z.object({
+  kind: NudgeKind,
+  /** Days since anything was logged. `dormant` only. */
+  days_since_logged: z.number().nullable(),
+  /** Days of the window that carried a log at all. */
+  days_logged: z.number(),
+  mean_kcal: z.number().nullable(),
+  target_kcal: z.number(),
+  mean_protein_g: z.number().nullable(),
+  target_protein_g: z.number(),
+  /** Signed kg per week off the weight trend. `stalled` reads this. */
+  weight_change_kg_per_week: z.number().nullable(),
+  /** Mean daily fiber and its floor. `quality_short` reads these. */
+  mean_fiber_g: z.number().nullable(),
+  target_fiber_g: z.number(),
+});
+export type NudgeStats = z.infer<typeof NudgeStats>;
+
+export const Nudge = z.object({
+  id: z.string().uuid(),
+  kind: NudgeKind,
+  local_date: z.string(),
+  content: z.string(),
+  message_id: z.string().uuid().nullable(),
+  created_at: z.string(),
+});
+export type Nudge = z.infer<typeof Nudge>;
 
 // ---- Repeat a meal ---------------------------------------------------------
 

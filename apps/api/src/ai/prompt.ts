@@ -1,4 +1,11 @@
-import type { DaySummary, Profile, ReviewStats, WeeklyReview, WeightEntry } from '@ct/shared';
+import type {
+  DaySummary,
+  NudgeStats,
+  Profile,
+  ReviewStats,
+  WeeklyReview,
+  WeightEntry,
+} from '@ct/shared';
 import type { AgentNote } from '../services/notes.ts';
 import { MIN_TARGET_KCAL } from '../services/targets.ts';
 import type { Wellbeing } from '../services/wellbeing.ts';
@@ -457,6 +464,92 @@ You have read tools if you want to check a specific day or look up what a food w
  * Wholly stable, with the pantry and the day's numbers riding in the user turn,
  * so `dynamicSystemPrompt` stays empty and the entire prompt is cacheable.
  */
+// ---- Nudges ----------------------------------------------------------------
+
+export const NUDGE_SYSTEM_PROMPT = `You write one very short message to someone who has not opened the app today. They did not ask for it. That is the whole of the brief.
+
+# What has already been decided
+
+Whether to send this at all was decided before you were called, by arithmetic over their log. You are not being asked whether the pattern is real or whether it is worth mentioning — it is, and it is. You are being asked for the wording.
+
+# Rules
+
+One or two sentences. Not three. This lands as a notification and a line in their journal, and anything longer is something to be dismissed rather than read.
+
+Every number comes from the stats you were given. Never invent one, never round one into a different one, and if a figure is null then it is not a figure you have.
+
+No guilt, ever, and this is the rule the whole feature lives or dies on. Someone who feels nagged stops opening the app — the same failure the no-judgement rule exists to prevent, arriving through a different door. "You have not logged since Tuesday" is a reproach. "Your log has been quiet since Tuesday — want to catch up on today?" is an open door. Never "you should have", never "don't forget", never a streak you are about to lose.
+
+Offer the smallest possible next step, and make it genuinely small. One meal, not a week. One idea for tonight's dinner, not a plan. If there is no useful step, say the thing and stop — an invented action is worse than none.
+
+Do not explain the mechanism. They do not need to know that a fortnight of flat weight is what triggered this, and telling them makes the app sound like a monitoring system rather than someone who noticed.
+
+Do not moralise about food, do not congratulate them on nothing, and do not ask a question you are not going to get an answer to — except the one that invites them back in.
+
+# Shape
+
+Plain sentences. No greeting, no sign-off, no headings, no emoji. Write it the way a friend would text.`;
+
+/** The per-nudge user turn: which pattern fired, and the numbers behind it. */
+export function nudgeTaskPrompt(stats: NudgeStats, profile: Profile): string {
+  const name = profile.display_name ? `${profile.display_name}'s` : 'Their';
+
+  const lines: string[] = [
+    `Write the nudge. ${name} log, over the last week:`,
+    `- Days logged: ${stats.days_logged} of 7`,
+  ];
+  if (stats.mean_kcal !== null) {
+    lines.push(`- Average intake: ${stats.mean_kcal} kcal against a ${stats.target_kcal} target`);
+  }
+  if (stats.mean_protein_g !== null) {
+    lines.push(
+      `- Average protein: ${stats.mean_protein_g} g against a ${stats.target_protein_g} g target`,
+    );
+  }
+
+  /*
+   * One paragraph per trigger, saying what was noticed and what a good message
+   * about it does. Written per-kind rather than as one generic instruction
+   * because the four need genuinely different tones — a dormant log wants an
+   * open door and a stalled scale wants reassurance that nothing is broken.
+   */
+  switch (stats.kind) {
+    case 'dormant':
+      lines.push(
+        '',
+        `What was noticed: nothing has been logged for ${stats.days_since_logged} days, after a stretch of logging regularly.`,
+        'Say something that makes coming back cost nothing. One meal is a fine place to restart, and there is nothing to catch up on — the days they missed are gone and do not need filling in. Do not mention consistency, streaks, or getting back on track.',
+      );
+      break;
+
+    case 'stalled':
+      lines.push(
+        '',
+        `What was noticed: their goal is to lose weight, and across the last fortnight the scale has moved ${stats.weight_change_kg_per_week} kg per week — flat.`,
+        'The useful thing to say is that a plateau is ordinary and readable, not that they have failed. Two weeks flat while eating to target usually means maintenance has moved, which is a thing the app can measure rather than a thing they did wrong. Invite them to ask about it in the journal, where you can actually look.',
+      );
+      break;
+
+    case 'protein_short':
+      lines.push(
+        '',
+        `What was noticed: protein came in under target on every one of the last 7 days, averaging ${stats.mean_protein_g} g against ${stats.target_protein_g} g.`,
+        'Name the gap once and offer one concrete, ordinary thing that closes some of it — the sort of food they already eat. Not a meal plan.',
+      );
+      break;
+
+    case 'quality_short':
+      lines.push(
+        '',
+        `What was noticed: fiber averaged ${stats.mean_fiber_g} g a day against a floor of ${stats.target_fiber_g} g, every day of a week that was well enough logged to be sure.`,
+        'This is the gentlest of the four and should sound like it — it is a suggestion, not a shortfall. One easy swap or addition, and nothing about processed food, clean eating, or what they ought to be having instead.',
+      );
+      break;
+  }
+
+  return lines.join('\n');
+}
+
 export const RECIPE_SYSTEM_PROMPT = `You suggest things someone could cook right now, from what is actually in their kitchen, that fit what is left of their day.
 
 # Why you can do this and a recipe website cannot

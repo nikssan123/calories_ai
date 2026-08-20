@@ -1,5 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify';
-import type { WeeklyReview } from '@ct/shared';
+import type { Nudge, WeeklyReview } from '@ct/shared';
 import { env } from '../env.ts';
 import { issueToken, issueVerification, TOKEN_TTL_MINUTES } from '../services/tokens.ts';
 import { findRecipientByEmail, getEmailRecipient } from '../services/user.ts';
@@ -207,6 +207,47 @@ export async function sendWeeklyReviewEmail(
       content: review.content,
       stats: review.stats,
       range: formatRange(review.week_start, review.week_end),
+      appUrl: env.appUrl,
+      unsubscribeUrl: link.url,
+    }),
+  });
+}
+
+// ---- Nudges ----------------------------------------------------------------
+
+/**
+ * A nudge, for the people who asked to hear about them.
+ *
+ * Three gates rather than the review's two, and the extra one is `notifyNudges`
+ * defaulting to false. This is the only mail the product sends that nobody
+ * scheduled and nobody triggered, so it goes out on an explicit yes and on
+ * nothing else.
+ *
+ * The idempotency key is the nudge's own id, which is stronger than the
+ * review's week key and needs to be: a nudge is not tied to a calendar period,
+ * so there is no natural window to key on.
+ */
+export async function sendNudgeEmail(
+  userId: string,
+  nudge: Nudge,
+  logger?: FastifyBaseLogger,
+): Promise<SendResult> {
+  const recipient = await getEmailRecipient(userId);
+  if (!recipient) return SKIPPED('no address');
+  if (!recipient.notifyNudges) return SKIPPED('opted out');
+  if (!recipient.verified) return SKIPPED('address not verified');
+
+  const link = await unsubscribeLink(userId);
+
+  return sendEmail({
+    to: recipient.email,
+    userId,
+    logger,
+    idempotencyKey: `nudge:${nudge.id}`,
+    headers: unsubscribeHeaders(link),
+    message: templates.nudge({
+      name: recipient.displayName,
+      content: nudge.content,
       appUrl: env.appUrl,
       unsubscribeUrl: link.url,
     }),

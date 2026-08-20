@@ -408,13 +408,16 @@ function EmailSettings({
    * email. The optimistic flip is reverted if the write fails, so the control
    * never shows a state the server does not hold.
    */
-  async function setWeekly(enabled: boolean) {
-    const previous = profile.notify_weekly_review;
-    onChange({ ...profile, notify_weekly_review: enabled });
+  async function setPreference(
+    field: 'notify_weekly_review' | 'notify_nudges',
+    enabled: boolean,
+  ) {
+    const previous = profile[field];
+    onChange({ ...profile, [field]: enabled });
     try {
-      onChange(await api.updateProfile({ notify_weekly_review: enabled }));
+      onChange(await api.updateProfile({ [field]: enabled }));
     } catch (e) {
-      onChange({ ...profile, notify_weekly_review: previous });
+      onChange({ ...profile, [field]: previous });
       toast.error((e as Error).message);
     }
   }
@@ -463,8 +466,29 @@ function EmailSettings({
         </div>
         <Switch
           checked={profile.notify_weekly_review}
-          onCheckedChange={(checked) => void setWeekly(checked)}
+          onCheckedChange={(checked) => void setPreference('notify_weekly_review', checked)}
           aria-label="Email me the weekly review"
+        />
+      </InsetRow>
+
+      {/*
+        * Off by default, unlike the review above, and the copy has to earn the
+        * flip rather than assume it. A nudge arrives because the app decided to
+        * say something, so the honest pitch is the ceiling — at most one, and
+        * only when there is something to say.
+        */}
+      <InsetRow>
+        <div className="flex-1">
+          <p className="text-body">Nudges</p>
+          <p className="text-muted-foreground text-[13px] font-medium">
+            At most one a week, when something in your log is worth a mention. They always
+            appear in the journal; this emails them too.
+          </p>
+        </div>
+        <Switch
+          checked={profile.notify_nudges}
+          onCheckedChange={(checked) => void setPreference('notify_nudges', checked)}
+          aria-label="Email me nudges"
         />
       </InsetRow>
     </InsetGroup>

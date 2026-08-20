@@ -75,6 +75,12 @@ export const MODELS: Record<TurnKind, ModelChoice> = {
   // The suggestions themselves. Occasional, read end to end, and the thing
   // people would actually pay for — so it goes where the review goes.
   recipe: { model: 'claude-opus-5', effort: 'high' },
+  // Two sentences, from stats that were computed before the call. There is no
+  // reasoning to do here and no long-form writing — the hard part was deciding
+  // to send it at all, and that happened in SQL. Sonnet, and it would be waste
+  // to spend more: this runs unprompted, so its cost is the app's, not a
+  // request somebody chose to make.
+  nudge: { model: 'claude-sonnet-5', effort: 'high' },
 };
 
 /** Back-compat for anything still asking for "the" model. */

@@ -41,12 +41,29 @@ describe('limitsFor', () => {
     expect(limitsFor('free').reviewsPerDay).toBe(5);
   });
 
-  it('gives a paid account more of everything', () => {
+  /**
+   * Everything a user can *spend*, that is.
+   *
+   * `nudgesPerWeek` is the odd one out and the exception is deliberate: it caps
+   * what the app may send someone unasked rather than what they may ask for.
+   * Being messaged more often is not a thing anybody would pay for, so the two
+   * plans hold the same line and this test says which rule it is checking.
+   */
+  it('gives a paid account more of every ceiling they can spend against', () => {
     const free = limitsFor('free');
     const pro = limitsFor('pro');
-    for (const key of Object.keys(free) as Array<keyof typeof free>) {
+    const spendable = (Object.keys(free) as Array<keyof typeof free>).filter(
+      (key) => key !== 'nudgesPerWeek',
+    );
+
+    expect(spendable.length).toBeGreaterThan(0);
+    for (const key of spendable) {
       expect(pro[key]).toBeGreaterThan(free[key]);
     }
+  });
+
+  it('does not let a paid account be nudged more often', () => {
+    expect(limitsFor('pro').nudgesPerWeek).toBe(limitsFor('free').nudgesPerWeek);
   });
 
   /**

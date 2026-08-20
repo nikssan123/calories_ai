@@ -66,6 +66,11 @@ export function readOpenAiConfig(source: NodeJS.ProcessEnv = process.env): OpenA
       // difference between a scan and a confidently empty list.
       pantry_scan: source.OPENAI_MODEL_VISION ?? base,
       recipe: source.OPENAI_MODEL_RECIPE ?? source.OPENAI_MODEL_REVIEW ?? base,
+      // Two sentences from numbers already computed. No slot of its own, and it
+      // does not follow the review's: a nudge is the smallest job here, and a
+      // deployment that pointed its review model at something expensive should
+      // not find it spending that on a one-line message nobody asked for.
+      nudge: source.OPENAI_MODEL_NUDGE ?? base,
     },
     rate: openAiRate(source),
   };

@@ -306,6 +306,44 @@ export function weeklyReview(input: {
   };
 }
 
+/**
+ * A nudge, in the inbox.
+ *
+ * No stats block and no excerpt, unlike the review above: the whole nudge is
+ * two sentences, so anything wrapped around it would be more chrome than
+ * message. The subject carries the sentence rather than a label, because a
+ * subject line reading "A note from Day So Far" tells nobody whether to open it.
+ */
+export function nudge(input: {
+  name: string | null;
+  content: string;
+  appUrl: string;
+  unsubscribeUrl: string;
+}): EmailMessage {
+  return {
+    template: 'nudge',
+    category: 'product',
+    unsubscribeUrl: input.unsubscribeUrl,
+    ...renderEmail({
+      subject: subjectFrom(input.content),
+      preheader: input.content,
+      heading: 'A quick note',
+      blocks: [
+        { kind: 'text', text: greeting(input.name) },
+        { kind: 'text', text: input.content },
+        { kind: 'button', label: 'Open the journal', url: input.appUrl },
+      ],
+      unsubscribeUrl: input.unsubscribeUrl,
+    }),
+  };
+}
+
+/** The nudge's first sentence, trimmed to something a mail client will show whole. */
+function subjectFrom(content: string): string {
+  const first = content.trim().split(/(?<=[.!?])\s+/)[0] ?? content.trim();
+  return first.length > 78 ? `${first.slice(0, 75).trimEnd()}…` : first;
+}
+
 /** The first two paragraphs, and a marker if there was more. */
 function excerpt(content: string, paragraphs = 2): string {
   const parts = content.trim().split(/\n{2,}/);

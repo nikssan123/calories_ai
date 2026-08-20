@@ -75,7 +75,8 @@ export type TurnKind =
   | 'setup'
   | 'review'
   | 'pantry_scan'
-  | 'recipe';
+  | 'recipe'
+  | 'nudge';
 
 export type ToolsetName = 'journal' | 'kitchen';
 

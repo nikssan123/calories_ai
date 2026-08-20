@@ -183,6 +183,7 @@ describe('OpenAI-compatible providers', () => {
       review: 'gpt-4o',
       pantry_scan: 'gpt-4o',
       recipe: 'gpt-4o',
+      nudge: 'gpt-4o',
     });
   });
 

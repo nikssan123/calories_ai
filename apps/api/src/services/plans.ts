@@ -32,6 +32,16 @@ export interface PlanLimits {
   recipeRunsPerDay: number;
   /** How much kitchen the pantry will hold. Not a cost limit — a usability one. */
   pantryItems: number;
+  /**
+   * Unprompted messages a week.
+   *
+   * The odd one out: every other number here caps what somebody can spend, and
+   * this caps what the app may spend on them without being asked. The service
+   * already holds itself to one a week in code, so this is a ceiling on that
+   * ceiling — the place a future decision to make nudges a paid feature, or to
+   * turn them off entirely for a plan, gets made without touching the sender.
+   */
+  nudgesPerWeek: number;
 }
 
 /*
@@ -83,6 +93,7 @@ const LIMITS: Record<PlanName, PlanLimits> = {
     fridgeScansPerDay: 1,
     recipeRunsPerDay: 1,
     pantryItems: 60,
+    nudgesPerWeek: 1,
   },
   pro: {
     chatTurnsPerHour: 200,
@@ -90,6 +101,10 @@ const LIMITS: Record<PlanName, PlanLimits> = {
     fridgeScansPerDay: 6,
     recipeRunsPerDay: 4,
     pantryItems: 300,
+    // Not more than free. Being messaged more often is not a feature anybody
+    // would pay for, and the once-a-week rule is about what is welcome rather
+    // than about what it costs.
+    nudgesPerWeek: 1,
   },
 };
 

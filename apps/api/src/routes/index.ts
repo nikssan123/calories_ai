@@ -47,6 +47,7 @@ import {
   getUserContext,
   markOnboarded,
   missingProfileFields,
+  setNudgeEmails,
   setWeeklyReviewEmails,
   updateUser,
 } from '../services/user.ts';
@@ -533,8 +534,21 @@ export async function registerRoutes(app: FastifyInstance) {
       return reply.status(403).send({ error: 'That unsubscribe link is not valid.' });
     }
 
-    await setWeeklyReviewEmails(u as string, false);
-    return { ok: true as const, message: 'You will not get the weekly review by email again.' };
+    /*
+     * Both preferences, from the one link.
+     *
+     * There is exactly one unsubscribe button in every product email and one
+     * person pressing it, and what they mean by it is "stop". Turning off only
+     * the mail they happened to be reading and then sending them the other kind
+     * next week is the behaviour that earns a spam report — and a preference
+     * centre offering to unsubscribe from some of it is the thing people press
+     * this button to escape.
+     */
+    await Promise.all([
+      setWeeklyReviewEmails(u as string, false),
+      setNudgeEmails(u as string, false),
+    ]);
+    return { ok: true as const, message: 'You will not get product email from us again.' };
   });
 
   /**
