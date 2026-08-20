@@ -95,6 +95,12 @@ export interface EmailEnv {
    * confusing — set it and the whole flow can be exercised for real.
    */
   redirectTo: string | null;
+  /**
+   * Signs the inbound webhook, as `whsec_…`. Absent means the receiving side is
+   * off and `POST /email/inbound` refuses everything — which is the only safe
+   * default for a public endpoint whose whole authentication *is* the signature.
+   */
+  webhookSecret: string | null;
 }
 
 export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
@@ -176,6 +182,9 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
       from: source.EMAIL_FROM ?? 'Day So Far <onboarding@resend.dev>',
       replyTo: source.EMAIL_REPLY_TO ?? null,
       redirectTo: source.EMAIL_REDIRECT_TO ?? null,
+      // Forced off under test for the same reason the API key is: a real secret
+      // in the developer's .env must not let the suite accept a live webhook.
+      webhookSecret: isTest ? null : (source.RESEND_WEBHOOK_SECRET ?? null),
     },
     isTest,
   };

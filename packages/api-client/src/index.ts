@@ -23,6 +23,7 @@ import type {
   RepeatRequest,
   ReviewStats,
   SignupRequest,
+  SupportInbox,
   TablePage,
   TableSummary,
   UsageTurn,
@@ -267,6 +268,15 @@ export function createApiClient({
       users: (limit = 100) => request<{ users: AdminUser[] }>(`/admin/users?limit=${limit}`),
 
       user: (id: string) => request<AdminUser>(`/admin/users/${id}`),
+
+      /** What people have written in to the support address. */
+      support: (limit = 50) => request<SupportInbox>(`/admin/support?limit=${limit}`),
+
+      setSupportHandled: (id: string, handled: boolean) =>
+        request<{ ok: true; handled: boolean }>(`/admin/support/${id}/handled`, {
+          method: 'POST',
+          body: JSON.stringify({ handled }),
+        }),
 
       costs: (days = 30) => request<CostReport>(`/admin/costs?days=${days}`),
 

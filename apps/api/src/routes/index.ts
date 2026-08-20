@@ -2,10 +2,18 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ChatRequest, DeleteAccountRequest, Meal, ProfileUpdate, RepeatRequest } from '@ct/shared';
 import { AUTH_HELP, authDescription, hasSubscriptionAuth } from '../ai/client.ts';
+import { env } from '../env.ts';
 import { generateWeeklyReview } from '../ai/review.ts';
 import { runTurn } from '../ai/run.ts';
 import { sendAccountDeletedEmail } from '../email/notify.ts';
+import {
+  fetchReceivedEmail,
+  isReceivedEmail,
+  parseAddress,
+  verifyWebhookSignature,
+} from '../email/inbound.ts';
 import { verifyUnsubscribe } from '../email/unsubscribe.ts';
+import { attachBody, recordBodyFailure, recordSupportEmail } from '../services/support.ts';
 import { deleteAccount } from '../services/admin.ts';
 import { proposeTargets } from '../services/adaptive.ts';
 import { listMessages } from '../services/chat.ts';
@@ -433,6 +441,93 @@ export async function registerRoutes(app: FastifyInstance) {
 
     await setWeeklyReviewEmails(u as string, false);
     return { ok: true as const, message: 'You will not get the weekly review by email again.' };
+  });
+
+  /**
+   * Mail arriving at the domain, posted here by Resend.
+   *
+   * Registered inside its own scope so it can keep the raw body: Fastify hands
+   * routes a parsed object, and a signature computed over a re-serialised one
+   * will not match — key order and whitespace are not preserved by a round trip
+   * through JSON.parse. Content-type parsers are per-plugin in Fastify, so this
+   * affects nothing but the route below it.
+   */
+  await app.register(async (scope) => {
+    scope.addContentTypeParser(
+      'application/json',
+      { parseAs: 'string' },
+      (request, body, done) => {
+        (request as unknown as { rawBody: string }).rawBody = body as string;
+        try {
+          done(null, JSON.parse(body as string));
+        } catch (error) {
+          done(error as Error, undefined);
+        }
+      },
+    );
+
+    scope.post('/email/inbound', async (request, reply) => {
+      const secret = env.email.webhookSecret;
+      // No secret means no way to tell Resend from anyone else who found this
+      // URL, and a public write endpoint that cannot authenticate its caller
+      // should refuse rather than trust.
+      if (!secret) {
+        request.log.warn('inbound email received but RESEND_WEBHOOK_SECRET is not set');
+        return reply.status(503).send({ error: 'Inbound email is not configured.' });
+      }
+
+      const headers = request.headers;
+      const verified = verifyWebhookSignature({
+        id: headers['svix-id'] as string | undefined,
+        timestamp: headers['svix-timestamp'] as string | undefined,
+        signature: headers['svix-signature'] as string | undefined,
+        body: (request as unknown as { rawBody: string }).rawBody,
+        secret,
+      });
+      if (!verified) {
+        request.log.warn({ ip: request.ip }, 'inbound email failed signature verification');
+        return reply.status(401).send({ error: 'Bad signature.' });
+      }
+
+      const event = request.body;
+      // Resend posts delivery events down the same pipe. Anything that is not a
+      // received message is acknowledged and dropped — a 4xx would only make
+      // Svix retry something we are never going to want.
+      if (!isReceivedEmail(event)) return { ok: true as const, stored: false };
+
+      const from = parseAddress(event.data.from);
+      const id = await recordSupportEmail({
+        providerId: event.data.email_id,
+        fromEmail: from.email,
+        fromName: from.name,
+        toEmail: (event.data.to?.[0] ?? '').toLowerCase(),
+        subject: event.data.subject ?? null,
+        attachments: event.data.attachments?.length ?? 0,
+        receivedAt: event.created_at ? new Date(event.created_at) : new Date(),
+      });
+
+      // Null means we have seen this message before, so there is no body to go
+      // and fetch and nothing to update.
+      if (id === null) return { ok: true as const, stored: false };
+
+      /*
+       * The metadata is already safe on disk; the body is best effort from here.
+       *
+       * Deliberately not allowed to fail the request: a non-2xx would have Svix
+       * redeliver a message that is already stored, and the redelivery would hit
+       * the same failing fetch. Better a row with a visible gap in it than a
+       * retry loop and an email nobody knows arrived.
+       */
+      try {
+        await attachBody(id, await fetchReceivedEmail(event.data.email_id));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await recordBodyFailure(id, message);
+        request.log.error({ err: error, emailId: event.data.email_id }, 'could not fetch body');
+      }
+
+      return { ok: true as const, stored: true };
+    });
   });
 }
 

@@ -80,8 +80,15 @@ services:
       # on a domain verified with Resend; the sandbox sender only ever delivers
       # to the address that owns the account.
       RESEND_API_KEY: ${RESEND_API_KEY:-}
-      EMAIL_FROM: ${EMAIL_FROM:-Day So Far <hello@daysofar.com>}
-      EMAIL_REPLY_TO: ${EMAIL_REPLY_TO:-}
+      EMAIL_FROM: ${EMAIL_FROM:-Day So Far <notifications@daysofar.com>}
+      # Replies land in the support inbox rather than at the sending address.
+      # Several of these messages end with "reply to this email", so this has to
+      # be an address that is actually received — see RESEND_WEBHOOK_SECRET.
+      EMAIL_REPLY_TO: ${EMAIL_REPLY_TO:-support@daysofar.com}
+      # Signs the inbound webhook, from the Resend webhooks dashboard. Unset
+      # means POST /email/inbound refuses everything, which is the only safe
+      # default for a public endpoint whose whole authentication is a signature.
+      RESEND_WEBHOOK_SECRET: ${RESEND_WEBHOOK_SECRET:-}
       # Caddy reaches this over the private Docker network, so X-Forwarded-For is
       # believed only when the immediate peer is a private address. Without it
       # the rate limiter sees Caddy on every request and buckets the whole

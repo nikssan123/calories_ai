@@ -668,6 +668,39 @@ export const AdminUser = z.object({
 });
 export type AdminUser = z.infer<typeof AdminUser>;
 
+/**
+ * A message somebody sent to the support address.
+ *
+ * Admin-only, and shaped as a record rather than a conversation: there is no
+ * reply field, because replying is what a mail client is for. `user_id` is the
+ * account matched at the moment it arrived — the question support is actually
+ * asking is who this was when they wrote in, not who owns that address today.
+ */
+export const SupportEmail = z.object({
+  id: z.string().uuid(),
+  from_email: z.string(),
+  /** The display name the sender chose. Only the address beside it is a fact. */
+  from_name: z.string().nullable(),
+  to_email: z.string(),
+  subject: z.string().nullable(),
+  text_body: z.string().nullable(),
+  html_body: z.string().nullable(),
+  /** Why the body is missing, when it is. The webhook carries metadata only. */
+  body_error: z.string().nullable(),
+  user_id: z.string().uuid().nullable(),
+  user_name: z.string().nullable(),
+  attachments: z.number(),
+  received_at: z.string(),
+  handled_at: z.string().nullable(),
+});
+export type SupportEmail = z.infer<typeof SupportEmail>;
+
+export const SupportInbox = z.object({
+  emails: z.array(SupportEmail),
+  unhandled: z.number(),
+});
+export type SupportInbox = z.infer<typeof SupportInbox>;
+
 export const TableSummary = z.object({
   name: z.string(),
   rows: z.number(),

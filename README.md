@@ -265,6 +265,31 @@ fires on every commute is one people filter — which costs it its value on the 
 matters. `known_devices` is separate from `auth_sessions` for the same reason: signing
 out and back in must not report itself as a new device.
 
+### Receiving
+
+Several of these messages end with "reply to this email", so the domain receives as well
+as sends. Resend takes delivery of anything addressed to it, and POSTs each message to
+`POST /email/inbound`, where it lands in **Admin → Inbox** next to the account it came
+from. Kept locally rather than left in the provider's dashboard for the same reason the
+send log is: a support inbox that lives somewhere else is one nobody reads.
+
+That endpoint is public and writable, which makes it the most exposed surface in the
+product — the Svix signature is the only thing between it and anyone who finds the URL.
+It is verified against `RESEND_WEBHOOK_SECRET` with a five-minute replay window, and
+**with no secret set it refuses everything** rather than trusting an unauthenticated
+caller. Webhooks carry metadata only, so the body is a second request; if that fails the
+message is still stored, with the reason in `body_error`, because "somebody wrote in and
+we lost it" is the outcome worth avoiding.
+
+The panel renders every message as plain text even when the sender sent HTML. This is a
+screen for reading mail from strangers in an admin session, and rendering their markup
+would mean loading whatever they linked to. Replying hands off to your own mail client
+via `mailto:` — threading, drafts and search are things it already does well.
+
+To turn it on: add the MX record Resend gives you on the **Receiving** tab, create a
+webhook for the `email.received` event pointing at `https://daysofar.com/api/email/inbound`,
+and put its `whsec_…` secret in `RESEND_WEBHOOK_SECRET`.
+
 Everything sent is recorded in `email_deliveries`, because a self-hosted install has no
 provider dashboard and "did the reset email actually go out?" is the first question
 asked when someone cannot get in. Its unique `idempotency_key` is also what stops the
@@ -488,10 +513,14 @@ cannot host the agent itself.
 
 ## Deploying to a server
 
-Runs at **https://eat.webwork.bg** on the same VPS as the trading bot, using the
-same pattern: its own compose stack in `/srv/calorytracker`, joined to the shared
-external `web` network, fronted by the Caddy that `site_maker` owns. Nothing
-publishes a port.
+Runs at **https://daysofar.com**, with the API on **api.daysofar.com**, on the same
+VPS as the trading bot and using the same pattern: its own compose stack in
+`/srv/calorytracker`, joined to the shared external `web` network, fronted by the
+Caddy that `site_maker` owns. Nothing publishes a port.
+
+`eat.webwork.bg` still resolves to the same host and is the address this was first
+deployed under; `daysofar.com` is the one the product is named for and the one every
+link in an email points at.
 
 ```
                     internet
@@ -517,18 +546,24 @@ Only the Next.js container is reachable, and it proxies to the API internally.
 
 ### Reverse proxy
 
-The route lives in the **site_maker** repo, not this one:
-`site_maker/caddy/Caddyfile`, block `eat.webwork.bg`. It must stay more specific
-than the `*.webwork.bg` wildcard or requests fall through to the hosting
-app-runner and get a "domain not found" page. Reload Caddy there after changing it.
+The routes live in the **site_maker** repo, not this one:
+`site_maker/caddy/Caddyfile`. Three hostnames land here — `daysofar.com` and
+`api.daysofar.com` to the web and api containers, plus the original
+`eat.webwork.bg`, which must stay more specific than the `*.webwork.bg` wildcard
+or requests fall through to the hosting app-runner and get a "domain not found"
+page. Reload Caddy there after changing it.
+
+A hostname added here also has to be added to `WEB_ORIGINS`, or the browser's
+credentialed requests to the API are refused by CORS.
 
 ### First-time setup on the host
 
 Not automated: it needs secrets and an interactive Claude login, and happens once.
 
 ```bash
-# DNS first — an A record for eat.webwork.bg pointing at the VPS. Caddy issues the
-# certificate over HTTP-01 on first request, which cannot work until DNS resolves.
+# DNS first — A records for daysofar.com and api.daysofar.com pointing at the VPS.
+# Caddy issues the certificate over HTTP-01 on first request, which cannot work
+# until DNS resolves. Email needs its own records; see the Email section above.
 
 git clone <this repo> /srv/calorytracker && cd /srv/calorytracker
 
@@ -552,7 +587,7 @@ docker compose -f docker-compose.prod.yml up -d
 docker compose -f docker-compose.prod.yml logs -f api
 ```
 
-Then open https://eat.webwork.bg, create your account, and let the journal
+Then open https://daysofar.com, create your account, and let the journal
 interview you. Afterwards set `ALLOW_SIGNUP=false` in `.env` and
 `docker compose -f docker-compose.prod.yml up -d api` to close registration.
 

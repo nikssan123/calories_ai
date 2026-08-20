@@ -20,6 +20,7 @@ import {
   setDisabled,
   signOutEverywhere,
 } from '../services/admin.ts';
+import { listSupportEmails, setHandled, unhandledCount } from '../services/support.ts';
 import { getUserContext } from '../services/user.ts';
 import {
   costByDay,
@@ -76,6 +77,32 @@ export async function registerAdminRoutes(app: FastifyInstance) {
   app.get('/admin/overview', async () => buildOverview());
 
   app.get('/admin/migrations', async () => ({ migrations: await appliedMigrations() }));
+
+  // ---- The support inbox ----------------------------------------------------
+
+  /**
+   * What people have written in. Admin-only for the obvious reason: these are
+   * other people's messages, sent to a support address in confidence.
+   */
+  app.get('/admin/support', async (request) => {
+    const raw = (request.query as Record<string, string | undefined>).limit;
+    return {
+      emails: await listSupportEmails(clampInt(raw, 50, 1, 200)),
+      unhandled: await unhandledCount(),
+    };
+  });
+
+  const HandledBody = z.object({ handled: z.boolean() });
+
+  /** Marking one dealt with. Not a delete — an inbox that forgets is a liability. */
+  app.post('/admin/support/:id/handled', async (request, reply) => {
+    const parsed = HandledBody.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: 'Send { handled: boolean }.' });
+
+    const ok = await setHandled((request.params as any).id, parsed.data.handled);
+    if (!ok) return reply.status(404).send({ error: 'Message not found' });
+    return { ok: true, handled: parsed.data.handled };
+  });
 
   // ---- Read-only: the database ---------------------------------------------
 
