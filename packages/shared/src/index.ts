@@ -193,6 +193,25 @@ export const AuthStatus = z.object({
 export type AuthStatus = z.infer<typeof AuthStatus>;
 
 /**
+ * Closing your own account. The password is asked for again rather than taken
+ * from the session, because the session is exactly what an unlocked phone or a
+ * lifted token already has, and this is the one request in the product where
+ * that should not be enough.
+ */
+export const DeleteAccountRequest = z.object({
+  password: z.string().min(1).max(200),
+});
+export type DeleteAccountRequest = z.infer<typeof DeleteAccountRequest>;
+
+/** What was destroyed, so the confirmation can say it rather than imply it. */
+export const AccountDeletion = z.object({
+  food_entries: z.number(),
+  chat_messages: z.number(),
+  photos: z.number(),
+});
+export type AccountDeletion = z.infer<typeof AccountDeletion>;
+
+/**
  * What onboarding still needs before targets mean anything. The journal uses
  * this to decide whether to open in setup mode.
  */

@@ -1,14 +1,16 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { ChatRequest, Meal, ProfileUpdate, RepeatRequest } from '@ct/shared';
+import { ChatRequest, DeleteAccountRequest, Meal, ProfileUpdate, RepeatRequest } from '@ct/shared';
 import { AUTH_HELP, authDescription, hasSubscriptionAuth } from '../ai/client.ts';
 import { generateWeeklyReview } from '../ai/review.ts';
 import { runTurn } from '../ai/run.ts';
+import { deleteAccount } from '../services/admin.ts';
 import { proposeTargets } from '../services/adaptive.ts';
 import { listMessages } from '../services/chat.ts';
 import { mealTemplates, repeatFoodEntry } from '../services/history.ts';
 import { savePhoto, readPhoto, readPhotoById, verifyPhotoUrl } from '../services/photos.ts';
 import { getSecret, PHOTO_URL_SECRET } from '../services/secrets.ts';
+import { SESSION_COOKIE } from '../services/auth.ts';
 import {
   deleteExerciseEntry,
   deleteFoodEntry,
@@ -22,6 +24,7 @@ import { buildCalendar, buildExerciseSummary } from '../services/calendar.ts';
 import { buildDaySummary, buildProgress, currentLocalDate } from '../services/summary.ts';
 import { calculateTargets, setTargets, targetsForDate } from '../services/targets.ts';
 import {
+  authenticate,
   getUser,
   getUserContext,
   markOnboarded,
@@ -36,6 +39,12 @@ import { addDays, dateRange, localDateFor } from '../time.ts';
  */
 const CHAT_LIMIT = { max: 40, timeWindow: '1 hour' };
 const REVIEW_LIMIT = { max: 5, timeWindow: '1 day' };
+
+/**
+ * Not about money: this one verifies a password, which is deliberately slow,
+ * and is the only irreversible thing an account can do to itself.
+ */
+const DELETE_ACCOUNT_LIMIT = { max: 5, timeWindow: '15 minutes' };
 
 export async function registerRoutes(app: FastifyInstance) {
   app.get('/health', async () => ({
@@ -248,6 +257,48 @@ export async function registerRoutes(app: FastifyInstance) {
     if (complete && !profile.is_setup_complete) await markOnboarded(userId);
 
     return getUser(userId);
+  });
+
+  /**
+   * Closing your own account, and everything in it.
+   *
+   * Both stores require this to be reachable from inside the app rather than by
+   * emailing someone, which is why it is a route and not an admin errand. The
+   * password is re-checked here for the reason given on DeleteAccountRequest:
+   * a live session is precisely what a stolen phone already holds.
+   *
+   * Sessions cascade with the user row, so this also signs out every other
+   * device the moment it succeeds — there is nothing left for them to resolve.
+   */
+  app.delete('/account', { config: { rateLimit: DELETE_ACCOUNT_LIMIT } }, async (request, reply) => {
+    const parsed = DeleteAccountRequest.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Enter your password to confirm.' });
+    }
+
+    const userId = request.userId!;
+    const profile = await getUser(userId);
+    // No email means no password to check against — the pre-accounts placeholder
+    // row, and later a provider-only sign-in. Refusing is the safe answer while
+    // there is no second way to prove who is asking.
+    if (!profile.email) {
+      return reply.status(400).send({ error: 'This account cannot be deleted from here.' });
+    }
+    if ((await authenticate(profile.email, parsed.data.password)) !== userId) {
+      return reply.status(403).send({ error: 'That password is not correct.' });
+    }
+
+    const summary = await deleteAccount(userId);
+    if (!summary) return reply.status(404).send({ error: 'Account not found' });
+
+    reply.clearCookie(SESSION_COOKIE, { path: '/' });
+    // Counts, not the file paths the admin view gets: the server's own layout
+    // is not something to hand back to a client.
+    return {
+      food_entries: summary.food_entries,
+      chat_messages: summary.chat_messages,
+      photos: summary.photos.length,
+    };
   });
 
   app.get('/onboarding', async (request) => {

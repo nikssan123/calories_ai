@@ -323,6 +323,8 @@ export default function SetupPage() {
         </button>
       </InsetGroup>
 
+      <DeleteAccount email={profile.email} />
+
       </div>
 
       <Button
@@ -339,6 +341,94 @@ export default function SetupPage() {
       </Button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Closing the account, from inside the product.
+ *
+ * Deliberately not a modal: the app has no dialog primitive, and a destructive
+ * confirmation is the last place to introduce one — a focus trap that misbehaves
+ * on a phone would sit between someone and their own data. Expanding in place
+ * costs a tap, shows the consequences next to the button, and cannot trap
+ * anything.
+ *
+ * The password field is the real gate; the disclosure is only there so the
+ * control cannot be hit by accident.
+ */
+function DeleteAccount({ email }: { email: string | null }) {
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  async function confirm() {
+    setDeleting(true);
+    try {
+      await api.deleteAccount(password);
+      // Everything this session could read is gone, so a reload is both the
+      // simplest correct next state and the only one that cannot show stale
+      // data: AuthGate re-runs, finds no session, and lands on /login.
+      window.location.replace('/login');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not delete the account.');
+      setDeleting(false);
+    }
+  }
+
+  if (!email) return null;
+
+  return (
+    <InsetGroup title="Danger zone">
+      {!open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="text-destructive w-full px-4 py-3 text-left text-[15px]"
+        >
+          Delete account
+        </button>
+      ) : (
+        <div className="flex flex-col gap-3 px-4 py-3.5">
+          <p className="text-muted-foreground text-[13px] leading-relaxed">
+            This erases every meal, photo, weight and conversation on{' '}
+            <span className="text-foreground font-medium">{email}</span>, on every device, and
+            cannot be undone. Enter your password to confirm.
+          </p>
+          <Input
+            type="password"
+            value={password}
+            autoFocus
+            placeholder="Password"
+            autoComplete="current-password"
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && password) void confirm();
+            }}
+            className={FIELD}
+          />
+          <div className="flex gap-2">
+            <Button
+              variant="destructive"
+              disabled={!password || deleting}
+              onClick={() => void confirm()}
+              className="flex-1"
+            >
+              {deleting ? 'Deleting…' : 'Delete everything'}
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={deleting}
+              onClick={() => {
+                setOpen(false);
+                setPassword('');
+              }}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+    </InsetGroup>
   );
 }
 

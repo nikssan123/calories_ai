@@ -1,4 +1,5 @@
 import type {
+  AccountDeletion,
   AdaptiveProposal,
   Calendar,
   AdminOverview,
@@ -113,6 +114,13 @@ export function createApiClient({
       request<AuthStatus>('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
 
     logout: () => request<AuthStatus>('/auth/logout', { method: 'POST' }),
+
+    /** Irreversible, and takes every other signed-in device with it. */
+    deleteAccount: (password: string) =>
+      request<AccountDeletion>('/account', {
+        method: 'DELETE',
+        body: JSON.stringify({ password }),
+      }),
 
     onboarding: () => request<OnboardingState>('/onboarding'),
 

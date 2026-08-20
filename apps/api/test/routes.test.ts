@@ -629,3 +629,116 @@ describe('GET /photos/:id — signed links', () => {
     expect(message.photo_url).toBeNull();
   });
 });
+
+/**
+ * Closing your own account. Both stores require this to exist inside the app,
+ * and it is the one route where getting the authorisation wrong is unrecoverable
+ * — so the password check gets more attention here than the happy path does.
+ */
+describe('DELETE /account', () => {
+  const PASSWORD = 'correct-horse';
+
+  /** A real account with a real password hash, which `createUser` does not make. */
+  async function accountWithPassword(email: string): Promise<{ id: string; cookie: string }> {
+    const { createAccount } = await import('../src/services/user.ts');
+    const { createSession } = await import('../src/services/auth.ts');
+    const id = await createAccount(email, PASSWORD, 'Test', 'Europe/Sofia');
+    const { token } = await createSession(id);
+    return { id, cookie: `ct_session=${token}` };
+  }
+
+  it('erases the account and everything it owned', async () => {
+    const account = await accountWithPassword('closing@example.com');
+    const { savePhoto } = await import('../src/services/photos.ts');
+    const photo = await savePhoto(account.id, 'image/png', 'iVBORw0KGgo=');
+    await insertMessage(account.id, 'user', 'a meal', photo.id);
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/account',
+      headers: { cookie: account.cookie },
+      payload: { password: PASSWORD },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ chat_messages: 1, photos: 1 });
+    expect(await query('SELECT * FROM users WHERE id = $1', [account.id])).toEqual([]);
+  });
+
+  it('signs out every other device, because sessions go with the row', async () => {
+    const account = await accountWithPassword('sessions@example.com');
+    const { createSession } = await import('../src/services/auth.ts');
+    const elsewhere = await createSession(account.id);
+
+    await app.inject({
+      method: 'DELETE',
+      url: '/account',
+      headers: { cookie: account.cookie },
+      payload: { password: PASSWORD },
+    });
+
+    const after = await app.inject({
+      method: 'GET',
+      url: '/profile',
+      headers: { authorization: `Bearer ${elsewhere.token}` },
+    });
+    expect(after.statusCode).toBe(401);
+  });
+
+  it('refuses the wrong password and keeps the account', async () => {
+    const account = await accountWithPassword('safe@example.com');
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/account',
+      headers: { cookie: account.cookie },
+      payload: { password: 'wrong-horse' },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(await query('SELECT id FROM users WHERE id = $1', [account.id])).toHaveLength(1);
+  });
+
+  it('refuses a request with no password at all', async () => {
+    const account = await accountWithPassword('nopass@example.com');
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/account',
+      headers: { cookie: account.cookie },
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(await query('SELECT id FROM users WHERE id = $1', [account.id])).toHaveLength(1);
+  });
+
+  it('refuses an anonymous caller', async () => {
+    const anon = await anonymousApp();
+    try {
+      const response = await anon.inject({
+        method: 'DELETE',
+        url: '/account',
+        payload: { password: PASSWORD },
+      });
+      expect(response.statusCode).toBe(401);
+    } finally {
+      await anon.close();
+    }
+  });
+
+  /** Someone else's correct password must not delete the caller's account, nor
+      theirs — the check is that the credential belongs to *this* session. */
+  it('refuses another account’s password', async () => {
+    const mine = await accountWithPassword('mine@example.com');
+    await accountWithPassword('theirs@example.com');
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/account',
+      headers: { cookie: mine.cookie },
+      payload: { password: 'a-different-password' },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(await query('SELECT id FROM users')).toHaveLength(4);
+  });
+});
