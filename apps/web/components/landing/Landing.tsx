@@ -2,14 +2,12 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowRight, ArrowUpRight, Camera, MessageSquareText, RotateCcw } from 'lucide-react';
+import { ArrowRight, Camera, MessageSquareText, RotateCcw } from 'lucide-react';
 import { useAuth } from '@/components/AuthGate';
 import { Logo } from '@/components/Logo';
 import { HeroDemo } from '@/components/landing/HeroDemo';
 import { Reveal } from '@/components/landing/Reveal';
 import { cn } from '@/lib/utils';
-
-const REPO = 'https://github.com/nikssan123/calories_ai';
 
 /**
  * The public face of the app, served at `/` to anyone without a session.
@@ -49,7 +47,7 @@ export function Landing() {
         <AdaptiveTarget />
         <WeeklyRead />
         <Details />
-        <OpenSource />
+        <Privacy />
         <Closing start={start} />
       </main>
 
@@ -133,8 +131,8 @@ function Header({ start }: { start: Cta }) {
           <a href="#target" className="hover:text-foreground transition-colors">
             Your target
           </a>
-          <a href="#open" className="hover:text-foreground transition-colors">
-            Open source
+          <a href="#privacy" className="hover:text-foreground transition-colors">
+            Your data
           </a>
         </nav>
 
@@ -193,7 +191,7 @@ function Hero({ start }: { start: Cta }) {
               </a>
             </div>
             <p className="text-footnote text-muted-foreground mt-5">
-              Free and open source. Runs on your own server.
+              No ads, no trackers, nothing sold on.
             </p>
           </Reveal>
         </div>
@@ -476,11 +474,11 @@ function Details() {
   );
 }
 
-/* --------------------------------------------------------------- open source */
+/* ------------------------------------------------------------------- privacy */
 
-function OpenSource() {
+function Privacy() {
   return (
-    <Section id="open">
+    <Section id="privacy">
       <Reveal>
         <div
           className="relative overflow-hidden rounded-[2rem] px-8 py-14 sm:px-12 sm:py-16"
@@ -492,22 +490,13 @@ function OpenSource() {
           }}
         >
           <h2 className="text-section-title max-w-xl text-balance text-white">
-            Your meals live in your database.
+            Your meals stay yours.
           </h2>
           <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-white/80">
-            Nutrition is open source under Apache 2.0. There is no third-party sign-in, no
-            analytics, no advertising and nothing to sell — your meals are rows in a Postgres
-            you own. Run it on a five-dollar VPS, or on the laptop under your desk.
+            There is no third-party sign-in, no analytics, no advertising and nothing to
+            sell. Your meals are rows in a database that exists to answer one question —
+            what did you eat today — and nothing else.
           </p>
-          <a
-            href={REPO}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-8 inline-flex h-11 items-center gap-1.5 rounded-full bg-white px-5 text-[15px] font-medium text-[#171614] transition-transform active:scale-[0.97]"
-          >
-            Read the source
-            <ArrowUpRight size={17} strokeWidth={2.2} />
-          </a>
         </div>
       </Reveal>
     </Section>
@@ -545,15 +534,7 @@ function Footer() {
           <Link href="/login" className="hover:text-foreground transition-colors">
             Sign in
           </Link>
-          <a
-            href={REPO}
-            target="_blank"
-            rel="noreferrer"
-            className="hover:text-foreground transition-colors"
-          >
-            GitHub
-          </a>
-          <span>Apache-2.0</span>
+          <span>© {new Date().getFullYear()} Nutrition</span>
         </nav>
       </div>
     </footer>
