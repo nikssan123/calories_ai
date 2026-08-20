@@ -1,9 +1,15 @@
 'use client';
 
-import { useRef, useState } from 'react';
-import { ArrowUp, Camera, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowUp, Camera, ImageIcon, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 
 export interface ComposerPayload {
@@ -72,6 +78,27 @@ function readDataUrl(file: File): Promise<string> {
   });
 }
 
+/**
+ * Whether the device has a camera app to hand the photo off to. Only a phone or
+ * a tablet does: a desktop browser ignores `capture` and opens the same file
+ * dialog either way, so offering the choice there would be two menu items that
+ * do the same thing. Starts false so the server-rendered markup is the plain
+ * button, and settles on the first client effect.
+ */
+function useHasCameraApp() {
+  const [hasCameraApp, setHasCameraApp] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia('(pointer: coarse)');
+    const apply = () => setHasCameraApp(media.matches);
+    apply();
+    media.addEventListener('change', apply);
+    return () => media.removeEventListener('change', apply);
+  }, []);
+
+  return hasCameraApp;
+}
+
 export function Composer({
   onSend,
   disabled,
@@ -83,8 +110,10 @@ export function Composer({
   const [photo, setPhoto] = useState<{ dataUrl: string; mediaType: (typeof ACCEPTED)[number] } | null>(
     null,
   );
-  const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const libraryRef = useRef<HTMLInputElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
+  const hasCameraApp = useHasCameraApp();
 
   const canSend = (text.trim().length > 0 || photo !== null) && !disabled;
 
@@ -99,12 +128,16 @@ export function Composer({
     });
     setText('');
     setPhoto(null);
-    if (fileRef.current) fileRef.current.value = '';
     if (textRef.current) textRef.current.style.height = 'auto';
   }
 
   async function onPickFile(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const input = event.target;
+    const file = input.files?.[0];
+    // Emptied straight away, so that re-picking the photo just removed still
+    // fires a change, and so the two inputs never disagree about what is
+    // attached. The `File` above survives it.
+    input.value = '';
     if (!file) return;
 
     const prepared = await prepare(file);
@@ -113,11 +146,24 @@ export function Composer({
     // camera button is simply broken.
     if (!prepared) {
       toast.error('That image format is not supported. Try a JPEG or PNG.');
-      if (fileRef.current) fileRef.current.value = '';
       return;
     }
     setPhoto(prepared);
   }
+
+  const photoButton = (onClick?: () => void) => (
+    <Button
+      type="button"
+      size="icon"
+      variant="ghost"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label="Add a photo"
+      className="text-muted-foreground size-9 shrink-0 rounded-full"
+    >
+      <Camera size={22} strokeWidth={1.9} />
+    </Button>
+  );
 
   return (
     <div
@@ -138,10 +184,7 @@ export function Composer({
           <button
             type="button"
             aria-label="Remove photo"
-            onClick={() => {
-              setPhoto(null);
-              if (fileRef.current) fileRef.current.value = '';
-            }}
+            onClick={() => setPhoto(null)}
             className="bg-foreground/70 text-background absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full backdrop-blur"
           >
             <X size={12} strokeWidth={3} />
@@ -150,26 +193,55 @@ export function Composer({
       )}
 
       <div className="flex items-end gap-2">
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          onClick={() => fileRef.current?.click()}
-          disabled={disabled}
-          aria-label="Add a photo"
-          className="text-muted-foreground size-9 shrink-0 rounded-full"
-        >
-          <Camera size={22} strokeWidth={1.9} />
-        </Button>
+        {hasCameraApp ? (
+          // The camera and the library are two different intents, and a phone
+          // cannot show both from one input: with `capture` it opens the camera
+          // and nothing else, without it the picker it offers varies by phone.
+          // So ask first, then open the input that does exactly that one thing.
+          <DropdownMenu>
+            <DropdownMenuTrigger render={photoButton()} />
+            <DropdownMenuContent
+              side="top"
+              align="start"
+              sideOffset={8}
+              className="w-auto min-w-44"
+            >
+              <DropdownMenuItem
+                onClick={() => cameraRef.current?.click()}
+                className="gap-2.5 px-2 py-2 text-[0.9375rem]"
+              >
+                <Camera />
+                Take a photo
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => libraryRef.current?.click()}
+                className="gap-2.5 px-2 py-2 text-[0.9375rem]"
+              >
+                <ImageIcon />
+                Choose a photo
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          photoButton(() => libraryRef.current?.click())
+        )}
         <input
-          ref={fileRef}
+          ref={cameraRef}
+          type="file"
+          accept={ACCEPTED.join(',')}
+          // `environment` is the rear camera — the one pointed at the plate.
+          capture="environment"
+          onChange={(e) => void onPickFile(e)}
+          className="hidden"
+        />
+        <input
+          ref={libraryRef}
           type="file"
           accept={ACCEPTED.join(',')}
           /*
-           * Deliberately no `capture`: it forces the camera and hides everything
-           * else, so a meal already photographed — or a screenshot of a menu, or
-           * a packet's nutrition label — could not be logged at all. Without it
-           * the phone offers its own picker, camera included.
+           * Deliberately no `capture` here: this is the half of the choice that
+           * has to reach everything already on the phone — a meal photographed
+           * earlier, a screenshot of a menu, a packet's nutrition label.
            */
           onChange={(e) => void onPickFile(e)}
           className="hidden"
