@@ -74,15 +74,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, [loading, status, onLogin, isPublic, router]);
 
   const signOut = useCallback(async () => {
-    await api.logout();
-    setStatus({
-      authenticated: false,
-      profile: null,
-      signup_allowed: true,
-      has_accounts: false,
-      is_admin: false,
-    });
-    router.replace('/login');
+    // Logout answers with the signed-out status rather than a bare ack, so the
+    // landing page we are about to show reads the server's real `signup_allowed`
+    // instead of an optimistic guess that would offer a stranger a closed door.
+    setStatus(await api.logout());
+    // Out through the front door, not the side one: `/` is the landing page to
+    // anyone without a session, which is a better place to be left than a bare
+    // sign-in form you did not ask for.
+    router.replace('/');
   }, [router]);
 
   // Avoid flashing the app shell before we know who this is.

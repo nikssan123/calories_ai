@@ -56,7 +56,10 @@ export function createApiClient({ baseUrl, token, fetchImpl }: ApiClientOptions)
 
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(init.headers);
-    headers.set('content-type', 'application/json');
+    // Only claim a JSON body when one is actually being sent. A bodyless POST
+    // or DELETE labelled `application/json` is rejected by the API before it
+    // reaches the route.
+    if (init.body !== undefined) headers.set('content-type', 'application/json');
     if (token) headers.set('authorization', `Bearer ${token}`);
 
     const res = await doFetch(`${root}${path}`, {

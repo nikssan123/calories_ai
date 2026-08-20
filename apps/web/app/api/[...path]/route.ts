@@ -17,19 +17,23 @@ async function forward(request: Request, path: string[]) {
   const target = `${API_URL}/${path.join('/')}${url.search}`;
 
   const headers = new Headers();
-  const contentType = request.headers.get('content-type');
-  if (contentType) headers.set('content-type', contentType);
   // Pass the caller's session through to the API.
   const cookie = request.headers.get('cookie');
   if (cookie) headers.set('cookie', cookie);
 
-  const hasBody = request.method !== 'GET' && request.method !== 'HEAD';
+  const canHaveBody = request.method !== 'GET' && request.method !== 'HEAD';
+  const requestBody = canHaveBody ? await request.text() : '';
+  // A bodyless request must arrive at the API bodyless and unlabelled: an empty
+  // string still makes fetch stamp a content-type on the way out, and the API
+  // rejects a content-type with nothing behind it.
+  const contentType = request.headers.get('content-type');
+  if (requestBody && contentType) headers.set('content-type', contentType);
 
   try {
     const response = await fetch(target, {
       method: request.method,
       headers,
-      body: hasBody ? await request.text() : undefined,
+      body: requestBody || undefined,
       cache: 'no-store',
       redirect: 'manual',
     });
