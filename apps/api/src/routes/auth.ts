@@ -1,7 +1,8 @@
-import type { FastifyInstance, FastifyReply } from 'fastify';
-import { Credentials, SignupRequest } from '@ct/shared';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { Credentials, SESSION_TRANSPORT_HEADER, SignupRequest } from '@ct/shared';
 import { env } from '../env.ts';
 import {
+  bearerToken,
   createSession,
   destroySession,
   SESSION_COOKIE,
@@ -41,6 +42,21 @@ function setSessionCookie(reply: FastifyReply, token: string, expiresAt: Date) {
     path: '/',
     expires: expiresAt,
   });
+}
+
+/**
+ * The raw token, but only for a client that asked to carry it itself. A browser
+ * gets `undefined` and keeps using the httpOnly cookie set alongside it, which
+ * is the whole point: a token this endpoint returned in JSON is a token the
+ * page's own scripts — and anything injected into them — can read.
+ */
+function tokenForBody(request: FastifyRequest, token: string): string | undefined {
+  return request.headers[SESSION_TRANSPORT_HEADER] === 'bearer' ? token : undefined;
+}
+
+/** The session this request is authenticating with, whichever way it arrived. */
+function requestToken(request: FastifyRequest): string | undefined {
+  return bearerToken(request.headers.authorization) ?? request.cookies[SESSION_COOKIE];
 }
 
 export async function registerAuthRoutes(app: FastifyInstance) {
@@ -86,6 +102,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       signup_allowed: false,
       has_accounts: true,
       is_admin: await isAdmin(userId),
+      token: tokenForBody(request, token),
     };
   });
 
@@ -115,11 +132,12 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       signup_allowed: false,
       has_accounts: true,
       is_admin: await isAdmin(userId),
+      token: tokenForBody(request, token),
     };
   });
 
   app.post('/auth/logout', async (request, reply) => {
-    const token = request.cookies[SESSION_COOKIE];
+    const token = requestToken(request);
     if (token) await destroySession(token);
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
     return {

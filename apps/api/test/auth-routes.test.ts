@@ -178,3 +178,115 @@ describe('POST /auth/logout', () => {
     expect(response.statusCode).toBe(200);
   });
 });
+
+/**
+ * The native app has no cookie jar, so it asks for the session token and sends
+ * it back as a bearer. Both transports resolve to the same session row; what
+ * differs is only who is trusted to hold the raw value.
+ */
+describe('bearer sessions', () => {
+  const BEARER = { 'x-session-transport': 'bearer' };
+
+  async function signUpAsApp(): Promise<string> {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/signup',
+      payload: CREDENTIALS,
+      headers: BEARER,
+    });
+    return response.json().token;
+  }
+
+  it('returns the token to a client that asks to carry it', async () => {
+    const token = await signUpAsApp();
+    expect(typeof token).toBe('string');
+    expect(token.length).toBeGreaterThan(20);
+  });
+
+  /** The cookie is httpOnly so that script cannot read it; echoing the same
+      value into the body for a browser would give that protection away. */
+  it('withholds the token from a client that did not ask', async () => {
+    const response = await app.inject({ method: 'POST', url: '/auth/signup', payload: CREDENTIALS });
+    expect(response.json().token).toBeUndefined();
+    expect(sessionCookie(response)).toBeDefined();
+  });
+
+  it('returns the token on login too', async () => {
+    await app.inject({ method: 'POST', url: '/auth/signup', payload: CREDENTIALS });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: CREDENTIALS,
+      headers: BEARER,
+    });
+    expect(typeof response.json().token).toBe('string');
+  });
+
+  it('authenticates a protected route with no cookie at all', async () => {
+    const token = await signUpAsApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: '/profile',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().email).toBe(CREDENTIALS.email);
+  });
+
+  it('resolves /auth/me the same way a cookie does', async () => {
+    const token = await signUpAsApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: '/auth/me',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(response.json()).toMatchObject({ authenticated: true, profile: { email: CREDENTIALS.email } });
+  });
+
+  it('logs out the session the bearer names', async () => {
+    const token = await signUpAsApp();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/logout',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.json().authenticated).toBe(false);
+    expect(await query('SELECT * FROM auth_sessions')).toEqual([]);
+
+    const after = await app.inject({
+      method: 'GET',
+      url: '/profile',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(after.statusCode).toBe(401);
+  });
+
+  it.each([
+    ['a token that was never issued', 'Bearer not-a-real-token'],
+    ['a scheme we do not speak', 'Basic bmlrOmh1bnRlcjI='],
+    ['a bearer with nothing behind it', 'Bearer'],
+  ])('is anonymous given %s', async (_label, authorization) => {
+    await signUpAsApp();
+    const response = await app.inject({ method: 'GET', url: '/profile', headers: { authorization } });
+    expect(response.statusCode).toBe(401);
+  });
+
+  /** Ambient credentials lose to deliberate ones — see the hook in app.ts. */
+  it('prefers the bearer when a request carries both', async () => {
+    const token = await signUpAsApp();
+    const second = await app.inject({
+      method: 'POST',
+      url: '/auth/signup',
+      payload: { email: 'other@example.com', password: 'correct-horse' },
+    });
+    const cookie = sessionCookie(second)!.split(';')[0]!;
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/profile',
+      headers: { authorization: `Bearer ${token}`, cookie },
+    });
+    expect(response.json().email).toBe(CREDENTIALS.email);
+  });
+});

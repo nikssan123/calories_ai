@@ -5,7 +5,7 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import { registerRoutes } from './routes/index.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
 import { registerAdminRoutes } from './routes/admin.ts';
-import { resolveSession, SESSION_COOKIE } from './services/auth.ts';
+import { bearerToken, resolveSession, SESSION_COOKIE } from './services/auth.ts';
 import { isDisabled } from './services/admin.ts';
 
 declare module 'fastify' {
@@ -50,7 +50,12 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
 
   /** Resolve the session on every request; route guards decide what to do with it. */
   app.addHook('onRequest', async (request) => {
-    const token = request.cookies[SESSION_COOKIE];
+    // Both transports carry the same kind of token and resolve identically, so
+    // nothing downstream of here knows which one arrived. The header wins when
+    // a request somehow has both, because a client attaches it deliberately
+    // while a browser sends its cookie on every request whether it meant to or
+    // not — the explicit credential is the one that expresses an intent.
+    const token = bearerToken(request.headers.authorization) ?? request.cookies[SESSION_COOKIE];
     const userId = token ? await resolveSession(token) : null;
     // A suspended account is treated as signed out rather than having its
     // sessions merely revoked, so a cookie minted before the suspension — or

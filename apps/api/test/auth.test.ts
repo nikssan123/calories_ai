@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { query } from '../src/db.ts';
 import {
+  bearerToken,
   createSession,
   destroySession,
   hashPassword,
@@ -117,5 +118,29 @@ describe('sessions', () => {
 
   it('names the cookie the client and server agree on', () => {
     expect(SESSION_COOKIE).toBe('ct_session');
+  });
+});
+
+describe('bearerToken', () => {
+  it.each([
+    ['a plain bearer', 'Bearer abc123', 'abc123'],
+    ['a lowercased scheme', 'bearer abc123', 'abc123'],
+    ['a shouted scheme', 'BEARER abc123', 'abc123'],
+    ['surrounding whitespace', '  Bearer abc123  ', 'abc123'],
+    ['a tab separator', 'Bearer\tabc123', 'abc123'],
+    ['base64url punctuation', 'Bearer a-b_c.d', 'a-b_c.d'],
+  ])('reads %s', (_label, header, expected) => {
+    expect(bearerToken(header)).toBe(expected);
+  });
+
+  it.each([
+    ['no header at all', undefined],
+    ['an empty header', ''],
+    ['another scheme', 'Basic bmlrOmh1bnRlcjI='],
+    ['a scheme with no token', 'Bearer'],
+    ['a scheme with only spaces after it', 'Bearer   '],
+    ['a token with a space in it', 'Bearer abc 123'],
+  ])('returns null for %s', (_label, header) => {
+    expect(bearerToken(header)).toBeNull();
   });
 });

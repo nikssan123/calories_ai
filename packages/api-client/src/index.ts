@@ -27,10 +27,11 @@ import type {
   WeeklyReview,
   WeightEntry,
 } from '@ct/shared';
+import { SESSION_TRANSPORT_HEADER } from '@ct/shared';
 
 /**
  * Transport-only client. Uses nothing but `fetch`, so the same file works in
- * Next.js (server and browser) and in React Native later.
+ * Next.js (server and browser) and in React Native.
  */
 
 export class ApiError extends Error {
@@ -46,13 +47,31 @@ export class ApiError extends Error {
 
 export interface ApiClientOptions {
   baseUrl: string;
-  token?: string;
+  /**
+   * The session token, for clients that hold their own. A function is read on
+   * every request, which is what a native app needs: the client is constructed
+   * before anyone has signed in, and the token appears later.
+   */
+  token?: string | (() => string | null | undefined);
+  /**
+   * How this client carries its session. `cookie` (the default) suits the
+   * browser, where the token is httpOnly and deliberately unreadable. `bearer`
+   * asks the API to return the token on signup and login so the caller can
+   * store it — for React Native, in the device keystore.
+   */
+  sessionTransport?: 'cookie' | 'bearer';
   fetchImpl?: typeof fetch;
 }
 
-export function createApiClient({ baseUrl, token, fetchImpl }: ApiClientOptions) {
+export function createApiClient({
+  baseUrl,
+  token,
+  sessionTransport = 'cookie',
+  fetchImpl,
+}: ApiClientOptions) {
   const doFetch = fetchImpl ?? globalThis.fetch;
   const root = baseUrl.replace(/\/$/, '');
+  const currentToken = () => (typeof token === 'function' ? token() : token);
 
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const headers = new Headers(init.headers);
@@ -60,13 +79,18 @@ export function createApiClient({ baseUrl, token, fetchImpl }: ApiClientOptions)
     // or DELETE labelled `application/json` is rejected by the API before it
     // reaches the route.
     if (init.body !== undefined) headers.set('content-type', 'application/json');
-    if (token) headers.set('authorization', `Bearer ${token}`);
+
+    const bearer = currentToken();
+    if (bearer) headers.set('authorization', `Bearer ${bearer}`);
+    // Sent on every request rather than only on the two that answer with a
+    // token, so the server never has to care which endpoint is being called.
+    if (sessionTransport === 'bearer') headers.set(SESSION_TRANSPORT_HEADER, 'bearer');
 
     const res = await doFetch(`${root}${path}`, {
       ...init,
       headers,
-      // The session lives in an httpOnly cookie. React Native will pass a token
-      // via the `token` option instead, which is why both paths are supported.
+      // Harmless where there is no cookie jar, and required where there is: the
+      // browser's session is an httpOnly cookie it will not send otherwise.
       credentials: 'include',
     });
     const text = await res.text();

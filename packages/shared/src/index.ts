@@ -162,6 +162,18 @@ export const SignupRequest = Credentials.extend({
 });
 export type SignupRequest = z.infer<typeof SignupRequest>;
 
+/**
+ * Sent as `x-session-transport: bearer` by a client that holds its own session
+ * token rather than relying on the cookie — which in practice means the native
+ * app, since a phone has no cookie jar worth trusting a 60-day session to.
+ *
+ * It is opt-in rather than the default because the browser must never receive
+ * the raw token. The session cookie is httpOnly precisely so that script on the
+ * page cannot read it, and returning the same value in a JSON body would hand
+ * an XSS the session it was written to protect.
+ */
+export const SESSION_TRANSPORT_HEADER = 'x-session-transport';
+
 export const AuthStatus = z.object({
   authenticated: z.boolean(),
   profile: Profile.nullable(),
@@ -171,6 +183,12 @@ export const AuthStatus = z.object({
   has_accounts: z.boolean(),
   /** Whether this account may open /admin. Decided by ADMIN_EMAILS on the API. */
   is_admin: z.boolean(),
+  /**
+   * The raw session token, returned by signup and login only to a client that
+   * asked for it with SESSION_TRANSPORT_HEADER. Absent everywhere else — the
+   * browser's copy stays in the httpOnly cookie and is never readable here.
+   */
+  token: z.string().optional(),
 });
 export type AuthStatus = z.infer<typeof AuthStatus>;
 

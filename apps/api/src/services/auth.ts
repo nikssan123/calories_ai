@@ -5,7 +5,8 @@ import { query, queryOne } from '../db.ts';
 /**
  * Email + password with server-side sessions. Uses node's built-in scrypt so
  * there is no native dependency to build, and stores only a hash of the session
- * token — the raw value lives exclusively in the user's cookie.
+ * token — the raw value lives exclusively with the client, in the browser's
+ * cookie or a native app's keystore.
  */
 
 const scrypt = promisify(scryptCb) as (
@@ -18,6 +19,17 @@ const KEY_LENGTH = 64;
 const SESSION_DAYS = 60;
 
 export const SESSION_COOKIE = 'ct_session';
+
+/**
+ * The session token from an `Authorization: Bearer` header, or null when the
+ * header is absent or carries a different scheme. Native clients authenticate
+ * this way; browsers keep using the cookie.
+ */
+export function bearerToken(header: string | undefined): string | null {
+  if (!header) return null;
+  const match = /^bearer[ \t]+(\S+)[ \t]*$/i.exec(header.trim());
+  return match?.[1] ?? null;
+}
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16);
