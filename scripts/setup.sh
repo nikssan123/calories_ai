@@ -77,6 +77,12 @@ fi
 step "Running migrations"
 pnpm --filter @ct/api migrate
 
+# The starter recipes are reference data the same way the exercise catalogue is,
+# but they live in a JSON file rather than an INSERT in a migration, so they need
+# a line of their own here. Without it the Cook tab opens empty on a fresh clone.
+step "Seeding the recipe library"
+pnpm --filter @ct/api seed:library
+
 # ---------------------------------------------------------------- done
 cat <<'DONE'
 

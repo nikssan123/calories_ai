@@ -52,4 +52,15 @@ WORKDIR /app/apps/api
 EXPOSE 4000
 # Migrations run on boot: the schema and the code that expects it ship together,
 # so there is no window where a new image is serving against an old schema.
-CMD ["sh", "-c", "pnpm exec tsx src/migrate.ts && pnpm exec tsx src/index.ts"]
+#
+# The recipe library is seeded on the same breath, for the same reason. It is
+# reference data, not somebody's rows — the exercise catalogue gets this for
+# free by being an INSERT inside its migration, but a hundred recipes with
+# nutrition and photographs live in a JSON file that plain SQL cannot read. So
+# it runs here instead. The seed is an upsert keyed on the USDA slug: harmless
+# on every restart, and the way a correction to the data reaches production.
+#
+# Chained with && so a broken seed stops the boot and shows up in the deploy's
+# verification, rather than leaving the Cook tab quietly empty — which is
+# exactly the failure this replaces.
+CMD ["sh", "-c", "pnpm exec tsx src/migrate.ts && pnpm exec tsx src/seed-library.ts && pnpm exec tsx src/index.ts"]

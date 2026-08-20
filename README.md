@@ -47,7 +47,7 @@ packages/
 **Setup**
 
 ```bash
-pnpm setup     # deps, .env, Postgres, migrations
+pnpm setup     # deps, .env, Postgres, migrations, recipe library
 pnpm dev       # API on :4000, web on :3000
 ```
 

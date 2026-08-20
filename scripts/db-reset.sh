@@ -13,8 +13,12 @@ for _ in $(seq 1 60); do
   if [ "$(docker inspect --format='{{.State.Health.Status}}' ct-postgres 2>/dev/null)" = "healthy" ]; then
     echo " ready"
     pnpm --filter @ct/api migrate
+    # Reference data, not somebody's rows — a reset is meant to clear the second
+    # kind and restore the first, which is why the exercise catalogue survives it
+    # and the recipe library has to be put back explicitly.
+    pnpm --filter @ct/api seed:library
     echo
-    echo "Database is empty. Restart the API so it drops its stale connection pool:"
+    echo "Database is back to a fresh install. Restart the API so it drops its stale connection pool:"
     echo "  pnpm dev:api      (or just pnpm dev)"
     exit 0
   fi
