@@ -1,6 +1,3 @@
-import { readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { afterAll, beforeEach, vi } from 'vitest';
 import { pool, query } from '../../src/db.ts';
 import { resetAgent } from './agent-mock.ts';
@@ -26,23 +23,50 @@ vi.mock('@anthropic-ai/claude-agent-sdk', async (importOriginal) => {
 process.env.ANTHROPIC_API_KEY ??= 'test-key-not-used';
 
 /**
- * Reference data that a migration inserted, restored after each truncate.
+ * Reference data, carried across the truncate that would otherwise destroy it.
  *
- * `exercise_types` is a catalogue, not user data — it ships with the app and a
- * fresh deployment gets it from `pnpm migrate` alone. But `TRUNCATE users
- * CASCADE` empties the whole of any table referencing users, not just the rows
- * that pointed at them, so the built-ins go with the custom ones.
+ * `exercise_types` is a catalogue rather than user data — it ships with the app
+ * and a fresh deployment gets it from `pnpm migrate` alone. But it references
+ * `users`, and `TRUNCATE users CASCADE` empties the whole of a referencing
+ * table rather than the rows that pointed at the deleted ones, so the built-ins
+ * go with the custom ones. Dropping that foreign key would fix the tests and
+ * lose real referential integrity, which is the wrong trade.
  *
- * Re-running the migration's own INSERT keeps one source of truth: a catalogue
- * added to in a later migration turns up here without anyone remembering to
- * copy it.
+ * So the rows are read out of the database once and put back after each reset.
+ * Reading them rather than replaying the migration that inserted them is what
+ * makes this maintain itself: a later migration adding fifty more exercises
+ * needs no change here, because by the time the suite starts they are simply
+ * rows in the table like any other. Only a brand-new reference *table* needs a
+ * line below.
  */
-const REFERENCE_MIGRATIONS = ['015_exercise_catalogue.sql'];
+const REFERENCE_TABLES: { table: string; where: string }[] = [
+  { table: 'exercise_types', where: 'user_id IS NULL' },
+];
+
+/**
+ * Captured before the first truncate of the run, when the schema is freshly
+ * migrated and nothing has had a chance to touch it.
+ */
+let reference: Map<string, Record<string, unknown>[]> | null = null;
+
+async function captureReferenceData(): Promise<void> {
+  if (reference) return;
+  reference = new Map();
+  for (const { table, where } of REFERENCE_TABLES) {
+    // Table and predicate are our own constants, never input.
+    reference.set(table, await query(`SELECT * FROM ${table} WHERE ${where}`));
+  }
+}
 
 async function restoreReferenceData(): Promise<void> {
-  const dir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'migrations');
-  for (const file of REFERENCE_MIGRATIONS) {
-    await query(await readFile(join(dir, file), 'utf8'));
+  for (const [table, rows] of reference ?? []) {
+    if (rows.length === 0) continue;
+    const columns = Object.keys(rows[0]!);
+    const params: unknown[] = [];
+    const tuples = rows.map(
+      (row) => `(${columns.map((c) => `$${params.push(row[c])}`).join(', ')})`,
+    );
+    await query(`INSERT INTO ${table} (${columns.join(', ')}) VALUES ${tuples.join(', ')}`, params);
   }
 }
 
@@ -64,6 +88,8 @@ beforeEach(async () => {
   // would outlive the row it came from — harmless until a test asserts that a
   // signature made in one case is rejected in the next.
   forgetSecrets();
+  // Before the truncate, or there would be nothing left to capture.
+  await captureReferenceData();
   await truncateAll();
   await restoreReferenceData();
 });
