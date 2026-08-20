@@ -178,7 +178,7 @@ export function HeroDemo({ className }: { className?: string }) {
                   // itself never remounts — that is the claim being made.
                   style={
                     replied2 && !reduced
-                      ? { animation: 'entry-touched 1500ms cubic-bezier(0.32, 0.72, 0, 1)' }
+                      ? { animation: 'entry-touched 1500ms var(--ease-out)' }
                       : undefined
                   }
                 >
@@ -293,7 +293,7 @@ function StatusStrip({ consumed, className }: { consumed: number; className?: st
   return (
     <header className={cn('border-border shrink-0 border-b px-4 py-2.5', className)}>
       <div className="flex items-baseline justify-between">
-        <p className="tnum text-[15px] font-semibold">
+        <p className="text-figure text-[15px]">
           {consumed.toLocaleString()}
           <span className="text-muted-foreground font-normal">
             {' '}
@@ -304,13 +304,13 @@ function StatusStrip({ consumed, className }: { consumed: number; className?: st
           {(TARGETS.kcal - consumed).toLocaleString()} left
         </p>
       </div>
-      <div className="bg-muted mt-2 h-1 overflow-hidden rounded-full">
+      <div className="bg-muted mt-2 h-[5px] overflow-hidden rounded-full">
         <div
           className="h-full rounded-full"
           style={{
             width: `${pct}%`,
             background: 'var(--calories)',
-            transition: 'width 700ms cubic-bezier(0.34, 1.4, 0.64, 1)',
+            transition: 'width var(--dur-spring) var(--ease-spring)',
           }}
         />
       </div>
@@ -325,7 +325,7 @@ function DayRail({ consumed }: { consumed: Nutrition | null }) {
     <aside className="border-border hidden flex-col items-center border-l px-5 py-7 lg:flex">
       <CalorieRing consumed={totals.kcal} target={TARGETS.kcal} size={148} strokeWidth={12} />
       <p className="tnum text-muted-foreground mt-3 text-sm">
-        <span className="text-foreground font-semibold">{totals.kcal.toLocaleString()}</span> of{' '}
+        <span className="text-figure text-foreground">{totals.kcal.toLocaleString()}</span> of{' '}
         {TARGETS.kcal.toLocaleString()} kcal
       </p>
 

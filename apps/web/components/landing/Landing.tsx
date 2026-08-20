@@ -7,6 +7,7 @@ import { useAuth } from '@/components/AuthGate';
 import { Logo } from '@/components/Logo';
 import { HeroDemo } from '@/components/landing/HeroDemo';
 import { Reveal } from '@/components/landing/Reveal';
+import { StoreLinks } from '@/components/landing/StoreLinks';
 import { cn } from '@/lib/utils';
 
 /**
@@ -85,7 +86,7 @@ function Section({
 
 /**
  * The pill. Monochrome on purpose: `--primary` inverts cleanly between themes,
- * and keeping the buttons colourless leaves indigo meaning "calories" wherever
+ * and keeping the buttons colourless leaves the accent meaning "calories" wherever
  * it appears on the page.
  */
 function pill(variant: 'primary' | 'secondary', className?: string) {
@@ -190,9 +191,12 @@ function Hero({ start }: { start: Cta }) {
                 See how it works
               </a>
             </div>
+
             <p className="text-footnote text-muted-foreground mt-5">
               No ads, no trackers, nothing sold on.
             </p>
+
+            <StoreLinks className="mt-2.5" />
           </Reveal>
         </div>
 
@@ -236,7 +240,7 @@ function ThreeWaysIn() {
       <div className="mt-12 grid gap-10 sm:grid-cols-3 sm:gap-8">
         {WAYS.map(({ Icon, title, body }, i) => (
           <Reveal key={title} delay={i * 80}>
-            <Icon size={24} strokeWidth={1.9} style={{ color: 'var(--calories)' }} />
+            <Icon size={24} strokeWidth={1.9} style={{ color: 'var(--calories-text)' }} />
             <h3 className="mt-4 text-[17px] font-semibold tracking-tight">{title}</h3>
             <p className="text-muted-foreground mt-2 text-[15px] leading-relaxed">{body}</p>
           </Reveal>
@@ -290,7 +294,7 @@ function Corrections() {
                     {item.after ? (
                       <>
                         <s>{item.before}</s>{' '}
-                        <span className="font-medium text-[var(--calories)]">{item.after}</span>
+                        <span className="font-medium text-[var(--calories-text)]">{item.after}</span>
                       </>
                     ) : (
                       item.before
@@ -298,7 +302,7 @@ function Corrections() {
                   </span>
                   <span className="tnum text-right text-[15px]">
                     {item.after ? (
-                      <span className="font-medium text-[var(--calories)]">{item.kcalAfter}</span>
+                      <span className="font-medium text-[var(--calories-text)]">{item.kcalAfter}</span>
                     ) : (
                       item.kcal
                     )}
@@ -419,7 +423,7 @@ function WeeklyRead() {
               <div className="tnum flex items-center gap-2 text-[15px] font-medium">
                 <span className="text-muted-foreground">2,290</span>
                 <ArrowRight size={14} className="text-muted-foreground" />
-                <span className="text-[var(--calories)]">2,480 kcal</span>
+                <span className="text-[var(--calories-text)]">2,480 kcal</span>
               </div>
               <p className="text-footnote text-muted-foreground mt-1">
                 From 14 logged days and 6 weigh-ins. Capped at +200.
@@ -483,10 +487,13 @@ function Privacy() {
         <div
           className="relative overflow-hidden rounded-[2rem] px-8 py-14 sm:px-12 sm:py-16"
           style={{
-            // The mark's indigo-to-purple ramp, pinned dark rather than taken
-            // from the tokens: `--calories` lightens in dark mode, and white
-            // text on it would fall under 4.5:1 exactly where it matters most.
-            background: 'linear-gradient(135deg, #0b6349 0%, #12a594 100%)',
+            // The mark's own forest-into-jade ramp, pinned rather than taken
+            // from the tokens: `--calories` lifts to mint in dark mode, and
+            // white on that is barely 2:1. The jade end stops short of the
+            // `--logo-ramp` value for the same reason — white on #12a594 is
+            // 3.1:1, and the body copy runs the width of the panel. Every stop
+            // here clears 4.7:1.
+            background: 'linear-gradient(140deg, #0b6349 0%, #0f7b5c 45%, #0e8174 100%)',
           }}
         >
           <h2 className="text-section-title max-w-xl text-balance text-white">
@@ -517,6 +524,7 @@ function Closing({ start }: { start: Cta }) {
         <Link href={start.href} className={pill('primary', 'mt-8 h-12 px-6 text-[15px]')}>
           {start.label}
         </Link>
+        <StoreLinks className="mt-5" />
       </Reveal>
     </Section>
   );

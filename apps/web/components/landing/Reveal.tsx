@@ -23,8 +23,10 @@ export function useReducedMotion() {
 
 /**
  * The page's one motion idea: eight pixels of rise and a fade as a section
- * arrives, on the ease Apple uses for sheets. Everything moves the same way and
- * nothing moves twice, so the page settles rather than performs.
+ * arrives, on the app's own plain ease — this is chrome settling, not a number
+ * reporting itself, so it gets `--ease-out` and never the spring. Everything
+ * moves the same way and nothing moves twice, so the page settles rather than
+ * performs.
  *
  * Content is never the animation — with `prefers-reduced-motion` this renders
  * the resting state and observes nothing.
@@ -82,7 +84,7 @@ export function Reveal({
           ? undefined
           : {
               transition:
-                'opacity 700ms cubic-bezier(0.32, 0.72, 0, 1), transform 700ms cubic-bezier(0.32, 0.72, 0, 1)',
+                'opacity var(--dur-spring) var(--ease-out), transform var(--dur-spring) var(--ease-out)',
               transitionDelay: `${delay}ms`,
             }
       }
