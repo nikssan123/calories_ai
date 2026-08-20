@@ -45,6 +45,94 @@ function formatInTimeZone(date: Date, timeZone: string): string {
   return formatter.format(date); // en-CA yields YYYY-MM-DD
 }
 
+/**
+ * ISO-shaped hints, resolved against the *user's* zone rather than the server's.
+ *
+ * `new Date()` gets both spellings wrong for our purposes: a bare `2026-08-20`
+ * is read as UTC midnight, and a zoneless `2026-08-20T08:00` as whatever the
+ * container's TZ happens to be. With a 04:00 day start, UTC midnight on the
+ * 20th resolves to the *19th* — so a model that shortened its own timestamp
+ * silently backdated the entry by a day.
+ *
+ * A hint that carries an explicit offset is left alone: the model has already
+ * committed to an instant and it is not ours to reinterpret.
+ */
+function fromIsoHint(hint: string, timeZone: string): Date | null {
+  const match = hint
+    .trim()
+    .match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::\d{2})?(?:\.\d+)?(Z|[+-]\d{2}:?\d{2})?)?$/);
+  if (!match) return null;
+
+  const [, year, month, day, hour, minute, offset] = match;
+  if (offset) {
+    const explicit = new Date(hint.trim());
+    return Number.isNaN(explicit.getTime()) ? null : explicit;
+  }
+
+  // A bare date names a day, not a moment. Noon keeps it inside that day for
+  // every day_start_hour we allow, and on both sides of a DST change.
+  const at = instantFromLocalParts(
+    Number(year),
+    Number(month),
+    Number(day),
+    hour === undefined ? 12 : Number(hour),
+    minute === undefined ? 0 : Number(minute),
+    timeZone,
+  );
+
+  // A date-shaped string that is not a real date ("9999-99-99") rolls over into
+  // some other date instead of failing. If it does not read back as the date we
+  // were asked for, it was nonsense — let the language parser have it.
+  if (Number.isNaN(at.getTime())) return null;
+  return formatInTimeZone(at, timeZone) === `${year}-${month}-${day}` ? at : null;
+}
+
+/** The instant at which `timeZone` reads these wall-clock parts. */
+function instantFromLocalParts(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  timeZone: string,
+): Date {
+  const wall = Date.UTC(year, month - 1, day, hour, minute);
+  // The offset to apply depends on the instant we are looking for, so measure
+  // it at a first guess and correct. The second pass settles the DST edges,
+  // where the guess lands on the far side of a transition.
+  const first = new Date(wall - zoneOffsetMs(new Date(wall), timeZone));
+  return new Date(wall - zoneOffsetMs(first, timeZone));
+}
+
+/** How far ahead of UTC `timeZone` runs at `instant`, in milliseconds. */
+function zoneOffsetMs(instant: Date, timeZone: string): number {
+  if (Number.isNaN(instant.getTime())) return 0;
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone,
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    })
+      .formatToParts(instant)
+      .map((part) => [part.type, part.value]),
+  );
+  const asUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    // en-GB spells midnight "24" in some ICU versions.
+    Number(parts.hour) % 24,
+    Number(parts.minute),
+    Number(parts.second),
+  );
+  return asUtc - instant.getTime();
+}
+
 export function addDays(isoDate: string, days: number): string {
   const [y, m, d] = isoDate.split('-').map(Number);
   const date = new Date(Date.UTC(y!, m! - 1, d!));
@@ -71,8 +159,8 @@ export function dateRange(start: string, end: string): string[] {
 export function resolveWhen(hint: string | undefined, now: Date, ctx: DayContext): Date {
   if (!hint) return now;
 
-  const asIso = new Date(hint);
-  if (!Number.isNaN(asIso.getTime()) && /\d{4}-\d{2}-\d{2}/.test(hint)) return asIso;
+  const iso = fromIsoHint(hint, ctx.timezone);
+  if (iso) return iso;
 
   const text = hint.toLowerCase().trim();
   const dayOffset = text.includes('yesterday') ? -1 : 0;

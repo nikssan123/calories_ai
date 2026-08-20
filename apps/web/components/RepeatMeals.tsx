@@ -56,7 +56,7 @@ export function RepeatMeals({ onLogged }: { onLogged: () => void }) {
   return (
     <InsetGroup
       title="Log again"
-      footer="Logs it at today's time. Correct it in the journal if the portion was different."
+      footer="Logs it at today's time. If the portion was different, just say so in the journal and I'll fix it."
     >
       <div className="p-3">
         <Input

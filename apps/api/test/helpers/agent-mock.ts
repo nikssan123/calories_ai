@@ -45,6 +45,18 @@ export interface AgentCall {
 const script: ScriptedRun[] = [];
 export const agentCalls: AgentCall[] = [];
 
+/**
+ * The system prompt as one string.
+ *
+ * The Anthropic provider passes it as an array so the cache breakpoint can sit
+ * between the stable and volatile halves; these assertions are about what the
+ * model was told, not about where the blocks were cut.
+ */
+export function systemPromptOf(call: AgentCall): string {
+  const prompt = call.options?.systemPrompt;
+  return Array.isArray(prompt) ? prompt.join('\n') : String(prompt ?? '');
+}
+
 /** Queues one run per expected `query()` call, in order. */
 export function scriptAgent(...runs: ScriptedRun[]): void {
   script.length = 0;

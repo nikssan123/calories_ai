@@ -74,3 +74,15 @@ export const MODEL = MODELS.text_log.model;
 
 /** Tool-call round trips per turn. A meal log needs 2–3; the cap is a runaway guard. */
 export const MAX_TURNS = 12;
+
+/**
+ * Messages in one day before the agent session is rotated mid-day.
+ *
+ * The session is normally dropped at the day rollover, which caps an ordinary
+ * day at roughly forty messages. This only catches the day that runs away —
+ * without it a single very long conversation could still reach the context
+ * window and trigger a compaction pass, which costs a model call and quietly
+ * loses fidelity. Set well above a heavy day's logging so it never fires for
+ * anyone using the product normally.
+ */
+export const MAX_SESSION_MESSAGES = 120;

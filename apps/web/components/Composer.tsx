@@ -73,7 +73,7 @@ function readDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(reader.error ?? new Error('Could not read the photo.'));
+    reader.onerror = () => reject(reader.error ?? new Error("I couldn't read that photo — mind trying again?"));
     reader.readAsDataURL(file);
   });
 }
@@ -145,7 +145,7 @@ export function Composer({
     // the picker — but dropping the file without a word would look like the
     // camera button is simply broken.
     if (!prepared) {
-      toast.error('That image format is not supported. Try a JPEG or PNG.');
+      toast.error("I can't read that image format — a JPEG or PNG will work.");
       return;
     }
     setPhoto(prepared);

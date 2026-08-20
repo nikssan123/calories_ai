@@ -2,15 +2,22 @@ import type { ChatAction, ChatResponse, Profile } from '@ct/shared';
 import { queryOne, query as sql } from '../db.ts';
 import type { DayContext } from '../time.ts';
 import { localDateFor } from '../time.ts';
-import { insertMessage, listMessages } from '../services/chat.ts';
+import { countMessagesSince, insertMessage, lastMessageAt, listMessages } from '../services/chat.ts';
+import { listNotes } from '../services/notes.ts';
 import { buildDaySummary } from '../services/summary.ts';
 import { latestWeight } from '../services/log.ts';
 import { latestReview } from '../services/reviews.ts';
 import { missingProfileFields } from '../services/user.ts';
 import { recordUsage } from '../services/usage.ts';
-import { MAX_TURNS } from './client.ts';
+import { MAX_SESSION_MESSAGES, MAX_TURNS } from './client.ts';
 import { createProvider, type AgentMessage, type AgentRequest } from './providers/index.ts';
-import { dayContextPrompt, onboardingPrompt, recentReviewPrompt, STABLE_SYSTEM_PROMPT } from './prompt.ts';
+import {
+  dayContextPrompt,
+  dayRolloverNotice,
+  onboardingPrompt,
+  recentReviewPrompt,
+  STABLE_SYSTEM_PROMPT,
+} from './prompt.ts';
 import { buildNutritionServer, type ToolContext } from './tools.ts';
 
 export interface RunTurnInput {
@@ -56,15 +63,33 @@ export async function runTurn(input: RunTurnInput): Promise<ChatResponse> {
   const review = needsOnboarding ? null : await latestReview(input.userId);
   const reviewContext = review ? `\n\n---\n\n${recentReviewPrompt(review, today)}` : '';
 
+  const notes = await listNotes(input.userId);
+  const previousTurnAt = await lastMessageAt(input.userId);
+  const previousDate = previousTurnAt ? localDateFor(previousTurnAt, input.ctx) : null;
+  const rolledOver = previousDate !== null && previousDate !== today;
+
+  // The rollover notice stays even though the session is dropped below, because
+  // the two defend different things. Closing the session removes yesterday from
+  // the model's context; the notice explains the discontinuity to a model that
+  // may still be resuming — a same-day session that ran past midnight, or the
+  // OpenAI provider, which replays 30 messages of history regardless of what we
+  // do with the session id. Only the text sent to the model carries it; what
+  // gets persisted as the user's message stays exactly what they typed.
+  const promptText = rolledOver
+    ? `${dayRolloverNotice(previousDate, today, input.profile, now)}\n\n${input.text}`
+    : input.text;
+
   const request: AgentRequest = {
     // Photo first: a turn with an image needs a model that can see, whatever
     // else is going on. Setup outranks a plain log because it happens once and
     // is the first thing a new account experiences.
     kind: input.photo ? 'photo_log' : needsOnboarding ? 'setup' : 'text_log',
-    // The stable half is the system prompt; the volatile half (today's numbers,
-    // entry ids) is regenerated every turn.
-    systemPrompt: `${STABLE_SYSTEM_PROMPT}\n\n---\n\n${dayContextPrompt(input.profile, day, currentWeight)}${onboarding}${reviewContext}`,
-    text: input.text,
+    // Kept apart all the way to the provider so the cache breakpoint can land
+    // between them. Onboarding and the review recap sit on the volatile side:
+    // both end, and a prefix that changes when they do is not a stable prefix.
+    staticSystemPrompt: STABLE_SYSTEM_PROMPT,
+    dynamicSystemPrompt: `${dayContextPrompt(input.profile, day, currentWeight, notes)}${onboarding}${reviewContext}`,
+    text: promptText,
     photo: input.photo ? { mediaType: input.photo.mediaType, base64: input.photo.base64 } : null,
     tools,
     toolNames,
@@ -74,7 +99,9 @@ export async function runTurn(input: RunTurnInput): Promise<ChatResponse> {
     maxTurns: MAX_TURNS,
   };
 
-  const sessionId = await loadSessionId(input.userId);
+  const sessionId = await shouldStartFreshSession(input, today, rolledOver)
+    ? null
+    : await loadSessionId(input.userId);
 
   let outcome = await provider.run(request, sessionId);
   if (outcome.staleSession) {
@@ -125,6 +152,52 @@ export async function runTurn(input: RunTurnInput): Promise<ChatResponse> {
 async function loadHistory(userId: string): Promise<AgentMessage[]> {
   const messages = await listMessages(userId, 30);
   return messages.map((m) => ({ role: m.role as AgentMessage['role'], content: m.content }));
+}
+
+/**
+ * Whether this turn should start a new agent session instead of resuming.
+ *
+ * The session used to be resumed for the life of the account, which had two
+ * costs. The visible one was confusion: on 2026-08-20 the model read a photo of
+ * that morning's breakfast as a correction to the entry it had written the
+ * evening before, because the transcript ran straight from one into the other.
+ * The quieter one was the bill — the transcript grows about 450 tokens per turn
+ * and is re-read on every model call inside every turn, so by week three a
+ * conversation nobody had reason to keep was the largest thing in the prompt.
+ *
+ * Almost nothing is lost by dropping it. The day context rebuilds today's
+ * numbers and entry ids every turn, `search_food_history` returns past meals
+ * with their portions, the weekly review is re-injected for ten days, and
+ * standing preferences live in `agent_notes`. What goes is the conversational
+ * thread — and a day boundary is precisely where there is no thread to cut.
+ */
+async function shouldStartFreshSession(
+  input: RunTurnInput,
+  today: string,
+  rolledOver: boolean,
+): Promise<boolean> {
+  if (rolledOver) return true;
+
+  // A guard for the pathological single day, so one very long conversation
+  // cannot reach the context window on its own. Counted rather than estimated:
+  // a message count is exact and cheap, where a token estimate is neither.
+  const turnsToday = await countMessagesSince(input.userId, startOfLocalDay(today, input.ctx));
+  return turnsToday >= MAX_SESSION_MESSAGES;
+}
+
+/**
+ * The instant `localDate` began for this user, so "messages today" is counted
+ * against the same boundary everything else in the product uses.
+ */
+function startOfLocalDay(localDate: string, ctx: DayContext): Date {
+  // Walk back from the first UTC instant of the date until the day-start rule
+  // agrees, which is at most a day either side and avoids re-deriving offsets.
+  let candidate = new Date(`${localDate}T00:00:00Z`);
+  for (let hours = -24; hours <= 24; hours += 1) {
+    const at = new Date(candidate.getTime() + hours * 60 * 60 * 1000);
+    if (localDateFor(at, ctx) === localDate) return at;
+  }
+  return candidate;
 }
 
 async function loadSessionId(userId: string): Promise<string | null> {

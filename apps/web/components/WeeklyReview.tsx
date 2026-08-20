@@ -65,8 +65,9 @@ export function WeeklyReview() {
       ) : (
         <div className="space-y-3 px-4 py-4">
           <p className="text-[15px]">
-            Every Monday morning you'll get a short read on the week — what the numbers
-            actually showed, and whether your target needs to move.
+            Every Monday morning you'll get a short read on how the week went — what the
+            numbers actually showed, and whether your target needs to move. No lectures,
+            just the picture.
           </p>
           <Button
             size="sm"

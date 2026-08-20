@@ -67,7 +67,20 @@ export type TurnKind = 'text_log' | 'photo_log' | 'setup' | 'review';
 export interface AgentRequest {
   /** Which model tier this turn warrants. See `TurnKind`. */
   kind: TurnKind;
-  systemPrompt: string;
+  /**
+   * The system prompt in two halves, because where the split falls is a billing
+   * decision, not a formatting one.
+   *
+   * `staticSystemPrompt` is byte-identical on every turn and is what the prompt
+   * cache can actually hold. `dynamicSystemPrompt` carries the clock, today's
+   * totals and today's entry ids, so it differs every single turn — and while
+   * the two were concatenated into one string, that difference invalidated the
+   * whole prefix and the entire prompt was re-cached each turn (~20k tokens,
+   * measured). Providers that can express a cache breakpoint put it between
+   * these two; providers that cannot just join them.
+   */
+  staticSystemPrompt: string;
+  dynamicSystemPrompt: string;
   /** This turn's user text. */
   text: string;
   photo?: { mediaType: string; base64: string } | null;

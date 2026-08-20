@@ -7,6 +7,7 @@ import { currentLocalDate } from '../src/services/summary.ts';
 import { targetsForDate } from '../src/services/targets.ts';
 import { addDays } from '../src/time.ts';
 import { getUser } from '../src/services/user.ts';
+import { listNotes } from '../src/services/notes.ts';
 import { addMeal, addWeight, createUser, setUserTargets, type TestUser } from './helpers/factories.ts';
 
 /**
@@ -217,6 +218,63 @@ describe('update_food_entry', () => {
     expect(result.isError).toBe(true);
     expect(result.text).toMatch(/get_day/);
   });
+
+  it('says which day it wrote to', async () => {
+    const entry = await addMeal(user, { date: TODAY, kcal: 500 });
+    const { json } = await call('update_food_entry', {
+      entry_id: entry.id,
+      description: null, meal: null, when: null, items: null, confidence: null,
+    });
+    expect(json.local_date).toBe(TODAY);
+    expect(json.moved_from_date).toBeUndefined();
+  });
+
+  it('flags a correction that silently moved the entry to another day', async () => {
+    // The 2026-08-20 failure in miniature: totals come back for a day the model
+    // is not thinking about, and nothing in the reply says so.
+    const entry = await addMeal(user, { date: TODAY, kcal: 500 });
+
+    const { json } = await call('update_food_entry', {
+      entry_id: entry.id,
+      description: null, meal: null, when: 'yesterday 7pm', items: null, confidence: null,
+    });
+
+    expect(json.local_date).toBe('2026-03-09');
+    expect(json.moved_from_date).toBe(TODAY);
+    expect(json.warning).toMatch(/moved from 2026-03-10 to 2026-03-09/);
+  });
+});
+
+describe('the day every write landed on', () => {
+  it('comes back from log_food', async () => {
+    const { json } = await call('log_food', {
+      description: 'Eggs', meal: null, when: null, note: null,
+      confidence: 'medium', items: [ITEM],
+    });
+    expect(json.local_date).toBe(TODAY);
+  });
+
+  it('comes back from log_food even when "when" put it on another day', async () => {
+    const { json } = await call('log_food', {
+      description: 'Eggs', meal: null, when: 'yesterday 8pm', note: null,
+      confidence: 'medium', items: [ITEM],
+    });
+    expect(json.local_date).toBe('2026-03-09');
+  });
+
+  it('comes back from log_exercise', async () => {
+    const { json } = await call('log_exercise', {
+      description: '5km run', duration_min: 30, distance_km: 5,
+      kcal_burned: 300, when: null, confidence: 'low',
+    });
+    expect(json.local_date).toBe(TODAY);
+  });
+
+  it('comes back from delete_entry, so the model knows what it emptied', async () => {
+    const entry = await addMeal(user, { date: '2026-03-09', kcal: 500 });
+    const { json } = await call('delete_entry', { entry_id: entry.id, kind: 'food' });
+    expect(json).toMatchObject({ deleted: true, local_date: '2026-03-09' });
+  });
 });
 
 describe('log_exercise', () => {
@@ -304,6 +362,131 @@ describe('delete_entry', () => {
       kind: 'food',
     });
     expect(result.isError).toBe(true);
+  });
+});
+
+describe('working on a day that is not today', () => {
+  /**
+   * The session is dropped at each rollover, so yesterday is never in context
+   * any more — it is reached through the tools or not at all. These are the
+   * paths a user takes when they say "I forgot to log Sunday's dinner" or
+   * "yesterday's lunch was bigger than you thought".
+   */
+  const YESTERDAY = '2026-03-09';
+
+  it('reads a past day, with the ids needed to change it', async () => {
+    const entry = await addMeal(user, { date: YESTERDAY, kcal: 500, description: 'Sunday roast' });
+
+    const { json } = await call('get_day', { date: YESTERDAY, days_ago: null });
+
+    expect(json.local_date).toBe(YESTERDAY);
+    expect(json.food.map((f: any) => f.id)).toContain(entry.id);
+  });
+
+  it('reaches a past day by days_ago as well as by date', async () => {
+    await addMeal(user, { date: YESTERDAY, kcal: 500 });
+    const { json } = await call('get_day', { date: null, days_ago: 1 });
+    expect(json.local_date).toBe(YESTERDAY);
+  });
+
+  it('corrects an entry on a past day without disturbing its date', async () => {
+    const entry = await addMeal(user, { date: YESTERDAY, kcal: 500 });
+
+    const { json } = await call('update_food_entry', {
+      entry_id: entry.id,
+      description: null, meal: null, when: null,
+      items: [{ ...ITEM, name: 'Bigger portion', kcal: 800 }],
+      confidence: null,
+    });
+
+    expect(json.updated.kcal).toBe(800);
+    expect(json.local_date).toBe(YESTERDAY);
+    // Correcting a number is not moving a day.
+    expect(json.moved_from_date).toBeUndefined();
+    expect(json.day_totals.kcal).toBe(800);
+  });
+
+  it('logs a forgotten meal onto a past day from a bare date', async () => {
+    const { json } = await call('log_food', {
+      description: 'Forgotten dinner', meal: null, when: YESTERDAY, note: null,
+      confidence: 'medium', items: [ITEM],
+    });
+
+    expect(json.local_date).toBe(YESTERDAY);
+    const day = await call('get_day', { date: YESTERDAY, days_ago: null });
+    expect(day.json.food.map((f: any) => f.description)).toContain('Forgotten dinner');
+  });
+
+  it('logs a forgotten meal from plain language', async () => {
+    const { json } = await call('log_food', {
+      description: 'Late dinner', meal: null, when: 'yesterday 8pm', note: null,
+      confidence: 'medium', items: [ITEM],
+    });
+    expect(json.local_date).toBe(YESTERDAY);
+    expect(json.meal).toBe('dinner');
+  });
+
+  it('backdates exercise and weight too', async () => {
+    const ex = await call('log_exercise', {
+      description: 'Sunday walk', duration_min: 40, distance_km: 3,
+      kcal_burned: 150, when: YESTERDAY, confidence: 'low',
+    });
+    expect(ex.json.local_date).toBe(YESTERDAY);
+
+    const wt = await call('log_weight', { weight_kg: 84, when: YESTERDAY });
+    expect(wt.json.local_date).toBe(YESTERDAY);
+  });
+
+  it('deletes something logged on a past day', async () => {
+    const entry = await addMeal(user, { date: YESTERDAY, kcal: 500 });
+    const { json } = await call('delete_entry', { entry_id: entry.id, kind: 'food' });
+    expect(json).toMatchObject({ deleted: true, local_date: YESTERDAY });
+  });
+
+  it('leaves today alone while a past day is being edited', async () => {
+    const todayEntry = await addMeal(user, { date: TODAY, kcal: 600 });
+    await call('log_food', {
+      description: 'Forgotten dinner', meal: null, when: YESTERDAY, note: null,
+      confidence: 'medium', items: [ITEM],
+    });
+
+    const today = await call('get_day', { date: null, days_ago: null });
+    expect(today.json.local_date).toBe(TODAY);
+    expect(today.json.food).toHaveLength(1);
+    expect(today.json.food[0].id).toBe(todayEntry.id);
+  });
+});
+
+describe('remember and forget', () => {
+  it('keeps a standing instruction and reports it back', async () => {
+    const { json } = await call('remember', { note: 'Do not log my commute walk' });
+    expect(json.remembered).toBe('Do not log my commute walk');
+    expect(await listNotes(user.id)).toHaveLength(1);
+  });
+
+  it('refuses an empty note rather than storing a blank', async () => {
+    const result = await call('remember', { note: '   ' });
+    expect(result.isError).toBe(true);
+    expect(await listNotes(user.id)).toEqual([]);
+  });
+
+  it('drops one by the id the prompt showed', async () => {
+    const { json } = await call('remember', { note: 'I use a small plate' });
+    const gone = await call('forget', { note_id: json.note_id });
+    expect(gone.json.forgotten).toBe(true);
+    expect(await listNotes(user.id)).toEqual([]);
+  });
+
+  it('tells the model where to look after a bad id', async () => {
+    const result = await call('forget', { note_id: '00000000-0000-0000-0000-000000000000' });
+    expect(result.isError).toBe(true);
+    expect(result.text).toMatch(/context/);
+  });
+
+  it('is a write, so the read-only review agent cannot reach it', () => {
+    build({}, true);
+    expect([...tools.keys()]).not.toContain('remember');
+    expect([...tools.keys()]).not.toContain('forget');
   });
 });
 

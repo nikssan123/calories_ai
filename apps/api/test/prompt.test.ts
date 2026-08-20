@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { DaySummary, Profile, ReviewStats, WeeklyReview, WeightEntry } from '@ct/shared';
 import {
   dayContextPrompt,
+  dayRolloverNotice,
   onboardingPrompt,
   recentReviewPrompt,
   REVIEW_SYSTEM_PROMPT,
@@ -77,6 +78,29 @@ const weight: WeightEntry = {
 };
 
 describe('STABLE_SYSTEM_PROMPT', () => {
+  it('makes logging for a past day routine rather than exceptional', () => {
+    // Every other line about other days is a caution. Without this the model
+    // can read the section as "avoid", and start asking which day was meant
+    // instead of just backdating it.
+    expect(STABLE_SYSTEM_PROMPT).toContain('Days other than today');
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/ordinary, not an exception/);
+    expect(STABLE_SYSTEM_PROMPT).toContain('days_ago');
+  });
+
+  it('is warm about the person and silent about the food', () => {
+    // The one line that must survive any future edit to the voice: warmth is
+    // aimed at the user, never at what they ate. A judged user starts editing
+    // what they report, and the log stops being worth keeping.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/Encourage the person; never judge the food/);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/beer or a dessert/);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/Anxiety is not a motivator/);
+  });
+
+  it('keeps warmth from turning into length', () => {
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/Warmth lives in the wording, not in extra length/);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/not a licence to pad/);
+  });
+
   it('states the rules the product depends on', () => {
     expect(STABLE_SYSTEM_PROMPT).toContain('assume, don’t interrogate'.replace('’', "'"));
     expect(STABLE_SYSTEM_PROMPT).toMatch(/update_food_entry/);
@@ -156,6 +180,58 @@ describe('dayContextPrompt', () => {
     }, weight);
     expect(empty).toContain('none logged');
     expect(empty).not.toContain('use these ids');
+    // An empty day has to say it is empty. Left silent, the model fills the gap
+    // from the conversation, and the conversation is full of yesterday.
+    expect(empty).toContain('Nothing is logged for 2026-03-10 yet');
+    expect(empty).toContain('belongs to an earlier day');
+  });
+});
+
+describe('standing notes in the day context', () => {
+  const notes = [
+    { id: 'aaaaaaaa-0000-0000-0000-000000000001', note: 'Do not log my commute walk', created_at: '2026-03-01T00:00:00Z' },
+  ];
+
+  it('carries them into every turn, with the id needed to drop one', () => {
+    const prompt = dayContextPrompt(profile, day, weight, notes);
+    expect(prompt).toContain('Do not log my commute walk');
+    expect(prompt).toContain('aaaaaaaa-0000-0000-0000-000000000001');
+  });
+
+  it('says nothing at all when there are none', () => {
+    expect(dayContextPrompt(profile, day, weight, [])).not.toContain('Standing instructions');
+  });
+});
+
+describe('dayRolloverNotice', () => {
+  const now = new Date('2026-03-10T14:00:00Z'); // 16:00 Sofia
+
+  it('names both the day that ended and the day that started', () => {
+    const notice = dayRolloverNotice('2026-03-09', '2026-03-10', profile, now);
+    expect(notice).toContain('2026-03-09');
+    expect(notice).toContain('2026-03-10');
+    expect(notice).toContain('Europe/Sofia');
+  });
+
+  it('points at the tool rather than at memory for the closed day', () => {
+    const notice = dayRolloverNotice('2026-03-09', '2026-03-10', profile, now);
+    expect(notice).toContain('get_day');
+    // It must not claim a conversation the model can no longer see: after the
+    // rollover the session is dropped, so there is no previous message to cite.
+    expect(notice).not.toContain('previous message');
+  });
+
+  it('leaves the door open to a day the user names', () => {
+    const notice = dayRolloverNotice('2026-03-09', '2026-03-10', profile, now);
+    expect(notice).toContain('unless they name another day');
+  });
+
+  it('reports the wall clock separately from the logging day', () => {
+    // 01:00 Sofia on the 11th still counts toward the 10th under a 04:00 start,
+    // and the notice must not collapse the two into one date.
+    const notice = dayRolloverNotice('2026-03-09', '2026-03-10', profile, new Date('2026-03-10T23:00:00Z'));
+    expect(notice).toContain('01:00 on 2026-03-11');
+    expect(notice).toContain('counts toward 2026-03-10');
   });
 });
 
@@ -228,6 +304,11 @@ describe('recentReviewPrompt', () => {
 });
 
 describe('the review agent’s prompts', () => {
+  it('is warm without opening on a cheer, and still refuses to moralise', () => {
+    expect(REVIEW_SYSTEM_PROMPT).toMatch(/"Great week!" on its own is not/);
+    expect(REVIEW_SYSTEM_PROMPT).toMatch(/Do not moralise about food choices/);
+  });
+
   it('forbids inventing numbers and caps the length', () => {
     expect(REVIEW_SYSTEM_PROMPT).toMatch(/Never estimate/);
     expect(REVIEW_SYSTEM_PROMPT).toMatch(/150 words/);

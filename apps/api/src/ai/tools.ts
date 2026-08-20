@@ -23,6 +23,7 @@ import {
 } from '../services/log.ts';
 import { buildDaySummary, buildProgress } from '../services/summary.ts';
 import { getUser, markOnboarded, missingProfileFields, updateUser } from '../services/user.ts';
+import { addNote, forgetNote, MAX_NOTE_LENGTH } from '../services/notes.ts';
 import { calculateTargets, setTargets, targetsForDate } from '../services/targets.ts';
 import { latestWeight } from '../services/log.ts';
 
@@ -248,6 +249,11 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
       const day = await buildDaySummary(tc.userId, entry.local_date);
       return ok({
         entry_id: entry.id,
+        // Echoed back on every write. Without it the model cannot tell which day
+        // it just wrote to, so a totals figure that belongs to another day reads
+        // as today's and gets reported to the user as today's.
+        local_date: entry.local_date,
+        meal: entry.meal,
         logged: pickTotals(entry),
         day_totals: day.consumed,
         targets: day.targets,
@@ -274,6 +280,10 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
       confidence: confidenceField.nullable().default(null),
     },
     async (args) => {
+      // Read first: a `when` that crosses a day boundary is the single most
+      // damaging thing this tool can do silently, and the only way to say so is
+      // to know where the entry started.
+      const before = await getFoodEntry(tc.userId, args.entry_id);
       const entry = await updateFoodEntry(tc.userId, args.entry_id, {
         meal: (args.meal as Meal | null) ?? undefined,
         description: args.description ?? undefined,
@@ -293,8 +303,16 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
       });
 
       const day = await buildDaySummary(tc.userId, entry.local_date);
+      const movedFrom = before && before.local_date !== entry.local_date ? before.local_date : null;
       return ok({
         entry_id: entry.id,
+        local_date: entry.local_date,
+        ...(movedFrom
+          ? {
+              moved_from_date: movedFrom,
+              warning: `This entry was moved from ${movedFrom} to ${entry.local_date}. Only leave it moved if the user asked for that entry to change day; otherwise move it back.`,
+            }
+          : {}),
         updated: pickTotals(entry),
         day_totals: day.consumed,
         kcal_remaining: day.targets.kcal - day.consumed.kcal,
@@ -341,6 +359,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
       });
       return ok({
         entry_id: entry.id,
+        local_date: entry.local_date,
         kcal_burned: entry.kcal_burned,
         distance_km: entry.distance_km,
       });
@@ -381,6 +400,34 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
     { alwaysLoad: true },
   );
 
+  const remember = tool(
+    'remember',
+    'Save a standing instruction the user gives you about how to log or how to talk to them — "don\'t log my commute walk", "I use a small plate", "skip the remaining-budget line". Only for things that apply from now on. A one-off correction to a meal is not a note: fix the entry instead, where the number itself is the record.',
+    {
+      note: z
+        .string()
+        .describe('The instruction in one short sentence, written so it still makes sense months later.'),
+    },
+    async (args) => {
+      const saved = await addNote(tc.userId, args.note);
+      if (!saved) return fail('An empty note has nothing to remember.');
+      return ok({ remembered: saved.note, note_id: saved.id, max_length: MAX_NOTE_LENGTH });
+    },
+    { alwaysLoad: true },
+  );
+
+  const forget = tool(
+    'forget',
+    'Drop a standing instruction that no longer applies, by the id shown in your notes.',
+    { note_id: z.string() },
+    async (args) => {
+      const gone = await forgetNote(tc.userId, args.note_id);
+      if (!gone) return fail('No note with that id. The current notes are listed in your context.');
+      return ok({ forgotten: true });
+    },
+    { alwaysLoad: true },
+  );
+
   const deleteEntry = tool(
     'delete_entry',
     'Remove a logged entry the user says did not happen or was a mistake.',
@@ -404,7 +451,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         // Nothing to draw: the entry it referred to no longer exists.
         card: null,
       });
-      return ok({ deleted: true });
+      return ok({ deleted: true, local_date: existing?.local_date ?? null });
     },
     { alwaysLoad: true },
   );
@@ -677,7 +724,18 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
 
   const reads = [getDay, searchHistory, getProgress];
   const shows = [showChart, showDay];
-  const writes = [logFood, updateFood, logExercise, logWeightTool, deleteEntry, setProfile];
+  const writes = [
+    logFood,
+    updateFood,
+    logExercise,
+    logWeightTool,
+    deleteEntry,
+    setProfile,
+    // Notes outlive the session, which is the whole reason they exist — so they
+    // are writes, and the read-only review agent cannot touch them.
+    remember,
+    forget,
+  ];
   // The display tools stay out of the read-only set: the weekly review renders
   // as markdown on its own screen, where a chat card has nowhere to appear.
   const tools = options.readOnly ? reads : [...writes, ...reads, ...shows];

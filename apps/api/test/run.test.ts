@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { queryOne } from '../src/db.ts';
+import { query, queryOne } from '../src/db.ts';
 import { runTurn } from '../src/ai/run.ts';
 import { listMessages } from '../src/services/chat.ts';
 import { getUser } from '../src/services/user.ts';
 import { saveReview } from '../src/services/reviews.ts';
-import { agentCalls, scriptAgent } from './helpers/agent-mock.ts';
+import { agentCalls, scriptAgent, systemPromptOf } from './helpers/agent-mock.ts';
+import { MAX_SESSION_MESSAGES } from '../src/ai/client.ts';
 import { addMeal, addWeight, createUser, setUserTargets, type TestUser } from './helpers/factories.ts';
 
 /**
@@ -25,6 +26,130 @@ async function turn(text = 'two eggs and toast') {
   const profile = await getUser(user.id);
   return runTurn({ userId: user.id, ctx: user.ctx, profile, text });
 }
+
+/**
+ * Backdates a prior turn so the next one lands on a different logging day. The
+ * session is resumed for the life of the account, so this is the ordinary case
+ * every morning — not an edge case.
+ */
+async function seedPriorTurn(daysAgo: number) {
+  await queryOne(
+    `INSERT INTO chat_messages (user_id, role, content, created_at)
+     VALUES ($1, 'user', 'yesterday''s message', now() - ($2 || ' days')::interval)
+     RETURNING id`,
+    [user.id, String(daysAgo)],
+  );
+}
+
+async function setSession(id: string | null) {
+  await query('UPDATE users SET agent_session_id = $1 WHERE id = $2', [id, user.id]);
+}
+
+async function storedSession(): Promise<string | null> {
+  const row = await queryOne<{ agent_session_id: string | null }>(
+    'SELECT agent_session_id FROM users WHERE id = $1',
+    [user.id],
+  );
+  return row?.agent_session_id ?? null;
+}
+
+describe('when the agent session is dropped', () => {
+  it('resumes within the same day', async () => {
+    scriptAgent({ text: 'a', sessionId: 'sess-1' }, { text: 'b', sessionId: 'sess-1' });
+
+    await turn('first');
+    await turn('second');
+
+    expect(agentCalls.at(-1)!.resume).toBe('sess-1');
+  });
+
+  it('starts fresh once the day has rolled over', async () => {
+    await seedPriorTurn(2);
+    await setSession('sess-yesterday');
+    scriptAgent({ text: 'Logged.', sessionId: 'sess-today' });
+
+    await turn('Breakfast');
+
+    // Yesterday's transcript is what made the model treat this morning's photo
+    // as a correction to last night's entry. Dropping it is the actual fix; the
+    // rollover marker only covers the providers that replay history anyway.
+    expect(agentCalls.at(-1)!.resume).toBeUndefined();
+    expect(await storedSession()).toBe('sess-today');
+  });
+
+  it('rotates a session that has run away inside a single day', async () => {
+    // The guard against one very long day reaching the context window on its
+    // own. Ordinary days are nowhere near this.
+    await query(
+      `INSERT INTO chat_messages (user_id, role, content)
+       SELECT $1, 'user', 'chatter' FROM generate_series(1, $2)`,
+      [user.id, MAX_SESSION_MESSAGES],
+    );
+    await setSession('sess-long');
+    scriptAgent({ text: 'Logged.', sessionId: 'sess-rotated' });
+
+    await turn('and another');
+
+    expect(agentCalls.at(-1)!.resume).toBeUndefined();
+  });
+
+  it('keeps resuming while the day is merely busy', async () => {
+    await query(
+      `INSERT INTO chat_messages (user_id, role, content)
+       SELECT $1, 'user', 'chatter' FROM generate_series(1, $2)`,
+      [user.id, MAX_SESSION_MESSAGES - 10],
+    );
+    await setSession('sess-busy');
+    scriptAgent({ text: 'Logged.' });
+
+    await turn('one more');
+
+    expect(agentCalls.at(-1)!.resume).toBe('sess-busy');
+  });
+});
+
+describe('the day rollover marker', () => {
+  it('marks the boundary when the conversation resumes on a later day', async () => {
+    await seedPriorTurn(2);
+    scriptAgent({ text: 'Logged.' });
+
+    await turn('Breakfast');
+
+    const prompt = agentCalls.at(-1)!.prompt as string;
+    expect(prompt).toContain('New day');
+    expect(prompt).toContain('get_day');
+    // The user's own words still end the turn, untouched.
+    expect(prompt.endsWith('Breakfast')).toBe(true);
+  });
+
+  it('stays silent when the previous turn was earlier the same day', async () => {
+    scriptAgent({ text: 'Logged.' }, { text: 'Logged.' });
+
+    await turn('first');
+    await turn('second');
+
+    expect(agentCalls.at(-1)!.prompt).toBe('second');
+  });
+
+  it('stays silent on the very first turn of a new account', async () => {
+    scriptAgent({ text: 'Logged.' });
+    await turn('two eggs and toast');
+    expect(agentCalls.at(-1)!.prompt).toBe('two eggs and toast');
+  });
+
+  it('keeps the marker out of the conversation that gets stored', async () => {
+    await seedPriorTurn(2);
+    scriptAgent({ text: 'Logged.' });
+
+    await turn('Breakfast');
+
+    // It steers this one turn; it is not part of what the user said, and it must
+    // not come back as history on the next one.
+    const messages = await listMessages(user.id);
+    expect(messages.some((m) => m.content === 'Breakfast')).toBe(true);
+    expect(messages.some((m) => m.content.includes('New day'))).toBe(false);
+  });
+});
 
 describe('runTurn', () => {
   it('persists both messages and echoes the day back', async () => {
@@ -156,7 +281,7 @@ describe('runTurn', () => {
     scriptAgent({ text: 'Noted.' });
     await turn('what have I had today?');
 
-    const prompt = agentCalls[0]!.options.systemPrompt as string;
+    const prompt = systemPromptOf(agentCalls[0]!);
     expect(prompt).toContain('620 / 2200 kcal');
     expect(prompt).toContain(entry.id);
     expect(prompt).toContain('Chicken and rice');
@@ -165,14 +290,14 @@ describe('runTurn', () => {
   it('adds the setup brief only while the profile is incomplete', async () => {
     scriptAgent({ text: 'Noted.' });
     await turn();
-    expect(agentCalls[0]!.options.systemPrompt).not.toContain('Setup mode');
+    expect(systemPromptOf(agentCalls[0]!)).not.toContain('Setup mode');
 
     const fresh = await createUser({ sex: null, is_setup_complete: false });
     user = fresh;
     scriptAgent({ text: 'Hello.' });
     await turn('hi');
-    expect(agentCalls.at(-1)!.options.systemPrompt).toContain('Setup mode');
-    expect(agentCalls.at(-1)!.options.systemPrompt).toContain('current weight');
+    expect(systemPromptOf(agentCalls.at(-1)!)).toContain('Setup mode');
+    expect(systemPromptOf(agentCalls.at(-1)!)).toContain('current weight');
   });
 
   it('carries a recent weekly review into the journal’s context', async () => {
@@ -209,7 +334,7 @@ describe('runTurn', () => {
 
     scriptAgent({ text: 'Noted.' });
     await turn('how was last week?');
-    expect(agentCalls[0]!.options.systemPrompt).toContain('You averaged 2,100');
+    expect(systemPromptOf(agentCalls[0]!)).toContain('You averaged 2,100');
   });
 
   it('locks the agent down: no built-ins, no inherited settings', async () => {

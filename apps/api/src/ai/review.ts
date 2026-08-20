@@ -46,7 +46,10 @@ export async function generateWeeklyReview(
 
   const request: AgentRequest = {
     kind: 'review',
-    systemPrompt: REVIEW_SYSTEM_PROMPT,
+    // The review's whole prompt is stable; the week's numbers ride in the user
+    // turn, so there is nothing volatile to keep out of the cache.
+    staticSystemPrompt: REVIEW_SYSTEM_PROMPT,
+    dynamicSystemPrompt: '',
     text: reviewTaskPrompt(stats, profile),
     photo: null,
     tools,

@@ -148,14 +148,54 @@ describe('resolveWhen', () => {
     expect(localPartsFor(resolveWhen(hint, now, SOFIA), SOFIA.timezone).time).toBe(expected);
   });
 
+  it('reads a bare date as that day in the user timezone, not UTC midnight', () => {
+    // The regression: `new Date('2026-03-09')` is UTC midnight, which the 04:00
+    // day start then drags back onto the 8th. A bare date names a day, and the
+    // day it names must survive the round trip.
+    expect(localDateFor(resolveWhen('2026-03-09', now, SOFIA), SOFIA)).toBe('2026-03-09');
+  });
+
+  it.each(['2026-01-15', '2026-06-15', '2026-03-29', '2026-10-25'])(
+    'round-trips the bare date %s through the day boundary',
+    (date) => {
+      expect(localDateFor(resolveWhen(date, now, SOFIA), SOFIA)).toBe(date);
+    },
+  );
+
+  it('reads a zoneless timestamp in the user timezone, not the server one', () => {
+    // 08:00 for a user in Los Angeles is 15:00 UTC, whatever TZ the container runs.
+    const la = { timezone: 'America/Los_Angeles', dayStartHour: 4 };
+    const at = resolveWhen('2026-03-09T08:00:00', now, la);
+    expect(localPartsFor(at, la.timezone)).toMatchObject({ date: '2026-03-09', time: '08:00' });
+  });
+
+  it('keeps an early-hours timestamp on the previous logging day', () => {
+    // 02:00 local is before the 04:00 rollover, so it belongs to the 8th.
+    expect(localDateFor(resolveWhen('2026-03-09T02:00:00', now, SOFIA), SOFIA)).toBe('2026-03-08');
+  });
+
+  it('does not reinterpret a timestamp that carries its own offset', () => {
+    expect(resolveWhen('2026-03-09T08:30:00+05:00', now, SOFIA).toISOString()).toBe(
+      '2026-03-09T03:30:00.000Z',
+    );
+  });
+
+  it('leaves a date embedded in prose to the language parser', () => {
+    // Previously any string *containing* a date shape took the ISO branch.
+    const at = resolveWhen('after the gym on 2026-03-09', now, SOFIA);
+    expect(at.getTime()).toBe(now.getTime());
+  });
+
   it('falls back to now for a hint it cannot parse', () => {
     expect(resolveWhen('sometime after the gym', now, SOFIA).getTime()).toBe(now.getTime());
   });
 
   it('ignores a date-shaped string that is not a real date', () => {
-    // Matches the YYYY-MM-DD test but fails to parse, so it must not throw.
+    // Matches the YYYY-MM-DD shape but is not a date. It must not throw, and it
+    // must not roll over into some arbitrary far-future day either.
     const at = resolveWhen('9999-99-99', now, SOFIA);
     expect(Number.isNaN(at.getTime())).toBe(false);
+    expect(at.getTime()).toBe(now.getTime());
   });
 });
 

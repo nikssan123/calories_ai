@@ -5,7 +5,7 @@ import { fallbackReview, generateWeeklyReview } from '../src/ai/review.ts';
 import { listMessages } from '../src/services/chat.ts';
 import { latestReview } from '../src/services/reviews.ts';
 import { targetsForDate } from '../src/services/targets.ts';
-import { agentCalls, scriptAgent } from './helpers/agent-mock.ts';
+import { agentCalls, scriptAgent, systemPromptOf } from './helpers/agent-mock.ts';
 import {
   addMeal,
   createUser,
@@ -71,7 +71,7 @@ describe('generateWeeklyReview', () => {
     const prompt = agentCalls[0]!.prompt as string;
     expect(prompt).toContain('"days_logged": 1');
     expect(prompt).toContain('"target_kcal": 2200');
-    expect(agentCalls[0]!.options.systemPrompt).toContain('weekly review');
+    expect(systemPromptOf(agentCalls[0]!)).toContain('weekly review');
   });
 
   it('gives the review agent read tools only', async () => {

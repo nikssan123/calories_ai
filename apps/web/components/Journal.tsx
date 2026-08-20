@@ -181,8 +181,8 @@ export function Journal() {
           <div className="pt-12">
             <h1 className="text-large-title">What have you eaten today?</h1>
             <p className="text-muted-foreground mt-2 text-[15px] leading-relaxed">
-              Type it or take a photo. No forms, no searching a food database — just say what
-              happened.
+              Type it or take a photo — whatever's easiest. No forms, nothing to search for.
+              Say what happened and I'll work out the rest.
             </p>
             <div className="mt-7 flex flex-wrap gap-2">
               {PROMPTS.map((prompt) => (

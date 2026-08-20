@@ -1,4 +1,4 @@
-import type { Options, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { SYSTEM_PROMPT_DYNAMIC_BOUNDARY, type Options, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { env } from '../../env.ts';
 import { executeAgent } from '../agent.ts';
 import { AUTH_HELP, hasSubscriptionAuth, MODELS } from '../client.ts';
@@ -36,7 +36,18 @@ export function createAnthropicProvider(toolContext: ToolContext): AiProvider {
       const choice = MODELS[request.kind];
 
       const options: Options = {
-        systemPrompt: request.systemPrompt,
+        // An array with the boundary marker, not one joined string. Everything
+        // before the marker is cacheable across turns and sessions; everything
+        // after it is this turn's clock and numbers. Joined, the volatile half
+        // invalidated the stable half and the whole prefix was rewritten every
+        // turn — which was the single largest line on the bill.
+        // The boundary is only worth placing when there is a volatile half to
+        // put after it. The review agent has none — its whole prompt is stable
+        // and the week's numbers ride in the user turn — and an empty trailing
+        // block is the kind of thing an API rejects.
+        systemPrompt: request.dynamicSystemPrompt
+          ? [request.staticSystemPrompt, SYSTEM_PROMPT_DYNAMIC_BOUNDARY, request.dynamicSystemPrompt]
+          : [request.staticSystemPrompt],
         mcpServers: { [SERVER_NAME]: server },
         allowedTools: toolNames,
         // Strip every built-in. The agent cannot read files, run bash, or search

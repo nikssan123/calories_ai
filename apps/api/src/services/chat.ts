@@ -53,6 +53,30 @@ async function photoSecret(row: { photo_id: string | null }): Promise<string | n
   return row.photo_id ? getSecret(PHOTO_URL_SECRET) : null;
 }
 
+/**
+ * When the conversation was last touched, for detecting a day rollover.
+ *
+ * Read separately from `listMessages` because the caller needs it before the
+ * turn runs, and on providers that keep their own session there is no transcript
+ * to read it off.
+ */
+export async function lastMessageAt(userId: string): Promise<Date | null> {
+  const row = await queryOne<{ created_at: string }>(
+    'SELECT created_at FROM chat_messages WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1',
+    [userId],
+  );
+  return row ? new Date(row.created_at) : null;
+}
+
+/** How many messages have been stored since `since`. Used to cap a runaway day. */
+export async function countMessagesSince(userId: string, since: Date): Promise<number> {
+  const row = await queryOne<{ count: string }>(
+    'SELECT COUNT(*)::text AS count FROM chat_messages WHERE user_id = $1 AND created_at >= $2',
+    [userId, since],
+  );
+  return row ? Number(row.count) : 0;
+}
+
 function toMessage(row: any, photoSecret: string | null): ChatMessage {
   return {
     id: row.id,
