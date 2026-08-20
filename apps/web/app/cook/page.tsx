@@ -242,7 +242,7 @@ export default function CookPage() {
                 </p>
               </div>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 lg:grid-cols-2">
                 {recipes.map((recipe) => (
                   <RecipeCard
                     key={recipe.id}
@@ -257,7 +257,7 @@ export default function CookPage() {
             )}
           </>
         ) : library === null ? (
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 lg:grid-cols-2">
             <Skeleton className="h-72 w-full rounded-[var(--radius)]" />
             <Skeleton className="h-72 w-full rounded-[var(--radius)]" />
           </div>
@@ -267,7 +267,7 @@ export default function CookPage() {
           </p>
         ) : (
           <>
-            <div className="grid items-start gap-3 sm:grid-cols-2">
+            <div className="grid items-start gap-3 lg:grid-cols-2">
               {library.map((recipe) => (
                 <LibraryCard
                   key={recipe.slug}
