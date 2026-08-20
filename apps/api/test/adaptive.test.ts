@@ -342,6 +342,95 @@ describe('defaults', () => {
   });
 });
 
+describe('the floor guard', () => {
+  /**
+   * The one guardrail that is about the person rather than the data.
+   *
+   * Left alone, the adaptive pass reads a very low intake as a very low
+   * maintenance and lowers the target to match — every week, in the same
+   * direction. This is the thing that stops it.
+   */
+
+  /** Eating well under the floor, losing hard, and the estimate is believable. */
+  const underEating = {
+    endDate: WINDOW_END,
+    kcalPerDay: 1100,
+    startWeightKg: 85,
+    kgPerWeek: -1.4,
+  };
+
+  it('will not lower a target for someone already under the floor', async () => {
+    await seedAdaptiveWindow(user, underEating);
+    // ~2,640 maintenance less a 500 deficit is 2,140, so the pass would
+    // ordinarily step this down by its full 200.
+    await setUserTargets(user, '2026-03-01', { kcal: 2400 });
+
+    const proposal = await proposeTargets(user.id, user.ctx, TODAY);
+    expect(proposal).toMatchObject({ eligible: false, blocked_by: 'intake_below_floor' });
+    expect(proposal.delta_kcal).toBe(0);
+    expect(proposal.proposed).toEqual(proposal.current);
+    // And says something a person can act on, not a status code.
+    expect(proposal.explanation).toMatch(/dietitian|doctor/i);
+  });
+
+  it('writes nothing for that user', async () => {
+    await seedAdaptiveWindow(user, underEating);
+    await setUserTargets(user, '2026-03-01', { kcal: 2400 });
+
+    const { applied } = await applyAdaptiveTargets(user.id, user.ctx, TODAY);
+    expect(applied).toBe(false);
+    expect((await targetsForDate(user.id, TODAY)).kcal).toBe(2400);
+  });
+
+  it('still lets the target move up', async () => {
+    /*
+     * The asymmetry is the whole point. Someone under-eating against a target
+     * that is itself too low needs the target raised, and blocking the pass
+     * outright would leave them pinned to the floor forever.
+     */
+    await seedAdaptiveWindow(user, { ...underEating, kcalPerDay: 1150, kgPerWeek: -1.5 });
+    await setUserTargets(user, '2026-03-01', { kcal: 1200 });
+
+    const proposal = await proposeTargets(user.id, user.ctx, TODAY);
+    expect(proposal.eligible).toBe(true);
+    expect(proposal.delta_kcal).toBeGreaterThan(0);
+  });
+
+  it('outranks a complaint about the data', async () => {
+    /*
+     * A very low intake is exactly what makes an observed maintenance land
+     * outside the sanity band, so the band would otherwise swallow this case
+     * and hand the one person who needed a different message a note about
+     * estimate quality.
+     */
+    await seedAdaptiveWindow(user, {
+      endDate: WINDOW_END,
+      kcalPerDay: 1000,
+      startWeightKg: 60,
+      kgPerWeek: -0.4,
+    });
+    await setUserTargets(user, '2026-03-01', { kcal: 1600 });
+
+    const proposal = await proposeTargets(user.id, user.ctx, TODAY);
+    expect(proposal.blocked_by).toBe('intake_below_floor');
+    expect((await targetsForDate(user.id, TODAY)).kcal).toBe(1600);
+  });
+
+  it('leaves an ordinary intake alone', async () => {
+    await seedAdaptiveWindow(user, {
+      endDate: WINDOW_END,
+      kcalPerDay: 2200,
+      startWeightKg: 85,
+      kgPerWeek: -0.5,
+    });
+    await setUserTargets(user, '2026-03-01', { kcal: 2600 });
+
+    const proposal = await proposeTargets(user.id, user.ctx, TODAY);
+    expect(proposal.eligible).toBe(true);
+    expect(proposal.blocked_by).toBeNull();
+  });
+});
+
 describe('applyAdaptiveTargets', () => {
   it('writes the new target and dates it today', async () => {
     await seedAdaptiveWindow(user, { endDate: WINDOW_END, kcalPerDay: 2200, kgPerWeek: -0.5 });

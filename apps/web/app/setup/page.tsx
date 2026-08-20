@@ -146,6 +146,22 @@ export default function SetupPage() {
             <MacroChip label="Carbs" value={day.targets.carbs_g} color="var(--carbs)" />
             <MacroChip label="Fat" value={day.targets.fat_g} color="var(--fat)" />
           </div>
+
+          {/*
+            * Under the number, not tucked into a footer nobody reaches.
+            *
+            * A figure this size, presented alone, reads as a prescription. It is
+            * an average for a body of these dimensions, and it does not know
+            * anything about the person — which is exactly the sentence someone
+            * pregnant, or managing diabetes, needs to have read before they
+            * start treating it as an instruction.
+            */}
+          <p className="text-footnote text-muted-foreground mx-auto mt-5 max-w-md font-medium">
+            A population average for someone your size, not medical advice. It is corrected from
+            your own logged data after a fortnight. If you are pregnant or breastfeeding, or
+            managing a condition like diabetes or kidney disease, get your number from a
+            clinician and set it by hand here.
+          </p>
         </div>
       )}
 

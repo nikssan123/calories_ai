@@ -117,6 +117,24 @@ describe('STABLE_SYSTEM_PROMPT', () => {
     expect(STABLE_SYSTEM_PROMPT).toMatch(/no-judgement rule applies here/i);
   });
 
+  it('says where it stops, and does not stop working', () => {
+    expect(STABLE_SYSTEM_PROMPT).toContain('Where you stop');
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/not a clinician/i);
+    // The conditions where population arithmetic is the wrong tool.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/pregnan/i);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/diabetes/i);
+    // The three refusals, which are refusals of a request rather than of work.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/Never encourage a larger deficit/);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/Never validate a very low intake as discipline/);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/Never suggest skipping a meal/);
+    // Distress drops the numbers entirely rather than adding a caveat to them.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/purging/i);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/drop the numbers entirely/i);
+    // And the whole section must not turn into a disclaimer on every reply.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/never as a disclaimer stapled/i);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/do not refuse to work/i);
+  });
+
   it('is warm about the person and silent about the food', () => {
     // The one line that must survive any future edit to the voice: warmth is
     // aimed at the user, never at what they ate. A judged user starts editing
@@ -219,6 +237,48 @@ describe('dayContextPrompt', () => {
       weight,
     );
     expect(none).not.toContain('Diet quality');
+  });
+
+  it('says nothing about wellbeing when there is nothing to say', () => {
+    const prompt = dayContextPrompt(profile, day, weight, [], {
+      intake_below_floor: false,
+      losing_too_fast: false,
+      mean_intake_kcal: 2100,
+      days_logged: 7,
+      loss_pct_per_week: -0.5,
+    });
+    expect(prompt).not.toMatch(/do not encourage/i);
+    expect(prompt).not.toMatch(/bodyweight a week/i);
+  });
+
+  it('tells the model outright when the week has been under the floor', () => {
+    // As an instruction rather than a statistic: a mean intake figure is
+    // something a model folds into an optimisation, and "do not encourage them
+    // to eat less" is not.
+    const prompt = dayContextPrompt(profile, day, weight, [], {
+      intake_below_floor: true,
+      losing_too_fast: false,
+      mean_intake_kcal: 950,
+      days_logged: 6,
+      loss_pct_per_week: null,
+    });
+    expect(prompt).toContain('950 kcal a day');
+    expect(prompt).toMatch(/do not encourage them to eat less/i);
+    expect(prompt).toMatch(/not logging everything/i);
+    // Never an instruction to stop logging — the journal keeps working.
+    expect(prompt).not.toMatch(/refuse to log/i);
+  });
+
+  it('names a loss that is running too fast, without calling it good news', () => {
+    const prompt = dayContextPrompt(profile, day, weight, [], {
+      intake_below_floor: false,
+      losing_too_fast: true,
+      mean_intake_kcal: 1900,
+      days_logged: 7,
+      loss_pct_per_week: -1.8,
+    });
+    expect(prompt).toContain('1.8%');
+    expect(prompt).toMatch(/do not treat this as good news/i);
   });
 
   it('lists exercise ids even on a day with no food logged', () => {

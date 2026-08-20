@@ -1022,6 +1022,12 @@ export const ADAPTIVE_BLOCKERS = [
   'custom_targets',
   'estimate_out_of_range',
   'change_too_small',
+  /**
+   * They are already eating under the floor, so the pass will not lower the
+   * target further however the arithmetic comes out. The only blocker here that
+   * is about the person rather than about the quality of the data.
+   */
+  'intake_below_floor',
 ] as const;
 export const AdaptiveBlocker = z.enum(ADAPTIVE_BLOCKERS);
 export type AdaptiveBlocker = z.infer<typeof AdaptiveBlocker>;

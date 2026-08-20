@@ -769,6 +769,14 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         current_weight_kg: weight?.weight_kg ?? null,
         needs_current_weight: !weight,
         targets,
+        /*
+         * Returned with the number rather than left to the prompt, because this
+         * is the one moment the caveat is actually load-bearing: a target that
+         * arrives with no account of where it came from gets read as a
+         * prescription, and it is nothing of the sort.
+         */
+        what_this_number_is:
+          'Mifflin-St Jeor times an activity multiplier, plus a goal adjustment — a population average for someone this size, not a measurement of them. Say so in a clause the first time you hand it over, mention that it will be corrected from their own data after a fortnight of logging, and say that anyone pregnant, breastfeeding, or managing a medical condition should get their number from a clinician instead. Once, in passing. Do not repeat it every time targets come up.',
       });
     },
     { alwaysLoad: true },

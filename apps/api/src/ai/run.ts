@@ -9,6 +9,7 @@ import { latestWeight } from '../services/log.ts';
 import { latestReview } from '../services/reviews.ts';
 import { missingProfileFields } from '../services/user.ts';
 import { recordUsage } from '../services/usage.ts';
+import { checkWellbeing } from '../services/wellbeing.ts';
 import { MAX_SESSION_MESSAGES, MAX_TURNS } from './client.ts';
 import { createProvider, type AgentMessage, type AgentRequest } from './providers/index.ts';
 import {
@@ -64,6 +65,11 @@ export async function runTurn(input: RunTurnInput): Promise<ChatResponse> {
   const reviewContext = review ? `\n\n---\n\n${recentReviewPrompt(review, today)}` : '';
 
   const notes = await listNotes(input.userId);
+
+  // Skipped during onboarding: a brand new account has nothing logged, and both
+  // checks read an empty week as no answer rather than a worrying one — but
+  // paying for two queries to be told nothing on every turn of setup is waste.
+  const wellbeing = needsOnboarding ? null : await checkWellbeing(input.userId, input.ctx, today);
   const previousTurnAt = await lastMessageAt(input.userId);
   const previousDate = previousTurnAt ? localDateFor(previousTurnAt, input.ctx) : null;
   const rolledOver = previousDate !== null && previousDate !== today;
@@ -88,7 +94,7 @@ export async function runTurn(input: RunTurnInput): Promise<ChatResponse> {
     // between them. Onboarding and the review recap sit on the volatile side:
     // both end, and a prefix that changes when they do is not a stable prefix.
     staticSystemPrompt: STABLE_SYSTEM_PROMPT,
-    dynamicSystemPrompt: `${dayContextPrompt(input.profile, day, currentWeight, notes)}${onboarding}${reviewContext}`,
+    dynamicSystemPrompt: `${dayContextPrompt(input.profile, day, currentWeight, notes, wellbeing)}${onboarding}${reviewContext}`,
     text: promptText,
     photo: input.photo ? { mediaType: input.photo.mediaType, base64: input.photo.base64 } : null,
     tools,

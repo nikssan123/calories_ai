@@ -11,6 +11,7 @@ import {
   targetsForDate,
 } from './targets.ts';
 import { getUser } from './user.ts';
+import { checkWellbeing } from './wellbeing.ts';
 
 /**
  * Adaptive targets. Mifflin-St Jeor predicts what a population of people your
@@ -250,6 +251,12 @@ export async function proposeTargets(
     return unchanged('custom_targets', null, 'Your targets are set manually, so this leaves them alone.');
   }
 
+  /*
+   * Read before the estimate, because it is a fact about the person rather than
+   * about the data, and it outranks every guardrail below.
+   */
+  const wellbeing = await checkWellbeing(userId, ctx, today);
+
   const { estimate, blocked_by } = await estimateTdee(userId, ctx, ADAPTIVE_WINDOW_DAYS, today);
   if (!estimate) {
     return unchanged(blocked_by!, null, BLOCKER_TEXT[blocked_by!]);
@@ -257,20 +264,46 @@ export async function proposeTargets(
 
   // A fortnight of water weight can imply a TDEE of 900 or 5,000. Disbelieve
   // anything that far from the formula rather than acting on it.
+  //
+  // Someone eating far too little is exactly the person whose observed
+  // maintenance lands outside the band, so without the first branch this
+  // guardrail quietly swallows the case and reports a complaint about data
+  // quality to the one person who needed to be told something else.
   const drift = Math.abs(estimate.observed_tdee_kcal - estimate.predicted_tdee_kcal);
   if (drift > estimate.predicted_tdee_kcal * SANITY_BAND) {
-    return unchanged(
-      'estimate_out_of_range',
-      estimate,
-      `The last ${estimate.window_days} days imply ${estimate.observed_tdee_kcal} kcal maintenance, too far from the expected ${estimate.predicted_tdee_kcal} to trust yet.`,
-    );
+    return wellbeing.intake_below_floor
+      ? unchanged('intake_below_floor', estimate, BLOCKER_TEXT.intake_below_floor)
+      : unchanged(
+          'estimate_out_of_range',
+          estimate,
+          `The last ${estimate.window_days} days imply ${estimate.observed_tdee_kcal} kcal maintenance, too far from the expected ${estimate.predicted_tdee_kcal} to trust yet.`,
+        );
   }
 
   const goal = user.goal ?? 'maintain';
   const ideal = estimate.observed_tdee_kcal + GOAL_KCAL_DELTA[goal];
-  const step = clamp(ideal - current.kcal, -MAX_STEP_KCAL * estimate.quality, MAX_STEP_KCAL * estimate.quality);
+  const raw = clamp(ideal - current.kcal, -MAX_STEP_KCAL * estimate.quality, MAX_STEP_KCAL * estimate.quality);
+
+  /*
+   * The one guardrail here that is about the person rather than the data.
+   *
+   * Everything above asks "is this estimate trustworthy". This asks "should we
+   * act on it at all" — and for someone whose logged week already sits under
+   * the floor, the honest answer to a downward step is no. Left alone the pass
+   * would read a low intake as a low maintenance and lower the target to match,
+   * every week, in the same direction, which is the exact shape of the harm.
+   *
+   * Clamped rather than blocked outright, so an *upward* move still lands. That
+   * asymmetry is the whole point: the pass is allowed to help someone eat more.
+   */
+  const step = wellbeing.intake_below_floor ? Math.max(0, raw) : raw;
+
   const kcal = Math.max(MIN_TARGET_KCAL, Math.round((current.kcal + step) / 10) * 10);
   const delta = kcal - current.kcal;
+
+  if (wellbeing.intake_below_floor && delta <= 0) {
+    return unchanged('intake_below_floor', estimate, BLOCKER_TEXT.intake_below_floor);
+  }
 
   if (Math.abs(delta) < MIN_MEANINGFUL_STEP_KCAL) {
     return unchanged(
@@ -309,6 +342,7 @@ const BLOCKER_TEXT: Record<AdaptiveBlocker, string> = {
   custom_targets: 'Your targets are set manually, so this leaves them alone.',
   estimate_out_of_range: 'The estimate is too far from expectation to act on yet.',
   change_too_small: 'Your target already matches what the data says.',
+  intake_below_floor: `Your logged intake this week is under ${MIN_TARGET_KCAL} kcal a day, so this is not lowering your target. If that is not what you have actually been eating, log the days you missed; if it is, it is worth talking to a doctor or a dietitian rather than cutting further.`,
 };
 
 /** Proposes, and writes the row when the proposal is eligible. */
