@@ -46,18 +46,27 @@ export interface ModelChoice {
    * cannot silently move the cost and latency of every meal log.
    *
    * Optional because not every model accepts it — Haiku 4.5 rejects `effort`
-   * with a 400. Nothing here uses Haiku today, but the provider omits the key
-   * entirely when this is unset, so adding a cheaper tier later cannot break the
-   * highest-volume path.
+   * with a 400, and `text_log` now runs on Haiku, so this is load-bearing
+   * rather than hypothetical: the provider omits the key entirely when this is
+   * unset, and setting it on the text path would 400 every meal log.
    */
   effort?: 'low' | 'medium' | 'high';
 }
 
 export const MODELS: Record<TurnKind, ModelChoice> = {
   // ~70% of turns, and the most predictable: turning "two eggs and toast" into
-  // items with macros is structured extraction, not reasoning. Sonnet does it
-  // well and leaves subscription headroom for everything else.
-  text_log: { model: 'claude-sonnet-5', effort: 'high' },
+  // items with macros is structured extraction, not reasoning. This is the
+  // highest-volume path in the product and therefore the one that decides
+  // whether the unit economics work, so it runs on the cheapest model that can
+  // do the job: Haiku 4.5 at $1/$5, a third of Sonnet.
+  //
+  // Deliberately no `effort`. Haiku 4.5 is the one model in the line-up that
+  // *rejects* the parameter with a 400 — see `ModelChoice.effort` — and it does
+  // no thinking unless thinking is explicitly enabled, which is exactly what is
+  // wanted here. On Sonnet at high effort this path was spending ~755 output
+  // tokens a turn to emit ~150 tokens of reply and one tool call; 91% of that
+  // was reasoning nobody reads, on a task that is not a reasoning task.
+  text_log: { model: 'claude-haiku-4-5' },
   // The hardest task in the product — estimating a portion from plate and
   // cutlery cues. Opus 5's high-resolution vision is the point of paying here.
   photo_log: { model: 'claude-opus-5', effort: 'high' },
@@ -102,7 +111,16 @@ export const MAX_TURNS = 12;
  * day at roughly forty messages. This only catches the day that runs away —
  * without it a single very long conversation could still reach the context
  * window and trigger a compaction pass, which costs a model call and quietly
- * loses fidelity. Set well above a heavy day's logging so it never fires for
- * anyone using the product normally.
+ * loses fidelity.
+ *
+ * 60 rather than 120 because `text_log` moved to Haiku 4.5, whose context
+ * window is 200K rather than the 1M the rest of the line-up has. Two rows land
+ * in `chat_messages` per turn, so this is ~30 turns; production transcripts
+ * grow about 5k tokens a turn, which puts the ceiling near 150k — headroom,
+ * where 120 would have been ~270k and over the limit on a heavy day.
+ *
+ * Rotating early is also the cheap direction: a fresh session drops the
+ * accumulated transcript, and today's numbers and entry ids arrive on every
+ * turn regardless, so almost nothing is lost with it.
  */
-export const MAX_SESSION_MESSAGES = 120;
+export const MAX_SESSION_MESSAGES = 60;

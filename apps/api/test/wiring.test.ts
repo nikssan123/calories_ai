@@ -16,15 +16,30 @@ afterEach(() => {
 
 describe('agent client', () => {
   it('routes each kind of turn to its own model', () => {
-    expect(MODELS.text_log.model).toBe('claude-sonnet-5');
+    // The highest-volume path takes the cheapest model; the rare and the hard
+    // ones take the expensive one. That split is the unit economics.
+    expect(MODELS.text_log.model).toBe('claude-haiku-4-5');
     expect(MODELS.photo_log.model).toBe('claude-opus-5');
     expect(MODELS.setup.model).toBe('claude-opus-5');
     expect(MODELS.review.model).toBe('claude-opus-5');
     expect(MAX_TURNS).toBeGreaterThan(1);
   });
 
-  it('pins reasoning effort on every kind', () => {
-    for (const kind of ['text_log', 'photo_log', 'setup', 'review'] as const) {
+  /**
+   * Haiku 4.5 is the one model in the line-up that rejects `effort` outright —
+   * it returns a 400 rather than ignoring it. `text_log` runs on Haiku and is
+   * ~70% of all turns, so setting an effort there would not degrade the product
+   * quietly, it would break every meal log in production. Hence a test rather
+   * than a comment.
+   */
+  it('never pins an effort on a model that rejects one', () => {
+    for (const choice of Object.values(MODELS)) {
+      if (choice.model.includes('haiku')) expect(choice.effort).toBeUndefined();
+    }
+  });
+
+  it('pins reasoning effort on every kind that accepts one', () => {
+    for (const kind of ['photo_log', 'setup', 'review'] as const) {
       expect(MODELS[kind].effort).toBe('high');
     }
   });
