@@ -45,6 +45,47 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
 
+  # Rate-limit counters shared across API replicas.
+  #
+  # This is what makes a per-account ceiling mean one number rather than one per
+  # replica. It is only load-bearing once `api` is scaled past one; a
+  # single-container deployment can drop the service and REDIS_URL together and
+  # the limiter keeps its counters in process.
+  #
+  # `internal` only — like the database, and for a stronger reason: Redis has no
+  # authentication configured here, so its whole security model is that nothing
+  # outside this stack can address it.
+  #
+  # No volume, and snapshots off. Everything in here is a counter with a TTL of
+  # minutes; persisting it would preserve nothing worth having, and restoring a
+  # spent hour's counts into a fresh hour is worse than starting empty.
+  redis:
+    image: redis:8-alpine
+    container_name: calorytracker-redis
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      # Counters are pure cache, so a full instance should evict rather than
+      # start refusing writes — which, with `skipOnError`, would otherwise turn
+      # into a limiter that has silently stopped limiting.
+      - --maxmemory
+      - ${REDIS_MAXMEMORY:-128mb}
+      - --maxmemory-policy
+      - allkeys-lru
+    networks: [internal]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
   api:
     build:
       context: .
@@ -54,11 +95,17 @@ services:
     restart: unless-stopped
     depends_on:
       db: { condition: service_healthy }
+      redis: { condition: service_healthy }
 
     environment:
       TZ: ${TZ:-Europe/Sofia}
       PORT: 4000
       DATABASE_URL: postgres://${POSTGRES_USER:-ct}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-calorytracker}
+      # Where the rate limiter keeps its counters. Required the moment `api` is
+      # scaled past one replica: without it each replica enforces the full
+      # ceiling by itself, so three replicas serve three times the turns an
+      # account is entitled to, and nothing anywhere says so.
+      REDIS_URL: redis://redis:6379
       # Served over HTTPS by Caddy, so session cookies must carry Secure.
       SECURE_COOKIES: "true"
       # Close registration once your own account exists. The very first account

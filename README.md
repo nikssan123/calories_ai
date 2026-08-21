@@ -169,6 +169,28 @@ and drives the tool-calling loop itself. Expect slightly more input tokens per
 message, and note that `cost_usd` is recorded as 0 because the API does not
 return a price.
 
+### Running more than one API replica
+
+The limiter's counters live in process by default, which is correct for one process and
+silently wrong for two: each replica would enforce the whole ceiling by itself, so three
+replicas serve three times the turns an account is entitled to. Point `REDIS_URL` at a
+Redis and they share one counter instead.
+
+```bash
+docker compose up -d redis          # local, on 6380
+REDIS_URL=redis://localhost:6380    # .env
+```
+
+`docker-compose.prod.yml` already runs one on the private network and wires `REDIS_URL`
+to it. Leave the variable unset for a single-process install and nothing changes.
+
+Redis is used for rate-limit counters and nothing else — sessions are in Postgres, the
+per-account turn lease is a column, and the scheduler takes a Postgres advisory lock. If
+Redis is unreachable the limiter fails open rather than failing requests.
+
+Photos are still written to a local volume, so that is the remaining thing to move before
+replicas make sense. See [SCALING.md](SCALING.md).
+
 ### Adding another provider
 
 Implement `AiProvider` from `apps/api/src/ai/providers/types.ts` — `checkAuth()`

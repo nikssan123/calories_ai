@@ -9,6 +9,7 @@ import { registerAdminRoutes } from './routes/admin.ts';
 import { registerKitchenRoutes } from './routes/kitchen.ts';
 import { env } from './env.ts';
 import { bearerToken, resolveSession, SESSION_COOKIE } from './services/auth.ts';
+import { closeRedis, createRedis } from './services/redis.ts';
 import { accountGate } from './services/user.ts';
 
 declare module 'fastify' {
@@ -38,7 +39,18 @@ declare module 'fastify' {
  * Builds the server without starting it, so tests can drive it with
  * `app.inject()` and the entrypoint can own the listen/shutdown lifecycle.
  */
-export async function buildApp(options: { logger?: boolean } = {}): Promise<FastifyInstance> {
+export async function buildApp(
+  options: {
+    logger?: boolean;
+    /**
+     * Overrides `REDIS_URL` for this instance. The suite uses it to stand up
+     * two apps against one Redis, which is the only way to actually observe the
+     * property the store exists for — a shared counter is invisible from inside
+     * a single process.
+     */
+    redisUrl?: string | null;
+  } = {},
+): Promise<FastifyInstance> {
   const app = Fastify({
     logger: options.logger === false ? false : { level: process.env.LOG_LEVEL ?? 'info' },
     // Meal photos arrive as base64 in the JSON body.
@@ -76,12 +88,47 @@ export async function buildApp(options: { logger?: boolean } = {}): Promise<Fast
    * would throttle the dashboard polling that the app does normally; what needs
    * a ceiling is the handful of routes that cost money or guard a password.
    */
+  /*
+   * Counters go to Redis when there is one, and stay in this process when there
+   * is not.
+   *
+   * Where they live is the whole difference between a limit and a suggestion
+   * once the API runs more than once. In-process counters mean each replica
+   * enforces the full ceiling on its own, so three replicas serve three times
+   * the turns the plan says an account gets — with nothing in any log to say
+   * so, because from each process's point of view the limit is being applied
+   * exactly as written.
+   *
+   * Unset stays the right answer for a single-process install, which is what a
+   * personal one is. See `services/redis.ts`.
+   */
+  const redisUrl = options.redisUrl !== undefined ? options.redisUrl : env.redisUrl;
+  const redis = redisUrl ? createRedis(redisUrl, app.log) : null;
+
   await app.register(rateLimit, {
     global: false,
     // A signed-in user is the real subject; fall back to IP for anonymous hits
     // so a login flood cannot be spread across a single shared account.
     keyGenerator: (request: FastifyRequest) => request.userId ?? request.ip,
     addHeaders: { 'retry-after': true, 'x-ratelimit-limit': true, 'x-ratelimit-remaining': true },
+    ...(redis ? { redis } : {}),
+    /*
+     * Fail open. If the store cannot answer, the request goes through
+     * unthrottled rather than becoming a 500.
+     *
+     * This is a deliberate choice about which failure is worse. These limits
+     * guard spending and password guessing, and both are better served by a few
+     * unthrottled minutes than by an API that refuses everyone because a cache
+     * restarted. The plan's other ceilings are not affected either way: the
+     * recipe budget is counted off the cost ledger in Postgres, and the
+     * per-account turn lease is a column, so neither has a Redis to lose.
+     */
+    skipOnError: true,
+  });
+
+  // Closed with the app so a test, a reload or a shutdown leaves no socket open.
+  app.addHook('onClose', async () => {
+    await closeRedis(redis);
   });
 
   /**

@@ -1,4 +1,4 @@
-# Local development: Postgres only. The app runs on the host via `pnpm dev`.
+# Local development: Postgres and Redis. The app runs on the host via `pnpm dev`.
 #
 # The project name is pinned because docker-compose.prod.yml sits in this same
 # directory — without it both files derive the same name and a `down -v` on one
@@ -22,6 +22,29 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ct -d calorytracker"]
       interval: 5s
       timeout: 5s
+      retries: 10
+
+  # Rate-limit counters, and nothing else. Unset REDIS_URL and the API keeps
+  # them in process instead, which is the right answer for a single process —
+  # this is here so the shared-counter path can be exercised locally rather than
+  # discovered in production.
+  #
+  # No volume on purpose. Everything in here is a counter with a TTL measured in
+  # minutes; persisting it across a restart would preserve nothing worth having
+  # and would quietly carry a spent hour's count into a fresh one.
+  redis:
+    image: redis:8-alpine
+    container_name: ct-redis
+    restart: unless-stopped
+    # `--save ""` turns off RDB snapshots for the same reason there is no
+    # volume: there is nothing here worth writing to disk.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
       retries: 10
 
 volumes:

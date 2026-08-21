@@ -218,9 +218,22 @@ That leaves two, and they are real for both lanes:
 
 1. **Photos to object storage.** `savePhoto`/`readPhoto` change bodies; the signed-URL
    scheme in `verifyPhotoUrl` survives untouched. While in there, have the client upload
-   directly and stop pushing base64 through a 25 MB JSON body.
-2. **Rate limiter to Redis.** In-process counters mean N replicas silently enforce N
-   times the intended limit.
+   directly and stop pushing base64 through a 25 MB JSON body — there is no client-side
+   resizing today, so a full-resolution phone photo goes up base64-encoded at +33%. That
+   is worth fixing before the storage bill exists rather than after.
+2. **Rate limiter to Redis — built.** In-process counters mean N replicas silently
+   enforce N times the intended limit. `REDIS_URL` switches the store; unset keeps the
+   counters in process, which is right for a single-process install and is what the
+   subscription lane runs.
+
+   Two things about it are deliberate. It **fails open** — `skipOnError`, so a store
+   that cannot answer lets the request through rather than turning a cache outage into
+   an API outage; these limits guard spending and password guessing, and both survive a
+   few unthrottled minutes better than everyone survives a 500. And the offline queue
+   stays **on**: turning it off loses the first requests after every boot, because the
+   client is still opening its socket while the limiter's check fails instantly and
+   `skipOnError` waves them through uncounted. `maxRetriesPerRequest: 1` is what keeps
+   the queue bounded, so a blip is absorbed and a real outage still falls through.
 
 Then remove `container_name`, run two or three replicas behind Caddy. pgbouncer is not
 needed at three replicas and is needed well before twenty.
@@ -231,9 +244,9 @@ reads as a global ceiling and is not one — leaving it implicit is how a deploy
 that scaled out perfectly happily runs into `max_connections` instead, and the error
 arrives at whichever query was unlucky rather than at the thing that caused it.
 
-**Not built, and both are a decision rather than a keystroke.** Photos need a bucket and
-its credentials; the limiter needs a Redis. These two are now the whole of what stands
-between here and a second replica.
+**Left in Stage 1:** photos. That is now the only thing standing between here and a
+second replica, and it is a provisioning decision rather than a keystroke — R2 over S3,
+because egress is what bills you when a photo is served to a browser more than once.
 
 ## Stage 2 — Govern in tokens, not in requests
 
@@ -384,10 +397,8 @@ headroom. Stage 2 is the seatbelt that stops a bad afternoon becoming an outage.
 
 1. **Answer the rate-limit question above.** It is one question, it costs a look at the
    Console, and it decides whether Stage 5 is an optimisation or a prerequisite.
-2. **Photos to a bucket, and the limiter to Redis.** Both need provisioning decided
-   before either can be written — which bucket, which Redis, whose credentials. With
-   the session column no longer on this list, these two are the whole of what stands
-   between here and a second replica.
+2. **Photos to a bucket**, and client-side resizing on the way in. The last thing
+   between here and a second replica now that the limiter is shared.
 3. **Streaming**, at the provider seam so both lanes get it. Twenty silent seconds reads
    as broken. This is the largest remaining piece and the only one a user sees directly.
 4. **Stage 5**, at the priority step 1 assigns it.

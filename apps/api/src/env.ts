@@ -78,6 +78,15 @@ export interface Env {
    * which for a rate limiter keyed on IP means picking your own bucket.
    */
   trustProxy: boolean | string;
+  /**
+   * Where the rate limiter keeps its counters, or null for in-process.
+   *
+   * Null is a supported configuration, not a missing one: one process wants
+   * in-process counters, and that is what a personal install is. It matters
+   * only once there is a second replica, where per-process counters silently
+   * enforce N times the intended ceiling.
+   */
+  redisUrl: string | null;
   email: EmailEnv;
   /**
    * Google sign-in, or null when this deployment has not configured it. Null is
@@ -205,6 +214,15 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
      * evadable. Behind Caddy on a private Docker network this is `uniquelocal`.
      */
     trustProxy: source.TRUST_PROXY ? source.TRUST_PROXY.trim() : false,
+    /*
+     * Forced off under test, like the email key and the Google client above and
+     * for exactly the same reason: a developer with REDIS_URL in their .env
+     * must not have the suite behave differently from anyone else's. It would
+     * not merely differ, it would break — the cases that assert a limit is
+     * reached count on a counter that starts empty, and a real Redis carries
+     * yesterday's count into today's run. The case that exercises this sets it.
+     */
+    redisUrl: isTest ? null : (source.REDIS_URL?.trim() || null),
     /**
      * Forced off under test for the reason the API key above is: a developer
      * with a real client in their .env must not have the suite behave
