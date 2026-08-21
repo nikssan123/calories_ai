@@ -73,6 +73,8 @@ function CardBody({
       return <DayCard card={card} />;
     case 'recipes':
       return <RecipesCard card={card} />;
+    case 'plan':
+      return <PlanCard card={card} />;
     case 'workout_prompt':
       // Needs a real message id to answer onto. An optimistic bubble has none
       // yet, but it also cannot be carrying a card the model drew.
@@ -106,6 +108,64 @@ function RecipesCard({ card }: { card: Extract<Card, { type: 'recipes' }> }) {
         />
       ))}
     </div>
+  );
+}
+
+/**
+ * The week, as a line per night.
+ *
+ * Deliberately not the recipe cards above: seven of those is a screen and a
+ * half of conversation, and a week is something you read down rather than act
+ * on one item at a time. The nights that matter are tonight and tomorrow, so
+ * anything already cooked reads back quietly and the whole card opens the plan
+ * screen — which is where swapping and cooking actually live.
+ */
+function PlanCard({ card }: { card: Extract<Card, { type: 'plan' }> }) {
+  const router = useRouter();
+  const planned = card.nights.filter((night) => night.title !== null);
+
+  return (
+    <button
+      type="button"
+      onClick={() => router.push('/plan')}
+      className="w-full text-left"
+      aria-label="Open the week's plan"
+    >
+      <Shell className="transition-transform active:scale-[0.99]">
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="text-body font-bold">This week&rsquo;s dinners</p>
+          <span className="text-footnote text-muted-foreground shrink-0 font-semibold">
+            {planned.length} night{planned.length === 1 ? '' : 's'}
+          </span>
+        </div>
+
+        <ul className="mt-2.5 space-y-1.5">
+          {card.nights.map((night) => (
+            <li key={night.slot_id} className="flex items-baseline gap-2.5">
+              <span className="text-footnote text-muted-foreground w-9 shrink-0 font-bold uppercase">
+                {night.weekday.slice(0, 3)}
+              </span>
+              <span
+                className={cn(
+                  'text-footnote min-w-0 flex-1 truncate font-semibold',
+                  night.title === null && 'text-muted-foreground',
+                  // Cooked is history, not an achievement to celebrate — it
+                  // steps back so the nights still ahead are what you see.
+                  night.cooked && 'text-muted-foreground line-through',
+                )}
+              >
+                {night.title ?? 'Nothing planned'}
+              </span>
+              {night.kcal !== null && (
+                <span className="tnum text-footnote text-muted-foreground shrink-0 font-bold">
+                  {night.kcal.toLocaleString()}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      </Shell>
+    </button>
   );
 }
 

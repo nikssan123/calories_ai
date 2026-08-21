@@ -821,6 +821,36 @@ export const ChatCard = z.discriminatedUnion('type', [
     targets: Targets,
     burned_kcal: z.number(),
   }),
+  /**
+   * The week's dinners, drawn rather than recited.
+   *
+   * A projection of `MealPlan` rather than the plan itself: the card needs a
+   * line per night and nothing else, and shipping seven whole recipes — steps,
+   * ingredients, macros per ingredient — through a chat message to draw seven
+   * titles would be most of a chat history's weight for none of its use. The
+   * plan screen is one tap away for anyone who wants the rest.
+   */
+  z.object({
+    type: z.literal('plan'),
+    week_start: z.string(),
+    nights: z.array(
+      z.object({
+        slot_id: z.string().uuid(),
+        local_date: z.string(),
+        weekday: z.string(),
+        /** Null on a night with nothing planned — an ordinary state, not a gap. */
+        title: z.string().nullable(),
+        /** Per portion, as the plan screen shows it. Null with no recipe. */
+        kcal: z.number().nullable(),
+        protein_g: z.number().nullable(),
+        minutes: z.number().nullable(),
+        /** How many the cook makes. More than one is a batch; `covers` says which nights. */
+        portions: z.number().int(),
+        covers: z.array(z.string()),
+        cooked: z.boolean(),
+      }),
+    ),
+  }),
 ]);
 export type ChatCard = z.infer<typeof ChatCard>;
 
@@ -835,6 +865,8 @@ export const ChatAction = z.object({
     'card_shown',
     'recipes_suggested',
     'workout_asked',
+    'plan_made',
+    'plan_shown',
   ]),
   entry_id: z.string().uuid().nullable(),
   summary: z.string(),

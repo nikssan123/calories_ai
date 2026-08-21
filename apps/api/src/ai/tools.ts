@@ -8,8 +8,11 @@ import type {
   ExerciseEntry,
   FoodEntry,
   Meal,
+  MealPlan,
+  PantryItem,
   Progress,
 } from '@ct/shared';
+import { DIETS } from '@ct/shared';
 import { query } from '../db.ts';
 import { addDays, type DayContext, inferMeal, localDateFor, resolveWhen } from '../time.ts';
 import {
@@ -26,6 +29,22 @@ import { getUser, markOnboarded, missingProfileFields, updateUser } from '../ser
 import { addNote, forgetNote, MAX_NOTE_LENGTH } from '../services/notes.ts';
 import { calculateTargets, setTargets, targetsForDate } from '../services/targets.ts';
 import { latestWeight } from '../services/log.ts';
+import { repeatFoodEntry } from '../services/history.ts';
+import {
+  addPantryItems,
+  ageInDays,
+  deletePantryItem,
+  listPantry,
+  PantryFullError,
+  STALE_AFTER_DAYS,
+} from '../services/pantry.ts';
+import { cookRecipe, getRecipe, listRecipes, setRecipeSaved } from '../services/recipes.ts';
+import {
+  cookLibraryRecipe,
+  getLibraryRecipe,
+  listLibrary,
+  setLibrarySaved,
+} from '../services/library.ts';
 import { buildKitchenTools, emptyCollector, type KitchenCollector } from './kitchen.ts';
 import type { ToolsetName } from './providers/types.ts';
 import { itemShape } from './shapes.ts';
@@ -145,6 +164,51 @@ function exerciseCard(entry: ExerciseEntry): ChatCard {
     distance_km: entry.distance_km,
     category: entry.category,
     sets: entry.sets,
+  };
+}
+
+/**
+ * A week of dinners, projected down to what a card draws.
+ *
+ * Built from the plan the database returned, like every other card here — and
+ * trimmed to a line per night, because putting seven whole recipes through a
+ * stored chat message to render seven titles would make the journal's history
+ * mostly ingredient lists nobody ever reads back.
+ */
+function planCard(plan: MealPlan): ChatCard {
+  return {
+    type: 'plan',
+    week_start: plan.week_start,
+    nights: plan.slots.map((slot) => ({
+      slot_id: slot.id,
+      local_date: slot.local_date,
+      weekday: slot.weekday,
+      title: slot.recipe?.title ?? null,
+      kcal: slot.recipe ? Math.round(slot.recipe.kcal) : null,
+      protein_g: slot.recipe ? Math.round(slot.recipe.protein_g) : null,
+      minutes: slot.recipe?.minutes ?? null,
+      portions: slot.portions,
+      covers: slot.covers,
+      cooked: slot.cooked_at !== null,
+    })),
+  };
+}
+
+/**
+ * One pantry item, with its age said in days rather than as a timestamp.
+ *
+ * The age is the whole point of the list — an ingredient last seen three weeks
+ * ago is a maybe, and a model handed an ISO date will happily treat it as a
+ * fact about the fridge. Staples read as fresh by design.
+ */
+function pantryLine(item: PantryItem, now: Date) {
+  const age = ageInDays(item, now);
+  return {
+    name: item.name,
+    quantity: item.quantity_desc,
+    is_staple: item.is_staple,
+    last_seen_days_ago: age,
+    ...(item.is_staple || age <= STALE_AFTER_DAYS ? {} : { stale: true }),
   };
 }
 
@@ -708,7 +772,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
 
   const setProfile = tool(
     'set_profile',
-    'Save what you have learned about the user during setup: sex, date of birth, height, activity level, goal, target weight. Call it as soon as you learn a value — do not wait until you have them all. Targets are recalculated automatically each time. To record their current weight use log_weight instead; that is a measurement, not a profile field.',
+    'Save what you have learned about the user during setup: sex, date of birth, height, activity level, goal, target weight. Call it as soon as you learn a value — do not wait until you have them all. Targets are recalculated automatically each time. To record their current weight use log_weight instead; that is a measurement, not a profile field. It also holds what they will not eat, which is the one thing here you may learn long after setup is over.',
     {
       sex: z.enum(['male', 'female']).nullable().default(null),
       birth_date: z.string().nullable().default(null).describe('YYYY-MM-DD. If they give only an age, convert it to an approximate birth date.'),
@@ -727,6 +791,29 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         .nullable()
         .default(null)
         .describe('Hour their day rolls over, 0-12. Default 4 — only set it if they say something about late-night eating.'),
+      /*
+       * The two fields here that are not about setup at all.
+       *
+       * They belong on the profile rather than in a note because they are true
+       * of every meal this person will ever eat, and because the recipe engine
+       * reads them as hard limits — which it does not, and cannot, do for a
+       * sentence filed with `remember`. Someone who says they are vegetarian
+       * once should never be handed a chicken traybake, and telling them you
+       * have "made a note of it" when the kitchen cannot see the note is the
+       * shape of promise this app does not get to make.
+       */
+      diet: z
+        .enum(DIETS)
+        .nullable()
+        .default(null)
+        .describe('A dietary pattern they keep, when they mention one. "none" clears it. Set it the moment they say it, whether or not you are in setup.'),
+      avoids: z
+        .array(z.string())
+        .nullable()
+        .default(null)
+        .describe(
+          'Foods they will not or cannot eat — allergies, intolerances, dislikes strong enough to matter. The complete list, not an addition: send what they already avoid plus the new one, and an empty list to clear it. Their current list is in your context.',
+        ),
     },
     async (args) => {
       // Only forward the fields actually supplied; null means "not mentioned".
@@ -1080,7 +1167,683 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
     { alwaysLoad: true },
   );
 
+  // ---- The kitchen ---------------------------------------------------------
+
+  /**
+   * The pantry, from the conversation.
+   *
+   * `suggest_recipes` has always read it, but only from the inside: the journal
+   * could cook out of a kitchen it was not allowed to look at or correct. So
+   * "what have I got in?" had no answer, and "I used the last of the chicken"
+   * landed on the only tool that would take it — `remember` — which files it as
+   * a sentence in a prompt the kitchen never reads. The pantry is the main
+   * input to every recipe this app suggests, and it was reachable from one tab
+   * and nowhere else.
+   */
+  const getPantry = tool(
+    'get_pantry',
+    'Read what they have told the app is in their kitchen, with how long ago each item was last mentioned. Use it for "what have I got in?", before you talk about cooking something specific, and to check whether an item is already listed before adding it.',
+    {},
+    async () => {
+      const items = await listPantry(tc.userId);
+      return ok({
+        count: items.length,
+        items: items.map((item) => pantryLine(item, tc.now)),
+        // Said on every read rather than left to the prompt, because this is
+        // the premise the model would otherwise get wrong in the direction that
+        // costs something: a confident recipe built on food that is long gone.
+        what_this_is: `A memory of what they have mentioned, not a stocktake. Nothing is deducted when they cook, so anything last seen more than ${STALE_AFTER_DAYS} days ago is a maybe — build on it only if you say you are assuming it is still there. Staples are exempt from that.`,
+      });
+    },
+    { annotations: { readOnlyHint: true }, alwaysLoad: true },
+  );
+
+  const updatePantry = tool(
+    'update_pantry',
+    'Change what the app thinks is in their kitchen. Adding an item that is already listed refreshes it rather than duplicating it, which is also how you record "yes, still got that". Call it whenever they mention shopping, running out, or using something up — "got a big bag of rice", "we finished the eggs" — so the next recipe is built on what is actually there. Both lists are optional; send whichever the sentence gave you.',
+    {
+      add: z
+        .array(
+          z.object({
+            name: z.string().describe('The ingredient as someone would write it on a list — "Chicken thighs", not "some chicken".'),
+            quantity_desc: z
+              .string()
+              .nullable()
+              .default(null)
+              .describe('Roughly how much, in their words — "a big bag", "2 tins". Null if they did not say.'),
+            is_staple: z
+              .boolean()
+              .default(false)
+              .describe('True only for things that are simply always there — salt, oil, flour. A staple never ages out and is never put on a shopping list.'),
+          }),
+        )
+        .nullable()
+        .default(null)
+        .describe('Things they have, or have just bought. Null if they only used something up.'),
+      remove: z
+        .array(z.string())
+        .nullable()
+        .default(null)
+        .describe('Names of things that are gone, exactly as get_pantry lists them. Null if nothing ran out.'),
+    },
+    async (args) => {
+      const additions = args.add ?? [];
+      const removals = args.remove ?? [];
+      if (additions.length === 0 && removals.length === 0) {
+        return fail('Nothing to add and nothing to remove. Say what changed.');
+      }
+
+      const before = await listPantry(tc.userId);
+      const byName = new Map(before.map((item) => [item.name.toLowerCase(), item]));
+
+      const removed: string[] = [];
+      const notFound: string[] = [];
+      for (const name of removals) {
+        const item = byName.get(name.trim().toLowerCase());
+        if (item && (await deletePantryItem(tc.userId, item.id))) removed.push(item.name);
+        else notFound.push(name);
+      }
+
+      let added: string[] = [];
+      let refreshed: string[] = [];
+      if (additions.length > 0) {
+        const profile = await getUser(tc.userId);
+        try {
+          await addPantryItems(
+            tc.userId,
+            profile.plan,
+            additions.map((item) => ({
+              name: item.name,
+              quantity_desc: item.quantity_desc,
+              is_staple: item.is_staple,
+              source: 'typed' as const,
+            })),
+          );
+        } catch (error) {
+          if (error instanceof PantryFullError) return fail(error.message);
+          throw error;
+        }
+        // Split after the write rather than guessed before it, so the wording
+        // matches what actually happened to a name that was already there.
+        added = additions.filter((i) => !byName.has(i.name.trim().toLowerCase())).map((i) => i.name);
+        refreshed = additions.filter((i) => byName.has(i.name.trim().toLowerCase())).map((i) => i.name);
+      }
+
+      return ok({
+        added,
+        refreshed,
+        removed,
+        ...(notFound.length > 0
+          ? { not_in_the_list: notFound, note: 'These were not there to remove. Do not claim you took them off.' }
+          : {}),
+        pantry_size: (await listPantry(tc.userId)).length,
+      });
+    },
+    { alwaysLoad: true },
+  );
+
+  /**
+   * Recipes they already have, rather than recipes invented from scratch.
+   *
+   * `suggest_recipes` costs money and takes most of a minute, and half the time
+   * it is asked for something already saved — the chilli from last week, one of
+   * the hundred in the starter library. Searching first is both the cheaper
+   * answer and the better one: these have been cooked before.
+   */
+  const findRecipes = tool(
+    'find_recipes',
+    'Search recipes they already have: their own saved and generated ones, and the app\'s built-in library of about a hundred. Try this before suggest_recipes when they name a dish ("do I still have that chilli?", "something with chickpeas") — it is instant and free, and suggest_recipes is neither. Their own recipes come back as cards they can cook in one tap.',
+    {
+      query: z
+        .string()
+        .nullable()
+        .default(null)
+        .describe('What to match against the title — a dish, an ingredient. Null lists the most recent.'),
+      where: z
+        .enum(['mine', 'library', 'both'])
+        .default('both')
+        .describe('"mine" = recipes they saved or you generated for them. "library" = the built-in set. "both" unless they clearly meant one.'),
+      saved_only: z
+        .boolean()
+        .default(false)
+        .describe('True when they mean the ones they deliberately kept, not everything ever suggested.'),
+      limit: z.number().nullable().default(null).describe('Max per source. Null means 8.'),
+    },
+    async (args) => {
+      const limit = Math.min(Math.max(args.limit ?? 8, 1), 20);
+      const needle = args.query?.trim().toLowerCase() || null;
+
+      const mine =
+        args.where === 'library'
+          ? []
+          : (await listRecipes(tc.userId, { limit: 100, savedOnly: args.saved_only }))
+              // Filtered here rather than in SQL: the list is capped per account
+              // and this keeps the query the Cook tab uses untouched.
+              .filter((r) => !needle || r.title.toLowerCase().includes(needle))
+              .slice(0, limit);
+
+      const library =
+        args.where === 'mine'
+          ? []
+          : await listLibrary(tc.userId, tc.ctx, { q: needle, savedOnly: args.saved_only, limit }, tc.now);
+
+      if (mine.length === 0 && library.length === 0) {
+        return ok({
+          found: 0,
+          note: needle
+            ? `Nothing of theirs or in the library matches "${needle}". suggest_recipes can invent one, if that is what they want.`
+            : 'They have no recipes yet.',
+        });
+      }
+
+      // Only their own go on screen: a library recipe has measured macros per
+      // portion and no per-ingredient breakdown, so it cannot fill the card
+      // without inventing the half that is missing.
+      if (mine.length > 0) {
+        tc.actions.push({
+          kind: 'recipes_suggested',
+          entry_id: null,
+          summary: mine.map((r) => r.title).join(', '),
+          card: { type: 'recipes', recipes: mine },
+        });
+      }
+
+      return ok({
+        theirs: mine.map((r) => ({
+          recipe_id: r.id,
+          title: r.title,
+          kcal_per_portion: Math.round(r.kcal),
+          protein_g_per_portion: Math.round(r.protein_g),
+          minutes: r.minutes,
+          portions: r.portions,
+          saved: r.saved,
+        })),
+        library: library.map((r) => ({
+          library_slug: r.slug,
+          title: r.title,
+          category: r.category,
+          kcal_per_portion: Math.round(r.kcal),
+          protein_g_per_portion: Math.round(r.protein_g),
+          saved: r.saved,
+        })),
+        how_to_use_these: 'cook_recipe logs one, by recipe_id or library_slug. save_recipe keeps one for later.',
+      });
+    },
+    { annotations: { readOnlyHint: true }, alwaysLoad: true },
+  );
+
+  const cookRecipeTool = tool(
+    'cook_recipe',
+    'Log a recipe they already have as eaten — one of theirs by recipe_id, or one from the library by library_slug. This is the best entry the app can make: the macros were settled when the recipe was written and nothing gets re-estimated. Use it instead of log_food whenever the food is a recipe they have, and get the id from find_recipes first.',
+    {
+      recipe_id: z.string().nullable().default(null).describe('One of their own recipes. Null if using a library one.'),
+      library_slug: z.string().nullable().default(null).describe('A recipe from the built-in library. Null if using one of theirs.'),
+      portions: z
+        .number()
+        .nullable()
+        .default(null)
+        .describe('How much of it they ate, in portions. Null means one. Half a portion is 0.5. This is what went on the plate, not how many the pot makes.'),
+      meal: mealField.nullable().default(null).describe('Null to infer from the time.'),
+      when: whenField,
+    },
+    async (args) => {
+      if (!args.recipe_id === !args.library_slug) {
+        return fail('Give exactly one of recipe_id or library_slug. find_recipes returns both kinds.');
+      }
+
+      const eatenAt = resolveWhen(args.when ?? undefined, tc.now, tc.ctx);
+      const options = {
+        portions: args.portions ?? undefined,
+        meal: (args.meal as Meal | null) ?? undefined,
+        eatenAt,
+        ctx: tc.ctx,
+      };
+      const entry = args.recipe_id
+        ? await cookRecipe(tc.userId, args.recipe_id, options)
+        : await cookLibraryRecipe(tc.userId, args.library_slug!, options);
+
+      if (!entry) return fail('No recipe with that id. Call find_recipes to list what they actually have.');
+
+      tc.actions.push({
+        kind: 'food_logged',
+        entry_id: entry.id,
+        summary: `${entry.meal}: ${entry.description} — ${Math.round(entry.kcal)} kcal`,
+        card: foodCard(entry),
+      });
+
+      const day = await buildDaySummary(tc.userId, entry.local_date);
+      return ok({
+        entry_id: entry.id,
+        local_date: entry.local_date,
+        logged: pickTotals(entry),
+        day_totals: day.consumed,
+        kcal_remaining: day.targets.kcal - day.consumed.kcal,
+        protein_remaining: day.targets.protein_g - day.consumed.protein_g,
+      });
+    },
+    { alwaysLoad: true },
+  );
+
+  /**
+   * Reworking a library recipe so they can actually cook it tonight.
+   *
+   * The one kitchen job that is neither inventing nor transcribing: the recipe
+   * already exists and somebody has already chosen it, and what is wrong with
+   * it is this person — the diet it breaks, the ingredient they do not have,
+   * the forty minutes they have not got. Costs the same as inventing one from
+   * nothing, so it takes the same ceiling.
+   */
+  const adaptRecipeTool = tool(
+    'adapt_recipe',
+    'Rework one of the library recipes to fit them — their diet, what is in their kitchen, the time they have, what is left of the day. Use it when they are looking at a library recipe and it does not quite work: "can I make that without the cream?", "is there a vegetarian version?". Needs a library_slug from find_recipes. It is slow and it costs money, and it shares one daily budget with suggest_recipes, so call it once per turn at most.',
+    {
+      library_slug: z.string().describe('The library recipe to start from. From find_recipes.'),
+      wants: z
+        .string()
+        .nullable()
+        .default(null)
+        .describe('What has to change, in their words — "without the cream", "half the time". Null to fit it to them generally.'),
+      minutes: z.number().nullable().default(null).describe('Minutes they have, if they said.'),
+      portions: z.number().nullable().default(null).describe('Servings to cook. Null means one.'),
+    },
+    async (args) => {
+      const { suggestRecipes, RecipeBudgetError } = await import('./recipes.ts');
+
+      let recipes, message;
+      try {
+        ({ recipes, message } = await suggestRecipes(tc.userId, {
+          wants: args.wants,
+          minutes: args.minutes,
+          portions: args.portions,
+          now: tc.now,
+          job: { kind: 'adapt', slug: args.library_slug },
+        }));
+      } catch (error) {
+        if (error instanceof RecipeBudgetError) {
+          return fail(
+            `They have used all ${error.allowed} recipe runs for today, so this cannot be reworked yet. Say so plainly, and tell them the original is still there to cook.`,
+          );
+        }
+        // Thrown by the engine when the slug is not in the library at all.
+        if ((error as Error).message.includes('No such recipe')) {
+          return fail('No library recipe with that slug. Call find_recipes for the real ones.');
+        }
+        throw error;
+      }
+
+      const [adapted] = recipes;
+      if (!adapted) return fail('That did not come back as a recipe. Say so, and leave the original alone.');
+
+      tc.actions.push({
+        kind: 'recipes_suggested',
+        entry_id: null,
+        summary: adapted.title,
+        card: { type: 'recipes', recipes },
+      });
+
+      return ok({
+        adapted: {
+          title: adapted.title,
+          kcal_per_portion: Math.round(adapted.kcal),
+          protein_g_per_portion: Math.round(adapted.protein_g),
+          minutes: adapted.minutes,
+        },
+        your_note_to_them: message,
+      });
+    },
+    { alwaysLoad: true },
+  );
+
+  const saveRecipeTool = tool(
+    'save_recipe',
+    'Keep a recipe, or stop keeping it. Saved recipes are the ones that show under "For you" in Cook and survive being tidied away. Use it when they say they liked one, want it again, or are done with it.',
+    {
+      recipe_id: z.string().nullable().default(null),
+      library_slug: z.string().nullable().default(null),
+      saved: z.boolean().default(true).describe('False to un-keep it.'),
+    },
+    async (args) => {
+      if (!args.recipe_id === !args.library_slug) {
+        return fail('Give exactly one of recipe_id or library_slug.');
+      }
+      const done = args.recipe_id
+        ? (await setRecipeSaved(tc.userId, args.recipe_id, args.saved)) !== null
+        : await setLibrarySaved(tc.userId, args.library_slug!, args.saved);
+
+      if (!done) return fail('No recipe with that id. Call find_recipes first.');
+      return ok({ saved: args.saved, where_it_lives: 'Cook, under "For you".' });
+    },
+    { alwaysLoad: true },
+  );
+
+  // ---- The week ahead ------------------------------------------------------
+
+  /**
+   * The planner, from the conversation.
+   *
+   * The whole feature lived behind one tab: the journal could not read a plan
+   * it had no part in making, could not say what was on tonight, and could not
+   * log it when they cooked it. "What am I making tonight?" is about the most
+   * ordinary thing anyone would ask a food app, and it was the one question the
+   * chat box could not answer.
+   */
+  const planWeekTool = tool(
+    'plan_week',
+    "Plan their dinners for the rest of the week — a recipe a night, built around what is in their kitchen and what their targets are. Slow and expensive, and capped at a couple of plans a week, so call it only when they actually ask to plan the week. \"What should I cook tonight?\" is suggest_recipes, not this.",
+    {
+      wants: z
+        .string()
+        .nullable()
+        .default(null)
+        .describe('Anything they said about the week in their own words — "nothing fiddly on weeknights", "use up the freezer".'),
+      minutes: z
+        .number()
+        .nullable()
+        .default(null)
+        .describe('Minutes they have on an ordinary weeknight, if they said.'),
+      servings: z
+        .number()
+        .nullable()
+        .default(null)
+        .describe('How many people each dinner feeds. Null means one.'),
+      batch: z
+        .boolean()
+        .nullable()
+        .default(null)
+        .describe('Whether one cook may cover more than one night. Null leaves it on, which is usually what someone planning a week wants.'),
+    },
+    async (args) => {
+      // Lazy for the same reason as suggest_recipes: `services/mealPlans.ts`
+      // reaches back into `ai/plan.ts`, which builds its tools through here.
+      const { generateMealPlan } = await import('./plan.ts');
+      const { RecipeBudgetError } = await import('./recipes.ts');
+
+      let plan, message;
+      try {
+        ({ plan, message } = await generateMealPlan(tc.userId, {
+          brief: {
+            ...(args.wants ? { wants: args.wants } : {}),
+            minutes: args.minutes,
+            servings: args.servings,
+            ...(args.batch === null ? {} : { batch: args.batch }),
+          },
+          now: tc.now,
+        }));
+      } catch (error) {
+        if (error instanceof RecipeBudgetError) {
+          return fail(
+            `They have used all ${error.allowed} meal plans for this week, so a new one cannot be made yet. Say so plainly, and offer suggest_recipes for tonight instead.`,
+          );
+        }
+        throw error;
+      }
+
+      tc.actions.push({
+        kind: 'plan_made',
+        entry_id: null,
+        summary: `${plan.slots.filter((s) => s.recipe).length} dinners from ${plan.week_start}`,
+        card: planCard(plan),
+      });
+
+      // Terse, like the other card tools: the week is already on their screen.
+      return ok({
+        week_start: plan.week_start,
+        nights_planned: plan.slots.filter((s) => s.recipe).length,
+        where_it_lives: 'The Plan tab — and the shopping list is derived from it.',
+        your_note_to_them: message,
+      });
+    },
+    { alwaysLoad: true },
+  );
+
+  const getMealPlanTool = tool(
+    'get_meal_plan',
+    'Read the dinners they have planned, with the id of each night. This is how you answer "what am I making tonight?" and how you get the slot_id before changing or cooking a night. Defaults to this week.',
+    {
+      week_start: z
+        .string()
+        .nullable()
+        .default(null)
+        .describe('YYYY-MM-DD, any date in the week you want. Null for this week.'),
+    },
+    async (args) => {
+      const { getMealPlan, planWeekFor } = await import('../services/mealPlans.ts');
+      const weekStart = planWeekFor(args.week_start ?? localDateFor(tc.now, tc.ctx));
+      const plan = await getMealPlan(tc.userId, weekStart);
+
+      if (!plan) {
+        return ok({
+          week_start: weekStart,
+          plan: null,
+          note: 'Nothing planned for that week. plan_week will make one, but only if they ask for it.',
+        });
+      }
+
+      tc.actions.push({
+        kind: 'plan_shown',
+        entry_id: null,
+        summary: `Dinners from ${plan.week_start}`,
+        card: planCard(plan),
+      });
+
+      return ok({
+        week_start: plan.week_start,
+        today: localDateFor(tc.now, tc.ctx),
+        nights: plan.slots.map((slot) => ({
+          slot_id: slot.id,
+          date: slot.local_date,
+          weekday: slot.weekday,
+          title: slot.recipe?.title ?? null,
+          kcal_per_portion: slot.recipe ? Math.round(slot.recipe.kcal) : null,
+          portions: slot.portions,
+          also_covers: slot.covers,
+          cooked: slot.cooked_at !== null,
+        })),
+      });
+    },
+    { annotations: { readOnlyHint: true }, alwaysLoad: true },
+  );
+
+  const updatePlanNight = tool(
+    'update_plan_night',
+    'Change one night of the plan — swap in a different recipe of theirs, clear the night because they are out, or change how many portions that cook makes. Never touches the rest of the week. Get slot_id from get_meal_plan.',
+    {
+      slot_id: z.string().describe('The night to change.'),
+      recipe_id: z
+        .string()
+        .nullable()
+        .default(null)
+        .describe('One of their own recipes to put on that night — find_recipes gives the id. Null leaves the dish alone.'),
+      clear: z
+        .boolean()
+        .default(false)
+        .describe('True to empty the night entirely. Use this for "we are eating out on Thursday".'),
+      portions: z
+        .number()
+        .nullable()
+        .default(null)
+        .describe('How many the cook makes. Null leaves it. More than one is a batch covering more than one night.'),
+    },
+    async (args) => {
+      const { updateSlot } = await import('../services/mealPlans.ts');
+
+      if (args.clear && args.recipe_id) {
+        return fail('Clear the night or give it a recipe — not both.');
+      }
+      // A slot may only point at a recipe this account owns. The route checks
+      // the same thing for the same reason: an id in a request body is
+      // otherwise a way to read somebody else's recipe through your own plan.
+      if (args.recipe_id && !(await getRecipe(tc.userId, args.recipe_id))) {
+        return fail('That is not one of their recipes. Call find_recipes for the ids.');
+      }
+
+      const plan = await updateSlot(tc.userId, args.slot_id, {
+        ...(args.clear ? { recipeId: null } : args.recipe_id ? { recipeId: args.recipe_id } : {}),
+        ...(args.portions === null ? {} : { portions: args.portions }),
+      });
+      if (!plan) return fail('No night with that id. Call get_meal_plan to list them.');
+
+      tc.actions.push({
+        kind: 'plan_shown',
+        entry_id: null,
+        summary: `Dinners from ${plan.week_start}`,
+        card: planCard(plan),
+      });
+
+      const slot = plan.slots.find((s) => s.id === args.slot_id);
+      return ok({
+        week_start: plan.week_start,
+        night: slot
+          ? { date: slot.local_date, weekday: slot.weekday, title: slot.recipe?.title ?? null, portions: slot.portions }
+          : null,
+        note: 'The shopping list is derived on every read, so it has already changed with this.',
+      });
+    },
+    { alwaysLoad: true },
+  );
+
+  const cookPlannedNight = tool(
+    'cook_planned_night',
+    'Log a planned dinner as eaten, and mark that night cooked. Use it when they say they made what was planned — "had the traybake". One portion unless they say otherwise: a batch is what the pot makes, not what went on the plate.',
+    {
+      slot_id: z.string().describe('The night they cooked. From get_meal_plan.'),
+      portions: z.number().nullable().default(null).describe('How much they ate. Null means one portion.'),
+      when: whenField,
+    },
+    async (args) => {
+      const { cookSlot } = await import('../services/mealPlans.ts');
+      const entry = await cookSlot(tc.userId, args.slot_id, tc.ctx, {
+        portions: args.portions ?? undefined,
+        eatenAt: resolveWhen(args.when ?? undefined, tc.now, tc.ctx),
+      });
+      if (!entry) {
+        return fail('Nothing planned on that night, or no night with that id. Call get_meal_plan.');
+      }
+
+      tc.actions.push({
+        kind: 'food_logged',
+        entry_id: entry.id,
+        summary: `${entry.meal}: ${entry.description} — ${Math.round(entry.kcal)} kcal`,
+        card: foodCard(entry),
+      });
+
+      const day = await buildDaySummary(tc.userId, entry.local_date);
+      return ok({
+        entry_id: entry.id,
+        local_date: entry.local_date,
+        logged: pickTotals(entry),
+        day_totals: day.consumed,
+        kcal_remaining: day.targets.kcal - day.consumed.kcal,
+      });
+    },
+    { alwaysLoad: true },
+  );
+
+  const getShoppingList = tool(
+    'get_shopping_list',
+    'What they would need to buy for the planned week, with anything already in their kitchen taken off. Derived fresh every time, so it is never stale. Defaults to this week.',
+    {
+      week_start: z.string().nullable().default(null).describe('YYYY-MM-DD, any date in the week. Null for this week.'),
+    },
+    async (args) => {
+      const { planWeekFor, shoppingListFor } = await import('../services/mealPlans.ts');
+      const weekStart = planWeekFor(args.week_start ?? localDateFor(tc.now, tc.ctx));
+      const list = await shoppingListFor(tc.userId, weekStart);
+      if (!list) return fail('No plan for that week, so there is nothing to shop for yet.');
+
+      return ok({
+        week_start: list.week_start,
+        to_buy: list.items.map((item) => ({
+          name: item.name,
+          quantity_g: item.quantity_g,
+          quantity: item.quantity_descs,
+          for_dates: item.for_dates,
+        })),
+        // Named rather than silently dropped: "you already have this" is a
+        // claim about what they told us, not about what is in the fridge.
+        already_have: list.have_already,
+      });
+    },
+    { annotations: { readOnlyHint: true }, alwaysLoad: true },
+  );
+
+  // ---- The rest ------------------------------------------------------------
+
+  /**
+   * The same clone the repeat button makes.
+   *
+   * `search_food_history` plus `log_food` looks like it covers this and does
+   * not: the search returns each item's calories and none of its macros, so a
+   * re-log is a fresh estimate wearing an old meal's name. This copies the
+   * entry, which is what "the same as yesterday" actually means.
+   */
+  const repeatMeal = tool(
+    'repeat_meal',
+    'Log a past meal again, exactly as it was priced the first time. Use it for "the same as yesterday", "my usual breakfast", or anything they have logged before — get the entry id from search_food_history or get_day. Better than logging it again from the description, which re-estimates every number.',
+    {
+      entry_id: z.string().describe('The past entry to copy. The copy is independent of it.'),
+      meal: mealField.nullable().default(null).describe('Null to infer from the time.'),
+      when: whenField,
+    },
+    async (args) => {
+      const entry = await repeatFoodEntry(tc.userId, args.entry_id, tc.ctx, {
+        meal: (args.meal as Meal | null) ?? undefined,
+        eatenAt: resolveWhen(args.when ?? undefined, tc.now, tc.ctx),
+      });
+      if (!entry) return fail('No entry with that id. Call search_food_history to find it.');
+
+      tc.actions.push({
+        kind: 'food_logged',
+        entry_id: entry.id,
+        summary: `${entry.meal}: ${entry.description} — ${Math.round(entry.kcal)} kcal`,
+        card: foodCard(entry),
+      });
+
+      const day = await buildDaySummary(tc.userId, entry.local_date);
+      return ok({
+        entry_id: entry.id,
+        local_date: entry.local_date,
+        logged: pickTotals(entry),
+        day_totals: day.consumed,
+        kcal_remaining: day.targets.kcal - day.consumed.kcal,
+        protein_remaining: day.targets.protein_g - day.consumed.protein_g,
+      });
+    },
+    { alwaysLoad: true },
+  );
+
+  /**
+   * Writing the review early, on request.
+   *
+   * It publishes itself into the journal as its own message, which is why this
+   * returns almost nothing: the review is already on their screen by the time
+   * the tool result comes back, and repeating it would print it twice.
+   */
+  const runReviewTool = tool(
+    'run_weekly_review',
+    'Write this week\'s review now instead of waiting for Monday. Only when they ask for it — "how did my week go?", "can you do my review early?". It is slow and it costs money, and it also runs the adaptive pass, so their calorie target may change. It posts the review into this conversation itself: do not repeat it, and do not summarise it.',
+    {},
+    async () => {
+      const { generateWeeklyReview } = await import('./review.ts');
+      const review = await generateWeeklyReview(tc.userId);
+      return ok({
+        published: true,
+        week: `${review.week_start} to ${review.week_end}`,
+        note: 'It is already in the conversation as its own message. Say one short line at most — "that is your week" — or nothing at all. Never restate it.',
+      });
+    },
+    { alwaysLoad: true },
+  );
+
   const reads = [getDay, searchHistory, getProgress];
+  /**
+   * Kitchen reads, kept out of `reads` on purpose.
+   *
+   * `reads` is the read-only set the weekly review and the nudge get, and a
+   * review has no use for a shopping list — it would only be more prompt for
+   * the model to wander into. These go to the journal alone.
+   */
+  const kitchenReads = [getPantry, findRecipes, getMealPlanTool, getShoppingList];
   const shows = [showChart, showDay];
   const writes = [
     logFood,
@@ -1100,10 +1863,26 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
     // recipes. The read-only review agent must not be able to reach either.
     suggestRecipesTool,
     importRecipeTool,
+    adaptRecipeTool,
+    planWeekTool,
+    // Logging tools that price nothing themselves — the numbers were settled
+    // when the recipe or the original entry was written.
+    cookRecipeTool,
+    saveRecipeTool,
+    cookPlannedNight,
+    updatePlanNight,
+    repeatMeal,
+    updatePantry,
+    /*
+     * A write for a reason that is easy to miss: it publishes a message into
+     * the journal and moves their calorie target. A review agent able to call
+     * it would review its own review, on a schedule.
+     */
+    runReviewTool,
   ];
   // The display tools stay out of the read-only set: the weekly review renders
   // as markdown on its own screen, where a chat card has nowhere to appear.
-  const tools = options.readOnly ? reads : [...writes, ...reads, ...shows];
+  const tools = options.readOnly ? reads : [...writes, ...reads, ...kitchenReads, ...shows];
 
   return {
     server: createSdkMcpServer({ name: SERVER_NAME, version: '1.0.0', tools }),

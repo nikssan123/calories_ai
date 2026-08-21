@@ -15,9 +15,13 @@ import {
  * not the wording, which is free to change.
  */
 
+// The whole row, not the interesting half: `tsconfig` covers `src` only, so
+// nothing here fails to compile when the profile grows a column, and a fixture
+// missing one reads to `dayContextPrompt` as a user who has none.
 const profile: Profile = {
   id: '11111111-1111-1111-1111-111111111111',
   email: 'nik@example.com',
+  email_verified: true,
   display_name: 'Nik',
   sex: 'male',
   birth_date: '1990-01-01',
@@ -28,6 +32,11 @@ const profile: Profile = {
   timezone: 'Europe/Sofia',
   day_start_hour: 4,
   is_setup_complete: true,
+  plan: 'free',
+  diet: 'none',
+  avoids: [],
+  notify_weekly_review: true,
+  notify_nudges: false,
 };
 
 const day: DaySummary = {

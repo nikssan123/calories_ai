@@ -911,3 +911,791 @@ describe('suggest_recipes', () => {
     expect((await call('suggest_recipes', {})).isError).toBe(false);
   });
 });
+
+// ---- The kitchen -----------------------------------------------------------
+
+/**
+ * The journal could cook out of a kitchen it was not allowed to look at.
+ *
+ * These cover the reach rather than the cleverness: the pantry, the recipes
+ * already saved, the week ahead and the review are all things a user can do by
+ * hand, and every one of them used to stop at the edge of the chat box.
+ */
+
+const INGREDIENT = {
+  name: 'Chicken thighs',
+  quantity_g: 400,
+  quantity_desc: '4 thighs',
+  kcal: 800,
+  protein_g: 80,
+  carbs_g: 0,
+  fat_g: 50,
+  fiber_g: 0,
+  sodium_mg: 400,
+  sat_fat_g: 14,
+  sugar_g: 0,
+  missing: false,
+};
+
+async function makeRecipe(title: string, overrides: Record<string, unknown> = {}) {
+  const { saveRecipe } = await import('../src/services/recipes.ts');
+  return saveRecipe({
+    userId: user.id,
+    title,
+    summary: null,
+    portions: 2,
+    minutes: 25,
+    steps: ['Cook it.'],
+    ingredients: [INGREDIENT],
+    confidence: 'medium',
+    generatedFor: null,
+    ...overrides,
+  } as never);
+}
+
+async function stock(...names: string[]) {
+  const { addPantryItems } = await import('../src/services/pantry.ts');
+  return addPantryItems(user.id, 'free', names.map((name) => ({ name })));
+}
+
+describe('get_pantry', () => {
+  it('is on the journal and nowhere near the review', () => {
+    build();
+    expect(tools.has('get_pantry')).toBe(true);
+    build({}, true);
+    expect(tools.has('get_pantry')).toBe(false);
+  });
+
+  it('lists what they said they have, with its age', async () => {
+    await stock('Chicken thighs', 'Spinach');
+    build();
+
+    const { json } = await call('get_pantry');
+
+    expect(json.count).toBe(2);
+    expect(json.items.map((i: any) => i.name).sort()).toEqual(['Chicken thighs', 'Spinach']);
+    expect(json.items[0].last_seen_days_ago).toBe(0);
+    // The premise the model would otherwise get wrong in the expensive
+    // direction: a confident recipe built on food that is long gone.
+    expect(json.what_this_is).toContain('not a stocktake');
+  });
+
+  it('marks anything gone stale, and never a staple', async () => {
+    const { addPantryItems } = await import('../src/services/pantry.ts');
+    const { query } = await import('../src/db.ts');
+    await addPantryItems(user.id, 'free', [{ name: 'Rice', is_staple: true }, { name: 'Milk' }]);
+    // Absolute, not `now() - interval`: the turn's clock is NOW, and the
+    // database's is whatever day the suite happens to run on.
+    await query('UPDATE pantry_items SET last_seen_at = $1', ['2026-02-08T11:00:00Z']);
+    build();
+
+    const { json } = await call('get_pantry');
+    const byName = new Map(json.items.map((i: any) => [i.name, i]));
+
+    expect(byName.get('Milk').stale).toBe(true);
+    expect(byName.get('Rice').stale).toBeUndefined();
+    expect(byName.get('Rice').last_seen_days_ago).toBe(0);
+  });
+});
+
+describe('update_pantry', () => {
+  it('adds what they bought', async () => {
+    build();
+
+    const { json } = await call('update_pantry', {
+      add: [{ name: 'Spinach', quantity_desc: 'a bag', is_staple: false }],
+    });
+
+    expect(json.added).toEqual(['Spinach']);
+    expect(json.pantry_size).toBe(1);
+    const { listPantry } = await import('../src/services/pantry.ts');
+    expect((await listPantry(user.id))[0]).toMatchObject({ name: 'Spinach', quantity_desc: 'a bag' });
+  });
+
+  /** Two rows called "Eggs" and "eggs" is what makes a pantry unusable. */
+  it('refreshes a name it already has rather than duplicating it', async () => {
+    await stock('Eggs');
+    build();
+
+    const { json } = await call('update_pantry', { add: [{ name: 'eggs', quantity_desc: 'half a box' }] });
+
+    expect(json.added).toEqual([]);
+    expect(json.refreshed).toEqual(['eggs']);
+    expect(json.pantry_size).toBe(1);
+  });
+
+  it('removes what ran out', async () => {
+    await stock('Eggs', 'Spinach');
+    build();
+
+    const { json } = await call('update_pantry', { remove: ['eggs'] });
+
+    expect(json.removed).toEqual(['Eggs']);
+    expect(json.pantry_size).toBe(1);
+  });
+
+  it('takes the shopping and the shortage in one call', async () => {
+    await stock('Eggs');
+    build();
+
+    const { json } = await call('update_pantry', {
+      add: [{ name: 'Chicken thighs' }],
+      remove: ['Eggs'],
+    });
+
+    expect(json.added).toEqual(['Chicken thighs']);
+    expect(json.removed).toEqual(['Eggs']);
+  });
+
+  /** Reporting a removal that did not happen is the failure worth catching. */
+  it('says which names were not there to remove', async () => {
+    build();
+
+    const { json } = await call('update_pantry', { remove: ['Caviar'] });
+
+    expect(json.removed).toEqual([]);
+    expect(json.not_in_the_list).toEqual(['Caviar']);
+    expect(json.note).toContain('Do not claim');
+  });
+
+  it('refuses a call that changes nothing', async () => {
+    build();
+    expect((await call('update_pantry', {})).isError).toBe(true);
+  });
+
+  it('reports a full kitchen rather than throwing', async () => {
+    const { limitsFor } = await import('../src/services/plans.ts');
+    const limit = limitsFor('free').pantryItems;
+    await stock(...Array.from({ length: limit }, (_, i) => `Item ${i}`));
+    build();
+
+    const result = await call('update_pantry', { add: [{ name: 'One too many' }] });
+
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain('full');
+  });
+});
+
+describe('find_recipes', () => {
+  it('puts their own on screen as cards they can cook', async () => {
+    await makeRecipe('Chicken traybake');
+    build();
+
+    const { json } = await call('find_recipes', { query: 'chicken' });
+
+    expect(json.theirs).toHaveLength(1);
+    expect(json.theirs[0]).toMatchObject({ title: 'Chicken traybake', portions: 2 });
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({ kind: 'recipes_suggested', card: { type: 'recipes' } });
+  });
+
+  it('searches the built-in library too', async () => {
+    const { seedLibrary } = await import('../src/seed-library.ts');
+    await seedLibrary([
+      {
+        slug: 'lentil-soup',
+        title: 'Lentil soup',
+        summary: null,
+        category: 'Soup',
+        portions: 4,
+        serving_size: '1 bowl',
+        ingredients: [{ text: '1 cup lentils', note: null }],
+        steps: ['Simmer.'],
+        keywords: ['lentil'],
+        kcal: 300,
+        protein_g: 18,
+        carbs_g: 45,
+        fat_g: 4,
+        food_groups: [],
+        image_path: '/recipes/lentil-soup.jpg',
+        source: 'USDA MyPlate Kitchen',
+        source_url: 'https://example.test/lentil-soup',
+        rating: 4,
+        rating_count: 10,
+      },
+    ]);
+    build();
+
+    const { json } = await call('find_recipes', { query: 'lentil' });
+
+    expect(json.library).toEqual([
+      expect.objectContaining({ library_slug: 'lentil-soup', title: 'Lentil soup', kcal_per_portion: 300 }),
+    ]);
+    // A library recipe has measured macros per portion and no per-ingredient
+    // split, so it cannot fill the card without inventing the missing half.
+    expect(actions).toEqual([]);
+  });
+
+  it('says plainly when there is nothing, rather than drawing an empty card', async () => {
+    build();
+
+    const { json } = await call('find_recipes', { query: 'wellington' });
+
+    expect(json.found).toBe(0);
+    expect(json.note).toContain('wellington');
+    expect(actions).toEqual([]);
+  });
+
+  it('narrows to what they deliberately kept', async () => {
+    const kept = await makeRecipe('Kept one');
+    await makeRecipe('Passing one');
+    const { setRecipeSaved } = await import('../src/services/recipes.ts');
+    await setRecipeSaved(user.id, kept.id, true);
+    build();
+
+    const { json } = await call('find_recipes', { saved_only: true });
+
+    expect(json.theirs.map((r: any) => r.title)).toEqual(['Kept one']);
+  });
+});
+
+describe('cook_recipe', () => {
+  it('logs one of theirs against the day, priced as it was written', async () => {
+    const recipe = await makeRecipe('Chicken traybake');
+    build();
+
+    const { json } = await call('cook_recipe', { recipe_id: recipe.id });
+
+    // Two portions in the recipe, one eaten: half the ingredients.
+    expect(json.logged).toEqual({ kcal: 400, protein_g: 40, carbs_g: 0, fat_g: 25 });
+    expect(json.local_date).toBe(TODAY);
+    expect(json.day_totals.kcal).toBe(400);
+    expect(actions[0]).toMatchObject({ kind: 'food_logged', card: { type: 'food' } });
+
+    const entry = await getFoodEntry(user.id, json.entry_id);
+    expect(entry!.description).toBe('Chicken traybake');
+    expect(entry!.source).toBe('quick');
+  });
+
+  it('scales to what actually went on the plate', async () => {
+    const recipe = await makeRecipe('Chicken traybake');
+    build();
+
+    const { json } = await call('cook_recipe', { recipe_id: recipe.id, portions: 2 });
+
+    expect(json.logged.kcal).toBe(800);
+  });
+
+  it('logs a library recipe by slug', async () => {
+    const { seedLibrary } = await import('../src/seed-library.ts');
+    await seedLibrary([
+      {
+        slug: 'lentil-soup',
+        title: 'Lentil soup',
+        summary: null,
+        category: 'Soup',
+        portions: 4,
+        serving_size: '1 bowl',
+        ingredients: [{ text: '1 cup lentils', note: null }],
+        steps: ['Simmer.'],
+        keywords: ['lentil'],
+        kcal: 300,
+        protein_g: 18,
+        carbs_g: 45,
+        fat_g: 4,
+        food_groups: [],
+        image_path: '/recipes/lentil-soup.jpg',
+        source: 'USDA MyPlate Kitchen',
+        source_url: 'https://example.test/lentil-soup',
+        rating: 4,
+        rating_count: 10,
+      },
+    ]);
+    build();
+
+    const { json } = await call('cook_recipe', { library_slug: 'lentil-soup' });
+
+    expect(json.logged.kcal).toBe(300);
+    const entry = await getFoodEntry(user.id, json.entry_id);
+    expect(entry!.description).toBe('Lentil soup');
+  });
+
+  it('insists on exactly one kind of id', async () => {
+    const recipe = await makeRecipe('Chicken traybake');
+    build();
+
+    expect((await call('cook_recipe', {})).isError).toBe(true);
+    expect(
+      (await call('cook_recipe', { recipe_id: recipe.id, library_slug: 'lentil-soup' })).isError,
+    ).toBe(true);
+  });
+
+  it('fails rather than logging nothing quietly', async () => {
+    build();
+    const result = await call('cook_recipe', { recipe_id: '11111111-1111-1111-1111-111111111111' });
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain('find_recipes');
+  });
+});
+
+describe('save_recipe', () => {
+  it('keeps one of theirs, and stops keeping it', async () => {
+    const recipe = await makeRecipe('Chicken traybake');
+    build();
+
+    expect((await call('save_recipe', { recipe_id: recipe.id, saved: true })).json.saved).toBe(true);
+    const { getRecipe } = await import('../src/services/recipes.ts');
+    expect((await getRecipe(user.id, recipe.id))!.saved).toBe(true);
+
+    await call('save_recipe', { recipe_id: recipe.id, saved: false });
+    expect((await getRecipe(user.id, recipe.id))!.saved).toBe(false);
+  });
+
+  it('fails on an id that is not theirs', async () => {
+    build();
+    expect(
+      (await call('save_recipe', { recipe_id: '11111111-1111-1111-1111-111111111111' })).isError,
+    ).toBe(true);
+  });
+});
+
+// ---- The week ahead --------------------------------------------------------
+
+/** Tuesday 10 March 2026 belongs to the plan week starting Monday the 9th. */
+const WEEK_START = '2026-03-09';
+
+async function planWith(slots: Array<{ date: string; recipeId: string | null; portions?: number }>) {
+  const { saveMealPlan } = await import('../src/services/mealPlans.ts');
+  return saveMealPlan(
+    user.id,
+    WEEK_START,
+    null,
+    slots.map((s) => ({ local_date: s.date, recipeId: s.recipeId, portions: s.portions ?? 1 })),
+  );
+}
+
+describe('get_meal_plan', () => {
+  it('draws the week and hands back the id of every night', async () => {
+    const recipe = await makeRecipe('Chicken traybake');
+    await planWith([
+      { date: '2026-03-10', recipeId: recipe.id },
+      { date: '2026-03-11', recipeId: null },
+    ]);
+    build();
+
+    const { json } = await call('get_meal_plan');
+
+    expect(json.week_start).toBe(WEEK_START);
+    expect(json.today).toBe(TODAY);
+    expect(json.nights).toHaveLength(2);
+    expect(json.nights[0]).toMatchObject({ weekday: 'Tuesday', title: 'Chicken traybake', cooked: false });
+    expect(json.nights[1].title).toBeNull();
+    expect(json.nights[0].slot_id).toEqual(expect.any(String));
+
+    expect(actions[0]).toMatchObject({ kind: 'plan_shown', card: { type: 'plan' } });
+    const card = actions[0]!.card as Extract<ChatCard, { type: 'plan' }>;
+    expect(card.nights[0]).toMatchObject({ title: 'Chicken traybake', kcal: 400, weekday: 'Tuesday' });
+    expect(card.nights[1]!.title).toBeNull();
+  });
+
+  it('says there is no plan rather than failing', async () => {
+    build();
+
+    const { json } = await call('get_meal_plan');
+
+    expect(json.plan).toBeNull();
+    expect(json.week_start).toBe(WEEK_START);
+    expect(actions).toEqual([]);
+  });
+});
+
+describe('update_plan_night', () => {
+  it('swaps one night for another recipe', async () => {
+    const first = await makeRecipe('Chicken traybake');
+    const second = await makeRecipe('Lentil stew');
+    const plan = await planWith([{ date: '2026-03-10', recipeId: first.id }]);
+    build();
+
+    const { json } = await call('update_plan_night', {
+      slot_id: plan.slots[0]!.id,
+      recipe_id: second.id,
+    });
+
+    expect(json.night).toMatchObject({ date: '2026-03-10', title: 'Lentil stew' });
+  });
+
+  it('clears a night they are eating out', async () => {
+    const recipe = await makeRecipe('Chicken traybake');
+    const plan = await planWith([{ date: '2026-03-10', recipeId: recipe.id }]);
+    build();
+
+    const { json } = await call('update_plan_night', { slot_id: plan.slots[0]!.id, clear: true });
+
+    expect(json.night.title).toBeNull();
+  });
+
+  it('will not clear and fill the same night', async () => {
+    const recipe = await makeRecipe('Chicken traybake');
+    const plan = await planWith([{ date: '2026-03-10', recipeId: recipe.id }]);
+    build();
+
+    const result = await call('update_plan_night', {
+      slot_id: plan.slots[0]!.id,
+      recipe_id: recipe.id,
+      clear: true,
+    });
+    expect(result.isError).toBe(true);
+  });
+
+  /** An id in a tool call is otherwise a way to read somebody else's recipe. */
+  it('refuses a recipe that is not theirs', async () => {
+    const recipe = await makeRecipe('Chicken traybake');
+    const plan = await planWith([{ date: '2026-03-10', recipeId: recipe.id }]);
+    const stranger = await createUser();
+    const { saveRecipe } = await import('../src/services/recipes.ts');
+    const theirs = await saveRecipe({
+      userId: stranger.id,
+      title: 'Not yours',
+      summary: null,
+      portions: 1,
+      minutes: 10,
+      steps: ['Cook it.'],
+      ingredients: [INGREDIENT],
+      confidence: 'medium',
+      generatedFor: null,
+    } as never);
+    build();
+
+    const result = await call('update_plan_night', {
+      slot_id: plan.slots[0]!.id,
+      recipe_id: theirs.id,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain('not one of their recipes');
+  });
+
+  it('fails on a night that does not exist', async () => {
+    build();
+    const result = await call('update_plan_night', {
+      slot_id: '11111111-1111-1111-1111-111111111111',
+    });
+    expect(result.isError).toBe(true);
+  });
+});
+
+describe('cook_planned_night', () => {
+  /** A batch is what the pot makes, not what went on the plate. */
+  it('logs one portion however many the cook makes', async () => {
+    const recipe = await makeRecipe('Chicken traybake');
+    const plan = await planWith([{ date: '2026-03-10', recipeId: recipe.id, portions: 4 }]);
+    build();
+
+    const { json } = await call('cook_planned_night', { slot_id: plan.slots[0]!.id });
+
+    expect(json.logged.kcal).toBe(400);
+    expect(actions[0]).toMatchObject({ kind: 'food_logged', card: { type: 'food' } });
+
+    const { getMealPlan } = await import('../src/services/mealPlans.ts');
+    expect((await getMealPlan(user.id, WEEK_START))!.slots[0]!.cooked_at).not.toBeNull();
+  });
+
+  it('fails on a night with nothing planned', async () => {
+    const plan = await planWith([{ date: '2026-03-10', recipeId: null }]);
+    build();
+
+    const result = await call('cook_planned_night', { slot_id: plan.slots[0]!.id });
+    expect(result.isError).toBe(true);
+  });
+});
+
+describe('get_shopping_list', () => {
+  it('drops what the kitchen already holds, and names what it dropped', async () => {
+    const recipe = await makeRecipe('Chicken traybake');
+    await planWith([{ date: '2026-03-10', recipeId: recipe.id }]);
+    await stock('Chicken thighs');
+    build();
+
+    const { json } = await call('get_shopping_list');
+
+    expect(json.week_start).toBe(WEEK_START);
+    expect(json.already_have).toEqual(['Chicken thighs']);
+    expect(json.to_buy).toEqual([]);
+  });
+
+  it('fails plainly when there is no plan to shop for', async () => {
+    build();
+    const result = await call('get_shopping_list');
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain('nothing to shop for');
+  });
+});
+
+// ---- Repeating, and what they will not eat ---------------------------------
+
+describe('repeat_meal', () => {
+  /**
+   * The reason this exists rather than search-then-log: the search returns each
+   * item's calories and none of its macros, so re-logging from it is a fresh
+   * estimate wearing an old meal's name.
+   */
+  it('copies the entry as it was priced the first time', async () => {
+    const original = await addMeal(user, {
+      date: addDays(TODAY, -1),
+      meal: 'breakfast',
+      description: 'Porridge and berries',
+      kcal: 430,
+      protein_g: 18,
+      carbs_g: 62,
+      fat_g: 11,
+    });
+    build();
+
+    const { json } = await call('repeat_meal', { entry_id: original.id, meal: 'breakfast' });
+
+    expect(json.local_date).toBe(TODAY);
+    expect(json.logged).toEqual({ kcal: 430, protein_g: 18, carbs_g: 62, fat_g: 11 });
+    expect(json.entry_id).not.toBe(original.id);
+    expect(actions[0]).toMatchObject({ kind: 'food_logged', card: { type: 'food' } });
+
+    const copy = await getFoodEntry(user.id, json.entry_id);
+    expect(copy!.description).toBe('Porridge and berries');
+    // A different meal that happens to match, so it does not inherit the photo.
+    expect(copy!.photo_id).toBeNull();
+  });
+
+  it('fails on an id it cannot find', async () => {
+    build();
+    const result = await call('repeat_meal', { entry_id: '11111111-1111-1111-1111-111111111111' });
+    expect(result.isError).toBe(true);
+  });
+});
+
+describe('set_profile and what they will not eat', () => {
+  /**
+   * The gap this closes: `diet` and `avoids` are read by the recipe engine as
+   * hard limits, and the journal could only ever file them as a standing note —
+   * which the kitchen never reads.
+   */
+  it('stores a dietary pattern and the list of things to avoid', async () => {
+    build();
+
+    const { json } = await call('set_profile', { diet: 'vegetarian', avoids: ['shellfish', 'peanuts'] });
+
+    expect(json.saved).toEqual(expect.arrayContaining(['diet', 'avoids']));
+    const profile = await getUser(user.id);
+    expect(profile.diet).toBe('vegetarian');
+    expect(profile.avoids).toEqual(['shellfish', 'peanuts']);
+  });
+
+  /** The list is replaced, not appended to — so an empty one clears it. */
+  it('clears the list when given an empty one', async () => {
+    build();
+    await call('set_profile', { avoids: ['peanuts'] });
+
+    await call('set_profile', { avoids: [] });
+
+    expect((await getUser(user.id)).avoids).toEqual([]);
+  });
+
+  it('leaves both alone when the turn was about something else', async () => {
+    build();
+    await call('set_profile', { diet: 'vegan', avoids: ['peanuts'] });
+
+    await call('set_profile', { height_cm: 180 });
+
+    const profile = await getUser(user.id);
+    expect(profile.diet).toBe('vegan');
+    expect(profile.avoids).toEqual(['peanuts']);
+  });
+});
+
+describe('plan_week', () => {
+  /** One plan run, with the scripted model proposing the given dinners in order. */
+  async function scriptPlan(titles: string[]) {
+    const toolsModule = await import('../src/ai/tools.ts');
+    const spy = vi.spyOn(toolsModule, 'buildNutritionServer');
+    const { scriptAgent } = await import('./helpers/agent-mock.ts');
+    scriptAgent({
+      text: 'A week built around the chicken.',
+      act: async () => {
+        const built = spy.mock.results.at(-1)!.value as ReturnType<
+          typeof toolsModule.buildNutritionServer
+        >;
+        const propose = built.tools.find((t) => t.name === 'propose_recipe')!;
+        for (const title of titles) {
+          await propose.handler(
+            {
+              title,
+              summary: null,
+              portions: 1,
+              minutes: 30,
+              steps: ['Cook it.'],
+              ingredients: [INGREDIENT],
+              confidence: 'medium',
+            } as never,
+            {},
+          );
+        }
+      },
+    });
+  }
+
+  it('is on the journal and nowhere near the review', () => {
+    build();
+    expect(tools.has('plan_week')).toBe(true);
+    build({}, true);
+    expect(tools.has('plan_week')).toBe(false);
+  });
+
+  it('fills the nights still ahead and draws them', async () => {
+    // Tuesday: six nights left in the week that started on the 9th.
+    await scriptPlan(['Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']);
+    build();
+
+    const { json } = await call('plan_week', { wants: 'nothing fiddly' });
+
+    expect(json.week_start).toBe(WEEK_START);
+    expect(json.nights_planned).toBe(6);
+    expect(actions[0]).toMatchObject({ kind: 'plan_made', card: { type: 'plan' } });
+
+    const card = actions[0]!.card as Extract<ChatCard, { type: 'plan' }>;
+    expect(card.nights[0]).toMatchObject({ local_date: TODAY, weekday: 'Tuesday', title: 'Tuesday' });
+
+    const { getMealPlan } = await import('../src/services/mealPlans.ts');
+    expect((await getMealPlan(user.id, WEEK_START))!.slots).toHaveLength(6);
+  });
+
+  /**
+   * The same hole `suggest_recipes` has: the route limiter counts requests to
+   * `/plan`, and a run started from a journal tool never goes there.
+   */
+  it('refuses once the week’s plan allowance is gone', async () => {
+    const { recordUsage } = await import('../src/services/usage.ts');
+    await recordUsage({
+      userId: user.id,
+      kind: 'meal_plan',
+      outcome: { text: 'x', sessionId: null, numTurns: 1, costUsd: 1, model: 'claude-opus-5' } as never,
+    });
+    build();
+
+    const result = await call('plan_week', {});
+
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain('all 1 meal plans');
+    expect(actions).toEqual([]);
+  });
+});
+
+describe('run_weekly_review', () => {
+  it('is a write, so a review can never run itself', () => {
+    build();
+    expect(tools.has('run_weekly_review')).toBe(true);
+    build({}, true);
+    expect(tools.has('run_weekly_review')).toBe(false);
+  });
+
+  it('publishes the week and tells the model not to repeat it', async () => {
+    await addMeal(user, { date: addDays(TODAY, -2), kcal: 2000 });
+    const { scriptAgent } = await import('./helpers/agent-mock.ts');
+    scriptAgent({ text: 'You averaged 2,000 against a 2,200 target.' });
+    build();
+
+    const { json } = await call('run_weekly_review');
+
+    expect(json.published).toBe(true);
+    expect(json.note).toContain('Never restate it');
+
+    // It posts itself into the journal, which is why the tool returns so little.
+    const { query } = await import('../src/db.ts');
+    const messages = await query<{ content: string }>(
+      'SELECT content FROM chat_messages WHERE user_id = $1',
+      [user.id],
+    );
+    expect(messages.some((m) => m.content.includes('averaged 2,000'))).toBe(true);
+  });
+});
+
+describe('adapt_recipe', () => {
+  async function seedOne() {
+    const { seedLibrary } = await import('../src/seed-library.ts');
+    await seedLibrary([
+      {
+        slug: 'creamy-pasta',
+        title: 'Creamy pasta',
+        summary: null,
+        category: 'Main dish',
+        portions: 4,
+        serving_size: '1 bowl',
+        ingredients: [{ text: '200ml cream', note: null }],
+        steps: ['Stir.'],
+        keywords: ['pasta'],
+        kcal: 600,
+        protein_g: 20,
+        carbs_g: 70,
+        fat_g: 25,
+        food_groups: [],
+        image_path: '/recipes/creamy-pasta.jpg',
+        source: 'USDA MyPlate Kitchen',
+        source_url: 'https://example.test/creamy-pasta',
+        rating: 4,
+        rating_count: 10,
+      },
+    ]);
+  }
+
+  /** The same scripted kitchen run the other recipe tools use. */
+  async function scriptAdaptation(title: string) {
+    const toolsModule = await import('../src/ai/tools.ts');
+    const spy = vi.spyOn(toolsModule, 'buildNutritionServer');
+    const { scriptAgent } = await import('./helpers/agent-mock.ts');
+    scriptAgent({
+      text: 'Swapped the cream for yoghurt.',
+      act: async () => {
+        const built = spy.mock.results.at(-1)!.value as ReturnType<
+          typeof toolsModule.buildNutritionServer
+        >;
+        await built.tools.find((t) => t.name === 'propose_recipe')!.handler(
+          {
+            title,
+            summary: null,
+            portions: 1,
+            minutes: 20,
+            steps: ['Stir.'],
+            ingredients: [INGREDIENT],
+            confidence: 'medium',
+          } as never,
+          {},
+        );
+      },
+    });
+  }
+
+  it('reworks a library recipe and draws the result', async () => {
+    await seedOne();
+    await scriptAdaptation('Pasta without the cream');
+    build();
+
+    const { json } = await call('adapt_recipe', {
+      library_slug: 'creamy-pasta',
+      wants: 'without the cream',
+    });
+
+    expect(json.adapted).toMatchObject({ title: 'Pasta without the cream', kcal_per_portion: 800 });
+    expect(actions[0]).toMatchObject({ kind: 'recipes_suggested', card: { type: 'recipes' } });
+  });
+
+  it('says so rather than throwing when the slug is not a library recipe', async () => {
+    build();
+    const result = await call('adapt_recipe', { library_slug: 'not-a-recipe' });
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain('find_recipes');
+  });
+
+  /** One budget with suggest_recipes, not a fourth door to the same spend. */
+  it('shares the daily recipe ceiling', async () => {
+    await seedOne();
+    const { recordUsage } = await import('../src/services/usage.ts');
+    await recordUsage({
+      userId: user.id,
+      kind: 'recipe',
+      outcome: { text: 'x', sessionId: null, numTurns: 1, costUsd: 0.2, model: 'claude-opus-5' } as never,
+    });
+    build();
+
+    const result = await call('adapt_recipe', { library_slug: 'creamy-pasta' });
+
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain('recipe runs for today');
+  });
+});
