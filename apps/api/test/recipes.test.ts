@@ -222,6 +222,61 @@ describe('the brief', () => {
   });
 
   /**
+   * What a fridge photo just turned up, as opposed to everything on the shelf.
+   *
+   * The pantry is already in the prompt in full, so the test that matters is
+   * not that the names appear — they would anyway — but that they appear a
+   * second time as the thing to build around. "You have spinach" and "this is a
+   * spinach dish" are different instructions, and only the second one is what
+   * someone who has just photographed their fridge is asking for.
+   */
+  it('builds around the ingredients a scan was about', async () => {
+    const tools = await import('../src/ai/tools.ts');
+    const spy = vi.spyOn(tools, 'buildNutritionServer');
+    scriptAgent({
+      text: 'ok',
+      act: async () => {
+        const built = spy.mock.results.at(-1)!.value as ReturnType<typeof tools.buildNutritionServer>;
+        await built.tools.find((t) => t.name === 'propose_recipe')!.handler(recipeArgs() as never, {});
+      },
+    });
+    await suggestRecipes(user.id, { focus: ['Spinach', 'feta', 'lemon'] });
+
+    const prompt = String(agentCalls.at(-1)!.prompt);
+    // A sentence, not a comma-separated list: the prompt is prose.
+    expect(prompt).toContain('Build the dish around spinach, feta and lemon');
+  });
+
+  it('says nothing about focus when a scan was not what started it', async () => {
+    await suggestProposing(recipeArgs());
+    expect(String(agentCalls.at(-1)!.prompt)).not.toContain('Build the dish around');
+  });
+
+  /**
+   * Day one, when there is nothing on the shelf at all.
+   *
+   * The standing rules cap a recipe at two ingredients they do not have, which
+   * is unsatisfiable from an empty cupboard — every ingredient is one. Left
+   * alone the model picks an instruction to break, so the task turn changes the
+   * job instead: suggest what one small shop would cover, and say the cap is
+   * off. Asserted because it is the first run a new account ever makes, and the
+   * one nobody testing a stocked account would notice was broken.
+   */
+  it('changes the job when the kitchen is bare', async () => {
+    await suggestProposing(recipeArgs());
+
+    const prompt = String(agentCalls.at(-1)!.prompt);
+    expect(prompt).toContain('Their kitchen is empty');
+    expect(prompt).toContain('The two-missing-ingredients rule does not apply');
+  });
+
+  it('says nothing about an empty kitchen once there is something in it', async () => {
+    await addPantryItems(user.id, 'free', [{ name: 'Chicken thighs' }]);
+    await suggestProposing(recipeArgs());
+    expect(String(agentCalls.at(-1)!.prompt)).not.toContain('Their kitchen is empty');
+  });
+
+  /**
    * The one section where being helpful about everything else is no excuse. It
    * is stated as a boundary rather than a preference, and it has to be there
    * whether or not the user thought to mention it in this particular request.

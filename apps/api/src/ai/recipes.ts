@@ -35,6 +35,12 @@ export interface SuggestOptions {
   proteinMin?: number | null;
   kcalMax?: number | null;
   /**
+   * Ingredients to build around rather than merely allow — what a fridge photo
+   * just turned up, typically. The pantry is already in the prompt; this says
+   * which of it is the point.
+   */
+  focus?: string[] | null;
+  /**
    * What is being asked for. Absent means the original job: invent three from
    * the kitchen. The other two arrive with a seed — a library recipe to rework,
    * or text the user brought — and produce exactly one recipe.
@@ -81,7 +87,7 @@ export class RecipeBudgetError extends Error {
     super(
       period === 'week'
         ? `That is all ${allowed} meal ${allowed === 1 ? 'plan' : 'plans'} for this week.`
-        : `That is all ${allowed} recipe suggestions for today.`,
+        : `That is all ${allowed} recipe ${allowed === 1 ? 'suggestion' : 'suggestions'} for today.`,
     );
     this.name = 'RecipeBudgetError';
   }
@@ -201,6 +207,7 @@ export async function suggestRecipes(
         portions: options.portions ?? null,
         proteinMin: options.proteinMin ?? null,
         kcalMax: options.kcalMax ?? null,
+        focus: options.focus ?? null,
       },
       job:
         job.kind === 'adapt'

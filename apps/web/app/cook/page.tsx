@@ -2,51 +2,75 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CalendarDays, ChefHat, ChevronRight, Loader2 } from 'lucide-react';
+import { CalendarDays, ChevronDown, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import type { DaySummary, LibraryRecipe, PantryItem, Recipe, RecipeBrief } from '@ct/shared';
 import { api } from '@/lib/api';
-import { InsetGroup, InsetRow } from '@/components/InsetGroup';
-import { Pantry } from '@/components/kitchen/Pantry';
-import { Brief } from '@/components/kitchen/Brief';
+import { InsetGroup } from '@/components/InsetGroup';
+import { Pantry, daysSince, STALE_DAYS } from '@/components/kitchen/Pantry';
+import { FridgeScan } from '@/components/kitchen/FridgeScan';
+import { ChipDot, chipClass } from '@/components/kitchen/ActionChip';
+import { Brief, BriefToggle } from '@/components/kitchen/Brief';
 import { ImportRecipe } from '@/components/kitchen/ImportRecipe';
 import { RecipeTile } from '@/components/kitchen/RecipeTile';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Button } from '@/components/ui/button';
 import { foodEmoji } from '@/lib/foodEmoji';
+import { cn, listWords } from '@/lib/utils';
 
 /**
  * Cook — what you could make, from what you have, that fits what is left.
  *
- * The order is still the order the decision happens in: check the kitchen is
- * roughly right, ask, read the answers. What changed is how much room the first
- * two are allowed to take.
+ * # The page is the recipes
  *
- * They used to be three stacked blocks of form — kitchen, ask, library search —
- * and on a laptop that was the entire first screen. You scrolled past three
- * things to type into before reaching the first thing to cook, which is exactly
- * backwards for a screen whose whole job is to answer a question. So the
- * kitchen folds to one line once it has anything in it, and the library's
- * search moved into the row that switches to the library, where it belongs.
+ * Everything above the grid is a control, and controls had eaten the screen.
+ * At its worst this page opened with a kitchen card (heading, text input, add
+ * button, camera, empty state, footer), then an ask card (heading, text input,
+ * budget line, filter row, three action rows with titles and chevrons and a
+ * paste form that expanded in place), then a week row — and on a large desktop
+ * display not one recipe was visible. Four things asking for input before a
+ * single answer.
  *
- * The answers are now one place rather than two piles. Generated ideas and the
- * shelf were stacked, so the shelf was an infinite tail below the ideas and you
- * could not get back past it; they are two tabs of one result area instead, in
- * a grid rather than a column, so a wide screen shows six recipes instead of
- * one and a half.
+ * The mistake worth writing down, because it is an easy one to repeat: an
+ * earlier pass read "this is confusing" as "this is under-labelled" and added
+ * headings, sub-lines and a group. Naming four things clearly does not help
+ * when the problem is that there are four of them above the fold. It made the
+ * page longer, and it left two cameras on screen five hundred pixels apart —
+ * which was the original complaint, now with better captions.
  *
- * What is in that grid is a tile and nothing more. Cards used to carry the
- * method in an accordion, a servings stepper and two buttons, which made every
- * one of them a small form and made opening one shove its neighbour down the
- * page. Choosing and cooking are different activities: this screen is for
- * choosing, and a recipe's own page — /cook/library/[slug] for the shelf,
+ * What is here instead, top to bottom:
+ *
+ *   Cook  ·  🧺 5 things ▾      the kitchen as a chip, opening a dialog
+ *   [ What do you fancy?    ] [ Find me something ]
+ *   Aiming at 900 kcal…              Anything specific?
+ *   📷 from a photo · 📋 paste one · 📅 plan the week
+ *   (For you) (Library)
+ *   the grid
+ *
+ * One primary action. Three alternatives on one quiet line, all the same size,
+ * none of them hidden. Everything that needs more than a phrase — the kitchen,
+ * a pasted recipe, confirming a photo — opens a dialog rather than growing in
+ * place, so choosing one never pushes the recipes off the screen. And one
+ * camera: photographing a shelf can end in a stocked list or in dinner, so the
+ * fork moved to the end of that flow — see <FridgeScan> — instead of being two
+ * buttons at the start.
+ *
+ * That leaves exactly one text input live at any moment, which is the other
+ * reason the kitchen is in a dialog. Two boxes on one screen, both about food,
+ * both the same pill, are read as the same box drawn twice — and no label
+ * fixes that, because nobody reads the label of a control they think they have
+ * already understood.
+ *
+ * The budget line is doing more work than it looks like it is: it is the reason
+ * the suggestions are any good, and saying it out loud is what separates this
+ * from a recipe search that happens to live inside a food app.
+ *
+ * The grid is tiles and nothing more. Choosing and cooking are different
+ * activities; a recipe's own page — /cook/library/[slug] for the shelf,
  * /cook/recipe/[id] for an idea — is for the rest.
- *
- * The budget line under the ask is doing more work than it looks like it is —
- * it is the reason the suggestions are any good, and saying it out loud is what
- * separates this from a recipe search that happens to live inside a food app.
  */
 export default function CookPage() {
   const [items, setItems] = useState<PantryItem[] | null>(null);
@@ -55,15 +79,34 @@ export default function CookPage() {
   const [library, setLibrary] = useState<LibraryRecipe[] | null>(null);
   const [librarySearch, setLibrarySearch] = useState('');
   const [message, setMessage] = useState('');
-  const [wants, setWants] = useState('');
   const [brief, setBrief] = useState<RecipeBrief>({});
   const [thinking, setThinking] = useState(false);
+  /** What the run in flight was asked for, printed over the skeletons. */
+  const [thinkingNote, setThinkingNote] = useState('');
   /*
-   * Which half of the answer is on screen. Starts on the shelf, because on a
-   * first visit there is nothing else to show and an empty "For you" would be a
-   * tab whose only content is an apology.
+   * Which half of the answer is on screen. Starts on your own, even when it is
+   * empty.
+   *
+   * It used to open on the library, on the reasoning that an empty "For you" is
+   * a tab whose only content is an apology. True in isolation, and wrong in
+   * context: landing on somebody else's hundred recipes made the whole screen
+   * read as a recipe search with an AI button bolted on, which is exactly the
+   * misreading this page kept producing. The empty state is not an apology now
+   * that the three ways to fill it are sitting directly above it — it is a
+   * caption for them.
    */
-  const [tab, setTab] = useState<'ideas' | 'library'>('library');
+  const [tab, setTab] = useState<'ideas' | 'library'>('ideas');
+
+  /*
+   * Whether the kitchen dialog is showing. Never opened for you: a modal that
+   * appears because you arrived is an interruption, and an empty kitchen is not
+   * an emergency — the ask works without one, and the chip already says the
+   * list is empty in the corner where the list lives.
+   */
+  const [kitchenOpen, setKitchenOpen] = useState(false);
+  /** The per-request filters. Shut by default: "just tell me what I could
+      cook" is still the useful default, and six empty fields is not. */
+  const [briefOpen, setBriefOpen] = useState(false);
 
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -85,8 +128,6 @@ export default function CookPage() {
     try {
       const { recipes } = await api.recipes({ limit: 6 });
       setRecipes(recipes);
-      // Something to come back to means "For you" is worth opening on.
-      if (recipes.length > 0) setTab('ideas');
     } catch {
       // Not worth a toast: the screen works without them, and whatever went
       // wrong will say so again the moment they ask for something new.
@@ -113,17 +154,50 @@ export default function CookPage() {
     void loadRecipes();
   }, [load, loadRecipes]);
 
+
   useEffect(() => {
     const timer = setTimeout(() => void loadLibrary(librarySearch), librarySearch ? 250 : 0);
     return () => clearTimeout(timer);
   }, [loadLibrary, librarySearch, refreshKey]);
 
+  const fresh = (items ?? []).filter((i) => !i.is_staple);
+  const staleCount = fresh.filter((i) => daysSince(i.last_seen_at) >= STALE_DAYS).length;
+
+  /**
+   * What pressing the button will do, in a sentence, before it is pressed.
+   *
+   * The box above it is optional and looked it — an empty field with a grey
+   * placeholder, next to a button that gave no clue what it would produce or
+   * from what. You could press it having typed nothing, which is in fact the
+   * intended way to use it, and get "Thinking…" and no idea what about. So the
+   * line says both halves out loud: what it is going to write, and the budget
+   * it is writing against, which is the part no recipe site could say.
+   */
   const remaining = day
     ? {
         kcal: Math.max(0, Math.round(day.targets.kcal - day.consumed.kcal)),
         protein: Math.max(0, Math.round(day.targets.protein_g - day.consumed.protein_g)),
       }
     : null;
+
+  const plan = (() => {
+    /*
+     * An empty kitchen is a different promise, not a smaller one. Saying "from
+     * what's in your kitchen" when the kitchen is empty is the screen telling
+     * an obvious lie in its first sentence — and it is the first sentence a new
+     * account ever reads. The run handles this too; see the bare-kitchen block
+     * in the recipe task prompt.
+     */
+    if (items !== null && items.length === 0) {
+      return `Your kitchen is empty, so I'll suggest things one small shop would cover — and name what to buy.`;
+    }
+    const from = brief.wants?.trim()
+      ? `I'll work from what you asked for and what's in your kitchen`
+      : `I'll invent three recipes from what's in your kitchen`;
+    if (!remaining) return `${from}.`;
+    if (remaining.kcal === 0) return `${from} — and you're at your target today, so I'll keep it light.`;
+    return `${from}, aiming at the ${remaining.kcal} kcal and ${remaining.protein}g protein you have left.`;
+  })();
 
   /*
    * Saving is the one thing still done from the grid, because it is the one
@@ -155,14 +229,48 @@ export default function CookPage() {
     }
   }
 
-  async function suggest() {
+  /**
+   * The one recipe run this screen makes, however it was started.
+   *
+   * `focus` is the handful of ingredients the ask was actually about — what a
+   * photo just found. The pantry is already in the prompt either way; this says
+   * which part of it is the point, which is the whole difference between "you
+   * have spinach" and "this is a spinach dish".
+   */
+  async function suggest(focus?: string[]) {
+    const asked = brief.wants?.trim() ?? '';
+    /*
+     * Say what is being done, where the answer will appear, before any of it
+     * exists.
+     *
+     * The button used to change to "Thinking…" and that was the entire signal:
+     * no statement of what it had been asked, no indication that the thing it
+     * was thinking about would land four hundred pixels lower, and a wait long
+     * enough to wonder whether the click had registered. A verb and an object
+     * beats a verb.
+     */
+    setThinkingNote(
+      focus?.length
+        ? `Writing recipes around the ${listWords(focus.slice(0, 4))} in your photo…`
+        : asked
+          ? `Writing three recipes for “${asked}”, from what's in your kitchen…`
+          : "Writing three recipes from what's in your kitchen…",
+    );
+    // Moved to the front: the skeletons are the answer to "what is it doing",
+    // and they are no use on a tab you cannot see.
+    setTab('ideas');
     setThinking(true);
     try {
-      const result = await api.suggestRecipes({ ...brief, wants: wants.trim() || undefined });
+      const result = await api.suggestRecipes({
+        ...brief,
+        wants: asked || undefined,
+        focus: focus?.length ? focus : undefined,
+      });
       setRecipes(result.recipes);
       setMessage(result.message);
-      setWants('');
-      setTab('ideas');
+      // Deliberately not cleared. It sits with the other five constraints now,
+      // all of which persist, and the count on the shut panel is what stops it
+      // steering a request nobody meant it to.
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -170,89 +278,134 @@ export default function CookPage() {
     }
   }
 
+  /*
+   * A scan that was started to cook, rather than to tidy the list. The finds are
+   * already in the pantry by the time this runs — <FridgeScan> commits them
+   * either way — so the reload is what keeps the kitchen line honest while the
+   * recipes are being written.
+   */
+  async function cookFromPhoto(found: string[]) {
+    await load();
+    await suggest(found);
+  }
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-5 pb-8 lg:px-6">
-      <div className="mx-auto w-full max-w-5xl space-y-5">
-        <h1 className="text-large-title">Cook</h1>
+      <div className="mx-auto w-full max-w-5xl space-y-4">
+        {/*
+          The title, and the kitchen as one chip beside it.
 
-        {/* One line once there is anything in it — see <Pantry>. */}
-        {items === null ? (
-          <Skeleton className="h-16 w-full rounded-[var(--radius)]" />
-        ) : (
-          <Pantry items={items} onChanged={load} />
-        )}
-
-        {/* The ask. One row: what you fancy, and the button that answers. */}
-        <InsetGroup>
-          <div className="space-y-2.5 p-3">
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Input
-                value={wants}
-                onChange={(e) => setWants(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !thinking) void suggest();
-                }}
-                placeholder="Anything in particular? (optional)"
-                className="bg-muted/60 border-border h-11 flex-1 rounded-full border-2 px-4 text-body"
+          The kitchen is a precondition, not an answer, and it used to be a card
+          with its own heading, its own input, its own camera and its own footer
+          sitting above everything — the top third of the screen given to the
+          thing you check for ten seconds a week.
+        */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-large-title">Cook</h1>
+          {items !== null && (
+            <button
+              type="button"
+              onClick={() => setKitchenOpen((v) => !v)}
+              aria-expanded={kitchenOpen}
+              className="bg-card border-border chunk-sm text-footnote hover:bg-muted/60 flex items-center gap-2 rounded-full border-2 px-3.5 py-2 font-semibold transition-colors"
+            >
+              <span aria-hidden>🧺</span>
+              {fresh.length === 0
+                ? 'Your kitchen is empty'
+                : `${fresh.length} ${fresh.length === 1 ? 'thing' : 'things'}`}
+              {staleCount > 0 && (
+                <span className="text-[var(--fat-text)]">· {staleCount} to check</span>
+              )}
+              <ChevronDown
+                size={15}
+                className={cn(
+                  'text-muted-foreground transition-transform duration-[var(--dur-quick)]',
+                  kitchenOpen && 'rotate-180',
+                )}
               />
+            </button>
+          )}
+        </div>
+
+        {/*
+          The kitchen, somewhere else. See <Pantry> — the short version is that
+          its "add ingredients" field and the ask box below were the same pill
+          two hundred pixels apart, and no amount of labelling makes two
+          identical inputs stacked in one column read as two different jobs.
+        */}
+        <Dialog open={kitchenOpen} onOpenChange={setKitchenOpen}>
+          <DialogContent
+            title="Your kitchen"
+            description="What I'll cook from. It only has to be roughly right."
+          >
+            {items && <Pantry items={items} onChanged={load} onCook={cookFromPhoto} />}
+          </DialogContent>
+        </Dialog>
+
+        {/*
+          The ask. One box, one button, and the number it is aiming at.
+
+          Everything else that produces a recipe is on the quiet line below it,
+          all three at the same size — see <ActionChip> for why that line is a
+          line and not three rows with titles and chevrons.
+        */}
+        <div className="space-y-2">
+          <InsetGroup>
+            <div className="space-y-2.5 p-3">
               <Button
                 onClick={() => void suggest()}
                 disabled={thinking}
-                className="h-11 shrink-0 gap-2 rounded-full px-5 sm:w-auto"
+                className="h-12 w-full gap-2 rounded-full text-[15px] sm:w-auto sm:px-6"
               >
-                {thinking ? <Loader2 size={16} className="animate-spin" /> : <ChefHat size={16} />}
-                {thinking ? 'Thinking…' : 'Give me ideas'}
+                {thinking ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                {thinking ? 'Thinking…' : 'Find me something'}
               </Button>
-            </div>
-            {remaining && (
-              <p className="text-footnote text-muted-foreground font-medium">
-                {remaining.kcal === 0
-                  ? "You're at your target for today — I'll keep it light."
-                  : `I'll aim at the ${remaining.kcal} kcal and ${remaining.protein}g protein you have left.`}
-              </p>
-            )}
-          </div>
 
-          <Brief value={brief} onChange={setBrief} />
-
-          {/*
-            * The other question this screen does not answer.
-            *
-            * "What do I cook tonight" and "what are we eating this week" are
-            * different jobs with different costs, and folding the week into
-            * this button would make the cheap question pay for the expensive
-            * one. A row rather than a nav item: it belongs to the kitchen, and
-            * it is not somewhere anybody goes every day.
-            */}
-          <Link href="/plan" className="active:bg-muted/60 block transition-colors">
-            <InsetRow className="py-3.5">
-              <CalendarDays size={17} className="text-muted-foreground shrink-0" />
-              <div className="flex-1">
-                <p className="text-body">Plan this week</p>
-                <p className="text-muted-foreground text-[13px] font-medium">
-                  Seven dinners and the shopping list they add up to.
-                </p>
+              {/*
+                The budget and the thing that changes it, on one line. It is the
+                reason the suggestions are any good, and saying it out loud is
+                what separates this from a recipe search that happens to live
+                inside a food app.
+              */}
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <p className="text-footnote text-muted-foreground font-medium">{plan}</p>
+                <BriefToggle
+                  value={brief}
+                  open={briefOpen}
+                  onToggle={() => setBriefOpen((v) => !v)}
+                />
               </div>
-              <ChevronRight size={18} className="text-muted-foreground shrink-0" />
-            </InsetRow>
-          </Link>
+            </div>
 
-          <ImportRecipe
-            onImported={(recipe) => {
-              setRecipes((prev) => [recipe, ...prev]);
-              setMessage('');
-              setTab('ideas');
-              void load();
-            }}
-          />
-        </InsetGroup>
+            {briefOpen && <Brief value={brief} onChange={setBrief} />}
+          </InsetGroup>
+
+          {/* The other three ways in. One line, one size, nothing hidden. */}
+          <div className="flex flex-wrap items-center gap-1 px-1.5">
+            <FridgeScan onSaved={load} onCook={cookFromPhoto} />
+            <ChipDot />
+            <ImportRecipe
+              onImported={(recipe) => {
+                setRecipes((prev) => [recipe, ...prev]);
+                setMessage('');
+                setTab('ideas');
+                void load();
+              }}
+            />
+            <ChipDot />
+            <Link href="/plan" className={chipClass}>
+              <CalendarDays size={13} />
+              plan the week
+            </Link>
+          </div>
+        </div>
 
         {/*
           The answers. Two tabs rather than two stacked lists: the shelf is a
           hundred recipes long, so underneath the ideas it was a tail you could
           never scroll back past.
         */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
           <ToggleGroup
             value={[tab]}
             onValueChange={(values) => {
@@ -287,7 +440,23 @@ export default function CookPage() {
           )}
         </div>
 
-        {tab === 'ideas' ? (
+        {tab === 'ideas' && thinking ? (
+          /*
+            The wait, shown where the answer is going to be rather than on the
+            button that started it. Three placeholders because three is what was
+            asked for, so the shape of the reply is visible before it arrives —
+            and the sentence above them repeats what it was asked, which is the
+            thing a spinner cannot say.
+          */
+          <>
+            <p className="text-muted-foreground px-1 text-body">{thinkingNote}</p>
+            <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+              <Skeleton className="h-72 w-full rounded-[var(--radius)]" />
+              <Skeleton className="h-72 w-full rounded-[var(--radius)] max-lg:hidden" />
+              <Skeleton className="h-72 w-full rounded-[var(--radius)] max-xl:hidden" />
+            </div>
+          </>
+        ) : tab === 'ideas' ? (
           <>
             {message && <p className="text-muted-foreground px-1 text-body">{message}</p>}
 
@@ -297,9 +466,11 @@ export default function CookPage() {
                   👩‍🍳
                 </span>
                 <p className="text-muted-foreground text-body font-medium">
-                  Nothing yet. Ask above, and I&rsquo;ll work from what&rsquo;s in your kitchen.
+                  Nothing yet. Press <span className="text-foreground">Find me something</span>{' '}
+                  and I&rsquo;ll invent three recipes
                   <br />
-                  Or take something off the shelf and make it fit you.
+                  from what&rsquo;s in your kitchen — or start from a photo, or a recipe you
+                  already have.
                 </p>
               </div>
             ) : (

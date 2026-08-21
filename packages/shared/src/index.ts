@@ -702,6 +702,19 @@ export const RecipeBrief = z.object({
    * which is otherwise what the kitchen aims at.
    */
   kcal_max: z.number().min(50).max(3000).nullable().optional(),
+  /**
+   * Ingredients to build the dish *around*, rather than merely permit.
+   *
+   * The pantry is the whole shelf and the model weighs all of it evenly. This
+   * is the handful that prompted the ask — what a photo just found, what is
+   * about to turn — and it is the difference between "you have spinach" and
+   * "this is a spinach dish".
+   *
+   * Kept apart from `wants` because that field is the user's own words and
+   * this is not. Writing "use the spinach and the feta" into a box the screen
+   * echoes back would put a sentence in their mouth they never typed.
+   */
+  focus: z.array(z.string().min(1).max(60)).max(20).nullable().optional(),
 });
 export type RecipeBrief = z.infer<typeof RecipeBrief>;
 

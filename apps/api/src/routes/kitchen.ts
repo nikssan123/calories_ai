@@ -86,6 +86,7 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
 
   app.get('/pantry', async (request) => ({ items: await listPantry(request.userId!) }));
 
+    focus: body.focus ?? null,
   app.post('/pantry', async (request, reply) => {
     const parsed = PantryAddRequest.safeParse(request.body);
     if (!parsed.success) {

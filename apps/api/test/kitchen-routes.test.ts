@@ -4,7 +4,7 @@ import { seedLibrary } from '../src/seed-library.ts';
 import { addPantryItems, listPantry } from '../src/services/pantry.ts';
 import { limitsFor } from '../src/services/plans.ts';
 import { listRecipes } from '../src/services/recipes.ts';
-import { scriptAgent } from './helpers/agent-mock.ts';
+import { agentCalls, scriptAgent } from './helpers/agent-mock.ts';
 import { appFor, createUser, setUserTargets, type TestUser } from './helpers/factories.ts';
 
 /**
@@ -82,7 +82,7 @@ describe('the pantry', () => {
 
 describe('recipes', () => {
   /** Drives one suggestion through the route, with the model scripted. */
-  async function suggest() {
+  async function suggest(body: Record<string, unknown> = {}) {
     const tools = await import('../src/ai/tools.ts');
     const spy = vi.spyOn(tools, 'buildNutritionServer');
 
@@ -116,7 +116,7 @@ describe('recipes', () => {
       },
     });
 
-    return send('POST', '/recipes/suggest', {});
+    return send('POST', '/recipes/suggest', body);
   }
 
   it('answers with the recipes and the model’s line about them', async () => {
@@ -129,6 +129,17 @@ describe('recipes', () => {
   });
 
   it('lists what has been generated, and saved ones apart', async () => {
+  /*
+   * The brief is mapped field by field in `brief()`, which is one list that has
+   * to be kept in step with the schema — exactly the place a new field gets
+   * forgotten, and the failure is silent: the run still succeeds, just without
+   * the constraint that was the whole reason for the request.
+   */
+  it('passes the scanned ingredients through to the run', async () => {
+    await suggest({ focus: ['spinach', 'feta'] });
+    expect(String(agentCalls.at(-1)!.prompt)).toContain('Build the dish around spinach and feta');
+  });
+
     await suggest();
     const [recipe] = await listRecipes(user.id);
 

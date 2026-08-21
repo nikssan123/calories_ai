@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
 import type { Meal, RecipeBrief } from '@ct/shared';
 import { Input } from '@/components/ui/input';
@@ -22,6 +21,61 @@ import { cn } from '@/lib/utils';
 const MINUTES = [15, 30, 60] as const;
 const MEALS: Meal[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
+/**
+ * How many fields are actually constraining the answer.
+ *
+ * `wants` counts, and that matters more than the other five: it is the only one
+ * that persists as a *sentence* rather than a chip, so a craving typed on
+ * Tuesday would otherwise still be steering Friday's dinner with nothing on
+ * screen to say so. The badge on the shut panel is the whole safeguard.
+ */
+export function briefCount(value: RecipeBrief): number {
+  return [
+    value.wants?.trim() ? value.wants : null,
+    value.minutes,
+    value.meal,
+    value.portions,
+    value.protein_min,
+    value.kcal_max,
+  ].filter((v) => v !== null && v !== undefined && v !== '').length;
+}
+
+/**
+ * The trigger, split out so it can sit on the end of the budget line.
+ *
+ * That pairing is deliberate: "here is the number I am aiming at" and "change
+ * what I aim at" are the same thought, and on its own row the toggle was one
+ * more full-width thing to scroll past. The count rides along so a shut panel
+ * never hides a setting somebody forgot they left on.
+ */
+export function BriefToggle({
+  value,
+  open,
+  onToggle,
+}: {
+  value: RecipeBrief;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const active = briefCount(value);
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      className="text-footnote text-muted-foreground hover:text-foreground hover:bg-muted/60 -mr-1 flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 font-medium transition-colors"
+    >
+      <SlidersHorizontal size={13} />
+      {open ? 'Hide' : 'Anything specific?'}
+      {!open && active > 0 && (
+        <span className="bg-secondary border-border rounded-full border px-1.5 text-[11px] font-bold">
+          {active}
+        </span>
+      )}
+    </button>
+  );
+}
+
 export function Brief({
   value,
   onChange,
@@ -29,32 +83,37 @@ export function Brief({
   value: RecipeBrief;
   onChange: (next: RecipeBrief) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const set = (patch: Partial<RecipeBrief>) => onChange({ ...value, ...patch });
-
-  // A count of what is actually constraining the answer, so a collapsed panel
-  // never hides a setting someone forgot they left on.
-  const active = [value.minutes, value.meal, value.portions, value.protein_min, value.kcal_max]
-    .filter((v) => v !== null && v !== undefined)
-    .length;
 
   return (
     <div className="border-border border-t-2">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="text-footnote text-muted-foreground hover:text-foreground flex w-full items-center gap-1.5 px-4 py-2.5"
-      >
-        <SlidersHorizontal size={13} />
-        {open ? 'Hide' : 'Anything specific?'}
-        {!open && active > 0 && (
-          <span className="bg-secondary border-border rounded-full border px-2 py-0.5 text-[11px] font-bold">{active}</span>
-        )}
-      </button>
+        <div className="space-y-3 px-4 py-3">
+          {/*
+            The free-text steer, and the reason it is in here rather than on the
+            page. It used to be a pill at the top of the screen next to the
+            button, where it read as a second search box that nobody could
+            explain the purpose of — it overlapped with these five fields while
+            being the only one of the six with no visible examples. In here its
+            job is obvious from its company: it is the row for the constraints
+            that were never going to be an enum. "One-pan" is not a slider.
+          */}
+          <div>
+            <label
+              htmlFor="brief-wants"
+              className="text-footnote text-muted-foreground mb-1.5 block"
+            >
+              Anything else?
+            </label>
+            <Input
+              id="brief-wants"
+              value={value.wants ?? ''}
+              onChange={(e) => set({ wants: e.target.value || undefined })}
+              placeholder={'"one-pan", "use up the spinach", "no coriander"'}
+              maxLength={300}
+              className="bg-muted/60 border-border h-11 rounded-xl border-2 px-3 text-body"
+            />
+          </div>
 
-      {open && (
-        <div className="space-y-3 px-4 pb-3">
           <Row label="Time">
             {MINUTES.map((m) => (
               <Chip
@@ -109,7 +168,6 @@ export function Brief({
             />
           </div>
         </div>
-      )}
     </div>
   );
 }

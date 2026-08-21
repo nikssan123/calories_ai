@@ -684,6 +684,8 @@ export interface RecipeConstraints {
 
 export interface RecipeTaskInput {
   /** What is being asked for: invent some, rework one, or price theirs. */
+  /** Ingredients the dish should be built around, not merely permitted. */
+  focus?: string[] | null;
   job?:
     | { kind: 'suggest'; count: number }
     | { kind: 'adapt'; recipe: string }
@@ -724,6 +726,20 @@ export function recipeTaskPrompt(input: RecipeTaskInput): string {
   const { budget } = input;
 
   const kitchen = [
+/**
+ * "chicken, garlic and spinach" — a sentence, not a comma-separated list.
+ *
+ * The web app has its own copy in `lib/utils`; this one is here because a
+ * prompt is prose and reads to the model as prose, and "spinach, feta" in the
+ * middle of an English sentence is a small stumble that costs nothing to avoid.
+ */
+function sentenceList(items: string[]): string {
+  const lower = items.map((i) => i.toLowerCase().trim()).filter(Boolean);
+  if (lower.length <= 1) return lower[0] ?? '';
+  if (lower.length === 2) return `${lower[0]} and ${lower[1]}`;
+  return `${lower.slice(0, -1).join(', ')} and ${lower.at(-1)}`;
+}
+
     input.fresh.length === 0
       ? 'Nothing recorded beyond the staples.'
       : input.fresh
@@ -794,8 +810,39 @@ export function recipeTaskPrompt(input: RecipeTaskInput): string {
   const brief = constraints.length > 0 ? `\n\n## For this one\n\n${constraints.join('\n')}` : '';
 
   const context = `## What is left of today
+    /*
+     * Stated as "build around", not "use" — the difference is the whole point
+     * of the field. Everything here is already in the kitchen list above, so
+     * an instruction merely to allow it would say nothing the model did not
+     * already have. What it does not know is which shelf the question came
+     * from: someone who has just photographed a fridge is asking about the
+     * things in the photo, not about the rice they typed in a fortnight ago.
+     */
+    c.focus && c.focus.length > 0
+      ? `- Build the dish around ${sentenceList(c.focus)}. These are what they are actually asking about, so a suggestion that only mentions them in passing has missed the point. If two of them do not belong in one dish, split them across the ideas rather than forcing all of them into each.`
+      : null,
 
 ${budget.kcal_remaining} kcal and ${budget.protein_remaining}g protein.
+
+  /*
+   * The bare-kitchen case, which the standing rules cannot answer on their own.
+   *
+   * The system prompt caps a recipe at two missing ingredients, on the sound
+   * reasoning that five gaps is a shopping list wearing a recipe's clothes.
+   * With nothing on the shelf that cap is unsatisfiable — every ingredient is a
+   * gap — so the model is left choosing which instruction to break, and the
+   * screen meanwhile promises recipes "from what's in your kitchen" when there
+   * is no kitchen.
+   *
+   * So the job changes rather than degrading: on day one the useful answer is
+   * "here is what a small shop would let you cook tonight", which is a real
+   * answer and an honest one. The cap is lifted explicitly, because a rule
+   * stated in a cached system prompt is not one the model will quietly drop.
+   */
+  const bareKitchen = input.fresh.length === 0 && input.staples.length === 0;
+  const bare = bareKitchen
+    ? `\n\n## Their kitchen is empty\n\nThey have recorded nothing at all, so assume a bare cupboard rather than a stocked one — not even oil.\n\nThis changes the job. Do not pretend to cook from an empty shelf, and do not fall back on suggestions so plain they need nothing: propose things worth eating that one small shop would cover, mark every ingredient they would have to buy with \`missing: true\`, and keep each dish to a handful of common items rather than a supermarket sweep. The two-missing-ingredients rule does not apply to this request; it exists to stop a stocked kitchen being ignored, and there is no stocked kitchen here.\n\nSay so in your reply — that you have assumed they are starting from nothing, and that adding what they actually have will make the next answer sharper.`
+    : '';
 
 ${
     budget.kcal_remaining < 400
@@ -807,7 +854,7 @@ ${
 
 Staples (assume present): ${staples}
 
-${kitchen}
+${kitchen}${bare}
 
 ## What they usually eat
 

@@ -5,11 +5,10 @@ import { ChevronDown, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PantryItem } from '@ct/shared';
 import { api } from '@/lib/api';
-import { InsetGroup } from '@/components/InsetGroup';
+import { FridgeScan } from '@/components/kitchen/FridgeScan';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { FridgeScan } from '@/components/kitchen/FridgeScan';
 
 /**
  * What is in the kitchen.
@@ -20,23 +19,42 @@ import { FridgeScan } from '@/components/kitchen/FridgeScan';
  * is one tap from confirmed or gone, and staples fold away because "do you still
  * have salt" is not a question worth anyone's screen space.
  *
- * It folds away too, and that is the important part. The kitchen is a
- * *precondition* for the question this screen exists to answer, not the answer
- * — but it was the first thing on the page and it held the top third of the
- * screen open permanently, so the recipes started below the fold. Stocked, it
- * is one line you can tap. Empty, it opens itself, because on day one the list
- * is the only thing to do here.
+ * In a dialog, and that is the important part. The kitchen is a *precondition*
+ * for the question the Cook screen exists to answer, not the answer — but it
+ * was the first thing on the page and it held the top third open permanently,
+ * so the recipes started below the fold. It is a chip in the title row now, and
+ * this is what the chip opens.
+ *
+ * A dialog rather than a panel because of what sharing a screen did to it. Open
+ * in the page, its "add ingredients" field sat two hundred pixels above the ask
+ * box in an identical pill, and two identical inputs stacked like that read as
+ * one feature implemented twice. They are not remotely the same: this writes
+ * rows to a list that outlives the visit, and that one is a phrase steering a
+ * single question. A modal makes the page behind it inert, so exactly one of
+ * the two is ever live — and being somewhere else is the clearest possible
+ * statement that it is something else.
+ *
+ * The camera is here and also under the ask, which is a repeat rather than the
+ * duplicate it looks like: both open the same dialog, and that dialog is where
+ * you choose between a stocked list and dinner. What made two cameras confusing
+ * before was that they forked the behaviour and made you choose first. These
+ * do not, and only one of them is ever on screen at rest — this panel is shut
+ * until you ask for it.
  */
 
 /** Past this many days an item is old enough to be worth a second look. */
-const STALE_DAYS = 10;
+export const STALE_DAYS = 10;
 
 export function Pantry({
   items,
   onChanged,
+  onCook,
 }: {
   items: PantryItem[];
   onChanged: () => void;
+  /** Passed straight to the scanner, so a scan started here can still end in
+      dinner rather than dead-ending at a list. */
+  onCook: (names: string[]) => Promise<void>;
 }) {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
@@ -44,18 +62,6 @@ export function Pantry({
 
   const staples = items.filter((i) => i.is_staple);
   const fresh = items.filter((i) => !i.is_staple);
-  const staleCount = fresh.filter((i) => daysSince(i.last_seen_at) >= STALE_DAYS).length;
-
-  /*
-   * Open when there is nothing to show, shut once there is. Held as state
-   * rather than derived so that opening it to add one thing does not slam it
-   * shut again the moment the item lands.
-   */
-  const [open, setOpen] = useState(items.length === 0);
-  const empty = items.length === 0;
-  useEffect(() => {
-    if (empty) setOpen(true);
-  }, [empty]);
 
   async function add() {
     const name = draft.trim();
@@ -99,69 +105,57 @@ export function Pantry({
   }
 
   return (
-    <InsetGroup
-      title="🧺  Your kitchen"
-      footer={open ? 'A rough list is plenty — it only has to be close enough to cook from.' : undefined}
-    >
+    <div className="divide-border divide-y-2">
       {/*
-        The summary line. It is the whole component when the kitchen is stocked,
-        and it says what is in there rather than just "Your kitchen", so folding
-        it away costs no information — the count and the number of things worth
-        re-checking are the only two facts the collapsed state has to carry.
+        Squared off, labelled, and with a button that says the verb.
+        
+        This field and the ask box used to be the same pill — same height, same
+        radius, same grey placeholder — sitting two hundred pixels apart, and
+        the honest reaction to that is the one it got: two inputs that look
+        identical are two inputs that do the same thing. They do not. This one
+        writes a row to a list that persists; that one is a phrase attached to a
+        single question and then thrown away. Different jobs get different
+        shapes, and this one is shaped like the list editor it is.
       */}
-      {!empty && (
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          className="active:bg-muted/60 flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors"
+      <div className="p-3">
+        <label
+          htmlFor="pantry-add"
+          className="text-footnote text-muted-foreground mb-1.5 block font-medium"
         >
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-body font-semibold">
-              {fresh.length} {fresh.length === 1 ? 'thing' : 'things'}
-              {staples.length > 0 && ` and ${staples.length} staples`}
-            </span>
-            {staleCount > 0 && !open && (
-              <span className="text-footnote block font-semibold text-[var(--fat-text)]">
-                {staleCount} worth checking you still have
-              </span>
-            )}
-          </span>
-          <ChevronDown
-            size={18}
-            className={cn(
-              'text-muted-foreground shrink-0 transition-transform duration-[var(--dur-quick)]',
-              open && 'rotate-180',
-            )}
+          Add to the list
+        </label>
+        <div className="flex items-center gap-2">
+          <Input
+            id="pantry-add"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void add();
+            }}
+            placeholder="chicken, rice, peppers"
+            className="bg-muted/60 border-border h-11 rounded-xl border-2 px-3 text-body"
           />
-        </button>
-      )}
-
-      {!open ? null : (
-      <>
-      <div className="flex items-center gap-2 p-3">
-        <Input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') void add();
-          }}
-          placeholder="Add ingredients, separated by commas"
-          className="bg-muted/60 border-border h-11 rounded-full border-2 px-4 text-body"
-        />
-        <Button
-          size="icon"
-          variant="secondary"
-          disabled={!draft.trim() || busy}
-          onClick={() => void add()}
-          className="size-11 shrink-0 rounded-full"
-          aria-label="Add to your kitchen"
-        >
-          <Plus size={18} />
-        </Button>
+          <Button
+            variant="secondary"
+            disabled={!draft.trim() || busy}
+            onClick={() => void add()}
+            className="h-11 shrink-0 gap-1.5 rounded-xl px-4"
+          >
+            <Plus size={16} />
+            Add
+          </Button>
+        </div>
+        <p className="text-footnote text-muted-foreground mt-1.5 font-medium">
+          A rough list is plenty — it only has to be close enough to cook from.
+        </p>
       </div>
 
-      <FridgeScan onSaved={onChanged} />
+      {/* Photographing a shelf is a way of filling this list, so the button for
+          it belongs on the list. It opens the same dialog the chip under the
+          ask opens, and that dialog still offers both endings — the panel this
+          sits in is shut by default, so the two triggers are never on screen
+          at the same time unless you went looking for the kitchen. */}
+      <FridgeScan variant="button" onSaved={onChanged} onCook={onCook} />
 
       {fresh.length === 0 ? (
         <p className="text-muted-foreground px-4 py-4 text-body">
@@ -243,9 +237,7 @@ export function Pantry({
           )}
         </div>
       )}
-      </>
-      )}
-    </InsetGroup>
+    </div>
   );
 }
 

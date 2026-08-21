@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Loader2, NotebookPen } from 'lucide-react';
+import { ClipboardPaste, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Recipe } from '@ct/shared';
 import { api } from '@/lib/api';
+import { ActionChip } from '@/components/kitchen/ActionChip';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 
 /**
@@ -20,6 +22,11 @@ import { Textarea } from '@/components/ui/textarea';
  * Text, not a URL. Somebody pasting the thing they already cook is using their
  * own recipe; a server that fetched and stored arbitrary pages would be doing
  * something else entirely, and it is not what was asked for.
+ *
+ * In a dialog rather than in the page. It expanded where it stood for a while,
+ * which meant picking it from a short list of options replaced that list with a
+ * three-hundred-pixel form and pushed everything below it off the screen —
+ * including the recipes, which are the only reason anyone opened the tab.
  */
 export function ImportRecipe({ onImported }: { onImported: (recipe: Recipe) => void }) {
   const [open, setOpen] = useState(false);
@@ -43,50 +50,37 @@ export function ImportRecipe({ onImported }: { onImported: (recipe: Recipe) => v
     }
   }
 
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="text-footnote text-muted-foreground hover:text-foreground flex w-full items-center gap-1.5 px-4 py-2.5"
-      >
-        <NotebookPen size={13} />
-        Add one of your own
-      </button>
-    );
-  }
-
   return (
-    <div className="space-y-2 p-3">
-      <Textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder={
-          'Paste or type the recipe — ingredients and method, however you have it written.\n\nI’ll work out the calories and macros and leave the recipe itself alone.'
-        }
-        rows={7}
-        className="bg-muted/60 border-border resize-none rounded-2xl border-2 text-body"
-      />
-      <div className="flex gap-2">
-        <Button
-          variant="secondary"
-          onClick={() => {
-            setOpen(false);
-            setText('');
-          }}
-          className="h-11 rounded-full px-5"
+    <>
+      <ActionChip icon={<ClipboardPaste size={13} />} onClick={() => setOpen(true)}>
+        paste one
+      </ActionChip>
+
+      <Dialog open={open} onOpenChange={(next) => !busy && setOpen(next)}>
+        <DialogContent
+          title="A recipe you already have"
+          description="I'll work out the calories and leave the cooking alone."
         >
-          Cancel
-        </Button>
-        <Button
-          onClick={() => void submit()}
-          disabled={busy || text.trim().length < 20}
-          className="h-11 flex-1 gap-2 rounded-full"
-        >
-          {busy && <Loader2 size={15} className="animate-spin" />}
-          {busy ? 'Working out the numbers…' : 'Work out the macros'}
-        </Button>
-      </div>
-    </div>
+          <div className="space-y-2 p-3">
+            <Textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Paste or type the recipe — ingredients and method, however you have it written."
+              rows={9}
+              autoFocus
+              className="bg-muted/60 border-border resize-none rounded-2xl border-2 text-body"
+            />
+            <Button
+              onClick={() => void submit()}
+              disabled={busy || text.trim().length < 20}
+              className="h-11 w-full gap-2 rounded-full"
+            >
+              {busy && <Loader2 size={15} className="animate-spin" />}
+              {busy ? 'Working out the numbers…' : 'Work out the macros'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
