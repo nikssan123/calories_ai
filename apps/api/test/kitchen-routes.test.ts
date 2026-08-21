@@ -140,6 +140,27 @@ describe('recipes', () => {
     expect(String(agentCalls.at(-1)!.prompt)).toContain('Build the dish around spinach and feta');
   });
 
+  /**
+   * The number the screen needs before the button is pressed.
+   *
+   * A ceiling only discoverable by hitting it is indistinguishable from a
+   * broken button, so both the list and the run carry what is left. The run
+   * carries it because it is the request that spends the last one — waiting for
+   * the next page load to find that out is the same dead click, one step later.
+   */
+  it('says what is left of the recipe budget, on the list and on the run', async () => {
+    const before = (await get('/recipes')).json().allowance;
+    expect(before).toMatchObject({ allowed: limitsFor('free').recipeRunsPerDay, used: 0 });
+    expect(before.resets_at).toBeNull();
+
+    const spent = (await suggest()).json().allowance;
+    expect(spent.used).toBe(1);
+    // Spent, so it has to say when it comes back rather than merely that it is gone.
+    expect(spent.resets_at).toEqual(expect.any(String));
+    expect(new Date(spent.resets_at).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('lists what has been generated, and saved ones apart', async () => {
     await suggest();
     const [recipe] = await listRecipes(user.id);
 

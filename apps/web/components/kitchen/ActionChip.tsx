@@ -23,7 +23,10 @@ import { cn } from '@/lib/utils';
 export const chipClass = cn(
   'text-footnote text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5',
   'rounded-full px-2 py-1 font-medium transition-colors',
-  'hover:bg-muted/60 disabled:pointer-events-none disabled:opacity-60',
+  // Not `pointer-events-none`: the `disabled` attribute already stops the
+  // click, and killing hover as well would suppress the title that explains
+  // why it is off.
+  'hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent',
 );
 
 export function ActionChip({

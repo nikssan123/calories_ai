@@ -3,6 +3,8 @@ import { anthropicRate, openAiRate, priceUsage, round6 } from '../ai/pricing.ts'
 import { MODELS } from '../ai/client.ts';
 import { providerId } from '../ai/providers/index.ts';
 import type { CostSource, Outcome, TurnKind } from '../ai/providers/types.ts';
+import { limitsFor } from './plans.ts';
+import type { PlanName } from '@ct/shared';
 
 /**
  * Recording and reading what the AI layer costs.
@@ -46,6 +48,54 @@ export async function turnsInLastDay(userId: string, kind: TurnKind): Promise<nu
  * calendar week, so nobody gets two plans by asking on Sunday night and again
  * on Monday morning.
  */
+/**
+ * When the oldest run still inside the window falls out of it.
+ *
+ * The ceiling is a rolling twenty-four hours, not a calendar day, so "resets at
+ * midnight" would be a lie — and a specific lie is worse than a vague truth,
+ * because somebody comes back at midnight and finds nothing. What actually
+ * happens is that the earliest run ages out, and this is when.
+ *
+ * Null when nothing is in the window, which means nothing is waiting.
+ */
+export async function oldestTurnInLastDay(
+  userId: string,
+  kind: TurnKind,
+): Promise<Date | null> {
+  const row = await queryOne<{ at: Date | null }>(
+    `SELECT min(occurred_at) AS at FROM ai_usage
+      WHERE user_id = $1 AND kind = $2 AND occurred_at > now() - interval '1 day'`,
+    [userId, kind],
+  );
+  return row?.at ? new Date(row.at) : null;
+}
+
+/**
+ * What is left of the recipe budget, for a screen that has to say so *before*
+ * the button is pressed.
+ *
+ * The ceiling was only ever discovered by hitting it: the client had no way to
+ * ask, so a spent account got an enabled button, a request, and a toast that
+ * slid away — which reads as the button being broken rather than as a limit
+ * being reached. Nothing about the number is secret, and a limit you can see is
+ * a feature of the plan rather than a trap in the interface.
+ */
+export async function recipeAllowance(
+  userId: string,
+  plan: PlanName,
+): Promise<{ allowed: number; used: number; resets_at: string | null }> {
+  const allowed = limitsFor(plan).recipeRunsPerDay;
+  const used = await turnsInLastDay(userId, 'recipe');
+  if (used < allowed) return { allowed, used, resets_at: null };
+
+  const oldest = await oldestTurnInLastDay(userId, 'recipe');
+  return {
+    allowed,
+    used,
+    resets_at: oldest ? new Date(oldest.getTime() + 24 * 60 * 60 * 1000).toISOString() : null,
+  };
+}
+
 export async function turnsInLastWeek(userId: string, kind: TurnKind): Promise<number> {
   const row = await queryOne<{ n: string }>(
     `SELECT count(*) AS n FROM ai_usage

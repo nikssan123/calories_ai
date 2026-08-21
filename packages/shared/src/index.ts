@@ -718,6 +718,21 @@ export const RecipeBrief = z.object({
 });
 export type RecipeBrief = z.infer<typeof RecipeBrief>;
 
+/**
+ * What is left of the recipe budget today.
+ *
+ * Sent with every list and every run so the screen can say the number before
+ * the button is pressed rather than after. `resets_at` is only set once the
+ * budget is spent — the window is a rolling twenty-four hours, so what matters
+ * is when the oldest run ages out, not midnight.
+ */
+export const RecipeAllowance = z.object({
+  allowed: z.number().int(),
+  used: z.number().int(),
+  resets_at: z.string().nullable(),
+});
+export type RecipeAllowance = z.infer<typeof RecipeAllowance>;
+
 /** The original ask: invent something from the kitchen. */
 export const RecipeSuggestRequest = RecipeBrief;
 export type RecipeSuggestRequest = z.infer<typeof RecipeSuggestRequest>;

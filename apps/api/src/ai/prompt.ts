@@ -690,12 +690,12 @@ export interface RecipeConstraints {
   portions?: number | null;
   proteinMin?: number | null;
   kcalMax?: number | null;
+  /** Ingredients the dish should be built around, not merely permitted. */
+  focus?: string[] | null;
 }
 
 export interface RecipeTaskInput {
   /** What is being asked for: invent some, rework one, or price theirs. */
-  /** Ingredients the dish should be built around, not merely permitted. */
-  focus?: string[] | null;
   job?:
     | { kind: 'suggest'; count: number }
     | { kind: 'adapt'; recipe: string }
@@ -732,10 +732,6 @@ export interface PlanDay {
  * it would go looking for are known before the run starts, and a fixed input is
  * one that can be asserted on in a test.
  */
-export function recipeTaskPrompt(input: RecipeTaskInput): string {
-  const { budget } = input;
-
-  const kitchen = [
 /**
  * "chicken, garlic and spinach" — a sentence, not a comma-separated list.
  *
@@ -750,6 +746,10 @@ function sentenceList(items: string[]): string {
   return `${lower.slice(0, -1).join(', ')} and ${lower.at(-1)}`;
 }
 
+export function recipeTaskPrompt(input: RecipeTaskInput): string {
+  const { budget } = input;
+
+  const kitchen = [
     input.fresh.length === 0
       ? 'Nothing recorded beyond the staples.'
       : input.fresh
@@ -816,10 +816,6 @@ function sentenceList(items: string[]): string {
     c.kcalMax
       ? `- No more than ${c.kcalMax} kcal per portion. This replaces the day's remaining budget as the number to hit.`
       : null,
-  ].filter(Boolean);
-  const brief = constraints.length > 0 ? `\n\n## For this one\n\n${constraints.join('\n')}` : '';
-
-  const context = `## What is left of today
     /*
      * Stated as "build around", not "use" — the difference is the whole point
      * of the field. Everything here is already in the kitchen list above, so
@@ -831,8 +827,8 @@ function sentenceList(items: string[]): string {
     c.focus && c.focus.length > 0
       ? `- Build the dish around ${sentenceList(c.focus)}. These are what they are actually asking about, so a suggestion that only mentions them in passing has missed the point. If two of them do not belong in one dish, split them across the ideas rather than forcing all of them into each.`
       : null,
-
-${budget.kcal_remaining} kcal and ${budget.protein_remaining}g protein.
+  ].filter(Boolean);
+  const brief = constraints.length > 0 ? `\n\n## For this one\n\n${constraints.join('\n')}` : '';
 
   /*
    * The bare-kitchen case, which the standing rules cannot answer on their own.
@@ -853,6 +849,10 @@ ${budget.kcal_remaining} kcal and ${budget.protein_remaining}g protein.
   const bare = bareKitchen
     ? `\n\n## Their kitchen is empty\n\nThey have recorded nothing at all, so assume a bare cupboard rather than a stocked one — not even oil.\n\nThis changes the job. Do not pretend to cook from an empty shelf, and do not fall back on suggestions so plain they need nothing: propose things worth eating that one small shop would cover, mark every ingredient they would have to buy with \`missing: true\`, and keep each dish to a handful of common items rather than a supermarket sweep. The two-missing-ingredients rule does not apply to this request; it exists to stop a stocked kitchen being ignored, and there is no stocked kitchen here.\n\nSay so in your reply — that you have assumed they are starting from nothing, and that adding what they actually have will make the next answer sharper.`
     : '';
+
+  const context = `## What is left of today
+
+${budget.kcal_remaining} kcal and ${budget.protein_remaining}g protein.
 
 ${
     budget.kcal_remaining < 400

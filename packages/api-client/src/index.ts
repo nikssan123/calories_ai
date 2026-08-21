@@ -32,6 +32,7 @@ import type {
   Progress,
   ChatMessage,
   Recipe,
+  RecipeAllowance,
   RecipeBrief,
   RecipeImportRequest,
   RecipeSuggestRequest,
@@ -340,7 +341,7 @@ export function createApiClient({
 
     /** Ideas for what to cook, from the pantry and what is left of today. */
     suggestRecipes: (payload: RecipeSuggestRequest = {}) =>
-      request<{ recipes: Recipe[]; message: string }>('/recipes/suggest', {
+      request<{ recipes: Recipe[]; message: string; allowance: RecipeAllowance }>('/recipes/suggest', {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
@@ -350,7 +351,9 @@ export function createApiClient({
       if (options.limit) params.set('limit', String(options.limit));
       if (options.savedOnly) params.set('saved', 'true');
       const qs = params.toString();
-      return request<{ recipes: Recipe[] }>(`/recipes${qs ? `?${qs}` : ''}`);
+      return request<{ recipes: Recipe[]; allowance: RecipeAllowance }>(
+        `/recipes${qs ? `?${qs}` : ''}`,
+      );
     },
 
     recipe: (id: string) => request<Recipe>(`/recipes/${id}`),

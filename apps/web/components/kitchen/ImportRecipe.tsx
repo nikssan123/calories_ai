@@ -28,7 +28,14 @@ import { Textarea } from '@/components/ui/textarea';
  * three-hundred-pixel form and pushed everything below it off the screen —
  * including the recipes, which are the only reason anyone opened the tab.
  */
-export function ImportRecipe({ onImported }: { onImported: (recipe: Recipe) => void }) {
+export function ImportRecipe({
+  onImported,
+  disabled = false,
+}: {
+  onImported: (recipe: Recipe) => void;
+  /** Pricing a recipe spends a run like any other, so it shuts with them. */
+  disabled?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -52,7 +59,12 @@ export function ImportRecipe({ onImported }: { onImported: (recipe: Recipe) => v
 
   return (
     <>
-      <ActionChip icon={<ClipboardPaste size={13} />} onClick={() => setOpen(true)}>
+      <ActionChip
+        icon={<ClipboardPaste size={13} />}
+        onClick={() => setOpen(true)}
+        disabled={disabled}
+        title={disabled ? 'No recipe runs left today' : undefined}
+      >
         paste one
       </ActionChip>
 

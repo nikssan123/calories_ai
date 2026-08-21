@@ -4,9 +4,15 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { CalendarDays, ChevronDown, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
-import type { DaySummary, LibraryRecipe, PantryItem, Recipe, RecipeBrief } from '@ct/shared';
+import type {
+  DaySummary,
+  LibraryRecipe,
+  PantryItem,
+  Recipe,
+  RecipeAllowance,
+  RecipeBrief,
+} from '@ct/shared';
 import { api } from '@/lib/api';
-import { InsetGroup } from '@/components/InsetGroup';
 import { Pantry, daysSince, STALE_DAYS } from '@/components/kitchen/Pantry';
 import { FridgeScan } from '@/components/kitchen/FridgeScan';
 import { ChipDot, chipClass } from '@/components/kitchen/ActionChip';
@@ -19,7 +25,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Button } from '@/components/ui/button';
 import { foodEmoji } from '@/lib/foodEmoji';
-import { cn, listWords } from '@/lib/utils';
+import { cn, listWords, untilWords } from '@/lib/utils';
 
 /**
  * Cook — what you could make, from what you have, that fits what is left.
@@ -83,6 +89,14 @@ export default function CookPage() {
   const [thinking, setThinking] = useState(false);
   /** What the run in flight was asked for, printed over the skeletons. */
   const [thinkingNote, setThinkingNote] = useState('');
+  /**
+   * What is left of today's recipe budget.
+   *
+   * Read on load rather than discovered by failing. A spent account used to get
+   * a live button, a request, and a toast that slid away — which reads as the
+   * button being broken, not as a limit being reached.
+   */
+  const [allowance, setAllowance] = useState<RecipeAllowance | null>(null);
   /*
    * Which half of the answer is on screen. Starts on your own, even when it is
    * empty.
@@ -126,8 +140,9 @@ export default function CookPage() {
   // and a recipe someone saved is still there when they come back to cook it.
   const loadRecipes = useCallback(async () => {
     try {
-      const { recipes } = await api.recipes({ limit: 6 });
+      const { recipes, allowance } = await api.recipes({ limit: 6 });
       setRecipes(recipes);
+      setAllowance(allowance);
     } catch {
       // Not worth a toast: the screen works without them, and whatever went
       // wrong will say so again the moment they ask for something new.
@@ -180,7 +195,18 @@ export default function CookPage() {
       }
     : null;
 
+  /*
+   * Spent, and therefore the reason every button that starts a run is shut.
+   * Null while it is still loading — an unknown budget is not a spent one, and
+   * disabling on "do not know yet" would make the page start broken.
+   */
+  const spent = allowance !== null && allowance.used >= allowance.allowed;
+
   const plan = (() => {
+    if (spent) {
+      const back = allowance.resets_at ? ` You'll have another ${untilWords(allowance.resets_at)}.` : '';
+      return `That's your ${allowance.allowed === 1 ? 'one recipe run' : `${allowance.allowed} recipe runs`} for today.${back}`;
+    }
     /*
      * An empty kitchen is a different promise, not a smaller one. Saying "from
      * what's in your kitchen" when the kitchen is empty is the screen telling
@@ -268,6 +294,7 @@ export default function CookPage() {
       });
       setRecipes(result.recipes);
       setMessage(result.message);
+      setAllowance(result.allowance);
       // Deliberately not cleared. It sits with the other five constraints now,
       // all of which persist, and the count on the shut panel is what stops it
       // steering a request nobody meant it to.
@@ -343,48 +370,60 @@ export default function CookPage() {
         </Dialog>
 
         {/*
-          The ask. One box, one button, and the number it is aiming at.
+          The ask: a button, the sentence that says what it will do, and the
+          quiet line of other ways in.
 
-          Everything else that produces a recipe is on the quiet line below it,
-          all three at the same size — see <ActionChip> for why that line is a
-          line and not three rows with titles and chevrons.
+          No card around any of it. There was one, back when this held an input,
+          a budget line, a filter row and three actions — a card is for grouping
+          things, and there were things to group. What is left is one button, so
+          the border, the ledge and the full-width box were framing a single
+          control and calling it structure. The page background is a perfectly
+          good container for three lines of content.
         */}
-        <div className="space-y-2">
-          <InsetGroup>
-            <div className="space-y-2.5 p-3">
-              <Button
-                onClick={() => void suggest()}
-                disabled={thinking}
-                className="h-12 w-full gap-2 rounded-full text-[15px] sm:w-auto sm:px-6"
-              >
-                {thinking ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                {thinking ? 'Thinking…' : 'Find me something'}
-              </Button>
+        <div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            {/*
+              Shut when there is nothing left to spend, rather than live and
+              then apologetic. The sentence below says why and when it comes
+              back — a disabled control with no explanation is the same dead end
+              as a live one that does nothing.
+            */}
+            <Button
+              onClick={() => void suggest()}
+              disabled={thinking || spent}
+              // Not merely a dimmed primary: at half opacity the accent still
+              // reads as the thing to press, and the whole point is that it is
+              // not. Spent, it stops being the loudest thing on screen.
+              variant={spent ? 'secondary' : 'default'}
+              className="h-12 shrink-0 gap-2 rounded-full px-6 text-[15px]"
+            >
+              {thinking ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+              {thinking ? 'Thinking…' : spent ? 'Nothing left today' : 'Find me something'}
+            </Button>
 
-              {/*
-                The budget and the thing that changes it, on one line. It is the
-                reason the suggestions are any good, and saying it out loud is
-                what separates this from a recipe search that happens to live
-                inside a food app.
-              */}
-              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                <p className="text-footnote text-muted-foreground font-medium">{plan}</p>
-                <BriefToggle
-                  value={brief}
-                  open={briefOpen}
-                  onToggle={() => setBriefOpen((v) => !v)}
-                />
-              </div>
-            </div>
+            <BriefToggle value={brief} onClick={() => setBriefOpen(true)} />
+          </div>
 
-            {briefOpen && <Brief value={brief} onChange={setBrief} />}
-          </InsetGroup>
+          {/*
+            The budget, said out loud. It is the reason the suggestions are any
+            good, and saying it is what separates this from a recipe search that
+            happens to live inside a food app.
+          */}
+          <p
+            className={cn(
+              'mt-2.5 px-0.5 text-footnote font-medium',
+              spent ? 'text-[var(--fat-text)]' : 'text-muted-foreground',
+            )}
+          >
+            {plan}
+          </p>
 
           {/* The other three ways in. One line, one size, nothing hidden. */}
-          <div className="flex flex-wrap items-center gap-1 px-1.5">
-            <FridgeScan onSaved={load} onCook={cookFromPhoto} />
+          <div className="mt-2 flex flex-wrap items-center gap-1">
+            <FridgeScan onSaved={load} onCook={cookFromPhoto} canCook={!spent} />
             <ChipDot />
             <ImportRecipe
+              disabled={spent}
               onImported={(recipe) => {
                 setRecipes((prev) => [recipe, ...prev]);
                 setMessage('');
@@ -399,6 +438,34 @@ export default function CookPage() {
             </Link>
           </div>
         </div>
+
+        {/*
+          The filters, over the page rather than inside it — and with the button
+          repeated at the foot, so setting one and running is one gesture rather
+          than set, close, then go looking for the button again.
+        */}
+        <Dialog open={briefOpen} onOpenChange={setBriefOpen}>
+          <DialogContent
+            title="Anything specific?"
+            description="All optional. Without any of it I still work from your kitchen and your day."
+          >
+            <Brief value={brief} onChange={setBrief} />
+            <div className="border-border border-t-2 p-3">
+              <Button
+                onClick={() => {
+                  setBriefOpen(false);
+                  void suggest();
+                }}
+                disabled={thinking || spent}
+                variant={spent ? 'secondary' : 'default'}
+                className="h-11 w-full gap-2 rounded-full"
+              >
+                <Sparkles size={15} />
+                {spent ? 'Nothing left today' : 'Find me something'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/*
           The answers. Two tabs rather than two stacked lists: the shelf is a

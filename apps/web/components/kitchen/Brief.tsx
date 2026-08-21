@@ -16,6 +16,12 @@ import { cn } from '@/lib/utils';
  *
  * What you never eat is not here — it belongs on the profile, because it is
  * true of every meal and should not have to be restated each time.
+ *
+ * Shown in a dialog, like everything else on Cook that needs a form. It grew in
+ * place for a while, which meant the page had to carry a bordered card around
+ * the one button it belonged to, just so the panel had something to unfold
+ * inside. A box that exists to hold a box is the kind of chrome nobody asks for
+ * and everybody feels.
  */
 
 const MINUTES = [15, 30, 60] as const;
@@ -41,33 +47,29 @@ export function briefCount(value: RecipeBrief): number {
 }
 
 /**
- * The trigger, split out so it can sit on the end of the budget line.
+ * The trigger, which sits next to the button it modifies.
  *
- * That pairing is deliberate: "here is the number I am aiming at" and "change
- * what I aim at" are the same thought, and on its own row the toggle was one
- * more full-width thing to scroll past. The count rides along so a shut panel
- * never hides a setting somebody forgot they left on.
+ * That pairing is deliberate: "find me something" and "but like this" are the
+ * same thought. The count rides along so a shut panel never hides a setting
+ * somebody forgot they left on.
  */
 export function BriefToggle({
   value,
-  open,
-  onToggle,
+  onClick,
 }: {
   value: RecipeBrief;
-  open: boolean;
-  onToggle: () => void;
+  onClick: () => void;
 }) {
   const active = briefCount(value);
   return (
     <button
       type="button"
-      onClick={onToggle}
-      aria-expanded={open}
-      className="text-footnote text-muted-foreground hover:text-foreground hover:bg-muted/60 -mr-1 flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 font-medium transition-colors"
+      onClick={onClick}
+      className="text-footnote text-muted-foreground hover:text-foreground hover:bg-muted/60 flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 font-medium transition-colors"
     >
       <SlidersHorizontal size={13} />
-      {open ? 'Hide' : 'Anything specific?'}
-      {!open && active > 0 && (
+      Anything specific?
+      {active > 0 && (
         <span className="bg-secondary border-border rounded-full border px-1.5 text-[11px] font-bold">
           {active}
         </span>
@@ -86,7 +88,6 @@ export function Brief({
   const set = (patch: Partial<RecipeBrief>) => onChange({ ...value, ...patch });
 
   return (
-    <div className="border-border border-t-2">
         <div className="space-y-3 px-4 py-3">
           {/*
             The free-text steer, and the reason it is in here rather than on the
@@ -168,7 +169,6 @@ export function Brief({
             />
           </div>
         </div>
-    </div>
   );
 }
 

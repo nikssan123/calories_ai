@@ -9,11 +9,14 @@ import {
   RecipeBrief,
   RecipeImportRequest,
   RecipeSuggestRequest,
+  ShoppingExtrasRequest,
+  ShoppingExtraUpdate,
 } from '@ct/shared';
 import { AUTH_HELP, hasSubscriptionAuth } from '../ai/client.ts';
 import { scanFridgePhoto } from '../ai/pantry.ts';
 import { generateMealPlan } from '../ai/plan.ts';
 import { RecipeBudgetError, suggestRecipes } from '../ai/recipes.ts';
+import { recipeAllowance } from '../services/usage.ts';
 import {
   cookSlot,
   getMealPlan,
@@ -78,6 +81,7 @@ function brief(body: RecipeBrief) {
     portions: body.portions ?? null,
     proteinMin: body.protein_min ?? null,
     kcalMax: body.kcal_max ?? null,
+    focus: body.focus ?? null,
   };
 }
 
@@ -86,7 +90,6 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
 
   app.get('/pantry', async (request) => ({ items: await listPantry(request.userId!) }));
 
-    focus: body.focus ?? null,
   app.post('/pantry', async (request, reply) => {
     const parsed = PantryAddRequest.safeParse(request.body);
     if (!parsed.success) {
@@ -156,7 +159,10 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
     }
 
     try {
-      return await suggestRecipes(request.userId!, brief(parsed.data));
+      const result = await suggestRecipes(request.userId!, brief(parsed.data));
+      // The fresh number, so the screen can shut the button behind the run that
+      // just spent the last of it rather than on the next page load.
+      return { ...result, allowance: await recipeAllowance(request.userId!, request.plan) };
     } catch (error) {
       request.log.error({ err: error }, 'recipe suggestion failed');
       return recipeFailure(error, reply);
@@ -165,12 +171,17 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
 
   app.get('/recipes', async (request) => {
     const q = request.query as any;
-    return {
-      recipes: await listRecipes(request.userId!, {
+    const [recipes, allowance] = await Promise.all([
+      listRecipes(request.userId!, {
         limit: Number(q?.limit ?? 20),
         savedOnly: q?.saved === 'true',
       }),
-    };
+      // Carried on the list the Cook screen already fetches on load, rather
+      // than a request of its own: the answer is one row, and a second round
+      // trip to learn whether a button works is a second thing to go wrong.
+      recipeAllowance(request.userId!, request.plan),
+    ]);
+    return { recipes, allowance };
   });
 
   app.get('/recipes/:id', async (request, reply) => {

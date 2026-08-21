@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { ChevronDown, Plus, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PantryItem } from '@ct/shared';
 import { api } from '@/lib/api';

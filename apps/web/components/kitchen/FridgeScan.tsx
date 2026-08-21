@@ -38,12 +38,21 @@ import { cn } from '@/lib/utils';
 export function FridgeScan({
   onSaved,
   onCook,
+  canCook = true,
   variant = 'chip',
 }: {
   /** Called once the accepted finds are in the pantry. */
   onSaved: () => void;
   /** Hands the accepted names to the recipe run. */
   onCook: (names: string[]) => Promise<void>;
+  /**
+   * Whether there is a recipe run left to spend.
+   *
+   * Only the cooking half shuts. Reading a shelf into a list costs nothing from
+   * that budget, and a spent account still wants its kitchen to be right — so
+   * the scan stays, and the dialog comes back with one button instead of two.
+   */
+  canCook?: boolean;
   /**
    * How the trigger presents itself, and nothing more.
    *
@@ -232,20 +241,22 @@ export function FridgeScan({
               <Button
                 onClick={() => void commit('stock')}
                 disabled={busy}
-                variant="secondary"
+                variant={canCook ? 'secondary' : 'default'}
                 className="h-11 flex-1 gap-2 rounded-full"
               >
                 {saving === 'stock' && <Loader2 size={15} className="animate-spin" />}
-                {saving === 'stock' ? 'Adding…' : 'Just add to my kitchen'}
+                {saving === 'stock' ? 'Adding…' : 'Add to my kitchen'}
               </Button>
-              <Button
-                onClick={() => void commit('cook')}
-                disabled={busy || chosen.size === 0}
-                className="h-11 flex-1 gap-2 rounded-full"
-              >
-                {saving === 'cook' && <Loader2 size={15} className="animate-spin" />}
-                {saving === 'cook' ? 'Finding recipes…' : 'Cook with these'}
-              </Button>
+              {canCook && (
+                <Button
+                  onClick={() => void commit('cook')}
+                  disabled={busy || chosen.size === 0}
+                  className="h-11 flex-1 gap-2 rounded-full"
+                >
+                  {saving === 'cook' && <Loader2 size={15} className="animate-spin" />}
+                  {saving === 'cook' ? 'Finding recipes…' : 'Cook with these'}
+                </Button>
+              )}
             </div>
           </DialogContent>
         )}
