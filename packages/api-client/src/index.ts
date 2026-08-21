@@ -49,6 +49,9 @@ import type {
   WeeklyReview,
   WeightEntry,
   WorkoutRequest,
+  ShoppingExtra,
+  ShoppingExtraInput,
+  ShoppingExtraUpdate,
 } from '@ct/shared';
 import { SESSION_TRANSPORT_HEADER } from '@ct/shared';
 
@@ -399,11 +402,39 @@ export function createApiClient({
         body: JSON.stringify(payload),
       }),
 
-    /** Derived on every read, so it can never be stale. */
+    /**
+     * The week's ingredients, plus whatever they wrote on the list themselves.
+     *
+     * The ingredient half is derived on every read, so it can never be stale.
+     * An empty list is an ordinary answer — there is no 404 for a week nobody
+     * has planned and nobody has written on.
+     */
     shoppingList: (weekStart?: string) =>
       request<ShoppingList>(
         `/plan/shopping-list${weekStart ? `?week_start=${encodeURIComponent(weekStart)}` : ''}`,
       ),
+
+    /**
+     * Writes lines no recipe would produce — kitchen roll, the wine for
+     * Saturday. Answers with the whole list, because a written name can land on
+     * a row the plan had already put there.
+     */
+    addShoppingItems: (items: ShoppingExtraInput[], weekStart?: string) =>
+      request<ShoppingList>('/plan/shopping-list/extras', {
+        method: 'POST',
+        body: JSON.stringify({ items, ...(weekStart ? { week_start: weekStart } : {}) }),
+      }),
+
+    /** Tick a written line off, put it back, or correct what it says. */
+    updateShoppingItem: (id: string, patch: ShoppingExtraUpdate) =>
+      request<ShoppingExtra>(`/plan/shopping-list/extras/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(patch),
+      }),
+
+    /** Off the list entirely. Only written lines can go — the rest is derived. */
+    deleteShoppingItem: (id: string) =>
+      request<void>(`/plan/shopping-list/extras/${id}`, { method: 'DELETE' }),
 
     // ---- The starter library ----
 

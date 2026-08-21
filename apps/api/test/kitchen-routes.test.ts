@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { seedLibrary } from '../src/seed-library.ts';
 import { addPantryItems, listPantry } from '../src/services/pantry.ts';
 import { limitsFor } from '../src/services/plans.ts';
+import { addExtras, MAX_SHOPPING_EXTRAS } from '../src/services/shopping.ts';
 import { listRecipes } from '../src/services/recipes.ts';
 import { agentCalls, scriptAgent } from './helpers/agent-mock.ts';
 import { appFor, createUser, setUserTargets, type TestUser } from './helpers/factories.ts';
@@ -128,7 +129,6 @@ describe('recipes', () => {
     });
   });
 
-  it('lists what has been generated, and saved ones apart', async () => {
   /*
    * The brief is mapped field by field in `brief()`, which is one list that has
    * to be kept in step with the schema — exactly the place a new field gets
@@ -283,6 +283,94 @@ describe('the starter library', () => {
   });
 });
 
+/**
+ * The one writable part of the shopping list.
+ *
+ * The ingredients are derived from the planned week and have no HTTP surface at
+ * all — there is deliberately nothing here that can edit one. What these routes
+ * carry is the other half: the lines somebody writes because no recipe would
+ * ever produce them.
+ */
+describe('the shopping list', () => {
+  const extras = '/plan/shopping-list/extras';
+
+  it('answers an unplanned week with an empty list rather than a 404', async () => {
+    const response = await get('/plan/shopping-list');
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ items: [], have_already: [] });
+  });
+
+  it('writes lines and hands the whole list back', async () => {
+    const response = await send('POST', extras, {
+      items: [{ name: 'Kitchen roll', quantity_desc: '2 rolls' }, { name: 'Bin bags' }],
+    });
+
+    expect(response.statusCode).toBe(201);
+    // The whole list, not the rows it created: a written name can land on a row
+    // the plan had already put there, and the caller needs to see where it went.
+    expect(response.json().items.map((i: { name: string }) => i.name)).toEqual([
+      'Bin bags',
+      'Kitchen roll',
+    ]);
+
+    const listed = (await get('/plan/shopping-list')).json();
+    expect(listed.items[1]).toMatchObject({
+      name: 'Kitchen roll',
+      quantity_descs: ['2 rolls'],
+      bought: false,
+      for_dates: [],
+    });
+  });
+
+  it('rejects an empty batch rather than doing nothing quietly', async () => {
+    expect((await send('POST', extras, { items: [] })).statusCode).toBe(400);
+  });
+
+  it('ticks a line off and puts it back', async () => {
+    const written = (await send('POST', extras, { items: [{ name: 'Wine' }] })).json();
+    const id = written.items[0].extra_id;
+
+    expect((await send('PATCH', `${extras}/${id}`, { bought: true })).json().bought).toBe(true);
+    expect((await get('/plan/shopping-list')).json().items[0].bought).toBe(true);
+
+    expect((await send('PATCH', `${extras}/${id}`, { bought: false })).json().bought).toBe(false);
+  });
+
+  it('refuses an update it cannot read', async () => {
+    const written = (await send('POST', extras, { items: [{ name: 'Wine' }] })).json();
+    const id = written.items[0].extra_id;
+    expect((await send('PATCH', `${extras}/${id}`, { bought: 'yes' })).statusCode).toBe(400);
+  });
+
+  it('deletes with no content', async () => {
+    const written = (await send('POST', extras, { items: [{ name: 'Wine' }] })).json();
+    const id = written.items[0].extra_id;
+
+    expect((await send('DELETE', `${extras}/${id}`)).statusCode).toBe(204);
+    expect((await get('/plan/shopping-list')).json().items).toEqual([]);
+  });
+
+  it('404s on someone else’s line rather than touching it', async () => {
+    const other = await createUser();
+    const [theirs] = await addExtras(other.id, '2026-01-05', [{ name: 'Wine' }]);
+
+    expect((await send('PATCH', `${extras}/${theirs!.id}`, { bought: true })).statusCode).toBe(404);
+    expect((await send('DELETE', `${extras}/${theirs!.id}`)).statusCode).toBe(404);
+  });
+
+  it('answers a full list with a conflict and the limit', async () => {
+    await addExtras(
+      user.id,
+      '2026-01-05',
+      Array.from({ length: MAX_SHOPPING_EXTRAS }, (_, i) => ({ name: `Thing ${i}` })),
+    );
+
+    const response = await send('POST', extras, { items: [{ name: 'One more' }] });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ limit: MAX_SHOPPING_EXTRAS });
+  });
+});
+
 describe('signed out', () => {
   it('refuses every kitchen route without a session', async () => {
     for (const [method, url] of [
@@ -292,6 +380,8 @@ describe('signed out', () => {
       ['POST', '/recipes/suggest'],
       ['GET', '/recipes'],
       ['GET', '/library'],
+      ['GET', '/plan/shopping-list'],
+      ['POST', '/plan/shopping-list/extras'],
     ] as const) {
       const response = await app.inject({ method, url, payload: {} } as never);
       expect(response.statusCode).toBe(401);

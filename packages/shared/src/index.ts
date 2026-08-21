@@ -1347,10 +1347,24 @@ export const ShoppingItem = z.object({
   quantity_g: z.number().nullable(),
   /** The amounts as each recipe wrote them, for anything not weighed. */
   quantity_descs: z.array(z.string()),
-  /** Which nights need it, so a part-week shop is possible. */
+  /** Which nights need it, so a part-week shop is possible. Empty on a line
+      nobody's recipe asked for — the shop is the reason, and there is no date. */
   for_dates: z.array(z.string()),
-  /** True when nothing in the pantry covers it. */
+  /** True when nothing in the pantry covers it. Always true for a written line:
+      putting something on the list by hand *is* the claim that it is needed. */
   missing: z.boolean(),
+  /**
+   * Set when a line somebody wrote themselves is part of this row.
+   *
+   * The one piece of state on an otherwise derived object, and the only handle
+   * a client has for ticking a line off or taking it back off the list. Null on
+   * a row that came purely out of the week's recipes, which is what makes those
+   * rows unremovable by design: the way to settle one is to cook the night or
+   * change it, not to argue with the list.
+   */
+  extra_id: z.string().uuid().nullable(),
+  /** Ticked off. Only ever true on a row with an `extra_id`. */
+  bought: z.boolean(),
 });
 export type ShoppingItem = z.infer<typeof ShoppingItem>;
 
@@ -1361,6 +1375,46 @@ export const ShoppingList = z.object({
   have_already: z.array(z.string()),
 });
 export type ShoppingList = z.infer<typeof ShoppingList>;
+
+/**
+ * A line on the shopping list that no recipe produced.
+ *
+ * Kitchen roll, nappies, the wine for Saturday. The derived list is a function
+ * of the planned week and can only ever contain ingredients; this is how
+ * anything else gets on it, and it is the only part of the list that is stored.
+ */
+export const ShoppingExtra = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  quantity_desc: z.string().nullable(),
+  /** The Monday it was written for. Pending lines still show on later weeks. */
+  week_start: z.string(),
+  bought: z.boolean(),
+  created_at: z.string(),
+});
+export type ShoppingExtra = z.infer<typeof ShoppingExtra>;
+
+/** Writing a line. Matching is on the name, case-insensitively, as the pantry's is. */
+export const ShoppingExtraInput = z.object({
+  name: z.string().min(1).max(80),
+  quantity_desc: z.string().max(120).nullable().optional(),
+});
+export type ShoppingExtraInput = z.infer<typeof ShoppingExtraInput>;
+
+export const ShoppingExtrasRequest = z.object({
+  items: z.array(ShoppingExtraInput).min(1).max(40),
+  /** Any date in the week it is for. Defaults to the week being shopped for. */
+  week_start: z.string().optional(),
+});
+export type ShoppingExtrasRequest = z.infer<typeof ShoppingExtrasRequest>;
+
+export const ShoppingExtraUpdate = z.object({
+  name: z.string().min(1).max(80).optional(),
+  quantity_desc: z.string().max(120).nullable().optional(),
+  /** True ticks it off, false puts it back on the list. */
+  bought: z.boolean().optional(),
+});
+export type ShoppingExtraUpdate = z.infer<typeof ShoppingExtraUpdate>;
 
 // ---- Repeat a meal ---------------------------------------------------------
 

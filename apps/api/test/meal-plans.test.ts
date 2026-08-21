@@ -10,6 +10,13 @@ import {
   weekdayFor,
 } from '../src/services/mealPlans.ts';
 import { addPantryItems } from '../src/services/pantry.ts';
+import {
+  addExtras,
+  deleteExtra,
+  MAX_SHOPPING_EXTRAS,
+  updateExtra,
+} from '../src/services/shopping.ts';
+import { addDays } from '../src/time.ts';
 import { buildDaySummary } from '../src/services/summary.ts';
 import { agentCalls, scriptAgent } from './helpers/agent-mock.ts';
 import { createUser, setUserTargets, type TestUser } from './helpers/factories.ts';
@@ -325,7 +332,171 @@ describe('the shopping list', () => {
     expect(list!.items[0]!.quantity_g).toBeNull();
   });
 
-  it('has nothing to say about a week with no plan', async () => {
+  it('has nothing to say about a week with no plan and nothing written on it', async () => {
     expect(await shoppingListFor(user.id, '2026-04-06')).toBeNull();
+  });
+});
+
+/**
+ * The written half.
+ *
+ * What is under test throughout is the seam: that a line somebody typed cannot
+ * be moved, dropped or rewritten by anything the plan does, and that the plan's
+ * own lines are unaffected by anything typed. The two halves meet in
+ * `shoppingListFor` and nowhere else.
+ */
+describe('lines they wrote themselves', () => {
+  it('puts something no recipe could produce on the list', async () => {
+    await addExtras(user.id, WEEK_START, [{ name: 'Kitchen roll', quantity_desc: '2 rolls' }]);
+
+    const list = await shoppingListFor(user.id, WEEK_START);
+    expect(list!.items).toHaveLength(1);
+    expect(list!.items[0]).toMatchObject({
+      name: 'Kitchen roll',
+      quantity_descs: ['2 rolls'],
+      // No weight and no nights: nobody's recipe asked for it, so there is
+      // nothing to sum it with and no date it is needed by.
+      quantity_g: null,
+      for_dates: [],
+      bought: false,
+    });
+    expect(list!.items[0]!.extra_id).not.toBeNull();
+  });
+
+  it('is a list of its own on a week nobody has planned', async () => {
+    await addExtras(user.id, '2026-04-06', [{ name: 'Bin bags' }]);
+
+    const list = await shoppingListFor(user.id, '2026-04-06');
+    expect(list!.items.map((i) => i.name)).toEqual(['Bin bags']);
+  });
+
+  it('walks the shop once when the plan already asked for the same thing', async () => {
+    await planProposing([
+      recipeArgs('Wed', { ingredients: [ingredient('Milk', { quantity_g: 500 })] }),
+    ]);
+    await addExtras(user.id, WEEK_START, [{ name: 'milk', quantity_desc: 'the big one' }]);
+
+    const list = await shoppingListFor(user.id, WEEK_START);
+    expect(list!.items).toHaveLength(1);
+
+    const milk = list!.items[0]!;
+    // One row, still carrying the recipe's weight, and still tickable — the
+    // written line's handle survives the merge or it could never be taken back.
+    expect(milk.name).toBe('Milk');
+    expect(milk.quantity_g).toBe(500);
+    expect(milk.quantity_descs).toEqual(['1 pack', 'the big one']);
+    expect(milk.extra_id).not.toBeNull();
+  });
+
+  it('does not drop a written line because the kitchen has one', async () => {
+    await addPantryItems(user.id, 'pro', [{ name: 'Olive oil', is_staple: true }]);
+    await addExtras(user.id, WEEK_START, [{ name: 'Olive oil' }]);
+
+    const list = await shoppingListFor(user.id, WEEK_START);
+    // Dropping an ingredient the kitchen holds is the app inferring something.
+    // Dropping a line somebody typed is the app overruling them.
+    expect(list!.items.map((i) => i.name)).toEqual(['Olive oil']);
+    // And the footer must not then claim it was left off.
+    expect(list!.have_already).toEqual([]);
+  });
+
+  it('carries an unbought line forward, and leaves a ticked one behind', async () => {
+    const [written] = await addExtras(user.id, WEEK_START, [{ name: 'Kitchen roll' }]);
+    const next = addDays(WEEK_START, 7);
+
+    // Still needed on Monday, because needing something does not expire.
+    expect((await shoppingListFor(user.id, next))!.items.map((i) => i.name)).toEqual([
+      'Kitchen roll',
+    ]);
+
+    await updateExtra(user.id, written!.id, { bought: true });
+
+    // Ticked off, so it stays visible on the week it was written for — the shop
+    // it was ticked during — and follows nobody into the next one.
+    const own = await shoppingListFor(user.id, WEEK_START);
+    expect(own!.items[0]).toMatchObject({ name: 'Kitchen roll', bought: true });
+    expect(await shoppingListFor(user.id, next)).toBeNull();
+  });
+
+  it('refreshes a line already waiting rather than writing it twice', async () => {
+    await addExtras(user.id, WEEK_START, [{ name: 'Milk', quantity_desc: '2 litres' }]);
+    // Bare, and case-shifted: neither should cost the quantity already typed.
+    await addExtras(user.id, WEEK_START, [{ name: 'milk' }]);
+
+    const list = await shoppingListFor(user.id, WEEK_START);
+    expect(list!.items).toHaveLength(1);
+    expect(list!.items[0]!.quantity_descs).toEqual(['2 litres']);
+  });
+
+  it('lets a bought line be written again', async () => {
+    const [first] = await addExtras(user.id, WEEK_START, [{ name: 'Milk' }]);
+    await updateExtra(user.id, first!.id, { bought: true });
+
+    // The partial index is what makes this legal: uniqueness is over the lines
+    // still waiting, not over everything ever bought.
+    const after = await addExtras(user.id, WEEK_START, [{ name: 'Milk' }]);
+    expect(after.filter((e) => !e.bought)).toHaveLength(1);
+    expect(after).toHaveLength(2);
+  });
+
+  it('puts a line back on the list without colliding with the one already there', async () => {
+    const [first] = await addExtras(user.id, WEEK_START, [{ name: 'Milk' }]);
+    await updateExtra(user.id, first!.id, { bought: true });
+    await addExtras(user.id, WEEK_START, [{ name: 'Milk' }]);
+
+    // Un-ticking the old row would breach the index. There is nothing to
+    // reconcile — the waiting row already says what the un-tick asked for — so
+    // the ticked one is dropped and that row comes back.
+    const back = await updateExtra(user.id, first!.id, { bought: false });
+    expect(back!.bought).toBe(false);
+    expect(back!.id).not.toBe(first!.id);
+    expect((await shoppingListFor(user.id, WEEK_START))!.items).toHaveLength(1);
+  });
+
+  it('refuses to write past the ceiling, and says the number', async () => {
+    await addExtras(
+      user.id,
+      WEEK_START,
+      Array.from({ length: MAX_SHOPPING_EXTRAS }, (_, i) => ({ name: `Thing ${i}` })),
+    );
+
+    await expect(addExtras(user.id, WEEK_START, [{ name: 'One more' }])).rejects.toThrow(
+      String(MAX_SHOPPING_EXTRAS),
+    );
+    // Re-writing a name already waiting is not a new line, so it still works.
+    await expect(addExtras(user.id, WEEK_START, [{ name: 'Thing 1' }])).resolves.toBeDefined();
+  });
+
+  it('never reaches another account', async () => {
+    const stranger = await createUser();
+    const [theirs] = await addExtras(stranger.id, WEEK_START, [{ name: 'Wine' }]);
+
+    expect(await updateExtra(user.id, theirs!.id, { bought: true })).toBeNull();
+    // Including the read an empty patch degrades to, which would otherwise be
+    // the one way to see a line belonging to somebody else.
+    expect(await updateExtra(user.id, theirs!.id, {})).toBeNull();
+    expect(await deleteExtra(user.id, theirs!.id)).toBe(false);
+    expect(await shoppingListFor(stranger.id, WEEK_START)).not.toBeNull();
+  });
+
+  it('takes a line off entirely', async () => {
+    const [written] = await addExtras(user.id, WEEK_START, [{ name: 'Wine' }]);
+    expect(await deleteExtra(user.id, written!.id)).toBe(true);
+    expect(await shoppingListFor(user.id, WEEK_START)).toBeNull();
+  });
+
+  it('corrects what a line says', async () => {
+    const [written] = await addExtras(user.id, WEEK_START, [{ name: 'Wine' }]);
+    const fixed = await updateExtra(user.id, written!.id, {
+      name: 'Red wine',
+      quantity_desc: '2 bottles',
+    });
+    expect(fixed).toMatchObject({ name: 'Red wine', quantity_desc: '2 bottles' });
+    // An empty patch is a read, not a write.
+    expect(await updateExtra(user.id, written!.id, {})).toMatchObject({ name: 'Red wine' });
+  });
+
+  it('ignores a blank name rather than writing an empty line', async () => {
+    expect(await addExtras(user.id, WEEK_START, [{ name: '   ' }])).toEqual([]);
   });
 });

@@ -44,6 +44,13 @@ import {
   PantryFullError,
   STALE_AFTER_DAYS,
 } from '../services/pantry.ts';
+import {
+  addExtras,
+  deleteExtra,
+  listExtras,
+  ShoppingListFullError,
+  updateExtra,
+} from '../services/shopping.ts';
 import { cookRecipe, getRecipe, listRecipes, setRecipeSaved } from '../services/recipes.ts';
 import {
   cookLibraryRecipe,
@@ -1755,7 +1762,19 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
       const { planWeekFor, shoppingListFor } = await import('../services/mealPlans.ts');
       const weekStart = planWeekFor(args.week_start ?? localDateFor(tc.now, tc.ctx));
       const list = await shoppingListFor(tc.userId, weekStart);
-      if (!list) return fail('No plan for that week, so there is nothing to shop for yet.');
+      // An empty list is an answer, not a failure. It used to be an error
+      // because the list was nothing but a projection of the plan, so no plan
+      // meant no such thing — now they can write on it, and "there is nothing
+      // on it yet" is something the model should be able to say plainly and
+      // then offer to fix.
+      if (!list) {
+        return ok({
+          week_start: weekStart,
+          to_buy: [],
+          already_have: [],
+          note: 'Nothing on the list: no week planned and nothing written on it. update_shopping_list writes a line; plan_week fills the ingredients in, but only if they ask.',
+        });
+      }
 
       return ok({
         week_start: list.week_start,
@@ -1764,6 +1783,9 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
           quantity_g: item.quantity_g,
           quantity: item.quantity_descs,
           for_dates: item.for_dates,
+          // Only said of the lines it is true of, so an ordinary week's list
+          // reads as the list of ingredients it almost entirely is.
+          ...(item.extra_id ? { they_wrote_this: true, ticked_off: item.bought } : {}),
         })),
         // Named rather than silently dropped: "you already have this" is a
         // claim about what they told us, not about what is in the fridge.
@@ -1771,6 +1793,145 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
       });
     },
     { annotations: { readOnlyHint: true }, alwaysLoad: true },
+  );
+
+  /**
+   * Writing on the shopping list.
+   *
+   * The list is two halves and only one of them is writable. The ingredients
+   * are derived from the planned week on every read, which is what makes them
+   * trustworthy and also what makes them unarguable: a line is there because
+   * Tuesday needs it, so the way to remove it is to change Tuesday. Everything
+   * else — kitchen roll, nappies, the wine for Saturday — has no recipe behind
+   * it and no other way onto the list, and this is that way.
+   *
+   * Names rather than ids, unlike every other tool that edits something. The
+   * user says "got the kitchen roll", not a UUID, and a round trip through
+   * get_shopping_list to convert one into the other is a turn spent on
+   * bookkeeping — so the lookup happens here, and anything that does not match
+   * comes back named so the model can say which line it could not find.
+   */
+  const updateShoppingList = tool(
+    'update_shopping_list',
+    'Write things on their shopping list that no recipe would produce — kitchen roll, nappies, the wine for Saturday — and tick off or take back off the ones already written. Use it for "add X to the shopping list", "we need more Y", "got the kitchen roll". It cannot touch the ingredients: those are derived from the planned week, so a line is on the list because a recipe needs it and update_plan_night is what removes it. If they say they bought an ingredient, that is update_pantry — putting it in the kitchen is what takes it off the list.',
+    {
+      add: z
+        .array(
+          z.object({
+            name: z.string().describe('As they would write it on a list — "Kitchen roll", not "some kitchen roll".'),
+            quantity_desc: z
+              .string()
+              .nullable()
+              .default(null)
+              .describe('How much, in their words — "2 rolls", "a big one". Null if they did not say.'),
+          }),
+        )
+        .nullable()
+        .default(null)
+        .describe('Lines to write. Null if they are only ticking things off.'),
+      bought: z
+        .array(z.string())
+        .nullable()
+        .default(null)
+        .describe('Names of written lines they have now got. Ticked off rather than deleted, so they can still see it in the trolley. Only works on lines they wrote.'),
+      still_needed: z
+        .array(z.string())
+        .nullable()
+        .default(null)
+        .describe('Names to un-tick, for "actually I did not get the kitchen roll".'),
+      remove: z
+        .array(z.string())
+        .nullable()
+        .default(null)
+        .describe('Names to take off the list entirely — they changed their mind. Not the same as bought.'),
+    },
+    async (args) => {
+      const { planWeekFor, shoppingListFor } = await import('../services/mealPlans.ts');
+      const weekStart = planWeekFor(localDateFor(tc.now, tc.ctx));
+
+      const additions = args.add ?? [];
+      const bought = args.bought ?? [];
+      const stillNeeded = args.still_needed ?? [];
+      const removals = args.remove ?? [];
+      if (
+        additions.length === 0 &&
+        bought.length === 0 &&
+        stillNeeded.length === 0 &&
+        removals.length === 0
+      ) {
+        return fail('Nothing to write and nothing to tick off. Say what changed.');
+      }
+
+      const before = new Set(
+        (await listExtras(tc.userId, weekStart)).map((extra) => extra.name.toLowerCase()),
+      );
+
+      let written: string[] = [];
+      let refreshed: string[] = [];
+      if (additions.length > 0) {
+        try {
+          await addExtras(
+            tc.userId,
+            weekStart,
+            additions.map((item) => ({ name: item.name, quantity_desc: item.quantity_desc })),
+          );
+        } catch (error) {
+          if (error instanceof ShoppingListFullError) return fail(error.message);
+          throw error;
+        }
+        // Split after the write rather than guessed before it, so the wording
+        // matches what actually happened to a name already on the list.
+        written = additions.filter((i) => !before.has(i.name.trim().toLowerCase())).map((i) => i.name);
+        refreshed = additions.filter((i) => before.has(i.name.trim().toLowerCase())).map((i) => i.name);
+      }
+
+      /*
+       * Resolved against the list as it stands after the additions, so writing
+       * a line and ticking it off in one call works — which is exactly what
+       * "grab some kitchen roll, actually I already got it" is.
+       */
+      const byName = new Map(
+        (await listExtras(tc.userId, weekStart)).map((extra) => [extra.name.toLowerCase(), extra]),
+      );
+      const missed: string[] = [];
+      const settle = async (names: string[], apply: (id: string) => Promise<unknown>) => {
+        const done: string[] = [];
+        for (const name of names) {
+          const extra = byName.get(name.trim().toLowerCase());
+          if (!extra) {
+            missed.push(name);
+            continue;
+          }
+          await apply(extra.id);
+          done.push(extra.name);
+        }
+        return done;
+      };
+
+      const tickedOff = await settle(bought, (id) => updateExtra(tc.userId, id, { bought: true }));
+      const backOn = await settle(stillNeeded, (id) =>
+        updateExtra(tc.userId, id, { bought: false }),
+      );
+      const removed = await settle(removals, (id) => deleteExtra(tc.userId, id));
+
+      const list = await shoppingListFor(tc.userId, weekStart);
+      return ok({
+        week_start: weekStart,
+        written,
+        refreshed,
+        ticked_off: tickedOff,
+        back_on_the_list: backOn,
+        removed,
+        ...(missed.length > 0
+          ? {
+              not_written_by_them: missed,
+              note: 'These are not lines they wrote, so nothing happened to them. If one is an ingredient the plan put on the list, say so — it comes off by going in the kitchen (update_pantry) or by changing the night that needs it. Do not claim you ticked it off.',
+            }
+          : {}),
+        still_to_buy: list ? list.items.filter((item) => !item.bought).length : 0,
+      });
+    },
+    { alwaysLoad: true },
   );
 
   // ---- The rest ------------------------------------------------------------
@@ -2018,6 +2179,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
     repeatMeal,
     logBarcodeTool,
     updatePantry,
+    updateShoppingList,
     /*
      * A write for a reason that is easy to miss: it publishes a message into
      * the journal and moves their calorie target. A review agent able to call

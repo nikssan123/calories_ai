@@ -32,6 +32,12 @@ import {
   updatePantryItem,
 } from '../services/pantry.ts';
 import {
+  addExtras,
+  deleteExtra,
+  ShoppingListFullError,
+  updateExtra,
+} from '../services/shopping.ts';
+import {
   cookLibraryRecipe,
   getLibraryRecipe,
   listLibrary,
@@ -39,7 +45,7 @@ import {
 } from '../services/library.ts';
 import { cookRecipe, getRecipe, listRecipes, setRecipeSaved } from '../services/recipes.ts';
 import { getUserContext } from '../services/user.ts';
-import { localDateFor } from '../time.ts';
+import { type DayContext, localDateFor } from '../time.ts';
 import { stripDataUrl } from './body.ts';
 import { RECIPE_BURST, SCAN_LIMIT } from './limits.ts';
 
@@ -373,10 +379,7 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
    */
   app.get('/plan', async (request, reply) => {
     const { userId, ...ctx } = await getUserContext(request.userId!);
-    const asked = (request.query as any)?.week_start;
-    const weekStart = ISO_DATE.test(String(asked ?? ''))
-      ? planWeekFor(String(asked))
-      : planWeekFor(localDateFor(new Date(), ctx));
+    const weekStart = askedWeek(request, ctx);
 
     void reply;
     return { plan: await getMealPlan(userId, weekStart), week_start: weekStart };
@@ -416,18 +419,85 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
     return reply.status(201).send(entry);
   });
 
-  /** Derived on every read — see `shoppingListFor` for why it is never stored. */
+  /**
+   * The week's ingredients and whatever they wrote on the list themselves.
+   *
+   * 200 with an empty list rather than a 404, for the reason `GET /plan` gives
+   * for answering with a null plan: an empty list is an ordinary state of the
+   * screen and not a missing resource. It used to 404 on an unplanned week,
+   * which was defensible while the list was purely a projection of the plan and
+   * is not any more — the screen has an "add" field on it now, and a client
+   * cannot show an empty list it was told does not exist.
+   */
   app.get('/plan/shopping-list', async (request, reply) => {
     const { userId, ...ctx } = await getUserContext(request.userId!);
-    const asked = (request.query as any)?.week_start;
-    const weekStart = ISO_DATE.test(String(asked ?? ''))
-      ? planWeekFor(String(asked))
-      : planWeekFor(localDateFor(new Date(), ctx));
+    const weekStart = askedWeek(request, ctx);
+
+    void reply;
+    const list = await shoppingListFor(userId, weekStart);
+    return list ?? { week_start: weekStart, items: [], have_already: [] };
+  });
+
+  /**
+   * Writing lines nobody's recipe produced.
+   *
+   * The only stored part of the shopping list, and the only part a client may
+   * write. Answers with the whole list rather than the rows it created, because
+   * a written name can land on a row the plan already put there — the caller
+   * needs to see where it went, not what it sent.
+   */
+  app.post('/plan/shopping-list/extras', async (request, reply) => {
+    const parsed = ShoppingExtrasRequest.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid items' });
+    }
+
+    const { userId, ...ctx } = await getUserContext(request.userId!);
+    const weekStart = ISO_DATE.test(String(parsed.data.week_start ?? ''))
+      ? planWeekFor(String(parsed.data.week_start))
+      : askedWeek(request, ctx);
+
+    try {
+      await addExtras(userId, weekStart, parsed.data.items);
+    } catch (error) {
+      // Same shape a full kitchen answers with: well-formed request, fixable by
+      // the caller, and the number they have to get under.
+      if (error instanceof ShoppingListFullError) {
+        return reply.status(409).send({ error: error.message, limit: error.limit });
+      }
+      throw error;
+    }
 
     const list = await shoppingListFor(userId, weekStart);
-    if (!list) return reply.status(404).send({ error: 'No plan for that week yet' });
-    return list;
+    return reply
+      .status(201)
+      .send(list ?? { week_start: weekStart, items: [], have_already: [] });
   });
+
+  /** Ticking a written line off, putting it back, or correcting what it says. */
+  app.patch('/plan/shopping-list/extras/:id', async (request, reply) => {
+    const parsed = ShoppingExtraUpdate.safeParse(request.body ?? {});
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid update' });
+
+    const extra = await updateExtra(request.userId!, (request.params as any).id, parsed.data);
+    if (!extra) return reply.status(404).send({ error: 'No such item' });
+    return extra;
+  });
+
+  /** Off the list entirely — the answer to "we don't need that after all". */
+  app.delete('/plan/shopping-list/extras/:id', async (request, reply) => {
+    const gone = await deleteExtra(request.userId!, (request.params as any).id);
+    if (!gone) return reply.status(404).send({ error: 'No such item' });
+    return reply.status(204).send();
+  });
+}
+
+/** The week a request is about: the one it asked for, or the one they are in. */
+function askedWeek(request: { query?: unknown }, ctx: DayContext): string {
+  const asked = (request.query as any)?.week_start;
+  return ISO_DATE.test(String(asked ?? ''))
+    ? planWeekFor(String(asked))
+    : planWeekFor(localDateFor(new Date(), ctx));
 }
 
 /** Anything else in `week_start` is ignored rather than argued with. */

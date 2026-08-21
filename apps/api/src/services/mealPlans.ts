@@ -12,6 +12,7 @@ import { addDays, type DayContext } from '../time.ts';
 import { nightsCovered } from '../ai/plan.ts';
 import { cookRecipe, toRecipeRow } from './recipes.ts';
 import { listPantry } from './pantry.ts';
+import { listExtras } from './shopping.ts';
 
 /**
  * Storing a planned week, and turning it into a shopping list.
@@ -257,19 +258,31 @@ export async function cookSlot(
 // ---- The shopping list -----------------------------------------------------
 
 /**
- * The union of the week's ingredients, minus what the kitchen already holds.
+ * The union of the week's ingredients, minus what the kitchen already holds,
+ * plus whatever they wrote on it themselves.
  *
- * Derived on every read and never stored. A stored list is wrong the moment a
- * slot is swapped, and a shopping list wrong in one line is not trusted in any
- * line — which makes it worse than no list, because it still has to be checked
- * against the recipes it came from.
+ * The ingredient half is derived on every read and never stored. A stored list
+ * is wrong the moment a slot is swapped, and a shopping list wrong in one line
+ * is not trusted in any line — which makes it worse than no list, because it
+ * still has to be checked against the recipes it came from.
+ *
+ * The written half is stored, because nothing derives kitchen roll. The two
+ * meet here and nowhere else: `shopping_extras` never learns about the plan and
+ * the plan never learns about it, so a swapped Tuesday still rewrites exactly
+ * its own ingredients. What a client gets is one list; what either half can do
+ * to the other is nothing.
  */
 export async function shoppingListFor(
   userId: string,
   weekStart: string,
 ): Promise<ShoppingList | null> {
-  const plan = await getMealPlan(userId, weekStart);
-  if (!plan) return null;
+  const [plan, extras] = await Promise.all([
+    getMealPlan(userId, weekStart),
+    listExtras(userId, weekStart),
+  ]);
+  // Null means there is nothing here at all, which is no longer the same thing
+  // as having nothing planned: a list can be one written line and no week.
+  if (!plan && extras.length === 0) return null;
 
   const pantry = await listPantry(userId);
   /*
@@ -286,7 +299,7 @@ export async function shoppingListFor(
   const byName = new Map<string, ShoppingItem>();
   const haveAlready = new Set<string>();
 
-  for (const slot of plan.slots) {
+  for (const slot of plan?.slots ?? []) {
     if (!slot.recipe) continue;
     for (const ingredient of slot.recipe.ingredients) {
       const key = ingredient.name.trim().toLowerCase();
@@ -309,6 +322,8 @@ export async function shoppingListFor(
           quantity_descs: ingredient.quantity_desc ? [ingredient.quantity_desc] : [],
           for_dates: [slot.local_date],
           missing: ingredient.missing,
+          extra_id: null,
+          bought: false,
         });
         continue;
       }
@@ -327,11 +342,57 @@ export async function shoppingListFor(
     }
   }
 
+  /*
+   * The written lines, folded in last.
+   *
+   * Deliberately not filtered against the pantry the way an ingredient is.
+   * Dropping an ingredient because the kitchen holds it is the app inferring
+   * something; a line somebody typed is the person stating it, and an app that
+   * quietly deletes what you wrote because it thinks you already have some is
+   * an app you stop writing on.
+   *
+   * A name that is on both sides becomes one row rather than two — the point of
+   * a list is to be walked once — and that row keeps the written line's handle,
+   * so it can still be ticked off. Its quantities sit side by side unsummed,
+   * which is the same thing the derived half already does with "1 tin" and "a
+   * splash": two ways of saying an amount do not add up.
+   */
+  const written = new Set(extras.map((extra) => extra.name.trim().toLowerCase()));
+  for (const extra of extras) {
+    const key = extra.name.trim().toLowerCase();
+    const existing = byName.get(key);
+    if (existing) {
+      if (extra.quantity_desc && !existing.quantity_descs.includes(extra.quantity_desc)) {
+        existing.quantity_descs.push(extra.quantity_desc);
+      }
+      existing.extra_id = extra.id;
+      existing.bought = extra.bought;
+      continue;
+    }
+
+    byName.set(key, {
+      name: extra.name,
+      // No weight, and no nights: nobody's recipe asked for this, so there is
+      // no date it is needed by and nothing to sum it with.
+      quantity_g: null,
+      quantity_descs: extra.quantity_desc ? [extra.quantity_desc] : [],
+      for_dates: [],
+      missing: true,
+      extra_id: extra.id,
+      bought: extra.bought,
+    });
+  }
+
   return {
     week_start: weekStart,
     // Alphabetical: a shopping list is read while walking, and the one useful
     // order — by aisle — is a fact about a shop nobody here knows.
     items: [...byName.values()].sort((a, b) => a.name.localeCompare(b.name)),
-    have_already: [...haveAlready].sort((a, b) => a.localeCompare(b)),
+    // Anything written by hand is dropped from here, whatever the kitchen says.
+    // It is on the list; saying underneath that it was left off is the list
+    // contradicting itself in the one place people look to check it.
+    have_already: [...haveAlready]
+      .filter((name) => !written.has(name.trim().toLowerCase()))
+      .sort((a, b) => a.localeCompare(b)),
   };
 }

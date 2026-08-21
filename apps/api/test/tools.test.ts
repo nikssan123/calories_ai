@@ -1413,11 +1413,155 @@ describe('get_shopping_list', () => {
     expect(json.to_buy).toEqual([]);
   });
 
-  it('fails plainly when there is no plan to shop for', async () => {
+  it('says an empty list is empty rather than failing', async () => {
     build();
-    const result = await call('get_shopping_list');
+    const { json } = await call('get_shopping_list');
+    // Not an error any more. The list is no longer only a projection of the
+    // plan, so "nothing on it yet" is a state to describe and offer to fix.
+    expect(json.to_buy).toEqual([]);
+    expect(json.note).toContain('update_shopping_list');
+  });
+
+  it('marks which lines they wrote themselves', async () => {
+    await written([{ name: 'Kitchen roll' }]);
+    build();
+
+    const { json } = await call('get_shopping_list');
+    expect(json.to_buy).toEqual([
+      {
+        name: 'Kitchen roll',
+        quantity_g: null,
+        quantity: [],
+        for_dates: [],
+        they_wrote_this: true,
+        ticked_off: false,
+      },
+    ]);
+  });
+
+  it('says nothing about authorship on an ordinary ingredient', async () => {
+    const recipe = await makeRecipe('Chicken traybake');
+    await planWith([{ date: '2026-03-10', recipeId: recipe.id }]);
+    build();
+
+    const { json } = await call('get_shopping_list');
+    expect(json.to_buy[0]).not.toHaveProperty('they_wrote_this');
+  });
+});
+
+/** Writes a line straight into the list, without going through the tool. */
+async function written(items: Array<{ name: string; quantity_desc?: string | null }>) {
+  const { addExtras } = await import('../src/services/shopping.ts');
+  return addExtras(user.id, WEEK_START, items);
+}
+
+describe('update_shopping_list', () => {
+  it('is on the journal and nowhere near the review', () => {
+    build();
+    expect(tools.has('update_shopping_list')).toBe(true);
+    build({}, true);
+    expect(tools.has('update_shopping_list')).toBe(false);
+  });
+
+  it('writes what no recipe would ever produce', async () => {
+    build();
+    const { json } = await call('update_shopping_list', {
+      add: [
+        { name: 'Kitchen roll', quantity_desc: '2 rolls' },
+        { name: 'Bin bags', quantity_desc: null },
+      ],
+    });
+
+    expect(json.written).toEqual(['Kitchen roll', 'Bin bags']);
+    expect(json.still_to_buy).toBe(2);
+
+    const { json: list } = await call('get_shopping_list');
+    expect(list.to_buy.map((i: { name: string }) => i.name)).toEqual(['Bin bags', 'Kitchen roll']);
+  });
+
+  it('says a name already on the list was refreshed, not written', async () => {
+    await written([{ name: 'Milk', quantity_desc: '2 litres' }]);
+    build();
+
+    const { json } = await call('update_shopping_list', { add: [{ name: 'milk' }] });
+    expect(json.written).toEqual([]);
+    expect(json.refreshed).toEqual(['milk']);
+  });
+
+  it('ticks a line off without deleting it', async () => {
+    await written([{ name: 'Kitchen roll' }]);
+    build();
+
+    const { json } = await call('update_shopping_list', { bought: ['kitchen roll'] });
+    expect(json.ticked_off).toEqual(['Kitchen roll']);
+    expect(json.still_to_buy).toBe(0);
+
+    // Still drawn, so a shop in progress can see what is in the trolley.
+    const { json: list } = await call('get_shopping_list');
+    expect(list.to_buy[0]).toMatchObject({ name: 'Kitchen roll', ticked_off: true });
+  });
+
+  it('puts one back when they did not actually get it', async () => {
+    await written([{ name: 'Kitchen roll' }]);
+    build();
+    await call('update_shopping_list', { bought: ['Kitchen roll'] });
+
+    const { json } = await call('update_shopping_list', { still_needed: ['Kitchen roll'] });
+    expect(json.back_on_the_list).toEqual(['Kitchen roll']);
+    expect(json.still_to_buy).toBe(1);
+  });
+
+  it('takes one off entirely, which is not the same as buying it', async () => {
+    await written([{ name: 'Wine' }]);
+    build();
+
+    const { json } = await call('update_shopping_list', { remove: ['Wine'] });
+    expect(json.removed).toEqual(['Wine']);
+    expect((await call('get_shopping_list')).json.to_buy).toEqual([]);
+  });
+
+  it('writes and ticks off in one call', async () => {
+    build();
+    // "Grab some kitchen roll — actually, I already got it." The tick resolves
+    // against the list as it stands after the write, or this would silently
+    // half-work.
+    const { json } = await call('update_shopping_list', {
+      add: [{ name: 'Kitchen roll' }],
+      bought: ['Kitchen roll'],
+    });
+    expect(json.written).toEqual(['Kitchen roll']);
+    expect(json.ticked_off).toEqual(['Kitchen roll']);
+  });
+
+  it('will not pretend it ticked off an ingredient the plan put there', async () => {
+    const recipe = await makeRecipe('Chicken traybake');
+    await planWith([{ date: '2026-03-10', recipeId: recipe.id }]);
+    build();
+
+    const { json } = await call('update_shopping_list', { bought: ['Chicken thighs'] });
+    expect(json.ticked_off).toEqual([]);
+    expect(json.not_written_by_them).toEqual(['Chicken thighs']);
+    // And it is told where that actually goes, so the turn is not wasted.
+    expect(json.note).toContain('update_pantry');
+    // The ingredient is untouched.
+    expect((await call('get_shopping_list')).json.to_buy).toHaveLength(1);
+  });
+
+  it('refuses a call that changes nothing', async () => {
+    build();
+    const result = await call('update_shopping_list');
     expect(result.isError).toBe(true);
-    expect(result.text).toContain('nothing to shop for');
+    expect(result.text).toContain('Say what changed');
+  });
+
+  it('refuses to write past the ceiling', async () => {
+    const { MAX_SHOPPING_EXTRAS } = await import('../src/services/shopping.ts');
+    await written(Array.from({ length: MAX_SHOPPING_EXTRAS }, (_, i) => ({ name: `Thing ${i}` })));
+    build();
+
+    const result = await call('update_shopping_list', { add: [{ name: 'One more' }] });
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain(String(MAX_SHOPPING_EXTRAS));
   });
 });
 
