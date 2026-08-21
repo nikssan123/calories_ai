@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ExerciseEntry, ExerciseSummary } from '@ct/shared';
@@ -26,6 +26,19 @@ const WINDOWS = [14, 30, 90] as const;
 export default function ExercisePage() {
   const [summary, setSummary] = useState<ExerciseSummary | null>(null);
   const [days, setDays] = useState<number>(30);
+
+  /* The series carries a date and a number per day; the sessions that made
+     that number sit in a flat list beside it. Index them once, so pointing at
+     a bar can answer what the day actually was. */
+  const byDate = useMemo(() => {
+    const map = new Map<string, ExerciseEntry[]>();
+    for (const entry of summary?.entries ?? []) {
+      const day = map.get(entry.local_date);
+      if (day) day.push(entry);
+      else map.set(entry.local_date, [entry]);
+    }
+    return map;
+  }, [summary]);
 
   const load = useCallback(async (window: number) => {
     try {
@@ -118,6 +131,14 @@ export default function ExercisePage() {
                   stroke="var(--exercise)"
                   variant="bars"
                   className="mt-4"
+                  label="Calories burned per day"
+                  tooltip={(point) => (
+                    <DayReadout
+                      date={point.local_date}
+                      kcal={point.value ?? 0}
+                      sessions={byDate.get(point.local_date) ?? []}
+                    />
+                  )}
                 />
               </div>
 
@@ -182,6 +203,73 @@ export default function ExercisePage() {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * What one bar was.
+ *
+ * The number on its own is the least interesting half of a day — "260 kcal"
+ * last Saturday means nothing until you remember it was the long ride — so the
+ * sessions come with it. A rest day says so in words: an empty slot with no
+ * caption reads as something the app lost rather than a day off.
+ */
+function DayReadout({
+  date,
+  kcal,
+  sessions,
+}: {
+  date: string;
+  kcal: number;
+  sessions: ExerciseEntry[];
+}) {
+  const distance = sessions.reduce((sum, s) => sum + (s.distance_km ?? 0), 0);
+  const minutes = sessions.reduce((sum, s) => sum + (s.duration_min ?? 0), 0);
+  const detail = [
+    distance > 0 ? `${Math.round(distance * 10) / 10} km` : null,
+    minutes > 0 ? formatDuration(minutes) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <>
+      {/* Date and figure share a line. The card is parked on top of the chart
+          it is explaining, so every line it costs is a bar you cannot see. */}
+      <div className="flex items-baseline gap-3">
+        <p className="text-footnote text-muted-foreground font-bold">{formatDate(date)}</p>
+        {sessions.length === 0 ? (
+          <p className="text-footnote ml-auto font-semibold">Rest day</p>
+        ) : (
+          <p className="text-figure ml-auto text-body text-[var(--exercise-text)]">
+            {Math.round(kcal).toLocaleString()}
+            <span className="text-muted-foreground text-xs font-semibold">
+              {' '}
+              kcal{detail && ` · ${detail}`}
+            </span>
+          </p>
+        )}
+      </div>
+      {sessions.length > 0 && (
+        /* Three is as many as fits before the card covers the chart it is
+           explaining; a fourth session is rarer than that limit is annoying. */
+        <ul className="mt-1 space-y-0.5">
+          {sessions.slice(0, 3).map((session) => (
+            <li key={session.id} className="text-footnote flex items-baseline gap-1.5 font-medium">
+              <span aria-hidden className="shrink-0">
+                {exerciseEmoji(session.description)}
+              </span>
+              <span className="min-w-0 truncate">{session.description}</span>
+            </li>
+          ))}
+          {sessions.length > 3 && (
+            <li className="text-footnote text-muted-foreground font-medium">
+              +{sessions.length - 3} more
+            </li>
+          )}
+        </ul>
+      )}
+    </>
   );
 }
 

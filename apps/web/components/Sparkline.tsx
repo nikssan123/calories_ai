@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import type { TrendPoint } from '@ct/shared';
 import { cn } from '@/lib/utils';
 
@@ -18,6 +21,8 @@ export function Sparkline({
   target,
   variant = 'line',
   height = 72,
+  tooltip,
+  label,
   className,
 }: {
   points: TrendPoint[];
@@ -26,8 +31,19 @@ export function Sparkline({
   target?: number | null;
   variant?: 'line' | 'bars';
   height?: number;
+  /**
+   * Opt in to inspecting a single day. The caller draws the contents, because
+   * only it knows what the day *was* — this component has a date and a number
+   * and nothing else. Bars only: a bar is a day you can point at, where a
+   * line's value between two samples is an interpolation nobody logged.
+   */
+  tooltip?: (point: TrendPoint, index: number) => React.ReactNode;
+  /** Names the chart for screen readers, once `tooltip` makes it focusable. */
+  label?: string;
   className?: string;
 }) {
+  const [hovered, setHovered] = useState<number | null>(null);
+
   const values = points.map((p) => p[accessor]);
   const present = values.filter((v): v is number => v !== null);
   if (present.length < 2) return null;
@@ -67,15 +83,29 @@ export function Sparkline({
     // 365-day window — below about a pixel the chart reads as an empty box.
     const slot = width / points.length;
     const barWidth = Math.max(1.5, slot * 0.66);
+    // Switching 90d → 14d can leave the held index pointing past the end.
+    const active = hovered !== null && hovered < points.length ? hovered : null;
 
-    return (
+    const chart = (
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        className={cn('w-full', className)}
+        className={cn('w-full', !tooltip && className)}
         role="img"
         aria-hidden="true"
       >
         {targetLine}
+        {active !== null && (
+          /* The whole slot lights up rather than the bar: a rest day has no bar
+             to light and still has to be findable. */
+          <rect
+            x={(slot * active).toFixed(1)}
+            y="0"
+            width={slot.toFixed(1)}
+            height={height}
+            rx={Math.min(4, slot / 2).toFixed(1)}
+            className="fill-foreground/10"
+          />
+        )}
         {points.map((point, i) => {
           const v = point[accessor] ?? 0;
           const top = y(v);
@@ -90,11 +120,65 @@ export function Sparkline({
               height={Math.max(v > 0 ? 1.5 : 0, height - 5 - top).toFixed(1)}
               rx={Math.min(3, barWidth / 2)}
               fill={stroke}
-              opacity={v > 0 ? 1 : 0}
+              opacity={v > 0 ? (active === null || active === i ? 1 : 0.35) : 0}
             />
           );
         })}
       </svg>
+    );
+
+    if (!tooltip) return chart;
+
+    const pick = (clientX: number, element: HTMLElement) => {
+      const box = element.getBoundingClientRect();
+      const ratio = (clientX - box.left) / (box.width || 1);
+      setHovered(Math.min(points.length - 1, Math.max(0, Math.floor(ratio * points.length))));
+    };
+
+    const step = (by: number) =>
+      setHovered((prev) => {
+        const next = prev === null ? (by > 0 ? 0 : points.length - 1) : prev + by;
+        return Math.min(points.length - 1, Math.max(0, next));
+      });
+
+    return (
+      <div
+        className={cn(
+          'focus-visible:ring-ring relative rounded-lg outline-none focus-visible:ring-2',
+          className,
+        )}
+        role="group"
+        tabIndex={0}
+        aria-label={`${label ?? 'Daily chart'}. Use the arrow keys to read a day.`}
+        /* Pointer rather than mouse, so a finger held on the chart reads a day
+           the same way a cursor over it does. Touch clears on lift: a tap that
+           left the card parked over the chart for good would be worse than no
+           card at all. */
+        onPointerMove={(e) => {
+          if (e.pointerType === 'mouse') pick(e.clientX, e.currentTarget);
+        }}
+        onPointerDown={(e) => pick(e.clientX, e.currentTarget)}
+        onPointerUp={(e) => {
+          if (e.pointerType !== 'mouse') setHovered(null);
+        }}
+        onPointerCancel={() => setHovered(null)}
+        onPointerLeave={() => setHovered(null)}
+        onBlur={() => setHovered(null)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowRight') step(1);
+          else if (e.key === 'ArrowLeft') step(-1);
+          else if (e.key === 'Escape') setHovered(null);
+          else return;
+          e.preventDefault();
+        }}
+      >
+        {chart}
+        {active !== null && (
+          <Readout position={(active + 0.5) / points.length}>
+            {tooltip(points[active]!, active)}
+          </Readout>
+        )}
+      </div>
     );
   }
 
@@ -128,5 +212,38 @@ export function Sparkline({
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+/** The readout's widest allowed size, as a percentage of the chart. */
+const READOUT_MAX = 70;
+
+/**
+ * The floating card, parked over the top of the chart and anchored to the day
+ * under the pointer.
+ *
+ * It slides rather than flips at the ends: the horizontal translation runs from
+ * 0% at the left edge through 50% in the middle to 100% at the right, which
+ * keeps the card inside the chart — and so inside the card the chart sits on,
+ * which clips what overflows it — without jumping sideways as the pointer
+ * crosses some threshold. `READOUT_MAX` is what makes that arithmetic safe: a
+ * card no wider than that fraction can always be fitted.
+ */
+function Readout({ position, children }: { position: number; children: React.ReactNode }) {
+  const pct = position * 100;
+  const shift = Math.min(
+    Math.max(50, ((pct + READOUT_MAX - 100) * 100) / READOUT_MAX),
+    (pct * 100) / READOUT_MAX,
+  );
+
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-0" role="status" aria-live="polite">
+      <div
+        className="bg-card border-border chunk-sm absolute top-0 w-max max-w-[70%] rounded-xl border-2 px-2.5 py-1.5"
+        style={{ left: `${pct}%`, transform: `translateX(-${shift}%)` }}
+      >
+        {children}
+      </div>
+    </div>
   );
 }
