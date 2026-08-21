@@ -59,14 +59,25 @@ export const ANTHROPIC_RATES: Record<string, Rate> = {
  * one-hour: every usage record it returns reports its cache writes under
  * `ephemeral_1h_input_tokens` and none under `ephemeral_5m_input_tokens`.
  *
- * 2× is therefore the multiplier that matches the bill, and it is worth stating
- * plainly that this is the expensive lever in the whole file: a token written
- * to cache costs twenty times the same token read back out of it. Keeping the
- * prefix stable enough to be read rather than re-written is worth more than any
- * choice of model — see `dayContextPrompt`.
+ * 2× is therefore the multiplier that matches that provider's bill, and it is
+ * worth stating plainly that this is the expensive lever in the whole file: a
+ * token written to cache costs twenty times the same token read back out of it.
+ * Keeping the prefix stable enough to be read rather than re-written is worth
+ * more than any choice of model — see `dayContextPrompt`.
+ *
+ * Which TTL was taken is a property of the caller, not of the rate card, so it
+ * travels with the turn: the direct Messages API provider asks for the plain
+ * five-minute `ephemeral` and pays 1.25×, and deliberately does not reach for
+ * the one-hour TTL — at any real concurrency the prefix is kept warm by traffic
+ * and the longer TTL would double the write cost to close a gap that is not
+ * there. Pricing a 5m write at 2× would overstate the largest line on the bill
+ * by 60% at exactly the volumes where cache writes still dominate.
  */
 export const CACHE_READ_MULTIPLIER = 0.1;
-export const CACHE_WRITE_MULTIPLIER = 2;
+export const CACHE_WRITE_MULTIPLIER_5M = 1.25;
+export const CACHE_WRITE_MULTIPLIER_1H = 2;
+/** The default, because the Agent SDK — still the default provider — takes 1h. */
+export const CACHE_WRITE_MULTIPLIER = CACHE_WRITE_MULTIPLIER_1H;
 
 export function anthropicRate(model: string): Rate | null {
   return ANTHROPIC_RATES[model] ?? null;
@@ -90,14 +101,22 @@ export function openAiRate(source: NodeJS.ProcessEnv = process.env): Rate | null
 /**
  * Prices token counts against a rate card. Cache reads and writes are charged
  * against the input rate at their own multipliers; `inputTokens` is assumed to
- * already exclude them, which is how both providers report it.
+ * already exclude them, which is how every provider here reports it.
+ *
+ * `cacheWriteMultiplier` defaults to the one-hour figure rather than being
+ * required, so the Agent SDK path and the OpenAI path — neither of which has a
+ * choice to express — read exactly as they did before.
  */
-export function priceUsage(usage: TokenUsage, rate: Rate): number {
+export function priceUsage(
+  usage: TokenUsage,
+  rate: Rate,
+  cacheWriteMultiplier: number = CACHE_WRITE_MULTIPLIER,
+): number {
   const million = 1_000_000;
   const input =
     usage.inputTokens * rate.input +
     usage.cacheReadTokens * rate.input * CACHE_READ_MULTIPLIER +
-    usage.cacheWriteTokens * rate.input * CACHE_WRITE_MULTIPLIER;
+    usage.cacheWriteTokens * rate.input * cacheWriteMultiplier;
   return round6((input + usage.outputTokens * rate.output) / million);
 }
 

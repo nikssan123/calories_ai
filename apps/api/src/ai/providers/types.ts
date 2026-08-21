@@ -179,6 +179,14 @@ export interface Outcome {
   /** Whether `costUsd` was priced by the provider, by us, or not at all. */
   costSource?: CostSource;
   usage?: TokenUsage;
+  /**
+   * What a cache write cost this turn, as a multiple of the input rate — 1.25×
+   * for the five-minute TTL, 2× for the one-hour one. It rides on the outcome
+   * because it is the *writer's* choice, and only the provider knows which it
+   * asked for. Unset means the rate card's default, which is what the Agent SDK
+   * takes. See `CACHE_WRITE_MULTIPLIER_5M` in `pricing.ts`.
+   */
+  cacheWriteMultiplier?: number;
   /** Wall-clock time inside the provider, for the latency half of viability. */
   durationMs?: number;
   error?: string;

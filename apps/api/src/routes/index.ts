@@ -61,6 +61,7 @@ import {
 } from '../services/user.ts';
 import { listExerciseTypes, logWorkout } from '../services/workouts.ts';
 import { messageActions, replaceActions } from '../services/chat.ts';
+import { TurnInProgressError } from '../services/turn-lock.ts';
 import { addDays, dateRange, localDateFor } from '../time.ts';
 import { stripDataUrl } from './body.ts';
 import { BARCODE_BURST, CHAT_LIMIT, DELETE_ACCOUNT_LIMIT, REVIEW_LIMIT } from './limits.ts';
@@ -115,6 +116,13 @@ export async function registerRoutes(app: FastifyInstance) {
     try {
       return await runTurn({ userId, ctx, profile, text: parsed.data.text, photo });
     } catch (error) {
+      // Not a failure, and not logged as one: they have a turn in flight and
+      // pressed send again. A fast, honest rejection is the right answer for a
+      // path somebody is watching — queueing it would move the wait, not
+      // remove it.
+      if (error instanceof TurnInProgressError) {
+        return reply.status(429).send({ error: error.message });
+      }
       request.log.error({ err: error }, 'chat turn failed');
       return reply.status(502).send({ error: (error as Error).message });
     }

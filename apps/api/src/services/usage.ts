@@ -72,7 +72,7 @@ export async function recordUsage(input: RecordUsageInput): Promise<void> {
   // it did not — or priced it at zero while plainly having done work — fall
   // back to the rate card, so the row carries a number rather than a blank.
   if (costSource !== 'reported' || costUsd === 0) {
-    const estimated = estimateCost(model, usage);
+    const estimated = estimateCost(model, usage, outcome.cacheWriteMultiplier);
     if (estimated !== null) {
       costUsd = estimated;
       costSource = 'estimated';
@@ -109,13 +109,21 @@ export async function recordUsage(input: RecordUsageInput): Promise<void> {
   }
 }
 
-/** Rate-card price for a turn, or null when no rate applies to that model. */
+/**
+ * Rate-card price for a turn, or null when no rate applies to that model.
+ *
+ * `cacheWriteMultiplier` comes from the provider that ran the turn, because
+ * what a cache write costs depends on the TTL it was written at and only the
+ * writer knows which it asked for. Left unset it falls back to the rate card's
+ * default, which is the one-hour TTL the Agent SDK takes.
+ */
 export function estimateCost(
   model: string,
   usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number },
+  cacheWriteMultiplier?: number,
 ): number | null {
   const rate = anthropicRate(model) ?? openAiRate();
-  return rate ? priceUsage(usage, rate) : null;
+  return rate ? priceUsage(usage, rate, cacheWriteMultiplier) : null;
 }
 
 // ---- Reading ----------------------------------------------------------------

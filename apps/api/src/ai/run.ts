@@ -9,6 +9,7 @@ import { latestWeight } from '../services/log.ts';
 import { latestReview } from '../services/reviews.ts';
 import { missingProfileFields } from '../services/user.ts';
 import { recordUsage } from '../services/usage.ts';
+import { withTurnLock } from '../services/turn-lock.ts';
 import { checkWellbeing } from '../services/wellbeing.ts';
 import { MAX_SESSION_MESSAGES, MAX_TURNS } from './client.ts';
 import { createProvider, type AgentMessage, type AgentRequest } from './providers/index.ts';
@@ -29,7 +30,18 @@ export interface RunTurnInput {
   photo?: { id: string; mediaType: string; base64: string } | null;
 }
 
+/**
+ * One journal turn, with the account's turn lease held for the whole of it.
+ *
+ * The lease is taken here rather than in the route so that every entry point
+ * gets it — the turn's read-modify-write of the day is what needs defending,
+ * and it does not care which door the request came through.
+ */
 export async function runTurn(input: RunTurnInput): Promise<ChatResponse> {
+  return withTurnLock(input.userId, () => runLockedTurn(input));
+}
+
+async function runLockedTurn(input: RunTurnInput): Promise<ChatResponse> {
   const now = new Date();
   const today = localDateFor(now, input.ctx);
 
@@ -74,13 +86,18 @@ export async function runTurn(input: RunTurnInput): Promise<ChatResponse> {
   const previousDate = previousTurnAt ? localDateFor(previousTurnAt, input.ctx) : null;
   const rolledOver = previousDate !== null && previousDate !== today;
 
-  // The rollover notice stays even though the session is dropped below, because
-  // the two defend different things. Closing the session removes yesterday from
-  // the model's context; the notice explains the discontinuity to a model that
-  // may still be resuming — a same-day session that ran past midnight, or the
-  // OpenAI provider, which replays 30 messages of history regardless of what we
-  // do with the session id. Only the text sent to the model carries it; what
-  // gets persisted as the user's message stays exactly what they typed.
+  // Decided once and used twice: it governs both whether a session is resumed
+  // and how far back the replayed transcript reaches, which are the same
+  // decision expressed in the two ways a provider can remember a conversation.
+  const fresh = await shouldStartFreshSession(input, today, rolledOver);
+
+  // The rollover notice stays even though the transcript is cut below, because
+  // the two defend different things. Dropping the session removes yesterday
+  // from the model's context; the notice explains the discontinuity to a model
+  // that may still be resuming — a same-day session that ran past midnight, or
+  // a mid-day rotation that cut the history without a day having ended. Only
+  // the text sent to the model carries it; what gets persisted as the user's
+  // message stays exactly what they typed.
   const rollover = rolledOver ? `${dayRolloverNotice(previousDate, today, input.profile, now)}\n\n` : '';
 
   /*
@@ -116,16 +133,26 @@ export async function runTurn(input: RunTurnInput): Promise<ChatResponse> {
     photo: input.photo ? { mediaType: input.photo.mediaType, base64: input.photo.base64 } : null,
     tools,
     toolNames,
-    // Providers that keep no session of their own get the transcript replayed.
-    history: provider.needsHistory ? await loadHistory(input.userId) : [],
+    /*
+     * Providers that keep no session of their own get the transcript replayed —
+     * and get it cut at the same boundary a session is dropped at, rather than
+     * always reaching back thirty messages.
+     *
+     * Without this, everything `shouldStartFreshSession` defends is defended
+     * only for the Agent SDK. The two costs it exists to avoid are both
+     * properties of the transcript, not of the session id: yesterday's meals
+     * running straight into this morning's, which is how a breakfast photo came
+     * to be read as a correction to the previous evening's entry, and a
+     * conversation nobody had reason to keep becoming the largest thing in the
+     * prompt and being re-read on every model call inside every turn.
+     */
+    history: provider.needsHistory && !fresh ? await loadHistory(input.userId) : [],
     readOnly: false,
     toolset: 'journal',
     maxTurns: MAX_TURNS,
   };
 
-  const sessionId = await shouldStartFreshSession(input, today, rolledOver)
-    ? null
-    : await loadSessionId(input.userId);
+  const sessionId = fresh ? null : await loadSessionId(input.userId);
 
   let outcome = await provider.run(request, sessionId);
   if (outcome.staleSession) {

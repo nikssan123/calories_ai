@@ -8,7 +8,26 @@ pg.types.setTypeParser(pg.types.builtins.NUMERIC, (v) => (v === null ? null : Nu
 // DATE columns should stay 'YYYY-MM-DD' strings, not become local-midnight Dates.
 pg.types.setTypeParser(pg.types.builtins.DATE, (v) => v);
 
-export const pool = new pg.Pool({ connectionString: env.databaseUrl });
+/**
+ * Connections per process, stated rather than defaulted.
+ *
+ * `pg` defaults to ten, which reads as a global ceiling and is not one — it is
+ * ten *per replica*, so the number Postgres actually sees is this times however
+ * many API processes are running, plus the scheduler's. Leaving it implicit is
+ * how a deployment that scaled out perfectly happily runs into
+ * `max_connections` instead, and the error arrives at whichever query was
+ * unlucky rather than at the thing that caused it.
+ *
+ * Ten is still the right number for one box. It is configuration because the
+ * right number is a function of the deployment, and the deployment is the thing
+ * that changes.
+ */
+const POOL_MAX = Number(process.env.DATABASE_POOL_MAX ?? 10);
+
+export const pool = new pg.Pool({
+  connectionString: env.databaseUrl,
+  max: Number.isFinite(POOL_MAX) && POOL_MAX > 0 ? POOL_MAX : 10,
+});
 
 export async function query<T extends pg.QueryResultRow = pg.QueryResultRow>(
   text: string,

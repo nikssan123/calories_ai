@@ -67,10 +67,16 @@ the volume and start over). Don't run `build` while `dev` is running — they sh
 
 The journal talks to a provider through one small interface (`apps/api/src/ai/providers/`),
 so which service answers is a config change, not a code change. Set `AI_PROVIDER`
-in `.env` to `anthropic` (the default) or `openai`.
+in `.env` to `anthropic` (the default), `anthropic-api` or `openai`.
 
-Both providers share the same tool handlers, so a meal is logged identically
+All three share the same tool handlers, so a meal is logged identically
 whichever one ran the turn.
+
+The first two are the same Claude models reached two different ways, and both are
+permanent rather than one being a stepping stone to the other: `anthropic` is the
+right shape for a personal instance, `anthropic-api` for a deployment serving other
+people. The choice is about where it runs, not about quality — see
+[SCALING.md](SCALING.md).
 
 ### anthropic — your Claude Code subscription (default)
 
@@ -88,6 +94,41 @@ calling an HTTP endpoint. Two consequences worth knowing:
   this ever becomes something other people sign into, move it to an API key.
 
 Setting `ANTHROPIC_API_KEY` overrides the subscription and bills per token instead.
+
+### anthropic-api — the same models, on a metered key
+
+The same Claude models and the same tools, with the Agent SDK taken out from
+between them: one `POST /v1/messages` per round trip, and the tool loop driven
+here.
+
+```bash
+# .env
+AI_PROVIDER=anthropic-api
+ANTHROPIC_API_KEY=sk-ant-...   # https://console.anthropic.com/settings/keys
+```
+
+Setting the key alone is not enough to select this provider — the Agent SDK
+picks the same variable up in preference to your subscription. `AI_PROVIDER` is
+what chooses.
+
+This is the path a deployment serving other people wants, and the reason is shape
+rather than cost. The Agent SDK spawns the signed-in `claude` binary once per
+turn, so a turn holds a process for the whole twenty seconds it runs; at roughly
+250 MB each, a 2 GB API container runs out of memory somewhere around eight
+concurrent turns. It also keeps the conversation in a session file on that
+container's disk, which pins the deployment to one box no matter how much memory
+it has. This provider has neither: it replays the recent transcript on each turn,
+like the OpenAI one, and holds no state between them.
+
+None of which is an argument against the subscription for a personal install,
+where one person on one box is exactly the shape the Agent SDK is good at.
+
+Two things are given up with it. There is no `total_cost_usd` from the SDK, so a
+turn is priced from the rate card in `ai/pricing.ts` and recorded as `estimated`
+rather than `reported`. And the cache breakpoint is placed by hand — the system
+prompt goes as two blocks with `cache_control` on the stable one, which is the
+single largest line on the bill and worth verifying with a non-zero
+`cache_read_input_tokens` on the admin panel rather than by reading the code.
 
 ### openai — an API key
 

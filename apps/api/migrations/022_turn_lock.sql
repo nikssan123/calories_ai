@@ -1,0 +1,19 @@
+-- One turn at a time per account.
+--
+-- Two turns from the same person running at once is not merely wasteful, it is
+-- wrong: both read the day's totals through `buildDaySummary` before either
+-- writes, so a double-tapped send can log the same meal twice and each turn
+-- reports a total that does not include the other. Double-tapping send is not
+-- an exotic thing for a person to do.
+--
+-- A lease rather than a lock, on the row rather than in the process. An
+-- advisory lock would need its connection held for the whole twenty seconds of
+-- a turn, which is a connection not serving anything else; an in-process map
+-- would stop defending anything the moment there is a second replica, which is
+-- the entire direction of travel. A timestamp costs neither: it is one atomic
+-- UPDATE to take, one to release, and it self-heals if the process holding it
+-- dies, because the lease simply runs out.
+--
+-- Nullable, and null is the ordinary state — the column is only non-null for
+-- the seconds a turn is actually in flight.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS turn_lock_until TIMESTAMPTZ;

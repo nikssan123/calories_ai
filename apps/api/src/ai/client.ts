@@ -105,6 +105,23 @@ export const MODEL = MODELS.text_log.model;
 export const MAX_TURNS = 12;
 
 /**
+ * Output ceiling for one model call on the direct Messages API, which — unlike
+ * the Agent SDK — requires the caller to name one.
+ *
+ * A runaway guard rather than a budget: nothing here wants to be truncated, so
+ * it sits well above the longest thing the product produces (a weekly review,
+ * or seven dinners and their shop, both comfortably under 6k) and well below
+ * every model's cap — Haiku 4.5 tops out at 64k and the rest at 128k. It also
+ * stays under the ceiling where the SDK insists on streaming to avoid an HTTP
+ * timeout, which matters until streaming lands.
+ *
+ * Raising it costs nothing until it is actually reached: `max_tokens` is a
+ * ceiling, not a reservation, and is neither billed nor thought about unless
+ * the model runs into it.
+ */
+export const MAX_OUTPUT_TOKENS = 16_000;
+
+/**
  * Messages in one day before the agent session is rotated mid-day.
  *
  * The session is normally dropped at the day rollover, which caps an ordinary

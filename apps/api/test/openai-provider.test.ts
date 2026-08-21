@@ -49,13 +49,15 @@ const logFood: ToolDefinition = {
 function request(overrides: Partial<AgentRequest> = {}): AgentRequest {
   return {
     kind: 'text_log',
-    systemPrompt: 'You are a nutrition journal.',
+    staticSystemPrompt: 'You are a nutrition journal.',
+    dynamicSystemPrompt: undefined,
     text: 'two eggs',
     photo: null,
     tools: [logFood],
     toolNames: ['log_food'],
     history: [],
     readOnly: false,
+    toolset: 'journal',
     maxTurns: 5,
     ...overrides,
   };
@@ -125,9 +127,26 @@ describe('a plain turn', () => {
     );
 
     const messages = calls[0]!.body.messages;
-    expect(messages[0]).toMatchObject({ role: 'system' });
+    expect(messages[0]).toMatchObject({ role: 'system', content: 'You are a nutrition journal.' });
     expect(messages[1]).toMatchObject({ role: 'user', content: 'earlier' });
     expect(messages[2]).toMatchObject({ role: 'user', content: 'two eggs' });
+  });
+
+  /**
+   * This dialect has no cache breakpoint to place, so the two halves are joined
+   * into one system message rather than dropped — which is what the seam in
+   * `types.ts` means by "providers that cannot just join them".
+   */
+  it('joins the two halves of the system prompt, having nowhere to cut them', async () => {
+    const calls = stubFetch(text('Sure.'));
+    await createOpenAiProvider().run(
+      request({ dynamicSystemPrompt: 'They are still being onboarded.' }),
+      null,
+    );
+
+    expect(calls[0]!.body.messages[0].content).toBe(
+      'You are a nutrition journal.\n\n---\n\nThey are still being onboarded.',
+    );
   });
 
   it('attaches a photo as a data URI', async () => {

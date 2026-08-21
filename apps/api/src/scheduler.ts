@@ -5,6 +5,7 @@ import { generateNudge } from './ai/nudge.ts';
 import { generateWeeklyReview } from './ai/review.ts';
 import { sendNudgeEmail, sendWeeklyReviewEmail } from './email/notify.ts';
 import { sweepBarcodeCache } from './services/barcode.ts';
+import { NUDGE_JOB, REVIEW_JOB, withJobLock } from './services/job-lock.ts';
 import { dueNudge, NUDGE_HOUR } from './services/nudges.ts';
 import { reviewForWeek, reviewWeekFor } from './services/reviews.ts';
 import { listActiveUsers } from './services/user.ts';
@@ -30,6 +31,8 @@ export const REVIEW_HOUR = 8;
 
 const TICK_MS = 60 * 60 * 1000;
 
+const emptyTick = (): TickResult => ({ considered: 0, generated: [], skipped: 0, failed: [] });
+
 export interface TickResult {
   considered: number;
   generated: string[];
@@ -45,8 +48,25 @@ export async function runDueReviews(
   now: Date = new Date(),
   logger?: FastifyBaseLogger,
 ): Promise<TickResult> {
-  const result: TickResult = { considered: 0, generated: [], skipped: 0, failed: [] };
-  if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) return result;
+  if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) return emptyTick();
+
+  /*
+   * Held for the whole pass, so two overlapping ticks — or two replicas —
+   * cannot both publish this week's review and both email it. The pass is
+   * idempotent in intent, but the check that makes it so ("has this week been
+   * written?") happens forty seconds before the write that answers it, which is
+   * plenty of room for the other run to pass the same check.
+   */
+  const result = await withJobLock(REVIEW_JOB, () => reviewPass(now, logger));
+  if (result === null) {
+    logger?.info('review pass already running; skipped this tick');
+    return emptyTick();
+  }
+  return result;
+}
+
+async function reviewPass(now: Date, logger?: FastifyBaseLogger): Promise<TickResult> {
+  const result: TickResult = emptyTick();
 
   for (const user of await listActiveUsers()) {
     result.considered += 1;
@@ -131,8 +151,21 @@ export async function runDueNudges(
   now: Date = new Date(),
   logger?: FastifyBaseLogger,
 ): Promise<TickResult> {
-  const result: TickResult = { considered: 0, generated: [], skipped: 0, failed: [] };
-  if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) return result;
+  if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) return emptyTick();
+
+  // Its own lock rather than the review's, for the reason the two passes are
+  // started separately: they share a tick and nothing else, and a review pass
+  // still grinding through a timezone must not be why nobody gets a nudge.
+  const result = await withJobLock(NUDGE_JOB, () => nudgePass(now, logger));
+  if (result === null) {
+    logger?.info('nudge pass already running; skipped this tick');
+    return emptyTick();
+  }
+  return result;
+}
+
+async function nudgePass(now: Date, logger?: FastifyBaseLogger): Promise<TickResult> {
+  const result: TickResult = emptyTick();
 
   for (const user of await listActiveUsers()) {
     result.considered += 1;
