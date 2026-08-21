@@ -128,13 +128,17 @@ describe('the day rollover marker', () => {
     await turn('first');
     await turn('second');
 
-    expect(agentCalls.at(-1)!.prompt).toBe('second');
+    const prompt = agentCalls.at(-1)!.prompt as string;
+    expect(prompt).not.toContain('New day');
+    expect(prompt.endsWith('second')).toBe(true);
   });
 
   it('stays silent on the very first turn of a new account', async () => {
     scriptAgent({ text: 'Logged.' });
     await turn('two eggs and toast');
-    expect(agentCalls.at(-1)!.prompt).toBe('two eggs and toast');
+    const prompt = agentCalls.at(-1)!.prompt as string;
+    expect(prompt).not.toContain('New day');
+    expect(prompt.endsWith('two eggs and toast')).toBe(true);
   });
 
   it('keeps the marker out of the conversation that gets stored', async () => {
@@ -273,7 +277,15 @@ describe('runTurn', () => {
     spy.mockRestore();
   });
 
-  it('puts today’s numbers and the entry ids in the system prompt', async () => {
+  /**
+   * Today's numbers ride on the user turn, and keeping them off the system
+   * prompt is a billing constraint rather than a stylistic one: the system
+   * prompt sits in front of the whole transcript, so anything there that
+   * changes per-turn re-keys the cache for every message behind it and the
+   * conversation is re-written at 2x input instead of read back at 0.1x. That
+   * was 87% of the production bill. The `not.toContain` half is the guard.
+   */
+  it('puts today’s numbers and the entry ids on the user turn, not the system prompt', async () => {
     const { localDateFor } = await import('../src/time.ts');
     const today = localDateFor(new Date(), user.ctx);
     const entry = await addMeal(user, { date: today, kcal: 620, description: 'Chicken and rice' });
@@ -281,10 +293,34 @@ describe('runTurn', () => {
     scriptAgent({ text: 'Noted.' });
     await turn('what have I had today?');
 
-    const prompt = systemPromptOf(agentCalls[0]!);
+    const prompt = agentCalls[0]!.prompt as string;
     expect(prompt).toContain('620 / 2200 kcal');
     expect(prompt).toContain(entry.id);
     expect(prompt).toContain('Chicken and rice');
+    // The user's own words still end the turn.
+    expect(prompt.endsWith('what have I had today?')).toBe(true);
+
+    const system = systemPromptOf(agentCalls[0]!);
+    expect(system).not.toContain('620 / 2200 kcal');
+    expect(system).not.toContain(entry.id);
+  });
+
+  /**
+   * The other half of the same constraint: two turns of one conversation must
+   * hand the model a byte-identical system prompt, or the cache cannot hold it.
+   */
+  it('sends a byte-identical system prompt across turns of the same day', async () => {
+    scriptAgent({ text: 'Logged.' }, { text: 'Logged.' });
+
+    await turn('two eggs');
+    await addMeal(user, {
+      date: (await import('../src/time.ts')).localDateFor(new Date(), user.ctx),
+      kcal: 620,
+      description: 'Chicken and rice',
+    });
+    await turn('and a coffee');
+
+    expect(systemPromptOf(agentCalls[1]!)).toBe(systemPromptOf(agentCalls[0]!));
   });
 
   it('adds the setup brief only while the profile is incomplete', async () => {

@@ -88,16 +88,22 @@ export interface AgentRequest {
    * The system prompt in two halves, because where the split falls is a billing
    * decision, not a formatting one.
    *
-   * `staticSystemPrompt` is byte-identical on every turn and is what the prompt
-   * cache can actually hold. `dynamicSystemPrompt` carries the clock, today's
-   * totals and today's entry ids, so it differs every single turn — and while
-   * the two were concatenated into one string, that difference invalidated the
-   * whole prefix and the entire prompt was re-cached each turn (~20k tokens,
-   * measured). Providers that can express a cache breakpoint put it between
-   * these two; providers that cannot just join them.
+   * `staticSystemPrompt` is byte-identical for every turn of every account, so
+   * it is the only part a cross-session — and cross-user — cache prefix can
+   * hold. `dynamicSystemPrompt` is per-account context that still holds still
+   * *within* a conversation: onboarding state, the last weekly review.
+   * Providers that can express a cache breakpoint put it between these two;
+   * providers that cannot just join them.
+   *
+   * Nothing that changes turn to turn may go in either. The system prompt sits
+   * in front of the whole transcript, so a per-turn byte re-keys the cache for
+   * every message behind it and the conversation is re-written at the
+   * cache-write rate instead of read at a tenth of it. That is what the clock
+   * and today's totals were doing here, and it was 87% of the production bill.
+   * They now ride on the user turn — see `dayContextPrompt`.
    */
   staticSystemPrompt: string;
-  dynamicSystemPrompt: string;
+  dynamicSystemPrompt?: string;
   /** This turn's user text. */
   text: string;
   photo?: { mediaType: string; base64: string } | null;

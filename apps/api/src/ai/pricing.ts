@@ -36,9 +36,12 @@ export interface Rate {
  * preference to it for every real turn, and this exists for the projections on
  * the admin panel and for turns where the SDK reported nothing.
  *
- * Note Sonnet 5's introductory rate ($2/$10) ends 2026-08-31; `sonnetIsIntro`
- * below is what tells the panel to say so rather than quietly getting 50%
- * cheaper than reality overnight.
+ * These are checked against what production was actually billed: reconstructing
+ * a day of `ai_usage` rows from these rates reproduces the SDK's own
+ * `total_cost_usd` to the sixth decimal. Sonnet 5 bills at $3/$15 here — the
+ * $2/$10 introductory rate did *not* apply to these turns, so it is not in the
+ * table. If a projection ever stops matching the reported column, this is the
+ * first place to look.
  */
 export const ANTHROPIC_RATES: Record<string, Rate> = {
   'claude-opus-5': { input: 5, output: 25 },
@@ -50,25 +53,23 @@ export const ANTHROPIC_RATES: Record<string, Rate> = {
   'claude-fable-5': { input: 10, output: 50 },
 };
 
-/** Sonnet 5's introductory pricing, and the day it stops applying. */
-export const SONNET_INTRO = { rate: { input: 2, output: 10 }, until: '2026-08-31' };
-
 /**
- * Cache reads bill at a tenth of the input rate; a five-minute cache write
- * bills at 1.25×. The journal's system prompt is half stable and half today's
- * numbers, so the cache line is a real part of the bill rather than a rounding
- * error — see `dayContextPrompt`.
+ * Cache reads bill at a tenth of the input rate. Writes bill at 1.25× for the
+ * five-minute TTL and 2× for the one-hour one, and the Agent SDK takes the
+ * one-hour: every usage record it returns reports its cache writes under
+ * `ephemeral_1h_input_tokens` and none under `ephemeral_5m_input_tokens`.
+ *
+ * 2× is therefore the multiplier that matches the bill, and it is worth stating
+ * plainly that this is the expensive lever in the whole file: a token written
+ * to cache costs twenty times the same token read back out of it. Keeping the
+ * prefix stable enough to be read rather than re-written is worth more than any
+ * choice of model — see `dayContextPrompt`.
  */
 export const CACHE_READ_MULTIPLIER = 0.1;
-export const CACHE_WRITE_MULTIPLIER = 1.25;
+export const CACHE_WRITE_MULTIPLIER = 2;
 
-export function anthropicRate(model: string, on = new Date()): Rate | null {
-  const rate = ANTHROPIC_RATES[model];
-  if (!rate) return null;
-  if (model === 'claude-sonnet-5' && on.toISOString().slice(0, 10) <= SONNET_INTRO.until) {
-    return SONNET_INTRO.rate;
-  }
-  return rate;
+export function anthropicRate(model: string): Rate | null {
+  return ANTHROPIC_RATES[model] ?? null;
 }
 
 /**

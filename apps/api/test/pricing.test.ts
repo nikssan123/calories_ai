@@ -3,7 +3,6 @@ import {
   ANTHROPIC_RATES,
   CACHE_READ_MULTIPLIER,
   CACHE_WRITE_MULTIPLIER,
-  SONNET_INTRO,
   anthropicRate,
   openAiRate,
   priceUsage,
@@ -86,21 +85,30 @@ describe('anthropicRate', () => {
   });
 
   /**
-   * Sonnet 5 ships at an introductory rate that expires. Without the date check
-   * the panel would keep reporting the cheap rate afterwards, understating
-   * every projection by a third at exactly the moment the real bill went up.
+   * The rate card checked against turns that were actually billed.
+   *
+   * Both rows are real `ai_usage` records from production, with the cost as the
+   * Agent SDK reported it. A rate card is only worth having if it reproduces
+   * the bill, and this is the test that says so — it is what caught the cache
+   * write multiplier being 1.25 (the five-minute TTL) when the SDK takes the
+   * one-hour one and bills writes at 2x.
    */
-  it('applies the introductory Sonnet rate until it expires, and the list rate after', () => {
-    const during = new Date(`${SONNET_INTRO.until}T00:00:00Z`);
-    expect(anthropicRate('claude-sonnet-5', during)).toEqual(SONNET_INTRO.rate);
+  it('reproduces the cost the provider reported for real turns', () => {
+    const sonnet = priceUsage(
+      { inputTokens: 4, outputTokens: 452, cacheReadTokens: 59_716, cacheWriteTokens: 37_407 },
+      anthropicRate('claude-sonnet-5')!,
+    );
+    expect(sonnet).toBeCloseTo(0.2491, 4);
 
-    const after = new Date(Date.parse(`${SONNET_INTRO.until}T00:00:00Z`) + 86_400_000);
-    expect(anthropicRate('claude-sonnet-5', after)).toEqual(ANTHROPIC_RATES['claude-sonnet-5']);
+    const opus = priceUsage(
+      { inputTokens: 4, outputTokens: 480, cacheReadTokens: 39_406, cacheWriteTokens: 39_966 },
+      anthropicRate('claude-opus-5')!,
+    );
+    expect(opus).toBeCloseTo(0.4314, 4);
   });
 
-  it('leaves other models alone on the intro boundary', () => {
-    const after = new Date('2030-01-01T00:00:00Z');
-    expect(anthropicRate('claude-opus-5', after)).toEqual(ANTHROPIC_RATES['claude-opus-5']);
+  it('returns the list rate for a model it knows', () => {
+    expect(anthropicRate('claude-opus-5')).toEqual(ANTHROPIC_RATES['claude-opus-5']);
   });
 });
 

@@ -123,7 +123,12 @@ export function createOpenAiProvider(): AiProvider {
       };
 
       const messages: ChatMessage[] = [
-        { role: 'system', content: `${request.staticSystemPrompt}\n\n---\n\n${request.dynamicSystemPrompt}` },
+        {
+          role: 'system',
+          content: request.dynamicSystemPrompt
+            ? `${request.staticSystemPrompt}\n\n---\n\n${request.dynamicSystemPrompt}`
+            : request.staticSystemPrompt,
+        },
         ...request.history.map((m) => ({ role: m.role, content: m.content }) as ChatMessage),
         { role: 'user', content: userContent(request) },
       ];

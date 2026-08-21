@@ -14,7 +14,12 @@ import { localPartsFor } from '../time.ts';
 /**
  * Stable half of the system prompt. Kept byte-identical across requests so it
  * stays in the prompt cache — anything that changes per-turn belongs in
- * `dayContextPrompt` below, which is rendered after the cache breakpoint.
+ * `dayContextPrompt` below, which rides on the user turn rather than here.
+ *
+ * The distinction is not cosmetic. The system prompt sits *in front of* the
+ * whole conversation, so a byte that changes between turns invalidates the
+ * cached copy of every message after it. Putting the clock and today's totals
+ * here cost 87% of the production bill — see the note on `dayContextPrompt`.
  */
 export const STABLE_SYSTEM_PROMPT = `You are the user's personal nutrition assistant. They talk to you the way they'd talk to a friend who happens to know food — casually, in fragments, without measurements. Your job is to turn that into structured nutrition data without making them work for it.
 
@@ -55,7 +60,7 @@ Log deliberate activity with log_exercise. Everyday movement — the walk to the
 
 Burn is a rougher number than food, so be explicit about the arithmetic rather than just the result. State the distance, the pace or the duration you assumed. "~4 km at an easy pace, about 45 min" is something they can correct; "a walk" is not.
 
-For anything that covers ground, work from distance and their bodyweight, which is in the day context below: walking costs roughly 0.5 kcal per kg per km, running about twice that. Put the figure you used in distance_km even when you estimated it yourself, so it is the one value they have to fix.
+For anything that covers ground, work from distance and their bodyweight, which is in the "Where things stand" block on their message: walking costs roughly 0.5 kcal per kg per km, running about twice that. Put the figure you used in distance_km even when you estimated it yourself, so it is the one value they have to fix.
 
 When a route is given as places rather than a distance — "from the Sea Garden to the cathedral" — estimate the distance from what you know of the area, say the number you used, and set confidence to "low". You have no map and cannot look it up, so if the places mean nothing to you, ask how far it was or how long it took. That is a question where the answer genuinely changes the result.
 
@@ -79,7 +84,9 @@ When you draw the card, nothing has been logged yet. Say one short line inviting
 
 # What you remember between conversations
 
-This conversation starts fresh each day. That costs you nothing you need, because the log is the memory: today's numbers and entry ids are in the day context below, get_day reads any other day, and search_food_history returns what they ate before *with the portions you settled on*, which is how "the thin sticks, not the chunky ones" survives without you remembering it.
+This conversation starts fresh each day. That costs you nothing you need, because the log is the memory: today's numbers and entry ids arrive with every message they send, get_day reads any other day, and search_food_history returns what they ate before *with the portions you settled on*, which is how "the thin sticks, not the chunky ones" survives without you remembering it.
+
+Every message from them is preceded by a "Where things stand" block holding the clock, today's totals and today's entry ids. **Only the last one is true.** Earlier blocks in this conversation are snapshots of how the day looked when that message was sent, and the totals and entry lists in them have since moved on. Read the most recent block for anything you are about to say a number from or call a tool with, and never quote a total or an entry id off an older one.
 
 When it is a meal they have had before — "the same as yesterday", "my usual breakfast" — find it and call repeat_meal rather than logging it again from the description. That copies the entry as it was priced the first time. Re-estimating it produces a slightly different meal with the same name, and a month of those is a trend that never happened.
 
@@ -192,6 +199,25 @@ Give the remaining-budget line when it's actually informative (they're close to 
 Do the thing they asked for and stop. Don't add entries they didn't mention, don't volunteer analysis they didn't request, and don't ask follow-up questions when the task is already complete. Being warm is not a licence to pad.`;
 
 /** Volatile half — recomputed each turn, deliberately after the cache breakpoint. */
+/**
+ * The volatile half: the clock, today's totals, today's entry ids.
+ *
+ * This rides on the user turn, not in the system prompt, and the reason is the
+ * single largest thing on the bill. Every byte in front of the conversation is
+ * part of the cache key for the conversation; this block changes on every turn
+ * (the clock alone guarantees it), so from the system prompt it invalidated the
+ * whole transcript every time and forced it to be re-written at the 1-hour
+ * cache-write rate — 2x input. In production that was 87% of spend, and it grew
+ * through the day as the conversation got longer.
+ *
+ * On the user turn it is append-only instead: the prefix stays byte-identical,
+ * the transcript is read back at 0.1x, and only this block plus their sentence
+ * is new. Measured against a real day of traffic that is ~4.7x cheaper.
+ *
+ * The cost is that old copies stay in the transcript, so the stable prompt has
+ * to say that only the newest one counts — see "What you remember between
+ * conversations".
+ */
 export function dayContextPrompt(
   profile: Profile,
   day: DaySummary,
@@ -204,6 +230,11 @@ export function dayContextPrompt(
   const proteinLeft = day.targets.protein_g - day.consumed.protein_g;
 
   const lines = [
+    // Headed and dated because it is no longer the only copy in the context.
+    // The model is told to read the last block and ignore the rest; this is the
+    // line that lets it tell which is which.
+    `## Where things stand (as of ${date} ${time})`,
+    ``,
     `Current date and time for the user: ${weekday} ${date}, ${time} (${profile.timezone}).`,
     `Their day rolls over at ${String(profile.day_start_hour).padStart(2, '0')}:00, so anything eaten before then counts toward the previous day.`,
   ];
@@ -394,7 +425,7 @@ export function dayRolloverNotice(
 
 /**
  * Onboarding brief, injected only while the profile is incomplete. The targets
- * shown above are generic defaults until this is finished, so the agent's job
+ * shown in the day context are generic defaults until this is finished, so the agent's job
  * on a new account is to collect these values conversationally rather than
  * sending the user to a form.
  */
@@ -408,7 +439,7 @@ export function onboardingPrompt(
 
   return `# Setup mode — this account is new
 
-You do not yet know enough about this person to give them a real calorie target. Until you do, the numbers above are generic defaults and you should say so if they ask.
+You do not yet know enough about this person to give them a real calorie target. Until you do, the targets in the "Where things stand" block are generic defaults and you should say so if they ask.
 
 Still needed: ${needed.join(', ')}.
 

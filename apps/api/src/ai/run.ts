@@ -56,13 +56,13 @@ export async function runTurn(input: RunTurnInput): Promise<ChatResponse> {
   const currentWeight = await latestWeight(input.userId);
   const needsOnboarding = missing.length > 0 || currentWeight === null;
   const onboarding = needsOnboarding
-    ? `\n\n---\n\n${onboardingPrompt(input.profile, missing, currentWeight)}`
-    : '';
+    ? onboardingPrompt(input.profile, missing, currentWeight)
+    : null;
 
   // The weekly review is published in its own agent session, so without this the
   // journal would have no idea what it said when the user asks about it.
   const review = needsOnboarding ? null : await latestReview(input.userId);
-  const reviewContext = review ? `\n\n---\n\n${recentReviewPrompt(review, today)}` : '';
+  const reviewContext = review ? recentReviewPrompt(review, today) : null;
 
   const notes = await listNotes(input.userId);
 
@@ -81,20 +81,37 @@ export async function runTurn(input: RunTurnInput): Promise<ChatResponse> {
   // OpenAI provider, which replays 30 messages of history regardless of what we
   // do with the session id. Only the text sent to the model carries it; what
   // gets persisted as the user's message stays exactly what they typed.
-  const promptText = rolledOver
-    ? `${dayRolloverNotice(previousDate, today, input.profile, now)}\n\n${input.text}`
-    : input.text;
+  const rollover = rolledOver ? `${dayRolloverNotice(previousDate, today, input.profile, now)}\n\n` : '';
+
+  /*
+   * The turn as the model sees it: where the day stands, then what they said.
+   *
+   * The day context leads rather than trails so their sentence is the last
+   * thing in the turn, which is where a model's attention is sharpest and where
+   * it was before this block existed. What gets persisted as their message is
+   * still exactly what they typed — see `insertMessage` below.
+   *
+   * This is the cache fix. The block changes every turn, and in the system
+   * prompt that put it in front of the whole transcript, invalidating it; here
+   * it is just more conversation, and the prefix in front of it never moves.
+   */
+  const promptText = `${dayContextPrompt(input.profile, day, currentWeight, notes, wellbeing)}\n\n---\n\n${rollover}${input.text}`;
 
   const request: AgentRequest = {
     // Photo first: a turn with an image needs a model that can see, whatever
     // else is going on. Setup outranks a plain log because it happens once and
     // is the first thing a new account experiences.
     kind: input.photo ? 'photo_log' : needsOnboarding ? 'setup' : 'text_log',
-    // Kept apart all the way to the provider so the cache breakpoint can land
-    // between them. Onboarding and the review recap sit on the volatile side:
-    // both end, and a prefix that changes when they do is not a stable prefix.
+    // What is left on the dynamic side is only what is stable *within* a
+    // session: onboarding ends once, the review recap changes weekly. Both are
+    // still barred from the cross-session prefix — a deployment-wide cache hit
+    // needs bytes that are the same for every user, and these are per-account —
+    // but neither moves between two turns of the same conversation, so neither
+    // costs the transcript its cache.
     staticSystemPrompt: STABLE_SYSTEM_PROMPT,
-    dynamicSystemPrompt: `${dayContextPrompt(input.profile, day, currentWeight, notes, wellbeing)}${onboarding}${reviewContext}`,
+    dynamicSystemPrompt:
+      [onboarding, reviewContext].filter((part): part is string => part !== null).join('\n\n---\n\n') ||
+      undefined,
     text: promptText,
     photo: input.photo ? { mediaType: input.photo.mediaType, base64: input.photo.base64 } : null,
     tools,
