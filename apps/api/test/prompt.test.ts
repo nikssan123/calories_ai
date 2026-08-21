@@ -126,6 +126,27 @@ describe('STABLE_SYSTEM_PROMPT', () => {
     expect(STABLE_SYSTEM_PROMPT).toMatch(/no-judgement rule applies here/i);
   });
 
+  /**
+   * The gap that shipped to production.
+   *
+   * 917 lines of prompt, and the only instruction anywhere about describing
+   * itself was the setup-mode line telling it to introduce what it does in a
+   * sentence. The only material for that sentence was the opening "personal
+   * nutrition assistant", so the kitchen — half the product — was invisible to
+   * anyone who asked what the app was for. Sonnet inferred its way past it from
+   * the tool list. The cheaper model the text path moved to did not, and told a
+   * real user it could only give nutrition information.
+   */
+  it('knows it is more than a calorie logger', () => {
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/# When they ask what you can do/);
+    // Answered from the tools rather than from the first line of the prompt.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/not the edge of what you are/i);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/if a tool does something, you do it/i);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/Never answer that you only do nutrition/);
+    // With a shape, or the fix trades one bad answer for a brochure.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/three or four real things/i);
+  });
+
   it('says where it stops, and does not stop working', () => {
     expect(STABLE_SYSTEM_PROMPT).toContain('Where you stop');
     expect(STABLE_SYSTEM_PROMPT).toMatch(/not a clinician/i);
@@ -382,6 +403,15 @@ describe('onboardingPrompt', () => {
       weight_kg: 85,
     });
     expect(prompt).toContain('Still needed: sex.');
+  });
+
+  /**
+   * The first sentence a new account ever reads. It was the one place in the
+   * product that described what the app is, and it described a food log.
+   */
+  it('opens with more than logging', () => {
+    const prompt = onboardingPrompt(profile, ['sex'], null);
+    expect(prompt).toMatch(/reach past logging/i);
   });
 
   it('mentions the name only when there is one', () => {
