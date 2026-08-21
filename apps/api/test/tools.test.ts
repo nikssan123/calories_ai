@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SdkMcpToolDefinition } from '@anthropic-ai/claude-agent-sdk';
 import type { ChatAction, ChatCard } from '@ct/shared';
 import { buildNutritionServer, SERVER_NAME, type ToolContext } from '../src/ai/tools.ts';
@@ -1697,5 +1697,163 @@ describe('adapt_recipe', () => {
 
     expect(result.isError).toBe(true);
     expect(result.text).toContain('recipe runs for today');
+  });
+});
+
+/**
+ * The scanner's fallback, for the portions a picker cannot express.
+ *
+ * `fetch` is stubbed here as it is in `barcode.test.ts` — what these cases are
+ * about is the seam between the two tools, and specifically that the model is
+ * never the thing doing the multiplication.
+ */
+describe('the barcode tools', () => {
+  const CODE = '3017620422003';
+
+  const SPREAD = {
+    status: 1,
+    product: {
+      code: CODE,
+      product_name: 'Hazelnut spread',
+      brands: 'Ferrero',
+      nutriments: {
+        'energy-kcal_100g': 500,
+        proteins_100g: 6,
+        carbohydrates_100g: 57,
+        fat_100g: 31,
+      },
+      serving_size: '15 g',
+      serving_quantity: 15,
+    },
+  };
+
+  function stubOff(body: unknown, status = 200) {
+    vi.stubGlobal('fetch', async () => ({
+      ok: status < 400,
+      status,
+      json: async () => body,
+    }));
+  }
+
+  // The only cases in this file that touch the network, so the stub is put back
+  // rather than left standing for whatever runs next.
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps the lookup on the journal and away from the review', () => {
+    build();
+    expect(tools.has('lookup_barcode')).toBe(true);
+    expect(tools.has('log_barcode')).toBe(true);
+    // A read that leaves the building, and a review agent has no business
+    // making an outbound request to anybody.
+    build({}, true);
+    expect(tools.has('lookup_barcode')).toBe(false);
+    expect(tools.has('log_barcode')).toBe(false);
+  });
+
+  it('reads the packet without logging anything', async () => {
+    stubOff(SPREAD);
+    build();
+
+    const { json } = await call('lookup_barcode', { barcode: CODE });
+
+    expect(json).toMatchObject({
+      name: 'Hazelnut spread',
+      brand: 'Ferrero',
+      per_100g: { kcal: 500, protein_g: 6 },
+      serving_g: 15,
+      source: 'Open Food Facts',
+    });
+    // The whole point of the tool being a read: it says what the food is and
+    // leaves the amount to a conversation.
+    expect(json.what_this_is).toContain('not what they ate');
+    expect(actions).toHaveLength(0);
+  });
+
+  it('sends the model to the label when nobody has catalogued it', async () => {
+    stubOff(null, 404);
+    build();
+
+    const result = await call('lookup_barcode', { barcode: CODE });
+
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain('photograph the nutrition panel');
+  });
+
+  it('does not report an outage as a missing product', async () => {
+    stubOff(null, 503);
+    build();
+
+    const result = await call('lookup_barcode', { barcode: CODE });
+
+    expect(result.isError).toBe(true);
+    // Otherwise someone gets sent to photograph a label for a product that is
+    // in the catalogue and will be back in a minute.
+    expect(result.text).not.toContain('catalogued');
+    expect(result.text).toContain('try again');
+  });
+
+  it('logs an awkward portion in grams, priced here rather than by the model', async () => {
+    stubOff(SPREAD);
+    build();
+
+    const { json } = await call('log_barcode', { barcode: CODE, grams: 250, meal: 'snack' });
+
+    expect(json.logged.kcal).toBe(1250);
+    const entry = await getFoodEntry(user.id, json.entry_id);
+    expect(entry).toMatchObject({ source: 'barcode', confidence: 'high', meal: 'snack' });
+    expect(entry!.items[0]).toMatchObject({ quantity_g: 250 });
+  });
+
+  it('logs servings against the label that named them', async () => {
+    stubOff(SPREAD);
+    build();
+
+    const { json } = await call('log_barcode', { barcode: CODE, servings: 2 });
+
+    expect(json.logged.kcal).toBe(150);
+    const entry = await getFoodEntry(user.id, json.entry_id);
+    expect(entry!.items[0]!.quantity_desc).toContain('2 servings');
+  });
+
+  it('draws a card, like every other way of logging a meal', async () => {
+    stubOff(SPREAD);
+    build();
+
+    await call('log_barcode', { barcode: CODE, grams: 30 });
+
+    expect(actions[0]).toMatchObject({ kind: 'food_logged' });
+    expect((actions[0]!.card as Extract<ChatCard, { type: 'food' }>).type).toBe('food');
+  });
+
+  it('refuses a portion said two ways at once, or not at all', async () => {
+    stubOff(SPREAD);
+    build();
+
+    expect((await call('log_barcode', { barcode: CODE, grams: 30, servings: 1 })).isError).toBe(true);
+    expect((await call('log_barcode', { barcode: CODE })).isError).toBe(true);
+  });
+
+  it('refuses servings against a label that never named one', async () => {
+    stubOff({ ...SPREAD, product: { ...SPREAD.product, serving_quantity: null, serving_size: '' } });
+    build();
+
+    const result = await call('log_barcode', { barcode: CODE, servings: 2 });
+
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain('grams');
+  });
+
+  it('rejects a code that did not scan cleanly before asking anyone', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      calls.push(String(url));
+      throw new Error('should not be reached');
+    });
+    build();
+
+    expect((await call('lookup_barcode', { barcode: '3017620422004' })).isError).toBe(true);
+    expect(calls).toHaveLength(0);
   });
 });

@@ -14,7 +14,18 @@ export const CONFIDENCES = ['high', 'medium', 'low'] as const;
 export const Confidence = z.enum(CONFIDENCES);
 export type Confidence = z.infer<typeof Confidence>;
 
-export const ENTRY_SOURCES = ['text', 'photo', 'quick', 'manual'] as const;
+/**
+ * How the entry got here. `barcode` means the numbers were read off a label
+ * rather than estimated by a model, which is the one thing a correction screen
+ * most wants to know.
+ *
+ * Shared with `ExerciseEntry`, so this list is wider than either table's CHECK
+ * constraint strictly needs: `exercise_entries.source` still refuses 'barcode',
+ * and nothing writes one, because there is no path from a packet to a workout.
+ * That mismatch is deliberate — splitting this into two enums would double the
+ * commonest three values to keep one impossible row honest.
+ */
+export const ENTRY_SOURCES = ['text', 'photo', 'quick', 'manual', 'barcode'] as const;
 export const EntrySource = z.enum(ENTRY_SOURCES);
 export type EntrySource = z.infer<typeof EntrySource>;
 
@@ -718,6 +729,63 @@ export const CookRequest = z.object({
   eaten_at: z.string().optional(),
 });
 export type CookRequest = z.infer<typeof CookRequest>;
+
+// ---- Barcode ---------------------------------------------------------------
+
+/** Which catalogue answered. Shown on the card, because ODbL requires it. */
+export const BARCODE_SOURCES = ['off', 'fdc'] as const;
+export const BarcodeSource = z.enum(BARCODE_SOURCES);
+export type BarcodeSource = z.infer<typeof BarcodeSource>;
+
+/**
+ * A product as the packet describes it — never as a meal.
+ *
+ * Everything here is per 100g, whichever catalogue answered, because that is
+ * the only basis every label agrees on. The portion is not in this shape and
+ * deliberately so: a lookup says what the food is, a person says how much of it
+ * they ate, and folding the two together is how a scanner logs a whole 500g jar
+ * of peanut butter as one snack.
+ */
+export const BarcodeProduct = z.object({
+  /** Normalised to GTIN-13, so the code echoed back may not be the one sent. */
+  barcode: z.string(),
+  brand: z.string().nullable(),
+  name: z.string(),
+  kcal_100g: z.number(),
+  protein_100g: z.number(),
+  carbs_100g: z.number(),
+  fat_100g: z.number(),
+  /**
+   * What the label calls one serving. Null when it does not say, which is
+   * common and is not a failure — it decides only whether the portion picker
+   * can offer "1 serving" or has to open on 100g.
+   */
+  serving_g: z.number().nullable(),
+  serving_desc: z.string().nullable(),
+  source: BarcodeSource,
+  source_url: z.string().nullable(),
+});
+export type BarcodeProduct = z.infer<typeof BarcodeProduct>;
+
+/**
+ * Logging a scanned product. Grams or servings, one or the other.
+ *
+ * Servings is not sugar for grams. It is what the user picked, and the card
+ * offering "2 servings" against a label that says nothing about servings is a
+ * different bug from one that multiplies wrongly — so the two arrive named,
+ * and the route refuses servings on a product with no `serving_g`.
+ */
+export const BarcodeLogRequest = z
+  .object({
+    grams: z.number().positive().max(5000).optional(),
+    servings: z.number().positive().max(50).optional(),
+    meal: Meal.optional(),
+    eaten_at: z.string().optional(),
+  })
+  .refine((body) => (body.grams === undefined) !== (body.servings === undefined), {
+    message: 'Say either grams or servings',
+  });
+export type BarcodeLogRequest = z.infer<typeof BarcodeLogRequest>;
 
 /** Declared here rather than with Progress: the chat cards below build on it. */
 export const TrendPoint = z.object({

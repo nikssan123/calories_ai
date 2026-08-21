@@ -86,7 +86,26 @@ export interface Env {
    * back to, and the button must not be offered where pressing it 400s.
    */
   google: GoogleEnv | null;
+  barcode: BarcodeEnv;
   isTest: boolean;
+}
+
+export interface BarcodeEnv {
+  /**
+   * USDA FoodData Central, or null when only Open Food Facts is consulted.
+   *
+   * Null is a working configuration rather than a degraded one: OFF covers the
+   * EU shelf well on its own, and FDC exists to answer the American branded
+   * half. A deployment with no US users needs neither the key nor the second
+   * round trip on every miss.
+   */
+  fdcApiKey: string | null;
+  /**
+   * Sent to Open Food Facts on every request, because their policy asks for
+   * `AppName/Version (contact)` and throttles the generic agents that do not
+   * bother. Being identifiable is the price of a free catalogue.
+   */
+  userAgent: string;
 }
 
 export interface GoogleEnv {
@@ -192,6 +211,15 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
      * differently from anyone else's. The cases that exercise this set it.
      */
     google: isTest ? null : googleEnv(source, appUrl),
+    barcode: {
+      /**
+       * Forced off under test, like every other outbound credential here: a
+       * developer with a real key in their .env must not have the suite take a
+       * different path from anyone else's. The FDC cases set it themselves.
+       */
+      fdcApiKey: isTest ? null : (source.FDC_API_KEY?.trim() || null),
+      userAgent: source.BARCODE_USER_AGENT?.trim() || `DaySoFar/1.0 (${appUrl})`,
+    },
     email: {
       /**
        * No key means no mail provider: the server logs what it would have sent

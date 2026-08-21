@@ -31,8 +31,19 @@ const baloo = Baloo_2({
   weight: ['600', '700', '800'],
 });
 
+/**
+ * One sentence, feeding the meta description, the Open Graph card and the
+ * Twitter card below.
+ *
+ * It used to end "no barcodes", which the scanner now contradicts. The claim
+ * underneath survived the feature intact, because what the page is selling is
+ * not the absence of a scanner — it is the absence of *hunting*: the search
+ * box, the forty results for "chicken breast", the picking. A scanner that
+ * reads a packet in one motion is on the same side of that argument. It is the
+ * search box it replaces, not the sentence.
+ */
 const DESCRIPTION =
-  'Say what you ate. No forms, no food database, no barcodes — describe the meal in your own words and the day adds itself up.';
+  'A calorie journal you talk to. No forms, no database to search, no forty results for "chicken breast" — describe the meal in your own words and the day adds itself up.';
 
 export const metadata: Metadata = {
   title: 'Day So Far',

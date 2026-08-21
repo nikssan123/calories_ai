@@ -471,6 +471,62 @@ Publishing it also emails it, unless the account has turned that off — see
 [Email](#email). The send is keyed on the week, so the re-entrant tick cannot deliver
 Monday twice, and a provider failure is logged without touching the published review.
 
+## Scanning a packet
+
+A barcode is another way of saying what you ate, so it lives in the composer's menu
+beside Take a photo and Choose a photo rather than in a tab of its own. One decision
+holds the whole feature together: **a scan produces a candidate, never a log.** A barcode
+says what is in 100g of a product and nothing at all about how much of it somebody ate,
+so `GET /barcode/:code` and `POST /barcode/:code/log` are two requests with a person's
+decision in between. Folding them together is how a scanner logs a whole 500g jar of
+peanut butter as one snack.
+
+Decoding happens in the browser. `BarcodeDetector` where it exists — Chrome and Android
+— and `zxing-wasm` lazily imported where it does not, which on a food app means iOS
+Safari and is not a rounding error. The wasm binary is copied out of `node_modules` into
+`public/` at build time (`apps/web/scripts/copy-zxing.mjs`) rather than fetched from the
+library's default CDN: a self-hosted deployment should not need jsDelivr to read a
+packet. Anywhere a camera stream cannot start, photographing the barcode decodes from the
+still at full resolution — never through `preparePhoto`, whose JPEG re-encode eats thin
+parallel bars first.
+
+Resolving the code is `services/barcode.ts`, and all of the provider knowledge is in
+there so nothing downstream learns which catalogue answered. Open Food Facts first, then
+USDA FoodData Central when `FDC_API_KEY` is set — OFF covers the EU shelf well, FDC
+answers the American branded half, and both are free. Codes normalise to GTIN-13 and the
+check digit is verified before any network call, so a mis-scan is a free local rejection.
+
+`barcode_products` is a cache rather than a product table, and the `found` column is what
+makes the difference: a scan of something nobody has catalogued is the likeliest single
+outcome in a real supermarket, and without a negative row every rescan is another round
+trip that returns nothing. The two have different clocks — ninety days for a hit, because
+a printed label does not change, and seven for a miss, because OFF gains products daily
+and a remembered miss is a permanently broken scan. An outage is never written down as a
+miss; that distinction is the difference between "nobody has catalogued this" and "we
+could not ask", and only one of them should send someone to photograph a label.
+
+A row is only usable with energy *and* all three macros on it. Crowd-sourced rows
+carrying a name and nothing else are common, and logging one as a zero-calorie food is
+worse than finding nothing: a miss sends the user to the nutrition panel, which works,
+while a zero silently subtracts a meal from the day and looks like a number.
+
+The miss path is the part worth building carefully, and it is the answer almost no
+calorie app has. *"Couldn't find it — snap the label instead"* hands a photo of the
+nutrition panel to the composer, and from there it is the meal-photo flow that already
+existed.
+
+`lookup_barcode` and `log_barcode` exist on the journal agent for the portions a picker
+cannot express — "about half this packet". Two tools rather than one so the arithmetic
+stays on the server: the read says what is in 100g and the write multiplies it. Both are
+kept out of the read-only review agent's set, `lookup_barcode` because it is the only
+read in the file that leaves the building.
+
+The entries land with `source: 'barcode'` and `confidence: 'high'` — the only path in the
+product that gets high by default, and it is earned: every other entry is a model reading
+a sentence or a photograph, while this one is a manufacturer's own panel multiplied by a
+number somebody typed. Open Food Facts is ODbL, so "Data from Open Food Facts" appears on
+the product card and on the entry itself.
+
 ## Rate limits
 
 Two kinds of route have a ceiling, and nothing else does — a blanket limit would only
@@ -486,7 +542,15 @@ throttle the dashboard polling the app does normally.
 | `POST /auth/verify/resend` | 5 / hour | account |
 | `POST /auth/password/reset` | 20 / hour | IP |
 | `POST /auth/verify` | 20 / hour | IP |
+| `GET|POST /barcode/:code…` | 30 / minute | account |
 | `DELETE /account` | 5 / 15 min | account |
+
+The barcode ceiling is the odd one out: it guards neither money nor a password. A lookup
+is usually a read of a shared cache row, and when it is not it is one request to a free
+catalogue. It exists to be a polite Open Food Facts client and to stop a scanner stuck on
+a blurry frame from looping, which is why it is not a plan limit — charging for it would
+be charging for something that costs nothing to serve. Thirty a minute is a shopper
+walking down an aisle.
 
 The chat limits exist because turns are spent from your Claude subscription's budget. The
 password limits exist because those are the only routes an anonymous caller can make burn
@@ -769,12 +833,12 @@ Two things to know:
 
 ## Not built (deliberately)
 
-Social features, barcode scanning, Apple Health, recipe databases, micronutrients,
-payments. See §21 of the product plan. (§21 also ruled out multiple users — that one
-was overridden on purpose.)
+Social features, Apple Health, recipe databases, micronutrients, payments. See §21 of
+the product plan. (§21 also ruled out multiple users — that one was overridden on
+purpose.)
 
-Weekly reviews and adaptive targets were v2 and are now built — see the two sections
-above. Notifications are not: the review lands in the journal and waits to be read,
+Weekly reviews, adaptive targets and barcode scanning were all on this list and are now
+built — see the sections above. Notifications are not: the review lands in the journal and waits to be read,
 because a nutrition app that pushes at you is a different and worse product.
 
 Streaming the chat turn is the obvious next thing. `POST /chat` awaits the whole agent

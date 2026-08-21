@@ -12,3 +12,5 @@ uploads/
 # Test artefacts: the suite's own upload directory and coverage output.
 .test-uploads/
 coverage/
+# Copied from node_modules by apps/web/scripts/copy-zxing.mjs at build time.
+apps/web/public/zxing_reader.wasm

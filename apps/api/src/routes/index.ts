@@ -1,6 +1,7 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import {
+  BarcodeLogRequest,
   ChatRequest,
   DeleteAccountRequest,
   Meal,
@@ -20,6 +21,13 @@ import {
   verifyWebhookSignature,
 } from '../email/inbound.ts';
 import { verifyUnsubscribe } from '../email/unsubscribe.ts';
+import {
+  BarcodeUnavailableError,
+  InvalidBarcodeError,
+  InvalidPortionError,
+  logScannedProduct,
+  lookupBarcode,
+} from '../services/barcode.ts';
 import { attachBody, recordBodyFailure, recordSupportEmail } from '../services/support.ts';
 import { deleteAccount } from '../services/admin.ts';
 import { proposeTargets } from '../services/adaptive.ts';
@@ -55,7 +63,26 @@ import { listExerciseTypes, logWorkout } from '../services/workouts.ts';
 import { messageActions, replaceActions } from '../services/chat.ts';
 import { addDays, dateRange, localDateFor } from '../time.ts';
 import { stripDataUrl } from './body.ts';
-import { CHAT_LIMIT, DELETE_ACCOUNT_LIMIT, REVIEW_LIMIT } from './limits.ts';
+import { BARCODE_BURST, CHAT_LIMIT, DELETE_ACCOUNT_LIMIT, REVIEW_LIMIT } from './limits.ts';
+
+/**
+ * The three ways a scan can fail, told apart.
+ *
+ * A code that did not scan cleanly and a portion that cannot be resolved are
+ * both the caller's to fix, so they are 400s carrying the sentence to show. An
+ * unreachable catalogue is nobody's fault and is deliberately *not* a 404 — the
+ * client's miss path says "nobody has catalogued that", which would be a lie
+ * about an outage and would send someone hunting for a product that is there.
+ */
+function barcodeFailure(error: unknown, reply: FastifyReply) {
+  if (error instanceof InvalidBarcodeError || error instanceof InvalidPortionError) {
+    return reply.status(400).send({ error: error.message });
+  }
+  if (error instanceof BarcodeUnavailableError) {
+    return reply.status(502).send({ error: error.message });
+  }
+  throw error;
+}
 
 export async function registerRoutes(app: FastifyInstance) {
   app.get('/health', async () => ({
@@ -213,6 +240,66 @@ export async function registerRoutes(app: FastifyInstance) {
     if (!entry) return reply.status(404).send({ error: 'Entry not found' });
     return reply.status(201).send(entry);
   });
+
+  // ---- Barcodes ------------------------------------------------------------
+
+  /**
+   * What is in the packet. Never how much of it was eaten.
+   *
+   * A 404 is the interesting reply rather than the error case: most of a real
+   * trolley is supermarket own-brands nobody has catalogued, and the client
+   * answers this one by offering to photograph the nutrition panel instead —
+   * a flow that already exists and already works.
+   */
+  app.get('/barcode/:code', { config: { rateLimit: BARCODE_BURST } }, async (request, reply) => {
+    try {
+      const product = await lookupBarcode((request.params as any).code);
+      if (!product) return reply.status(404).send({ error: 'Nobody has catalogued that one yet' });
+      return product;
+    } catch (error) {
+      return barcodeFailure(error, reply);
+    }
+  });
+
+  /**
+   * The portion, which is the whole feature.
+   *
+   * Deliberately a second request rather than a `grams` parameter on the
+   * lookup. A scan that could log would log the wrong amount — a barcode says
+   * what is in 100g and nothing whatever about how much of the jar somebody
+   * ate — so the card in between, where a person picks, is not a step to be
+   * optimised away.
+   *
+   * No model call and no rate limit beyond the burst: the numbers came off a
+   * printed label and the amount was typed by the user, so this is arithmetic.
+   */
+  app.post(
+    '/barcode/:code/log',
+    { config: { rateLimit: BARCODE_BURST } },
+    async (request, reply) => {
+      const parsed = BarcodeLogRequest.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid portion' });
+      }
+
+      const { userId, ...ctx } = await getUserContext(request.userId!);
+      try {
+        const product = await lookupBarcode((request.params as any).code);
+        if (!product) return reply.status(404).send({ error: 'Nobody has catalogued that one yet' });
+
+        const entry = await logScannedProduct(userId, product, {
+          grams: parsed.data.grams,
+          servings: parsed.data.servings,
+          meal: parsed.data.meal,
+          eatenAt: parsed.data.eaten_at ? new Date(parsed.data.eaten_at) : undefined,
+          ctx,
+        });
+        return reply.status(201).send(entry);
+      } catch (error) {
+        return barcodeFailure(error, reply);
+      }
+    },
+  );
 
   // ---- Workouts ------------------------------------------------------------
 

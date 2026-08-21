@@ -12,6 +12,12 @@ import { cn } from '@/lib/utils';
  * empty `href` reloads the page and `#` scrolls it to the top, and either one
  * reads as a broken button. Fill in a URL and that entry becomes a real link;
  * fill in both and the "Coming soon" label disappears by itself.
+ *
+ * When those listings are written: "barcode scanner" is one of the
+ * highest-volume queries in the stores' nutrition category and belongs in the
+ * subtitle and the keyword field, even though it has no business in the hero
+ * headline on this page. Different surfaces, different jobs — a store listing
+ * is answering a search, the landing page is making an argument.
  */
 const STORES: { name: string; href: string | null; Mark: typeof AppleMark }[] = [
   { name: 'App Store', href: null, Mark: AppleMark },

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Camera, ImageIcon, X } from 'lucide-react';
+import { ArrowUp, Camera, ImageIcon, ScanBarcode, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PhotoMediaType } from '@ct/shared';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { PHOTO_ACCEPT, preparePhoto, type PreparedPhoto, useHasCameraApp } from '@/lib/image';
+import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { cn } from '@/lib/utils';
 
 export interface ComposerPayload {
@@ -23,15 +24,22 @@ export interface ComposerPayload {
 
 export function Composer({
   onSend,
+  onLogged,
   disabled,
 }: {
   onSend: (payload: ComposerPayload) => void;
+  /**
+   * Something was logged without going through the conversation — a scanned
+   * packet — so the day beside it has to re-read itself.
+   */
+  onLogged: () => void;
   disabled: boolean;
 }) {
   const [text, setText] = useState('');
   const [photo, setPhoto] = useState<PreparedPhoto | null>(
     null,
   );
+  const [scanning, setScanning] = useState(false);
   const cameraRef = useRef<HTMLInputElement>(null);
   const libraryRef = useRef<HTMLInputElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
@@ -80,7 +88,7 @@ export function Composer({
       variant="ghost"
       onClick={onClick}
       disabled={disabled}
-      aria-label="Add a photo"
+      aria-label="Add a photo or scan a packet"
       className="text-muted-foreground size-10 shrink-0 rounded-full"
     >
       <Camera size={22} strokeWidth={2.2} />
@@ -119,19 +127,27 @@ export function Composer({
       )}
 
       <div className="flex items-end gap-2">
-        {hasCameraApp ? (
-          // The camera and the library are two different intents, and a phone
-          // cannot show both from one input: with `capture` it opens the camera
-          // and nothing else, without it the picker it offers varies by phone.
-          // So ask first, then open the input that does exactly that one thing.
-          <DropdownMenu>
-            <DropdownMenuTrigger render={photoButton()} />
-            <DropdownMenuContent
-              side="top"
-              align="start"
-              sideOffset={8}
-              className="w-auto min-w-44"
-            >
+        {/*
+          The camera and the library are two different intents, and a phone
+          cannot show both from one input: with `capture` it opens the camera
+          and nothing else, without it the picker it offers varies by phone.
+          So ask first, then open the input that does exactly that one thing.
+
+          The scanner sits here as a third peer rather than in a tab of its own,
+          because a barcode is another way of saying what you ate — the same
+          sentence, told to the phone in a different grammar. On a desktop the
+          two photo entries collapse into one and this menu still earns its
+          keep, which is why it is no longer conditional on having a camera app.
+        */}
+        <DropdownMenu>
+          <DropdownMenuTrigger render={photoButton()} />
+          <DropdownMenuContent
+            side="top"
+            align="start"
+            sideOffset={8}
+            className="w-auto min-w-44"
+          >
+            {hasCameraApp && (
               <DropdownMenuItem
                 onClick={() => cameraRef.current?.click()}
                 className="gap-2.5 px-2 py-2 text-[0.9375rem]"
@@ -139,18 +155,23 @@ export function Composer({
                 <Camera />
                 Take a photo
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => libraryRef.current?.click()}
-                className="gap-2.5 px-2 py-2 text-[0.9375rem]"
-              >
-                <ImageIcon />
-                Choose a photo
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : (
-          photoButton(() => libraryRef.current?.click())
-        )}
+            )}
+            <DropdownMenuItem
+              onClick={() => libraryRef.current?.click()}
+              className="gap-2.5 px-2 py-2 text-[0.9375rem]"
+            >
+              <ImageIcon />
+              Choose a photo
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setScanning(true)}
+              className="gap-2.5 px-2 py-2 text-[0.9375rem]"
+            >
+              <ScanBarcode />
+              Scan a barcode
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <input
           ref={cameraRef}
           type="file"
@@ -212,6 +233,24 @@ export function Composer({
           <ArrowUp size={21} strokeWidth={3} />
         </Button>
       </div>
+
+      <BarcodeScanner
+        open={scanning}
+        onOpenChange={setScanning}
+        onLogged={onLogged}
+        /*
+         * A miss lands here rather than dead-ending in the sheet: the label
+         * photo is attached to the composer exactly as if it had been picked
+         * from the camera, with a sentence saying what it is. The user still
+         * presses send, because this is a message about their meal and putting
+         * one in the conversation without them is not the app's to do.
+         */
+        onLabelPhoto={(prepared) => {
+          setPhoto(prepared);
+          setText((current) => current || 'This is the label — log what I ate off it.');
+          textRef.current?.focus();
+        }}
+      />
     </div>
   );
 }

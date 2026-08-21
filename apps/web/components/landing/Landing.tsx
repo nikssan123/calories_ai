@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Camera, MessageSquareText, RotateCcw } from 'lucide-react';
+import { ArrowRight, Camera, MessageSquareText, RotateCcw, ScanBarcode } from 'lucide-react';
 import { useAuth } from '@/components/AuthGate';
 import { Logo } from '@/components/Logo';
 import { HeroDemo } from '@/components/landing/HeroDemo';
@@ -44,6 +44,7 @@ export function Landing() {
       <main>
         <Hero start={start} />
         <ThreeWaysIn />
+        <TheOnesNobodyCatalogued />
         <Corrections />
         <AdaptiveTarget />
         <BeyondCalories />
@@ -177,8 +178,9 @@ function Hero({ start }: { start: Cta }) {
 
           <Reveal delay={90}>
             <p className="text-lede text-muted-foreground mx-auto mt-6 max-w-xl text-pretty">
-              A calorie journal you talk to. No forms, no food database, no barcode to hunt
-              for — describe the meal in your own words and the day adds itself up.
+              A calorie journal you talk to. No forms, no database to search, no forty
+              results for “chicken breast” — describe the meal in your own words and the day
+              adds itself up.
             </p>
           </Reveal>
 
@@ -226,6 +228,23 @@ const WAYS = [
     title: 'Or ask for your usual',
     body: '“My usual breakfast” looks up what you actually ate before and reuses those quantities. Your own history, not a stranger’s database.',
   },
+  /*
+   * A peer, not a footnote. The obvious cheap move was to fold this into the
+   * camera card above — it already says "the back of a packet" and is halfway
+   * there — but the scanner sits in the composer's menu beside Take a photo
+   * and Choose a photo, and something that is a peer in the product should be
+   * a peer on the page. Buried in the photo card it reads as a detail of a
+   * feature rather than as a feature.
+   *
+   * The sentence is doing two jobs on purpose. It says the scan produces a
+   * candidate and not a log, which is the decision the whole thing rests on,
+   * and it puts the miss path in the shop window rather than in the FAQ.
+   */
+  {
+    Icon: ScanBarcode,
+    title: 'Or scan the packet',
+    body: 'Point at the barcode and the label comes back. You say how much of it you ate — and if nobody has catalogued it, photograph the panel instead.',
+  },
 ] as const;
 
 function ThreeWaysIn() {
@@ -233,11 +252,11 @@ function ThreeWaysIn() {
     <Section id="how">
       <Reveal>
         <h2 className="text-section-title max-w-2xl text-balance">
-          Three ways in. None of them is a form.
+          Four ways in. None of them is a form.
         </h2>
       </Reveal>
 
-      <div className="mt-12 grid gap-10 sm:grid-cols-3 sm:gap-8">
+      <div className="mt-12 grid gap-10 sm:grid-cols-2 sm:gap-8 lg:grid-cols-4">
         {WAYS.map(({ Icon, title, body }, i) => (
           <Reveal key={title} delay={i * 80}>
             {/* The icon sits on a tinted disc rather than floating: three bare
@@ -255,6 +274,87 @@ function ThreeWaysIn() {
             <p className="text-muted-foreground mt-2 text-body leading-relaxed">{body}</p>
           </Reveal>
         ))}
+      </div>
+    </Section>
+  );
+}
+
+/* ------------------------------------------------------- the ones nobody has */
+
+/**
+ * A fabricated scan, and deliberately fabricated.
+ *
+ * ODbL requires a visible "Data from Open Food Facts" wherever their data is
+ * shown, which the product card carries. This page only inherits that
+ * obligation if it shows a real product — so it invents one, the way HeroDemo,
+ * Corrections and WeeklyRead invent everything they display. Plausible numbers,
+ * no real GTIN, no obligation, and nothing here that goes stale when somebody
+ * edits a crowd-sourced row.
+ */
+const MISS_STEPS = [
+  { label: '5 060 337 XXXXXX', caption: 'Own-brand oat milk', tone: 'code' },
+  { label: 'Not in the catalogue', caption: 'Nobody has scanned this one', tone: 'miss' },
+  { label: 'Oat drink · 250 ml', caption: '113 kcal · read off the panel', tone: 'hit' },
+] as const;
+
+function TheOnesNobodyCatalogued() {
+  return (
+    <Section>
+      <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
+        <Reveal>
+          <h2 className="text-section-title text-balance">
+            A scanner is only as good as its worst case.
+          </h2>
+          <p className="text-muted-foreground mt-5 text-[17px] leading-relaxed font-medium">
+            Every calorie app has a barcode scanner. Almost none of them has an answer for the
+            supermarket own-brand nobody has ever catalogued — and that is most of a real
+            trolley.
+          </p>
+          <p className="text-muted-foreground mt-4 text-[17px] leading-relaxed font-medium">
+            Here a miss is not a dead end. It says <em>couldn’t find it — snap the label
+            instead</em>, and the nutrition panel goes to the same reader that handles a plate
+            of food. The worst case of the newest feature is a feature this app already had.
+          </p>
+        </Reveal>
+
+        <Reveal delay={100}>
+          <div className="bg-card border-border chunk rounded-[var(--radius)] border-2 px-5 py-4">
+            <p className="text-eyebrow text-muted-foreground">One scan, start to finish</p>
+
+            <ol className="divide-border mt-2 divide-y-2">
+              {MISS_STEPS.map((step, i) => (
+                <li key={step.label} className="flex items-baseline gap-3 py-3">
+                  <span
+                    aria-hidden
+                    className="text-footnote text-muted-foreground tnum w-4 shrink-0 font-extrabold"
+                  >
+                    {i + 1}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span
+                      className={cn(
+                        'block truncate text-body font-semibold',
+                        step.tone === 'code' && 'tnum',
+                        step.tone === 'miss' && 'text-muted-foreground',
+                        step.tone === 'hit' && 'text-[var(--calories-text)] font-extrabold',
+                      )}
+                    >
+                      {step.label}
+                    </span>
+                    <span className="text-footnote text-muted-foreground block truncate">
+                      {step.caption}
+                    </span>
+                  </span>
+                  {step.tone === 'hit' && (
+                    <span aria-hidden className="shrink-0 text-body">
+                      ✓
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </div>
+        </Reveal>
       </div>
     </Section>
   );

@@ -2,6 +2,8 @@ import type {
   AccountDeletion,
   Acknowledged,
   AdaptiveProposal,
+  BarcodeLogRequest,
+  BarcodeProduct,
   Calendar,
   AdminOverview,
   AdminUser,
@@ -296,6 +298,28 @@ export function createApiClient({
       request<PantryScanProposal>('/pantry/scan', {
         method: 'POST',
         body: JSON.stringify({ photo_base64: photoBase64, photo_media_type: mediaType }),
+      }),
+
+    // ---- Barcodes ----
+
+    /**
+     * What is in the packet, per 100g. Writes nothing.
+     *
+     * A 404 is an ordinary answer rather than an error — most of a real trolley
+     * is own-brands nobody has catalogued — and the caller is expected to offer
+     * the label photo instead of reporting a failure.
+     */
+    barcode: (code: string) => request<BarcodeProduct>(`/barcode/${encodeURIComponent(code)}`),
+
+    /**
+     * How much of it was eaten. Grams or servings, one or the other, and never
+     * folded into the lookup above: the packet says what the food is and only a
+     * person can say how much of it they had.
+     */
+    logBarcode: (code: string, portion: BarcodeLogRequest) =>
+      request<FoodEntry>(`/barcode/${encodeURIComponent(code)}/log`, {
+        method: 'POST',
+        body: JSON.stringify(portion),
       }),
 
     /**

@@ -4,6 +4,7 @@ import { hasSubscriptionAuth } from './ai/client.ts';
 import { generateNudge } from './ai/nudge.ts';
 import { generateWeeklyReview } from './ai/review.ts';
 import { sendNudgeEmail, sendWeeklyReviewEmail } from './email/notify.ts';
+import { sweepBarcodeCache } from './services/barcode.ts';
 import { dueNudge, NUDGE_HOUR } from './services/nudges.ts';
 import { reviewForWeek, reviewWeekFor } from './services/reviews.ts';
 import { listActiveUsers } from './services/user.ts';
@@ -211,6 +212,13 @@ export function tick(logger?: FastifyBaseLogger): void {
   // be the reason nobody gets a nudge, and neither waits on the other.
   runDueNudges(now, logger).catch((error) => {
     logger?.error({ err: error }, 'nudge scheduler tick failed');
+  });
+  // Not a user's clock at all — one DELETE over a small shared table, riding a
+  // tick that already exists rather than earning a scheduler of its own. Every
+  // read checks its own row's age, so this is only about disk: it is safe to
+  // run every hour, safe to skip, and safe to run twice.
+  sweepBarcodeCache().catch((error) => {
+    logger?.error({ err: error }, 'barcode cache sweep failed');
   });
 }
 

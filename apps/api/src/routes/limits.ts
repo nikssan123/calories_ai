@@ -48,6 +48,21 @@ export const SCAN_LIMIT = planLimit((l) => l.fridgeScansPerDay, '1 day');
 export const RECIPE_BURST = { max: 6, timeWindow: '1 minute' };
 
 /**
+ * Scanning packets, and deliberately not a `planLimit`.
+ *
+ * Every other ceiling in this file guards money or a password. This one guards
+ * neither: a lookup is usually a read of a shared cache row, and when it is
+ * not, it is one request to a free catalogue. What the limit is actually for is
+ * being a polite Open Food Facts client and stopping a scanner stuck on a
+ * blurry frame from looping. Charging for it would be charging for something
+ * that costs nothing to serve.
+ *
+ * Generous, because a shopper walks down an aisle: a dozen products in a minute
+ * is a normal trolley rather than a runaway client.
+ */
+export const BARCODE_BURST = { max: 30, timeWindow: '1 minute' };
+
+/**
  * Not about money, and deliberately not a plan limit: this one verifies a
  * password, which is intentionally slow, and it is the only irreversible thing
  * an account can do to itself. Paying should not buy a higher ceiling on it.

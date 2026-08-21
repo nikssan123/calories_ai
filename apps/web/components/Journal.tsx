@@ -275,7 +275,14 @@ export function Journal() {
             inside, the composer rendered 64px narrower than the messages. */}
         <div className="shrink-0 lg:px-8 lg:pb-4">
           <div className="mx-auto w-full max-w-2xl">
-            <Composer onSend={(p) => void send(p)} disabled={busy} />
+            <Composer
+              onSend={(p) => void send(p)}
+              // A scanned packet is logged by the scanner itself, without a
+              // turn — so, like the workout card above, the day beside the
+              // conversation has to be told to re-read itself.
+              onLogged={() => void api.day().then(setDay).catch(() => {})}
+              disabled={busy}
+            />
           </div>
         </div>
       </div>

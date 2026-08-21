@@ -31,6 +31,12 @@ import { calculateTargets, setTargets, targetsForDate } from '../services/target
 import { latestWeight } from '../services/log.ts';
 import { repeatFoodEntry } from '../services/history.ts';
 import {
+  InvalidBarcodeError,
+  InvalidPortionError,
+  logScannedProduct,
+  lookupBarcode,
+} from '../services/barcode.ts';
+import {
   addPantryItems,
   ageInDays,
   deletePantryItem,
@@ -1835,15 +1841,153 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
     { alwaysLoad: true },
   );
 
+  /*
+   * ---- Barcodes ------------------------------------------------------------
+   *
+   * Last of everything on purpose. The scanner's own card handles the common
+   * case — a cereal box, one serving — with no model call and no waiting, and
+   * this is the fallback for the portions a picker cannot express: "about half
+   * this packet", "the rest of the jar", "two of these bars". Built first, it
+   * would have put a paid turn in front of every scan of a cereal box.
+   *
+   * Two tools rather than one, which is not the shape a single "lookup" verb
+   * suggests. The split is what keeps the arithmetic on this side of the wire:
+   * the read tells the model what is in 100g and the write multiplies it, so
+   * "half the packet" arrives as a number this code produced. A model doing
+   * that multiplication itself would usually be right, and the times it was
+   * not would look exactly like the times it was.
+   */
+
+  const lookupBarcodeTool = tool(
+    'lookup_barcode',
+    'Look up a product by the barcode on its packet. Returns what is in 100g of it, and the serving size if the label names one — never a logged meal, because a barcode says nothing about how much of it was eaten. Use it when the user gives you a barcode number, then work out the amount with them and call log_barcode. If nothing comes back, tell them to photograph the nutrition panel instead: plenty of supermarket own-brands have never been catalogued, and reading the label is something you can do.',
+    {
+      barcode: z.string().describe('The digits under the stripes, 8, 12 or 13 of them.'),
+    },
+    async (args) => {
+      let product: Awaited<ReturnType<typeof lookupBarcode>>;
+      try {
+        product = await lookupBarcode(args.barcode);
+      } catch (error) {
+        if (error instanceof InvalidBarcodeError) return fail(error.message);
+        // An outage is said as an outage. Reported as "not found", the model
+        // would send someone to photograph a label for a product that is in
+        // the catalogue and would be there again in a minute.
+        return fail(`${(error as Error).message}. Ask them to try again shortly.`);
+      }
+
+      if (!product) {
+        return fail(
+          'Nobody has catalogued that barcode. Ask them to photograph the nutrition panel and read the figures off it instead — that works for own-brands, which is most of what is missing.',
+        );
+      }
+
+      return ok({
+        barcode: product.barcode,
+        brand: product.brand,
+        name: product.name,
+        per_100g: {
+          kcal: product.kcal_100g,
+          protein_g: product.protein_100g,
+          carbs_g: product.carbs_100g,
+          fat_g: product.fat_100g,
+        },
+        serving_g: product.serving_g,
+        serving_desc: product.serving_desc,
+        source: product.source === 'off' ? 'Open Food Facts' : 'USDA FoodData Central',
+        // Said on every read, because it is the premise the model is most
+        // likely to skip past: it now knows the food and still does not know
+        // the meal. A packet weight is not on the barcode either, so "half the
+        // packet" needs asking about unless they said how big the packet is.
+        what_this_is: 'What is in the product, not what they ate. Ask how much if you do not know, then call log_barcode with grams or servings — do not do the multiplication yourself.',
+      });
+    },
+    { annotations: { readOnlyHint: true } },
+  );
+
+  const logBarcodeTool = tool(
+    'log_barcode',
+    'Log a scanned product as eaten, once you know the amount. Give either grams or servings, never both — servings only work if lookup_barcode came back with a serving size. The macros are worked out here from the label, so this is more accurate than describing the product to log_food.',
+    {
+      barcode: z.string().describe('The same barcode you looked up.'),
+      grams: z
+        .number()
+        .nullable()
+        .default(null)
+        .describe('How many grams of it they ate. Null if you are giving servings instead.'),
+      servings: z
+        .number()
+        .nullable()
+        .default(null)
+        .describe('How many of the label\'s servings they ate. Null if you are giving grams.'),
+      meal: mealField.nullable().default(null).describe('Null to infer from the time it was eaten.'),
+      when: whenField,
+    },
+    async (args) => {
+      // `== null` rather than `=== null`: the schema defaults these to null for
+      // a model, but a caller reaching the handler directly simply omits the
+      // one it is not using, and "undefined" has to mean the same thing here.
+      const grams = args.grams ?? undefined;
+      const servings = args.servings ?? undefined;
+      if ((grams === undefined) === (servings === undefined)) {
+        return fail('Give exactly one of grams or servings.');
+      }
+
+      let entry: FoodEntry;
+      try {
+        const product = await lookupBarcode(args.barcode);
+        if (!product) return fail('Nobody has catalogued that barcode — read the label instead.');
+
+        entry = await logScannedProduct(tc.userId, product, {
+          grams,
+          servings,
+          meal: (args.meal as Meal | null) ?? undefined,
+          eatenAt: resolveWhen(args.when ?? undefined, tc.now, tc.ctx),
+          ctx: tc.ctx,
+        });
+      } catch (error) {
+        if (error instanceof InvalidPortionError || error instanceof InvalidBarcodeError) {
+          return fail(error.message);
+        }
+        return fail((error as Error).message);
+      }
+
+      tc.actions.push({
+        kind: 'food_logged',
+        entry_id: entry.id,
+        summary: `${entry.meal}: ${entry.description} — ${Math.round(entry.kcal)} kcal`,
+        card: foodCard(entry),
+      });
+
+      const day = await buildDaySummary(tc.userId, entry.local_date);
+      return ok({
+        entry_id: entry.id,
+        local_date: entry.local_date,
+        logged: pickTotals(entry),
+        day_totals: day.consumed,
+        kcal_remaining: day.targets.kcal - day.consumed.kcal,
+        protein_remaining: day.targets.protein_g - day.consumed.protein_g,
+      });
+    },
+  );
+
   const reads = [getDay, searchHistory, getProgress];
   /**
-   * Kitchen reads, kept out of `reads` on purpose.
+   * Reads the journal gets and the read-only agents do not.
    *
-   * `reads` is the read-only set the weekly review and the nudge get, and a
+   * `reads` above is the set the weekly review and the nudge are given, and a
    * review has no use for a shopping list — it would only be more prompt for
-   * the model to wander into. These go to the journal alone.
+   * the model to wander into. The barcode lookup is here for the same reason
+   * and one more: it is the only read in the file that leaves the building,
+   * and a review agent has no business making an outbound request to anybody.
    */
-  const kitchenReads = [getPantry, findRecipes, getMealPlanTool, getShoppingList];
+  const kitchenReads = [
+    getPantry,
+    findRecipes,
+    getMealPlanTool,
+    getShoppingList,
+    lookupBarcodeTool,
+  ];
   const shows = [showChart, showDay];
   const writes = [
     logFood,
@@ -1872,6 +2016,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
     cookPlannedNight,
     updatePlanNight,
     repeatMeal,
+    logBarcodeTool,
     updatePantry,
     /*
      * A write for a reason that is easy to miss: it publishes a message into
