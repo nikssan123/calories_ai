@@ -122,6 +122,24 @@ password. This one guards neither — a lookup costs nothing to serve and is usu
 read. The limit exists to be a polite Open Food Facts client and to stop a stuck scanner
 from looping. Charging for it would be charging for something free.
 
+**Since built:** the limiter's counters moved to Redis (`REDIS_URL`, added with the
+scaling work — see SCALING.md). That matters more for this ceiling than for the others in
+the file, because this is the only one whose subject is somebody else. The others are
+promises to our own users, and a replica enforcing its own copy of a per-account ceiling
+is merely wrong; politeness to a third party is a property of the whole deployment, so
+in-process counters would have meant N replicas each granting thirty lookups a minute and
+Open Food Facts seeing N times what the plan says it agreed to. One shared counter is the
+only version of this limit that means anything from the outside.
+
+Two consequences worth carrying. The cache was never the problem — `barcode_products` is
+in Postgres and every replica already shares its hits, so the limiter was the only
+per-process part of the politeness story. And the limiter **fails open**: if Redis is
+unreachable the request is served unthrottled rather than refused, which is the right
+trade for a ceiling guarding spending or a password, and the one place in this file where
+it deserves a second thought — a Redis outage during a stuck-scanner loop is the case
+where OFF, not the user, pays. The catalogue's own throttling is the backstop there, and
+the `found` row means a repeated scan of one product stops reaching them at all.
+
 Client methods go in `packages/api-client/src/index.ts` beside `scanFridge` (line 271).
 
 ## Phase 3 — The scanner
