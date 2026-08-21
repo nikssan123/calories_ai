@@ -1553,7 +1553,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         .number()
         .nullable()
         .default(null)
-        .describe('Minutes they have on an ordinary weeknight, if they said.'),
+        .describe('The longest a single dinner may take, if they said. It caps every night in the week, not just the weeknights.'),
       servings: z
         .number()
         .nullable()

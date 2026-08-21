@@ -166,32 +166,88 @@ export default function PlanPage() {
                   <p className="text-muted-foreground text-body font-medium">
                     Nothing planned for this week yet.
                     <br />
-                    Say what the week looks like and the kitchen will fill the nights in.
+                    Fill the week in below, or ask for it in the{' '}
+                    <Link
+                      href="/"
+                      className="text-foreground font-semibold underline underline-offset-2"
+                    >
+                      journal
+                    </Link>
+                    .
                   </p>
                 </div>
               )}
 
               <InsetGroup
-                title="🍳  What the week looks like"
-                footer="This is the most expensive thing the kitchen does, so it runs once and you edit it after."
+                title="🍳  How to plan the week"
+                footer={
+                  <>
+                    This is the most expensive thing the kitchen does, so it runs once and you edit
+                    it after. Or say it in the{' '}
+                    <Link
+                      href="/"
+                      className="text-foreground font-semibold underline underline-offset-2"
+                    >
+                      journal
+                    </Link>{' '}
+                    — “plan my dinners this week, two of us, nothing over 30 minutes”.
+                  </>
+                }
               >
+                {/*
+                  Labelled, rather than left to its placeholder to explain itself.
+                  Every other row here says what it is before you touch it, and a
+                  bare field at the top of the group was the one thing you had to
+                  click into to find out.
+                */}
                 <div className="px-4 py-3.5">
+                  <label
+                    htmlFor="plan-wants"
+                    className="text-footnote text-muted-foreground mb-1.5 block font-medium"
+                  >
+                    Anything happening this week?
+                  </label>
                   <Input
+                    id="plan-wants"
                     value={wants}
                     onChange={(e) => setWants(e.target.value)}
-                    placeholder="Anything to steer it — “out on Thursday”, “use up the squash”"
+                    placeholder="“out on Thursday”, “use up the squash”"
                     className="bg-muted/60 border-border h-11 rounded-full border-2 px-4 text-body"
                   />
                 </div>
 
+                {/*
+                  A whole label and a line saying what it does to the week, on each
+                  of the three.
+
+                  They were sentence fragments finished by their own controls
+                  — "Feeding" [2], "On a weeknight" [30m] — which is a caption
+                  for a number rather than a question anybody could answer, and it
+                  read as a label for something else entirely unless you already
+                  knew what the planner did with it. "On a weeknight" was also
+                  untrue: the number goes to the model as the time they have, for
+                  every night in the run and the weekend with it, so it is the
+                  longest cook of the week and now says so.
+                */}
                 <InsetRow>
-                  <span className="flex-1 text-body">Feeding</span>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex-1">
+                    <p className="text-body">How many it feeds</p>
+                    <p className="text-muted-foreground text-[13px] font-medium">
+                      Every dinner is cooked for this many.
+                    </p>
+                  </div>
+                  <div
+                    role="group"
+                    aria-label="How many it feeds"
+                    className="flex shrink-0 items-center gap-1.5"
+                  >
                     {[1, 2, 3, 4].map((n) => (
                       <button
                         key={n}
                         type="button"
                         onClick={() => setServings(n)}
+                        aria-pressed={servings === n}
+                        aria-label={n === 1 ? '1 person' : `${n} people`}
                         className={cn(
                           'size-9 rounded-full border-2 text-[13px] font-bold transition-colors',
                           servings === n
@@ -209,20 +265,36 @@ export default function PlanPage() {
                   <div className="flex-1">
                     <p className="text-body">Cook once, eat twice</p>
                     <p className="text-muted-foreground text-[13px] font-medium">
-                      Lets one cook cover the night after it.
+                      A bigger cook covers the night after it, so the week has fewer evenings at the
+                      stove.
                     </p>
                   </div>
-                  <Switch checked={batch} onCheckedChange={setBatch} aria-label="Batch cook" />
+                  <Switch
+                    checked={batch}
+                    onCheckedChange={setBatch}
+                    aria-label="Cook once, eat twice"
+                  />
                 </InsetRow>
 
                 <InsetRow>
-                  <span className="flex-1 text-body">On a weeknight</span>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex-1">
+                    <p className="text-body">Longest cook</p>
+                    <p className="text-muted-foreground text-[13px] font-medium">
+                      No dinner in the week takes longer than this.
+                    </p>
+                  </div>
+                  <div
+                    role="group"
+                    aria-label="Longest cook"
+                    className="flex shrink-0 items-center gap-1.5"
+                  >
                     {[20, 30, 45, null].map((m) => (
                       <button
                         key={String(m)}
                         type="button"
                         onClick={() => setMinutes(m)}
+                        aria-pressed={minutes === m}
+                        aria-label={m === null ? 'Any length' : `${m} minutes`}
                         className={cn(
                           'h-9 rounded-full border-2 px-3 text-[13px] font-bold transition-colors',
                           minutes === m

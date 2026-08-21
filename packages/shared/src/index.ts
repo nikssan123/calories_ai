@@ -1316,7 +1316,7 @@ export type MealPlanSlot = z.infer<typeof MealPlanSlot>;
 /** What the week was asked for. The persistent half still lives on the profile. */
 export const MealPlanBrief = z.object({
   wants: z.string().max(300).optional(),
-  /** Minutes available on an ordinary weeknight. */
+  /** The longest a single dinner may take. Caps every night, weekends included. */
   minutes: z.number().int().min(5).max(240).nullable().optional(),
   /** How many people each dinner feeds. */
   servings: z.number().int().min(1).max(8).nullable().optional(),
