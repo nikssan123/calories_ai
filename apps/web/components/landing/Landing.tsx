@@ -3,7 +3,9 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Camera, MessageSquareText, RotateCcw, ScanBarcode } from 'lucide-react';
+import type { DayQuality } from '@ct/shared';
 import { useAuth } from '@/components/AuthGate';
+import { DietQuality } from '@/components/DietQuality';
 import { Logo } from '@/components/Logo';
 import { HeroDemo } from '@/components/landing/HeroDemo';
 import { Reveal } from '@/components/landing/Reveal';
@@ -67,21 +69,55 @@ interface Cta {
 /* ---------------------------------------------------------------- primitives */
 
 /**
+ * The hero's wash, and the page's only piece of pure decoration.
+ *
+ * A page this long that lights its accent once at the top and then runs flat
+ * for six screens reads as a single unbroken field of paper — or, on dark, of
+ * ink. So the same radial the mark carries comes back twice further down, at
+ * the two places the page changes subject: where it starts talking about the
+ * target, and where it asks for the sign-up. Turned far enough down that you
+ * would not point at it, which is the whole idea — it is the ground warming,
+ * not a shape.
+ */
+function Glow() {
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-x-0 top-1/2 h-[34rem] -translate-y-1/2 opacity-70"
+      style={{
+        background:
+          'radial-gradient(44% 44% at 50% 50%, color-mix(in oklch, var(--calories), transparent 84%), transparent 70%)',
+      }}
+    />
+  );
+}
+
+/**
  * Section rhythm. Every band on the page gets the same gutters and the same
  * vertical air, so the eye can predict where the next idea starts.
  */
 function Section({
   id,
+  glow,
   className,
   children,
 }: {
   id?: string;
+  glow?: boolean;
   className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className={cn('scroll-mt-16 px-6 py-20 sm:py-24 lg:py-28', className)}>
-      <div className="mx-auto w-full max-w-5xl">{children}</div>
+    <section
+      id={id}
+      className={cn(
+        'relative scroll-mt-16 px-6 py-20 sm:py-24 lg:py-28',
+        glow && 'overflow-hidden',
+        className,
+      )}
+    >
+      {glow && <Glow />}
+      <div className="relative mx-auto w-full max-w-5xl">{children}</div>
     </section>
   );
 }
@@ -177,9 +213,8 @@ function Hero({ start }: { start: Cta }) {
           </Reveal>
 
           <Reveal delay={90}>
-            <p className="text-lede text-muted-foreground mx-auto mt-6 max-w-xl text-pretty">
-              A calorie journal you talk to. No forms, no database to search, no forty
-              results for “chicken breast” — describe the meal in your own words and the day
+            <p className="text-lede text-muted-foreground mx-auto mt-6 max-w-lg text-pretty">
+              A calorie journal you talk to. Describe the meal in your own words; the day
               adds itself up.
             </p>
           </Reveal>
@@ -216,17 +251,17 @@ const WAYS = [
   {
     Icon: MessageSquareText,
     title: 'Say it',
-    body: '“Two eggs, toast and some cheese.” That is the whole interaction. It reads the sentence, works out the items and logs the meal.',
+    body: '“Two eggs, toast and some cheese.” That is the whole interaction.',
   },
   {
     Icon: Camera,
     title: 'Or photograph it',
-    body: 'A plate, a menu, the back of a packet. The photo goes up and the numbers come back — and a guess arrives labelled as a guess.',
+    body: 'A plate, a menu, the back of a packet. A guess comes back labelled as a guess.',
   },
   {
     Icon: RotateCcw,
     title: 'Or ask for your usual',
-    body: '“My usual breakfast” looks up what you actually ate before and reuses those quantities. Your own history, not a stranger’s database.',
+    body: '“My usual breakfast” reuses what you actually ate before. Your history, not a stranger’s database.',
   },
   /*
    * A peer, not a footnote. The obvious cheap move was to fold this into the
@@ -243,7 +278,7 @@ const WAYS = [
   {
     Icon: ScanBarcode,
     title: 'Or scan the packet',
-    body: 'Point at the barcode and the label comes back. You say how much of it you ate — and if nobody has catalogued it, photograph the panel instead.',
+    body: 'Point at the barcode and the label comes back. You say how much of it you ate.',
   },
 ] as const;
 
@@ -306,14 +341,9 @@ function TheOnesNobodyCatalogued() {
             A scanner is only as good as its worst case.
           </h2>
           <p className="text-muted-foreground mt-5 text-[17px] leading-relaxed font-medium">
-            Every calorie app has a barcode scanner. Almost none of them has an answer for the
-            supermarket own-brand nobody has ever catalogued — and that is most of a real
-            trolley.
-          </p>
-          <p className="text-muted-foreground mt-4 text-[17px] leading-relaxed font-medium">
-            Here a miss is not a dead end. It says <em>couldn’t find it — snap the label
-            instead</em>, and the nutrition panel goes to the same reader that handles a plate
-            of food. The worst case of the newest feature is a feature this app already had.
+            Most of a real trolley is own-brand that nobody has ever catalogued. Here a miss
+            is not a dead end: it says <em>snap the label instead</em>, and the nutrition
+            panel goes to the same reader that handles a plate of food.
           </p>
         </Reveal>
 
@@ -377,13 +407,9 @@ function Corrections() {
             Change your mind. It changes the entry.
           </h2>
           <p className="text-muted-foreground mt-5 text-[17px] leading-relaxed font-medium">
-            “Actually there were three eggs.” The meal you already logged is corrected in
-            place — not appended to, not logged twice, and never left for you to go and fix
-            on a screen somewhere else.
-          </p>
-          <p className="text-muted-foreground mt-4 text-[17px] leading-relaxed font-medium">
-            It can do that because a meal is stored item by item rather than as one number.
-            Correcting the eggs leaves the toast alone.
+            “Actually there were three eggs.” The entry is corrected in place — not appended
+            to, not logged twice. A meal is stored item by item, so correcting the eggs
+            leaves the toast alone.
           </p>
         </Reveal>
 
@@ -438,24 +464,23 @@ function Corrections() {
 /* ----------------------------------------------------------- adaptive target */
 
 const GUARDRAILS = [
-  'Ten logged days and four weigh-ins before it will move at all. Below that the estimate is noise.',
-  'Two hundred calories a pass at most, scaled by how well you logged — so successive weeks converge instead of oscillating.',
-  'Never further than 35% from the formula’s prediction. A fortnight of water weight can imply almost anything.',
+  'Ten logged days and four weigh-ins before it moves at all.',
+  'Two hundred calories a pass at most, scaled by how well you logged.',
+  'Never further than 35% from the formula’s prediction.',
   'A number you set by hand is never touched.',
 ];
 
 function AdaptiveTarget() {
   return (
-    <Section id="target">
+    <Section id="target" glow>
       <Reveal>
         <h2 className="text-section-title max-w-2xl text-balance">
           Your target learns what you actually burn.
         </h2>
         <p className="text-muted-foreground mt-5 max-w-2xl text-[17px] leading-relaxed font-medium">
-          Every calculator on the internet predicts what a population of people your size
-          burns. After a fortnight of logging there is something better available: what{' '}
-          <em className="text-foreground not-italic">you</em> burn, read off the only
-          experiment that matters.
+          A calculator predicts what people your size burn. After a fortnight of logging
+          there is something better: what <em className="text-foreground not-italic">you</em>{' '}
+          burn.
         </p>
       </Reveal>
 
@@ -477,7 +502,7 @@ function AdaptiveTarget() {
             </p>
             <p className="text-muted-foreground mt-5 text-body leading-relaxed">
               Eat 2,000 while losing half a kilo a week and you were burning about 2,550. The
-              arithmetic is three lines. What takes the work is knowing when not to believe it.
+              arithmetic is easy; knowing when not to believe it is the work.
             </p>
           </div>
         </Reveal>
@@ -498,97 +523,57 @@ function AdaptiveTarget() {
 /* ---------------------------------------------------------- beyond calories */
 
 /**
- * The four figures, drawn rather than described.
+ * A Tuesday, drawn by the app's own `DietQuality`.
  *
- * Static markup rather than the real `DietQuality` component: this is a
- * picture of a day, not a day, and wiring a live component to invented numbers
- * is how a landing page ends up shipping a second, subtly different copy of
- * the thing it is advertising.
+ * This used to be a hand-typed copy of that component's markup, on the grounds
+ * that a landing page shows a picture of a day rather than a day. The picture
+ * is still invented — but the invention is now the four numbers rather than the
+ * panel, which is the half that was worth keeping honest. A second copy of a
+ * component is a thing that will eventually disagree with the first.
+ *
+ * The day is deliberately a partly-measured one, so the panel prints its own
+ * "only 55% of today's calories carry these figures" line. That sentence used
+ * to be a whole card of prose beside this one, and it is worth more shown than
+ * told: an un-estimated item is recorded as unknown, never as a zero.
  */
-const PANEL = [
-  { label: 'Fiber', emoji: '🌱', value: '31', target: '/31g', pct: 100, floor: true },
-  { label: 'Sodium', emoji: '🧂', value: '1,590', target: '/2,300mg', pct: 69, floor: false },
-  { label: 'Sat fat', emoji: '🧈', value: '18', target: '/24g', pct: 75, floor: false },
-  { label: 'Sugar', emoji: '🍬', value: '44', target: '/55g', pct: 80, floor: false },
-];
+const A_TUESDAY: DayQuality = {
+  fiber_g: 22,
+  sodium_mg: 1590,
+  sat_fat_g: 18,
+  sugar_g: 44,
+  coverage: 0.55,
+  targets: {
+    fiber_g: { value: 31, direction: 'floor' },
+    sodium_mg: { value: 2300, direction: 'ceiling' },
+    sat_fat_g: { value: 24, direction: 'ceiling' },
+    sugar_g: { value: 55, direction: 'ceiling' },
+  },
+};
 
 function BeyondCalories() {
   return (
     <Section id="quality">
-      <Reveal>
-        <h2 className="text-section-title max-w-2xl text-balance">
-          Two identical days can be very different dinners.
-        </h2>
-        <p className="text-muted-foreground mt-5 max-w-2xl text-[17px] leading-relaxed font-medium">
-          Hitting 2,100 calories and 150g of protein is the same number whether it came from
-          lentils or from a bag of crisps and a shake. So the same estimate that prices your
-          meal also reads its fiber, sodium, saturated fat and sugar &mdash; per item, beside
-          the macros, from the sentence you already typed.
-        </p>
-      </Reveal>
-
-      <div className="mt-12 grid gap-6 lg:grid-cols-2">
+      <div className="grid items-center gap-12 lg:grid-cols-2 lg:gap-16">
         <Reveal>
-          <div className="bg-card border-border chunk h-full rounded-[var(--radius)] border-2 p-6 sm:p-7">
-            <p className="text-eyebrow text-muted-foreground">A Tuesday</p>
-            <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-5">
-              {PANEL.map(({ label, emoji, value, target, pct, floor }) => (
-                <div key={label} className="space-y-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <span aria-hidden className="text-[11px] leading-none">
-                      {emoji}
-                    </span>
-                    <span className="text-footnote text-muted-foreground font-semibold">
-                      {label}
-                    </span>
-                  </div>
-                  <div className="flex items-baseline gap-1">
-                    <span
-                      className="text-figure text-footnote leading-none"
-                      style={floor ? { color: 'var(--calories-text)' } : undefined}
-                    >
-                      {value}
-                    </span>
-                    <span className="tnum text-footnote text-muted-foreground font-semibold">
-                      {target}
-                    </span>
-                  </div>
-                  <div className="bg-muted border-border h-1.5 overflow-hidden rounded-full border">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${pct}%`,
-                        background: floor ? 'var(--calories)' : 'var(--muted-foreground)',
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p className="text-muted-foreground mt-6 text-body leading-relaxed">
-              Fiber is a floor to reach. The other three are ceilings to stay under, and they
-              are drawn differently because they are not the same kind of number &mdash;
-              nothing here throws a party for hitting your sodium.
-            </p>
-          </div>
+          <h2 className="text-section-title text-balance">
+            Two identical days can be very different dinners.
+          </h2>
+          <p className="text-muted-foreground mt-5 text-[17px] leading-relaxed font-medium">
+            2,100 calories is the same number from lentils or from crisps and a shake. So the
+            same estimate that prices your meal reads its fiber, sodium, saturated fat and
+            sugar &mdash; from the sentence you already typed.
+          </p>
+          <p className="text-muted-foreground mt-4 text-[17px] leading-relaxed font-medium">
+            Fiber is a floor to reach; the other three are ceilings to stay under, and they
+            are drawn differently because nothing here throws a party for hitting your sodium.
+          </p>
         </Reveal>
 
         <Reveal delay={100}>
-          <div className="bg-card border-border chunk h-full rounded-[var(--radius)] border-2 p-6 sm:p-7">
-            <p className="text-eyebrow text-muted-foreground">And when it does not know</p>
-            <p className="mt-4 text-[19px] font-extrabold tracking-[-0.01em] font-[family-name:var(--font-display)]">
-              &ldquo;Only 40% of today&rsquo;s calories carry these figures.&rdquo;
-            </p>
-            <p className="text-muted-foreground mt-4 text-body leading-relaxed">
-              Nobody can judge the sodium in a dish they were told nothing about, and a total
-              that quietly leaves out half your day is worse than no total at all &mdash; it
-              looks exactly like a fact. So an un-estimated item is recorded as unknown, never
-              as a zero, and the day says out loud how much of itself it actually measured.
-            </p>
-            <p className="text-muted-foreground mt-4 text-body leading-relaxed">
-              The same reason a guess is marked as a guess. A number you can trust is worth
-              more than a number that is always there.
-            </p>
+          {/* No eyebrow of its own: the panel brings its own heading, and two
+              labels stacked on one card is one label too many. */}
+          <div className="bg-card border-border chunk rounded-[var(--radius)] border-2 p-6 sm:p-7">
+            <DietQuality flush quality={A_TUESDAY} />
           </div>
         </Reveal>
       </div>
@@ -607,13 +592,13 @@ function WeeklyRead() {
             Monday morning, a short read on the week.
           </h2>
           <p className="text-muted-foreground mt-5 text-[17px] leading-relaxed font-medium">
-            Every number in it is computed in SQL. The model is handed those numbers and
-            writes the prose — because anything asked to both recall and narrate will get one
-            of them wrong, and it is always the recall.
+            Every number in it is computed in SQL; the model only writes the prose. Anything
+            asked to both recall and narrate gets one of them wrong, and it is always the
+            recall.
           </p>
           <p className="text-muted-foreground mt-4 text-[17px] leading-relaxed font-medium">
             It runs after the target has already moved, so it explains a change rather than
-            proposing one. An unexplained calorie target is one people ignore.
+            proposing one.
           </p>
         </Reveal>
 
@@ -622,11 +607,10 @@ function WeeklyRead() {
             <p className="text-footnote text-muted-foreground">11 – 17 August</p>
             <p className="text-body leading-relaxed">
               You averaged 2,180 calories against a target of 2,290, and protein held above
-              150g on six days of seven. Weight is down 0.4 kg over the fortnight — close to
-              the half-kilo a week you asked for, and steadier than the week before.
+              150g on six days of seven. Weight is down 0.4 kg over the fortnight.
             </p>
             <p className="text-body leading-relaxed">
-              Your target goes up today. You have been eating below the old number and losing
+              Your target goes up today: you have been eating below the old number and losing
               at the rate you wanted, which means the old number was too low.
             </p>
 
@@ -652,19 +636,19 @@ function WeeklyRead() {
 const DETAILS = [
   {
     title: 'A day ends at 4am.',
-    body: 'Your 1am snack counts toward the evening it belonged to, not the morning after. Move the hour to wherever your day actually ends.',
+    body: 'Your 1am snack counts toward the evening it belonged to. Move the hour to wherever your day actually ends.',
   },
   {
     title: 'Exercise is logged, never spent.',
-    body: 'A run shows up on your day and in your trends. It does not quietly enlarge your calorie budget on the way past.',
+    body: 'A run shows up on your day and in your trends. It does not quietly enlarge your calorie budget.',
   },
   {
     title: 'A guess is marked as a guess.',
-    body: 'A weighed portion and a restaurant estimate are not the same evidence, and the target maths weighs them differently.',
+    body: 'A weighed portion and a restaurant estimate are not the same evidence, and the maths weighs them differently.',
   },
   {
     title: 'Phone and desktop are different layouts.',
-    body: 'Not one scaled to fit. The day rides beside the conversation on a wide screen, and gets a tab of its own on a phone.',
+    body: 'Not one scaled to fit. The day rides beside the conversation on a wide screen, and gets its own tab on a phone.',
   },
 ];
 
@@ -712,9 +696,9 @@ function Privacy() {
             Your meals stay yours.
           </h2>
           <p className="mt-5 max-w-xl text-[17px] leading-relaxed font-medium text-white/85">
-            There is no third-party sign-in, no analytics, no advertising and nothing to
-            sell. Your meals are rows in a database that exists to answer one question —
-            what did you eat today — and nothing else.
+            No third-party sign-in, no analytics, no advertising, nothing to sell. Your meals
+            are rows in a database that exists to answer one question &mdash; what did you
+            eat today.
           </p>
         </div>
       </Reveal>
@@ -726,12 +710,12 @@ function Privacy() {
 
 function Closing({ start }: { start: Cta }) {
   return (
-    <Section className="text-center">
+    <Section glow className="text-center">
       <Reveal>
         <h2 className="text-section-title text-balance">Start with breakfast.</h2>
         <p className="text-muted-foreground mx-auto mt-5 max-w-md text-[17px] leading-relaxed font-medium">
-          It takes about a minute. The journal asks you a few things — your height, your
-          weight, what you are aiming at — and works the rest out from there.
+          About a minute to set up. It asks your height, your weight and what you are aiming
+          at, and works the rest out from there.
         </p>
         <Link href={start.href} className={pill('primary', 'mt-8 h-12 px-6 text-body')}>
           {start.label}

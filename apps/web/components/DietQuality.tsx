@@ -30,9 +30,16 @@ const ROWS = [
 
 export function DietQuality({
   quality,
+  flush,
   className,
 }: {
   quality: DayQuality;
+  /**
+   * Drop the card chrome and keep only the four tracks. For the places that are
+   * already inside a slab — the hero demo's day rail, the landing page's panel
+   * — where a second bordered box inside the first reads as a mistake.
+   */
+  flush?: boolean;
   className?: string;
 }) {
   // Nothing estimated means nothing to say. An empty panel of dashes would
@@ -50,7 +57,14 @@ export function DietQuality({
         )}
       </header>
 
-      <div className="bg-card border-border chunk grid grid-cols-2 gap-x-5 gap-y-4 rounded-[var(--radius)] border-2 px-4 py-4">
+      <div
+        className={cn(
+          'grid grid-cols-2 gap-x-5 gap-y-4',
+          flush
+            ? 'px-1.5'
+            : 'bg-card border-border chunk rounded-[var(--radius)] border-2 px-4 py-4',
+        )}
+      >
         {ROWS.map((row) => (
           <QualityTrack
             key={row.key}

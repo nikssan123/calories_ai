@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, Camera } from 'lucide-react';
-import type { ChatAction, Nutrition, Targets } from '@ct/shared';
+import type { ChatAction, DayQuality, Nutrition, Targets } from '@ct/shared';
 import { CalorieRing } from '@/components/CalorieRing';
 import { ChatActionCard } from '@/components/ChatCard';
+import { DietQuality } from '@/components/DietQuality';
 import { MacroBars } from '@/components/MacroBars';
 import { useReducedMotion } from '@/components/landing/Reveal';
 import { cn } from '@/lib/utils';
@@ -12,11 +13,22 @@ import { cn } from '@/lib/utils';
 /**
  * The hero's product shot, played rather than photographed.
  *
- * It is built out of the app's own <CalorieRing>, <ChatActionCard> and
- * <MacroBars> rather than a mock-up, so it cannot drift away from the thing it
- * is advertising — and it deliberately shows the second turn, not the first,
- * because "I logged a meal" is table stakes and "I changed my mind and it
- * corrected the entry it already had" is the product.
+ * It is built out of the app's own <CalorieRing>, <ChatActionCard>,
+ * <MacroBars> and <DietQuality> rather than a mock-up, so it cannot drift away
+ * from the thing it is advertising.
+ *
+ * The day it shows is already underway. That is not set dressing: every figure
+ * worth advertising is a figure about a day rather than about a meal, and none
+ * of them can be drawn from a standing start. A ring at zero is a hole, the
+ * quality tracks are four empty gutters, and the card's calorie bar — the day
+ * so far in quiet green, this meal bright on the end of it — degenerates into a
+ * single band with nothing behind it. So breakfast and a snack are already on
+ * the board before the visitor arrives, and the conversation on screen is the
+ * one that adds lunch to them.
+ *
+ * It also shows a correction rather than a first log, because "I logged a meal"
+ * is table stakes and "I changed my mind and it corrected the entry it already
+ * had" is the product.
  */
 
 const TARGETS: Targets = {
@@ -28,39 +40,20 @@ const TARGETS: Targets = {
   source: 'calculated',
 };
 
-const NOTHING: Nutrition = { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+/**
+ * The four quality targets that go with a 2,290 kcal day, worked out by the
+ * same arithmetic the API uses: 14g of fiber per 1000 kcal, a flat 2,300mg of
+ * sodium, and a tenth of the day's energy each for saturated fat and sugar.
+ */
+const QUALITY_TARGETS: DayQuality['targets'] = {
+  fiber_g: { value: 32, direction: 'floor' },
+  sodium_mg: { value: 2300, direction: 'ceiling' },
+  sat_fat_g: { value: 25, direction: 'ceiling' },
+  sugar_g: { value: 57, direction: 'ceiling' },
+};
 
 /** Stable ids: nothing here reaches the API, but the card's props are the real ones. */
 const ENTRY_ID = '00000000-0000-4000-8000-000000000001';
-
-function breakfast(nutrition: Nutrition, eggs: string): ChatAction {
-  return {
-    kind: 'food_logged',
-    entry_id: ENTRY_ID,
-    summary: 'Logged breakfast',
-    card: {
-      type: 'food',
-      entry_id: ENTRY_ID,
-      meal: 'breakfast',
-      description: 'Eggs, toast and cheese',
-      confidence: 'medium',
-      items: [
-        { name: 'Eggs', quantity: eggs },
-        { name: 'Toast', quantity: '2 slices' },
-        { name: 'Cheddar', quantity: '30 g' },
-      ],
-      ...nutrition,
-      // Breakfast, so the day starts empty and the card's bar is all this meal
-      // — which is the bit worth advertising: the correction moves the band.
-      day: {
-        local_date: TODAY,
-        kcal_before: 0,
-        kcal_after: nutrition.kcal,
-        target_kcal: TARGETS.kcal,
-      },
-    },
-  };
-}
 
 /**
  * The demo's day is always today, so its card never says "on 14 Mar". Built
@@ -73,50 +66,74 @@ const TODAY = (() => {
   return `${now.getFullYear()}-${month}-${String(now.getDate()).padStart(2, '0')}`;
 })();
 
-const FIRST = {
-  text: 'Two eggs, toast and some cheese',
-  reply: 'Logged as breakfast — I went with two medium eggs and about 30g of cheddar.',
-  nutrition: { kcal: 407, protein_g: 24, carbs_g: 31, fat_g: 21 } satisfies Nutrition,
+/** Breakfast and a snack: what the day already held before the turn on screen. */
+const EARLIER: Nutrition = { kcal: 502, protein_g: 25, carbs_g: 56, fat_g: 21 };
+
+/** The turn that is already on screen when the demo starts. */
+const LOGGED = {
+  text: 'Chicken salad with avocado, and a flat white',
+  reply: 'Logged as lunch — a palm-sized chicken breast, half an avocado and a small flat white.',
+  nutrition: { kcal: 550, protein_g: 45, carbs_g: 30, fat_g: 28 } satisfies Nutrition,
+  quality: { fiber_g: 14, sodium_mg: 1180, sat_fat_g: 12, sugar_g: 22 },
+  chicken: '100 g',
 };
 
-const SECOND = {
-  text: 'actually there were three eggs',
-  reply: 'No problem — third egg is on the same entry, and the day has moved with it.',
-  nutrition: { kcal: 479, protein_g: 30, carbs_g: 31, fat_g: 26 } satisfies Nutrition,
+/** And the one it types. */
+const CORRECTED = {
+  text: 'make that double chicken',
+  reply: 'Done — same entry, 200g of chicken now, and the day has moved with it.',
+  nutrition: { kcal: 715, protein_g: 76, carbs_g: 30, fat_g: 32 } satisfies Nutrition,
+  quality: { fiber_g: 14, sodium_mg: 1310, sat_fat_g: 13, sugar_g: 22 },
+  chicken: '200 g',
 };
+
+function lunch(turn: typeof LOGGED): ChatAction {
+  return {
+    kind: 'food_logged',
+    entry_id: ENTRY_ID,
+    summary: 'Logged lunch',
+    card: {
+      type: 'food',
+      entry_id: ENTRY_ID,
+      meal: 'lunch',
+      description: 'Chicken salad and a flat white',
+      confidence: 'medium',
+      items: [
+        { name: 'Chicken breast', quantity: turn.chicken },
+        { name: 'Avocado', quantity: 'half' },
+        { name: 'Flat white', quantity: 'small' },
+      ],
+      ...turn.nutrition,
+      day: {
+        local_date: TODAY,
+        kcal_before: EARLIER.kcal,
+        kcal_after: EARLIER.kcal + turn.nutrition.kcal,
+        target_kcal: TARGETS.kcal,
+      },
+    },
+  };
+}
 
 /** Roughly 57 words a minute — a person thinking, not a machine printing. */
 const TYPE_MS = 42;
 
-type Phase =
-  | 'idle'
-  | 'typing-1'
-  | 'sent-1'
-  | 'thinking-1'
-  | 'reply-1'
-  | 'typing-2'
-  | 'sent-2'
-  | 'thinking-2'
-  | 'reply-2';
+type Phase = 'resting' | 'typing' | 'sent' | 'thinking' | 'corrected';
 
 /** How long each beat holds before the next one starts. */
 const SCRIPT: { phase: Phase; ms: number }[] = [
-  { phase: 'idle', ms: 1100 },
-  { phase: 'typing-1', ms: FIRST.text.length * TYPE_MS + 520 },
-  { phase: 'sent-1', ms: 380 },
-  { phase: 'thinking-1', ms: 1600 },
-  { phase: 'reply-1', ms: 3400 },
-  { phase: 'typing-2', ms: SECOND.text.length * TYPE_MS + 520 },
-  { phase: 'sent-2', ms: 380 },
-  { phase: 'thinking-2', ms: 1500 },
+  // Long enough to read the day before anything moves on it.
+  { phase: 'resting', ms: 2600 },
+  { phase: 'typing', ms: CORRECTED.text.length * TYPE_MS + 520 },
+  { phase: 'sent', ms: 380 },
+  { phase: 'thinking', ms: 1500 },
   // The long one: the corrected numbers are the point, so leave them up.
-  { phase: 'reply-2', ms: 5600 },
+  { phase: 'corrected', ms: 5600 },
 ];
 
 const AT = Object.fromEntries(SCRIPT.map((beat, i) => [beat.phase, i])) as Record<Phase, number>;
 
 const CAPTION =
-  'A conversation with the journal: "Two eggs, toast and some cheese" is logged as breakfast at about 407 calories, drawn as a band on the day\'s calorie bar — then corrected to three eggs, and the same entry updates in place to 479.';
+  'A conversation with the journal. A day with breakfast and a snack already on it; "chicken salad with avocado, and a flat white" is logged as lunch at about 550 calories, drawn as a band on the end of the day\'s calorie bar — then corrected to double chicken, and the same entry updates in place to 715 while the ring, the macros and the fiber, sodium, saturated fat and sugar tracks move with it.';
 
 export function HeroDemo({ className }: { className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -147,19 +164,20 @@ export function HeroDemo({ className }: { className?: string }) {
   }, [beat, reduced, onScreen]);
 
   // Asked for less movement: show the finished conversation and leave it there.
-  const stage = reduced ? AT['reply-2'] : beat;
+  const stage = reduced ? AT.corrected : beat;
 
-  const typing =
-    stage === AT['typing-1'] ? FIRST.text : stage === AT['typing-2'] ? SECOND.text : '';
-  const draft = useTypewriter(typing);
+  const draft = useTypewriter(stage === AT.typing ? CORRECTED.text : '');
 
-  const sent1 = stage >= AT['sent-1'];
-  const replied1 = stage >= AT['reply-1'];
-  const sent2 = stage >= AT['sent-2'];
-  const replied2 = stage >= AT['reply-2'];
+  const sent = stage >= AT.sent;
+  const corrected = stage >= AT.corrected;
+  const turn = corrected ? CORRECTED : LOGGED;
 
-  const logged = replied2 ? SECOND.nutrition : replied1 ? FIRST.nutrition : null;
-  const action = replied2 ? breakfast(SECOND.nutrition, '3') : breakfast(FIRST.nutrition, '2');
+  const consumed: Nutrition = {
+    kcal: EARLIER.kcal + turn.nutrition.kcal,
+    protein_g: EARLIER.protein_g + turn.nutrition.protein_g,
+    carbs_g: EARLIER.carbs_g + turn.nutrition.carbs_g,
+    fat_g: EARLIER.fat_g + turn.nutrition.fat_g,
+  };
 
   return (
     <div
@@ -173,44 +191,51 @@ export function HeroDemo({ className }: { className?: string }) {
         className,
       )}
     >
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="flex min-w-0 flex-col">
+      {/* Fixed once there is a rail to measure against, because a shot that
+          grows by a bubble's height every few seconds shoves the whole page
+          under it up and down. The conversation is what flexes inside it. */}
+      <div className="grid lg:h-[28rem] lg:grid-cols-[minmax(0,1fr)_20rem]">
+        {/* `min-h-0`: a grid item's default `min-height: auto` would let this
+            column refuse to be shorter than the conversation inside it, and the
+            fixed height above would be a suggestion rather than a height. */}
+        <div className="flex min-w-0 flex-col lg:min-h-0">
           {/* The app's own responsive split: the day is a strip above the
               conversation where there is no room beside it, and the rail below. */}
-          <StatusStrip consumed={logged?.kcal ?? 0} className="lg:hidden" />
+          <StatusStrip consumed={consumed.kcal} className="lg:hidden" />
 
           <div
-            className="flex h-[19rem] flex-col justify-end gap-4 px-4 py-5 sm:h-[21rem] sm:px-5"
+            // `overflow-hidden` and `min-h-0` together are what let the column
+            // clip rather than grow: without them a flex child refuses to be
+            // shorter than its content, and the last reply of the loop shoves
+            // the composer out through the bottom of the shot.
+            className="flex min-h-[19rem] flex-1 flex-col justify-end gap-4 overflow-hidden px-4 py-5 sm:min-h-[21rem] sm:px-5 lg:min-h-0"
             style={{
               // Older turns leave at the top edge rather than being cut by it.
               maskImage: 'linear-gradient(to bottom, transparent, #000 16%)',
               WebkitMaskImage: 'linear-gradient(to bottom, transparent, #000 16%)',
             }}
           >
-            {sent1 && <UserBubble>{FIRST.text}</UserBubble>}
-            {stage === AT['thinking-1'] && <Thinking />}
-            {replied1 && (
+            <UserBubble>{LOGGED.text}</UserBubble>
+            <Assistant>
+              <p className="text-body leading-relaxed">{LOGGED.reply}</p>
+              <div
+                className="rounded-2xl"
+                // A one-shot ring the moment the entry is corrected. The card
+                // itself never remounts — that is the claim being made.
+                style={
+                  corrected && !reduced
+                    ? { animation: 'entry-touched 1500ms var(--ease-out)' }
+                    : undefined
+                }
+              >
+                <ChatActionCard action={lunch(turn)} today={TODAY} />
+              </div>
+            </Assistant>
+            {sent && <UserBubble>{CORRECTED.text}</UserBubble>}
+            {stage === AT.thinking && <Thinking />}
+            {corrected && (
               <Assistant>
-                <p className="text-body leading-relaxed">{FIRST.reply}</p>
-                <div
-                  className="rounded-2xl"
-                  // A one-shot ring the moment the entry is corrected. The card
-                  // itself never remounts — that is the claim being made.
-                  style={
-                    replied2 && !reduced
-                      ? { animation: 'entry-touched 1500ms var(--ease-out)' }
-                      : undefined
-                  }
-                >
-                  <ChatActionCard action={action} today={TODAY} />
-                </div>
-              </Assistant>
-            )}
-            {sent2 && <UserBubble>{SECOND.text}</UserBubble>}
-            {stage === AT['thinking-2'] && <Thinking />}
-            {replied2 && (
-              <Assistant>
-                <p className="text-body leading-relaxed">{SECOND.reply}</p>
+                <p className="text-body leading-relaxed">{CORRECTED.reply}</p>
               </Assistant>
             )}
           </div>
@@ -220,7 +245,7 @@ export function HeroDemo({ className }: { className?: string }) {
           </div>
         </div>
 
-        <DayRail consumed={logged} />
+        <DayRail consumed={consumed} quality={turn.quality} />
       </div>
     </div>
   );
@@ -338,35 +363,34 @@ function StatusStrip({ consumed, className }: { consumed: number; className?: st
   );
 }
 
-function DayRail({ consumed }: { consumed: Nutrition | null }) {
-  const totals = consumed ?? NOTHING;
-
+/**
+ * The day beside the conversation: ring, macros, quality — the Today screen's
+ * own three panels, in its own order.
+ *
+ * No list of the day's entries, which the rail carried while it had the room.
+ * The four quality tracks say more about the product than a third copy of
+ * "Breakfast · ~407" does, and the shot has to stay the height it was.
+ */
+function DayRail({ consumed, quality }: { consumed: Nutrition; quality: typeof LOGGED.quality }) {
   return (
-    <aside className="border-border hidden flex-col items-center border-l-2 px-5 py-7 lg:flex">
-      <CalorieRing consumed={totals.kcal} target={TARGETS.kcal} size={148} strokeWidth={12} />
-      <p className="tnum text-muted-foreground mt-3 text-sm">
-        <span className="text-figure text-foreground">{totals.kcal.toLocaleString()}</span> of{' '}
-        {TARGETS.kcal.toLocaleString()} kcal
-      </p>
-
-      <MacroBars consumed={totals} targets={TARGETS} className="mt-6 w-full" />
-
-      <div className="mt-7 w-full">
-        <h3 className="text-eyebrow text-muted-foreground mb-2">
-          Today
-        </h3>
-        {consumed ? (
-          <div className="flex items-baseline justify-between gap-3">
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm">Eggs, toast and cheese</span>
-              <span className="text-footnote text-muted-foreground">Breakfast</span>
-            </span>
-            <span className="tnum shrink-0 text-sm">~{consumed.kcal}</span>
-          </div>
-        ) : (
-          <p className="text-footnote text-muted-foreground">Nothing logged yet.</p>
-        )}
+    <aside className="border-border hidden flex-col border-l-2 px-5 py-6 lg:flex">
+      <div className="flex flex-col items-center">
+        <CalorieRing consumed={consumed.kcal} target={TARGETS.kcal} size={132} strokeWidth={11} />
+        <p className="tnum text-muted-foreground mt-3 text-sm">
+          <span className="text-figure text-foreground">{consumed.kcal.toLocaleString()}</span> of{' '}
+          {TARGETS.kcal.toLocaleString()} kcal
+        </p>
       </div>
+
+      <MacroBars consumed={consumed} targets={TARGETS} className="mt-6 w-full" />
+
+      {/* The other four figures the same estimate reads off the same sentence.
+          Flush rather than in their own card: they are already inside one. */}
+      <DietQuality
+        flush
+        className="mt-6 w-full"
+        quality={{ ...quality, coverage: 1, targets: QUALITY_TARGETS }}
+      />
     </aside>
   );
 }

@@ -97,6 +97,12 @@ export function CalorieRing({
   const dash = circumference * Math.min(1, Math.max(0, ratio));
   const over = consumed > target;
   const remaining = target - consumed;
+  // The figure is a fraction of the dial rather than a fixed size. A quarter of
+  // the diameter is exactly the 46px the default ring has always used, and it
+  // is the only version of that number which survives being asked for a small
+  // ring: at any size below the default a fixed 46px walks a four-digit total
+  // straight out through the track.
+  const figure = Math.round(size * 0.25);
 
   const shown = useCountUp(Math.round(Math.abs(remaining)), 900);
 
@@ -165,8 +171,8 @@ export function CalorieRing({
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span
           key={popKey}
-          className="text-figure animate-pop text-[2.875rem] leading-none"
-          style={{ color: over ? 'var(--foreground)' : undefined }}
+          className="text-figure animate-pop leading-none"
+          style={{ fontSize: `${figure}px`, color: over ? 'var(--foreground)' : undefined }}
         >
           {Math.round(shown).toLocaleString()}
         </span>
