@@ -141,3 +141,17 @@ export const dark: Palette = {
    */
   chunk: 'rgba(0, 0, 0, 0.88)',
 };
+
+/**
+ * A flat palette hex at an alpha.
+ *
+ * The web reaches for `color-mix(in oklch, …, transparent N%)` for this, and
+ * mixing with `transparent` is premultiplied — so the result is the same colour
+ * at a lower alpha rather than a hue shift, and it ports as arithmetic instead
+ * of as a precomputed value. Only for the flat hex entries above; the `rgba`
+ * ones are already carrying an alpha of their own.
+ */
+export function withAlpha(hex: string, alpha: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}

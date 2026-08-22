@@ -890,8 +890,15 @@ under reduced motion, since a loop has no end state worth arriving at. And
 **`entry-touched`**, the one-shot ring on a card the agent has just corrected, belongs with
 the cards.
 
-Then the four remaining tabs, in the order they are worth doing: **You**, which holds
-onboarding and the unit switch, then Progress, Exercise and Cook, which are all reads.
+**You — built.** Target card, the profile fields, goal, day boundary, diet rules, email
+preferences, sign-out and account deletion. Three controls had no RN equivalent to inherit:
+a `<select>` becomes a bottom sheet rather than a popover, because a menu the size of a
+fingertip floating beside its trigger is a pointer idiom; `<input type="date">` becomes the
+platform picker, in that same sheet on iOS and its own dialog on Android; and the switches
+are RN's own. **Appearance** is the one group left out — the app still follows the OS
+scheme only, so a three-state toggle would have nothing to toggle.
+
+Then the three remaining tabs: Progress, Exercise and Cook, which are all reads.
 
 Three things cut across every screen. There is no **toast**: the web leans on sonner
 throughout, and the ported screens report failures inline instead, which will not scale to

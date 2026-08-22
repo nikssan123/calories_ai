@@ -19,7 +19,7 @@ import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 import { Chunk } from '@/components/Chunk';
 import { Sparkline } from '@/components/Sparkline';
 import { useUnits } from '@/lib/units';
-import { duration, ease, font, type as t, useColors, type Palette } from '@/theme';
+import { duration, ease, font, type as t, useColors, withAlpha, type Palette } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 /**
@@ -457,12 +457,6 @@ function bandFill(colors: Palette, mine: boolean, over: boolean): string {
   // premultiplied, so it is the same colour at 32% and not a hue shift — which
   // is why this one can be spelled as an alpha rather than precomputed.
   return mine ? colour : withAlpha(colour, 0.32);
-}
-
-/** `#rrggbb` at an alpha. Every palette colour these reach is flat hex. */
-function withAlpha(hex: string, alpha: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
 /**

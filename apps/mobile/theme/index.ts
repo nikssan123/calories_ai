@@ -2,7 +2,7 @@ import { createContext, useContext } from 'react';
 import { dark, light, type Palette } from './colors';
 
 export type { Palette } from './colors';
-export { dark, light } from './colors';
+export { dark, light, withAlpha } from './colors';
 export { DISPLAY_LEADING, font, MONO, type } from './typography';
 export { CHUNK_DEPTH, duration, ease, RADIUS } from './motion';
 
