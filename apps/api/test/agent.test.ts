@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { executeAgent } from '../src/ai/agent.ts';
 import { scriptAgent } from './helpers/agent-mock.ts';
+import type { StreamEvent } from '../src/ai/providers/types.ts';
 
 /**
  * The single place SDK messages are turned into a result. Both the journal turn
@@ -129,5 +130,53 @@ describe('executeAgent', () => {
     }
     expect((await executeAgent(prompt(), OPTIONS)).text).toBe('ok');
     expect(drained).toBe(true);
+  });
+});
+
+/**
+ * Streaming on the subscription lane.
+ *
+ * This loop was already iterating the SDK's messages — that was always the easy
+ * half — so what needs pinning is not that events come out but that they come
+ * out in the shape the *other* lane produces. A client should not be able to
+ * tell which provider answered, and the tool name is where that would leak:
+ * this lane reaches its tools over MCP and the names arrive prefixed.
+ */
+describe('executeAgent, watched', () => {
+  it('emits the assistant text as the SDK delivers it', async () => {
+    scriptAgent({ turns: [{ text: 'Let me log that.' }], text: 'Logged — 140 kcal.' });
+
+    const events: StreamEvent[] = [];
+    const outcome = await executeAgent('log it', OPTIONS, null, (e) => events.push(e));
+
+    expect(events).toEqual([
+      { type: 'text', text: 'Let me log that.' },
+      { type: 'text', text: 'Logged — 140 kcal.' },
+    ]);
+    // Watching a run changes nothing about what it returns.
+    expect(outcome.text).toBe('Logged — 140 kcal.');
+  });
+
+  it('reports tool names unprefixed, exactly as the Messages API lane does', async () => {
+    scriptAgent({
+      turns: [{ text: 'One moment.', toolUse: 'mcp__nutrition__log_food' }],
+      text: 'Logged.',
+    });
+
+    const events: StreamEvent[] = [];
+    await executeAgent('log it', OPTIONS, null, (e) => events.push(e));
+
+    expect(events).toContainEqual({ type: 'tool', name: 'log_food' });
+    // The MCP prefix is an artefact of how this lane reaches its tools, and a
+    // client that had to know about it would be a client that knows which
+    // provider answered.
+    expect(JSON.stringify(events)).not.toContain('mcp__');
+  });
+
+  it('says nothing at all when nobody is watching', async () => {
+    scriptAgent({ turns: [{ text: 'Preamble.' }], text: 'Logged.' });
+    // No sink: the unwatched path must not construct events, and this is the
+    // only assertion that can catch it having been made mandatory.
+    expect((await executeAgent('log it', OPTIONS)).text).toBe('Logged.');
   });
 });

@@ -26,7 +26,15 @@ function planLimit(pick: (limits: PlanLimits) => number, timeWindow: string) {
   };
 }
 
-/** The journal. The one limit that is about runaway loops, not about money. */
+/**
+ * The journal. The one limit that is about runaway loops, not about money.
+ *
+ * Attached with `app.rateLimit()` and shared by `/chat` and `/chat/stream`
+ * rather than declared on each — see the note where it is used. This plugin
+ * counts per route configuration, so a `config.rateLimit` on both would be two
+ * ceilings of forty and one entitlement of eighty. Same trap as `RECIPE_BURST`
+ * below, arrived at from the other direction.
+ */
 export const CHAT_LIMIT = planLimit((l) => l.chatTurnsPerHour, '1 hour');
 
 /** Manually triggered reviews. The scheduled one does not come through a route. */

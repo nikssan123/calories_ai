@@ -597,7 +597,7 @@ throttle the dashboard polling the app does normally.
 
 | Route | Limit | Keyed by |
 |---|---|---|
-| `POST /chat` | 40 / hour | account |
+| `POST /chat` and `POST /chat/stream` | 40 / hour, shared | account |
 | `POST /reviews/run` | 5 / day | account |
 | `POST /auth/login` | 10 / 15 min | IP |
 | `POST /auth/signup` | 5 / hour | IP |
@@ -607,6 +607,11 @@ throttle the dashboard polling the app does normally.
 | `POST /auth/verify` | 20 / hour | IP |
 | `GET|POST /barcode/:code…` | 30 / minute | account |
 | `DELETE /account` | 5 / 15 min | account |
+
+The two chat routes share one bucket rather than having one each, which took saying out
+loud: @fastify/rate-limit counts per route configuration, so the obvious spelling would
+give an account forty turns on each and eighty in total — enforced exactly as written by
+both routes, and visible nowhere.
 
 The barcode ceiling is the odd one out: it guards neither money nor a password. A lookup
 is usually a read of a shared cache row, and when it is not it is one request to a free
@@ -904,6 +909,10 @@ Weekly reviews, adaptive targets and barcode scanning were all on this list and 
 built — see the sections above. Notifications are not: the review lands in the journal and waits to be read,
 because a nutrition app that pushes at you is a different and worse product.
 
-Streaming the chat turn is the obvious next thing. `POST /chat` awaits the whole agent
-loop and returns one JSON blob, but `ai/agent.ts` already iterates the SDK's messages —
-the hard half of an SSE endpoint is written.
+Streaming the chat turn was the obvious next thing and is now built. `POST /chat` is
+still there and still returns one JSON blob — it is what the native client and any
+script use — but the web journal talks to `POST /chat/stream`, which sends the reply as
+it is written. Both Claude lanes stream; a provider that cannot simply answers at the
+end, which is what every provider did before. See §Stage 2 of `SCALING.md` for why the
+events describe what the reader should see rather than what the model sent, and why the
+response head is written late.

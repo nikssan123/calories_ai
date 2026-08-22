@@ -32,14 +32,16 @@ Three consequences the rest of this document now depends on:
   volume, the `.agent-workspace` directory and the container memory cap all belong to
   the subscription lane and stay with it.
 - **Every future change has to work on both**, or say plainly which lane it is for.
-  Streaming and the token bucket are both in this category — see where they land below.
+  Streaming was in this category and went to both, at the seam; the token bucket is in it
+  and goes to one. See where each lands below.
 
 ## Status
 
 **Built:** Stage 0 in full, and all of Stage 1 — shared rate-limit counters and photos in
 a bucket, both optional and both off by default — plus the pieces of Stages 2 and 3 that
 are code rather than infrastructure: the pool ceiling, admission control on a turn, and
-the scheduler's re-entrancy guard.
+the scheduler's re-entrancy guard. Streaming landed on 2026-08-22 and is the only item so
+far that a user can see.
 
 **Deployed and verified**, 2026-08-22, at `7bfd1e6`. Redis was already carrying the
 limiter's counters; this deploy added the bucket. Migration `023` applied, the API
@@ -54,8 +56,8 @@ normalisation added the same day is the only reason this deploy worked rather th
 every photo on `day-so-far/day-so-far/…` — a fix written an hour before the mistake it
 prevents, which is the sort of luck worth turning into a note.
 
-**Left:** the deploy topology, streaming, and whatever the one unanswered question below
-turns out to imply. Each is marked in place, and the ordered list is at the end.
+**Left:** the deploy topology, and whatever the one unanswered question below turns out
+to imply. Each is marked in place, and the ordered list is at the end.
 
 ## The short version
 
@@ -337,17 +339,54 @@ cannot tell them apart.
   an honest "try again in a moment" than to leave someone watching a spinner for a
   minute. `maxRetries: 1`, and a `RateLimitError` becomes a sentence carrying the
   server's own `retry-after` rather than the SDK's string.
-- **Streaming — not built.** Not optional at this point. Twenty silent seconds reads as
-  broken; the same twenty seconds with text arriving reads as thinking. It also removes
-  any risk of HTTP timeouts on the longer photo turns. The README already notes this is
-  the obvious next thing.
+- **Streaming — built.** `AiProvider.runStream`, `POST /chat/stream`, and the journal
+  rendering the reply as it is written. Twenty silent seconds reads as broken; the same
+  twenty seconds with text arriving reads as thinking.
 
-  Unlike the token bucket, this one has to work on **both** lanes, and that decides
-  where it goes. Both can stream — the Agent SDK already yields assistant messages as
-  they arrive, and the Messages API streams natively — but they stream differently
-  enough that expressing it in either provider alone would strand the other on a
-  spinner. It belongs at the seam: a streaming variant of `AiProvider.run`, with the
-  route and the web client speaking one shape regardless of which lane answered.
+  It went where the plan said it should — at the seam, as a variant of `run` rather than
+  a replacement — and the shape that fell out is worth writing down, because four
+  decisions inside it were not obvious from up here.
+
+  **The events describe what the reader should see, not what the vendor sent.** The two
+  lanes stream at genuinely different granularities: the Messages API gives token
+  deltas, and the Agent SDK gives a finished assistant message at a time. Neither shape
+  may reach a client, or the client learns which provider answered — so the seam speaks
+  `text`, `tool` and `reset`, and both providers translate into it. `runStream` is
+  optional and falls back to `run`, which is what lets the OpenAI lane keep working
+  untouched: it answers in one piece at the end, exactly as everything did before.
+
+  **`tool` clears what has been shown, and that is the whole trick.** A model that says
+  "Let me log that" and then calls a tool has written a preamble, not an answer — what
+  gets persisted is its *final* message. Streaming the preamble and keeping it on screen
+  buys a moment of extra text and pays for it with a visible jump when the real reply
+  lands. Clearing on the tool call means the streamed text and the stored text are the
+  same sentence, which is the property the wire test pins.
+
+  **The response head is written late.** Once `200 text/event-stream` is on the wire the
+  status line is spent, and every later failure has to be an apology inside a success.
+  That is the wrong answer for the failure that matters most here: the turn lease
+  rejects a double-tapped send *before* the model is called, and that is a 429 with a
+  `retry-after`, not a 200. So the head is deferred until there is genuinely something
+  to send, and the route branches on whether it has started. Failures after that point
+  travel as an `error` frame, which the client re-throws as the 502 it would have been.
+
+  **A reader who leaves does not cancel the turn.** The tools have already written to
+  the log by then and the message is committed at the very end, so abandoning the run
+  would leave the meal logged and the reply lost — which is precisely the state
+  `reconcile` in the web client exists to recover from. Writes go quiet, the heartbeat
+  stops, and the turn finishes.
+
+  Two smaller things that only showed up in the doing. The Next.js proxy was reading
+  every response with `await response.text()`, which on an event stream waits for the
+  whole turn and then delivers it at once — the frames all arrive, the reply is correct,
+  and the feature is silently absent. It hands `response.body` straight through now. And
+  the journal's message rows had to be memoised: a streamed reply lands as tens of state
+  updates a second, and each one was re-rendering forty bubbles and their cards to add a
+  word to the last of them.
+
+  There is also a heartbeat, every fifteen seconds. The gap it covers is real and is the
+  longest one in a turn — a photo log on Opus can spend most of a minute inside a tool
+  call — and idle proxy timeouts start at thirty.
 
 Chat should not go behind a job queue. Someone is watching the screen, and a queue moves
 the wait rather than removing it. Admission control and a fast, honest rejection are the
@@ -452,10 +491,8 @@ headroom. Stage 2 is the seatbelt that stops a bad afternoon becoming an outage.
 
 1. **Answer the rate-limit question above.** It is one question, it costs a look at the
    Console, and it decides whether Stage 5 is an optimisation or a prerequisite.
-2. **Streaming**, at the provider seam so both lanes get it. Twenty silent seconds reads
-   as broken. This is the largest remaining piece and the only one a user sees directly.
-3. **Stage 5**, at the priority step 1 assigns it.
-4. **Direct uploads.** The client PUTs to a presigned URL and sends the API a photo id
+2. **Stage 5**, at the priority step 1 assigns it.
+3. **Direct uploads.** The client PUTs to a presigned URL and sends the API a photo id
    instead of several megabytes of base64. Worth doing, but an optimisation rather than
    a blocker now the bucket exists: it takes the +33% encoding and a 25 MB body off the
    API's path, and it means a slow phone uplink is no longer holding a request open.

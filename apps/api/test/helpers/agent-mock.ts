@@ -21,8 +21,20 @@ export interface ScriptedRun {
   subtype?: 'success' | 'error_max_turns' | 'error_during_execution';
   /** Throw instead of streaming, to exercise the failure paths. */
   throws?: string;
+  /**
+   * Throw *after* the scripted turns have been yielded. The failure that only
+   * a streamed route can distinguish: the head is already on the wire, so the
+   * error has to arrive as a frame rather than as a status code.
+   */
+  throwsLate?: string;
   /** Emit assistant text blocks and no result, as a truncated run would. */
   chunksOnly?: string[];
+  /**
+   * Assistant messages before the final one, as the SDK delivers them: a
+   * preamble, a tool call, then the answer. Only the streaming path can see
+   * these, which is the point of being able to script them.
+   */
+  turns?: { text?: string; toolUse?: string }[];
   /** Runs before the result is emitted; receives the options the SDK was given. */
   act?: (options: any) => Promise<void> | void;
 }
@@ -92,6 +104,17 @@ export async function* runScripted(args: any): AsyncGenerator<any> {
     };
   }
   if (run.chunksOnly) return;
+
+  for (const turn of run.turns ?? []) {
+    const content: unknown[] = [];
+    if (turn.text) content.push({ type: 'text', text: turn.text });
+    if (turn.toolUse) {
+      content.push({ type: 'tool_use', id: 'toolu_1', name: turn.toolUse, input: {} });
+    }
+    yield { type: 'assistant', session_id: sessionId, message: { content } };
+  }
+
+  if (run.throwsLate) throw new Error(run.throwsLate);
 
   yield {
     type: 'assistant',

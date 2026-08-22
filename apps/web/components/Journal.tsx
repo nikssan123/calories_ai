@@ -1,8 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import type { ChatAction, ChatMessage, DaySummary, OnboardingState } from '@ct/shared';
+import type {
+  ChatAction,
+  ChatMessage,
+  ChatStreamEvent,
+  DaySummary,
+  OnboardingState,
+} from '@ct/shared';
 import { api } from '@/lib/api';
 import { ChatActionCard } from '@/components/ChatCard';
 import { Composer, type ComposerPayload } from '@/components/Composer';
@@ -20,6 +26,12 @@ interface Bubble {
   pending?: boolean;
   failed?: boolean;
   actions?: ChatAction[];
+  /**
+   * The tool the model is running right now, while this row is still pending.
+   * Set from the stream and cleared when text starts arriving again, so the
+   * wait says "logging food" rather than nothing.
+   */
+  tool?: string;
 }
 
 /** Near enough to the end that a new message should still carry the view. */
@@ -88,6 +100,15 @@ export function Journal() {
     };
   }, []);
 
+  /**
+   * Re-read the day. Stable, because it is a prop on every memoised row — an
+   * inline arrow here would hand each of them a new function on every render
+   * and quietly undo the memoisation while looking like it worked.
+   */
+  const refreshDay = useCallback(() => {
+    void api.day().then(setDay).catch(() => {});
+  }, []);
+
   const stickToBottom = useCallback(() => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
@@ -151,19 +172,28 @@ export function Journal() {
     setBusy(true);
 
     try {
-      const result = await api.chat({
-        text: payload.text,
-        photo_base64: payload.photoBase64,
-        photo_media_type: payload.photoMediaType,
-      });
+      const replyKey = `${localKey}-reply`;
+      const result = await api.chatStream(
+        {
+          text: payload.text,
+          photo_base64: payload.photoBase64,
+          photo_media_type: payload.photoMediaType,
+        },
+        // The stream is a preview of the reply, never the record of it: `result`
+        // below is what actually lands in the conversation. So this only ever
+        // touches the one pending row, and nothing here has to be undone.
+        (event) =>
+          setBubbles((prev) => prev.map((b) => (b.key === replyKey ? applyEvent(b, event) : b))),
+      );
       setBubbles((prev) =>
         prev.map((b) =>
-          b.key === `${localKey}-reply`
+          b.key === replyKey
             ? {
                 ...b,
                 key: result.message.id,
                 content: result.message.content,
                 pending: false,
+                tool: undefined,
                 actions: result.actions,
               }
             : b,
@@ -194,7 +224,7 @@ export function Journal() {
         setBubbles((prev) =>
           prev.map((b) =>
             b.key === `${localKey}-reply`
-              ? { ...b, content: message, pending: false, failed: true }
+              ? { ...b, content: message, pending: false, tool: undefined, failed: true }
               : b,
           ),
         );
@@ -270,7 +300,7 @@ export function Journal() {
               today={day?.local_date}
               // The workout card logs without going through `send`, so the day
               // beside the conversation has to be told to re-read itself.
-              onLogged={() => void api.day().then(setDay).catch(() => {})}
+              onLogged={refreshDay}
             />
           ))}
           </div>
@@ -285,7 +315,7 @@ export function Journal() {
               // A scanned packet is logged by the scanner itself, without a
               // turn — so, like the workout card above, the day beside the
               // conversation has to be told to re-read itself.
-              onLogged={() => void api.day().then(setDay).catch(() => {})}
+              onLogged={refreshDay}
               disabled={busy}
             />
           </div>
@@ -296,6 +326,71 @@ export function Journal() {
       <DayRail day={day} />
     </div>
   );
+}
+
+/**
+ * One streamed frame folded into the row it belongs to.
+ *
+ * The clearing on `tool` is the part that is easy to get wrong by leaving it
+ * out. Text before a tool call is a preamble — "Let me log that" — and is not
+ * part of the reply the server persists, which is the model's final message. So
+ * keeping it on screen buys a moment of extra text and pays for it with a
+ * visible jump when the real answer replaces it. Clearing means what was
+ * streamed and what was stored are the same sentence.
+ */
+function applyEvent(bubble: Bubble, event: ChatStreamEvent): Bubble {
+  switch (event.type) {
+    case 'text':
+      return { ...bubble, content: bubble.content + event.text, tool: undefined };
+    case 'tool':
+      return { ...bubble, content: '', tool: event.name };
+    case 'reset':
+      return { ...bubble, content: '', tool: undefined };
+    default:
+      // `done` and `error` never reach here — the client resolves or throws on
+      // them — but a frame from a newer server should be ignored, not rendered.
+      return bubble;
+  }
+}
+
+/**
+ * What to call the pause while a tool runs.
+ *
+ * Keyed on the verb rather than on all thirty-odd tool names, because the names
+ * are already `verb_noun` and a table of every one of them would be a second
+ * place to update whenever a tool is added — which is exactly the kind of list
+ * that silently goes stale. An unknown verb falls through to the plain spinner,
+ * which is no worse than what was there before any of this.
+ */
+const TOOL_VERBS: Record<string, string> = {
+  log: 'Logging',
+  update: 'Updating',
+  delete: 'Removing',
+  get: 'Checking',
+  search: 'Looking back',
+  find: 'Finding',
+  set: 'Saving',
+  show: 'Drawing',
+  suggest: 'Thinking up',
+  import: 'Importing',
+  adapt: 'Adapting',
+  save: 'Saving',
+  plan: 'Planning',
+  cook: 'Cooking',
+  repeat: 'Repeating',
+  remember: 'Remembering',
+  forget: 'Forgetting',
+  lookup: 'Looking up',
+  run: 'Running',
+  define: 'Defining',
+  ask: 'Asking about',
+};
+
+function toolLabel(name: string): string | null {
+  const [verb = '', ...rest] = name.split('_');
+  const gerund = TOOL_VERBS[verb];
+  if (!gerund) return null;
+  return rest.length > 0 ? `${gerund} ${rest.join(' ')}` : gerund;
 }
 
 /**
@@ -412,7 +507,16 @@ function StatusBar({
   );
 }
 
-function Bubble({
+/**
+ * Memoised, which matters now rather than before.
+ *
+ * A streamed reply lands as tens of state updates a second, and every one of
+ * them re-rendered the whole conversation — forty bubbles and their cards — to
+ * add a word to the last row. `bubble` is a fresh object only for the row that
+ * changed, so with `onLogged` held stable by the caller this narrows each
+ * delta to the one row it actually touches.
+ */
+const Bubble = memo(function Bubble({
   bubble,
   today,
   onLogged,
@@ -443,21 +547,39 @@ function Bubble({
     );
   }
 
+  /*
+   * The dots are for silence, not for waiting.
+   *
+   * A turn used to be twenty seconds of them; now they cover only the gaps the
+   * stream cannot fill — before the first word, and while a tool is running,
+   * which is where the label comes from. Once text is arriving it speaks for
+   * itself, and there is deliberately nothing decorating it: text that is
+   * visibly growing already reads as live, and a pulse or a caret on top of
+   * that is an animation competing with the thing it is animating.
+   */
+  const label = bubble.tool ? toolLabel(bubble.tool) : null;
+  const waiting = bubble.pending && !bubble.content;
+
   return (
     <div className="max-w-[92%] space-y-2.5">
-      {bubble.pending ? (
-        <div className="flex gap-2 py-2" aria-label="Thinking">
-          {[
-            'var(--protein)',
-            'var(--carbs)',
-            'var(--fat)',
-          ].map((color, i) => (
-            <span
-              key={color}
-              className="size-2.5 animate-bounce rounded-full"
-              style={{ background: color, animationDelay: `${i * 140}ms`, animationDuration: '1s' }}
-            />
-          ))}
+      {waiting ? (
+        <div className="flex items-center gap-2 py-2" aria-label={label ?? 'Thinking'}>
+          <div className="flex gap-2">
+            {[
+              'var(--protein)',
+              'var(--carbs)',
+              'var(--fat)',
+            ].map((color, i) => (
+              <span
+                key={color}
+                className="size-2.5 animate-bounce rounded-full"
+                style={{ background: color, animationDelay: `${i * 140}ms`, animationDuration: '1s' }}
+              />
+            ))}
+          </div>
+          {label && (
+            <span className="text-muted-foreground text-footnote font-semibold">{label}…</span>
+          )}
         </div>
       ) : (
         <p
@@ -489,7 +611,7 @@ function Bubble({
       )}
     </div>
   );
-}
+});
 
 function ChatSkeleton() {
   return (

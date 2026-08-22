@@ -4,7 +4,15 @@ import { createAnthropicApiProvider } from './messages.ts';
 import { createOpenAiProvider } from './openai.ts';
 import type { AiProvider } from './types.ts';
 
-export type { AgentMessage, AgentRequest, AiProvider, Outcome, ToolDefinition } from './types.ts';
+export type {
+  AgentMessage,
+  AgentRequest,
+  AiProvider,
+  Outcome,
+  StreamEvent,
+  StreamSink,
+  ToolDefinition,
+} from './types.ts';
 
 /**
  * `anthropic` and `anthropic-api` are the same models and the same tools,

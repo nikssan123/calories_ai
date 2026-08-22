@@ -8,6 +8,7 @@ import {
   type AgentRequest,
   type AiProvider,
   type Outcome,
+  type StreamSink,
   type TokenUsage,
   type ToolDefinition,
 } from './types.ts';
@@ -112,121 +113,189 @@ export function createAnthropicApiProvider(): AiProvider {
       return process.env.ANTHROPIC_API_KEY ? null : ANTHROPIC_API_AUTH_HELP;
     },
 
-    async run(request: AgentRequest): Promise<Outcome> {
-      const usage: TokenUsage = { ...EMPTY_USAGE };
-      const startedAt = Date.now();
-      const choice = MODELS[request.kind];
+    run(request: AgentRequest): Promise<Outcome> {
+      return execute(request);
+    },
 
-      const outcome: Outcome = {
-        text: '',
-        model: choice.model,
-        sessionId: null,
-        numTurns: 0,
-        costUsd: 0,
-        costSource: 'unknown',
-        usage,
-        // Plain `ephemeral` below, so every cache write on this path is a
-        // five-minute one. See `pricing.ts`.
-        cacheWriteMultiplier: CACHE_WRITE_MULTIPLIER_5M,
-      };
-
-      /**
-       * A turn is several round trips, and each one bills. Settling up in one
-       * place — including on the error paths — is what stops a tool loop that
-       * failed halfway through from being recorded as free.
-       */
-      const settle = (): Outcome => {
-        outcome.durationMs = Date.now() - startedAt;
-        usage.byModel = { [choice.model]: { ...usage, byModel: undefined } };
-        const rate = anthropicRate(choice.model);
-        if (rate) {
-          outcome.costUsd = priceUsage(usage, rate, CACHE_WRITE_MULTIPLIER_5M);
-          outcome.costSource = 'estimated';
-        }
-        return outcome;
-      };
-
-      const byName = new Map(request.tools.map((t) => [t.name, t]));
-      const messages: Anthropic.MessageParam[] = [
-        ...replayable(request.history),
-        { role: 'user', content: userContent(request) },
-      ];
-
-      try {
-        const client = clientFor(process.env.ANTHROPIC_API_KEY ?? '');
-
-        for (let turn = 0; turn < request.maxTurns; turn++) {
-          outcome.numTurns = turn + 1;
-
-          const response = await client.messages.create({
-            model: choice.model,
-            max_tokens: MAX_OUTPUT_TOKENS,
-            system: systemBlocks(request),
-            messages,
-            ...(request.tools.length > 0 ? { tools: request.tools.map(toolSpec) } : {}),
-            // Spread rather than assigned, for the reason the Agent SDK path
-            // spreads it: Haiku 4.5 rejects `effort` with a 400, `text_log`
-            // runs on Haiku, and an explicit `undefined` is not the same as an
-            // absent key. Nothing sets `thinking` — Opus 5 thinks adaptively by
-            // default, and Haiku does not think unless asked, which is what the
-            // routing table in `client.ts` wants from each of them.
-            ...(choice.effort ? { output_config: { effort: choice.effort } } : {}),
-          });
-
-          accumulate(usage, response.usage);
-
-          if (response.stop_reason !== 'tool_use') {
-            outcome.text = textOf(response.content);
-            // A refusal arrives as a 200 with no usable content, so it has to
-            // be read off `stop_reason` rather than caught. Reported as an
-            // error because that is what it is: the turn produced nothing.
-            if (response.stop_reason === 'refusal') {
-              const category = response.stop_details?.category ?? 'unspecified';
-              outcome.error = `The model declined to answer (${category}).`;
-            } else if (response.stop_reason === 'max_tokens') {
-              outcome.error = `The reply was cut off at the ${MAX_OUTPUT_TOKENS}-token ceiling.`;
-            }
-            return settle();
-          }
-
-          // The assistant's tool-call turn goes back verbatim — content blocks,
-          // not extracted text — or the tool results below answer calls the
-          // conversation no longer contains.
-          messages.push({ role: 'assistant', content: response.content });
-
-          const results: Anthropic.ToolResultBlockParam[] = [];
-          for (const block of response.content) {
-            if (block.type === 'tool_use') results.push(await runTool(byName, block));
-          }
-
-          /*
-           * Every result in one user message.
-           *
-           * Claude may emit several `tool_use` blocks in a single assistant
-           * message, and splitting the answers across several user messages
-           * raises no error — it quietly teaches the model to stop calling
-           * tools in parallel, which surfaces only as a latency regression
-           * weeks later.
-           *
-           * The calls above are run one at a time rather than concurrently,
-           * which is a separate decision: the handlers write to the log and
-           * push cards onto `tc.actions`, so serial execution keeps the cards
-           * in the order the model asked for them and keeps two writes to the
-           * same day from reading each other's totals half-applied.
-           */
-          messages.push({ role: 'user', content: results });
-        }
-
-        // Out of round trips with tools still in flight. The writes already
-        // happened, so this is a truncated reply rather than a failed turn.
-        outcome.error = `The agent stopped early (max turns: ${request.maxTurns}).`;
-        return settle();
-      } catch (error) {
-        outcome.error = describe(error);
-        return settle();
-      }
+    runStream(request: AgentRequest, _state: string | null, emit: StreamSink): Promise<Outcome> {
+      return execute(request, emit);
     },
   };
+}
+
+/**
+ * One turn, with or without somebody watching it.
+ *
+ * `run` and `runStream` are the same function because they have to be: the tool
+ * loop, the cache breakpoint, the token accounting and the price are all things
+ * that would rot the moment there were two copies, and the difference between
+ * the two entry points is exactly one call — `messages.stream` in place of
+ * `messages.create`. Everything downstream reads a finished `Message` either
+ * way, so nothing else in here knows which one it got.
+ */
+async function execute(request: AgentRequest, emit?: StreamSink): Promise<Outcome> {
+  const usage: TokenUsage = { ...EMPTY_USAGE };
+  const startedAt = Date.now();
+  const choice = MODELS[request.kind];
+
+  const outcome: Outcome = {
+    text: '',
+    model: choice.model,
+    sessionId: null,
+    numTurns: 0,
+    costUsd: 0,
+    costSource: 'unknown',
+    usage,
+    // Plain `ephemeral` below, so every cache write on this path is a
+    // five-minute one. See `pricing.ts`.
+    cacheWriteMultiplier: CACHE_WRITE_MULTIPLIER_5M,
+  };
+
+  /**
+   * A turn is several round trips, and each one bills. Settling up in one
+   * place — including on the error paths — is what stops a tool loop that
+   * failed halfway through from being recorded as free.
+   */
+  const settle = (): Outcome => {
+    outcome.durationMs = Date.now() - startedAt;
+    usage.byModel = { [choice.model]: { ...usage, byModel: undefined } };
+    const rate = anthropicRate(choice.model);
+    if (rate) {
+      outcome.costUsd = priceUsage(usage, rate, CACHE_WRITE_MULTIPLIER_5M);
+      outcome.costSource = 'estimated';
+    }
+    return outcome;
+  };
+
+  const byName = new Map(request.tools.map((t) => [t.name, t]));
+  const messages: Anthropic.MessageParam[] = [
+    ...replayable(request.history),
+    { role: 'user', content: userContent(request) },
+  ];
+
+  try {
+    const client = clientFor(process.env.ANTHROPIC_API_KEY ?? '');
+
+    for (let turn = 0; turn < request.maxTurns; turn++) {
+      outcome.numTurns = turn + 1;
+
+      const params: Anthropic.MessageCreateParamsNonStreaming = {
+        model: choice.model,
+        max_tokens: MAX_OUTPUT_TOKENS,
+        system: systemBlocks(request),
+        messages,
+        ...(request.tools.length > 0 ? { tools: request.tools.map(toolSpec) } : {}),
+        // Spread rather than assigned, for the reason the Agent SDK path
+        // spreads it: Haiku 4.5 rejects `effort` with a 400, `text_log`
+        // runs on Haiku, and an explicit `undefined` is not the same as an
+        // absent key. Nothing sets `thinking` — Opus 5 thinks adaptively by
+        // default, and Haiku does not think unless asked, which is what the
+        // routing table in `client.ts` wants from each of them.
+        ...(choice.effort ? { output_config: { effort: choice.effort } } : {}),
+      };
+
+      const response = emit
+        ? await watched(client, params, emit)
+        : await client.messages.create(params);
+
+      accumulate(usage, response.usage);
+
+      if (response.stop_reason !== 'tool_use') {
+        outcome.text = textOf(response.content);
+        // A refusal arrives as a 200 with no usable content, so it has to
+        // be read off `stop_reason` rather than caught. Reported as an
+        // error because that is what it is: the turn produced nothing.
+        if (response.stop_reason === 'refusal') {
+          const category = response.stop_details?.category ?? 'unspecified';
+          outcome.error = `The model declined to answer (${category}).`;
+        } else if (response.stop_reason === 'max_tokens') {
+          outcome.error = `The reply was cut off at the ${MAX_OUTPUT_TOKENS}-token ceiling.`;
+        }
+        return settle();
+      }
+
+      // The assistant's tool-call turn goes back verbatim — content blocks,
+      // not extracted text — or the tool results below answer calls the
+      // conversation no longer contains.
+      messages.push({ role: 'assistant', content: response.content });
+
+      const results: Anthropic.ToolResultBlockParam[] = [];
+      for (const block of response.content) {
+        if (block.type === 'tool_use') results.push(await runTool(byName, block));
+      }
+
+      /*
+       * Every result in one user message.
+       *
+       * Claude may emit several `tool_use` blocks in a single assistant
+       * message, and splitting the answers across several user messages
+       * raises no error — it quietly teaches the model to stop calling
+       * tools in parallel, which surfaces only as a latency regression
+       * weeks later.
+       *
+       * The calls above are run one at a time rather than concurrently,
+       * which is a separate decision: the handlers write to the log and
+       * push cards onto `tc.actions`, so serial execution keeps the cards
+       * in the order the model asked for them and keeps two writes to the
+       * same day from reading each other's totals half-applied.
+       */
+      messages.push({ role: 'user', content: results });
+    }
+
+    // Out of round trips with tools still in flight. The writes already
+    // happened, so this is a truncated reply rather than a failed turn.
+    outcome.error = `The agent stopped early (max turns: ${request.maxTurns}).`;
+    return settle();
+  } catch (error) {
+    outcome.error = describe(error);
+    return settle();
+  }
+}
+
+/**
+ * The same round trip, narrated.
+ *
+ * `messages.stream` is the SDK's own accumulator: it reassembles the deltas
+ * into the identical `Message` that `messages.create` would have returned, so
+ * the loop above is unchanged and nothing downstream — the tool dispatch, the
+ * token accounting, the price — learns that this turn was watched. What is
+ * gained is only the middle: the text as it is written, instead of after it is.
+ *
+ * Two kinds of event are forwarded, and the second is the less obvious one.
+ *
+ * `text` deltas are the point. `tool` fires on `content_block_start` rather
+ * than when the block finishes, which is the whole difference between useful
+ * and decorative: the arguments to `log_food` stream in over a second or two,
+ * and the reader wants to know something is happening at the start of that,
+ * not at the end.
+ *
+ * Nothing is forwarded from a `thinking` block. Reasoning is not the reply,
+ * `MODELS` only asks for it on the slow kinds, and showing a reader the model's
+ * working and then replacing it with two sentences is worse than the spinner
+ * this exists to remove.
+ */
+async function watched(
+  client: Anthropic,
+  params: Anthropic.MessageCreateParamsNonStreaming,
+  emit: StreamSink,
+): Promise<Anthropic.Message> {
+  const stream = client.messages.stream(params);
+
+  stream.on('text', (delta) => emit({ type: 'text', text: delta }));
+  stream.on('streamEvent', (event) => {
+    if (event.type === 'content_block_start' && event.content_block.type === 'tool_use') {
+      emit({ type: 'tool', name: event.content_block.name });
+    }
+  });
+
+  /*
+   * `finalMessage()` is what rejects on a failed stream, and it rejects with
+   * the same error classes `create` throws — `RateLimitError` included — so
+   * `describe` upstream keeps working unchanged. The listener-based `error`
+   * event is deliberately not used: it would need its own path to the caller
+   * and would race this one.
+   */
+  return stream.finalMessage();
 }
 
 /**

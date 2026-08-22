@@ -113,7 +113,9 @@ export const MAX_TURNS = 12;
  * or seven dinners and their shop, both comfortably under 6k) and well below
  * every model's cap — Haiku 4.5 tops out at 64k and the rest at 128k. It also
  * stays under the ceiling where the SDK insists on streaming to avoid an HTTP
- * timeout, which matters until streaming lands.
+ * timeout — which still matters, because streaming is a property of the *turn*
+ * and the unwatched paths are the long ones: a weekly review, a week of dinners.
+ * The journal turn is the one that streams.
  *
  * Raising it costs nothing until it is actually reached: `max_tokens` is a
  * ceiling, not a reservation, and is neither billed nor thought about unless

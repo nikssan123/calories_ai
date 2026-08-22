@@ -12,6 +12,7 @@ import type {
   CostReport,
   ChatRequest,
   ChatResponse,
+  ChatStreamEvent,
   Credentials,
   DaySummary,
   ExerciseEntry,
@@ -99,7 +100,11 @@ export function createApiClient({
   const root = baseUrl.replace(/\/$/, '');
   const currentToken = () => (typeof token === 'function' ? token() : token);
 
-  async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  /**
+   * The credentials and content type every call carries, built once so the
+   * streaming path below cannot drift from the ordinary one.
+   */
+  function headersFor(init: RequestInit): Headers {
     const headers = new Headers(init.headers);
     // Only claim a JSON body when one is actually being sent. A bodyless POST
     // or DELETE labelled `application/json` is rejected by the API before it
@@ -111,10 +116,13 @@ export function createApiClient({
     // Sent on every request rather than only on the two that answer with a
     // token, so the server never has to care which endpoint is being called.
     if (sessionTransport === 'bearer') headers.set(SESSION_TRANSPORT_HEADER, 'bearer');
+    return headers;
+  }
 
+  async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const res = await doFetch(`${root}${path}`, {
       ...init,
-      headers,
+      headers: headersFor(init),
       // Harmless where there is no cookie jar, and required where there is: the
       // browser's session is an httpOnly cookie it will not send otherwise.
       credentials: 'include',
@@ -197,6 +205,60 @@ export function createApiClient({
     /** The whole product loop lives behind this one call. */
     chat: (payload: ChatRequest) =>
       request<ChatResponse>('/chat', { method: 'POST', body: JSON.stringify(payload) }),
+
+    /**
+     * The same turn, narrated. Resolves with exactly what `chat` would have
+     * returned; `onEvent` sees the reply being written on the way there.
+     *
+     * The resolved `ChatResponse` is the authority and the streamed text is a
+     * preview of it — a caller that renders the final message on resolve is
+     * correct even if it ignores every event. That is the property worth
+     * keeping: `onEvent` is an improvement to the wait, never a source of
+     * truth, so nothing downstream has to reason about a half-written reply.
+     *
+     * A failure raised after the stream opened arrives as an `error` frame
+     * rather than a status code — the head is long gone by then — so it is
+     * re-thrown here as an `ApiError`. 502 because that is what the same
+     * failure would have been on `/chat`, and a caller telling the two paths
+     * apart by the shape of their errors would be a caller with a bug in it.
+     */
+    chatStream: async (
+      payload: ChatRequest,
+      onEvent: (event: ChatStreamEvent) => void,
+    ): Promise<ChatResponse> => {
+      const init: RequestInit = { method: 'POST', body: JSON.stringify(payload) };
+      const res = await doFetch(`${root}/chat/stream`, {
+        ...init,
+        headers: headersFor(init),
+        credentials: 'include',
+      });
+
+      // Every pre-flight rejection — a bad body, no provider configured, a turn
+      // already in flight — still arrives as an ordinary JSON error, because
+      // the API defers the stream's head precisely so it can send these.
+      if (!res.ok || !res.body) {
+        const text = await res.text();
+        const body = text ? safeJson(text) : undefined;
+        throw new ApiError(errorMessage(body, res.status), res.status, body);
+      }
+
+      let response: ChatResponse | null = null;
+      let failure: string | null = null;
+
+      for await (const event of readEventStream(res.body)) {
+        if (event.type === 'done') response = event.response;
+        else if (event.type === 'error') failure = event.error;
+        else onEvent(event);
+      }
+
+      if (failure) throw new ApiError(failure, 502);
+      // A stream that ended without either terminal frame is a connection that
+      // died mid-turn. Said plainly rather than resolved with nothing: the turn
+      // may well have landed, and the caller's reconciliation is the right
+      // thing to run next.
+      if (!response) throw new ApiError('The connection dropped before the reply arrived.', 502);
+      return response;
+    },
 
     history: (limit = 50) => request<{ messages: ChatMessage[] }>(`/chat/history?limit=${limit}`),
 
@@ -577,5 +639,58 @@ function safeJson(text: string): unknown {
     return JSON.parse(text);
   } catch {
     return { error: text };
+  }
+}
+
+/**
+ * The SSE frames on a response body, one parsed event at a time.
+ *
+ * Hand-rolled because `EventSource` cannot do this: it is GET-only, and a turn
+ * is a POST carrying up to twenty-five megabytes of photo. What is left is
+ * small — the protocol in use here is one `data:` line per frame, terminated by
+ * a blank line — but two details are the ones people get wrong.
+ *
+ * A chunk boundary falls wherever TCP decides, not where a frame ends, so the
+ * tail of a partial frame has to survive until the next read; a parser that
+ * treats each chunk as a whole message works perfectly in development and
+ * corrupts long replies in production. And `: keep-alive` comments have to be
+ * skipped rather than parsed — they are how the stream survives an idle proxy.
+ */
+async function* readEventStream(body: ReadableStream<Uint8Array>): AsyncGenerator<ChatStreamEvent> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      // `stream: true`, so a multi-byte character split across two chunks is
+      // held rather than turned into a replacement character.
+      buffer += decoder.decode(value, { stream: true });
+
+      let split = buffer.indexOf('\n\n');
+      for (; split !== -1; split = buffer.indexOf('\n\n')) {
+        const frame = buffer.slice(0, split);
+        buffer = buffer.slice(split + 2);
+        const event = parseFrame(frame);
+        if (event) yield event;
+      }
+    }
+  } finally {
+    // Releases the lock whichever way this generator was left — including a
+    // caller that stopped consuming it early.
+    reader.cancel().catch(() => {});
+  }
+}
+
+/** One frame to an event, or null for anything that is not one — comments included. */
+function parseFrame(frame: string): ChatStreamEvent | null {
+  const line = frame.split('\n').find((l) => l.startsWith('data:'));
+  if (!line) return null;
+  try {
+    return JSON.parse(line.slice('data:'.length)) as ChatStreamEvent;
+  } catch {
+    return null;
   }
 }

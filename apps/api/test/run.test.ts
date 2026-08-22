@@ -6,6 +6,7 @@ import { getUser } from '../src/services/user.ts';
 import { saveReview } from '../src/services/reviews.ts';
 import { agentCalls, scriptAgent, systemPromptOf } from './helpers/agent-mock.ts';
 import { MAX_SESSION_MESSAGES } from '../src/ai/client.ts';
+import type { StreamEvent } from '../src/ai/providers/types.ts';
 import { addMeal, addWeight, createUser, setUserTargets, type TestUser } from './helpers/factories.ts';
 
 /**
@@ -225,6 +226,36 @@ describe('runTurn', () => {
       [user.id],
     );
     expect(stored!.agent_session_id).toBe('sess-b');
+  });
+
+  /**
+   * The retry re-runs the whole turn, so anything already streamed belongs to
+   * the run that just died. In practice a resume fails before the model has
+   * said a word — which is why the first scripted run below says something,
+   * so the case is actually exercised rather than merely allowed for.
+   */
+  it('tells a watcher to discard the dead run before retrying', async () => {
+    scriptAgent({ text: 'One.', sessionId: 'sess-a' });
+    await turn();
+
+    scriptAgent(
+      { turns: [{ text: 'Half a thought' }], throwsLate: 'session sess-a not found' },
+      { text: 'Recovered.', sessionId: 'sess-b' },
+    );
+
+    const events: StreamEvent[] = [];
+    const profile = await getUser(user.id);
+    const response = await runTurn(
+      { userId: user.id, ctx: user.ctx, profile, text: 'again' },
+      (e) => events.push(e),
+    );
+
+    expect(response.message.content).toBe('Recovered.');
+    expect(events).toEqual([
+      { type: 'text', text: 'Half a thought' },
+      { type: 'reset' },
+      { type: 'text', text: 'Recovered.' },
+    ]);
   });
 
   it('reflects a tool’s writes in the day and the actions it returns', async () => {

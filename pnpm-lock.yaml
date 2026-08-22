@@ -54,6 +54,9 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
+      '@ct/api-client':
+        specifier: workspace:*
+        version: link:../../packages/api-client
       '@types/node':
         specifier: ^22.10.7
         version: 22.20.1

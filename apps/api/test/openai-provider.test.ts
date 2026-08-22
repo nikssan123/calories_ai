@@ -161,6 +161,21 @@ describe('a plain turn', () => {
   });
 });
 
+/**
+ * No streaming here, deliberately.
+ *
+ * `runStream` is optional at the seam precisely so this lane needs no work to
+ * keep functioning: `/chat/stream` still answers, it just answers all at once —
+ * which is what every provider did before streaming existed. Pinned as a
+ * contract rather than left implicit, because the failure it prevents is a
+ * caller that assumes every provider narrates itself.
+ */
+describe('streaming', () => {
+  it('is not implemented, and the seam falls back to a whole reply', () => {
+    expect(createOpenAiProvider().runStream).toBeUndefined();
+  });
+});
+
 describe('the tool loop', () => {
   it('runs a tool, feeds the result back, and finishes', async () => {
     const calls = stubFetch(

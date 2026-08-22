@@ -5,7 +5,7 @@ import {
   ANTHROPIC_API_AUTH_HELP,
   createAnthropicApiProvider,
 } from '../src/ai/providers/messages.ts';
-import type { AgentRequest, ToolDefinition } from '../src/ai/providers/types.ts';
+import type { AgentRequest, StreamEvent, ToolDefinition } from '../src/ai/providers/types.ts';
 
 /**
  * Claude over the Messages API.
@@ -664,5 +664,205 @@ describe('failures', () => {
 
     const outcome = await createAnthropicApiProvider().run(request(), null);
     expect(outcome.error).toMatch(/cut off/);
+  });
+});
+
+/**
+ * Streaming.
+ *
+ * The property under test is not "deltas arrive" — it is that a watched turn
+ * and an unwatched one are the *same turn*. The tool loop, the token counts and
+ * the price all come off a `Message` the SDK reassembles from the wire, so the
+ * risk worth pinning is that reassembly silently losing something the
+ * non-streaming path had. Hence the assertions on usage and on the tool round
+ * trip, not only on the text.
+ */
+
+/** One SSE frame, in the shape the Messages API actually puts on the wire. */
+function frame(event: string, data: unknown): string {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+interface StreamedReply {
+  /** Text blocks, delivered a delta at a time so a partial reply is observable. */
+  text?: string[];
+  tools?: { id: string; name: string; input: unknown }[];
+  stopReason?: string;
+  usage?: Record<string, number>;
+}
+
+/** Renders one round trip as an event stream and queues it on `fetch`. */
+function stubStream(...replies: StreamedReply[]) {
+  const seen: { url: string; body: any }[] = [];
+  const queue = [...replies];
+
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string | URL | Request, init: RequestInit) => {
+      seen.push({ url: String(url), body: JSON.parse(String(init.body)) });
+      const reply = queue.shift();
+      if (!reply) throw new Error('unexpected extra request');
+
+      const counts = reply.usage ?? usage(1000, 200);
+      let body = frame('message_start', {
+        type: 'message_start',
+        message: {
+          id: 'msg_test',
+          type: 'message',
+          role: 'assistant',
+          model: MODELS.text_log.model,
+          content: [],
+          stop_reason: null,
+          stop_sequence: null,
+          usage: counts,
+        },
+      });
+
+      let index = 0;
+      for (const chunk of reply.text ?? []) {
+        body += frame('content_block_start', {
+          type: 'content_block_start',
+          index,
+          content_block: { type: 'text', text: '' },
+        });
+        // Two deltas per block, so the test can tell "streamed" from "sent at
+        // the end in one piece" — which is exactly the regression that would
+        // otherwise pass silently.
+        const half = Math.ceil(chunk.length / 2);
+        for (const part of [chunk.slice(0, half), chunk.slice(half)]) {
+          body += frame('content_block_delta', {
+            type: 'content_block_delta',
+            index,
+            delta: { type: 'text_delta', text: part },
+          });
+        }
+        body += frame('content_block_stop', { type: 'content_block_stop', index });
+        index += 1;
+      }
+
+      for (const call of reply.tools ?? []) {
+        body += frame('content_block_start', {
+          type: 'content_block_start',
+          index,
+          content_block: { type: 'tool_use', id: call.id, name: call.name, input: {} },
+        });
+        body += frame('content_block_delta', {
+          type: 'content_block_delta',
+          index,
+          delta: { type: 'input_json_delta', partial_json: JSON.stringify(call.input) },
+        });
+        body += frame('content_block_stop', { type: 'content_block_stop', index });
+        index += 1;
+      }
+
+      body += frame('message_delta', {
+        type: 'message_delta',
+        delta: { stop_reason: reply.stopReason ?? 'end_turn', stop_sequence: null },
+        usage: { output_tokens: counts.output_tokens },
+      });
+      body += frame('message_stop', { type: 'message_stop' });
+
+      return new Response(body, {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      });
+    }),
+  );
+  return seen;
+}
+
+describe('a watched turn', () => {
+  it('asks the API to stream, which the plain path does not', async () => {
+    const seen = stubStream({ text: ['Logged.'] });
+    await createAnthropicApiProvider().runStream!(request(), null, () => {});
+    expect(seen[0]!.body.stream).toBe(true);
+  });
+
+  it('hands over the reply in pieces rather than in one go', async () => {
+    stubStream({ text: ['Logged two eggs — 140 kcal.'] });
+
+    const events: StreamEvent[] = [];
+    const outcome = await createAnthropicApiProvider().runStream!(request(), null, (e) =>
+      events.push(e),
+    );
+
+    const texts = events.filter((e) => e.type === 'text');
+    expect(texts.length).toBeGreaterThan(1);
+    expect(texts.map((e) => (e as { text: string }).text).join('')).toBe(
+      'Logged two eggs — 140 kcal.',
+    );
+    // And the outcome is unchanged by having been watched.
+    expect(outcome.text).toBe('Logged two eggs — 140 kcal.');
+  });
+
+  /**
+   * The event that tells a client its preamble was a preamble. It has to fire
+   * when the block *starts*: the arguments to `log_food` stream in over a
+   * second or two, and announcing the tool after they finish is announcing it
+   * after the pause it was meant to explain.
+   */
+  it('says which tool it is running, before the arguments have arrived', async () => {
+    stubStream(
+      { text: ['Let me log that.'], tools: [{ id: 't1', name: 'log_food', input: { description: 'two eggs' } }], stopReason: 'tool_use' },
+      { text: ['Logged.'] },
+    );
+
+    const events: StreamEvent[] = [];
+    await createAnthropicApiProvider().runStream!(request(), null, (e) => events.push(e));
+
+    expect(events).toContainEqual({ type: 'tool', name: 'log_food' });
+    // Preamble, then the tool, then the answer — the order a client folds into
+    // a single bubble by clearing on the middle one.
+    const kinds = events.map((e) => e.type);
+    expect(kinds.indexOf('tool')).toBeGreaterThan(kinds.indexOf('text'));
+    expect(kinds.lastIndexOf('text')).toBeGreaterThan(kinds.indexOf('tool'));
+  });
+
+  it('runs the tool and comes back with the same answer the plain path gives', async () => {
+    stubStream(
+      { text: [], tools: [{ id: 't1', name: 'log_food', input: { description: 'two eggs' } }], stopReason: 'tool_use' },
+      { text: ['Logged two eggs.'] },
+    );
+
+    const outcome = await createAnthropicApiProvider().runStream!(request(), null, () => {});
+    expect(outcome.text).toBe('Logged two eggs.');
+    expect(outcome.numTurns).toBe(2);
+    expect(outcome.error).toBeUndefined();
+  });
+
+  /**
+   * The quiet failure worth guarding: a turn that streams perfectly and is
+   * recorded as free, because the counts only ever appear in frames nobody
+   * accumulated.
+   */
+  it('still counts every token, including the cache', async () => {
+    stubStream({ text: ['Logged.'], usage: usage(120, 40, 6000, 0) });
+
+    const outcome = await createAnthropicApiProvider().runStream!(request(), null, () => {});
+    expect(outcome.usage).toMatchObject({
+      inputTokens: 120,
+      outputTokens: 40,
+      cacheReadTokens: 6000,
+      cacheWriteTokens: 0,
+    });
+    expect(outcome.costUsd).toBeGreaterThan(0);
+    expect(outcome.costSource).toBe('estimated');
+  });
+
+  it('reports a mid-stream failure as an ordinary failed turn', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response('{"error":{"message":"overloaded_error"}}', {
+            status: 529,
+            headers: { 'content-type': 'application/json' },
+          }),
+      ),
+    );
+
+    const outcome = await createAnthropicApiProvider().runStream!(request(), null, () => {});
+    expect(outcome.error).toBeTruthy();
+    expect(outcome.text).toBe('');
   });
 });

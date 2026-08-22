@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
   BarcodeLogRequest,
@@ -12,7 +12,7 @@ import {
 import { AUTH_HELP, authDescription, hasSubscriptionAuth } from '../ai/client.ts';
 import { env } from '../env.ts';
 import { generateWeeklyReview } from '../ai/review.ts';
-import { runTurn } from '../ai/run.ts';
+import { runTurn, type RunTurnInput } from '../ai/run.ts';
 import { sendAccountDeletedEmail } from '../email/notify.ts';
 import {
   fetchReceivedEmail,
@@ -70,6 +70,7 @@ import { messageActions, replaceActions } from '../services/chat.ts';
 import { TurnInProgressError } from '../services/turn-lock.ts';
 import { addDays, dateRange, localDateFor } from '../time.ts';
 import { stripDataUrl } from './body.ts';
+import { openEventStream } from './sse.ts';
 import { BARCODE_BURST, CHAT_LIMIT, DELETE_ACCOUNT_LIMIT, REVIEW_LIMIT } from './limits.ts';
 
 /**
@@ -99,13 +100,30 @@ export async function registerRoutes(app: FastifyInstance) {
 
   // ---- The core loop -------------------------------------------------------
 
-  app.post('/chat', { config: { rateLimit: CHAT_LIMIT } }, async (request, reply) => {
+  /**
+   * Everything a turn needs, or the reply that says why it cannot have one.
+   *
+   * Shared by `/chat` and `/chat/stream` because the two differ only in how the
+   * answer comes back — the validation, the auth check and the photo write are
+   * the same work, and the day they disagree about which formats are allowed or
+   * where a photo is stored is a bug nobody would think to look for.
+   *
+   * The photo is saved here rather than inside the turn so it survives a turn
+   * that fails: the bytes are already uploaded, and making somebody take the
+   * picture again because the model was busy is the wrong trade.
+   */
+  async function prepareTurn(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<RunTurnInput | null> {
     const parsed = ChatRequest.safeParse(request.body);
     if (!parsed.success) {
-      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid request' });
+      await reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid request' });
+      return null;
     }
     if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) {
-      return reply.status(503).send({ error: AUTH_HELP });
+      await reply.status(503).send({ error: AUTH_HELP });
+      return null;
     }
 
     const { userId, ...ctx } = await getUserContext(request.userId!);
@@ -119,8 +137,36 @@ export async function registerRoutes(app: FastifyInstance) {
       photo = { id: saved.id, mediaType, base64 };
     }
 
+    return { userId, ctx, profile, text: parsed.data.text, photo };
+  }
+
+  /*
+   * One ceiling across both chat routes, not one each.
+   *
+   * @fastify/rate-limit keeps a separate counter per *route config*, so the
+   * obvious `config: { rateLimit: CHAT_LIMIT }` on each of `/chat` and
+   * `/chat/stream` would hand every account two buckets of forty and a client
+   * that alternated between them eighty turns an hour. That is the same trap
+   * `RECIPE_BURST` documents in `limits.ts`, and it is invisible: each route
+   * enforces exactly the number it was given.
+   *
+   * `app.rateLimit()` builds a standalone limiter whose store is keyed on
+   * nothing route-specific, so attaching the *same* handler to both routes puts
+   * them in one bucket — which is what a "turns per hour" entitlement has to
+   * mean. Built once, deliberately: a second call would allocate a second
+   * in-process cache and quietly restore the bug.
+   *
+   * On `onRequest` rather than `preHandler` so a throttled photo turn is
+   * refused before twenty-five megabytes of base64 are parsed.
+   */
+  const chatLimit = app.rateLimit(CHAT_LIMIT);
+
+  app.post('/chat', { onRequest: chatLimit }, async (request, reply) => {
+    const input = await prepareTurn(request, reply);
+    if (!input) return reply;
+
     try {
-      return await runTurn({ userId, ctx, profile, text: parsed.data.text, photo });
+      return await runTurn(input);
     } catch (error) {
       // Not a failure, and not logged as one: they have a turn in flight and
       // pressed send again. A fast, honest rejection is the right answer for a
@@ -131,6 +177,62 @@ export async function registerRoutes(app: FastifyInstance) {
       }
       request.log.error({ err: error }, 'chat turn failed');
       return reply.status(502).send({ error: (error as Error).message });
+    }
+  });
+
+  /**
+   * The same turn, told as it happens.
+   *
+   * A turn is twenty seconds. Silence for twenty seconds reads as broken, and a
+   * long photo turn is also where an idle proxy starts thinking about closing
+   * the connection. Both are answered by saying something.
+   *
+   * A separate route rather than content negotiation on `/chat`: the plain one
+   * is what the native client and every script use, and a route that changes
+   * shape depending on a header is a route that gets tested in one shape and
+   * deployed in the other. They share `prepareTurn` and `runTurn`, which is
+   * where all the behaviour actually lives.
+   *
+   * Two things about the shape are load-bearing.
+   *
+   * **The head is written late.** Once a 200 and `text/event-stream` are on the
+   * wire the status is spent, and every failure after that has to be an event
+   * inside a successful response — which is a worse answer for the failures
+   * that arrive *before* anything has been sent. `TurnInProgressError` is the
+   * one that matters: it is thrown by the turn lease before the provider is
+   * ever called, so deferring the head until the first event keeps it a real
+   * 429 with a real `retry-after`, exactly as on `/chat`.
+   *
+   * **A vanished reader does not cancel the turn.** The tools have already
+   * written to the log by the time most of this is streamed, and the message is
+   * committed at the very end; abandoning a turn because a phone changed
+   * network would leave the meal logged and the reply lost. So writes go quiet
+   * and the turn runs to completion — which is precisely what `reconcile` in
+   * the web client comes back to find.
+   */
+  app.post('/chat/stream', { onRequest: chatLimit }, async (request, reply) => {
+    const input = await prepareTurn(request, reply);
+    if (!input) return reply;
+
+    const stream = openEventStream(request, reply);
+
+    try {
+      const response = await runTurn(input, (event) => stream.send(event));
+      stream.send({ type: 'done', response });
+      return stream.close();
+    } catch (error) {
+      if (!stream.started) {
+        // Nothing has gone out yet, so the status line is still ours to write
+        // and these stay ordinary HTTP failures.
+        if (error instanceof TurnInProgressError) {
+          return reply.status(429).send({ error: error.message });
+        }
+        request.log.error({ err: error }, 'chat turn failed');
+        return reply.status(502).send({ error: (error as Error).message });
+      }
+      request.log.error({ err: error }, 'chat turn failed mid-stream');
+      stream.send({ type: 'error', error: (error as Error).message });
+      return stream.close();
     }
   });
 

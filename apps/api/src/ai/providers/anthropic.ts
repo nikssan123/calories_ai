@@ -3,7 +3,7 @@ import { env } from '../../env.ts';
 import { executeAgent } from '../agent.ts';
 import { AUTH_HELP, hasSubscriptionAuth, MODELS } from '../client.ts';
 import { buildNutritionServer, SERVER_NAME, type ToolContext } from '../tools.ts';
-import type { AgentRequest, AiProvider, Outcome } from './types.ts';
+import type { AgentRequest, AiProvider, Outcome, StreamSink } from './types.ts';
 
 /**
  * Claude Code. The only provider that can run on a subscription rather than a
@@ -26,54 +26,77 @@ export function createAnthropicProvider(toolContext: ToolContext): AiProvider {
       return AUTH_HELP;
     },
 
-    async run(request: AgentRequest, state: string | null): Promise<Outcome> {
-      // Rebuilt here rather than passed in: the MCP server closes over the
-      // per-turn tool context, and only this provider speaks MCP.
-      const { server, toolNames } = buildNutritionServer(toolContext, {
-        readOnly: request.readOnly,
-        toolset: request.toolset,
-      });
+    run(request: AgentRequest, state: string | null): Promise<Outcome> {
+      return execute(toolContext, request, state);
+    },
 
-      const choice = MODELS[request.kind];
-
-      const options: Options = {
-        // An array with the boundary marker, not one joined string. Everything
-        // before the marker is cacheable across turns and sessions; everything
-        // after it is this turn's clock and numbers. Joined, the volatile half
-        // invalidated the stable half and the whole prefix was rewritten every
-        // turn — which was the single largest line on the bill.
-        // The boundary is only worth placing when there is a volatile half to
-        // put after it. The review agent has none — its whole prompt is stable
-        // and the week's numbers ride in the user turn — and an empty trailing
-        // block is the kind of thing an API rejects.
-        systemPrompt: request.dynamicSystemPrompt
-          ? [request.staticSystemPrompt, SYSTEM_PROMPT_DYNAMIC_BOUNDARY, request.dynamicSystemPrompt]
-          : [request.staticSystemPrompt],
-        mcpServers: { [SERVER_NAME]: server },
-        allowedTools: toolNames,
-        // Strip every built-in. The agent cannot read files, run bash, or search
-        // the web — it has the nutrition tools and nothing more.
-        tools: [],
-        // Do not load ~/.claude or the repo's CLAUDE.md, skills, or settings.
-        settingSources: [],
-        permissionMode: 'bypassPermissions',
-        model: choice.model,
-        // Spread rather than assign: Haiku 4.5 rejects `effort` with a 400, and
-        // an explicit `effort: undefined` is not the same as omitting the key.
-        ...(choice.effort ? { effort: choice.effort } : {}),
-        maxTurns: request.maxTurns,
-        cwd: env.agentCwd,
-      };
-
-      // Streaming input exists to carry an image; a text-only turn goes as a
-      // plain string, which is what the review path has always sent and what
-      // the SDK reports back verbatim.
-      const prompt = request.photo ? promptStream(request) : request.text;
-      const outcome = await executeAgent(prompt, options, state);
-      // Reported back so the turn can be costed against the model that ran it.
-      return { ...outcome, model: choice.model };
+    runStream(request: AgentRequest, state: string | null, emit: StreamSink): Promise<Outcome> {
+      return execute(toolContext, request, state, emit);
     },
   };
+}
+
+/**
+ * One turn, watched or not.
+ *
+ * Both entry points build the identical `Options` and hand them to the same
+ * `executeAgent`, because a streamed turn on this lane differs from an
+ * unstreamed one in nothing but whether the message loop tells anyone what it
+ * is reading. Splitting them would be two copies of the SDK configuration —
+ * the stripped built-ins, the empty `settingSources`, the effort spread — and
+ * that block is the one place where a silent divergence would be expensive.
+ */
+async function execute(
+  toolContext: ToolContext,
+  request: AgentRequest,
+  state: string | null,
+  emit?: StreamSink,
+): Promise<Outcome> {
+  // Rebuilt here rather than passed in: the MCP server closes over the
+  // per-turn tool context, and only this provider speaks MCP.
+  const { server, toolNames } = buildNutritionServer(toolContext, {
+    readOnly: request.readOnly,
+    toolset: request.toolset,
+  });
+
+  const choice = MODELS[request.kind];
+
+  const options: Options = {
+    // An array with the boundary marker, not one joined string. Everything
+    // before the marker is cacheable across turns and sessions; everything
+    // after it is this turn's clock and numbers. Joined, the volatile half
+    // invalidated the stable half and the whole prefix was rewritten every
+    // turn — which was the single largest line on the bill.
+    // The boundary is only worth placing when there is a volatile half to
+    // put after it. The review agent has none — its whole prompt is stable
+    // and the week's numbers ride in the user turn — and an empty trailing
+    // block is the kind of thing an API rejects.
+    systemPrompt: request.dynamicSystemPrompt
+      ? [request.staticSystemPrompt, SYSTEM_PROMPT_DYNAMIC_BOUNDARY, request.dynamicSystemPrompt]
+      : [request.staticSystemPrompt],
+    mcpServers: { [SERVER_NAME]: server },
+    allowedTools: toolNames,
+    // Strip every built-in. The agent cannot read files, run bash, or search
+    // the web — it has the nutrition tools and nothing more.
+    tools: [],
+    // Do not load ~/.claude or the repo's CLAUDE.md, skills, or settings.
+    settingSources: [],
+    permissionMode: 'bypassPermissions',
+    model: choice.model,
+    // Spread rather than assign: Haiku 4.5 rejects `effort` with a 400, and
+    // an explicit `effort: undefined` is not the same as omitting the key.
+    ...(choice.effort ? { effort: choice.effort } : {}),
+    maxTurns: request.maxTurns,
+    cwd: env.agentCwd,
+  };
+
+  // Streaming input exists to carry an image; a text-only turn goes as a
+  // plain string, which is what the review path has always sent and what
+  // the SDK reports back verbatim.
+  const prompt = request.photo ? promptStream(request) : request.text;
+  const outcome = await executeAgent(prompt, options, state, emit);
+  // Reported back so the turn can be costed against the model that ran it.
+  return { ...outcome, model: choice.model };
 }
 
 /**

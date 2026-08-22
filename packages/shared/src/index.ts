@@ -1030,6 +1030,44 @@ export const ChatResponse = z.object({
 export type ChatResponse = z.infer<typeof ChatResponse>;
 
 /**
+ * What `POST /chat/stream` sends, frame by frame.
+ *
+ * A turn takes twenty seconds, and twenty silent seconds read as broken. These
+ * are the events that fill them — deliberately describing what the reader
+ * should *see* rather than mirroring any model vendor's stream format, because
+ * the two Claude lanes stream at very different granularities and neither shape
+ * should reach a client.
+ *
+ * `text` is additive and in order. `tool` and `reset` both clear what has been
+ * shown so far, for reasons worth knowing:
+ *
+ *   - `tool` means the model stopped talking in order to act, so the text
+ *     before it was a preamble ("Let me log that") rather than the answer. The
+ *     reply that gets persisted is the model's *final* message, so a client
+ *     that keeps the preamble ends up showing something that jumps when the
+ *     real answer arrives. Clear on this, and what was streamed matches what
+ *     was stored.
+ *   - `reset` means the turn restarted — a stale session, retried.
+ *
+ * Exactly one terminal frame ends the stream: `done` carries the same
+ * `ChatResponse` that `POST /chat` would have returned, and is what a client
+ * should actually render; `error` carries a failure that arrived too late to be
+ * a status code.
+ *
+ * A plain type rather than a Zod schema, unlike everything else in this file:
+ * the payload that matters is `ChatResponse`, which is already the contract,
+ * and the envelope around it is produced and consumed by code in this
+ * repository. There is nothing here for a schema to defend that the shape of
+ * the union does not.
+ */
+export type ChatStreamEvent =
+  | { type: 'text'; text: string }
+  | { type: 'tool'; name: string }
+  | { type: 'reset' }
+  | { type: 'done'; response: ChatResponse }
+  | { type: 'error'; error: string };
+
+/**
  * What the API will accept as an image. Named because two routes take a photo —
  * a meal for the journal, a fridge for the kitchen — and the day they disagree
  * about which formats are allowed is a bug nobody would look for.

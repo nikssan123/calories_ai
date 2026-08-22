@@ -12,7 +12,14 @@ import { recordUsage } from '../services/usage.ts';
 import { withTurnLock } from '../services/turn-lock.ts';
 import { checkWellbeing } from '../services/wellbeing.ts';
 import { MAX_SESSION_MESSAGES, MAX_TURNS } from './client.ts';
-import { createProvider, type AgentMessage, type AgentRequest } from './providers/index.ts';
+import {
+  createProvider,
+  type AgentMessage,
+  type AgentRequest,
+  type AiProvider,
+  type Outcome,
+  type StreamSink,
+} from './providers/index.ts';
 import {
   dayContextPrompt,
   dayRolloverNotice,
@@ -36,12 +43,18 @@ export interface RunTurnInput {
  * The lease is taken here rather than in the route so that every entry point
  * gets it — the turn's read-modify-write of the day is what needs defending,
  * and it does not care which door the request came through.
+ *
+ * `emit`, when supplied, is where the turn narrates itself — see `StreamEvent`.
+ * It is an argument rather than a second function because a streamed turn and
+ * an unstreamed one must be the *same* turn: the same lease, the same day
+ * context, the same persisted message and cards at the end. The only thing a
+ * watcher changes is whether the twenty seconds in the middle are silent.
  */
-export async function runTurn(input: RunTurnInput): Promise<ChatResponse> {
-  return withTurnLock(input.userId, () => runLockedTurn(input));
+export async function runTurn(input: RunTurnInput, emit?: StreamSink): Promise<ChatResponse> {
+  return withTurnLock(input.userId, () => runLockedTurn(input, emit));
 }
 
-async function runLockedTurn(input: RunTurnInput): Promise<ChatResponse> {
+async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<ChatResponse> {
   const now = new Date();
   const today = localDateFor(now, input.ctx);
 
@@ -154,12 +167,17 @@ async function runLockedTurn(input: RunTurnInput): Promise<ChatResponse> {
 
   const sessionId = fresh ? null : await loadSessionId(input.userId);
 
-  let outcome = await provider.run(request, sessionId);
+  let outcome = await drive(provider, request, sessionId, emit);
   if (outcome.staleSession) {
     // The stored session is gone (cleared cache, another machine). Start a new
     // one — the nutrition data lives in Postgres, so only chat continuity is lost.
     await saveSessionId(input.userId, null);
-    outcome = await provider.run(request, null);
+    // Anything already shown belongs to the run that just died. In practice a
+    // resume fails before the model has said a word, so this almost never has
+    // anything to undo — but "almost never" is not a reason to let someone
+    // watch the answer be written twice.
+    emit?.({ type: 'reset' });
+    outcome = await drive(provider, request, null, emit);
   }
 
   // Before the error check: a turn that spent tokens and then failed is exactly
@@ -197,6 +215,25 @@ async function runLockedTurn(input: RunTurnInput): Promise<ChatResponse> {
   const updatedDay = await buildDaySummary(input.userId, today);
 
   return { message: assistantMessage, actions, day: updatedDay };
+}
+
+/**
+ * Runs the turn on whichever entry point this provider offers.
+ *
+ * `runStream` is optional at the seam, and the fallback is the whole reason it
+ * can be: a provider that cannot narrate itself still answers correctly, it
+ * just answers all at once. That is exactly what every provider did before
+ * this, so nothing regresses on the lane that has not implemented it — the
+ * OpenAI one, today — and no caller has to ask which lane it is on.
+ */
+function drive(
+  provider: AiProvider,
+  request: AgentRequest,
+  state: string | null,
+  emit?: StreamSink,
+): Promise<Outcome> {
+  if (emit && provider.runStream) return provider.runStream(request, state, emit);
+  return provider.run(request, state);
 }
 
 /** Prior turns for providers that cannot remember the conversation themselves. */

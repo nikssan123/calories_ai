@@ -62,6 +62,55 @@ describe('POST /chat', () => {
     expect(String(blocked.headers['x-ratelimit-limit'])).toBe('40');
   });
 
+  /**
+   * One ceiling, not one per route.
+   *
+   * @fastify/rate-limit counts per route config, so giving `/chat` and
+   * `/chat/stream` a `CHAT_LIMIT` each would hand every account two buckets of
+   * forty — eighty turns an hour for a client that alternated, with nothing in
+   * any log to say so, because each route would be enforcing exactly the number
+   * it was given. They share one limiter instead, and this is what says so.
+   */
+  it('shares its ceiling with the streaming route', async () => {
+    scriptAgent();
+    for (let i = 0; i < 40; i++) {
+      scriptAgent({ text: 'Logged.' });
+      await app.inject({ method: 'POST', url: '/chat', headers: { cookie }, payload: { text: 'x' } });
+    }
+
+    scriptAgent({ text: 'Logged.' });
+    const streamed = await app.inject({
+      method: 'POST',
+      url: '/chat/stream',
+      headers: { cookie },
+      payload: { text: 'x' },
+    });
+    expect(streamed.statusCode).toBe(429);
+  });
+
+  /** And the other direction, since a client may only ever use the new route. */
+  it('is spent by the streaming route too', async () => {
+    scriptAgent();
+    for (let i = 0; i < 40; i++) {
+      scriptAgent({ text: 'Logged.' });
+      await app.inject({
+        method: 'POST',
+        url: '/chat/stream',
+        headers: { cookie },
+        payload: { text: 'x' },
+      });
+    }
+
+    scriptAgent({ text: 'Logged.' });
+    const plain = await app.inject({
+      method: 'POST',
+      url: '/chat',
+      headers: { cookie },
+      payload: { text: 'x' },
+    });
+    expect(plain.statusCode).toBe(429);
+  });
+
   /** The limit is per account, not per process — one user cannot lock out another. */
   it('counts each account separately', async () => {
     scriptAgent();

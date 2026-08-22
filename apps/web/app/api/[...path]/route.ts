@@ -39,14 +39,36 @@ async function forward(request: Request, path: string[]) {
     });
 
     const responseType = response.headers.get('content-type') ?? 'application/json';
-    // Images come back as bytes; everything else is JSON.
-    const body = responseType.startsWith('image/')
-      ? await response.arrayBuffer()
-      : await response.text();
+
+    /*
+     * A streamed turn is passed through, not read.
+     *
+     * This is the one response here that must not be buffered: `await
+     * response.text()` on an event stream waits for the turn to finish and then
+     * hands over the whole thing at once, which is precisely the behaviour
+     * `/chat/stream` exists to remove — and it would fail silently, since the
+     * frames all arrive and the reply is correct, just twenty seconds late.
+     * Handing `response.body` straight to NextResponse keeps this proxy a pipe.
+     *
+     * Images come back as bytes; everything else is JSON, and both are small
+     * enough that reading them whole is simpler than streaming them.
+     */
+    const streaming = responseType.startsWith('text/event-stream');
+    const body = streaming
+      ? response.body
+      : responseType.startsWith('image/')
+        ? await response.arrayBuffer()
+        : await response.text();
 
     const out = new NextResponse(body as BodyInit, {
       status: response.status,
-      headers: { 'content-type': responseType },
+      headers: {
+        'content-type': responseType,
+        // Relayed for the same reason the API sends them: nothing should keep a
+        // copy of one turn's frames, and a buffering proxy in front of *this*
+        // one would undo the pass-through above.
+        ...(streaming ? { 'cache-control': 'no-store', 'x-accel-buffering': 'no' } : {}),
+      },
     });
 
     /*

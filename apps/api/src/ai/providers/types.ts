@@ -194,6 +194,42 @@ export interface Outcome {
   staleSession?: boolean;
 }
 
+/**
+ * What a turn says about itself while it is still running.
+ *
+ * A turn takes twenty seconds. Silence for twenty seconds reads as broken; the
+ * same twenty seconds with text arriving reads as thinking. That is the whole
+ * reason this exists, and it is why the events describe *what the reader should
+ * see* rather than mirroring any vendor's stream format — the two lanes stream
+ * at very different granularities (token deltas on the Messages API, whole
+ * assistant messages out of the Agent SDK) and neither shape should reach the
+ * client.
+ *
+ * `text` fragments are additive and in order. The two clearing events are the
+ * subtle part:
+ *
+ *   - `tool` means the model stopped talking in order to act. Whatever text
+ *     preceded it was a preamble ("Let me log that") and is *not* part of the
+ *     answer — the reply that gets persisted is the model's final message, so a
+ *     client that keeps the preamble on screen shows something that then jumps
+ *     when the real reply lands. Clear on this event and the streamed text ends
+ *     up byte-identical to what is stored.
+ *   - `reset` means the turn is starting over from the beginning — a stale
+ *     session, retried. Rare to the point of near-impossible, because a resume
+ *     fails before the model says anything, but "near-impossible" is not a
+ *     reason to let a client render the answer twice.
+ */
+export type StreamEvent =
+  | { type: 'text'; text: string }
+  | { type: 'tool'; name: string }
+  | { type: 'reset' };
+
+/**
+ * Where a running turn puts its events. Synchronous and returning nothing: the
+ * turn must never be slowed down, or made to fail, by whoever is watching it.
+ */
+export type StreamSink = (event: StreamEvent) => void;
+
 export interface AiProvider {
   /** Stable id, as written in AI_PROVIDER. */
   readonly id: string;
@@ -207,4 +243,20 @@ export interface AiProvider {
   /** Null when usable; otherwise the sentence telling the user how to fix it. */
   checkAuth(): string | null;
   run(request: AgentRequest, state: string | null): Promise<Outcome>;
+  /**
+   * The same turn, narrating itself as it goes. Optional, and the fallback is
+   * `run` — a provider that cannot stream is not broken, it just delivers the
+   * whole reply at the end, which is exactly what every provider did before.
+   *
+   * It is a variant of `run` rather than a replacement because the *result* is
+   * unchanged: the same `Outcome`, priced and counted the same way, persisted
+   * the same way. Only the silence in the middle is different. Deliberately a
+   * callback rather than an async iterator, so there is one shape of turn in
+   * this codebase instead of two — every caller still awaits an `Outcome`.
+   */
+  runStream?(
+    request: AgentRequest,
+    state: string | null,
+    emit: StreamSink,
+  ): Promise<Outcome>;
 }

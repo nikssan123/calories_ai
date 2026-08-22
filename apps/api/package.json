@@ -30,6 +30,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@ct/api-client": "workspace:*",
     "@types/node": "^22.10.7",
     "@types/pg": "^8.11.10",
     "@vitest/coverage-v8": "^4.1.11",

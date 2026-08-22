@@ -59,6 +59,7 @@ describe('authentication guard', () => {
     ['GET', '/reviews'],
     ['GET', '/targets/adaptive'],
     ['POST', '/chat'],
+    ['POST', '/chat/stream'],
     ['POST', '/weight'],
   ])('rejects an anonymous %s %s', async (method, url) => {
     const anon = await anonymousApp();
@@ -482,6 +483,122 @@ describe('chat', () => {
     expect(response.statusCode).toBe(200);
     const photos = await query<{ id: string }>('SELECT id FROM photos WHERE user_id = $1', [user.id]);
     expect(photos).toHaveLength(1);
+  });
+
+  /**
+   * The streamed twin of the route above.
+   *
+   * What is actually under test is the seam between HTTP and the turn: that the
+   * frames arrive as frames, that the last one carries exactly what `/chat`
+   * would have returned, and — the part that is easy to lose — that a failure
+   * arriving *before* any bytes went out is still an honest status code rather
+   * than an apology inside a 200.
+   */
+  const framesOf = (payload: string) =>
+    payload
+      .split('\n\n')
+      .map((frame) => frame.split('\n').find((line) => line.startsWith('data:')))
+      .filter((line): line is string => line !== undefined)
+      .map((line) => JSON.parse(line.slice('data:'.length)));
+
+  it('streams the turn and ends with the same response /chat would have given', async () => {
+    scriptAgent({ turns: [{ text: 'One moment.' }], text: 'Added to lunch — ~620 kcal.' });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/chat/stream',
+      ...auth({ payload: { text: 'chicken and rice' } }),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toMatch(/text\/event-stream/);
+    // Nothing about one turn is worth keeping, and the URL is the same every
+    // time — a cached stream would replay somebody else's lunch.
+    expect(response.headers['cache-control']).toBe('no-store');
+
+    const frames = framesOf(response.payload);
+    expect(frames).toContainEqual({ type: 'text', text: 'One moment.' });
+
+    const last = frames.at(-1);
+    expect(last.type).toBe('done');
+    expect(last.response).toMatchObject({
+      message: { role: 'assistant', content: 'Added to lunch — ~620 kcal.' },
+      actions: [],
+      day: { local_date: today },
+    });
+  });
+
+  it('persists exactly one turn, however it was delivered', async () => {
+    scriptAgent({ text: 'Logged.' });
+    await app.inject({
+      method: 'POST',
+      url: '/chat/stream',
+      ...auth({ payload: { text: 'two eggs' } }),
+    });
+
+    const messages = await query<{ role: string }>(
+      'SELECT role FROM chat_messages WHERE user_id = $1',
+      [user.id],
+    );
+    // Sorted rather than relying on the order rows happen to come back in: the
+    // claim is that a streamed turn wrote one of each, not what an unordered
+    // SELECT decided today.
+    expect(messages.map((m) => m.role).sort()).toEqual(['assistant', 'user']);
+  });
+
+  /**
+   * The reason the head is written late rather than up front. A double-tapped
+   * send is answered by the turn lease before the model is ever called, and
+   * that answer is a 429 — which stops being available the instant a 200 and a
+   * content type are on the wire.
+   */
+  it('still answers a turn already in flight with a real 429', async () => {
+    await query("UPDATE users SET turn_lock_until = now() + interval '60 seconds' WHERE id = $1", [
+      user.id,
+    ]);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/chat/stream',
+      ...auth({ payload: { text: 'two eggs' } }),
+    });
+
+    expect(response.statusCode).toBe(429);
+    expect(response.json().error).toMatch(/already have a message/);
+  });
+
+  it.each([{}, { text: '' }])('rejects %j before opening a stream', async (payload) => {
+    const response = await app.inject({ method: 'POST', url: '/chat/stream', ...auth({ payload }) });
+    expect(response.statusCode).toBe(400);
+    expect(response.headers['content-type']).toMatch(/application\/json/);
+  });
+
+  it('reports a turn that failed before it spoke as a bad gateway', async () => {
+    scriptAgent({ throws: 'the model exploded' });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/chat/stream',
+      ...auth({ payload: { text: 'hi' } }),
+    });
+    expect(response.statusCode).toBe(502);
+    expect(response.json().error).toBe('the model exploded');
+  });
+
+  /**
+   * And the other half of that: once frames have gone out the status line is
+   * spent, so the failure has to travel inside the stream. A client cannot be
+   * left resolving with nothing.
+   */
+  it('reports a failure after the first frame as an error frame', async () => {
+    scriptAgent({ turns: [{ text: 'Working on it.' }], throwsLate: 'the model exploded' });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/chat/stream',
+      ...auth({ payload: { text: 'hi' } }),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const frames = framesOf(response.payload);
+    expect(frames[0]).toEqual({ type: 'text', text: 'Working on it.' });
+    expect(frames.at(-1)).toEqual({ type: 'error', error: 'the model exploded' });
   });
 
   it('returns 503 rather than failing obscurely without credentials', async () => {
