@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { ChatAction, ChatCard as Card } from '@ct/shared';
+import type { ChatAction, ChatCard as Card, ExerciseEntry } from '@ct/shared';
 import { RecipeCard } from '@/components/kitchen/RecipeCard';
 import { WorkoutCard } from '@/components/workout/WorkoutCard';
 import { Sparkline } from '@/components/Sparkline';
@@ -79,9 +80,58 @@ function CardBody({
       // Needs a real message id to answer onto. An optimistic bubble has none
       // yet, but it also cannot be carrying a card the model drew.
       return messageId ? (
-        <WorkoutCard card={card} messageId={messageId} onLogged={() => onLogged?.()} />
+        <WorkoutPrompt card={card} messageId={messageId} onLogged={onLogged} />
       ) : null;
   }
+}
+
+/**
+ * The question, and the receipt it becomes.
+ *
+ * Logging rewrites this message's card on the server, but nothing re-reads the
+ * conversation afterwards — so the question used to stay on screen with a live
+ * button, and every further press logged the same session again. Only a reload
+ * ended it. Swapping the card here shows what that reload would have shown,
+ * without waiting for one.
+ */
+function WorkoutPrompt({
+  card,
+  messageId,
+  onLogged,
+}: {
+  card: Extract<Card, { type: 'workout_prompt' }>;
+  messageId: string;
+  onLogged?: () => void;
+}) {
+  const [logged, setLogged] = useState<ExerciseEntry | null>(null);
+
+  if (logged) return <ExerciseCard card={toExerciseCard(logged)} />;
+
+  return (
+    <WorkoutCard
+      card={card}
+      messageId={messageId}
+      onLogged={(entry) => {
+        setLogged(entry);
+        onLogged?.();
+      }}
+    />
+  );
+}
+
+/** The receipt the server just wrote onto the message, from the entry it returned. */
+function toExerciseCard(entry: ExerciseEntry): Extract<Card, { type: 'exercise' }> {
+  return {
+    type: 'exercise',
+    entry_id: entry.id,
+    description: entry.description,
+    confidence: entry.confidence,
+    kcal_burned: Math.round(entry.kcal_burned),
+    duration_min: entry.duration_min,
+    distance_km: entry.distance_km,
+    category: entry.category,
+    sets: entry.sets,
+  };
 }
 
 /**

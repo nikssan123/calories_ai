@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, Loader2, Minus, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type {
@@ -58,6 +58,10 @@ export function WorkoutCard({
   const [types, setTypes] = useState<ExerciseType[] | null>(null);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [saving, setSaving] = useState(false);
+  // Latched the moment a post goes out, and only released if it fails. The
+  // disabled button covers the second tap of a double-tap on a slow phone;
+  // this covers the one that beats the re-render to it.
+  const posted = useRef(false);
 
   useEffect(() => {
     if (!category) return;
@@ -84,8 +88,9 @@ export function WorkoutCard({
 
   async function submit() {
     const exercises = drafts.map(toExercise).filter((e): e is WorkoutExercise => e !== null);
-    if (!category || exercises.length === 0) return;
+    if (!category || exercises.length === 0 || posted.current) return;
 
+    posted.current = true;
     setSaving(true);
     try {
       const entry = await api.logWorkout({
@@ -95,8 +100,12 @@ export function WorkoutCard({
         message_id: messageId,
       });
       toast.success(`Logged ${entry.description} — ~${Math.round(entry.kcal_burned)} kcal`);
+      // The parent swaps this card for the receipt; nothing here needs to
+      // stand back up afterwards.
       onLogged(entry);
     } catch (e) {
+      // A session that never landed is worth another go — one that did is not.
+      posted.current = false;
       toast.error((e as Error).message);
     } finally {
       setSaving(false);
