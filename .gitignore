@@ -3,8 +3,11 @@ dist/
 .next/
 uploads/
 *.tsbuildinfo
-.env
-.env.local
+# Every .env variant, not just the two that were thought of. A file named
+# .env.server or .env.production holds exactly the same kind of secret as .env,
+# and the version that gets committed is always the one nobody added a line for.
+.env*
+!.env.example
 .DS_Store
 .agent-workspace/
 # Database dumps and photo archives taken by bin/deploy.sh on the host.
