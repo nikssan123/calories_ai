@@ -81,9 +81,46 @@ export type TurnKind =
 
 export type ToolsetName = 'journal' | 'kitchen';
 
+/**
+ * A model and how hard it should think. Lives here rather than in `client.ts`
+ * so a request can carry one — see `AgentRequest.model`; `client.ts` re-exports
+ * it for the callers that had always found it there.
+ */
+export interface ModelChoice {
+  model: string;
+  /**
+   * Reasoning depth. Pinned rather than defaulted so a Claude Code release
+   * cannot silently move the cost and latency of every meal log.
+   *
+   * Optional because not every model accepts it — Haiku 4.5 rejects `effort`
+   * with a 400, and `text_log` runs on Haiku, so this is load-bearing rather
+   * than hypothetical: the provider omits the key entirely when this is unset,
+   * and setting it on the text path would 400 every meal log.
+   */
+  effort?: 'low' | 'medium' | 'high';
+}
+
 export interface AgentRequest {
   /** Which model tier this turn warrants. See `TurnKind`. */
   kind: TurnKind;
+  /**
+   * Overrides the model `kind` would have chosen, for the turn where the kind
+   * is not the whole story.
+   *
+   * There is one such case today: a journal turn written in a language Haiku
+   * 4.5 does not write well is still a `text_log` — same tools, same job, same
+   * daily allowance — it just cannot run on the model the kind names. Expressed
+   * as an override rather than as a second `TurnKind` precisely so it stays one
+   * kind everywhere else: the cost ledger still counts it as a text log, and
+   * so will the per-day entitlement that `SUBSCRIPTIONS.md` puts on the same
+   * counter. The ledger records what actually ran either way, because
+   * providers report the model back on the outcome.
+   *
+   * Claude-specific, so the OpenAI-compatible provider ignores it: the name in
+   * here is a Claude model, and that provider's routing is configuration on a
+   * deployment that may not be talking to Anthropic at all.
+   */
+  model?: ModelChoice;
   /**
    * The system prompt in two halves, because where the split falls is a billing
    * decision, not a formatting one.

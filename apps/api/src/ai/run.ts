@@ -11,7 +11,8 @@ import { missingProfileFields } from '../services/user.ts';
 import { recordUsage } from '../services/usage.ts';
 import { withTurnLock } from '../services/turn-lock.ts';
 import { checkWellbeing } from '../services/wellbeing.ts';
-import { MAX_SESSION_MESSAGES, MAX_TURNS } from './client.ts';
+import { MAX_SESSION_MESSAGES, MAX_TURNS, TEXT_LOG_UNSUPPORTED_LANGUAGE } from './client.ts';
+import { needsCapableModel } from './language.ts';
 import {
   createProvider,
   type AgentMessage,
@@ -127,11 +128,46 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
    */
   const promptText = `${dayContextPrompt(input.profile, day, currentWeight, notes, wellbeing)}\n\n---\n\n${rollover}${input.text}`;
 
+  /*
+   * Providers that keep no session of their own get the transcript replayed —
+   * and get it cut at the same boundary a session is dropped at, rather than
+   * always reaching back thirty messages.
+   *
+   * Without this, everything `shouldStartFreshSession` defends is defended only
+   * for the Agent SDK. The two costs it exists to avoid are both properties of
+   * the transcript, not of the session id: yesterday's meals running straight
+   * into this morning's, which is how a breakfast photo came to be read as a
+   * correction to the previous evening's entry, and a conversation nobody had
+   * reason to keep becoming the largest thing in the prompt and being re-read
+   * on every model call inside every turn.
+   *
+   * Hoisted out of the request because the language check below reads it too.
+   */
+  const history = provider.needsHistory && !fresh ? await loadHistory(input.userId) : [];
+
+  // Photo first: a turn with an image needs a model that can see, whatever else
+  // is going on. Setup outranks a plain log because it happens once and is the
+  // first thing a new account experiences.
+  const kind = input.photo ? 'photo_log' : needsOnboarding ? 'setup' : 'text_log';
+
   const request: AgentRequest = {
-    // Photo first: a turn with an image needs a model that can see, whatever
-    // else is going on. Setup outranks a plain log because it happens once and
-    // is the first thing a new account experiences.
-    kind: input.photo ? 'photo_log' : needsOnboarding ? 'setup' : 'text_log',
+    kind,
+    /*
+     * Only the text log is routed by language, and only ever upward.
+     *
+     * The other kinds are already on models that write every language in the
+     * product well, so there is nothing to fix and a check would just be a
+     * chance to get it wrong. `text_log` is the one that runs on Haiku 4.5,
+     * and it is where a Bulgarian meal log came back with invented words in it.
+     *
+     * Decided from the conversation rather than from this one message, because
+     * a journal is made of fragments — "малко повече" is too short to identify
+     * on its own, and would otherwise reset the decision every few turns and
+     * flip the model back and forth mid-conversation.
+     */
+    model: kind === 'text_log' && (await escalateForLanguage(input, history))
+      ? TEXT_LOG_UNSUPPORTED_LANGUAGE
+      : undefined,
     // What is left on the dynamic side is only what is stable *within* a
     // session: onboarding ends once, the review recap changes weekly. Both are
     // still barred from the cross-session prefix — a deployment-wide cache hit
@@ -146,20 +182,7 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
     photo: input.photo ? { mediaType: input.photo.mediaType, base64: input.photo.base64 } : null,
     tools,
     toolNames,
-    /*
-     * Providers that keep no session of their own get the transcript replayed —
-     * and get it cut at the same boundary a session is dropped at, rather than
-     * always reaching back thirty messages.
-     *
-     * Without this, everything `shouldStartFreshSession` defends is defended
-     * only for the Agent SDK. The two costs it exists to avoid are both
-     * properties of the transcript, not of the session id: yesterday's meals
-     * running straight into this morning's, which is how a breakfast photo came
-     * to be read as a correction to the previous evening's entry, and a
-     * conversation nobody had reason to keep becoming the largest thing in the
-     * prompt and being re-read on every model call inside every turn.
-     */
-    history: provider.needsHistory && !fresh ? await loadHistory(input.userId) : [],
+    history,
     readOnly: false,
     toolset: 'journal',
     maxTurns: MAX_TURNS,
@@ -237,9 +260,45 @@ function drive(
 }
 
 /** Prior turns for providers that cannot remember the conversation themselves. */
-async function loadHistory(userId: string): Promise<AgentMessage[]> {
-  const messages = await listMessages(userId, 30);
+async function loadHistory(userId: string, limit = 30): Promise<AgentMessage[]> {
+  const messages = await listMessages(userId, limit);
   return messages.map((m) => ({ role: m.role as AgentMessage['role'], content: m.content }));
+}
+
+/**
+ * Turns of conversation the language check may look back over when the
+ * transcript was not loaded for the model.
+ *
+ * Small on purpose. This is a second query on the hot path for the session-
+ * based provider, and it buys only what a fragment cannot say on its own —
+ * three or four sentences is already more than the detector needs, and a wider
+ * window would mostly re-read a conversation the model is not being sent.
+ */
+const LANGUAGE_LOOKBACK = 6;
+
+/**
+ * Whether this turn should run on the capable model because of the language it
+ * is written in.
+ *
+ * The current message leads, and prior *user* turns stand behind it. The
+ * assistant's own replies are deliberately excluded: a turn that wrongly
+ * answered a Bulgarian message in English would otherwise be evidence that this
+ * is an English conversation, and the mistake would keep itself alive.
+ *
+ * Providers with `needsHistory` have already paid for the transcript, so the
+ * common case reads no extra rows. The session-based provider has not, and a
+ * fresh session has none to read — hence the fallback, which is also why it is
+ * allowed to reach back past a day boundary: nobody changes language at
+ * midnight, and the first message of a new day is exactly the one with no
+ * conversation behind it.
+ */
+async function escalateForLanguage(
+  input: RunTurnInput,
+  history: AgentMessage[],
+): Promise<boolean> {
+  const prior = history.length > 0 ? history : await loadHistory(input.userId, LANGUAGE_LOOKBACK);
+  const userTexts = prior.filter((m) => m.role === 'user').map((m) => m.content);
+  return needsCapableModel([input.text, ...userTexts.reverse()]);
 }
 
 /**

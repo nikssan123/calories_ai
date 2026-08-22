@@ -136,7 +136,7 @@ export function createAnthropicApiProvider(): AiProvider {
 async function execute(request: AgentRequest, emit?: StreamSink): Promise<Outcome> {
   const usage: TokenUsage = { ...EMPTY_USAGE };
   const startedAt = Date.now();
-  const choice = MODELS[request.kind];
+  const choice = request.model ?? MODELS[request.kind];
 
   const outcome: Outcome = {
     text: '',

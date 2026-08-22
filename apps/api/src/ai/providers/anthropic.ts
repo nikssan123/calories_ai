@@ -59,7 +59,7 @@ async function execute(
     toolset: request.toolset,
   });
 
-  const choice = MODELS[request.kind];
+  const choice = request.model ?? MODELS[request.kind];
 
   const options: Options = {
     // An array with the boundary marker, not one joined string. Everything

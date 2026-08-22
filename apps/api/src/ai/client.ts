@@ -1,7 +1,14 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import type { TurnKind } from './providers/types.ts';
+import type { ModelChoice, TurnKind } from './providers/types.ts';
+
+/**
+ * Re-exported because this was where it lived. It now sits with the other
+ * provider-facing types so `AgentRequest` can carry one without importing this
+ * module back — see `AgentRequest.model`.
+ */
+export type { ModelChoice } from './providers/types.ts';
 
 /**
  * Auth: this app runs the agent on your Claude Code subscription rather than a
@@ -39,20 +46,6 @@ export const AUTH_HELP =
  * If this ever moves to a metered API key, revisit this table first — that is
  * where the economics live.
  */
-export interface ModelChoice {
-  model: string;
-  /**
-   * Reasoning depth. Pinned rather than defaulted so a Claude Code release
-   * cannot silently move the cost and latency of every meal log.
-   *
-   * Optional because not every model accepts it — Haiku 4.5 rejects `effort`
-   * with a 400, and `text_log` now runs on Haiku, so this is load-bearing
-   * rather than hypothetical: the provider omits the key entirely when this is
-   * unset, and setting it on the text path would 400 every meal log.
-   */
-  effort?: 'low' | 'medium' | 'high';
-}
-
 export const MODELS: Record<TurnKind, ModelChoice> = {
   // ~70% of turns, and the most predictable: turning "two eggs and toast" into
   // items with macros is structured extraction, not reasoning. This is the
@@ -96,6 +89,27 @@ export const MODELS: Record<TurnKind, ModelChoice> = {
   // seven dishes that vary, share a shop and land a batch on the right night —
   // is exactly the kind a smaller model drops halfway through.
   meal_plan: { model: 'claude-opus-5', effort: 'high' },
+};
+
+/**
+ * What a journal turn runs on when it is written in a language Haiku 4.5 does
+ * not write well. See `ai/language.ts` for the measurements behind the list.
+ *
+ * Sonnet 5 rather than Opus because the deficit is vocabulary and grammar, not
+ * reasoning — the task is the same structured extraction it always was — and
+ * `effort: 'low'` for the same reason. The commit that moved this path to Haiku
+ * did so partly because Sonnet at high effort was spending ~755 output tokens a
+ * turn to emit ~150 tokens of reply; none of that reasoning was what made the
+ * English replies good, and re-tested on the eight languages that failed, low
+ * effort came back clean. That keeps an escalated turn at ~3.2x a Haiku one
+ * rather than the ~4.1x the old high-effort configuration cost.
+ *
+ * This is the first dial to turn if the escalated replies disappoint: raising
+ * the effort is a one-word change and roughly a cent a turn.
+ */
+export const TEXT_LOG_UNSUPPORTED_LANGUAGE: ModelChoice = {
+  model: 'claude-sonnet-5',
+  effort: 'low',
 };
 
 /** Back-compat for anything still asking for "the" model. */

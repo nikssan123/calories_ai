@@ -439,3 +439,62 @@ describe('runTurn', () => {
     expect(messages[1]!.photo_id).toBeNull();
   });
 });
+
+/**
+ * The model a journal turn runs on is decided by the language it is written in.
+ * `language.test.ts` covers which languages land where; what is under test here
+ * is only that `runTurn` acts on the answer — the detector could be perfect and
+ * the turn still run on the wrong model.
+ */
+describe('routing a turn by its language', () => {
+  it('keeps an English meal log on the cheap model', async () => {
+    scriptAgent({ text: 'Logged.' });
+    await turn('two eggs and a slice of toast with butter');
+
+    expect(agentCalls[0]!.options.model).toBe('claude-haiku-4-5');
+    // Haiku 4.5 rejects `effort` with a 400 — the key must be absent, not undefined.
+    expect('effort' in agentCalls[0]!.options).toBe(false);
+  });
+
+  it('escalates a Bulgarian meal log to the capable model', async () => {
+    scriptAgent({ text: 'Записано.' });
+    await turn('две яйца и филия хляб с масло');
+
+    expect(agentCalls[0]!.options.model).toBe('claude-sonnet-5');
+    expect(agentCalls[0]!.options.effort).toBe('low');
+  });
+
+  /*
+   * The fragment case, end to end. "ок" says nothing on its own, and on its own
+   * it would drop the conversation back onto Haiku — a worse reply mid-thread,
+   * and a model change under a warm cache for the sake of one word.
+   */
+  it('stays escalated across a reply too short to identify', async () => {
+    scriptAgent({ text: 'Записано.' }, { text: 'Добре.' });
+    await turn('две яйца и филия хляб с масло');
+    await turn('ок');
+
+    expect(agentCalls[1]!.options.model).toBe('claude-sonnet-5');
+  });
+
+  /*
+   * A photo is a `photo_log` and already runs on Opus, which writes Bulgarian
+   * perfectly well. The language check must not reach it — there is nothing to
+   * fix there and a downgrade would be the only thing it could achieve.
+   */
+  it('leaves a photo turn on its own model whatever language it is captioned in', async () => {
+    scriptAgent({ text: 'Записано.' });
+    const { savePhoto } = await import('../src/services/photos.ts');
+    const photo = await savePhoto(user.id, 'image/png', 'AAAA');
+    const profile = await getUser(user.id);
+    await runTurn({
+      userId: user.id,
+      ctx: user.ctx,
+      profile,
+      text: 'това е обядът ми',
+      photo: { id: photo.id, mediaType: 'image/png', base64: 'AAAA' },
+    });
+
+    expect(agentCalls[0]!.options.model).toBe('claude-opus-5');
+  });
+});

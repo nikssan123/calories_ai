@@ -30,6 +30,7 @@ The model config the tables assume is the one now in `ai/client.ts`: Haiku 4.5 f
 | action | model | cost |
 |---|---|---|
 | text log | Haiku 4.5 | $0.012 |
+| text log, escalated by language | Sonnet 5, low effort | $0.038 |
 | photo scan | Sonnet 5 | $0.046 |
 | photo scan | Opus 5 | $0.072 |
 | weekly review *(est.)* | Opus 5 | $0.10 |
@@ -51,6 +52,11 @@ Two second-order effects worth knowing, because they are counter-intuitive:
   intuition formed before 2026-08-21.
 
 ## The tiers
+
+Every table in this section prices a text log at $0.012 — the Haiku figure, and so
+the right one only for a user writing in a language Haiku handles. What happens to
+these numbers when that does not hold is the section after them, and for some cells
+it is the difference between a business and a hole.
 
 ### Free — 6 text logs a day, 1 photo scan ever
 
@@ -105,6 +111,50 @@ business and should be cut to a 14-day trial instead.
 Net revenue is after Stripe (2.9% + $0.30). On annual that fee lands once instead of
 twelve times, which is worth about $0.45/month — the reason annual survives at all.
 
+## When the language escalates
+
+A text log costs $0.012 on Haiku 4.5 and $0.038 on Sonnet 5, and which one it is
+depends on the language it was written in — Haiku writes about two dozen languages
+cleanly and roughly ten badly enough to be a product defect. `ai/language.ts` holds
+the list and the measurements; the routing is in `ai/run.ts`.
+
+So the tier tables have a variable in them that they do not show. Only the text-log
+line moves — photos, reviews and plans are already on models that write every
+language well — but text is most of the volume, and at 3.2x it is enough to change
+the answer:
+
+| | net revenue | COGS, none escalated | 10% escalated | all escalated |
+|---|---|---|---|---|
+| Standard typical | $12.31 | $4.32 · **65%** | $4.86 · 61% | $9.75 · 21% |
+| Standard at the cap | $12.31 | $8.33 · 32% | $9.44 · 23% | $19.46 · **−58%** |
+| Standard annual, typical | $9.60 | $4.32 · 55% | $4.86 · 49% | $9.75 · **−2%** |
+| Standard annual, at the cap | $9.60 | $8.33 · 13% | $9.44 · 2% | $19.46 · **−103%** |
+| Coach typical | $28.82 | $12.26 · **57%** | $13.23 · 54% | $21.97 · 24% |
+| Coach at the cap | $28.82 | $23.84 · 17% | $26.38 · 9% | $49.28 · **−71%** |
+| Coach annual, typical | $24.17 | $12.26 · 49% | $13.23 · 45% | $21.97 · 9% |
+| Coach annual, at the cap | $24.17 | $23.84 · 1% | $26.38 · **−9%** | $49.28 · **−104%** |
+
+And the free tier, where the whole number is the CAC:
+
+| | cost per active free user | CAC at 3% | at 5% | at 8% |
+|---|---|---|---|---|
+| none escalated | $1.91 | $63.51 | $38.11 | $23.82 |
+| 10% escalated | $2.31 | $76.97 | $46.18 | $28.86 |
+| all escalated | $5.94 | $198.01 | $118.81 | $74.25 |
+
+**The escalated share is not known.** It is a property of who signs up, not of the
+code, and nothing here can guess it. `ai_usage` records the model each turn actually
+ran on, so the query that settles it is a `GROUP BY model` over `kind = 'text_log'`
+— and it is worth running before the paywall is built rather than after, because two
+of the decisions below depend on the answer.
+
+**If this product is aimed at one of the escalated languages, the right-hand column
+is the real one.** A Bulgarian or Croatian or Finnish user base does not make the
+tiers thinner; it makes two of the eight cells lose money outright and puts the free
+tier's CAC near $200 at plausible conversion. That is a repricing, not a tuning:
+either the caps come down, or the escalated languages carry their own price, or the
+escalated path gets cheaper than Sonnet at low effort.
+
 ## Why the caps are where they are
 
 Every cell in both tables is positive, including the pathological one: a user who
@@ -112,6 +162,14 @@ sits at the ceiling every single day for a year on the cheapest annual plan stil
 does not lose money. That is the property the caps are chosen for, and it is worth
 more than a headline price, because the users who do that are also the ones who never
 churn.
+
+**That property is conditional on the language, and the caps were set before anyone
+knew that.** It holds for a user Haiku can serve. It does not survive a user whose
+every turn escalates — the annual at-the-cap cell goes to −103% on Standard — and on
+Coach annual it does not even survive one turn in ten. The caps are the thing to move
+when the escalated share is known: they are what stands between the pathological user
+and the bill, and against Sonnet prices they are currently set about three times too
+high.
 
 The caps are roughly 2× typical usage. In human terms 15 logs a day is every meal,
 every snack, and several corrections — more than the heaviest real user currently
@@ -147,10 +205,11 @@ Roughly in order:
 - **The three estimated costs.** Review, meal plan and nudge are modelled, not
   measured. Trigger one of each in production and check the ledger before trusting
   the Coach tier's margin.
-- **Whether Haiku is good enough at `text_log`.** The economics assume it is. This
-  is the one change in the cost work that could show up as a worse product, and it
-  is a one-word revert if it does. Watch correction rates — a rise in
-  `update_food_entry` calls per log is the signal.
+- **What share of turns escalate by language.** The largest unknown in this
+  document, and the only one that can turn a cell negative — see "When the
+  language escalates". It is also the cheapest to answer: the ledger already
+  records the model per turn, so it needs a query rather than an experiment.
+  Answer it before building the paywall, because the caps depend on it.
 - **Conversion.** Every number in the free-tier section is a guess until there is a
   paywall to measure. It is also the number the business is most sensitive to.
 - **Whether the market bears $29.99.** Coach is priced as a coaching product rather
