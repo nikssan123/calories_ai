@@ -2,7 +2,13 @@ import type { ChatAction, ChatResponse, Profile } from '@ct/shared';
 import { queryOne, query as sql } from '../db.ts';
 import type { DayContext } from '../time.ts';
 import { localDateFor } from '../time.ts';
-import { countMessagesSince, insertMessage, lastMessageAt, listMessages } from '../services/chat.ts';
+import {
+  countMessagesSince,
+  insertMessage,
+  lastMessageAt,
+  listMessages,
+  listReplayWindow,
+} from '../services/chat.ts';
 import { listNotes } from '../services/notes.ts';
 import { buildDaySummary } from '../services/summary.ts';
 import { latestWeight } from '../services/log.ts';
@@ -264,8 +270,44 @@ function drive(
   return provider.run(request, state);
 }
 
-/** Prior turns for providers that cannot remember the conversation themselves. */
-async function loadHistory(userId: string, limit = 30): Promise<AgentMessage[]> {
+/**
+ * How much transcript a provider that replays gets, and how the window moves.
+ *
+ * `HISTORY_KEEP` is the floor and `HISTORY_CHUNK` is the stride: the window
+ * runs between twenty and thirty-nine messages, and its *start* only moves once
+ * every twenty messages — ten turns — rather than on every one. The average is
+ * about thirty, which is what a plain sliding window held, so nothing is lost
+ * from what the model can see; what is gained is that the front of the prefix
+ * stands still long enough for the cache breakpoint at the end of it to be read
+ * back nine turns out of ten instead of never.
+ *
+ * They are equal on purpose. The stride is what buys the reads and the floor is
+ * what guarantees the context, and there is no reason here to want more of one
+ * than the other — a longer stride would earn slightly more reads per write and
+ * pay for it by carrying a wider window every turn, which very nearly cancels.
+ */
+export const HISTORY_KEEP = 20;
+export const HISTORY_CHUNK = 20;
+
+/**
+ * Prior turns for providers that cannot remember the conversation themselves.
+ *
+ * The window is chunked rather than sliding — see `listReplayWindow`. That
+ * matters here and nowhere else in this file: this is the only transcript that
+ * is sent to a model, so it is the only one whose stability is worth anything.
+ */
+async function loadHistory(userId: string): Promise<AgentMessage[]> {
+  const messages = await listReplayWindow(userId, HISTORY_KEEP, HISTORY_CHUNK);
+  return messages.map((m) => ({ role: m.role as AgentMessage['role'], content: m.content }));
+}
+
+/**
+ * The last few messages, plainly, for a caller that only wants to read them.
+ *
+ * The language check is not sent to a model and has no prefix to protect, so it
+ * takes the simple query and the exact number of rows it asked for.
+ */
+async function loadRecent(userId: string, limit: number): Promise<AgentMessage[]> {
   const messages = await listMessages(userId, limit);
   return messages.map((m) => ({ role: m.role as AgentMessage['role'], content: m.content }));
 }
@@ -301,7 +343,7 @@ async function escalateForLanguage(
   input: RunTurnInput,
   history: AgentMessage[],
 ): Promise<boolean> {
-  const prior = history.length > 0 ? history : await loadHistory(input.userId, LANGUAGE_LOOKBACK);
+  const prior = history.length > 0 ? history : await loadRecent(input.userId, LANGUAGE_LOOKBACK);
   const userTexts = prior.filter((m) => m.role === 'user').map((m) => m.content);
   return needsCapableModel([input.text, ...userTexts.reverse()]);
 }

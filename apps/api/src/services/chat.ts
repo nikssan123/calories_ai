@@ -82,6 +82,53 @@ export async function listMessages(userId: string, limit = 50): Promise<ChatMess
   return rows.map((row) => toMessage(row, secret));
 }
 
+/**
+ * The window of transcript a provider replays, with a start that holds still.
+ *
+ * `listMessages` above is the wrong shape for this, and only for one reason: a
+ * turn appends two rows, so its "most recent N" window slides by two every
+ * turn. The replayed conversation is the front of the cached prefix, and a
+ * prefix whose first message changes on every request is re-keyed on every
+ * request — the cache write is paid and the read is never earned.
+ *
+ * So the *start* is quantised rather than the end. The anchor advances a whole
+ * `chunk` of messages at a time, which holds the replayed prefix byte-identical
+ * for `chunk / 2` consecutive turns and re-keys once, when the anchor jumps.
+ * The window therefore breathes between `keep` and `keep + chunk - 1` messages
+ * instead of sitting at a fixed size. That is the price of the stability, and
+ * it is the whole point: a window that is always exactly thirty messages long
+ * is a window that is never the same twice.
+ *
+ * Counted forward from the user's first message rather than back from their
+ * last, because only a fixed origin gives an anchor that does not drift.
+ * `row_number` and `count` come off the same scan, so it stays one round trip.
+ * `id` breaks ties in the ordering: two rows sharing a `created_at` would
+ * otherwise be free to swap places between turns, which is exactly the silent
+ * re-keying this function exists to prevent.
+ *
+ * Deliberately leaner than `listMessages` — no photo URLs, no cards, no ids.
+ * The model is being sent a transcript, not a page of the app.
+ */
+export async function listReplayWindow(
+  userId: string,
+  keep: number,
+  chunk: number,
+): Promise<{ role: 'user' | 'assistant'; content: string }[]> {
+  const rows = await query<{ role: string; content: string }>(
+    `WITH numbered AS (
+       SELECT role, content,
+              row_number() OVER (ORDER BY created_at, id) - 1 AS idx,
+              count(*)     OVER ()                           AS total
+         FROM chat_messages WHERE user_id = $1
+     )
+     SELECT role, content FROM numbered
+      WHERE idx >= GREATEST(0, (total - $2) / $3) * $3
+      ORDER BY idx`,
+    [userId, keep, chunk],
+  );
+  return rows.map((row) => ({ role: row.role as 'user' | 'assistant', content: row.content }));
+}
+
 /** The signing key, read only when this row actually has a photo to sign. */
 async function photoSecret(row: { photo_id: string | null }): Promise<string | null> {
   return row.photo_id ? getSecret(PHOTO_URL_SECRET) : null;

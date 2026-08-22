@@ -158,13 +158,22 @@ Three things worth knowing:
 - **Verify, don't assume.** Non-zero `cache_read_input_tokens` on repeated turns is the
   only proof the breakpoint landed.
 
-**The breakpoint alone is a no-op — it needs a second change.** `loadHistory` (`run.ts:268`)
-takes the *most recent 30* messages, and at two rows per turn that window slides by two
-every turn once a conversation passes fifteen. A sliding window re-keys the prefix under
-the breakpoint on every turn, so it would pay the write and never earn the read. The
-window has to evict in **chunks** — jump the anchor forward ~20 messages at a time — so
-the prefix holds still for twenty turns and earns roughly nineteen reads per write.
+**The breakpoint alone is a no-op — it needs a second change.** `loadHistory` took the
+*most recent 30* messages, and at two rows per turn that window slid by two every turn
+once a conversation passed fifteen. A sliding window re-keys the prefix under the
+breakpoint on every turn, so it would have paid the write and never earned the read. The
+window now evicts in **chunks**: the anchor is quantised to every 20th message, so the
+replayed prefix is byte-identical for ten consecutive turns — one cache write, then nine
+reads — and the window breathes between 20 and 39 messages instead of sitting at 30.
 Breakpoint and chunked eviction are one change, not two; neither works alone.
+
+**Landed.** `providers/messages.ts` (`replayable`, breakpoint 2 plus uniform block form)
+and `run.ts` (`loadHistory` → `listReplayWindow`, `HISTORY_KEEP`/`HISTORY_CHUNK` = 20/20).
+Two caveats found while implementing, both of which cap the win and neither of which is
+fixable here: a photo turn invalidates the message tier because image presence does, and
+a language escalation switches model, and caches are per-model. Mixed conversations
+therefore re-key more often than the arithmetic above assumes — which is the argument for
+doing step 2 before trusting any of these figures.
 
 ### Where caching does *not* help
 
@@ -393,9 +402,9 @@ field and hoping the architecture shows.
 
 ## 7. What to do first
 
-1. **Add the second cache breakpoint** on the replayed history in `providers/messages.ts`,
-   **and** switch `loadHistory` from a sliding window to chunked eviction. One change in
-   two files; the breakpoint does nothing without the eviction fix. Half a day.
+1. ~~**Add the second cache breakpoint** on the replayed history in `providers/messages.ts`,
+   **and** switch `loadHistory` from a sliding window to chunked eviction.~~ **Done.** One
+   change in two files; the breakpoint does nothing without the eviction fix.
 2. **Flip prod to `anthropic-api`** and log 20 text turns and 10 photos. You would then
    have measured Haiku and photo costs for the first time — the two biggest holes in the
    pricing. Confirm non-zero `cache_read_input_tokens`.

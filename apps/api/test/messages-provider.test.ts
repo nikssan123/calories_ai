@@ -80,6 +80,14 @@ const usage = (input: number, output: number, read = 0, write = 0) => ({
   cache_creation_input_tokens: write,
 });
 
+/**
+ * What a message says, whichever shape it is in. The replayed transcript is in
+ * block form so it can carry a cache breakpoint; this turn's own message is
+ * still a bare string when there is no photo on it.
+ */
+const said = (m: any): string =>
+  typeof m.content === 'string' ? m.content : m.content.map((b: any) => b.text ?? '').join('');
+
 const says = (text: string, tokens = usage(1000, 200)): Reply => ({
   content: [{ type: 'text', text }],
   stop_reason: 'end_turn',
@@ -290,9 +298,71 @@ describe('the replayed transcript', () => {
 
     const messages = seen[0]!.body.messages;
     expect(messages).toHaveLength(3);
-    expect(messages[0]).toMatchObject({ role: 'user', content: 'earlier' });
-    expect(messages[1]).toMatchObject({ role: 'assistant', content: 'Logged.' });
-    expect(messages[2]).toMatchObject({ role: 'user' });
+    expect(said(messages[0])).toBe('earlier');
+    expect(said(messages[1])).toBe('Logged.');
+    expect(messages.map((m: any) => m.role)).toEqual(['user', 'assistant', 'user']);
+  });
+
+  /**
+   * Every replayed message in block form, not only the one carrying the marker.
+   *
+   * The marked message becomes an unmarked one on the next turn. If the two
+   * were rendered differently — a block now, a bare string then — the prefix
+   * under the breakpoint would change on every turn, and the cache would be
+   * written and never read. This is the assertion that catches someone
+   * "simplifying" the unmarked messages back to strings.
+   */
+  it('renders every replayed message the same way, marked or not', async () => {
+    const seen = stubFetch(says('Sure.'));
+    await createAnthropicApiProvider().run(
+      request({
+        history: [
+          { role: 'user', content: 'earlier' },
+          { role: 'assistant', content: 'Logged.' },
+        ],
+      }),
+      null,
+    );
+
+    const [first, second] = seen[0]!.body.messages;
+    expect(first.content).toEqual([{ type: 'text', text: 'earlier' }]);
+    expect(second.content).toEqual([
+      { type: 'text', text: 'Logged.', cache_control: { type: 'ephemeral' } },
+    ]);
+  });
+
+  /**
+   * The breakpoint sits at the end of the transcript and nowhere else, so what
+   * it caches is the tools, the system prompt and the whole conversation — and
+   * the volatile part of the turn, the day's numbers and this message, stays
+   * after it where changing it costs only itself.
+   */
+  it('marks the end of the transcript, and only the end', async () => {
+    const seen = stubFetch(says('Sure.'));
+    await createAnthropicApiProvider().run(
+      request({
+        history: [
+          { role: 'user', content: 'earlier' },
+          { role: 'assistant', content: 'Logged.' },
+          { role: 'user', content: 'and a coffee' },
+        ],
+      }),
+      null,
+    );
+
+    const marked = seen[0]!.body.messages.filter((m: any) =>
+      (Array.isArray(m.content) ? m.content : []).some((b: any) => b.cache_control),
+    );
+    expect(marked).toHaveLength(1);
+    expect(said(marked[0])).toBe('and a coffee');
+  });
+
+  /** Nothing to replay is nothing to mark, rather than an empty marked block. */
+  it('marks nothing when there is no transcript', async () => {
+    const seen = stubFetch(says('Sure.'));
+    await createAnthropicApiProvider().run(request({ history: [] }), null);
+
+    expect(JSON.stringify(seen[0]!.body.messages)).not.toContain('cache_control');
   });
 
   /**
@@ -315,7 +385,8 @@ describe('the replayed transcript', () => {
 
     const messages = seen[0]!.body.messages;
     expect(messages).toHaveLength(2);
-    expect(messages[0]).toMatchObject({ role: 'user', content: 'thanks' });
+    expect(messages[0].role).toBe('user');
+    expect(said(messages[0])).toBe('thanks');
   });
 
   it('drops empty messages, which the API refuses', async () => {

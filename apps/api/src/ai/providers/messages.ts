@@ -379,19 +379,64 @@ function userContent(request: AgentRequest): string | Anthropic.ContentBlockPara
 }
 
 /**
- * The stored transcript, trimmed to something the API will accept.
+ * The stored transcript, trimmed to something the API will accept, and marked
+ * so the next turn does not pay for it twice.
  *
- * Two rules, both of which the journal can break through no fault of its own.
- * The conversation must open on a user message, and the window of recent
- * messages can easily begin mid-exchange on an assistant reply — or on the
- * weekly review, which is published into the journal as one. And no message may
- * be empty, which a row can be if a turn stored a blank reply.
+ * Two rules for the trimming, both of which the journal can break through no
+ * fault of its own. The conversation must open on a user message, and the
+ * window of recent messages can easily begin mid-exchange on an assistant reply
+ * — or on the weekly review, which is published into the journal as one. And no
+ * message may be empty, which a row can be if a turn stored a blank reply.
+ *
+ * Note that both rules are stable under a stable window: the same messages in,
+ * the same messages out. Neither can move the front of the prefix on its own,
+ * which is what makes it safe to cache what they produce.
  */
 function replayable(history: AgentMessage[]): Anthropic.MessageParam[] {
   const kept = history.filter((m) => m.content.trim().length > 0);
   const start = kept.findIndex((m) => m.role === 'user');
   if (start === -1) return [];
-  return kept.slice(start).map((m) => ({ role: m.role, content: m.content }));
+
+  const replay = kept.slice(start);
+  return replay.map((m, i): Anthropic.MessageParam => {
+    /*
+     * Block form for every message, not only the marked one.
+     *
+     * `content` may be a bare string, and only a block can carry a breakpoint —
+     * so the tempting version converts just the last message and leaves the
+     * rest as strings. That version cannot work. The message marked on this
+     * turn is an unmarked message on the next one, and if the two forms do not
+     * serialise identically the prefix changes underneath the breakpoint every
+     * single turn. Rendering all of them the same way costs nothing and removes
+     * the question.
+     */
+    const block: Anthropic.TextBlockParam = { type: 'text', text: m.content };
+
+    /*
+     * The second breakpoint, at the end of the replayed transcript.
+     *
+     * It moves forward two messages a turn, and that is the intended use: the
+     * entry written here is a prefix of the next turn's request, so the next
+     * turn reads back everything up to this point and writes only what it
+     * added. Earlier entries stay readable, so a turn that misses the newest
+     * one still lands on an older one rather than falling all the way through.
+     *
+     * What it caches is everything ahead of it — tools, the system prompt, and
+     * the whole conversation — which is why the transcript's own stability is a
+     * precondition rather than a detail. `loadHistory` evicts in chunks for
+     * exactly this reason; with the sliding window it replaced, the prefix was
+     * re-keyed every turn and this marker would have bought nothing but the
+     * write. The two changes are one change.
+     *
+     * Two things still re-key it legitimately, and both are worth knowing when
+     * the hit rate is read off `ai_usage` rather than guessed at: a photo turn,
+     * because the presence of an image invalidates the message tier, and a
+     * language escalation, because caches are per-model.
+     */
+    if (i === replay.length - 1) block.cache_control = { type: 'ephemeral' };
+
+    return { role: m.role, content: [block] };
+  });
 }
 
 /**

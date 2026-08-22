@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { queryOne } from '../src/db.ts';
 import { MAX_SESSION_MESSAGES, MODELS } from '../src/ai/client.ts';
-import { runTurn } from '../src/ai/run.ts';
+import { HISTORY_CHUNK, HISTORY_KEEP, runTurn } from '../src/ai/run.ts';
 import { getUser } from '../src/services/user.ts';
 import { addWeight, createUser, setUserTargets, type TestUser } from './helpers/factories.ts';
 
@@ -68,6 +68,14 @@ function stubFetch(...replies: { content: unknown[]; stop_reason: string }[]) {
 }
 
 const says = (text: string) => ({ content: [{ type: 'text', text }], stop_reason: 'end_turn' });
+
+/**
+ * What a message says, whichever shape it is in. The replayed transcript is in
+ * block form so it can carry a cache breakpoint; this turn's own message is
+ * still a bare string when there is no photo on it.
+ */
+const said = (m: any): string =>
+  typeof m.content === 'string' ? m.content : m.content.map((b: any) => b.text ?? '').join('');
 
 async function turn(text = 'two eggs and toast') {
   const profile = await getUser(user.id);
@@ -153,7 +161,7 @@ describe('a turn on the direct provider', () => {
 
     const system = seen[0]!.body.system.map((b: any) => b.text).join('\n');
     expect(system).not.toMatch(/2200/);
-    expect(String(seen[0]!.body.messages.at(-1).content)).toMatch(/2200/);
+    expect(said(seen[0]!.body.messages.at(-1))).toMatch(/2200/);
   });
 
   it('records the turn against the model that ran it', async () => {
@@ -189,13 +197,68 @@ describe('a turn on the direct provider', () => {
  * for the Agent SDK — and this provider, which replays rather than resumes, is
  * the one production is meant to run on.
  */
+/** A conversation already several turns deep, all of it inside today. */
+async function seedConversation(messages: number) {
+  for (let i = 0; i < messages; i++) {
+    await queryOne(
+      `INSERT INTO chat_messages (user_id, role, content, created_at)
+       VALUES ($1, $2, $3, now() - ($4 || ' seconds')::interval)
+       RETURNING id`,
+      [user.id, i % 2 === 0 ? 'user' : 'assistant', `message ${i}`, String(messages - i)],
+    );
+  }
+}
+
+/**
+ * Where the replayed transcript *starts*, which is the part the cache pays for.
+ *
+ * The breakpoint at the end of the transcript is only worth writing if what
+ * comes before it is the same bytes as last turn. A window of the thirty most
+ * recent messages is not: a turn appends two rows, so its first message differs
+ * on every request and the entry written under the breakpoint is never read
+ * back. These two tests are the reason `loadHistory` counts forward from the
+ * first message instead of back from the last.
+ */
+describe('where the replayed transcript starts', () => {
+  it('opens on the same message two turns running', async () => {
+    await seedConversation(HISTORY_KEEP + HISTORY_CHUNK + 2);
+
+    const seen = stubFetch(says('Sure.'), says('Sure.'));
+    await turn('and a coffee');
+    await turn('and a banana');
+
+    const [before, after] = seen.map((r) => r.body.messages);
+    expect(said(after[0])).toBe(said(before[0]));
+
+    // Same opener, two more messages: the second turn replayed everything the
+    // first one did and the exchange in between, which is exactly the shape a
+    // cache read wants — an unchanged prefix with new content after it.
+    expect(after).toHaveLength(before.length + 2);
+  });
+
+  it('jumps the start forward in one step rather than growing without bound', async () => {
+    await seedConversation(HISTORY_KEEP + HISTORY_CHUNK - 2);
+
+    const seen = stubFetch(says('Sure.'), says('Sure.'));
+    await turn('and a coffee');
+    await turn('and a banana');
+
+    // Everything, then the floor: the anchor crossed a chunk boundary between
+    // the two turns and moved a whole chunk forward, paying one cache write to
+    // buy the next nine turns a prefix that does not move.
+    const replayed = (i: number) => seen[i]!.body.messages.length - 1;
+    expect(replayed(0)).toBe(HISTORY_KEEP + HISTORY_CHUNK - 2);
+    expect(replayed(1)).toBe(HISTORY_KEEP);
+  });
+});
+
 describe('how far back the transcript reaches', () => {
   it('replays the conversation within a day', async () => {
     await seedPriorTurn(0, 'earlier today');
     const seen = stubFetch(says('Sure.'));
     await turn();
 
-    const contents = seen[0]!.body.messages.map((m: any) => String(m.content));
+    const contents = seen[0]!.body.messages.map(said);
     expect(contents.some((c: string) => c.includes('earlier today'))).toBe(true);
   });
 
@@ -206,7 +269,7 @@ describe('how far back the transcript reaches', () => {
 
     const messages = seen[0]!.body.messages;
     expect(messages).toHaveLength(1);
-    expect(String(messages[0].content)).not.toMatch(/yesterday's dinner/);
+    expect(said(messages[0])).not.toMatch(/yesterday's dinner/);
   });
 
   /** The notice still explains the discontinuity, even with nothing replayed. */
@@ -215,7 +278,7 @@ describe('how far back the transcript reaches', () => {
     const seen = stubFetch(says('Morning.'));
     await turn();
 
-    expect(String(seen[0]!.body.messages[0].content)).toMatch(/new day/i);
+    expect(said(seen[0]!.body.messages[0])).toMatch(/new day/i);
   });
 
   it('cuts a single day that has run away, so one conversation cannot fill the window', async () => {
