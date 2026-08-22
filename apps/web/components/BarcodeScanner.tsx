@@ -334,6 +334,25 @@ function PortionCard({
     mode === 'serving' ? servings * (product.serving_g ?? 100) : mode === 'hundred' ? 100 : grams;
   const share = eatenGrams / 100;
 
+  // What goes on the first pill, and what goes under the row.
+  //
+  // A pill is a third of a card that is a phone wide — about ten characters —
+  // and the label on it comes from a crowd: "30 g", but also "1 serving (2
+  // biscuits, 25 g)". The long ones used to run out of their own pill and
+  // across the one beside them. So the pill gets the weight, which is short by
+  // construction and is the number the arithmetic below is done in anyway, and
+  // the words the label actually used get a line to themselves underneath,
+  // where they have the width of the card and can wrap.
+  const servingDesc = product.serving_desc?.trim() || null;
+  const servingGrams = `${Math.round(product.serving_g ?? 0)} g`;
+  const servingPill = servingDesc && servingDesc.length <= 10 ? servingDesc : servingGrams;
+  const servingNote =
+    servingDesc === null
+      ? null
+      : servingPill === servingDesc
+        ? `${servingGrams} a serving`
+        : servingDesc;
+
   async function log() {
     setLogging(true);
     try {
@@ -383,28 +402,29 @@ function PortionCard({
         {product.serving_g !== null && (
           <ToggleGroupItem
             value="serving"
-            className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-9 flex-1 rounded-full px-3 text-footnote font-bold transition-colors"
+            className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-9 min-w-0 flex-1 rounded-full px-2 text-footnote font-bold transition-colors"
           >
-            {product.serving_desc ?? `${Math.round(product.serving_g)} g`}
+            <span className="truncate">{servingPill}</span>
           </ToggleGroupItem>
         )}
         <ToggleGroupItem
           value="hundred"
-          className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-9 flex-1 rounded-full px-3 text-footnote font-bold transition-colors"
+          className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-9 min-w-0 flex-1 rounded-full px-2 text-footnote font-bold transition-colors"
         >
-          100 g
+          <span className="truncate">100 g</span>
         </ToggleGroupItem>
         <ToggleGroupItem
           value="custom"
-          className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-9 flex-1 rounded-full px-3 text-footnote font-bold transition-colors"
+          className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-9 min-w-0 flex-1 rounded-full px-2 text-footnote font-bold transition-colors"
         >
-          Weigh it
+          <span className="truncate">Weigh it</span>
         </ToggleGroupItem>
       </ToggleGroup>
 
       {mode === 'serving' && (
         <Stepper
           label="servings"
+          note={servingNote}
           value={servings}
           onChange={setServings}
           min={0.5}
@@ -503,6 +523,7 @@ function Missed({
 /** A stepper, because a phone keyboard over a camera sheet is a bad time. */
 function Stepper({
   label,
+  note,
   value,
   onChange,
   min,
@@ -510,6 +531,8 @@ function Stepper({
   step,
 }: {
   label: string;
+  /** What the serving on the pill actually was, in the label's own words. */
+  note?: string | null;
   value: number;
   onChange: (next: number) => void;
   min: number;
@@ -520,8 +543,11 @@ function Stepper({
     onChange(Math.min(max, Math.max(min, Math.round((value + delta) / step) * step)));
 
   return (
-    <div className="flex items-center justify-between gap-3">
-      <p className="text-body">How much did you have?</p>
+    <div className="flex items-center justify-between gap-2">
+      <div className="min-w-0">
+        <p className="text-body">How much did you have?</p>
+        {note && <p className="text-footnote text-muted-foreground mt-0.5">{note}</p>}
+      </div>
       <div className="bg-muted border-border flex shrink-0 items-center rounded-full border-2">
         <button
           type="button"
@@ -532,7 +558,7 @@ function Stepper({
         >
           −
         </button>
-        <span className="text-figure w-20 text-center text-body tnum" aria-live="polite">
+        <span className="text-figure w-16 text-center text-body tnum" aria-live="polite">
           {value % 1 === 0 ? value : value.toFixed(1)} {label === 'grams' ? 'g' : ''}
         </span>
         <button

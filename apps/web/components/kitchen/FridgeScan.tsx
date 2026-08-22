@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { Camera, Check, Loader2, X } from 'lucide-react';
+import { Camera, Check, Loader2, Plus, UtensilsCrossed, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PantryFind, PantryScanProposal } from '@ct/shared';
 import { api } from '@/lib/api';
@@ -236,24 +236,37 @@ export function FridgeScan({
               the same list and differ only in where they leave you, which is why
               it is safe to decide this late — and deciding it late is the whole
               reason there is one camera on the screen instead of two.
+
+              Full width while stacked, sharing the row once there is one:
+              `flex-1` on its own sizes the main axis, which in a column is the
+              height, and the pair used to collapse to the height of their own
+              text — two 24px slivers on exactly the phone this is used from.
             */}
             <div className="border-border flex flex-col gap-2 border-t-2 p-3 sm:flex-row">
               <Button
                 onClick={() => void commit('stock')}
                 disabled={busy}
                 variant={canCook ? 'secondary' : 'default'}
-                className="h-11 flex-1 gap-2 rounded-full"
+                className="h-12 w-full gap-2 rounded-full sm:h-11 sm:flex-1"
               >
-                {saving === 'stock' && <Loader2 size={15} className="animate-spin" />}
+                {saving === 'stock' ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Plus size={16} />
+                )}
                 {saving === 'stock' ? 'Adding…' : 'Add to my kitchen'}
               </Button>
               {canCook && (
                 <Button
                   onClick={() => void commit('cook')}
                   disabled={busy || chosen.size === 0}
-                  className="h-11 flex-1 gap-2 rounded-full"
+                  className="h-12 w-full gap-2 rounded-full sm:h-11 sm:flex-1"
                 >
-                  {saving === 'cook' && <Loader2 size={15} className="animate-spin" />}
+                  {saving === 'cook' ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <UtensilsCrossed size={16} />
+                  )}
                   {saving === 'cook' ? 'Finding recipes…' : 'Cook with these'}
                 </Button>
               )}
