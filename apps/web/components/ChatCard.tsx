@@ -414,6 +414,12 @@ function DayProgress({
         )}
       </div>
 
+      {/*
+        Both halves of the answer, because "1,315 left" on its own is only half
+        of it: it says where the day is going and never says where it has got
+        to. The two figures are the same pair the ring on the dashboard carries,
+        in the same order, so glancing between them is not translation work.
+      */}
       <div className="mt-2 flex items-baseline justify-between gap-3">
         <span className="text-footnote text-muted-foreground flex min-w-0 items-center gap-1.5 font-semibold">
           <span
@@ -421,22 +427,21 @@ function DayProgress({
             className="size-2.5 shrink-0 rounded-full"
             style={{ background: bandFill(true, over && before >= target) }}
           />
-          this meal
+          <span className="truncate">this meal</span>
         </span>
-        <span
-          className={cn(
-            'tnum text-footnote shrink-0 font-bold',
-            over ? 'text-foreground' : 'text-muted-foreground',
-          )}
-        >
-          {[
-            over
+
+        <span className="tnum text-footnote text-muted-foreground shrink-0 font-semibold">
+          {/* The day so far leads, at ink weight: it is the figure the bar is
+              a picture of, and the one they came to the card for. */}
+          <span className="text-foreground font-extrabold">{after.toLocaleString()}</span> of{' '}
+          {target.toLocaleString()}
+          {' · '}
+          <span className={cn('font-bold', over && 'text-foreground')}>
+            {over
               ? `${Math.abs(remaining).toLocaleString()} over`
-              : `${remaining.toLocaleString()} left`,
-            dayWord(day.local_date, today),
-          ]
-            .filter(Boolean)
-            .join(' ')}
+              : `${remaining.toLocaleString()} left`}
+          </span>
+          {dayWord(day.local_date, today) && ` ${dayWord(day.local_date, today)}`}
         </span>
       </div>
     </div>
@@ -465,17 +470,17 @@ function bandFill(mine: boolean, over: boolean): string {
 }
 
 /**
- * Which day the bar is talking about.
+ * Which day the bar is talking about, said only when it is not this one.
  *
- * Almost always today, and saying so is worth the two words — the one time it
- * is not is a meal logged onto yesterday, where a bar reading as today's would
- * be a confident picture of the wrong day. Said as a date, or not at all, when
- * nobody has told us which day is current; a guess is the one answer that could
- * be wrong without looking wrong.
+ * Two figures and a date is more line than a phone has, and "today" is what
+ * everybody assumes anyway — so the words are spent on the case that would
+ * otherwise mislead: a meal logged onto yesterday, whose bar would read as
+ * today's day. Silent, too, when nobody has told us which day is current; a
+ * guess is the one answer that could be wrong without looking wrong.
  */
 function dayWord(isoDate: string, today?: string): string {
-  if (isoDate === today) return 'today';
-  return today === undefined ? '' : `on ${formatDate(isoDate)}`;
+  if (today === undefined || isoDate === today) return '';
+  return `on ${formatDate(isoDate)}`;
 }
 
 function ExerciseCard({ card }: { card: Extract<Card, { type: 'exercise' }> }) {
