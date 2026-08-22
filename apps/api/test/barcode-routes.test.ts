@@ -152,6 +152,28 @@ describe('POST /barcode/:code/log', () => {
     ]);
   });
 
+  it('logs a fraction of a serving as the fraction, not as a decimal', async () => {
+    stubOff(SPREAD);
+    // Three quarters off the picker's ladder. It arrives as 0.75 and has to
+    // read back as ¾ — "0.8 servings" is a portion nobody chose.
+    const response = await post(`/barcode/${CODE}/log`, { servings: 0.75 });
+
+    expect(response.statusCode).toBe(201);
+    expect(await entries()).toMatchObject([
+      { quantity_g: 11.3, quantity_desc: '¾ serving (11.3 g) — 15 g' },
+    ]);
+  });
+
+  it('logs a third without rounding it to something else', async () => {
+    stubOff(SPREAD);
+    // ⅓ cannot be written down exactly, so it crosses the wire as 0.333…. The
+    // entry still has to say ⅓ rather than the decimal it travelled as.
+    const response = await post(`/barcode/${CODE}/log`, { servings: 1 / 3 });
+
+    expect(response.statusCode).toBe(201);
+    expect(await entries()).toMatchObject([{ quantity_desc: '⅓ serving (5 g) — 15 g' }]);
+  });
+
   it('refuses servings against a label that never named one', async () => {
     stubOff({ ...SPREAD, product: { ...SPREAD.product, serving_quantity: null, serving_size: '' } });
     const response = await post(`/barcode/${CODE}/log`, { servings: 2 });

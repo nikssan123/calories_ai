@@ -1146,6 +1146,71 @@ export function formatKcal(kcal: number, confidence: Confidence = 'medium'): str
   return confidence === 'high' ? `${n} kcal` : `~${n} kcal`;
 }
 
+/**
+ * The amounts people actually eat a packet in.
+ *
+ * Half a tin, three quarters of a bar, a third of a pizza — the portions that
+ * come out of someone's mouth when you ask how much they had. The portion
+ * picker walks this ladder instead of stepping by a fixed half serving, so the
+ * common answers are one or two taps from the default rather than unreachable:
+ * nothing on a linear half-serving step can say a quarter or a third at all.
+ *
+ * It thins out as it climbs on purpose. The difference between ¼ and ⅓ of a
+ * chocolate bar is a distinction someone can see on the wrapper; the difference
+ * between 7 and 7¼ servings of anything is noise.
+ */
+export const SERVING_STEPS = [
+  1 / 4,
+  1 / 3,
+  1 / 2,
+  2 / 3,
+  3 / 4,
+  1,
+  1.25,
+  1.5,
+  1.75,
+  2,
+  2.5,
+  3,
+  3.5,
+  4,
+  5,
+  6,
+  7,
+  8,
+  10,
+  12,
+  16,
+  20,
+];
+
+/** Written the way the ladder offered it: ½ rather than 0.5, 1¾ rather than 1.8. */
+const SERVING_GLYPHS: [number, string][] = [
+  [1 / 4, '¼'],
+  [1 / 3, '⅓'],
+  [1 / 2, '½'],
+  [2 / 3, '⅔'],
+  [3 / 4, '¾'],
+];
+
+/**
+ * A serving count as a person would write it.
+ *
+ * Thirds are the reason this is not a `toFixed`. ⅓ arrives over the wire as
+ * 0.3333…, and rounding that to one decimal gives "0.3 servings" — a number the
+ * user never chose and cannot get back to. So the fractions are matched with a
+ * tolerance and printed as themselves, and only genuinely odd amounts fall
+ * through to a decimal.
+ */
+export function formatServings(servings: number): string {
+  const whole = Math.floor(servings + 1e-6);
+  const rest = servings - whole;
+  const glyph = SERVING_GLYPHS.find(([value]) => Math.abs(rest - value) < 0.02)?.[1];
+  if (glyph) return whole === 0 ? glyph : `${whole}${glyph}`;
+  if (rest < 0.02) return String(whole);
+  return String(Math.round(servings * 100) / 100);
+}
+
 // ---- Adaptive targets ------------------------------------------------------
 
 /**

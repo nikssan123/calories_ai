@@ -2095,7 +2095,9 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         .number()
         .nullable()
         .default(null)
-        .describe('How many of the label\'s servings they ate. Null if you are giving grams.'),
+        .describe(
+          "How many of the label's servings they ate. Fractions are expected — 0.5 for half a packet, 0.75 for three quarters of it. Null if you are giving grams.",
+        ),
       meal: mealField.nullable().default(null).describe('Null to infer from the time it was eaten.'),
       when: whenField,
     },

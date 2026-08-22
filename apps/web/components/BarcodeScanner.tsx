@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Camera, ImageIcon, Loader2, ScanBarcode } from 'lucide-react';
 import { toast } from 'sonner';
-import type { BarcodeProduct, FoodEntry } from '@ct/shared';
+import { type BarcodeProduct, type FoodEntry, SERVING_STEPS, formatServings } from '@ct/shared';
 import { api } from '@/lib/api';
 import { canOpenCamera, decodeBarcode, decodeBarcodeFromFile } from '@/lib/barcode';
 import { PHOTO_ACCEPT, preparePhoto, type PreparedPhoto } from '@/lib/image';
@@ -427,9 +427,8 @@ function PortionCard({
           note={servingNote}
           value={servings}
           onChange={setServings}
-          min={0.5}
-          max={20}
-          step={0.5}
+          ladder={SERVING_STEPS}
+          format={formatServings}
         />
       )}
       {mode === 'custom' && (
@@ -520,7 +519,14 @@ function Missed({
   );
 }
 
-/** A stepper, because a phone keyboard over a camera sheet is a bad time. */
+/**
+ * A stepper, because a phone keyboard over a camera sheet is a bad time.
+ *
+ * Two ways of moving, for two kinds of quantity. Grams are linear and step by a
+ * fixed amount. Servings walk a `ladder` of the fractions people eat packets in
+ * — a fixed step can only ever offer multiples of itself, which is how a picker
+ * ends up unable to say three quarters of a bar.
+ */
 function Stepper({
   label,
   note,
@@ -529,18 +535,37 @@ function Stepper({
   min,
   max,
   step,
+  ladder,
+  format,
 }: {
   label: string;
   /** What the serving on the pill actually was, in the label's own words. */
   note?: string | null;
   value: number;
   onChange: (next: number) => void;
-  min: number;
-  max: number;
-  step: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  /** Ascending amounts to move between, instead of a fixed step. */
+  ladder?: number[];
+  format?: (value: number) => string;
 }) {
-  const move = (delta: number) =>
-    onChange(Math.min(max, Math.max(min, Math.round((value + delta) / step) * step)));
+  const rung = ladder ? nearestRung(ladder, value) : -1;
+
+  const atMin = ladder ? rung === 0 : value <= (min ?? 0);
+  const atMax = ladder ? rung === ladder.length - 1 : value >= (max ?? Infinity);
+
+  const move = (delta: number) => {
+    if (ladder) {
+      const next = Math.min(ladder.length - 1, Math.max(0, rung + Math.sign(delta)));
+      onChange(ladder[next] ?? value);
+      return;
+    }
+    const size = step ?? 1;
+    onChange(
+      Math.min(max ?? Infinity, Math.max(min ?? 0, Math.round((value + delta) / size) * size)),
+    );
+  };
 
   return (
     <div className="flex items-center justify-between gap-2">
@@ -551,20 +576,21 @@ function Stepper({
       <div className="bg-muted border-border flex shrink-0 items-center rounded-full border-2">
         <button
           type="button"
-          onClick={() => move(-step)}
-          disabled={value <= min}
+          onClick={() => move(-(step ?? 1))}
+          disabled={atMin}
           aria-label="Less"
           className="text-muted-foreground hover:text-foreground flex size-9 items-center justify-center rounded-full text-lg font-bold disabled:opacity-40"
         >
           −
         </button>
         <span className="text-figure w-16 text-center text-body tnum" aria-live="polite">
-          {value % 1 === 0 ? value : value.toFixed(1)} {label === 'grams' ? 'g' : ''}
+          {format ? format(value) : value % 1 === 0 ? value : value.toFixed(1)}{' '}
+          {label === 'grams' ? 'g' : ''}
         </span>
         <button
           type="button"
-          onClick={() => move(step)}
-          disabled={value >= max}
+          onClick={() => move(step ?? 1)}
+          disabled={atMax}
           aria-label="More"
           className="text-muted-foreground hover:text-foreground flex size-9 items-center justify-center rounded-full text-lg font-bold disabled:opacity-40"
         >
@@ -573,6 +599,23 @@ function Stepper({
       </div>
     </div>
   );
+}
+
+/**
+ * Which rung the ladder is standing on. Nearest rather than exact, because ⅓
+ * is 0.333… and an equality test against it is a coin flip.
+ */
+function nearestRung(ladder: number[], value: number): number {
+  let best = 0;
+  let closest = Infinity;
+  ladder.forEach((candidate, index) => {
+    const gap = Math.abs(candidate - value);
+    if (gap < closest) {
+      closest = gap;
+      best = index;
+    }
+  });
+  return best;
 }
 
 function Macro({ label, value, color }: { label: string; value: number; color: string }) {

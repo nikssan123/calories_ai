@@ -1,4 +1,4 @@
-import type { BarcodeProduct, BarcodeSource, FoodEntry, Meal } from '@ct/shared';
+import { type BarcodeProduct, type BarcodeSource, type FoodEntry, type Meal, formatServings } from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import { env } from '../env.ts';
 import { createFoodEntry } from './log.ts';
@@ -569,6 +569,10 @@ function describe(product: BarcodeProduct): string {
  * than a bare weight they never typed — the grams are the arithmetic and the
  * servings are the decision, and a correction screen is easier to use when it
  * shows the decision.
+ *
+ * Which is why the fractions are written as fractions. Someone who tapped ¾ and
+ * reads "0.8 servings" back has been shown the arithmetic after all, and a
+ * rounder one than they picked.
  */
 function portionDescription(
   product: BarcodeProduct,
@@ -577,6 +581,7 @@ function portionDescription(
 ): string {
   if (servings === undefined) return `${round(grams)} g`;
   const label = product.serving_desc ? ` — ${product.serving_desc}` : '';
-  const plural = servings === 1 ? 'serving' : 'servings';
-  return `${round(servings)} ${plural} (${round(grams)} g)${label}`;
+  // Singular for anything up to one, because "¾ servings" is not English.
+  const plural = servings <= 1 ? 'serving' : 'servings';
+  return `${formatServings(servings)} ${plural} (${round(grams)} g)${label}`;
 }
