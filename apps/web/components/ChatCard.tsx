@@ -315,7 +315,7 @@ function FoodCard({ card, today }: { card: Extract<Card, { type: 'food' }>; toda
         </p>
       )}
 
-      {card.day && <DayProgress day={card.day} kcal={card.kcal} today={today} />}
+      {card.day && <DayProgress day={card.day} kcal={card.kcal} approx={approx} today={today} />}
     </Shell>
   );
 }
@@ -339,10 +339,13 @@ function FoodCard({ card, today }: { card: Extract<Card, { type: 'food' }>; toda
 function DayProgress({
   day,
   kcal,
+  approx,
   today,
 }: {
   day: NonNullable<Extract<Card, { type: 'food' }>['day']>;
   kcal: number;
+  /** Estimated rather than measured — marked here exactly as in the header. */
+  approx: boolean;
   today?: string;
 }) {
   const target = Math.max(1, Math.round(day.target_kcal));
@@ -428,6 +431,14 @@ function DayProgress({
             style={{ background: bandFill(true, over && before >= target) }}
           />
           <span className="truncate">this meal</span>
+          {/* The band's own figure, on the band's own label. The header carries
+              it too, but the header is about the plate and this line is about
+              the day — and a legend that names a colour without saying what it
+              is worth leaves the reader to measure the bar by eye. */}
+          <span className="tnum text-foreground shrink-0 font-extrabold">
+            {approx && '~'}
+            {kcal.toLocaleString()}
+          </span>
         </span>
 
         <span className="tnum text-footnote text-muted-foreground shrink-0 font-semibold">
