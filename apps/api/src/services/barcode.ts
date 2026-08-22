@@ -350,7 +350,17 @@ async function fromFoodDataCentral(code: string): Promise<BarcodeProduct | null>
   const key = env.barcode.fdcApiKey;
   if (!key) return null;
 
-  const url = `${FDC_URL}?query=${code}&dataType=Branded&pageSize=5&api_key=${encodeURIComponent(key)}`;
+  // FDC indexes the GTIN zero-padded to 14 and matches nothing else. A search
+  // for the 13-digit form of a code whose row is sitting right there comes back
+  // with zero hits, not an error — so before this, a configured key bought
+  // nothing at all for anything scanned off a US packet. `normaliseBarcode`
+  // hands over 8, 13 or 14 digits, and only the last of those ever matched.
+  //
+  // Padded for the query alone. The cache stays keyed on `code`, and the GTIN
+  // on the way back is still checked with `sameGtin`, which compares without
+  // leading zeros and so does not care which form either side wrote.
+  const gtin14 = code.padStart(14, '0');
+  const url = `${FDC_URL}?query=${gtin14}&dataType=Branded&pageSize=5&api_key=${encodeURIComponent(key)}`;
   const body = await fetchJson(url, {});
   if (!body) return null;
 

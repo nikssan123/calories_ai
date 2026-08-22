@@ -283,6 +283,29 @@ describe('FoodData Central', () => {
     expect(calls[1]!.url).toContain('api_key=test-key');
   });
 
+  it('asks for the GTIN padded to 14, which is the only form FDC matches', async () => {
+    env.barcode.fdcApiKey = 'test-key';
+    const calls = stubFetch({ status: 404 }, { body: { foods: [FDC_FOOD] } });
+
+    await lookupBarcode(UPC);
+
+    // `normaliseBarcode` turns a scanned UPC-A into 13 digits, and a search for
+    // that form returns zero hits against a row that is present — verified
+    // against the live API. The padded form is what finds it.
+    const url = new URL(calls[1]!.url);
+    expect(url.searchParams.get('query')).toBe('00028400090865');
+    expect(url.searchParams.get('query')).toHaveLength(14);
+  });
+
+  it('still matches the product back when FDC answers with a shorter GTIN', async () => {
+    env.barcode.fdcApiKey = 'test-key';
+    // Padding the question does not mean the answer comes back padded: FDC
+    // stores these both ways, which is why the check is on the number.
+    stubFetch({ status: 404 }, { body: { foods: [{ ...FDC_FOOD, gtinUpc: '28400090865' }] } });
+
+    expect(await lookupBarcode(UPC)).toMatchObject({ name: 'Corn flakes', source: 'fdc' });
+  });
+
   it('refuses a search hit that is a different product', async () => {
     env.barcode.fdcApiKey = 'test-key';
     stubFetch({ status: 404 }, { body: { foods: [{ ...FDC_FOOD, gtinUpc: '012345678905' }] } });
