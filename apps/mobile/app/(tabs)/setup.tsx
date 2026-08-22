@@ -17,6 +17,7 @@ import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { NumberField, Picker, Sheet, TextField } from '@/components/Field';
 import { Skeleton } from '@/components/Skeleton';
 import { Switch } from '@/components/Switch';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { font, type as t, useColors, withAlpha } from '@/theme';
@@ -304,6 +305,15 @@ export default function SetupScreen() {
       </InsetGroup>
 
       <DietRules profile={profile} onChange={setProfile} onError={setError} />
+
+      <InsetGroup
+        title="Appearance"
+        footer="System follows your device, including its light and dark schedule."
+      >
+        <View style={styles.appearance}>
+          <ThemeToggle />
+        </View>
+      </InsetGroup>
 
       <EmailSettings profile={profile} onChange={setProfile} onError={setError} />
 
@@ -794,6 +804,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   goalLabel: { fontFamily: font.bold, fontSize: 14, lineHeight: 20 },
+  appearance: { padding: 12 },
   rowButton: { paddingHorizontal: 16, paddingVertical: 14 },
   unverified: { paddingHorizontal: 16, paddingVertical: 14, gap: 10 },
   hint: { lineHeight: 20 },

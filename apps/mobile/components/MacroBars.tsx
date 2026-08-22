@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import type { Nutrition, Targets } from '@ct/shared';
 import { duration, ease, type as t, useColors, type Palette } from '@/theme';
+import { Confetti } from '@/components/Confetti';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 /**
@@ -14,13 +15,10 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
  * three coloured stubs with three short labels is exactly the arrangement a
  * glance skips.
  *
- * The web throws confetti on crossing a target — once, in that macro's own
- * colour. That is the app's only celebration and it is deliberately on the
- * macros rather than on calories: "you have reached your protein" is
- * unambiguously good news and "you have reached your calorie limit" is not.
- * It is not ported yet; when it is, it must consult `useReducedMotion` and not
- * fire at all for anyone who asked for less motion — the one animation in the
- * app with no end state worth arriving at.
+ * Crossing a target throws confetti — once, out of the bar that did it. That is
+ * the app's only celebration and it is deliberately on the macros rather than
+ * on calories: "you have reached your protein" is unambiguously good news and
+ * "you have reached your calorie limit" is not.
  */
 const MACROS = [
   { key: 'protein_g', label: 'Protein', emoji: '💪', fill: 'protein', ink: 'proteinText' },
@@ -73,6 +71,24 @@ function MacroTrack({
   const pct = Math.min(100, target > 0 ? (value / target) * 100 : 0);
   const met = target > 0 && value >= target;
 
+  /*
+   * Counts the crossings rather than tracking a boolean, so <Confetti> — which
+   * ignores the value it is handed and watches only for a change — fires again
+   * if a target is met, undone by a deletion, and met a second time.
+   */
+  const [crossings, setCrossings] = useState(0);
+  const wasMet = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (wasMet.current === null) {
+      // The state on arrival is not an event: a day already at target must not
+      // let off fireworks every time the screen is opened.
+      wasMet.current = met;
+      return;
+    }
+    if (met && !wasMet.current) setCrossings((c) => c + 1);
+    wasMet.current = met;
+  }, [met]);
+
   const width = useSharedValue(pct);
   const reduced = useReducedMotion();
   useEffect(() => {
@@ -93,6 +109,8 @@ function MacroTrack({
 
   return (
     <View style={styles.track}>
+      <Confetti trigger={crossings || null} />
+
       <View style={styles.labelRow}>
         <Text style={styles.emoji}>{macro.emoji}</Text>
         <Text

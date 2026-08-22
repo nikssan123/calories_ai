@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { useColorScheme, View } from 'react-native';
+import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -30,7 +30,8 @@ import { Nunito_800ExtraBold } from '@expo-google-fonts/nunito/800ExtraBold';
 import { Nunito_500Medium_Italic } from '@expo-google-fonts/nunito/500Medium_Italic';
 import { Nunito_800ExtraBold_Italic } from '@expo-google-fonts/nunito/800ExtraBold_Italic';
 import { AuthProvider, useAuth } from '@/lib/auth';
-import { paletteFor, ThemeContext, useColors, type Scheme } from '@/theme';
+import { ThemePreferenceProvider, useThemePreference } from '@/lib/theme-preference';
+import { paletteFor, ThemeContext, useColors } from '@/theme';
 
 /*
  * Held until the fonts are in and the session has resolved.
@@ -69,21 +70,23 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <Themed />
-      </AuthProvider>
+      <ThemePreferenceProvider>
+        <AuthProvider>
+          <Themed />
+        </AuthProvider>
+      </ThemePreferenceProvider>
     </SafeAreaProvider>
   );
 }
 
 function Themed() {
   /*
-   * The OS setting, for now. The web has an in-app override on top of it
-   * (`ThemeSync`/`ThemeToggle`); when that is ported it resolves here, which is
-   * why every component reads the palette from context rather than calling
-   * `useColorScheme` for itself.
+   * The preference and the OS, resolved together in one place. This is why
+   * every component reads its palette from context rather than calling
+   * `useColorScheme` for itself: a component that asked the OS directly would
+   * ignore an override, and the app would render two themes at once.
    */
-  const scheme: Scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const { scheme } = useThemePreference();
   const theme = useMemo(() => ({ scheme, colors: paletteFor(scheme) }), [scheme]);
 
   return (

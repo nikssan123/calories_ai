@@ -3,11 +3,14 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import type { DaySummary, LibraryRecipe, Recipe, RecipeAllowance } from '@ct/shared';
+import type { DaySummary, LibraryRecipe, PantryItem, Recipe, RecipeAllowance, RecipeBrief } from '@ct/shared';
 import { untilWords } from '@ct/shared/words';
 import { foodEmoji } from '@ct/shared/food-emoji';
 import { Chunk, PressableChunk } from '@/components/Chunk';
+import { Brief, BriefToggle } from '@/components/kitchen/Brief';
+import { daysSince, Pantry, STALE_DAYS } from '@/components/kitchen/Pantry';
 import { RecipeTile } from '@/components/kitchen/RecipeTile';
+import { Sheet } from '@/components/Field';
 import { Skeleton } from '@/components/Skeleton';
 import { api } from '@/lib/api';
 import { font, type as t, useColors } from '@/theme';
@@ -24,10 +27,9 @@ import { font, type as t, useColors } from '@/theme';
  * the suggestions are any good, and saying it out loud is what separates this
  * from a recipe search that happens to live inside a food app.
  *
- * Three of the web's ways in are not here yet and are named where they would
- * be: the kitchen list itself, a photograph of a shelf, and a pasted recipe.
- * The first two want `<Pantry>` and `<FridgeScan>`; the run works without any
- * of them, because the pantry reaches the model from the server either way.
+ * The kitchen is a chip in the title row, opening the sheet that `<Pantry>`
+ * fills — a precondition rather than an answer, and not worth the top third of
+ * the screen for something checked ten seconds a week.
  */
 export default function CookScreen() {
   const colors = useColors();
@@ -35,11 +37,27 @@ export default function CookScreen() {
   const router = useRouter();
 
   const [day, setDay] = useState<DaySummary | null>(null);
+  const [items, setItems] = useState<PantryItem[] | null>(null);
+  /*
+   * Never opened for you: a sheet that appears because you arrived is an
+   * interruption, and an empty kitchen is not an emergency — the ask works
+   * without one, and the chip already says the list is empty.
+   */
+  const [kitchenOpen, setKitchenOpen] = useState(false);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [library, setLibrary] = useState<LibraryRecipe[] | null>(null);
   const [librarySearch, setLibrarySearch] = useState('');
   const [message, setMessage] = useState('');
-  const [wants, setWants] = useState('');
+  /*
+   * The per-request filters, `wants` among them. It lives in here rather than
+   * in a box on the screen because out there it read as a second search box
+   * with no explicable purpose; in the sheet its company makes its job obvious.
+   */
+  const [brief, setBrief] = useState<RecipeBrief>({});
+  const [briefOpen, setBriefOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importing, setImporting] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [thinkingNote, setThinkingNote] = useState('');
   const [allowance, setAllowance] = useState<RecipeAllowance | null>(null);
@@ -56,6 +74,19 @@ export default function CookScreen() {
    * ref rather than a nicety.
    */
   const running = useRef(false);
+
+  const loadKitchen = useCallback(async () => {
+    try {
+      const pantry = await api.pantry();
+      setItems(pantry.items);
+    } catch {
+      setItems([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadKitchen();
+  }, [loadKitchen]);
 
   useEffect(() => {
     void (async () => {
@@ -104,6 +135,9 @@ export default function CookScreen() {
    */
   const spent = allowance !== null && allowance.used >= allowance.allowed;
 
+  const fresh = (items ?? []).filter((i) => !i.is_staple);
+  const staleCount = fresh.filter((i) => daysSince(i.last_seen_at) >= STALE_DAYS).length;
+
   /**
    * What pressing the button will do, in a sentence, before it is pressed.
    *
@@ -119,7 +153,16 @@ export default function CookScreen() {
         : '';
       return `That's your ${allowance.allowed === 1 ? 'one recipe run' : `${allowance.allowed} recipe runs`} for today.${back}`;
     }
-    const from = wants.trim()
+    /*
+     * An empty kitchen is a different promise, not a smaller one. Saying "from
+     * what's in your kitchen" when the kitchen is empty is the screen telling
+     * an obvious lie in its first sentence — and it is the first sentence a new
+     * account ever reads.
+     */
+    if (items !== null && items.length === 0) {
+      return `Your kitchen is empty, so I'll suggest things one small shop would cover — and name what to buy.`;
+    }
+    const from = brief.wants?.trim()
       ? `I'll work from what you asked for and what's in your kitchen`
       : `I'll invent a recipe from what's in your kitchen`;
     if (!remaining) return `${from}.`;
@@ -157,12 +200,31 @@ export default function CookScreen() {
     }
   }
 
+  async function importRecipe() {
+    setImporting(true);
+    try {
+      const { recipes } = await api.importRecipe({ text: importText.trim() });
+      const [recipe] = recipes;
+      if (!recipe) throw new Error("I couldn't read that as a recipe.");
+      setRecipes((prev) => [recipe, ...prev]);
+      setMessage('');
+      setTab('ideas');
+      setImportText('');
+      setImportOpen(false);
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setImporting(false);
+    }
+  }
+
   async function suggest() {
     // Claimed before the first await, so a second tap in the same tick turns
     // into nothing rather than into a second run against the same budget.
     if (running.current) return;
     running.current = true;
-    const asked = wants.trim();
+    const asked = brief.wants?.trim() ?? '';
 
     /*
      * Say what is being done, and where the answer will appear, before any of
@@ -179,7 +241,7 @@ export default function CookScreen() {
     setTab('ideas');
     setThinking(true);
     try {
-      const result = await api.suggestRecipes({ wants: asked || undefined });
+      const result = await api.suggestRecipes({ ...brief, wants: asked || undefined });
       setRecipes(result.recipes);
       setMessage(result.message);
       setAllowance(result.allowance);
@@ -198,24 +260,48 @@ export default function CookScreen() {
       contentContainerStyle={[styles.page, { paddingTop: insets.top + 20 }]}
       keyboardShouldPersistTaps="handled"
     >
-      <Text style={[t.largeTitle, { color: colors.foreground }]}>Cook</Text>
+      {/*
+        The title, and the kitchen as one chip beside it. The kitchen is a
+        precondition, not an answer — it does not get the top third of the
+        screen for something checked ten seconds a week.
+      */}
+      <View style={styles.titleRow}>
+        <Text style={[t.largeTitle, { color: colors.foreground }]}>Cook</Text>
+        {items !== null && (
+          <Chunk
+            depth={2}
+            radius={999}
+            contentStyle={[
+              styles.chip,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            <Pressable
+              onPress={() => setKitchenOpen(true)}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.chipInner, { opacity: pressed ? 0.6 : 1 }]}
+            >
+              <Text style={styles.chipGlyph}>🧺</Text>
+              <Text style={[t.footnoteSemibold, { color: colors.foreground }]}>
+                {fresh.length === 0
+                  ? 'Your kitchen is empty'
+                  : `${fresh.length} ${fresh.length === 1 ? 'thing' : 'things'}`}
+              </Text>
+              {staleCount > 0 && (
+                <Text style={[t.footnoteSemibold, { color: colors.fatText }]}>
+                  · {staleCount} to check
+                </Text>
+              )}
+            </Pressable>
+          </Chunk>
+        )}
+      </View>
+
+      <Sheet open={kitchenOpen} title="Your kitchen" onClose={() => setKitchenOpen(false)}>
+        {items && <Pantry items={items} onChanged={loadKitchen} onError={setError} />}
+      </Sheet>
 
       <View style={styles.ask}>
-        <TextInput
-          value={wants}
-          onChangeText={setWants}
-          onSubmitEditing={() => void suggest()}
-          returnKeyType="search"
-          placeholder="What do you fancy?"
-          placeholderTextColor={colors.mutedForeground}
-          editable={!thinking && !spent}
-          style={[
-            t.body,
-            styles.wants,
-            { backgroundColor: colors.card, borderColor: colors.input, color: colors.foreground },
-          ]}
-        />
-
         <PressableChunk
           radius={999}
           color={spent ? undefined : colors.caloriesDeep}
@@ -254,7 +340,112 @@ export default function CookScreen() {
         >
           {plan}
         </Text>
+
+        {/* The other two ways in, one line, one size, nothing hidden. */}
+        <View style={styles.ways}>
+          <BriefToggle value={brief} onPress={() => setBriefOpen(true)} />
+          <Text style={{ color: colors.mutedForeground }}>·</Text>
+          <Pressable
+            onPress={() => setImportOpen(true)}
+            disabled={spent || thinking}
+            accessibilityRole="button"
+            style={({ pressed }) => [
+              styles.way,
+              { opacity: spent || thinking ? 0.4 : pressed ? 0.6 : 1 },
+            ]}
+          >
+            <Svg width={13} height={13} viewBox="0 0 24 24">
+              <Path
+                d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 2h6v4H9z"
+                stroke={colors.mutedForeground}
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+              />
+            </Svg>
+            <Text style={[t.footnote, { color: colors.mutedForeground }]}>paste one</Text>
+          </Pressable>
+        </View>
       </View>
+
+      {/*
+        The filters, with the button repeated at the foot — so setting one and
+        running is a single gesture rather than set, close, then go looking for
+        the button again.
+      */}
+      <Sheet open={briefOpen} title="Anything specific?" onClose={() => setBriefOpen(false)}>
+        <Brief value={brief} onChange={setBrief} />
+        <View style={[styles.sheetFoot, { borderTopColor: colors.border }]}>
+          <PressableChunk
+            radius={999}
+            color={spent ? undefined : colors.caloriesDeep}
+            onPress={() => {
+              setBriefOpen(false);
+              void suggest();
+            }}
+            disabled={thinking || spent}
+            accessibilityRole="button"
+            contentStyle={[
+              styles.find,
+              spent
+                ? { backgroundColor: colors.secondary, borderWidth: 2, borderColor: colors.border }
+                : { backgroundColor: colors.primary },
+            ]}
+          >
+            <Sparkles color={spent ? colors.secondaryForeground : colors.primaryForeground} />
+            <Text
+              style={[
+                styles.findLabel,
+                { color: spent ? colors.secondaryForeground : colors.primaryForeground },
+              ]}
+            >
+              {spent ? 'Nothing left today' : 'Find me something'}
+            </Text>
+          </PressableChunk>
+        </View>
+      </Sheet>
+
+      <Sheet
+        open={importOpen}
+        title="A recipe you already have"
+        onClose={() => !importing && setImportOpen(false)}
+      >
+        <View style={styles.importBody}>
+          <Text style={[t.footnote, { color: colors.mutedForeground }]}>
+            I&rsquo;ll work out the calories and leave the cooking alone.
+          </Text>
+          <TextInput
+            value={importText}
+            onChangeText={setImportText}
+            multiline
+            placeholder="Paste or type the recipe — ingredients and method, however you have it written."
+            placeholderTextColor={colors.mutedForeground}
+            style={[
+              t.body,
+              styles.importInput,
+              {
+                backgroundColor: colors.mutedField,
+                borderColor: colors.border,
+                color: colors.foreground,
+              },
+            ]}
+          />
+          <PressableChunk
+            radius={999}
+            color={colors.caloriesDeep}
+            onPress={() => void importRecipe()}
+            disabled={!importText.trim() || importing}
+            accessibilityRole="button"
+            style={{ opacity: !importText.trim() || importing ? 0.4 : 1 }}
+            contentStyle={[styles.find, { backgroundColor: colors.primary }]}
+          >
+            <Text style={[styles.findLabel, { color: colors.primaryForeground }]}>
+              {importing ? 'Reading it…' : 'Work out the calories'}
+            </Text>
+          </PressableChunk>
+        </View>
+      </Sheet>
 
       <View style={styles.tabs}>
         <Chunk
@@ -415,13 +606,22 @@ function Sparkles({ color }: { color: string }) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   page: { paddingHorizontal: 16, paddingBottom: 40, gap: 12 },
+  titleRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  chip: { borderWidth: 2, borderRadius: 999 },
+  chipInner: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8 },
+  chipGlyph: { fontSize: 14, lineHeight: 18 },
   ask: { gap: 10, marginTop: 4 },
-  wants: {
-    height: 48,
+  ways: { flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' },
+  way: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6 },
+  sheetFoot: { borderTopWidth: 2, padding: 12 },
+  importBody: { paddingHorizontal: 20, paddingVertical: 12, gap: 10 },
+  importInput: {
+    minHeight: 180,
     borderWidth: 2,
-    borderRadius: 999,
-    paddingHorizontal: 18,
-    paddingVertical: 0,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    textAlignVertical: 'top',
   },
   find: {
     flexDirection: 'row',
