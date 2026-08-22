@@ -11,6 +11,15 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import type {
   ChatAction,
   ChatMessage,
@@ -20,6 +29,7 @@ import type {
   UnitSystem,
 } from '@ct/shared';
 import { unitsOf } from '@ct/shared';
+import { ChatActionCard } from '@/components/ChatCard';
 import { Composer, type ComposerPayload } from '@/components/Composer';
 import { Markdown } from '@/components/Markdown';
 import { Material } from '@/components/Material';
@@ -27,7 +37,7 @@ import { PressableChunk } from '@/components/Chunk';
 import { Skeleton } from '@/components/Skeleton';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { font, type as t, useColors } from '@/theme';
+import { duration, ease, font, type as t, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 /** Optimistic rows carry a local id until the server assigns the real one. */
@@ -127,15 +137,6 @@ export default function JournalScreen() {
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  /**
-   * Re-read the day. Stable, because it is a prop on every memoised row — an
-   * inline arrow here would hand each of them a new function on every render
-   * and quietly undo the memoisation while looking like it worked.
-   */
-  const refreshDay = useCallback(() => {
-    void api.day().then(setDay).catch(() => {});
   }, []);
 
   /*
@@ -325,7 +326,7 @@ export default function JournalScreen() {
         )}
 
         {bubbles.map((bubble) => (
-          <Row key={bubble.key} bubble={bubble} onLogged={refreshDay} />
+          <Row key={bubble.key} bubble={bubble} today={day?.local_date} />
         ))}
       </ScrollView>
 
@@ -490,12 +491,7 @@ function StatusBar({
       </View>
 
       <View style={[styles.track, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-        <View
-          style={[
-            styles.fill,
-            { width: `${pct}%`, backgroundColor: over ? colors.foreground : colors.calories },
-          ]}
-        />
+        <Bar pct={pct} color={over ? colors.foreground : colors.calories} />
       </View>
 
       {/*
@@ -516,6 +512,34 @@ function StatusBar({
 }
 
 /**
+ * The fill, which travels rather than jumps.
+ *
+ * `transition: width var(--dur-spring) var(--ease-spring)` on the web, and the
+ * overshoot is the point: logging a meal is the moment the app is meant to feel
+ * like it did something, and a bar that is simply at its new length the next
+ * frame reports the same fact without any of that. It is also the only feedback
+ * on this screen that the number at the top changed.
+ */
+function Bar({ pct, color }: { pct: number; color: string }) {
+  const reduced = useReducedMotion();
+  const width = useSharedValue(pct);
+
+  useEffect(() => {
+    width.value = reduced
+      ? pct
+      : withTiming(pct, { duration: duration.spring, easing: ease.spring });
+  }, [pct, reduced, width]);
+
+  const style = useAnimatedStyle(() => ({
+    // The spring overshoots, and a fill wider than its track paints out of the
+    // rounded end — so the clamp lives here rather than in the easing.
+    width: `${Math.max(0, Math.min(100, width.value))}%`,
+  }));
+
+  return <Animated.View style={[styles.fill, { backgroundColor: color }, style]} />;
+}
+
+/**
  * Memoised, which matters here rather than elsewhere.
  *
  * A streamed reply lands as tens of state updates a second, and every one of
@@ -524,7 +548,7 @@ function StatusBar({
  * `onLogged` held stable by the caller this narrows each delta to the one row
  * it actually touches.
  */
-const Row = memo(function Row({ bubble, onLogged }: { bubble: Bubble; onLogged: () => void }) {
+const Row = memo(function Row({ bubble, today }: { bubble: Bubble; today?: string }) {
   const colors = useColors();
 
   if (bubble.role === 'user') {
@@ -577,31 +601,17 @@ const Row = memo(function Row({ bubble, onLogged }: { bubble: Bubble; onLogged: 
       {bubble.actions && bubble.actions.length > 0 && (
         <View style={styles.actions}>
           {bubble.actions.map((action, i) => (
-            <Receipt key={`${action.entry_id ?? action.kind}-${i}`} action={action} />
+            <ChatActionCard
+              key={`${action.entry_id ?? action.kind}-${i}`}
+              action={action}
+              today={today}
+            />
           ))}
         </View>
       )}
     </View>
   );
 });
-
-/**
- * What the turn actually did, as a line rather than as a card.
- *
- * Every action carries a `summary` the server wrote, which is the honest thing
- * to show while the rich cards — the web's `ChatCard`, and the largest single
- * component in the app — are still to port. It is the difference between a
- * reply that says what happened and one that quietly drops it; `onLogged` will
- * matter when the workout card, which answers back, arrives with them.
- */
-function Receipt({ action }: { action: ChatAction }) {
-  const colors = useColors();
-  return (
-    <View style={[styles.receipt, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{action.summary}</Text>
-    </View>
-  );
-}
 
 /**
  * The dots are for silence, not for waiting.
@@ -613,28 +623,13 @@ function Receipt({ action }: { action: ChatAction }) {
  */
 function Waiting({ label }: { label: string | null }) {
   const colors = useColors();
-  const reduced = useReducedMotion();
-  const [step, setStep] = useState(0);
-
-  useEffect(() => {
-    if (reduced) return;
-    const timer = setInterval(() => setStep((s) => (s + 1) % 3), 260);
-    return () => clearInterval(timer);
-  }, [reduced]);
-
   const dots = [colors.protein, colors.carbs, colors.fat];
 
   return (
     <View style={styles.waiting} accessibilityLabel={label ?? 'Thinking'}>
       <View style={styles.dots}>
         {dots.map((color, i) => (
-          <View
-            key={color}
-            style={[
-              styles.dot,
-              { backgroundColor: color, opacity: reduced || i === step ? 1 : 0.35 },
-            ]}
-          />
+          <Dot key={color} color={color} index={i} />
         ))}
       </View>
       {label && (
@@ -643,6 +638,52 @@ function Waiting({ label }: { label: string | null }) {
     </View>
   );
 }
+
+/**
+ * One of the three, bouncing.
+ *
+ * `animate-bounce` rather than the fade an earlier version of this used, and
+ * the difference is not decoration: three dots taking turns to light up is a
+ * *progress* indicator, and there is no progress to report — the model has not
+ * said how long it will be. A bounce says only that something is still
+ * happening, which is the whole of what is known.
+ *
+ * Tailwind's keyframes, ported exactly: a quarter of its own height, and the
+ * two halves carry different easings so the fall accelerates and the rise
+ * settles. Reduced motion leaves the dots still rather than substituting
+ * something quieter — the web resolves that with a blanket rule, so this does
+ * too, and the label beside them still says what is going on.
+ */
+function Dot({ color, index }: { color: string; index: number }) {
+  const reduced = useReducedMotion();
+  const y = useSharedValue(0);
+
+  useEffect(() => {
+    if (reduced) {
+      y.value = 0;
+      return;
+    }
+    y.value = -BOUNCE;
+    y.value = withDelay(
+      index * 140,
+      withRepeat(
+        withSequence(
+          withTiming(0, { duration: 500, easing: Easing.bezier(0.8, 0, 1, 1) }),
+          withTiming(-BOUNCE, { duration: 500, easing: Easing.bezier(0, 0, 0.2, 1) }),
+        ),
+        -1,
+        false,
+      ),
+    );
+  }, [index, reduced, y]);
+
+  const style = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
+
+  return <Animated.View style={[styles.dot, { backgroundColor: color }, style]} />;
+}
+
+/** `translateY(-25%)` of a 10px dot. */
+const BOUNCE = 2.5;
 
 function ChatSkeleton() {
   return (
@@ -657,6 +698,16 @@ function ChatSkeleton() {
     </View>
   );
 }
+
+/**
+ * The tucked corner of a sent bubble — `rounded-br-lg`, which is `--radius-lg`.
+ *
+ * Worth naming rather than inlining, because the radius scale is overridden
+ * wholesale in `@theme inline` and `lg` is 16px here, not Tailwind's stock 8.
+ * Read as the stock value it makes the tuck twice as sharp as the web's, which
+ * is small on paper and the difference between a bubble and an arrow on screen.
+ */
+const TUCK = 16;
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
@@ -682,7 +733,18 @@ const styles = StyleSheet.create({
   promptLabel: { fontFamily: font.bold, fontSize: 14, lineHeight: 20 },
   userRow: { alignItems: 'flex-end' },
   userStack: { maxWidth: '85%', alignItems: 'flex-end', gap: 8 },
-  photo: { width: 200, height: 200, borderRadius: 24, borderWidth: 2 },
+  /*
+   * Square, where the web keeps the photo's own proportions under a `max-h-72`.
+   *
+   * The web can do that because an `<img>` sizes itself once it decodes; an RN
+   * `<Image>` with a remote source has no intrinsic size and lays out at
+   * whatever it is told, so honouring the aspect ratio means knowing it, and
+   * the ratio of a photo pulled from `photo_url` is not known until it is
+   * fetched. A fixed square with `cover` is the version that never lays out at
+   * zero height and never distorts; carrying the real dimensions through is
+   * worth doing when the photo becomes tappable.
+   */
+  photo: { width: 240, height: 240, borderRadius: 24, borderWidth: 2 },
   /*
    * The ledge again, and drawn by hand rather than with <Chunk> because this
    * one is not a rounded rectangle: the corner nearest the sender is tucked in,
@@ -696,15 +758,16 @@ const styles = StyleSheet.create({
     bottom: -3,
     left: 0,
     borderRadius: 22,
-    borderBottomRightRadius: 8,
+    borderBottomRightRadius: TUCK,
   },
   userBubble: {
     borderRadius: 22,
-    borderBottomRightRadius: 8,
+    borderBottomRightRadius: TUCK,
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
-  userText: { fontFamily: font.semibold, lineHeight: 24 },
+  // `leading-relaxed`, which overrides the 24 that `text-body` sets.
+  userText: { fontFamily: font.semibold, lineHeight: 26 },
   assistantRow: { maxWidth: '92%', gap: 10 },
   actions: { gap: 6 },
   receipt: { borderWidth: 2, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },

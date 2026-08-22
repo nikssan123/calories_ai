@@ -168,13 +168,21 @@ export function Composer({
         />
 
         <PressableChunk
-          depth={3}
+          // The default button depth. `size-10` on the web overrides the size
+          // but not `--chunk-depth`, which stays at 4 — only the `sm` sizes
+          // step it down to 3.
+          depth={4}
           radius={999}
           color={colors.caloriesDeep}
           onPress={submit}
           disabled={!canSend}
           accessibilityRole="button"
           accessibilityLabel="Send"
+          // `disabled:opacity-30`, rather than the 0.5 a disabled chunk carries
+          // by default. Nothing else in the app spends this long disabled — it
+          // is the resting state of an empty composer — and at 0.5 it still
+          // reads as a button waiting to be pressed.
+          style={{ opacity: canSend ? 1 : 0.3 }}
           contentStyle={[styles.send, { backgroundColor: colors.primary }]}
         >
           <Svg width={21} height={21} viewBox="0 0 24 24">
@@ -259,7 +267,9 @@ function CameraGlyph({ color, size = 22 }: { color: string; size?: number }) {
 }
 
 const styles = StyleSheet.create({
-  bar: { borderTopWidth: 2, paddingHorizontal: 12, paddingTop: 10 },
+  // `px-3 py-2.5` — both halves of the `py`, or the bar sits flush on the tab
+  // bar below it and the field looks welded to the wrong edge.
+  bar: { borderTopWidth: 2, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10 },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   attach: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   input: {

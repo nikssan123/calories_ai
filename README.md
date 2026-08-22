@@ -878,12 +878,17 @@ platforms.
 
 ### What is left
 
-**On the Journal.** `ChatCard` — the rich cards a reply draws, and the largest single
-component in the app at 746 lines — is not ported; every action currently renders as the
-one-line `summary` the server already sends, which is true but plain. **Confetti**, the
-app's only celebration, is the one animation that must not fire at all under reduced
-motion, since a loop has no end state worth arriving at. And **`entry-touched`**, the
-one-shot ring on a card the agent has just corrected, belongs with the cards.
+**On the Journal.** Six of the eight cards a reply can draw are ported — food (with the
+day-progress bar), exercise, weight, trend, day and plan — along with the `Sparkline` they
+two of them need. The two missing are `recipes` and `workout_prompt`, and they are missing
+for the same reason: the first is Cook's recipe card and the second is Exercise's set
+logger, both of which live in tabs still on the placeholder. They fall back to the summary
+chip, which says what happened without pretending to offer an action it cannot carry out.
+
+**Confetti**, the app's only celebration, is the one animation that must not fire at all
+under reduced motion, since a loop has no end state worth arriving at. And
+**`entry-touched`**, the one-shot ring on a card the agent has just corrected, belongs with
+the cards.
 
 Then the four remaining tabs, in the order they are worth doing: **You**, which holds
 onboarding and the unit switch, then Progress, Exercise and Cook, which are all reads.

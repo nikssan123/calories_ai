@@ -28,6 +28,15 @@ import { font, MONO, type as t, useColors, type Palette } from '@/theme';
  * on the text and the whole component on its props: a token arriving re-parses
  * one bubble, not the thread.
  */
+/**
+ * `leading-relaxed` — 1.625 against the body's 16px.
+ *
+ * A reply is the longest run of prose in the app and the web sets it looser
+ * than the 24 that `text-body` carries; ported as 24 it reads a step tighter
+ * than every paragraph it is a port of.
+ */
+const RELAXED = 26;
+
 export const Markdown = memo(function Markdown({
   text,
   style,
@@ -56,7 +65,7 @@ function BlockView({
   colors: Palette;
   style?: TextStyle;
 }) {
-  const base: TextStyle = { color: colors.foreground, ...t.body, lineHeight: 24, ...style };
+  const base: TextStyle = { color: colors.foreground, ...t.body, lineHeight: RELAXED, ...style };
 
   switch (block.kind) {
     case 'paragraph':
@@ -149,7 +158,7 @@ function ItemBody({
 }) {
   const only = blocks.length === 1 ? blocks[0] : undefined;
   if (only?.kind === 'paragraph') {
-    const base: TextStyle = { color: colors.foreground, ...t.body, lineHeight: 24, ...style };
+    const base: TextStyle = { color: colors.foreground, ...t.body, lineHeight: RELAXED, ...style };
     return <Text style={base}>{renderInline(only.content, colors, base)}</Text>;
   }
   return (
@@ -328,8 +337,9 @@ const isItalic = (style: TextStyle) =>
 const styles = StyleSheet.create({
   stack: { gap: 10 },
   list: { gap: 4 },
-  item: { flexDirection: 'row', gap: 8 },
-  marker: { minWidth: 16, textAlign: 'right' },
+  // `pl-5` — the marker sits inside the indent, so the two add up to 20.
+  item: { flexDirection: 'row', gap: 6 },
+  marker: { minWidth: 14, textAlign: 'right' },
   itemBody: { flex: 1 },
   quote: { borderLeftWidth: 2, paddingLeft: 12, gap: 8 },
   fence: { borderWidth: 2, borderRadius: 24, flexGrow: 0 },
