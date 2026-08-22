@@ -142,19 +142,7 @@ export default function LibraryRecipePage({ params }: { params: Promise<{ slug: 
       onToggleSave={() => void toggleSaved()}
       footnote={
         <>
-          {recipe.source_url ? (
-            <a
-              href={recipe.source_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline underline-offset-2"
-            >
-              {recipe.source}
-            </a>
-          ) : (
-            recipe.source
-          )}{' '}
-          · public domain
+          {recipe.source} · public domain
           {recipe.have.length > 0 && <> · uses your {listWords(recipe.have)}</>}
         </>
       }
