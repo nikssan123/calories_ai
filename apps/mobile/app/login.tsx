@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -89,7 +88,13 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      /*
+       * `padding` on both. Android used to resize its own window away from the
+       * keyboard and need nothing here; under edge-to-edge it spans the
+       * keyboard instead, so the stale advice leaves the submit button beneath
+       * it. Same fix as the journal's composer.
+       */
+      behavior="padding"
     >
       <ScrollView
         contentContainerStyle={[

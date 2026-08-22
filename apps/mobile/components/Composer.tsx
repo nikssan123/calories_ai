@@ -1,20 +1,12 @@
 import { useState } from 'react';
-import {
-  ActionSheetIOS,
-  Image,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Circle, Path, Polyline, Rect } from 'react-native-svg';
 import type { PhotoMediaType } from '@ct/shared';
 import { Material } from '@/components/Material';
+import { Sheet } from '@/components/Field';
 import { PressableChunk } from '@/components/Chunk';
 import { pickPhoto, takePhoto, type PreparedPhoto } from '@/lib/image';
-import { font, type as t, useColors, useTheme } from '@/theme';
+import { font, type as t, useColors } from '@/theme';
 
 export interface ComposerPayload {
   text: string;
@@ -44,7 +36,7 @@ export function Composer({
   onSend: (payload: ComposerPayload) => void;
   disabled: boolean;
 }) {
-  const { colors, scheme } = useTheme();
+  const colors = useColors();
   const [text, setText] = useState('');
   const [photo, setPhoto] = useState<PreparedPhoto | null>(null);
   const [busy, setBusy] = useState(false);
@@ -66,10 +58,13 @@ export function Composer({
 
   /*
    * The camera and the library are two different intents, so the app asks which
-   * before opening either — the same choice the web puts in a dropdown. iOS
-   * gets its own action sheet because a menu drawn in JS over a native keyboard
-   * is a fight not worth having; Android has no equivalent primitive, so the
-   * two options are laid out inline there instead.
+   * before opening either — the same choice the web puts in a dropdown.
+   *
+   * One sheet on both platforms rather than `ActionSheetIOS` on one and a list
+   * on the other. The native sheet is a better citizen on iOS in isolation, but
+   * it is Apple's typeface, Apple's radii and Apple's greys, which means the
+   * same question looks like two different apps depending on the phone — and
+   * this app has a face of its own that it is the whole point to keep.
    */
   const [choosing, setChoosing] = useState(false);
 
@@ -82,24 +77,6 @@ export function Composer({
     } finally {
       setBusy(false);
     }
-  }
-
-  function onAttachPress() {
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: ['Cancel', 'Take a photo', 'Choose a photo'],
-          cancelButtonIndex: 0,
-          userInterfaceStyle: scheme,
-        },
-        (index) => {
-          if (index === 1) void attach('camera');
-          if (index === 2) void attach('library');
-        },
-      );
-      return;
-    }
-    setChoosing((open) => !open);
   }
 
   return (
@@ -130,16 +107,9 @@ export function Composer({
         </View>
       )}
 
-      {choosing && (
-        <View style={styles.choices}>
-          <Choice label="Take a photo" onPress={() => void attach('camera')} icon="camera" />
-          <Choice label="Choose a photo" onPress={() => void attach('library')} icon="image" />
-        </View>
-      )}
-
       <View style={styles.row}>
         <Pressable
-          onPress={onAttachPress}
+          onPress={() => setChoosing(true)}
           disabled={disabled || busy}
           accessibilityRole="button"
           accessibilityLabel="Add a photo"
@@ -197,6 +167,11 @@ export function Composer({
           </Svg>
         </PressableChunk>
       </View>
+
+      <Sheet open={choosing} title="Add a photo" onClose={() => setChoosing(false)}>
+        <Choice label="Take a photo" icon="camera" onPress={() => void attach('camera')} />
+        <Choice label="Choose a photo" icon="image" onPress={() => void attach('library')} />
+      </Sheet>
     </Material>
   );
 }
@@ -217,7 +192,7 @@ function Choice({
       accessibilityRole="button"
       style={({ pressed }) => [
         styles.choice,
-        { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.6 : 1 },
+        { borderTopColor: colors.border, opacity: pressed ? 0.6 : 1 },
       ]}
     >
       {icon === 'camera' ? (
@@ -301,14 +276,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  choices: { gap: 8, marginBottom: 10 },
   choice: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    borderWidth: 2,
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    gap: 12,
+    borderTopWidth: 2,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
 });

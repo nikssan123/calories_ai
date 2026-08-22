@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import type { ActivityLevel, DaySummary, Goal, Profile, Sex, UnitSystem } from '@ct/shared';
@@ -16,6 +16,7 @@ import { DietRules } from '@/components/DietRules';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { NumberField, Picker, Sheet, TextField } from '@/components/Field';
 import { Skeleton } from '@/components/Skeleton';
+import { Switch } from '@/components/Switch';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { font, type as t, useColors, withAlpha } from '@/theme';
@@ -396,13 +397,14 @@ function MacroChip({ label, value, color }: { label: string; value: number; colo
 }
 
 /**
- * The date, through the platform's own picker.
+ * The date, through the platform's own wheels but in the app's own sheet.
  *
- * The web hands this to `<input type="date">` and lets the browser draw it.
- * There is no equivalent to inherit here, so the native picker is opened
- * explicitly — inside the same sheet the `Picker` uses on iOS, where the
- * control is inline and needs somewhere to live, and as its own dialog on
- * Android, which supplies one.
+ * The web hands this to `<input type="date">` and lets the browser draw it;
+ * there is nothing to inherit here, so it is opened explicitly. `spinner` on
+ * both platforms rather than letting Android put up its calendar dialog: the
+ * wheels are the part that has to be native — they are the thing a thumb knows
+ * how to use — and the frame around them is the part that should be this app's
+ * on both, rather than Material's on one phone and nothing on the other.
  */
 function BirthDate({
   value,
@@ -428,10 +430,9 @@ function BirthDate({
     <DateTimePicker
       value={parsed ?? new Date(1995, 0, 1)}
       mode="date"
-      display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+      display="spinner"
       maximumDate={new Date()}
       onChange={(event, date) => {
-        if (Platform.OS !== 'ios') setOpen(false);
         if (event.type === 'dismissed' || !date) return;
         // Local parts rather than toISOString: the picker hands back local
         // midnight, and in a negative offset that is the previous day in UTC.
@@ -459,13 +460,9 @@ function BirthDate({
         </Text>
       </Pressable>
 
-      {Platform.OS === 'ios' ? (
-        <Sheet open={open} title="Date of birth" onClose={() => setOpen(false)}>
-          {picker}
-        </Sheet>
-      ) : (
-        open && picker
-      )}
+      <Sheet open={open} title="Date of birth" onClose={() => setOpen(false)}>
+        {picker}
+      </Sheet>
     </>
   );
 }
@@ -568,8 +565,6 @@ function EmailSettings({
     }
   }
 
-  const track = { false: colors.muted, true: colors.primary };
-
   return (
     <InsetGroup
       title="Email"
@@ -625,7 +620,6 @@ function EmailSettings({
         <Switch
           value={profile.notify_weekly_review}
           onValueChange={(v) => void setPreference('notify_weekly_review', v)}
-          trackColor={track}
           accessibilityLabel="Email me the weekly review"
         />
       </InsetRow>
@@ -644,7 +638,6 @@ function EmailSettings({
         <Switch
           value={profile.notify_nudges}
           onValueChange={(v) => void setPreference('notify_nudges', v)}
-          trackColor={track}
           accessibilityLabel="Email me nudges"
         />
       </InsetRow>
