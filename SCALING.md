@@ -56,8 +56,9 @@ normalisation added the same day is the only reason this deploy worked rather th
 every photo on `day-so-far/day-so-far/…` — a fix written an hour before the mistake it
 prevents, which is the sort of luck worth turning into a note.
 
-**Left:** the deploy topology, and whatever the one unanswered question below turns out
-to imply. Each is marked in place, and the ordered list is at the end.
+**Left:** the deploy topology, and Stage 5 — which the rate-limit question, now answered,
+demotes from prerequisite to optimisation. Each is marked in place, and the ordered list
+is at the end.
 
 ## The short version
 
@@ -68,7 +69,11 @@ roughly 24,000 input tokens against an org-wide per-minute ceiling.
 
 Stage 0 settled the first — the product's lane spawns nothing — and with Stage 1's two
 pins now pulled, two replicas carry the product to five figures of users as soon as
-somebody starts them. Fix the second and the ceiling stops being interesting.
+somebody starts them.
+
+The second turned out to be much less of a problem than it looked, because cache reads do
+not count against the per-minute ceiling at all. Most of that 24,000 is the prefix being
+re-read, and a re-read prefix is a cache read. See the section below.
 
 ## Where the ceilings are today
 
@@ -123,10 +128,15 @@ roughly like this:
 | Output tokens per turn | ~600 |
 
 The prefix is re-read on every model call inside the turn. That multiplier is the whole
-story, and §Stage 5 is about removing it.
+story for the *bill* — a cache read still costs a tenth of the input rate, and a tenth of
+18,000 tokens on every turn is real money at volume. It is not the story for the
+*ceiling*: cache reads are excluded from ITPM entirely. §Stage 5 is about removing the
+multiplier; the section below is about which of the two problems that solves.
 
 Peak load, assuming a quarter of the day's turns land in a ninety-minute meal window and
-four turns per user per day:
+four turns per user per day. These are *gross* token figures — what the model reads, not
+what the rate limiter counts; the governed figure is in the next section and is roughly a
+quarter of this:
 
 | Users | Peak turns/min | Peak input tokens/min | Peak output tokens/min |
 |---|---|---|---|
@@ -134,16 +144,58 @@ four turns per user per day:
 | 10,000 | ~110 | ~2.6M | ~66k |
 | 100,000 | ~1,100 | ~26M | ~660k |
 
-## Answer this before planning anything
+## The question that moved the plan — **answered**
 
 **Do cache-read tokens count against the input-tokens-per-minute limit at full rate, or
 at the discounted rate they are billed at?**
 
-They cost a tenth as much in dollars. If they also count a tenth as much against the rate
-limit, the table above is comfortable well past 10,000 users. If they count in full, the
-ceiling is ten times lower than the dollar figure suggests and Stage 5 stops being an
-optimisation and becomes a prerequisite. The Console's limits page, or whoever holds the
-account relationship, has the answer. It is one question and it moves the whole plan.
+**Neither. They do not count at all.** Anthropic's rate-limit documentation is explicit:
+what counts toward ITPM is `input_tokens` plus `cache_creation_input_tokens`.
+`cache_read_input_tokens` is excluded outright — not discounted, excluded — for every
+current model. The one exception is Claude Haiku 3.5, which is retired and which this
+product never used; it is marked with a dagger in the tier tables precisely because it is
+the odd one out.
+
+That is better than the optimistic branch this section was written to choose between, and
+it settles three things.
+
+**Stage 5 is an optimisation, not a prerequisite.** It was only ever going to be a
+prerequisite on the pessimistic branch. It is still worth doing — see the re-framing in
+its own section, which is now about requests and the bill rather than about headroom —
+but nothing waits on it.
+
+**The peak table above is a gross figure, not a governed one.** Of the ~24k input tokens
+a turn reads, roughly 18k is the ~6k prefix re-read on each of two or three model calls,
+and once the prefix is warm every one of those re-reads is a cache read. What actually
+counts is the volatile remainder, near enough ~6k a turn:
+
+| Users | Peak turns/min | Gross input tokens/min | Counted against ITPM |
+|---|---|---|---|
+| 1,000 | ~11 | ~260k | ~66k |
+| 10,000 | ~110 | ~2.6M | ~660k |
+| 100,000 | ~1,100 | ~26M | ~6.6M |
+
+And that total is split before it meets a ceiling, because **rate limits are per model**
+and `MODELS` already routes by turn kind — the text log on Haiku 4.5, photos and setup on
+Opus 5, the fridge scan and the nudge on Sonnet 5. Each has its own bucket, so the number
+that matters is the busiest one: `text_log` is ~70% of turns, which puts roughly 460k of
+the 10,000-user row's 660k on Haiku. Against 2M ITPM on the lowest published tier, that is
+about four times the peak in headroom, before any tier increase is asked for.
+
+**The limit that binds first at the top of the table is requests, not tokens.** At 100,000
+users the tokens are still comfortable, but ~1,100 turns a minute at two or three model
+calls each is ~2,750 requests a minute — ~1,900 of them on Haiku. That clears the lowest
+tier's 1,000 RPM and fits the next one several times over, which makes RPM the first
+ceiling this product would actually have to ask about. It is also the one Stage 5 moves
+most directly: collapsing a three-call tool loop into one call is a threefold cut in
+requests, not only in tokens.
+
+One consequence worth carrying forward. Cache reads being free against the ceiling makes
+the hit rate **operationally** load-bearing rather than merely a line on the bill: if the
+prefix goes cold or something starts varying inside it, those tokens do not get more
+expensive by a tenth, they move from the uncounted bucket to the counted one and the
+effective ITPM capacity drops about fourfold. That is a cliff rather than a slope, and it
+is why the metric in §Stage 4 is worth a threshold rather than a glance.
 
 ## Stage 0 — A direct Messages API provider — **built**
 
@@ -443,10 +495,16 @@ Three consequences:
   cost linearly, but that cost was observed at low volume against a mostly-cold cache. At
   scale the input line falls toward a tenth. Read the 1,000 and 10,000 user tiers as a
   ceiling rather than a forecast.
-- **Track `cache_read_input_tokens` as an operational metric, not only a cost one.** If it
-  drops, something began varying inside the prefix. Tool definitions render *before* the
-  system prompt in the cache key, so non-deterministic ordering out of
-  `buildNutritionServer` is the first place to look.
+- **Track `cache_read_input_tokens` as an operational metric, not only a cost one, and
+  give it a threshold rather than a glance.** If it drops, something began varying inside
+  the prefix. Tool definitions render *before* the system prompt in the cache key, so
+  non-deterministic ordering out of `buildNutritionServer` is the first place to look.
+
+  This matters more than it did when it was written. Cache reads are excluded from the
+  per-minute input ceiling entirely, so a prefix that stops being read does not merely get
+  a tenth more expensive — those tokens move from the uncounted bucket into the counted
+  one, and about three quarters of the turn's input arrives at the rate limiter that was
+  never sized for it. It is a cliff, and it is invisible in latency until the 429s start.
 
 One caveat: the minimum cacheable prefix is not uniform across models — 512 tokens on
 Opus 5, 1024 on Sonnet 5. The current prefix clears both easily, but the assumption is
@@ -460,9 +518,25 @@ highest-leverage change available.
 `text_log` is around 70% of all turns and it is structured extraction, not reasoning — the
 `TurnKind` comment in `providers/types.ts` says as much. A single `messages.create` with
 structured outputs, in place of a two-or-three call tool loop, cuts input tokens per turn
-by roughly two thirds. That is not a cost optimisation. It is a threefold increase in how
-many users a given per-minute ceiling supports, and it decides whether the 10,000-user row
-is comfortable.
+by roughly two thirds.
+
+This paragraph used to end by claiming that was a threefold increase in how many users a
+per-minute ceiling supports, and that it decided whether the 10,000-user row was
+comfortable. Both are now known to be wrong, and it is worth saying why rather than
+quietly deleting them: they assumed the re-read prefix was governed, and it is not — cache
+reads do not count against ITPM at all. The 10,000-user row was already comfortable.
+
+What the change is actually worth, in the order the numbers say:
+
+- **Requests.** Three model calls become one. At six figures of users RPM is the binding
+  ceiling rather than tokens — see the answered question above — so this is the only item
+  in the plan that moves the limit that actually binds there.
+- **The bill.** A cache read is a tenth of the input rate, not nothing, and it is a tenth
+  of ~18k tokens on ~70% of all turns. Cheap per turn; not cheap at volume.
+- **Latency.** Two round trips removed from the turn somebody is watching, which is worth
+  more now that they are watching it arrive rather than waiting for it.
+
+None of which is a reason to rush it ahead of the replica.
 
 After that:
 
@@ -481,17 +555,22 @@ and none of it applies there — which is the point of keeping the two apart.
 | Users | What is required | State |
 |---|---|---|
 | ~2,000 | Stage 0. Two replicas. Nothing else. | Code and stores done and deployed; replicas need starting |
-| ~10,000 | Stages 1–3, plus Stage 5 if cache reads count in full against the rate limit. | Stage 3's guard done; the rest open |
+| ~10,000 | Stages 1–3. Not Stage 5 — cache reads turned out not to count against the ceiling at all. | Stage 1 done; Stage 2 all but the token bucket; Stage 3's guard done, the worker and the Batch API open |
 | ~100,000 | All of it, pgbouncer, and a negotiated rate-limit tier. | open |
 
-Stage 0 unblocked. Stage 3 removes the only real spike. Stage 5 is what actually buys
-headroom. Stage 2 is the seatbelt that stops a bad afternoon becoming an outage.
+Stage 0 unblocked. Stage 3 removes the only real spike. Stage 2 is the seatbelt that
+stops a bad afternoon becoming an outage, and is now mostly fastened. Stage 5 was written
+down as the thing that buys headroom; it is not, because the headroom was already there —
+it buys requests, money and latency instead.
 
 ### What is left, in the order it wants doing
 
-1. **Answer the rate-limit question above.** It is one question, it costs a look at the
-   Console, and it decides whether Stage 5 is an optimisation or a prerequisite.
-2. **Stage 5**, at the priority step 1 assigns it.
+1. **Start the second replica** — moved up from the note below, because answering the
+   rate-limit question left nothing above it. It is the only item here that changes what
+   the deployment can survive, and every store a request touches is already shared.
+2. **Stage 5.** An optimisation, at the priority the answered question assigns it: it
+   buys requests, money and latency, and no headroom that is not already there. Worth
+   doing before six figures of users, not before the replica.
 3. **Direct uploads.** The client PUTs to a presigned URL and sends the API a photo id
    instead of several megabytes of base64. Worth doing, but an optimisation rather than
    a blocker now the bucket exists: it takes the +33% encoding and a 25 MB body off the
@@ -499,12 +578,10 @@ headroom. Stage 2 is the seatbelt that stops a bad afternoon becoming an outage.
    The wrinkle is that the model needs the bytes, so the turn either fetches them back
    or passes the presigned URL as an image source.
 
-And the one that is now unblocked rather than merely possible:
-
-- **Start the second replica.** Every store a request touches is shared: sessions and
-  photos and counters all live outside the container. Drop `container_name` from
-  `docker-compose.prod.yml`, `--scale api=2`, and check that a photo taken on one
-  replica renders on the other — which it will, because neither of them holds it.
+What step 1 involves, since it is a deploy rather than a change to this repository: drop
+`container_name` from `docker-compose.prod.yml`, `--scale api=2`, and check that a photo
+taken on one replica renders on the other — which it will, because neither of them holds
+it. Sessions, photos and counters all live outside the container.
 
 Two smaller things worth doing whenever their file is next open, neither urgent:
 
@@ -516,6 +593,10 @@ Two smaller things worth doing whenever their file is next open, neither urgent:
   Claude-shaped question asked on behalf of whichever provider is configured — it
   already 503s a correctly configured `openai` deployment. The provider's own
   `checkAuth()` is the right thing to ask, and every provider already implements it.
+
+  Smaller than it was: the journal's copy moved into `prepareTurn` when the streaming
+  route was added, so one edit now covers both chat routes. `routes/index.ts` still has a
+  second copy on the review route, and `scheduler.ts` has two.
 
 ## Not in this plan (deliberately)
 
