@@ -11,6 +11,7 @@ import type {
 } from '@ct/shared';
 import { api } from '@/lib/api';
 import { ChatActionCard } from '@/components/ChatCard';
+import { Markdown } from '@/components/Markdown';
 import { Composer, type ComposerPayload } from '@/components/Composer';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/components/AuthGate';
@@ -582,14 +583,13 @@ const Bubble = memo(function Bubble({
           )}
         </div>
       ) : (
-        <p
+        <Markdown
+          text={bubble.content}
           className={cn(
-            'text-body leading-relaxed whitespace-pre-wrap',
+            'text-body leading-relaxed',
             bubble.failed && 'text-destructive font-semibold',
           )}
-        >
-          {bubble.content}
-        </p>
+        />
       )}
 
       {bubble.actions && bubble.actions.length > 0 && (
