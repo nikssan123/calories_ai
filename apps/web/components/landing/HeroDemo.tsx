@@ -202,7 +202,7 @@ export function HeroDemo({ className }: { className?: string }) {
                       : undefined
                   }
                 >
-                  <ChatActionCard action={action} />
+                  <ChatActionCard action={action} today={TODAY} />
                 </div>
               </Assistant>
             )}

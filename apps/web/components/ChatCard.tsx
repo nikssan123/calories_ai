@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ChatAction, ChatCard as Card, ExerciseEntry } from '@ct/shared';
 import { RecipeCard } from '@/components/kitchen/RecipeCard';
@@ -26,15 +26,24 @@ import { cn } from '@/lib/utils';
 export function ChatActionCard({
   action,
   messageId,
+  today,
   onLogged,
 }: {
   action: ChatAction;
   /** The message this card sits on — the workout card answers onto it. */
   messageId?: string;
+  /**
+   * The date the app currently calls today, from the day summary beside the
+   * conversation. Never guessed from the browser clock: this app's day turns
+   * over at 4am, so between midnight and then the calendar and the journal
+   * disagree about which day it is, and a card that took the browser's word
+   * for it would label tonight's supper as yesterday's.
+   */
+  today?: string;
   onLogged?: () => void;
 }) {
   if (!action.card) return <Chip action={action} />;
-  return <CardBody card={action.card} messageId={messageId} onLogged={onLogged} />;
+  return <CardBody card={action.card} messageId={messageId} today={today} onLogged={onLogged} />;
 }
 
 /** Actions with nothing to draw — a deletion — stay a line of text. */
@@ -55,15 +64,17 @@ function Chip({ action }: { action: ChatAction }) {
 function CardBody({
   card,
   messageId,
+  today,
   onLogged,
 }: {
   card: Card;
   messageId?: string;
+  today?: string;
   onLogged?: () => void;
 }) {
   switch (card.type) {
     case 'food':
-      return <FoodCard card={card} />;
+      return <FoodCard card={card} today={today} />;
     case 'exercise':
       return <ExerciseCard card={card} />;
     case 'weight':
@@ -239,7 +250,7 @@ function Shell({ children, className }: { children: React.ReactNode; className?:
   );
 }
 
-function FoodCard({ card }: { card: Extract<Card, { type: 'food' }> }) {
+function FoodCard({ card, today }: { card: Extract<Card, { type: 'food' }>; today?: string }) {
   const approx = card.confidence !== 'high';
   const macros = [
     { value: card.protein_g, label: 'P', color: 'var(--protein)', text: 'var(--protein-text)' },
@@ -304,7 +315,7 @@ function FoodCard({ card }: { card: Extract<Card, { type: 'food' }> }) {
         </p>
       )}
 
-      {card.day && <DayProgress day={card.day} kcal={card.kcal} />}
+      {card.day && <DayProgress day={card.day} kcal={card.kcal} today={today} />}
     </Shell>
   );
 }
@@ -328,12 +339,12 @@ function FoodCard({ card }: { card: Extract<Card, { type: 'food' }> }) {
 function DayProgress({
   day,
   kcal,
+  today,
 }: {
   day: NonNullable<Extract<Card, { type: 'food' }>['day']>;
   kcal: number;
+  today?: string;
 }) {
-  const grown = useGrown();
-
   const target = Math.max(1, Math.round(day.target_kcal));
   const before = Math.max(0, Math.round(day.kcal_before));
   // Defensive: a card written before a deletion elsewhere could otherwise ask
@@ -359,25 +370,36 @@ function DayProgress({
     <div className="border-border/70 mt-3 border-t-2 border-dashed pt-2.5">
       <div
         role="img"
-        aria-label={`${after.toLocaleString()} of ${target.toLocaleString()} kcal ${dayWord(day.local_date)}, this meal ${kcal.toLocaleString()}. ${
+        aria-label={[
+          `${after.toLocaleString()} of ${target.toLocaleString()} kcal`,
+          dayWord(day.local_date, today),
+          `— this meal ${kcal.toLocaleString()}.`,
           over
             ? `${Math.abs(remaining).toLocaleString()} over.`
-            : `${remaining.toLocaleString()} left.`
-        }`}
-        className="bg-muted border-border relative flex h-3 overflow-hidden rounded-full border"
+            : `${remaining.toLocaleString()} left.`,
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        // A hairline of track between the bands, exactly as the macro bar
+        // above separates its three — it is what makes the day so far and this
+        // meal read as two things rather than one two-tone one.
+        className="bg-muted border-border relative flex h-3 gap-px overflow-hidden rounded-full border"
       >
         {bands.map((band, i) => (
           <div
             key={band.key}
-            // Never shrunk: the spring overshoots its width by design, and a
-            // band that gave way to it would drag the whole day back and forth.
-            className={cn('h-full shrink-0', i === last && 'rounded-r-full')}
+            className={cn(
+              // Never shrunk: the spring overshoots by design, and a band that
+              // gave way to it would drag the whole day back and forth.
+              'h-full shrink-0',
+              // Only this meal's band grows. The day so far was already true
+              // when the card arrived, and animating it would claim otherwise.
+              band.mine && 'animate-band',
+              i === last && 'rounded-r-full',
+            )}
             style={{
-              // Only this meal's bands animate, and they animate from nothing:
-              // the day so far was already true when the card arrived.
-              width: `${((band.mine && !grown ? 0 : band.kcal) / scale) * 100}%`,
+              width: `${bandWidth(band.kcal, band.mine, scale)}%`,
               background: bandFill(band.mine, band.over),
-              transition: 'width var(--dur-spring) var(--ease-spring) 140ms',
             }}
           />
         ))}
@@ -407,13 +429,33 @@ function DayProgress({
             over ? 'text-foreground' : 'text-muted-foreground',
           )}
         >
-          {over
-            ? `${Math.abs(remaining).toLocaleString()} over ${dayWord(day.local_date)}`
-            : `${remaining.toLocaleString()} left ${dayWord(day.local_date)}`}
+          {[
+            over
+              ? `${Math.abs(remaining).toLocaleString()} over`
+              : `${remaining.toLocaleString()} left`,
+            dayWord(day.local_date, today),
+          ]
+            .filter(Boolean)
+            .join(' ')}
         </span>
       </div>
     </div>
   );
+}
+
+/**
+ * A band's share of the bar, with a floor under this meal's own.
+ *
+ * An apple against a 2,200 kcal day is four percent of the track — three
+ * pixels, which on a bar with a border reads as nothing logged at all. The
+ * floor costs a little accuracy on exactly the meals whose accuracy nobody is
+ * reading off the bar, and buys the one thing the card is for: seeing that the
+ * thing you just said went in. Only this meal's band gets it; padding the day
+ * so far would make the whole day look further along than it is.
+ */
+function bandWidth(kcal: number, mine: boolean, scale: number): number {
+  const share = (kcal / scale) * 100;
+  return mine ? Math.max(share, 2.5) : share;
 }
 
 /** Green up to the target, ink past it; the day so far steps back behind both. */
@@ -427,28 +469,13 @@ function bandFill(mine: boolean, over: boolean): string {
  *
  * Almost always today, and saying so is worth the two words — the one time it
  * is not is a meal logged onto yesterday, where a bar reading as today's would
- * be a confident picture of the wrong day.
+ * be a confident picture of the wrong day. Said as a date, or not at all, when
+ * nobody has told us which day is current; a guess is the one answer that could
+ * be wrong without looking wrong.
  */
-function dayWord(isoDate: string): string {
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
-    now.getDate(),
-  ).padStart(2, '0')}`;
-  return isoDate === today ? 'today' : `on ${formatDate(isoDate)}`;
-}
-
-/**
- * False for one frame, so that a width computed from it has somewhere to
- * animate from. A card restored from history gets the same growth as a fresh
- * one, which is the same bargain <Shell>'s landing animation already makes.
- */
-function useGrown(): boolean {
-  const [grown, setGrown] = useState(false);
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => setGrown(true));
-    return () => cancelAnimationFrame(frame);
-  }, []);
-  return grown;
+function dayWord(isoDate: string, today?: string): string {
+  if (isoDate === today) return 'today';
+  return today === undefined ? '' : `on ${formatDate(isoDate)}`;
 }
 
 function ExerciseCard({ card }: { card: Extract<Card, { type: 'exercise' }> }) {

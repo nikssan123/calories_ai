@@ -677,6 +677,28 @@
   animation: land var(--dur-spring) var(--ease-spring) both;
 }
 
+/*
+ * The band a meal adds to the day's calorie bar, growing out of the day it
+ * landed in. It follows the card down rather than arriving with it, because the
+ * band is the answer to "and where does that leave me?" — a question you only
+ * ask once the meal itself has appeared.
+ *
+ * Scale rather than width, and CSS rather than a mounted flag in React: a
+ * requestAnimationFrame does not fire in a background tab, so a journal reopened
+ * from another tab used to paint every one of its bars empty and leave them
+ * that way. An animation that never starts still ends on its final frame.
+ */
+@keyframes band {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@utility animate-band {
+  transform-origin: left center;
+  animation: band var(--dur-spring) var(--ease-spring) 140ms both;
+}
+
 /* The acknowledgement: something you touched answering back. */
 @keyframes pop {
   0% {

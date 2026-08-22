@@ -263,6 +263,11 @@ export function Journal() {
             <Bubble
               key={bubble.key}
               bubble={bubble}
+              // Which date the app currently calls today, so a food card can
+              // say "today" rather than a date — and say the date on the one
+              // that was backdated. The browser's own clock cannot answer it:
+              // the day here turns over at 4am.
+              today={day?.local_date}
               // The workout card logs without going through `send`, so the day
               // beside the conversation has to be told to re-read itself.
               onLogged={() => void api.day().then(setDay).catch(() => {})}
@@ -407,7 +412,15 @@ function StatusBar({
   );
 }
 
-function Bubble({ bubble, onLogged }: { bubble: Bubble; onLogged: () => void }) {
+function Bubble({
+  bubble,
+  today,
+  onLogged,
+}: {
+  bubble: Bubble;
+  today?: string;
+  onLogged: () => void;
+}) {
   if (bubble.role === 'user') {
     return (
       <div className="flex justify-end">
@@ -468,6 +481,7 @@ function Bubble({ bubble, onLogged }: { bubble: Bubble; onLogged: () => void }) 
               // message it is sitting on. An optimistic bubble has no server id
               // yet, but it also cannot be carrying a card the model drew.
               messageId={bubble.key}
+              today={today}
               onLogged={onLogged}
             />
           ))}
