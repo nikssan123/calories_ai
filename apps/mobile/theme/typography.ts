@@ -31,11 +31,31 @@ export const font = {
  */
 const tnum = { fontVariant: ['tabular-nums'] } satisfies TextStyle;
 
+/**
+ * The shortest line box the display face can be given before iOS crops it.
+ *
+ * CSS lets a glyph overflow a short line box; RN does not, and iOS puts the
+ * baseline at `lineHeight - descent` and clips whatever is taller above it.
+ * Baloo 2 ExtraBold has an unusually deep descender — 0.524em, read off the
+ * font's own `hhea` table — against a cap height of 0.602em, so the shortest
+ * line that still draws a whole digit is 1.126em. This is that, plus a little
+ * for the overshoot on Baloo's very round numerals.
+ *
+ * Which means `leading-none` cannot be ported literally anywhere the display
+ * face is set: on the web it is a tight line box with the glyph hanging out of
+ * it, and here it is a crop. Android is more forgiving — it pads the line box
+ * by default — so this only ever shows up on an iPhone, which is exactly why it
+ * is written down rather than tuned by eye at each call site.
+ */
+export const DISPLAY_LEADING = 1.15;
+
 export const type = StyleSheet.create({
   largeTitle: {
     fontFamily: font.display,
     fontSize: 36,
-    lineHeight: 40,
+    // The web sets 40 (`leading-10`), which is 1.111em — just under the floor,
+    // and enough to shave the top off a capital or a figure. See DISPLAY_LEADING.
+    lineHeight: 42,
     letterSpacing: -0.54,
   },
   title2: {

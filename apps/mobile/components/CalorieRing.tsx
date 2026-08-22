@@ -8,7 +8,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { duration, ease, type as t, useColors } from '@/theme';
+import { DISPLAY_LEADING, duration, ease, type as t, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 /**
@@ -199,7 +199,9 @@ export function CalorieRing({
             style={[
               t.figure,
               popStyle,
-              { fontSize: figure, lineHeight: figure * 1.05, color: colors.foreground },
+              // `leading-none` on the web. Here it is the display face's floor,
+              // or the biggest number in the app loses the tops of its digits.
+              { fontSize: figure, lineHeight: figure * DISPLAY_LEADING, color: colors.foreground },
             ]}
           >
             {Math.round(shown).toLocaleString()}
