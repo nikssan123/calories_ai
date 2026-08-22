@@ -1,0 +1,304 @@
+import { useState } from 'react';
+import {
+  ActionSheetIOS,
+  Image,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import Svg, { Circle, Path, Polyline, Rect } from 'react-native-svg';
+import type { PhotoMediaType } from '@ct/shared';
+import { Material } from '@/components/Material';
+import { PressableChunk } from '@/components/Chunk';
+import { pickPhoto, takePhoto, type PreparedPhoto } from '@/lib/image';
+import { font, type as t, useColors, useTheme } from '@/theme';
+
+export interface ComposerPayload {
+  text: string;
+  photoBase64?: string;
+  photoMediaType?: PhotoMediaType;
+  /** The local file URI, so the sent bubble can show the photo immediately. */
+  photoPreview?: string;
+}
+
+/**
+ * The bar at the bottom: a sentence, or a photo, or both.
+ *
+ * The web's version welds itself to the bottom edge on a phone and becomes a
+ * floating card from `lg` up. Only the first of those exists here, so this is
+ * the phone half of that component and nothing else — translucent material,
+ * hairline along the top, conversation scrolling underneath it.
+ *
+ * The barcode scanner is the one peer missing from the menu. On the web it is
+ * `BarcodeDetector` with a `zxing-wasm` fallback, neither of which exists in
+ * RN; it wants `expo-camera`'s native scanner, which is a rebuild rather than
+ * a port and is its own piece of work.
+ */
+export function Composer({
+  onSend,
+  disabled,
+}: {
+  onSend: (payload: ComposerPayload) => void;
+  disabled: boolean;
+}) {
+  const { colors, scheme } = useTheme();
+  const [text, setText] = useState('');
+  const [photo, setPhoto] = useState<PreparedPhoto | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const canSend = (text.trim().length > 0 || photo !== null) && !disabled;
+
+  function submit() {
+    if (!canSend) return;
+    onSend({
+      // A photo on its own is a valid log — give the model a default instruction.
+      text: text.trim() || "Here's what I'm eating — log it.",
+      photoBase64: photo?.dataUrl,
+      photoMediaType: photo?.mediaType,
+      photoPreview: photo?.uri,
+    });
+    setText('');
+    setPhoto(null);
+  }
+
+  /*
+   * The camera and the library are two different intents, so the app asks which
+   * before opening either — the same choice the web puts in a dropdown. iOS
+   * gets its own action sheet because a menu drawn in JS over a native keyboard
+   * is a fight not worth having; Android has no equivalent primitive, so the
+   * two options are laid out inline there instead.
+   */
+  const [choosing, setChoosing] = useState(false);
+
+  async function attach(source: 'camera' | 'library') {
+    setChoosing(false);
+    setBusy(true);
+    try {
+      const prepared = source === 'camera' ? await takePhoto() : await pickPhoto();
+      if (prepared) setPhoto(prepared);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onAttachPress() {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Cancel', 'Take a photo', 'Choose a photo'],
+          cancelButtonIndex: 0,
+          userInterfaceStyle: scheme,
+        },
+        (index) => {
+          if (index === 1) void attach('camera');
+          if (index === 2) void attach('library');
+        },
+      );
+      return;
+    }
+    setChoosing((open) => !open);
+  }
+
+  return (
+    <Material style={[styles.bar, { borderTopColor: colors.border }]}>
+      {photo && (
+        <View style={styles.thumbWrap}>
+          <Image source={{ uri: photo.uri }} style={styles.thumb} />
+          <Pressable
+            onPress={() => setPhoto(null)}
+            accessibilityRole="button"
+            accessibilityLabel="Remove photo"
+            hitSlop={8}
+            style={[
+              styles.remove,
+              { backgroundColor: colors.foreground, borderColor: colors.card },
+            ]}
+          >
+            <Svg width={13} height={13} viewBox="0 0 24 24">
+              <Path
+                d="M18 6 6 18M6 6l12 12"
+                stroke={colors.background}
+                strokeWidth={3.2}
+                strokeLinecap="round"
+                fill="none"
+              />
+            </Svg>
+          </Pressable>
+        </View>
+      )}
+
+      {choosing && (
+        <View style={styles.choices}>
+          <Choice label="Take a photo" onPress={() => void attach('camera')} icon="camera" />
+          <Choice label="Choose a photo" onPress={() => void attach('library')} icon="image" />
+        </View>
+      )}
+
+      <View style={styles.row}>
+        <Pressable
+          onPress={onAttachPress}
+          disabled={disabled || busy}
+          accessibilityRole="button"
+          accessibilityLabel="Add a photo"
+          hitSlop={6}
+          style={({ pressed }) => [styles.attach, { opacity: pressed || busy ? 0.5 : 1 }]}
+        >
+          <CameraGlyph color={colors.mutedForeground} />
+        </Pressable>
+
+        <TextInput
+          value={text}
+          onChangeText={setText}
+          placeholder="Two eggs and toast…"
+          placeholderTextColor={colors.mutedForeground}
+          editable={!disabled}
+          multiline
+          style={[
+            styles.input,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.input,
+              color: colors.foreground,
+              opacity: disabled ? 0.6 : 1,
+            },
+          ]}
+        />
+
+        <PressableChunk
+          depth={3}
+          radius={999}
+          color={colors.caloriesDeep}
+          onPress={submit}
+          disabled={!canSend}
+          accessibilityRole="button"
+          accessibilityLabel="Send"
+          contentStyle={[styles.send, { backgroundColor: colors.primary }]}
+        >
+          <Svg width={21} height={21} viewBox="0 0 24 24">
+            <Path
+              d="M12 19V5M5 12l7-7 7 7"
+              stroke={colors.primaryForeground}
+              strokeWidth={3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+          </Svg>
+        </PressableChunk>
+      </View>
+    </Material>
+  );
+}
+
+function Choice({
+  label,
+  icon,
+  onPress,
+}: {
+  label: string;
+  icon: 'camera' | 'image';
+  onPress: () => void;
+}) {
+  const colors = useColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={({ pressed }) => [
+        styles.choice,
+        { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.6 : 1 },
+      ]}
+    >
+      {icon === 'camera' ? (
+        <CameraGlyph color={colors.foreground} size={18} />
+      ) : (
+        <Svg width={18} height={18} viewBox="0 0 24 24">
+          <Rect
+            x={3}
+            y={3}
+            width={18}
+            height={18}
+            rx={2}
+            stroke={colors.foreground}
+            strokeWidth={2}
+            fill="none"
+          />
+          <Circle cx={8.5} cy={8.5} r={1.5} stroke={colors.foreground} strokeWidth={2} fill="none" />
+          <Polyline
+            points="21 15 16 10 5 21"
+            stroke={colors.foreground}
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+          />
+        </Svg>
+      )}
+      <Text style={[t.body, { fontFamily: font.semibold, color: colors.foreground }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function CameraGlyph({ color, size = 22 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        d="M14.5 4h-5L8 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-4l-1.5-2Z"
+        stroke={color}
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <Circle cx={12} cy={13} r={3.5} stroke={color} strokeWidth={2.2} fill="none" />
+    </Svg>
+  );
+}
+
+const styles = StyleSheet.create({
+  bar: { borderTopWidth: 2, paddingHorizontal: 12, paddingTop: 10 },
+  row: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  attach: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  input: {
+    flex: 1,
+    minHeight: 40,
+    // `max-h-33` on the web — about four lines, after which it scrolls rather
+    // than eating the conversation it belongs to.
+    maxHeight: 132,
+    borderWidth: 2,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
+    fontFamily: font.medium,
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  send: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 999 },
+  thumbWrap: { width: 80, marginLeft: 44, marginBottom: 8 },
+  thumb: { width: 80, height: 80, borderRadius: 16 },
+  remove: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  choices: { gap: 8, marginBottom: 10 },
+  choice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 2,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+});

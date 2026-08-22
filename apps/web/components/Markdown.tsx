@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, memo, useMemo, type ReactNode } from 'react';
-import { parseBlocks, type Align, type Block, type Inline } from '@/lib/markdown';
+import { parseBlocks, type Align, type Block, type Inline } from '@ct/shared/markdown';
 import { cn } from '@/lib/utils';
 
 /**

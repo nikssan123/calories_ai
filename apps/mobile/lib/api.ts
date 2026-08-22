@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { fetch as expoFetch } from 'expo/fetch';
 import { createApiClient } from '@ct/api-client';
 import { currentToken } from '@/lib/session';
 
@@ -36,4 +37,20 @@ export const api = createApiClient({
   baseUrl: API_BASE_URL,
   sessionTransport: 'bearer',
   token: currentToken,
+  /*
+   * `expo/fetch`, not the global one, and the whole client rather than the one
+   * call that needs it.
+   *
+   * React Native's built-in `fetch` is XMLHttpRequest underneath: it buffers
+   * the entire response and hands back a `Response` whose `.body` is null. The
+   * journal is a *streamed* reply — `chatStream` iterates `res.body` — so on
+   * the stock implementation it does not degrade to arriving slowly, it throws
+   * before the first word. Expo's WinterCG fetch is a real streaming client and
+   * gives back a real `ReadableStream`.
+   *
+   * One client rather than two so there is a single transport to reason about;
+   * the bearer token means nothing here depends on a cookie jar, which is the
+   * usual reason to keep the platform one.
+   */
+  fetchImpl: expoFetch as unknown as typeof fetch,
 });

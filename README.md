@@ -852,23 +852,41 @@ scale drifts toward olive — dark's `--card` is a warm brown with real chroma, 
 green into it moves the hue as well as the lightness. That is what the browser renders today,
 so it is what the app renders; if it is a bug it is the web's, and both have to change.
 
+**The Journal — the conversation half, built.** History, the streamed reply, the composer,
+the photo, and the model's markdown drawn rather than printed. Three things about it:
+
+The stream needed `expo/fetch`. React Native's built-in `fetch` is XMLHttpRequest
+underneath — it buffers the whole response and hands back a `Response` whose `.body` is
+null, so `chatStream` did not degrade to arriving slowly, it threw before the first word.
+Expo's WinterCG fetch is a real streaming client, and it is passed as the `fetchImpl` the
+client already accepted, for the whole client rather than the one call: one transport to
+reason about, and the bearer token means nothing here wanted a cookie jar.
+
+The markdown **parser** moved to `@ct/shared/markdown`, the way `foodEmoji` did — it is
+pure, takes source and returns a small tree, and two copies of it would eventually disagree
+about what a reply says. Only the renderer is native, and the difference driving it is that
+RN has no inline layout: there is no `<strong>` inside a paragraph, only a `Text` inside a
+`Text`. Which is why emphasis resolves to a *face* — `Nunito_500Medium_Italic` and its
+ExtraBold cut are bundled for it, since `fontStyle: 'italic'` is the same empty request as
+`fontWeight` and silently falls back to the system font.
+
+And the app draws its own tab bar, so `tabBarHideOnKeyboard` — a feature of the default one
+— was never running. Under edge-to-edge the window no longer shrinks away from the
+keyboard either, so the composer sat underneath it on the one screen that exists to type
+on. `useKeyboardVisible` takes the bar off screen and `KeyboardAvoidingView` pads on both
+platforms.
+
 ### What is left
 
-The five placeholder tabs, in the order they are worth doing: **Journal** first, because it
-is the product — and the largest, since it carries the composer, the streaming reply and
-`expo-image-picker` in place of `<input type="file">`. Then **You**, which holds onboarding
-and the unit switch. Then Progress, Exercise and Cook, which are all reads.
+**On the Journal.** `ChatCard` — the rich cards a reply draws, and the largest single
+component in the app at 746 lines — is not ported; every action currently renders as the
+one-line `summary` the server already sends, which is true but plain. **Confetti**, the
+app's only celebration, is the one animation that must not fire at all under reduced
+motion, since a loop has no end state worth arriving at. And **`entry-touched`**, the
+one-shot ring on a card the agent has just corrected, belongs with the cards.
 
-The Journal port carries one thing that is not a component. `chatStream` reads `res.body` as
-a `ReadableStream`, and React Native's built-in `fetch` does not expose one. The fix is
-`expo/fetch` passed as the `fetchImpl` the client already accepts, so it is a line rather
-than a rewrite — but nothing about the Journal works until it is done.
-
-Two smaller pieces have no screen of their own and are easy to forget. **Confetti** — the
-app's only celebration, on the macros — is the one animation that must not fire at all
-under reduced motion, since a loop has no end state worth arriving at. And **`entry-touched`**,
-the one-shot ring on a card the agent has just corrected, needs the overlay `View` described
-above; it belongs to the Journal port, because that is where corrections arrive.
+Then the four remaining tabs, in the order they are worth doing: **You**, which holds
+onboarding and the unit switch, then Progress, Exercise and Cook, which are all reads.
 
 Three things cut across every screen. There is no **toast**: the web leans on sonner
 throughout, and the ported screens report failures inline instead, which will not scale to

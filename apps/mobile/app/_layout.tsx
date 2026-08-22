@@ -21,6 +21,14 @@ import { Nunito_500Medium } from '@expo-google-fonts/nunito/500Medium';
 import { Nunito_600SemiBold } from '@expo-google-fonts/nunito/600SemiBold';
 import { Nunito_700Bold } from '@expo-google-fonts/nunito/700Bold';
 import { Nunito_800ExtraBold } from '@expo-google-fonts/nunito/800ExtraBold';
+/*
+ * The two italics exist for the journal alone: the model writes *emphasis* and
+ * the markdown renderer has to draw it. `fontStyle: 'italic'` is the same empty
+ * request as `fontWeight` — with no italic face loaded iOS quietly falls back to
+ * the system font, so a stressed word changes typeface mid-sentence.
+ */
+import { Nunito_500Medium_Italic } from '@expo-google-fonts/nunito/500Medium_Italic';
+import { Nunito_800ExtraBold_Italic } from '@expo-google-fonts/nunito/800ExtraBold_Italic';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { paletteFor, ThemeContext, useColors, type Scheme } from '@/theme';
 
@@ -47,6 +55,8 @@ export default function RootLayout() {
     Nunito_600SemiBold,
     Nunito_700Bold,
     Nunito_800ExtraBold,
+    Nunito_500Medium_Italic,
+    Nunito_800ExtraBold_Italic,
     Baloo2_600SemiBold,
     Baloo2_700Bold,
     Baloo2_800ExtraBold,

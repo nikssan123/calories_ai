@@ -3,7 +3,7 @@ import { dark, light, type Palette } from './colors';
 
 export type { Palette } from './colors';
 export { dark, light } from './colors';
-export { DISPLAY_LEADING, font, type } from './typography';
+export { DISPLAY_LEADING, font, MONO, type } from './typography';
 export { CHUNK_DEPTH, duration, ease, RADIUS } from './motion';
 
 export type Scheme = 'light' | 'dark';

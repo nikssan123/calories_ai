@@ -1,4 +1,4 @@
-import { StyleSheet, type TextStyle } from 'react-native';
+import { Platform, StyleSheet, type TextStyle } from 'react-native';
 
 /**
  * The type scale from `globals.css`, and the one trap in porting it.
@@ -20,10 +20,20 @@ export const font = {
   semibold: 'Nunito_600SemiBold',
   bold: 'Nunito_700Bold',
   extrabold: 'Nunito_800ExtraBold',
+  /* Emphasis in a streamed reply. See the note in `app/_layout.tsx`. */
+  italic: 'Nunito_500Medium_Italic',
+  boldItalic: 'Nunito_800ExtraBold_Italic',
   displaySemibold: 'Baloo2_600SemiBold',
   displayBold: 'Baloo2_700Bold',
   display: 'Baloo2_800ExtraBold',
 } as const;
+
+/**
+ * The platform's monospace face, for a code span or fence in a reply.
+ * `font-mono` on the web resolves to whatever the OS offers; this is the same
+ * bargain, spelled out, since neither face the app bundles has a mono cut.
+ */
+export const MONO = Platform.select({ ios: 'Menlo', default: 'monospace' });
 
 /**
  * Tabular numerals, so a total does not jitter as it ticks up during a log.

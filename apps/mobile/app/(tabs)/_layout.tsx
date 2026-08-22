@@ -7,6 +7,7 @@ import Svg, { Circle, Path, Polyline, Rect } from 'react-native-svg';
 import { Material } from '@/components/Material';
 import { duration, ease, font, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
 
 /**
  * Six, which is one past where a bottom bar is usually said to stop.
@@ -60,6 +61,14 @@ function TabBar({
 }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+
+  /*
+   * Out of the way while typing. The bar is behind the keyboard regardless, but
+   * the space it reserves is where the composer has to be — leaving it there
+   * puts the send button under the keyboard on a screen whose entire purpose is
+   * a sentence you just typed.
+   */
+  if (useKeyboardVisible()) return null;
 
   return (
     <Material style={[styles.bar, { borderTopColor: colors.border, paddingBottom: insets.bottom }]}>
