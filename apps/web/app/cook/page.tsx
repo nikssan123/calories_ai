@@ -24,7 +24,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Button } from '@/components/ui/button';
-import { foodEmoji } from '@/lib/foodEmoji';
+import { foodEmoji } from '@ct/shared/food-emoji';
 import { cn, listWords, untilWords } from '@/lib/utils';
 
 /**

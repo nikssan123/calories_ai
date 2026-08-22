@@ -4,7 +4,7 @@ import type { DaySummary } from '@ct/shared';
 import { CalorieRing } from '@/components/CalorieRing';
 import { MacroBars } from '@/components/MacroBars';
 import { Skeleton } from '@/components/ui/skeleton';
-import { exerciseEmoji, foodEmoji } from '@/lib/foodEmoji';
+import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 
 const MEAL_LABEL: Record<string, string> = {
   breakfast: 'Breakfast',

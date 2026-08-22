@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "Day So Far",
+    "slug": "day-so-far",
+    "scheme": "daysofar",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "backgroundColor": "#fff6ec",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.daysofar.app"
+    },
+    "android": {
+      "package": "com.daysofar.app",
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#fff6ec",
+          "dark": { "backgroundColor": "#1a1512" }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

@@ -1,4 +1,4 @@
-import type { Meal } from '@ct/shared';
+import type { Meal } from './index.ts';
 
 /**
  * A picture for every logged thing.

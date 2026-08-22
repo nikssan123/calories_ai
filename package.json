@@ -11,6 +11,7 @@
     "dev": "pnpm --parallel --filter @ct/api --filter @ct/web dev",
     "dev:api": "pnpm --filter @ct/api dev",
     "dev:web": "pnpm --filter @ct/web dev",
+    "dev:mobile": "pnpm --filter @ct/mobile start",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm --filter @ct/api test",
     "test:coverage": "pnpm --filter @ct/api test:coverage",
