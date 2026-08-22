@@ -162,6 +162,12 @@ CURRENT="$(git rev-parse HEAD)"
 # Two stores, not one. Meal photos are files in the `uploads` volume rather than
 # rows in Postgres, so a pg_dump on its own restores a database full of `photos`
 # rows pointing at files that no longer exist.
+#
+# With S3_* configured that becomes three, and only two of them are backed up
+# here: new photos go to the bucket, which has its own durability and is not
+# something a deploy script should be tarring up on every push. The volume is
+# still archived because everything written before the switch is still in it,
+# and a `photos` row with a `file_path` has nowhere else to look.
 if [[ "$DRY" != 1 ]]; then
     STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
     mkdir -p .deploy-backups

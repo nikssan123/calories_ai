@@ -63,6 +63,18 @@ async function forward(request: Request, path: string[]) {
     const location = response.headers.get('location');
     if (location) out.headers.set('location', location);
 
+    /*
+     * And relay the cacheability along with it, which for one route is the
+     * difference between a working image and a broken one. A photo in object
+     * storage answers with a redirect to a URL that expires in minutes, while
+     * the redirect itself describes a photo that does not — so the API marks it
+     * `no-store`, and dropping that here would let a browser keep serving a
+     * dead link. A 302 is not cacheable by default, which makes this a belt
+     * rather than the braces, but the intent should survive the proxy.
+     */
+    const cacheControl = response.headers.get('cache-control');
+    if (cacheControl) out.headers.set('cache-control', cacheControl);
+
     // Relay Set-Cookie so login and logout actually take effect in the browser.
     // getSetCookie() preserves multiple cookies, which .get() would collapse.
     for (const value of response.headers.getSetCookie?.() ?? []) {

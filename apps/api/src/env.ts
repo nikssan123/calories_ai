@@ -87,6 +87,21 @@ export interface Env {
    * enforce N times the intended ceiling.
    */
   redisUrl: string | null;
+  /**
+   * Where meal photos are written, or null for the local `uploadDir`.
+   *
+   * Null is supported rather than degraded, on the same terms as `redisUrl`: a
+   * single box with a volume is a perfectly good place to keep photos, and it
+   * is what a personal install should do. A bucket matters once there is a
+   * second replica, because a photo written to one container's disk is a 404
+   * from the other — and unlike a rate-limit counter, the miss is permanent.
+   *
+   * Deliberately S3-shaped rather than R2-shaped. The product runs on R2
+   * because egress is what bills you when a photo is served more than once,
+   * but nothing here knows that; any S3-compatible endpoint works, and naming
+   * the vendor in a variable is how a deployment ends up unable to move.
+   */
+  storage: StorageEnv | null;
   email: EmailEnv;
   /**
    * Google sign-in, or null when this deployment has not configured it. Null is
@@ -115,6 +130,20 @@ export interface BarcodeEnv {
    * bother. Being identifiable is the price of a free catalogue.
    */
   userAgent: string;
+}
+
+export interface StorageEnv {
+  /** The bucket's S3 API endpoint, without the bucket name. */
+  endpoint: string;
+  bucket: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  /**
+   * `auto` on R2, which has no regions but still requires the field: SigV4
+   * signs it, so a wrong value is a signature mismatch rather than a routing
+   * mistake. A real S3 bucket names its region here.
+   */
+  region: string;
 }
 
 export interface GoogleEnv {
@@ -223,6 +252,15 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
      * yesterday's count into today's run. The case that exercises this sets it.
      */
     redisUrl: isTest ? null : (source.REDIS_URL?.trim() || null),
+    /*
+     * Forced off under test on the same grounds, and here it is not merely
+     * about determinism: the suite writes and deletes photos, and a developer
+     * with S3 credentials in their .env would have `pnpm test` writing objects
+     * into the deployment's real bucket. `UPLOAD_DIR` is already redirected to
+     * `.test-uploads` for exactly this reason; this is the same fence around
+     * the same hazard.
+     */
+    storage: isTest ? null : storageEnv(source),
     /**
      * Forced off under test for the reason the API key above is: a developer
      * with a real client in their .env must not have the suite behave
@@ -282,6 +320,32 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
  * already picked an account and granted consent, which is the worst possible
  * place to discover a missing variable.
  */
+/**
+ * All four or none. A half-configured bucket is the one outcome worth ruling
+ * out here: a deployment that names an endpoint but no key would otherwise boot
+ * happily and fail at the first photo, which is both the least convenient
+ * moment to find out and the hardest place to see why.
+ */
+export function storageEnv(source: NodeJS.ProcessEnv): StorageEnv | null {
+  const endpoint = source.S3_ENDPOINT?.trim().replace(/\/+$/, '');
+  const bucket = source.S3_BUCKET?.trim();
+  const accessKeyId = source.S3_ACCESS_KEY_ID?.trim();
+  const secretAccessKey = source.S3_SECRET_ACCESS_KEY?.trim();
+  if (!endpoint || !bucket || !accessKeyId || !secretAccessKey) {
+    const named = [endpoint, bucket, accessKeyId, secretAccessKey].filter(Boolean).length;
+    if (named > 0) {
+      throw new Error(
+        'Object storage is half-configured: S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY_ID and ' +
+          'S3_SECRET_ACCESS_KEY are all required together. Unset all four to keep photos on ' +
+          'local disk in UPLOAD_DIR.',
+      );
+    }
+    return null;
+  }
+
+  return { endpoint, bucket, accessKeyId, secretAccessKey, region: source.S3_REGION?.trim() || 'auto' };
+}
+
 function googleEnv(source: NodeJS.ProcessEnv, appUrl: string): GoogleEnv | null {
   const clientId = source.GOOGLE_CLIENT_ID?.trim();
   const clientSecret = source.GOOGLE_CLIENT_SECRET?.trim();

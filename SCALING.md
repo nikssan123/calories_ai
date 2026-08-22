@@ -36,13 +36,13 @@ Three consequences the rest of this document now depends on:
 
 ## Status
 
-**Built:** Stage 0 in full, plus the pieces of Stages 1–3 that are code rather than
-infrastructure — the pool ceiling, admission control on a turn, and the scheduler's
-re-entrancy guard.
+**Built:** Stage 0 in full, and all of Stage 1 — shared rate-limit counters and photos in
+a bucket, both optional and both off by default — plus the pieces of Stages 2 and 3 that
+are code rather than infrastructure: the pool ceiling, admission control on a turn, and
+the scheduler's re-entrancy guard.
 
-**Left:** what needs a bucket, a Redis and a deploy topology decided; streaming; and
-whatever the one unanswered question below turns out to imply. Each is marked in place,
-and the ordered list is at the end.
+**Left:** the deploy topology, streaming, and whatever the one unanswered question below
+turns out to imply. Each is marked in place, and the ordered list is at the end.
 
 ## The short version
 
@@ -51,9 +51,9 @@ second on average. What it had was a per-turn *cost* problem in two currencies: 
 held a whole Claude Code process for twenty seconds, and beneath that each turn reads
 roughly 24,000 input tokens against an org-wide per-minute ceiling.
 
-Stage 0 settled the first — the product's lane spawns nothing — and two replicas now
-carry the product to five figures of users, once the two remaining pins in Stage 1 are
-pulled. Fix the second and the ceiling stops being interesting.
+Stage 0 settled the first — the product's lane spawns nothing — and with Stage 1's two
+pins now pulled, two replicas carry the product to five figures of users as soon as
+somebody starts them. Fix the second and the ceiling stops being interesting.
 
 ## Where the ceilings are today
 
@@ -76,10 +76,11 @@ wants it; it simply no longer describes what the product runs into first.
 deployment to one box. `users.agent_session_id` points at a session file on that
 container's disk — but only for the lane that keeps one, and the product's lane never
 reads the column, so this is not a pin on the product and is not going to become one.
-The two that genuinely remain are real for both lanes and are what Stage 1 is now
-about: meal photos are written to a local volume by `services/photos.ts`, and
-`@fastify/rate-limit` keeps its counters in process memory. `container_name` in the
-compose file means `--scale` will not even start.
+The two that genuinely remained were real for both lanes and were what Stage 1 was
+about: meal photos written to a local volume, and `@fastify/rate-limit` counting in
+process memory. Both are now configurable — a bucket and a Redis respectively, each
+unset by default — so the last one standing is `container_name` in the compose file,
+which means `--scale` will not even start.
 
 **The weekly review.** `runDueReviews` in `scheduler.ts` walks every active user
 serially, generating each review on Opus. At a few hundred users in one timezone this
@@ -216,11 +217,45 @@ splitting them out so it is obvious which lane each belongs to — a deployment 
 
 That leaves two, and they are real for both lanes:
 
-1. **Photos to object storage.** `savePhoto`/`readPhoto` change bodies; the signed-URL
-   scheme in `verifyPhotoUrl` survives untouched. While in there, have the client upload
-   directly and stop pushing base64 through a 25 MB JSON body — there is no client-side
-   resizing today, so a full-resolution phone photo goes up base64-encoded at +33%. That
-   is worth fixing before the storage bill exists rather than after.
+1. **Photos to object storage — built.** `services/storage.ts`, switched on with the four
+   `S3_*` variables and off by their absence, on the same terms as `REDIS_URL`: one box
+   with a volume is a perfectly good place for photos, and it is what the subscription
+   lane should keep doing.
+
+   `savePhoto` and `readPhoto` changed bodies as predicted and `verifyPhotoUrl` did not
+   change at all. Four things about it were decided along the way and are worth having
+   written down.
+
+   **It is a switch, not a cutover.** `photos.storage_key` is null for a row on disk and
+   the object key for a row in the bucket, so the column is both the address and the
+   discriminator — nothing can disagree with the thing it describes. Turning the bucket
+   on sends new photos to it and leaves every existing one being read off the volume.
+   No backfill, and no moment where both have to be true at once.
+
+   **A read is a redirect, not a proxy.** `/photos/:id` still decides whether this caller
+   may have the photo — signature or session, unchanged — and then hands over a
+   five-minute presigned URL rather than streaming the bytes. Proxying would spend our
+   bandwidth and hold a multi-megabyte buffer in the event loop for a file R2 serves for
+   free, which is most of the reason for having R2. The route became a turnstile instead
+   of a pipe, and the 302 carries `no-store` because the URL inside it expires long
+   before the photo does.
+
+   **SigV4 over `fetch`, not the AWS SDK.** Three verbs and one presigned URL do not
+   justify tens of megabytes on a cold start — the deployment already has a 30-second
+   health probe it has come close to missing. `aws4fetch` is 65 KB and signs the request
+   this code was going to make anyway. Its default of ten retries is turned down to two:
+   the default backs off to roughly fifty seconds inside a request somebody is watching,
+   which is the same mistake `maxRetries: 1` fixed on the model client.
+
+   **Half-configured refuses to boot.** All four variables or none. The alternative is a
+   deployment that starts happily and fails at the first photo anybody takes, which is
+   the least convenient moment to discover it and the hardest place to see why.
+
+   Client-side resizing turned out to already exist — `apps/web/lib/image.ts` caps the
+   long edge at 2576px, which is what the vision model reads at anyway, so anything
+   larger was being paid for twice. What is still true is that the bytes go up base64 in
+   a JSON body at +33%. Having the client PUT straight to a presigned URL is the next
+   step there, and it is an optimisation rather than a blocker — see the list at the end.
 2. **Rate limiter to Redis — built.** In-process counters mean N replicas silently
    enforce N times the intended limit. `REDIS_URL` switches the store; unset keeps the
    counters in process, which is right for a single-process install and is what the
@@ -244,9 +279,9 @@ reads as a global ceiling and is not one — leaving it implicit is how a deploy
 that scaled out perfectly happily runs into `max_connections` instead, and the error
 arrives at whichever query was unlucky rather than at the thing that caused it.
 
-**Left in Stage 1:** photos. That is now the only thing standing between here and a
-second replica, and it is a provisioning decision rather than a keystroke — R2 over S3,
-because egress is what bills you when a photo is served to a browser more than once.
+**Left in Stage 1:** nothing in the code. What remains is the deploy topology itself —
+drop `container_name`, run two or three replicas behind Caddy — and that is a decision
+about the host rather than a change to this repository.
 
 ## Stage 2 — Govern in tokens, not in requests
 
@@ -386,7 +421,7 @@ and none of it applies there — which is the point of keeping the two apart.
 
 | Users | What is required | State |
 |---|---|---|
-| ~2,000 | Stage 0. Two replicas. Nothing else. | Stage 0 done; replicas need Stage 1's two items |
+| ~2,000 | Stage 0. Two replicas. Nothing else. | Code done; replicas need starting |
 | ~10,000 | Stages 1–3, plus Stage 5 if cache reads count in full against the rate limit. | Stage 3's guard done; the rest open |
 | ~100,000 | All of it, pgbouncer, and a negotiated rate-limit tier. | open |
 
@@ -397,11 +432,15 @@ headroom. Stage 2 is the seatbelt that stops a bad afternoon becoming an outage.
 
 1. **Answer the rate-limit question above.** It is one question, it costs a look at the
    Console, and it decides whether Stage 5 is an optimisation or a prerequisite.
-2. **Photos to a bucket**, and client-side resizing on the way in. The last thing
-   between here and a second replica now that the limiter is shared.
-3. **Streaming**, at the provider seam so both lanes get it. Twenty silent seconds reads
+2. **Streaming**, at the provider seam so both lanes get it. Twenty silent seconds reads
    as broken. This is the largest remaining piece and the only one a user sees directly.
-4. **Stage 5**, at the priority step 1 assigns it.
+3. **Stage 5**, at the priority step 1 assigns it.
+4. **Direct uploads.** The client PUTs to a presigned URL and sends the API a photo id
+   instead of several megabytes of base64. Worth doing, but an optimisation rather than
+   a blocker now the bucket exists: it takes the +33% encoding and a 25 MB body off the
+   API's path, and it means a slow phone uplink is no longer holding a request open.
+   The wrinkle is that the model needs the bytes, so the turn either fetches them back
+   or passes the presigned URL as an image source.
 
 Two smaller things worth doing whenever their file is next open, neither urgent:
 

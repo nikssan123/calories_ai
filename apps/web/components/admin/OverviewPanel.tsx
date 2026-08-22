@@ -92,6 +92,14 @@ export function OverviewPanel() {
           label="Secure cookies"
           value={config.secure_cookies ? 'On' : 'Off — plain HTTP only'}
         />
+        <ConfigRow
+          label="Photo storage"
+          value={
+            config.photo_storage === 'local-disk'
+              ? 'Local disk — one replica only'
+              : config.photo_storage.replace(/^bucket:/, 'Bucket ')
+          }
+        />
         {config.provider === 'openai' && (
           <ConfigRow
             label="Token pricing"

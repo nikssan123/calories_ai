@@ -1,11 +1,12 @@
-import { readdir, stat, unlink } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { unlink } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { query, queryOne } from '../db.ts';
 import { env } from '../env.ts';
 import { authDescription } from '../ai/client.ts';
 import { providerId } from '../ai/providers/index.ts';
 import { openAiRate } from '../ai/pricing.ts';
 import { hashPassword } from './auth.ts';
+import { objectStore } from './storage.ts';
 
 /**
  * The admin panel's data layer.
@@ -57,6 +58,8 @@ export interface AdminOverview {
     signup_allowed: boolean;
     secure_cookies: boolean;
     admin_source: 'env' | 'first-account';
+    /** `local-disk`, or `bucket:<name>` once object storage is configured. */
+    photo_storage: string;
     /** Null when the OpenAI-compatible path has no configured rate card. */
     openai_rate: { input: number; output: number } | null;
   };
@@ -102,28 +105,32 @@ export async function buildOverview(): Promise<AdminOverview> {
       signup_allowed: env.allowSignup,
       secure_cookies: env.secureCookies,
       admin_source: env.adminEmails.length > 0 ? 'env' : 'first-account',
+      // Which of the two backends new photos are going to. Worth showing
+      // because both work and the wrong one is silent — a bucket that failed to
+      // configure looks exactly like a deployment that never wanted one, right
+      // up until the second replica.
+      photo_storage: env.storage ? `bucket:${env.storage.bucket}` : 'local-disk',
       openai_rate: providerId() === 'openai' ? openAiRate() : null,
     },
   };
 }
 
 /**
- * Meal photos are files in a volume, not rows — the same split that makes the
- * deploy script back up two things. Sizing them here is what stops the disk
- * being the surprise.
+ * Meal photos are bytes somewhere else — a volume, or a bucket — not rows. The
+ * same split that makes the deploy script back up two things. Sizing them here
+ * is what stops storage being the surprise.
+ *
+ * Counted from `photos.byte_size` rather than by walking a directory, which
+ * used to be the same answer and no longer is: with a bucket configured there
+ * is no directory to walk, and the panel would report zero on the deployment
+ * that most needs the number. The column is written from the same buffer that
+ * was stored, so it is not an estimate.
  */
 async function uploadsSize(): Promise<{ uploads_bytes: number; photo_count: number }> {
-  try {
-    const files = await readdir(env.uploadDir);
-    let bytes = 0;
-    for (const file of files) {
-      const info = await stat(join(env.uploadDir, file)).catch(() => null);
-      if (info?.isFile()) bytes += info.size;
-    }
-    return { uploads_bytes: bytes, photo_count: files.length };
-  } catch {
-    return { uploads_bytes: 0, photo_count: 0 };
-  }
+  const row = await queryOne<{ bytes: string; count: number }>(
+    'SELECT coalesce(sum(byte_size), 0)::bigint AS bytes, count(*)::int AS count FROM photos',
+  );
+  return { uploads_bytes: Number(row?.bytes ?? 0), photo_count: row?.count ?? 0 };
 }
 
 // ---- Reading: the schema browser --------------------------------------------
@@ -390,8 +397,8 @@ export async function deleteAccount(userId: string): Promise<DeleteSummary | nul
   const user = await queryOne<{ id: string }>('SELECT id FROM users WHERE id = $1', [userId]);
   if (!user) return null;
 
-  const photos = await query<{ file_path: string }>(
-    'SELECT file_path FROM photos WHERE user_id = $1',
+  const photos = await query<{ file_path: string | null; storage_key: string | null }>(
+    'SELECT file_path, storage_key FROM photos WHERE user_id = $1',
     [userId],
   );
   const counts = (await queryOne<{ food_entries: number; chat_messages: number }>(
@@ -403,14 +410,30 @@ export async function deleteAccount(userId: string): Promise<DeleteSummary | nul
   await query('DELETE FROM users WHERE id = $1', [userId]);
 
   const dir = resolve(env.uploadDir);
+  const store = objectStore();
   const removed: string[] = [];
   for (const photo of photos) {
+    if (photo.storage_key) {
+      /*
+       * A bucket delete that fails must not abort the loop. The rows are
+       * already gone, so throwing here would leave the rest of this account's
+       * photos unreachable *and* undeleted — the worst of both. An orphaned
+       * object is recoverable by a lifecycle rule; a half-run erasure is not.
+       */
+      if (!store) continue;
+      await store.remove(photo.storage_key).then(
+        () => removed.push(photo.storage_key!),
+        () => undefined,
+      );
+      continue;
+    }
+    if (!photo.file_path) continue;
     // Confined to the upload directory for the same reason `readPhoto` is: the
     // path is ours, but a delete loop is the wrong place to assume that.
     if (!resolve(photo.file_path).startsWith(dir)) continue;
     // A missing file is not a failure — the row is already gone either way.
     await unlink(photo.file_path).then(
-      () => removed.push(photo.file_path),
+      () => removed.push(photo.file_path!),
       () => undefined,
     );
   }

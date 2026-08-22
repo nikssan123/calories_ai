@@ -429,10 +429,10 @@ describe('actions', () => {
         Buffer.from('bytes').toString('base64'),
       );
       const summary = await deleteAccount(member.id);
-      expect(summary!.photos).toContain(filePath);
+      expect(summary!.photos).toContain(filePath!);
 
       const { access } = await import('node:fs/promises');
-      await expect(access(filePath)).rejects.toThrow();
+      await expect(access(filePath!)).rejects.toThrow();
     });
 
     it('refuses when the confirmation email does not match', async () => {

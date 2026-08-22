@@ -1547,6 +1547,8 @@ export const AdminOverview = z.object({
     signup_allowed: z.boolean(),
     secure_cookies: z.boolean(),
     admin_source: z.enum(['env', 'first-account']),
+    /** Where new meal photos are written: `local-disk`, or `bucket:<name>`. */
+    photo_storage: z.string(),
     openai_rate: z.object({ input: z.number(), output: z.number() }).nullable(),
   }),
 });

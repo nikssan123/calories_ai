@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { query } from '../src/db.ts';
@@ -6,9 +6,11 @@ import { env } from '../src/env.ts';
 import {
   readPhoto,
   readPhotoById,
+  readPhotoBytes,
   savePhoto,
   signPhotoUrl,
   verifyPhotoUrl,
+  type PhotoDelivery,
 } from '../src/services/photos.ts';
 import { createUser, type TestUser } from './helpers/factories.ts';
 
@@ -18,6 +20,18 @@ const PIXEL =
 let user: TestUser;
 let other: TestUser;
 
+/**
+ * Every case in this file runs with no bucket configured — `env.storage` is
+ * forced null under test — so a delivery here is always the local-disk branch.
+ * Asserting that before reaching for the bytes is what keeps a silent switch to
+ * the other branch from reading as a type error thirty lines later.
+ */
+function servedBytes(photo: PhotoDelivery | null) {
+  expect(photo).not.toBeNull();
+  expect(photo!.kind).toBe('bytes');
+  return photo as Extract<PhotoDelivery, { kind: 'bytes' }>;
+}
+
 beforeEach(async () => {
   user = await createUser();
   other = await createUser();
@@ -26,7 +40,7 @@ beforeEach(async () => {
 describe('savePhoto', () => {
   it('writes the bytes and records the row', async () => {
     const saved = await savePhoto(user.id, 'image/png', PIXEL);
-    const bytes = await readFile(saved.filePath);
+    const bytes = await readFile(saved.filePath!);
     expect(bytes.equals(Buffer.from(PIXEL, 'base64'))).toBe(true);
 
     const rows = await query<any>('SELECT * FROM photos WHERE id = $1', [saved.id]);
@@ -41,16 +55,16 @@ describe('savePhoto', () => {
     ['application/octet-stream', '.bin'],
   ])('gives %s the %s extension', async (mediaType, extension) => {
     const saved = await savePhoto(user.id, mediaType, PIXEL);
-    expect(saved.filePath.endsWith(extension)).toBe(true);
+    expect(saved.filePath!.endsWith(extension)).toBe(true);
   });
 });
 
 describe('readPhoto', () => {
   it('returns the bytes to their owner', async () => {
     const saved = await savePhoto(user.id, 'image/png', PIXEL);
-    const photo = await readPhoto(user.id, saved.id);
-    expect(photo!.mediaType).toBe('image/png');
-    expect(photo!.bytes.equals(Buffer.from(PIXEL, 'base64'))).toBe(true);
+    const photo = servedBytes(await readPhoto(user.id, saved.id));
+    expect(photo.mediaType).toBe('image/png');
+    expect(photo.bytes.equals(Buffer.from(PIXEL, 'base64'))).toBe(true);
   });
 
   it('refuses another account’s photo', async () => {
@@ -64,7 +78,7 @@ describe('readPhoto', () => {
 
   it('returns null when the file has gone missing under the row', async () => {
     const saved = await savePhoto(user.id, 'image/png', PIXEL);
-    await rm(saved.filePath);
+    await rm(saved.filePath!);
     expect(await readPhoto(user.id, saved.id)).toBeNull();
   });
 
@@ -158,11 +172,117 @@ describe('signed photo URLs', () => {
 describe('readPhotoById', () => {
   it('returns the bytes without a user to scope by', async () => {
     const saved = await savePhoto(user.id, 'image/png', PIXEL);
-    const photo = await readPhotoById(saved.id);
-    expect(photo!.bytes.equals(Buffer.from(PIXEL, 'base64'))).toBe(true);
+    const photo = servedBytes(await readPhotoById(saved.id));
+    expect(photo.bytes.equals(Buffer.from(PIXEL, 'base64'))).toBe(true);
   });
 
   it('returns null for an id that does not exist', async () => {
     expect(await readPhotoById('00000000-0000-0000-0000-000000000000')).toBeNull();
+  });
+});
+
+/**
+ * The bucket-backed path.
+ *
+ * `env.storage` is null everywhere else in this file — forced so under test —
+ * which is what makes it possible to set it here for a handful of cases and get
+ * the real code path rather than a mock of it. Only the network is stubbed, so
+ * these exercise `savePhoto` and `deliver` against the actual client.
+ */
+describe('with object storage configured', () => {
+  const CONFIG = {
+    endpoint: 'https://acct123.r2.cloudflarestorage.com',
+    bucket: 'meals',
+    accessKeyId: 'AKIAEXAMPLE',
+    secretAccessKey: 'secret',
+    region: 'auto',
+  };
+
+  const original = globalThis.fetch;
+  let calls: Request[];
+
+  beforeEach(() => {
+    calls = [];
+    (env as any).storage = { ...CONFIG };
+    globalThis.fetch = vi.fn(async (input: any) => {
+      calls.push(input as Request);
+      return new Response('bytes', { status: 200 });
+    }) as typeof fetch;
+  });
+
+  afterEach(() => {
+    (env as any).storage = null;
+    globalThis.fetch = original;
+  });
+
+  it('puts the bytes in the bucket and records the key instead of a path', async () => {
+    const saved = await savePhoto(user.id, 'image/png', PIXEL);
+
+    expect(saved.filePath).toBeNull();
+    expect(saved.storageKey).toMatch(new RegExp(`^photos/${user.id}/[0-9a-f-]+\\.png$`));
+    expect(calls[0]!.method).toBe('PUT');
+    expect(calls[0]!.url).toBe(
+      `https://acct123.r2.cloudflarestorage.com/meals/${saved.storageKey}`,
+    );
+
+    const rows = await query<any>('SELECT * FROM photos WHERE id = $1', [saved.id]);
+    expect(rows[0]).toMatchObject({ file_path: null, storage_key: saved.storageKey });
+    expect(rows[0].byte_size).toBe(Buffer.from(PIXEL, 'base64').byteLength);
+  });
+
+  /**
+   * The whole reason for a bucket: the bytes are served by it rather than
+   * proxied through here, so the API spends a signature and not its bandwidth.
+   */
+  it('hands the reader a presigned URL rather than the bytes', async () => {
+    const saved = await savePhoto(user.id, 'image/png', PIXEL);
+    const photo = await readPhoto(user.id, saved.id);
+
+    expect(photo!.kind).toBe('redirect');
+    const url = new URL((photo as Extract<PhotoDelivery, { kind: 'redirect' }>).url);
+    expect(url.pathname).toBe(`/meals/${saved.storageKey}`);
+    expect(url.searchParams.get('X-Amz-Signature')).toBeTruthy();
+    // The PUT, and nothing since: signing is arithmetic, not a round trip.
+    expect(calls).toHaveLength(1);
+  });
+
+  it('still scopes the owner read by user', async () => {
+    const saved = await savePhoto(user.id, 'image/png', PIXEL);
+    expect(await readPhoto(other.id, saved.id)).toBeNull();
+  });
+
+  it('fetches the bytes when a caller genuinely needs them', async () => {
+    const saved = await savePhoto(user.id, 'image/png', PIXEL);
+    const bytes = await readPhotoBytes(saved.id);
+
+    expect(bytes!.toString()).toBe('bytes');
+    expect(calls.at(-1)!.method).toBe('GET');
+  });
+
+  /**
+   * Photos written before the bucket was turned on keep being read off the
+   * volume. This is what makes the switch a configuration rather than a
+   * migration with a cutover — nothing is backfilled, and nothing has to be.
+   */
+  it('keeps serving photos that were written to disk beforehand', async () => {
+    (env as any).storage = null;
+    const onDisk = await savePhoto(user.id, 'image/png', PIXEL);
+    (env as any).storage = { ...CONFIG };
+
+    const photo = servedBytes(await readPhoto(user.id, onDisk.id));
+    expect(photo.bytes.equals(Buffer.from(PIXEL, 'base64'))).toBe(true);
+  });
+
+  /**
+   * The other direction is not symmetrical, and must not fail quietly. A row in
+   * the bucket with the bucket switched off is a misconfiguration, and looking
+   * for a local file that was never written would report it as a missing photo
+   * — sending whoever investigates to the wrong place entirely.
+   */
+  it('says so loudly when the bucket is switched off under a row that needs it', async () => {
+    const saved = await savePhoto(user.id, 'image/png', PIXEL);
+    (env as any).storage = null;
+
+    await expect(readPhoto(user.id, saved.id)).rejects.toThrow(/not configured/);
   });
 });

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { query } from '../src/db.ts';
+import { env } from '../src/env.ts';
 import { getFoodEntry, listExerciseEntries } from '../src/services/log.ts';
 import { insertMessage } from '../src/services/chat.ts';
 import { targetsForDate } from '../src/services/targets.ts';
@@ -572,6 +573,65 @@ describe('GET /photos/:id', () => {
     const { savePhoto } = await import('../src/services/photos.ts');
     const photo = await savePhoto(other.id, 'image/png', 'iVBORw0KGgo=');
     expect((await app.inject({ method: 'GET', url: `/photos/${photo.id}`, ...auth() })).statusCode).toBe(404);
+  });
+
+  /**
+   * With a bucket configured the route stops being a pipe and becomes a
+   * turnstile: it still decides whether this caller may have the photo, and
+   * then lets the bucket do the transfer. Proxying the bytes would spend our
+   * bandwidth on a file R2 serves for free, which is most of the point.
+   */
+  describe('with object storage configured', () => {
+    const original = globalThis.fetch;
+
+    beforeEach(() => {
+      (env as any).storage = {
+        endpoint: 'https://acct123.r2.cloudflarestorage.com',
+        bucket: 'meals',
+        accessKeyId: 'AKIAEXAMPLE',
+        secretAccessKey: 'secret',
+        region: 'auto',
+      };
+      globalThis.fetch = vi.fn(async () => new Response('bytes', { status: 200 })) as typeof fetch;
+    });
+
+    afterEach(() => {
+      (env as any).storage = null;
+      globalThis.fetch = original;
+    });
+
+    it('redirects the owner to a presigned URL instead of proxying the bytes', async () => {
+      const { savePhoto } = await import('../src/services/photos.ts');
+      const photo = await savePhoto(user.id, 'image/png', 'iVBORw0KGgo=');
+
+      const response = await app.inject({ method: 'GET', url: `/photos/${photo.id}`, ...auth() });
+      expect(response.statusCode).toBe(302);
+      const location = new URL(response.headers.location as string);
+      expect(location.pathname).toBe(`/meals/${photo.storageKey}`);
+      expect(location.searchParams.get('X-Amz-Signature')).toBeTruthy();
+    });
+
+    /**
+     * The presigned URL inside expires in minutes; the photo does not. A cached
+     * 302 would become a broken image long before the link that produced it
+     * went stale.
+     */
+    it('forbids caching the redirect, which outlives the URL it carries', async () => {
+      const { savePhoto } = await import('../src/services/photos.ts');
+      const photo = await savePhoto(user.id, 'image/png', 'iVBORw0KGgo=');
+
+      const response = await app.inject({ method: 'GET', url: `/photos/${photo.id}`, ...auth() });
+      expect(response.headers['cache-control']).toBe('private, no-store');
+    });
+
+    it('still refuses another account’s photo before any redirect', async () => {
+      const { savePhoto } = await import('../src/services/photos.ts');
+      const photo = await savePhoto(other.id, 'image/png', 'iVBORw0KGgo=');
+
+      const response = await app.inject({ method: 'GET', url: `/photos/${photo.id}`, ...auth() });
+      expect(response.statusCode).toBe(404);
+      expect(response.headers.location).toBeUndefined();
+    });
   });
 });
 

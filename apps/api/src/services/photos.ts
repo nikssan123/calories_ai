@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
 import { env } from '../env.ts';
 import { queryOne } from '../db.ts';
+import { objectStore } from './storage.ts';
 
 const EXTENSIONS: Record<string, string> = {
   'image/jpeg': '.jpg',
@@ -22,40 +23,87 @@ const EXTENSIONS: Record<string, string> = {
  */
 const URL_TTL_SECONDS = 7 * 24 * 60 * 60;
 
+export interface SavedPhoto {
+  id: string;
+  /** Set when the bytes went to local disk, null when they went to a bucket. */
+  filePath: string | null;
+  /** Set when the bytes went to a bucket, null when they went to local disk. */
+  storageKey: string | null;
+}
+
 export async function savePhoto(
   userId: string,
   mediaType: string,
   base64: string,
-): Promise<{ id: string; filePath: string }> {
-  const dir = resolve(env.uploadDir);
-  await mkdir(dir, { recursive: true });
-
+): Promise<SavedPhoto> {
   const bytes = Buffer.from(base64, 'base64');
   const fileName = `${randomUUID()}${EXTENSIONS[mediaType] ?? '.bin'}`;
-  const filePath = join(dir, fileName);
-  await writeFile(filePath, bytes);
 
+  const store = objectStore();
+  let filePath: string | null = null;
+  let storageKey: string | null = null;
+
+  if (store) {
+    /*
+     * Keyed by owner, which buys two things beyond tidiness: a bucket listing
+     * is readable by a human, and a lifecycle rule or a bulk delete can be
+     * scoped to one account without consulting the database. The uuid still
+     * carries the uniqueness — the prefix is for whoever has to look.
+     */
+    storageKey = `photos/${userId}/${fileName}`;
+    await store.put(storageKey, mediaType, bytes);
+  } else {
+    const dir = resolve(env.uploadDir);
+    await mkdir(dir, { recursive: true });
+    filePath = join(dir, fileName);
+    await writeFile(filePath, bytes);
+  }
+
+  /*
+   * Written after the bytes are safely stored, so the failure mode is an
+   * orphaned object rather than a row pointing at nothing. An orphan costs a
+   * fraction of a cent and is reclaimable; a row whose photo never arrived is a
+   * permanent hole in somebody's history.
+   */
   const row = await queryOne<{ id: string }>(
-    `INSERT INTO photos (user_id, media_type, file_path, byte_size)
-     VALUES ($1,$2,$3,$4) RETURNING id`,
-    [userId, mediaType, filePath, bytes.byteLength],
+    `INSERT INTO photos (user_id, media_type, file_path, storage_key, byte_size)
+     VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+    [userId, mediaType, filePath, storageKey, bytes.byteLength],
   );
-  return { id: row!.id, filePath };
+  return { id: row!.id, filePath, storageKey };
 }
 
-export interface StoredPhoto {
-  mediaType: string;
-  bytes: Buffer;
+/**
+ * How a photo should reach the client.
+ *
+ * A union rather than always-bytes, because the two backends want different
+ * answers and flattening them would throw away the better one. Local disk has
+ * to be read and sent. A bucket should not be: proxying the bytes spends our
+ * bandwidth and holds a multi-megabyte buffer in the event loop for a file the
+ * bucket will serve for free, which is most of the reason for having a bucket.
+ * So the API stays the thing that decides *whether* the read is allowed, and
+ * hands off the transfer once it has.
+ */
+export type PhotoDelivery =
+  | { kind: 'bytes'; mediaType: string; bytes: Buffer }
+  | { kind: 'redirect'; url: string };
+
+interface PhotoRow {
+  media_type: string;
+  file_path: string | null;
+  storage_key: string | null;
 }
+
+const COLUMNS = 'media_type, file_path, storage_key';
 
 /** The owner's own read. Scoped by user, so a wrong id is indistinguishable
     from someone else's photo. */
-export async function readPhoto(userId: string, photoId: string): Promise<StoredPhoto | null> {
-  const row = await queryOne<{ media_type: string; file_path: string }>(
-    'SELECT media_type, file_path FROM photos WHERE id = $1 AND user_id = $2',
+export async function readPhoto(userId: string, photoId: string): Promise<PhotoDelivery | null> {
+  const row = await queryOne<PhotoRow>(
+    `SELECT ${COLUMNS} FROM photos WHERE id = $1 AND user_id = $2`,
     [photoId, userId],
   );
-  return row ? loadFile(row) : null;
+  return row ? deliver(row) : null;
 }
 
 /**
@@ -63,15 +111,45 @@ export async function readPhoto(userId: string, photoId: string): Promise<Stored
  * to scope by. Only call this once `verifyPhotoUrl` has passed — the signature
  * is what stands in for ownership here.
  */
-export async function readPhotoById(photoId: string): Promise<StoredPhoto | null> {
-  const row = await queryOne<{ media_type: string; file_path: string }>(
-    'SELECT media_type, file_path FROM photos WHERE id = $1',
-    [photoId],
-  );
-  return row ? loadFile(row) : null;
+export async function readPhotoById(photoId: string): Promise<PhotoDelivery | null> {
+  const row = await queryOne<PhotoRow>(`SELECT ${COLUMNS} FROM photos WHERE id = $1`, [photoId]);
+  return row ? deliver(row) : null;
 }
 
-async function loadFile(row: { media_type: string; file_path: string }): Promise<StoredPhoto | null> {
+/**
+ * The bytes themselves, whichever backend holds them.
+ *
+ * Separate from `deliver` because a caller that genuinely needs the content —
+ * as opposed to a caller serving it to a browser — should not have to know
+ * that one of the two answers is a URL.
+ */
+export async function readPhotoBytes(photoId: string): Promise<Buffer | null> {
+  const row = await queryOne<PhotoRow>(`SELECT ${COLUMNS} FROM photos WHERE id = $1`, [photoId]);
+  if (!row) return null;
+  if (row.storage_key) return (await objectStore()?.get(row.storage_key)) ?? null;
+  return loadFile(row);
+}
+
+async function deliver(row: PhotoRow): Promise<PhotoDelivery | null> {
+  if (row.storage_key) {
+    const store = objectStore();
+    /*
+     * A key with no store configured is a deployment that turned the bucket
+     * off after writing to it. Nothing here can serve that, and guessing —
+     * looking for a local file that was never written — would turn a
+     * configuration mistake into a confusing 404 rather than a loud one.
+     */
+    if (!store) throw new Error('This photo is in object storage, which is not configured.');
+    return { kind: 'redirect', url: await store.presignGet(row.storage_key) };
+  }
+
+  const bytes = await loadFile(row);
+  return bytes ? { kind: 'bytes', mediaType: row.media_type, bytes } : null;
+}
+
+async function loadFile(row: PhotoRow): Promise<Buffer | null> {
+  if (!row.file_path) return null;
+
   // The stored path is written by savePhoto, never by a client, but confine the
   // read to the upload directory anyway.
   const dir = resolve(env.uploadDir);
@@ -80,7 +158,7 @@ async function loadFile(row: { media_type: string; file_path: string }): Promise
   if (!EXTENSIONS[row.media_type] && extname(filePath) !== '.bin') return null;
 
   try {
-    return { mediaType: row.media_type, bytes: await readFile(filePath) };
+    return await readFile(filePath);
   } catch {
     return null;
   }
@@ -93,7 +171,8 @@ async function loadFile(row: { media_type: string; file_path: string }): Promise
  * cannot be made to send an Authorization header, so a session-scoped photo
  * route is unreachable from the one element that needs it. Signing the path
  * moves the proof into the URL itself, which is the same shape object storage
- * uses when these files eventually move off local disk.
+ * uses — and now literally is what happens on the far side, since the route
+ * trades this signature for the bucket's own.
  *
  * Returned as a path rather than an absolute URL because the API does not know
  * what hostname it is reached by: the browser goes through the Next proxy at

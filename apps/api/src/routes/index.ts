@@ -33,7 +33,13 @@ import { deleteAccount } from '../services/admin.ts';
 import { proposeTargets } from '../services/adaptive.ts';
 import { listMessages } from '../services/chat.ts';
 import { mealTemplates, repeatFoodEntry } from '../services/history.ts';
-import { savePhoto, readPhoto, readPhotoById, verifyPhotoUrl } from '../services/photos.ts';
+import {
+  savePhoto,
+  readPhoto,
+  readPhotoById,
+  verifyPhotoUrl,
+  type PhotoDelivery,
+} from '../services/photos.ts';
 import { EMAIL_UNSUBSCRIBE_SECRET, getSecret, PHOTO_URL_SECRET } from '../services/secrets.ts';
 import { SESSION_COOKIE } from '../services/auth.ts';
 import {
@@ -594,16 +600,34 @@ export async function registerRoutes(app: FastifyInstance) {
       if (!verifyPhotoUrl(photoId, exp, sig, secret)) {
         return reply.status(403).send({ error: 'This photo link has expired.' });
       }
-      const photo = await readPhotoById(photoId);
-      if (!photo) return reply.status(404).send({ error: 'Photo not found' });
-      return reply.type(photo.mediaType).send(photo.bytes);
+      return send(reply, await readPhotoById(photoId));
     }
 
     if (request.userId === null) return reply.status(401).send({ error: 'Not signed in.' });
-    const photo = await readPhoto(request.userId, photoId);
-    if (!photo) return reply.status(404).send({ error: 'Photo not found' });
-    return reply.type(photo.mediaType).send(photo.bytes);
+    return send(reply, await readPhoto(request.userId, photoId));
   });
+
+  /**
+   * The same ending for both branches above, once each has established that the
+   * caller may have this photo.
+   *
+   * A photo in a bucket is a redirect rather than a proxied body: the bucket
+   * serves it for free and we do not, and the authorisation this route exists
+   * to perform has already happened by the time the 302 is written. The
+   * short-lived presigned URL is what carries it the rest of the way, so this
+   * is a handoff between two signatures rather than a hole in one.
+   *
+   * `no-store` on the redirect itself, because the presigned URL inside it
+   * expires in minutes while the photo does not — a cached 302 would turn into
+   * a broken image long before the link that produced it went stale.
+   */
+  function send(reply: FastifyReply, photo: PhotoDelivery | null) {
+    if (!photo) return reply.status(404).send({ error: 'Photo not found' });
+    if (photo.kind === 'redirect') {
+      return reply.header('cache-control', 'private, no-store').redirect(photo.url, 302);
+    }
+    return reply.type(photo.mediaType).send(photo.bytes);
+  }
 
   // ---- Email preferences ---------------------------------------------------
 
