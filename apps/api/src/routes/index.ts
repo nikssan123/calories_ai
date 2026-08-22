@@ -68,6 +68,7 @@ import {
 import { listExerciseTypes, logWorkout } from '../services/workouts.ts';
 import { messageActions, replaceActions } from '../services/chat.ts';
 import { TurnInProgressError } from '../services/turn-lock.ts';
+import { ModelBusyError } from '../ai/token-bucket.ts';
 import { addDays, dateRange, localDateFor } from '../time.ts';
 import { stripDataUrl } from './body.ts';
 import { openEventStream } from './sse.ts';
@@ -175,6 +176,20 @@ export async function registerRoutes(app: FastifyInstance) {
       if (error instanceof TurnInProgressError) {
         return reply.status(429).send({ error: error.message });
       }
+      /*
+       * The same answer, for the other reason a turn is refused before it
+       * starts: the model's per-minute token budget is spent. Not a failure
+       * either — at the volumes the metered lane exists to serve, being briefly
+       * over the ceiling is ordinary operation — and it carries a `retry-after`
+       * because unlike the turn lease, this one knows exactly when capacity
+       * returns.
+       */
+      if (error instanceof ModelBusyError) {
+        return reply
+          .status(429)
+          .header('retry-after', String(error.retryAfterSeconds))
+          .send({ error: error.message });
+      }
       request.log.error({ err: error }, 'chat turn failed');
       return reply.status(502).send({ error: (error as Error).message });
     }
@@ -198,10 +213,12 @@ export async function registerRoutes(app: FastifyInstance) {
    * **The head is written late.** Once a 200 and `text/event-stream` are on the
    * wire the status is spent, and every failure after that has to be an event
    * inside a successful response — which is a worse answer for the failures
-   * that arrive *before* anything has been sent. `TurnInProgressError` is the
-   * one that matters: it is thrown by the turn lease before the provider is
-   * ever called, so deferring the head until the first event keeps it a real
-   * 429 with a real `retry-after`, exactly as on `/chat`.
+   * that arrive *before* anything has been sent. Both refusals are of that
+   * kind: the turn lease rejects a double-tapped send before the provider is
+   * called at all, and the token bucket rejects a turn there is no per-minute
+   * budget for before anything goes on the wire. Deferring the head until the
+   * first event keeps both of them real 429s with a real `retry-after`,
+   * exactly as on `/chat`.
    *
    * **A vanished reader does not cancel the turn.** The tools have already
    * written to the log by the time most of this is streamed, and the message is
@@ -226,6 +243,12 @@ export async function registerRoutes(app: FastifyInstance) {
         // and these stay ordinary HTTP failures.
         if (error instanceof TurnInProgressError) {
           return reply.status(429).send({ error: error.message });
+        }
+        if (error instanceof ModelBusyError) {
+          return reply
+            .status(429)
+            .header('retry-after', String(error.retryAfterSeconds))
+            .send({ error: error.message });
         }
         request.log.error({ err: error }, 'chat turn failed');
         return reply.status(502).send({ error: (error as Error).message });

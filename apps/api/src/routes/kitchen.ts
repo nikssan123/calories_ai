@@ -16,6 +16,7 @@ import { AUTH_HELP, hasSubscriptionAuth } from '../ai/client.ts';
 import { scanFridgePhoto } from '../ai/pantry.ts';
 import { generateMealPlan } from '../ai/plan.ts';
 import { RecipeBudgetError, suggestRecipes } from '../ai/recipes.ts';
+import { ModelBusyError } from '../ai/token-bucket.ts';
 import { recipeAllowance } from '../services/usage.ts';
 import {
   cookSlot,
@@ -67,11 +68,19 @@ const PhotoBody = z.object({
  *
  * The budget is a 429 with the same shape the rate limiter produces, because
  * from the client's side it is the same event — you have had your allowance —
- * and it should not matter which of the two noticed.
+ * and it should not matter which of the two noticed. The token bucket joins it
+ * for the same reason and says something different: not "you have had your
+ * allowance" but "come back in a moment", which is why it carries the seconds.
  */
 function recipeFailure(error: unknown, reply: FastifyReply) {
   if (error instanceof RecipeBudgetError) {
     return reply.status(429).send({ error: error.message, limit: error.allowed });
+  }
+  if (error instanceof ModelBusyError) {
+    return reply
+      .status(429)
+      .header('retry-after', String(error.retryAfterSeconds))
+      .send({ error: error.message });
   }
   const message = (error as Error).message;
   if (message.includes('No such recipe')) return reply.status(404).send({ error: message });
@@ -150,6 +159,9 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
         base64: stripDataUrl(parsed.data.photo_base64),
       });
     } catch (error) {
+      // A spent per-minute budget is not a failed scan, and the shared funnel
+      // already knows how to say so.
+      if (error instanceof ModelBusyError) return recipeFailure(error, reply);
       request.log.error({ err: error }, 'fridge scan failed');
       return reply.status(502).send({ error: (error as Error).message });
     }

@@ -37,11 +37,12 @@ Three consequences the rest of this document now depends on:
 
 ## Status
 
-**Built:** Stage 0 in full, and all of Stage 1 — shared rate-limit counters and photos in
-a bucket, both optional and both off by default — plus the pieces of Stages 2 and 3 that
-are code rather than infrastructure: the pool ceiling, admission control on a turn, and
-the scheduler's re-entrancy guard. Streaming landed on 2026-08-22 and is the only item so
-far that a user can see.
+**Built:** Stage 0 in full, all of Stage 1 — shared rate-limit counters and photos in a
+bucket, both optional and both off by default — all of Stage 2, and the pieces of Stage 3
+that are code rather than infrastructure: the pool ceiling, the scheduler's re-entrancy
+guard. Streaming landed on 2026-08-22 and is the only item so far that a user can see.
+The token bucket, Stage 2's last piece, landed the same day: migration `025`, the bucket
+in `ai/token-bucket.ts` and its admission call in the `anthropic-api` provider.
 
 **Deployed and verified**, 2026-08-22, at `7bfd1e6`. Redis was already carrying the
 limiter's counters; this deploy added the bucket. Migration `023` applied, the API
@@ -84,9 +85,10 @@ deploy topology, and both of its real blockers were somewhere else — one in th
 one in the choice of provider.
 
 **Left:** moving this deployment to `anthropic-api`, which is now what stands between it
-and a second replica. And Stage 5, which the rate-limit question, now answered, demotes
-from prerequisite to optimisation. Each is marked in place, and the ordered list is at the
-end.
+and a second replica — and which, with the token bucket built, has nothing left in front
+of it but setting three variables. And Stage 5, which the rate-limit question, now
+answered, demotes from prerequisite to optimisation. Each is marked in place, and the
+ordered list is at the end.
 
 ## The short version
 
@@ -396,18 +398,54 @@ one abusive account and the wrong shape for protecting an org-wide token ceiling
 a photo turn and a text turn differ by an order of magnitude in tokens and the limiter
 cannot tell them apart.
 
-- **A token bucket in front of the model call — not built.** Sized in tokens per minute
-  against the real limit with about 20% headroom. Estimate a turn's cost before
-  admitting it — `messages.count_tokens` for the exact figure, or a constant per
-  `TurnKind`, which is accurate enough given every turn is already classified.
+- **A token bucket in front of the model call — built.** `ai/token-bucket.ts`, sized in
+  tokens per minute from `ANTHROPIC_ITPM` with 20% kept back, one bucket per model, and
+  its admission call in `providers/messages.ts`. It went where this section said it
+  should: inside the metered provider, so the subscription lane — which shares a budget
+  with my own terminal rather than having a tokens-per-minute ceiling — and the OpenAI
+  lane are untouched by a limit sized against Anthropic's tiers. Unset means no bucket,
+  which is the right default for a personal install and the wrong one the moment the key
+  is metered; `.env.example` says so next to `ANTHROPIC_API_KEY`.
 
-  Not built because sizing it needs the answer to the question above. It is also the
-  clearest example of a **lane-specific** change: the ceiling it protects is the API
-  key's tokens-per-minute limit, which the subscription lane does not have — that lane
-  shares a budget with my own terminal instead, which is a real constraint but not this
-  one. So it belongs in the `anthropic-api` provider or in front of it, keyed on
-  whether the running provider is metered, and not in `runTurn` where it would tax a
-  lane it cannot help.
+  Four decisions inside it were not obvious from up here.
+
+  **It admits a whole turn, not a model call.** The heading says "in front of the model
+  call" and that turns out to be the wrong place by one level. A turn is two or three
+  round trips with tool writes in between, so a check before each call can refuse the
+  third — after the meal is in the log and before the sentence saying so is written.
+  Reserving the turn's whole estimate up front means the only refusal possible is the
+  one that costs nothing, and it is also the only one that can be a clean 429 rather
+  than a half-finished turn.
+
+  **A constant per `TurnKind` is not the fallback here, it is the correct instrument.**
+  This section offered `messages.count_tokens` as the exact figure. It is exact about
+  the wrong quantity: it reports *gross* input and cannot know which of it will come
+  back as a cache read, so admitting against it would govern this lane to about a
+  quarter of its real capacity — and the pessimism would look exactly like a ceiling
+  being hit. What counts is the volatile remainder, which is what the table estimates.
+  It is also a round trip of its own on the front of a watched path.
+
+  **Every turn settles up against what it actually spent.** `input_tokens +
+  cache_creation_input_tokens`, summed over the turn's calls, replaces the estimate when
+  the turn ends — including when it ends in an error, which is the case that matters
+  most: a turn that spent nothing hands its whole reservation straight back. This is
+  what makes the constants above a starting point rather than a maintenance burden, and
+  it is worth re-deriving them from `ai_usage` after real traffic, which already records
+  both columns per kind.
+
+  **The two scheduler kinds wait; everything else is refused.** Fast rejection is right
+  where somebody is watching a screen, and it is what `review` and `nudge` are not:
+  nobody is waiting on a weekly review, and the alternative to a one-minute wait is a
+  review that is simply never written. A pass that walks every user is also the one
+  thing in this product that can empty a bucket by itself, which is Stage 3's subject.
+  Past a full refill it gives up rather than holding a pass open behind its job lock.
+
+  The bucket lives in Postgres, on the same reasoning `turn_lock_until` does — an
+  in-process bucket defends nothing once there are two replicas. Not Redis, which is
+  optional here precisely because the request limiter can afford to be approximate; this
+  ceiling has to hold on exactly the deployment that is metered, cache or no cache. The
+  balance is stored as of a timestamp and every reader brings it forward, so there is no
+  ticker to run and a leaked reservation is repaid by the next minute's refill.
 - **A per-user in-flight lock — built.** One turn at a time per account, in
   `services/turn-lock.ts`, and the second turn gets a 429 rather than a queue slot.
   This is a correctness fix as much as a load fix: two concurrent turns both read
@@ -587,11 +625,11 @@ and none of it applies there — which is the point of keeping the two apart.
 | Users | What is required | State |
 |---|---|---|
 | ~2,000 | Stage 0. Two replicas. Nothing else. | Code, stores, compose and deploy done and proven at two replicas; held at one until the host moves off the subscription lane |
-| ~10,000 | Stages 1–3. Not Stage 5 — cache reads turned out not to count against the ceiling at all. | Stage 1 done; Stage 2 all but the token bucket; Stage 3's guard done, the worker and the Batch API open |
+| ~10,000 | Stages 1–3. Not Stage 5 — cache reads turned out not to count against the ceiling at all. | Stages 1 and 2 done; Stage 3's guard done, the worker and the Batch API open |
 | ~100,000 | All of it, pgbouncer, and a negotiated rate-limit tier. | open |
 
 Stage 0 unblocked. Stage 3 removes the only real spike. Stage 2 is the seatbelt that
-stops a bad afternoon becoming an outage, and is now mostly fastened. Stage 5 was written
+stops a bad afternoon becoming an outage, and is now fastened. Stage 5 was written
 down as the thing that buys headroom; it is not, because the headroom was already there —
 it buys requests, money and latency instead.
 
@@ -600,10 +638,12 @@ it buys requests, money and latency instead.
 1. **Move this deployment to `anthropic-api`, then start the second replica.** The code,
    the compose file and the deploy are done and the stores are all shared; the remaining
    blocker is that the host runs the subscription lane, where a second replica is two
-   `claude` processes on one credential store. Set `ANTHROPIC_API_KEY` and
-   `AI_PROVIDER=anthropic-api` in the host's `.env`, then `API_REPLICAS=2`. Note that this
-   is the point where the bill starts — it is a lane change, not a scaling knob, and it
-   deserves the Stage 2 token bucket landing first.
+   `claude` processes on one credential store. Set `ANTHROPIC_API_KEY`,
+   `AI_PROVIDER=anthropic-api` and `ANTHROPIC_ITPM` in the host's `.env`, then
+   `API_REPLICAS=2`. Note that this is the point where the bill starts — it is a lane
+   change, not a scaling knob. The token bucket it was waiting on is built; `ANTHROPIC_ITPM`
+   is what arms it, and a lane change that sets the key without it is the one mistake this
+   step has left.
 2. **Stage 5.** An optimisation, at the priority the answered question assigns it: it
    buys requests, money and latency, and no headroom that is not already there. Worth
    doing before six figures of users, not before the replica.

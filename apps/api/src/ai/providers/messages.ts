@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { anthropicRate, CACHE_WRITE_MULTIPLIER_5M, priceUsage } from '../pricing.ts';
 import { MAX_OUTPUT_TOKENS, MODELS } from '../client.ts';
+import { reserve, settle as settleBucket, type Reservation } from '../token-bucket.ts';
 import {
   EMPTY_USAGE,
   type AgentMessage,
@@ -152,11 +153,17 @@ async function execute(request: AgentRequest, emit?: StreamSink): Promise<Outcom
   };
 
   /**
+   * What this turn reserved out of the model's per-minute budget, or null when
+   * no budget is configured. Held here so every exit below settles it.
+   */
+  let reservation: Reservation | null = null;
+
+  /**
    * A turn is several round trips, and each one bills. Settling up in one
    * place — including on the error paths — is what stops a tool loop that
    * failed halfway through from being recorded as free.
    */
-  const settle = (): Outcome => {
+  const settle = async (): Promise<Outcome> => {
     outcome.durationMs = Date.now() - startedAt;
     usage.byModel = { [choice.model]: { ...usage, byModel: undefined } };
     const rate = anthropicRate(choice.model);
@@ -164,6 +171,19 @@ async function execute(request: AgentRequest, emit?: StreamSink): Promise<Outcom
       outcome.costUsd = priceUsage(usage, rate, CACHE_WRITE_MULTIPLIER_5M);
       outcome.costSource = 'estimated';
     }
+    /*
+     * The bucket is balanced against what the turn really put on the meter,
+     * which is uncached input plus cache writes — the two figures that count
+     * toward the input-tokens-per-minute ceiling. Cache reads are deliberately
+     * absent: they are excluded from it outright, and folding them in would
+     * govern this lane to about a quarter of the capacity it actually has.
+     *
+     * Here rather than at the end of the loop so it also covers the turn that
+     * threw, which is the one that most needs it: a run that spent nothing
+     * gives its whole reservation back instead of holding capacity for a
+     * minute.
+     */
+    await settleBucket(reservation, usage.inputTokens + usage.cacheWriteTokens);
     return outcome;
   };
 
@@ -172,6 +192,17 @@ async function execute(request: AgentRequest, emit?: StreamSink): Promise<Outcom
     ...replayable(request.history),
     { role: 'user', content: userContent(request) },
   ];
+
+  /*
+   * Admission, before anything is sent and outside the catch below.
+   *
+   * Outside it on purpose: a bucket refusal is not a failed turn and must not
+   * be flattened into `outcome.error`, which every caller turns into a 502. It
+   * travels as `ModelBusyError` so the routes can answer it the way they answer
+   * the turn lease — a 429 carrying the seconds to wait. Nothing has been sent
+   * and nothing has been written, so there is nothing to unwind.
+   */
+  reservation = await reserve(choice.model, request.kind);
 
   try {
     const client = clientFor(process.env.ANTHROPIC_API_KEY ?? '');
