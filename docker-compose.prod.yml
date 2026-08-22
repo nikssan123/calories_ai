@@ -151,8 +151,67 @@ services:
       # replaces that fallback rather than adding to it, so an address that does
       # not match an existing account leaves nobody holding the panel.
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
-      # Optional: bill per token instead of using the subscription login below.
+      # Optional: bill per token instead of using the subscription login. On its
+      # own this does NOT switch lanes — the Agent SDK picks it up in preference
+      # to the subscription and still spawns a subprocess. AI_PROVIDER below is
+      # what chooses.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # ---- forwarded from the host's .env, not defaulted here -----------------
+      #
+      # Everything below is written as a bare `KEY:`, which is compose's
+      # pass-through form: the value comes from the host's .env, and when it is
+      # not set there the variable is left out of the container altogether so
+      # the default in the code applies. That is the whole point of the form.
+      #
+      # `KEY: ${KEY:-}` — the shape used above for keys and addresses — would be
+      # wrong for these. It sets the variable to an empty string, and an empty
+      # string is a value: `AI_PROVIDER=` fails the check in
+      # `ai/providers/index.ts` and takes the API down at boot, and an empty
+      # OPENAI_MODEL is a request for a model named "". The keys above survive
+      # it only because each is read as "absent or falsy means off".
+      #
+      # These have to be forwarded at all because there is no `env_file:` here
+      # and .env is in .dockerignore: a variable set only in the host's .env
+      # reaches compose's substitution and never reaches the process.
+
+      # Which lane runs the journal: `anthropic` (the subscription login above,
+      # and what an absent value means), `anthropic-api`, or `openai`. Without
+      # this line the lane change in SCALING.md appears to work and changes
+      # nothing — the deployment stays on the subscription, silently.
+      AI_PROVIDER:
+      # The input-tokens-per-minute ceiling the key is entitled to, which is what
+      # arms the token bucket. Absent means ungoverned: right for the
+      # subscription lane, wrong the moment ANTHROPIC_API_KEY starts paying.
+      # Setting the key without this is the one mistake SCALING.md names.
+      ANTHROPIC_ITPM:
+      # The third lane, in full. Each of these is read with its own default in
+      # `ai/providers/openai.ts`, so a missing line here is not an error — it is
+      # the default, silently, however carefully the host's .env was written.
+      OPENAI_API_KEY:
+      OPENAI_BASE_URL:
+      OPENAI_MODEL:
+      OPENAI_MODEL_TEXT:
+      OPENAI_MODEL_VISION:
+      OPENAI_MODEL_SETUP:
+      OPENAI_MODEL_REVIEW:
+      OPENAI_MODEL_RECIPE:
+      OPENAI_MODEL_NUDGE:
+      OPENAI_MODEL_PLAN:
+      OPENAI_PRICE_INPUT:
+      OPENAI_PRICE_OUTPUT:
+      # USDA FoodData Central, which answers the American branded half of a
+      # barcode lookup. Absent means Open Food Facts only — a working
+      # configuration, not a broken one.
+      FDC_API_KEY:
+      # Sent to Open Food Facts on every request. The default is built from
+      # APP_URL and is already correct here; this exists so it can be changed
+      # without a rebuild.
+      BARCODE_USER_AGENT:
+      # Pino's level. Absent means `info`.
+      LOG_LEVEL:
+      # Postgres pool size per replica, default 10. Worth a look before
+      # API_REPLICAS goes up: the ceiling is this times the replica count.
+      DATABASE_POOL_MAX:
       # Where a link in an email has to point. This is the *web* address, not
       # the API's: a mail client cannot do anything useful with api.daysofar.com.
       APP_URL: ${APP_URL:-https://daysofar.com}
