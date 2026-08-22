@@ -201,11 +201,18 @@ but takes a Postgres advisory lock, so one of them does the work. Migrations run
 in every replica and take the same kind of lock, so two containers starting together queue
 rather than race.
 
-`docker-compose.prod.yml` therefore runs `api` at `deploy.replicas: 2` — declared in the
-file rather than passed as `--scale`, so it survives an `up -d` that forgot the flag. Both
-replicas answer to the `calorytracker-api` network alias and Docker's DNS round-robins
-between them, which is why that service is the one with no `container_name`. See
-[SCALING.md](SCALING.md).
+`docker-compose.prod.yml` runs `api` at `deploy.replicas: ${API_REPLICAS:-1}` — declared
+in the file rather than passed as `--scale`, so the topology survives an `up -d` that
+forgot the flag. Every replica answers to the `calorytracker-api` network alias and
+Docker's DNS round-robins between them, which is why that service is the one with no
+`container_name`.
+
+**It defaults to 1, and the reason is the lane rather than the stores.** Scaling is for
+`AI_PROVIDER=anthropic-api`, which spawns nothing and keeps nothing between turns. The
+subscription lane — which is also what an unset `AI_PROVIDER` means — runs a `claude`
+subprocess against credentials in the shared `claude-home` volume, and two replicas would
+be two processes refreshing one OAuth token. Set `API_REPLICAS=2` in the host's `.env`
+once the deployment is on the API lane, not before. See [SCALING.md](SCALING.md).
 
 ### Adding another provider
 

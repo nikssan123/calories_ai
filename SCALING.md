@@ -56,19 +56,37 @@ normalisation added the same day is the only reason this deploy worked rather th
 every photo on `day-so-far/day-so-far/…` — a fix written an hour before the mistake it
 prevents, which is the sort of luck worth turning into a note.
 
-**Deploy topology written, 2026-08-22.** `api` is `deploy.replicas: 2` in
-`docker-compose.prod.yml` and no longer carries a `container_name`. Writing it turned up
-one thing this document had called a pure deploy change and was not: migrations run on
-boot in every container, and the runner had no lock, so two replicas starting together
-both read an empty ledger and both applied the same migration. The loser took its boot
-chain down with it and restarted — recovering on the retry, which is what made it worth
-finding now rather than later, because a replica that flaps once per deploy is a symptom
-a deploy learns to ignore. `src/migrate.ts` now takes a blocking advisory lock and reads
-the ledger inside it; `test/migrate.test.ts` boots two pools at once and fails without it.
+**Deploy topology built and deployed, 2026-08-22.** `api` no longer carries a
+`container_name` and takes its replica count from `API_REPLICAS`. Two things came out of
+doing it, and the second is the more useful:
 
-**Left:** running it — the topology is in the file, but the file has not been applied to
-the host. And Stage 5, which the rate-limit question, now answered, demotes from
-prerequisite to optimisation. Each is marked in place, and the ordered list is at the end.
+*Migrations were not multi-replica safe.* They run on boot in every container and the
+runner took no lock, so two replicas starting together both read an empty ledger and both
+applied the same migration. The loser took its boot chain down with it and restarted —
+recovering on the retry, which is what made it worth finding now rather than later,
+because a replica that flaps once per deploy is a symptom a deploy learns to ignore.
+`src/migrate.ts` now takes a blocking advisory lock and reads the ledger inside it, and
+`test/migrate.test.ts` boots two pools at once and fails without it. `deploy.sh` now asks
+each replica for `/health` on its own loopback rather than making one round-robin request
+through the alias, which is the check that catches this shape from outside.
+
+*This deployment cannot take a second replica yet, and the reason is not in this
+document's list.* It runs the **subscription lane** — `AI_PROVIDER` is unset on the host,
+which means `anthropic` — so a second replica is two `claude` processes sharing one
+`claude-home` volume and one `.credentials.json`, with two of them refreshing one OAuth
+token. Every store this plan spent Stage 1 on is genuinely shared and none of them is the
+problem. The replica count is therefore `${API_REPLICAS:-1}`: safe by default, opt-in by
+setting `API_REPLICAS=2` on a host running `anthropic-api`.
+
+It was briefly deployed at two replicas before this was noticed, and put back to one. What
+that says about the plan is worth keeping: "start the second replica" was filed under
+deploy topology, and both of its real blockers were somewhere else — one in the boot path,
+one in the choice of provider.
+
+**Left:** moving this deployment to `anthropic-api`, which is now what stands between it
+and a second replica. And Stage 5, which the rate-limit question, now answered, demotes
+from prerequisite to optimisation. Each is marked in place, and the ordered list is at the
+end.
 
 ## The short version
 
@@ -110,9 +128,11 @@ The two that genuinely remained were real for both lanes and were what Stage 1 w
 about: meal photos written to a local volume, and `@fastify/rate-limit` counting in
 process memory. Both are now configurable — a bucket and a Redis respectively, each
 unset by default. The last one standing was `container_name` in the compose file, which
-meant `--scale` would not even start; it is gone, and the service declares
-`deploy.replicas: 2` instead. Nothing in this repository now pins the product's lane to
-one container.
+meant `--scale` would not even start; it is gone, and the service takes its count from
+`API_REPLICAS`. Nothing in this repository now pins the *product's* lane to one container
+— but the deployment at daysofar.com is not on the product's lane yet, and the
+subscription lane is pinned to one container by the `claude` subprocess and the single
+credential store it shares, which no amount of Stage 1 work changes.
 
 **The weekly review.** `runDueReviews` in `scheduler.ts` walks every active user
 serially, generating each review on Opus. At a few hundred users in one timezone this
@@ -566,7 +586,7 @@ and none of it applies there — which is the point of keeping the two apart.
 
 | Users | What is required | State |
 |---|---|---|
-| ~2,000 | Stage 0. Two replicas. Nothing else. | Code, stores and compose done; the two-replica deploy has not been run on the host |
+| ~2,000 | Stage 0. Two replicas. Nothing else. | Code, stores, compose and deploy done and proven at two replicas; held at one until the host moves off the subscription lane |
 | ~10,000 | Stages 1–3. Not Stage 5 — cache reads turned out not to count against the ceiling at all. | Stage 1 done; Stage 2 all but the token bucket; Stage 3's guard done, the worker and the Batch API open |
 | ~100,000 | All of it, pgbouncer, and a negotiated rate-limit tier. | open |
 
@@ -577,10 +597,13 @@ it buys requests, money and latency instead.
 
 ### What is left, in the order it wants doing
 
-1. **Start the second replica** — *the code and the compose file are done; what is left
-   is the deploy.* Moved up from the note below, because answering the rate-limit question
-   left nothing above it. It is the only item here that changes what the deployment can
-   survive, and every store a request touches is already shared.
+1. **Move this deployment to `anthropic-api`, then start the second replica.** The code,
+   the compose file and the deploy are done and the stores are all shared; the remaining
+   blocker is that the host runs the subscription lane, where a second replica is two
+   `claude` processes on one credential store. Set `ANTHROPIC_API_KEY` and
+   `AI_PROVIDER=anthropic-api` in the host's `.env`, then `API_REPLICAS=2`. Note that this
+   is the point where the bill starts — it is a lane change, not a scaling knob, and it
+   deserves the Stage 2 token bucket landing first.
 2. **Stage 5.** An optimisation, at the priority the answered question assigns it: it
    buys requests, money and latency, and no headroom that is not already there. Worth
    doing before six figures of users, not before the replica.
@@ -591,16 +614,16 @@ it buys requests, money and latency instead.
    The wrinkle is that the model needs the bytes, so the turn either fetches them back
    or passes the presigned URL as an image source.
 
-What is left of step 1, now that the file says two: `docker compose -f
-docker-compose.prod.yml up -d --build` on the host, then check that a photo taken on one
-replica renders on the other — which it will, because neither of them holds it. Sessions,
+What is left of step 1, once the lane has moved and `API_REPLICAS=2` is set:
+`bin/deploy.sh`, then check that a photo taken on one replica renders on the other — which it will, because neither of them holds it. Sessions,
 photos and counters all live outside the container. Worth confirming in this order:
 
 - `S3_*` is set in the host's `.env` before the second container ever starts. It has been
   since the Stage 1 deploy, but a replica booting without it writes photos to its own
   volume, and those are a 404 from the other replica for as long as they exist.
-- `docker compose ps` shows `calorytracker-api-1` and `-2`, both healthy. If only one came
-  up, the `container_name` is back.
+- `docker compose ps` shows `calorytracker-api-1` and `-2`, both healthy. `deploy.sh`
+  prints the replica count and healths each one separately, so this is already checked; if
+  only one came up, `API_REPLICAS` did not reach the host's `.env`.
 - The logs of exactly one of them show migrations applied and the other show
   `database already up to date`. That is the lock working; both claiming to have applied
   the same migration would mean it is not.
@@ -614,10 +637,11 @@ Two smaller things worth doing whenever their file is next open, neither urgent:
 
 - **Split the compose files by lane.** The `claude-home` volume, `.agent-workspace` and
   the memory cap are the subscription lane's; a deployment running `anthropic-api`
-  should not carry a volume for a binary it never spawns. Slightly more pressing since
-  the replica count went to two: both replicas mount the same `claude-home`, so the
-  subscription lane has to be pinned back to one replica by hand — there is a comment
-  saying so on `deploy.replicas`, which is a worse mechanism than two files.
+  should not carry a volume for a binary it never spawns. More pressing after the deploy
+  above: one file now serves both lanes and the difference between them decides whether
+  scaling is safe, which `API_REPLICAS` defaults around rather than resolves. Two files
+  would make the constraint structural instead of a default someone can raise without
+  reading why it is low.
 - **Fix the auth gate in `routes/index.ts` and `scheduler.ts`.** Both still ask
   `hasSubscriptionAuth() || ANTHROPIC_API_KEY` before admitting a turn, which is a
   Claude-shaped question asked on behalf of whichever provider is configured — it
