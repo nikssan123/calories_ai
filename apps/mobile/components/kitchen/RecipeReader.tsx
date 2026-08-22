@@ -351,8 +351,14 @@ const styles = StyleSheet.create({
   },
   hero: { borderWidth: 2, borderRadius: 24, overflow: 'hidden' },
   heroImage: { width: '100%', aspectRatio: 4 / 3 },
-  heroStandIn: { aspectRatio: 4 / 3, alignItems: 'center', justifyContent: 'center' },
-  heroGlyph: { fontSize: 96, lineHeight: 112, opacity: 0.9 },
+  /*
+   * Shorter than the photograph it stands in for, for the same reason the tile's
+   * is: a real picture earns 4:3 and one glyph does not. Full width on a phone
+   * that is 260 points of cream around an emoji, and the title — which is what
+   * you came to read — starts below the fold.
+   */
+  heroStandIn: { height: 180, alignItems: 'center', justifyContent: 'center' },
+  heroGlyph: { fontSize: 84, lineHeight: 98, opacity: 0.9 },
   title: { marginTop: 6 },
   summary: { marginTop: 8, lineHeight: 26 },
   meta: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 12 },
