@@ -350,17 +350,19 @@ async function fromFoodDataCentral(code: string): Promise<BarcodeProduct | null>
   const key = env.barcode.fdcApiKey;
   if (!key) return null;
 
-  // FDC indexes the GTIN zero-padded to 14 and matches nothing else. A search
-  // for the 13-digit form of a code whose row is sitting right there comes back
-  // with zero hits, not an error — so before this, a configured key bought
-  // nothing at all for anything scanned off a US packet. `normaliseBarcode`
-  // hands over 8, 13 or 14 digits, and only the last of those ever matched.
+  // FDC matches the GTIN as it happens to be stored, and it is stored in
+  // whichever form the brand submitted — Cheerios under the 14-digit
+  // 00016000275287, a bag of tortilla chips under the 12-digit 743209235513.
+  // A search for either one's *other* form returns zero hits rather than an
+  // error, so a single form finds about half the shelf and reports the rest as
+  // uncatalogued. `normaliseBarcode` settles on one form by design, which makes
+  // that this function's problem to undo.
   //
-  // Padded for the query alone. The cache stays keyed on `code`, and the GTIN
-  // on the way back is still checked with `sameGtin`, which compares without
-  // leading zeros and so does not care which form either side wrote.
-  const gtin14 = code.padStart(14, '0');
-  const url = `${FDC_URL}?query=${gtin14}&dataType=Branded&pageSize=5&api_key=${encodeURIComponent(key)}`;
+  // So ask for every form of the same number at once: space-separated terms are
+  // alternatives to FDC's search, which keeps this to one round trip. Widening
+  // the question cannot widen the answer — `sameGtin` below still takes only a
+  // row whose number is this number.
+  const url = `${FDC_URL}?query=${encodeURIComponent(gtinForms(code))}&dataType=Branded&pageSize=10&api_key=${encodeURIComponent(key)}`;
   const body = await fetchJson(url, {});
   if (!body) return null;
 
@@ -403,6 +405,17 @@ async function fromFoodDataCentral(code: string): Promise<BarcodeProduct | null>
     source: 'fdc',
     source_url: food.fdcId ? `https://fdc.nal.usda.gov/food-details/${food.fdcId}` : null,
   };
+}
+
+/**
+ * The same number written every way FDC might be holding it: padded to 14, as
+ * `normaliseBarcode` left it, and stripped of leading zeros.
+ *
+ * Deduplicated, because for a 14-digit code that does not begin with a zero all
+ * three are the same string and repeating a term buys nothing.
+ */
+function gtinForms(code: string): string {
+  return [...new Set([code.padStart(14, '0'), code, code.replace(/^0+/, '') || code])].join(' ');
 }
 
 /** FDC stores GTINs unpadded about as often as padded. Compare as numbers. */

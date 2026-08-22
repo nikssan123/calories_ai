@@ -283,18 +283,31 @@ describe('FoodData Central', () => {
     expect(calls[1]!.url).toContain('api_key=test-key');
   });
 
-  it('asks for the GTIN padded to 14, which is the only form FDC matches', async () => {
+  it('asks for every form of the GTIN, because FDC matches only the stored one', async () => {
     env.barcode.fdcApiKey = 'test-key';
     const calls = stubFetch({ status: 404 }, { body: { foods: [FDC_FOOD] } });
 
     await lookupBarcode(UPC);
 
-    // `normaliseBarcode` turns a scanned UPC-A into 13 digits, and a search for
-    // that form returns zero hits against a row that is present — verified
-    // against the live API. The padded form is what finds it.
-    const url = new URL(calls[1]!.url);
-    expect(url.searchParams.get('query')).toBe('00028400090865');
-    expect(url.searchParams.get('query')).toHaveLength(14);
+    // Verified against the live API: Cheerios is stored as the 14-digit
+    // 00016000275287 and matches nothing shorter, a bag of tortilla chips as
+    // the 12-digit 743209235513 and matches nothing longer. Asking for one form
+    // finds about half the shelf, so all three go in one query — the search
+    // reads space-separated terms as alternatives.
+    const terms = new URL(calls[1]!.url).searchParams.get('query')!.split(' ');
+    expect(terms).toEqual(
+      expect.arrayContaining(['00028400090865', '0028400090865', '28400090865']),
+    );
+  });
+
+  it('does not repeat a term when every form of the code is the same string', async () => {
+    env.barcode.fdcApiKey = 'test-key';
+    // A 14-digit code with no leading zero: padding and stripping both no-op.
+    const calls = stubFetch({ status: 404 }, { body: { foods: [] } });
+
+    await lookupBarcode('10693392005820');
+
+    expect(new URL(calls[1]!.url).searchParams.get('query')).toBe('10693392005820');
   });
 
   it('still matches the product back when FDC answers with a shorter GTIN', async () => {
