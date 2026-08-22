@@ -8,6 +8,7 @@ import { formatBodyWeight } from '@ct/shared';
 import { Chunk } from '@/components/Chunk';
 import { InsetGroup } from '@/components/InsetGroup';
 import { Skeleton } from '@/components/Skeleton';
+import { Stat, Stats } from '@/components/Stat';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors, useTheme, type Scheme } from '@/theme';
@@ -194,7 +195,7 @@ export default function HistoryScreen() {
           </InsetGroup>
 
           <InsetGroup title="📆  This month">
-            <View style={styles.stats}>
+            <Stats>
               <Stat label="Logged" value={`${logged.length}`} unit="days" first />
               <Stat
                 label="Avg intake"
@@ -214,7 +215,7 @@ export default function HistoryScreen() {
                 }`}
                 unit="days"
               />
-            </View>
+            </Stats>
           </InsetGroup>
 
           {error && (
@@ -378,38 +379,6 @@ function Legend() {
   );
 }
 
-function Stat({
-  label,
-  value,
-  unit,
-  first,
-}: {
-  label: string;
-  value: string;
-  unit: string;
-  first?: boolean;
-}) {
-  const colors = useColors();
-  return (
-    <View
-      style={[
-        styles.stat,
-        first ? null : { borderLeftWidth: 2, borderLeftColor: colors.border },
-      ]}
-    >
-      <Text style={[t.footnoteSemibold, styles.centred, { color: colors.mutedForeground }]}>
-        {label}
-      </Text>
-      <Text style={[t.figure, styles.statValue, { color: colors.foreground }]}>
-        {value}
-        {value !== '—' && (
-          <Text style={[styles.statUnit, { color: colors.mutedForeground }]}> {unit}</Text>
-        )}
-      </Text>
-    </View>
-  );
-}
-
 function Chevron({
   direction,
   label,
@@ -545,9 +514,5 @@ const styles = StyleSheet.create({
   detailHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },
   facts: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, columnGap: 12 },
   nothing: { paddingHorizontal: 16, paddingVertical: 24, textAlign: 'center' },
-  stats: { flexDirection: 'row' },
-  stat: { flex: 1, paddingHorizontal: 12, paddingVertical: 12, alignItems: 'center' },
-  statValue: { marginTop: 2 },
-  statUnit: { fontFamily: font.semibold, fontSize: 12, lineHeight: 16 },
   centred: { textAlign: 'center' },
 });

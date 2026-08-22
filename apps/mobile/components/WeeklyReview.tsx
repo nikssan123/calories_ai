@@ -1,0 +1,190 @@
+import { useCallback, useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
+import type { AdaptiveProposal, WeeklyReview as Review } from '@ct/shared';
+import { PressableChunk } from '@/components/Chunk';
+import { InsetGroup } from '@/components/InsetGroup';
+import { api } from '@/lib/api';
+import { font, type as t, useColors } from '@/theme';
+
+/**
+ * Last week, and what it did to the target.
+ *
+ * The point of showing the adaptive proposal even when it cannot act is that an
+ * unexplained calorie target is one people ignore. If the number is about to
+ * move, they should be able to see it coming; if it is stuck, they should know
+ * what it is waiting for.
+ */
+export function WeeklyReview({ onError }: { onError: (message: string) => void }) {
+  const colors = useColors();
+  const [review, setReview] = useState<Review | null>(null);
+  const [adaptive, setAdaptive] = useState<AdaptiveProposal | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [writing, setWriting] = useState(false);
+
+  const load = useCallback(async () => {
+    const [latest, proposal] = await Promise.allSettled([api.latestReview(), api.adaptiveTargets()]);
+    // A 404 here is the ordinary state of a new account, not an error.
+    setReview(latest.status === 'fulfilled' ? latest.value : null);
+    setAdaptive(proposal.status === 'fulfilled' ? proposal.value : null);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function writeNow() {
+    setWriting(true);
+    try {
+      setReview(await api.runReview());
+      await load();
+    } catch (e) {
+      onError((e as Error).message);
+    } finally {
+      setWriting(false);
+    }
+  }
+
+  if (loading) return null;
+
+  // The target change reported by the review it came with, if it is still the
+  // most recent one — otherwise the live proposal.
+  const change = review?.stats.adaptive ?? adaptive;
+
+  return (
+    <InsetGroup title={review ? '📅  Last week' : '📅  Weekly review'}>
+      {review ? (
+        <View style={styles.body}>
+          <Text style={[t.footnoteBold, { color: colors.mutedForeground }]}>
+            {formatRange(review.week_start, review.week_end)}
+          </Text>
+          {/* The review is prose the model wrote, and it comes with its own
+              paragraph breaks — RN keeps them, so nothing has to parse it. */}
+          <Text style={[t.body, styles.prose, { color: colors.foreground }]}>
+            {review.content}
+          </Text>
+          {change?.eligible && <TargetChange proposal={change} tense="past" />}
+        </View>
+      ) : (
+        <View style={styles.body}>
+          <Text style={[t.body, { color: colors.foreground }]}>
+            Every Monday morning you&apos;ll get a short read on how the week went — what the
+            numbers actually showed, and whether your target needs to move. No lectures, just
+            the picture.
+          </Text>
+          <PressableChunk
+            depth={3}
+            radius={999}
+            onPress={() => void writeNow()}
+            disabled={writing}
+            accessibilityRole="button"
+            style={styles.writeWrap}
+            contentStyle={[
+              styles.write,
+              { backgroundColor: colors.secondary, borderColor: colors.border },
+            ]}
+          >
+            <Svg width={15} height={15} viewBox="0 0 24 24">
+              <Path
+                d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"
+                stroke={colors.secondaryForeground}
+                strokeWidth={2.2}
+                strokeLinecap="round"
+                fill="none"
+              />
+            </Svg>
+            <Text style={[t.footnoteBold, { color: colors.secondaryForeground }]}>
+              {writing ? 'Writing…' : 'Write one now'}
+            </Text>
+          </PressableChunk>
+        </View>
+      )}
+
+      {adaptive && !adaptive.eligible && (
+        <View style={[styles.waiting, { borderTopColor: colors.border, backgroundColor: colors.mutedWash }]}>
+          <Text style={[t.footnote, { color: colors.mutedForeground }]}>
+            <Text style={{ fontFamily: font.extrabold, color: colors.foreground }}>
+              Target {adaptive.current.kcal.toLocaleString()} kcal.
+            </Text>
+            {` ${adaptive.explanation}`}
+          </Text>
+        </View>
+      )}
+
+      {adaptive?.eligible && !review && (
+        <View style={styles.body}>
+          <TargetChange proposal={adaptive} tense="future" />
+        </View>
+      )}
+    </InsetGroup>
+  );
+}
+
+function TargetChange({
+  proposal,
+  tense,
+}: {
+  proposal: AdaptiveProposal;
+  tense: 'past' | 'future';
+}) {
+  const colors = useColors();
+  return (
+    <View style={[styles.change, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+      <View style={styles.changeRow}>
+        <Text style={[t.bodyBold, t.tnum, { color: colors.mutedForeground }]}>
+          {proposal.current.kcal.toLocaleString()}
+        </Text>
+        <Svg width={14} height={14} viewBox="0 0 24 24">
+          <Path
+            d="M5 12h14M13 6l6 6-6 6"
+            stroke={colors.mutedForeground}
+            strokeWidth={2.4}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+          />
+        </Svg>
+        <Text style={[t.bodyBold, t.tnum, { color: colors.caloriesText }]}>
+          {proposal.proposed.kcal.toLocaleString()} kcal
+        </Text>
+      </View>
+      <Text style={[t.footnote, styles.changeWhy, { color: colors.mutedForeground }]}>
+        {tense === 'future' ? 'Next review will apply this. ' : ''}
+        {proposal.explanation}
+      </Text>
+    </View>
+  );
+}
+
+function formatRange(start: string, end: string): string {
+  const format = (iso: string, withMonth: boolean) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(Date.UTC(y!, m! - 1, d!)).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: withMonth ? 'long' : undefined,
+      timeZone: 'UTC',
+    });
+  };
+  const sameMonth = start.slice(0, 7) === end.slice(0, 7);
+  return `${format(start, !sameMonth)} – ${format(end, true)}`;
+}
+
+const styles = StyleSheet.create({
+  body: { paddingHorizontal: 16, paddingVertical: 16, gap: 12 },
+  prose: { lineHeight: 26 },
+  writeWrap: { alignSelf: 'flex-start' },
+  write: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 36,
+    borderRadius: 999,
+    borderWidth: 2,
+    paddingHorizontal: 16,
+  },
+  waiting: { borderTopWidth: 2, paddingHorizontal: 16, paddingVertical: 12 },
+  change: { borderWidth: 2, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12 },
+  changeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  changeWhy: { marginTop: 6, lineHeight: 20 },
+});
