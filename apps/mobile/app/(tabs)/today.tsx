@@ -333,7 +333,7 @@ function EntryRow({
         accessibilityRole="button"
         style={({ pressed }) => [
           styles.entry,
-          pressed ? { backgroundColor: colors.muted } : null,
+          pressed ? { backgroundColor: colors.mutedWash } : null,
         ]}
       >
         <Text style={styles.rowEmoji}>{foodEmoji(entry.description, entry.meal)}</Text>
@@ -354,23 +354,28 @@ function EntryRow({
       </Pressable>
 
       {open && (
-        <View style={[styles.details, { backgroundColor: colors.muted }]}>
-          {entry.items.map((item) => (
-            <View key={item.id} style={styles.item}>
-              <Text numberOfLines={1} style={[t.footnote, styles.rowBody, { color: colors.foreground }]}>
-                {item.name}
-                {(item.quantity_desc || item.quantity_g !== null) && (
-                  <Text style={{ color: colors.mutedForeground }}>
-                    {' · '}
-                    {item.quantity_desc ?? formatMass(item.quantity_g!, units)}
-                  </Text>
-                )}
-              </Text>
-              <Text style={[t.footnote, t.tnum, { color: colors.mutedForeground }]}>
-                {Math.round(item.kcal)} kcal
-              </Text>
-            </View>
-          ))}
+        <View style={[styles.details, { backgroundColor: colors.mutedWash }]}>
+          <View style={styles.items}>
+            {entry.items.map((item) => (
+              <View key={item.id} style={styles.item}>
+                <Text
+                  numberOfLines={1}
+                  style={[t.footnote, styles.rowBody, { color: colors.foreground }]}
+                >
+                  {item.name}
+                  {(item.quantity_desc || item.quantity_g !== null) && (
+                    <Text style={{ color: colors.mutedForeground }}>
+                      {' · '}
+                      {item.quantity_desc ?? formatMass(item.quantity_g!, units)}
+                    </Text>
+                  )}
+                </Text>
+                <Text style={[t.footnote, t.tnum, { color: colors.mutedForeground }]}>
+                  {Math.round(item.kcal)} kcal
+                </Text>
+              </View>
+            ))}
+          </View>
 
           <View style={styles.actions}>
             <Text style={[t.footnote, styles.rowBody, { color: colors.mutedForeground }]}>
@@ -518,8 +523,8 @@ const styles = StyleSheet.create({
   centred: { textAlign: 'center' },
   step: { padding: 10 },
   page: { paddingHorizontal: 16, paddingTop: 16, gap: 28 },
-  summary: { alignItems: 'center', gap: 4 },
-  total: { marginTop: 20 },
+  summary: { alignItems: 'center' },
+  total: { marginTop: 20, marginBottom: 4 },
   loading: { alignItems: 'center', gap: 24, paddingHorizontal: 16, paddingVertical: 32 },
   loadingRing: { width: 176, height: 176, borderRadius: 88 },
   loadingBar: { height: 48, alignSelf: 'stretch', borderRadius: 16 },
@@ -528,9 +533,10 @@ const styles = StyleSheet.create({
   entry: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
   rowEmoji: { fontSize: 20, lineHeight: 24 },
   rowBody: { flex: 1 },
-  figure: { fontSize: 16, lineHeight: 20 },
-  details: { paddingHorizontal: 16, paddingVertical: 12, gap: 6 },
+  figure: { fontSize: 16, lineHeight: 24 },
+  details: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
+  items: { gap: 6 },
   item: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 6 },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 4 },
   textButton: { flexDirection: 'row', alignItems: 'center', gap: 6 },
 });

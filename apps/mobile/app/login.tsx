@@ -152,7 +152,7 @@ export default function LoginScreen() {
           onPress={() => void submit()}
           disabled={busy || !email || password.length < 8}
           color={colors.caloriesDeep}
-          radius={20}
+          radius={24}
           style={styles.submit}
           contentStyle={[styles.submitFace, { backgroundColor: colors.primary }]}
         >
@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
   },
   head: { marginBottom: 32, gap: 10 },
   title: { marginTop: 10 },
-  field: { gap: 6, marginBottom: 12 },
+  field: { gap: 6, marginBottom: 16 },
   input: { height: 44, paddingHorizontal: 14 },
   error: { marginBottom: 12 },
   submit: { marginTop: 8 },

@@ -22,6 +22,8 @@ export interface Palette {
   secondary: string;
   secondaryForeground: string;
   muted: string;
+  /** `bg-muted/40` — the wash under an expanded entry, not a second surface. */
+  mutedWash: string;
   mutedForeground: string;
   accent: string;
   accentForeground: string;
@@ -63,6 +65,7 @@ export const light: Palette = {
   secondary: '#f5ebdd',
   secondaryForeground: '#31261e',
   muted: '#f3e8d9',
+  mutedWash: 'rgba(243, 232, 217, 0.4)',
   mutedForeground: '#77685b',
   accent: '#f5ebdd',
   accentForeground: '#31261e',
@@ -101,6 +104,7 @@ export const dark: Palette = {
   secondary: '#322822',
   secondaryForeground: '#f7efe6',
   muted: '#322822',
+  mutedWash: 'rgba(50, 40, 34, 0.4)',
   mutedForeground: '#a79a8d',
   accent: '#322822',
   accentForeground: '#f7efe6',

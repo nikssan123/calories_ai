@@ -31,9 +31,11 @@ const TABS = [
 ] as const;
 
 export default function TabsLayout() {
+  const colors = useColors();
   return (
     <Tabs
-      screenOptions={{ headerShown: false }}
+      // Named for the same reason the Stack's is — see app/_layout.tsx.
+      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.background } }}
       tabBar={(props) => <TabBar {...props} />}
     >
       {TABS.map((tab) => (
@@ -224,7 +226,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 10,
     lineHeight: 13,
-    letterSpacing: -0.1,
+    letterSpacing: -0.25,
     textAlign: 'center',
     // Android clips a descender at this size without a touch of headroom.
     includeFontPadding: Platform.OS === 'android' ? false : undefined,

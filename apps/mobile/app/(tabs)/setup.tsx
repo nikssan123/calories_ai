@@ -30,7 +30,7 @@ export default function SetupScreen() {
 
       <PressableChunk
         onPress={() => void signOut()}
-        radius={20}
+        radius={24}
         style={styles.button}
         contentStyle={{
           backgroundColor: colors.card,

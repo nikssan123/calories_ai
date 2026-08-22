@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useColorScheme, View } from 'react-native';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
@@ -22,7 +22,7 @@ import { Nunito_600SemiBold } from '@expo-google-fonts/nunito/600SemiBold';
 import { Nunito_700Bold } from '@expo-google-fonts/nunito/700Bold';
 import { Nunito_800ExtraBold } from '@expo-google-fonts/nunito/800ExtraBold';
 import { AuthProvider, useAuth } from '@/lib/auth';
-import { paletteFor, ThemeContext, type Scheme } from '@/theme';
+import { paletteFor, ThemeContext, useColors, type Scheme } from '@/theme';
 
 /*
  * Held until the fonts are in and the session has resolved.
@@ -97,37 +97,43 @@ function Themed() {
  */
 function Gate() {
   const { authenticated, loading } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
-  const onLogin = segments[0] === 'login';
+  const colors = useColors();
 
   useEffect(() => {
-    if (loading) return;
-    if (!authenticated && !onLogin) {
-      router.replace('/login');
-      return;
-    }
-    if (authenticated && onLogin) {
-      router.replace('/today');
-      return;
-    }
-    // Only once we are on the screen we belong on. Hiding it before the
-    // redirect lands shows a frame of the tab bar to someone who is about to be
-    // sent to the sign-in form.
-    void SplashScreen.hideAsync();
-  }, [authenticated, loading, onLogin, router]);
+    // Held until the session has resolved, so nobody sees a frame of the wrong
+    // screen on the way to the right one.
+    if (!loading) void SplashScreen.hideAsync();
+  }, [loading]);
 
   return (
     <Stack
       screenOptions={{
         headerShown: false,
-        // The shell paints its own ground; the default white flashes through
-        // every push on a dark theme.
-        contentStyle: { backgroundColor: 'transparent' },
+        /*
+         * The ground, spelled out.
+         *
+         * React Navigation paints every scene with its own default theme —
+         * a cool #f2f2f2 — over whatever is behind it. Leaving it alone put a
+         * grey page under a cream tab bar and quietly cancelled the warmest
+         * decision in the palette. `transparent` is not enough either: the card
+         * still paints, so the colour has to be named.
+         */
+        contentStyle: { backgroundColor: colors.background },
       }}
     >
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="login" />
+      {/*
+        * Declarative guards rather than a `router.replace` in an effect. The
+        * imperative version dispatches into a navigator that has not finished
+        * mounting on the first pass, which React reports as a state update on a
+        * component that has not mounted yet — and it is a real race, not just a
+        * warning: the tab bar gets a frame before the redirect lands.
+        */}
+      <Stack.Protected guard={authenticated}>
+        <Stack.Screen name="(tabs)" />
+      </Stack.Protected>
+      <Stack.Protected guard={!authenticated}>
+        <Stack.Screen name="login" />
+      </Stack.Protected>
     </Stack>
   );
 }

@@ -31,13 +31,17 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
  * translating the card down by the depth consumes the ledge exactly the way
  * `:active` does on the web, because there is nothing left underneath.
  *
- * `chunk-slot`'s reserved travel becomes this wrapper's bottom padding, so a
- * pressed control never shifts its neighbours.
+ * Layout, though, follows the CSS exactly: a `box-shadow` occupies no space, so
+ * neither does the ledge. It overhangs whatever comes next by its own depth,
+ * which is what makes a column of cards `gap: 28` apart read the same here as
+ * on the web. `reserve` is the port of `chunk-slot`, for the few places that
+ * genuinely need the travel held open.
  */
 export function Chunk({
   depth = CHUNK_DEPTH,
   color,
   radius = RADIUS,
+  reserve = false,
   style,
   contentStyle,
   children,
@@ -46,7 +50,9 @@ export function Chunk({
   /** Overrides `--chunk` — a green button sits on a dark green ledge. */
   color?: string;
   radius?: number;
-  /** Laid on the wrapper that reserves the travel. */
+  /** `chunk-slot`: hold the ledge's depth open so it overhangs nothing. */
+  reserve?: boolean;
+  /** Laid on the wrapper. */
   style?: StyleProp<ViewStyle>;
   /** Laid on the surface itself — background, border, padding. */
   contentStyle?: StyleProp<ViewStyle>;
@@ -54,7 +60,7 @@ export function Chunk({
 }) {
   const colors = useColors();
   return (
-    <View style={[{ marginBottom: depth }, style]}>
+    <View style={[reserve ? { marginBottom: depth } : null, style]}>
       <Ledge depth={depth} radius={radius} color={color ?? colors.chunk} />
       <View style={[{ borderRadius: radius }, contentStyle]}>{children}</View>
     </View>
@@ -76,6 +82,7 @@ export function PressableChunk({
   depth = CHUNK_DEPTH,
   color,
   radius = RADIUS,
+  reserve = false,
   style,
   contentStyle,
   children,
@@ -85,6 +92,7 @@ export function PressableChunk({
   depth?: number;
   color?: string;
   radius?: number;
+  reserve?: boolean;
   style?: StyleProp<ViewStyle>;
   contentStyle?: StyleProp<ViewStyle>;
   /*
@@ -116,7 +124,11 @@ export function PressableChunk({
       onPressOut={() => {
         pressed.value = withTiming(0, timing);
       }}
-      style={[{ marginBottom: depth }, disabled ? styles.disabled : null, style]}
+      style={[
+        reserve ? { marginBottom: depth } : null,
+        disabled ? styles.disabled : null,
+        style,
+      ]}
       {...props}
     >
       <Ledge depth={depth} radius={radius} color={color ?? colors.chunk} />

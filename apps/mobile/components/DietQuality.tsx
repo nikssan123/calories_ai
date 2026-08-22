@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   emoji: { fontSize: 11, lineHeight: 13 },
   label: { flexShrink: 1 },
   figureRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  figure: { fontSize: 13, lineHeight: 14 },
+  figure: { fontSize: 13, lineHeight: 13 },
   bar: { height: 6, borderRadius: 999, borderWidth: 1, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 999 },
   footer: { paddingHorizontal: 6, paddingTop: 2 },
