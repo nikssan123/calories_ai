@@ -54,7 +54,10 @@ export function BriefToggle({ value, onPress }: { value: RecipeBrief; onPress: (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      style={({ pressed }) => [styles.toggle, { opacity: pressed ? 0.6 : 1 }]}
+      style={({ pressed }) => [
+        styles.toggle,
+        { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.6 : 1 },
+      ]}
     >
       <Svg width={13} height={13} viewBox="0 0 24 24">
         <Path
@@ -218,7 +221,16 @@ function Chip({ on, onPress, label }: { on: boolean; onPress: () => void; label:
 }
 
 const styles = StyleSheet.create({
-  toggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6 },
+  // Matches Cook's other ways in — see the note on `way` there.
+  toggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 2,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
   badge: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1 },
   badgeText: { fontFamily: font.bold, fontSize: 11, lineHeight: 15 },
   body: { paddingHorizontal: 20, paddingVertical: 12, gap: 14 },

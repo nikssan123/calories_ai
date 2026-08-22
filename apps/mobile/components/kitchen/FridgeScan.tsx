@@ -110,7 +110,14 @@ export function FridgeScan({
         onPress={() => setChoosing(true)}
         disabled={scanning}
         accessibilityRole="button"
-        style={({ pressed }) => [styles.chip, { opacity: scanning || pressed ? 0.6 : 1 }]}
+        style={({ pressed }) => [
+          styles.chip,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+            opacity: scanning || pressed ? 0.6 : 1,
+          },
+        ]}
       >
         {scanning ? (
           <ActivityIndicator size="small" color={colors.mutedForeground} />
@@ -127,7 +134,7 @@ export function FridgeScan({
           </Svg>
         )}
         <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-          {scanning ? 'Looking…' : 'from a photo'}
+          {scanning ? 'Looking…' : 'scan your fridge'}
         </Text>
       </Pressable>
 
@@ -259,7 +266,16 @@ function Choice({ label, onPress }: { label: string; onPress: () => void }) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6 },
+  // Matches Cook's other ways in — see the note on `way` there.
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 2,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
   note: { paddingHorizontal: 20, paddingBottom: 10, lineHeight: 20 },
   finds: { maxHeight: 320 },
   find: {

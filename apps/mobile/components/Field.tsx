@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -11,9 +11,16 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Polyline } from 'react-native-svg';
-import { font, type as t, useColors } from '@/theme';
+import { ease, font, type as t, useColors } from '@/theme';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 /**
  * The shell every editable value on the profile screen wears.
@@ -200,7 +207,16 @@ export function Picker<T extends string>({
   );
 }
 
-/** The bottom sheet the picker and the date field both open into. */
+/**
+ * The bottom sheet the pickers, the kitchen and the scanner all open into.
+ *
+ * Animated by hand rather than with `animationType="slide"`. The scrim lives
+ * inside the modal, and RN slides the modal's *whole* content — so the built-in
+ * animation dragged a full-screen black rectangle up from the bottom edge along
+ * with the sheet, which reads as a shadow being pulled across the screen rather
+ * than as a panel arriving. The two have to move differently: the scrim fades
+ * where it is, and only the sheet travels.
+ */
 export function Sheet({
   open,
   title,
@@ -213,6 +229,7 @@ export function Sheet({
   children: React.ReactNode;
 }) {
   const colors = useColors();
+  const reduced = useReducedMotion();
   /*
    * A `Modal` is its own root view and inherits nothing, including the safe
    * area — so the bottom of a sheet sits under the home indicator unless it is
@@ -221,14 +238,51 @@ export function Sheet({
    */
   const insets = useSafeAreaInsets();
 
+  /*
+   * Kept mounted for the length of the exit, then unmounted. Without the second
+   * flag the sheet would vanish on the frame `open` went false and there would
+   * be nothing left to animate out.
+   */
+  const [mounted, setMounted] = useState(open);
+  const height = useRef(420);
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      progress.value = reduced ? 1 : withTiming(1, { duration: 260, easing: ease.out });
+      return;
+    }
+    if (reduced) {
+      progress.value = 0;
+      setMounted(false);
+      return;
+    }
+    progress.value = withTiming(0, { duration: 200, easing: ease.out }, (done) => {
+      if (done) runOnJS(setMounted)(false);
+    });
+  }, [open, reduced, progress]);
+
+  const scrim = useAnimatedStyle(() => ({ opacity: progress.value }));
+  const panel = useAnimatedStyle(() => ({
+    transform: [{ translateY: (1 - progress.value) * height.current }],
+  }));
+
   return (
-    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
-      {/* Tapping away closes it — the same affordance as tapping off a popover,
-          and the only one a sheet with no visible chrome can offer. */}
-      <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close" />
-      <View
+    <Modal visible={mounted} transparent animationType="none" onRequestClose={onClose}>
+      <Animated.View style={[styles.scrim, scrim]}>
+        {/* Tapping away closes it — the same affordance as tapping off a
+            popover, and the only one a sheet with no chrome can offer. */}
+        <Pressable style={styles.flex} onPress={onClose} accessibilityLabel="Close" />
+      </Animated.View>
+
+      <Animated.View
+        onLayout={(event) => {
+          height.current = event.nativeEvent.layout.height;
+        }}
         style={[
           styles.sheet,
+          panel,
           {
             backgroundColor: colors.card,
             borderColor: colors.border,
@@ -240,7 +294,7 @@ export function Sheet({
           {title}
         </Text>
         <ScrollView bounces={false}>{children}</ScrollView>
-      </View>
+      </Animated.View>
     </Modal>
   );
 }
@@ -262,9 +316,14 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
   },
   trigger: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  scrim: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.35)' },
+  flex: { flex: 1 },
+  scrim: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(0, 0, 0, 0.35)' },
   sheet: {
-    maxHeight: '60%',
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    maxHeight: '75%',
     borderTopWidth: 2,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,

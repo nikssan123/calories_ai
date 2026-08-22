@@ -361,7 +361,9 @@ export default function CookScreen() {
           {plan}
         </Text>
 
-        {/* The other two ways in, one line, one size, nothing hidden. */}
+        {/* The other three ways in. All the same size, nothing hidden behind a
+            menu — "photograph your fridge" is the one thing here nobody would
+            think to go looking for. */}
         <View style={styles.ways}>
           <FridgeScan
             onSaved={loadKitchen}
@@ -376,7 +378,11 @@ export default function CookScreen() {
             accessibilityRole="button"
             style={({ pressed }) => [
               styles.way,
-              { opacity: spent || thinking ? 0.4 : pressed ? 0.6 : 1 },
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                opacity: spent || thinking ? 0.4 : pressed ? 0.6 : 1,
+              },
             ]}
           >
             <Svg width={13} height={13} viewBox="0 0 24 24">
@@ -394,7 +400,10 @@ export default function CookScreen() {
           <Pressable
             onPress={() => router.push('/plan')}
             accessibilityRole="button"
-            style={({ pressed }) => [styles.way, { opacity: pressed ? 0.6 : 1 }]}
+            style={({ pressed }) => [
+              styles.way,
+              { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.6 : 1 },
+            ]}
           >
             <Svg width={13} height={13} viewBox="0 0 24 24">
               <Path
@@ -662,8 +671,27 @@ const styles = StyleSheet.create({
    * Four chips at a phone's width wrap every time. Spacing does the same job
    * and cannot dangle.
    */
-  ways: { flexDirection: 'row', alignItems: 'center', columnGap: 10, rowGap: 2, flexWrap: 'wrap' },
-  way: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6 },
+  ways: { flexDirection: 'row', alignItems: 'center', columnGap: 8, rowGap: 8, flexWrap: 'wrap' },
+  /*
+   * A surface at rest, which the web's version does not have.
+   *
+   * On the web these are bare muted text and grow a background on hover — and
+   * that hover is what says "this is a control". A phone has no hover, so four
+   * lines of small grey text under a large green button read as a caption, not
+   * as four things you can press. Worse, four of them do not fit one line at
+   * this width, so they wrap into a ragged two-by-two and the raggedness is
+   * what makes it look broken: discrete objects can wrap untidily and still
+   * look deliberate, loose text cannot.
+   */
+  way: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 2,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
   sheetFoot: { borderTopWidth: 2, padding: 12 },
   importBody: { paddingHorizontal: 20, paddingVertical: 12, gap: 10 },
   importInput: {
