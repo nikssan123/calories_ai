@@ -41,6 +41,19 @@ a bucket, both optional and both off by default — plus the pieces of Stages 2 
 are code rather than infrastructure: the pool ceiling, admission control on a turn, and
 the scheduler's re-entrancy guard.
 
+**Deployed and verified**, 2026-08-22, at `7bfd1e6`. Redis was already carrying the
+limiter's counters; this deploy added the bucket. Migration `023` applied, the API
+resolved its endpoint correctly, and a round trip from inside the production container
+wrote, read, presigned and deleted an object — including the check that matters most for
+privacy, that an unsigned read of a known key is refused. Production photos have gone to
+`day-so-far` since.
+
+Worth recording that the endpoint in the server's `.env` was pasted from R2's bucket
+settings page with the bucket name on the end, which is the form Cloudflare offers. The
+normalisation added the same day is the only reason this deploy worked rather than 404ing
+every photo on `day-so-far/day-so-far/…` — a fix written an hour before the mistake it
+prevents, which is the sort of luck worth turning into a note.
+
 **Left:** the deploy topology, streaming, and whatever the one unanswered question below
 turns out to imply. Each is marked in place, and the ordered list is at the end.
 
@@ -279,9 +292,16 @@ reads as a global ceiling and is not one — leaving it implicit is how a deploy
 that scaled out perfectly happily runs into `max_connections` instead, and the error
 arrives at whichever query was unlucky rather than at the thing that caused it.
 
-**Left in Stage 1:** nothing in the code. What remains is the deploy topology itself —
-drop `container_name`, run two or three replicas behind Caddy — and that is a decision
-about the host rather than a change to this repository.
+**Left in Stage 1:** nothing in the code, and nothing in the configuration either — both
+stores are live in production as of 2026-08-22. What remains is the deploy topology
+itself: drop `container_name`, run two or three replicas behind Caddy. That is a decision
+about the host rather than a change to this repository, and it is now the only thing
+standing between this deployment and a second replica.
+
+One operational note from turning it on. The `uploads` volume stays mounted and stays in
+the deploy script's backup, because it still holds every photo written before the switch
+— six megabytes of them on the first deploy — and a `photos` row with a `file_path` has
+nowhere else to look. The volume stops growing; it does not stop mattering.
 
 ## Stage 2 — Govern in tokens, not in requests
 
@@ -421,7 +441,7 @@ and none of it applies there — which is the point of keeping the two apart.
 
 | Users | What is required | State |
 |---|---|---|
-| ~2,000 | Stage 0. Two replicas. Nothing else. | Code done; replicas need starting |
+| ~2,000 | Stage 0. Two replicas. Nothing else. | Code and stores done and deployed; replicas need starting |
 | ~10,000 | Stages 1–3, plus Stage 5 if cache reads count in full against the rate limit. | Stage 3's guard done; the rest open |
 | ~100,000 | All of it, pgbouncer, and a negotiated rate-limit tier. | open |
 
@@ -441,6 +461,13 @@ headroom. Stage 2 is the seatbelt that stops a bad afternoon becoming an outage.
    API's path, and it means a slow phone uplink is no longer holding a request open.
    The wrinkle is that the model needs the bytes, so the turn either fetches them back
    or passes the presigned URL as an image source.
+
+And the one that is now unblocked rather than merely possible:
+
+- **Start the second replica.** Every store a request touches is shared: sessions and
+  photos and counters all live outside the container. Drop `container_name` from
+  `docker-compose.prod.yml`, `--scale api=2`, and check that a photo taken on one
+  replica renders on the other — which it will, because neither of them holds it.
 
 Two smaller things worth doing whenever their file is next open, neither urgent:
 
