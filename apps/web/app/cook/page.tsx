@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { CalendarDays, ChevronDown, Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
@@ -87,6 +87,16 @@ export default function CookPage() {
   const [message, setMessage] = useState('');
   const [brief, setBrief] = useState<RecipeBrief>({});
   const [thinking, setThinking] = useState(false);
+  /**
+   * The same fact as `thinking`, readable synchronously.
+   *
+   * Every control that can start a run is disabled on `thinking`, which is
+   * correct and not sufficient: `setThinking(true)` schedules a render, so two
+   * clicks landing in the same tick both see a live button and both start a
+   * run. The second one costs a full Opus run and a slot out of a three-a-day
+   * budget, so the guard is a ref rather than a nicety.
+   */
+  const running = useRef(false);
   /** What the run in flight was asked for, printed over the skeletons. */
   const [thinkingNote, setThinkingNote] = useState('');
   /**
@@ -219,7 +229,7 @@ export default function CookPage() {
     }
     const from = brief.wants?.trim()
       ? `I'll work from what you asked for and what's in your kitchen`
-      : `I'll invent three recipes from what's in your kitchen`;
+      : `I'll invent a recipe from what's in your kitchen`;
     if (!remaining) return `${from}.`;
     if (remaining.kcal === 0) return `${from} — and you're at your target today, so I'll keep it light.`;
     return `${from}, aiming at the ${remaining.kcal} kcal and ${remaining.protein}g protein you have left.`;
@@ -263,7 +273,12 @@ export default function CookPage() {
    * which part of it is the point, which is the whole difference between "you
    * have spinach" and "this is a spinach dish".
    */
-  async function suggest(focus?: string[]) {
+  async function suggest(focus?: string[], reloadKitchenFirst = false) {
+    // Claimed before the first await, so a second click in the same tick — or a
+    // photo finishing while a run is already in flight — turns into nothing
+    // rather than into a second run against the same budget.
+    if (running.current) return;
+    running.current = true;
     const asked = brief.wants?.trim() ?? '';
     /*
      * Say what is being done, where the answer will appear, before any of it
@@ -277,16 +292,19 @@ export default function CookPage() {
      */
     setThinkingNote(
       focus?.length
-        ? `Writing recipes around the ${listWords(focus.slice(0, 4))} in your photo…`
+        ? `Writing a recipe around the ${listWords(focus.slice(0, 4))} in your photo…`
         : asked
-          ? `Writing three recipes for “${asked}”, from what's in your kitchen…`
-          : "Writing three recipes from what's in your kitchen…",
+          ? `Writing a recipe for “${asked}”, from what's in your kitchen…`
+          : "Writing a recipe from what's in your kitchen…",
     );
     // Moved to the front: the skeletons are the answer to "what is it doing",
     // and they are no use on a tab you cannot see.
     setTab('ideas');
     setThinking(true);
     try {
+      // Inside the guard rather than before the call, so the page is locked for
+      // the round trip too — see `cookFromPhoto`.
+      if (reloadKitchenFirst) await load();
       const result = await api.suggestRecipes({
         ...brief,
         wants: asked || undefined,
@@ -301,6 +319,7 @@ export default function CookPage() {
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
+      running.current = false;
       setThinking(false);
     }
   }
@@ -309,11 +328,15 @@ export default function CookPage() {
    * A scan that was started to cook, rather than to tidy the list. The finds are
    * already in the pantry by the time this runs — <FridgeScan> commits them
    * either way — so the reload is what keeps the kitchen line honest while the
-   * recipes are being written.
+   * recipe is being written.
    */
   async function cookFromPhoto(found: string[]) {
-    await load();
-    await suggest(found);
+    // The reload happens inside the run rather than ahead of it. Done ahead, it
+    // was a round trip during which nothing on the page knew a run was starting
+    // — the button stayed live for exactly as long as the pantry took to come
+    // back — and locking it here instead would have stranded the spinner on the
+    // path where `suggest` declines the claim.
+    await suggest(found, true);
   }
 
   return (
@@ -420,10 +443,11 @@ export default function CookPage() {
 
           {/* The other three ways in. One line, one size, nothing hidden. */}
           <div className="mt-2 flex flex-wrap items-center gap-1">
-            <FridgeScan onSaved={load} onCook={cookFromPhoto} canCook={!spent} />
+            <FridgeScan onSaved={load} onCook={cookFromPhoto} canCook={!spent && !thinking} />
             <ChipDot />
             <ImportRecipe
-              disabled={spent}
+              disabled={spent || thinking}
+              disabledReason={thinking ? 'Already writing one…' : 'No recipe runs left today'}
               onImported={(recipe) => {
                 setRecipes((prev) => [recipe, ...prev]);
                 setMessage('');
@@ -534,7 +558,7 @@ export default function CookPage() {
                 </span>
                 <p className="text-muted-foreground text-body font-medium">
                   Nothing yet. Press <span className="text-foreground">Find me something</span>{' '}
-                  and I&rsquo;ll invent three recipes
+                  and I&rsquo;ll invent a recipe
                   <br />
                   from what&rsquo;s in your kitchen — or start from a photo, or a recipe you
                   already have.

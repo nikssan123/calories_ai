@@ -96,7 +96,7 @@ export interface KitchenToolContext {
 export function buildKitchenTools(tc: KitchenToolContext) {
   const proposeRecipe = tool(
     'propose_recipe',
-    'Put forward one thing they could cook. Call it once per idea — three ideas is three calls. Every ingredient needs its own quantity and macros for the whole recipe (not per portion), because this list is what gets logged if they cook it, and nothing downstream re-estimates it.',
+    'Put forward one thing they could cook. Call it once per idea — the task turn says how many to write, and two ideas is two calls. Every ingredient needs its own quantity and macros for the whole recipe (not per portion), because this list is what gets logged if they cook it, and nothing downstream re-estimates it.',
     {
       title: z.string().describe('What the dish is, in a few words. "Chicken and rice traybake".'),
       summary: z

@@ -129,6 +129,19 @@ describe('propose_recipe', () => {
 });
 
 describe('the recipe prompt', () => {
+  /**
+   * The count had two independent defaults — one in `recipes.ts`, one in
+   * `recipeTaskPrompt` — and they agreed only by coincidence. They are one
+   * constant now, and this is what notices if a third appears.
+   */
+  it('asks for exactly one recipe by default', async () => {
+    await suggestProposing(recipeArgs());
+
+    const prompt = String(agentCalls.at(-1)!.prompt);
+    expect(prompt).toContain('Call propose_recipe once,');
+    expect(prompt).not.toMatch(/once per idea \(\d+ of them\)/);
+  });
+
   it('carries what is left of the day', async () => {
     await addMeal(user, { date: today(), kcal: 1200, protein_g: 60 });
     await suggestProposing(recipeArgs());

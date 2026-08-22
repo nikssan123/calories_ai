@@ -28,7 +28,7 @@ export interface PlanLimits {
   reviewsPerDay: number;
   /** Fridge photos. Vision, and the most expensive thing per call after a recipe run. */
   fridgeScansPerDay: number;
-  /** Recipe generations, each producing several ideas. */
+  /** Recipe generations, one idea each. */
   recipeRunsPerDay: number;
   /** How much kitchen the pantry will hold. Not a cost limit — a usability one. */
   pantryItems: number;
@@ -44,9 +44,9 @@ export interface PlanLimits {
   nudgesPerWeek: number;
   /**
    * Weeks of dinners planned. Weekly rather than daily because that is the unit
-   * it produces, and the single most expensive call in the product — several
-   * times the ~$0.22 a three-recipe run costs. Pro-shaped, and the ceiling says
-   * so: one a week is exactly enough to plan the week you are in.
+   * it produces, and the single most expensive call in the product — many times
+   * what a one-recipe run costs. Pro-shaped, and the ceiling says so: one a week
+   * is exactly enough to plan the week you are in.
    */
   mealPlansPerWeek: number;
 }
@@ -61,6 +61,12 @@ export interface PlanLimits {
  *   ...importing  ~$0.09   one recipe, and the method came with it
  *   text_log      ~$0.05   the journal, for comparison
  *
+ * Superseded in part on 2026-08-22: a suggest run now writes one recipe rather
+ * than three (`RECIPES_PER_RUN`), which should put it near the ~$0.15 the adapt
+ * job measures — the same single recipe, from the same context. Re-read the
+ * admin panel before trusting that: it is an inference from the row above, not
+ * a measurement, and the ceilings below were re-cut on the strength of it.
+ *
  * Asking in the journal costs both: ~$0.30 and about 75 seconds, because the
  * chat turn waits on a full recipe run inside its own tool call. That is the
  * most expensive single thing a user can do, and it is charged against the same
@@ -72,16 +78,18 @@ export interface PlanLimits {
  * things follow from it that are worth writing down:
  *
  * A daily cap is a burst limit, not a budget. One recipe run a day for a month
- * is ~$6 of model spend against a €4 subscription that nets closer to $2.40
- * after VAT and the store's cut. Nobody actually asks what to cook every single
- * day, so the typical account is nowhere near this — but if the caps ever need
- * to hold the line rather than catch abuse, the instrument is a monthly budget,
- * not a bigger number here.
+ * is ~$4.50 of model spend against a €4 subscription that nets closer to $2.40
+ * after VAT and the store's cut — still underwater, which is the point: cutting
+ * the run to one recipe moved that number without fixing it. Nobody actually
+ * asks what to cook every single day, so the typical account is nowhere near
+ * this — but if the caps ever need to hold the line rather than catch abuse,
+ * the instrument is a monthly budget, not a bigger number here.
  *
- * The other lever is the output itself. Three complete recipes is most of the
- * 5k tokens; generating three summaries and writing the method only for the one
- * someone opens would cut the dominant cost several-fold, at the price of a
- * second round trip on the recipe they picked.
+ * The other lever is the output itself, and it has now been pulled once: a run
+ * writes one complete recipe rather than three. What is left of it is the same
+ * idea applied within a run — a summary first, the method only for the card
+ * someone opens — which is worth reaching for only if the count ever goes back
+ * up, since at one recipe there is no second card to defer.
  */
 const LIMITS: Record<PlanName, PlanLimits> = {
   /*
@@ -109,7 +117,7 @@ const LIMITS: Record<PlanName, PlanLimits> = {
     chatTurnsPerHour: 200,
     reviewsPerDay: 20,
     fridgeScansPerDay: 6,
-    recipeRunsPerDay: 4,
+    recipeRunsPerDay: 3,
     pantryItems: 300,
     // Not more than free. Being messaged more often is not a feature anybody
     // would pay for, and the once-a-week rule is about what is welcome rather

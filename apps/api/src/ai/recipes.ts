@@ -11,7 +11,12 @@ import { inferMeal, localDateFor } from '../time.ts';
 import { MAX_TURNS } from './client.ts';
 import { emptyCollector } from './kitchen.ts';
 import { createProvider, type AgentRequest } from './providers/index.ts';
-import { RECIPE_SYSTEM_PROMPT, recipeTaskPrompt, type PlanDay } from './prompt.ts';
+import {
+  RECIPES_PER_RUN,
+  RECIPE_SYSTEM_PROMPT,
+  recipeTaskPrompt,
+  type PlanDay,
+} from './prompt.ts';
 import { buildNutritionServer } from './tools.ts';
 import type { ToolContext } from './tools.ts';
 
@@ -41,9 +46,9 @@ export interface SuggestOptions {
    */
   focus?: string[] | null;
   /**
-   * What is being asked for. Absent means the original job: invent three from
-   * the kitchen. The other two arrive with a seed — a library recipe to rework,
-   * or text the user brought — and produce exactly one recipe.
+   * What is being asked for. Absent means the original job: invent from the
+   * kitchen. The other two arrive with a seed — a library recipe to rework, or
+   * text the user brought — and produce exactly one recipe.
    */
   job?: RecipeJob;
   /** Overrides "now". Tests and backfills use it. */
@@ -130,7 +135,7 @@ export async function suggestRecipes(
    * matters.
    *
    * A plan is counted apart, weekly, against its own allowance: it costs
-   * several times a three-recipe run, so charging it to the daily recipe budget
+   * several times a single-recipe run, so charging it to the daily recipe budget
    * would mean one plan eats a free account's whole day of cooking — and
    * recording it as a `recipe` would hide the most expensive thing in the
    * product inside the second most expensive.
@@ -216,7 +221,7 @@ export async function suggestRecipes(
             ? { kind: 'import', text: job.text }
             : job.kind === 'plan'
               ? { kind: 'plan', days: job.days, batch: job.batch, servings: job.servings }
-              : { kind: 'suggest', count: job.count ?? 3 },
+              : { kind: 'suggest', count: job.count ?? RECIPES_PER_RUN },
     }),
     photo: null,
     tools,

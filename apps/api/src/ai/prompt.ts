@@ -545,9 +545,27 @@ You have read tools if you want to check a specific day or look up what a food w
 // ---- The kitchen -----------------------------------------------------------
 
 /**
+ * How many recipes one suggest run writes.
+ *
+ * One, not three. The two numbers this trades between are not symmetrical: a
+ * run's cost is mostly the ingredient JSON and the thinking that produces it,
+ * so three recipes measured ~$0.22 against ~$0.15 for one — a third off, not
+ * two thirds, because the system prompt, the pantry and the day's numbers are
+ * paid for once either way. What one buys instead is latency: the wait was long
+ * enough that people wondered whether the click had registered, and two thirds
+ * of it was spent writing methods for the two cards nobody opened.
+ *
+ * Declared here rather than defaulted at each use because it was defaulted at
+ * each use — `recipes.ts` and `recipeTaskPrompt` each carried their own `?? 3`,
+ * and two independent defaults for one number is one place to change and one
+ * place to forget.
+ */
+export const RECIPES_PER_RUN = 1;
+
+/**
  * The recipe agent. Its own prompt for the same reason the review has one: the
  * job is different. Nothing here logs anything, nobody is mid-conversation, and
- * the whole output is three ideas somebody either cooks tonight or doesn't.
+ * the whole output is an idea somebody either cooks tonight or doesn't.
  *
  * Wholly stable, with the pantry and the day's numbers riding in the user turn,
  * so `dynamicSystemPrompt` stays empty and the entire prompt is cacheable.
@@ -660,13 +678,13 @@ You know three things no recipe site knows: what they have, what they have left 
 
 # Shape
 
-Call propose_recipe once per idea. The task below says how many; unless it says otherwise, three.
+Call propose_recipe once per idea. The task below says how many; unless it says otherwise, one.
 
 When there is more than one, vary them — three ways to cook the same chicken breast is one idea submitted three times. Different effort levels is the most useful axis: something in fifteen minutes, and something worth an hour.
 
 Steps are written for someone standing in a kitchen. Short, ordered, one action each. Do not open by listing the ingredients back at them; they are already on the card.
 
-Then reply with one or two sentences — what you went for and why. Not a summary of the recipes, which they can see. Something like "All three use up the chicken before it turns. The traybake is the one that fits tonight's protein without much work." If nothing good was possible from what they have, say that plainly and say what one shopping trip would unlock.`;
+Then reply with one or two sentences — what you went for and why. Not a summary of the recipe, which they can see. Something like "This uses up the chicken before it turns, and it fits tonight's protein without much work." If nothing good was possible from what they have, say that plainly and say what one shopping trip would unlock.`;
 
 /**
  * What a fridge photo is for. Short because the job is: the model is naming
@@ -792,7 +810,7 @@ export function recipeTaskPrompt(input: RecipeTaskInput): string {
 
   const asked = input.wants ? `\n\n## What they asked for\n\n"${input.wants}"` : '';
 
-  const job = input.job ?? { kind: 'suggest' as const, count: 3 };
+  const job = input.job ?? { kind: 'suggest' as const, count: RECIPES_PER_RUN };
 
   /*
    * The dietary block is stated as a hard boundary and placed above everything

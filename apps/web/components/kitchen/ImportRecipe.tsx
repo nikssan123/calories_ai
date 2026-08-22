@@ -31,10 +31,16 @@ import { Textarea } from '@/components/ui/textarea';
 export function ImportRecipe({
   onImported,
   disabled = false,
+  disabledReason = 'No recipe runs left today',
 }: {
   onImported: (recipe: Recipe) => void;
-  /** Pricing a recipe spends a run like any other, so it shuts with them. */
+  /**
+   * Pricing a recipe spends a run like any other, so it shuts with them — and
+   * also while another run is in flight, since the budget is shared.
+   */
   disabled?: boolean;
+  /** Why it is shut. Two reasons now, and they are not interchangeable. */
+  disabledReason?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
@@ -63,7 +69,7 @@ export function ImportRecipe({
         icon={<ClipboardPaste size={13} />}
         onClick={() => setOpen(true)}
         disabled={disabled}
-        title={disabled ? 'No recipe runs left today' : undefined}
+        title={disabled ? disabledReason : undefined}
       >
         paste one
       </ActionChip>
