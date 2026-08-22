@@ -50,19 +50,38 @@ function breakfast(nutrition: Nutrition, eggs: string): ChatAction {
         { name: 'Cheddar', quantity: '30 g' },
       ],
       ...nutrition,
+      // Breakfast, so the day starts empty and the card's bar is all this meal
+      // — which is the bit worth advertising: the correction moves the band.
+      day: {
+        local_date: TODAY,
+        kcal_before: 0,
+        kcal_after: nutrition.kcal,
+        target_kcal: TARGETS.kcal,
+      },
     },
   };
 }
 
+/**
+ * The demo's day is always today, so its card never says "on 14 Mar". Built
+ * from local parts rather than an ISO slice, which is UTC and so is the wrong
+ * date for anyone east of it after their evening meal.
+ */
+const TODAY = (() => {
+  const now = new Date();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${String(now.getDate()).padStart(2, '0')}`;
+})();
+
 const FIRST = {
   text: 'Two eggs, toast and some cheese',
-  reply: 'Breakfast — about 407 calories and 24g of protein. That leaves you 1,883 for the day.',
+  reply: 'Logged as breakfast — I went with two medium eggs and about 30g of cheddar.',
   nutrition: { kcal: 407, protein_g: 24, carbs_g: 31, fat_g: 21 } satisfies Nutrition,
 };
 
 const SECOND = {
   text: 'actually there were three eggs',
-  reply: 'Updated — breakfast is 479 now, and 30g of protein. Still 1,811 to go.',
+  reply: 'No problem — third egg is on the same entry, and the day has moved with it.',
   nutrition: { kcal: 479, protein_g: 30, carbs_g: 31, fat_g: 26 } satisfies Nutrition,
 };
 
@@ -97,7 +116,7 @@ const SCRIPT: { phase: Phase; ms: number }[] = [
 const AT = Object.fromEntries(SCRIPT.map((beat, i) => [beat.phase, i])) as Record<Phase, number>;
 
 const CAPTION =
-  'A conversation with the journal: "Two eggs, toast and some cheese" is logged as breakfast at about 407 calories, then corrected to three eggs — and the same entry updates in place to 479.';
+  'A conversation with the journal: "Two eggs, toast and some cheese" is logged as breakfast at about 407 calories, drawn as a band on the day\'s calorie bar — then corrected to three eggs, and the same entry updates in place to 479.';
 
 export function HeroDemo({ className }: { className?: string }) {
   const ref = useRef<HTMLDivElement>(null);

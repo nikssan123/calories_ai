@@ -844,6 +844,31 @@ export const ChatCard = z.discriminatedUnion('type', [
     confidence: Confidence,
     items: z.array(z.object({ name: z.string(), quantity: z.string().nullable() })),
     ...Nutrition.shape,
+    /**
+     * Where the meal left the day — the half of the card people actually read.
+     *
+     * A meal's calories mean nothing on their own: 640 is most of a day or a
+     * quarter of one depending on whose day it is, and asking someone to work
+     * that out by subtracting one figure from another is asking them to do
+     * arithmetic to find out how they are doing. Carrying the day's before and
+     * after lets the card draw it instead, with this meal as its own band.
+     *
+     * `kcal_before` is the day *without* this entry rather than the day as it
+     * stood at some earlier moment, so a correction redraws honestly: the band
+     * is always what this entry is currently worth, not what it first cost.
+     *
+     * Nullable because it is younger than the cards already on disk, and an
+     * older row is a card without a bar rather than a card that fails to parse.
+     */
+    day: z
+      .object({
+        local_date: z.string(),
+        kcal_before: z.number(),
+        kcal_after: z.number(),
+        target_kcal: z.number(),
+      })
+      .nullable()
+      .default(null),
   }),
   z.object({
     type: z.literal('exercise'),

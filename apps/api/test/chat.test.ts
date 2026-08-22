@@ -90,6 +90,7 @@ describe('stored actions', () => {
       protein_g: 62,
       carbs_g: 50,
       fat_g: 8,
+      day: { local_date: '2025-03-14', kcal_before: 400, kcal_after: 1020, target_kcal: 2100 },
     },
   };
 

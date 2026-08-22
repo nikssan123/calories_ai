@@ -4,6 +4,7 @@ import type {
   ChatAction,
   ChatCard,
   Confidence,
+  DaySummary,
   EntrySource,
   ExerciseEntry,
   FoodEntry,
@@ -150,7 +151,8 @@ function pickTotals(entry: { kcal: number; protein_g: number; carbs_g: number; f
  * patch — and a card showing the request instead of the result would be a
  * confident picture of something that did not happen.
  */
-function foodCard(entry: FoodEntry): ChatCard {
+function foodCard(entry: FoodEntry, day: DaySummary): ChatCard {
+  const kcalAfter = Math.round(day.consumed.kcal);
   return {
     type: 'food',
     entry_id: entry.id,
@@ -163,6 +165,19 @@ function foodCard(entry: FoodEntry): ChatCard {
         item.quantity_desc ?? (item.quantity_g === null ? null : `${Math.round(item.quantity_g)}g`),
     })),
     ...pickTotals(entry),
+    /*
+     * The day this landed in, read back after the write — so the bar on the
+     * card is the same arithmetic the ring on the dashboard is doing, not a
+     * second opinion about it. `day.consumed` already includes this entry,
+     * which is why the "before" figure is derived by taking it back out rather
+     * than by reading the day twice and hoping nothing moved in between.
+     */
+    day: {
+      local_date: entry.local_date,
+      kcal_before: Math.max(0, kcalAfter - Math.round(entry.kcal)),
+      kcal_after: kcalAfter,
+      target_kcal: day.targets.kcal,
+    },
   };
 }
 
@@ -319,14 +334,14 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         ctx: tc.ctx,
       });
 
+      const day = await buildDaySummary(tc.userId, entry.local_date);
       tc.actions.push({
         kind: 'food_logged',
         entry_id: entry.id,
         summary: `${entry.meal}: ${entry.description} — ${Math.round(entry.kcal)} kcal`,
-        card: foodCard(entry),
+        card: foodCard(entry, day),
       });
 
-      const day = await buildDaySummary(tc.userId, entry.local_date);
       return ok({
         entry_id: entry.id,
         // Echoed back on every write. Without it the model cannot tell which day
@@ -375,14 +390,14 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
 
       if (!entry) return fail('No entry with that id. Call get_day to list the ids for a date.');
 
+      const day = await buildDaySummary(tc.userId, entry.local_date);
       tc.actions.push({
         kind: 'food_updated',
         entry_id: entry.id,
         summary: `Updated ${entry.description} — now ${Math.round(entry.kcal)} kcal`,
-        card: foodCard(entry),
+        card: foodCard(entry, day),
       });
 
-      const day = await buildDaySummary(tc.userId, entry.local_date);
       const movedFrom = before && before.local_date !== entry.local_date ? before.local_date : null;
       return ok({
         entry_id: entry.id,
@@ -1417,14 +1432,14 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
 
       if (!entry) return fail('No recipe with that id. Call find_recipes to list what they actually have.');
 
+      const day = await buildDaySummary(tc.userId, entry.local_date);
       tc.actions.push({
         kind: 'food_logged',
         entry_id: entry.id,
         summary: `${entry.meal}: ${entry.description} — ${Math.round(entry.kcal)} kcal`,
-        card: foodCard(entry),
+        card: foodCard(entry, day),
       });
 
-      const day = await buildDaySummary(tc.userId, entry.local_date);
       return ok({
         entry_id: entry.id,
         local_date: entry.local_date,
@@ -1733,14 +1748,14 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         return fail('Nothing planned on that night, or no night with that id. Call get_meal_plan.');
       }
 
+      const day = await buildDaySummary(tc.userId, entry.local_date);
       tc.actions.push({
         kind: 'food_logged',
         entry_id: entry.id,
         summary: `${entry.meal}: ${entry.description} — ${Math.round(entry.kcal)} kcal`,
-        card: foodCard(entry),
+        card: foodCard(entry, day),
       });
 
-      const day = await buildDaySummary(tc.userId, entry.local_date);
       return ok({
         entry_id: entry.id,
         local_date: entry.local_date,
@@ -1959,14 +1974,14 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
       });
       if (!entry) return fail('No entry with that id. Call search_food_history to find it.');
 
+      const day = await buildDaySummary(tc.userId, entry.local_date);
       tc.actions.push({
         kind: 'food_logged',
         entry_id: entry.id,
         summary: `${entry.meal}: ${entry.description} — ${Math.round(entry.kcal)} kcal`,
-        card: foodCard(entry),
+        card: foodCard(entry, day),
       });
 
-      const day = await buildDaySummary(tc.userId, entry.local_date);
       return ok({
         entry_id: entry.id,
         local_date: entry.local_date,
@@ -2113,14 +2128,14 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         return fail((error as Error).message);
       }
 
+      const day = await buildDaySummary(tc.userId, entry.local_date);
       tc.actions.push({
         kind: 'food_logged',
         entry_id: entry.id,
         summary: `${entry.meal}: ${entry.description} — ${Math.round(entry.kcal)} kcal`,
-        card: foodCard(entry),
+        card: foodCard(entry, day),
       });
 
-      const day = await buildDaySummary(tc.userId, entry.local_date);
       return ok({
         entry_id: entry.id,
         local_date: entry.local_date,

@@ -168,6 +168,32 @@ describe('log_food', () => {
     expect(card.kcal).toBe(330);
     expect(card.items).toEqual([{ name: 'Chicken breast', quantity: '~200g' }]);
   });
+
+  /**
+   * The bar the card draws, and the only reason it can draw one.
+   *
+   * A meal's calories mean nothing without the day around them, and asking the
+   * user to subtract one figure from another to find out how they are doing is
+   * exactly what the picture exists to stop. The day is read back *after* the
+   * write, so `kcal_before` is this meal taken back out of it rather than a
+   * second, racier reading of the same table.
+   */
+  it('carries the day it landed in, with this meal as its own band', async () => {
+    await addMeal(user, { date: TODAY, kcal: 500 });
+
+    await call('log_food', {
+      description: 'Chicken and rice',
+      meal: 'lunch', when: null, items: [ITEM], note: null, confidence: 'medium',
+    });
+
+    const card = actions[0]!.card as Extract<ChatCard, { type: 'food' }>;
+    expect(card.day).toEqual({
+      local_date: TODAY,
+      kcal_before: 500,
+      kcal_after: 830,
+      target_kcal: 2200,
+    });
+  });
 });
 
 describe('update_food_entry', () => {
@@ -186,6 +212,28 @@ describe('update_food_entry', () => {
     expect(json.updated.kcal).toBe(700);
     expect(json.day_totals.kcal).toBe(700);
     expect(actions[0]!.kind).toBe('food_updated');
+  });
+
+  /**
+   * A correction redraws the band as what the entry is worth *now*, not as the
+   * difference the correction made — otherwise "there was more rice" would draw
+   * a card whose bright band was 400 kcal of rice nobody ate on its own.
+   */
+  it('draws the corrected entry as the band, not the change to it', async () => {
+    await addMeal(user, { date: TODAY, kcal: 500, description: 'Breakfast' });
+    const entry = await addMeal(user, { date: TODAY, kcal: 300 });
+
+    await call('update_food_entry', {
+      entry_id: entry.id,
+      description: null,
+      meal: null,
+      when: null,
+      items: [{ ...ITEM, name: 'More rice', kcal: 700, protein_g: 12 }],
+      confidence: null,
+    });
+
+    const card = actions[0]!.card as Extract<ChatCard, { type: 'food' }>;
+    expect(card.day).toMatchObject({ kcal_before: 500, kcal_after: 1200 });
   });
 
   it('changes description, meal, time and confidence', async () => {

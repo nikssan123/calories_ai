@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ChatAction, ChatCard as Card, ExerciseEntry } from '@ct/shared';
 import { RecipeCard } from '@/components/kitchen/RecipeCard';
@@ -303,8 +303,152 @@ function FoodCard({ card }: { card: Extract<Card, { type: 'food' }> }) {
             .join(' · ')}
         </p>
       )}
+
+      {card.day && <DayProgress day={card.day} kcal={card.kcal} />}
     </Shell>
   );
+}
+
+/**
+ * The meal, put where it lands in the day.
+ *
+ * A calorie figure on its own is a number people have to do sums with: 640 is
+ * a third of one person's day and most of another's, and the app was already
+ * making them read two numbers and subtract. So the card draws it — the day so
+ * far in a quiet green, this meal as the bright band on the end of it, and
+ * whatever is left as empty track. It answers "how am I doing?" at a glance,
+ * before anyone has read a digit.
+ *
+ * The bands run in the order the day happened, which is why the meal is always
+ * the one on the right and always the one that grows on arrival: the movement
+ * *is* the message. Anything past the target is drawn in ink rather than red —
+ * over is information, not a telling-off — and the target keeps a notch so a
+ * day that ran past it still shows where it went.
+ */
+function DayProgress({
+  day,
+  kcal,
+}: {
+  day: NonNullable<Extract<Card, { type: 'food' }>['day']>;
+  kcal: number;
+}) {
+  const grown = useGrown();
+
+  const target = Math.max(1, Math.round(day.target_kcal));
+  const before = Math.max(0, Math.round(day.kcal_before));
+  // Defensive: a card written before a deletion elsewhere could otherwise ask
+  // for a negative band, which paints as a full-width one.
+  const after = Math.max(before, Math.round(day.kcal_after));
+  const over = after > target;
+  const remaining = target - after;
+  // The bar is the target's width until the day runs past it, and the day's
+  // width after that — so a 3,000 kcal day still fits, and the notch says
+  // where the target was rather than the bar quietly rescaling nothing.
+  const scale = Math.max(target, after);
+
+  const underTarget = Math.min(before, target);
+  const bands = [
+    { key: 'earlier', kcal: underTarget, mine: false, over: false },
+    { key: 'earlier-over', kcal: Math.max(0, before - target), mine: false, over: true },
+    { key: 'meal', kcal: Math.max(0, Math.min(after, target) - underTarget), mine: true, over: false },
+    { key: 'meal-over', kcal: Math.max(0, after - Math.max(before, target)), mine: true, over: true },
+  ].filter((band) => band.kcal > 0);
+  const last = bands.length - 1;
+
+  return (
+    <div className="border-border/70 mt-3 border-t-2 border-dashed pt-2.5">
+      <div
+        role="img"
+        aria-label={`${after.toLocaleString()} of ${target.toLocaleString()} kcal ${dayWord(day.local_date)}, this meal ${kcal.toLocaleString()}. ${
+          over
+            ? `${Math.abs(remaining).toLocaleString()} over.`
+            : `${remaining.toLocaleString()} left.`
+        }`}
+        className="bg-muted border-border relative flex h-3 overflow-hidden rounded-full border"
+      >
+        {bands.map((band, i) => (
+          <div
+            key={band.key}
+            // Never shrunk: the spring overshoots its width by design, and a
+            // band that gave way to it would drag the whole day back and forth.
+            className={cn('h-full shrink-0', i === last && 'rounded-r-full')}
+            style={{
+              // Only this meal's bands animate, and they animate from nothing:
+              // the day so far was already true when the card arrived.
+              width: `${((band.mine && !grown ? 0 : band.kcal) / scale) * 100}%`,
+              background: bandFill(band.mine, band.over),
+              transition: 'width var(--dur-spring) var(--ease-spring) 140ms',
+            }}
+          />
+        ))}
+
+        {/* Where the day was aiming, kept visible once it has been passed. */}
+        {over && (
+          <span
+            aria-hidden
+            className="absolute inset-y-0 w-0.5 bg-[var(--card)] opacity-70"
+            style={{ left: `${(target / scale) * 100}%` }}
+          />
+        )}
+      </div>
+
+      <div className="mt-2 flex items-baseline justify-between gap-3">
+        <span className="text-footnote text-muted-foreground flex min-w-0 items-center gap-1.5 font-semibold">
+          <span
+            aria-hidden
+            className="size-2.5 shrink-0 rounded-full"
+            style={{ background: bandFill(true, over && before >= target) }}
+          />
+          this meal
+        </span>
+        <span
+          className={cn(
+            'tnum text-footnote shrink-0 font-bold',
+            over ? 'text-foreground' : 'text-muted-foreground',
+          )}
+        >
+          {over
+            ? `${Math.abs(remaining).toLocaleString()} over ${dayWord(day.local_date)}`
+            : `${remaining.toLocaleString()} left ${dayWord(day.local_date)}`}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Green up to the target, ink past it; the day so far steps back behind both. */
+function bandFill(mine: boolean, over: boolean): string {
+  const colour = over ? 'var(--foreground)' : 'var(--calories)';
+  return mine ? colour : `color-mix(in oklch, ${colour}, transparent 68%)`;
+}
+
+/**
+ * Which day the bar is talking about.
+ *
+ * Almost always today, and saying so is worth the two words — the one time it
+ * is not is a meal logged onto yesterday, where a bar reading as today's would
+ * be a confident picture of the wrong day.
+ */
+function dayWord(isoDate: string): string {
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    now.getDate(),
+  ).padStart(2, '0')}`;
+  return isoDate === today ? 'today' : `on ${formatDate(isoDate)}`;
+}
+
+/**
+ * False for one frame, so that a width computed from it has somewhere to
+ * animate from. A card restored from history gets the same growth as a fresh
+ * one, which is the same bargain <Shell>'s landing animation already makes.
+ */
+function useGrown(): boolean {
+  const [grown, setGrown] = useState(false);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setGrown(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  return grown;
 }
 
 function ExerciseCard({ card }: { card: Extract<Card, { type: 'exercise' }> }) {
