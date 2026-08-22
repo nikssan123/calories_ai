@@ -878,64 +878,33 @@ platforms.
 
 ### What is left
 
-**On the Journal.** Six of the eight cards a reply can draw are ported — food (with the
-day-progress bar), exercise, weight, trend, day and plan — along with the `Sparkline` they
-two of them need. The two missing are `recipes` and `workout_prompt`, and they are missing
-for the same reason: the first is Cook's recipe card and the second is Exercise's set
-logger, both of which live in tabs still on the placeholder. They fall back to the summary
-chip, which says what happened without pretending to offer an action it cannot carry out.
+The port is finished: every screen the web has that belongs on a phone is here, and the app
+has been driven end to end against a live API — sign-up, verification, a streamed turn, a
+recipe run, the kitchen, the cards.
 
-**Confetti**, the app's only celebration, is the one animation that must not fire at all
-under reduced motion, since a loop has no end state worth arriving at. And
-**`entry-touched`**, the one-shot ring on a card the agent has just corrected, belongs with
-the cards.
+Four things remain, and none of them is a screen.
 
-**You — built.** Target card, the profile fields, goal, day boundary, diet rules, email
-preferences, sign-out and account deletion. Three controls had no RN equivalent to inherit:
-a `<select>` becomes a bottom sheet rather than a popover, because a menu the size of a
-fingertip floating beside its trigger is a pointer idiom; `<input type="date">` becomes the
-platform picker, in that same sheet on iOS and its own dialog on Android; and the switches
-are RN's own. **Appearance** is the one group left out — the app still follows the OS
-scheme only, so a three-state toggle would have nothing to toggle.
+**No toast.** The web leans on sonner throughout; here every failure is reported inline, in
+the card or the form it belongs to. That is arguably better on a phone — a message that
+floats in at the top and leaves again is the one piece of copy nobody can re-read — but it
+is a substitution rather than a port, and a few places would read better with one.
 
-**Progress and Exercise — built.** Both are reads, and between them they finished the
-`Sparkline`: Exercise needed the touch readout that Progress could do without, because a bar
-chart is the one place a single day is a thing you point at. It is a scrub rather than a
-hover — held while a finger is down, cleared on lift — since a finger cannot rest on a bar
-without also being a tap, and it covers what it points at.
+**Google sign-in** is absent. It is a chain of full-page navigations, which on a device
+means `expo-auth-session` and a redirect back through the app's scheme — real work sharing
+nothing with the web flow.
 
-**Cook — the browsing half, built.** The ask, the budget sentence, For you / Library, the
-tiles, and one `RecipeReader` serving both kinds of recipe: generated ones know which
-ingredients are missing from your kitchen, library ones have a photograph and a source to
-credit, and each passes what it has. "Make it fit me" bridges them.
+**`entry-touched`**, the one-shot ring on a card the agent has just corrected, is the last
+piece of the design language not drawn.
 
-Two adaptations rather than ports. The tiles are one column, not the web's grid of three —
-a tile narrowed to a third of a phone would have to drop the summary and the kitchen line,
-which are the two things worth choosing between. And the emoji stand-in is a short band
-instead of the photograph's 16:10: the web gives it that ratio to keep a grid row's rhythm,
-and with one tile per row there is no rhythm to keep, only 230 points of empty paper.
+**Nothing has been shipped.** There is an icon and a splash now, but no EAS build profile,
+no store listing, and no dev client — which the app will need the day it wants a native
+module Expo Go does not carry.
 
-What is left of Cook is everything that takes input: the kitchen list (`Pantry`), the shelf
-photograph (`FridgeScan`, another camera surface), a pasted recipe (`ImportRecipe`), the
-per-request filters (`Brief`), and the week's plan. The run works without any of them,
-because the pantry reaches the model from the server either way.
-
-Three things cut across every screen. There is no **toast**: the web leans on sonner
-throughout, and the ported screens report failures inline instead, which will not scale to
-the Journal. The **theme toggle** is three-state on the web (system, light, dark) and the app
-resolves the OS setting only — the seam is `Themed` in `app/_layout.tsx`, which is why every
-component reads its palette from context. And the **barcode scanner** is a rebuild, not a
-port: 709 lines of `BarcodeDetector` and `zxing-wasm`, both web-only, against `expo-camera`'s
-native scanner. The tuning constants in `lib/barcode.ts` survive; the implementation does not.
-
-Google sign-in is absent from the native login screen. It is a chain of full-page
-navigations, which on a device means `expo-auth-session` and a redirect back through the
-app's scheme — real work, sharing nothing with the web flow, so it is its own piece rather
-than a line in the port.
-
-Nothing has been done about shipping: there is no `assets/` directory, so no app icon and no
-splash image — `app.json` names the background colours and nothing else — and no EAS build or
-store submission config.
+Two notes for whoever tests this next. Verification is not optional and not cosmetic: the
+API refuses every route outside `/auth/` with a 403 until the address is confirmed, so a
+fresh account that skips it sees six blank screens rather than a degraded app. And running
+the API with `RESEND_API_KEY` unset is a supported mode that logs the mail instead of
+sending it, which is the only sane way to exercise sign-up against a real database.
 
 ## Deploying to a server
 
