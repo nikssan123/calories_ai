@@ -369,9 +369,7 @@ export default function CookScreen() {
             canCook={!spent && !thinking}
             onError={setError}
           />
-          <Text style={{ color: colors.mutedForeground }}>·</Text>
           <BriefToggle value={brief} onPress={() => setBriefOpen(true)} />
-          <Text style={{ color: colors.mutedForeground }}>·</Text>
           <Pressable
             onPress={() => setImportOpen(true)}
             disabled={spent || thinking}
@@ -393,7 +391,6 @@ export default function CookScreen() {
             </Svg>
             <Text style={[t.footnote, { color: colors.mutedForeground }]}>paste one</Text>
           </Pressable>
-          <Text style={{ color: colors.mutedForeground }}>·</Text>
           <Pressable
             onPress={() => router.push('/plan')}
             accessibilityRole="button"
@@ -656,7 +653,16 @@ const styles = StyleSheet.create({
   chipInner: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8 },
   chipGlyph: { fontSize: 14, lineHeight: 18 },
   ask: { gap: 10, marginTop: 4 },
-  ways: { flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' },
+  /*
+   * No separators between these.
+   *
+   * The web sets a `·` between each, which is fine on one line and wrong the
+   * moment the row wraps — a dot is a sibling like any other, so a wrap can
+   * leave one stranded at the end of a line with nothing after it to separate.
+   * Four chips at a phone's width wrap every time. Spacing does the same job
+   * and cannot dangle.
+   */
+  ways: { flexDirection: 'row', alignItems: 'center', columnGap: 10, rowGap: 2, flexWrap: 'wrap' },
   way: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6 },
   sheetFoot: { borderTopWidth: 2, padding: 12 },
   importBody: { paddingHorizontal: 20, paddingVertical: 12, gap: 10 },

@@ -791,9 +791,14 @@ const styles = StyleSheet.create({
   heightPart: { width: 88 },
   dateField: {
     height: 40,
+    // A width, so an unset date is still shaped like something you can tap.
+    // Hugging its content, an empty one collapsed to a stray dash in a tiny
+    // oval — the exact failure the field treatment exists to prevent.
+    minWidth: 140,
     borderRadius: 999,
     borderWidth: 2,
     paddingHorizontal: 14,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   goals: { flexDirection: 'row', gap: 8, padding: 8 },

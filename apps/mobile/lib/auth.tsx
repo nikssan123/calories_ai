@@ -34,6 +34,11 @@ interface AuthValue {
   signupAllowed: boolean;
   /** False on a brand-new server, so the form can open on "create account". */
   hasAccounts: boolean;
+  /**
+   * Whether the address has been proved. Load-bearing rather than cosmetic:
+   * the API answers 403 to everything outside `/auth/` until it is true.
+   */
+  emailVerified: boolean;
   /** Resolved once at launch; screens render only after it is false. */
   loading: boolean;
   refresh: () => Promise<void>;
@@ -49,6 +54,7 @@ const AuthContext = createContext<AuthValue>({
   profile: null,
   signupAllowed: false,
   hasAccounts: false,
+  emailVerified: false,
   loading: true,
   refresh: async () => {},
   adoptProfile: () => {},
@@ -116,6 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       profile: status?.profile ?? null,
       signupAllowed: status?.signup_allowed ?? false,
       hasAccounts: status?.has_accounts ?? false,
+      emailVerified: status?.profile?.email_verified ?? false,
       loading,
       refresh,
       adoptProfile,

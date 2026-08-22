@@ -100,16 +100,19 @@ function Themed() {
 }
 
 /**
- * The one redirect a native app needs.
+ * Two boundaries, not one.
  *
- * The web's gate defends a URL bar: it has to hold unauthenticated visitors on
- * public routes and keep an unverified account at `/verify`, because anyone can
- * type any address. Nothing here is reachable by typing, so the only question
- * is whether there is a session — and the answer moves exactly one boundary,
- * between `login` and the tabs.
+ * An earlier version of this reasoned that the web's gate exists to defend a
+ * URL bar — anyone can type `/today` — and that since nothing here is reachable
+ * by typing, the only question is whether there is a session. Half right, and
+ * the wrong half was expensive: verification is not a URL concern at all. The
+ * API refuses *every* route outside `/auth/` with a 403 until the address is
+ * confirmed, so an app that walked an unverified account into the tabs showed
+ * six blank screens and a status bar stuck on its skeleton. Found by signing a
+ * fresh account in against the real server, which is the only place it shows.
  */
 function Gate() {
-  const { authenticated, loading } = useAuth();
+  const { authenticated, emailVerified, loading } = useAuth();
   const colors = useColors();
 
   useEffect(() => {
@@ -141,7 +144,11 @@ function Gate() {
         * component that has not mounted yet — and it is a real race, not just a
         * warning: the tab bar gets a frame before the redirect lands.
         */}
-      <Stack.Protected guard={authenticated}>
+      <Stack.Protected guard={authenticated && !emailVerified}>
+        <Stack.Screen name="verify" />
+      </Stack.Protected>
+
+      <Stack.Protected guard={authenticated && emailVerified}>
         <Stack.Screen name="(tabs)" />
         {/*
           * History sits outside the tabs, as it does on the web: it is reached
