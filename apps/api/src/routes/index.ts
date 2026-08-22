@@ -563,7 +563,8 @@ export async function registerRoutes(app: FastifyInstance) {
       profile.sex !== null &&
       profile.birth_date !== null &&
       profile.height_cm !== null &&
-      profile.goal !== null;
+      profile.goal !== null &&
+      profile.units !== null;
     if (complete && !profile.is_setup_complete) await markOnboarded(userId);
 
     return getUser(userId);
