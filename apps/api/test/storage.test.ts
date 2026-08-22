@@ -213,6 +213,32 @@ describe('configuration', () => {
     );
   });
 
+  /**
+   * The paste Cloudflare invites. Its bucket settings page labels
+   * `https://<account>.r2.cloudflarestorage.com/<bucket>` as the "S3 API" URL,
+   * so the obvious copy is one segment longer than this wants — and left alone
+   * it would ask for `meals/meals/<key>` and 404 every photo on a path nobody
+   * wrote.
+   */
+  it('drops the bucket when the endpoint was copied from R2 with it attached', () => {
+    const config = storageEnv({ ...FULL, S3_ENDPOINT: `${FULL.S3_ENDPOINT}/meals` } as never);
+    expect(config!.endpoint).toBe('https://acct123.r2.cloudflarestorage.com');
+    expect(objectUrl(config!, 'a.jpg')).toBe(
+      'https://acct123.r2.cloudflarestorage.com/meals/a.jpg',
+    );
+  });
+
+  it('drops it with a trailing slash too, which is the other likely paste', () => {
+    const config = storageEnv({ ...FULL, S3_ENDPOINT: `${FULL.S3_ENDPOINT}/meals/` } as never);
+    expect(config!.endpoint).toBe('https://acct123.r2.cloudflarestorage.com');
+  });
+
+  /** A path that merely starts with the name is somebody's deliberate prefix. */
+  it('leaves a path that only resembles the bucket name alone', () => {
+    const config = storageEnv({ ...FULL, S3_ENDPOINT: `${FULL.S3_ENDPOINT}/meals-archive` } as never);
+    expect(config!.endpoint).toBe('https://acct123.r2.cloudflarestorage.com/meals-archive');
+  });
+
   it('is null when none of it is set, which is local disk', () => {
     expect(storageEnv({} as never)).toBeNull();
   });

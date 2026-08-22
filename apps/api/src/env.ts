@@ -343,7 +343,42 @@ export function storageEnv(source: NodeJS.ProcessEnv): StorageEnv | null {
     return null;
   }
 
-  return { endpoint, bucket, accessKeyId, secretAccessKey, region: source.S3_REGION?.trim() || 'auto' };
+  return {
+    endpoint: withoutBucket(endpoint, bucket),
+    bucket,
+    accessKeyId,
+    secretAccessKey,
+    region: source.S3_REGION?.trim() || 'auto',
+  };
+}
+
+/**
+ * Drops a trailing `/<bucket>` from the endpoint, because Cloudflare hands you
+ * one that has it.
+ *
+ * The R2 bucket settings page labels
+ * `https://<account>.r2.cloudflarestorage.com/<bucket>` as the "S3 API" URL,
+ * which is the obvious thing to paste here and is one segment longer than this
+ * wants. Left alone it asks for `<bucket>/<bucket>/<key>` and every photo 404s
+ * on a path nobody wrote — a configuration mistake wearing the costume of a
+ * missing file.
+ *
+ * Only an exact match of the whole path is removed. A prefix that merely starts
+ * with the bucket's name is somebody's deliberate path and is left alone.
+ */
+function withoutBucket(endpoint: string, bucket: string): string {
+  try {
+    const url = new URL(endpoint);
+    if (url.pathname === `/${bucket}`) {
+      url.pathname = '';
+      return url.toString().replace(/\/+$/, '');
+    }
+  } catch {
+    // Not parseable as a URL. Let it through — the store's own error on the
+    // first request says far more about a malformed endpoint than anything
+    // guessable from here.
+  }
+  return endpoint;
 }
 
 function googleEnv(source: NodeJS.ProcessEnv, appUrl: string): GoogleEnv | null {
