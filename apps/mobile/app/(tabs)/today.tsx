@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Polyline } from 'react-native-svg';
 import type { DaySummary, ExerciseEntry, FoodEntry, Meal } from '@ct/shared';
@@ -16,10 +17,14 @@ import { CalorieRing } from '@/components/CalorieRing';
 import { DietQuality } from '@/components/DietQuality';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { MacroBars } from '@/components/MacroBars';
+import { RepeatMeals } from '@/components/RepeatMeals';
 import { Skeleton } from '@/components/Skeleton';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
+
+/** The `date` the calendar links here with. Anything else is ignored. */
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const MEAL_ORDER: Meal[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 const MEAL_LABEL: Record<Meal, string> = {
@@ -41,10 +46,26 @@ export default function TodayScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const units = useUnits();
+  const router = useRouter();
+
+  const params = useLocalSearchParams<{ date?: string }>();
+  const requested = typeof params.date === 'string' && ISO_DATE.test(params.date) ? params.date : null;
 
   const [day, setDay] = useState<DaySummary | null>(null);
-  /** The date being shown, or null for "whatever the server calls today". */
-  const [date, setDate] = useState<string | null>(null);
+  /*
+   * The date being shown, or null for "whatever the server calls today". Held
+   * as a date rather than an offset so History can link straight to a day.
+   *
+   * Seeded from the param, and then re-applied whenever the param *changes*.
+   * The web can seed this once at render because arriving at `/today?date=…`
+   * mounts the page; here Today is a tab that is already mounted and stays
+   * mounted, so an initialiser alone would read the param exactly once — at
+   * launch, when there is never one — and every later link from the calendar
+   * would land on a screen that ignored it. Guarded on the previous value so
+   * that stepping days afterwards is not dragged back by the stale param.
+   */
+  const [date, setDate] = useState<string | null>(requested);
+  const appliedParam = useRef(requested);
   const [today, setToday] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -78,6 +99,12 @@ export default function TodayScreen() {
       if (seq === latest.current) setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (requested === appliedParam.current) return;
+    appliedParam.current = requested;
+    if (requested) setDate(requested);
+  }, [requested]);
 
   useEffect(() => {
     void load(date);
@@ -157,17 +184,23 @@ export default function TodayScreen() {
     >
       <View style={styles.header}>
         <StepButton direction="back" onPress={() => step(-1)} />
-        <View style={styles.headerLabel}>
+        {/* The date is the way to the calendar, as on the web — the second line
+            says so on any day but today, where it is spent on the date itself. */}
+        <Pressable
+          onPress={() => router.push('/history')}
+          accessibilityRole="button"
+          accessibilityLabel="View calendar"
+          style={({ pressed }) => [styles.headerLabel, { opacity: pressed ? 0.6 : 1 }]}
+        >
           <Text style={[t.title2, styles.centred, { color: colors.foreground }]}>
             {isToday ? 'Today' : formatDay(day?.local_date)}
           </Text>
           {/* Reserved even when empty: without it the header jumps a line every
-              time you step off today. History is not ported, so the web's
-              "View calendar" has nothing to say here yet. */}
+              time you step off today. */}
           <Text style={[t.footnoteSemibold, styles.centred, { color: colors.mutedForeground }]}>
-            {isToday && day ? formatDay(day.local_date) : ' '}
+            {isToday && day ? formatDay(day.local_date) : 'View calendar'}
           </Text>
-        </View>
+        </Pressable>
         <StepButton direction="forward" onPress={() => step(1)} disabled={isToday} />
       </View>
 
@@ -295,6 +328,9 @@ export default function TodayScreen() {
               </InsetRow>
             </InsetGroup>
           )}
+
+          {/* Repeating logs at the current time, so it only belongs on today. */}
+          {isToday && <RepeatMeals onLogged={() => void load(null)} />}
 
           {error && (
             <Text style={[t.footnoteSemibold, styles.centred, { color: colors.destructive }]}>

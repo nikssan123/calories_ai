@@ -130,6 +130,13 @@ function Gate() {
         */}
       <Stack.Protected guard={authenticated}>
         <Stack.Screen name="(tabs)" />
+        {/*
+          * History sits outside the tabs, as it does on the web: it is reached
+          * from the date at the top of Today and nowhere else. A seventh tab
+          * would put a calendar in the thumb's way all day for something used
+          * once a week.
+          */}
+        <Stack.Screen name="history" options={{ animation: 'slide_from_right' }} />
       </Stack.Protected>
       <Stack.Protected guard={!authenticated}>
         <Stack.Screen name="login" />

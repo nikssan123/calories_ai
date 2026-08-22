@@ -722,8 +722,13 @@ more than the turn costs.
 ## Migrating to React Native
 
 `apps/mobile` exists. It boots on Expo SDK 57, signs in against the API as it stands, and
-renders Today from live data; the other five tabs are named placeholders. `pnpm dev:mobile`
-starts the packager.
+renders Today and History from live data; the other five tabs are named placeholders.
+`pnpm dev:mobile` starts the packager. It has been run on both an iOS simulator and an
+Android emulator, which is worth doing early and often — the worst bugs so far were all
+invisible to `tsc` and to the eye reading the diff: a scene painted React Navigation's grey
+instead of the app's cream, numerals cropped by a `leading-none` that CSS lets overflow and
+RN clips, and a grid of day cells collapsed to nothing because `flex: 1` inside a container
+of undefined height is zero.
 
 The API and both shared packages are untouched by it, which was the claim this whole
 arrangement was making. The one thing that moved is `foodEmoji` — pure presentation, needed
@@ -835,6 +840,18 @@ the LAN needs the machine's address, never `localhost`, which on a phone resolve
 phone. `lib/api.ts` falls back to the packager's own host for exactly that reason: it is by
 definition the machine you ran `expo start` on. `EXPO_PUBLIC_API_URL` overrides it.
 
+**History — built.** It sits outside the tabs, as it does on the web: reached by tapping the
+date at the top of Today, and nowhere else. A seventh tab would put a calendar in the thumb's
+way all day for something opened once a week. Two things about the port are worth knowing.
+The web pairs every cell with a hover card, which is *dropped* rather than translated — a
+mouse can inspect a day without choosing it and a finger cannot, so tapping selects, and the
+panel below the grid already says everything the hover card said. And the five day-fills are
+`color-mix(in oklch, …)` on the web, which RN has no equivalent for; they are precomputed in
+`app/history.tsx` by the same polar interpolation CSS Color 4 specifies. In dark mode that
+scale drifts toward olive — dark's `--card` is a warm brown with real chroma, so mixing a
+green into it moves the hue as well as the lightness. That is what the browser renders today,
+so it is what the app renders; if it is a bug it is the web's, and both have to change.
+
 ### What is left
 
 The five placeholder tabs, in the order they are worth doing: **Journal** first, because it
@@ -842,16 +859,33 @@ is the product — and the largest, since it carries the composer, the streaming
 `expo-image-picker` in place of `<input type="file">`. Then **You**, which holds onboarding
 and the unit switch. Then Progress, Exercise and Cook, which are all reads.
 
+The Journal port carries one thing that is not a component. `chatStream` reads `res.body` as
+a `ReadableStream`, and React Native's built-in `fetch` does not expose one. The fix is
+`expo/fetch` passed as the `fetchImpl` the client already accepts, so it is a line rather
+than a rewrite — but nothing about the Journal works until it is done.
+
 Two smaller pieces have no screen of their own and are easy to forget. **Confetti** — the
 app's only celebration, on the macros — is the one animation that must not fire at all
 under reduced motion, since a loop has no end state worth arriving at. And **`entry-touched`**,
 the one-shot ring on a card the agent has just corrected, needs the overlay `View` described
 above; it belongs to the Journal port, because that is where corrections arrive.
 
+Three things cut across every screen. There is no **toast**: the web leans on sonner
+throughout, and the ported screens report failures inline instead, which will not scale to
+the Journal. The **theme toggle** is three-state on the web (system, light, dark) and the app
+resolves the OS setting only — the seam is `Themed` in `app/_layout.tsx`, which is why every
+component reads its palette from context. And the **barcode scanner** is a rebuild, not a
+port: 709 lines of `BarcodeDetector` and `zxing-wasm`, both web-only, against `expo-camera`'s
+native scanner. The tuning constants in `lib/barcode.ts` survive; the implementation does not.
+
 Google sign-in is absent from the native login screen. It is a chain of full-page
 navigations, which on a device means `expo-auth-session` and a redirect back through the
 app's scheme — real work, sharing nothing with the web flow, so it is its own piece rather
 than a line in the port.
+
+Nothing has been done about shipping: there is no `assets/` directory, so no app icon and no
+splash image — `app.json` names the background colours and nothing else — and no EAS build or
+store submission config.
 
 ## Deploying to a server
 

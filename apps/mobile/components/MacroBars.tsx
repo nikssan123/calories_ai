@@ -128,7 +128,15 @@ const styles = StyleSheet.create({
   emoji: { fontSize: 13, lineHeight: 15 },
   label: { flexShrink: 1 },
   figureRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  figure: { fontSize: 16, lineHeight: 16 },
+  /*
+   * `leading-none` on the web, but not spelled 16/16 here.
+   *
+   * CSS lets a glyph overflow a short line box; React Native clips it. The
+   * display face is Baloo, whose natural line box is about 1.5em, so a line
+   * height equal to the font size cropped the tops off every figure on the
+   * screen. This is the tightest leading that still draws the whole numeral.
+   */
+  figure: { fontSize: 16, lineHeight: 20 },
   bar: {
     height: 10,
     borderRadius: 999,

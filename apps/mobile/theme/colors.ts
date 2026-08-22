@@ -24,6 +24,8 @@ export interface Palette {
   muted: string;
   /** `bg-muted/40` — the wash under an expanded entry, not a second surface. */
   mutedWash: string;
+  /** `bg-muted/60` — a text field sunk into a card, one step darker than the wash. */
+  mutedField: string;
   mutedForeground: string;
   accent: string;
   accentForeground: string;
@@ -66,6 +68,7 @@ export const light: Palette = {
   secondaryForeground: '#31261e',
   muted: '#f3e8d9',
   mutedWash: 'rgba(243, 232, 217, 0.4)',
+  mutedField: 'rgba(243, 232, 217, 0.6)',
   mutedForeground: '#77685b',
   accent: '#f5ebdd',
   accentForeground: '#31261e',
@@ -105,6 +108,7 @@ export const dark: Palette = {
   secondaryForeground: '#f7efe6',
   muted: '#322822',
   mutedWash: 'rgba(50, 40, 34, 0.4)',
+  mutedField: 'rgba(50, 40, 34, 0.6)',
   mutedForeground: '#a79a8d',
   accent: '#322822',
   accentForeground: '#f7efe6',

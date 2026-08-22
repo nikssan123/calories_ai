@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -29,7 +29,7 @@ import { font, type as t, useColors } from '@/theme';
 export default function LoginScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { adoptSession, hasAccounts, signupAllowed, refresh } = useAuth();
+  const { adoptSession, hasAccounts, signupAllowed, refresh, loading } = useAuth();
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
@@ -38,11 +38,24 @@ export default function LoginScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Only a server with no accounts at all opens on "create account"; otherwise a
-  // returning user lands on the sign-in form.
+  /*
+   * Only a server with no accounts at all opens on "create account"; otherwise a
+   * returning user lands on the sign-in form.
+   *
+   * Decided once, and only after the status has actually arrived. This screen
+   * mounts behind the splash while `me()` is still in flight, and `hasAccounts`
+   * reads false until it lands — so a version of this that only ever flipped
+   * *toward* signup pinned every launch to "Create your account" against a
+   * server full of accounts, with nothing to flip it back. Deciding once also
+   * keeps a later `refresh()` from swapping the form out from under someone who
+   * is halfway through typing into it.
+   */
+  const decided = useRef(false);
   useEffect(() => {
-    if (!hasAccounts) setMode('signup');
-  }, [hasAccounts]);
+    if (loading || decided.current) return;
+    decided.current = true;
+    setMode(hasAccounts ? 'signin' : 'signup');
+  }, [loading, hasAccounts]);
 
   const signup = mode === 'signup';
 
