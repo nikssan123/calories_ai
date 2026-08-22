@@ -279,33 +279,64 @@ echo
 say "verifying"
 FAIL=0
 
-for c in calorytracker-db calorytracker-api calorytracker-web; do
+# `db` and `web` are one container each and still carry a `container_name`.
+# `api` deliberately does not — it is scaled, and Docker will not give two
+# containers one name — so it is found by service instead.
+for c in calorytracker-db calorytracker-web; do
     STATE="$(docker inspect -f '{{.State.Status}}' "$c" 2>/dev/null || echo missing)"
     [[ "$STATE" == running ]] || { warn "$c is $STATE"; FAIL=1; }
 done
 
-# The API reports which credential source the agent resolved. Give it a few
-# seconds: migrations run before the server binds.
-HEALTH=""
-for _ in $(seq 1 15); do
-    HEALTH="$($COMPOSE exec -T web node -e \
-        'fetch(process.env.API_INTERNAL_URL+"/health").then(r=>r.text()).then(t=>console.log(t)).catch(()=>process.exit(1))' \
-        2>/dev/null || true)"
-    [[ -n "$HEALTH" ]] && break
-    sleep 2
-done
+API_IDS=()
+while read -r id; do
+    [[ -n "$id" ]] && API_IDS+=("$id")
+done < <($COMPOSE ps -q api 2>/dev/null || true)
 
-if [[ -n "$HEALTH" ]]; then
-    echo "    api         $HEALTH"
-    case "$HEALTH" in
-        *claude-code-subscription*|*anthropic-api-key*) ;;
-        *) warn "the agent has no credentials — chat will 503 until you run:
-      cd $REPO && $COMPOSE run --rm api claude auth login"; FAIL=1 ;;
-    esac
+if (( ${#API_IDS[@]} == 0 )); then
+    warn "no api container is running"; FAIL=1
 else
-    warn "API did not answer /health"; FAIL=1
+    say "api replicas: ${#API_IDS[@]}"
 fi
 
+# Every replica is asked, on its own loopback, rather than one request through
+# the `api` alias: that alias round-robins, so a single probe can come back
+# healthy while the other replica is crash-looping on boot and taking half the
+# traffic with it. This is the check that would have caught the migration race.
+#
+# The API reports which credential source the agent resolved. Give each a few
+# seconds — migrations run before the server binds, and with two replicas one of
+# them waits on the other's migration lock before it even gets that far.
+NO_CREDS=0
+for id in "${API_IDS[@]}"; do
+    NAME="$(docker inspect -f '{{.Name}}' "$id" 2>/dev/null | sed 's|^/||')"
+    NAME="${NAME:-${id:0:12}}"
+
+    HEALTH=""
+    for _ in $(seq 1 15); do
+        HEALTH="$(docker exec "$id" node -e \
+            'fetch("http://127.0.0.1:4000/health").then(r=>r.text()).then(t=>console.log(t)).catch(()=>process.exit(1))' \
+            2>/dev/null || true)"
+        [[ -n "$HEALTH" ]] && break
+        sleep 2
+    done
+
+    if [[ -n "$HEALTH" ]]; then
+        printf '    %-22s %s\n' "$NAME" "$HEALTH"
+        case "$HEALTH" in
+            *claude-code-subscription*|*anthropic-api-key*) ;;
+            *) NO_CREDS=1; FAIL=1 ;;
+        esac
+    else
+        warn "$NAME did not answer /health"; FAIL=1
+    fi
+done
+
+if (( NO_CREDS )); then
+    warn "the agent has no credentials — chat will 503 until you run:
+      cd $REPO && $COMPOSE run --rm api claude auth login"
+fi
+
+# By service, so this covers every replica at once.
 if $COMPOSE logs --since 2m api 2>/dev/null | grep -qiE '\bfatal\b|unhandled'; then
     warn "errors in recent API logs:"
     $COMPOSE logs --since 2m api | grep -iE '\bfatal\b|unhandled' | tail -3 >&2

@@ -13,10 +13,58 @@ export interface MigrationResult {
 }
 
 /**
+ * The lock every booting process queues on before it touches the schema.
+ *
+ * Migrations run on container boot — see `docker/api.Dockerfile` — so with two
+ * replicas the same image starts twice at once and both processes read an empty
+ * `schema_migrations`, both decide migration N is unapplied, and both run it.
+ * One commits; the other fails, takes the CMD's `&&` chain down with it and
+ * restarts. It recovers on the retry, which is precisely what makes it worth
+ * fixing now: the symptom is a replica that flaps once per deploy rather than
+ * one that stays down, and that is the kind of thing a deploy learns to ignore.
+ *
+ * Blocking rather than `pg_try_advisory_lock`, which is the opposite of the
+ * choice `job-lock.ts` makes, for the opposite reason: a background pass that
+ * is already running wants skipping, but a replica that skipped its migrations
+ * would go on to serve traffic against a schema it does not know is current.
+ * The second replica waits the length of the migration and then finds nothing
+ * to do.
+ *
+ * `hashtext` matches how `job-lock.ts` derives its keys — advisory locks share
+ * one bigint namespace per database, so the two must not collide by accident.
+ */
+const MIGRATION_LOCK = 'schema-migrations';
+
+/**
  * Applies every unapplied migration, each in its own transaction. Exported so
  * the test suite can build a schema without shelling out.
+ *
+ * Everything after the lock is inside it, the read of `schema_migrations`
+ * included: reading which migrations are applied *before* waiting would answer
+ * the question with the state from before the other replica's work, which is
+ * the race this is here to close. Even the `CREATE TABLE IF NOT EXISTS` belongs
+ * inside — run concurrently it does not merely no-op, it can fail on a
+ * duplicate-key error against the system catalogue.
  */
 export async function runMigrations(target: pg.Pool = pool): Promise<MigrationResult> {
+  const lock = await target.connect();
+  try {
+    await lock.query('SELECT pg_advisory_lock(hashtext($1)::bigint)', [MIGRATION_LOCK]);
+    try {
+      return await applyMigrations(target);
+    } finally {
+      // An advisory lock is held by the session, so a connection returned to
+      // the pool still holding one would keep every other replica waiting until
+      // the pool happened to discard it.
+      await lock.query('SELECT pg_advisory_unlock(hashtext($1)::bigint)', [MIGRATION_LOCK]);
+    }
+  } finally {
+    lock.release();
+  }
+}
+
+/** The migration run itself, with `MIGRATION_LOCK` already held. */
+async function applyMigrations(target: pg.Pool): Promise<MigrationResult> {
   await target.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       name TEXT PRIMARY KEY,

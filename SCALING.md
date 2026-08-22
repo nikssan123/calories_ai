@@ -56,9 +56,19 @@ normalisation added the same day is the only reason this deploy worked rather th
 every photo on `day-so-far/day-so-far/…` — a fix written an hour before the mistake it
 prevents, which is the sort of luck worth turning into a note.
 
-**Left:** the deploy topology, and Stage 5 — which the rate-limit question, now answered,
-demotes from prerequisite to optimisation. Each is marked in place, and the ordered list
-is at the end.
+**Deploy topology written, 2026-08-22.** `api` is `deploy.replicas: 2` in
+`docker-compose.prod.yml` and no longer carries a `container_name`. Writing it turned up
+one thing this document had called a pure deploy change and was not: migrations run on
+boot in every container, and the runner had no lock, so two replicas starting together
+both read an empty ledger and both applied the same migration. The loser took its boot
+chain down with it and restarted — recovering on the retry, which is what made it worth
+finding now rather than later, because a replica that flaps once per deploy is a symptom
+a deploy learns to ignore. `src/migrate.ts` now takes a blocking advisory lock and reads
+the ledger inside it; `test/migrate.test.ts` boots two pools at once and fails without it.
+
+**Left:** running it — the topology is in the file, but the file has not been applied to
+the host. And Stage 5, which the rate-limit question, now answered, demotes from
+prerequisite to optimisation. Each is marked in place, and the ordered list is at the end.
 
 ## The short version
 
@@ -99,8 +109,10 @@ reads the column, so this is not a pin on the product and is not going to become
 The two that genuinely remained were real for both lanes and were what Stage 1 was
 about: meal photos written to a local volume, and `@fastify/rate-limit` counting in
 process memory. Both are now configurable — a bucket and a Redis respectively, each
-unset by default — so the last one standing is `container_name` in the compose file,
-which means `--scale` will not even start.
+unset by default. The last one standing was `container_name` in the compose file, which
+meant `--scale` would not even start; it is gone, and the service declares
+`deploy.replicas: 2` instead. Nothing in this repository now pins the product's lane to
+one container.
 
 **The weekly review.** `runDueReviews` in `scheduler.ts` walks every active user
 serially, generating each review on Opus. At a few hundred users in one timezone this
@@ -554,7 +566,7 @@ and none of it applies there — which is the point of keeping the two apart.
 
 | Users | What is required | State |
 |---|---|---|
-| ~2,000 | Stage 0. Two replicas. Nothing else. | Code and stores done and deployed; replicas need starting |
+| ~2,000 | Stage 0. Two replicas. Nothing else. | Code, stores and compose done; the two-replica deploy has not been run on the host |
 | ~10,000 | Stages 1–3. Not Stage 5 — cache reads turned out not to count against the ceiling at all. | Stage 1 done; Stage 2 all but the token bucket; Stage 3's guard done, the worker and the Batch API open |
 | ~100,000 | All of it, pgbouncer, and a negotiated rate-limit tier. | open |
 
@@ -565,9 +577,10 @@ it buys requests, money and latency instead.
 
 ### What is left, in the order it wants doing
 
-1. **Start the second replica** — moved up from the note below, because answering the
-   rate-limit question left nothing above it. It is the only item here that changes what
-   the deployment can survive, and every store a request touches is already shared.
+1. **Start the second replica** — *the code and the compose file are done; what is left
+   is the deploy.* Moved up from the note below, because answering the rate-limit question
+   left nothing above it. It is the only item here that changes what the deployment can
+   survive, and every store a request touches is already shared.
 2. **Stage 5.** An optimisation, at the priority the answered question assigns it: it
    buys requests, money and latency, and no headroom that is not already there. Worth
    doing before six figures of users, not before the replica.
@@ -578,16 +591,33 @@ it buys requests, money and latency instead.
    The wrinkle is that the model needs the bytes, so the turn either fetches them back
    or passes the presigned URL as an image source.
 
-What step 1 involves, since it is a deploy rather than a change to this repository: drop
-`container_name` from `docker-compose.prod.yml`, `--scale api=2`, and check that a photo
-taken on one replica renders on the other — which it will, because neither of them holds
-it. Sessions, photos and counters all live outside the container.
+What is left of step 1, now that the file says two: `docker compose -f
+docker-compose.prod.yml up -d --build` on the host, then check that a photo taken on one
+replica renders on the other — which it will, because neither of them holds it. Sessions,
+photos and counters all live outside the container. Worth confirming in this order:
+
+- `S3_*` is set in the host's `.env` before the second container ever starts. It has been
+  since the Stage 1 deploy, but a replica booting without it writes photos to its own
+  volume, and those are a 404 from the other replica for as long as they exist.
+- `docker compose ps` shows `calorytracker-api-1` and `-2`, both healthy. If only one came
+  up, the `container_name` is back.
+- The logs of exactly one of them show migrations applied and the other show
+  `database already up to date`. That is the lock working; both claiming to have applied
+  the same migration would mean it is not.
+- A photo uploaded through the app renders after a reload, several times over — the alias
+  round-robins, so a few reloads is what puts the request on the other replica.
+
+The row in the table above stays at *replicas need starting* until that has been done on
+the host, not when this file changed.
 
 Two smaller things worth doing whenever their file is next open, neither urgent:
 
 - **Split the compose files by lane.** The `claude-home` volume, `.agent-workspace` and
   the memory cap are the subscription lane's; a deployment running `anthropic-api`
-  should not carry a volume for a binary it never spawns.
+  should not carry a volume for a binary it never spawns. Slightly more pressing since
+  the replica count went to two: both replicas mount the same `claude-home`, so the
+  subscription lane has to be pinned back to one replica by hand — there is a comment
+  saying so on `deploy.replicas`, which is a worse mechanism than two files.
 - **Fix the auth gate in `routes/index.ts` and `scheduler.ts`.** Both still ask
   `hasSubscriptionAuth() || ANTHROPIC_API_KEY` before admitting a turn, which is a
   Claude-shaped question asked on behalf of whichever provider is configured — it

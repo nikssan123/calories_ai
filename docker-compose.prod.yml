@@ -91,11 +91,36 @@ services:
       context: .
       dockerfile: docker/api.Dockerfile
     image: calorytracker-api:latest
-    container_name: calorytracker-api
     restart: unless-stopped
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_healthy }
+
+    # Two of them. Deliberately in the file rather than left to `--scale api=2`
+    # on the command line, because a topology that only exists in somebody's
+    # shell history is one `up -d` away from silently becoming one replica again.
+    #
+    # This is safe only because the API keeps nothing on the container: sessions
+    # are rows, rate-limit counters are in Redis, and photos are in the bucket —
+    # if S3_* is unset they land on a per-container volume instead, and a photo
+    # taken on one replica 404s from the other. Set the bucket before scaling.
+    #
+    # No `container_name` above for the same reason: Docker will not create two
+    # containers with one name, and naming this service pins it to one replica.
+    # `calorytracker-api` survives as the network alias below, which is what
+    # Caddy and the web container actually address — both replicas answer to it
+    # and Docker's DNS round-robins between them.
+    #
+    # The scheduler runs in both and that is fine: each hourly pass takes a
+    # Postgres advisory lock, so exactly one replica runs it. Migrations do the
+    # same on boot — see `src/migrate.ts` — so the two starting together queue
+    # rather than race.
+    #
+    # On the subscription lane (AI_PROVIDER=anthropic) leave this at 1. Both
+    # replicas would mount the same `claude-home` volume and spawn their own
+    # `claude` against one set of credentials, which is not a supported shape.
+    deploy:
+      replicas: 2
 
     environment:
       TZ: ${TZ:-Europe/Sofia}
@@ -191,6 +216,10 @@ services:
 
     # Claude Code can spike well past its usual footprint. Without a cap an
     # unlucky spike gets a neighbouring project's container OOM-killed instead.
+    #
+    # Per replica, so budget it twice against the host. It is sized for the
+    # subscription lane's subprocess; the API lane spawns nothing and runs in a
+    # fraction of it, which is worth remembering if this host ever gets tight.
     mem_limit: 2g
     memswap_limit: 2g
     security_opt: [no-new-privileges:true]

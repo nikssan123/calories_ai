@@ -188,8 +188,24 @@ Redis is used for rate-limit counters and nothing else — sessions are in Postg
 per-account turn lease is a column, and the scheduler takes a Postgres advisory lock. If
 Redis is unreachable the limiter fails open rather than failing requests.
 
-Photos are still written to a local volume, so that is the remaining thing to move before
-replicas make sense. See [SCALING.md](SCALING.md).
+Photos were the other thing pinning the API to one container, and they are no longer:
+with `S3_*` configured they go to a bucket, and a photo taken on one replica is readable
+from the other. Leave those unset and they land on a per-container volume instead — which
+works perfectly for one replica and not at all for two, where it is a permanent 404 from
+whichever container did not take the photo. So the bucket comes before the second replica,
+not after it.
+
+Nothing else on a request's path is held in the container: sessions are rows, the turn
+lease is a column, counters are in Redis, and the hourly scheduler runs in every replica
+but takes a Postgres advisory lock, so one of them does the work. Migrations run on boot
+in every replica and take the same kind of lock, so two containers starting together queue
+rather than race.
+
+`docker-compose.prod.yml` therefore runs `api` at `deploy.replicas: 2` — declared in the
+file rather than passed as `--scale`, so it survives an `up -d` that forgot the flag. Both
+replicas answer to the `calorytracker-api` network alias and Docker's DNS round-robins
+between them, which is why that service is the one with no `container_name`. See
+[SCALING.md](SCALING.md).
 
 ### Adding another provider
 

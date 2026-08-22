@@ -74,6 +74,60 @@ describe('runMigrations', () => {
       await cleanup.end();
     }
   });
+
+  it('lets two replicas boot at once — one migrates, the other waits and finds nothing', async () => {
+    const url = new URL(env.databaseUrl);
+    const database = `${url.pathname.slice(1)}_concurrent`;
+
+    const adminUrl = new URL(url.toString());
+    adminUrl.pathname = '/postgres';
+    const admin = new pg.Client({ connectionString: adminUrl.toString() });
+    await admin.connect();
+    await admin.query(`DROP DATABASE IF EXISTS "${database}"`);
+    await admin.query(`CREATE DATABASE "${database}"`);
+    await admin.end();
+
+    const scratchUrl = new URL(url.toString());
+    scratchUrl.pathname = `/${database}`;
+
+    // Two pools rather than one, because two replicas are two processes: an
+    // advisory lock is held by a session, so sharing a pool would not be the
+    // thing being tested.
+    const first = new pg.Pool({ connectionString: scratchUrl.toString() });
+    const second = new pg.Pool({ connectionString: scratchUrl.toString() });
+
+    try {
+      // Started together and neither awaited first — before the lock this threw
+      // from whichever one lost, which on a real host is a replica exiting its
+      // boot chain and restarting.
+      const [a, b] = await Promise.all([runMigrations(first), runMigrations(second)]);
+
+      const [winner, loser] = a.applied.length > 0 ? [a, b] : [b, a];
+      expect(winner.applied.length).toBeGreaterThan(0);
+      expect(winner.alreadyApplied).toBe(0);
+
+      // The waiter read the ledger after the lock, so it saw the finished work.
+      expect(loser.applied).toEqual([]);
+      expect(loser.alreadyApplied).toBe(winner.applied.length);
+
+      // Applied once each, not twice: the ledger is the proof.
+      const { rows } = await first.query<{ name: string; n: string }>(
+        'SELECT name, count(*) AS n FROM schema_migrations GROUP BY name HAVING count(*) > 1',
+      );
+      expect(rows).toEqual([]);
+
+      // And the lock was handed back — a third run must not block on a
+      // connection that went home to the pool still holding it.
+      expect((await runMigrations(first)).applied).toEqual([]);
+    } finally {
+      await first.end();
+      await second.end();
+      const cleanup = new pg.Client({ connectionString: adminUrl.toString() });
+      await cleanup.connect();
+      await cleanup.query(`DROP DATABASE IF EXISTS "${database}"`);
+      await cleanup.end();
+    }
+  });
 });
 
 describe('failure handling', () => {
