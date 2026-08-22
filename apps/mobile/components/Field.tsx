@@ -11,6 +11,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Polyline } from 'react-native-svg';
 import { font, type as t, useColors } from '@/theme';
 
@@ -212,13 +213,29 @@ export function Sheet({
   children: React.ReactNode;
 }) {
   const colors = useColors();
+  /*
+   * A `Modal` is its own root view and inherits nothing, including the safe
+   * area — so the bottom of a sheet sits under the home indicator unless it is
+   * told not to. `SafeAreaProvider` is above the modal in the React tree even
+   * though it is not above it on screen, so the inset is still readable here.
+   */
+  const insets = useSafeAreaInsets();
 
   return (
     <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
       {/* Tapping away closes it — the same affordance as tapping off a popover,
           and the only one a sheet with no visible chrome can offer. */}
       <Pressable style={styles.scrim} onPress={onClose} accessibilityLabel="Close" />
-      <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View
+        style={[
+          styles.sheet,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+            paddingBottom: Math.max(insets.bottom, 16) + 12,
+          },
+        ]}
+      >
         <Text style={[t.eyebrow, styles.sheetTitle, { color: colors.mutedForeground }]}>
           {title}
         </Text>
@@ -251,7 +268,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 2,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    paddingBottom: 28,
   },
   sheetTitle: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 10 },
   option: {
