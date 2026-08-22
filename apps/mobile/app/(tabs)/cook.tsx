@@ -4,10 +4,11 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import type { DaySummary, LibraryRecipe, PantryItem, Recipe, RecipeAllowance, RecipeBrief } from '@ct/shared';
-import { untilWords } from '@ct/shared/words';
+import { listWords, untilWords } from '@ct/shared/words';
 import { foodEmoji } from '@ct/shared/food-emoji';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { Brief, BriefToggle } from '@/components/kitchen/Brief';
+import { FridgeScan } from '@/components/kitchen/FridgeScan';
 import { daysSince, Pantry, STALE_DAYS } from '@/components/kitchen/Pantry';
 import { RecipeTile } from '@/components/kitchen/RecipeTile';
 import { Sheet } from '@/components/Field';
@@ -200,6 +201,16 @@ export default function CookScreen() {
     }
   }
 
+  /*
+   * A scan started to cook rather than to tidy the list. The finds are already
+   * in the pantry by the time this runs — <FridgeScan> commits them either way
+   * — so the reload is what keeps the kitchen chip honest while the recipe is
+   * being written.
+   */
+  async function cookFromPhoto(found: string[]) {
+    await suggest(found, true);
+  }
+
   async function importRecipe() {
     setImporting(true);
     try {
@@ -219,7 +230,7 @@ export default function CookScreen() {
     }
   }
 
-  async function suggest() {
+  async function suggest(focus?: string[], reloadKitchenFirst = false) {
     // Claimed before the first await, so a second tap in the same tick turns
     // into nothing rather than into a second run against the same budget.
     if (running.current) return;
@@ -232,16 +243,25 @@ export default function CookScreen() {
      * says nothing about what it was asked or where the reply will land.
      */
     setThinkingNote(
-      asked
-        ? `Writing a recipe for “${asked}”, from what's in your kitchen…`
-        : "Writing a recipe from what's in your kitchen…",
+      focus?.length
+        ? `Writing a recipe around the ${listWords(focus.slice(0, 4))} in your photo…`
+        : asked
+          ? `Writing a recipe for “${asked}”, from what's in your kitchen…`
+          : "Writing a recipe from what's in your kitchen…",
     );
     // Moved to the front: the skeletons are the answer to "what is it doing",
     // and they are no use on a tab you cannot see.
     setTab('ideas');
     setThinking(true);
     try {
-      const result = await api.suggestRecipes({ ...brief, wants: asked || undefined });
+      // Inside the guard rather than before the call, so the screen is locked
+      // for the round trip too.
+      if (reloadKitchenFirst) await loadKitchen();
+      const result = await api.suggestRecipes({
+        ...brief,
+        wants: asked || undefined,
+        focus: focus?.length ? focus : undefined,
+      });
       setRecipes(result.recipes);
       setMessage(result.message);
       setAllowance(result.allowance);
@@ -343,6 +363,13 @@ export default function CookScreen() {
 
         {/* The other two ways in, one line, one size, nothing hidden. */}
         <View style={styles.ways}>
+          <FridgeScan
+            onSaved={loadKitchen}
+            onCook={cookFromPhoto}
+            canCook={!spent && !thinking}
+            onError={setError}
+          />
+          <Text style={{ color: colors.mutedForeground }}>·</Text>
           <BriefToggle value={brief} onPress={() => setBriefOpen(true)} />
           <Text style={{ color: colors.mutedForeground }}>·</Text>
           <Pressable
@@ -365,6 +392,24 @@ export default function CookScreen() {
               />
             </Svg>
             <Text style={[t.footnote, { color: colors.mutedForeground }]}>paste one</Text>
+          </Pressable>
+          <Text style={{ color: colors.mutedForeground }}>·</Text>
+          <Pressable
+            onPress={() => router.push('/plan')}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.way, { opacity: pressed ? 0.6 : 1 }]}
+          >
+            <Svg width={13} height={13} viewBox="0 0 24 24">
+              <Path
+                d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"
+                stroke={colors.mutedForeground}
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+              />
+            </Svg>
+            <Text style={[t.footnote, { color: colors.mutedForeground }]}>plan the week</Text>
           </Pressable>
         </View>
       </View>

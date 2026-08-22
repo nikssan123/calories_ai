@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Line } from 'react-native-svg';
 import Animated, {
@@ -7,7 +8,7 @@ import Animated, {
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
-import type { ChatAction, ChatCard as Card, UnitSystem } from '@ct/shared';
+import type { ChatAction, ChatCard as Card, ExerciseEntry, UnitSystem } from '@ct/shared';
 import {
   formatBodyWeight,
   formatDistance,
@@ -17,7 +18,10 @@ import {
 } from '@ct/shared';
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 import { Chunk } from '@/components/Chunk';
+import { RecipeTile } from '@/components/kitchen/RecipeTile';
 import { Sparkline } from '@/components/Sparkline';
+import { WorkoutCard } from '@/components/workout/WorkoutCard';
+import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { duration, ease, font, type as t, useColors, withAlpha, type Palette } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -36,9 +40,13 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
  */
 export function ChatActionCard({
   action,
+  messageId,
   today,
+  onLogged,
 }: {
   action: ChatAction;
+  /** The message this card sits on — the workout card answers onto it. */
+  messageId?: string;
   /**
    * The date the app currently calls today, from the day summary above the
    * conversation. Never guessed from the device clock: this app's day turns
@@ -47,9 +55,13 @@ export function ChatActionCard({
    * it would label tonight's supper as yesterday's.
    */
   today?: string;
+  /** Something was logged from a card rather than through a turn. */
+  onLogged?: () => void;
 }) {
   if (!action.card) return <Chip action={action} />;
-  return <CardBody card={action.card} today={today} />;
+  return (
+    <CardBody card={action.card} messageId={messageId} today={today} onLogged={onLogged} />
+  );
 }
 
 /** Actions with nothing to draw — a deletion — stay a line of text. */
@@ -81,7 +93,17 @@ function Chip({ action }: { action: ChatAction }) {
   );
 }
 
-function CardBody({ card, today }: { card: Card; today?: string }) {
+function CardBody({
+  card,
+  messageId,
+  today,
+  onLogged,
+}: {
+  card: Card;
+  messageId?: string;
+  today?: string;
+  onLogged?: () => void;
+}) {
   switch (card.type) {
     case 'food':
       return <FoodCard card={card} today={today} />;
@@ -95,17 +117,104 @@ function CardBody({ card, today }: { card: Card; today?: string }) {
       return <DayCard card={card} />;
     case 'plan':
       return <PlanCard card={card} />;
-    /*
-     * Two the web draws and this cannot yet. `recipes` is the full recipe card
-     * from Cook — servings stepper and a cook button — and `workout_prompt` is
-     * the set-by-set logger from Exercise; both are whole screens' worth of
-     * component that live in tabs still on the placeholder. Falling back to the
-     * summary is the honest version: it says what happened, and does not
-     * pretend to offer the action it cannot carry out.
-     */
-    default:
-      return null;
+    case 'recipes':
+      return <RecipesCard card={card} />;
+    case 'workout_prompt':
+      // Needs a real message id to answer onto. An optimistic bubble has none
+      // yet, but it also cannot be carrying a card the model drew.
+      return messageId ? (
+        <WorkoutPrompt card={card} messageId={messageId} onLogged={onLogged} />
+      ) : null;
   }
+}
+
+/**
+ * Recipes, answered in the conversation.
+ *
+ * The one card that breaks the compactness rule above, and it earns it: these
+ * are not a picture of something that already happened, they are the thing the
+ * user has to act on. A summary here would send someone to another tab to do
+ * the one tap the card could have taken itself.
+ */
+function RecipesCard({ card }: { card: Extract<Card, { type: 'recipes' }> }) {
+  const router = useRouter();
+  return (
+    <Land style={styles.recipes}>
+      {card.recipes.map((recipe) => (
+        <RecipeTile
+          key={recipe.id}
+          title={recipe.title}
+          summary={recipe.summary}
+          kcal={recipe.kcal}
+          protein_g={recipe.protein_g}
+          servingLabel="per portion"
+          emoji={foodEmoji(recipe.title)}
+          needs={recipe.ingredients.filter((i) => i.missing).map((i) => i.name)}
+          minutes={recipe.minutes}
+          steps={recipe.steps.length}
+          saved={recipe.saved}
+          onPress={() => router.push(`/recipe/${recipe.id}`)}
+          onToggleSave={() => void api.saveRecipe(recipe.id, !recipe.saved).catch(() => {})}
+        />
+      ))}
+    </Land>
+  );
+}
+
+/**
+ * The question, and the receipt it becomes.
+ *
+ * Logging rewrites this message's card on the server, but nothing re-reads the
+ * conversation afterwards — so the question would stay on screen with a live
+ * button, and every further press would log the same session again. Swapping
+ * the card here shows what a reload would have shown, without waiting for one.
+ */
+function WorkoutPrompt({
+  card,
+  messageId,
+  onLogged,
+}: {
+  card: Extract<Card, { type: 'workout_prompt' }>;
+  messageId: string;
+  onLogged?: () => void;
+}) {
+  const [logged, setLogged] = useState<ExerciseEntry | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const colors = useColors();
+
+  if (logged) return <ExerciseCard card={toExerciseCard(logged)} />;
+
+  return (
+    <>
+      <WorkoutCard
+        card={card}
+        messageId={messageId}
+        onLogged={(entry) => {
+          setLogged(entry);
+          onLogged?.();
+        }}
+        onError={setError}
+      />
+      {error && (
+        <Text style={[t.footnoteSemibold, { color: colors.destructive }]}>{error}</Text>
+      )}
+    </>
+  );
+}
+
+/** The receipt the server just wrote onto the message, from the entry it returned. */
+function toExerciseCard(entry: ExerciseEntry): Extract<Card, { type: 'exercise' }> {
+  return {
+    type: 'exercise',
+    entry_id: entry.id,
+    description: entry.description,
+    confidence: entry.confidence,
+    kcal_burned: Math.round(entry.kcal_burned),
+    duration_min: entry.duration_min,
+    distance_km: entry.distance_km,
+    category: entry.category,
+    sets: entry.sets,
+  };
 }
 
 /**
@@ -782,6 +891,7 @@ function formatDate(isoDate: string): string {
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
   shell: { borderWidth: 2, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 14 },
+  recipes: { gap: 8 },
   chipWrap: { alignSelf: 'flex-start' },
   chip: {
     flexDirection: 'row',

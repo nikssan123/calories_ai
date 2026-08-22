@@ -4,6 +4,7 @@ import Svg, { Circle, Path, Polyline, Rect } from 'react-native-svg';
 import type { PhotoMediaType } from '@ct/shared';
 import { Material } from '@/components/Material';
 import { Sheet } from '@/components/Field';
+import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { PressableChunk } from '@/components/Chunk';
 import { pickPhoto, takePhoto, type PreparedPhoto } from '@/lib/image';
 import { font, type as t, useColors } from '@/theme';
@@ -31,9 +32,15 @@ export interface ComposerPayload {
  */
 export function Composer({
   onSend,
+  onLogged,
   disabled,
 }: {
   onSend: (payload: ComposerPayload) => void;
+  /**
+   * Something was logged without going through the conversation — a scanned
+   * packet — so the day above it has to re-read itself.
+   */
+  onLogged: () => void;
   disabled: boolean;
 }) {
   const colors = useColors();
@@ -67,6 +74,7 @@ export function Composer({
    * this app has a face of its own that it is the whole point to keep.
    */
   const [choosing, setChoosing] = useState(false);
+  const [scanning, setScanning] = useState(false);
 
   async function attach(source: 'camera' | 'library') {
     setChoosing(false);
@@ -168,10 +176,36 @@ export function Composer({
         </PressableChunk>
       </View>
 
+      {/*
+        The scanner sits here as a third peer rather than in a tab of its own,
+        because a barcode is another way of saying what you ate — the same
+        sentence, told to the phone in a different grammar.
+      */}
       <Sheet open={choosing} title="Add a photo" onClose={() => setChoosing(false)}>
         <Choice label="Take a photo" icon="camera" onPress={() => void attach('camera')} />
         <Choice label="Choose a photo" icon="image" onPress={() => void attach('library')} />
+        <Choice
+          label="Scan a barcode"
+          icon="barcode"
+          onPress={() => {
+            setChoosing(false);
+            setScanning(true);
+          }}
+        />
       </Sheet>
+
+      <BarcodeScanner
+        open={scanning}
+        onClose={() => setScanning(false)}
+        onLogged={() => {
+          setScanning(false);
+          onLogged();
+        }}
+        onLabelPhoto={(prepared) => {
+          setPhoto(prepared);
+          setText((current) => current || 'This is the label — log what I ate off it.');
+        }}
+      />
     </Material>
   );
 }
@@ -182,7 +216,7 @@ function Choice({
   onPress,
 }: {
   label: string;
-  icon: 'camera' | 'image';
+  icon: 'camera' | 'image' | 'barcode';
   onPress: () => void;
 }) {
   const colors = useColors();
@@ -197,6 +231,16 @@ function Choice({
     >
       {icon === 'camera' ? (
         <CameraGlyph color={colors.foreground} size={18} />
+      ) : icon === 'barcode' ? (
+        <Svg width={18} height={18} viewBox="0 0 24 24">
+          <Path
+            d="M3 5v14M6 5v14M10 5v14M14 5v11M18 5v14M21 5v14"
+            stroke={colors.foreground}
+            strokeWidth={2}
+            strokeLinecap="round"
+            fill="none"
+          />
+        </Svg>
       ) : (
         <Svg width={18} height={18} viewBox="0 0 24 24">
           <Rect

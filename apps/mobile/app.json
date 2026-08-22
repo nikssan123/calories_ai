@@ -14,7 +14,11 @@
     },
     "android": {
       "package": "com.daysofar.app",
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#fff6ec"
+      }
     },
     "plugins": [
       "expo-router",
@@ -26,13 +30,30 @@
           "backgroundColor": "#fff6ec",
           "dark": {
             "backgroundColor": "#1a1512"
-          }
+          },
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Day So Far uses the camera to read a barcode or photograph a meal. Photos of your food are sent to be identified; a barcode is read on the phone."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Day So Far opens your photos so you can log a meal you already photographed.",
+          "cameraPermission": "Day So Far uses the camera to photograph a meal so it can be identified and logged."
         }
       ],
       "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "icon": "./assets/icon.png"
   }
 }

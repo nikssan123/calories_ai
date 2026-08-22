@@ -151,6 +151,15 @@ export default function JournalScreen() {
     if (pinned.current) scroller.current?.scrollToEnd({ animated: false });
   }, []);
 
+  /**
+   * Re-read the day. Stable, because it is a prop on every memoised row — an
+   * inline arrow would hand each of them a new function on every render and
+   * quietly undo the memoisation while looking like it worked.
+   */
+  const refreshDay = useCallback(() => {
+    void api.day().then(setDay).catch(() => {});
+  }, []);
+
   const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     pinned.current =
@@ -326,11 +335,22 @@ export default function JournalScreen() {
         )}
 
         {bubbles.map((bubble) => (
-          <Row key={bubble.key} bubble={bubble} today={day?.local_date} />
+          <Row
+            key={bubble.key}
+            bubble={bubble}
+            today={day?.local_date}
+            onLogged={refreshDay}
+          />
         ))}
       </ScrollView>
 
-      <Composer onSend={(p) => void send(p)} disabled={busy} />
+      <Composer
+        onSend={(p) => void send(p)}
+        // A scanned packet is logged by the scanner itself, without a turn — so
+        // the status bar above has to be told to re-read itself.
+        onLogged={refreshDay}
+        disabled={busy}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -548,7 +568,15 @@ function Bar({ pct, color }: { pct: number; color: string }) {
  * `onLogged` held stable by the caller this narrows each delta to the one row
  * it actually touches.
  */
-const Row = memo(function Row({ bubble, today }: { bubble: Bubble; today?: string }) {
+const Row = memo(function Row({
+  bubble,
+  today,
+  onLogged,
+}: {
+  bubble: Bubble;
+  today?: string;
+  onLogged: () => void;
+}) {
   const colors = useColors();
 
   if (bubble.role === 'user') {
@@ -604,7 +632,12 @@ const Row = memo(function Row({ bubble, today }: { bubble: Bubble; today?: strin
             <ChatActionCard
               key={`${action.entry_id ?? action.kind}-${i}`}
               action={action}
+              // The workout card posts its own answer and the server rewrites
+              // this message's card into a receipt — so it has to know which
+              // message it is sitting on.
+              messageId={bubble.key}
               today={today}
+              onLogged={onLogged}
             />
           ))}
         </View>

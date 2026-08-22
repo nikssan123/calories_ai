@@ -154,6 +154,7 @@ function Gate() {
             pushes rather than becoming a seventh tab. */}
         <Stack.Screen name="recipe/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="library/[slug]" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="plan" options={{ animation: 'slide_from_right' }} />
       </Stack.Protected>
       <Stack.Protected guard={!authenticated}>
         <Stack.Screen name="login" />
