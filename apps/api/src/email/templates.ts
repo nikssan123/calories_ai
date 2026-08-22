@@ -1,4 +1,5 @@
-import type { ReviewStats } from '@ct/shared';
+import type { ReviewStats, UnitSystem } from '@ct/shared';
+import { formatWeightDelta } from '@ct/shared';
 import { type Block, type RenderedEmail, renderEmail } from './layout.ts';
 
 /**
@@ -272,8 +273,10 @@ export function weeklyReview(input: {
   range: string;
   appUrl: string;
   unsubscribeUrl: string;
+  /** The stats arrive in kilograms; this is what the reader's scale says. */
+  units: UnitSystem;
 }): EmailMessage {
-  const { stats } = input;
+  const { stats, units } = input;
 
   const items: Array<{ label: string; value: string }> = [
     { label: 'Days logged', value: `${stats.days_logged}/7` },
@@ -284,7 +287,7 @@ export function weeklyReview(input: {
     { label: 'On target', value: `${stats.days_on_target} days` },
   ];
   if (stats.weight_change_kg !== null) {
-    items.push({ label: 'Weight', value: signed(stats.weight_change_kg) });
+    items.push({ label: 'Weight', value: formatWeightDelta(stats.weight_change_kg, units) });
   }
 
   return {
@@ -293,7 +296,7 @@ export function weeklyReview(input: {
     unsubscribeUrl: input.unsubscribeUrl,
     ...renderEmail({
       subject: `Your week: ${input.range}`,
-      preheader: summaryLine(stats),
+      preheader: summaryLine(stats, units),
       heading: 'Last week, in review',
       blocks: [
         { kind: 'text', text: greeting(input.name) },
@@ -351,15 +354,11 @@ function excerpt(content: string, paragraphs = 2): string {
   return parts.length > paragraphs ? `${head}\n\n…` : head;
 }
 
-function summaryLine(stats: ReviewStats): string {
+function summaryLine(stats: ReviewStats, units: UnitSystem): string {
   if (stats.mean_kcal === null) return `${stats.days_logged} days logged.`;
   const weight =
-    stats.weight_change_kg === null ? '' : `, weight ${signed(stats.weight_change_kg)}`;
+    stats.weight_change_kg === null ? '' : `, weight ${formatWeightDelta(stats.weight_change_kg, units)}`;
   return `${stats.days_logged} days logged, averaging ${Math.round(stats.mean_kcal)} kcal${weight}.`;
-}
-
-function signed(kg: number): string {
-  return `${kg > 0 ? '+' : ''}${kg.toFixed(1)} kg`;
 }
 
 function plural(count: number, one: string, many: string): string {

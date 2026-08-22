@@ -4,7 +4,15 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { BadgeCheck, Check, Mail, Shield } from 'lucide-react';
 import { toast } from 'sonner';
-import type { ActivityLevel, DaySummary, Goal, Profile, Sex } from '@ct/shared';
+import type { ActivityLevel, DaySummary, Goal, Profile, Sex, UnitSystem } from '@ct/shared';
+import {
+  bodyWeightToKg,
+  bodyWeightUnit,
+  cmToFeetInches,
+  feetInchesToCm,
+  toBodyWeight,
+  unitsOf,
+} from '@ct/shared';
 import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthGate';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -14,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
   Select,
   SelectContent,
@@ -59,6 +68,17 @@ const ACTIVITY_SHORT: Record<ActivityLevel, string> = {
   very_active: 'Very active',
 };
 
+const UNIT_LABELS: Record<UnitSystem, string> = {
+  metric: 'Metric',
+  imperial: 'Imperial',
+};
+
+/** What each one actually means, since "imperial" is a word and not a number. */
+const UNIT_EXAMPLES: Record<UnitSystem, string> = {
+  metric: 'kg · cm · km · g',
+  imperial: 'lb · ft · mi · oz',
+};
+
 const GOAL_LABELS: Record<Goal, string> = {
   lose: 'Lose',
   maintain: 'Maintain',
@@ -84,6 +104,8 @@ export default function SetupPage() {
     })();
   }, []);
 
+  const units = unitsOf(profile);
+
   function patch<K extends keyof Profile>(key: K, value: Profile[K]) {
     setProfile((prev) => (prev ? { ...prev, [key]: value } : prev));
     setDirty(true);
@@ -102,6 +124,9 @@ export default function SetupPage() {
         activity_level: profile.activity_level,
         goal: profile.goal,
         timezone: profile.timezone,
+        // Never null on the way out. Saving this screen is somebody looking at
+        // the control and leaving it where it is, which is an answer.
+        units: unitsOf(profile),
         day_start_hour: profile.day_start_hour,
       });
       setProfile(updated);
@@ -212,21 +237,64 @@ export default function SetupPage() {
           />
         </InsetRow>
 
+        {/*
+          * Above the two fields it governs, so switching it visibly rewrites
+          * them rather than changing something further down the page that the
+          * eye has already left.
+          */}
+        <InsetRow>
+          <span className="flex-1 text-body">Units</span>
+          <ToggleGroup
+            value={[units]}
+            onValueChange={(values) => {
+              const next = values[0];
+              if (next === 'metric' || next === 'imperial') patch('units', next);
+            }}
+            className="bg-muted rounded-full p-0.5"
+          >
+            {(Object.keys(UNIT_LABELS) as UnitSystem[]).map((system) => (
+              <ToggleGroupItem
+                key={system}
+                value={system}
+                aria-label={`${UNIT_LABELS[system]} — ${UNIT_EXAMPLES[system]}`}
+                className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-9 rounded-full px-3.5 text-footnote font-bold transition-colors"
+              >
+                {UNIT_LABELS[system]}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </InsetRow>
+
         <InsetRow>
           <span className="flex-1 text-body">Height</span>
-          <NumberField
-            value={profile.height_cm}
-            onChange={(v) => patch('height_cm', v)}
-            unit="cm"
-          />
+          {units === 'imperial' ? (
+            <HeightFeetInches value={profile.height_cm} onChange={(v) => patch('height_cm', v)} />
+          ) : (
+            <NumberField
+              value={profile.height_cm}
+              onChange={(v) => patch('height_cm', v)}
+              unit="cm"
+            />
+          )}
         </InsetRow>
 
         <InsetRow>
           <span className="flex-1 text-body">Target weight</span>
+          {/*
+            * Converted on the way in and back out on the way to the API, so the
+            * column stays kilograms whatever this field says. Typing 165 lb
+            * stores 74.8 kg; the number that comes back rounds to 165 again.
+            */}
           <NumberField
-            value={profile.target_weight_kg}
-            onChange={(v) => patch('target_weight_kg', v)}
-            unit="kg"
+            value={
+              profile.target_weight_kg === null
+                ? null
+                : toBodyWeight(profile.target_weight_kg, units)
+            }
+            onChange={(v) =>
+              patch('target_weight_kg', v === null ? null : bodyWeightToKg(v, units))
+            }
+            unit={bodyWeightUnit(units)}
             step="0.1"
           />
         </InsetRow>
@@ -593,16 +661,63 @@ function MacroChip({ label, value, color }: { label: string; value: number; colo
   );
 }
 
+/**
+ * Height in the two numbers people actually say it in.
+ *
+ * Two fields rather than one text box parsing 5'10", because a free-text height
+ * has to guess at every notation anyone might type — 5'10, 5 ft 10, 70" — and
+ * gets one of them wrong for somebody. Two number inputs have no notation to
+ * guess at.
+ *
+ * Feet is deliberately not clamped and inches only rolls over on the way out:
+ * typing 5 then 13 is a keystroke away from 6 then 1, and snapping the field
+ * out from under the caret mid-edit is worse than briefly showing "5 ft 13".
+ */
+function HeightFeetInches({
+  value,
+  onChange,
+}: {
+  value: number | null;
+  onChange: (cm: number | null) => void;
+}) {
+  const parts = value === null ? null : cmToFeetInches(value);
+
+  const set = (feet: number | null, inches: number | null) => {
+    if (feet === null && inches === null) return onChange(null);
+    onChange(feetInchesToCm(feet ?? 0, inches ?? 0));
+  };
+
+  return (
+    <div className="flex gap-2">
+      <NumberField
+        value={parts?.feet ?? null}
+        onChange={(feet) => set(feet, parts?.inches ?? 0)}
+        unit="ft"
+        className="w-[5.5rem]"
+      />
+      <NumberField
+        value={parts?.inches ?? null}
+        onChange={(inches) => set(parts?.feet ?? 0, inches)}
+        unit="in"
+        className="w-[5.5rem]"
+      />
+    </div>
+  );
+}
+
 function NumberField({
   value,
   onChange,
   unit,
   step = '1',
+  className,
 }: {
   value: number | null;
   onChange: (value: number | null) => void;
   unit: string;
   step?: string;
+  /** Narrower when two of these share a row, as feet and inches do. */
+  className?: string;
 }) {
   // The unit sits inside the field rather than beside it, so an empty value
   // still shows something shaped like an input instead of a stray "cm".
@@ -621,6 +736,7 @@ function NumberField({
       className={cn(
         FIELD,
         'focus-within:ring-ring inline-flex w-32 cursor-text items-center justify-end gap-1.5 focus-within:ring-2',
+        className,
       )}
     >
       <Input

@@ -2,11 +2,19 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { ChatAction, ChatCard as Card, ExerciseEntry } from '@ct/shared';
+import type { ChatAction, ChatCard as Card, ExerciseEntry, UnitSystem } from '@ct/shared';
+import {
+  formatBodyWeight,
+  formatDistance,
+  formatWeightDelta,
+  loadUnit,
+  toLoad,
+} from '@ct/shared';
+import { useUnits } from '@/lib/units';
 import { RecipeCard } from '@/components/kitchen/RecipeCard';
 import { WorkoutCard } from '@/components/workout/WorkoutCard';
 import { Sparkline } from '@/components/Sparkline';
-import { exerciseEmoji, foodEmoji } from '@/lib/foodEmoji';
+import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 import { cn } from '@/lib/utils';
 
 /**
@@ -20,8 +28,8 @@ import { cn } from '@/lib/utils';
  * What they do get is the entrance, and a face. A card is the moment the agent
  * hands an understood meal back to you, so it drops in and bounces once instead
  * of simply appearing (`animate-land` in globals.css) and it arrives wearing a
- * picture of the food — see lib/foodEmoji. Between them those two are most of
- * what makes a reply feel like an answer rather than a receipt.
+ * picture of the food — see @ct/shared/food-emoji. Between them those two are
+ * most of what makes a reply feel like an answer rather than a receipt.
  */
 export function ChatActionCard({
   action,
@@ -495,8 +503,9 @@ function dayWord(isoDate: string, today?: string): string {
 }
 
 function ExerciseCard({ card }: { card: Extract<Card, { type: 'exercise' }> }) {
+  const units = useUnits();
   const detail = [
-    card.distance_km !== null ? `${card.distance_km} km` : null,
+    card.distance_km !== null ? formatDistance(card.distance_km, units) : null,
     card.duration_min !== null ? `${Math.round(card.duration_min)} min` : null,
   ].filter(Boolean);
 
@@ -530,7 +539,7 @@ function ExerciseCard({ card }: { card: Extract<Card, { type: 'exercise' }> }) {
       */}
       {card.sets.length > 0 && (
         <div className="mt-2.5 space-y-1">
-          {groupSets(card.sets).map((group) => (
+          {groupSets(card.sets, units).map((group) => (
             <div key={group.name} className="flex items-baseline justify-between gap-3">
               <span className="text-footnote min-w-0 flex-1 truncate">{group.name}</span>
               <span className="text-footnote text-muted-foreground shrink-0 tabular-nums">
@@ -551,8 +560,11 @@ function ExerciseCard({ card }: { card: Extract<Card, { type: 'exercise' }> }) {
  * when they are not — because the set where the reps dropped is the most
  * informative thing in the session, and averaging it away would hide exactly
  * the detail the sets were stored to keep.
+ *
+ * The load is converted per distinct value rather than after joining, so that
+ * "80/85 kg" becomes "176/187 lb" and not a rounded pair that collides.
  */
-function groupSets(sets: Extract<Card, { type: 'exercise' }>['sets']) {
+function groupSets(sets: Extract<Card, { type: 'exercise' }>['sets'], units: UnitSystem) {
   const byName = new Map<string, typeof sets>();
   for (const set of sets) {
     byName.set(set.name, [...(byName.get(set.name) ?? []), set]);
@@ -566,7 +578,8 @@ function groupSets(sets: Extract<Card, { type: 'exercise' }>['sets']) {
     if (reps.length > 0) {
       const same = new Set(reps).size === 1;
       const count = same ? `${reps.length} × ${reps[0]}` : reps.join(', ');
-      const load = weights.length === 1 ? ` at ${weights[0]}kg` : weights.length > 1 ? ` at ${weights.join('/')}kg` : '';
+      const loads = weights.map((w) => toLoad(w, units));
+      const load = loads.length > 0 ? ` at ${loads.join('/')}${loadUnit(units)}` : '';
       return { name, detail: `${count}${load}` };
     }
     if (seconds.length > 0) {
@@ -578,11 +591,12 @@ function groupSets(sets: Extract<Card, { type: 'exercise' }>['sets']) {
 }
 
 function WeightCard({ card }: { card: Extract<Card, { type: 'weight' }> }) {
+  const units = useUnits();
   return (
     <Shell>
       <div className="flex items-baseline gap-2.5">
         <span aria-hidden className="text-[22px] leading-none">⚖️</span>
-        <span className="text-figure text-[24px]">{card.weight_kg} kg</span>
+        <span className="text-figure text-[24px]">{formatBodyWeight(card.weight_kg, units)}</span>
         {card.change_7d_kg !== null && card.change_7d_kg !== 0 && (
           <span
             className={cn(
@@ -591,7 +605,7 @@ function WeightCard({ card }: { card: Extract<Card, { type: 'weight' }> }) {
             )}
           >
             {card.change_7d_kg > 0 ? '+' : '−'}
-            {Math.abs(card.change_7d_kg)} kg this week
+            {formatWeightDelta(Math.abs(card.change_7d_kg), units, false)} this week
           </span>
         )}
       </div>

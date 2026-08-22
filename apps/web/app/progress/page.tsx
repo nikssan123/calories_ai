@@ -5,8 +5,16 @@ import Link from 'next/link';
 import { ArrowDown, ArrowUp, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Progress } from '@ct/shared';
-import { QUALITY_COVERAGE_FLOOR } from '@ct/shared';
+import {
+  QUALITY_COVERAGE_FLOOR,
+  bodyWeightToKg,
+  bodyWeightUnit,
+  formatBodyWeight,
+  formatWeightDelta,
+  toBodyWeight,
+} from '@ct/shared';
 import { api } from '@/lib/api';
+import { useUnits } from '@/lib/units';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { Sparkline } from '@/components/Sparkline';
 import { WeeklyReview } from '@/components/WeeklyReview';
@@ -23,6 +31,7 @@ export default function ProgressPage() {
   const [days, setDays] = useState<number>(30);
   const [weightInput, setWeightInput] = useState('');
   const [saving, setSaving] = useState(false);
+  const units = useUnits();
 
   async function load(window: number) {
     try {
@@ -42,9 +51,12 @@ export default function ProgressPage() {
     if (!Number.isFinite(value) || value <= 0) return;
     setSaving(true);
     try {
-      await api.logWeight(value);
+      // Typed in whatever they read, stored in kilograms. The API has one unit
+      // and does not need to be told which one the keyboard was in.
+      const kg = bodyWeightToKg(value, units);
+      await api.logWeight(kg);
       setWeightInput('');
-      toast.success(`Logged ${value} kg`);
+      toast.success(`Logged ${formatBodyWeight(kg, units)}`);
       await load(days);
     } catch (e) {
       toast.error((e as Error).message);
@@ -96,7 +108,9 @@ export default function ProgressPage() {
               ) : (
                 <>
                   <div className="flex items-baseline gap-3">
-                    <span className="text-figure text-large-title">{progress.weight.current_kg} kg</span>
+                    <span className="text-figure text-large-title">
+                      {formatBodyWeight(progress.weight.current_kg, units)}
+                    </span>
                     {progress.weight.change_7d_kg !== null && progress.weight.change_7d_kg !== 0 && (
                       <span
                         className={cn(
@@ -111,7 +125,8 @@ export default function ProgressPage() {
                         ) : (
                           <ArrowUp size={14} />
                         )}
-                        {Math.abs(progress.weight.change_7d_kg)} kg this week
+                        {formatWeightDelta(Math.abs(progress.weight.change_7d_kg), units, false)}{' '}
+                        this week
                       </span>
                     )}
                   </div>
@@ -123,26 +138,30 @@ export default function ProgressPage() {
             <div className="divide-border grid grid-cols-3 divide-x-2">
               <Stat
                 label="7-day avg"
-                value={progress.weight.average_7d_kg === null ? '—' : `${progress.weight.average_7d_kg}`}
-                unit="kg"
+                value={
+                  progress.weight.average_7d_kg === null
+                    ? '—'
+                    : `${toBodyWeight(progress.weight.average_7d_kg, units)}`
+                }
+                unit={bodyWeightUnit(units)}
               />
               <Stat
                 label="Since start"
                 value={
                   progress.weight.change_since_start_kg === null
                     ? '—'
-                    : `${progress.weight.change_since_start_kg > 0 ? '+' : ''}${progress.weight.change_since_start_kg}`
+                    : `${progress.weight.change_since_start_kg > 0 ? '+' : ''}${toBodyWeight(progress.weight.change_since_start_kg, units)}`
                 }
-                unit="kg"
+                unit={bodyWeightUnit(units)}
               />
               <Stat
                 label="To target"
                 value={
                   progress.weight.to_target_kg === null
                     ? '—'
-                    : `${Math.abs(progress.weight.to_target_kg)}`
+                    : `${Math.abs(toBodyWeight(progress.weight.to_target_kg, units))}`
                 }
-                unit="kg"
+                unit={bodyWeightUnit(units)}
               />
             </div>
 
@@ -154,7 +173,7 @@ export default function ProgressPage() {
                 value={weightInput}
                 onChange={(e) => setWeightInput(e.target.value)}
                 onWheel={(e) => e.currentTarget.blur()}
-                placeholder="Log today's weight"
+                placeholder={`Log today's weight (${bodyWeightUnit(units)})`}
                 className="bg-muted/60 border-border h-11 rounded-full border-2 px-4 text-body"
               />
               <Button

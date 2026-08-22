@@ -21,13 +21,15 @@ import type {
   ShoppingItem,
   ShoppingList,
 } from '@ct/shared';
+import { formatMass } from '@ct/shared';
 import { api } from '@/lib/api';
+import { useUnits } from '@/lib/units';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
-import { foodEmoji } from '@/lib/foodEmoji';
+import { foodEmoji } from '@ct/shared/food-emoji';
 import { cn } from '@/lib/utils';
 
 /**
@@ -448,6 +450,7 @@ function Shopping({
 }) {
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
+  const units = useUnits();
 
   if (!list) return null;
 
@@ -583,7 +586,7 @@ function Shopping({
                 </p>
                 <p className="text-muted-foreground text-footnote font-medium">
                   {item.quantity_g !== null
-                    ? `${Math.round(item.quantity_g)}g`
+                    ? formatMass(item.quantity_g, units)
                     : item.quantity_descs.join(' + ') || '—'}
                 </p>
               </div>

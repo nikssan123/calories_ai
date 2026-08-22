@@ -5,12 +5,14 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import type { Recipe } from '@ct/shared';
+import { formatMass } from '@ct/shared';
 import { api } from '@/lib/api';
+import { useUnits } from '@/lib/units';
 import { RecipeReader } from '@/components/kitchen/RecipeReader';
 import { formatServings, scale, Servings } from '@/components/kitchen/Servings';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { foodEmoji } from '@/lib/foodEmoji';
+import { foodEmoji } from '@ct/shared/food-emoji';
 
 /**
  * A recipe written for this person, on its own page.
@@ -42,6 +44,8 @@ const CONFIDENCE_NOTE: Record<Recipe['confidence'], string> = {
 export default function GeneratedRecipePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+
+  const units = useUnits();
 
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [missing, setMissing] = useState(false);
@@ -131,7 +135,7 @@ export default function GeneratedRecipePage({ params }: { params: Promise<{ id: 
       ingredients={recipe.ingredients.map((i) => ({
         text: i.name,
         amount:
-          i.quantity_desc ?? (i.quantity_g === null ? null : `${Math.round(i.quantity_g)}g`),
+          i.quantity_desc ?? (i.quantity_g === null ? null : formatMass(i.quantity_g, units)),
         missing: i.missing,
       }))}
       steps={recipe.steps}

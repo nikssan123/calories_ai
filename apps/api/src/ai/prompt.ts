@@ -6,6 +6,7 @@ import type {
   WeeklyReview,
   WeightEntry,
 } from '@ct/shared';
+import { formatBodyWeight, formatHeight, unitsOf } from '@ct/shared';
 import type { AgentNote } from '../services/notes.ts';
 import { MIN_TARGET_KCAL } from '../services/targets.ts';
 import type { Wellbeing } from '../services/wellbeing.ts';
@@ -242,6 +243,31 @@ Do the thing they asked for and stop. Don't add entries they didn't mention, don
  * to say that only the newest one counts — see "What you remember between
  * conversations".
  */
+/**
+ * What this person reads, said only when it is not what the tools already do.
+ *
+ * Two halves, and the second is the one that matters. Telling a model to talk
+ * in pounds without telling it the tools are still metric produces a log where
+ * a 180 lb weigh-in is stored as 180 kg — silently, once, and it corrupts the
+ * whole weight trend and every exercise burn computed from it afterwards.
+ *
+ * Metric users get nothing. Metric is what the tool signatures say and what the
+ * model does unprompted, so a line confirming it is tokens spent on every turn
+ * to buy a behaviour that was already there.
+ */
+export function unitsBrief(profile: Profile): string | null {
+  if (unitsOf(profile) !== 'imperial') return null;
+  return [
+    'Units: this person reads imperial. Write every measurement to them in pounds, ounces, feet and',
+    'inches, miles and \u00b0F \u2014 portions, weigh-ins, distances, oven temperatures, all of it.',
+    'Grams stay grams for protein, carbs, fat, fiber and sugar, and sodium stays in mg: that is how an',
+    'American nutrition label prints them too, so converting those would make the numbers harder to',
+    'read rather than easier. **Tool arguments never change.** Every field named _kg, _cm, _km or _g',
+    'takes the metric value whatever units the conversation is in \u2014 convert before you call it,',
+    'not after.',
+  ].join(' ');
+}
+
 export function dayContextPrompt(
   profile: Profile,
   day: DaySummary,
@@ -266,15 +292,29 @@ export function dayContextPrompt(
   // Exercise burn scales with bodyweight, and the latest weigh-in is often on an
   // earlier day than this one — so it comes from the weight history rather than
   // from `day.weight`, which is null on any day they did not step on the scale.
+  //
+  // Both systems when they read imperial, metric first. The burn arithmetic the
+  // stable prompt describes â 0.5 kcal per kg per km â is done in kilograms
+  // whoever is asking, and a model handed only "160 lb" will either convert it
+  // silently or not at all. The imperial half is there so that the sentence it
+  // writes back to them matches the one they would have said themselves.
+  const units = unitsOf(profile);
+  const both = (metric: string, display: string) =>
+    units === 'imperial' ? `${metric} / ${display}` : metric;
   const body = [
-    weight ? `${weight.weight_kg} kg (weighed ${weight.local_date})` : null,
-    profile.height_cm ? `${profile.height_cm} cm` : null,
+    weight
+      ? `${both(`${weight.weight_kg} kg`, formatBodyWeight(weight.weight_kg, units))} (weighed ${weight.local_date})`
+      : null,
+    profile.height_cm ? both(`${profile.height_cm} cm`, formatHeight(profile.height_cm, units)) : null,
   ].filter((part): part is string => part !== null);
   if (body.length > 0) {
     lines.push(
-      `Their body: ${body.join(', ')}. Use this for anything that scales with body size, exercise burn above all.`,
+      `Their body: ${body.join(', ')}. Use the metric figures for anything that scales with body size, exercise burn above all.`,
     );
   }
+
+  const brief = unitsBrief(profile);
+  if (brief) lines.push(brief);
 
   /*
    * What they will not eat, carried on every turn.
@@ -472,7 +512,8 @@ Gather these by talking, not by sending them to a settings screen. How to run it
 - Open by introducing what you do in a sentence, and let that sentence reach past logging — this is where somebody decides what the app is for, and "I track your calories" is both narrower than the truth and the version they have already tried. Then ask for the first couple of things. Do not dump the whole list on them. This is the first thing they ever hear from you, so let the warmth show — someone signing up to track their food has usually had a discouraging time of it before.
 - Ask for two or three at a time, in plain language. "How tall are you, and roughly what do you weigh at the moment?" is right. A numbered questionnaire is not.
 - Call set_profile the moment you learn a value, even mid-conversation. Never hold answers back to save a single call. Current weight goes through log_weight instead — it is a measurement that gets tracked over time.
-- Accept whatever units they use and convert: pounds, stones, feet and inches, an age instead of a birth date.
+- Units are one clause, not a question of their own. "How tall are you, and roughly what do you weigh at the moment? Kilos and centimetres, or pounds and feet — whichever you think in" gets both facts and the preference in one breath. And if they simply answer “5'10", about 180 lb”, you have your answer: set units to imperial from what they said and do not ask. Set it to metric the same way when they answer in kilos.
+- Accept whatever units they use and convert: pounds, stones, feet and inches, an age instead of a birth date. What you store is always metric — height_cm, target_weight_kg, weight_kg — however they said it. The units field decides how you talk to them afterwards, not what goes into the tools.
 - If they give you something vague ("I'm pretty active"), map it to the closest option and say which one you picked rather than asking them to choose from a list.
 - If they want to log food before finishing setup, log it. Answer the food first, then pick up where you left off with one question at the end.
 - Do not ask about anything already known${profile.display_name ? `. Their name is ${profile.display_name}` : ''}.
@@ -539,7 +580,10 @@ Do not moralise about food choices — the same rule as the journal, and it matt
 /** The per-review user turn: the numbers, and what to do with them. */
 export function reviewTaskPrompt(stats: ReviewStats, profile: Profile): string {
   const name = profile.display_name ? ` Their name is ${profile.display_name}.` : '';
-  return `Write the weekly review for ${stats.week_start} to ${stats.week_end}.${name}
+  // The stats arrive in kilograms whoever is reading, so a review written
+  // without this says "down 0.4 kg" to somebody who owns a pound scale.
+  const units = unitsBrief(profile);
+  return `Write the weekly review for ${stats.week_start} to ${stats.week_end}.${name}${units ? `\n\n${units}` : ''}
 
 Here are the week's numbers. They are already computed — use them as given.
 
@@ -608,10 +652,14 @@ Plain sentences. No greeting, no sign-off, no headings, no emoji. Write it the w
 export function nudgeTaskPrompt(stats: NudgeStats, profile: Profile): string {
   const name = profile.display_name ? `${profile.display_name}'s` : 'Their';
 
+  const units = unitsBrief(profile);
   const lines: string[] = [
     `Write the nudge. ${name} log, over the last week:`,
     `- Days logged: ${stats.days_logged} of 7`,
   ];
+  // Macros and calories are unit-neutral, but a stalled-scale nudge quotes a
+  // weight, and a nudge is one short message that gets exactly one reading.
+  if (units) lines.push('', units);
   if (stats.mean_kcal !== null) {
     lines.push(`- Average intake: ${stats.mean_kcal} kcal against a ${stats.target_kcal} target`);
   }
@@ -747,6 +795,13 @@ export interface RecipeTaskInput {
   /** Which meal this is for, and anything they asked for in their own words. */
   meal: string;
   wants: string | null;
+  /**
+   * `unitsBrief` for this account, or null. A method is prose full of
+   * measurements — "brown 500 g of mince at 180 °C" is not something an
+   * American can cook from — and this agent has no day context block to carry
+   * it, so it has to arrive with the task.
+   */
+  units?: string | null;
 }
 
 /** One night of a planned week: the date, its name, and what it has to fit. */
@@ -882,7 +937,14 @@ export function recipeTaskPrompt(input: RecipeTaskInput): string {
     ? `\n\n## Their kitchen is empty\n\nThey have recorded nothing at all, so assume a bare cupboard rather than a stocked one — not even oil.\n\nThis changes the job. Do not pretend to cook from an empty shelf, and do not fall back on suggestions so plain they need nothing: propose things worth eating that one small shop would cover, mark every ingredient they would have to buy with \`missing: true\`, and keep each dish to a handful of common items rather than a supermarket sweep. The two-missing-ingredients rule does not apply to this request; it exists to stop a stocked kitchen being ignored, and there is no stocked kitchen here.\n\nSay so in your reply — that you have assumed they are starting from nothing, and that adding what they actually have will make the next answer sharper.`
     : '';
 
-  const context = `## What is left of today
+  /*
+   * Named `unitsLine` because `brief` is already taken above by the
+   * per-request constraints, and two things called brief in one function is
+   * the sort of thing that gets edited into a bug.
+   */
+  const unitsLine = input.units ? `## How to write the numbers\n\n${input.units}\n\n` : '';
+
+  const context = `${unitsLine}## What is left of today
 
 ${budget.kcal_remaining} kcal and ${budget.protein_remaining}g protein.
 

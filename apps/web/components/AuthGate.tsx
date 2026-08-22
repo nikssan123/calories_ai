@@ -17,6 +17,13 @@ interface AuthValue {
   signupAllowed: boolean;
   loading: boolean;
   refresh: () => Promise<void>;
+  /**
+   * Adopt a profile the app already has in hand — chat turns come back with
+   * one, because `set_profile` can change units or diet mid-conversation. A
+   * local swap rather than a `refresh()`, which would be a round trip to fetch
+   * something already received.
+   */
+  adoptProfile: (profile: Profile) => void;
   signOut: () => Promise<void>;
 }
 
@@ -27,6 +34,7 @@ const AuthContext = createContext<AuthValue>({
   signupAllowed: false,
   loading: true,
   refresh: async () => {},
+  adoptProfile: () => {},
   signOut: async () => {},
 });
 
@@ -103,6 +111,10 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     // where you are already logged in.
   }, [loading, status, onLogin, isPublic, pathname, router]);
 
+  const adoptProfile = useCallback((profile: Profile) => {
+    setStatus((prev) => (prev ? { ...prev, profile } : prev));
+  }, []);
+
   const signOut = useCallback(async () => {
     // Logout answers with the signed-out status rather than a bare ack, so the
     // landing page we are about to show reads the server's real `signup_allowed`
@@ -127,6 +139,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         signupAllowed: status?.signup_allowed ?? false,
         loading,
         refresh,
+        adoptProfile,
         signOut,
       }}
     >

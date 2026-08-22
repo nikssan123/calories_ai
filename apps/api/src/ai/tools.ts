@@ -13,7 +13,7 @@ import type {
   PantryItem,
   Progress,
 } from '@ct/shared';
-import { DIETS } from '@ct/shared';
+import { DIETS, UNIT_SYSTEMS } from '@ct/shared';
 import { query } from '../db.ts';
 import { addDays, type DayContext, inferMeal, localDateFor, resolveWhen } from '../time.ts';
 import {
@@ -427,7 +427,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         .nullable()
         .default(null)
         .describe(
-          'Distance covered, for a walk, run, ride or swim. Send the figure you actually based the burn on, including when you estimated it yourself from a described route. Null for activities that do not cover ground.',
+          'Distance covered in kilometres, always — convert from miles yourself, 5 mi is 8.05. Send the figure you actually based the burn on, including when you estimated it yourself from a described route. Null for activities that do not cover ground.',
         ),
       kcal_burned: z.number().describe('Estimated calories burned.'),
       when: whenField,
@@ -492,7 +492,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
               .array(
                 z.object({
                   reps: z.number().nullable().default(null),
-                  weight_kg: z.number().nullable().default(null).describe('Load per set. Null for bodyweight.'),
+                  weight_kg: z.number().nullable().default(null).describe('Load per set, in kilograms always — convert from pounds yourself, 225 lb is 102. Null for bodyweight.'),
                   duration_sec: z.number().nullable().default(null).describe('For a held exercise like a plank.'),
                   distance_m: z.number().nullable().default(null),
                 }),
@@ -618,7 +618,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
     'log_weight',
     'Record a bodyweight measurement. One per day — logging again for the same day replaces the earlier value.',
     {
-      weight_kg: z.number(),
+      weight_kg: z.number().describe('Kilograms, always. Convert from pounds or stones yourself before calling — 180 lb is 81.6.'),
       when: whenField,
     },
     async (args) => {
@@ -800,12 +800,19 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
 
   const setProfile = tool(
     'set_profile',
-    'Save what you have learned about the user during setup: sex, date of birth, height, activity level, goal, target weight. Call it as soon as you learn a value — do not wait until you have them all. Targets are recalculated automatically each time. To record their current weight use log_weight instead; that is a measurement, not a profile field. It also holds what they will not eat, which is the one thing here you may learn long after setup is over.',
+    'Save what you have learned about the user during setup: sex, date of birth, height, activity level, goal, target weight, which units they read. Call it as soon as you learn a value — do not wait until you have them all. Targets are recalculated automatically each time. To record their current weight use log_weight instead; that is a measurement, not a profile field. It also holds what they will not eat, which is the one thing here you may learn long after setup is over.',
     {
       sex: z.enum(['male', 'female']).nullable().default(null),
       birth_date: z.string().nullable().default(null).describe('YYYY-MM-DD. If they give only an age, convert it to an approximate birth date.'),
-      height_cm: z.number().nullable().default(null).describe('Height in centimetres. Convert from feet/inches if needed.'),
-      target_weight_kg: z.number().nullable().default(null).describe('Goal weight in kilograms.'),
+      height_cm: z.number().nullable().default(null).describe('Height in centimetres, always — convert from feet and inches yourself. 5\'10" is 178.'),
+      target_weight_kg: z.number().nullable().default(null).describe('Goal weight in kilograms, always — convert from pounds or stones yourself. 165 lb is 74.8.'),
+      units: z
+        .enum(UNIT_SYSTEMS)
+        .nullable()
+        .default(null)
+        .describe(
+          'Which system they read: "imperial" for pounds, ounces, feet and miles, "metric" for kilos, grams and kilometres. Set it from how they answer rather than asking twice — someone who says they are 5\'10" and 180 lb has told you. It changes nothing about what you store here, only how you write numbers back to them.',
+        ),
       activity_level: z
         .enum(['sedentary', 'light', 'moderate', 'active', 'very_active'])
         .nullable()

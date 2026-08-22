@@ -8,7 +8,9 @@ import type {
   ChatStreamEvent,
   DaySummary,
   OnboardingState,
+  UnitSystem,
 } from '@ct/shared';
+import { unitsOf } from '@ct/shared';
 import { api } from '@/lib/api';
 import { ChatActionCard } from '@/components/ChatCard';
 import { Markdown } from '@/components/Markdown';
@@ -38,12 +40,25 @@ interface Bubble {
 /** Near enough to the end that a new message should still carry the view. */
 const NEAR_BOTTOM_PX = 64;
 
-const PROMPTS = [
-  'Two eggs, toast and coffee',
-  'Chicken and rice for lunch',
-  'Went for a 5km run',
-  'Am I eating enough protein?',
-];
+/**
+ * The empty-state suggestions. Only the run carries a unit, and it carries one
+ * because a distance without one is not a sentence anybody says — so there are
+ * two lists rather than a placeholder to substitute into.
+ */
+const PROMPTS: Record<UnitSystem, string[]> = {
+  metric: [
+    'Two eggs, toast and coffee',
+    'Chicken and rice for lunch',
+    'Went for a 5km run',
+    'Am I eating enough protein?',
+  ],
+  imperial: [
+    'Two eggs, toast and coffee',
+    'Chicken and rice for lunch',
+    'Went for a 3 mile run',
+    'Am I eating enough protein?',
+  ],
+};
 
 /**
  * The product itself: one continuous conversation, with the day beside it on a
@@ -51,7 +66,8 @@ const PROMPTS = [
  * <Landing> at the same address.
  */
 export function Journal() {
-  const { profile, refresh: refreshAuth } = useAuth();
+  const { profile, refresh: refreshAuth, adoptProfile } = useAuth();
+  const units = unitsOf(profile);
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [day, setDay] = useState<DaySummary | null>(null);
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
@@ -201,6 +217,10 @@ export function Journal() {
         ),
       );
       setDay(result.day);
+      // The turn may have changed the profile — units, diet, a name. Adopting
+      // it here is what makes "switch me to pounds" take effect in the rail
+      // beside the conversation rather than at the next page load.
+      adoptProfile(result.profile);
 
       // set_profile may have completed setup during this turn.
       if (!onboarding?.complete) {
@@ -234,7 +254,7 @@ export function Journal() {
     } finally {
       setBusy(false);
     }
-  }, [onboarding?.complete, refreshAuth]);
+  }, [onboarding?.complete, refreshAuth, adoptProfile]);
 
   // A new account opens straight into setup: the agent introduces itself and
   // asks for what it needs, rather than pointing at a settings form.
@@ -276,7 +296,7 @@ export function Journal() {
               Say what happened and I'll work out the rest.
             </p>
             <div className="mt-7 flex flex-wrap gap-2">
-              {PROMPTS.map((prompt) => (
+              {PROMPTS[units].map((prompt) => (
                 <button
                   key={prompt}
                   type="button"

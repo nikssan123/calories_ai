@@ -376,7 +376,7 @@ describe('profile routes', () => {
 
   it('marks an account onboarded once the required fields land', async () => {
     const fresh = await createUser({
-      sex: null, birth_date: null, height_cm: null, goal: null, is_setup_complete: false,
+      sex: null, birth_date: null, height_cm: null, goal: null, units: null, is_setup_complete: false,
     });
     const { app: freshApp, cookie: freshCookie } = await appFor(fresh);
     try {
@@ -384,12 +384,36 @@ describe('profile routes', () => {
         method: 'PATCH',
         url: '/profile',
         headers: { cookie: freshCookie },
-        payload: { sex: 'male', birth_date: '1990-01-01', height_cm: 180, goal: 'lose' },
+        payload: {
+          sex: 'male', birth_date: '1990-01-01', height_cm: 180, goal: 'lose', units: 'imperial',
+        },
       });
       expect((await getUser(fresh.id)).is_setup_complete).toBe(true);
     } finally {
       await freshApp.close();
     }
+  });
+
+  /*
+   * Storage is metric whatever the preference says, so the check that matters
+   * is not that the flag saved — it is that nothing else moved when it did.
+   */
+  it('stores the preference without touching the metric it renders', async () => {
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/profile',
+      ...auth({ payload: { units: 'imperial', height_cm: 178 } }),
+    });
+    expect(response.json()).toMatchObject({ units: 'imperial', height_cm: 178 });
+  });
+
+  it('refuses a measurement system it has never heard of', async () => {
+    const response = await app.inject({
+      method: 'PATCH',
+      url: '/profile',
+      ...auth({ payload: { units: 'nautical' } }),
+    });
+    expect(response.statusCode).toBe(400);
   });
 
   it('reports what onboarding still needs', async () => {

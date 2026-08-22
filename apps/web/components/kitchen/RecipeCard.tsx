@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { ArrowUpRight, Bookmark, ChevronDown, Clock, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Recipe } from '@ct/shared';
+import { formatMass } from '@ct/shared';
 import { api } from '@/lib/api';
+import { useUnits } from '@/lib/units';
 import { Button } from '@/components/ui/button';
 import { formatServings, scale, Servings } from '@/components/kitchen/Servings';
 import { cn } from '@/lib/utils';
@@ -33,6 +35,7 @@ export function RecipeCard({
   recipe: Recipe;
   onCooked: () => void;
 }) {
+  const units = useUnits();
   const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState(recipe.saved);
   const [cooking, setCooking] = useState(false);
@@ -154,7 +157,7 @@ export function RecipeCard({
                   </span>
                   <span className="text-muted-foreground tnum text-footnote shrink-0 self-center">
                     {item.quantity_desc ??
-                      (item.quantity_g === null ? '' : `${Math.round(item.quantity_g)}g`)}
+                      (item.quantity_g === null ? '' : formatMass(item.quantity_g, units))}
                   </span>
                 </li>
               ))}

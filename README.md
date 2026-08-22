@@ -7,7 +7,7 @@ An AI-first calorie tracker. You say what you ate; it produces structured nutrit
 
 ## Why it's built this way
 
-The product is one continuous conversation, so three constraints drove the architecture:
+The product is one continuous conversation, so four constraints drove the architecture:
 
 1. **The conversation is a view, not the source of truth.** Meals live in `food_entries`
    / `food_items`. Chat messages live separately. "There was more rice" *mutates the
@@ -19,6 +19,10 @@ The product is one continuous conversation, so three constraints drove the archi
 3. **A day is not a calendar day.** Every entry stores `local_date`, computed at write
    time from your timezone and a configurable `day_start_hour` (default 04:00), so a 1am
    snack counts toward the evening it belongs to.
+4. **Storage is metric; units are a lens.** Kilograms, centimetres, grams and kilometres
+   on disk, whoever is reading. The journal asks during onboarding whether you think in
+   pounds and feet, and converts at the edges — screen and keyboard — so switching
+   re-renders your history instead of rewriting it. See [UNITS.md](UNITS.md).
 
 ## Layout
 
@@ -26,6 +30,7 @@ The product is one continuous conversation, so three constraints drove the archi
 apps/
   api/       Fastify + Postgres. Owns all data and the agent.
   web/       Next.js. Talks to the API and nothing else.
+  mobile/    Expo + React Native. Same API, same client, its own UI shell.
 packages/
   shared/    Zod schemas + types — the wire contract.
   api-client/  fetch-only client. No node imports, so RN can use it as-is.
@@ -716,6 +721,15 @@ more than the turn costs.
 
 ## Migrating to React Native
 
+`apps/mobile` exists. It boots on Expo SDK 57, signs in against the API as it stands, and
+renders Today from live data; the other five tabs are named placeholders. `pnpm dev:mobile`
+starts the packager.
+
+The API and both shared packages are untouched by it, which was the claim this whole
+arrangement was making. The one thing that moved is `foodEmoji` — pure presentation, needed
+by both clients, and now `@ct/shared/food-emoji` rather than a second copy of a 200-line
+keyword table waiting to drift.
+
 Unchanged: `apps/api`, `packages/shared`, `packages/api-client`.
 
 Replaced: `apps/web` becomes `apps/mobile`, and the state each screen holds is already
@@ -734,6 +748,13 @@ and accepts `token` as a *function*, read per request, because a native app buil
 client before anyone has signed in. Meal photos are reachable too: a signed `photo_url`
 authorises itself and needs no session, which is the only path RN has, since `<Image>`
 does its own fetching.
+
+On the device the token lives in `expo-secure-store` — the Keychain on iOS, the Keystore on
+Android — mirrored in memory, because the client reads it synchronously on every request
+and the store is async. A native client has no httpOnly cookie to hide behind, so the token
+is readable by definition; the question is only by what, and the answer should not be "a
+plaintext file a backup carries off". Sign-out drops it whether or not the revoke call
+succeeds: someone tapping "sign out" with no signal must still end up signed out.
 
 **Camera.** `expo-image-picker` replaces the `<input type="file">` in `Composer.tsx` and
 `kitchen/FridgeScan.tsx`, producing the same base64 payload the API already takes.
@@ -760,7 +781,7 @@ What ports directly:
 
 What has to be rebuilt rather than translated:
 
-- **The ledge.** `--chunk` is a solid, *zero-blur*, offset shadow. iOS can express that
+- **The ledge — built.** `--chunk` is a solid, *zero-blur*, offset shadow. iOS can express that
   with `shadowRadius: 0`; Android has only `elevation`, which is always blurred and always
   centred. So the shadow route splits the platforms on the one decision the whole design
   rests on. Don't fake it twice — render the ledge as a real `View`: same radius, `--chunk`
@@ -768,34 +789,69 @@ What has to be rebuilt rather than translated:
   it is identical on both platforms, and it makes the press fall out for free, since
   translating the card down by the depth consumes the ledge exactly the way `:active` does.
   `chunk-slot`'s reserved travel becomes the wrapper's padding, and one `<Chunk>` component
-  replaces four `@utility` blocks.
+  replaces four `@utility` blocks. `components/Chunk.tsx`, with `<PressableChunk>` beside
+  it for the half that sinks.
 - **`entry-touched`** animates box-shadow spread, which RN cannot animate at all. It
   becomes an overlay `View` with an animated border and opacity — same one-shot ring on a
   card the agent has just corrected, different mechanism.
-- **Reduced motion.** The CSS kills every animation from one `prefers-reduced-motion`
-  block. RN has no such switch: `AccessibilityInfo.isReduceMotionEnabled()` has to be
-  consulted per component. Write that hook before the first animated component, not after
-  the fortieth — the celebration must never fire for someone who asked for less motion, and
-  a rule that has to be remembered forty times is a rule that will be missed.
-- **`--material`**, the translucent header and tab bar, wants `expo-blur` on iOS. Android
-  blur is weak and expensive, so it should fall back to a near-opaque solid.
-- **Fonts.** Baloo 2 and Nunito come from `@expo-google-fonts/*`, with one trap: RN does
-  not synthesise weights across a family. The type scale leans on 800, so the ExtraBold
-  faces must be bundled and referenced *by face name* — `fontWeight: '800'` on its own
-  silently renders regular.
+- **Reduced motion — built, first.** The CSS kills every animation from one
+  `prefers-reduced-motion` block. RN has no such switch:
+  `AccessibilityInfo.isReduceMotionEnabled()` has to be consulted per component. That hook
+  went in before the first animated component rather than after the fortieth — the
+  celebration must never fire for someone who asked for less motion, and a rule that has to
+  be remembered forty times is a rule that will be missed. `hooks/useReducedMotion.ts`.
+- **`--material` — built.** The translucent header and tab bar takes `expo-blur` on iOS.
+  Android blur is weak and expensive, so it falls back to a near-opaque solid — pushed to
+  0.97 rather than reused at the web's 0.85, because without a blur behind it 85% is just a
+  bar you can see the list through.
+- **Fonts — built.** Baloo 2 and Nunito come from `@expo-google-fonts/*`, with one trap:
+  RN does not synthesise weights across a family. The type scale leans on 800, so the
+  ExtraBold faces are bundled and referenced *by face name* — `fontWeight: '800'` on its
+  own silently renders regular. A second trap found on the way: both packages `require()`
+  every weight they ship from their root module, so importing a single named face from
+  there drags all of them in. Nunito alone is sixteen files with the italics. The faces are
+  imported one per subpath, and the app carries the eight it uses.
 
-One open decision, best made at scaffold time: NativeWind, keeping the Tailwind class
-names so the port of the component tree is mechanical and the palette has one home, versus
-StyleSheet and a theme object. `apps/web` is on Tailwind v4 — `@theme inline`,
-`@custom-variant`, `@utility` — so this turns on how completely the current NativeWind
-handles v4, which is worth checking against its docs rather than assuming. Either way the
-ledge, the press, the ring and the reduced-motion hook are purpose-built native components;
-nothing is gained by forcing them through utility classes.
+**Settled: StyleSheet and a theme object, not NativeWind.** The case for NativeWind was
+that keeping the class names makes the port of the component tree mechanical and leaves
+the palette with one home. It turns on Tailwind v4, which is what `apps/web` is built on —
+`@theme inline`, `@custom-variant`, `@utility` — and at the time of scaffolding the only
+NativeWind that speaks v4 is `5.0.0-preview.4`. Stable is 4.2.6, peered to Tailwind 3.
+Betting the entire UI layer on a preview to save a port that is a few days of typing is
+the wrong trade, and it would have been a bet on the *most* load-bearing dependency in the
+app: everything renders through it.
+
+So the palette is `theme/colors.ts` — two hand-tuned `Palette` objects, read through
+`useTheme()` — and the type scale is `theme/typography.ts`. It is a second home for the
+colours, which is the real cost and worth naming: `globals.css` and `colors.ts` have to be
+edited together. Nothing else was given up. The ledge, the press, the ring and the
+reduced-motion hook were always going to be purpose-built native components, and they are
+the parts that matter.
 
 One caveat that is not a blocker: the Agent SDK spawns a local `claude` process, so the API
 must run on a machine with Claude Code installed. In production it already does, and a
 phone simply talks to `api.daysofar.com`. Only local development needs care — a device on
-the LAN needs the machine's address, never `localhost`.
+the LAN needs the machine's address, never `localhost`, which on a phone resolves to the
+phone. `lib/api.ts` falls back to the packager's own host for exactly that reason: it is by
+definition the machine you ran `expo start` on. `EXPO_PUBLIC_API_URL` overrides it.
+
+### What is left
+
+The five placeholder tabs, in the order they are worth doing: **Journal** first, because it
+is the product — and the largest, since it carries the composer, the streaming reply and
+`expo-image-picker` in place of `<input type="file">`. Then **You**, which holds onboarding
+and the unit switch. Then Progress, Exercise and Cook, which are all reads.
+
+Two smaller pieces have no screen of their own and are easy to forget. **Confetti** — the
+app's only celebration, on the macros — is the one animation that must not fire at all
+under reduced motion, since a loop has no end state worth arriving at. And **`entry-touched`**,
+the one-shot ring on a card the agent has just corrected, needs the overlay `View` described
+above; it belongs to the Journal port, because that is where corrections arrive.
+
+Google sign-in is absent from the native login screen. It is a chain of full-page
+navigations, which on a device means `expo-auth-session` and a redirect back through the
+app's scheme — real work, sharing nothing with the web flow, so it is its own piece rather
+than a line in the port.
 
 ## Deploying to a server
 

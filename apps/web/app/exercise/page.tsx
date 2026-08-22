@@ -4,12 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ExerciseEntry, ExerciseSummary } from '@ct/shared';
+import { distanceUnit, formatDistance, toDistance } from '@ct/shared';
 import { api } from '@/lib/api';
+import { useUnits } from '@/lib/units';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { Sparkline } from '@/components/Sparkline';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { exerciseEmoji } from '@/lib/foodEmoji';
+import { exerciseEmoji } from '@ct/shared/food-emoji';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 /**
@@ -26,6 +28,7 @@ const WINDOWS = [14, 30, 90] as const;
 export default function ExercisePage() {
   const [summary, setSummary] = useState<ExerciseSummary | null>(null);
   const [days, setDays] = useState<number>(30);
+  const units = useUnits();
 
   /* The series carries a date and a number per day; the sessions that made
      that number sit in a flat list beside it. Index them once, so pointing at
@@ -105,7 +108,7 @@ export default function ExercisePage() {
               <p className="text-muted-foreground text-body font-medium">
                 Nothing logged in the last {days} days.
                 <br />
-                Tell the journal — “went for a 5km run”.
+                Tell the journal — “went for a {units === 'imperial' ? '3 mile' : '5km'} run”.
               </p>
             </div>
           </InsetGroup>
@@ -146,8 +149,12 @@ export default function ExercisePage() {
                 <Stat label="Burned" value={summary.total_kcal.toLocaleString()} unit="kcal" />
                 <Stat
                   label="Distance"
-                  value={summary.total_distance_km === null ? '—' : `${summary.total_distance_km}`}
-                  unit="km"
+                  value={
+                    summary.total_distance_km === null
+                      ? '—'
+                      : `${toDistance(summary.total_distance_km, units)}`
+                  }
+                  unit={distanceUnit(units)}
                 />
                 <Stat
                   label="Time"
@@ -163,7 +170,7 @@ export default function ExercisePage() {
 
             <InsetGroup
               title="🏃  Sessions"
-              footer="Burn is an estimate and is never netted off your calorie target. Correct one in the journal — “that run was closer to 7km”."
+              footer={`Burn is an estimate and is never netted off your calorie target. Correct one in the journal — “that run was closer to ${units === 'imperial' ? '4.5 miles' : '7km'}”.`}
             >
               {summary.entries.map((entry) => (
                 <InsetRow key={entry.id}>
@@ -175,7 +182,7 @@ export default function ExercisePage() {
                     <p className="text-footnote text-muted-foreground font-medium">
                       {[
                         formatDate(entry.local_date),
-                        entry.distance_km !== null ? `${entry.distance_km} km` : null,
+                        entry.distance_km !== null ? formatDistance(entry.distance_km, units) : null,
                         entry.duration_min !== null
                           ? `${Math.round(entry.duration_min)} min`
                           : null,
@@ -223,10 +230,11 @@ function DayReadout({
   kcal: number;
   sessions: ExerciseEntry[];
 }) {
+  const units = useUnits();
   const distance = sessions.reduce((sum, s) => sum + (s.distance_km ?? 0), 0);
   const minutes = sessions.reduce((sum, s) => sum + (s.duration_min ?? 0), 0);
   const detail = [
-    distance > 0 ? `${Math.round(distance * 10) / 10} km` : null,
+    distance > 0 ? formatDistance(distance, units) : null,
     minutes > 0 ? formatDuration(minutes) : null,
   ]
     .filter(Boolean)

@@ -4,6 +4,11 @@
     "lib": ["ES2023"],
     "module": "ESNext",
     "moduleResolution": "bundler",
+    // @ct/shared is consumed as TypeScript source rather than as a build
+    // output, and its internal imports carry the .ts extension so that Node can
+    // resolve them at runtime in the API. Every package here compiles noEmit,
+    // which is what makes this legal.
+    "allowImportingTsExtensions": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "esModuleInterop": true,

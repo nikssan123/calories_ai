@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Calendar, CalendarDay } from '@ct/shared';
+import { formatBodyWeight } from '@ct/shared';
 import { api } from '@/lib/api';
+import { useUnits } from '@/lib/units';
 import { InsetGroup } from '@/components/InsetGroup';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -27,6 +29,7 @@ export default function HistoryPage() {
   // rather than on a Date object in some ambient timezone.
   const [month, setMonth] = useState<string | null>(null);
   const [calendar, setCalendar] = useState<Calendar | null>(null);
+  const units = useUnits();
   const [selected, setSelected] = useState<string | null>(null);
 
   useEffect(() => {
@@ -148,7 +151,9 @@ export default function HistoryPage() {
                         </span>
                       )}
                       {selectedDay.weight_kg !== null && (
-                        <span className="tnum">{selectedDay.weight_kg} kg</span>
+                        <span className="tnum">
+                          {formatBodyWeight(selectedDay.weight_kg, units)}
+                        </span>
                       )}
                     </div>
                     <Link
@@ -281,6 +286,7 @@ function DayHoverCard({
   placeAbove: boolean;
 }) {
   const over = day.target_kcal > 0 && day.kcal > day.target_kcal;
+  const units = useUnits();
 
   return (
     <div
@@ -311,7 +317,9 @@ function DayHoverCard({
         {day.burned_kcal > 0 && (
           <span className="tnum text-[var(--exercise-text)]">−{day.burned_kcal} burned</span>
         )}
-        {day.weight_kg !== null && <span className="tnum">{day.weight_kg} kg</span>}
+        {day.weight_kg !== null && (
+          <span className="tnum">{formatBodyWeight(day.weight_kg, units)}</span>
+        )}
       </div>
     </div>
   );

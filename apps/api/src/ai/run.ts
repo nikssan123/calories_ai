@@ -7,7 +7,7 @@ import { listNotes } from '../services/notes.ts';
 import { buildDaySummary } from '../services/summary.ts';
 import { latestWeight } from '../services/log.ts';
 import { latestReview } from '../services/reviews.ts';
-import { missingProfileFields } from '../services/user.ts';
+import { getUser, missingProfileFields } from '../services/user.ts';
 import { recordUsage } from '../services/usage.ts';
 import { withTurnLock } from '../services/turn-lock.ts';
 import { checkWellbeing } from '../services/wellbeing.ts';
@@ -234,10 +234,15 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
   );
 
   // Re-read the day: tools may have written to it, and the client should not
-  // have to make a second request to see the result.
-  const updatedDay = await buildDaySummary(input.userId, today);
+  // have to make a second request to see the result. Same for the profile —
+  // `set_profile` runs from inside a turn, and `input.profile` is the copy from
+  // before it did.
+  const [updatedDay, updatedProfile] = await Promise.all([
+    buildDaySummary(input.userId, today),
+    getUser(input.userId),
+  ]);
 
-  return { message: assistantMessage, actions, day: updatedDay };
+  return { message: assistantMessage, actions, day: updatedDay, profile: updatedProfile };
 }
 
 /**

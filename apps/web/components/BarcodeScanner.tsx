@@ -3,7 +3,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Camera, ImageIcon, Loader2, ScanBarcode } from 'lucide-react';
 import { toast } from 'sonner';
-import { type BarcodeProduct, type FoodEntry, SERVING_STEPS, formatServings } from '@ct/shared';
+import {
+  type BarcodeProduct,
+  type FoodEntry,
+  type UnitSystem,
+  GRAMS_PER_OZ,
+  SERVING_STEPS,
+  formatMass,
+  formatServings,
+  massUnit,
+} from '@ct/shared';
+import { useUnits } from '@/lib/units';
 import { api } from '@/lib/api';
 import { canOpenCamera, decodeBarcode, decodeBarcodeFromFile } from '@/lib/barcode';
 import { PHOTO_ACCEPT, preparePhoto, type PreparedPhoto } from '@/lib/image';
@@ -305,12 +315,63 @@ export function BarcodeScanner({
 }
 
 /**
+ * The middle pill and the "Weigh it" stepper, per measurement system.
+ *
+ * Two tables rather than a conversion, because these are not the same numbers
+ * in different clothes. Grams step by 5 from 5 to 2 kg because that is what a
+ * kitchen scale does; ounces step by a half because a half ounce is the finest
+ * graduation most American scales show and 5 g steps rendered in ounces would
+ * be a stepper whose every press produces a new decimal.
+ */
+const BASIS: Record<
+  UnitSystem,
+  {
+    /** What the pill says, and what the figures beside it are quoted per. */
+    label: string;
+    grams: number;
+    /** One step-unit in grams, so the stepper can hold ounces and log grams. */
+    gramsPerStepUnit: number;
+    weighDefault: number;
+    weighMin: number;
+    weighMax: number;
+    weighStep: number;
+  }
+> = {
+  metric: {
+    label: '100 g',
+    grams: 100,
+    gramsPerStepUnit: 1,
+    weighDefault: 100,
+    weighMin: 5,
+    weighMax: 2000,
+    weighStep: 5,
+  },
+  imperial: {
+    label: '1 oz',
+    grams: GRAMS_PER_OZ,
+    gramsPerStepUnit: GRAMS_PER_OZ,
+    // Four ounces is a small plated portion — the same place 100 g sits.
+    weighDefault: 4,
+    weighMin: 0.5,
+    weighMax: 70,
+    weighStep: 0.5,
+  },
+};
+
+/**
  * The gap between "what this is" and "what you ate", made explicit.
  *
- * Three choices and no more. A serving when the label named one, 100g because
- * that is the basis every figure here is quoted in, and a number for everyone
- * whose lunch was neither. A slider would imply a precision nobody has about
- * the amount of cereal in a bowl.
+ * Three choices and no more. A serving when the label named one, the basis
+ * every figure here is quoted in, and a number for everyone whose lunch was
+ * neither. A slider would imply a precision nobody has about the amount of
+ * cereal in a bowl.
+ *
+ * The middle pill is where the data's nationality shows. Both catalogues
+ * normalise to per-100 g and the cache stores that, but 100 g is a European
+ * convention: the American equivalent is the ounce, which is what a deli
+ * counter and a recipe both use. So the pill reads "1 oz" and the arithmetic
+ * underneath is unchanged — everything still resolves to grams before the
+ * request leaves the browser, and the API never learns any of this happened.
  */
 function PortionCard({
   product,
@@ -321,17 +382,26 @@ function PortionCard({
   onLogged: (entry: FoodEntry) => void;
   onRescan: () => void;
 }) {
-  // Defaults to the serving when the label gave one, and to 100g when it did
-  // not — never to a guess dressed up as a serving.
+  const units = useUnits();
+  const basis = BASIS[units];
+
+  // Defaults to the serving when the label gave one, and to the basis amount
+  // when it did not — never to a guess dressed up as a serving.
   const [mode, setMode] = useState<'serving' | 'hundred' | 'custom'>(
     product.serving_g === null ? 'hundred' : 'serving',
   );
   const [servings, setServings] = useState(1);
-  const [grams, setGrams] = useState(100);
+  // Held in whichever unit the stepper is showing, not in grams, so that
+  // stepping never lands on a number the display has to round away.
+  const [weighed, setWeighed] = useState(basis.weighDefault);
   const [logging, setLogging] = useState(false);
 
   const eatenGrams =
-    mode === 'serving' ? servings * (product.serving_g ?? 100) : mode === 'hundred' ? 100 : grams;
+    mode === 'serving'
+      ? servings * (product.serving_g ?? basis.grams)
+      : mode === 'hundred'
+        ? basis.grams
+        : weighed * basis.gramsPerStepUnit;
   const share = eatenGrams / 100;
 
   // What goes on the first pill, and what goes under the row.
@@ -344,7 +414,7 @@ function PortionCard({
   // the words the label actually used get a line to themselves underneath,
   // where they have the width of the card and can wrap.
   const servingDesc = product.serving_desc?.trim() || null;
-  const servingGrams = `${Math.round(product.serving_g ?? 0)} g`;
+  const servingGrams = formatMass(product.serving_g ?? 0, units);
   const servingPill = servingDesc && servingDesc.length <= 10 ? servingDesc : servingGrams;
   const servingNote =
     servingDesc === null
@@ -388,7 +458,7 @@ function PortionCard({
         <Macro label="P" value={product.protein_100g * share} color="var(--protein)" />
         <Macro label="C" value={product.carbs_100g * share} color="var(--carbs)" />
         <Macro label="F" value={product.fat_100g * share} color="var(--fat)" />
-        <span className="tnum">{Math.round(eatenGrams)} g</span>
+        <span className="tnum">{formatMass(eatenGrams, units)}</span>
       </div>
 
       <ToggleGroup
@@ -411,7 +481,7 @@ function PortionCard({
           value="hundred"
           className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-9 min-w-0 flex-1 rounded-full px-2 text-footnote font-bold transition-colors"
         >
-          <span className="truncate">100 g</span>
+          <span className="truncate">{basis.label}</span>
         </ToggleGroupItem>
         <ToggleGroupItem
           value="custom"
@@ -432,7 +502,15 @@ function PortionCard({
         />
       )}
       {mode === 'custom' && (
-        <Stepper label="grams" value={grams} onChange={setGrams} min={5} max={2000} step={5} />
+        <Stepper
+          label="weighed"
+          suffix={massUnit(units)}
+          value={weighed}
+          onChange={setWeighed}
+          min={basis.weighMin}
+          max={basis.weighMax}
+          step={basis.weighStep}
+        />
       )}
 
       <Button
@@ -529,6 +607,7 @@ function Missed({
  */
 function Stepper({
   label,
+  suffix,
   note,
   value,
   onChange,
@@ -539,6 +618,8 @@ function Stepper({
   format,
 }: {
   label: string;
+  /** Unit shown after the figure, when the figure has one. */
+  suffix?: string;
   /** What the serving on the pill actually was, in the label's own words. */
   note?: string | null;
   value: number;
@@ -585,7 +666,7 @@ function Stepper({
         </button>
         <span className="text-figure w-16 text-center text-body tnum" aria-live="polite">
           {format ? format(value) : value % 1 === 0 ? value : value.toFixed(1)}{' '}
-          {label === 'grams' ? 'g' : ''}
+          {suffix ?? ''}
         </span>
         <button
           type="button"

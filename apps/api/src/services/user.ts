@@ -1,4 +1,5 @@
-import type { PlanName, Profile, ProfileUpdate } from '@ct/shared';
+import type { PlanName, Profile, ProfileUpdate, UnitSystem } from '@ct/shared';
+import { unitsOf } from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import type { DayContext } from '../time.ts';
 import { hashPassword, verifyPassword } from './auth.ts';
@@ -28,6 +29,7 @@ export async function updateUser(userId: string, patch: ProfileUpdate): Promise<
     activity_level: patch.activity_level,
     goal: patch.goal,
     timezone: patch.timezone,
+    units: patch.units,
     day_start_hour: patch.day_start_hour,
     notify_weekly_review: patch.notify_weekly_review,
     notify_nudges: patch.notify_nudges,
@@ -48,7 +50,17 @@ export async function updateUser(userId: string, patch: ProfileUpdate): Promise<
   return getUser(userId);
 }
 
-/** The fields onboarding needs before targets can be calculated honestly. */
+/**
+ * What onboarding still has to find out. All but the last are what a target
+ * cannot honestly be calculated without.
+ *
+ * Units is the exception and belongs here anyway, because this list is also
+ * what decides when setup is over. Left out of it, the preference would be
+ * asked last or not at all — the conversation would end the moment the target
+ * could be computed, and someone in Ohio would be handed a number in kilos.
+ * Null is "not yet asked"; existing accounts were backfilled to metric, which
+ * is what they have been reading all along.
+ */
 export function missingProfileFields(profile: Profile): string[] {
   const missing: string[] = [];
   if (!profile.sex) missing.push('sex');
@@ -56,6 +68,7 @@ export function missingProfileFields(profile: Profile): string[] {
   if (!profile.height_cm) missing.push('height');
   if (!profile.goal) missing.push('goal');
   if (!profile.activity_level) missing.push('activity level');
+  if (!profile.units) missing.push('whether they read metric or imperial units');
   return missing;
 }
 
@@ -151,6 +164,8 @@ export interface EmailRecipient {
   email: string;
   displayName: string | null;
   timezone: string;
+  /** Which units the mail should be written in. Same reason as `timezone`. */
+  units: UnitSystem;
   /** Product email goes only to an address someone has proved they can read. */
   verified: boolean;
   notifyWeeklyReview: boolean;
@@ -193,7 +208,7 @@ export async function accountGate(userId: string): Promise<AccountGate> {
 
 export async function getEmailRecipient(userId: string): Promise<EmailRecipient | null> {
   const row = await queryOne<any>(
-    `SELECT id, email, display_name, timezone, email_verified_at, notify_weekly_review, notify_nudges
+    `SELECT id, email, display_name, timezone, units, email_verified_at, notify_weekly_review, notify_nudges
        FROM users WHERE id = $1 AND email IS NOT NULL`,
     [userId],
   );
@@ -203,7 +218,7 @@ export async function getEmailRecipient(userId: string): Promise<EmailRecipient 
 /** The same, found by address. For flows that start before there is a session. */
 export async function findRecipientByEmail(email: string): Promise<EmailRecipient | null> {
   const row = await queryOne<any>(
-    `SELECT id, email, display_name, timezone, email_verified_at, notify_weekly_review, notify_nudges
+    `SELECT id, email, display_name, timezone, units, email_verified_at, notify_weekly_review, notify_nudges
        FROM users WHERE lower(email) = lower($1)`,
     [email],
   );
@@ -216,6 +231,7 @@ function toRecipient(row: any): EmailRecipient {
     email: row.email,
     displayName: row.display_name,
     timezone: row.timezone,
+    units: unitsOf(row),
     verified: row.email_verified_at !== null,
     notifyWeeklyReview: row.notify_weekly_review,
     notifyNudges: row.notify_nudges,
@@ -295,6 +311,7 @@ function toProfile(row: any): Profile {
     activity_level: row.activity_level,
     goal: row.goal,
     timezone: row.timezone,
+    units: row.units ?? null,
     day_start_hour: Number(row.day_start_hour),
     is_setup_complete: row.is_setup_complete,
     notify_weekly_review: row.notify_weekly_review,

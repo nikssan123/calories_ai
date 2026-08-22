@@ -209,6 +209,7 @@ export async function sendWeeklyReviewEmail(
       range: formatRange(review.week_start, review.week_end),
       appUrl: env.appUrl,
       unsubscribeUrl: link.url,
+      units: recipient.units,
     }),
   });
 }

@@ -15,6 +15,7 @@ import {
   RECIPES_PER_RUN,
   RECIPE_SYSTEM_PROMPT,
   recipeTaskPrompt,
+  unitsBrief,
   type PlanDay,
 } from './prompt.ts';
 import { buildNutritionServer } from './tools.ts';
@@ -207,6 +208,7 @@ export async function suggestRecipes(
       meal: options.meal ?? inferMeal(now, ctx.timezone),
       wants: options.wants ?? null,
       rules: { diet: profile.diet, avoids: profile.avoids },
+      units: unitsBrief(profile),
       constraints: {
         minutes: options.minutes ?? null,
         portions: options.portions ?? null,

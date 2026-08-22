@@ -8,9 +8,12 @@ import type {
   ExerciseCategory,
   ExerciseEntry,
   ExerciseType,
+  UnitSystem,
   WorkoutExercise,
 } from '@ct/shared';
+import { loadToKg, loadUnit } from '@ct/shared';
 import { api } from '@/lib/api';
+import { useUnits } from '@/lib/units';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -58,6 +61,7 @@ export function WorkoutCard({
   const [types, setTypes] = useState<ExerciseType[] | null>(null);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [saving, setSaving] = useState(false);
+  const units = useUnits();
   // Latched the moment a post goes out, and only released if it fails. The
   // disabled button covers the second tap of a double-tap on a slow phone;
   // this covers the one that beats the re-render to it.
@@ -87,7 +91,9 @@ export function WorkoutCard({
   }
 
   async function submit() {
-    const exercises = drafts.map(toExercise).filter((e): e is WorkoutExercise => e !== null);
+    const exercises = drafts
+      .map((d) => toExercise(d, units))
+      .filter((e): e is WorkoutExercise => e !== null);
     if (!category || exercises.length === 0 || posted.current) return;
 
     posted.current = true;
@@ -139,7 +145,7 @@ export function WorkoutCard({
   // ---- Building the session -------------------------------------------------
 
   const chosen = new Set(drafts.map((d) => d.typeId));
-  const ready = drafts.some((d) => toExercise(d) !== null);
+  const ready = drafts.some((d) => toExercise(d, units) !== null);
 
   return (
     <Shell heard={card.heard}>
@@ -227,6 +233,7 @@ function ExerciseRow({
   onChange: (next: Draft) => void;
   onRemove: () => void;
 }) {
+  const units = useUnits();
   const setSets = (sets: Draft['sets']) => onChange({ ...draft, sets });
   const patch = (i: number, key: keyof Draft['sets'][number], value: string) =>
     setSets(draft.sets.map((s, j) => (j === i ? { ...s, [key]: value } : s)));
@@ -255,7 +262,11 @@ function ExerciseRow({
             {draft.tracks === 'reps' ? (
               <>
                 <Field value={set.reps} onChange={(v) => patch(i, 'reps', v)} suffix="reps" />
-                <Field value={set.weight} onChange={(v) => patch(i, 'weight', v)} suffix="kg" />
+                <Field
+                  value={set.weight}
+                  onChange={(v) => patch(i, 'weight', v)}
+                  suffix={loadUnit(units)}
+                />
               </>
             ) : (
               <Field value={set.minutes} onChange={(v) => patch(i, 'minutes', v)} suffix="min" />
@@ -317,15 +328,23 @@ function Field({
 
 const blankSet = () => ({ reps: '', weight: '', minutes: '' });
 
-/** A draft becomes an exercise only once at least one set has a number in it. */
-function toExercise(draft: Draft): WorkoutExercise | null {
+/**
+ * A draft becomes an exercise only once at least one set has a number in it.
+ *
+ * The load leaves here in kilograms whatever the field said, which is the only
+ * conversion on this screen: everything above it is the number the person
+ * typed, and everything below it is what the API stores.
+ */
+function toExercise(draft: Draft, units: UnitSystem): WorkoutExercise | null {
   const sets = draft.sets
     .map((set) => {
       const reps = num(set.reps);
       const weight = num(set.weight);
       const minutes = num(set.minutes);
       if (draft.tracks === 'reps') {
-        return reps === null ? null : { reps, weight_kg: weight };
+        return reps === null
+          ? null
+          : { reps, weight_kg: weight === null ? null : loadToKg(weight, units) };
       }
       return minutes === null ? null : { duration_sec: Math.round(minutes * 60) };
     })

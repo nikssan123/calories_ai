@@ -1,9 +1,13 @@
 import { z } from 'zod';
+import { UnitSystem } from './units.ts';
 
 /**
  * The wire contract between the API and any client (web today, React Native later).
  * Nothing in this file may import node-only modules.
  */
+
+/** Conversion between what is stored and what is read. See UNITS.md. */
+export * from './units.ts';
 
 export const MEALS = ['breakfast', 'lunch', 'dinner', 'snack'] as const;
 export const Meal = z.enum(MEALS);
@@ -362,6 +366,15 @@ export const Profile = z.object({
   activity_level: ActivityLevel.nullable(),
   goal: Goal.nullable(),
   timezone: z.string(),
+  /**
+   * Which units they read. Null means onboarding has not asked yet, which is
+   * not the same as metric — it is what lets the journal ask once and never
+   * again. Everything that renders a number goes through `unitsOf()`, which
+   * resolves null to metric, so null is a special case only here and in the
+   * onboarding brief. Nothing about the stored data changes with it: see
+   * UNITS.md.
+   */
+  units: UnitSystem.nullable(),
   /** §"Day boundaries": 4 means 1am counts toward the previous day. */
   day_start_hour: z.number().int().min(0).max(12),
   is_setup_complete: z.boolean(),
@@ -1026,6 +1039,17 @@ export const ChatResponse = z.object({
   actions: z.array(ChatAction),
   /** Always echoed back so the dashboard updates without a second round trip. */
   day: DaySummary,
+  /**
+   * The profile as it stands after the turn, for the same reason as `day`.
+   *
+   * `set_profile` is an ordinary tool: someone can say "switch me to pounds",
+   * or "I'm vegetarian now", and the model will do it mid-conversation. Without
+   * this the client holds a profile from page load and keeps rendering kilos at
+   * somebody who just asked it not to, until they happen to reload.
+   *
+   * Free to include — the turn already read it.
+   */
+  profile: Profile,
 });
 export type ChatResponse = z.infer<typeof ChatResponse>;
 

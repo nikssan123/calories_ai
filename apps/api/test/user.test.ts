@@ -42,6 +42,9 @@ describe('getUser', () => {
       target_weight_kg: null,
       activity_level: null,
       goal: null,
+      // Null, not 'metric': "never asked" is what the journal reads to know it
+      // still has a question to put.
+      units: null,
       is_setup_complete: false,
     });
     const profile = await getUser(bare.id);
@@ -87,14 +90,30 @@ describe('missingProfileFields', () => {
     expect(missingProfileFields(await getUser(user.id))).toEqual([]);
   });
 
+  /*
+   * Units belongs on this list even though no target depends on it, because
+   * this list is also what ends setup. Left off, the conversation would finish
+   * the moment a target could be computed — and hand somebody in Ohio a number
+   * in kilos without ever having asked.
+   */
+  it('asks which units when nobody has said', async () => {
+    const user = await createUser({ units: null });
+    expect(missingProfileFields(await getUser(user.id))).toEqual([
+      'whether they read metric or imperial units',
+    ]);
+  });
+
   it('names each gap in plain words', async () => {
-    const user = await createUser({ sex: null, birth_date: null, height_cm: null, goal: null, activity_level: null });
+    const user = await createUser({
+      sex: null, birth_date: null, height_cm: null, goal: null, activity_level: null, units: null,
+    });
     expect(missingProfileFields(await getUser(user.id))).toEqual([
       'sex',
       'date of birth',
       'height',
       'goal',
       'activity level',
+      'whether they read metric or imperial units',
     ]);
   });
 });

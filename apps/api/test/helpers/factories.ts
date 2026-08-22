@@ -36,6 +36,9 @@ export async function createUser(overrides: Record<string, unknown> = {}): Promi
     activity_level: 'moderate',
     goal: 'lose',
     timezone: DEFAULT_CTX.timezone,
+    // Set, not null: a null here is "onboarding has not asked yet", which would
+    // make every fixture look like a half-finished account.
+    units: 'metric',
     day_start_hour: DEFAULT_CTX.dayStartHour,
     is_setup_complete: true,
     onboarding_completed_at: new Date().toISOString(),

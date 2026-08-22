@@ -6,7 +6,9 @@ import { useSearchParams } from 'next/navigation';
 import { ChevronLeft, ChevronRight, RotateCcw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { DaySummary, ExerciseEntry, FoodEntry, Meal } from '@ct/shared';
+import { formatBodyWeight, formatDistance, formatMass } from '@ct/shared';
 import { api } from '@/lib/api';
+import { useUnits } from '@/lib/units';
 import { CalorieRing } from '@/components/CalorieRing';
 import { MacroBars } from '@/components/MacroBars';
 import { DietQuality } from '@/components/DietQuality';
@@ -14,7 +16,7 @@ import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { RepeatMeals } from '@/components/RepeatMeals';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { exerciseEmoji, foodEmoji } from '@/lib/foodEmoji';
+import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 
 /** The `?date=` the calendar links here with. Anything else is ignored. */
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -59,6 +61,7 @@ function TodaySkeleton() {
 
 function TodayView() {
   const requested = useSearchParams().get('date');
+  const units = useUnits();
 
   const [day, setDay] = useState<DaySummary | null>(null);
   /*
@@ -306,7 +309,7 @@ function TodayView() {
                     {(entry.distance_km !== null || entry.duration_min !== null) && (
                       <p className="text-footnote text-muted-foreground font-medium">
                         {[
-                          entry.distance_km !== null ? `${entry.distance_km} km` : null,
+                          entry.distance_km !== null ? formatDistance(entry.distance_km, units) : null,
                           entry.duration_min !== null ? `${Math.round(entry.duration_min)} min` : null,
                         ]
                           .filter(Boolean)
@@ -335,7 +338,9 @@ function TodayView() {
             <InsetGroup title="⚖️  Weight">
               <InsetRow>
                 <span className="flex-1 text-body font-semibold">Weighed</span>
-                <span className="text-figure text-body">{day.weight.weight_kg} kg</span>
+                <span className="text-figure text-body">
+                  {formatBodyWeight(day.weight.weight_kg, units)}
+                </span>
               </InsetRow>
             </InsetGroup>
           )}
@@ -360,6 +365,7 @@ function EntryRow({
 }) {
   const [open, setOpen] = useState(false);
   const approx = entry.confidence !== 'high';
+  const units = useUnits();
 
   return (
     <div>
@@ -395,7 +401,7 @@ function EntryRow({
                   {(item.quantity_desc || item.quantity_g !== null) && (
                     <span className="text-muted-foreground">
                       {' · '}
-                      {item.quantity_desc ?? `${Math.round(item.quantity_g!)}g`}
+                      {item.quantity_desc ?? formatMass(item.quantity_g!, units)}
                     </span>
                   )}
                 </span>
