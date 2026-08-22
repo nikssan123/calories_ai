@@ -39,8 +39,9 @@ export function Stat({
       <Text style={[t.figure, styles.value, { color: colors.foreground }]}>
         {value}
         {/* An em dash has no unit — "— kg" reads as a measurement that failed
-            rather than as one nobody has taken. */}
-        {value !== '—' && (
+            rather than as one nobody has taken. Nor does a value whose unit is
+            already in it, like a duration. */}
+        {value !== '—' && unit !== '' && (
           <Text style={[styles.unit, { color: colors.mutedForeground }]}> {unit}</Text>
         )}
       </Text>

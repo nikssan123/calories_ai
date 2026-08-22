@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  type LayoutChangeEvent,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import Svg, { Line, Path, Rect } from 'react-native-svg';
 import type { TrendPoint } from '@ct/shared';
 import { useColors } from '@/theme';
@@ -26,6 +32,7 @@ export function Sparkline({
   variant = 'line',
   height = 72,
   style,
+  readout,
 }: {
   points: TrendPoint[];
   accessor?: 'value' | 'average';
@@ -34,6 +41,13 @@ export function Sparkline({
   variant?: 'line' | 'bars';
   height?: number;
   style?: StyleProp<ViewStyle>;
+  /**
+   * Opt in to inspecting a single day. The caller draws the contents, because
+   * only it knows what the day *was* — this component has a date and a number
+   * and nothing else. Bars only: a bar is a day you can point at, where a
+   * line's value between two samples is an interpolation nobody logged.
+   */
+  readout?: (point: TrendPoint, index: number) => React.ReactNode;
 }) {
   const colors = useColors();
   /*
@@ -57,6 +71,8 @@ export function Sparkline({
    */
   const mounted = useRef(false);
   const pending = useRef(0);
+  /** The bar being read, while a finger is down on it. */
+  const [held, setHeld] = useState<number | null>(null);
 
   useEffect(() => {
     mounted.current = true;
@@ -113,7 +129,16 @@ export function Sparkline({
 
   const body =
     variant === 'bars' ? (
-      <Bars points={points} accessor={accessor} stroke={stroke} y={y} height={height} view={VIEW} />
+      <Bars
+        points={points}
+        accessor={accessor}
+        stroke={stroke}
+        y={y}
+        height={height}
+        view={VIEW}
+        held={held}
+        card={colors.foreground}
+      />
     ) : (
       <Path
         d={trace(points, accessor, x, y)}
@@ -125,14 +150,93 @@ export function Sparkline({
       />
     );
 
+  /*
+   * Scrubbing, which is the touch spelling of the web's hover.
+   *
+   * A finger is not a cursor: it cannot rest on a bar without also being a tap,
+   * and it covers the thing it is pointing at. So the readout is held only
+   * while the finger is down and clears on lift — a card left parked over the
+   * chart after a tap would be worse than no card at all — and it is drawn
+   * above the bars rather than beside them, where the hand is not.
+   */
+  const active = held !== null && held < points.length ? held : null;
+  const pick = (x: number) => {
+    const ratio = x / (width || 1);
+    setHeld(Math.min(points.length - 1, Math.max(0, Math.floor(ratio * points.length))));
+  };
+
+  const scrubbing = readout !== undefined && variant === 'bars';
+  const drawn = (width * height) / VIEW;
+
   return (
-    <View style={style} onLayout={onLayout}>
+    <View
+      style={style}
+      onLayout={onLayout}
+      accessible={scrubbing}
+      accessibilityLabel={scrubbing ? 'Chart. Touch and drag to read a day.' : undefined}
+      onStartShouldSetResponder={() => scrubbing}
+      onMoveShouldSetResponder={() => scrubbing}
+      onResponderGrant={(e) => pick(e.nativeEvent.locationX)}
+      onResponderMove={(e) => pick(e.nativeEvent.locationX)}
+      onResponderRelease={() => setHeld(null)}
+      onResponderTerminate={() => setHeld(null)}
+    >
       {width > 0 && (
-        <Svg width={width} height={(width * height) / VIEW} viewBox={`0 0 ${VIEW} ${height}`}>
+        <Svg width={width} height={drawn} viewBox={`0 0 ${VIEW} ${height}`}>
           {targetLine}
           {body}
         </Svg>
       )}
+      {active !== null && readout && (
+        <Readout position={(active + 0.5) / points.length} width={width}>
+          {readout(points[active]!, active)}
+        </Readout>
+      )}
+    </View>
+  );
+}
+
+/** The readout's widest allowed size, as a fraction of the chart. */
+const READOUT_MAX = 0.7;
+
+/**
+ * The card, parked over the top of the chart and anchored to the day under the
+ * finger.
+ *
+ * It slides rather than flips at the ends: the shift runs from 0 at the left
+ * edge through half in the middle to the full width at the right, which keeps
+ * the card inside the chart without jumping sideways as the finger crosses some
+ * threshold. `READOUT_MAX` is what makes that arithmetic safe — a card no wider
+ * than that fraction can always be fitted.
+ */
+function Readout({
+  position,
+  width,
+  children,
+}: {
+  position: number;
+  width: number;
+  children: React.ReactNode;
+}) {
+  const colors = useColors();
+  const max = width * READOUT_MAX;
+  const left = position * width;
+  const shift = Math.min(Math.max(max / 2, left + max - width), left);
+
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        styles.readout,
+        {
+          left: left - shift,
+          maxWidth: max,
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+        },
+      ]}
+    >
+      {children}
     </View>
   );
 }
@@ -144,6 +248,8 @@ function Bars({
   y,
   height,
   view,
+  held,
+  card,
 }: {
   points: TrendPoint[];
   accessor: 'value' | 'average';
@@ -151,6 +257,8 @@ function Bars({
   y: (v: number) => number;
   height: number;
   view: number;
+  held: number | null;
+  card: string;
 }) {
   // Leave a hairline of gap between bars, but never let them vanish on a
   // 365-day window — below about a pixel the chart reads as an empty box.
@@ -159,6 +267,19 @@ function Bars({
 
   return (
     <>
+      {/* The whole slot lights up rather than the bar: a rest day has no bar to
+          light and still has to be findable. */}
+      {held !== null && (
+        <Rect
+          x={slot * held}
+          y={0}
+          width={slot}
+          height={height}
+          rx={Math.min(4, slot / 2)}
+          fill={card}
+          opacity={0.1}
+        />
+      )}
       {points.map((point, i) => {
         const v = point[accessor] ?? 0;
         const top = y(v);
@@ -174,12 +295,24 @@ function Bars({
             height={Math.max(1.5, height - 5 - top)}
             rx={Math.min(3, barWidth / 2)}
             fill={stroke}
+            opacity={held === null || held === i ? 1 : 0.35}
           />
         );
       })}
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  readout: {
+    position: 'absolute',
+    top: 0,
+    borderWidth: 2,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+});
 
 /** Skips gaps rather than drawing a line through days with no data. */
 function trace(

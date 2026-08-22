@@ -898,7 +898,14 @@ platform picker, in that same sheet on iOS and its own dialog on Android; and th
 are RN's own. **Appearance** is the one group left out — the app still follows the OS
 scheme only, so a three-state toggle would have nothing to toggle.
 
-Then the three remaining tabs: Progress, Exercise and Cook, which are all reads.
+**Progress and Exercise — built.** Both are reads, and between them they finished the
+`Sparkline`: Exercise needed the touch readout that Progress could do without, because a bar
+chart is the one place a single day is a thing you point at. It is a scrub rather than a
+hover — held while a finger is down, cleared on lift — since a finger cannot rest on a bar
+without also being a tap, and it covers what it points at.
+
+Then **Cook**, the last tab and the largest: 3,442 lines across the plan, the library, a
+recipe screen and ten `kitchen/*` components, one of which is another camera surface.
 
 Three things cut across every screen. There is no **toast**: the web leans on sonner
 throughout, and the ported screens report failures inline instead, which will not scale to
