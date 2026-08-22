@@ -904,8 +904,21 @@ chart is the one place a single day is a thing you point at. It is a scrub rathe
 hover — held while a finger is down, cleared on lift — since a finger cannot rest on a bar
 without also being a tap, and it covers what it points at.
 
-Then **Cook**, the last tab and the largest: 3,442 lines across the plan, the library, a
-recipe screen and ten `kitchen/*` components, one of which is another camera surface.
+**Cook — the browsing half, built.** The ask, the budget sentence, For you / Library, the
+tiles, and one `RecipeReader` serving both kinds of recipe: generated ones know which
+ingredients are missing from your kitchen, library ones have a photograph and a source to
+credit, and each passes what it has. "Make it fit me" bridges them.
+
+Two adaptations rather than ports. The tiles are one column, not the web's grid of three —
+a tile narrowed to a third of a phone would have to drop the summary and the kitchen line,
+which are the two things worth choosing between. And the emoji stand-in is a short band
+instead of the photograph's 16:10: the web gives it that ratio to keep a grid row's rhythm,
+and with one tile per row there is no rhythm to keep, only 230 points of empty paper.
+
+What is left of Cook is everything that takes input: the kitchen list (`Pantry`), the shelf
+photograph (`FridgeScan`, another camera surface), a pasted recipe (`ImportRecipe`), the
+per-request filters (`Brief`), and the week's plan. The run works without any of them,
+because the pantry reaches the model from the server either way.
 
 Three things cut across every screen. There is no **toast**: the web leans on sonner
 throughout, and the ported screens report failures inline instead, which will not scale to

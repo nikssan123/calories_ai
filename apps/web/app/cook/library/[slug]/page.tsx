@@ -11,7 +11,7 @@ import { RecipeReader } from '@/components/kitchen/RecipeReader';
 import { formatServings, scale, Servings } from '@/components/kitchen/Servings';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { listWords } from '@/lib/utils';
+import { listWords } from '@ct/shared/words';
 
 /**
  * One recipe from the starter library, on its own page.

@@ -147,6 +147,10 @@ function Gate() {
           * once a week.
           */}
         <Stack.Screen name="history" options={{ animation: 'slide_from_right' }} />
+        {/* A recipe is a place you go from Cook and come back from, so it
+            pushes rather than becoming a seventh tab. */}
+        <Stack.Screen name="recipe/[id]" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="library/[slug]" options={{ animation: 'slide_from_right' }} />
       </Stack.Protected>
       <Stack.Protected guard={!authenticated}>
         <Stack.Screen name="login" />

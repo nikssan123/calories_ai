@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { Bookmark, Check, Clock, UtensilsCrossed } from 'lucide-react';
-import { cn, listWords } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+import { listWords } from '@ct/shared/words';
 
 /**
  * One recipe, as something to choose between.

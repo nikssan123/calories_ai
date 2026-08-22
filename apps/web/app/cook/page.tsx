@@ -25,7 +25,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Button } from '@/components/ui/button';
 import { foodEmoji } from '@ct/shared/food-emoji';
-import { cn, listWords, untilWords } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+import { listWords, untilWords } from '@ct/shared/words';
 
 /**
  * Cook — what you could make, from what you have, that fits what is left.
