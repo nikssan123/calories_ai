@@ -7,7 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   runOnJS,
@@ -164,6 +164,46 @@ export default function TodayScreen() {
   useEffect(() => {
     void load(date);
   }, [load, date]);
+
+  /*
+   * And again every time the tab comes back.
+   *
+   * The web refetches this screen for free, because reaching it there is a
+   * navigation and the page mounts. Here it is a tab: it mounts once, on the
+   * first visit, and then stays mounted for the life of the app — so the effect
+   * above was the only fetch a session ever made unless the date changed.
+   * Meanwhile everything that puts food in the day happens somewhere else. A
+   * sentence in the Journal, a recipe in Cook; neither can reach this copy of
+   * the day, so what the screen drew on first open is what it kept drawing
+   * until the user thought to pull down. Coming back to a tab is the moment the
+   * question "what have I eaten" is being asked again, so it is the moment to
+   * go and ask.
+   *
+   * `load` only ever clears `loading`, never re-raises it, so this refills the
+   * screen underneath the reader rather than throwing it back to skeletons.
+   *
+   * The date is read through a ref so this callback can stay stable: the hook
+   * re-runs the effect whenever the callback changes identity, and one that
+   * closed over `date` would fetch a second time on every step through the
+   * days.
+   */
+  const shown = useRef(date);
+  useEffect(() => {
+    shown.current = date;
+  }, [date]);
+  /*
+   * Set when the tab is left, which is what makes the *first* focus silent —
+   * the mount above has already fetched, and this fires on that same focus.
+   */
+  const left = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (left.current) void load(shown.current);
+      return () => {
+        left.current = true;
+      };
+    }, [load]),
+  );
 
   const isToday = day !== null && today !== null && day.local_date === today;
   const step = (days: number) =>
