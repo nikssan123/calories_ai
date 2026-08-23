@@ -17,3 +17,21 @@ uploads/
 coverage/
 # Copied from node_modules by apps/web/scripts/copy-zxing.mjs at build time.
 apps/web/public/zxing_reader.wasm
+
+# Push credentials.
+#
+# Two files, and only one of them is a secret — which is exactly why both are
+# named here rather than left to judgement in a hurry.
+#
+# `google-services.json` is client config: it tells the app which Firebase
+# project to ask for a token. It is shipped inside every APK, so it is not
+# secret in the password sense — but it is account-identifying, it differs per
+# environment, and a repo is the wrong place to pin one copy of it.
+#
+# The service-account key is a real secret. It authorises *sending* as this
+# project, and it is uploaded once to EAS rather than living here at all.
+google-services.json
+apps/mobile/google-services.json
+*-firebase-adminsdk-*.json
+GoogleService-Info.plist
+apps/mobile/GoogleService-Info.plist
