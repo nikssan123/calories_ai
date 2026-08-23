@@ -147,14 +147,17 @@ commit to, which is precisely the interaction a shared element is *for* — it
 answers "where did that come from?" without a word. The same trick would work
 from a History day cell into Today.
 
-### Lists
+### Lists — done
 
-- **Layout animations on removal — done**, and they shipped inside `SwipeRow`
-  rather than at the call sites, so nothing can be given a swipe without them.
-- **Entrance stagger** — still to do. `FadeInDown` with a per-item delay on Today's meal
-  groups, Exercise's sessions and Cook's tiles. Use 70ms, which is what
-  `MacroBars` already staggers at, so the whole app has one rhythm rather than
-  three.
+- **Layout animations on removal** shipped inside `SwipeRow` rather than at the
+  call sites, so nothing can be given a swipe without them.
+- **Entrance stagger** at 70ms — `MacroBars`' own interval, so the app arrives
+  to one rhythm rather than three. Capped at the seventh row: past that the
+  delay outlasts the patience of anyone about to scroll, and a list of twenty
+  would spend a second and a half assembling itself. It rides on `SwipeRow` for
+  the lists, and on a small wrapper on Cook, whose grid is the one that really
+  does land all at once when a run finishes.
+
 ### Numbers that move — done for Today
 
 `useCountUp` is out of `CalorieRing` and in `hooks/`. Today's total and the three
