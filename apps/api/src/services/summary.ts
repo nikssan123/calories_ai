@@ -1,10 +1,20 @@
-import type { DayQuality, DaySummary, FoodItem, Progress, TrendPoint } from '@ct/shared';
+import type {
+  DayQuality,
+  DaySummary,
+  DietQuality,
+  FoodItem,
+  Progress,
+  TrendPoint,
+} from '@ct/shared';
 export { QUALITY_COVERAGE_FLOOR } from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import { addDays, dateRange, type DayContext, localDateFor } from '../time.ts';
 import { listExerciseEntries, listFoodEntries, listWeights } from './log.ts';
 import { qualityTargetsFor, targetsForDate } from './targets.ts';
 import { getUser } from './user.ts';
+
+/** The four columns the diet quality panel is made of. */
+type QualityField = keyof DietQuality;
 
 export async function buildDaySummary(
   userId: string,
@@ -250,25 +260,41 @@ export async function buildProgress(
   const windowKcal = loggedDays.reduce((sum, t) => sum + t.kcal, 0);
   const measuredKcal = loggedDays.reduce((sum, t) => sum + t.kcal * t.coverage, 0);
 
-  const qualityMean = (field: 'fiber_g' | 'sodium_mg' | 'sat_fat_g' | 'sugar_g') => {
+  const qualityMean = (field: QualityField) => {
     const value = mean(
       measuredDays.map((t) => t[field]).filter((v): v is number => v !== null),
     );
     return value === null ? null : Math.round(value);
   };
 
-  const fiberByDate = new Map(measuredDays.map((t) => [t.local_date, t.fiber_g!]));
-  const fiberSeries: TrendPoint[] = window.map((date, index) => {
-    const priorWindow = window
-      .slice(Math.max(0, index - 6), index + 1)
-      .map((d) => fiberByDate.get(d))
-      .filter((v): v is number => v !== undefined);
-    return {
-      local_date: date,
-      value: fiberByDate.get(date) ?? null,
-      average: mean(priorWindow),
-    };
-  });
+  /**
+   * One series per nutrient, because the card lets you put any of the four on
+   * its chart. Built here rather than fetched per selection: the window is one
+   * query either way, and a chart that has to go to the network to change which
+   * line it is drawing feels like a page rather than a switch.
+   *
+   * A day missing this particular figure is a gap like an unlogged day is, not
+   * a zero — the columns arrived mid-history, and a run of zeroes before them
+   * would draw a fortnight of sodium-free eating that never happened.
+   */
+  const qualitySeries = (field: QualityField): TrendPoint[] => {
+    const byDate = new Map(
+      measuredDays
+        .filter((t) => t[field] !== null)
+        .map((t) => [t.local_date, t[field]!] as const),
+    );
+    return window.map((date, index) => {
+      const priorWindow = window
+        .slice(Math.max(0, index - 6), index + 1)
+        .map((d) => byDate.get(d))
+        .filter((v): v is number => v !== undefined);
+      return {
+        local_date: date,
+        value: byDate.get(date) ?? null,
+        average: mean(priorWindow),
+      };
+    });
+  };
 
   const currentWeight = weights.at(-1)?.weight_kg ?? null;
   const firstWeight = weights[0]?.weight_kg ?? null;
@@ -319,7 +345,12 @@ export async function buildProgress(
       coverage:
         windowKcal > 0 ? Math.round((measuredKcal / windowKcal) * 100) / 100 : 1,
       days_measured: measuredDays.length,
-      fiber_series: fiberSeries,
+      series: {
+        fiber_g: qualitySeries('fiber_g'),
+        sodium_mg: qualitySeries('sodium_mg'),
+        sat_fat_g: qualitySeries('sat_fat_g'),
+        sugar_g: qualitySeries('sugar_g'),
+      },
     },
   };
 }

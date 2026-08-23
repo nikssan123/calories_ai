@@ -1139,10 +1139,10 @@ export const Progress = z.object({
    * Diet quality over the window. Daily means rather than totals, because a
    * fortnight of fiber is not a number anybody has an intuition for.
    *
-   * One series and it is fiber's, not four: fiber is the floor and the one
-   * whose shape over time is worth looking at. Sodium, saturated fat and sugar
-   * are ceilings, and a ceiling is a question about a week rather than a line
-   * to watch day by day — four lines here would be a dashboard nobody reads.
+   * All four series travel, but the card still draws one line at a time —
+   * whichever nutrient was asked for. Four curves at once would be a dashboard
+   * nobody opens twice; four curves to choose between is a question you can
+   * answer without leaving the card, and the window is already loaded.
    */
   quality: z.object({
     average: DietQuality,
@@ -1151,7 +1151,13 @@ export const Progress = z.object({
     coverage: z.number(),
     /** Days in the window whose panel was estimated at all. */
     days_measured: z.number(),
-    fiber_series: z.array(TrendPoint),
+    /** Keyed as `average` is, so a screen can pick one by the same name. */
+    series: z.object({
+      fiber_g: z.array(TrendPoint),
+      sodium_mg: z.array(TrendPoint),
+      sat_fat_g: z.array(TrendPoint),
+      sugar_g: z.array(TrendPoint),
+    }),
   }),
 });
 export type Progress = z.infer<typeof Progress>;

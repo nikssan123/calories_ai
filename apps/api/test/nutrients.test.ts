@@ -140,6 +140,23 @@ describe('the window queries', () => {
     expect(progress.quality.days_measured).toBe(1);
     expect(progress.quality.coverage).toBe(0.5);
   });
+
+  it('carries a series per nutrient, with the days that lack one left blank', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    // Fiber and sodium, but nothing said about sugar — which is a gap in that
+    // series, not a sugar-free day. A zero here would draw a flat floor the
+    // chart would then read as a fact.
+    await addMeal(user, { date: today, kcal: 600, fiber_g: 12, sodium_mg: 800 });
+
+    const { series } = (await buildProgress(user.id, user.ctx, 7)).quality;
+    const last = <T,>(points: T[]) => points.at(-1)!;
+
+    expect(last(series.fiber_g)).toMatchObject({ local_date: today, value: 12 });
+    expect(last(series.sodium_mg)).toMatchObject({ local_date: today, value: 800 });
+    expect(last(series.sugar_g)).toMatchObject({ local_date: today, value: null });
+    // One point per day of the window, whether or not anything was logged.
+    expect(series.sugar_g).toHaveLength(series.fiber_g.length);
+  });
 });
 
 describe('recipes', () => {

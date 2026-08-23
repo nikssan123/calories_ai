@@ -24,6 +24,21 @@ import { font, type as t, useColors } from '@/theme';
 
 const WINDOWS = [14, 30, 90] as const;
 
+/**
+ * The four quality nutrients, in the order the Today panel draws them, and the
+ * words each needs when it is the one on the chart. A ceiling is not aimed for
+ * — "aim for 2,300mg of sodium" is advice nobody should be given — so the
+ * direction picks the phrasing rather than a single line covering both.
+ */
+const NUTRIENTS = [
+  { key: 'fiber_g', label: 'Fiber', unit: 'g' },
+  { key: 'sodium_mg', label: 'Sodium', unit: 'mg' },
+  { key: 'sat_fat_g', label: 'Sat fat', unit: 'g' },
+  { key: 'sugar_g', label: 'Sugar', unit: 'g' },
+] as const;
+
+type NutrientKey = (typeof NUTRIENTS)[number]['key'];
+
 export default function ProgressScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -32,6 +47,12 @@ export default function ProgressScreen() {
 
   const [progress, setProgress] = useState<Progress | null>(null);
   const [days, setDays] = useState<number>(30);
+  /**
+   * Which nutrient the quality chart is drawing. Fiber to start with: it is the
+   * only floor of the four and the only one whose shape over time is worth
+   * watching unprompted — the ceilings are questions you go looking for.
+   */
+  const [nutrient, setNutrient] = useState<NutrientKey>('fiber_g');
   const [weightInput, setWeightInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -286,60 +307,60 @@ export default function ProgressScreen() {
               }
             >
               {/*
-                Fiber gets the line, and the other three get a row of figures.
-                Fiber is the only floor here and the only one whose shape over
-                time tells you anything — a ceiling is a question about a week,
-                not a curve to watch. Four sparklines would be a dashboard
-                nobody opens twice.
+                One line at a time, and you choose whose. Four sparklines at
+                once would be a dashboard nobody opens twice, but the question
+                "is my sodium creeping up?" deserves an answer here rather than
+                a trip to the journal — so the chips promote a nutrient into the
+                chart and the row underneath keeps the other three's averages
+                where they were.
               */}
-              <View style={styles.pad}>
-                <View style={styles.headline}>
-                  <Text style={[t.largeTitle, t.tnum, { color: colors.foreground }]}>
-                    {progress.quality.average.fiber_g === null
-                      ? '—'
-                      : `${progress.quality.average.fiber_g}g`}
-                  </Text>
-                  <Text style={[t.footnote, styles.aside, { color: colors.mutedForeground }]}>
-                    fiber avg/day · aim for {progress.quality.targets.fiber_g.value}g
-                  </Text>
-                </View>
-                <Sparkline
-                  points={progress.quality.fiber_series}
-                  stroke={colors.calories}
-                  target={progress.quality.targets.fiber_g.value}
-                  style={styles.chart}
-                />
+              <View style={styles.chips}>
+                {NUTRIENTS.map((n) => {
+                  const active = nutrient === n.key;
+                  return (
+                    <Pressable
+                      key={n.key}
+                      onPress={() => setNutrient(n.key)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Chart ${n.label.toLowerCase()}`}
+                      accessibilityState={{ selected: active }}
+                      style={({ pressed }) => [
+                        styles.chip,
+                        {
+                          backgroundColor: active ? colors.muted : colors.mutedWash,
+                          borderColor: active ? colors.caloriesText : 'transparent',
+                          opacity: pressed ? 0.6 : 1,
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          t.footnote,
+                          { color: active ? colors.foreground : colors.mutedForeground },
+                        ]}
+                      >
+                        {n.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
 
+              <QualityChart quality={progress.quality} nutrient={nutrient} />
+
               <Stats>
-                <Stat
-                  first
-                  label="Sodium"
-                  value={
-                    progress.quality.average.sodium_mg === null
-                      ? '—'
-                      : progress.quality.average.sodium_mg.toLocaleString()
-                  }
-                  unit="mg"
-                />
-                <Stat
-                  label="Sat fat"
-                  value={
-                    progress.quality.average.sat_fat_g === null
-                      ? '—'
-                      : String(progress.quality.average.sat_fat_g)
-                  }
-                  unit="g"
-                />
-                <Stat
-                  label="Sugar"
-                  value={
-                    progress.quality.average.sugar_g === null
-                      ? '—'
-                      : String(progress.quality.average.sugar_g)
-                  }
-                  unit="g"
-                />
+                {NUTRIENTS.filter((n) => n.key !== nutrient).map((n, index) => {
+                  const value = progress.quality.average[n.key];
+                  return (
+                    <Stat
+                      key={n.key}
+                      first={index === 0}
+                      label={n.label}
+                      value={value === null ? '—' : value.toLocaleString()}
+                      unit={n.unit}
+                    />
+                  );
+                })}
               </Stats>
             </InsetGroup>
           )}
@@ -394,6 +415,50 @@ export default function ProgressScreen() {
   );
 }
 
+/**
+ * The headline figure and the line, for whichever nutrient is showing.
+ *
+ * Fiber is a floor and takes the app's positive green, exactly as its bar does
+ * on Today. The other three are ceilings, which have no good news in them — a
+ * high sodium line is not an achievement — so they run in plain ink, and the
+ * aside says "keep under" rather than "aim for". Never red: crossing a ceiling
+ * is worth seeing and is still not an alarm.
+ */
+function QualityChart({
+  quality,
+  nutrient,
+}: {
+  quality: Progress['quality'];
+  nutrient: NutrientKey;
+}) {
+  const colors = useColors();
+  const { label, unit } = NUTRIENTS.find((n) => n.key === nutrient)!;
+  const average = quality.average[nutrient];
+  const target = quality.targets[nutrient];
+  const floor = target.direction === 'floor';
+
+  return (
+    <View style={styles.qualityPad}>
+      <View style={styles.headline}>
+        <Text style={[t.largeTitle, t.tnum, { color: colors.foreground }]}>
+          {average === null ? '—' : `${average.toLocaleString()}${unit}`}
+        </Text>
+        <Text style={[t.footnote, styles.aside, { color: colors.mutedForeground }]}>
+          {label.toLowerCase()} avg/day · {floor ? 'aim for' : 'keep under'}{' '}
+          {target.value.toLocaleString()}
+          {unit}
+        </Text>
+      </View>
+      <Sparkline
+        points={quality.series[nutrient]}
+        stroke={floor ? colors.calories : colors.foreground}
+        target={target.value}
+        style={styles.chart}
+      />
+    </View>
+  );
+}
+
 function Arrow({ up, color }: { up: boolean; color: string }) {
   return (
     <Svg width={14} height={14} viewBox="0 0 24 24">
@@ -423,6 +488,11 @@ const styles = StyleSheet.create({
   },
   windowLabel: { fontFamily: font.bold, fontSize: 12, lineHeight: 16 },
   pad: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 16, paddingTop: 14 },
+  // The chips already own the space above, so the figure sits closer to them
+  // than a card's first row normally would.
+  qualityPad: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12 },
+  chip: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6 },
   empty: { paddingVertical: 8 },
   headline: { flexDirection: 'row', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' },
   aside: { flexShrink: 1 },

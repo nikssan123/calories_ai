@@ -26,9 +26,30 @@ import { cn } from '@/lib/utils';
 
 const WINDOWS = [14, 30, 90] as const;
 
+/**
+ * The four quality nutrients, in the order the Today panel draws them, and the
+ * words each needs when it is the one on the chart. A ceiling is not aimed for
+ * — "aim for 2,300mg of sodium" is advice nobody should be given — so the
+ * direction picks the phrasing rather than a single line covering both.
+ */
+const NUTRIENTS = [
+  { key: 'fiber_g', label: 'Fiber', unit: 'g' },
+  { key: 'sodium_mg', label: 'Sodium', unit: 'mg' },
+  { key: 'sat_fat_g', label: 'Sat fat', unit: 'g' },
+  { key: 'sugar_g', label: 'Sugar', unit: 'g' },
+] as const;
+
+type NutrientKey = (typeof NUTRIENTS)[number]['key'];
+
 export default function ProgressPage() {
   const [progress, setProgress] = useState<Progress | null>(null);
   const [days, setDays] = useState<number>(30);
+  /**
+   * Which nutrient the quality chart is drawing. Fiber to start with: it is the
+   * only floor of the four and the only one whose shape over time is worth
+   * watching unprompted — the ceilings are questions you go looking for.
+   */
+  const [nutrient, setNutrient] = useState<NutrientKey>('fiber_g');
   const [weightInput, setWeightInput] = useState('');
   const [saving, setSaving] = useState(false);
   const units = useUnits();
@@ -241,59 +262,47 @@ export default function ProgressPage() {
               }
             >
               {/*
-               * Fiber gets the line, and the other three get a row of figures.
-               * Fiber is the only floor here and the only one whose shape over
-               * time tells you anything — a ceiling is a question about a week,
-               * not a curve to watch. Four sparklines would be a dashboard
-               * nobody opens twice.
+               * One line at a time, and you choose whose. Four sparklines at
+               * once would be a dashboard nobody opens twice, but the question
+               * "is my sodium creeping up?" deserves an answer here rather than
+               * a trip to the journal — so the chips promote a nutrient into
+               * the chart and the row underneath keeps the other three's
+               * averages where they were.
                */}
-              <div className="px-4 pt-4 pb-3">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-figure text-large-title">
-                    {progress.quality.average.fiber_g === null
-                      ? '—'
-                      : `${progress.quality.average.fiber_g}g`}
-                  </span>
-                  <span className="text-muted-foreground text-sm font-medium">
-                    fiber avg/day · aim for {progress.quality.targets.fiber_g.value}g
-                  </span>
-                </div>
-                <Sparkline
-                  points={progress.quality.fiber_series}
-                  stroke="var(--calories)"
-                  target={progress.quality.targets.fiber_g.value}
-                  className="mt-4"
-                />
+              <div className="flex flex-wrap gap-1.5 px-4 pt-3.5">
+                {NUTRIENTS.map((n) => (
+                  <button
+                    key={n.key}
+                    type="button"
+                    onClick={() => setNutrient(n.key)}
+                    aria-pressed={nutrient === n.key}
+                    aria-label={`Chart ${n.label.toLowerCase()}`}
+                    className={cn(
+                      'text-footnote rounded-full px-3 py-1.5 transition-colors',
+                      nutrient === n.key
+                        ? 'bg-muted text-foreground ring-1 ring-[var(--calories-text)]'
+                        : 'bg-muted/40 text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {n.label}
+                  </button>
+                ))}
               </div>
 
+              <QualityChart quality={progress.quality} nutrient={nutrient} />
+
               <div className="divide-border grid grid-cols-3 divide-x-2">
-                <Stat
-                  label="Sodium"
-                  value={
-                    progress.quality.average.sodium_mg === null
-                      ? '—'
-                      : progress.quality.average.sodium_mg.toLocaleString()
-                  }
-                  unit="mg"
-                />
-                <Stat
-                  label="Sat fat"
-                  value={
-                    progress.quality.average.sat_fat_g === null
-                      ? '—'
-                      : `${progress.quality.average.sat_fat_g}`
-                  }
-                  unit="g"
-                />
-                <Stat
-                  label="Sugar"
-                  value={
-                    progress.quality.average.sugar_g === null
-                      ? '—'
-                      : `${progress.quality.average.sugar_g}`
-                  }
-                  unit="g"
-                />
+                {NUTRIENTS.filter((n) => n.key !== nutrient).map((n) => {
+                  const value = progress.quality.average[n.key];
+                  return (
+                    <Stat
+                      key={n.key}
+                      label={n.label}
+                      value={value === null ? '—' : value.toLocaleString()}
+                      unit={n.unit}
+                    />
+                  );
+                })}
               </div>
             </InsetGroup>
           )}
@@ -325,6 +334,49 @@ export default function ProgressPage() {
         </div>
       )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The headline figure and the line, for whichever nutrient is showing.
+ *
+ * Fiber is a floor and takes the app's positive green, exactly as its bar does
+ * on Today. The other three are ceilings, which have no good news in them — a
+ * high sodium line is not an achievement — so they run in plain ink, and the
+ * aside says "keep under" rather than "aim for". Never red: crossing a ceiling
+ * is worth seeing and is still not an alarm.
+ */
+function QualityChart({
+  quality,
+  nutrient,
+}: {
+  quality: Progress['quality'];
+  nutrient: NutrientKey;
+}) {
+  const { label, unit } = NUTRIENTS.find((n) => n.key === nutrient)!;
+  const average = quality.average[nutrient];
+  const target = quality.targets[nutrient];
+  const floor = target.direction === 'floor';
+
+  return (
+    <div className="px-4 pt-2.5 pb-3">
+      <div className="flex items-baseline gap-2">
+        <span className="text-figure text-large-title">
+          {average === null ? '—' : `${average.toLocaleString()}${unit}`}
+        </span>
+        <span className="text-muted-foreground text-sm font-medium">
+          {label.toLowerCase()} avg/day · {floor ? 'aim for' : 'keep under'}{' '}
+          {target.value.toLocaleString()}
+          {unit}
+        </span>
+      </div>
+      <Sparkline
+        points={quality.series[nutrient]}
+        stroke={floor ? 'var(--calories)' : 'var(--foreground)'}
+        target={target.value}
+        className="mt-4"
+      />
     </div>
   );
 }
