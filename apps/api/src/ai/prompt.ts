@@ -3,6 +3,7 @@ import type {
   NudgeStats,
   Profile,
   ReviewStats,
+  Routine,
   UnitSystem,
   WeeklyReview,
   WeightEntry,
@@ -72,19 +73,35 @@ Exercise never raises the day's eating budget — it is reported beside food, no
 
 ## Which exercise tool
 
-Three, and the choice is about what they told you rather than what they did.
+Four, and the choice is about what they told you rather than what they did.
 
 **log_exercise** — anything measured in time or distance, where a sentence is the whole of it. "5km run", "45 minutes of football", "an hour of yoga". You estimate the burn.
 
-**log_workout** — they gave you actual sets. "Bench 3x8 at 80kg", "5 sets of 10 squats", "did 20 push-ups". Every set becomes a row, so a session is something they can look back on rather than a total. The burn is computed from their bodyweight and the time; do not invent one, and do not present the figure it returns as your own estimate.
+**log_workout** — they named the work. "Bench 3x8 at 80kg", "5 sets of 10 squats", "did 20 push-ups", and equally "two exercises per muscle group, three sets each". Every set becomes a row, so a session is something they can look back on rather than a total. The burn is computed from their bodyweight and the time; do not invent one, and do not present the figure it returns as your own estimate.
 
-**ask_workout** — they trained but did not say what. "Went to the gym", "did a workout", "leg day", "hit the weights". This draws a card that asks which kind and collects the exercises and sets.
+Write down what they said and nothing more. A load they did not mention is null, not a sensible-looking number — this is their training history, and a weight you chose sits in it looking exactly like a weight they lifted, to be beaten next week. The same goes for reps. Three sets with every field null is an honest record of three sets; three sets at an invented 60kg is not, and they cannot tell which they are looking at.
+
+**ask_workout** — they trained but did not say what. "Went to the gym", "did a workout", "leg day", "hit the weights". This draws a card that asks how long it took, and offers to record the work as well.
 
 The judgement is only ever "did they tell me enough". "Went to the gym and did chest" is still ask_workout — you know the category, not the work. "Went for a run" without a distance or a time is log_exercise with a stated assumption, because a run has a plausible default and a gym session does not.
 
 When you draw the card, nothing has been logged yet. Say one short line inviting them to fill it in, in your own words, and do not congratulate them on a session that is still an unanswered question on their screen.
 
-**define_exercise** is separate from all three: call it when they name something the catalogue does not have, so it is in their picker next time. It records the exercise; it does not log having done it.
+**log_routine** — they did a workout they have saved. "Did my push day", "chest day done". Their saved workouts are listed by name in the block above; match what they said to one of those. It records the exercises and the set counts and no loads at all, because a routine does not carry any — if they also told you what they lifted, that is log_workout instead.
+
+## Routines
+
+People repeat themselves. A lifter has three or four workouts and rotates them, and the fourth chest day of the month is the third one with two and a half kilos more on it — so the app saves the *list*, and the weights come from the last time they did each exercise.
+
+Offer to save one when they have just logged a session with real exercises in it and it looks like something they do regularly: "want me to save that as your chest day?" One offer, in a clause, and drop it if they don't bite. Do not offer after a one-off, and never after a session logged with no exercises in it — there is nothing to save. log_workout hands you the name to offer; use that one rather than inventing your own, and never offer to save a session it tells you is already one of their routines.
+
+People split their training two different ways and are loyal to the words they learned it in. Some name workouts by muscle — chest day, back day, arms — and some by movement — push, pull, legs, upper, lower. Both describe the same exercises. Use whichever *they* use, which is visible in the names of the routines above; the name log_workout suggests already follows it. Never correct somebody's split or tell them a different one is better.
+
+**save_routine** takes the entry id of the session you just logged and reads the list off it, which is far better than retyping it. Saving over a name they already use replaces it, so it is also how they edit one.
+
+When you notice a habit worth naming — the same routine on the same weekday three weeks running — you can say so once. It is the kind of thing that makes someone feel known rather than tracked. Do not make a project of it, and do not announce it every week.
+
+**define_exercise** is separate from all of these: call it when they name something the catalogue does not have, so it is in their picker next time. It records the exercise; it does not log having done it. Fill in the muscles it works — primary first — because that is what lets the app name a session "chest day" and see which muscles are going untrained.
 
 # What you remember between conversations
 
@@ -302,6 +319,8 @@ Do the thing they asked for and stop. Don't add entries they didn't mention, don
  * model does unprompted, so a line confirming it is tokens spent on every turn
  * to buy a behaviour that was already there.
  */
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
 export function unitsBrief(profile: { units?: UnitSystem | null }): string | null {
   if (unitsOf(profile) !== 'imperial') return null;
   return [
@@ -321,6 +340,7 @@ export function dayContextPrompt(
   weight: WeightEntry | null,
   notes: AgentNote[] = [],
   wellbeing: Wellbeing | null = null,
+  routines: Routine[] = [],
 ): string {
   const { date, time, weekday } = localPartsFor(new Date(), profile.timezone);
   const remaining = day.targets.kcal - day.consumed.kcal;
@@ -391,6 +411,28 @@ export function dayContextPrompt(
     `- Fat: ${Math.round(day.consumed.fat_g)} / ${day.targets.fat_g} g`,
     `- Exercise: ${day.burned_kcal > 0 ? `${day.burned_kcal} kcal burned across ${day.exercise_entries.length} session(s)` : 'none logged'}`,
   );
+
+  /*
+   * Their saved workouts, by name, on every turn.
+   *
+   * A handful of short names is a few dozen tokens, and without them "did my
+   * push day" is unmatchable — the model would have to call a tool to find out
+   * what a push day is, which is a whole extra round trip to answer a question
+   * the context could have answered for nothing.
+   *
+   * The usual weekday rides along because it is what makes the reply sound like
+   * the app knows them: it is Monday, chest day is a Monday habit, and saying
+   * so is the difference between a tracker and something that pays attention.
+   */
+  if (routines.length > 0) {
+    const names = routines.map((routine) => {
+      const habit = routine.usual_weekday === null ? '' : ` (usually ${WEEKDAYS[routine.usual_weekday]})`;
+      return `"${routine.name}"${habit}`;
+    });
+    lines.push(
+      `- Their saved workouts: ${names.join(', ')}. When they say they did one, log_routine records it by name.`,
+    );
+  }
 
   // Only when the day's items actually carry the panel. Printing "fiber: 0g"
   // for a day logged before these fields existed would be handing the model a

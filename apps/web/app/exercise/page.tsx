@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exerciseEmoji } from '@ct/shared/food-emoji';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Workouts } from '@/components/exercise/Workouts';
 
 /**
  * Exercise, split out of Progress so it gets a screen rather than a single row.
@@ -93,6 +94,11 @@ export default function ExercisePage() {
             ))}
           </ToggleGroup>
         </div>
+
+        {/* Saved workouts and the week, above the history: this is the half of
+            the screen you come here to *act* on, and the history below is the
+            half you come to read. */}
+        <Workouts onLogged={() => void load(days)} />
 
         {!summary ? (
           <div className="space-y-4">

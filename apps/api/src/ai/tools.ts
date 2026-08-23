@@ -14,7 +14,7 @@ import type {
   Progress,
   UnitSystem,
 } from '@ct/shared';
-import { DIETS, UNIT_SYSTEMS, bodyWeightUnit, formatMass, toBodyWeight } from '@ct/shared';
+import { DIETS, MUSCLE_GROUPS, UNIT_SYSTEMS, bodyWeightUnit, formatMass, toBodyWeight } from '@ct/shared';
 import { query } from '../db.ts';
 import { addDays, type DayContext, inferMeal, localDateFor, resolveWhen } from '../time.ts';
 import {
@@ -499,7 +499,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
    */
   const logWorkout = tool(
     'log_workout',
-    'Record a training session where the user told you the actual sets — "bench 3x8 at 80kg", "5 sets of 10 squats". One call per session, with every exercise in it. Use log_exercise instead for anything measured in time or distance, and ask_workout when they said they trained but not what they did.',
+    'Record a training session from what the user actually told you — "bench 3x8 at 80kg", "5 sets of 10 squats", or just "two exercises per muscle group". One call per session, with every exercise in it. Write down only the numbers they gave you and leave the rest null; this becomes their training history, and a load you invented will be read back as something they lifted. Use log_exercise instead for anything measured in time or distance, and ask_workout when they said they trained but not what they did.',
     {
       category: categoryField,
       when: whenField,
@@ -515,14 +515,26 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
             sets: z
               .array(
                 z.object({
-                  reps: z.number().nullable().default(null),
-                  weight_kg: z.number().nullable().default(null).describe('Load per set, in kilograms always — convert from pounds yourself, 225 lb is 102. Null for bodyweight.'),
+                  reps: z
+                    .number()
+                    .nullable()
+                    .default(null)
+                    .describe('Null unless they said the count. Do not put a plausible number here.'),
+                  weight_kg: z
+                    .number()
+                    .nullable()
+                    .default(null)
+                    .describe(
+                      'Load per set, in kilograms always — convert from pounds yourself, 225 lb is 102. Null for bodyweight, and null whenever they did not tell you the load. Never estimate one: a weight you chose is indistinguishable from one they lifted once it is in their history, and their next session will be judged against it.',
+                    ),
                   duration_sec: z.number().nullable().default(null).describe('For a held exercise like a plank.'),
                   distance_m: z.number().nullable().default(null),
                 }),
               )
               .min(1)
-              .describe('One entry per set actually performed. "3x8" is three entries of 8, not one saying 3.'),
+              .describe(
+                'One entry per set actually performed. "3x8" is three entries of 8, not one saying 3. When they gave a count but no numbers — "three sets of bench" — send three entries with every field null: an unrecorded set is a true thing to store, and a guessed one is not.',
+              ),
           }),
         )
         .min(1),
@@ -544,6 +556,21 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         summary: `${entry.description} — ~${Math.round(entry.kcal_burned)} kcal`,
         card: exerciseCard(entry),
       });
+      /*
+       * What this session would be called if they saved it.
+       *
+       * Handed back rather than left to the model to invent, because the name
+       * comes from the muscle tags on the catalogue — which the model cannot
+       * see — and because a concrete offer ("save that as your chest day?") is
+       * worth making where a vague one ("want to save this?") is not.
+       */
+      const { matchSessionToRoutine, suggestRoutineName } = await import('../services/routines.ts');
+      const [suggested, existing] = await Promise.all([
+        suggestRoutineName(tc.userId, entry.id),
+        matchSessionToRoutine(tc.userId, entry.id),
+      ]);
+      const alreadySaved = existing !== null;
+
       return ok({
         entry_id: entry.id,
         local_date: entry.local_date,
@@ -553,6 +580,10 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         // Said back so the model does not report a burn it invented: this
         // figure came from bodyweight, time and a MET, not from the sentence.
         burn_note: 'Computed from their bodyweight and the time, not estimated by you.',
+        would_be_called: suggested,
+        routine_hint: alreadySaved
+          ? `This is their "${suggested}" workout — it is already saved, so do not offer to save it again.`
+          : `If this looks like a workout they repeat, offer once to save it as "${suggested}" with save_routine. That name is in the vocabulary they already use.`,
       });
     },
     { alwaysLoad: true },
@@ -564,12 +595,17 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
    * knows and the model would only guess at.
    *
    * Asking in conversation would be three more turns and most of a minute for
-   * something they could tap out in fifteen seconds. So the tool draws a card
-   * that collects the lot and posts it itself, and the model's part ends here.
+   * something they could tap out in seconds. So the tool draws a card that
+   * collects it and posts itself, and the model's part ends here.
+   *
+   * What the card actually needs is small: the burn is category, bodyweight and
+   * time, so a kind and a duration finish the job. The sets are the training
+   * record, which is worth having and is not worth making anyone type twice —
+   * the card offers their last session of that kind back instead.
    */
   const askWorkout = tool(
     'ask_workout',
-    'Draw the workout card when they say they trained but not what they did — "went to the gym", "did a workout", "leg day". It asks them which kind and collects the exercises and sets. Do not call it when they already told you enough to log: a run with a distance goes to log_exercise, and named sets go to log_workout.',
+    'Draw the workout card when they say they trained but not what they did — "went to the gym", "did a workout", "leg day". It asks which kind and how long, which is all a session needs, and offers to take the exercises too. Do not call it when they already told you enough to log: a run with a distance goes to log_exercise, and named work goes to log_workout.',
     {
       category: categoryField
         .nullable()
@@ -599,7 +635,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
       return ok({
         asked: true,
         logged: false,
-        note: 'The card is on their screen and fills itself in. Say one short line inviting them to fill it, and do not claim anything has been recorded.',
+        note: 'The card is on their screen and asks how long it took — one tap. Say one short line inviting them to answer it, and do not claim anything has been recorded.',
       });
     },
     { alwaysLoad: true },
@@ -622,6 +658,12 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
       met: z
         .number()
         .describe('Metabolic equivalent. Roughly: 3 easy, 5 ordinary weights, 8 hard, 10+ flat out. Match a similar exercise rather than agonising.'),
+      muscles: z
+        .array(z.enum(MUSCLE_GROUPS))
+        .default([])
+        .describe(
+          'Which muscles it works, the one it is chosen for first — a bench press is ["chest","triceps","shoulders"]. This is what lets the app call a session "chest day" and notice which muscles have gone untrained, so it is worth getting the first one right. Empty for anything that is not lifting.',
+        ),
     },
     async (args) => {
       const { defineExerciseType } = await import('../services/workouts.ts');
@@ -632,8 +674,131 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         emoji: args.emoji,
         tracks: args.tracks as never,
         met: args.met,
+        muscles: args.muscles as never,
       });
       return ok({ exercise: type.name, id: type.id, already_known: !type.custom });
+    },
+    { alwaysLoad: true },
+  );
+
+  /**
+   * Saving the workout they keep doing.
+   *
+   * A routine is a list of exercises with a name on it and nothing else — no
+   * loads, because the weight to put in front of somebody next time is the one
+   * they used last time, which the sets table already knows. A routine that
+   * stored 60kg would be wrong within a fortnight and would need maintaining;
+   * this one is true for as long as they keep doing it.
+   */
+  const saveRoutineTool = tool(
+    'save_routine',
+    'Save a workout under a name they can reuse — "save that as my push day", "this is my usual leg day". Point it at a session you have just logged with from_entry_id and it reads the exercises off that, which is almost always what you want. Saving over a name they already have replaces it, so this is also how a routine gets edited.',
+    {
+      name: z
+        .string()
+        .describe(
+          'What they call it — "Push", "Chest day", "Upper", "Legs A". Use their words if they gave any, and otherwise the name log_workout suggested, which already matches whether they split by muscle or by movement. Do not translate one into the other.',
+        ),
+      emoji: z.string().nullable().default(null).describe('One emoji for the picker. 🏋️ 💪 🦵 🏃 🧘 are the useful ones.'),
+      from_entry_id: z
+        .string()
+        .nullable()
+        .default(null)
+        .describe('The session to read the exercise list off — normally the one you just logged. Its exercises and set counts become the routine.'),
+      exercises: z
+        .array(
+          z.object({
+            name: z.string(),
+            target_sets: z.number().nullable().default(null).describe('How many sets the plan calls for. Not the load — that is never part of a routine.'),
+          }),
+        )
+        .nullable()
+        .default(null)
+        .describe('Only when there is no session to point at, because they described the routine rather than doing it.'),
+    },
+    async (args) => {
+      const { saveRoutine } = await import('../services/routines.ts');
+      const routine = await saveRoutine({
+        userId: tc.userId,
+        name: args.name,
+        emoji: args.emoji,
+        fromEntryId: args.from_entry_id,
+        exercises: args.exercises as never,
+      });
+      return ok({
+        routine_id: routine.id,
+        name: routine.name,
+        exercises: routine.exercises.map((e) => e.name),
+        note: 'It is in their workout card from now on, one tap to log.',
+      });
+    },
+    { alwaysLoad: true },
+  );
+
+  /**
+   * "Did my chest day."
+   *
+   * Everything about the session is known except the numbers: the exercises and
+   * the set counts are the routine, and the loads are not. So this writes the
+   * sets with null reps and null weights, which is the honest record of having
+   * done three sets of something at a weight nobody wrote down — and is exactly
+   * what the no-invented-loads rule requires.
+   */
+  const logRoutineTool = tool(
+    'log_routine',
+    'Log a saved workout they say they did — "did my push day", "chest day done". Records the routine\'s exercises and set counts against today. It does not record any loads, because they did not give you any; if they also said what they lifted, use log_workout instead and write down what they said.',
+    {
+      routine: z.string().describe('The routine, by the name it is saved under. Match it to one of the saved workouts in the "Where things stand" block.'),
+      duration_min: z.number().nullable().default(null).describe('How long, if they said. Null to estimate it from the set count.'),
+      when: whenField,
+    },
+    async (args) => {
+      const { listRoutines } = await import('../services/routines.ts');
+      const routines = await listRoutines(tc.userId);
+      const wanted = args.routine.trim().toLowerCase();
+      const routine =
+        routines.find((r) => r.name.toLowerCase() === wanted) ??
+        routines.find((r) => r.name.toLowerCase().includes(wanted));
+
+      if (!routine) {
+        return ok({
+          logged: false,
+          saved_routines: routines.map((r) => r.name),
+          note: 'No routine by that name. Ask which of theirs they mean, or log it as an ordinary session.',
+        });
+      }
+
+      const { logWorkout: write } = await import('../services/workouts.ts');
+      const entry = await write({
+        userId: tc.userId,
+        category: routine.category,
+        routineId: routine.id,
+        durationMin: args.duration_min,
+        performedAt: resolveWhen(args.when ?? undefined, tc.now, tc.ctx),
+        exercises: routine.exercises.map((exercise) => ({
+          name: exercise.name,
+          type_id: exercise.type_id,
+          // One entry per set the plan calls for, every field null. A set that
+          // happened at a weight nobody recorded is a true thing to store.
+          sets: Array.from({ length: exercise.target_sets ?? 1 }, () => ({})),
+        })) as never,
+        ctx: tc.ctx,
+      });
+
+      tc.actions.push({
+        kind: 'exercise_logged',
+        entry_id: entry.id,
+        summary: `${entry.description} — ~${Math.round(entry.kcal_burned)} kcal`,
+        card: exerciseCard(entry),
+      });
+      return ok({
+        entry_id: entry.id,
+        routine: routine.name,
+        local_date: entry.local_date,
+        sets_recorded: entry.sets.length,
+        kcal_burned: entry.kcal_burned,
+        note: 'Logged with no loads, because none were given. If they tell you the weights, update it.',
+      });
     },
     { alwaysLoad: true },
   );
@@ -2206,6 +2371,8 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
     logWorkout,
     askWorkout,
     defineExercise,
+    saveRoutineTool,
+    logRoutineTool,
     logWeightTool,
     deleteEntry,
     setProfile,

@@ -15,6 +15,7 @@ import { font, type as t, useColors } from '@/theme';
 import { Glyph } from '@/components/Glyph';
 import { removeAction, SwipeRow } from '@/components/SwipeRow';
 import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
+import { Workouts } from '@/components/exercise/Workouts';
 
 /**
  * Exercise, split out of Progress so it gets a screen rather than a single row.
@@ -119,6 +120,11 @@ export default function ExerciseScreen() {
           })}
         </Chunk>
       </View>
+
+      {/* Saved workouts and the week, above the history: this is the half of
+          the screen you come here to *act* on, and the history below is the
+          half you come to read. */}
+      <Workouts onLogged={() => void load(days)} />
 
       {!summary ? (
         <>

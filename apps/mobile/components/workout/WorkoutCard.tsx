@@ -1,8 +1,28 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import type { ChatCard, ExerciseCategory, ExerciseEntry } from '@ct/shared';
-import { EXERCISE_CATEGORIES, loadToKg, loadUnit } from '@ct/shared';
+import type {
+  ChatCard,
+  ExerciseCategory,
+  ExerciseEntry,
+  ExerciseTracks,
+  ExerciseType,
+  LastWorkout,
+  MuscleGroup,
+  Routine,
+  UnitSystem,
+  WorkoutExercise,
+} from '@ct/shared';
+import {
+  EXERCISE_CATEGORIES,
+  ROUTINE_MATCH_LIKELY,
+  loadToKg,
+  loadUnit,
+  matchRoutine,
+  nameFromMuscles,
+  namingStyleOf,
+  toLoad,
+} from '@ct/shared';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
@@ -12,12 +32,18 @@ import { haptics } from '@/lib/haptics';
 /**
  * The question a session prompts, answered in the conversation.
  *
- * A strength session summed to one calorie figure is the least interesting
- * thing about it — the number nobody trained for. What was actually done is the
- * load and the reps, and neither is something a model can guess from "did
- * legs". So the agent asks, and this is the form: one row per exercise, one
- * line per set, and no round trip to a model when it is sent — the card
- * collected everything and the server does arithmetic.
+ * What the app actually needs from a session is small: the burn is category,
+ * bodyweight and time, and the reps and kilos contribute nothing to it. So the
+ * complete answer here is a kind and a duration — two taps, one of them usually
+ * already made by the agent — and the sets underneath are a training record
+ * that is worth keeping and not worth demanding.
+ *
+ * The port that first landed this screen asked for the opposite: a free-text
+ * field per exercise and two number pads per set, with none of the catalogue
+ * the web has had all along. Typing "Bulgarian split squat" on a phone after
+ * training is exactly the friction that stops people logging at all, so the
+ * picker is here now, and `tracks` decides which fields a set gets rather than
+ * every exercise being asked for reps and a weight.
  *
  * `message_id` travels with it so the server can rewrite this message's card
  * into a receipt. Without it, reopening the app shows a question that was
@@ -32,13 +58,25 @@ const CATEGORY_LABEL: Record<ExerciseCategory, string> = {
   flexibility: 'Stretching',
 };
 
+/**
+ * The durations a session actually comes in. Chips rather than a number pad,
+ * because nobody times a gym session to the minute and "about an hour" is both
+ * the true answer and the one that costs a single tap.
+ */
+const DURATIONS = [30, 45, 60, 75, 90];
+
 interface DraftSet {
   reps: number | null;
   weight: number | null;
+  minutes: number | null;
 }
 
 interface DraftExercise {
   name: string;
+  typeId: string | null;
+  tracks: ExerciseTracks;
+  emoji: string;
+  muscles: MuscleGroup[];
   sets: DraftSet[];
 }
 
@@ -49,7 +87,12 @@ export function WorkoutCard({
   onError,
 }: {
   card: Extract<ChatCard, { type: 'workout_prompt' }>;
-  messageId: string;
+  /**
+   * The chat message this card is answering, when it is sitting in the
+   * conversation. Absent when the card was opened from the Exercise tab, where
+   * there is no question to rewrite into a receipt.
+   */
+  messageId?: string;
   onLogged: (entry: ExerciseEntry) => void;
   onError: (message: string) => void;
 }) {
@@ -59,17 +102,79 @@ export function WorkoutCard({
   const [category, setCategory] = useState<ExerciseCategory>(
     card.suggested_category ?? 'strength',
   );
-  const [exercises, setExercises] = useState<DraftExercise[]>([
-    { name: '', sets: [{ reps: null, weight: null }] },
-  ]);
+  const [minutes, setMinutes] = useState<number | null>(null);
+  const [detail, setDetail] = useState(false);
+  const [types, setTypes] = useState<ExerciseType[] | null>(null);
+  const [last, setLast] = useState<LastWorkout | null>(null);
+  const [routines, setRoutines] = useState<Routine[]>([]);
+  /** Which saved routine this session is, once one has been tapped. */
+  const [routineId, setRoutineId] = useState<string | null>(null);
+  /** Non-null once they have asked for this session to become a routine. */
+  const [saveAs, setSaveAs] = useState<string | null>(null);
+  const [exercises, setExercises] = useState<DraftExercise[]>([]);
   const [saving, setSaving] = useState(false);
 
-  const named = exercises.filter((e) => e.name.trim().length > 0);
-  const canSend = named.length > 0 && !saving;
+  /*
+   * Both reads fire on the kind, not on opening the detail section: the "same
+   * as last time" offer has to be on screen *before* anyone decides whether
+   * filling a grid is worth it, or it is an offer nobody ever sees.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    setTypes(null);
+    setLast(null);
+    setRoutines([]);
+    setRoutineId(null);
+    void api
+      .exerciseTypes(category)
+      .then(({ types }) => !cancelled && setTypes(types))
+      .catch(() => !cancelled && setTypes([]));
+    void api
+      .lastWorkout(category)
+      .then(({ workout }) => !cancelled && setLast(workout))
+      .catch(() => {
+        /* Never having done one is an ordinary answer; so is a failed lookup. */
+      });
+    void api
+      .routines(category)
+      .then(({ routines }) => !cancelled && setRoutines(routines))
+      .catch(() => {
+        /* Having saved none is the normal state for a new account. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [category]);
 
-  function patch(index: number, next: Partial<DraftExercise>) {
-    setExercises((prev) => prev.map((e, i) => (i === index ? { ...e, ...next } : e)));
-  }
+  const filled = exercises.filter((e) => toExercise(e, units) !== null);
+  const counted = exercises.map((e) => toExercise(e, units)).filter(isExercise);
+  const canSend = (minutes !== null || counted.length > 0) && !saving;
+  const today = new Date().getDay();
+  // Today's habit first, then whatever was done most recently. Only ever an
+  // ordering — nothing is preselected, because logging the wrong workout is a
+  // worse outcome than one extra tap.
+  const ordered = [...routines].sort(
+    (a, b) => Number(b.usual_weekday === today) - Number(a.usual_weekday === today),
+  );
+  /*
+   * A session worth saving is one with real work in it that they have not
+   * already saved. Two exercises is the bar — one is a fragment — and a session
+   * that is plainly a routine they own is not worth offering to save twice.
+   */
+  const alreadySaved =
+    routineId !== null ||
+    matchRoutine(
+      filled.map((e) => e.typeId).filter((id): id is string => id !== null),
+      routines,
+      ROUTINE_MATCH_LIKELY,
+    ) !== null;
+  const offerSave = !alreadySaved && filled.length >= 2;
+  // Named in the words they already use: somebody whose routines are "Push" and
+  // "Pull" should not be offered "Chest & Triceps".
+  const suggestedName = nameFromMuscles(
+    filled.map((e) => e.muscles[0]).filter((m): m is MuscleGroup => m !== undefined),
+    namingStyleOf(routines.map((r) => r.name)),
+  );
 
   function patchSet(exercise: number, set: number, next: Partial<DraftSet>) {
     setExercises((prev) =>
@@ -79,25 +184,103 @@ export function WorkoutCard({
     );
   }
 
+  function addExercise(type: ExerciseType) {
+    haptics.press();
+    setExercises((prev) => [
+      ...prev,
+      {
+        name: type.name,
+        typeId: type.id,
+        tracks: type.tracks,
+        emoji: type.emoji,
+        muscles: type.muscles,
+        sets: [blankSet()],
+      },
+    ]);
+  }
+
+  /** Opens the grid on the last session of this kind rather than on nothing. */
+  function repeatLast() {
+    if (!last) return;
+    haptics.press();
+    setExercises(
+      last.exercises.map((exercise) => ({
+        name: exercise.name,
+        typeId: exercise.type_id,
+        tracks: exercise.tracks,
+        emoji: exercise.emoji,
+        muscles: [],
+        sets: exercise.sets.map((set) => ({
+          reps: set.reps,
+          weight: set.weight_kg === null ? null : toLoad(set.weight_kg, units),
+          minutes: set.duration_sec === null ? null : Math.round(set.duration_sec / 60),
+        })),
+      })),
+    );
+    if (minutes === null && last.duration_min !== null) {
+      setMinutes(nearestDuration(last.duration_min));
+    }
+    setDetail(true);
+  }
+
+  /**
+   * Tapping a saved workout fills the whole grid in, numbers included.
+   *
+   * `previous` is what they did last time this exercise came up, which is the
+   * right thing to put in front of somebody about to do it again: they adjust
+   * the one lift that moved and send it.
+   */
+  function openRoutine(routine: Routine) {
+    haptics.press();
+    setRoutineId(routine.id);
+    setExercises(
+      routine.exercises.map((exercise) => {
+        const previous = exercise.previous.map((set) => ({
+          reps: set.reps,
+          weight: set.weight_kg === null ? null : toLoad(set.weight_kg, units),
+          minutes: set.duration_sec === null ? null : Math.round(set.duration_sec / 60),
+        }));
+        // Never fewer rows than the plan calls for: a routine that says three
+        // sets shows three, even the first time, when there is no history.
+        const wanted = Math.max(exercise.target_sets ?? 1, previous.length, 1);
+        return {
+          name: exercise.name,
+          typeId: exercise.type_id,
+          tracks: exercise.tracks,
+          emoji: exercise.emoji,
+          muscles: exercise.muscles,
+          sets: Array.from({ length: wanted }, (_, i) => previous[i] ?? blankSet()),
+        };
+      }),
+    );
+    // Saving one of these again would be saving what it already is.
+    setSaveAs(null);
+    setDetail(true);
+  }
+
   async function send() {
     setSaving(true);
     try {
       const entry = await api.logWorkout({
         category,
+        exercises: counted,
+        duration_min: minutes,
+        routine_id: routineId,
         performed_at: card.performed_at,
         message_id: messageId,
-        exercises: named.map((e) => ({
-          name: e.name.trim(),
-          // A set with nothing in it is a row somebody added and did not fill,
-          // not a set of zero reps — dropping it is the honest reading.
-          sets: e.sets
-            .filter((s) => s.reps !== null || s.weight !== null)
-            .map((s) => ({
-              reps: s.reps,
-              weight_kg: s.weight === null ? null : loadToKg(s.weight, units),
-            })),
-        })).filter((e) => e.sets.length > 0),
       });
+
+      /*
+       * Saving the routine comes after the session and never instead of it. A
+       * failure here must not cost them the workout, which is the thing they
+       * actually came to record.
+       */
+      if (saveAs && saveAs.trim().length > 0) {
+        await api
+          .saveRoutine({ name: saveAs.trim(), category, from_entry_id: entry.id })
+          .catch(() => onError('Logged, but the workout did not save'));
+      }
+
       haptics.logged();
       onLogged(entry);
     } catch (e) {
@@ -106,6 +289,8 @@ export function WorkoutCard({
       setSaving(false);
     }
   }
+
+  const chosen = new Set(exercises.map((e) => e.typeId));
 
   return (
     <Chunk
@@ -124,7 +309,17 @@ export function WorkoutCard({
           return (
             <Pressable
               key={key}
-              onPress={() => setCategory(key)}
+              onPress={() => {
+                haptics.press();
+                setCategory(key);
+                // The grid belonged to the old kind: a leg day's exercises are
+                // not a swim's, and carrying them across would submit work
+                // nobody did.
+                setExercises([]);
+                setDetail(false);
+                setRoutineId(null);
+                setSaveAs(null);
+              }}
               accessibilityRole="button"
               accessibilityState={{ selected: on }}
               style={({ pressed }) => [
@@ -149,86 +344,282 @@ export function WorkoutCard({
         })}
       </View>
 
-      {exercises.map((exercise, i) => (
-        <View key={i} style={[styles.exercise, { borderTopColor: colors.border }]}>
-          <TextInput
-            value={exercise.name}
-            onChangeText={(name) => patch(i, { name })}
-            placeholder="Exercise — “bench press”"
-            placeholderTextColor={colors.mutedForeground}
-            style={[
-              t.bodySemibold,
-              styles.name,
-              {
-                backgroundColor: colors.mutedField,
-                borderColor: colors.border,
-                color: colors.foreground,
-              },
-            ]}
-          />
+      {/* Their own workouts, before anything the app came up with. One tap
+          fills the entire grid, which is the point of having saved them. */}
+      {ordered.length > 0 && (
+        <>
+          <Text style={[t.footnote, styles.label, { color: colors.mutedForeground }]}>
+            Your workouts
+          </Text>
+          <View style={styles.chips}>
+            {ordered.map((routine) => {
+              const on = routineId === routine.id;
+              return (
+                <Pressable
+                  key={routine.id}
+                  onPress={() => openRoutine(routine)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  style={({ pressed }) => [
+                    styles.chip,
+                    {
+                      backgroundColor: on ? colors.primary : colors.muted,
+                      borderColor: on ? 'transparent' : colors.border,
+                      opacity: pressed ? 0.7 : 1,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      t.footnoteSemibold,
+                      { color: on ? colors.primaryForeground : colors.mutedForeground },
+                    ]}
+                  >
+                    {routine.emoji} {routine.name}
+                    {routine.usual_weekday === today && !on ? ' · today' : ''}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </>
+      )}
 
-          {exercise.sets.map((set, j) => (
-            <View key={j} style={styles.setRow}>
-              <Text style={[t.footnote, styles.setNumber, { color: colors.mutedForeground }]}>
-                {j + 1}
+      {/* The whole required answer. Everything under it is optional. */}
+      <Text style={[t.footnote, styles.label, { color: colors.mutedForeground }]}>How long?</Text>
+      <View style={styles.durations}>
+        {DURATIONS.map((value) => {
+          const on = minutes === value;
+          return (
+            <Pressable
+              key={value}
+              onPress={() => {
+                haptics.press();
+                setMinutes(on ? null : value);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`${value} minutes`}
+              accessibilityState={{ selected: on }}
+              style={({ pressed }) => [
+                styles.duration,
+                {
+                  backgroundColor: on ? colors.primary : colors.muted,
+                  borderColor: on ? 'transparent' : colors.border,
+                  opacity: pressed ? 0.7 : 1,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.durationLabel,
+                  { color: on ? colors.primaryForeground : colors.mutedForeground },
+                ]}
+              >
+                {value}
               </Text>
-              <Cell
-                value={set.reps}
-                onChange={(reps) => patchSet(i, j, { reps })}
-                unit="reps"
-              />
-              <Cell
-                value={set.weight}
-                onChange={(weight) => patchSet(i, j, { weight })}
-                unit={loadUnit(units)}
-                decimal
-              />
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {detail && (
+        <>
+          {exercises.map((exercise, i) => (
+            <View key={`${exercise.typeId ?? exercise.name}-${i}`} style={[styles.exercise, { borderTopColor: colors.border }]}>
+              <View style={styles.exerciseHead}>
+                <Text style={[t.bodySemibold, styles.name, { color: colors.foreground }]}>
+                  {exercise.emoji} {exercise.name}
+                </Text>
+                <Pressable
+                  onPress={() => setExercises((prev) => prev.filter((_, j) => j !== i))}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${exercise.name}`}
+                  hitSlop={8}
+                >
+                  <Svg width={13} height={13} viewBox="0 0 24 24">
+                    <Path
+                      d="M6 6l12 12M18 6L6 18"
+                      stroke={colors.mutedForeground}
+                      strokeWidth={2.6}
+                      strokeLinecap="round"
+                      fill="none"
+                    />
+                  </Svg>
+                </Pressable>
+              </View>
+
+              {exercise.sets.map((set, j) => (
+                <View key={j} style={styles.setRow}>
+                  <Text style={[t.footnote, styles.setNumber, { color: colors.mutedForeground }]}>
+                    {j + 1}
+                  </Text>
+                  {exercise.tracks === 'reps' ? (
+                    <>
+                      <Cell
+                        value={set.reps}
+                        onChange={(reps) => patchSet(i, j, { reps })}
+                        unit="reps"
+                      />
+                      <Cell
+                        value={set.weight}
+                        onChange={(weight) => patchSet(i, j, { weight })}
+                        unit={loadUnit(units)}
+                        decimal
+                      />
+                    </>
+                  ) : (
+                    <Cell
+                      value={set.minutes}
+                      onChange={(m) => patchSet(i, j, { minutes: m })}
+                      unit="min"
+                    />
+                  )}
+                </View>
+              ))}
+
+              <Pressable
+                onPress={() =>
+                  // Carries the last set forward: the second set of anything is
+                  // almost always the same as the first, and retyping it is the
+                  // difference between logging four sets and logging one.
+                  setExercises((prev) =>
+                    prev.map((e, j) =>
+                      j === i ? { ...e, sets: [...e.sets, { ...(e.sets.at(-1) ?? blankSet()) }] } : e,
+                    ),
+                  )
+                }
+                accessibilityRole="button"
+                hitSlop={6}
+                style={({ pressed }) => [styles.quiet, { opacity: pressed ? 0.6 : 1 }]}
+              >
+                <Plus color={colors.mutedForeground} />
+                <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+                  another set
+                </Text>
+              </Pressable>
             </View>
           ))}
 
+          {/* The catalogue, as chips. A picker rather than a text field because
+              the names are already known, and typing them on a phone after a
+              session is exactly the friction that stops people logging at all. */}
+          <View style={[styles.picker, { borderTopColor: colors.border }]}>
+            {types === null ? (
+              <Text style={[t.footnote, { color: colors.mutedForeground }]}>Loading…</Text>
+            ) : (
+              <View style={styles.chips}>
+                {types
+                  .filter((type) => !chosen.has(type.id))
+                  .map((type) => (
+                    <Pressable
+                      key={type.id}
+                      onPress={() => addExercise(type)}
+                      accessibilityRole="button"
+                      style={({ pressed }) => [
+                        styles.chip,
+                        {
+                          backgroundColor: colors.muted,
+                          borderColor: colors.border,
+                          opacity: pressed ? 0.7 : 1,
+                        },
+                      ]}
+                    >
+                      <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+                        {type.emoji} {type.name}
+                      </Text>
+                    </Pressable>
+                  ))}
+              </View>
+            )}
+          </View>
+        </>
+      )}
+
+      {!detail && (
+        <View style={styles.offers}>
           <Pressable
-            onPress={() => patch(i, { sets: [...exercise.sets, { reps: null, weight: null }] })}
+            onPress={() => {
+              haptics.press();
+              setDetail(true);
+            }}
             accessibilityRole="button"
             hitSlop={6}
-            style={({ pressed }) => [styles.addSet, { opacity: pressed ? 0.6 : 1 }]}
+            style={({ pressed }) => [styles.quiet, { opacity: pressed ? 0.6 : 1 }]}
           >
-            <Svg width={13} height={13} viewBox="0 0 24 24">
-              <Path
-                d="M12 5v14M5 12h14"
-                stroke={colors.mutedForeground}
-                strokeWidth={2.6}
-                strokeLinecap="round"
-                fill="none"
-              />
-            </Svg>
-            <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>another set</Text>
+            <Plus color={colors.mutedForeground} />
+            <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+              add what you did
+            </Text>
           </Pressable>
+
+          {last && (
+            <Pressable
+              onPress={repeatLast}
+              accessibilityRole="button"
+              hitSlop={6}
+              style={({ pressed }) => [styles.quiet, { opacity: pressed ? 0.6 : 1 }]}
+            >
+              <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+                ↻ same as {when(last.local_date)}
+              </Text>
+            </Pressable>
+          )}
         </View>
-      ))}
+      )}
+
+      {offerSave &&
+        (saveAs === null ? (
+          <Pressable
+            onPress={() => {
+              haptics.press();
+              setSaveAs(suggestedName);
+            }}
+            accessibilityRole="button"
+            hitSlop={6}
+            style={({ pressed }) => [styles.saveOffer, { opacity: pressed ? 0.6 : 1 }]}
+          >
+            <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+              ⭑ save this as “{suggestedName}”
+            </Text>
+          </Pressable>
+        ) : (
+          <View style={styles.saveRow}>
+            <TextInput
+              value={saveAs}
+              onChangeText={setSaveAs}
+              accessibilityLabel="Name for this workout"
+              placeholder="Name it"
+              placeholderTextColor={colors.mutedForeground}
+              style={[
+                t.bodySemibold,
+                styles.saveField,
+                {
+                  backgroundColor: colors.mutedField,
+                  borderColor: colors.border,
+                  color: colors.foreground,
+                },
+              ]}
+            />
+            <Pressable
+              onPress={() => setSaveAs(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Don’t save this as a workout"
+              hitSlop={8}
+            >
+              <Svg width={13} height={13} viewBox="0 0 24 24">
+                <Path
+                  d="M6 6l12 12M18 6L6 18"
+                  stroke={colors.mutedForeground}
+                  strokeWidth={2.6}
+                  strokeLinecap="round"
+                  fill="none"
+                />
+              </Svg>
+            </Pressable>
+          </View>
+        ))}
 
       <View style={[styles.foot, { borderTopColor: colors.border }]}>
-        <Pressable
-          onPress={() =>
-            setExercises((prev) => [...prev, { name: '', sets: [{ reps: null, weight: null }] }])
-          }
-          accessibilityRole="button"
-          hitSlop={6}
-          style={({ pressed }) => [styles.addSet, { opacity: pressed ? 0.6 : 1 }]}
-        >
-          <Svg width={13} height={13} viewBox="0 0 24 24">
-            <Path
-              d="M12 5v14M5 12h14"
-              stroke={colors.mutedForeground}
-              strokeWidth={2.6}
-              strokeLinecap="round"
-              fill="none"
-            />
-          </Svg>
-          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-            another exercise
-          </Text>
-        </Pressable>
-
         <PressableChunk
           depth={3}
           radius={999}
@@ -245,6 +636,14 @@ export function WorkoutCard({
         </PressableChunk>
       </View>
     </Chunk>
+  );
+}
+
+function Plus({ color }: { color: string }) {
+  return (
+    <Svg width={13} height={13} viewBox="0 0 24 24">
+      <Path d="M12 5v14M5 12h14" stroke={color} strokeWidth={2.6} strokeLinecap="round" fill="none" />
+    </Svg>
   );
 }
 
@@ -278,20 +677,70 @@ function Cell({
   );
 }
 
+const blankSet = (): DraftSet => ({ reps: null, weight: null, minutes: null });
+
+/**
+ * A draft becomes an exercise only once at least one set has a number in it.
+ *
+ * A set with nothing in it is a row somebody added and did not fill, not a set
+ * of zero reps — dropping it is the honest reading. The load leaves here in
+ * kilograms whatever the field said, which is the only conversion on this
+ * screen.
+ */
+function toExercise(draft: DraftExercise, units: UnitSystem): WorkoutExercise | null {
+  const sets = draft.sets
+    .map((set) => {
+      if (draft.tracks === 'reps') {
+        if (set.reps === null && set.weight === null) return null;
+        return { reps: set.reps, weight_kg: set.weight === null ? null : loadToKg(set.weight, units) };
+      }
+      return set.minutes === null ? null : { duration_sec: Math.round(set.minutes * 60) };
+    })
+    .filter((s): s is NonNullable<typeof s> => s !== null);
+
+  if (sets.length === 0) return null;
+  return { name: draft.name, type_id: draft.typeId, sets };
+}
+
+const isExercise = (e: WorkoutExercise | null): e is WorkoutExercise => e !== null;
+
+/** The chip nearest a remembered duration, so repeating fills that in too. */
+function nearestDuration(min: number): number {
+  return DURATIONS.reduce((best, d) => (Math.abs(d - min) < Math.abs(best - min) ? d : best));
+}
+
+/**
+ * "Tuesday" for anything inside the last week, a date beyond it. A session two
+ * months old is worth offering back but not worth calling recent.
+ */
+function when(localDate: string): string {
+  const then = new Date(`${localDate}T12:00:00`);
+  const days = Math.round((Date.now() - then.getTime()) / 86_400_000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 7) return then.toLocaleDateString(undefined, { weekday: 'long' });
+  return then.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
 const styles = StyleSheet.create({
   card: { borderWidth: 2, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 14 },
   heard: { marginTop: 4, lineHeight: 20 },
   categories: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
   category: { borderWidth: 2, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   categoryLabel: { fontFamily: font.bold, fontSize: 13, lineHeight: 18 },
-  exercise: { borderTopWidth: 2, marginTop: 12, paddingTop: 12, gap: 8 },
-  name: {
-    height: 40,
+  label: { marginTop: 14, marginBottom: 6 },
+  durations: { flexDirection: 'row', gap: 6 },
+  duration: {
+    flex: 1,
+    alignItems: 'center',
     borderWidth: 2,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 0,
+    borderRadius: 999,
+    paddingVertical: 8,
   },
+  durationLabel: { fontFamily: font.display, fontSize: 15, lineHeight: 18 },
+  exercise: { borderTopWidth: 2, marginTop: 12, paddingTop: 12, gap: 8 },
+  exerciseHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  name: { flex: 1 },
   setRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   setNumber: { width: 16 },
   cell: {
@@ -313,15 +762,28 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     paddingVertical: 0,
   },
-  addSet: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  picker: { borderTopWidth: 2, marginTop: 12, paddingTop: 12 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: { borderWidth: 2, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  quiet: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  saveOffer: { marginTop: 14 },
+  saveRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 },
+  saveField: {
+    flex: 1,
+    height: 40,
+    borderWidth: 2,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 0,
+  },
+  offers: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 14 },
   foot: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
+    justifyContent: 'flex-end',
     borderTopWidth: 2,
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 14,
+    paddingTop: 14,
   },
-  send: { height: 36, borderRadius: 999, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center' },
+  send: { paddingHorizontal: 18, paddingVertical: 9 },
 });

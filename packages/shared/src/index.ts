@@ -148,17 +148,213 @@ export const ExerciseTracks = z.enum(EXERCISE_TRACKS);
 export type ExerciseTracks = z.infer<typeof ExerciseTracks>;
 
 /**
- * An exercise the app knows about. Built in, or invented for one account the
- * moment they mentioned something the catalogue had never heard of — nobody
- * should have to pick "Other" because their gym does an exercise this app has
- * not been told about.
+ * Which muscles an exercise is for.
+ *
+ * The category says what an exercise *is* — all of this is `strength` — and
+ * this says what it is *for*, which is the thing people actually name a session
+ * after. "Chest day" is a statement about muscles, and without them the app
+ * cannot form the sentence, name a routine, or notice that shoulders have not
+ * been trained in three weeks.
+ *
+ * Ordered primary-first wherever it appears: a bench press is chest and triceps
+ * and front delts, and the first one is what the exercise is chosen for.
  */
+export const MUSCLE_GROUPS = [
+  'chest',
+  'back',
+  'shoulders',
+  'biceps',
+  'triceps',
+  'quads',
+  'hamstrings',
+  'glutes',
+  'calves',
+  'core',
+] as const;
+export const MuscleGroup = z.enum(MUSCLE_GROUPS);
+export type MuscleGroup = z.infer<typeof MuscleGroup>;
+
+/** The four that people say "legs" about, for naming a day rather than storing one. */
+export const LEG_MUSCLES: MuscleGroup[] = ['quads', 'hamstrings', 'glutes', 'calves'];
+
+/**
+ * The movement pattern a muscle belongs to.
+ *
+ * Muscle groups alone cannot name a workout, because half the training world
+ * does not split by muscle. Push/pull/legs and upper/lower are splits by what
+ * the movement *does* — everything you press away from you on one day,
+ * everything you pull toward you on another — and a chest-and-triceps session
+ * is a "push day" to one person and a "chest day" to another. Both are looking
+ * at the same set of exercises.
+ *
+ * So this is the second axis. `core` is deliberately neutral: abs get trained
+ * on the end of everything and must never be what decides a session's name.
+ */
+export type MovementPattern = 'push' | 'pull' | 'legs' | 'core';
+
+export const MUSCLE_PATTERN: Record<MuscleGroup, MovementPattern> = {
+  chest: 'push',
+  shoulders: 'push',
+  triceps: 'push',
+  back: 'pull',
+  biceps: 'pull',
+  quads: 'legs',
+  hamstrings: 'legs',
+  glutes: 'legs',
+  calves: 'legs',
+  core: 'core',
+};
+
+const MUSCLE_LABEL: Record<MuscleGroup, string> = {
+  chest: 'Chest',
+  back: 'Back',
+  shoulders: 'Shoulders',
+  biceps: 'Biceps',
+  triceps: 'Triceps',
+  quads: 'Quads',
+  hamstrings: 'Hamstrings',
+  glutes: 'Glutes',
+  calves: 'Calves',
+  core: 'Core',
+};
+
+export const muscleLabel = (muscle: MuscleGroup) => MUSCLE_LABEL[muscle];
+
+/**
+ * Which vocabulary someone names their workouts in.
+ *
+ * `pattern` is push/pull/legs/upper/lower; `muscle` is chest day, back day. The
+ * app has no business having an opinion about which is correct — they describe
+ * the same training and people are loyal to the words they learned it in — so
+ * it reads theirs off the routines they have already named and follows suit.
+ *
+ * Null until they have named one, which is the only time a default is needed.
+ */
+export type NamingStyle = 'pattern' | 'muscle';
+
+const PATTERN_WORDS = ['push', 'pull', 'leg', 'upper', 'lower', 'full body', 'ppl'];
+
+export function namingStyleOf(existingNames: string[]): NamingStyle | null {
+  let pattern = 0;
+  let muscle = 0;
+  for (const raw of existingNames) {
+    const name = raw.toLowerCase();
+    // "Leg day" reads as both; it is the one word the two systems share, so it
+    // votes for neither rather than for whichever is tested first.
+    const isLegs = name.includes('leg');
+    const saysPattern = PATTERN_WORDS.some((word) => name.includes(word));
+    const saysMuscle = MUSCLE_GROUPS.some((m) => m !== 'core' && name.includes(m.slice(0, 5)));
+    if (isLegs && !saysMuscle) continue;
+    if (saysPattern) pattern += 1;
+    else if (saysMuscle) muscle += 1;
+  }
+  if (pattern === muscle) return null;
+  return pattern > muscle ? 'pattern' : 'muscle';
+}
+
+/**
+ * What to call a session, from the muscles it actually hit.
+ *
+ * Counts primary muscles only — a bench press is a chest exercise that happens
+ * to involve triceps, and letting the secondary muscles vote turns every push
+ * day into "chest and triceps and shoulders".
+ *
+ * The order of the tests is the whole design, and it is what makes one function
+ * serve both splits:
+ *
+ *   1. One muscle carrying most of the work names the day outright. A session
+ *      that is three chest movements and a pushdown is a chest day in anybody's
+ *      vocabulary.
+ *   2. Otherwise the movement pattern names it. Bench, overhead press, laterals,
+ *      dips and pushdowns is not "shoulders and triceps" — it is a push day, and
+ *      the only reason the muscle counts do not say so is that push days are
+ *      spread across three muscles by design.
+ *   3. Push and pull together, with no legs, is an upper day.
+ *   4. Anything touching all three is full body.
+ *
+ * `style` breaks the genuine ties — a back-and-biceps session is "Pull" to one
+ * person and "Back & Biceps" to another, and both are right. It comes from the
+ * routines they have already named, so the app converges on their words after
+ * the first one rather than insisting on its own.
+ */
+export function nameFromMuscles(
+  primaries: MuscleGroup[],
+  style: NamingStyle | null = null,
+): string {
+  if (primaries.length === 0) return 'Workout';
+
+  // Core rides along with everything and decides nothing — unless it is all
+  // there was, in which case it is the honest answer.
+  const working = primaries.filter((m) => MUSCLE_PATTERN[m] !== 'core');
+  if (working.length === 0) return 'Core day';
+
+  const total = working.length;
+
+  const muscles = new Map<string, number>();
+  const patterns = new Map<MovementPattern, number>();
+  for (const muscle of working) {
+    const key = LEG_MUSCLES.includes(muscle) ? 'Legs' : MUSCLE_LABEL[muscle];
+    muscles.set(key, (muscles.get(key) ?? 0) + 1);
+    const pattern = MUSCLE_PATTERN[muscle];
+    patterns.set(pattern, (patterns.get(pattern) ?? 0) + 1);
+  }
+
+  const byMuscle = [...muscles.entries()].sort((a, b) => b[1] - a[1]);
+  const byPattern = [...patterns.entries()].sort((a, b) => b[1] - a[1]);
+  const [topMuscle] = byMuscle;
+  const [topPattern] = byPattern;
+  if (!topMuscle || !topPattern) return 'Workout';
+
+  // 1. A session that is essentially one muscle is that muscle's day, in
+  //    anybody's vocabulary. Somebody who trains push/pull/legs and spends a
+  //    whole session on shoulders has still had a shoulders day, and calling it
+  //    "Push" throws away the only interesting thing about it.
+  if (topMuscle[1] / total >= 0.85) return `${topMuscle[0]} day`;
+
+  // 2. One muscle carrying most of it names the day too — but this is the test
+  //    that a pattern-namer would disagree with, because a back-heavy session
+  //    with curls on the end is "Pull" to them and "Back day" to somebody who
+  //    splits by body part. Legs are exempt: "Legs" is what both camps say.
+  if (style !== 'pattern' || topMuscle[0] === 'Legs') {
+    if (topMuscle[1] / total >= 0.7) return `${topMuscle[0]} day`;
+  }
+
+  // 3. Arms are their own session in both systems, and neither "Upper" nor
+  //    "Push" describes an hour of curls and pushdowns.
+  if (working.every((m) => m === 'biceps' || m === 'triceps')) return 'Arms';
+
+  // 4. One movement pattern carries it. Not exclusivity — a pull day with one
+  //    rear-delt movement in it is still a pull day.
+  if (topPattern[1] / total >= 0.8) {
+    if (topPattern[0] === 'legs') return 'Legs day';
+    // Two muscles and no stated preference for patterns reads better named:
+    // "Chest & Triceps" says more than "Push" and is wrong for nobody.
+    if (style !== 'pattern' && byMuscle.length === 2) {
+      return `${byMuscle[0]![0]} & ${byMuscle[1]![0]}`;
+    }
+    return topPattern[0] === 'push' ? 'Push' : 'Pull';
+  }
+
+  // 5. Everything above the waist.
+  if (!patterns.has('legs')) {
+    if (style !== 'pattern' && byMuscle.length === 2) {
+      return `${byMuscle[0]![0]} & ${byMuscle[1]![0]}`;
+    }
+    return 'Upper';
+  }
+
+  // 6. Legs plus enough upper work to not be a leg day.
+  return 'Full body';
+}
+
 export const ExerciseType = z.object({
   id: z.string().uuid(),
   name: z.string(),
   category: ExerciseCategory,
   emoji: z.string(),
   tracks: ExerciseTracks,
+  /** Primary first. Empty for anything that is not lifting. */
+  muscles: z.array(MuscleGroup).default([]),
   /** True when this account invented it rather than it shipping with the app. */
   custom: z.boolean(),
 });
@@ -226,21 +422,285 @@ export type WorkoutExercise = z.infer<typeof WorkoutExercise>;
  * the better part of a minute to log something the user already knows; the card
  * collects it all and posts once, and the model is not involved at all.
  */
-export const WorkoutRequest = z.object({
-  category: ExerciseCategory,
-  exercises: z.array(WorkoutExercise).min(1).max(20),
-  /** Total session time, if they know it. Otherwise estimated from the sets. */
-  duration_min: z.number().min(1).max(600).nullable().optional(),
-  /** ISO instant. Defaults to now; the card carries the one the agent meant. */
-  performed_at: z.string().optional(),
-  /**
-   * The chat message whose question this answers. Given it, the server rewrites
-   * that message's card into a receipt — otherwise reopening the app shows a
-   * question that was answered days ago.
-   */
-  message_id: z.string().uuid().optional(),
-});
+export const WorkoutRequest = z
+  .object({
+    category: ExerciseCategory,
+    /**
+     * What was lifted — and empty is the ordinary case, not a degenerate one.
+     *
+     * The burn is category, bodyweight and time; the sets contribute nothing to
+     * it. They are a training record the app is glad to keep and has no
+     * standing to demand, so a session can be logged without one.
+     */
+    exercises: z.array(WorkoutExercise).max(20).default([]),
+    /**
+     * Total session time. Required when no exercises came with it, since then
+     * there is nothing left to estimate the minutes from.
+     */
+    duration_min: z.number().min(1).max(600).nullable().optional(),
+    /** ISO instant. Defaults to now; the card carries the one the agent meant. */
+    performed_at: z.string().optional(),
+    /**
+     * The routine this session was, when it came from one. Written onto the
+     * entry so the weekday habit can be read back out of the history later —
+     * "Monday is chest day" is a fact about these rows, not a setting.
+     */
+    routine_id: z.string().uuid().nullable().optional(),
+    /**
+     * The chat message whose question this answers. Given it, the server rewrites
+     * that message's card into a receipt — otherwise reopening the app shows a
+     * question that was answered days ago.
+     */
+    message_id: z.string().uuid().optional(),
+  })
+  .refine((body) => body.exercises.length > 0 || (body.duration_min ?? null) !== null, {
+    message: 'Say how long the session took, or what was in it',
+    path: ['duration_min'],
+  });
 export type WorkoutRequest = z.infer<typeof WorkoutRequest>;
+
+/**
+ * The last session of a given kind, shaped for the card to open with.
+ *
+ * The second push day of someone's life is the first one with five kilos on it,
+ * and retyping eleven exercises to say so is the friction that stops people
+ * keeping a log at all. So the card offers the last one back and asks them to
+ * correct it, which is a different and much smaller job than remembering it.
+ *
+ * Carries `tracks` and `emoji` per exercise so the card can draw the right
+ * fields without a second round trip to the catalogue.
+ */
+export const LastWorkout = z.object({
+  entry_id: z.string().uuid(),
+  local_date: z.string(),
+  duration_min: z.number().nullable(),
+  category: ExerciseCategory,
+  exercises: z.array(
+    z.object({
+      name: z.string(),
+      type_id: z.string().uuid().nullable(),
+      tracks: ExerciseTracks,
+      emoji: z.string(),
+      sets: z.array(
+        z.object({
+          reps: z.number().int().nullable(),
+          weight_kg: z.number().nullable(),
+          duration_sec: z.number().int().nullable(),
+          distance_m: z.number().int().nullable(),
+        }),
+      ),
+    }),
+  ),
+});
+export type LastWorkout = z.infer<typeof LastWorkout>;
+
+// ---- Routines ---------------------------------------------------------------
+
+/** The numbers of one set, however it happens to be measured. */
+export const SetValues = z.object({
+  reps: z.number().int().nullable(),
+  weight_kg: z.number().nullable(),
+  duration_sec: z.number().int().nullable(),
+  distance_m: z.number().int().nullable(),
+});
+export type SetValues = z.infer<typeof SetValues>;
+
+/**
+ * One exercise in a saved routine, with what happened last time it was done.
+ *
+ * `previous` is the whole reason a routine can stay a list of names: the load
+ * to put in front of somebody is the one they used last time, which the sets
+ * table already knows and the routine would only get wrong. It is empty the
+ * first time — a routine can name an exercise they have never performed.
+ */
+export const RoutineExercise = z.object({
+  name: z.string(),
+  type_id: z.string().uuid().nullable(),
+  tracks: ExerciseTracks,
+  emoji: z.string(),
+  muscles: z.array(MuscleGroup).default([]),
+  /** How many sets the plan calls for. The load is not part of the plan. */
+  target_sets: z.number().int().nullable(),
+  previous: z.array(SetValues).default([]),
+});
+export type RoutineExercise = z.infer<typeof RoutineExercise>;
+
+/**
+ * A workout somebody does often enough to have named.
+ *
+ * The picker on the card is a list of these, and tapping one fills the grid in
+ * completely — which is the difference between logging a session in one tap and
+ * abandoning the card, and the entire point of the feature.
+ */
+export const Routine = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  emoji: z.string(),
+  category: ExerciseCategory,
+  last_used_at: z.string().nullable(),
+  /** How many times it has been done. Nothing is claimed from one session. */
+  times_done: z.number().int(),
+  /**
+   * The weekday it usually falls on, 0 = Sunday, or null when there is no habit
+   * to speak of yet. This is "Monday is chest day" *observed* — read out of the
+   * history, because nobody sets that up and everybody has one.
+   */
+  usual_weekday: z.number().int().min(0).max(6).nullable(),
+  /**
+   * The days they have said this routine belongs on. Several, because push/pull/
+   * legs runs twice through a six-day week and Push is Monday *and* Thursday.
+   * Empty when they have never filled the schedule in, which is the normal case.
+   */
+  scheduled_weekdays: z.array(z.number().int().min(0).max(6)).default([]),
+  exercises: z.array(RoutineExercise).default([]),
+});
+export type Routine = z.infer<typeof Routine>;
+
+/**
+ * How completely a session and a routine are the same workout.
+ *
+ * The problem this solves: somebody with a "Push" routine does their push day
+ * and logs it by typing it out, or by tapping exercises rather than the routine
+ * chip. Nothing links the two, so the session is called "Bench press and 4
+ * more", the weekday habit never builds, and the app keeps offering to save a
+ * routine they already have. Matching on the exercises themselves is what makes
+ * "Monday is push day" readable however the session got logged.
+ *
+ * The score is the harmonic mean of two coverages — how much of the routine the
+ * session did, and how much of the session the routine explains — because
+ * either alone is easy to fool. A leg day shares one exercise with a five-move
+ * push routine and would score 1.0 on routine coverage if only the intersection
+ * mattered; a two-exercise session that is a strict subset of a big routine
+ * would score 1.0 the other way.
+ */
+export function routineOverlap(sessionTypeIds: string[], routineTypeIds: string[]): number {
+  const session = new Set(sessionTypeIds.filter(Boolean));
+  const routine = new Set(routineTypeIds.filter(Boolean));
+  if (session.size === 0 || routine.size === 0) return 0;
+
+  let shared = 0;
+  for (const id of session) if (routine.has(id)) shared += 1;
+  // One exercise in common is a coincidence — squats appear in half of all
+  // routines — so it is never a match however small the two sets are.
+  if (shared < 2) return 0;
+
+  const ofRoutine = shared / routine.size;
+  const ofSession = shared / session.size;
+  return (2 * ofRoutine * ofSession) / (ofRoutine + ofSession);
+}
+
+/**
+ * Enough alike to put the routine's name on the session and count it toward
+ * that routine's habit. Set high: a wrong link mislabels a workout and teaches
+ * the app the wrong day, and the cost of missing one is only that the session
+ * keeps its own name.
+ */
+export const ROUTINE_MATCH_CERTAIN = 0.75;
+
+/** Enough alike to stop offering to save what is plainly already saved. */
+export const ROUTINE_MATCH_LIKELY = 0.55;
+
+/** The routine a session most resembles, or null when none is close enough. */
+/**
+ * One day of the training week, and where the app's opinion about it came from.
+ *
+ * `declared` is what they said; `learned` is what the history says; null is a
+ * day with neither. Keeping the source rather than flattening to a routine id
+ * is what lets the app be honest on screen — "you set this" and "you've done
+ * this three Mondays running" deserve to read differently, and only one of them
+ * should be silently overwritten when the habit changes.
+ */
+export const ScheduledDay = z.object({
+  weekday: z.number().int().min(0).max(6),
+  routine_id: z.string().uuid().nullable(),
+  routine_name: z.string().nullable(),
+  routine_emoji: z.string().nullable(),
+  source: z.enum(['declared', 'learned']).nullable(),
+});
+export type ScheduledDay = z.infer<typeof ScheduledDay>;
+
+/** Sunday first, seven entries, always — a week with holes is still a week. */
+export const WeekSchedule = z.array(ScheduledDay).length(7);
+export type WeekSchedule = z.infer<typeof WeekSchedule>;
+
+/**
+ * Setting the week. A day mapped to null is cleared back to whatever the
+ * history infers, which is why this is not simply a delete.
+ */
+export const SaveScheduleRequest = z.object({
+  days: z
+    .array(
+      z.object({
+        weekday: z.number().int().min(0).max(6),
+        routine_id: z.string().uuid().nullable(),
+      }),
+    )
+    .max(7),
+});
+export type SaveScheduleRequest = z.infer<typeof SaveScheduleRequest>;
+
+export const WEEKDAY_NAMES = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+] as const;
+
+/** Monday-first ordering for display, since almost nobody plans a week from Sunday. */
+export const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
+export function matchRoutine<T extends { exercises: { type_id: string | null }[] }>(
+  sessionTypeIds: string[],
+  routines: T[],
+  threshold: number = ROUTINE_MATCH_CERTAIN,
+): { routine: T; score: number } | null {
+  let best: { routine: T; score: number } | null = null;
+  for (const routine of routines) {
+    const ids = routine.exercises
+      .map((e) => e.type_id)
+      .filter((id): id is string => id !== null);
+    const score = routineOverlap(sessionTypeIds, ids);
+    if (score >= threshold && (best === null || score > best.score)) {
+      best = { routine, score };
+    }
+  }
+  return best;
+}
+
+/**
+ * Saving one.
+ *
+ * Two ways in, and the first is the one that matters: `from_entry_id` points at
+ * a session they have just logged, and the server reads the exercise list off
+ * it. That is a single tap at the only moment somebody has both the list and
+ * their phone in hand. Naming the exercises explicitly is the other way, for
+ * the agent building one from a sentence.
+ */
+export const SaveRoutineRequest = z
+  .object({
+    name: z.string().min(1).max(60),
+    emoji: z.string().max(8).optional(),
+    category: ExerciseCategory.optional(),
+    from_entry_id: z.string().uuid().optional(),
+    exercises: z
+      .array(
+        z.object({
+          name: z.string().min(1).max(80),
+          type_id: z.string().uuid().nullable().optional(),
+          target_sets: z.number().int().min(1).max(30).nullable().optional(),
+        }),
+      )
+      .max(20)
+      .optional(),
+  })
+  .refine((body) => body.from_entry_id !== undefined || (body.exercises?.length ?? 0) > 0, {
+    message: 'Say which session to save, or which exercises are in it',
+    path: ['exercises'],
+  });
+export type SaveRoutineRequest = z.infer<typeof SaveRoutineRequest>;
 
 export const WeightEntry = z.object({
   id: z.string().uuid(),

@@ -3,8 +3,11 @@ import type {
   ExerciseEntry,
   ExerciseTracks,
   ExerciseType,
+  LastWorkout,
+  MuscleGroup,
   WorkoutExercise,
 } from '@ct/shared';
+import { matchRoutine } from '@ct/shared';
 import { query, queryOne, transaction } from '../db.ts';
 import { latestWeight } from './log.ts';
 import { type DayContext, localDateFor } from '../time.ts';
@@ -26,7 +29,7 @@ export async function listExerciseTypes(
   category?: ExerciseCategory | null,
 ): Promise<ExerciseType[]> {
   const rows = await query<any>(
-    `SELECT id, name, category, emoji, tracks, user_id
+    `SELECT id, name, category, emoji, tracks, muscles, user_id
        FROM exercise_types
       WHERE (user_id IS NULL OR user_id = $1)
         AND ($2::text IS NULL OR category = $2)
@@ -41,7 +44,7 @@ export async function findExerciseType(
   name: string,
 ): Promise<ExerciseType | null> {
   const row = await queryOne<any>(
-    `SELECT id, name, category, emoji, tracks, user_id
+    `SELECT id, name, category, emoji, tracks, muscles, user_id
        FROM exercise_types
       WHERE lower(name) = lower($2) AND (user_id IS NULL OR user_id = $1)
    ORDER BY (user_id IS NOT NULL) DESC
@@ -58,6 +61,8 @@ export interface DefineExerciseInput {
   emoji: string;
   tracks: ExerciseTracks;
   met: number;
+  /** Primary first. Empty for anything that is not lifting. */
+  muscles?: MuscleGroup[] | null;
 }
 
 /**
@@ -73,10 +78,18 @@ export async function defineExerciseType(input: DefineExerciseInput): Promise<Ex
   if (existing) return existing;
 
   const row = await queryOne<any>(
-    `INSERT INTO exercise_types (user_id, name, category, emoji, tracks, met)
-     VALUES ($1,$2,$3,$4,$5,$6)
-     RETURNING id, name, category, emoji, tracks, user_id`,
-    [input.userId, input.name.trim(), input.category, input.emoji, input.tracks, input.met],
+    `INSERT INTO exercise_types (user_id, name, category, emoji, tracks, met, muscles)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)
+     RETURNING id, name, category, emoji, tracks, muscles, user_id`,
+    [
+      input.userId,
+      input.name.trim(),
+      input.category,
+      input.emoji,
+      input.tracks,
+      input.met,
+      input.muscles ?? [],
+    ],
   );
   return toType(row);
 }
@@ -89,6 +102,8 @@ export interface LogWorkoutInput {
   exercises: WorkoutExercise[];
   durationMin?: number | null;
   performedAt?: Date;
+  /** The saved routine this session was, when it came from one. */
+  routineId?: string | null;
   ctx: DayContext;
 }
 
@@ -118,16 +133,32 @@ export async function logWorkout(input: LogWorkoutInput): Promise<ExerciseEntry>
   const weight = await latestWeight(input.userId);
   const kcal = estimateBurn(resolved, minutes, weight?.weight_kg ?? null, input.category);
 
+  /*
+   * A session that came from a routine is called by its name.
+   *
+   * "Chest day" is what the person calls it and what they will look for in
+   * their history; "Bench press, Chest fly and 9 more" is a list of the first
+   * two things they did. The name is only trusted when the routine is actually
+   * theirs, which the lookup enforces.
+   *
+   * When no routine was named, the exercises are asked whether this *is* one.
+   * Somebody who does their push day and types it into the chat rather than
+   * tapping the push day chip has still done their push day, and without this
+   * the session would be called after its first two exercises and would never
+   * count toward the habit that makes the card useful on a Monday.
+   */
+  const routine = await routineFor(input, resolved);
+
   const entryId = await transaction(async (client) => {
     const { rows } = await client.query<{ id: string }>(
       `INSERT INTO exercise_entries
          (user_id, description, performed_at, local_date, duration_min,
-          kcal_burned, confidence, source, category, detail)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'workout',$8,'counted')
+          kcal_burned, confidence, source, category, detail, routine_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'workout',$8,'counted',$9)
        RETURNING id`,
       [
         input.userId,
-        describe(input.category, resolved.map((r) => r.exercise)),
+        routine?.name ?? describe(input.category, resolved.map((r) => r.exercise)),
         performedAt.toISOString(),
         localDate,
         minutes,
@@ -136,6 +167,7 @@ export async function logWorkout(input: LogWorkoutInput): Promise<ExerciseEntry>
         // effort, so this is honest rather than flattering.
         'medium',
         input.category,
+        routine?.id ?? null,
       ],
     );
     const id = rows[0]!.id;
@@ -164,9 +196,49 @@ export async function logWorkout(input: LogWorkoutInput): Promise<ExerciseEntry>
     return id;
   });
 
+  // Ordering for the picker: the routine done on Tuesday should be near the top
+  // on Thursday. Deliberately after the transaction — a failure to reorder a
+  // picker is not a reason to lose a logged session.
+  if (routine) {
+    const { touchRoutine } = await import('./routines.ts');
+    await touchRoutine(input.userId, routine.id, performedAt);
+  }
+
   const entry = await getExerciseEntry(input.userId, entryId);
   if (!entry) throw new Error('Workout vanished immediately after insert');
   return entry;
+}
+
+/**
+ * Which routine this session is — the one they named, or the one it plainly is.
+ *
+ * An explicitly chosen routine is taken at its word and only checked for
+ * ownership. A session with no routine on it is matched against theirs by
+ * exercise overlap, at a deliberately high bar: mislabelling a workout and
+ * teaching the app the wrong weekday is a worse outcome than leaving a session
+ * unlinked, and an unlinked session still records everything that happened.
+ */
+async function routineFor(
+  input: LogWorkoutInput,
+  resolved: Resolved[],
+): Promise<{ id: string; name: string } | null> {
+  if (input.routineId) {
+    const row = await queryOne<{ id: string; name: string }>(
+      `SELECT id, name FROM routines WHERE id = $1 AND user_id = $2`,
+      [input.routineId, input.userId],
+    );
+    return row ?? null;
+  }
+
+  const typeIds = resolved
+    .map((r) => r.type?.id)
+    .filter((id): id is string => id !== undefined);
+  if (typeIds.length === 0) return null;
+
+  const { listRoutines } = await import('./routines.ts');
+  const routines = await listRoutines(input.userId, { category: input.category });
+  const match = matchRoutine(typeIds, routines);
+  return match ? { id: match.routine.id, name: match.routine.name } : null;
 }
 
 export async function getExerciseEntry(
@@ -182,6 +254,90 @@ export async function getExerciseEntry(
   if (!row) return null;
   return { ...toEntry(row), sets: await listSets(entryId) };
 }
+
+/**
+ * The most recent counted session of a kind, ready to be offered back.
+ *
+ * Only sessions that actually recorded sets qualify: a duration-only log is a
+ * perfectly good entry and a useless template, and offering "same as last time"
+ * for one would hand back an empty grid.
+ *
+ * `emoji` and `tracks` come from the catalogue where the set was matched to it,
+ * and fall back to the category's own where it was not — a set typed as free
+ * text still deserves to come back with the right fields around it.
+ */
+export async function lastWorkout(
+  userId: string,
+  category: ExerciseCategory,
+): Promise<LastWorkout | null> {
+  const entry = await queryOne<any>(
+    `SELECT e.id, e.local_date, e.duration_min
+       FROM exercise_entries e
+      WHERE e.user_id = $1 AND e.category = $2 AND e.detail = 'counted'
+        AND EXISTS (SELECT 1 FROM exercise_sets s WHERE s.entry_id = e.id)
+   ORDER BY e.performed_at DESC
+      LIMIT 1`,
+    [userId, category],
+  );
+  if (!entry) return null;
+
+  const rows = await query<any>(
+    `SELECT s.name, s.position, s.set_number, s.reps, s.weight_kg,
+            s.duration_sec, s.distance_m, s.type_id, t.emoji, t.tracks
+       FROM exercise_sets s
+       LEFT JOIN exercise_types t ON t.id = s.type_id
+      WHERE s.entry_id = $1
+   ORDER BY s.position, s.set_number`,
+    [entry.id],
+  );
+
+  const byPosition = new Map<number, LastWorkout['exercises'][number]>();
+  for (const row of rows) {
+    const position = Number(row.position);
+    let exercise = byPosition.get(position);
+    if (!exercise) {
+      exercise = {
+        name: row.name,
+        type_id: row.type_id ?? null,
+        tracks: (row.tracks as ExerciseTracks) ?? CATEGORY_TRACKS[category],
+        emoji: row.emoji ?? CATEGORY_EMOJI[category],
+        sets: [],
+      };
+      byPosition.set(position, exercise);
+    }
+    exercise.sets.push({
+      reps: row.reps === null ? null : Number(row.reps),
+      weight_kg: row.weight_kg === null ? null : Number(row.weight_kg),
+      duration_sec: row.duration_sec === null ? null : Number(row.duration_sec),
+      distance_m: row.distance_m === null ? null : Number(row.distance_m),
+    });
+  }
+
+  return {
+    entry_id: entry.id,
+    local_date: entry.local_date,
+    duration_min: entry.duration_min === null ? null : Number(entry.duration_min),
+    category,
+    exercises: [...byPosition.entries()].sort((a, b) => a[0] - b[0]).map(([, e]) => e),
+  };
+}
+
+/** What a set of this kind is measured in, when the catalogue cannot say. */
+const CATEGORY_TRACKS: Record<ExerciseCategory, ExerciseTracks> = {
+  strength: 'reps',
+  cardio: 'duration',
+  class: 'duration',
+  sport: 'duration',
+  flexibility: 'duration',
+};
+
+const CATEGORY_EMOJI: Record<ExerciseCategory, string> = {
+  strength: '🏋️',
+  cardio: '🏃',
+  class: '🤸',
+  sport: '⚽',
+  flexibility: '🧘',
+};
 
 export async function listSets(entryId: string) {
   const rows = await query<any>(
@@ -287,7 +443,7 @@ const LABEL: Record<ExerciseCategory, string> = {
 
 async function typeById(userId: string, id: string): Promise<ExerciseType | null> {
   const row = await queryOne<any>(
-    `SELECT id, name, category, emoji, tracks, user_id
+    `SELECT id, name, category, emoji, tracks, muscles, user_id
        FROM exercise_types WHERE id = $1 AND (user_id IS NULL OR user_id = $2)`,
     [id, userId],
   );
@@ -301,6 +457,7 @@ function toType(row: any): ExerciseType {
     category: row.category,
     emoji: row.emoji,
     tracks: row.tracks,
+    muscles: row.muscles ?? [],
     custom: row.user_id !== null,
   };
 }

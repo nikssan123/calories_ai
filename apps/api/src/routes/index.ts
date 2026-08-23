@@ -4,7 +4,10 @@ import {
   BarcodeLogRequest,
   ChatRequest,
   DeleteAccountRequest,
+  ExerciseCategory,
   Meal,
+  SaveRoutineRequest,
+  SaveScheduleRequest,
   ProfileUpdate,
   RepeatRequest,
   WorkoutRequest,
@@ -67,7 +70,14 @@ import {
   setWeeklyReviewEmails,
   updateUser,
 } from '../services/user.ts';
-import { listExerciseTypes, logWorkout } from '../services/workouts.ts';
+import { lastWorkout, listExerciseTypes, logWorkout } from '../services/workouts.ts';
+import {
+  deleteRoutine,
+  listRoutines,
+  saveRoutine,
+  saveSchedule,
+  weekSchedule,
+} from '../services/routines.ts';
 import { messageActions, replaceActions } from '../services/chat.ts';
 import { TurnInProgressError } from '../services/turn-lock.ts';
 import { ModelBusyError } from '../ai/token-bucket.ts';
@@ -491,6 +501,93 @@ export async function registerRoutes(app: FastifyInstance) {
   });
 
   /**
+   * The last session of a kind, so the card can offer it back.
+   *
+   * Null rather than a 404 when there isn't one: "you have not done this before"
+   * is an ordinary answer to this question, not a failure, and the card draws
+   * differently for it rather than showing an error.
+   */
+  app.get('/exercise/last', async (request, reply) => {
+    const parsed = ExerciseCategory.safeParse((request.query as any)?.category);
+    if (!parsed.success) return reply.status(400).send({ error: 'Unknown category' });
+    return { workout: await lastWorkout(request.userId!, parsed.data) };
+  });
+
+  // ---- Routines ------------------------------------------------------------
+
+  /**
+   * The workouts this account has saved, most recently used first.
+   *
+   * Carries each exercise's previous numbers with it, so tapping a routine
+   * fills the whole grid without a second request. That round trip is the
+   * difference between the card being instant and the card being something you
+   * wait for while standing in a gym.
+   */
+  app.get('/routines', async (request) => {
+    const raw = (request.query as any)?.category ?? null;
+    const category = raw === null ? null : ExerciseCategory.safeParse(raw);
+    if (category && !category.success) {
+      return { routines: [] };
+    }
+    return {
+      routines: await listRoutines(request.userId!, {
+        category: category ? category.data : null,
+        withPrevious: true,
+      }),
+    };
+  });
+
+  /**
+   * Saves one, or replaces the one that already has this name.
+   *
+   * The ordinary caller is the button on a freshly logged session, which sends
+   * `from_entry_id` and a name the server suggested a moment earlier.
+   */
+  app.post('/routines', async (request, reply) => {
+    const parsed = SaveRoutineRequest.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid routine' });
+    }
+    try {
+      const routine = await saveRoutine({
+        userId: request.userId!,
+        name: parsed.data.name,
+        emoji: parsed.data.emoji ?? null,
+        category: parsed.data.category ?? null,
+        fromEntryId: parsed.data.from_entry_id ?? null,
+        exercises: parsed.data.exercises ?? null,
+      });
+      return reply.status(201).send(routine);
+    } catch (error) {
+      return reply.status(400).send({ error: (error as Error).message });
+    }
+  });
+
+  /**
+   * The training week — what they set, with what the app inferred filling in.
+   *
+   * Ahead of `/routines/:id` in the file so "schedule" is never read as an id.
+   */
+  app.get('/routines/schedule', async (request) => {
+    return { week: await weekSchedule(request.userId!) };
+  });
+
+  app.put('/routines/schedule', async (request, reply) => {
+    const parsed = SaveScheduleRequest.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid schedule' });
+    }
+    return { week: await saveSchedule(request.userId!, parsed.data.days) };
+  });
+
+  app.delete('/routines/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const gone = await deleteRoutine(request.userId!, id);
+    if (!gone) return reply.status(404).send({ error: 'No such routine' });
+    return reply.status(204).send();
+  });
+
+  /**
    * A session, counted rather than described.
    *
    * No rate limit and no model call: the card collected everything already, and
@@ -510,6 +607,7 @@ export async function registerRoutes(app: FastifyInstance) {
       exercises: parsed.data.exercises,
       durationMin: parsed.data.duration_min ?? null,
       performedAt: parsed.data.performed_at ? new Date(parsed.data.performed_at) : undefined,
+      routineId: parsed.data.routine_id ?? null,
       ctx,
     });
 

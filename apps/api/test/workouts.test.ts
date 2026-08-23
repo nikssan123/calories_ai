@@ -7,6 +7,7 @@ import {
   estimateMinutes,
   findExerciseType,
   getExerciseEntry,
+  lastWorkout,
   listExerciseTypes,
   logWorkout,
   primeMetCache,
@@ -412,5 +413,170 @@ describe('the routes', () => {
     } finally {
       await app.close();
     }
+  });
+});
+
+/**
+ * A session with no sets in it.
+ *
+ * The burn is category, bodyweight and time, and the sets contribute nothing to
+ * it — so a kind and a duration is a complete session, and the card no longer
+ * has to extract fifty-six numbers from somebody who has just finished
+ * training to accept one.
+ */
+describe('a session logged by duration alone', () => {
+  it('writes an entry with the category’s own name and a burn from the clock', async () => {
+    const entry = await logWorkout({
+      userId: user.id,
+      category: 'strength',
+      exercises: [],
+      durationMin: 60,
+      ctx: user.ctx,
+    });
+
+    expect(entry.description).toBe('Weight training');
+    expect(entry.duration_min).toBe(60);
+    expect(entry.sets).toHaveLength(0);
+    // 5.0 MET × 80 kg × 1 h. Nothing here was estimated by a model.
+    expect(entry.kcal_burned).toBeCloseTo(400, 0);
+  });
+
+  it('is accepted by the route', async () => {
+    const { app, cookie } = await appFor(user);
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/exercise/workout',
+        headers: { cookie },
+        payload: { category: 'cardio', duration_min: 45 },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json()).toMatchObject({ description: 'Cardio', duration_min: 45 });
+    } finally {
+      await app.close();
+    }
+  });
+
+  /** Neither half given is still nothing to log. */
+  it('is refused with neither a duration nor a set', async () => {
+    const { app, cookie } = await appFor(user);
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/exercise/workout',
+        headers: { cookie },
+        payload: { category: 'strength' },
+      });
+      expect(response.statusCode).toBe(400);
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+/**
+ * "Same as last time".
+ *
+ * The second push day of somebody's life is the first one with five kilos on
+ * it, and retyping eleven exercises to say so is the friction that stops people
+ * keeping a log at all.
+ */
+describe('lastWorkout', () => {
+  it('offers the most recent counted session of that kind back', async () => {
+    await logWorkout({
+      userId: user.id,
+      category: 'strength',
+      exercises: [bench([8, 8], 70)],
+      performedAt: new Date('2026-03-01T10:00:00Z'),
+      ctx: user.ctx,
+    });
+    await logWorkout({
+      userId: user.id,
+      category: 'strength',
+      exercises: [bench([8, 8, 6], 80), { name: 'Squat', sets: [{ reps: 5, weight_kg: 100 }] }],
+      performedAt: new Date('2026-03-08T10:00:00Z'),
+      ctx: user.ctx,
+    });
+
+    const last = await lastWorkout(user.id, 'strength');
+    expect(last!.local_date).toBe('2026-03-08');
+    expect(last!.exercises.map((e) => e.name)).toEqual(['Bench press', 'Squat']);
+    // The load comes back in kilograms, and the card converts at the edge.
+    expect(last!.exercises[0]!.sets).toEqual([
+      { reps: 8, weight_kg: 80, duration_sec: null, distance_m: null },
+      { reps: 8, weight_kg: 80, duration_sec: null, distance_m: null },
+      { reps: 6, weight_kg: 80, duration_sec: null, distance_m: null },
+    ]);
+  });
+
+  /** So the card can draw a plank's clock and a bench's two number fields. */
+  it('carries the catalogue’s tracks and emoji for each exercise', async () => {
+    await logWorkout({
+      userId: user.id,
+      category: 'strength',
+      exercises: [bench([8], 80), { name: 'Plank', sets: [{ duration_sec: 60 }] }],
+      ctx: user.ctx,
+    });
+
+    const last = await lastWorkout(user.id, 'strength');
+    expect(last!.exercises.map((e) => e.tracks)).toEqual(['reps', 'duration']);
+    expect(last!.exercises.every((e) => e.emoji.length > 0)).toBe(true);
+  });
+
+  /** A duration-only log is a fine entry and a useless template. */
+  it('ignores sessions that recorded no sets', async () => {
+    await logWorkout({
+      userId: user.id,
+      category: 'cardio',
+      exercises: [],
+      durationMin: 40,
+      ctx: user.ctx,
+    });
+    expect(await lastWorkout(user.id, 'cardio')).toBeNull();
+  });
+
+  it('does not reach across kinds, or across accounts', async () => {
+    await logWorkout({
+      userId: user.id,
+      category: 'strength',
+      exercises: [bench([8], 80)],
+      ctx: user.ctx,
+    });
+    expect(await lastWorkout(user.id, 'cardio')).toBeNull();
+
+    const other = await createUser();
+    expect(await lastWorkout(other.id, 'strength')).toBeNull();
+  });
+
+  describe('the route', () => {
+    it('answers with null rather than a 404 when there is nothing to offer', async () => {
+      const { app, cookie } = await appFor(user);
+      try {
+        const response = await app.inject({
+          method: 'GET',
+          url: '/exercise/last?category=strength',
+          headers: { cookie },
+        });
+        expect(response.statusCode).toBe(200);
+        expect(response.json().workout).toBeNull();
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('refuses a category it does not have', async () => {
+      const { app, cookie } = await appFor(user);
+      try {
+        const response = await app.inject({
+          method: 'GET',
+          url: '/exercise/last?category=interpretive-dance',
+          headers: { cookie },
+        });
+        expect(response.statusCode).toBe(400);
+      } finally {
+        await app.close();
+      }
+    });
   });
 });

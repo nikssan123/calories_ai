@@ -21,6 +21,7 @@ import type {
   ExerciseType,
   FoodEntry,
   GoogleExchange,
+  LastWorkout,
   Meal,
   MealTemplate,
   LibraryRecipe,
@@ -43,6 +44,10 @@ import type {
   MealPlanBrief,
   ShoppingList,
   RepeatRequest,
+  Routine,
+  SaveRoutineRequest,
+  SaveScheduleRequest,
+  WeekSchedule,
   ReviewStats,
   SignupRequest,
   SupportInbox,
@@ -360,6 +365,43 @@ export function createApiClient({
       request<{ types: ExerciseType[] }>(
         `/exercise/types${category ? `?category=${encodeURIComponent(category)}` : ''}`,
       ),
+
+    /**
+     * The last session of a kind, so the card can offer it back rather than ask
+     * for it again. Null when they have not done one.
+     */
+    lastWorkout: (category: string) =>
+      request<{ workout: LastWorkout | null }>(
+        `/exercise/last?category=${encodeURIComponent(category)}`,
+      ),
+
+    // ---- Routines ----
+
+    /**
+     * The workouts this account has saved, most recently used first, each
+     * carrying the numbers from the last time its exercises were done.
+     */
+    routines: (category?: string) =>
+      request<{ routines: Routine[] }>(
+        `/routines${category ? `?category=${encodeURIComponent(category)}` : ''}`,
+      ),
+
+    /** Saves one, or replaces whichever already has this name. */
+    saveRoutine: (payload: SaveRoutineRequest) =>
+      request<Routine>('/routines', { method: 'POST', body: JSON.stringify(payload) }),
+
+    deleteRoutine: (id: string) =>
+      request<void>(`/routines/${id}`, { method: 'DELETE' }),
+
+    /** The training week: declared days, with inferred ones filling the gaps. */
+    schedule: () => request<{ week: WeekSchedule }>('/routines/schedule'),
+
+    /** Sets the days they chose. A day mapped to null falls back to inference. */
+    saveSchedule: (payload: SaveScheduleRequest) =>
+      request<{ week: WeekSchedule }>('/routines/schedule', {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      }),
 
     /**
      * Logs a counted session in one request. No model call behind it — the card
