@@ -16,11 +16,14 @@ physical objects, and a phone is the only device that can finish that idea.
 Reanimated is already carrying most of the weight; what it has not been asked to
 do yet is the part people would notice.
 
-Ordered by what I would do first, which is not the same as by size.
+Ordered by what I would do first, which is not the same as by size. **The first
+three sections are now built** — haptics, the travelling tab lozenge, and
+swipe-to-delete with undo. What they turned out to cost, and the two claims in
+here they proved wrong, are noted in place.
 
 ---
 
-## 1. Haptics
+## 1. Haptics — done
 
 **The largest gap relative to this specific design, and the cheapest to close.**
 
@@ -34,10 +37,22 @@ promise, because the phone is the one device that can finish it.
 
 `expo-haptics`, three rules and roughly fifty lines:
 
-- **Light impact** on every `PressableChunk` press-in. One place to change, and
-  every chunky control in the app inherits it.
+- **Light impact** on every `PressableChunk` press.
+
+  Written here as press-*in*, and built as `onPress` instead. Pairing the buzz
+  with the visual sink is what a real key does, but a `Pressable` inside a
+  `ScrollView` gets `onPressIn` on touch-down before the scroll is recognised,
+  so every flick down a list would buzz on the way past. iOS hides most of that
+  behind `delaysContentTouches` and Android does not — a platform split on
+  exactly the thing this design cannot split on. A buzz a fraction late beats
+  one that fires when you were only scrolling.
 - **Success notification** when something is actually logged — a meal, a
   weigh-in, a cooked recipe. The moment the number moves.
+
+  In the journal there is nothing that says outright whether a turn logged
+  anything: the model decides mid-sentence and the stream never mentions it.
+  What is certain is the day that comes back with the reply, so the test is
+  literally whether the number moved.
 - **One on a successful barcode decode.** The scanner is currently silent at the
   exact instant the user needs to know it worked, and they are holding a tin at
   an awkward angle and cannot see the screen well.
@@ -48,7 +63,7 @@ existing `useReducedMotion` contract says the spring is decoration and the
 information must survive it, which is an argument for the buzz rather than
 against it.
 
-## 2. Motion
+## 2. Motion — the tab bar is done, the rest is not
 
 **Reanimated is already in the app and already doing real work.** The ring's arc
 springs open and its figure counts up, the macro bars stagger in at 70ms apart,
@@ -72,9 +87,9 @@ small vocabulary is that a screen full of independently-authored motion still
 reads as one object behaving consistently, and that is exactly what is easy to
 lose when "add some animation" is the brief.
 
-### The bottom tabs
+### The bottom tabs — done
 
-**Today each of the six tabs owns its own lozenge and cross-fades it in place.**
+**Each of the six tabs used to own its own lozenge and cross-fade it in place.**
 Tap Cook and Today's lozenge fades out while Cook's fades in — which is two
 objects appearing and disappearing at once. It works, and it is the wrong mental
 model: the lozenge is the *selection*, and there is only ever one selection.
@@ -98,6 +113,11 @@ Deliberately *not*: per-tab character animations — the flame flickering, the
 chef's hat lifting. Charming the first time and noise by the fortieth log of the
 week, and the tab bar is on screen for the entire session.
 
+Measured rather than assumed, on the emulator: the pill leaves 89, passes 722
+and 886, overshoots to 1040 and settles back to 990. Six equal columns meant the
+geometry fell out of one measurement of the row, so no tab had to report its own
+— which stops being true the moment a tab is given a different width.
+
 ### Shared element transitions — the showpiece
 
 Tapping a recipe tile currently pushes a screen in from the right, and the tile's
@@ -115,15 +135,12 @@ day cell into Today.
 
 ### Lists
 
-- **Entrance stagger.** `FadeInDown` with a per-item delay on Today's meal
+- **Layout animations on removal — done**, and they shipped inside `SwipeRow`
+  rather than at the call sites, so nothing can be given a swipe without them.
+- **Entrance stagger** — still to do. `FadeInDown` with a per-item delay on Today's meal
   groups, Exercise's sessions and Cook's tiles. Use 70ms, which is what
   `MacroBars` already staggers at, so the whole app has one rhythm rather than
   three.
-- **Layout animations on removal**, and this one is not optional if swipe-to-
-  delete happens: without `Layout` and an `exiting` animation, a swiped row
-  vanishes and the list snaps shut underneath your thumb. With them the gap
-  closes and the gesture feels finished. These two features should ship together.
-
 ### Numbers that move
 
 `CalorieRing` already counts its figure up rather than swapping it, and that is
@@ -170,15 +187,20 @@ of which are easy to drop when adding more:
   untappable for 200ms is strictly worse than no stagger. Animate appearance,
   never availability.
 
-## 3. Gestures the port does not have
+## 3. Gestures the port does not have — swipe and undo are done
 
-### Swipe on a row to act on it
+### Swipe on a row to act on it — done
 
-Five lists currently hang their destructive action on a ~15pt trash target:
-Today's food and exercise rows, Exercise's sessions, Pantry's items, the plan's
-shopping lines. That is well under the 44pt minimum, so this is an accessibility
-fix as much as an idiom — the gesture is how phones give a small control a big
-target without spending layout on it.
+Five lists hung their destructive action on a 15pt trash mark with 10pt of
+`hitSlop` — about 35pt of real target, not the ~15pt claimed here before anyone
+counted the slop, but still under the 44pt minimum and reliably missable with a
+thumb. So this is an accessibility fix as much as an idiom: the gesture is how
+phones give a small control a big target without spending layout on it. The mark
+stays where it is for discoverability.
+
+Done on all five: Today's food and exercise rows, Exercise's sessions, the
+pantry's items, and the shopping lines somebody typed — only those last ones,
+since a line derived from the week's plan cannot be removed at all.
 
 On Today's food rows it composes rather than competes: tap still expands to show
 the items and the note, swipe reveals **delete** and **log again**.
@@ -186,7 +208,7 @@ the items and the note, swipe reveals **delete** and **log again**.
 Use `react-native-gesture-handler`'s `Swipeable`, which is already in the tree
 as a Reanimated peer.
 
-### Undo in the toast, not a confirmation
+### Undo in the toast, not a confirmation — done
 
 A confirmation dialog is a desktop habit and a bad trade on a phone: it costs
 everyone a tap to protect the rare mistake, and it interrupts the thing you were
@@ -197,12 +219,22 @@ chicken salad · Undo"* — which is faster in the common case and safer in the
 rare one, because it survives the mis-tap you did not notice until the row
 vanished.
 
-**This needs the toast extended.** `useToast()` today is `success`, `error` and
-`message`, all text-only, with no slot for an action. Deleting is already
-optimistic in the client, so undo is mostly a matter of holding the removed
-entry and re-posting it; the API has `repeatFoodEntry`, but a true undo wants to
-restore the original id and time rather than clone it to now, which is a small
-server-side question rather than a client one.
+The toast grew an action slot for it, and now exports its own lifetime, because
+the offer and the grace period have to be the same four seconds.
+
+**The server-side question answered itself.** The plan assumed undo meant
+re-creating what had been deleted, and worried that `repeatFoodEntry` clones to
+*now* — wrong time, and past midnight the wrong day. The way out is not to
+delete during the window at all: the row leaves the screen at once and the
+request is *held*, so undo is a `clearTimeout` and a state restore. The entry
+keeps its own id, timestamp and day, and the API needs nothing new. If the app
+dies inside the window the delete never runs and the entry stays, which of the
+two ways this can fail is the recoverable one.
+
+One consequence worth writing down: Today's totals now come off optimistically.
+They used to be left to the reload that followed the delete, which was fine when
+the delete went out immediately — holding it would have left the ring counting a
+meal the reader had just watched leave the screen.
 
 ### Swipe down to dismiss a sheet
 
@@ -307,24 +339,23 @@ said to stop, and horizontal swipe between tabs would relieve it. But that
 directly contradicts swipe-to-step-days on Today. Pick one meaning for a
 horizontal swipe and use it everywhere — two would be worse than neither.
 
-**Does undo want a server-side restore?** Cloning a deleted entry to now is
-nearly right and quietly wrong: the entry comes back at the wrong time and, if
-the day boundary has passed, on the wrong day. A real `restore` is a small
-endpoint and makes undo honest.
-
 **How loud is a nudge allowed to be?** See push, above. This is a product
 decision rather than an engineering one, and it should be made before the
 transport is built rather than after.
 
 ---
 
-## If only three things get done
+## What is next
 
-Haptics, the travelling tab lozenge, and swipe-to-delete-with-undo — the last of
-which drags list layout animations along with it and should not ship without
-them.
+The three that were supposed to come first are in: haptics, the travelling
+lozenge, and swipe-to-delete-with-undo — which did drag list layout animations
+along with it, as predicted, and could not honestly have shipped without them.
 
-Together they are a day or two, they touch every list, every button and the one
-piece of chrome that is on screen for the whole session, and they change how the
-app *feels* rather than what it can do. The shared element transition is the one
-to do fourth, because it is the one people would mention to someone else.
+Two bugs turned up while testing them, neither caused by them, both now fixed:
+the pantry's rows were silently not swipeable because a `Modal` is its own
+native window and the app's gesture root does not reach inside one; and `Sheet`
+was animating its slide from a guessed height, because it read a ref that a
+worklet had already frozen.
+
+**The shared element transition is the one to do fourth**, because it is the one
+people would mention to someone else.
