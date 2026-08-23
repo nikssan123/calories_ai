@@ -386,6 +386,47 @@ describe('POST /weight', () => {
     expect(response.json().local_date).toBe('2026-03-05');
   });
 
+  /*
+   * The correction path. A weight row is keyed by the day, so naming the day is
+   * how a client targets the reading it is looking at rather than inventing a
+   * timestamp and hoping the server derives the same date back from it.
+   */
+  it('files a correction under the day it names', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/weight',
+      ...auth({ payload: { weight_kg: 84.2, local_date: '2026-03-05' } }),
+    });
+    expect(response.json()).toMatchObject({ weight_kg: 84.2, local_date: '2026-03-05' });
+  });
+
+  it('replaces that day’s weight rather than adding a second one', async () => {
+    const first = await app.inject({
+      method: 'POST',
+      url: '/weight',
+      ...auth({ payload: { weight_kg: 8.5, local_date: '2026-03-05' } }),
+    });
+    const second = await app.inject({
+      method: 'POST',
+      url: '/weight',
+      ...auth({ payload: { weight_kg: 85, local_date: '2026-03-05' } }),
+    });
+
+    expect(second.json().weight_kg).toBe(85);
+    // The row keeps its id, which is what lets the journal card that announced
+    // it be redrawn rather than orphaned.
+    expect(second.json().id).toBe(first.json().id);
+  });
+
+  it('rejects a local_date that is not one', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/weight',
+      ...auth({ payload: { weight_kg: 84.2, local_date: 'last tuesday' } }),
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
   it.each([{ weight_kg: -1 }, { weight_kg: 900 }, { weight_kg: 'heavy' }, {}])(
     'rejects %j',
     async (payload) => {

@@ -832,6 +832,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
           weight_kg: entry.weight_kg,
           change_7d_kg: trend.weight.change_7d_kg,
           series: trend.weight.series,
+          local_date: entry.local_date,
         },
       });
       return ok(entry);

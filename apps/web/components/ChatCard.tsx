@@ -4,14 +4,20 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { ChatAction, ChatCard as Card, ExerciseEntry, FoodEntry, UnitSystem } from '@ct/shared';
 import {
+  bodyWeightToKg,
+  bodyWeightUnit,
   formatBodyWeight,
   formatDistance,
   formatWeightDelta,
   loadUnit,
+  toBodyWeight,
   toLoad,
 } from '@ct/shared';
 import { useUnits } from '@/lib/units';
 import { RecipeCard } from '@/components/kitchen/RecipeCard';
+import { api } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { FoodEditor } from '@/components/FoodEditor';
 import { WorkoutCard } from '@/components/workout/WorkoutCard';
 import { Sparkline } from '@/components/Sparkline';
@@ -121,7 +127,7 @@ function CardBody({
     case 'exercise':
       return <ExerciseCard card={card} onLogged={onLogged} />;
     case 'weight':
-      return <WeightCard card={card} />;
+      return <WeightCard card={card} onLogged={onLogged} />;
     case 'trend':
       return <TrendCard card={card} />;
     case 'day':
@@ -778,13 +784,102 @@ function groupSets(sets: Extract<Card, { type: 'exercise' }>['sets'], units: Uni
   });
 }
 
-function WeightCard({ card }: { card: Extract<Card, { type: 'weight' }> }) {
+/**
+ * A weigh-in, and the way back into it.
+ *
+ * The smallest correction in the app and the one most worth having: a weight is
+ * a single number typed on a bathroom floor, which is exactly where a
+ * transposed digit comes from. 8.5 for 85 is not a rare slip, and until now it
+ * could only be fixed by saying so in the conversation.
+ *
+ * One weight per day is the rule, so this writes rather than appends — the row
+ * is keyed by `local_date`, which the card now carries for precisely this. A
+ * card old enough to predate that field simply does not offer the edit.
+ */
+function WeightCard({
+  card,
+  onLogged,
+}: {
+  card: Extract<Card, { type: 'weight' }>;
+  onLogged?: () => void;
+}) {
   const units = useUnits();
+  const [weight, setWeight] = useState<number | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const shown = weight ?? card.weight_kg;
+
+  async function save() {
+    const typed = Number(draft);
+    if (!Number.isFinite(typed) || typed <= 0) {
+      setError('That is not a weight.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const entry = await api.logWeight(
+        bodyWeightToKg(typed, units),
+        undefined,
+        card.local_date ?? undefined,
+      );
+      setWeight(entry.weight_kg);
+      setEditing(false);
+      setError(null);
+      onLogged?.();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <Shell>
+        <div className="flex items-center gap-2.5">
+          <span aria-hidden className="text-[22px] leading-none">⚖️</span>
+          <Input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value.replace(/[^0-9.]/g, ''))}
+            aria-label="Weight"
+            inputMode="decimal"
+            autoFocus
+            className="text-figure flex-1"
+          />
+          <span className="text-footnote text-muted-foreground">{bodyWeightUnit(units)}</span>
+        </div>
+
+        {error !== null && (
+          <p className="text-footnote text-destructive mt-1.5 font-semibold">{error}</p>
+        )}
+
+        <div className="mt-2.5 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => {
+              setEditing(false);
+              setError(null);
+            }}
+            className="text-footnote text-muted-foreground hover:text-foreground font-semibold"
+          >
+            Cancel
+          </button>
+          <Button onClick={() => void save()} disabled={saving} className="gap-1.5 rounded-full">
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
+      </Shell>
+    );
+  }
+
   return (
     <Shell>
       <div className="flex items-baseline gap-2.5">
         <span aria-hidden className="text-[22px] leading-none">⚖️</span>
-        <span className="text-figure text-[24px]">{formatBodyWeight(card.weight_kg, units)}</span>
+        <span className="text-figure text-[24px]">{formatBodyWeight(shown, units)}</span>
         {card.change_7d_kg !== null && card.change_7d_kg !== 0 && (
           <span
             className={cn(
@@ -803,6 +898,22 @@ function WeightCard({ card }: { card: Extract<Card, { type: 'weight' }> }) {
         height={44}
         className="mt-2 opacity-80"
       />
+
+      {/* Only where the card knows which day it is for. An older row cannot say,
+          and guessing would write today's weight over a reading from March. */}
+      {card.local_date !== null && (
+        <button
+          type="button"
+          onClick={() => {
+            setDraft(String(toBodyWeight(shown, units)));
+            setEditing(true);
+          }}
+          aria-label="Edit this weigh-in"
+          className="text-footnote text-muted-foreground hover:text-foreground mt-1.5 ml-auto block font-semibold"
+        >
+          Edit
+        </button>
+      )}
     </Shell>
   );
 }

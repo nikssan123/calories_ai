@@ -442,11 +442,30 @@ export async function deleteExerciseEntry(userId: string, entryId: string): Prom
   return true;
 }
 
+/**
+ * A weigh-in, filed under the day it belongs to.
+ *
+ * The upsert on `(user_id, local_date)` is what makes a correction free: one
+ * weight per day is the rule, so writing the same day twice replaces rather
+ * than accumulates, and the row keeps its id — which is what lets the journal
+ * card that announced it be redrawn rather than orphaned.
+ */
 export async function logWeight(
   userId: string,
   weightKg: number,
   measuredAt: Date,
   ctx: DayContext,
+  /**
+   * The day this belongs to, when the caller already knows it.
+   *
+   * A correction targets a day, not an instant: the card being edited says
+   * "Tuesday", and asking the client to invent a timestamp that the server
+   * derives Tuesday back from means reproducing the user's timezone and
+   * `day_start_hour` on the client — exactly the arithmetic that lands a
+   * correction on the wrong day. Given it, the upsert hits the row the reader
+   * was actually looking at.
+   */
+  localDate?: string,
 ): Promise<WeightEntry> {
   const row = await queryOne<any>(
     `INSERT INTO weight_entries (user_id, measured_at, local_date, weight_kg)
@@ -454,7 +473,7 @@ export async function logWeight(
      ON CONFLICT (user_id, local_date)
      DO UPDATE SET weight_kg = EXCLUDED.weight_kg, measured_at = EXCLUDED.measured_at
      RETURNING *`,
-    [userId, measuredAt.toISOString(), localDateFor(measuredAt, ctx), weightKg],
+    [userId, measuredAt.toISOString(), localDate ?? localDateFor(measuredAt, ctx), weightKg],
   );
   return toWeightEntry(row);
 }

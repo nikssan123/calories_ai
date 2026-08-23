@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import Svg, { Line } from 'react-native-svg';
 import Animated, {
   useAnimatedStyle,
@@ -17,10 +25,13 @@ import type {
   UnitSystem,
 } from '@ct/shared';
 import {
+  bodyWeightToKg,
+  bodyWeightUnit,
   formatBodyWeight,
   formatDistance,
   formatWeightDelta,
   loadUnit,
+  toBodyWeight,
   toLoad,
 } from '@ct/shared';
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
@@ -161,7 +172,7 @@ function CardBody({
     case 'exercise':
       return <ExerciseCard card={card} onLogged={onLogged} />;
     case 'weight':
-      return <WeightCard card={card} />;
+      return <WeightCard card={card} onLogged={onLogged} />;
     case 'trend':
       return <TrendCard card={card} />;
     case 'day':
@@ -952,16 +963,126 @@ function groupSets(sets: Extract<Card, { type: 'exercise' }>['sets'], units: Uni
   });
 }
 
-function WeightCard({ card }: { card: Extract<Card, { type: 'weight' }> }) {
+/**
+ * A weigh-in, and the way back into it.
+ *
+ * The smallest correction in the app and the one most worth having: a weight is
+ * a single number typed on a bathroom floor, which is exactly where a
+ * transposed digit comes from. 8.5 for 85 is not a rare slip, and until now it
+ * could only be fixed by saying so in the conversation.
+ *
+ * One weight per day is the rule, so this writes rather than appends — the row
+ * is keyed by `local_date`, which the card now carries for precisely this. A
+ * card old enough to predate that field simply does not offer the edit.
+ */
+function WeightCard({
+  card,
+  onLogged,
+}: {
+  card: Extract<Card, { type: 'weight' }>;
+  onLogged?: () => void;
+}) {
   const colors = useColors();
   const units = useUnits();
+  const [weight, setWeight] = useState<number | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const shown = weight ?? card.weight_kg;
+
+  async function save() {
+    const typed = Number(draft);
+    if (!Number.isFinite(typed) || typed <= 0) {
+      setError('That is not a weight.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const entry = await api.logWeight(
+        bodyWeightToKg(typed, units),
+        undefined,
+        card.local_date ?? undefined,
+      );
+      setWeight(entry.weight_kg);
+      setEditing(false);
+      setError(null);
+      haptics.logged();
+      onLogged?.();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <Shell>
+        <View style={styles.weightRow}>
+          <Text style={styles.emoji}>⚖️</Text>
+          <TextInput
+            value={draft}
+            onChangeText={(next) => setDraft(next.replace(/[^0-9.]/g, ''))}
+            accessibilityLabel="Weight"
+            keyboardType="decimal-pad"
+            autoFocus
+            style={[
+              t.figure,
+              styles.weightField,
+              {
+                backgroundColor: colors.mutedField,
+                borderColor: colors.border,
+                color: colors.foreground,
+              },
+            ]}
+          />
+          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+            {bodyWeightUnit(units)}
+          </Text>
+        </View>
+
+        {error !== null && (
+          <Text style={[t.footnoteSemibold, { color: colors.destructive }]}>{error}</Text>
+        )}
+
+        <View style={styles.weightFoot}>
+          <Pressable
+            onPress={() => {
+              setEditing(false);
+              setError(null);
+            }}
+            accessibilityRole="button"
+            hitSlop={8}
+          >
+            <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Cancel</Text>
+          </Pressable>
+          <PressableChunk
+            depth={3}
+            radius={999}
+            color={colors.caloriesDeep}
+            onPress={() => void save()}
+            disabled={saving}
+            accessibilityRole="button"
+            style={{ opacity: saving ? 0.4 : 1 }}
+            contentStyle={[styles.weightSave, { backgroundColor: colors.primary }]}
+          >
+            <Text style={[t.footnoteBold, { color: colors.primaryForeground }]}>
+              {saving ? 'Saving…' : 'Save'}
+            </Text>
+          </PressableChunk>
+        </View>
+      </Shell>
+    );
+  }
 
   return (
     <Shell>
       <View style={styles.weightRow}>
         <Text style={styles.emoji}>⚖️</Text>
         <Text style={[t.figure, styles.weight, { color: colors.foreground }]}>
-          {formatBodyWeight(card.weight_kg, units)}
+          {formatBodyWeight(shown, units)}
         </Text>
         {card.change_7d_kg !== null && card.change_7d_kg !== 0 && (
           <Text
@@ -977,6 +1098,23 @@ function WeightCard({ card }: { card: Extract<Card, { type: 'weight' }> }) {
         )}
       </View>
       <Sparkline points={card.series} stroke={colors.foreground} height={44} style={styles.chart} />
+
+      {/* Only where the card knows which day it is for. An older row cannot say,
+          and guessing would write today's weight over a reading from March. */}
+      {card.local_date !== null && (
+        <Pressable
+          onPress={() => {
+            setDraft(String(toBodyWeight(shown, units)));
+            setEditing(true);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Edit this weigh-in"
+          hitSlop={8}
+          style={({ pressed }) => [styles.editRow, { opacity: pressed ? 0.6 : 1 }]}
+        >
+          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Edit</Text>
+        </Pressable>
+      )}
     </Shell>
   );
 }
@@ -1235,6 +1373,9 @@ const styles = StyleSheet.create({
   subline: { marginTop: 6 },
   /** Aligned right so it reads as an action on the card, not a line of it. */
   editRow: { marginTop: 8, alignSelf: 'flex-end' },
+  weightField: { flex: 1, borderWidth: 2, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6 },
+  weightFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
+  weightSave: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999 },
   caption: { marginTop: 8 },
   sets: { gap: 4, marginTop: 10 },
   setRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },

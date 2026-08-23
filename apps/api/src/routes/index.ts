@@ -781,6 +781,19 @@ export async function registerRoutes(app: FastifyInstance) {
   const WeightBody = z.object({
     weight_kg: z.number().positive().max(500),
     measured_at: z.string().optional(),
+    /**
+     * The day to file it under, for a correction to a past weigh-in.
+     *
+     * A weight row is keyed by the day rather than the instant, and that day is
+     * the user's — their timezone, their `day_start_hour`. Naming it directly
+     * is the only way a client can be sure a correction lands on the row it was
+     * looking at; deriving it from an invented timestamp is the arithmetic that
+     * puts it on the day before.
+     */
+    local_date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
   });
 
   app.post('/weight', async (request, reply) => {
@@ -789,7 +802,34 @@ export async function registerRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid weight' });
 
     const measuredAt = parsed.data.measured_at ? new Date(parsed.data.measured_at) : new Date();
-    return logWeight(userId, parsed.data.weight_kg, measuredAt, ctx);
+    const entry = await logWeight(
+      userId,
+      parsed.data.weight_kg,
+      measuredAt,
+      ctx,
+      parsed.data.local_date,
+    );
+
+    /*
+     * A weigh-in that replaced an earlier one redraws the card that announced
+     * it. The upsert keeps the row's id, so the stored action still points at
+     * it — without this the journal would go on showing the figure that was
+     * corrected, next to a trend that has already moved.
+     */
+    const trend = await buildProgress(userId, ctx, 30);
+    await refreshEntryCards(
+      userId,
+      entry.id,
+      {
+        type: 'weight',
+        weight_kg: entry.weight_kg,
+        change_7d_kg: trend.weight.change_7d_kg,
+        series: trend.weight.series,
+        local_date: entry.local_date,
+      },
+      `Weight ${entry.weight_kg} kg on ${entry.local_date}`,
+    );
+    return entry;
   });
 
   // ---- Profile & targets ---------------------------------------------------

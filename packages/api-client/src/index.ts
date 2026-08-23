@@ -371,10 +371,18 @@ export function createApiClient({
     deleteExerciseEntry: (id: string) =>
       request<{ ok: true }>(`/entries/exercise/${id}`, { method: 'DELETE' }),
 
-    logWeight: (weight_kg: number, measured_at?: string) =>
+    /**
+     * Records a weigh-in, or replaces the one already filed under that day.
+     *
+     * `local_date` is how a correction targets a past day. One weight per day
+     * is the rule, so naming the day replaces that day's figure and keeps the
+     * row's id — which is what lets the journal card that announced it be
+     * redrawn rather than orphaned. Omit it and the weigh-in lands on today.
+     */
+    logWeight: (weight_kg: number, measured_at?: string, local_date?: string) =>
       request<WeightEntry>('/weight', {
         method: 'POST',
-        body: JSON.stringify({ weight_kg, measured_at }),
+        body: JSON.stringify({ weight_kg, measured_at, local_date }),
       }),
 
     // ---- Repeat a meal ----

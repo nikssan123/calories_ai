@@ -1395,6 +1395,19 @@ export const ChatCard = z.discriminatedUnion('type', [
     weight_kg: z.number(),
     change_7d_kg: z.number().nullable(),
     series: z.array(TrendPoint),
+    /**
+     * The day this weigh-in is filed under, so the card can be corrected.
+     *
+     * A weight row is keyed by `(user_id, local_date)` rather than by an
+     * instant, and that date is the user's — their timezone, their
+     * `day_start_hour`. Without it on the card, an edit would have to invent a
+     * timestamp and hope the server derived the same date back from it, which
+     * is exactly the arithmetic that puts a correction on the wrong day.
+     *
+     * Nullable because it is younger than the cards already on disk. An older
+     * row is a card that cannot be edited rather than one that fails to parse.
+     */
+    local_date: z.string().nullable().default(null),
   }),
   /** Requested by the model via `show_chart`; the series is read from Postgres. */
   z.object({
