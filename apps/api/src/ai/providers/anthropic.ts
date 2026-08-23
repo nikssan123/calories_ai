@@ -88,6 +88,7 @@ async function execute(
     ...(choice.effort ? { effort: choice.effort } : {}),
     maxTurns: request.maxTurns,
     cwd: env.agentCwd,
+    env: subscriptionEnv(),
   };
 
   // Streaming input exists to carry an image; a text-only turn goes as a
@@ -97,6 +98,32 @@ async function execute(
   const outcome = await executeAgent(prompt, options, state, emit);
   // Reported back so the turn can be costed against the model that ran it.
   return { ...outcome, model: choice.model };
+}
+
+/**
+ * The environment the `claude` subprocess is handed.
+ *
+ * This exists for one reason, and without it this whole lane is a lie on any
+ * deployment that also runs the metered one. **The Agent SDK prefers
+ * `ANTHROPIC_API_KEY` to the subscription login.** So on a box where both are
+ * present — which is now every box running both lanes — spawning the subprocess
+ * with the ambient environment produces a turn that is billed to the key *and*
+ * pays for a process to do it: strictly worse than either lane alone, and
+ * completely silent. `docker-compose.prod.yml` says as much next to the key.
+ *
+ * `Options.env` replaces the subprocess environment rather than merging into
+ * it, so the whole of `process.env` is passed through minus the one variable —
+ * `PATH` and `HOME` matter to a spawned binary, and `HOME` is how it finds
+ * `.credentials.json` in the first place.
+ *
+ * Only when there is a login to fall back on. A deployment holding a key and no
+ * credentials file has exactly one credential, and taking it away would turn a
+ * working configuration into a broken one to make a point.
+ */
+function subscriptionEnv(): Record<string, string | undefined> | undefined {
+  if (!hasSubscriptionAuth()) return undefined;
+  const { ANTHROPIC_API_KEY: _billed, ...rest } = process.env;
+  return rest;
 }
 
 /**

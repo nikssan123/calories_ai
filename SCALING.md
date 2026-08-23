@@ -624,7 +624,7 @@ and none of it applies there — which is the point of keeping the two apart.
 
 | Users | What is required | State |
 |---|---|---|
-| ~2,000 | Stage 0. Two replicas. Nothing else. | Code, stores, compose and deploy done and proven at two replicas; held at one until the host moves off the subscription lane |
+| ~2,000 | Stage 0. Two replicas. Nothing else. | Code, stores, compose and deploy done and proven at two replicas. Held at one **by choice** since 2026-08-23 — the lane blocker is gone, the need has not arrived. See below. |
 | ~10,000 | Stages 1–3. Not Stage 5 — cache reads turned out not to count against the ceiling at all. | Stages 1 and 2 done; Stage 3's guard done, the worker and the Batch API open |
 | ~100,000 | All of it, pgbouncer, and a negotiated rate-limit tier. | open |
 
@@ -633,17 +633,91 @@ stops a bad afternoon becoming an outage, and is now fastened. Stage 5 was writt
 down as the thing that buys headroom; it is not, because the headroom was already there —
 it buys requests, money and latency instead.
 
+### When to start the second replica
+
+**Not on a user count, and not yet.** Measured on the host, 2026-08-23:
+
+```
+users                     4
+turns, last 7 days       59        (~8 a day, all accounts together)
+busiest single minute     2 turns  (all time)
+api container         0.15% CPU · 182 MiB of a 2 GiB cap
+box                   4 cores · 5.1 GB RAM free
+```
+
+The ~2,000 row above is the honest number for *this* stage, but it is worth being clear
+about what it is measuring, because it is not throughput. Working the ceiling from the
+other end: a turn spends about 1,370 tokens against the rate-limited total — uncached
+input plus cache writes, cache reads being excluded from it outright — so 10M ITPM is
+something like 7,300 turns a minute. Even assuming meals cluster hard into a few hours,
+the model-side ceiling is several hundred thousand users. One replica is nowhere near
+being the constraint on load.
+
+**So the second replica is an availability decision, not a capacity one.** One replica
+means a deploy drops whatever turn is in flight and a crash is an outage. That starts
+mattering when there is somebody to notice, which is a different question from when the
+box is busy.
+
+Watch these instead of a user count, all of which move before anything breaks:
+
+- **p95 turn duration climbing** with no model or prompt change behind it. `ai_usage`
+  has `duration_ms` on every row, which is what makes this readable rather than felt.
+- **429s from the token bucket.** The bucket is the seatbelt; it tightening is the first
+  hard evidence that arrival rate is real.
+- **Container memory approaching the 2 GiB cap.** A photo turn holds several megabytes of
+  base64 for the length of the call, so concurrency shows up here before it shows up in
+  CPU. 182 MiB today.
+- **Somebody complaining that a deploy ate their message.** The least technical signal
+  and the one that actually decides it.
+
+None of these is close. Revisit when one of them moves, not on a date.
+
+### The two lanes, per user
+
+Implemented 2026-08-23. The split this document opens with — the subscription lane for
+the instance I run for myself, the metered lane for the product — is no longer a choice
+made once per deployment. `SUBSCRIPTION_EMAILS` names the addresses whose turns run on
+the Claude Code subscription; everybody else takes `AI_PROVIDER`, which on this host is
+now `anthropic-api`.
+
+Three things make it work, and the middle one is the one that would have made it a lie:
+
+- **`createProvider` was already per turn**, because the tool context it closes over is
+  per turn. Routing by user was a parameter, not a restructuring. Five call sites — the
+  journal, the fridge scan, the review, the nudge and the recipe path — each pass the
+  lane for the account the turn belongs to.
+- **The Agent SDK prefers `ANTHROPIC_API_KEY` to the subscription login.** On a host
+  carrying both credentials — which is now this one — the subscription lane would have
+  been billed to the key *and* paid for a subprocess to do it, silently. The subprocess
+  is now handed an environment with that variable removed (`Options.env` replaces rather
+  than merges, so the rest of `process.env` is passed through — `HOME` is how the binary
+  finds its credentials at all).
+- **The allowlist can only move somebody onto the subscription, never off it**, and only
+  when there is a login to move them to. Naming an address can never make a turn cost
+  money, or take longer, than not naming it. That property is what makes the setting safe
+  to leave in place while the deployment's own lane changes underneath it.
+
+**The replica constraint follows the lane, and now follows it per user.** Any traffic on
+the subscription lane means a `claude` subprocess against one shared `.credentials.json`,
+and two replicas refreshing one OAuth token is how a login gets lost. So while
+`SUBSCRIPTION_EMAILS` is non-empty this deployment stays at one replica — which costs
+nothing today, per the section above, and is the thing to revisit first when the second
+replica is finally wanted. Splitting the two lanes into two services, one pinned to a
+single replica and one free to scale, is the way out and is not worth building yet.
+
 ### What is left, in the order it wants doing
 
-1. **Move this deployment to `anthropic-api`, then start the second replica.** The code,
-   the compose file and the deploy are done and the stores are all shared; the remaining
-   blocker is that the host runs the subscription lane, where a second replica is two
-   `claude` processes on one credential store. Set `ANTHROPIC_API_KEY`,
-   `AI_PROVIDER=anthropic-api` and `ANTHROPIC_ITPM` in the host's `.env`, then
-   `API_REPLICAS=2`. Note that this is the point where the bill starts — it is a lane
-   change, not a scaling knob. The token bucket it was waiting on is built; `ANTHROPIC_ITPM`
-   is what arms it, and a lane change that sets the key without it is the one mistake this
-   step has left.
+1. ~~**Move this deployment to `anthropic-api`**~~ — **done, 2026-08-23.**
+   `ANTHROPIC_API_KEY`, `AI_PROVIDER=anthropic-api` and `ANTHROPIC_ITPM=10000000` are in
+   the host's `.env`; `https://daysofar.com/api/health` reports
+   `{"ok":true,"auth":"anthropic-api-key"}`. The ITPM is the account's published ceiling,
+   read off the `anthropic-ratelimit-input-tokens-limit` response header rather than
+   guessed — 10M/min on Haiku 4.5, Sonnet 5 and Opus 5 alike. This is the point where the
+   bill started.
+
+   **The second replica did not follow, and should not yet.** See §When to start the
+   second replica below. The blocker this step described is gone; what replaced it is
+   that there is nothing to scale.
 2. **Stage 5.** An optimisation, at the priority the answered question assigns it: it
    buys requests, money and latency, and no headroom that is not already there. Worth
    doing before six figures of users, not before the replica.
@@ -654,7 +728,7 @@ it buys requests, money and latency instead.
    The wrinkle is that the model needs the bytes, so the turn either fetches them back
    or passes the presigned URL as an image source.
 
-What is left of step 1, once the lane has moved and `API_REPLICAS=2` is set:
+What is left of step 1, whenever `API_REPLICAS=2` is finally set:
 `bin/deploy.sh`, then check that a photo taken on one replica renders on the other — which it will, because neither of them holds it. Sessions,
 photos and counters all live outside the container. Worth confirming in this order:
 

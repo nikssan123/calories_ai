@@ -352,8 +352,14 @@ async function watched(
  * TTL stops mattering. The window where an hour wins is the band between, where
  * turns cluster inside an hour but not inside five minutes.
  *
+ * The break-even is worth carrying in your head, because the band starts earlier
+ * than "at scale" suggests: switching wins as soon as the hour cuts the cold
+ * share by more than about a quarter, which is any traffic where turns land
+ * between five minutes and an hour apart. `SUBSCRIPTIONS.md` works it through
+ * and puts it at roughly twenty active users, not thousands.
+ *
  * So this is a knob and not a decision: read the cold-write share off
- * `ai_usage` and set it when the numbers say the middle band has arrived.
+ * `ai_usage` and set it when the numbers say the band has arrived.
  *
  * Read once, at import, so a typo is a boot failure rather than a silent
  * fallback to a setting nobody chose — the same bargain `AI_PROVIDER` makes.

@@ -11,7 +11,7 @@ import { getUser, getUserContext } from '../services/user.ts';
 import { inferMeal, localDateFor } from '../time.ts';
 import { MAX_TURNS } from './client.ts';
 import { emptyCollector } from './kitchen.ts';
-import { createProvider, type AgentRequest } from './providers/index.ts';
+import { createProvider, laneFor, type AgentRequest } from './providers/index.ts';
 import {
   RECIPES_PER_RUN,
   RECIPE_SYSTEM_PROMPT,
@@ -184,7 +184,7 @@ export async function suggestRecipes(
     units: unitsOf(profile),
   };
 
-  const provider = createProvider(toolContext);
+  const provider = createProvider(toolContext, laneFor(profile.email));
   const authError = provider.checkAuth();
   if (authError) throw new Error(authError);
 

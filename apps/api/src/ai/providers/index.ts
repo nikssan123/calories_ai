@@ -1,3 +1,5 @@
+import { env } from '../../env.ts';
+import { hasSubscriptionAuth } from '../client.ts';
 import type { ToolContext } from '../tools.ts';
 import { createAnthropicProvider } from './anthropic.ts';
 import { createAnthropicApiProvider } from './messages.ts';
@@ -35,11 +37,51 @@ export function providerId(source: NodeJS.ProcessEnv = process.env): ProviderId 
 }
 
 /**
- * Build the provider for this run. The tool context is per-turn — it collects the
- * actions a turn performed — so this is called per turn rather than once at boot.
+ * Which lane this person's turns run on.
+ *
+ * `AI_PROVIDER` sets the deployment's lane and `SUBSCRIPTION_EMAILS` names the
+ * exceptions: the addresses belonging to whoever runs the box, whose turns go
+ * through the Claude Code subscription instead of being billed to the key.
+ *
+ * The asymmetry is deliberate. The allowlist can only ever move somebody *onto*
+ * the subscription, never off it, so a deployment already running `anthropic`
+ * for everyone — a personal install, or development — is unaffected by whatever
+ * the list says. There is no configuration in which naming an address makes a
+ * turn cost money that would otherwise have been free.
+ *
+ * Case-insensitive, and a user with no address on file is never on the list:
+ * `null` is not an address, and an account without one is exactly the anonymous
+ * signup the metered lane is for.
+ *
+ * The login has to actually exist, which is the second half of the guarantee.
+ * Without `.credentials.json` the Agent SDK falls back to `ANTHROPIC_API_KEY`
+ * and this lane becomes the metered one plus a subprocess — billed the same and
+ * slower, for nobody's benefit. Better to leave the listed address on whatever
+ * the deployment already does and let the absent credentials be a thing someone
+ * notices, than to quietly hand it the worse of the two lanes.
  */
-export function createProvider(toolContext: ToolContext): AiProvider {
-  switch (providerId()) {
+export function laneFor(email: string | null | undefined): ProviderId {
+  const address = email?.trim().toLowerCase();
+  if (address && env.subscriptionEmails.includes(address) && hasSubscriptionAuth()) {
+    return 'anthropic';
+  }
+  return providerId();
+}
+
+/**
+ * Build the provider for this run. The tool context is per-turn — it collects the
+ * actions a turn performed — so this is called per turn rather than once at boot,
+ * which is also what makes a per-user lane possible at all.
+ *
+ * `lane` defaults to the deployment's, so a caller with no user in hand — or one
+ * that has no business making the choice — gets the old behaviour by saying
+ * nothing.
+ */
+export function createProvider(
+  toolContext: ToolContext,
+  lane: ProviderId = providerId(),
+): AiProvider {
+  switch (lane) {
     case 'openai':
       return createOpenAiProvider();
     case 'anthropic-api':

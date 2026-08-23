@@ -2,10 +2,10 @@ import type { PantryScanProposal } from '@ct/shared';
 import { listPantry } from '../services/pantry.ts';
 import { savePhoto } from '../services/photos.ts';
 import { recordUsage } from '../services/usage.ts';
-import { getUserContext } from '../services/user.ts';
+import { getUser, getUserContext } from '../services/user.ts';
 import { MAX_TURNS } from './client.ts';
 import { emptyCollector } from './kitchen.ts';
-import { createProvider, type AgentRequest } from './providers/index.ts';
+import { createProvider, laneFor, type AgentRequest } from './providers/index.ts';
 import { PANTRY_SCAN_PROMPT, unitsBrief } from './prompt.ts';
 import { buildNutritionServer, type ToolContext } from './tools.ts';
 
@@ -46,7 +46,10 @@ export async function scanFridgePhoto(
     units,
   };
 
-  const provider = createProvider(toolContext);
+  // Read for the lane and nothing else, which is the same second query the
+  // review, the nudge and the recipe path each already make.
+  const profile = await getUser(id);
+  const provider = createProvider(toolContext, laneFor(profile.email));
   const authError = provider.checkAuth();
   if (authError) throw new Error(authError);
 

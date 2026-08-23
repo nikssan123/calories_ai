@@ -179,6 +179,12 @@ services:
       # this line the lane change in SCALING.md appears to work and changes
       # nothing — the deployment stays on the subscription, silently.
       AI_PROVIDER:
+      # The exceptions to it, comma-separated: addresses whose turns run on the
+      # Claude Code subscription instead of the metered key. Empty — the default
+      # — means every turn is billed. It can only ever move somebody *onto* the
+      # subscription, so it is inert on a deployment already running `anthropic`
+      # for everyone. The `claude-home` volume below is what it depends on.
+      SUBSCRIPTION_EMAILS:
       # The input-tokens-per-minute ceiling the key is entitled to, which is what
       # arms the token bucket. Absent means ungoverned: right for the
       # subscription lane, wrong the moment ANTHROPIC_API_KEY starts paying.

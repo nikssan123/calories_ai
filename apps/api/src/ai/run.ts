@@ -22,6 +22,7 @@ import { MAX_SESSION_MESSAGES, MAX_TURNS, TEXT_LOG_UNSUPPORTED_LANGUAGE } from '
 import { needsCapableModel } from './language.ts';
 import {
   createProvider,
+  laneFor,
   type AgentMessage,
   type AgentRequest,
   type AiProvider,
@@ -77,7 +78,7 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
   };
 
   // Built before any database work so a misconfigured provider fails fast.
-  const provider = createProvider(toolContext);
+  const provider = createProvider(toolContext, laneFor(input.profile.email));
   const authError = provider.checkAuth();
   if (authError) throw new Error(authError);
 
@@ -134,7 +135,16 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
    * prompt that put it in front of the whole transcript, invalidating it; here
    * it is just more conversation, and the prefix in front of it never moves.
    */
-  const promptText = `${dayContextPrompt(input.profile, day, currentWeight, notes, wellbeing)}\n\n---\n\n${rollover}${input.text}`;
+  /*
+   * Names only — no exercises, no previous loads. The model needs to recognise
+   * "my push day" and hand it to a tool; the tool reads the contents itself,
+   * and putting eight exercises per routine on every single turn would be a
+   * standing cost for something used on the turns that mention lifting.
+   */
+  const { listRoutines } = await import('../services/routines.ts');
+  const routines = await listRoutines(input.userId).catch(() => []);
+
+  const promptText = `${dayContextPrompt(input.profile, day, currentWeight, notes, wellbeing, routines)}\n\n---\n\n${rollover}${input.text}`;
 
   /*
    * Providers that keep no session of their own get the transcript replayed —

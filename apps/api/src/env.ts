@@ -62,6 +62,8 @@ export interface Env {
   agentCwd: string;
   /** Lower-cased emails granted the admin panel. Empty means "the first account". */
   adminEmails: string[];
+  /** Lower-cased emails whose turns run on the subscription. Empty means nobody's do. */
+  subscriptionEmails: string[];
   /** Where the browser reaches this deployment. Every link in an email is built from it. */
   appUrl: string;
   /**
@@ -220,6 +222,29 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
      * row in the database can quietly acquire.
      */
     adminEmails: (source.ADMIN_EMAILS ?? '')
+      .split(',')
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean),
+    /**
+     * Whose turns run on the Claude Code subscription instead of the metered
+     * key, named one address at a time.
+     *
+     * This is the seam `SCALING.md` keeps between the two lanes, made per-user
+     * rather than per-deployment. The subscription is a personal login: it is
+     * the right thing for the handful of accounts belonging to whoever runs the
+     * box, and the wrong thing for a stranger who signed up this morning, whose
+     * turn should be billed and counted like the product it is part of.
+     *
+     * An allowlist rather than a flag, and by address rather than by user id,
+     * because it has to be decided at deploy time in the environment. A row in
+     * the database that could put a user on somebody else's subscription is a
+     * row that will eventually do so by accident — the same reasoning
+     * `adminEmails` above is written with.
+     *
+     * Empty — the default — means every turn takes the metered lane, which is
+     * what a deployment that is not also somebody's personal instance wants.
+     */
+    subscriptionEmails: (source.SUBSCRIPTION_EMAILS ?? '')
       .split(',')
       .map((email) => email.trim().toLowerCase())
       .filter(Boolean),

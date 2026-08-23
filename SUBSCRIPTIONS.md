@@ -77,14 +77,32 @@ Two second-order effects worth knowing, because they are counter-intuitive:
 
 ## The tiers
 
-Every table in this section prices a text log at $0.012 — the Haiku figure, and so
-the right one only for a user writing in a language Haiku handles. What happens to
-these numbers when that does not hold is the section after them, and for some cells
-it is the difference between a business and a hole.
+**Recomputed 2026-08-23 from measured costs.** Every table below now has two COGS
+columns, and the gap between them is the whole finding.
+
+*Warm* is a deployment where the ~18k-token shared prefix — the tool definitions plus
+the static system prompt, identical for every account — is in cache when a turn
+arrives. *Cold* is one where it is not, and the turn pays to write it. A text log is
+$0.0052 warm and $0.0285 cold; a photo scan is $0.028 and $0.165. Both columns are the
+outer bounds: real traffic sits between them, nearer whichever end the volume puts it.
+
+Assumptions stated once, since the old tables did not state theirs: 30 days a month,
+4.3 weeks; Stripe at 2.9% + $0.30, which lands once a year on annual rather than
+twelve times.
+
+A text log is also priced here at the Haiku figure, and so is the right one only for a
+user writing in a language Haiku handles. What happens when that does not hold is the
+section after these, and for some cells it is the difference between a business and a
+hole.
 
 ### Free — 6 text logs a day, 1 photo scan ever
 
-**Cost: ~$1.87 per active free user per month.**
+| | COGS warm | COGS cold |
+|---|---:|---:|
+| typical — 4 logs/day, the one lifetime photo, weekly nudge | **$0.76** | $3.69 |
+| at the cap — 6 logs/day, every day | $1.07 | $5.40 |
+
+*(was: a flat $1.87, modelled)*
 
 The single lifetime photo is deliberate and is the most important design decision
 here. Photo scanning is both the thing that makes people say "oh" and the most
@@ -99,41 +117,109 @@ caps free-tier COGS exactly, which a soft degrade does not.
 No weekly review, no meal plan. Those are Opus and they are what the paid tiers are
 for. A weekly nudge stays, because it costs a cent and it is what brings people back.
 
-**Watch this number.** At $1.87/month, free-tier burn is the CAC:
+**Watch this number.** Free-tier burn is the CAC, and it now has a range rather than a
+value:
 
-| conversion | effective CAC per paying user |
-|---|---|
-| 3% | $63.51 |
-| 5% | $38.11 |
-| 8% | $23.82 |
+| conversion | CAC warm | CAC cold |
+|---|---:|---:|
+| 3% | $25.32 | $123.08 |
+| 5% | $15.19 | $73.85 |
+| 8% | $9.49 | $46.16 |
 
-If conversion lands under ~4%, the free tier is the most expensive line in the
-business and should be cut to a 14-day trial instead.
+Warm, the free tier is cheap enough that the old "cut it to a 14-day trial under 4%
+conversion" rule no longer bites — $25 CAC at 3% is a fine number. Cold, it is four to
+five times worse than the figure that rule was written against. **The decision about
+the free tier is therefore not a decision about conversion. It is a decision about
+whether the deployment is warm**, and the section below is about how little traffic
+that actually takes.
 
 ### Standard — $12.99/month or $119/year
 
-15 text logs a day · 2 photo scans a day (Sonnet) · weekly review
+15 text logs a day · 2 photo scans a day · weekly review
 
-| | COGS | net revenue | margin |
-|---|---|---|---|
-| typical — 8 logs, 1 photo | $4.32 | $12.31 | **65%** |
-| at the cap, every day | $8.33 | $12.31 | 32% |
-| annual, typical | $4.32 | $9.60 | 55% |
-| annual, at the cap | $8.33 | $9.60 | 13% |
+| | COGS warm | COGS cold | net revenue | margin warm | margin cold |
+|---|---:|---:|---:|---:|---:|
+| typical — 8 logs, 1 photo | $2.52 | $12.22 | $12.31 | **80%** | 1% |
+| at the cap, every day | $4.45 | $23.16 | $12.31 | 64% | **−88%** |
+| annual, typical | $2.52 | $12.22 | $9.60 | 74% | −27% |
+| annual, at the cap | $4.45 | $23.16 | $9.60 | 54% | **−141%** |
+
+**The tier header used to say "(Sonnet)" against the photo scans and that was never
+true** — `ai/client.ts` routes `photo_log` to Opus 5 at high effort. Either the code or
+this line has to move, and the choice is worth making deliberately: photos are the
+second-largest line in every cell above.
 
 ### Coach — $29.99/month or $299/year
 
 30 text logs a day · 5 photo scans a day (Opus) · weekly review · meal plans
 
-| | COGS | net revenue | margin |
-|---|---|---|---|
-| typical — 12 logs, 3 photos | $12.26 | $28.82 | **57%** |
-| at the cap, every day | $23.84 | $28.82 | 17% |
-| annual, typical | $12.26 | $24.17 | 49% |
-| annual, at the cap | $23.84 | $24.17 | 1% |
+Typical assumes 2 meal plans and 8 recipes a month; at the cap, 4 and 20.
+
+| | COGS warm | COGS cold | net revenue | margin warm | margin cold |
+|---|---:|---:|---:|---:|---:|
+| typical — 12 logs, 3 photos | $7.13 | $27.85 | $28.82 | **75%** | 3% |
+| at the cap, every day | $14.67 | $56.19 | $28.82 | 49% | **−95%** |
+| annual, typical | $7.13 | $27.85 | $24.17 | 71% | −15% |
+| annual, at the cap | $14.67 | $56.19 | $24.17 | 39% | **−133%** |
+
+The kitchen is most of the warm column here — $0.82 of meal plans and $1.49 of recipes
+at typical, $1.64 and $3.72 at the cap — and none of it is helped by caching, because
+it is output the model writes rather than input it reads. The caps on plans and recipes
+are the only thing holding this tier up, and they are load-bearing in the warm column
+as well as the cold one.
 
 Net revenue is after Stripe (2.9% + $0.30). On annual that fee lands once instead of
 twelve times, which is worth about $0.45/month — the reason annual survives at all.
+
+## The warm/cold question, which is now the business
+
+Every table above has a healthy column and a fatal one, and the same lever decides
+which one a deployment lives in. It is worth being exact about how much traffic that
+lever needs, because the intuition — "cache warmth is a problem for later, at scale" —
+is wrong by two orders of magnitude.
+
+The prefix is shared by **every account on the deployment**: same tools, same static
+system prompt, byte for byte. So it does not need *a user* to be active, it needs
+*anybody* to be. On the five-minute TTL an entry survives five minutes past the last
+turn that touched it. The deployment is warm when turns arrive closer together than
+that, and cold when they do not.
+
+At three logs a day per user, that is:
+
+| active users | turns/day | mean gap between turns | prefix |
+|---:|---:|---|---|
+| 4 *(today)* | 12 | ~2 hours | cold, always |
+| 20 | 60 | ~24 minutes | cold on 5m, warm on 1h |
+| 100 | 300 | ~5 minutes | borderline on 5m, warm on 1h |
+| 500 | 1,500 | ~1 minute | warm on either |
+
+Meals cluster, so the mean overstates coverage at the bottom of that table and
+understates it in the middle — a lunchtime hour at 100 users is comfortably warm even
+if 3am is not.
+
+**Which is the argument for `ANTHROPIC_CACHE_TTL=1h`, and it arrives earlier than the
+setting's own documentation suggests.** The hour costs 2× to write instead of 1.25×,
+so a cold turn goes from $0.0285 to $0.0358. Work the break-even: switching wins
+whenever the hour cuts the cold share by more than about a quarter. That is a low bar —
+it is met by any traffic where turns typically land between five minutes and an hour
+apart, which by the table above is somewhere around **twenty active users**, not
+thousands.
+
+So the order of operations for the pricing is:
+
+1. **Below ~20 users** — every turn is cold under either TTL and the hour is pure
+   premium. Stay on `5m`. This is where the deployment is today, and it is also where
+   the absolute numbers are small enough not to matter: 4 users at 12 turns a day is
+   about $0.35 a day even in the cold column.
+2. **Around 20 and up** — switch to `1h` and re-read the cold-write share. This is the
+   single highest-leverage setting in the product's cost model, worth more than any
+   prompt or model change, and it is one environment variable.
+3. **Only then** are the tier tables above worth trusting, because only then is it
+   settled which column the business is actually in.
+
+None of the three tiers survives its cold column at the cap. All three are comfortable
+warm. Nothing in the pricing should be committed to — not the caps, not the free tier,
+not the annual discount — until step 2 has been done and measured.
 
 ## When the language escalates
 

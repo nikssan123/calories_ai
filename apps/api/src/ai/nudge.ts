@@ -5,7 +5,7 @@ import { getUser, getUserContext } from '../services/user.ts';
 import { recordUsage } from '../services/usage.ts';
 import { localDateFor } from '../time.ts';
 import { MAX_TURNS } from './client.ts';
-import { createProvider, type AgentRequest } from './providers/index.ts';
+import { createProvider, laneFor, type AgentRequest } from './providers/index.ts';
 import { NUDGE_SYSTEM_PROMPT, nudgeTaskPrompt } from './prompt.ts';
 import { buildNutritionServer } from './tools.ts';
 
@@ -41,7 +41,7 @@ export async function generateNudge(
   const toolContext = { userId: id, ctx, now: new Date(), photoId: null, actions: [], units };
   const { tools, toolNames } = buildNutritionServer(toolContext, { readOnly: true });
 
-  const provider = createProvider(toolContext);
+  const provider = createProvider(toolContext, laneFor(profile.email));
   const authError = provider.checkAuth();
   if (authError) throw new Error(authError);
 
