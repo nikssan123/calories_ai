@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { DISPLAY_LEADING, duration, ease, type as t, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useCountUp } from '@/hooks/useCountUp';
 
 /**
  * The day, as one fat shape. Ported from `apps/web/components/CalorieRing.tsx`,
@@ -30,47 +31,6 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
  * but one of those is information and the other is a telling-off.
  */
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-
-/** Counts to `value`, from wherever it currently is. Honours reduced motion. */
-function useCountUp(value: number, ms: number): number {
-  const [shown, setShown] = useState(value);
-  const fromRef = useRef(value);
-  const frame = useRef<ReturnType<typeof requestAnimationFrame>>(undefined);
-  const reduced = useReducedMotion();
-
-  useEffect(() => {
-    const from = fromRef.current;
-    const delta = value - from;
-    if (reduced || delta === 0) {
-      fromRef.current = value;
-      setShown(value);
-      return;
-    }
-
-    const start = Date.now();
-    const tick = () => {
-      const p = Math.min(1, (Date.now() - start) / ms);
-      // Matches --ease-out: settles without overshooting.
-      setShown(from + delta * (1 - Math.pow(1 - p, 3)));
-      if (p < 1) {
-        frame.current = requestAnimationFrame(tick);
-      } else {
-        fromRef.current = value;
-      }
-    };
-    frame.current = requestAnimationFrame(tick);
-
-    return () => {
-      if (frame.current !== undefined) cancelAnimationFrame(frame.current);
-      // Whatever we reached is the honest starting point for the next change.
-      fromRef.current = shown;
-    };
-    // `shown` is read only in cleanup; depending on it would restart the run.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, ms, reduced]);
-
-  return shown;
-}
 
 export function CalorieRing({
   consumed,

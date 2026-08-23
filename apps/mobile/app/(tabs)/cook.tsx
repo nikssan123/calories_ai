@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -587,52 +588,54 @@ export default function CookScreen() {
               </Text>
             </View>
           ) : (
-            recipes.map((recipe) => (
-              <RecipeTile
-                key={recipe.id}
-                title={recipe.title}
-                summary={recipe.summary}
-                kcal={recipe.kcal}
-                protein_g={recipe.protein_g}
-                servingLabel="per portion"
-                emoji={foodEmoji(recipe.title)}
-                needs={recipe.ingredients.filter((i) => i.missing).map((i) => i.name)}
-                minutes={recipe.minutes}
-                steps={recipe.steps.length}
-                saved={recipe.saved}
-                onPress={() => router.push(`/recipe/${recipe.id}`)}
-                onToggleSave={() => void toggleRecipeSaved(recipe.id, !recipe.saved)}
-              />
-            ))
-          )}
-        </>
-      ) : library === null ? (
-        <>
-          <Skeleton style={styles.tileSkeleton} />
-          <Skeleton style={styles.tileSkeleton} />
-        </>
-      ) : library.length === 0 ? (
-        <Text style={[t.body, styles.centred, styles.aside, { color: colors.mutedForeground }]}>
-          Nothing matching &ldquo;{librarySearch}&rdquo;.
-        </Text>
-      ) : (
-        <>
-          {library.map((recipe) => (
-            <RecipeTile
-              key={recipe.slug}
-              title={recipe.title}
-              summary={recipe.summary}
-              kcal={recipe.kcal}
-              protein_g={recipe.protein_g}
-              servingLabel={`per ${recipe.serving_size ?? 'portion'}`}
-              photo={recipe.image_path ? api.photoUrl(recipe.image_path) : null}
-              fitsToday={recipe.fits_today}
-              have={recipe.have}
-              steps={recipe.steps.length}
-              saved={recipe.saved}
-              onPress={() => router.push(`/library/${recipe.slug}`)}
-              onToggleSave={() => void toggleLibrarySaved(recipe.slug, !recipe.saved)}
-            />
+            recipes.map((recipe, i) => (
+              <Arriving key={recipe.id} index={i}>
+                <RecipeTile
+                  title={recipe.title}
+                  summary={recipe.summary}
+                  kcal={recipe.kcal}
+                  protein_g={recipe.protein_g}
+                  servingLabel="per portion"
+                  emoji={foodEmoji(recipe.title)}
+                  needs={recipe.ingredients.filter((i) => i.missing).map((i) => i.name)}
+                  minutes={recipe.minutes}
+                  steps={recipe.steps.length}
+                  saved={recipe.saved}
+                  onPress={() => router.push(`/recipe/${recipe.id}`)}
+                  onToggleSave={() => void toggleRecipeSaved(recipe.id, !recipe.saved)}
+                />
+              </Arriving>
+              ))
+            )}
+          </>
+        ) : library === null ? (
+          <>
+            <Skeleton style={styles.tileSkeleton} />
+            <Skeleton style={styles.tileSkeleton} />
+          </>
+        ) : library.length === 0 ? (
+          <Text style={[t.body, styles.centred, styles.aside, { color: colors.mutedForeground }]}>
+            Nothing matching &ldquo;{librarySearch}&rdquo;.
+          </Text>
+        ) : (
+          <>
+            {library.map((recipe, i) => (
+              <Arriving key={recipe.slug} index={i}>
+                <RecipeTile
+                  title={recipe.title}
+                  summary={recipe.summary}
+                  kcal={recipe.kcal}
+                  protein_g={recipe.protein_g}
+                  servingLabel={`per ${recipe.serving_size ?? 'portion'}`}
+                  photo={recipe.image_path ? api.photoUrl(recipe.image_path) : null}
+                  fitsToday={recipe.fits_today}
+                  have={recipe.have}
+                  steps={recipe.steps.length}
+                  saved={recipe.saved}
+                  onPress={() => router.push(`/library/${recipe.slug}`)}
+                  onToggleSave={() => void toggleLibrarySaved(recipe.slug, !recipe.saved)}
+                />
+              </Arriving>
           ))}
           <Text style={[t.footnote, styles.aside, { color: colors.mutedForeground }]}>
             Real recipes from the USDA&rsquo;s public-domain collection, sorted by how much of one
@@ -647,6 +650,31 @@ export default function CookScreen() {
         </Text>
       )}
     </ScrollView>
+  );
+}
+
+/**
+ * A tile taking its turn.
+ *
+ * Cook is the one screen where a whole grid lands at once — a run finishes and
+ * four recipes appear together — and the stagger is what turns that from a
+ * flash into a list being dealt out. The same 70ms `MacroBars` uses, and the
+ * same cap: past the seventh tile the delay is longer than anyone waits before
+ * scrolling.
+ *
+ * A wrapper rather than a prop on `RecipeTile`, because the tile is also drawn
+ * inside a chat card, where things arrive one at a time and there is nothing to
+ * stagger against.
+ */
+function Arriving({ index, children }: { index: number; children: React.ReactNode }) {
+  return (
+    <Animated.View
+      entering={FadeInDown.duration(260)
+        .delay(Math.min(index, 6) * 70)
+        .reduceMotion(ReduceMotion.System)}
+    >
+      {children}
+    </Animated.View>
   );
 }
 

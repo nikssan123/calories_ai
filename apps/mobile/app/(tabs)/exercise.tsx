@@ -194,6 +194,7 @@ export default function ExerciseScreen() {
             {summary.entries.map((entry, i) => (
               <SwipeRow
                 key={entry.id}
+                index={i}
                 style={i === 0 ? null : { borderTopWidth: 2, borderTopColor: colors.border }}
                 actions={[removeAction(colors, entry.description, () => remove(entry))]}
               >

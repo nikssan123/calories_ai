@@ -1,5 +1,10 @@
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
-import Animated, { FadeOut, LinearTransition, ReduceMotion } from 'react-native-reanimated';
+import Animated, {
+  FadeInDown,
+  FadeOut,
+  LinearTransition,
+  ReduceMotion,
+} from 'react-native-reanimated';
 import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
@@ -52,10 +57,21 @@ export interface SwipeAction {
  */
 export function SwipeRow({
   actions,
+  index,
   style,
   children,
 }: {
   actions: SwipeAction[];
+  /**
+   * Position in its list, which buys the row its place in the entrance
+   * stagger. It lives here rather than in a wrapper of its own because this
+   * component already owns the row's outermost view, and a second animated
+   * layer around it would be one more thing for the layout transition to fight.
+   *
+   * Left off, the row simply appears — which is right for a list that is not
+   * arriving all at once.
+   */
+  index?: number;
   /** Laid on the wrapper — the divider above the row belongs out here. */
   style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
@@ -82,6 +98,22 @@ export function SwipeRow({
        */
       layout={LinearTransition.duration(220).reduceMotion(ReduceMotion.System)}
       exiting={FadeOut.duration(160).reduceMotion(ReduceMotion.System)}
+      /*
+       * 70ms apart, which is what `MacroBars` already staggers at, so the whole
+       * app arrives to one rhythm rather than three. Capped at the seventh row:
+       * past that the delay is longer than anybody waits before scrolling, and
+       * a list of twenty would spend a second and a half assembling itself.
+       *
+       * Safe against the rule that motion may never delay input — a view part
+       * way through a fade is mounted and takes touches the whole time.
+       */
+      entering={
+        index === undefined
+          ? undefined
+          : FadeInDown.duration(260)
+              .delay(Math.min(index, 6) * 70)
+              .reduceMotion(ReduceMotion.System)
+      }
     >
       <ReanimatedSwipeable
         friction={2}

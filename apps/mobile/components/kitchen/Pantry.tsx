@@ -176,12 +176,13 @@ export function Pantry({
           Nothing here yet. Add a few things and I&rsquo;ll cook from them.
         </Text>
       ) : (
-        fresh.map((item) => {
+        fresh.map((item, i) => {
           const days = daysSince(item.last_seen_at);
           const stale = days >= STALE_DAYS;
           return (
             <SwipeRow
               key={item.id}
+              index={i}
               actions={[removeAction(colors, item.name, () => remove(item))]}
             >
               <View style={[styles.item, { borderBottomColor: colors.border }]}>

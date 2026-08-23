@@ -347,6 +347,7 @@ export default function PlanScreen() {
                 list.items.map((item, i) => (
                   <SwipeRow
                     key={item.extra_id ?? `${item.name}-${i}`}
+                    index={i}
                     style={i === 0 ? null : { borderTopWidth: 2, borderTopColor: colors.border }}
                     actions={
                       item.extra_id

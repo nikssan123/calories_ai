@@ -27,6 +27,7 @@ import { haptics } from '@/lib/haptics';
 import { removeAction, repeatAction, SwipeRow } from '@/components/SwipeRow';
 import { Glyph } from '@/components/Glyph';
 import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
+import { useCountUp } from '@/hooks/useCountUp';
 
 /** The `date` the calendar links here with. Anything else is ignored. */
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -284,12 +285,7 @@ export default function TodayScreen() {
               target={day.targets.kcal}
               burned={day.burned_kcal}
             />
-            <Text style={[t.body, t.tnum, styles.total, { color: colors.mutedForeground }]}>
-              <Text style={{ fontFamily: font.extrabold, color: colors.foreground }}>
-                {Math.round(day.consumed.kcal).toLocaleString()}
-              </Text>
-              {` of ${day.targets.kcal.toLocaleString()} kcal`}
-            </Text>
+            <Total consumed={day.consumed.kcal} target={day.targets.kcal} />
             {day.burned_kcal > 0 && (
               <Text style={[t.footnoteSemibold, t.tnum, { color: colors.mutedForeground }]}>
                 net {day.net_kcal.toLocaleString()} kcal after exercise
@@ -325,6 +321,7 @@ export default function TodayScreen() {
                   key={entry.id}
                   entry={entry}
                   first={i === 0}
+                  index={i}
                   open={expanded === entry.id}
                   onToggle={() => setExpanded((id) => (id === entry.id ? null : entry.id))}
                   onDelete={() => void removeEntry(entry)}
@@ -348,6 +345,7 @@ export default function TodayScreen() {
               {day.exercise_entries.map((entry, i) => (
                 <SwipeRow
                   key={entry.id}
+                  index={i}
                   // The divider stays out here so it holds still while the row
                   // slides out from under it.
                   style={
@@ -420,9 +418,30 @@ export default function TodayScreen() {
   );
 }
 
+/**
+ * The line under the ring, extracted only so the count-up has somewhere to
+ * live: it is the second-largest figure on the screen and it was the one that
+ * swapped while the ring beside it travelled, which read as the two of them
+ * disagreeing for a moment about what had just happened.
+ */
+function Total({ consumed, target }: { consumed: number; target: number }) {
+  const colors = useColors();
+  const shown = useCountUp(Math.round(consumed), 900);
+
+  return (
+    <Text style={[t.body, t.tnum, styles.total, { color: colors.mutedForeground }]}>
+      <Text style={{ fontFamily: font.extrabold, color: colors.foreground }}>
+        {Math.round(shown).toLocaleString()}
+      </Text>
+      {` of ${target.toLocaleString()} kcal`}
+    </Text>
+  );
+}
+
 function EntryRow({
   entry,
   first,
+  index,
   open,
   onToggle,
   onDelete,
@@ -430,6 +449,7 @@ function EntryRow({
 }: {
   entry: FoodEntry;
   first: boolean;
+  index: number;
   open: boolean;
   onToggle: () => void;
   onDelete: () => void;
@@ -441,6 +461,7 @@ function EntryRow({
 
   return (
     <SwipeRow
+      index={index}
       style={first ? null : { borderTopWidth: 2, borderTopColor: colors.border }}
       /*
        * Both of the things the expanded row already offers, reachable without

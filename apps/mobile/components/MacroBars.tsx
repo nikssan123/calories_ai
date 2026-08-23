@@ -5,6 +5,7 @@ import type { Nutrition, Targets } from '@ct/shared';
 import { duration, ease, type as t, useColors, type Palette } from '@/theme';
 import { Confetti } from '@/components/Confetti';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useCountUp } from '@/hooks/useCountUp';
 
 /**
  * Protein, carbs, fat as three fat tracks.
@@ -68,6 +69,8 @@ function MacroTrack({
   index: number;
 }) {
   const colors = useColors();
+  // The bar and the figure move together, on the same clock as the ring's.
+  const shown = useCountUp(value, 900);
   const pct = Math.min(100, target > 0 ? (value / target) * 100 : 0);
   const met = target > 0 && value >= target;
 
@@ -125,7 +128,7 @@ function MacroTrack({
         <Text
           style={[t.figure, styles.figure, { color: met ? colors[macro.ink] : colors.foreground }]}
         >
-          {Math.round(value)}
+          {Math.round(shown)}
         </Text>
         <Text style={[t.footnoteSemibold, t.tnum, { color: colors.mutedForeground }]}>
           /{target}
