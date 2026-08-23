@@ -4,6 +4,7 @@ import { hasSubscriptionAuth } from './ai/client.ts';
 import { generateNudge } from './ai/nudge.ts';
 import { generateWeeklyReview } from './ai/review.ts';
 import { sendNudgeEmail, sendWeeklyReviewEmail } from './email/notify.ts';
+import { nudgeReachedAPhone, sendNudgePush, sendWeeklyReviewPush } from './push/notify.ts';
 import { sweepBarcodeCache } from './services/barcode.ts';
 import { NUDGE_JOB, REVIEW_JOB, withJobLock } from './services/job-lock.ts';
 import { dueNudge, NUDGE_HOUR } from './services/nudges.ts';
@@ -111,7 +112,16 @@ async function reviewPass(now: Date, logger?: FastifyBaseLogger): Promise<TickRe
        * way. Sending is keyed on the week, so a later tick will not send twice.
        */
       const published = await reviewForWeek(user.id, week.start);
-      if (published) await sendWeeklyReviewEmail(user.id, published, logger);
+      if (published) {
+        /*
+         * Both channels, and this is the one notification where that is right.
+         * The mail carries the review — the writing, the stats, the layout —
+         * and the push carries the news that it exists. They are two different
+         * messages, so nobody hears the same sentence twice.
+         */
+        await sendWeeklyReviewPush(user.id, published, logger);
+        await sendWeeklyReviewEmail(user.id, published, logger);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       result.failed.push({ userId: user.id, error: message });
@@ -196,10 +206,19 @@ async function nudgePass(now: Date, logger?: FastifyBaseLogger): Promise<TickRes
       result.generated.push(user.id);
       logger?.info({ userId: user.id, kind: nudge.kind }, 'nudge published');
 
-      // Inside the same try and after the write, so an email failure is
-      // reported against the user it belongs to while the nudge itself stays
-      // published. Keyed on the nudge, so a later tick will not send twice.
-      await sendNudgeEmail(user.id, nudge, logger);
+      /*
+       * Inside the same try and after the write, so a delivery failure is
+       * reported against the user it belongs to while the nudge itself stays
+       * published. Keyed on the nudge, so a later tick will not send twice.
+       *
+       * The phone first, and the inbox only if the phone was not reached. A
+       * nudge is one sentence with nothing behind it to go and read, so it is
+       * complete on a lock screen — and saying it again in an email would turn
+       * "at most one a week" into two of the same thing. Somebody with no
+       * device registered still gets the mail, exactly as before.
+       */
+      const pushed = await sendNudgePush(user.id, nudge, logger);
+      if (!nudgeReachedAPhone(pushed)) await sendNudgeEmail(user.id, nudge, logger);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       result.failed.push({ userId: user.id, error: message });

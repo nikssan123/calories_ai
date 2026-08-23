@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -30,10 +30,12 @@ import { Nunito_800ExtraBold } from '@expo-google-fonts/nunito/800ExtraBold';
  */
 import { Nunito_500Medium_Italic } from '@expo-google-fonts/nunito/500Medium_Italic';
 import { Nunito_800ExtraBold_Italic } from '@expo-google-fonts/nunito/800ExtraBold_Italic';
+import * as Notifications from 'expo-notifications';
 import { ToastProvider } from '@/components/Toast';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { ThemePreferenceProvider, useThemePreference } from '@/lib/theme-preference';
 import { paletteFor, ThemeContext, useColors } from '@/theme';
+import { registerForPush } from '@/lib/push';
 
 /*
  * Held until the fonts are in and the session has resolved.
@@ -135,12 +137,48 @@ function Themed() {
 function Gate() {
   const { authenticated, emailVerified, loading } = useAuth();
   const colors = useColors();
+  const router = useRouter();
 
   useEffect(() => {
     // Held until the session has resolved, so nobody sees a frame of the wrong
     // screen on the way to the right one.
     if (!loading) void SplashScreen.hideAsync();
   }, [loading]);
+
+  /*
+   * Re-register this phone's address once there is a session to attach it to.
+   *
+   * Silent by construction — `registerForPush` will not raise a permission
+   * dialog unless it is asked to, and it is not asked to here. Somebody who
+   * granted permission last week is quietly re-registered; somebody who never
+   * did is left alone until they turn a switch on, which is the only moment
+   * where the question is an answer to something they just did.
+   *
+   * Every launch rather than once, because a token is not permanent: a
+   * reinstall or a restore from backup mints a new one, and the old address
+   * fails in the only way that leaves no trace — the notification simply never
+   * arrives.
+   */
+  useEffect(() => {
+    if (authenticated && emailVerified) void registerForPush();
+  }, [authenticated, emailVerified]);
+
+  /*
+   * Where a tap lands.
+   *
+   * The server puts a `route` in every notification's data, so this stays a
+   * lookup rather than a switch that has to learn each kind: a weekly review
+   * opens Progress, a nudge opens the journal it also appears in. Anything
+   * unrecognised is left alone — opening the app at all is a reasonable answer
+   * to a notification whose destination we cannot parse.
+   */
+  useEffect(() => {
+    const tap = Notifications.addNotificationResponseReceivedListener((response) => {
+      const route = response.notification.request.content.data?.route;
+      if (typeof route === 'string' && route.startsWith('/')) router.push(route as never);
+    });
+    return () => tap.remove();
+  }, [router]);
 
   return (
     <Stack

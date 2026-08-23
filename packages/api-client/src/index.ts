@@ -321,6 +321,26 @@ export function createApiClient({
     updateFoodEntry: (id: string, patch: Partial<Pick<FoodEntry, 'meal' | 'description' | 'eaten_at'>>) =>
       request<FoodEntry>(`/entries/food/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 
+    /**
+     * Tells the server where this phone can be reached.
+     *
+     * Called on every start the app has permission for rather than once, since
+     * a token can change under a reinstall or a restore and a stale one fails
+     * silently — the notification simply never arrives.
+     */
+    registerDevice: (token: string, platform: 'ios' | 'android') =>
+      request<{ ok: true }>('/notifications/device', {
+        method: 'POST',
+        body: JSON.stringify({ token, platform }),
+      }),
+
+    /** Gives the address up, so the next person to sign in here is not buzzed. */
+    forgetDevice: (token: string) =>
+      request<{ ok: true }>('/notifications/device', {
+        method: 'DELETE',
+        body: JSON.stringify({ token }),
+      }),
+
     deleteFoodEntry: (id: string) =>
       request<{ ok: true }>(`/entries/food/${id}`, { method: 'DELETE' }),
 

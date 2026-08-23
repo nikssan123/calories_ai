@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { AuthStatus, Profile } from '@ct/shared';
 import { api } from '@/lib/api';
 import { clearToken, restoreToken, saveToken } from '@/lib/session';
+import { forgetPush } from '@/lib/push';
 
 /**
  * Who this is, resolved once at the root.
@@ -115,6 +116,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    /*
+     * Before the session goes, because giving the address up is an authenticated
+     * call. A push token belongs to the *device* rather than the account, so one
+     * left behind would keep delivering this person's nudges to whoever signs in
+     * on this phone next.
+     */
+    await forgetPush();
     try {
       await api.logout();
     } catch {

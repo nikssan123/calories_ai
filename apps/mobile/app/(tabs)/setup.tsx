@@ -23,6 +23,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PRIVACY_URL, SUPPORT_EMAIL, TERMS_URL } from '@/lib/links';
 import { font, type as t, useColors, withAlpha } from '@/theme';
+import { registerForPush } from '@/lib/push';
 
 /** §10: short setup. Enough to establish a starting target, nothing more. */
 
@@ -580,6 +581,20 @@ function EmailSettings({
     onChange({ ...profile, [field]: enabled });
     try {
       onChange(await api.updateProfile({ [field]: enabled }));
+      /*
+       * The one moment the permission dialog is honest.
+       *
+       * Asking at launch is asking someone to decide about notifications before
+       * they have seen what the app sends; asking here is answering a question
+       * they just asked out loud by flipping the switch. Only on the way on —
+       * turning it off is not an occasion to ask for anything.
+       *
+       * Nothing is reported if they say no. The preference is still saved and
+       * still honoured: the notification goes to their email instead, which is
+       * where it went before any of this, and telling somebody off for
+       * declining a dialog they were shown unprompted is not the app's place.
+       */
+      if (enabled) await registerForPush({ requestPermissions: true });
     } catch (e) {
       onChange({ ...profile, [field]: previous });
       onError((e as Error).message);
@@ -588,7 +603,7 @@ function EmailSettings({
 
   return (
     <InsetGroup
-      title="Email"
+      title="Telling you things"
       footer={
         profile.notify_weekly_review
           ? 'The weekly review arrives on Monday mornings. Emails about your account — a password change, a sign-in from a device we have not seen — are always sent.'
@@ -641,7 +656,7 @@ function EmailSettings({
         <Switch
           value={profile.notify_weekly_review}
           onValueChange={(v) => void setPreference('notify_weekly_review', v)}
-          accessibilityLabel="Email me the weekly review"
+          accessibilityLabel="Send me the weekly review"
         />
       </InsetRow>
 
@@ -653,13 +668,14 @@ function EmailSettings({
           <Text style={[t.body, { color: colors.foreground }]}>Nudges</Text>
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
             At most one a week, when something in your log is worth a mention. They always
-            appear in the journal; this emails them too.
+            appear in the journal; this sends it to your phone as well — or to your email,
+            if notifications are off.
           </Text>
         </View>
         <Switch
           value={profile.notify_nudges}
           onValueChange={(v) => void setPreference('notify_nudges', v)}
-          accessibilityLabel="Email me nudges"
+          accessibilityLabel="Send me nudges"
         />
       </InsetRow>
     </InsetGroup>

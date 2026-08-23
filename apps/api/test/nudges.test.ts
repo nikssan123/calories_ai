@@ -4,6 +4,7 @@ import { generateNudge } from '../src/ai/nudge.ts';
 import { isNudgeTime, runDueNudges } from '../src/scheduler.ts';
 import { dueNudge, listNudges, NUDGE_HOUR, saveNudge } from '../src/services/nudges.ts';
 import { saveReview } from '../src/services/reviews.ts';
+import { registerPushToken } from '../src/services/push-tokens.ts';
 import { addDays } from '../src/time.ts';
 import { agentCalls, scriptAgent, systemPromptOf } from './helpers/agent-mock.ts';
 import { mailbox } from './helpers/email.ts';
@@ -285,6 +286,46 @@ describe('runDueNudges', () => {
     const sent = mailbox();
     expect(sent).toHaveLength(1);
     expect(sent[0]!.text).toMatch(/second nudge/);
+  });
+
+  it('sends it to the phone instead of the inbox, so nobody hears it twice', async () => {
+    await query('UPDATE users SET notify_nudges = TRUE WHERE id = $1', [user.id]);
+    await registerPushToken(user.id, { token: 'ExponentPushToken[nudge]', platform: 'ios' });
+
+    // The relay accepts it. A nudge is one sentence with nothing behind it to
+    // go and read, so a lock screen is the whole message — and repeating it in
+    // an email is how "at most one a week" quietly becomes two of the same.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ data: [{ status: 'ok', id: 'x' }] }),
+        text: async () => '',
+      })),
+    );
+
+    scriptAgent({ text: 'A nudge that goes to the phone.' });
+    await runDueNudges(EVENING);
+
+    expect(mailbox()).toHaveLength(0);
+    vi.unstubAllGlobals();
+  });
+
+  it('still emails somebody whose phone could not be reached', async () => {
+    await query('UPDATE users SET notify_nudges = TRUE WHERE id = $1', [user.id]);
+    await registerPushToken(user.id, { token: 'ExponentPushToken[dead]', platform: 'android' });
+
+    // The relay is down. The pocket stayed quiet, so the inbox must not.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: false, status: 503, text: async () => 'down' })),
+    );
+
+    scriptAgent({ text: 'A nudge that falls back to email.' });
+    await runDueNudges(EVENING);
+
+    expect(mailbox()).toHaveLength(1);
+    vi.unstubAllGlobals();
   });
 
   it('keeps the message when the model fails, using its own words', async () => {

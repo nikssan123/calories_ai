@@ -70,6 +70,7 @@ import {
   setWeeklyReviewEmails,
   updateUser,
 } from '../services/user.ts';
+import { forgetPushToken, registerPushToken } from '../services/push-tokens.ts';
 import { lastWorkout, listExerciseTypes, logWorkout } from '../services/workouts.ts';
 import {
   deleteRoutine,
@@ -337,6 +338,47 @@ export async function registerRoutes(app: FastifyInstance) {
     });
     if (!updated) return reply.status(404).send({ error: 'Entry not found' });
     return updated;
+  });
+
+  /*
+   * Where to reach this person's phone.
+   *
+   * Registered on every cold start the app has permission for, not once at
+   * install: a token is not permanent — a reinstall, a restore from backup or a
+   * cleared app can mint a new one — and an address that is only ever written
+   * down once is an address that goes stale silently.
+   *
+   * The upsert is on the token, so signing into a second account on the same
+   * phone moves the device rather than duplicating it. Nobody should ever be
+   * buzzed with somebody else's food log.
+   */
+  app.post('/notifications/device', async (request, reply) => {
+    const userId = request.userId!;
+    const body = (request.body ?? {}) as { token?: unknown; platform?: unknown };
+    const token = typeof body.token === 'string' ? body.token.trim() : '';
+    const platform = body.platform;
+    if (!token) return reply.status(400).send({ error: 'A token is required' });
+    if (platform !== 'ios' && platform !== 'android') {
+      return reply.status(400).send({ error: 'platform must be ios or android' });
+    }
+    await registerPushToken(userId, { token, platform });
+    return { ok: true };
+  });
+
+  /*
+   * Signing out gives the address up.
+   *
+   * Not merely tidy: the phone keeps its token across accounts, so a device
+   * left registered to the person who just signed out would keep buzzing with
+   * their nudges in somebody else's pocket.
+   */
+  app.delete('/notifications/device', async (request, reply) => {
+    const userId = request.userId!;
+    const body = (request.body ?? {}) as { token?: unknown };
+    const token = typeof body.token === 'string' ? body.token.trim() : '';
+    if (!token) return reply.status(400).send({ error: 'A token is required' });
+    await forgetPushToken(userId, token);
+    return { ok: true };
   });
 
   app.delete('/entries/food/:id', async (request, reply) => {
