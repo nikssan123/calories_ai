@@ -749,22 +749,31 @@ the host, not when this file changed.
 
 Two smaller things worth doing whenever their file is next open, neither urgent:
 
-- **Split the compose files by lane.** The `claude-home` volume, `.agent-workspace` and
-  the memory cap are the subscription lane's; a deployment running `anthropic-api`
-  should not carry a volume for a binary it never spawns. More pressing after the deploy
-  above: one file now serves both lanes and the difference between them decides whether
-  scaling is safe, which `API_REPLICAS` defaults around rather than resolves. Two files
-  would make the constraint structural instead of a default someone can raise without
-  reading why it is low.
-- **Fix the auth gate in `routes/index.ts` and `scheduler.ts`.** Both still ask
-  `hasSubscriptionAuth() || ANTHROPIC_API_KEY` before admitting a turn, which is a
-  Claude-shaped question asked on behalf of whichever provider is configured — it
-  already 503s a correctly configured `openai` deployment. The provider's own
-  `checkAuth()` is the right thing to ask, and every provider already implements it.
+- **~~Split the compose files by lane.~~ Withdrawn, 2026-08-23.** The premise was that a
+  deployment runs one lane, so a metered one should not carry a volume for a binary it
+  never spawns. This deployment now runs both — four accounts on the subscription, the
+  rest on the key — so the `claude-home` volume is load-bearing here and splitting the
+  file by lane would describe a topology that no longer exists.
 
-  Smaller than it was: the journal's copy moved into `prepareTurn` when the streaming
-  route was added, so one edit now covers both chat routes. `routes/index.ts` still has a
-  second copy on the review route, and `scheduler.ts` has two.
+  What the item was really about survives and is now recorded where it belongs: the
+  replica count is constrained by whether *any* traffic takes the subscription lane, and
+  that is written down under §The two lanes, per user rather than left to a default
+  somebody could raise without reading why it is low.
+- **~~Fix the auth gate in `routes/index.ts` and `scheduler.ts`.~~ Done, 2026-08-23** —
+  `scheduler.ts` committed, `routes/index.ts` applied but held back (see below).
+  `authErrorFor(lane)` asks the provider that will actually run, with each lane's check
+  pulled out standalone so it can be answered before a tool context exists. The gate on
+  the chat routes moved below `getUser`, because the lane is now a per-user decision and
+  the question is whether *their* lane can run.
+
+  The scheduler keeps the deployment-lane form on purpose: a pass has no user in hand
+  when it decides whether to bother, and `review.ts` and `nudge.ts` already ask their own
+  provider before running a turn.
+
+  `routes/index.ts` is applied in the working tree but not committed: it also holds a
+  parallel session's in-flight routines change whose supporting edits are uncommitted, so
+  committing it would produce a tree that does not build. It goes in after theirs lands —
+  the same thing that happened to this file once before.
 
 ## Not in this plan (deliberately)
 
