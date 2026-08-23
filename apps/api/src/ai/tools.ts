@@ -773,7 +773,10 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         userId: tc.userId,
         category: routine.category,
         routineId: routine.id,
-        durationMin: args.duration_min,
+        // The routine's own length is the fallback for one saved with no
+        // exercises in it: there are no sets to estimate a duration from, and
+        // 45 minutes is the entire content of "my 45 minute swim".
+        durationMin: args.duration_min ?? routine.duration_min,
         performedAt: resolveWhen(args.when ?? undefined, tc.now, tc.ctx),
         exercises: routine.exercises.map((exercise) => ({
           name: exercise.name,

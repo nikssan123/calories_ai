@@ -660,6 +660,7 @@ export async function registerRoutes(app: FastifyInstance) {
         category: parsed.data.category ?? null,
         fromEntryId: parsed.data.from_entry_id ?? null,
         exercises: parsed.data.exercises ?? null,
+        durationMin: parsed.data.duration_min ?? null,
       });
       return reply.status(201).send(routine);
     } catch (error) {

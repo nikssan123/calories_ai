@@ -30,15 +30,26 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
   const [week, setWeek] = useState<WeekSchedule | null>(null);
   const [logging, setLogging] = useState(false);
   const [editing, setEditing] = useState<Routine | 'new' | null>(null);
+  /**
+   * The read failed, as opposed to came back empty.
+   *
+   * Kept apart from `routines` on purpose. Falling back to `[]` here drew the
+   * "nothing saved yet" copy for a request that never landed — so a dropped
+   * connection was indistinguishable from having none, and worse, somebody who
+   * had just logged a session read it as their session not having saved. The
+   * toast that said otherwise was gone four seconds later.
+   */
+  const [failed, setFailed] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const [{ routines }, { week }] = await Promise.all([api.routines(), api.schedule()]);
       setRoutines(routines);
       setWeek(week);
+      setFailed(false);
     } catch (e) {
       toast.error((e as Error).message);
-      setRoutines([]);
+      setFailed(true);
     }
   }, []);
 
@@ -133,7 +144,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
       </Button>
 
       <InsetGroup
-        title="🏋️  Your workouts"
+        title="🏋️  Saved workouts"
         trailing={
           <button
             type="button"
@@ -144,21 +155,41 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
           </button>
         }
         footer={
-          routines && routines.length > 0
-            ? 'One tap fills the whole card in, with the weights you used last time.'
-            : undefined
+          failed
+            ? undefined
+            : routines && routines.length > 0
+              ? 'One tap fills the whole card in, with the weights you used last time.'
+              : // Says where the session went. Empty here does not mean nothing
+                // was logged — the sessions are in the history further down the
+                // screen — and this panel sitting empty right after logging one
+                // is exactly the moment that reads as a lost workout.
+                'Sessions you log appear in the history below. This list is only for workouts you want to repeat.'
         }
       >
-        {routines === null ? (
+        {failed ? (
+          <div className="px-4 py-10 text-center">
+            <p className="text-muted-foreground text-body font-medium">
+              Couldn’t load your saved workouts.
+            </p>
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="text-footnote text-foreground mt-2 font-semibold underline underline-offset-4"
+            >
+              Try again
+            </button>
+          </div>
+        ) : routines === null ? (
           <InsetRow>
             <Loader2 size={15} className="text-muted-foreground animate-spin" />
           </InsetRow>
         ) : routines.length === 0 ? (
           <div className="px-4 py-10 text-center">
             <p className="text-muted-foreground text-body font-medium">
-              Nothing saved yet.
+              No workouts saved yet.
               <br />
-              Log a session and take the offer to name it — or build one here.
+              A saved workout is a list you reuse — log a session with its exercises and take the
+              offer to name it, or build one here.
             </p>
           </div>
         ) : (
@@ -170,8 +201,12 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
               <div className="min-w-0 flex-1">
                 <p className="text-body truncate font-medium">{routine.name}</p>
                 <p className="text-footnote text-muted-foreground truncate">
-                  {routine.exercises.length} exercise
-                  {routine.exercises.length === 1 ? '' : 's'}
+                  {/* A routine saved off a duration-only session has no list to
+                      count. "0 exercises" would describe it as empty when it is
+                      simply measured the other way. */}
+                  {routine.exercises.length > 0
+                    ? `${routine.exercises.length} exercise${routine.exercises.length === 1 ? '' : 's'}`
+                    : `${routine.duration_min} min`}
                   {routine.times_done > 0 && ` · done ${routine.times_done}×`}
                   {routine.scheduled_weekdays.length > 0 &&
                     ` · ${routine.scheduled_weekdays
@@ -200,7 +235,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
         )}
       </InsetGroup>
 
-      {routines !== null && routines.length > 0 && (
+      {!failed && routines !== null && routines.length > 0 && (
         <InsetGroup
           title="🗓️  Your week"
           footer="Days you set are fixed. Days you leave open follow whatever you actually keep doing."
@@ -271,7 +306,14 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
       .catch(() => setTypes([]));
   }, [routine?.category]);
 
-  const ready = name.trim().length > 0 && chosen.length > 0 && !saving;
+  /*
+   * A routine that is only a length can be renamed without gaining a grid.
+   * Its exercise list is empty and staying empty is a legitimate answer, so the
+   * "at least one exercise" gate has to let it through or the pencil on a
+   * duration-only workout opens a form that can never be saved.
+   */
+  const byDuration = chosen.length === 0 && (routine?.duration_min ?? null) !== null;
+  const ready = name.trim().length > 0 && (chosen.length > 0 || byDuration) && !saving;
 
   async function save() {
     setSaving(true);
@@ -283,6 +325,7 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
         emoji,
         category: routine?.category ?? 'strength',
         exercises: chosen.map((c) => ({ name: c.name, type_id: c.typeId, target_sets: c.sets })),
+        duration_min: byDuration ? (routine?.duration_min ?? null) : null,
       });
       if (routine && routine.name.toLowerCase() !== name.trim().toLowerCase()) {
         await api.deleteRoutine(routine.id);

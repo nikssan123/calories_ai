@@ -191,9 +191,17 @@ export function WorkoutCard({
     (a, b) => Number(b.usual_weekday === today) - Number(a.usual_weekday === today),
   );
   /*
-   * A session worth saving is one with real work in it that they have not
-   * already saved. Two exercises is the bar — one is a fragment — and a session
-   * that is plainly a routine they own is not worth offering to save twice.
+   * Anything they can log, they can save.
+   *
+   * The bar used to be two exercises, on the reasoning that one is a fragment.
+   * That quietly excluded the whole fast path: a duration-only session is a
+   * complete answer to this card, and the people using it — "cardio, 45 min",
+   * three times a week — were the only ones never offered the one-tap repeat
+   * that saving exists to give them. The offer was reserved for the people
+   * already doing the most typing, which is exactly backwards.
+   *
+   * A session that is plainly a routine they own is still not worth offering to
+   * save twice, whether or not they got to it by tapping the chip.
    */
   const alreadySaved =
     routineId !== null ||
@@ -202,13 +210,18 @@ export function WorkoutCard({
       routines,
       ROUTINE_MATCH_LIKELY,
     ) !== null;
-  const offerSave = !alreadySaved && filled.length >= 2;
+  const offerSave = !alreadySaved && canSend;
   // Named in the words they already use: somebody whose routines are "Push" and
   // "Pull" should not be offered "Chest & Triceps".
-  const suggestedName = nameFromMuscles(
-    filled.map((e) => e.muscles[0]).filter((m): m is MuscleGroup => m !== undefined),
-    namingStyleOf(routines.map((r) => r.name)),
-  );
+  const suggestedName =
+    filled.length > 0
+      ? nameFromMuscles(
+          filled.map((e) => e.muscles[0]).filter((m): m is MuscleGroup => m !== undefined),
+          namingStyleOf(routines.map((r) => r.name)),
+        )
+      : // Nothing to read muscles off. The kind is all this session is, so it is
+        // also the most it can honestly be called.
+        CATEGORY_LABEL[category];
 
   function patchSet(exercise: number, set: number, next: Partial<DraftSet>) {
     setExercises((prev) =>
@@ -287,9 +300,13 @@ export function WorkoutCard({
         };
       }),
     );
+    // A routine that is only a length carries it here: there is no grid to open
+    // and the duration *is* the workout, so tapping the chip has to fill it in
+    // or the chip does nothing at all.
+    if (routine.duration_min !== null) setMinutes(nearestDuration(routine.duration_min));
     // Saving one of these again would be saving what it already is.
     setSaveAs(null);
-    setDetail(true);
+    setDetail(routine.exercises.length > 0);
   }
 
   async function send() {
@@ -320,7 +337,12 @@ export function WorkoutCard({
        */
       if (saveAs && saveAs.trim().length > 0) {
         await api
-          .saveRoutine({ name: saveAs.trim(), category, from_entry_id: entry.id })
+          .saveRoutine({
+          name: saveAs.trim(),
+          category,
+          from_entry_id: entry.id,
+          duration_min: minutes,
+        })
           .catch(() => onError('Logged, but the workout did not save'));
       }
 

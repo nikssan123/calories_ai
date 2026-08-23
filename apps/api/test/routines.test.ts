@@ -306,6 +306,109 @@ describe('saving a routine', () => {
   });
 });
 
+/**
+ * The workout that is a kind and a length.
+ *
+ * The card has always taken a bare duration as a complete answer — "cardio, 45
+ * minutes" — and saving one used to be impossible, because a routine was
+ * defined as its exercise list. That reserved the one-tap repeat for the people
+ * already doing the most typing, and left the fast path with no way out of
+ * itself. These are the tests that keep the other shape working.
+ */
+describe('a routine that is only a length', () => {
+  /** A session with no sets in it: the whole answer is a kind and a duration. */
+  async function timedSession(date: string, minutes: number) {
+    return logWorkout({
+      userId: user.id,
+      category: 'cardio',
+      exercises: [],
+      durationMin: minutes,
+      performedAt: new Date(`${date}T10:00:00Z`),
+      ctx: user.ctx,
+    });
+  }
+
+  it('saves off a session that recorded no exercises, keeping its length', async () => {
+    const entry = await timedSession('2026-03-02', 45);
+    const routine = await saveRoutine({
+      userId: user.id,
+      name: 'Morning swim',
+      fromEntryId: entry.id,
+    });
+
+    expect(routine.exercises).toEqual([]);
+    expect(routine.duration_min).toBe(45);
+    // The kind comes off the session too, so the chip lands under the right
+    // category rather than defaulting to weights.
+    expect(routine.category).toBe('cardio');
+  });
+
+  it('takes the length directly, for a routine built without a session', async () => {
+    const routine = await saveRoutine({
+      userId: user.id,
+      name: 'Sauna',
+      category: 'flexibility',
+      durationMin: 30,
+    });
+    expect(routine.duration_min).toBe(30);
+  });
+
+  it('still refuses one with neither exercises nor a length', async () => {
+    await expect(
+      saveRoutine({ userId: user.id, name: 'Nothing', exercises: [], durationMin: null }),
+    ).rejects.toThrow();
+  });
+
+  it('leaves the length off a routine that has exercises', async () => {
+    const entry = await session('2026-03-02', [bench([8], 80), fly([12], 20)]);
+    const routine = await saveRoutine({
+      userId: user.id,
+      name: 'Push',
+      fromEntryId: entry.id,
+      // Sent anyway. The grid says how long the workout is and a second number
+      // beside it could only disagree with it later.
+      durationMin: 90,
+    });
+    expect(routine.exercises).toHaveLength(2);
+    expect(routine.duration_min).toBeNull();
+  });
+
+  it('is never matched to a session, having no exercises to match on', async () => {
+    const entry = await timedSession('2026-03-02', 45);
+    await saveRoutine({ userId: user.id, name: 'Morning swim', fromEntryId: entry.id });
+
+    // A lifting session must not be swallowed by the timed routine just because
+    // that routine names nothing: an empty overlap is not a total one.
+    const lifting = await session('2026-03-03', [bench([8], 80), fly([12], 20)]);
+    expect(await matchSessionToRoutine(user.id, lifting.id)).toBeNull();
+
+    // Nor another timed session, which has no exercises either.
+    const swim = await timedSession('2026-03-04', 45);
+    expect(await matchSessionToRoutine(user.id, swim.id)).toBeNull();
+  });
+
+  it('is replaced rather than duplicated when saved again at a new length', async () => {
+    const first = await timedSession('2026-03-02', 45);
+    await saveRoutine({ userId: user.id, name: 'Morning swim', fromEntryId: first.id });
+
+    const longer = await timedSession('2026-03-09', 60);
+    await saveRoutine({ userId: user.id, name: 'Morning swim', fromEntryId: longer.id });
+
+    const all = await listRoutines(user.id);
+    expect(all).toHaveLength(1);
+    expect(all[0]!.duration_min).toBe(60);
+  });
+
+  it('reads back through listRoutines, so the card can prefill the duration', async () => {
+    const entry = await timedSession('2026-03-02', 60);
+    await saveRoutine({ userId: user.id, name: 'Long ride', fromEntryId: entry.id });
+
+    const [routine] = await listRoutines(user.id, { category: 'cardio', withPrevious: true });
+    expect(routine!.duration_min).toBe(60);
+    expect(routine!.exercises).toEqual([]);
+  });
+});
+
 describe('the numbers a routine puts in front of you', () => {
   /**
    * The load comes from history, which is what lets the routine stay a list.

@@ -552,6 +552,13 @@ export const Routine = z.object({
    * Empty when they have never filled the schedule in, which is the normal case.
    */
   scheduled_weekdays: z.array(z.number().int().min(0).max(6)).default([]),
+  /**
+   * How long the session runs, for a routine that is a kind and a length rather
+   * than a list — "my 45 minute swim". Null whenever the exercises define it,
+   * which is every routine with a grid behind it: their length is however long
+   * those sets take, and a number here would only go stale against them.
+   */
+  duration_min: z.number().int().nullable().default(null),
   exercises: z.array(RoutineExercise).default([]),
 });
 export type Routine = z.infer<typeof Routine>;
@@ -685,6 +692,12 @@ export const SaveRoutineRequest = z
     emoji: z.string().max(8).optional(),
     category: ExerciseCategory.optional(),
     from_entry_id: z.string().uuid().optional(),
+    /**
+     * The length of a routine with no exercises in it. Ignored when the
+     * exercises are known, whether they were sent or read off a session: the
+     * grid already says how long the workout is.
+     */
+    duration_min: z.number().int().min(1).max(1440).nullable().optional(),
     exercises: z
       .array(
         z.object({
@@ -696,10 +709,16 @@ export const SaveRoutineRequest = z
       .max(20)
       .optional(),
   })
-  .refine((body) => body.from_entry_id !== undefined || (body.exercises?.length ?? 0) > 0, {
-    message: 'Say which session to save, or which exercises are in it',
-    path: ['exercises'],
-  });
+  .refine(
+    (body) =>
+      body.from_entry_id !== undefined ||
+      (body.exercises?.length ?? 0) > 0 ||
+      body.duration_min != null,
+    {
+      message: 'Say which session to save, or what is in it',
+      path: ['exercises'],
+    },
+  );
 export type SaveRoutineRequest = z.infer<typeof SaveRoutineRequest>;
 
 export const WeightEntry = z.object({

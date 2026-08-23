@@ -46,7 +46,7 @@ export async function listRoutines(
   options: ListRoutinesOptions = {},
 ): Promise<Routine[]> {
   const rows = await query<any>(
-    `SELECT r.id, r.name, r.emoji, r.category, r.last_used_at
+    `SELECT r.id, r.name, r.emoji, r.category, r.last_used_at, r.duration_min
        FROM routines r
       WHERE r.user_id = $1 AND ($2::text IS NULL OR r.category = $2)
    ORDER BY r.last_used_at DESC NULLS LAST, r.created_at DESC`,
@@ -70,6 +70,7 @@ export async function listRoutines(
       emoji: row.emoji,
       category: row.category as ExerciseCategory,
       last_used_at: row.last_used_at === null ? null : new Date(row.last_used_at).toISOString(),
+      duration_min: row.duration_min === null ? null : Number(row.duration_min),
       times_done: habit?.total ?? 0,
       usual_weekday: habit?.weekday ?? null,
       scheduled_weekdays: declared.get(row.id) ?? [],
@@ -327,6 +328,12 @@ export interface SaveRoutineInput {
   /** Read the exercise list off a session they have just done. */
   fromEntryId?: string | null;
   exercises?: { name: string; type_id?: string | null; target_sets?: number | null }[] | null;
+  /**
+   * The length of a routine that has no exercises in it. Ignored when there
+   * are any: a grid already says how long the workout is, and a second number
+   * beside it could only disagree.
+   */
+  durationMin?: number | null;
 }
 
 /**
@@ -362,8 +369,23 @@ export async function saveRoutine(input: SaveRoutineInput): Promise<Routine> {
         }),
       );
 
-  if (exercises.length === 0) {
-    throw new Error('A routine needs at least one exercise in it');
+  /*
+   * A routine with no exercises is saved on its length instead.
+   *
+   * This is the duration-only session — "cardio, 45 minutes" — which is a
+   * complete answer on the card and used to be an unsaveable one, so the people
+   * logging the fast way were the only ones who could never earn the one-tap
+   * repeat that saving is for. Read off the session when one was named, since
+   * that is the caller that matters and it already knows the number.
+   */
+  const durationMin =
+    exercises.length > 0
+      ? null
+      : (input.durationMin ??
+        (input.fromEntryId ? await durationOfEntry(input.userId, input.fromEntryId) : null));
+
+  if (exercises.length === 0 && durationMin === null) {
+    throw new Error('A routine needs exercises in it, or a length');
   }
 
   const category =
@@ -373,12 +395,13 @@ export async function saveRoutine(input: SaveRoutineInput): Promise<Routine> {
 
   const id = await transaction(async (client) => {
     const { rows } = await client.query<{ id: string }>(
-      `INSERT INTO routines (user_id, name, emoji, category)
-       VALUES ($1,$2,$3,$4)
+      `INSERT INTO routines (user_id, name, emoji, category, duration_min)
+       VALUES ($1,$2,$3,$4,$5)
        ON CONFLICT (user_id, lower(name))
-       DO UPDATE SET emoji = EXCLUDED.emoji, category = EXCLUDED.category
+       DO UPDATE SET emoji = EXCLUDED.emoji, category = EXCLUDED.category,
+                     duration_min = EXCLUDED.duration_min
        RETURNING id`,
-      [input.userId, input.name.trim(), input.emoji || '🏋️', category],
+      [input.userId, input.name.trim(), input.emoji || '🏋️', category, durationMin],
     );
     const routineId = rows[0]!.id;
 
@@ -439,6 +462,15 @@ async function exercisesFromEntry(userId: string, entryId: string) {
     type_id: (row.type_id as string | null) ?? null,
     target_sets: Number(row.sets),
   }));
+}
+
+/** How long a session ran, for a routine being saved off one with no sets. */
+async function durationOfEntry(userId: string, entryId: string): Promise<number | null> {
+  const row = await queryOne<{ duration_min: string | null }>(
+    `SELECT duration_min FROM exercise_entries WHERE id = $1 AND user_id = $2`,
+    [entryId, userId],
+  );
+  return row?.duration_min == null ? null : Math.round(Number(row.duration_min));
 }
 
 async function categoryOfEntry(userId: string, entryId: string): Promise<ExerciseCategory | null> {
