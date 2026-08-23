@@ -354,6 +354,17 @@ export function createApiClient({
         body: JSON.stringify({ token }),
       }),
 
+    /**
+     * One entry, items and macros and all.
+     *
+     * Richer than the card the journal holds, which carries item *names* and
+     * the meal's totals but not what each item is worth — so this is what an
+     * edit form opens on. Fetched on demand rather than widening the card,
+     * because every card in every turn would then carry a full nutrition table
+     * that only the rare correction ever reads.
+     */
+    foodEntry: (id: string) => request<FoodEntry>(`/entries/food/${id}`),
+
     deleteFoodEntry: (id: string) =>
       request<{ ok: true }>(`/entries/food/${id}`, { method: 'DELETE' }),
 

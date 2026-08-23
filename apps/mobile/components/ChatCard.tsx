@@ -8,7 +8,14 @@ import Animated, {
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
-import type { ChatAction, ChatCard as Card, ExerciseEntry, Recipe, UnitSystem } from '@ct/shared';
+import type {
+  ChatAction,
+  ChatCard as Card,
+  ExerciseEntry,
+  FoodEntry,
+  Recipe,
+  UnitSystem,
+} from '@ct/shared';
 import {
   formatBodyWeight,
   formatDistance,
@@ -18,6 +25,7 @@ import {
 } from '@ct/shared';
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 import { Chunk, PressableChunk } from '@/components/Chunk';
+import { FoodEditor } from '@/components/FoodEditor';
 import { RecipeTile } from '@/components/kitchen/RecipeTile';
 import { scale, Servings } from '@/components/kitchen/Servings';
 import { Sparkline } from '@/components/Sparkline';
@@ -149,7 +157,7 @@ function CardBody({
 }) {
   switch (card.type) {
     case 'food':
-      return <FoodCard card={card} today={today} />;
+      return <FoodCard card={card} today={today} onLogged={onLogged} />;
     case 'exercise':
       return <ExerciseCard card={card} onLogged={onLogged} />;
     case 'weight':
@@ -377,7 +385,85 @@ const MEAL_LABEL: Record<string, string> = {
   snack: 'Snack',
 };
 
-function FoodCard({ card, today }: { card: Extract<Card, { type: 'food' }>; today?: string }) {
+/**
+ * A meal, and the way back into it.
+ *
+ * Same bargain as the exercise card: the receipt gets a quiet way to reopen the
+ * thing it is a receipt for. The form is a separate component because a meal is
+ * a list of items with six numbers each, which is more form than a card should
+ * carry inline — see `FoodEditor`.
+ */
+function FoodCard({
+  card,
+  today,
+  onLogged,
+}: {
+  card: Extract<Card, { type: 'food' }>;
+  today?: string;
+  onLogged?: () => void;
+}) {
+  const colors = useColors();
+  const [edited, setEdited] = useState<Extract<Card, { type: 'food' }> | null>(null);
+  const [editing, setEditing] = useState(false);
+
+  if (editing) {
+    return (
+      <FoodEditor
+        entryId={card.entry_id}
+        onSaved={(entry) => {
+          setEdited(mergeFood(edited ?? card, entry));
+          setEditing(false);
+          onLogged?.();
+        }}
+        onCancel={() => setEditing(false)}
+      />
+    );
+  }
+
+  return <FoodReceipt card={edited ?? card} today={today} onEdit={() => setEditing(true)} />;
+}
+
+/**
+ * The corrected entry, drawn back onto the card it came from.
+ *
+ * `day` is carried over rather than recomputed: the band is this meal's share
+ * of the day, and the client cannot know what the rest of the day now sums to.
+ * The server has already rewritten the stored card with a correct one, so a
+ * reload is right — this only has to stop showing a figure that is plainly
+ * stale until then.
+ */
+function mergeFood(
+  card: Extract<Card, { type: 'food' }>,
+  entry: FoodEntry,
+): Extract<Card, { type: 'food' }> {
+  return {
+    ...card,
+    meal: entry.meal,
+    description: entry.description,
+    confidence: entry.confidence,
+    items: entry.items.map((item) => ({
+      name: item.name,
+      quantity: item.quantity_desc ?? (item.quantity_g === null ? null : `${Math.round(item.quantity_g)}g`),
+    })),
+    kcal: entry.kcal,
+    protein_g: entry.protein_g,
+    carbs_g: entry.carbs_g,
+    fat_g: entry.fat_g,
+    day: card.day
+      ? { ...card.day, kcal_after: card.day.kcal_before + entry.kcal }
+      : null,
+  };
+}
+
+function FoodReceipt({
+  card,
+  today,
+  onEdit,
+}: {
+  card: Extract<Card, { type: 'food' }>;
+  today?: string;
+  onEdit: () => void;
+}) {
   const colors = useColors();
   const approx = card.confidence !== 'high';
   const macros = [
@@ -445,6 +531,16 @@ function FoodCard({ card, today }: { card: Extract<Card, { type: 'food' }>; toda
             .join(' · ')}
         </Text>
       )}
+
+      <Pressable
+        onPress={onEdit}
+        accessibilityRole="button"
+        accessibilityLabel={`Edit ${card.description}`}
+        hitSlop={8}
+        style={({ pressed }) => [styles.editRow, { opacity: pressed ? 0.6 : 1 }]}
+      >
+        <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Edit</Text>
+      </Pressable>
 
       {card.day && <DayProgress day={card.day} kcal={card.kcal} approx={approx} today={today} />}
     </Shell>
