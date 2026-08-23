@@ -5,7 +5,7 @@ import { Camera, Check, Loader2, Plus, UtensilsCrossed, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PantryFind, PantryScanProposal } from '@ct/shared';
 import { api } from '@/lib/api';
-import { PHOTO_ACCEPT, preparePhoto, useHasCameraApp } from '@/lib/image';
+import { asBlob, PHOTO_ACCEPT, preparePhoto, useHasCameraApp } from '@/lib/image';
 import { ActionChip } from '@/components/kitchen/ActionChip';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -86,7 +86,13 @@ export function FridgeScan({
 
     setScanning(true);
     try {
-      const found = await api.scanFridge(prepared.dataUrl, prepared.mediaType);
+      // Straight to the bucket where there is one; the data URL is the
+      // fallback for a local-disk deployment. See `uploadPhoto`.
+      const key = await api.uploadPhoto(await asBlob(prepared.dataUrl), prepared.mediaType);
+      const found = await api.scanFridge(
+        key ? { key } : { base64: prepared.dataUrl },
+        prepared.mediaType,
+      );
       setChosen(new Set(found.found.filter((f) => f.confidence !== 'low').map((f) => f.name)));
       // Only opens when there is something to confirm; an empty proposal is a
       // sentence, not a dialog.

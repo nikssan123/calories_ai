@@ -74,6 +74,89 @@ export async function savePhoto(
 }
 
 /**
+ * A place for a client to put a photo, without it passing through here.
+ *
+ * The base64 path this replaces is expensive in a way that does not show up on
+ * the model bill: the encoding is a third larger than the bytes, the whole of it
+ * arrives as one JSON body, and an API worker holds it for as long as the phone
+ * takes to send it. On a slow uplink that is a request open for tens of seconds
+ * to move data the bucket would have taken directly.
+ *
+ * No row is written here, deliberately. `savePhoto` writes one only once the
+ * bytes are safely stored, and reserving an id up front would give up exactly
+ * that: a row whose photo never arrived is a permanent hole in somebody's
+ * history, while an unclaimed object is a fraction of a cent and reclaimable by
+ * a lifecycle rule. So this hands back a key and a URL, and `claimPhoto` writes
+ * the row afterwards, once there is something to point at.
+ *
+ * Null when no bucket is configured. That is not an error — it is a local-disk
+ * deployment, where there is nowhere to upload to and the client should send
+ * the bytes the old way.
+ */
+export interface PhotoUpload {
+  key: string;
+  url: string;
+  expiresInSeconds: number;
+}
+
+export async function reservePhotoUpload(
+  userId: string,
+  mediaType: string,
+): Promise<PhotoUpload | null> {
+  const store = objectStore();
+  if (!store) return null;
+
+  // The same shape `savePhoto` writes, and the owner in the key is what makes
+  // `claimPhoto` able to refuse somebody else's object without a second lookup.
+  const key = `photos/${userId}/${randomUUID()}${EXTENSIONS[mediaType] ?? '.bin'}`;
+  return { key, url: await store.presignPut(key, mediaType), expiresInSeconds: 900 };
+}
+
+/**
+ * Turn an uploaded object into a photo row, or refuse it.
+ *
+ * Three things have to be true, and the first is the one that matters: the key
+ * has to name this user. The client chooses what to send here, so without that
+ * check a guessed key would let one account attach another's photo to its own
+ * journal. The owner is in the key precisely so this is a string comparison
+ * rather than a question the database has to be asked.
+ *
+ * Then the object has to exist — a client that asked for a URL and never used
+ * it must not be able to leave a row pointing at nothing — and its size is read
+ * while we are there, since `byte_size` is what the storage report is built on.
+ *
+ * Claiming twice returns the first row rather than writing a second. A retried
+ * turn is the ordinary way that happens, and two rows sharing one object is a
+ * deletion away from a permanent broken image.
+ */
+export async function claimPhoto(
+  userId: string,
+  key: string,
+  mediaType: string,
+): Promise<SavedPhoto | null> {
+  if (!key.startsWith(`photos/${userId}/`)) return null;
+
+  const store = objectStore();
+  if (!store) return null;
+
+  const existing = await queryOne<{ id: string }>(
+    'SELECT id FROM photos WHERE storage_key = $1 AND user_id = $2',
+    [key, userId],
+  );
+  if (existing) return { id: existing.id, filePath: null, storageKey: key };
+
+  const bytes = await store.get(key);
+  if (!bytes) return null;
+
+  const row = await queryOne<{ id: string }>(
+    `INSERT INTO photos (user_id, media_type, file_path, storage_key, byte_size)
+     VALUES ($1,$2,NULL,$3,$4) RETURNING id`,
+    [userId, mediaType, key, bytes.byteLength],
+  );
+  return { id: row!.id, filePath: null, storageKey: key };
+}
+
+/**
  * How a photo should reach the client.
  *
  * A union rather than always-bytes, because the two backends want different

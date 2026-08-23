@@ -12,7 +12,7 @@ import {
   ShoppingExtrasRequest,
   ShoppingExtraUpdate,
 } from '@ct/shared';
-import { AUTH_HELP, hasSubscriptionAuth } from '../ai/client.ts';
+import { authErrorFor, laneFor } from '../ai/providers/index.ts';
 import { scanFridgePhoto } from '../ai/pantry.ts';
 import { generateMealPlan } from '../ai/plan.ts';
 import { RecipeBudgetError, suggestRecipes } from '../ai/recipes.ts';
@@ -45,7 +45,8 @@ import {
   setLibrarySaved,
 } from '../services/library.ts';
 import { cookRecipe, getRecipe, listRecipes, setRecipeSaved } from '../services/recipes.ts';
-import { getUserContext } from '../services/user.ts';
+import { getUser, getUserContext } from '../services/user.ts';
+import { claimPhoto, readPhotoBytes } from '../services/photos.ts';
 import { type DayContext, localDateFor } from '../time.ts';
 import { stripDataUrl } from './body.ts';
 import { RECIPE_BURST, SCAN_LIMIT } from './limits.ts';
@@ -58,10 +59,28 @@ import { RECIPE_BURST, SCAN_LIMIT } from './limits.ts';
  * own limits, and the journal's route file is long enough.
  */
 
-const PhotoBody = z.object({
-  photo_base64: z.string().min(1),
-  photo_media_type: PhotoMediaType.default('image/jpeg'),
-});
+/**
+ * Whether this person's turns can run at all, asked of the lane that would run
+ * them rather than of Claude in general.
+ *
+ * Five routes in this file asked `hasSubscriptionAuth() || ANTHROPIC_API_KEY`,
+ * which 503s a correctly configured `openai` deployment and, now that the lane
+ * is chosen per user, can refuse a turn their own lane would have run.
+ */
+async function laneAuthError(userId: string): Promise<string | null> {
+  return authErrorFor(laneFor((await getUser(userId)).email));
+}
+
+const PhotoBody = z
+  .object({
+    photo_base64: z.string().min(1).optional(),
+    /** An object the client already PUT to the bucket. See `ChatRequest`. */
+    photo_key: z.string().max(200).optional(),
+    photo_media_type: PhotoMediaType.default('image/jpeg'),
+  })
+  .refine((body) => body.photo_base64 || body.photo_key, {
+    message: 'A photo is required',
+  });
 
 /**
  * Turns whatever the engine threw into a reply.
@@ -149,15 +168,27 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
   app.post('/pantry/scan', { config: { rateLimit: SCAN_LIMIT } }, async (request, reply) => {
     const parsed = PhotoBody.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: 'A photo is required' });
-    if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) {
-      return reply.status(503).send({ error: AUTH_HELP });
+    const authError = await laneAuthError(request.userId!);
+    if (authError) return reply.status(503).send({ error: authError });
+
+    const mediaType = parsed.data.photo_media_type;
+    let base64: string;
+    let photoId: string | undefined;
+
+    if (parsed.data.photo_key) {
+      const claimed = await claimPhoto(request.userId!, parsed.data.photo_key, mediaType);
+      const bytes = claimed ? await readPhotoBytes(claimed.id) : null;
+      if (!claimed || !bytes) {
+        return reply.status(400).send({ error: 'That photo upload could not be found.' });
+      }
+      base64 = bytes.toString('base64');
+      photoId = claimed.id;
+    } else {
+      base64 = stripDataUrl(parsed.data.photo_base64!);
     }
 
     try {
-      return await scanFridgePhoto(request.userId!, {
-        mediaType: parsed.data.photo_media_type,
-        base64: stripDataUrl(parsed.data.photo_base64),
-      });
+      return await scanFridgePhoto(request.userId!, { mediaType, base64, photoId });
     } catch (error) {
       // A spent per-minute budget is not a failed scan, and the shared funnel
       // already knows how to say so.
@@ -172,9 +203,8 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
   app.post('/recipes/suggest', { config: { rateLimit: RECIPE_BURST } }, async (request, reply) => {
     const parsed = RecipeSuggestRequest.safeParse(request.body ?? {});
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid request' });
-    if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) {
-      return reply.status(503).send({ error: AUTH_HELP });
-    }
+    const authError = await laneAuthError(request.userId!);
+    if (authError) return reply.status(503).send({ error: authError });
 
     try {
       const result = await suggestRecipes(request.userId!, brief(parsed.data));
@@ -234,9 +264,8 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
     async (request, reply) => {
       const parsed = RecipeBrief.safeParse(request.body ?? {});
       if (!parsed.success) return reply.status(400).send({ error: 'Invalid request' });
-      if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) {
-        return reply.status(503).send({ error: AUTH_HELP });
-      }
+      const authError = await laneAuthError(request.userId!);
+      if (authError) return reply.status(503).send({ error: authError });
 
       try {
         return await suggestRecipes(request.userId!, {
@@ -264,9 +293,8 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
         .status(400)
         .send({ error: parsed.error.issues[0]?.message ?? 'Paste the recipe first' });
     }
-    if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) {
-      return reply.status(503).send({ error: AUTH_HELP });
-    }
+    const authError = await laneAuthError(request.userId!);
+    if (authError) return reply.status(503).send({ error: authError });
 
     try {
       return await suggestRecipes(request.userId!, {
@@ -367,9 +395,8 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
    * allowance is enforced in the engine, where the ledger can see it.
    */
   app.post('/plan', { config: { rateLimit: RECIPE_BURST } }, async (request, reply) => {
-    if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) {
-      return reply.status(503).send({ error: AUTH_HELP });
-    }
+    const authError = await laneAuthError(request.userId!);
+    if (authError) return reply.status(503).send({ error: authError });
 
     const parsed = MealPlanBrief.safeParse(request.body ?? {});
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid request' });

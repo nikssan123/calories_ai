@@ -23,6 +23,11 @@ import { buildNutritionServer, type ToolContext } from './tools.ts';
 export interface ScanInput {
   mediaType: string;
   base64: string;
+  /**
+   * Set when the bytes were uploaded straight to the bucket and the row already
+   * exists, so this does not store them a second time under a second id.
+   */
+  photoId?: string;
 }
 
 export async function scanFridgePhoto(
@@ -32,8 +37,12 @@ export async function scanFridgePhoto(
   const { userId: id, units, ...ctx } = await getUserContext(userId);
 
   // Stored like a meal photo, so the same signed-URL read serves it and a scan
-  // that read the fridge wrongly can be looked at afterwards.
-  const saved = await savePhoto(id, photo.mediaType, photo.base64);
+  // that read the fridge wrongly can be looked at afterwards. Already stored
+  // when the client uploaded directly — `claimPhoto` wrote the row before the
+  // route got here.
+  const saved = photo.photoId
+    ? { id: photo.photoId }
+    : await savePhoto(id, photo.mediaType, photo.base64);
 
   const kitchen = emptyCollector();
   const toolContext: ToolContext = {

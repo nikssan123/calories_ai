@@ -99,3 +99,13 @@ export function useHasCameraApp() {
 
 /** The `accept` attribute for a photo input, from the one list of formats. */
 export const PHOTO_ACCEPT = PHOTO_MEDIA_TYPES.join(',');
+
+/**
+ * The prepared data URL as bytes, for uploading straight to the bucket.
+ *
+ * `fetch` on a `data:` URL is the browser's own decoder — shorter than hand
+ * rolling atob/Uint8Array, and it gets the media type right without being told.
+ */
+export async function asBlob(dataUrl: string): Promise<Blob> {
+  return (await fetch(dataUrl)).blob();
+}

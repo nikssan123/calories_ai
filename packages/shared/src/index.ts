@@ -1639,11 +1639,38 @@ export type PhotoMediaType = z.infer<typeof PhotoMediaType>;
 
 export const ChatRequest = z.object({
   text: z.string().min(1).max(4000),
-  /** Data URL or base64 payload of a meal photo. */
+  /**
+   * Data URL or base64 payload of a meal photo.
+   *
+   * The original way to send one, and still supported: a client with no bucket
+   * to upload to — a local-disk deployment — has no alternative, and an app
+   * already installed on somebody's phone goes on speaking it. `photo_key`
+   * below is the way that does not put the bytes through the API at all.
+   */
   photo_base64: z.string().optional(),
+  /**
+   * The key of an object the client already PUT to the bucket, from
+   * `POST /photos/upload-url`. Checked against the caller before it is
+   * believed — the owner is in the key.
+   */
+  photo_key: z.string().max(200).optional(),
   photo_media_type: PhotoMediaType.optional(),
 });
 export type ChatRequest = z.infer<typeof ChatRequest>;
+
+/** What `POST /photos/upload-url` answers with. */
+export const PhotoUploadTicket = z.object({
+  /** Null when the deployment stores photos on local disk: send bytes instead. */
+  key: z.string().nullable(),
+  url: z.string().nullable(),
+  expires_in_seconds: z.number().nullable(),
+});
+export type PhotoUploadTicket = z.infer<typeof PhotoUploadTicket>;
+
+export const PhotoUploadRequest = z.object({
+  media_type: PhotoMediaType,
+});
+export type PhotoUploadRequest = z.infer<typeof PhotoUploadRequest>;
 
 export const Progress = z.object({
   weight: z.object({

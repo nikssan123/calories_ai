@@ -6,13 +6,15 @@ import {
   DeleteAccountRequest,
   ExerciseCategory,
   Meal,
+  PhotoUploadRequest,
   SaveRoutineRequest,
   SaveScheduleRequest,
   ProfileUpdate,
   RepeatRequest,
   WorkoutRequest,
 } from '@ct/shared';
-import { AUTH_HELP, authDescription, hasSubscriptionAuth } from '../ai/client.ts';
+import { authDescription } from '../ai/client.ts';
+import { authErrorFor, laneFor } from '../ai/providers/index.ts';
 import { env } from '../env.ts';
 import { generateWeeklyReview } from '../ai/review.ts';
 import { runTurn, type RunTurnInput } from '../ai/run.ts';
@@ -40,9 +42,12 @@ import { proposeTargets } from '../services/adaptive.ts';
 import { insertMessage, listMessages } from '../services/chat.ts';
 import { mealTemplates, repeatFoodEntry } from '../services/history.ts';
 import {
-  savePhoto,
+  claimPhoto,
   readPhoto,
   readPhotoById,
+  readPhotoBytes,
+  reservePhotoUpload,
+  savePhoto,
   verifyPhotoUrl,
   type PhotoDelivery,
 } from '../services/photos.ts';
@@ -136,17 +141,50 @@ export async function registerRoutes(app: FastifyInstance) {
       await reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid request' });
       return null;
     }
-    if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) {
-      await reply.status(503).send({ error: AUTH_HELP });
-      return null;
-    }
 
     const { userId, ...ctx } = await getUserContext(request.userId!);
     const profile = await getUser(userId);
 
+    // After the profile rather than before it, because the lane is now a
+    // per-user decision and the question is whether *their* lane can run — not
+    // whether Claude credentials of some kind exist somewhere. The old form was
+    // a Claude-shaped question asked on behalf of whichever provider is
+    // configured, and it 503s a correctly configured `openai` deployment.
+    const authError = authErrorFor(laneFor(profile.email));
+    if (authError) {
+      await reply.status(503).send({ error: authError });
+      return null;
+    }
+
+    /*
+     * Two ways in, and the difference is only where the bytes came from.
+     *
+     * `photo_key` names an object the client already PUT to the bucket, so
+     * nothing multi-megabyte was ever in this request. The model still needs the
+     * bytes, so they are read back here — but read back from the bucket in one
+     * hop, rather than carried through a JSON body a third larger than the file
+     * while an API worker waits on a phone's uplink.
+     *
+     * `photo_base64` is the older way and stays: a local-disk deployment has no
+     * bucket to upload to, and an app already on somebody's phone goes on
+     * speaking it.
+     */
+    const mediaType = parsed.data.photo_media_type ?? 'image/jpeg';
     let photo: { id: string; mediaType: string; base64: string } | null = null;
-    if (parsed.data.photo_base64) {
-      const mediaType = parsed.data.photo_media_type ?? 'image/jpeg';
+
+    if (parsed.data.photo_key) {
+      const claimed = await claimPhoto(userId, parsed.data.photo_key, mediaType);
+      if (!claimed) {
+        await reply.status(400).send({ error: 'That photo upload could not be found.' });
+        return null;
+      }
+      const bytes = await readPhotoBytes(claimed.id);
+      if (!bytes) {
+        await reply.status(400).send({ error: 'That photo upload could not be read.' });
+        return null;
+      }
+      photo = { id: claimed.id, mediaType, base64: bytes.toString('base64') };
+    } else if (parsed.data.photo_base64) {
       const base64 = stripDataUrl(parsed.data.photo_base64);
       const saved = await savePhoto(userId, mediaType, base64);
       photo = { id: saved.id, mediaType, base64 };
@@ -998,8 +1036,9 @@ export async function registerRoutes(app: FastifyInstance) {
 
   /** Generate this week's review now rather than waiting for Monday. */
   app.post('/reviews/run', { config: { rateLimit: REVIEW_LIMIT } }, async (request, reply) => {
-    if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) {
-      return reply.status(503).send({ error: AUTH_HELP });
+    const authError = authErrorFor(laneFor((await getUser(request.userId!)).email));
+    if (authError) {
+      return reply.status(503).send({ error: authError });
     }
     try {
       return await generateWeeklyReview(request.userId!);
@@ -1020,6 +1059,29 @@ export async function registerRoutes(app: FastifyInstance) {
    * without being asked. This route is therefore public in `app.ts` and does its
    * own checking; neither branch may serve a photo the caller has no claim to.
    */
+  /**
+   * Somewhere to put a photo that is not this process.
+   *
+   * Answers with nulls rather than an error when the deployment has no bucket:
+   * that is a local-disk install, which is a working configuration and not a
+   * failure, and the client's correct response is to send the bytes the old way.
+   */
+  app.post('/photos/upload-url', async (request, reply) => {
+    if (request.userId === null) return reply.status(401).send({ error: 'Not signed in.' });
+
+    const parsed = PhotoUploadRequest.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid request' });
+    }
+
+    const ticket = await reservePhotoUpload(request.userId, parsed.data.media_type);
+    return reply.send({
+      key: ticket?.key ?? null,
+      url: ticket?.url ?? null,
+      expires_in_seconds: ticket?.expiresInSeconds ?? null,
+    });
+  });
+
   app.get('/photos/:id', async (request, reply) => {
     const photoId = (request.params as any).id as string;
     const { exp, sig } = (request.query as any) ?? {};

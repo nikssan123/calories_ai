@@ -793,6 +793,43 @@ describe('review routes', () => {
   });
 });
 
+/**
+ * The contract every client depends on to keep working: nulls, not an error,
+ * when the deployment has nowhere to upload to. A local-disk install is a
+ * working configuration, and a client that read this as a failure would refuse
+ * to send a photo at all rather than falling back to the bytes.
+ */
+describe('POST /photos/upload-url', () => {
+  it('answers nulls when the deployment has no bucket', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/photos/upload-url',
+      payload: { media_type: 'image/jpeg' },
+      ...auth(),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ key: null, url: null, expires_in_seconds: null });
+  });
+
+  it('refuses a media type the product does not accept', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/photos/upload-url',
+      payload: { media_type: 'application/pdf' },
+      ...auth(),
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('needs a session', async () => {
+    const response = await anonymousApp().then((a) =>
+      a.inject({ method: 'POST', url: '/photos/upload-url', payload: { media_type: 'image/jpeg' } }),
+    );
+    expect(response.statusCode).toBe(401);
+  });
+});
+
 describe('GET /photos/:id', () => {
   it('serves an owner’s photo with its media type', async () => {
     const { savePhoto } = await import('../src/services/photos.ts');

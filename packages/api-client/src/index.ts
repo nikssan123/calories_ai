@@ -32,6 +32,7 @@ import type {
   PantryScanProposal,
   PantryUpdate,
   PhotoMediaType,
+  PhotoUploadTicket,
   Profile,
   ProfileUpdate,
   Progress,
@@ -244,6 +245,47 @@ export function createApiClient({
       }),
 
     onboarding: () => request<OnboardingState>('/onboarding'),
+
+    /**
+     * Put a photo in the bucket directly, and hand back the key to send with
+     * the turn instead of the bytes.
+     *
+     * Two round trips rather than one, and still the cheaper shape: base64 is a
+     * third larger than the file, and sending it as a JSON body means an API
+     * worker holds all of it for as long as the uplink takes. This way the
+     * bytes go phone-to-bucket and the API is told a string.
+     *
+     * **Null means send `photo_base64` instead** — the deployment stores photos
+     * on local disk and has nowhere to upload to. That is an ordinary
+     * configuration, not a failure, so callers must keep the old path working
+     * rather than treating this as an error.
+     */
+    uploadPhoto: async (
+      bytes: Blob | ArrayBuffer | Uint8Array,
+      mediaType: PhotoMediaType,
+    ): Promise<string | null> => {
+      const ticket = await request<PhotoUploadTicket>('/photos/upload-url', {
+        method: 'POST',
+        body: JSON.stringify({ media_type: mediaType }),
+      });
+      if (!ticket.url || !ticket.key) return null;
+
+      // Deliberately not through `request`: this goes to the bucket, and the
+      // session cookie or bearer token has no business being sent there. The
+      // content type has to match the one the URL was signed for.
+      const response = await doFetch(ticket.url, {
+        method: 'PUT',
+        headers: { 'content-type': mediaType },
+        // Cast because this file is deliberately DOM-lib-free — it runs in
+        // Next.js and in React Native, and `BodyInit` is not a name both agree
+        // on. Every value the parameter accepts is one `fetch` takes.
+        body: bytes as RequestInit['body'],
+      });
+      if (!response.ok) {
+        throw new ApiError(`Photo upload failed (${response.status})`, response.status);
+      }
+      return ticket.key;
+    },
 
     /** The whole product loop lives behind this one call. */
     chat: (payload: ChatRequest) =>
@@ -505,10 +547,18 @@ export function createApiClient({
      * Reads a fridge photo into a list to confirm. Writes nothing: post what
      * survives the user's editing to `addPantryItems`.
      */
-    scanFridge: (photoBase64: string, mediaType?: PhotoMediaType) =>
+    scanFridge: (photo: string | { base64?: string; key?: string }, mediaType?: PhotoMediaType) =>
       request<PantryScanProposal>('/pantry/scan', {
         method: 'POST',
-        body: JSON.stringify({ photo_base64: photoBase64, photo_media_type: mediaType }),
+        body: JSON.stringify({
+          // A bare string is the original call — the data URL itself. Kept
+          // because an app already on somebody's phone makes it, and there is
+          // no version of this worth a forced client update.
+          ...(typeof photo === 'string'
+            ? { photo_base64: photo }
+            : { photo_base64: photo.base64, photo_key: photo.key }),
+          photo_media_type: mediaType,
+        }),
       }),
 
     // ---- Barcodes ----

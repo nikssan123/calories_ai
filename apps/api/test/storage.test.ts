@@ -189,6 +189,39 @@ describe('presignGet', () => {
   });
 });
 
+describe('presignPut', () => {
+  it('signs the content type in, so the URL cannot be spent on something else', async () => {
+    const url = new URL(
+      await createObjectStore(CONFIG).presignPut('photos/u/a.jpg', 'image/jpeg'),
+    );
+
+    expect(url.origin + url.pathname).toBe(
+      'https://acct123.r2.cloudflarestorage.com/meals/photos/u/a.jpg',
+    );
+    expect(url.searchParams.get('X-Amz-Signature')).toBeTruthy();
+    // The header is named in the signature rather than merely expected: a URL
+    // minted for a JPEG is refused if the client PUTs anything else under it.
+    expect(url.searchParams.get('X-Amz-SignedHeaders')).toContain('content-type');
+  });
+
+  /** Longer than a read: a read is spent by an <img> already on screen, a write
+      has to survive somebody photographing lunch on hotel wifi. */
+  it('lasts fifteen minutes by default, and honours a shorter life', async () => {
+    const store = createObjectStore(CONFIG);
+    const dflt = new URL(await store.presignPut('photos/u/a.jpg', 'image/jpeg'));
+    const short = new URL(await store.presignPut('photos/u/a.jpg', 'image/jpeg', 60));
+
+    expect(dflt.searchParams.get('X-Amz-Expires')).toBe('900');
+    expect(short.searchParams.get('X-Amz-Expires')).toBe('60');
+  });
+
+  it('does not call the store', async () => {
+    stubFetch(() => new Response(null, { status: 500 }));
+    await createObjectStore(CONFIG).presignPut('photos/u/a.jpg', 'image/jpeg');
+    expect(calls).toHaveLength(0);
+  });
+});
+
 describe('configuration', () => {
   const BASE: NodeJS.ProcessEnv = { DATABASE_URL: 'postgres://ct:ct@localhost:5433/ct' };
   const FULL = {

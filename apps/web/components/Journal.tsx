@@ -12,6 +12,7 @@ import type {
 } from '@ct/shared';
 import { unitsOf } from '@ct/shared';
 import { api } from '@/lib/api';
+import { asBlob } from '@/lib/image';
 import { ChatActionCard } from '@/components/ChatCard';
 import { Markdown } from '@/components/Markdown';
 import { Composer, type ComposerPayload } from '@/components/Composer';
@@ -210,10 +211,34 @@ export function Journal() {
 
     try {
       const replyKey = `${localKey}-reply`;
+      /*
+       * The photo goes to the bucket first, and the turn carries a key instead
+       * of several megabytes of base64. `uploadPhoto` answers null when the
+       * deployment stores photos on local disk, which is where the old path
+       * still earns its place.
+       *
+       * A failed upload is deliberately allowed to throw rather than quietly
+       * falling back to base64: the fallback would still log the meal, and a
+       * bucket that has stopped accepting writes would go unnoticed for as long
+       * as nobody read the bill.
+       */
+      let photoKey: string | undefined;
+      if (payload.photoBase64) {
+        photoKey =
+          (await api.uploadPhoto(
+            await asBlob(payload.photoBase64),
+            // The composer only produces a photo alongside its media type, but
+            // the two travel as separate optional fields; jpeg is what
+            // `preparePhoto` re-encodes to and what the API assumes anyway.
+            payload.photoMediaType ?? 'image/jpeg',
+          )) ?? undefined;
+      }
+
       const result = await api.chatStream(
         {
           text: payload.text,
-          photo_base64: payload.photoBase64,
+          photo_key: photoKey,
+          photo_base64: photoKey ? undefined : payload.photoBase64,
           photo_media_type: payload.photoMediaType,
         },
         // The stream is a preview of the reply, never the record of it: `result`

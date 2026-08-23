@@ -23,12 +23,31 @@ import { env, type StorageEnv } from '../env.ts';
 /** How long a presigned read stays good for. */
 const PRESIGN_SECONDS = 300;
 
+/**
+ * And a presigned write. Longer than a read, because a read is spent
+ * immediately by an `<img>` already on screen while a write has to survive
+ * somebody photographing their lunch on hotel wifi.
+ */
+const PRESIGN_PUT_SECONDS = 900;
+
 export interface ObjectStore {
   put(key: string, mediaType: string, bytes: Buffer): Promise<void>;
   get(key: string): Promise<Buffer | null>;
   remove(key: string): Promise<void>;
   /** A URL that authorises its own read, for handing to a browser. */
   presignGet(key: string, seconds?: number): Promise<string>;
+  /**
+   * A URL that authorises its own write, for handing to a phone.
+   *
+   * The point is the bytes never touching this process: a meal photo is a few
+   * megabytes, base64 makes it a third bigger again, and sending it through the
+   * API means holding all of it in the event loop for as long as the uplink
+   * takes. The client PUTs to the bucket and tells us the key afterwards.
+   *
+   * `mediaType` is signed in, so the URL cannot be reused to upload something
+   * else — the client must send the same `content-type` or the signature fails.
+   */
+  presignPut(key: string, mediaType: string, seconds?: number): Promise<string>;
 }
 
 let cached: { config: StorageEnv; store: ObjectStore } | null = null;
@@ -97,6 +116,19 @@ export function createObjectStore(config: StorageEnv): ObjectStore {
       // S3 returns 204 for a key that was never there, which is the semantics
       // wanted: deleting is meant to end with the object absent, and it is.
       if (!response.ok && response.status !== 404) throw await storageError('delete', key, response);
+    },
+
+    async presignPut(key, mediaType, seconds = PRESIGN_PUT_SECONDS) {
+      const target = new URL(url(key));
+      target.searchParams.set('X-Amz-Expires', String(seconds));
+      const signed = await client.sign(target.toString(), {
+        method: 'PUT',
+        // Signed rather than merely expected: with the content type inside the
+        // signature, a URL minted for a JPEG cannot be spent on anything else.
+        headers: { 'content-type': mediaType },
+        aws: { signQuery: true, allHeaders: true },
+      });
+      return signed.url;
     },
 
     async presignGet(key, seconds = PRESIGN_SECONDS) {
