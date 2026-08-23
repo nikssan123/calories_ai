@@ -932,6 +932,14 @@ the better part of half an hour; later ones are minutes. And the dev client ship
 Refresh **off** by default, which is worth turning on in the dev menu — otherwise edits
 appear to be ignored and the honest-looking conclusion is that the bundler is broken.
 
+**Push needs a credential the repository cannot hold.** The transport is built and tested —
+`push_tokens`, the Expo relay, both notification policies — but a phone cannot be issued an
+address until FCM is configured for Android and an APNs key for iOS. Both are uploaded once
+with `eas credentials`, against the EAS project already named in `app.json`. Without them
+`registerForPush` returns `unavailable`, nothing registers, and every notification goes by
+email exactly as it did before; the emulator says the quiet part out loud in logcat —
+`FirebaseApp failed to initialize because no default options were found`.
+
 The other three are done, and two of them left something behind worth knowing.
 
 **The toast** exists, and is deliberately rarer than sonner is on the web. The rule here is

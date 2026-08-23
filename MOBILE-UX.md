@@ -286,7 +286,7 @@ before doing this one.
 
 Standard, expected, and both the Journal and Progress get long enough to want it.
 
-## 4. What only a phone can do
+## 4. What only a phone can do — push is built
 
 This is where the value is, as opposed to the polish.
 
@@ -300,16 +300,39 @@ half currently begins with "first, open the app". Being in the share sheet moves
 the app to where the photo already is. This is the single most on-brand thing on
 the list after Siri.
 
-### Push notifications
+### Push notifications — built; needs one credential
 
-The profile already carries `notify_weekly_review` and `notify_nudges`, and both
-send **email**. On a phone, email is the wrong channel for a nudge — the switches
-exist, the transport does not.
+The profile carried `notify_weekly_review` and `notify_nudges` from the
+beginning and both sent **email**. The switches existed; the transport did not.
+It does now, through Expo's relay — one call reaches both APNs and FCM, which is
+why the token table stores Expo's tokens rather than the platform-native ones.
 
-Worth being careful about: a nudge that arrives as a push is a much louder thing
-than one that arrives in a mailbox, and the copy on the switch ("at most one a
-week, when something in your log is worth a mention") is a promise made about the
-quieter medium. Either the promise gets stricter or the switch splits in two.
+**How loud is a nudge allowed to be?** Answered, since the plan said to answer it
+before building the transport rather than after. The switch copy promises "at
+most one a week", and that promise was made about the quieter medium — so a
+nudge that reaches a phone does *not* also reach an inbox. One sentence, one
+telling. Anyone with no device registered still gets the mail, and so does
+anyone whose phone could not be reached, because a skipped send and a failed one
+both mean the pocket stayed quiet.
+
+The weekly review is the exception and earns it: the mail carries the review and
+the push carries the news that it exists. Two different messages, so both go, and
+the push deliberately does not try to quote the review — a weekly review is
+something to sit down with, and squeezing it onto a lock screen only guarantees
+it is skimmed in the one place it cannot be read properly.
+
+The permission dialog is raised by turning a switch on and at no other moment,
+where it is an answer to something the reader just did rather than a modal in
+the way of an app they opened. Saying no is not reported: the preference still
+holds and the notification still goes by email.
+
+**What is left is a credential, not code.** Getting a token on Android needs FCM
+— the emulator says so plainly, `FirebaseApp failed to initialize because no
+default options were found` — and iOS needs an APNs key. Both are uploaded once
+to the EAS project (`eas credentials`), and both belong to the account holder
+rather than to the repository. Until then `registerForPush` returns
+`unavailable`, nothing is registered, and every notification goes by email
+exactly as it did before: verified on the emulator, switch on, no error shown.
 
 ### Siri, via App Intents
 
@@ -372,11 +395,6 @@ said to stop, and horizontal swipe between tabs would relieve it. But that
 directly contradicts swipe-to-step-days on Today. Pick one meaning for a
 horizontal swipe and use it everywhere — two would be worse than neither.
 
-**How loud is a nudge allowed to be?** See push, above. This is a product
-decision rather than an engineering one, and it should be made before the
-transport is built rather than after. It is now the thing blocking push, since
-the dev build is no longer.
-
 **Is the share sheet worth a third-party plugin?** Android takes an intent
 filter and nothing else. iOS needs a share *extension* — a second native target,
 which Expo cannot generate without a community config plugin. Doing only Android
@@ -405,9 +423,10 @@ between us and the showpiece. The shared element transition is blocked upstream:
 Reanimated 4 has the machinery and `react-native-screens` has no idea it exists.
 That is a wait, not a task.
 
-What the dev build *does* unlock is the whole of §4 — the share-sheet target,
-push notifications, App Intents, a widget — which is where the real value on
-this list has been all along. Two of those need a decision before they need
-code, and both are noted under Open questions: how loud a nudge is allowed to be
-once it is a push rather than an email, and whether a share-sheet target is worth
-a third-party config plugin to keep iOS and Android on the same feature.
+What the dev build *does* unlock is the whole of §4, and the first of it is
+built: **push notifications**, including the answer to how loud a nudge may be.
+Only a credential stands between that and a phone actually buzzing, and it is
+the account holder's to add.
+
+Left in §4: the share-sheet target, App Intents, a widget. The first of those
+still needs a decision before it needs code — see Open questions.
