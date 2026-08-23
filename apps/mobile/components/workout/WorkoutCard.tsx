@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import type {
@@ -82,11 +82,25 @@ interface DraftExercise {
 
 export function WorkoutCard({
   card,
+  editing,
   messageId,
   onLogged,
   onError,
 }: {
-  card: Extract<ChatCard, { type: 'workout_prompt' }>;
+  /**
+   * The question this card is answering. Absent when it is correcting a session
+   * instead — an edit has no question, only an answer that was already given.
+   */
+  card?: Extract<ChatCard, { type: 'workout_prompt' }>;
+  /**
+   * The session being corrected, opened with its own answers already in it.
+   *
+   * The same card either way, deliberately. Somebody fixing the third set is
+   * doing the thing they did ten seconds ago, and a separate edit screen would
+   * be a second layout to build, to keep in step and to learn — for a form that
+   * already knows how to collect exactly this.
+   */
+  editing?: ExerciseEntry;
   /**
    * The chat message this card is answering, when it is sitting in the
    * conversation. Absent when the card was opened from the Exercise tab, where
@@ -100,10 +114,13 @@ export function WorkoutCard({
   const units = useUnits();
 
   const [category, setCategory] = useState<ExerciseCategory>(
-    card.suggested_category ?? 'strength',
+    editing?.category ?? card?.suggested_category ?? 'strength',
   );
-  const [minutes, setMinutes] = useState<number | null>(null);
-  const [detail, setDetail] = useState(false);
+  const [minutes, setMinutes] = useState<number | null>(editing?.duration_min ?? null);
+  // A correction opens on the grid. The numbers being fixed are in it, and
+  // making somebody tap "add what you did" to reach their own sets would be
+  // hiding the entire reason the card reopened.
+  const [detail, setDetail] = useState(editing !== undefined);
   const [types, setTypes] = useState<ExerciseType[] | null>(null);
   const [last, setLast] = useState<LastWorkout | null>(null);
   const [routines, setRoutines] = useState<Routine[]>([]);
@@ -145,6 +162,23 @@ export function WorkoutCard({
       cancelled = true;
     };
   }, [category]);
+
+  /*
+   * The grid, filled in from the session being corrected.
+   *
+   * Waits for the catalogue because a draft needs `tracks` to know whether a
+   * set is reps-and-a-load or a duration, and the stored set carries only its
+   * name — the same match `lastWorkout` does on the server, done here because
+   * this is where the catalogue already is. Once, guarded by the ref: the
+   * effect re-runs whenever the kind changes, and re-seeding then would undo
+   * every edit made since.
+   */
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (!editing || seeded.current || types === null) return;
+    seeded.current = true;
+    setExercises(draftsFrom(editing, types, units));
+  }, [editing, types, units]);
 
   const filled = exercises.filter((e) => toExercise(e, units) !== null);
   const counted = exercises.map((e) => toExercise(e, units)).filter(isExercise);
@@ -261,14 +295,23 @@ export function WorkoutCard({
   async function send() {
     setSaving(true);
     try {
-      const entry = await api.logWorkout({
+      const payload = {
         category,
         exercises: counted,
         duration_min: minutes,
         routine_id: routineId,
-        performed_at: card.performed_at,
-        message_id: messageId,
-      });
+        /*
+         * A correction keeps the session where it happened. Falling through to
+         * now would quietly move Tuesday's session onto Thursday because
+         * somebody fixed a typo in it — and on a day boundary it would move it
+         * off the day whose totals it belongs to.
+         */
+        performed_at: editing?.performed_at ?? card?.performed_at,
+      };
+
+      const entry = editing
+        ? await api.updateWorkout(editing.id, payload)
+        : await api.logWorkout({ ...payload, message_id: messageId });
 
       /*
        * Saving the routine comes after the session and never instead of it. A
@@ -296,8 +339,10 @@ export function WorkoutCard({
     <Chunk
       contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
     >
-      <Text style={[t.bodyBold, { color: colors.foreground }]}>What did you do?</Text>
-      {card.heard && (
+      <Text style={[t.bodyBold, { color: colors.foreground }]}>
+        {editing ? 'Fix what’s wrong' : 'What did you do?'}
+      </Text>
+      {card?.heard && (
         <Text style={[t.footnote, styles.heard, { color: colors.mutedForeground }]}>
           {card.heard}
         </Text>
@@ -631,7 +676,13 @@ export function WorkoutCard({
           contentStyle={[styles.send, { backgroundColor: colors.primary }]}
         >
           <Text style={[t.footnoteBold, { color: colors.primaryForeground }]}>
-            {saving ? 'Logging…' : 'Log it'}
+            {editing
+              ? saving
+                ? 'Saving…'
+                : 'Save changes'
+              : saving
+                ? 'Logging…'
+                : 'Log it'}
           </Text>
         </PressableChunk>
       </View>
@@ -675,6 +726,68 @@ function Cell({
       <Text style={[t.footnote, { color: colors.mutedForeground }]}>{unit}</Text>
     </View>
   );
+}
+
+/**
+ * What a set of this kind is measured in, and what it looks like, when the
+ * catalogue cannot say. Mirrors the server's fallback in `lastWorkout` — a set
+ * typed as free text still deserves the right fields around it.
+ */
+const CATEGORY_TRACKS: Record<ExerciseCategory, ExerciseTracks> = {
+  strength: 'reps',
+  cardio: 'duration',
+  class: 'duration',
+  sport: 'duration',
+  flexibility: 'duration',
+};
+
+const CATEGORY_EMOJI: Record<ExerciseCategory, string> = {
+  strength: '🏋️',
+  cardio: '🏃',
+  class: '🤸',
+  sport: '⚽',
+  flexibility: '🧘',
+};
+
+/**
+ * A logged session, back in the shape the card collects.
+ *
+ * Sets arrive flat and carry the exercise they belong to as a `position`, so
+ * they are regrouped here in that order. The load comes back out in whatever
+ * the reader uses — it went in as kilograms, and the field it lands in is the
+ * same field it was typed into.
+ */
+function draftsFrom(
+  entry: ExerciseEntry,
+  types: ExerciseType[],
+  units: UnitSystem,
+): DraftExercise[] {
+  const category = entry.category ?? 'strength';
+  const byName = new Map(types.map((type) => [type.name.toLowerCase(), type]));
+  const byPosition = new Map<number, DraftExercise>();
+
+  for (const set of entry.sets) {
+    let draft = byPosition.get(set.position);
+    if (!draft) {
+      const type = byName.get(set.name.toLowerCase());
+      draft = {
+        name: type?.name ?? set.name,
+        typeId: type?.id ?? null,
+        tracks: type?.tracks ?? CATEGORY_TRACKS[category],
+        emoji: type?.emoji ?? CATEGORY_EMOJI[category],
+        muscles: type?.muscles ?? [],
+        sets: [],
+      };
+      byPosition.set(set.position, draft);
+    }
+    draft.sets.push({
+      reps: set.reps,
+      weight: set.weight_kg === null ? null : toLoad(set.weight_kg, units),
+      minutes: set.duration_sec === null ? null : Math.round(set.duration_sec / 60),
+    });
+  }
+
+  return [...byPosition.entries()].sort((a, b) => a[0] - b[0]).map(([, draft]) => draft);
 }
 
 const blankSet = (): DraftSet => ({ reps: null, weight: null, minutes: null });
