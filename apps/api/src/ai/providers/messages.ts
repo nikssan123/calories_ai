@@ -342,24 +342,25 @@ async function watched(
  * write at the wrong multiple misreports the largest line on the bill. They are
  * resolved together here so they cannot drift apart.
  *
- * The default is the five-minute TTL, which is not the obvious answer and is
- * worth the paragraph. The longer TTL only pays for itself in the *middle* of
- * the volume curve. Below it — a handful of accounts, turns hours apart — every
- * turn is a cold write under either setting, and the only thing an hour buys is
- * a 60% larger bill for it. Above it, traffic keeps the prefix warm on its own:
- * the tools and the static system prompt are byte-identical for every account,
- * so once somebody logs a meal every few minutes nobody is ever cold and the
- * TTL stops mattering. The window where an hour wins is the band between, where
- * turns cluster inside an hour but not inside five minutes.
+ * The default is the one hour, and the reasoning that first put it at five
+ * minutes was wrong in an instructive way. It went: few accounts, turns hours
+ * apart, so every turn is a cold write under either TTL and the hour only makes
+ * each one 60% dearer. Every step of that is sound and the premise was false.
  *
- * The break-even is worth carrying in your head, because the band starts earlier
- * than "at scale" suggests: switching wins as soon as the hour cuts the cold
- * share by more than about a quarter, which is any traffic where turns land
- * between five minutes and an hour apart. `SUBSCRIPTIONS.md` works it through
- * and puts it at roughly twenty active users, not thousands.
+ * Measured instead, on 59 production turns across four accounts: 41% of turns
+ * arrive within five minutes of another one, 32% within the hour, and only 27%
+ * are cold whatever the TTL says. The median gap is seventeen minutes; the mean
+ * is eighty-three. People log in conversations, so turns cluster, and a mean gap
+ * is the wrong statistic for a bursty arrival — reading it cost about 20% of the
+ * per-turn bill at a volume where the premise said the setting could not matter.
  *
- * So this is a knob and not a decision: read the cold-write share off
- * `ai_usage` and set it when the numbers say the band has arrived.
+ * The break-even is worth carrying: the hour wins whenever it cuts the cold
+ * share to less than about 0.64 of what five minutes leaves. That is a low bar,
+ * and clustered traffic clears it almost immediately rather than at some later
+ * scale.
+ *
+ * `5m` remains right for a genuinely idle install — one turn a day, nothing to
+ * keep warm — where it is also worth pennies either way.
  *
  * Read once, at import, so a typo is a boot failure rather than a silent
  * fallback to a setting nobody chose — the same bargain `AI_PROVIDER` makes.
@@ -370,7 +371,7 @@ export function resolveCacheTtl(raw: string | undefined): {
   control: Anthropic.CacheControlEphemeral;
   multiplier: number;
 } {
-  const value = (raw ?? '').trim() || '5m';
+  const value = (raw ?? '').trim() || '1h';
   if (value === '5m') {
     return { control: { type: 'ephemeral' }, multiplier: CACHE_WRITE_MULTIPLIER_5M };
   }

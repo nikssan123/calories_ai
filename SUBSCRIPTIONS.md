@@ -184,42 +184,44 @@ system prompt, byte for byte. So it does not need *a user* to be active, it need
 turn that touched it. The deployment is warm when turns arrive closer together than
 that, and cold when they do not.
 
-At three logs a day per user, that is:
+**And it has now been measured rather than modelled.** 59 production turns, four
+accounts, gap from each turn to the one before it — on the whole deployment, since the
+prefix is shared:
 
-| active users | turns/day | mean gap between turns | prefix |
-|---:|---:|---|---|
-| 4 *(today)* | 12 | ~2 hours | cold, always |
-| 20 | 60 | ~24 minutes | cold on 5m, warm on 1h |
-| 100 | 300 | ~5 minutes | borderline on 5m, warm on 1h |
-| 500 | 1,500 | ~1 minute | warm on either |
+| gap from the previous turn | turns | share |
+|---|---:|---:|
+| ≤ 5 minutes — warm already | 24 | 41% |
+| 5–60 minutes — **the hour converts these** | 19 | 32% |
+| > 1 hour, or the first of a run — cold either way | 16 | 27% |
 
-Meals cluster, so the mean overstates coverage at the bottom of that table and
-understates it in the middle — a lunchtime hour at 100 users is comfortably warm even
-if 3am is not.
+Median gap **17 minutes**. Mean gap 83 minutes.
 
-**Which is the argument for `ANTHROPIC_CACHE_TTL=1h`, and it arrives earlier than the
-setting's own documentation suggests.** The hour costs 2× to write instead of 1.25×,
-so a cold turn goes from $0.0285 to $0.0358. Work the break-even: switching wins
-whenever the hour cuts the cold share by more than about a quarter. That is a low bar —
-it is met by any traffic where turns typically land between five minutes and an hour
-apart, which by the table above is somewhere around **twenty active users**, not
-thousands.
+That difference between the median and the mean is the whole lesson. An earlier version
+of this section reasoned from the mean, concluded that four accounts means turns hours
+apart and nothing to keep warm, and put the switch at "roughly twenty active users".
+Wrong, by about 20% of the per-turn bill. People do not log meals as a Poisson process
+— they log them in conversations, three or four turns inside a couple of minutes, and
+those clusters land far closer together than an average gap suggests.
+
+Cost per text log at the distribution above: **$0.0190 on the five-minute TTL, $0.0151
+on the hour.** The hour wins whenever it cuts the cold share to less than about 0.64 of
+what five minutes leaves; here it cuts it from 59% to 27%, which clears the bar with
+room.
+
+`ANTHROPIC_CACHE_TTL=1h` was set on the host on 2026-08-23, and the code default moved
+with it. The remaining question is not when to switch — it is switched — but how much of
+the cold 27% is genuinely unavoidable overnight and first-thing-in-the-morning traffic,
+which more accounts will shrink on their own.
 
 So the order of operations for the pricing is:
 
-1. **Below ~20 users** — every turn is cold under either TTL and the hour is pure
-   premium. Stay on `5m`. This is where the deployment is today, and it is also where
-   the absolute numbers are small enough not to matter: 4 users at 12 turns a day is
-   about $0.35 a day even in the cold column.
-2. **Around 20 and up** — switch to `1h` and re-read the cold-write share. This is the
-   single highest-leverage setting in the product's cost model, worth more than any
-   prompt or model change, and it is one environment variable.
-3. **Only then** are the tier tables above worth trusting, because only then is it
-   settled which column the business is actually in.
-
-None of the three tiers survives its cold column at the cap. All three are comfortable
-warm. Nothing in the pricing should be committed to — not the caps, not the free tier,
-not the annual discount — until step 2 has been done and measured.
+1. ~~Below ~20 users, stay on `5m`~~ — **wrong, and retracted.** The bursty arrival
+   pattern makes the hour pay immediately.
+2. **Re-read the cold-write share once real traffic exists on the metered lane.** The
+   27% above is the ceiling on what is left to win from caching, and it is the number
+   that decides which column of the tier tables the business lives in.
+3. **Only then commit to the caps, the free tier, or the annual discount.** None of the
+   three tiers survives its cold column at the cap; all three are comfortable warm.
 
 ## When the language escalates
 

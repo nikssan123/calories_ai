@@ -174,12 +174,15 @@ Three things worth knowing:
 - **Don't shrink the prompt to save money.** Haiku 4.5's minimum cacheable prefix is
   **4,096 tokens**. A lean extraction prompt below that silently never caches — no error,
   just `cache_creation_input_tokens: 0`. The 12k prefix is an asset, not a cost.
-- **The 5-minute TTL is now configurable — and the default stays at 5m.** This entry
-  used to say "default `1h`", and the measurement says that is wrong at both ends of the
-  volume curve. Below the middle band every turn is a cold write under either setting,
-  and the hour only makes each one 60% dearer; above it, traffic keeps the shared prefix
-  warm and the TTL stops mattering. `ANTHROPIC_CACHE_TTL` exists so the switch is one
-  env var when the cold-write share in `ai_usage` says the middle band has arrived.
+- **The TTL is configurable, and the default is `1h`.** This entry has now said all
+  three things: originally "default `1h`", then "default `5m`, and the plan was wrong to
+  say otherwise", and now `1h` again — on measurement rather than reasoning either time.
+  The `5m` argument was that four accounts means turns hours apart, so nothing stays warm
+  under either setting and the hour is pure premium. The gap distribution says otherwise:
+  41% of production turns arrive within five minutes of another, 32% within the hour,
+  median gap seventeen minutes against a mean of eighty-three. People log in
+  conversations. Reasoning from the mean cost about 20% of the per-turn bill, at a volume
+  where the argument said the setting could not matter.
 - **Verify, don't assume.** Non-zero `cache_read_input_tokens` on repeated turns is the
   only proof the breakpoint landed.
 
@@ -441,8 +444,9 @@ field and hoping the architecture shows.
    account's published ceiling on all three models). Twenty text logs and three photo
    scans measured; `cache_read_input_tokens` non-zero from the second turn on.
 3. ~~**Make the cache TTL config**~~ **Done** — `ANTHROPIC_CACHE_TTL`, `5m` or `1h`,
-   validated at boot. Default stays `5m`; the reasoning is in §3 and it is the opposite
-   of what this step originally said.
+   validated at boot, default `1h`, and set to `1h` on the host. Which is what this step
+   originally said; the detour through `5m` and back is recorded in §3 because the
+   mistake in between is more useful than the conclusion.
 4. ~~**Re-run the tables above**~~ **Done** for per-action costs; `SUBSCRIPTIONS.md`
    carries the correction. The **tier tables are deliberately not recomputed** — they
    need a warm/cold mix, and only real traffic on the new lane can supply it.

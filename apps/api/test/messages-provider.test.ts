@@ -215,21 +215,24 @@ describe('the cache breakpoint', () => {
     expect(system).toHaveLength(2);
     expect(system[0]).toMatchObject({
       text: 'You are a nutrition journal.',
-      cache_control: { type: 'ephemeral' },
+      cache_control: { type: 'ephemeral', ttl: '1h' },
     });
     expect(system[1].text).toBe('They are still being onboarded.');
     expect(system[1]).not.toHaveProperty('cache_control');
   });
 
   /**
-   * The five-minute TTL, deliberately — see `pricing.ts`. The one-hour one
-   * doubles the write cost to close a gap that stops existing once the prefix,
-   * which is shared by every account, is being hit by real traffic.
+   * The one-hour TTL by default, which this test used to assert the opposite of.
+   * The five-minute one was chosen on the reasoning that the shared prefix stays
+   * warm on traffic alone once there is any — true, but it skipped the question
+   * of what happens before that, and the answer turned out to be that turns
+   * cluster into conversations tightly enough for the hour to pay at four
+   * accounts. See `CACHE_TTL` in `messages.ts` for the measurement.
    */
-  it('takes the five-minute TTL rather than the one-hour one', async () => {
+  it('takes the one-hour TTL rather than the five-minute one', async () => {
     const seen = stubFetch(says('Logged.'));
     await createAnthropicApiProvider().run(request(), null);
-    expect(seen[0]!.body.system[0].cache_control).toEqual({ type: 'ephemeral' });
+    expect(seen[0]!.body.system[0].cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
   });
 
   /**
@@ -290,19 +293,19 @@ describe('tool definitions', () => {
  * the kind of wrong that survives for months.
  */
 describe('how long a cache entry is asked to live', () => {
-  it('defaults to five minutes, priced at 1.25x', () => {
-    for (const raw of [undefined, '', '  ', '5m']) {
+  it('defaults to the hour, priced at 2x', () => {
+    for (const raw of [undefined, '', '  ', '1h']) {
       expect(resolveCacheTtl(raw)).toEqual({
-        control: { type: 'ephemeral' },
-        multiplier: 1.25,
+        control: { type: 'ephemeral', ttl: '1h' },
+        multiplier: 2,
       });
     }
   });
 
-  it('takes the hour when asked, and prices it at 2x', () => {
-    expect(resolveCacheTtl('1h')).toEqual({
-      control: { type: 'ephemeral', ttl: '1h' },
-      multiplier: 2,
+  it('takes five minutes when asked, and prices it at 1.25x', () => {
+    expect(resolveCacheTtl('5m')).toEqual({
+      control: { type: 'ephemeral' },
+      multiplier: 1.25,
     });
   });
 
@@ -358,7 +361,7 @@ describe('the replayed transcript', () => {
     const [first, second] = seen[0]!.body.messages;
     expect(first.content).toEqual([{ type: 'text', text: 'earlier' }]);
     expect(second.content).toEqual([
-      { type: 'text', text: 'Logged.', cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: 'Logged.', cache_control: { type: 'ephemeral', ttl: '1h' } },
     ]);
   });
 
@@ -659,12 +662,18 @@ describe('pricing', () => {
     expect(outcome.costSource).toBe('estimated');
   });
 
-  it('charges a cache write at the five-minute rate, not the one-hour one', async () => {
+  /**
+   * The multiple has to follow whichever TTL was actually asked for. Priced at
+   * 1.25x while asking for the hour would understate the largest line on the
+   * bill by 60% and break nothing, which is why it is asserted rather than
+   * assumed.
+   */
+  it('charges a cache write at the rate of the TTL it asked for', async () => {
     stubFetch(says('Logged.', usage(0, 0, 0, 1_000_000)));
 
     const outcome = await createAnthropicApiProvider().run(request(), null);
-    expect(outcome.costUsd).toBeCloseTo(1.25, 6);
-    expect(outcome.cacheWriteMultiplier).toBe(1.25);
+    expect(outcome.costUsd).toBeCloseTo(2, 6);
+    expect(outcome.cacheWriteMultiplier).toBe(2);
   });
 
   it('charges a cache read at a tenth of the input rate', async () => {

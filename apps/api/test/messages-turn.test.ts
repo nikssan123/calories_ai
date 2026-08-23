@@ -145,7 +145,7 @@ describe('a turn on the direct provider', () => {
     await turn();
 
     const system = seen[0]!.body.system;
-    expect(system[0].cache_control).toEqual({ type: 'ephemeral' });
+    expect(system[0].cache_control).toEqual({ type: 'ephemeral', ttl: '1h' });
     expect(system[0].text.length).toBeGreaterThan(500);
   });
 
