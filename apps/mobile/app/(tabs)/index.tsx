@@ -42,6 +42,7 @@ import { duration, ease, font, type as t, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { haptics } from '@/lib/haptics';
 import { onEntryRemoved } from '@/lib/removals';
+import { writeDaySnapshot } from '@/lib/snapshot';
 
 /** Optimistic rows carry a local id until the server assigns the real one. */
 interface Bubble {
@@ -124,6 +125,9 @@ export default function JournalScreen() {
     if (consumed.current !== null && next.consumed.kcal !== consumed.current) haptics.logged();
     consumed.current = next.consumed.kcal;
     setDay(next);
+    // The home screen learns what the journal just learned. Safe here because
+    // the journal is always today — see `today.tsx` for the case that is not.
+    void writeDaySnapshot(next);
   }, []);
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
   const [busy, setBusy] = useState(false);
@@ -158,6 +162,7 @@ export default function JournalScreen() {
         setBubbles(history.messages.map(toBubble));
         consumed.current = today.consumed.kcal;
         setDay(today);
+        void writeDaySnapshot(today);
       } catch {
         // Reported by the empty conversation rather than over it: there is no
         // toast here, and an error bar above a blank screen says less than the

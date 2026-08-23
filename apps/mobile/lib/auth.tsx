@@ -3,6 +3,7 @@ import type { AuthStatus, Profile } from '@ct/shared';
 import { api } from '@/lib/api';
 import { clearToken, restoreToken, saveToken } from '@/lib/session';
 import { forgetPush } from '@/lib/push';
+import { clearDaySnapshot } from '@/lib/snapshot';
 import { watch } from '@/lib/outbox';
 import { cacheProfile, forgetUser } from '@/lib/store';
 
@@ -161,6 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
      * on this phone next.
      */
     await forgetPush();
+    await clearDaySnapshot();
     /*
      * The status logout answers with, kept rather than dropped.
      *

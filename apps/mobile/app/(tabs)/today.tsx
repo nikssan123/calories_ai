@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
   RefreshControl,
@@ -15,7 +15,9 @@ import Animated, {
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
+  withTiming,
 } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Svg, { Path, Polyline, Rect } from 'react-native-svg';
 import type { DaySummary, ExerciseEntry, FoodEntry, FoodItemInput, Meal } from '@ct/shared';
 import { formatBodyWeight, formatDistance, formatMass, inferMeal } from '@ct/shared';
@@ -34,15 +36,17 @@ import { loadDay, localToday, pendingIds, withPending } from '@/lib/day';
 import { drop, enqueue, newId, onRejected } from '@/lib/outbox';
 import { useOutbox } from '@/hooks/useOutbox';
 import { useUnits } from '@/lib/units';
-import { font, type as t, useColors, type Palette } from '@/theme';
+import { duration, ease, font, type as t, useColors, type Palette } from '@/theme';
 import { haptics } from '@/lib/haptics';
 import { entryRemoved } from '@/lib/removals';
-import { removeAction, repeatAction, SwipeRow } from '@/components/SwipeRow';
+import { DeferToRows, removeAction, repeatAction, SwipeRow } from '@/components/SwipeRow';
 import { Glyph } from '@/components/Glyph';
 import { Material } from '@/components/Material';
 import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
 import { useCountUp } from '@/hooks/useCountUp';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { writeDaySnapshot } from '@/lib/snapshot';
 
 /** The `date` the calendar links here with. Anything else is ignored. */
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -284,6 +288,25 @@ export default function TodayScreen() {
   );
 
   const isToday = day !== null && today !== null && day.local_date === today;
+
+  /*
+   * Keep the home screen in step, but only while this screen is actually
+   * showing today — stepping back to Tuesday must not leave Tuesday's ring on
+   * the launcher.
+   *
+   * Watching `day` rather than the fetched summary, because `day` is what the
+   * ring above is drawing: it carries the optimistic edits too, so deleting a
+   * meal moves the widget at the same moment it moves the screen rather than
+   * after the round trip.
+   *
+   * Keyed on the numbers instead of the object, which is rebuilt every render
+   * by `withPending` and would otherwise rewrite the note on every keystroke.
+   */
+  useEffect(() => {
+    if (!day || !isToday) return;
+    void writeDaySnapshot(day);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isToday, day?.local_date, day?.consumed.kcal, day?.targets.kcal, day?.burned_kcal]);
   const step = (days: number) =>
     setDate((current) => shiftDate(current ?? day?.local_date ?? today ?? '', days));
 

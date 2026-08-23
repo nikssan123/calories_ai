@@ -67,6 +67,24 @@
             "image/*"
           ]
         }
+      ],
+      [
+        "react-native-android-widget",
+        {
+          "widgets": [
+            {
+              "name": "Day",
+              "label": "Day So Far",
+              "description": "Today's ring, and a tap into the journal.",
+              "minWidth": "150dp",
+              "minHeight": "150dp",
+              "targetCellWidth": 2,
+              "targetCellHeight": 2,
+              "resizeMode": "none",
+              "updatePeriodMillis": 1800000
+            }
+          ]
+        }
       ]
     ],
     "experiments": {
