@@ -1,6 +1,11 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
-import { anthropicRate, CACHE_WRITE_MULTIPLIER_5M, priceUsage } from '../pricing.ts';
+import {
+  anthropicRate,
+  CACHE_WRITE_MULTIPLIER_1H,
+  CACHE_WRITE_MULTIPLIER_5M,
+  priceUsage,
+} from '../pricing.ts';
 import { MAX_OUTPUT_TOKENS, MODELS } from '../client.ts';
 import { reserve, settle as settleBucket, type Reservation } from '../token-bucket.ts';
 import {
@@ -147,9 +152,9 @@ async function execute(request: AgentRequest, emit?: StreamSink): Promise<Outcom
     costUsd: 0,
     costSource: 'unknown',
     usage,
-    // Plain `ephemeral` below, so every cache write on this path is a
-    // five-minute one. See `pricing.ts`.
-    cacheWriteMultiplier: CACHE_WRITE_MULTIPLIER_5M,
+    // Whatever `CACHE_TTL` asked the API for, priced at the multiple that TTL
+    // actually costs. See `pricing.ts`.
+    cacheWriteMultiplier: CACHE_TTL.multiplier,
   };
 
   /**
@@ -168,7 +173,7 @@ async function execute(request: AgentRequest, emit?: StreamSink): Promise<Outcom
     usage.byModel = { [choice.model]: { ...usage, byModel: undefined } };
     const rate = anthropicRate(choice.model);
     if (rate) {
-      outcome.costUsd = priceUsage(usage, rate, CACHE_WRITE_MULTIPLIER_5M);
+      outcome.costUsd = priceUsage(usage, rate, CACHE_TTL.multiplier);
       outcome.costSource = 'estimated';
     }
     /*
@@ -330,6 +335,46 @@ async function watched(
 }
 
 /**
+ * How long a cache entry survives, and what writing it costs.
+ *
+ * One setting rather than two, because the two are the same decision: the
+ * one-hour TTL is bought at 2× the write price instead of 1.25×, and pricing a
+ * write at the wrong multiple misreports the largest line on the bill. They are
+ * resolved together here so they cannot drift apart.
+ *
+ * The default is the five-minute TTL, which is not the obvious answer and is
+ * worth the paragraph. The longer TTL only pays for itself in the *middle* of
+ * the volume curve. Below it — a handful of accounts, turns hours apart — every
+ * turn is a cold write under either setting, and the only thing an hour buys is
+ * a 60% larger bill for it. Above it, traffic keeps the prefix warm on its own:
+ * the tools and the static system prompt are byte-identical for every account,
+ * so once somebody logs a meal every few minutes nobody is ever cold and the
+ * TTL stops mattering. The window where an hour wins is the band between, where
+ * turns cluster inside an hour but not inside five minutes.
+ *
+ * So this is a knob and not a decision: read the cold-write share off
+ * `ai_usage` and set it when the numbers say the middle band has arrived.
+ *
+ * Read once, at import, so a typo is a boot failure rather than a silent
+ * fallback to a setting nobody chose — the same bargain `AI_PROVIDER` makes.
+ */
+const CACHE_TTL = resolveCacheTtl(process.env.ANTHROPIC_CACHE_TTL);
+
+export function resolveCacheTtl(raw: string | undefined): {
+  control: Anthropic.CacheControlEphemeral;
+  multiplier: number;
+} {
+  const value = (raw ?? '').trim() || '5m';
+  if (value === '5m') {
+    return { control: { type: 'ephemeral' }, multiplier: CACHE_WRITE_MULTIPLIER_5M };
+  }
+  if (value === '1h') {
+    return { control: { type: 'ephemeral', ttl: '1h' }, multiplier: CACHE_WRITE_MULTIPLIER_1H };
+  }
+  throw new Error(`ANTHROPIC_CACHE_TTL must be "5m" or "1h", got "${value}"`);
+}
+
+/**
  * The system prompt as blocks, with the cache breakpoint between the halves.
  *
  * This is the direct equivalent of `SYSTEM_PROMPT_DYNAMIC_BOUNDARY` on the
@@ -348,12 +393,10 @@ function systemBlocks(request: AgentRequest): Anthropic.TextBlockParam[] {
     {
       type: 'text',
       text: request.staticSystemPrompt,
-      // Plain `ephemeral` — the five-minute TTL, deliberately. The one-hour TTL
-      // doubles the write cost to keep the entry alive across gaps that stop
-      // existing once there is real traffic: the prefix is shared by every
-      // account, so past a few hundred users somebody hits it every few seconds
-      // and the cache hit rate rises on its own.
-      cache_control: { type: 'ephemeral' },
+      // The longest-lived thing in the request, and the reason the TTL is worth
+      // a setting at all: this prefix is shared by every account on the
+      // deployment. See `CACHE_TTL`.
+      cache_control: CACHE_TTL.control,
     },
   ];
   if (request.dynamicSystemPrompt) {
@@ -433,7 +476,7 @@ function replayable(history: AgentMessage[]): Anthropic.MessageParam[] {
      * because the presence of an image invalidates the message tier, and a
      * language escalation, because caches are per-model.
      */
-    if (i === replay.length - 1) block.cache_control = { type: 'ephemeral' };
+    if (i === replay.length - 1) block.cache_control = CACHE_TTL.control;
 
     return { role: m.role, content: [block] };
   });

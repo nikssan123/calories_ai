@@ -4,6 +4,7 @@ import { MAX_OUTPUT_TOKENS, MODELS } from '../src/ai/client.ts';
 import {
   ANTHROPIC_API_AUTH_HELP,
   createAnthropicApiProvider,
+  resolveCacheTtl,
 } from '../src/ai/providers/messages.ts';
 import type { AgentRequest, StreamEvent, ToolDefinition } from '../src/ai/providers/types.ts';
 
@@ -280,6 +281,36 @@ describe('tool definitions', () => {
     const seen = stubFetch(says('Hello.'));
     await createAnthropicApiProvider().run(request({ tools: [] }), null);
     expect(seen[0]!.body).not.toHaveProperty('tools');
+  });
+});
+
+/**
+ * The TTL and the price of a write are one setting, because getting them out of
+ * step misreports the biggest line on the bill rather than breaking anything —
+ * the kind of wrong that survives for months.
+ */
+describe('how long a cache entry is asked to live', () => {
+  it('defaults to five minutes, priced at 1.25x', () => {
+    for (const raw of [undefined, '', '  ', '5m']) {
+      expect(resolveCacheTtl(raw)).toEqual({
+        control: { type: 'ephemeral' },
+        multiplier: 1.25,
+      });
+    }
+  });
+
+  it('takes the hour when asked, and prices it at 2x', () => {
+    expect(resolveCacheTtl('1h')).toEqual({
+      control: { type: 'ephemeral', ttl: '1h' },
+      multiplier: 2,
+    });
+  });
+
+  /** A typo that silently bought the wrong TTL would be invisible in the bill. */
+  it('refuses anything else rather than guessing', () => {
+    for (const raw of ['1hr', '60m', 'ephemeral', '0']) {
+      expect(() => resolveCacheTtl(raw)).toThrow(/must be "5m" or "1h"/);
+    }
   });
 });
 

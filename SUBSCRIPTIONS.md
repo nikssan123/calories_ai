@@ -27,19 +27,43 @@ The model config the tables assume is the one now in `ai/client.ts`: Haiku 4.5 f
 
 ## What one action costs
 
-| action | model | cost |
-|---|---|---|
-| text log | Haiku 4.5 | $0.012 |
-| text log, escalated by language | Sonnet 5, low effort | $0.038 |
-| photo scan | Sonnet 5 | $0.046 |
-| photo scan | Opus 5 | $0.072 |
-| weekly review *(est.)* | Opus 5 | $0.10 |
-| meal plan *(est.)* | Opus 5 | $0.20 |
-| nudge *(est.)* | Haiku 4.5 | $0.01 |
+**Superseded 2026-08-23 by measurement.** The figures in this section were a model.
+Twenty text logs and three photo scans have now been run through the real
+`anthropic-api` lane on a real key, and the model was wrong in both directions:
 
-**A photo costs four to six times a text log.** That single ratio decides the whole
-tier structure: text is cheap enough to be effectively unlimited, and photos are the
-only thing that has to be metered. Everything below follows from it.
+| action | model | measured, warm | measured, cold | this doc had |
+|---|---|---|---|---|
+| text log | Haiku 4.5 | **$0.0052** | $0.0285 | $0.012 |
+| photo scan | Opus 5 | **$0.028** | $0.165 | $0.046–$0.072 |
+| nudge | Sonnet 5 | $0.025 | — | $0.01 *(est.)* |
+| recipe | Opus 5 | $0.186 | — | — |
+| meal plan | Opus 5 | $0.410 | — | $0.20 *(est.)* |
+| weekly review *(still est.)* | Opus 5 | ~$0.10 | — | $0.10 |
+
+*Warm* means the ~18k-token shared prefix — tool definitions plus the static system
+prompt — was already in cache; *cold* means that turn paid to write it. The two
+differ by 5.5× on text and 6× on a photo, and which one a turn gets is a function of
+deployment traffic, not of the user. **That spread is now the single largest source
+of uncertainty in this document**, and it cannot be resolved by modelling — only by
+running real traffic and reading the cold-write share off `ai_usage`.
+
+Three corrections that matter more than the arithmetic:
+
+- **A text log is half what this doc assumed**, warm. Text is even cheaper to give
+  away than the tiers below suppose.
+- **A photo scan runs on Opus 5, not Sonnet 5** — `ai/client.ts` routes `photo_log`
+  to Opus at high effort, so the Sonnet row was never a real configuration. Warm it
+  is cheaper than the doc's Sonnet figure; cold it is more than twice the Opus one.
+- **A meal plan is $0.41, not $0.20.** The estimate was half the truth, and meal
+  plans are output-dominated, which is the one thing caching cannot help.
+
+**A photo costs five times a text log, warm.** That ratio still decides the tier
+structure — text is cheap enough to be effectively unlimited, photos are the thing
+that has to be metered — so the shape of what follows survives; the absolute numbers
+in it do not. **Every tier table below still prices a text log at $0.012 and has not
+been recomputed**, deliberately: doing so would need a warm/cold mix that no
+production row can yet supply, and a projection recomputed from a measurement is
+still a projection. See `COMPETITION.md` §3.
 
 Two second-order effects worth knowing, because they are counter-intuitive:
 

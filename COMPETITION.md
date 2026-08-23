@@ -97,10 +97,12 @@ the constraint.
 ### First, what is actually measured
 
 ```
-ai_usage, all time:  23 turns · 3 accounts · 4 days · $3.26 total
-provider:            'anthropic' (Agent SDK) for all 23 rows
-claude-haiku-4-5:    0 rows
-photo_log:           0 rows
+production ai_usage:  59 turns · 4 accounts · all provider = 'anthropic' (Agent SDK)
+                      0 rows on the metered lane, because it had never been switched on
+
+as of 2026-08-23:     production flipped to AI_PROVIDER=anthropic-api
+measured separately:  20 text logs + 3 photo scans on the real key, real prompt,
+                      real tools -- the first Haiku and photo_log numbers that exist
 ```
 
 Everything in `SUBSCRIPTIONS.md` priced at Haiku ($0.012/text log) or on a photo
@@ -138,23 +140,46 @@ conversation grows.
 
 | step | per text log | product change |
 |---|---|---|
-| measured today (Agent SDK, Sonnet) | $0.0626 | — |
-| on `messages.ts` as written | ~$0.052 | none |
-| **+ breakpoint on replayed history** | **~$0.024** | **none** |
-| + 1h TTL on the shared prefix until volume | ~$0.021 | none |
-| + Haiku 4.5 (already configured, never exercised) | **~$0.008** | none |
+| measured, Agent SDK on Sonnet 5 | $0.0626 | — |
+| **measured, `anthropic-api` on Haiku 4.5, warm, no breakpoint** | **$0.0069** | none |
+| **measured, same with the breakpoint + chunked window** | **$0.0052** | **none** |
+| the same turn cold, i.e. paying to write the shared prefix | $0.0285 | — |
 
-**~8×, with nothing removed from the product.**
+**Measured 2026-08-23**, both arms: twenty real turns on a real key, same twenty
+messages, same account, run back to back. The lane change is the large one — 12× — and
+almost all of it is Sonnet 5 → Haiku 4.5 plus a warm prefix, not the breakpoint.
+
+The breakpoint's own contribution, isolated on the input side where it acts:
+
+| per turn, steady state | before | after |
+|---|---:|---:|
+| uncached input tokens | 2,653 | **1,320** |
+| cache read tokens | 31,069 | 30,144 |
+| cache write tokens | 0 | 47 |
+| **input cost** | **$0.00576** | **$0.00439** |
+
+**−24% on input, ~$0.0014 a turn.** The mechanism is visible in the raw rows: without
+the breakpoint, `input_tokens` climbs every turn — 1,696 at the start of the
+conversation, 4,435 by turn eighteen — because the whole transcript is re-sent at full
+price and the transcript keeps growing. With it, uncached input goes flat and cache
+writes collapse to 13–63 tokens a turn, which is the two new messages and nothing else.
+
+**The honest headline is that this was the smaller lever.** The bill is dominated by
+whether the ~18k-token shared prefix is warm when a turn arrives: $0.0052 warm against
+$0.0285 cold, a 5.5× spread that dwarfs everything above. That is a traffic property,
+not a code property.
 
 Three things worth knowing:
 
 - **Don't shrink the prompt to save money.** Haiku 4.5's minimum cacheable prefix is
   **4,096 tokens**. A lean extraction prompt below that silently never caches — no error,
   just `cache_creation_input_tokens: 0`. The 12k prefix is an asset, not a cost.
-- **The 5-minute TTL is a scale optimization applied pre-scale.** `messages.ts:351`
-  reasons that past a few hundred users the shared prefix stays warm on traffic alone.
-  Correct at scale, wrong at launch: cold prefixes mean a full write every turn. Make it
-  config, default `1h`, flip when volume justifies it.
+- **The 5-minute TTL is now configurable — and the default stays at 5m.** This entry
+  used to say "default `1h`", and the measurement says that is wrong at both ends of the
+  volume curve. Below the middle band every turn is a cold write under either setting,
+  and the hour only makes each one 60% dearer; above it, traffic keeps the shared prefix
+  warm and the TTL stops mattering. `ANTHROPIC_CACHE_TTL` exists so the switch is one
+  env var when the cold-write share in `ai_usage` says the middle band has arrived.
 - **Verify, don't assume.** Non-zero `cache_read_input_tokens` on repeated turns is the
   only proof the breakpoint landed.
 
@@ -189,15 +214,21 @@ so caching cannot. That asymmetry, not model choice, is what should shape the ti
 
 ### Per-action costs after the fix
 
-| action | model | cost | basis |
-|---|---|---|---|
-| text log | Haiku 4.5 | ~$0.008 | modelled |
-| text log, language-escalated | Sonnet 5, low | ~$0.024 | modelled |
-| photo scan | Sonnet 5 | ~$0.023 | modelled |
-| weekly review | Opus 5 | ~$0.10 | estimated |
-| nudge | Sonnet 5 | $0.025 | **measured** |
-| recipe | Opus 5 | $0.186 | **measured** |
-| meal plan | Opus 5 | $0.410 | **measured** |
+| action | model | warm | cold | basis |
+|---|---|---|---|---|
+| text log | Haiku 4.5 | **$0.0052** | $0.0285 | **measured** |
+| photo scan | **Opus 5** | **$0.028** | $0.165 | **measured** |
+| text log, language-escalated | Sonnet 5, low | ~$0.016 | ~$0.09 | modelled |
+| weekly review | Opus 5 | ~$0.10 | — | estimated |
+| nudge | Sonnet 5 | $0.025 | — | **measured** |
+| recipe | Opus 5 | $0.186 | — | **measured** |
+| meal plan | Opus 5 | $0.410 | — | **measured** |
+
+Two corrections to earlier drafts of this table. A photo scan runs on **Opus 5**, not
+Sonnet — `ai/client.ts` routes `photo_log` to Opus at high effort, so the Sonnet row was
+never a configuration that existed. And the warm/cold split is not a rounding detail: a
+cold photo scan is $0.165, six times the warm one, and is what a user's *first* photo of
+a quiet morning actually costs.
 
 ### Monthly COGS
 
@@ -405,13 +436,20 @@ field and hoping the architecture shows.
 1. ~~**Add the second cache breakpoint** on the replayed history in `providers/messages.ts`,
    **and** switch `loadHistory` from a sliding window to chunked eviction.~~ **Done.** One
    change in two files; the breakpoint does nothing without the eviction fix.
-2. **Flip prod to `anthropic-api`** and log 20 text turns and 10 photos. You would then
-   have measured Haiku and photo costs for the first time — the two biggest holes in the
-   pricing. Confirm non-zero `cache_read_input_tokens`.
-3. **Make the cache TTL config**, default `1h`.
-4. **Re-run the tables above** against real rows and correct `SUBSCRIPTIONS.md`, whose
-   headline figures are projections from a retired lane.
-5. Then build entitlements, the paywall, and payments — against numbers instead of
+2. ~~**Flip prod to `anthropic-api`** and log 20 text turns and 10 photos.~~ **Done.**
+   Production runs the metered lane as of 2026-08-23 (`ANTHROPIC_ITPM=10000000`, the
+   account's published ceiling on all three models). Twenty text logs and three photo
+   scans measured; `cache_read_input_tokens` non-zero from the second turn on.
+3. ~~**Make the cache TTL config**~~ **Done** — `ANTHROPIC_CACHE_TTL`, `5m` or `1h`,
+   validated at boot. Default stays `5m`; the reasoning is in §3 and it is the opposite
+   of what this step originally said.
+4. ~~**Re-run the tables above**~~ **Done** for per-action costs; `SUBSCRIPTIONS.md`
+   carries the correction. The **tier tables are deliberately not recomputed** — they
+   need a warm/cold mix, and only real traffic on the new lane can supply it.
+5. **Let real traffic accumulate, then read the cold-write share.** That single number
+   decides both the TTL setting and whether the monthly COGS table above is closer to its
+   warm column or its cold one. Nothing else in the pricing can be settled without it.
+6. Then build entitlements, the paywall, and payments — against numbers instead of
    guesses.
 
 ---
