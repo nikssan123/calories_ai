@@ -8,6 +8,7 @@ import type {
   WorkoutExercise,
 } from '@ct/shared';
 import { matchRoutine } from '@ct/shared';
+import type pg from 'pg';
 import { query, queryOne, transaction } from '../db.ts';
 import { latestWeight } from './log.ts';
 import { type DayContext, localDateFor } from '../time.ts';
@@ -117,8 +118,124 @@ export interface LogWorkoutInput {
  * which matters more than either number being exactly right.
  */
 export async function logWorkout(input: LogWorkoutInput): Promise<ExerciseEntry> {
+  const priced = await priceSession(input);
+
+  const entryId = await transaction(async (client) => {
+    const { rows } = await client.query<{ id: string }>(
+      `INSERT INTO exercise_entries
+         (user_id, description, performed_at, local_date, duration_min,
+          kcal_burned, confidence, source, category, detail, routine_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'workout',$8,'counted',$9)
+       RETURNING id`,
+      [
+        input.userId,
+        priced.description,
+        priced.performedAt.toISOString(),
+        priced.localDate,
+        priced.minutes,
+        priced.kcal,
+        // The sets were counted by a person; the burn is still a model of
+        // effort, so this is honest rather than flattering.
+        'medium',
+        input.category,
+        priced.routine?.id ?? null,
+      ],
+    );
+    const id = rows[0]!.id;
+    await writeSets(client, id, priced.resolved);
+    return id;
+  });
+
+  // Ordering for the picker: the routine done on Tuesday should be near the top
+  // on Thursday. Deliberately after the transaction — a failure to reorder a
+  // picker is not a reason to lose a logged session.
+  if (priced.routine) {
+    const { touchRoutine } = await import('./routines.ts');
+    await touchRoutine(input.userId, priced.routine.id, priced.performedAt);
+  }
+
+  const entry = await getExerciseEntry(input.userId, entryId);
+  if (!entry) throw new Error('Workout vanished immediately after insert');
+  return entry;
+}
+
+/**
+ * The same session, counted again.
+ *
+ * A workout card is submitted from memory, usually while still catching your
+ * breath, and the set you mistyped is not discoverable until it is already a
+ * receipt. Deleting it and logging it again would work and is what people
+ * currently do, but it loses the entry id — and with it the card in the
+ * journal, the routine link, and anything else that ever pointed at this
+ * session.
+ *
+ * So this rewrites in place. The burn is recomputed rather than kept: it was
+ * derived from the sets and the duration, and a correction that moved either of
+ * those leaves the old figure describing a session nobody did. Same for the
+ * description, which is why an edit that drops the last two exercises off a
+ * routine can quietly stop calling itself "Push day" — it is not one any more.
+ *
+ * Returns null when the entry is not theirs or does not exist, so the route can
+ * answer 404 rather than silently writing nothing.
+ */
+export async function updateWorkout(
+  input: LogWorkoutInput & { entryId: string },
+): Promise<ExerciseEntry | null> {
+  const existing = await getExerciseEntry(input.userId, input.entryId);
+  if (!existing) return null;
+
+  const priced = await priceSession(input);
+
+  await transaction(async (client) => {
+    await client.query(
+      `UPDATE exercise_entries
+          SET description = $1, performed_at = $2, local_date = $3, duration_min = $4,
+              kcal_burned = $5, category = $6, routine_id = $7, detail = 'counted'
+        WHERE id = $8 AND user_id = $9`,
+      [
+        priced.description,
+        priced.performedAt.toISOString(),
+        priced.localDate,
+        priced.minutes,
+        priced.kcal,
+        input.category,
+        priced.routine?.id ?? null,
+        input.entryId,
+        input.userId,
+      ],
+    );
+    // Replaced wholesale rather than diffed. A set has no identity of its own —
+    // it is the third set of the second exercise — so matching old rows to new
+    // ones is guesswork the moment an exercise is inserted or removed.
+    await client.query('DELETE FROM exercise_sets WHERE entry_id = $1', [input.entryId]);
+    await writeSets(client, input.entryId, priced.resolved);
+  });
+
+  if (priced.routine) {
+    const { touchRoutine } = await import('./routines.ts');
+    await touchRoutine(input.userId, priced.routine.id, priced.performedAt);
+  }
+
+  return getExerciseEntry(input.userId, input.entryId);
+}
+
+/**
+ * Everything a session is worth, worked out before a row is written.
+ *
+ * Shared by the log and the edit so the two can never disagree: a session
+ * corrected back to exactly what it was must come out with the number it
+ * started with, and it only does if both paths run the same arithmetic.
+ */
+async function priceSession(input: LogWorkoutInput): Promise<{
+  performedAt: Date;
+  localDate: string;
+  minutes: number;
+  kcal: number;
+  description: string;
+  resolved: Resolved[];
+  routine: { id: string; name: string } | null;
+}> {
   const performedAt = input.performedAt ?? new Date();
-  const localDate = localDateFor(performedAt, input.ctx);
 
   const resolved = await Promise.all(
     input.exercises.map(async (exercise) => ({
@@ -131,7 +248,6 @@ export async function logWorkout(input: LogWorkoutInput): Promise<ExerciseEntry>
 
   const minutes = input.durationMin ?? estimateMinutes(resolved);
   const weight = await latestWeight(input.userId);
-  const kcal = estimateBurn(resolved, minutes, weight?.weight_kg ?? null, input.category);
 
   /*
    * A session that came from a routine is called by its name.
@@ -149,64 +265,44 @@ export async function logWorkout(input: LogWorkoutInput): Promise<ExerciseEntry>
    */
   const routine = await routineFor(input, resolved);
 
-  const entryId = await transaction(async (client) => {
-    const { rows } = await client.query<{ id: string }>(
-      `INSERT INTO exercise_entries
-         (user_id, description, performed_at, local_date, duration_min,
-          kcal_burned, confidence, source, category, detail, routine_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,'workout',$8,'counted',$9)
-       RETURNING id`,
-      [
-        input.userId,
-        routine?.name ?? describe(input.category, resolved.map((r) => r.exercise)),
-        performedAt.toISOString(),
-        localDate,
-        minutes,
-        kcal,
-        // The sets were counted by a person; the burn is still a model of
-        // effort, so this is honest rather than flattering.
-        'medium',
-        input.category,
-        routine?.id ?? null,
-      ],
-    );
-    const id = rows[0]!.id;
+  return {
+    performedAt,
+    localDate: localDateFor(performedAt, input.ctx),
+    minutes,
+    kcal: estimateBurn(resolved, minutes, weight?.weight_kg ?? null, input.category),
+    description: routine?.name ?? describe(input.category, resolved.map((r) => r.exercise)),
+    resolved,
+    routine,
+  };
+}
 
-    for (const [position, { exercise, type }] of resolved.entries()) {
-      for (const [index, set] of exercise.sets.entries()) {
-        await client.query(
-          `INSERT INTO exercise_sets
-             (entry_id, type_id, name, position, set_number,
-              reps, weight_kg, duration_sec, distance_m)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-          [
-            id,
-            type?.id ?? null,
-            type?.name ?? exercise.name.trim(),
-            position,
-            index + 1,
-            set.reps ?? null,
-            set.weight_kg ?? null,
-            set.duration_sec ?? null,
-            set.distance_m ?? null,
-          ],
-        );
-      }
+/** One row per set, in the order they were done. Assumes the entry has none. */
+async function writeSets(
+  client: pg.PoolClient,
+  entryId: string,
+  resolved: Resolved[],
+): Promise<void> {
+  for (const [position, { exercise, type }] of resolved.entries()) {
+    for (const [index, set] of exercise.sets.entries()) {
+      await client.query(
+        `INSERT INTO exercise_sets
+           (entry_id, type_id, name, position, set_number,
+            reps, weight_kg, duration_sec, distance_m)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [
+          entryId,
+          type?.id ?? null,
+          type?.name ?? exercise.name.trim(),
+          position,
+          index + 1,
+          set.reps ?? null,
+          set.weight_kg ?? null,
+          set.duration_sec ?? null,
+          set.distance_m ?? null,
+        ],
+      );
     }
-    return id;
-  });
-
-  // Ordering for the picker: the routine done on Tuesday should be near the top
-  // on Thursday. Deliberately after the transaction — a failure to reorder a
-  // picker is not a reason to lose a logged session.
-  if (routine) {
-    const { touchRoutine } = await import('./routines.ts');
-    await touchRoutine(input.userId, routine.id, performedAt);
   }
-
-  const entry = await getExerciseEntry(input.userId, entryId);
-  if (!entry) throw new Error('Workout vanished immediately after insert');
-  return entry;
 }
 
 /**

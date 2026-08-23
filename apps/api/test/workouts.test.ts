@@ -11,6 +11,7 @@ import {
   listExerciseTypes,
   logWorkout,
   primeMetCache,
+  updateWorkout,
 } from '../src/services/workouts.ts';
 import { listExerciseEntries } from '../src/services/log.ts';
 import { addWeight, appFor, createUser, type TestUser } from './helpers/factories.ts';
@@ -207,6 +208,130 @@ describe('logWorkout', () => {
   });
 });
 
+/**
+ * Correcting a session that is already a receipt.
+ *
+ * The card is submitted from memory and memory mistypes the third set, so an
+ * edit has to be as ordinary as the log was. What it must never do is mint a
+ * new entry: the id is what the journal card, the day's totals and the routine
+ * link all point at.
+ */
+describe('updateWorkout', () => {
+  it('keeps the entry id', async () => {
+    const entry = await logWorkout({
+      userId: user.id, category: 'strength', exercises: [bench([8, 8, 6], 80)], ctx: user.ctx,
+    });
+    const edited = await updateWorkout({
+      entryId: entry.id,
+      userId: user.id,
+      category: 'strength',
+      exercises: [bench([8, 8, 8], 80)],
+      ctx: user.ctx,
+    });
+    expect(edited!.id).toBe(entry.id);
+  });
+
+  it('replaces the sets rather than appending to them', async () => {
+    const entry = await logWorkout({
+      userId: user.id, category: 'strength', exercises: [bench([8, 8, 6], 80)], ctx: user.ctx,
+    });
+    const edited = await updateWorkout({
+      entryId: entry.id,
+      userId: user.id,
+      category: 'strength',
+      exercises: [bench([5], 100)],
+      ctx: user.ctx,
+    });
+    expect(edited!.sets).toHaveLength(1);
+    expect(edited!.sets[0]).toMatchObject({ reps: 5, weight_kg: 100, set_number: 1 });
+  });
+
+  /*
+   * The burn was derived from the sets and the duration. Leaving it alone after
+   * a correction would leave the figure describing a session nobody did.
+   */
+  it('recomputes the burn from the corrected session', async () => {
+    const entry = await logWorkout({
+      userId: user.id, category: 'strength', exercises: [bench([8], 80)],
+      durationMin: 30, ctx: user.ctx,
+    });
+    const edited = await updateWorkout({
+      entryId: entry.id,
+      userId: user.id,
+      category: 'strength',
+      exercises: [bench([8], 80)],
+      durationMin: 90,
+      ctx: user.ctx,
+    });
+    expect(edited!.kcal_burned).toBeGreaterThan(entry.kcal_burned);
+  });
+
+  /** A correction back to what it was must come out with the number it had. */
+  it('is stable when nothing actually changed', async () => {
+    const entry = await logWorkout({
+      userId: user.id, category: 'strength', exercises: [bench([8, 8, 6], 80)],
+      durationMin: 45, ctx: user.ctx,
+    });
+    const edited = await updateWorkout({
+      entryId: entry.id,
+      userId: user.id,
+      category: 'strength',
+      exercises: [bench([8, 8, 6], 80)],
+      durationMin: 45,
+      ctx: user.ctx,
+    });
+    expect(edited!.kcal_burned).toBe(entry.kcal_burned);
+    expect(edited!.description).toBe(entry.description);
+  });
+
+  it('renames the session when the exercises no longer justify the old name', async () => {
+    const entry = await logWorkout({
+      userId: user.id,
+      category: 'strength',
+      exercises: [bench([5], 60), { name: 'Squat', sets: [{ reps: 5, weight_kg: 100 }] }],
+      ctx: user.ctx,
+    });
+    const edited = await updateWorkout({
+      entryId: entry.id,
+      userId: user.id,
+      category: 'strength',
+      exercises: [{ name: 'Squat', sets: [{ reps: 5, weight_kg: 100 }] }],
+      ctx: user.ctx,
+    });
+    expect(edited!.description).not.toBe(entry.description);
+    expect(edited!.description).toContain('Squat');
+  });
+
+  it('leaves somebody else\'s session alone', async () => {
+    const stranger = await createUser();
+    const entry = await logWorkout({
+      userId: user.id, category: 'strength', exercises: [bench([8], 80)], ctx: user.ctx,
+    });
+    const edited = await updateWorkout({
+      entryId: entry.id,
+      userId: stranger.id,
+      category: 'strength',
+      exercises: [bench([1], 200)],
+      ctx: stranger.ctx,
+    });
+    expect(edited).toBeNull();
+    // And the original is untouched.
+    const still = await getExerciseEntry(user.id, entry.id);
+    expect(still!.sets.map((s) => s.reps)).toEqual([8]);
+  });
+
+  it('answers null for an entry that does not exist', async () => {
+    const edited = await updateWorkout({
+      entryId: '00000000-0000-0000-0000-000000000000',
+      userId: user.id,
+      category: 'strength',
+      exercises: [bench([8], 80)],
+      ctx: user.ctx,
+    });
+    expect(edited).toBeNull();
+  });
+});
+
 describe('the arithmetic', () => {
   /** Three minutes a set — a set plus the rest after it. */
   it('estimates a session length from the sets when nobody said', () => {
@@ -301,6 +426,51 @@ describe('the routes', () => {
       expect(response.statusCode).toBe(201);
       expect(response.json()).toMatchObject({ detail: 'counted', description: 'Bench press' });
       expect(response.json().sets).toHaveLength(3);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('corrects a logged session in place', async () => {
+    const { app, cookie } = await appFor(user);
+    try {
+      const logged = await app.inject({
+        method: 'POST',
+        url: '/exercise/workout',
+        headers: { cookie },
+        payload: { category: 'strength', exercises: [bench([8, 8, 6], 80)] },
+      });
+      const id = logged.json().id;
+
+      const edited = await app.inject({
+        method: 'PATCH',
+        url: `/entries/exercise/${id}`,
+        headers: { cookie },
+        payload: { category: 'strength', exercises: [bench([8, 8, 8], 80)] },
+      });
+
+      expect(edited.statusCode).toBe(200);
+      expect(edited.json().id).toBe(id);
+      expect(edited.json().sets.map((s: any) => s.reps)).toEqual([8, 8, 8]);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('will not correct a session belonging to somebody else', async () => {
+    const entry = await logWorkout({
+      userId: user.id, category: 'strength', exercises: [bench([8], 80)], ctx: user.ctx,
+    });
+    const stranger = await createUser();
+    const { app, cookie } = await appFor(stranger);
+    try {
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/entries/exercise/${entry.id}`,
+        headers: { cookie },
+        payload: { category: 'strength', exercises: [bench([1], 200)] },
+      });
+      expect(response.statusCode).toBe(404);
     } finally {
       await app.close();
     }

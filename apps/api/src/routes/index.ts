@@ -17,6 +17,7 @@ import { env } from '../env.ts';
 import { generateWeeklyReview } from '../ai/review.ts';
 import { runTurn, type RunTurnInput } from '../ai/run.ts';
 import { foodCard } from '../ai/tools.ts';
+import { itemShape } from '../ai/shapes.ts';
 import { sendAccountDeletedEmail } from '../email/notify.ts';
 import {
   fetchReceivedEmail,
@@ -71,7 +72,7 @@ import {
   updateUser,
 } from '../services/user.ts';
 import { forgetPushToken, registerPushToken } from '../services/push-tokens.ts';
-import { lastWorkout, listExerciseTypes, logWorkout } from '../services/workouts.ts';
+import { lastWorkout, listExerciseTypes, logWorkout, updateWorkout } from '../services/workouts.ts';
 import {
   deleteRoutine,
   listRoutines,
@@ -316,12 +317,40 @@ export async function registerRoutes(app: FastifyInstance) {
     return buildCalendar(userId, from, to);
   });
 
-  // ---- Manual corrections from the Today screen -----------------------------
+  // ---- Manual corrections -----------------------------------------------------
+
+  /*
+   * A card is submitted from memory, and memory is wrong about the third set.
+   *
+   * Everything the journal draws as a receipt can be corrected here without
+   * going through the model: the user already knows what they meant, and asking
+   * a language model to re-read "make that 8 reps not 10" is a slower and less
+   * reliable way to change one integer. The model keeps its own correction
+   * tools for the conversational case — this is for the card that is already on
+   * screen with the wrong number on it.
+   *
+   * These are PATCHes onto the existing row rather than a delete and a re-log.
+   * The entry id is pointed at from the journal, from a routine and from the
+   * day's totals, and a correction that mints a new id silently orphans all
+   * three.
+   */
 
   const FoodPatch = z.object({
     meal: Meal.optional(),
     description: z.string().min(1).optional(),
     eaten_at: z.string().optional(),
+    confidence: z.enum(['high', 'medium', 'low']).optional(),
+    note: z.string().nullable().optional(),
+    /**
+     * The complete corrected item list, or absent to leave the food alone.
+     *
+     * Whole-list rather than per-item, for the same reason the model's
+     * `update_food_entry` works this way: an item has no identity worth
+     * addressing — it is "the rice" until the moment somebody splits it in two
+     * — so a patch that tried to name one would need an id the client has no
+     * stable way to hold.
+     */
+    items: z.array(z.object(itemShape)).min(1).optional(),
   });
 
   app.patch('/entries/food/:id', async (request, reply) => {
@@ -333,11 +362,44 @@ export async function registerRoutes(app: FastifyInstance) {
     const updated = await updateFoodEntry(userId, id, {
       meal: parsed.data.meal,
       description: parsed.data.description,
+      confidence: parsed.data.confidence,
+      note: parsed.data.note,
+      items: parsed.data.items,
       eatenAt: parsed.data.eaten_at ? new Date(parsed.data.eaten_at) : undefined,
       ctx,
     });
     if (!updated) return reply.status(404).send({ error: 'Entry not found' });
     return updated;
+  });
+
+  /**
+   * A counted session, corrected.
+   *
+   * Takes the same body the card posted in the first place, because it is the
+   * same card: an edit reopens the form with its own answers in it, and what
+   * comes back is a whole session rather than a diff. `message_id` is ignored
+   * here — the message that asked the question was rewritten into a receipt
+   * when the session was first logged, and there is no question left to answer.
+   */
+  app.patch('/entries/exercise/:id', async (request, reply) => {
+    const { userId, ...ctx } = await getUserContext(request.userId!);
+    const parsed = WorkoutRequest.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid workout' });
+    }
+
+    const entry = await updateWorkout({
+      entryId: (request.params as any).id as string,
+      userId,
+      category: parsed.data.category,
+      exercises: parsed.data.exercises,
+      durationMin: parsed.data.duration_min ?? null,
+      performedAt: parsed.data.performed_at ? new Date(parsed.data.performed_at) : undefined,
+      routineId: parsed.data.routine_id ?? null,
+      ctx,
+    });
+    if (!entry) return reply.status(404).send({ error: 'Entry not found' });
+    return entry;
   });
 
   /*

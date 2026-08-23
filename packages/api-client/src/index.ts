@@ -20,6 +20,7 @@ import type {
   ExerciseSummary,
   ExerciseType,
   FoodEntry,
+  FoodItem,
   GoogleExchange,
   LastWorkout,
   Meal,
@@ -318,8 +319,20 @@ export function createApiClient({
     updateProfile: (patch: ProfileUpdate) =>
       request<Profile>('/profile', { method: 'PATCH', body: JSON.stringify(patch) }),
 
-    updateFoodEntry: (id: string, patch: Partial<Pick<FoodEntry, 'meal' | 'description' | 'eaten_at'>>) =>
-      request<FoodEntry>(`/entries/food/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+    /**
+     * Corrects an entry that is already logged.
+     *
+     * `items` is the complete replacement list, not a diff — send every item
+     * the meal should end up with, including the ones that did not change.
+     * Omit it to leave the food alone and move only the label, the meal or the
+     * time.
+     */
+    updateFoodEntry: (
+      id: string,
+      patch: Partial<Pick<FoodEntry, 'meal' | 'description' | 'eaten_at' | 'confidence' | 'note'>> & {
+        items?: Omit<FoodItem, 'id' | 'entry_id'>[];
+      },
+    ) => request<FoodEntry>(`/entries/food/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 
     /**
      * Tells the server where this phone can be reached.
@@ -430,6 +443,20 @@ export function createApiClient({
     logWorkout: (payload: WorkoutRequest) =>
       request<ExerciseEntry>('/exercise/workout', {
         method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+
+    /**
+     * Rewrites a counted session in place, taking the body it was logged with.
+     *
+     * The whole session rather than a patch, because the card an edit reopens
+     * is the card it was submitted from: what comes back is a complete answer,
+     * and the sets have no ids for a diff to address anyway. The entry keeps
+     * its id, so the journal card and the day's totals follow it.
+     */
+    updateWorkout: (id: string, payload: WorkoutRequest) =>
+      request<ExerciseEntry>(`/entries/exercise/${id}`, {
+        method: 'PATCH',
         body: JSON.stringify(payload),
       }),
 

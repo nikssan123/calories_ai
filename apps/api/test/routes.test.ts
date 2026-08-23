@@ -203,6 +203,58 @@ describe('food entry routes', () => {
     expect(response.json()).toMatchObject({ meal: 'dinner', description: 'Renamed' });
   });
 
+  /*
+   * The half of a correction that actually moves the numbers. Everything above
+   * only relabels a meal; this is somebody saying the portion was wrong, which
+   * is the common case and the one the old route could not express at all.
+   */
+  it('replaces the items, and the totals follow them', async () => {
+    const entry = await addMeal(user, { date: today, kcal: 500 });
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/entries/food/${entry.id}`,
+      ...auth({
+        payload: {
+          items: [
+            { name: 'Rice', quantity_g: 300, kcal: 400, protein_g: 8, carbs_g: 88, fat_g: 1 },
+            { name: 'Chicken', quantity_g: 200, kcal: 330, protein_g: 62, carbs_g: 0, fat_g: 8 },
+          ],
+        },
+      }),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().items).toHaveLength(2);
+    // Summed from the items rather than carried over from the old entry.
+    expect(response.json().kcal).toBe(730);
+    expect(response.json().protein_g).toBe(70);
+  });
+
+  it('keeps the entry id across a correction', async () => {
+    const entry = await addMeal(user, { date: today, kcal: 500 });
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/entries/food/${entry.id}`,
+      ...auth({
+        payload: {
+          description: 'Bigger portion',
+          items: [{ name: 'Pasta', quantity_g: 400, kcal: 620, protein_g: 22, carbs_g: 120, fat_g: 4 }],
+        },
+      }),
+    });
+    expect(response.json().id).toBe(entry.id);
+  });
+
+  it('refuses a correction that empties the meal', async () => {
+    const entry = await addMeal(user, { date: today, kcal: 500 });
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/entries/food/${entry.id}`,
+      ...auth({ payload: { items: [] } }),
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
   it('rejects an invalid patch', async () => {
     const entry = await addMeal(user, { date: today, kcal: 500 });
     const response = await app.inject({
