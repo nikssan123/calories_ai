@@ -3,7 +3,8 @@ import Animated, { FadeOut, LinearTransition, ReduceMotion } from 'react-native-
 import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
-import { type as t, useColors } from '@/theme';
+import { type as t, useColors, type Palette } from '@/theme';
+import { Glyph } from '@/components/Glyph';
 import { haptics } from '@/lib/haptics';
 
 export interface SwipeAction {
@@ -60,6 +61,15 @@ export function SwipeRow({
   children: React.ReactNode;
 }) {
   const colors = useColors();
+
+  /*
+   * A row with nothing to offer is not a swipeable row that happens to be
+   * empty — it is a row. Some lists mix the two: a shopping line somebody
+   * typed can be removed and one derived from the week's plan cannot, and a
+   * gesture that opened onto a blank panel would promise an action that does
+   * not exist.
+   */
+  if (actions.length === 0) return <View style={style}>{children}</View>;
 
   return (
     <Animated.View
@@ -130,3 +140,30 @@ const styles = StyleSheet.create({
    */
   action: { width: 76, alignItems: 'center', justifyContent: 'center', gap: 3 },
 });
+
+/**
+ * The two things a pulled row offers, built here rather than at each call site
+ * so that "delete" is the same red, the same width and the same word wherever
+ * it is reached from.
+ */
+export function removeAction(colors: Palette, what: string, onPress: () => void): SwipeAction {
+  return {
+    label: 'Delete',
+    announce: `Delete ${what}`,
+    tint: colors.destructive,
+    ink: colors.destructiveForeground,
+    icon: <Glyph icon="trash" color={colors.destructiveForeground} size={19} />,
+    onPress,
+  };
+}
+
+export function repeatAction(colors: Palette, what: string, onPress: () => void): SwipeAction {
+  return {
+    label: 'Repeat',
+    announce: `Log ${what} again`,
+    tint: colors.primary,
+    ink: colors.primaryForeground,
+    icon: <Glyph icon="repeat" color={colors.primaryForeground} size={19} />,
+    onPress,
+  };
+}

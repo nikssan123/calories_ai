@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -11,6 +11,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -244,7 +245,15 @@ export function Sheet({
    * be nothing left to animate out.
    */
   const [mounted, setMounted] = useState(open);
-  const height = useRef(420);
+  /*
+   * A shared value rather than a ref, and not interchangeable with one: the
+   * worklet below reads this every frame, and Reanimated freezes a plain object
+   * the first time a worklet captures it. A ref written from `onLayout` would
+   * warn on every measurement and the panel would keep sliding in from the 420
+   * it guessed rather than from its own measured height — worst on the tall
+   * sheets, which is where the guess is furthest out.
+   */
+  const height = useSharedValue(420);
   const progress = useSharedValue(0);
 
   useEffect(() => {
@@ -265,36 +274,50 @@ export function Sheet({
 
   const scrim = useAnimatedStyle(() => ({ opacity: progress.value }));
   const panel = useAnimatedStyle(() => ({
-    transform: [{ translateY: (1 - progress.value) * height.current }],
+    transform: [{ translateY: (1 - progress.value) * height.value }],
   }));
 
   return (
     <Modal visible={mounted} transparent animationType="none" onRequestClose={onClose}>
-      <Animated.View style={[styles.scrim, scrim]}>
-        {/* Tapping away closes it — the same affordance as tapping off a
-            popover, and the only one a sheet with no chrome can offer. */}
-        <Pressable style={styles.flex} onPress={onClose} accessibilityLabel="Close" />
-      </Animated.View>
+      {/*
+       * A second gesture root, inside the modal.
+       *
+       * A `Modal` is its own native window, so the one at the top of the app
+       * does not reach in here — and a gesture mounted outside a root does not
+       * fail, it simply never fires. The pantry's rows are swipeable and were
+       * silently not, which is exactly the failure this shape produces: the
+       * code is right, the handler is mounted, nothing happens.
+       *
+       * The same reason this sheet already draws its own scrim and its own
+       * safe-area padding: nothing above it applies.
+       */}
+      <GestureHandlerRootView style={styles.flex}>
+        <Animated.View style={[styles.scrim, scrim]}>
+          {/* Tapping away closes it — the same affordance as tapping off a
+              popover, and the only one a sheet with no chrome can offer. */}
+          <Pressable style={styles.flex} onPress={onClose} accessibilityLabel="Close" />
+        </Animated.View>
 
-      <Animated.View
-        onLayout={(event) => {
-          height.current = event.nativeEvent.layout.height;
-        }}
-        style={[
-          styles.sheet,
-          panel,
-          {
-            backgroundColor: colors.card,
-            borderColor: colors.border,
-            paddingBottom: Math.max(insets.bottom, 16) + 12,
-          },
-        ]}
-      >
-        <Text style={[t.eyebrow, styles.sheetTitle, { color: colors.mutedForeground }]}>
-          {title}
-        </Text>
-        <ScrollView bounces={false}>{children}</ScrollView>
-      </Animated.View>
+        <Animated.View
+          onLayout={(event) => {
+            height.value = event.nativeEvent.layout.height;
+          }}
+          style={[
+            styles.sheet,
+            panel,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              paddingBottom: Math.max(insets.bottom, 16) + 12,
+            },
+          ]}
+        >
+          <Text style={[t.eyebrow, styles.sheetTitle, { color: colors.mutedForeground }]}>
+            {title}
+          </Text>
+          <ScrollView bounces={false}>{children}</ScrollView>
+        </Animated.View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

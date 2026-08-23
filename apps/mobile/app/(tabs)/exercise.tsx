@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path } from 'react-native-svg';
 import type { ExerciseEntry, ExerciseSummary } from '@ct/shared';
 import { distanceUnit, formatDistance, toDistance } from '@ct/shared';
 import { exerciseEmoji } from '@ct/shared/food-emoji';
@@ -13,6 +12,9 @@ import { Stat, Stats } from '@/components/Stat';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
+import { Glyph } from '@/components/Glyph';
+import { removeAction, SwipeRow } from '@/components/SwipeRow';
+import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
 
 /**
  * Exercise, split out of Progress so it gets a screen rather than a single row.
@@ -31,6 +33,7 @@ export default function ExerciseScreen() {
   const units = useUnits();
 
   const [summary, setSummary] = useState<ExerciseSummary | null>(null);
+  const undoably = useUndoableRemoval();
   const [days, setDays] = useState<number>(30);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,16 +63,21 @@ export default function ExerciseScreen() {
     void load(days);
   }, [days, load]);
 
-  async function remove(entry: ExerciseEntry) {
+  function remove(entry: ExerciseEntry) {
+    const before = summary;
     setSummary((prev) =>
       prev ? { ...prev, entries: prev.entries.filter((e) => e.id !== entry.id) } : prev,
     );
-    try {
-      await api.deleteExerciseEntry(entry.id);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-    void load(days);
+
+    undoably(`Removed ${entry.description}`, {
+      commit: () => {
+        void api
+          .deleteExerciseEntry(entry.id)
+          .catch((e: Error) => setError(e.message))
+          .finally(() => void load(days));
+      },
+      restore: () => setSummary(before),
+    });
   }
 
   return (
@@ -184,44 +192,41 @@ export default function ExerciseScreen() {
             footer={`Burn is an estimate and is never netted off your calorie target. Correct one in the journal — “that run was closer to ${units === 'imperial' ? '4.5 miles' : '7km'}”.`}
           >
             {summary.entries.map((entry, i) => (
-              <InsetRow key={entry.id} first={i === 0}>
-                <Text style={styles.rowEmoji}>{exerciseEmoji(entry.description)}</Text>
-                <View style={styles.flex}>
-                  <Text numberOfLines={1} style={[t.bodySemibold, { color: colors.foreground }]}>
-                    {entry.description}
+              <SwipeRow
+                key={entry.id}
+                style={i === 0 ? null : { borderTopWidth: 2, borderTopColor: colors.border }}
+                actions={[removeAction(colors, entry.description, () => remove(entry))]}
+              >
+                <InsetRow first>
+                  <Text style={styles.rowEmoji}>{exerciseEmoji(entry.description)}</Text>
+                  <View style={styles.flex}>
+                    <Text numberOfLines={1} style={[t.bodySemibold, { color: colors.foreground }]}>
+                      {entry.description}
+                    </Text>
+                    <Text style={[t.footnote, { color: colors.mutedForeground }]}>
+                      {[
+                        formatDate(entry.local_date),
+                        entry.distance_km !== null ? formatDistance(entry.distance_km, units) : null,
+                        entry.duration_min !== null ? `${Math.round(entry.duration_min)} min` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </Text>
+                  </View>
+                  <Text style={[t.figure, styles.figure, { color: colors.exerciseText }]}>
+                    −{Math.round(entry.kcal_burned)}
                   </Text>
-                  <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-                    {[
-                      formatDate(entry.local_date),
-                      entry.distance_km !== null ? formatDistance(entry.distance_km, units) : null,
-                      entry.duration_min !== null ? `${Math.round(entry.duration_min)} min` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </Text>
-                </View>
-                <Text style={[t.figure, styles.figure, { color: colors.exerciseText }]}>
-                  −{Math.round(entry.kcal_burned)}
-                </Text>
-                <Pressable
-                  onPress={() => void remove(entry)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Delete ${entry.description}`}
-                  hitSlop={10}
-                  style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
-                >
-                  <Svg width={15} height={15} viewBox="0 0 24 24">
-                    <Path
-                      d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"
-                      stroke={colors.mutedForeground}
-                      strokeWidth={2.2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      fill="none"
-                    />
-                  </Svg>
-                </Pressable>
-              </InsetRow>
+                  <Pressable
+                    onPress={() => remove(entry)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete ${entry.description}`}
+                    hitSlop={10}
+                    style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+                  >
+                    <Glyph icon="trash" color={colors.mutedForeground} />
+                  </Pressable>
+                </InsetRow>
+              </SwipeRow>
             ))}
           </InsetGroup>
         </>

@@ -6,6 +6,9 @@ import { PressableChunk } from '@/components/Chunk';
 import { FridgeScan } from '@/components/kitchen/FridgeScan';
 import { api } from '@/lib/api';
 import { font, type as t, useColors } from '@/theme';
+import { removeAction, SwipeRow } from '@/components/SwipeRow';
+import { Glyph } from '@/components/Glyph';
+import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
 
 /**
  * What is in the kitchen.
@@ -44,12 +47,22 @@ export function Pantry({
   onError: (message: string) => void;
 }) {
   const colors = useColors();
+  const undoably = useUndoableRemoval();
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [showStaples, setShowStaples] = useState(false);
 
-  const staples = items.filter((i) => i.is_staple);
-  const fresh = items.filter((i) => !i.is_staple);
+  /*
+   * The list is a prop, so the row cannot be taken out of it here — but it can
+   * be hidden, which is the same thing to look at and undoes without asking the
+   * parent for anything. Once the delete goes through, `onChanged` refetches
+   * without the item and the id left behind here is inert.
+   */
+  const [hidden, setHidden] = useState<string[]>([]);
+
+  const shown = items.filter((i) => !hidden.includes(i.id));
+  const staples = shown.filter((i) => i.is_staple);
+  const fresh = shown.filter((i) => !i.is_staple);
 
   async function add() {
     const name = draft.trim();
@@ -82,13 +95,18 @@ export function Pantry({
     }
   }
 
-  async function remove(item: PantryItem) {
-    try {
-      await api.deletePantryItem(item.id);
-      onChanged();
-    } catch (e) {
-      onError((e as Error).message);
-    }
+  function remove(item: PantryItem) {
+    setHidden((prev) => [...prev, item.id]);
+
+    undoably(`Removed ${item.name}`, {
+      commit: () => {
+        void api
+          .deletePantryItem(item.id)
+          .then(onChanged)
+          .catch((e: Error) => onError(e.message));
+      },
+      restore: () => setHidden((prev) => prev.filter((id) => id !== item.id)),
+    });
   }
 
   return (
@@ -162,62 +180,58 @@ export function Pantry({
           const days = daysSince(item.last_seen_at);
           const stale = days >= STALE_DAYS;
           return (
-            <View key={item.id} style={[styles.item, { borderBottomColor: colors.border }]}>
-              <View style={styles.itemBody}>
-                <Text numberOfLines={1} style={[t.body, { color: colors.foreground }]}>
-                  {item.name}
-                  {item.quantity_desc && (
-                    <Text style={{ color: colors.mutedForeground }}> · {item.quantity_desc}</Text>
-                  )}
-                </Text>
-                <Text
-                  style={[t.footnote, { color: stale ? colors.fatText : colors.mutedForeground }]}
-                >
-                  {describeAge(days)}
-                </Text>
-              </View>
-
-              {/* Only offered once an item is old enough to doubt. Before that
-                  it is a button that changes nothing, which teaches people to
-                  ignore it for the fortnight when it starts to matter. */}
-              {stale && (
-                <Pressable
-                  onPress={() => void confirm(item)}
-                  accessibilityRole="button"
-                  style={({ pressed }) => [
-                    styles.still,
-                    {
-                      backgroundColor: colors.secondary,
-                      borderColor: colors.border,
-                      opacity: pressed ? 0.6 : 1,
-                    },
-                  ]}
-                >
-                  <Text style={[t.footnoteBold, { color: colors.secondaryForeground }]}>
-                    Still have it
+            <SwipeRow
+              key={item.id}
+              actions={[removeAction(colors, item.name, () => remove(item))]}
+            >
+              <View style={[styles.item, { borderBottomColor: colors.border }]}>
+                <View style={styles.itemBody}>
+                  <Text numberOfLines={1} style={[t.body, { color: colors.foreground }]}>
+                    {item.name}
+                    {item.quantity_desc && (
+                      <Text style={{ color: colors.mutedForeground }}> · {item.quantity_desc}</Text>
+                    )}
                   </Text>
-                </Pressable>
-              )}
+                  <Text
+                    style={[t.footnote, { color: stale ? colors.fatText : colors.mutedForeground }]}
+                  >
+                    {describeAge(days)}
+                  </Text>
+                </View>
 
-              <Pressable
-                onPress={() => void remove(item)}
-                accessibilityRole="button"
-                accessibilityLabel={`Remove ${item.name}`}
-                hitSlop={8}
-                style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
-              >
-                <Svg width={15} height={15} viewBox="0 0 24 24">
-                  <Path
-                    d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"
-                    stroke={colors.mutedForeground}
-                    strokeWidth={2.2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    fill="none"
-                  />
-                </Svg>
-              </Pressable>
-            </View>
+                {/* Only offered once an item is old enough to doubt. Before that
+                    it is a button that changes nothing, which teaches people to
+                    ignore it for the fortnight when it starts to matter. */}
+                {stale && (
+                  <Pressable
+                    onPress={() => void confirm(item)}
+                    accessibilityRole="button"
+                    style={({ pressed }) => [
+                      styles.still,
+                      {
+                        backgroundColor: colors.secondary,
+                        borderColor: colors.border,
+                        opacity: pressed ? 0.6 : 1,
+                      },
+                    ]}
+                  >
+                    <Text style={[t.footnoteBold, { color: colors.secondaryForeground }]}>
+                      Still have it
+                    </Text>
+                  </Pressable>
+                )}
+
+                <Pressable
+                  onPress={() => remove(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove ${item.name}`}
+                  hitSlop={8}
+                  style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+                >
+                  <Glyph icon="trash" color={colors.mutedForeground} />
+                </Pressable>
+              </View>
+            </SwipeRow>
           );
         })
       )}
@@ -240,7 +254,7 @@ export function Pantry({
               {staples.map((item) => (
                 <Pressable
                   key={item.id}
-                  onPress={() => void remove(item)}
+                  onPress={() => remove(item)}
                   accessibilityRole="button"
                   accessibilityLabel={`Remove ${item.name}`}
                   style={({ pressed }) => [

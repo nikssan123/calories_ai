@@ -24,6 +24,8 @@ import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
+import { removeAction, SwipeRow } from '@/components/SwipeRow';
+import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
 
 /**
  * The week's dinners, and the shop that follows from them.
@@ -45,6 +47,7 @@ export default function PlanScreen() {
   const units = useUnits();
 
   const [plan, setPlan] = useState<MealPlan | null>(null);
+  const undoably = useUndoableRemoval();
   const [list, setList] = useState<ShoppingList | null>(null);
   const [loading, setLoading] = useState(true);
   const [thinking, setThinking] = useState(false);
@@ -143,16 +146,21 @@ export default function PlanScreen() {
     }
   }
 
-  async function removeLine(extraId: string) {
+  function removeLine(extraId: string, name: string) {
+    const before = list;
     setList((prev) =>
       prev ? { ...prev, items: prev.items.filter((i) => i.extra_id !== extraId) } : prev,
     );
-    try {
-      await api.deleteShoppingItem(extraId);
-    } catch (e) {
-      setError((e as Error).message);
-      await load();
-    }
+
+    undoably(`Removed ${name}`, {
+      commit: () => {
+        void api.deleteShoppingItem(extraId).catch((e: Error) => {
+          setError(e.message);
+          void load();
+        });
+      },
+      restore: () => setList(before),
+    });
   }
 
   return (
@@ -337,81 +345,95 @@ export default function PlanScreen() {
                 </Text>
               ) : (
                 list.items.map((item, i) => (
-                  <InsetRow key={item.extra_id ?? `${item.name}-${i}`} first={i === 0}>
-                    {/* Only a line somebody wrote can be ticked or removed. The
-                        rest is derived from the week — the way to settle one is
-                        to cook the night or change it, not to argue with the
-                        list. */}
-                    {item.extra_id ? (
-                      <Pressable
-                        onPress={() => void tick(item.extra_id!, !item.bought)}
-                        accessibilityRole="checkbox"
-                        accessibilityState={{ checked: item.bought }}
-                        hitSlop={6}
-                        style={[
-                          styles.box,
-                          {
-                            backgroundColor: item.bought ? colors.primary : 'transparent',
-                            borderColor: item.bought ? colors.caloriesDeep : colors.border,
-                          },
-                        ]}
-                      >
-                        {item.bought && (
-                          <Svg width={13} height={13} viewBox="0 0 24 24">
+                  <SwipeRow
+                    key={item.extra_id ?? `${item.name}-${i}`}
+                    style={i === 0 ? null : { borderTopWidth: 2, borderTopColor: colors.border }}
+                    actions={
+                      item.extra_id
+                        ? [
+                            removeAction(colors, item.name, () =>
+                              removeLine(item.extra_id!, item.name),
+                            ),
+                          ]
+                        : []
+                    }
+                  >
+                    <InsetRow first>
+                      {/* Only a line somebody wrote can be ticked or removed. The
+                          rest is derived from the week — the way to settle one is
+                          to cook the night or change it, not to argue with the
+                          list. */}
+                      {item.extra_id ? (
+                        <Pressable
+                          onPress={() => void tick(item.extra_id!, !item.bought)}
+                          accessibilityRole="checkbox"
+                          accessibilityState={{ checked: item.bought }}
+                          hitSlop={6}
+                          style={[
+                            styles.box,
+                            {
+                              backgroundColor: item.bought ? colors.primary : 'transparent',
+                              borderColor: item.bought ? colors.caloriesDeep : colors.border,
+                            },
+                          ]}
+                        >
+                          {item.bought && (
+                            <Svg width={13} height={13} viewBox="0 0 24 24">
+                              <Path
+                                d="M20 6 9 17l-5-5"
+                                stroke={colors.primaryForeground}
+                                strokeWidth={3.2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                fill="none"
+                              />
+                            </Svg>
+                          )}
+                        </Pressable>
+                      ) : (
+                        <View style={[styles.dot, { backgroundColor: colors.border }]} />
+                      )}
+
+                      <View style={styles.flex}>
+                        <Text
+                          style={[
+                            t.body,
+                            item.bought ? styles.bought : null,
+                            { color: item.bought ? colors.mutedForeground : colors.foreground },
+                          ]}
+                        >
+                          {item.name}
+                        </Text>
+                        {(item.quantity_g !== null || item.quantity_descs.length > 0) && (
+                          <Text style={[t.footnote, { color: colors.mutedForeground }]}>
+                            {item.quantity_g !== null
+                              ? formatMass(item.quantity_g, units)
+                              : item.quantity_descs.join(' · ')}
+                          </Text>
+                        )}
+                      </View>
+
+                      {item.extra_id && (
+                        <Pressable
+                          onPress={() => removeLine(item.extra_id!, item.name)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Remove ${item.name}`}
+                          hitSlop={8}
+                          style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+                        >
+                          <Svg width={15} height={15} viewBox="0 0 24 24">
                             <Path
-                              d="M20 6 9 17l-5-5"
-                              stroke={colors.primaryForeground}
-                              strokeWidth={3.2}
+                              d="M18 6 6 18M6 6l12 12"
+                              stroke={colors.mutedForeground}
+                              strokeWidth={2.4}
                               strokeLinecap="round"
-                              strokeLinejoin="round"
                               fill="none"
                             />
                           </Svg>
-                        )}
-                      </Pressable>
-                    ) : (
-                      <View style={[styles.dot, { backgroundColor: colors.border }]} />
-                    )}
-
-                    <View style={styles.flex}>
-                      <Text
-                        style={[
-                          t.body,
-                          item.bought ? styles.bought : null,
-                          { color: item.bought ? colors.mutedForeground : colors.foreground },
-                        ]}
-                      >
-                        {item.name}
-                      </Text>
-                      {(item.quantity_g !== null || item.quantity_descs.length > 0) && (
-                        <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-                          {item.quantity_g !== null
-                            ? formatMass(item.quantity_g, units)
-                            : item.quantity_descs.join(' · ')}
-                        </Text>
+                        </Pressable>
                       )}
-                    </View>
-
-                    {item.extra_id && (
-                      <Pressable
-                        onPress={() => void removeLine(item.extra_id!)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Remove ${item.name}`}
-                        hitSlop={8}
-                        style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
-                      >
-                        <Svg width={15} height={15} viewBox="0 0 24 24">
-                          <Path
-                            d="M18 6 6 18M6 6l12 12"
-                            stroke={colors.mutedForeground}
-                            strokeWidth={2.4}
-                            strokeLinecap="round"
-                            fill="none"
-                          />
-                        </Svg>
-                      </Pressable>
-                    )}
-                  </InsetRow>
+                    </InsetRow>
+                  </SwipeRow>
                 ))
               )}
             </InsetGroup>

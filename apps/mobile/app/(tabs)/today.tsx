@@ -24,7 +24,8 @@ import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors, type Palette } from '@/theme';
 import { haptics } from '@/lib/haptics';
-import { SwipeRow, type SwipeAction } from '@/components/SwipeRow';
+import { removeAction, repeatAction, SwipeRow } from '@/components/SwipeRow';
+import { Glyph } from '@/components/Glyph';
 import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
 
 /** The `date` the calendar links here with. Anything else is ignored. */
@@ -571,52 +572,6 @@ function StepButton({
       </Svg>
     </Pressable>
   );
-}
-
-function Glyph({ icon, color, size = 15 }: { icon: 'trash' | 'repeat'; color: string; size?: number }) {
-  const props = {
-    stroke: color,
-    strokeWidth: 2.2,
-    strokeLinecap: 'round' as const,
-    strokeLinejoin: 'round' as const,
-    fill: 'none',
-  };
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      {icon === 'trash' ? (
-        <Path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" {...props} />
-      ) : (
-        <Path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3H21m0 0V3m0 3h-2.3M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.7-3H3m0 0v3m0-3h2.3" {...props} />
-      )}
-    </Svg>
-  );
-}
-
-/**
- * The two things a pulled row offers, built here rather than at each call site
- * so that "delete" is the same red, the same width and the same word wherever
- * it is reached from.
- */
-function removeAction(colors: Palette, what: string, onPress: () => void): SwipeAction {
-  return {
-    label: 'Delete',
-    announce: `Delete ${what}`,
-    tint: colors.destructive,
-    ink: colors.destructiveForeground,
-    icon: <Glyph icon="trash" color={colors.destructiveForeground} size={19} />,
-    onPress,
-  };
-}
-
-function repeatAction(colors: Palette, what: string, onPress: () => void): SwipeAction {
-  return {
-    label: 'Repeat',
-    announce: `Log ${what} again`,
-    tint: colors.primary,
-    ink: colors.primaryForeground,
-    icon: <Glyph icon="repeat" color={colors.primaryForeground} size={19} />,
-    onPress,
-  };
 }
 
 function IconButton({ icon, label, onPress }: { icon: 'trash' | 'repeat'; label: string; onPress: () => void }) {
