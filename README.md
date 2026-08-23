@@ -919,9 +919,18 @@ recipe run, the kitchen, the cards.
 One thing remains, and it is not a screen.
 
 **Nothing has been shipped.** There is an icon and a splash now, and `eas.json` has the
-three build profiles, but no build has been made, there is no store listing, and there is
-no dev client — which the app will need the day it wants a native module Expo Go does not
-carry.
+three build profiles, but no build has been made and there is no store listing.
+
+There *is* a dev client. `pnpm android` runs `expo run:android`, which prebuilds the native
+project — `android/` and `ios/` are generated and gitignored, so nothing about them is
+committed — and installs a debug build of `com.daysofar.app` on the emulator. It was built
+the day the app first wanted something Expo Go does not carry, and everything left on
+MOBILE-UX.md wants it too: push notifications, App Intents, a widget, a share-sheet target.
+
+Two things worth knowing before running it. The first build downloads the NDK and takes
+the better part of half an hour; later ones are minutes. And the dev client ships with Fast
+Refresh **off** by default, which is worth turning on in the dev menu — otherwise edits
+appear to be ignored and the honest-looking conclusion is that the bundler is broken.
 
 The other three are done, and two of them left something behind worth knowing.
 

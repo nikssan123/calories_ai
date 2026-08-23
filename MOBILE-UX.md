@@ -63,7 +63,7 @@ existing `useReducedMotion` contract says the spring is decoration and the
 information must survive it, which is an argument for the buzz rather than
 against it.
 
-## 2. Motion — mostly done; one item is blocked
+## 2. Motion — done, except one item blocked upstream
 
 **Reanimated is already in the app and already doing real work.** The ring's arc
 springs open and its figure counts up, the macro bars stagger in at 70ms apart,
@@ -118,34 +118,42 @@ and 886, overshoots to 1040 and settles back to 990. Six equal columns meant the
 geometry fell out of one measurement of the row, so no tab had to report its own
 — which stops being true the moment a tab is given a different width.
 
-### Shared element transitions — **blocked, not skipped**
+### Shared element transitions — **blocked upstream**
 
 Tapping a recipe tile pushes a screen in from the right, and the tile's picture
 and the reader's hero are two unrelated images of the same dish. Having the
 tile's image **grow into the hero** is still the single most impressive thing
-available here.
+on this list, and it sits on the path people actually walk: Cook is a grid you
+scan and then commit to, which is precisely the interaction a shared element is
+*for* — it answers "where did that come from?" without a word.
 
-It cannot be built on this stack today. `sharedTransitionTag` is still in
-Reanimated 4.5.1's types and still accepted as a prop, and it does nothing:
-`AnimatedComponent._configureSharedTransition` returns immediately unless the
-`ENABLE_SHARED_ELEMENT_TRANSITIONS` static feature flag is on. It defaults to
-false, and only `setDynamicFeatureFlag` is exported — static flags are baked in
-at build time. So this needs a patched Reanimated *and* a custom dev build, and
-even then the native half looks half-landed: Android logs `Could not find
-generated setter for class REASharedTransitionBoundaryManager` on launch.
+It cannot be built on this stack, and the reason turned out not to be ours.
 
-Both ends were wired up and tested before this was understood; the screens
-simply cross-slid. The tags were reverted rather than left in as props that
-promise something they do not deliver.
+The first guess was the feature flag. `AnimatedComponent._configureSharedTransition`
+returns immediately unless `ENABLE_SHARED_ELEMENT_TRANSITIONS` is on; it defaults
+to false and only `setDynamicFeatureFlag` is exported. That much is real, and it
+has a supported fix — both the Android Gradle build and the iOS podspec read a
+`reanimated.staticFeatureFlags` block out of the app's own `package.json`, so no
+patching is needed. A dev build with the flag set compiles
+`ENABLE_SHARED_ELEMENT_TRANSITIONS:true` into the CMake arguments and
+`getStaticFeatureFlag` returns `true` at runtime. Both were verified.
 
-**Revisit when** the app moves off Expo Go to a dev build — which push
-notifications and App Intents both need anyway, so this is likely to become
-free rather than to stay impossible.
+It still does nothing. Tags on both ends, `SharedTransitionBoundary` wrapping the
+navigator, no errors — and the screens simply cross-slide.
 
-It sits on the path people actually walk: Cook is a grid you scan and then
-commit to, which is precisely the interaction a shared element is *for* — it
-answers "where did that come from?" without a word. The same trick would work
-from a History day cell into Today.
+The reason is one grep: **`react-native-screens` 4.26.2 does not mention shared
+transitions anywhere**, in JS or in its Android sources. In Reanimated 3 this
+feature was wired through react-native-screens on the old architecture. In
+Reanimated 4 the machinery is all present — the flag, the native module, a
+`SharedTransitionBoundary` component — and there is no navigator that drives it.
+Android also logs `Could not find generated setter for class
+REASharedTransitionBoundaryManager` on every launch, which fits a half-landed
+feature.
+
+So this is not waiting on our build any more; it is waiting on upstream. **The
+thing to watch is react-native-screens gaining shared-transition support**, not
+anything in this repo. Everything wired for it was reverted rather than left in
+as props that promise what they cannot deliver.
 
 ### Lists — done
 
@@ -171,12 +179,15 @@ lands exactly when someone is trying to read the number.
 
 **Still to do:** the Progress headline figures and the plan's per-night kcal.
 
-### Scroll-driven
+### Scroll-driven — the header is done
 
-- **Today's header condensing as you scroll** — the large date shrinking into a
-  compact title. This is a very iOS thing and Reanimated does it properly, on the
-  UI thread via `useAnimatedScrollHandler`, so it tracks the finger exactly
-  rather than lagging a frame behind it.
+- **Today's header condenses as you scroll.** It turned out to be an errand
+  rather than a decoration: Today is the longest screen in the app and that
+  header is the only way to History *and* the only way to step a day, so from
+  the bottom of a Tuesday both were out of reach. Driven on the UI thread via
+  `useAnimatedScrollHandler`, so it tracks the finger rather than lagging a
+  frame behind it, and the JS thread hears about it exactly twice a screen —
+  one boolean, which exists only so an invisible bar stops swallowing taps.
 - **The tab bar retracting on scroll-down** in the Journal is tempting and I
   would hold it: the bar already disappears for the keyboard, and two independent
   reasons for the same chrome to vanish is how a layout starts feeling
@@ -363,7 +374,14 @@ horizontal swipe and use it everywhere — two would be worse than neither.
 
 **How loud is a nudge allowed to be?** See push, above. This is a product
 decision rather than an engineering one, and it should be made before the
-transport is built rather than after.
+transport is built rather than after. It is now the thing blocking push, since
+the dev build is no longer.
+
+**Is the share sheet worth a third-party plugin?** Android takes an intent
+filter and nothing else. iOS needs a share *extension* — a second native target,
+which Expo cannot generate without a community config plugin. Doing only Android
+would split the platforms on a whole feature, which is a bigger version of the
+split this design refuses everywhere else; so it is one dependency or neither.
 
 ---
 
@@ -379,15 +397,17 @@ native window and the app's gesture root does not reach inside one; and `Sheet`
 was animating its slide from a guessed height, because it read a ref that a
 worklet had already frozen.
 
-Since then most of §2 has followed: the lists stagger in and close behind a
-delete, Today's figures travel instead of swapping, and skeletons shimmer.
+Since then the whole of §1–§3 has followed, and the condensing Today header with
+it. Every item that Expo Go could build is built.
 
-**The shared element transition — the one people would mention to someone else —
-turns out to need a custom dev build**, because Reanimated gates it behind a
-build-time flag with no public setter. It is not skipped, it is queued behind
-the same dev build that push notifications and App Intents need.
+**There is now a dev client**, and it did not turn out to be the thing standing
+between us and the showpiece. The shared element transition is blocked upstream:
+Reanimated 4 has the machinery and `react-native-screens` has no idea it exists.
+That is a wait, not a task.
 
-So the next thing that can actually be built here is the condensing Today
-header, and after that the phone-only capabilities in §4 — all of which want
-that dev build too. That is the fork in the road: everything cheap has been
-done, and what is left starts by leaving Expo Go.
+What the dev build *does* unlock is the whole of §4 — the share-sheet target,
+push notifications, App Intents, a widget — which is where the real value on
+this list has been all along. Two of those need a decision before they need
+code, and both are noted under Open questions: how loud a nudge is allowed to be
+once it is a push rather than an email, and whether a share-sheet target is worth
+a third-party config plugin to keep iOS and Android on the same feature.
