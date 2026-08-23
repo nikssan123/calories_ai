@@ -7,6 +7,7 @@ import { Chunk, PressableChunk } from '@/components/Chunk';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
+import { haptics } from '@/lib/haptics';
 
 /**
  * The question a session prompts, answered in the conversation.
@@ -97,6 +98,7 @@ export function WorkoutCard({
             })),
         })).filter((e) => e.sets.length > 0),
       });
+      haptics.logged();
       onLogged(entry);
     } catch (e) {
       onError((e as Error).message);

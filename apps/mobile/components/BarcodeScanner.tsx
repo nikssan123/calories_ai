@@ -21,6 +21,7 @@ import { api } from '@/lib/api';
 import { pickPhoto, takePhoto, type PreparedPhoto } from '@/lib/image';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
+import { haptics } from '@/lib/haptics';
 
 /**
  * A packet, read off its barcode.
@@ -79,6 +80,15 @@ export function BarcodeScanner({
   const onScanned = useCallback(async (code: string) => {
     if (claimed.current) return;
     claimed.current = true;
+    /*
+     * Here rather than after the lookup: this is the instant the frame
+     * resolved, and it is the instant the user is waiting on. They are holding
+     * a tin at an angle that makes the screen hard to read, so the buzz is
+     * doing the job the screen cannot — "stop moving, I have it". What the
+     * product turns out to be is a second question, answered a moment later
+     * by the sheet.
+     */
+    haptics.captured();
 
     setStage({ at: 'looking', code });
     try {
@@ -325,6 +335,7 @@ function Portion({
         product.barcode,
         mode === 'serving' ? { servings } : { grams: eatenGrams },
       );
+      haptics.logged();
       onLogged(message);
     } catch (e) {
       onError((e as Error).message);

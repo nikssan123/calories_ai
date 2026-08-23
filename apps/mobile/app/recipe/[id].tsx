@@ -13,6 +13,7 @@ import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
+import { haptics } from '@/lib/haptics';
 
 /**
  * A recipe written for this person, on its own screen.
@@ -75,6 +76,7 @@ export default function GeneratedRecipeScreen() {
     setCooking(true);
     try {
       const entry = await api.cookRecipe(recipe.id, { portions: servings });
+      haptics.logged();
       // Back to Cook, which re-ranks itself against the day that just moved.
       // Staying here would leave the button that was just pressed under the
       // thumb, inviting a double log.

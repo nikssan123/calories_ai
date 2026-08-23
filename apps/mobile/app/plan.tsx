@@ -23,6 +23,7 @@ import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
+import { haptics } from '@/lib/haptics';
 
 /**
  * The week's dinners, and the shop that follows from them.
@@ -96,6 +97,7 @@ export default function PlanScreen() {
   async function cook(slot: MealPlanSlot) {
     try {
       const entry = await api.cookSlot(slot.id);
+      haptics.logged();
       // The plan draws the week, never the day, so logging a night's dinner
       // from here changes nothing anybody can see on this screen.
       toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);

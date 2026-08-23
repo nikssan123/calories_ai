@@ -27,6 +27,7 @@ import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { duration, ease, font, type as t, useColors, withAlpha, type Palette } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { haptics } from '@/lib/haptics';
 
 /**
  * The visual half of a turn — and the thing this app should be recognised by.
@@ -184,6 +185,7 @@ function SuggestedRecipe({ recipe, onLogged }: { recipe: Recipe; onLogged?: () =
     setCooking(true);
     try {
       await api.cookRecipe(recipe.id, { portions: servings });
+      haptics.logged();
       onLogged?.();
     } catch (e) {
       setError((e as Error).message);

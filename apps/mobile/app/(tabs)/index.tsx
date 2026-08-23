@@ -39,6 +39,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { duration, ease, font, type as t, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { haptics } from '@/lib/haptics';
 
 /** Optimistic rows carry a local id until the server assigns the real one. */
 interface Bubble {
@@ -101,6 +102,27 @@ export default function JournalScreen() {
 
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [day, setDay] = useState<DaySummary | null>(null);
+
+  /*
+   * The buzz that says a turn logged something.
+   *
+   * A turn is the app's main way of putting food in the journal — "two eggs
+   * and toast" — and it is the one path that never announces itself. The
+   * stream carries prose, the model decides mid-sentence whether to call the
+   * tool, and nothing in the events says outright "that landed". What is
+   * certain is the day that comes back with the reply, so the test is the
+   * honest one: if the number moved, something was logged.
+   *
+   * Held in a ref rather than read off `day`, because the send callback is
+   * memoised against the profile and deliberately does not close over the day
+   * it is about to replace.
+   */
+  const consumed = useRef<number | null>(null);
+  const commitDay = useCallback((next: DaySummary) => {
+    if (consumed.current !== null && next.consumed.kcal !== consumed.current) haptics.logged();
+    consumed.current = next.consumed.kcal;
+    setDay(next);
+  }, []);
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -132,6 +154,7 @@ export default function JournalScreen() {
         if (cancelled) return;
         setOnboarding(state);
         setBubbles(history.messages.map(toBubble));
+        consumed.current = today.consumed.kcal;
         setDay(today);
       } catch {
         // Reported by the empty conversation rather than over it: there is no
@@ -244,7 +267,7 @@ export default function JournalScreen() {
               : b,
           ),
         );
-        setDay(result.day);
+        commitDay(result.day);
         // The turn may have changed the profile — units, diet, a name. Adopting
         // it here is what makes "switch me to pounds" take effect now rather
         // than at the next launch.
@@ -270,7 +293,7 @@ export default function JournalScreen() {
         const landed = await reconcile(known);
         if (landed) {
           setBubbles(landed.bubbles);
-          setDay(landed.day);
+          commitDay(landed.day);
         } else {
           const message = (e as Error).message;
           setBubbles((prev) =>
@@ -285,7 +308,7 @@ export default function JournalScreen() {
         setBusy(false);
       }
     },
-    [onboarding?.complete, refreshAuth, adoptProfile],
+    [onboarding?.complete, refreshAuth, adoptProfile, commitDay],
   );
 
   // A new account opens straight into setup: the agent introduces itself and

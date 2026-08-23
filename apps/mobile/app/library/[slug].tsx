@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/Skeleton';
 import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { font, type as t, useColors } from '@/theme';
+import { haptics } from '@/lib/haptics';
 
 /**
  * A recipe off the shelf.
@@ -60,6 +61,7 @@ export default function LibraryRecipeScreen() {
     setCooking(true);
     try {
       const entry = await api.cookLibraryRecipe(recipe.slug, { portions: servings });
+      haptics.logged();
       // The screen leaves with the press, so the receipt has to outlive it.
       toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
       router.back();

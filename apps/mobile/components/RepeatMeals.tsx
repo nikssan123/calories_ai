@@ -8,6 +8,7 @@ import { InsetGroup } from '@/components/InsetGroup';
 import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { font, type as t, useColors } from '@/theme';
+import { haptics } from '@/lib/haptics';
 
 /**
  * The eight things you actually eat.
@@ -56,6 +57,7 @@ export function RepeatMeals({ onLogged }: { onLogged: () => void }) {
     setBusy(template.entry_id);
     try {
       const entry = await api.repeatFoodEntry(template.entry_id);
+      haptics.logged();
       setError(null);
       toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
       onLogged();

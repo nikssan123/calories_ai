@@ -14,6 +14,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { CHUNK_DEPTH, duration, ease, RADIUS, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { haptics } from '@/lib/haptics';
 
 /**
  * The ledge.
@@ -77,6 +78,12 @@ export function Chunk({
  * duration, which leaves the press correct and immediate rather than absent —
  * the sink is feedback, not decoration, and removing it would leave a control
  * that does not answer.
+ *
+ * It also buzzes, which is the half of the metaphor a browser cannot reach:
+ * every chunky control in the app inherits one light impact from here. See
+ * `lib/haptics` for why that hangs off `onPress` and not the press-in the
+ * sink hangs off. `haptic={false}` is for the few controls that answer with
+ * a stronger one of their own a moment later.
  */
 export function PressableChunk({
   depth = CHUNK_DEPTH,
@@ -87,12 +94,16 @@ export function PressableChunk({
   contentStyle,
   children,
   disabled,
+  haptic = true,
+  onPress,
   ...props
 }: Omit<PressableProps, 'children' | 'style'> & {
   depth?: number;
   color?: string;
   radius?: number;
   reserve?: boolean;
+  /** Suppress the press buzz, for a control that fires its own instead. */
+  haptic?: boolean;
   style?: StyleProp<ViewStyle>;
   contentStyle?: StyleProp<ViewStyle>;
   /*
@@ -139,6 +150,14 @@ export function PressableChunk({
       onPressOut={() => {
         pressed.value = withTiming(0, timing);
       }}
+      onPress={
+        onPress == null
+          ? onPress
+          : (event) => {
+              if (haptic) haptics.press();
+              onPress(event);
+            }
+      }
       style={[
         reserve ? { marginBottom: depth } : null,
         disabled ? styles.disabled : null,

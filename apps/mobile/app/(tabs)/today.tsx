@@ -23,6 +23,7 @@ import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
+import { haptics } from '@/lib/haptics';
 
 /** The `date` the calendar links here with. Anything else is ignored. */
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -169,6 +170,7 @@ export default function TodayScreen() {
   async function repeatEntry(entry: FoodEntry) {
     try {
       const copy = await api.repeatFoodEntry(entry.id);
+      haptics.logged();
       toast.success(`Logged ${copy.description} — ${Math.round(copy.kcal)} kcal`);
       setDate(null);
       void load(null);

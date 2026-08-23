@@ -21,6 +21,7 @@ import { WeeklyReview } from '@/components/WeeklyReview';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
+import { haptics } from '@/lib/haptics';
 
 const WINDOWS = [14, 30, 90] as const;
 
@@ -76,6 +77,7 @@ export default function ProgressScreen() {
       // Typed in whatever they read, stored in kilograms. The API has one unit
       // and does not need to be told which one the keyboard was in.
       await api.logWeight(bodyWeightToKg(value, units));
+      haptics.logged();
       setWeightInput('');
       setProgress(await api.progress(days));
       setError(null);

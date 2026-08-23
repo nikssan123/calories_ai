@@ -1,13 +1,19 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import Svg, { Circle, Path, Polyline, Rect } from 'react-native-svg';
 import { Material } from '@/components/Material';
 import { duration, ease, font, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
+import { haptics } from '@/lib/haptics';
 
 /**
  * Six, which is one past where a bottom bar is usually said to stop.
@@ -51,6 +57,21 @@ export default function TabsLayout() {
  * rather than a colour. With six tabs the bar is tight, and a filled lozenge is
  * the only difference a thumb can find at a glance in a row that narrow —
  * colour alone reads as noise.
+ *
+ * There is exactly one lozenge and it slides.
+ *
+ * It used to be six, one per tab, each fading itself in and out in place — so
+ * tapping Cook faded one object out while a second faded in somewhere else,
+ * which is two things happening where there is only ever one selection. Moving
+ * a single pill says what the bar actually means: this is the thing you
+ * pointed at, and it went to where you pointed.
+ *
+ * Everything else here follows from that. Once the lozenge takes 420ms to
+ * arrive, the icon and the label underneath it cannot switch colour on the
+ * frame of the press — that would leave the destination lit with nothing
+ * beneath it and the origin dark with the pill still on top. So they cross-fade
+ * on the same clock, which is why each is drawn twice and one copy fades over
+ * the other: a weight change cannot be interpolated, and a stacked pair can.
  */
 function TabBar({
   state,
@@ -61,18 +82,71 @@ function TabBar({
 }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const reduced = useReducedMotion();
+
+  /*
+   * Six equal columns, so the lozenge's geometry falls out of one measurement
+   * of the row and no tab has to report its own. `flex: 1` six times is the
+   * only reason this is allowed to be arithmetic rather than six `onLayout`s,
+   * and it stops being true the moment a tab is given a different width.
+   */
+  const [rowWidth, setRowWidth] = useState(0);
+  const columns = state.routes.length;
+  const columnWidth = columns > 0 ? rowWidth / columns : 0;
+  const lozengeWidth = Math.min(LOZENGE_MAX_WIDTH, columnWidth);
+
+  /*
+   * The travel is in column units — the animated position of the selection,
+   * not of anything in pixels — so a rotation or a font-size change that
+   * re-measures the row moves the pill without re-animating it.
+   */
+  const travel = useSharedValue(state.index);
+  useEffect(() => {
+    travel.value = withTiming(state.index, {
+      duration: reduced ? 0 : duration.pop,
+      easing: ease.spring,
+    });
+  }, [state.index, travel, reduced]);
+
+  const sliding = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: travel.value * columnWidth + (columnWidth - lozengeWidth) / 2 },
+    ],
+  }));
 
   /*
    * Out of the way while typing. The bar is behind the keyboard regardless, but
    * the space it reserves is where the composer has to be — leaving it there
    * puts the send button under the keyboard on a screen whose entire purpose is
    * a sentence you just typed.
+   *
+   * Below every hook, and it has to stay there: this returns on one render and
+   * not the next, so anything called after it would change the hook order the
+   * first time somebody touched a text field.
    */
-  if (useKeyboardVisible()) return null;
+  const typing = useKeyboardVisible();
+  if (typing) return null;
 
   return (
     <Material style={[styles.bar, { borderTopColor: colors.border, paddingBottom: insets.bottom }]}>
-      <View style={styles.row}>
+      <View
+        style={styles.row}
+        onLayout={(e) => {
+          const width = e.nativeEvent.layout.width;
+          setRowWidth((previous) => (previous === width ? previous : width));
+        }}
+      >
+        {/* Withheld until the row has a width, so it cannot animate in from 0. */}
+        {rowWidth > 0 && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.lozenge,
+              sliding,
+              { width: lozengeWidth, backgroundColor: colors.caloriesWash },
+            ]}
+          />
+        )}
         {state.routes.map((route, index) => {
           const tab = TABS.find((t) => t.name === route.name);
           if (!tab) return null;
@@ -85,6 +159,12 @@ function TabBar({
               accessibilityState={active ? { selected: true } : {}}
               accessibilityLabel={tab.label}
               onPress={() => {
+                // Every chunky control in the app answers a press; the bar is
+                // not chunky and would otherwise be the one thing that does
+                // not. Fired whether or not it navigates — pressing the tab
+                // you are already on is still a press, and silence there reads
+                // as a missed tap.
+                haptics.press();
                 const event = navigation.emit({
                   type: 'tabPress',
                   target: route.key,
@@ -94,25 +174,7 @@ function TabBar({
               }}
               style={styles.tab}
             >
-              <Lozenge active={active}>
-                <TabIcon
-                  name={tab.icon}
-                  color={active ? colors.caloriesText : colors.mutedForeground}
-                  strokeWidth={active ? 2.6 : 2.1}
-                />
-              </Lozenge>
-              <Text
-                numberOfLines={1}
-                style={[
-                  styles.label,
-                  {
-                    fontFamily: active ? font.extrabold : font.bold,
-                    color: active ? colors.caloriesText : colors.mutedForeground,
-                  },
-                ]}
-              >
-                {tab.label}
-              </Text>
+              <TabItem tab={tab} active={active} />
             </Pressable>
           );
         })}
@@ -121,33 +183,78 @@ function TabBar({
   );
 }
 
-/** The tinted pill behind the active icon. Springs, like everything that reports a change. */
-function Lozenge({ active, children }: { active: boolean; children: React.ReactNode }) {
+/**
+ * One tab's icon and label, each drawn twice and cross-faded.
+ *
+ * The fade uses `ease.out` rather than the `ease.spring` the pill travels on,
+ * because opacity is the one property in this design that cannot overshoot:
+ * a spring past 1 is clamped flat, so the curve's whole character is lost and
+ * what is left is a fade that stalls. Same clock, different curve.
+ */
+function TabItem({ tab, active }: { tab: (typeof TABS)[number]; active: boolean }) {
   const colors = useColors();
   const reduced = useReducedMotion();
   const on = useSharedValue(active ? 1 : 0);
+  const pop = useSharedValue(1);
 
   useEffect(() => {
     on.value = withTiming(active ? 1 : 0, {
-      duration: reduced ? 0 : duration.spring,
-      easing: ease.spring,
+      duration: reduced ? 0 : duration.pop,
+      easing: ease.out,
     });
   }, [active, on, reduced]);
 
-  const animated = useAnimatedStyle(() => ({
-    // 0.9 → 1, matching `scale-90`/`scale-100` on the web.
-    transform: [{ scale: 0.9 + on.value * 0.1 }],
-    opacity: on.value,
-  }));
+  /*
+   * A small kick on the icon that was just chosen, and only on that one:
+   * popping the tab being left would pull the eye back to where the user has
+   * just decided not to be. Skipped on the first render, or every launch would
+   * open with the Journal icon bouncing at nobody.
+   */
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    if (!active || reduced) return;
+    pop.value = withSequence(
+      withTiming(1.12, { duration: duration.quick / 2, easing: ease.pop }),
+      withTiming(1, { duration: duration.quick, easing: ease.out }),
+    );
+  }, [active, pop, reduced]);
+
+  const fade = useAnimatedStyle(() => ({ opacity: on.value }));
+  const kick = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
 
   return (
-    <View style={styles.lozengeSlot}>
-      <Animated.View
-        style={[styles.lozenge, animated, { backgroundColor: colors.caloriesWash }]}
-        pointerEvents="none"
-      />
-      {children}
-    </View>
+    <>
+      <Animated.View style={[styles.lozengeSlot, kick]}>
+        <TabIcon name={tab.icon} color={colors.mutedForeground} strokeWidth={2.1} />
+        <Animated.View style={[StyleSheet.absoluteFill, styles.centred, fade]} pointerEvents="none">
+          <TabIcon name={tab.icon} color={colors.caloriesText} strokeWidth={2.6} />
+        </Animated.View>
+      </Animated.View>
+      <View style={styles.labelSlot}>
+        <Text
+          numberOfLines={1}
+          style={[styles.label, { fontFamily: font.bold, color: colors.mutedForeground }]}
+        >
+          {tab.label}
+        </Text>
+        <Animated.Text
+          numberOfLines={1}
+          pointerEvents="none"
+          style={[
+            styles.label,
+            StyleSheet.absoluteFill,
+            { fontFamily: font.extrabold, color: colors.caloriesText },
+            fade,
+          ]}
+        >
+          {tab.label}
+        </Animated.Text>
+      </View>
+    </>
   );
 }
 
@@ -220,6 +327,9 @@ function TabIcon({ name, color, strokeWidth }: { name: (typeof TABS)[number]['ic
   }
 }
 
+/** `lozengeSlot`'s `maxWidth`: the pill never grows past this on a wide phone. */
+const LOZENGE_MAX_WIDTH = 56;
+
 const styles = StyleSheet.create({
   bar: { borderTopWidth: 2 },
   row: { flexDirection: 'row' },
@@ -231,7 +341,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  lozenge: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, borderRadius: 999 },
+  lozenge: {
+    position: 'absolute',
+    // `styles.tab`'s own `paddingTop`, so the pill lands where the six of them
+    // used to sit rather than at the top of the row.
+    top: 6,
+    left: 0,
+    height: 32,
+    borderRadius: 999,
+  },
+  centred: { alignItems: 'center', justifyContent: 'center' },
+  labelSlot: { alignSelf: 'stretch' },
   label: {
     fontSize: 10,
     lineHeight: 13,
