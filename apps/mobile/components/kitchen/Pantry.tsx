@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import Svg, { Path } from 'react-native-svg';
 import type { PantryItem } from '@ct/shared';
 import { PressableChunk } from '@/components/Chunk';
+import { FridgeScan } from '@/components/kitchen/FridgeScan';
 import { api } from '@/lib/api';
 import { font, type as t, useColors } from '@/theme';
 
@@ -30,10 +31,16 @@ export const STALE_DAYS = 10;
 export function Pantry({
   items,
   onChanged,
+  onCook,
   onError,
 }: {
   items: PantryItem[];
   onChanged: () => void;
+  /**
+   * Passed straight through to the scanner, so a scan started here can still
+   * end in dinner rather than dead-ending at a list.
+   */
+  onCook: (names: string[]) => Promise<void>;
   onError: (message: string) => void;
 }) {
   const colors = useColors();
@@ -140,6 +147,11 @@ export function Pantry({
           A rough list is plenty — it only has to be close enough to cook from.
         </Text>
       </View>
+
+      {/* Photographing a shelf is a way of *filling* this list, so the button
+          for it belongs on the list — not only in the row of ways in on Cook,
+          which is somewhere you are not when you are looking at the kitchen. */}
+      <FridgeScan variant="button" onSaved={onChanged} onCook={onCook} onError={onError} />
 
       {fresh.length === 0 ? (
         <Text style={[t.body, styles.empty, { color: colors.mutedForeground }]}>

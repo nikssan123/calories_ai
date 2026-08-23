@@ -318,7 +318,17 @@ export default function CookScreen() {
       </View>
 
       <Sheet open={kitchenOpen} title="Your kitchen" onClose={() => setKitchenOpen(false)}>
-        {items && <Pantry items={items} onChanged={loadKitchen} onError={setError} />}
+        {items && (
+          <Pantry
+            items={items}
+            onChanged={loadKitchen}
+            onCook={async (found) => {
+              setKitchenOpen(false);
+              await cookFromPhoto(found);
+            }}
+            onError={setError}
+          />
+        )}
       </Sheet>
 
       <View style={styles.ask}>

@@ -27,6 +27,7 @@ export function FridgeScan({
   onCook,
   canCook = true,
   onError,
+  variant = 'chip',
 }: {
   /** Called once the accepted finds are in the pantry. */
   onSaved: () => void;
@@ -35,6 +36,16 @@ export function FridgeScan({
   /** False when there is no recipe budget left to cook with. */
   canCook?: boolean;
   onError: (message: string) => void;
+  /**
+   * Where it is being drawn. A chip in Cook's quiet row of ways in; a full-width
+   * button inside the kitchen sheet, where photographing a shelf is one of the
+   * two ways to fill the list it is sitting on.
+   *
+   * Both open the same thing, and that is a repeat rather than the duplicate it
+   * looks like — the two are never on screen together, because the kitchen is
+   * shut until you ask for it.
+   */
+  variant?: 'chip' | 'button';
 }) {
   const colors = useColors();
   const [choosing, setChoosing] = useState(false);
@@ -111,7 +122,7 @@ export function FridgeScan({
         disabled={scanning}
         accessibilityRole="button"
         style={({ pressed }) => [
-          styles.chip,
+          variant === 'chip' ? styles.chip : styles.wide,
           {
             backgroundColor: colors.card,
             borderColor: colors.border,
@@ -122,7 +133,11 @@ export function FridgeScan({
         {scanning ? (
           <ActivityIndicator size="small" color={colors.mutedForeground} />
         ) : (
-          <Svg width={13} height={13} viewBox="0 0 24 24">
+          <Svg
+            width={variant === 'chip' ? 13 : 17}
+            height={variant === 'chip' ? 13 : 17}
+            viewBox="0 0 24 24"
+          >
             <Path
               d="M14.5 4h-5L8 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-4l-1.5-2ZM12 16.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"
               stroke={colors.mutedForeground}
@@ -133,8 +148,13 @@ export function FridgeScan({
             />
           </Svg>
         )}
-        <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-          {scanning ? 'Looking…' : 'scan your fridge'}
+        <Text
+          style={[
+            variant === 'chip' ? t.footnote : t.bodySemibold,
+            { color: variant === 'chip' ? colors.mutedForeground : colors.foreground },
+          ]}
+        >
+          {scanning ? 'Looking…' : variant === 'chip' ? 'scan your fridge' : 'Photograph your shelf'}
         </Text>
       </Pressable>
 
@@ -298,4 +318,16 @@ const styles = StyleSheet.create({
   foot: { flexDirection: 'row', gap: 8, borderTopWidth: 2, padding: 12 },
   button: { height: 44, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   choice: { borderTopWidth: 2, paddingHorizontal: 20, paddingVertical: 16 },
+  // Inside the kitchen sheet: a row on the list rather than a chip beside it.
+  wide: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 2,
+    borderRadius: 16,
+    paddingVertical: 12,
+    marginHorizontal: 12,
+    marginBottom: 12,
+  },
 });

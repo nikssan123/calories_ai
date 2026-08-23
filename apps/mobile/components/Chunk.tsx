@@ -118,6 +118,21 @@ export function PressableChunk({
   return (
     <Pressable
       disabled={disabled}
+      /*
+       * Flatten before fading, on Android.
+       *
+       * A disabled chunk is drawn at reduced opacity, and Android applies a
+       * parent's opacity to each child *separately* unless it is told to
+       * composite the group offscreen first. The ledge sits behind an opaque
+       * surface, so per-child fading lets it show straight through — a disabled
+       * send button wore its own ledge as a halo on every side instead of a
+       * crescent underneath. iOS and the browser both flatten first, which is
+       * why this only ever went wrong on one platform.
+       *
+       * Only while disabled: the offscreen buffer is not free, and at full
+       * opacity there is nothing to composite.
+       */
+      needsOffscreenAlphaCompositing={disabled === true}
       onPressIn={() => {
         pressed.value = withTiming(1, timing);
       }}
