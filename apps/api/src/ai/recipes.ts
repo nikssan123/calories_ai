@@ -6,7 +6,7 @@ import { listNotes } from '../services/notes.ts';
 import { listPantry, ageInDays } from '../services/pantry.ts';
 import { buildDaySummary } from '../services/summary.ts';
 import { limitsFor } from '../services/plans.ts';
-import { recordUsage, turnsInLastDay, turnsInLastWeek } from '../services/usage.ts';
+import { PlanLimitError, recordUsage, requireAllowance } from '../services/usage.ts';
 import { getUser, getUserContext } from '../services/user.ts';
 import { inferMeal, localDateFor } from '../time.ts';
 import { MAX_TURNS } from './client.ts';
@@ -78,28 +78,6 @@ export type RecipeJob =
  * prompt. Only the task turn differs, which is why they are not four functions
  * — four functions would be four places for the dietary limits to be forgotten.
  */
-/**
- * Raised when an account has spent its recipe generations for the day.
- *
- * A typed error rather than a boolean return, because every caller has to react
- * to it and none of them can sensibly carry on: the route answers 429, and the
- * journal tool tells the model to say so and answer from the log instead.
- */
-export class RecipeBudgetError extends Error {
-  constructor(
-    readonly allowed: number,
-    readonly used: number,
-    readonly period: 'day' | 'week' = 'day',
-  ) {
-    super(
-      period === 'week'
-        ? `That is all ${allowed} meal ${allowed === 1 ? 'plan' : 'plans'} for this week.`
-        : `That is all ${allowed} recipe ${allowed === 1 ? 'suggestion' : 'suggestions'} for today.`,
-    );
-    this.name = 'RecipeBudgetError';
-  }
-}
-
 export async function suggestRecipes(
   userId: string,
   options: SuggestOptions = {},
@@ -136,19 +114,19 @@ export async function suggestRecipes(
    * actually spent rather than what was asked for, which is the number that
    * matters.
    *
-   * A plan is counted apart, weekly, against its own allowance: it costs
-   * several times a single-recipe run, so charging it to the daily recipe budget
-   * would mean one plan eats a free account's whole day of cooking — and
+   * A plan is counted apart, against its own allowance: at $0.63 measured it
+   * costs more than twice a single-recipe run, so charging it to the recipe
+   * budget would mean one plan eats a third of a month's cooking — and
    * recording it as a `recipe` would hide the most expensive thing in the
    * product inside the second most expensive.
+   *
+   * Both are monthly rather than daily/weekly as of the plan rework. A daily
+   * cap is a burst limit, not a budget — the note this file used to carry about
+   * one run a day for a month costing more than the subscription was exactly
+   * right, and the fix is to meter the month directly rather than to pick a
+   * smaller daily number and hope nobody is consistent.
    */
-  const limits = limitsFor(profile.plan);
-  const allowed = job.kind === 'plan' ? limits.mealPlansPerWeek : limits.recipeRunsPerDay;
-  const used =
-    job.kind === 'plan'
-      ? await turnsInLastWeek(id, 'meal_plan')
-      : await turnsInLastDay(id, 'recipe');
-  if (used >= allowed) throw new RecipeBudgetError(allowed, used, job.kind === 'plan' ? 'week' : 'day');
+  await requireAllowance(id, profile.plan, job.kind === 'plan' ? 'meal_plan' : 'recipe');
 
   /*
    * What is left, floored at zero.

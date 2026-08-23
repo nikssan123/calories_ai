@@ -1266,7 +1266,8 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
        * here would be a cycle evaluated at module load — and this one is
        * genuinely lazy anyway, since most journal turns never reach it.
        */
-      const { suggestRecipes, RecipeBudgetError } = await import('./recipes.ts');
+      const { suggestRecipes } = await import('./recipes.ts');
+      const { PlanLimitError } = await import('../services/usage.ts');
 
       let recipes, message;
       try {
@@ -1282,9 +1283,9 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
           now: tc.now,
         }));
       } catch (error) {
-        if (error instanceof RecipeBudgetError) {
+        if (error instanceof PlanLimitError) {
           return fail(
-            `They have used all ${error.allowed} recipe suggestions for today. Tell them so plainly, and answer from what you already know — search_food_history will tell you what they usually eat.`,
+            `${error.message} Tell them so plainly, and answer from what you already know — search_food_history will tell you what they usually eat.`,
           );
         }
         throw error;
@@ -1345,7 +1346,8 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
     async (args) => {
       // Lazy for the same reason as suggest_recipes: `ai/recipes.ts` builds its
       // tools through this module, so a static import here is a load-time cycle.
-      const { suggestRecipes, RecipeBudgetError } = await import('./recipes.ts');
+      const { suggestRecipes } = await import('./recipes.ts');
+      const { PlanLimitError } = await import('../services/usage.ts');
 
       const text = args.text.trim();
       if (text.length < 20) {
@@ -1362,9 +1364,9 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
           job: { kind: 'import', text },
         }));
       } catch (error) {
-        if (error instanceof RecipeBudgetError) {
+        if (error instanceof PlanLimitError) {
           return fail(
-            `They have used all ${error.allowed} recipe runs for today, so this one cannot be saved yet. Tell them plainly, and that it will work again tomorrow.`,
+            `${error.message} Tell them plainly, and do not guess at when it returns — the reply they get from the app carries the date.`,
           );
         }
         throw error;
@@ -1675,7 +1677,8 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
       portions: z.number().nullable().default(null).describe('Servings to cook. Null means one.'),
     },
     async (args) => {
-      const { suggestRecipes, RecipeBudgetError } = await import('./recipes.ts');
+      const { suggestRecipes } = await import('./recipes.ts');
+      const { PlanLimitError } = await import('../services/usage.ts');
 
       let recipes, message;
       try {
@@ -1687,9 +1690,9 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
           job: { kind: 'adapt', slug: args.library_slug },
         }));
       } catch (error) {
-        if (error instanceof RecipeBudgetError) {
+        if (error instanceof PlanLimitError) {
           return fail(
-            `They have used all ${error.allowed} recipe runs for today, so this cannot be reworked yet. Say so plainly, and tell them the original is still there to cook.`,
+            `${error.message} Say so plainly, and tell them the original is still there to cook.`,
           );
         }
         // Thrown by the engine when the slug is not in the library at all.
@@ -1784,7 +1787,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
       // Lazy for the same reason as suggest_recipes: `services/mealPlans.ts`
       // reaches back into `ai/plan.ts`, which builds its tools through here.
       const { generateMealPlan } = await import('./plan.ts');
-      const { RecipeBudgetError } = await import('./recipes.ts');
+      const { PlanLimitError } = await import('../services/usage.ts');
 
       let plan, message;
       try {
@@ -1798,9 +1801,9 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
           now: tc.now,
         }));
       } catch (error) {
-        if (error instanceof RecipeBudgetError) {
+        if (error instanceof PlanLimitError) {
           return fail(
-            `They have used all ${error.allowed} meal plans for this week, so a new one cannot be made yet. Say so plainly, and offer suggest_recipes for tonight instead.`,
+            `${error.message} Say so plainly, and offer suggest_recipes for tonight instead.`,
           );
         }
         throw error;

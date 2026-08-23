@@ -51,6 +51,7 @@ export function Landing() {
         <AdaptiveTarget />
         <BeyondCalories />
         <WeeklyRead />
+        <Pricing start={start} />
         <Details />
         <Privacy />
         <Closing start={start} />
@@ -168,6 +169,9 @@ function Header({ start }: { start: Cta }) {
           </a>
           <a href="#target" className="hover:text-foreground transition-colors">
             Your target
+          </a>
+          <a href="#pricing" className="hover:text-foreground transition-colors">
+            Pricing
           </a>
           <a href="#privacy" className="hover:text-foreground transition-colors">
             Your data
@@ -627,6 +631,146 @@ function WeeklyRead() {
           </div>
         </Reveal>
       </div>
+    </Section>
+  );
+}
+
+/* ------------------------------------------------------------------- pricing */
+
+/**
+ * What each plan is, said the way `plans.ts` means it.
+ *
+ * The split down the middle of this page is not a marketing frame — it is the
+ * architecture. Typing a meal in, repeating yesterday's, scanning a barcode and
+ * adding the day up are arithmetic the phone does by itself, so they cost
+ * nothing to serve and are free forever, offline included. Reading a sentence
+ * or a photograph is a model, and a model has a bill. Free gives away the first
+ * and meters the second, which is why the numbers below look the way they do.
+ *
+ * **The lifetime grant is stated in the card rather than in a footnote.** Twenty
+ * messages that never come back is a surprise if somebody finds it in week
+ * three, and this is a page that elsewhere makes a point of marking a guess as a
+ * guess. A limit you can read before signing up is a plan; the same limit
+ * discovered later is a bait.
+ */
+const PLANS = [
+  {
+    name: 'Free',
+    price: 'Free',
+    cadence: 'for as long as you want it',
+    pitch: 'The whole diary. It works on a plane.',
+    points: [
+      'Type a meal in, repeat yesterday’s, scan a barcode — unlimited, and offline',
+      'Your day, your history, your weight and your trends',
+      '20 messages and 1 photo scan to try the rest',
+    ],
+    cta: 'Get started',
+    featured: false,
+  },
+  {
+    name: 'Plus',
+    price: '$79.99',
+    cadence: '$6.67 a month, billed yearly',
+    pitch: 'Talk to it instead of typing.',
+    points: [
+      '30 messages a month — describe the meal and it does the rest',
+      '2 photo scans a month',
+      'A weekly read of how the fortnight actually went',
+      'A target that moves with the evidence',
+    ],
+    cta: 'Get started',
+    featured: true,
+  },
+  {
+    name: 'Coach',
+    price: '$149.99',
+    cadence: '$12.50 a month, billed yearly',
+    pitch: 'And it decides what you are cooking.',
+    points: [
+      'Everything in Plus, with more of it — 35 messages, 3 photo scans',
+      '8 recipes a month, written against what is in your kitchen',
+      '2 weeks of dinners planned, with the shopping list',
+      '10 fridge scans to fill the kitchen in without typing',
+    ],
+    cta: 'Get started',
+    featured: false,
+  },
+] as const;
+
+function Pricing({ start }: { start: Cta }) {
+  return (
+    <Section id="pricing" glow>
+      <Reveal>
+        <h2 className="text-section-title max-w-2xl text-balance">
+          The diary is free. The thinking is not.
+        </h2>
+        <p className="text-muted-foreground mt-5 max-w-xl text-[17px] leading-relaxed font-medium">
+          Writing a meal down is arithmetic, and arithmetic is free — including on the
+          underground, where it still adds up and sends when you surface. Reading a sentence
+          or a photograph is a model, and that is the part with a bill attached.
+        </p>
+      </Reveal>
+
+      {/* `items-stretch` and `h-full` on the Reveal both: the grid item is the
+          wrapper, not the card, so a card's own `h-full` measures against a
+          wrapper that has already shrunk to fit it. Three cards of three
+          different heights read as three different kinds of thing. */}
+      <div className="mt-12 grid items-stretch gap-6 lg:grid-cols-3">
+        {PLANS.map(({ name, price, cadence, pitch, points, cta, featured }, i) => (
+          <Reveal key={name} delay={i * 80} className="h-full">
+            <div
+              className={cn(
+                'chunk flex h-full flex-col rounded-[var(--radius)] border-2 px-6 py-7',
+                featured
+                  ? 'border-[var(--calories)] bg-card'
+                  : 'border-border bg-card',
+              )}
+            >
+              <div className="flex items-baseline gap-2.5">
+                <h3 className="font-[family-name:var(--font-display)] text-[19px] font-extrabold tracking-[-0.01em]">
+                  {name}
+                </h3>
+                {featured && (
+                  <span className="text-footnote rounded-full bg-[color-mix(in_oklch,var(--calories),transparent_88%)] px-2 py-0.5 font-bold text-[var(--calories-text)]">
+                    Most people
+                  </span>
+                )}
+              </div>
+
+              <p className="tnum mt-4 text-[32px] leading-none font-extrabold tracking-[-0.02em]">
+                {price}
+              </p>
+              <p className="text-footnote text-muted-foreground mt-1.5">{cadence}</p>
+
+              <p className="mt-5 text-body leading-relaxed font-semibold">{pitch}</p>
+
+              <Points items={[...points]} className="mt-3" />
+
+              {/* `mt-auto` on the wrapper rather than a fixed gap on the button:
+                  the three cards carry different numbers of points, so a fixed
+                  margin lands the buttons at three different heights even after
+                  the cards themselves match. */}
+              <div className="mt-auto pt-6">
+                <Link
+                  href={start.href}
+                  className={pill(featured ? 'primary' : 'secondary', 'h-11 w-full px-5 text-body')}
+                >
+                  {cta}
+                </Link>
+              </div>
+            </div>
+          </Reveal>
+        ))}
+      </div>
+
+      <Reveal delay={240}>
+        <p className="text-footnote text-muted-foreground mt-8 max-w-2xl leading-relaxed">
+          Every account starts on Free — there is no trial to forget to cancel, because there
+          is nothing to cancel until you decide otherwise. Monthly counts reset a day at a
+          time rather than all at once on a date you have to remember. If you stop paying,
+          the diary keeps working; it is the messages and the scans that stop.
+        </p>
+      </Reveal>
     </Section>
   );
 }

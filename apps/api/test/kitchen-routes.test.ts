@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { seedLibrary } from '../src/seed-library.ts';
 import { addPantryItems, listPantry } from '../src/services/pantry.ts';
-import { limitsFor } from '../src/services/plans.ts';
+import { limitsFor, meterFor } from '../src/services/plans.ts';
 import { addExtras, MAX_SHOPPING_EXTRAS } from '../src/services/shopping.ts';
 import { listRecipes } from '../src/services/recipes.ts';
 import { agentCalls, scriptAgent } from './helpers/agent-mock.ts';
@@ -18,7 +18,10 @@ let app: FastifyInstance;
 let cookie: string;
 
 beforeEach(async () => {
-  user = await createUser();
+  // `coach`, because the kitchen is that tier. This file is about the kitchen's
+  // HTTP surface — who may reach it is `plans.test.ts`'s question, and a fixture
+  // that cannot open the door would test the paywall over and over instead.
+  user = await createUser({ plan: 'coach' });
   await setUserTargets(user, '2026-01-01', { kcal: 2200, protein_g: 160 });
   ({ app, cookie } = await appFor(user));
 });
@@ -49,10 +52,12 @@ describe('the pantry', () => {
    * caller can fix it by removing something, which the message says.
    */
   it('answers a full kitchen with a conflict and the limit', async () => {
-    const limit = limitsFor('free').pantryItems;
+    // The fixture's own plan, not `free`: the route reads `request.plan`, so
+    // filling to a different tier's ceiling would leave room and prove nothing.
+    const limit = limitsFor('coach').pantryItems;
     await addPantryItems(
       user.id,
-      'free',
+      'coach',
       Array.from({ length: limit }, (_, i) => ({ name: `Thing ${i}` })),
     );
 
@@ -149,15 +154,33 @@ describe('recipes', () => {
    * the next page load to find that out is the same dead click, one step later.
    */
   it('says what is left of the recipe budget, on the list and on the run', async () => {
+    const allowed = meterFor('coach', 'recipe').allowed!;
     const before = (await get('/recipes')).json().allowance;
-    expect(before).toMatchObject({ allowed: limitsFor('free').recipeRunsPerDay, used: 0 });
+    expect(before).toMatchObject({ meter: 'recipe', allowed, used: 0, period: 'month' });
+    // Not spent, so there is nothing to wait for and it says so with a null
+    // rather than with a date in the past.
     expect(before.resets_at).toBeNull();
 
     const spent = (await suggest()).json().allowance;
     expect(spent.used).toBe(1);
-    // Spent, so it has to say when it comes back rather than merely that it is gone.
-    expect(spent.resets_at).toEqual(expect.any(String));
-    expect(new Date(spent.resets_at).getTime()).toBeGreaterThan(Date.now());
+    expect(spent.resets_at).toBeNull();
+
+    // And once the last one goes, it has to say when one comes back rather than
+    // merely that they are gone — a rolling window has no date the user knows.
+    const { recordUsage } = await import('../src/services/usage.ts');
+    for (let i = spent.used; i < allowed; i++) {
+      await recordUsage({
+        userId: user.id,
+        kind: 'recipe',
+        provider: 'anthropic-api',
+        outcome: { text: 'x', sessionId: null, numTurns: 1, costUsd: 0.28, model: 'claude-opus-5' } as never,
+      });
+    }
+
+    const gone = (await get('/recipes')).json().allowance;
+    expect(gone.used).toBe(allowed);
+    expect(gone.resets_at).toEqual(expect.any(String));
+    expect(new Date(gone.resets_at).getTime()).toBeGreaterThan(Date.now());
   });
 
   it('lists what has been generated, and saved ones apart', async () => {

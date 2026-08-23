@@ -21,7 +21,9 @@ import { addMeal, addWeight, createUser, setUserTargets, type TestUser } from '.
 let user: TestUser;
 
 beforeEach(async () => {
-  user = await createUser();
+  // `coach`: this file is about which model each kind of turn lands on, and the
+  // kitchen turns cannot be reached at all on a plan that does not carry them.
+  user = await createUser({ plan: 'coach' });
   await setUserTargets(user, '2020-01-01', { kcal: 2200, protein_g: 160 });
   await addWeight(user, '2026-03-01', 85);
 });

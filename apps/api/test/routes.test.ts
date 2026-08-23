@@ -749,6 +749,22 @@ describe('chat', () => {
 });
 
 describe('review routes', () => {
+  /**
+   * Running a review costs money and is a paid feature, so the three tests that
+   * actually generate one need an account that carries it. The refusal on
+   * `free` gets its own assertion below rather than being the accidental
+   * outcome of a fixture.
+   */
+  beforeEach(async () => {
+    await query('UPDATE users SET plan = $1 WHERE id = $2', ['plus', user.id]);
+  });
+
+  it('refuses a free account with a paywall, not a throttle', async () => {
+    await query('UPDATE users SET plan = $1 WHERE id = $2', ['free', user.id]);
+    const response = await app.inject({ method: 'POST', url: '/reviews/run', ...auth({ payload: {} }) });
+    expect(response.statusCode).toBe(402);
+  });
+
   it('404s the latest review before there is one', async () => {
     const response = await app.inject({ method: 'GET', url: '/reviews/latest', ...auth() });
     expect(response.statusCode).toBe(404);

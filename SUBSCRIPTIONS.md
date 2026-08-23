@@ -1,334 +1,214 @@
 # Subscription plan
 
-Nothing here is built. This is the pricing the cost data actually supports, written
-down while the measurements are fresh, so the tiers are a consequence of what a turn
-costs rather than a guess that the engineering then has to chase.
+**Built, as of 2026-08-24.** The tiers below are in `apps/api/src/services/plans.ts`,
+the meters are enforced off the cost ledger in `services/usage.ts`, and `users.plan`
+carries `free | plus | coach` after `034`. What is *not* built is Stripe and the
+paywall screen — the entitlement decides, but nothing yet takes money or explains
+itself beyond one sentence.
 
-It assumes the same decision `SCALING.md` does: **production runs on a metered
-Anthropic API key, not a Claude Code subscription.** Every figure below is what the
-tokens would cost at API rates, which is the only number that matters when the
-question is whether this can be a product.
+Previous versions of this document priced the tiers from a cost model. This one
+prices them from production. The difference between the two is the whole content of
+this rewrite, and it is not a rounding error: **a journal turn costs 13x what the
+model said it would.**
 
-## Where the numbers come from
+## What an action actually costs
 
-Three sources, in descending order of trust:
+Measured on `ai_usage` on the live deployment, 60 turns, 3 accounts, 4 days, $8.80.
+The deployment is running the caching work — `dc247d5` has every one of those commits
+in its history — so these are post-fix numbers rather than a preview of them.
 
-- **Billed production rows.** `ai_usage` for 2026-08-20/21 — 30 turns across three
-  accounts, priced by the Agent SDK itself. This is ground truth and everything else
-  is calibrated against it.
-- **A cost model** that reproduces that day to within 4%. It is what lets the tables
-  below say what 15 logs a day costs when nobody has yet logged 15 in a day.
-- **Estimates, flagged as such.** The weekly review, the meal plan and the nudge have
-  no production rows yet — nobody has triggered one. Those three numbers are the
-  softest thing in this document.
+| action | model | measured | this doc used to say |
+|---|---|---:|---:|
+| text log | Haiku 4.5 | **$0.025** | $0.0052 warm |
+| text log, escalated | Sonnet 5 | **$0.078** | $0.016 warm *(modelled)* |
+| **text log, blended** | — | **$0.066** | $0.0052 |
+| photo scan | Opus 5 | **$0.420** | $0.028 warm |
+| recipe | Opus 5 | **$0.284** | $0.186 |
+| fridge scan | Sonnet 5 | **$0.058** | $0.04 |
+| meal plan | Opus 5 | ~$0.63 *(scaled)* | $0.410 |
+| weekly review | Opus 5 | ~$0.15 *(est.)* | $0.10 |
+| nudge | Sonnet 5 | $0.025 | $0.025 |
 
-The model config the tables assume is the one now in `ai/client.ts`: Haiku 4.5 for
-`text_log`, Opus 5 for `photo_log`, `MAX_SESSION_MESSAGES` at 60.
+Two assumptions in the old tables were load-bearing and both are false.
 
-## What one action costs
+**1. The escalated path is the normal path.** This document called the escalated
+share "the largest unknown in this document" and then priced every table at the
+Haiku figure anyway. It is **77%** — 36 Sonnet text logs against 11 Haiku. Sonnet is
+3x Haiku, so the headline per-log figure was understated by roughly that much before
+anything else was counted. The query that settles it was one `GROUP BY model`, and it
+should have been run a month ago.
 
-**Superseded 2026-08-23 by measurement.** The figures in this section were a model.
-Twenty text logs and three photo scans have now been run through the real
-`anthropic-api` lane on a real key, and the model was wrong in both directions:
+**2. There is no warm column at this traffic.** **100% of production turns wrote
+cache.** Not the 27% the gap distribution predicted — all of them. A shared prefix
+only stays resident while *somebody* is running turns, and at three accounts nobody
+is. The warm column is real, but it is a property of volume this product does not
+have, which makes it exactly the wrong column to price a launch against. **Early
+users are the most expensive users**, and every table below is priced accordingly.
 
-| action | model | measured, warm | measured, cold | this doc had |
-|---|---|---|---|---|
-| text log | Haiku 4.5 | **$0.0052** | $0.0285 | $0.012 |
-| photo scan | Opus 5 | **$0.028** | $0.165 | $0.046–$0.072 |
-| nudge | Sonnet 5 | $0.025 | — | $0.01 *(est.)* |
-| recipe | Opus 5 | $0.186 | — | — |
-| meal plan | Opus 5 | $0.410 | — | $0.20 *(est.)* |
-| weekly review *(still est.)* | Opus 5 | ~$0.10 | — | $0.10 |
+### Where the money goes
 
-*Warm* means the ~18k-token shared prefix — tool definitions plus the static system
-prompt — was already in cache; *cold* means that turn paid to write it. The two
-differ by 5.5× on text and 6× on a photo, and which one a turn gets is a function of
-deployment traffic, not of the user. **That spread is now the single largest source
-of uncertainty in this document**, and it cannot be resolved by modelling — only by
-running real traffic and reading the cold-write share off `ai_usage`.
+On a $0.0787 Sonnet text log:
 
-Three corrections that matter more than the arithmetic:
+| component | tokens | rate | cost | share |
+|---|---:|---|---:|---:|
+| cache **write** | 9,134 | $6/M (1h TTL, 2x) | $0.0548 | **70%** |
+| cache read | 49,955 | $0.30/M | $0.0150 | 19% |
+| output | 538 | $15/M | $0.0081 | 10% |
+| fresh input | 263 | $3/M | $0.0008 | 1% |
 
-- **A text log is half what this doc assumed**, warm. Text is even cheaper to give
-  away than the tiers below suppose.
-- **A photo scan runs on Opus 5, not Sonnet 5** — `ai/client.ts` routes `photo_log`
-  to Opus at high effort, so the Sonnet row was never a real configuration. Warm it
-  is cheaper than the doc's Sonnet figure; cold it is more than twice the Opus one.
-- **A meal plan is $0.41, not $0.20.** The estimate was half the truth, and meal
-  plans are output-dominated, which is the one thing caching cannot help.
-
-**A photo costs five times a text log, warm.** That ratio still decides the tier
-structure — text is cheap enough to be effectively unlimited, photos are the thing
-that has to be metered — so the shape of what follows survives; the absolute numbers
-in it do not. **Every tier table below still prices a text log at $0.012 and has not
-been recomputed**, deliberately: doing so would need a warm/cold mix that no
-production row can yet supply, and a projection recomputed from a measurement is
-still a projection. See `COMPETITION.md` §3.
-
-Two second-order effects worth knowing, because they are counter-intuitive:
-
-- **Cost is superlinear in daily volume.** Each turn re-reads the conversation so
-  far, so the tenth log of a day costs more than the first. Capping the replayed
-  transcript is what flattens it — at a 6-turn window, 40 logs a day costs $21/month
-  instead of $34.
-- **Cache writes, not model calls, were 87% of the original bill.** That is fixed
-  (see the `dayContextPrompt` note), but it is the reason to distrust any cost
-  intuition formed before 2026-08-21.
+Seventy per cent of a journal turn is the cache write, and it is paid on every single
+turn. Not model choice, not transcript length — the write. That is the cost structure,
+and §"What would make this sellable" is the only part of this document that matters
+more than the tables.
 
 ## The tiers
 
-**Recomputed 2026-08-23 from measured costs.** Every table below now has two COGS
-columns, and the gap between them is the whole finding.
+Sized against the **store** column — 15%, the worse channel — so each tier holds up
+where we control the least. Stripe on the web is 2.9% + $0.30, landing once a year
+rather than twelve times.
 
-*Warm* is a deployment where the ~18k-token shared prefix — the tool definitions plus
-the static system prompt, identical for every account — is in cache when a turn
-arrives. *Cold* is one where it is not, and the turn pays to write it. A text log is
-$0.0052 warm and $0.0285 cold; a photo scan is $0.028 and $0.165. Both columns are the
-outer bounds: real traffic sits between them, nearer whichever end the volume puts it.
+| | annual | store net/mo | Stripe net/mo |
+|---|---|---:|---:|
+| Plus | $79.99 | $5.67 | $6.45 |
+| Coach | $149.99 | $10.62 | $12.10 |
 
-Assumptions stated once, since the old tables did not state theirs: 30 days a month,
-4.3 weeks; Stripe at 2.9% + $0.30, which lands once a year on annual rather than
-twelve times.
+### Free — the offline logbook
 
-A text log is also priced here at the Haiku figure, and so is the right one only for a
-user writing in a language Haiku handles. What happens when that does not hold is the
-section after these, and for some cells it is the difference between a business and a
-hole.
+Unlimited and unmetered: manual entry, repeat-a-meal, barcode, weight,
+Today/History/Progress, the outbox. That is a complete food diary, roughly what
+MyFitnessPal's free tier is, and it costs nothing to serve.
 
-### Free — 6 text logs a day, 1 photo scan ever
+Metered, and **lifetime rather than monthly**: 20 journal turns, 1 photo scan.
 
-| | COGS warm | COGS cold |
+The lifetime grant is the load-bearing decision. A monthly grant is a recurring bill
+for accounts that have already decided not to pay — at $0.066 a turn, 20/month
+forever is $1.32/month per free account, which at 4% conversion is a CAC that climbs
+for as long as the account exists. Lifetime makes it a one-time **$1.74** and then
+stops. Free-tier steady state is **$0.00/month**.
+
+No model-written nudges. A nudge is $0.025 and a dormant free account can collect one
+every week indefinitely. Free accounts hear from the app over a templated push, which
+FCM already sends and which costs nothing.
+
+**This is only survivable because `OFFLINE.md` shipped.** The old argument for a
+generous free tier — "someone who hits a wall logging their dinner stops logging, and
+an account that stops logging is worth nothing" — was correct while a model round trip
+was the only way to record a meal. It no longer is. **The wall stopped being an exit**,
+and that is what buys every number above.
+
+### Plus — $79.99/yr
+
+30 journal turns/mo · 2 photo scans/mo · weekly review · model-written nudges
+
+| | | |
 |---|---:|---:|
-| typical — 4 logs/day, the one lifetime photo, weekly nudge | **$0.76** | $3.69 |
-| at the cap — 6 logs/day, every day | $1.07 | $5.40 |
+| 30 chat | x $0.066 | $1.98 |
+| 2 photo | x $0.420 | $0.84 |
+| review | 4.3 x $0.15 | $0.65 |
+| nudge | 4.3 x $0.025 | $0.11 |
+| **COGS** | | **$3.58** |
+| margin, store net $5.67 | | **37%** |
+| margin, Stripe net $6.45 | | **44%** |
 
-*(was: a flat $1.87, modelled)*
+### Coach — $149.99/yr
 
-The single lifetime photo is deliberate and is the most important design decision
-here. Photo scanning is both the thing that makes people say "oh" and the most
-expensive action in the product. One scan, ever, means every free user experiences
-the best thing the app does, exactly once, and hits the wall while still impressed.
-It costs $0.05 once and it is the entire conversion argument.
+Plus, and the kitchen: 35 turns · 3 photos · 10 fridge scans · 8 recipes · 2 meal
+plans, all monthly.
 
-Text logs stop at 6/day with an upgrade prompt rather than degrading. A hard stop is
-legible — "that's your 6 logs for today" is a sentence someone understands — and it
-caps free-tier COGS exactly, which a soft degrade does not.
-
-No weekly review, no meal plan. Those are Opus and they are what the paid tiers are
-for. A weekly nudge stays, because it costs a cent and it is what brings people back.
-
-**Watch this number.** Free-tier burn is the CAC, and it now has a range rather than a
-value:
-
-| conversion | CAC warm | CAC cold |
+| | | |
 |---|---:|---:|
-| 3% | $25.32 | $123.08 |
-| 5% | $15.19 | $73.85 |
-| 8% | $9.49 | $46.16 |
+| 35 chat | x $0.066 | $2.31 |
+| 3 photo | x $0.420 | $1.26 |
+| 10 fridge scan | x $0.058 | $0.58 |
+| 8 recipe | x $0.284 | $2.27 |
+| 2 meal plan | x $0.630 | $1.26 |
+| review + nudge | | $0.76 |
+| **COGS** | | **$8.44** |
+| margin, store net $10.62 | | **21%** |
+| margin, Stripe net $12.10 | | **30%** |
 
-Warm, the free tier is cheap enough that the old "cut it to a 14-day trial under 4%
-conversion" rule no longer bites — $25 CAC at 3% is a fine number. Cold, it is four to
-five times worse than the figure that rule was written against. **The decision about
-the free tier is therefore not a decision about conversion. It is a decision about
-whether the deployment is warm**, and the section below is about how little traffic
-that actually takes.
+Thinner than Plus on purpose, and the kitchen is what makes it thin — $4.11 of the
+$8.44. None of that half can be improved by anything in the next section, because
+caching only ever helps input and a meal plan is ~10k tokens of *output*. The kitchen
+is the one irreducible cost in the product, which is precisely why it is sold
+separately rather than bundled into Plus.
 
-### Standard — $12.99/month or $119/year
+$149.99 is above the ~$80/yr ceiling `COMPETITION.md` identifies for anything called a
+tracker. That is the same bet that document recommends: pantry → recipe → plan →
+shopping list is a meal-planning product, a different market with a higher anchor and
+the one thing in the comparison table nobody else has.
 
-15 text logs a day · 2 photo scans a day · weekly review
+## The honest part
 
-| | COGS warm | COGS cold | net revenue | margin warm | margin cold |
-|---|---:|---:|---:|---:|---:|
-| typical — 8 logs, 1 photo | $2.52 | $12.22 | $12.31 | **80%** | 1% |
-| at the cap, every day | $4.45 | $23.16 | $12.31 | 64% | **−88%** |
-| annual, typical | $2.52 | $12.22 | $9.60 | 74% | −27% |
-| annual, at the cap | $4.45 | $23.16 | $9.60 | 54% | **−141%** |
+**These ceilings cover their costs and they are not yet competitive.**
 
-**The tier header used to say "(Sonnet)" against the photo scans and that was never
-true** — `ai/client.ts` routes `photo_log` to Opus 5 at high effort. Decided 2026-08-23:
-**the code is right and the line was wrong.** Photos stay on Opus.
+Thirty journal turns a month is about one a day, against a field where Cal AI sells
+effectively unlimited scanning for $29.99/yr. The number is small because the
+per-turn cost is 13x what this document used to assume — not because the tier is
+designed that way.
 
-That is a deliberate choice to carry the cost rather than a failure to notice it. A
-photo scan is the second-largest line in every cell above, and Sonnet would cut it —
-but reading a plate is the hardest perception task in the product and the one users
-judge it by, and a wrong number entered confidently is worse than a slower one. The
-caps are what hold the tier up; the model is what makes it worth subscribing to.
+The instruction these were built to was *if chat is unlimited, the subscription must
+cover it*. At $0.066 a turn, and after the review, nudge and two photo scans
+Plus also carries, unlimited chat breaks even at **about 2 messages a day**. There is no price in the $30–80/yr band that funds it, and a subscription that
+did would have to retail near $28/month, which is Noom's price for human coaching. So
+chat is metered, and the meter is published rather than hidden behind a "fair use"
+ceiling somebody would hit and call a bug.
 
-### Coach — $29.99/month or $299/year
+## What would make this sellable
 
-30 text logs a day · 5 photo scans a day (Opus) · weekly review · meal plans
+Not a pricing change. Three levers, and the first two are configuration:
 
-Typical assumes 2 meal plans and 8 recipes a month; at the cap, 4 and 20.
+1. **The cache write TTL.** 70% of a journal turn is the write at the 1h multiplier
+   (2x base). That TTL was chosen in `3062937` off a gap distribution that assumed
+   the written block would earn reads back. It does not — production writes cache on
+   100% of turns, so the hour is buying residency nothing returns for. The 5m
+   multiplier is 1.25x: **−26% on the whole turn, one line.** The hour becomes right
+   again the moment turns arrive close enough together to read what they wrote, so
+   this is a setting to revisit with traffic, not a permanent answer.
 
-| | COGS warm | COGS cold | net revenue | margin warm | margin cold |
-|---|---:|---:|---:|---:|---:|
-| typical — 12 logs, 3 photos | $7.13 | $27.85 | $28.82 | **75%** | 3% |
-| at the cap, every day | $14.67 | $56.19 | $28.82 | 49% | **−95%** |
-| annual, typical | $7.13 | $27.85 | $24.17 | 71% | −15% |
-| annual, at the cap | $14.67 | $56.19 | $24.17 | 39% | **−133%** |
+2. **The escalation policy.** 77% of turns run on Sonnet at 3x Haiku's rate because
+   of `ai/language.ts`. Blended $0.066; all-Haiku $0.025. **A 2.6x saving**, gated
+   entirely on whether Haiku 4.5 is genuinely unusable for those languages or was
+   measured once and written down. It is the largest single number in the pricing and
+   it deserves a re-measurement.
 
-The kitchen is most of the warm column here — $0.82 of meal plans and $1.49 of recipes
-at typical, $1.64 and $3.72 at the cap — and none of it is helped by caching, because
-it is output the model writes rather than input it reads. The caps on plans and recipes
-are the only thing holding this tier up, and they are load-bearing in the warm column
-as well as the cold one.
+3. **The replayed transcript.** ~50k tokens of cache read per turn, of which ~18k is
+   the shared prefix. This was item 5 of the old build list, "not required to ship".
+   At 19% of the turn it is genuinely the smallest of the three — but it also shrinks
+   the write in (1), since a shorter transcript is a smaller block to re-key.
 
-Net revenue is after Stripe (2.9% + $0.30). On annual that fee lands once instead of
-twelve times, which is worth about $0.45/month — the reason annual survives at all.
+**(1) and (2) together take a blended turn from $0.066 to roughly $0.019** — 3.5x,
+which turns Plus's 30 turns a month into something nearer 120 at the same margin.
+That is the difference between the table above and a product, and neither one is a
+refactor.
 
-## The warm/cold question, which is now the business
+## What is left to build
 
-Every table above has a healthy column and a fatal one, and the same lever decides
-which one a deployment lives in. It is worth being exact about how much traffic that
-lever needs, because the intuition — "cache warmth is a problem for later, at scale" —
-is wrong by two orders of magnitude.
-
-The prefix is shared by **every account on the deployment**: same tools, same static
-system prompt, byte for byte. So it does not need *a user* to be active, it needs
-*anybody* to be. On the five-minute TTL an entry survives five minutes past the last
-turn that touched it. The deployment is warm when turns arrive closer together than
-that, and cold when they do not.
-
-**And it has now been measured rather than modelled.** 59 production turns, four
-accounts, gap from each turn to the one before it — on the whole deployment, since the
-prefix is shared:
-
-| gap from the previous turn | turns | share |
-|---|---:|---:|
-| ≤ 5 minutes — warm already | 24 | 41% |
-| 5–60 minutes — **the hour converts these** | 19 | 32% |
-| > 1 hour, or the first of a run — cold either way | 16 | 27% |
-
-Median gap **17 minutes**. Mean gap 83 minutes.
-
-That difference between the median and the mean is the whole lesson. An earlier version
-of this section reasoned from the mean, concluded that four accounts means turns hours
-apart and nothing to keep warm, and put the switch at "roughly twenty active users".
-Wrong, by about 20% of the per-turn bill. People do not log meals as a Poisson process
-— they log them in conversations, three or four turns inside a couple of minutes, and
-those clusters land far closer together than an average gap suggests.
-
-Cost per text log at the distribution above: **$0.0190 on the five-minute TTL, $0.0151
-on the hour.** The hour wins whenever it cuts the cold share to less than about 0.64 of
-what five minutes leaves; here it cuts it from 59% to 27%, which clears the bar with
-room.
-
-`ANTHROPIC_CACHE_TTL=1h` was set on the host on 2026-08-23, and the code default moved
-with it. The remaining question is not when to switch — it is switched — but how much of
-the cold 27% is genuinely unavoidable overnight and first-thing-in-the-morning traffic,
-which more accounts will shrink on their own.
-
-So the order of operations for the pricing is:
-
-1. ~~Below ~20 users, stay on `5m`~~ — **wrong, and retracted.** The bursty arrival
-   pattern makes the hour pay immediately.
-2. **Re-read the cold-write share once real traffic exists on the metered lane.** The
-   27% above is the ceiling on what is left to win from caching, and it is the number
-   that decides which column of the tier tables the business lives in.
-3. **Only then commit to the caps, the free tier, or the annual discount.** None of the
-   three tiers survives its cold column at the cap; all three are comfortable warm.
-
-## When the language escalates
-
-A text log costs $0.012 on Haiku 4.5 and $0.038 on Sonnet 5, and which one it is
-depends on the language it was written in — Haiku writes about two dozen languages
-cleanly and roughly ten badly enough to be a product defect. `ai/language.ts` holds
-the list and the measurements; the routing is in `ai/run.ts`.
-
-So the tier tables have a variable in them that they do not show. Only the text-log
-line moves — photos, reviews and plans are already on models that write every
-language well — but text is most of the volume, and at 3.2x it is enough to change
-the answer:
-
-| | net revenue | COGS, none escalated | 10% escalated | all escalated |
-|---|---|---|---|---|
-| Standard typical | $12.31 | $4.32 · **65%** | $4.86 · 61% | $9.75 · 21% |
-| Standard at the cap | $12.31 | $8.33 · 32% | $9.44 · 23% | $19.46 · **−58%** |
-| Standard annual, typical | $9.60 | $4.32 · 55% | $4.86 · 49% | $9.75 · **−2%** |
-| Standard annual, at the cap | $9.60 | $8.33 · 13% | $9.44 · 2% | $19.46 · **−103%** |
-| Coach typical | $28.82 | $12.26 · **57%** | $13.23 · 54% | $21.97 · 24% |
-| Coach at the cap | $28.82 | $23.84 · 17% | $26.38 · 9% | $49.28 · **−71%** |
-| Coach annual, typical | $24.17 | $12.26 · 49% | $13.23 · 45% | $21.97 · 9% |
-| Coach annual, at the cap | $24.17 | $23.84 · 1% | $26.38 · **−9%** | $49.28 · **−104%** |
-
-And the free tier, where the whole number is the CAC:
-
-| | cost per active free user | CAC at 3% | at 5% | at 8% |
-|---|---|---|---|---|
-| none escalated | $1.91 | $63.51 | $38.11 | $23.82 |
-| 10% escalated | $2.31 | $76.97 | $46.18 | $28.86 |
-| all escalated | $5.94 | $198.01 | $118.81 | $74.25 |
-
-**The escalated share is not known.** It is a property of who signs up, not of the
-code, and nothing here can guess it. `ai_usage` records the model each turn actually
-ran on, so the query that settles it is a `GROUP BY model` over `kind = 'text_log'`
-— and it is worth running before the paywall is built rather than after, because two
-of the decisions below depend on the answer.
-
-**If this product is aimed at one of the escalated languages, the right-hand column
-is the real one.** A Bulgarian or Croatian or Finnish user base does not make the
-tiers thinner; it makes two of the eight cells lose money outright and puts the free
-tier's CAC near $200 at plausible conversion. That is a repricing, not a tuning:
-either the caps come down, or the escalated languages carry their own price, or the
-escalated path gets cheaper than Sonnet at low effort.
-
-## Why the caps are where they are
-
-Every cell in both tables is positive, including the pathological one: a user who
-sits at the ceiling every single day for a year on the cheapest annual plan still
-does not lose money. That is the property the caps are chosen for, and it is worth
-more than a headline price, because the users who do that are also the ones who never
-churn.
-
-**That property is conditional on the language, and the caps were set before anyone
-knew that.** It holds for a user Haiku can serve. It does not survive a user whose
-every turn escalates — the annual at-the-cap cell goes to −103% on Standard — and on
-Coach annual it does not even survive one turn in ten. The caps are the thing to move
-when the escalated share is known: they are what stands between the pathological user
-and the bill, and against Sonnet prices they are currently set about three times too
-high.
-
-The caps are roughly 2× typical usage. In human terms 15 logs a day is every meal,
-every snack, and several corrections — more than the heaviest real user currently
-does. Nobody should ever see these limits; they exist so that the one person who
-would have cost $86/month cannot.
-
-**Model tier is product tier.** Standard gets Sonnet vision, Coach gets Opus. This is
-the rare cost lever that is also an honest feature difference — Opus really is better
-at estimating a portion from a plate — so the thing you are metering and the thing
-you are selling are the same thing.
-
-## What has to be built
-
-Roughly in order:
-
-1. **A plan on the user, and enforcement in the cost ledger.** The ceilings belong
-   where `turnsInLastDay` already lives, not in the route limiter — `usage.ts`
-   explains why, and the reasoning applies unchanged to entitlements. Route limits
-   cannot see a turn started from inside a journal tool; the ledger can.
-2. **The lifetime photo counter.** Distinct from the daily counters — a
-   `COUNT(*) WHERE kind = 'photo_log'` over all time, not a rolling window.
-3. **Stripe.** Checkout, the webhook, and the plan column. Annual prices as the
-   default selection, monthly as the visible alternative.
-4. **The wall itself.** One sentence and two buttons. This is a product surface, not
-   an error state, and it is the screen that earns the revenue — worth more care than
-   the plumbing behind it.
-5. **A transcript window.** Not required to ship, but it is what makes the at-cap
-   column comfortable rather than merely positive, and it is a small change: keep the
-   last N turns rather than the day.
+1. ~~A plan on the user, and enforcement in the cost ledger.~~ **Done** — `034`,
+   `plans.ts`, `usage.ts`. Meters are counted off `ai_usage` rather than the route
+   limiter, because a route limiter cannot see a turn started from inside a journal
+   tool and cannot express "not included" (a ceiling of zero comes out as 429, "come
+   back later", for a feature that never comes back). Every entitlement refusal is
+   **402**; throttles stay 429.
+2. ~~The lifetime photo counter.~~ **Done** — `period: 'ever'` on the free meters.
+3. **Stripe.** Checkout, the webhook, and the column write. Annual as the default
+   selection. Sell on the web where the post-Epic link-out window allows it; keep IAP
+   at 15% as the convenient path.
+4. **The wall itself.** One sentence and two buttons. The sentences exist
+   (`sentenceFor` in `usage.ts`) and the API returns the allowance with every 402, so
+   what is missing is the screen. This is the surface that earns the revenue.
+5. **A billing period.** The meters roll over 30 days rather than resetting on a
+   date, deliberately — there is no billing period to anchor to yet, and a rolling
+   window has no cliff. When Stripe lands, `allowanceFor` is the one function that
+   has to learn about it.
 
 ## Open questions
 
-- **The three estimated costs.** Review, meal plan and nudge are modelled, not
-  measured. Trigger one of each in production and check the ledger before trusting
-  the Coach tier's margin.
-- **What share of turns escalate by language.** The largest unknown in this
-  document, and the only one that can turn a cell negative — see "When the
-  language escalates". It is also the cheapest to answer: the ledger already
-  records the model per turn, so it needs a query rather than an experiment.
-  Answer it before building the paywall, because the caps depend on it.
-- **Conversion.** Every number in the free-tier section is a guess until there is a
-  paywall to measure. It is also the number the business is most sensitive to.
-- **Whether the market bears $29.99.** Coach is priced as a coaching product rather
-  than a food logger, which is what the feature set actually is. That is a
-  positioning bet, and the cost data cannot settle it.
+- ~~What share of turns escalate by language.~~ **Answered: 77%.**
+- ~~What the cold-write share is.~~ **Answered: 100%, at this traffic.**
+- **The three estimated costs.** Meal plan, review and nudge are still modelled or
+  scaled. Trigger one of each in production and read the ledger.
+- **Whether Haiku is really unusable for the escalated languages.** The largest
+  remaining lever, and it is a quality question rather than a cost one.
+- **Conversion.** Every free-tier number is a guess until there is a paywall to
+  measure it against.

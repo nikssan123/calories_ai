@@ -15,9 +15,9 @@ import {
 import { authErrorFor, laneFor } from '../ai/providers/index.ts';
 import { scanFridgePhoto, type ScanInput } from '../ai/pantry.ts';
 import { generateMealPlan } from '../ai/plan.ts';
-import { RecipeBudgetError, suggestRecipes } from '../ai/recipes.ts';
+import { suggestRecipes } from '../ai/recipes.ts';
 import { ModelBusyError } from '../ai/token-bucket.ts';
-import { recipeAllowance } from '../services/usage.ts';
+import { allowanceFor, PlanLimitError, requireAllowance } from '../services/usage.ts';
 import {
   cookSlot,
   getMealPlan,
@@ -49,7 +49,7 @@ import { getUser, getUserContext } from '../services/user.ts';
 import { claimPhoto, presignPhotoRead } from '../services/photos.ts';
 import { type DayContext, localDateFor } from '../time.ts';
 import { stripDataUrl } from './body.ts';
-import { RECIPE_BURST, SCAN_LIMIT } from './limits.ts';
+import { RECIPE_BURST, SCAN_BURST } from './limits.ts';
 
 /**
  * The kitchen: what you have, and what you could cook with it.
@@ -85,15 +85,17 @@ const PhotoBody = z
 /**
  * Turns whatever the engine threw into a reply.
  *
- * The budget is a 429 with the same shape the rate limiter produces, because
- * from the client's side it is the same event — you have had your allowance —
- * and it should not matter which of the two noticed. The token bucket joins it
- * for the same reason and says something different: not "you have had your
+ * The budget answers **402**, and it used to answer 429 alongside the rate
+ * limiter on the grounds that "from the client's side it is the same event".
+ * That was wrong in the one way that matters: a 429 means come back later and a
+ * spent plan does not come back later, it comes back if you pay. The screens
+ * differ — a retry against a paywall — so the statuses have to. The token
+ * bucket keeps 429 and says something different again: not "you have had your
  * allowance" but "come back in a moment", which is why it carries the seconds.
  */
 function recipeFailure(error: unknown, reply: FastifyReply) {
-  if (error instanceof RecipeBudgetError) {
-    return reply.status(429).send({ error: error.message, limit: error.allowed });
+  if (error instanceof PlanLimitError) {
+    return reply.status(402).send({ error: error.message, allowance: error.allowance });
   }
   if (error instanceof ModelBusyError) {
     return reply
@@ -165,11 +167,22 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
    * reaches the kitchen — a photograph is a machine's reading of a cluttered
    * shelf, and the person holding the phone can settle it in four seconds.
    */
-  app.post('/pantry/scan', { config: { rateLimit: SCAN_LIMIT } }, async (request, reply) => {
+  app.post('/pantry/scan', { config: { rateLimit: SCAN_BURST } }, async (request, reply) => {
     const parsed = PhotoBody.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: 'A photo is required' });
     const authError = await laneAuthError(request.userId!);
     if (authError) return reply.status(503).send({ error: authError });
+
+    // Before the photo is claimed or presigned: a locked kitchen should cost
+    // nothing to refuse, and the paywall reads better than a dead scanner.
+    try {
+      await requireAllowance(request.userId!, request.plan, 'pantry_scan');
+    } catch (error) {
+      if (error instanceof PlanLimitError) {
+        return reply.status(402).send({ error: error.message, allowance: error.allowance });
+      }
+      throw error;
+    }
 
     const mediaType = parsed.data.photo_media_type;
     let scan: ScanInput;
@@ -209,7 +222,7 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
       const result = await suggestRecipes(request.userId!, brief(parsed.data));
       // The fresh number, so the screen can shut the button behind the run that
       // just spent the last of it rather than on the next page load.
-      return { ...result, allowance: await recipeAllowance(request.userId!, request.plan) };
+      return { ...result, allowance: await allowanceFor(request.userId!, request.plan, 'recipe') };
     } catch (error) {
       request.log.error({ err: error }, 'recipe suggestion failed');
       return recipeFailure(error, reply);
@@ -226,7 +239,7 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
       // Carried on the list the Cook screen already fetches on load, rather
       // than a request of its own: the answer is one row, and a second round
       // trip to learn whether a button works is a second thing to go wrong.
-      recipeAllowance(request.userId!, request.plan),
+      allowanceFor(request.userId!, request.plan, 'recipe'),
     ]);
     return { recipes, allowance };
   });

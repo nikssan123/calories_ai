@@ -37,11 +37,30 @@ function planLimit(pick: (limits: PlanLimits) => number, timeWindow: string) {
  */
 export const CHAT_LIMIT = planLimit((l) => l.chatTurnsPerHour, '1 hour');
 
-/** Manually triggered reviews. The scheduled one does not come through a route. */
-export const REVIEW_LIMIT = planLimit((l) => l.reviewsPerDay, '1 day');
+/**
+ * A burst guard on the manual review, not the daily ceiling.
+ *
+ * The ceiling itself moved into the handler, counted off the cost ledger, for a
+ * reason worth recording: `free` carries zero reviews, and a `planLimit` of
+ * zero makes @fastify/rate-limit refuse *before* any handler runs — so a
+ * feature that is not included answered 429, "come back later", for a thing
+ * that was never coming. The limiter cannot express "not included"; only the
+ * handler can. What is left here is the loop guard.
+ *
+ * The scheduled review does not come through a route at all.
+ */
+export const REVIEW_BURST = { max: 3, timeWindow: '1 minute' };
 
-/** Fridge photos: vision, and discretionary. */
-export const SCAN_LIMIT = planLimit((l) => l.fridgeScansPerDay, '1 day');
+/**
+ * A burst guard on the fridge scanner, not the scan allowance.
+ *
+ * The allowance itself is a monthly meter counted off the cost ledger — see
+ * `plans.ts` — because the kitchen is sold as a tier and a locked feature has
+ * to answer 402 rather than 429. What is left here is what a per-route limiter
+ * is actually good for: a client stuck on a blurry frame, firing the same
+ * vision call in a loop, spending a month of somebody's plan in a minute.
+ */
+export const SCAN_BURST = { max: 4, timeWindow: '1 minute' };
 
 /**
  * A burst guard on the recipe routes, not the recipe budget.

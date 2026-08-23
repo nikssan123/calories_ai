@@ -3,8 +3,8 @@ import { anthropicRate, openAiRate, priceUsage, round6 } from '../ai/pricing.ts'
 import { MODELS } from '../ai/client.ts';
 import type { ProviderId } from '../ai/providers/index.ts';
 import type { CostSource, Outcome, TurnKind } from '../ai/providers/types.ts';
-import { limitsFor } from './plans.ts';
-import type { PlanName } from '@ct/shared';
+import { limitsFor, meterFor } from './plans.ts';
+import type { Allowance, MeterName, PlanName } from '@ct/shared';
 
 /**
  * Recording and reading what the AI layer costs.
@@ -87,29 +87,162 @@ export async function oldestTurnInLastDay(
 }
 
 /**
- * What is left of the recipe budget, for a screen that has to say so *before*
- * the button is pressed.
+ * The turn kinds each sold meter is counted over.
+ *
+ * `chat` covers `setup` as well as `text_log` because somebody halfway through
+ * onboarding is not spending a different budget — and because the alternative
+ * is a free tier whose welcome allowance is silently drained by the profile
+ * questions before they have logged anything.
+ *
+ * `photo_log` is deliberately *not* in `chat`, despite being a journal turn
+ * through the same route. It is metered on its own because it costs six times
+ * as much, and a meter that averages the two would price neither.
+ */
+const METER_KINDS: Record<MeterName, TurnKind[]> = {
+  chat: ['text_log', 'setup'],
+  photo: ['photo_log'],
+  pantry_scan: ['pantry_scan'],
+  recipe: ['recipe'],
+  meal_plan: ['meal_plan'],
+};
+
+/**
+ * How many turns of these kinds this account has run inside the window.
+ *
+ * `null` days means all of time, which is what a lifetime allowance needs. The
+ * free tier is built out of those, so this is not an edge case — it is the
+ * common path for the majority of accounts.
+ *
+ * The index added in `034` is what makes the monthly form affordable: it runs
+ * *before* the turn rather than after, so unlike the cost rollups it is latency
+ * somebody is standing there waiting for.
+ */
+export async function turnsInWindow(
+  userId: string,
+  kinds: TurnKind[],
+  days: number | null,
+): Promise<number> {
+  const row = await queryOne<{ n: string }>(
+    `SELECT count(*) AS n FROM ai_usage
+      WHERE user_id = $1 AND kind = ANY($2::text[])
+        AND ($3::int IS NULL OR occurred_at > now() - ($3 || ' days')::interval)`,
+    [userId, kinds, days],
+  );
+  return Number(row?.n ?? 0);
+}
+
+/**
+ * What is left of one meter, for a screen that has to say so *before* the
+ * button is pressed.
  *
  * The ceiling was only ever discovered by hitting it: the client had no way to
  * ask, so a spent account got an enabled button, a request, and a toast that
  * slid away — which reads as the button being broken rather than as a limit
  * being reached. Nothing about the number is secret, and a limit you can see is
  * a feature of the plan rather than a trap in the interface.
+ *
+ * A month is a rolling thirty days, not a calendar one, for the same reason the
+ * daily ceilings are rolling: there is no billing period to anchor to yet, and
+ * a rolling window has no cliff — the allowance comes back a turn at a time
+ * instead of all at once on a date the user has to remember. When Stripe
+ * arrives and there *is* a period, this is the one function that has to learn
+ * about it.
  */
-export async function recipeAllowance(
+export async function allowanceFor(
   userId: string,
   plan: PlanName,
-): Promise<{ allowed: number; used: number; resets_at: string | null }> {
-  const allowed = limitsFor(plan).recipeRunsPerDay;
-  const used = await turnsInLastDay(userId, 'recipe');
-  if (used < allowed) return { allowed, used, resets_at: null };
+  meter: MeterName,
+): Promise<Allowance> {
+  const { allowed, period } = meterFor(plan, meter);
+  const kinds = METER_KINDS[meter];
 
-  const oldest = await oldestTurnInLastDay(userId, 'recipe');
+  // A meter the plan does not carry at all. No count is run: the answer does
+  // not depend on it, and this is on the hot path.
+  if (allowed === null) {
+    return { meter, allowed: null, used: 0, period, resets_at: null };
+  }
+
+  const days = period === 'month' ? 30 : null;
+  const used = await turnsInWindow(userId, kinds, days);
+  if (used < allowed || period === 'ever') {
+    return { meter, allowed, used, period, resets_at: null };
+  }
+
+  // Spent, and on a window that moves. When the oldest run still inside it
+  // falls out is when one comes back — which is a truthful thing to say, and
+  // "resets on the 1st" would not be.
+  const row = await queryOne<{ at: Date | null }>(
+    `SELECT min(occurred_at) AS at FROM ai_usage
+      WHERE user_id = $1 AND kind = ANY($2::text[])
+        AND occurred_at > now() - interval '30 days'`,
+    [userId, kinds],
+  );
   return {
+    meter,
     allowed,
     used,
-    resets_at: oldest ? new Date(oldest.getTime() + 24 * 60 * 60 * 1000).toISOString() : null,
+    period,
+    resets_at: row?.at ? new Date(new Date(row.at).getTime() + 30 * 86_400_000).toISOString() : null,
   };
+}
+
+/**
+ * Raised when an account has spent a meter.
+ *
+ * A typed error rather than a boolean return, because every caller has to react
+ * to it and none of them can sensibly carry on: a route answers 402, and a
+ * journal tool tells the model to say so and answer from the log instead.
+ *
+ * 402 rather than 429, and the distinction matters to the client: 429 means
+ * come back later, 402 means this is what your plan is. The phone shows a
+ * paywall for one and a retry for the other.
+ */
+export class PlanLimitError extends Error {
+  constructor(readonly allowance: Allowance) {
+    super(sentenceFor(allowance));
+    this.name = 'PlanLimitError';
+  }
+}
+
+/**
+ * What the wall actually says.
+ *
+ * One sentence, in the second person, naming the number. `SUBSCRIPTIONS.md` is
+ * right that this is a product surface rather than an error state — it is the
+ * screen that earns the revenue — so the words live next to the accounting
+ * rather than being assembled at four call sites.
+ */
+function sentenceFor({ meter, allowed, period }: Allowance): string {
+  const thing: Record<MeterName, [string, string]> = {
+    chat: ['message', 'messages'],
+    photo: ['photo scan', 'photo scans'],
+    pantry_scan: ['fridge scan', 'fridge scans'],
+    recipe: ['recipe', 'recipes'],
+    meal_plan: ['meal plan', 'meal plans'],
+  };
+  const [one, many] = thing[meter];
+
+  if (allowed === null) return `Your plan does not include ${many}.`;
+  const noun = allowed === 1 ? one : many;
+  return period === 'ever'
+    ? `That is your ${allowed} free ${noun}. Typing a meal in is still unlimited.`
+    : `That is all ${allowed} ${noun} for this month.`;
+}
+
+/**
+ * The gate itself. Throws when the meter is spent, returns what is left when it
+ * is not, so a caller that wants to show the remainder does not count twice.
+ */
+export async function requireAllowance(
+  userId: string,
+  plan: PlanName,
+  meter: MeterName,
+): Promise<Allowance> {
+  const allowance = await allowanceFor(userId, plan, meter);
+  if (allowance.allowed === null || allowance.used >= allowance.allowed) {
+    throw new PlanLimitError(allowance);
+  }
+  return allowance;
 }
 
 export async function turnsInLastWeek(userId: string, kind: TurnKind): Promise<number> {

@@ -31,7 +31,11 @@ const TODAY = '2026-03-19';
 let user: TestUser;
 
 beforeEach(async () => {
-  user = await createUser();
+  // A model-written nudge is a paid feature as of the plan rework — see
+  // `plans.ts` — so the fixture holds a plan that carries one. That free
+  // accounts get none is asserted on its own below rather than being a silent
+  // property of the fixture.
+  user = await createUser({ plan: 'plus' });
   await setUserTargets(user, '2026-01-01', { kcal: 2200, protein_g: 160 });
 });
 
@@ -70,6 +74,24 @@ describe('isNudgeTime', () => {
 });
 
 describe('what fires', () => {
+  /**
+   * The free tier's only recurring model cost, removed.
+   *
+   * A nudge is $0.025 of Sonnet and a dormant free account can collect one
+   * every week indefinitely — an annuity paid to people who have already
+   * decided not to subscribe. Free accounts still hear from the app; they hear
+   * from it over a templated push, which costs nothing to send.
+   */
+  it('does not spend a model on a free account', async () => {
+    const free = await createUser({ plan: 'free' });
+    await setUserTargets(free, '2026-01-01', { kcal: 2200, protein_g: 160 });
+    for (let i = 0; i < 14; i++) {
+      await addMeal(free, { date: addDays(TODAY, -(4 + i)), kcal: 2100 });
+    }
+
+    expect(await dueNudge(free.id, free.ctx, TODAY)).toBeNull();
+  });
+
   it('notices a log that has gone quiet after a habit of logging', async () => {
     // A fortnight of logging, then four silent days.
     for (let i = 0; i < 14; i++) {

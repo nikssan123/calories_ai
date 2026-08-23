@@ -37,7 +37,7 @@ let user: TestUser;
 
 beforeEach(async () => {
   // Pro, because the plan allowance is not what these tests are about.
-  user = await createUser({ plan: 'pro' });
+  user = await createUser({ plan: 'coach' });
   await setUserTargets(user, '2026-01-01', { kcal: 2200, protein_g: 160 });
 });
 
@@ -195,13 +195,22 @@ describe('generateMealPlan', () => {
     expect(usage).toHaveLength(1);
   });
 
-  it("refuses once the week's allowance is spent", async () => {
-    const { limitsFor } = await import('../src/services/plans.ts');
-    const spy = vi.spyOn(await import('../src/services/plans.ts'), 'limitsFor');
-    spy.mockReturnValue({ ...limitsFor('pro'), mealPlansPerWeek: 1 });
+  /**
+   * Spied on `meterFor` rather than on `limitsFor`, and the difference is not
+   * cosmetic: `meterFor` calls `limitsFor` *within its own module*, so a spy on
+   * the `limitsFor` export never reaches it and the mock silently does nothing.
+   * `requireAllowance` reads `meterFor` across a module boundary, which is
+   * where a spy can actually stand.
+   */
+  it("refuses once the month's allowance is spent", async () => {
+    const plans = await import('../src/services/plans.ts');
+    const spy = vi.spyOn(plans, 'meterFor');
+    spy.mockImplementation((plan, meter) =>
+      meter === 'meal_plan' ? { allowed: 1, period: 'month' } : plans.limitsFor(plan).chat,
+    );
     try {
       await planProposing([recipeArgs('One')]);
-      await expect(planProposing([recipeArgs('Two')])).rejects.toThrow(/meal plan for this week/);
+      await expect(planProposing([recipeArgs('Two')])).rejects.toThrow(/meal plan for this month/);
     } finally {
       spy.mockRestore();
     }
@@ -292,7 +301,7 @@ describe('the shopping list', () => {
   });
 
   it('drops the staples, and names what it dropped', async () => {
-    await addPantryItems(user.id, 'pro', [
+    await addPantryItems(user.id, 'coach', [
       { name: 'Olive oil', is_staple: true },
       { name: 'Salt', is_staple: true },
     ]);
@@ -310,7 +319,7 @@ describe('the shopping list', () => {
   });
 
   it('keeps a fresh item the recipe still says has to be bought', async () => {
-    await addPantryItems(user.id, 'pro', [{ name: 'Spinach' }]);
+    await addPantryItems(user.id, 'coach', [{ name: 'Spinach' }]);
     await planProposing([
       recipeArgs('Wed', {
         ingredients: [ingredient('Spinach', { missing: true })],
@@ -389,7 +398,7 @@ describe('lines they wrote themselves', () => {
   });
 
   it('does not drop a written line because the kitchen has one', async () => {
-    await addPantryItems(user.id, 'pro', [{ name: 'Olive oil', is_staple: true }]);
+    await addPantryItems(user.id, 'coach', [{ name: 'Olive oil', is_staple: true }]);
     await addExtras(user.id, WEEK_START, [{ name: 'Olive oil' }]);
 
     const list = await shoppingListFor(user.id, WEEK_START);

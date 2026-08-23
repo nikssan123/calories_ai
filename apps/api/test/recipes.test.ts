@@ -23,7 +23,7 @@ beforeEach(async () => {
   // On a paid plan because the daily recipe budget is not what these tests are
   // about, and a free account gets one run a day — several of them below
   // generate twice. The budget itself is covered in plans.test.ts.
-  user = await createUser({ plan: 'pro' });
+  user = await createUser({ plan: 'coach' });
   await setUserTargets(user, '2026-01-01', { kcal: 2200, protein_g: 160 });
 });
 

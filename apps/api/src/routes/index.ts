@@ -80,6 +80,13 @@ import {
   updateUser,
 } from '../services/user.ts';
 import { forgetPushToken, registerPushToken } from '../services/push-tokens.ts';
+import { limitsFor } from '../services/plans.ts';
+import {
+  allowanceFor,
+  PlanLimitError,
+  requireAllowance,
+  turnsInWindow,
+} from '../services/usage.ts';
 import { lastWorkout, listExerciseTypes, logWorkout, updateWorkout } from '../services/workouts.ts';
 import {
   deleteRoutine,
@@ -94,7 +101,7 @@ import { ModelBusyError } from '../ai/token-bucket.ts';
 import { addDays, dateRange, inferMeal, localDateFor } from '../time.ts';
 import { stripDataUrl } from './body.ts';
 import { openEventStream } from './sse.ts';
-import { BARCODE_BURST, CHAT_LIMIT, DELETE_ACCOUNT_LIMIT, REVIEW_LIMIT } from './limits.ts';
+import { BARCODE_BURST, CHAT_LIMIT, DELETE_ACCOUNT_LIMIT, REVIEW_BURST } from './limits.ts';
 
 /**
  * The three ways a scan can fail, told apart.
@@ -157,6 +164,32 @@ export async function registerRoutes(app: FastifyInstance) {
     if (authError) {
       await reply.status(503).send({ error: authError });
       return null;
+    }
+
+    /*
+     * The entitlement, before anything is claimed, presigned or decoded.
+     *
+     * A photo turn and a text turn spend different meters — a scan costs six
+     * times a message — so which one is being asked for has to be decided here
+     * rather than inside `runTurn`, where the bytes have already been fetched.
+     * `photo_key`/`photo_base64` is the same signal `runTurn` uses to pick the
+     * turn kind, read one step earlier.
+     *
+     * 402 rather than 429. The client has to tell "your plan is spent" from
+     * "you are going too fast", because the first is a paywall and the second
+     * is a retry, and answering both with the same status is how a limit ends
+     * up looking like a bug. The allowance rides along so the screen can say
+     * what was spent and when it comes back without asking a second endpoint.
+     */
+    const wantsPhoto = Boolean(parsed.data.photo_key || parsed.data.photo_base64);
+    try {
+      await requireAllowance(userId, profile.plan, wantsPhoto ? 'photo' : 'chat');
+    } catch (error) {
+      if (error instanceof PlanLimitError) {
+        await reply.status(402).send({ error: error.message, allowance: error.allowance });
+        return null;
+      }
+      throw error;
     }
 
     /*
@@ -1120,8 +1153,24 @@ export async function registerRoutes(app: FastifyInstance) {
     return stats;
   });
 
-  /** Generate this week's review now rather than waiting for Monday. */
-  app.post('/reviews/run', { config: { rateLimit: REVIEW_LIMIT } }, async (request, reply) => {
+  /**
+   * Generate this week's review now rather than waiting for Monday.
+   *
+   * The plan check comes before the rate limiter's ceiling because they answer
+   * different questions and, on `free`, the limiter's answer is misleading: a
+   * ceiling of zero makes every request a 429, which tells someone to come back
+   * later for a feature that is never coming back. Not included is 402.
+   */
+  app.post('/reviews/run', { config: { rateLimit: REVIEW_BURST } }, async (request, reply) => {
+    const perDay = limitsFor(request.plan).reviewsPerDay;
+    if (perDay === 0) {
+      return reply.status(402).send({ error: 'Weekly reviews are part of Plus.' });
+    }
+    // Spent for today, which — unlike the line above — genuinely does come back
+    // tomorrow, so it is the one refusal on this route that is a 429.
+    if ((await turnsInWindow(request.userId!, ['review'], 1)) >= perDay) {
+      return reply.status(429).send({ error: `That is all ${perDay} reviews for today.` });
+    }
     const authError = authErrorFor(laneFor((await getUser(request.userId!)).email));
     if (authError) {
       return reply.status(503).send({ error: authError });

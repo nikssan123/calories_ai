@@ -101,7 +101,7 @@ describe('addPantryItems', () => {
 
     it('gives a paid account more room', async () => {
       const free = limitsFor('free').pantryItems;
-      await expect(addPantryItems(user.id, 'pro', fill(free + 10))).resolves.toHaveLength(free + 10);
+      await expect(addPantryItems(user.id, 'coach', fill(free + 10))).resolves.toHaveLength(free + 10);
     });
   });
 });

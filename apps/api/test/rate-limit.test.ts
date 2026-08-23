@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import { query } from '../src/db.ts';
+import { limitsFor } from '../src/services/plans.ts';
 import { scriptAgent } from './helpers/agent-mock.ts';
 import { anonymousApp, appFor, createUser, type TestUser } from './helpers/factories.ts';
 
@@ -28,10 +30,20 @@ async function hit(times: number, inject: () => Promise<{ statusCode: number }>)
   return codes;
 }
 
+/**
+ * The journal's burst guard, which is no longer the journal's *allowance*.
+ *
+ * Since the plan rework the number sold is a meter counted off the cost ledger;
+ * what is left here is the loop guard, and it sits deliberately below the meter
+ * so that it can still fire. These tests read it from the table rather than
+ * hardcoding it, because it is now a number that moves with pricing.
+ */
+const BURST = limitsFor('free').chatTurnsPerHour;
+
 describe('POST /chat', () => {
   it('allows a normal session and then throttles', async () => {
     scriptAgent();
-    const codes = await hit(42, () => {
+    const codes = await hit(BURST + 2, () => {
       scriptAgent({ text: 'Logged.' });
       return app.inject({
         method: 'POST',
@@ -41,13 +53,13 @@ describe('POST /chat', () => {
       }) as never;
     });
 
-    expect(codes.slice(0, 40).every((c) => c === 200)).toBe(true);
-    expect(codes.slice(40)).toEqual([429, 429]);
+    expect(codes.slice(0, BURST).every((c) => c === 200)).toBe(true);
+    expect(codes.slice(BURST)).toEqual([429, 429]);
   });
 
   it('says how long to wait', async () => {
     scriptAgent();
-    for (let i = 0; i < 41; i++) {
+    for (let i = 0; i < BURST + 1; i++) {
       scriptAgent({ text: 'Logged.' });
       await app.inject({ method: 'POST', url: '/chat', headers: { cookie }, payload: { text: 'x' } });
     }
@@ -59,7 +71,7 @@ describe('POST /chat', () => {
     });
     expect(blocked.statusCode).toBe(429);
     expect(blocked.headers['retry-after']).toBeDefined();
-    expect(String(blocked.headers['x-ratelimit-limit'])).toBe('40');
+    expect(String(blocked.headers['x-ratelimit-limit'])).toBe(String(BURST));
   });
 
   /**
@@ -73,7 +85,7 @@ describe('POST /chat', () => {
    */
   it('shares its ceiling with the streaming route', async () => {
     scriptAgent();
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < BURST; i++) {
       scriptAgent({ text: 'Logged.' });
       await app.inject({ method: 'POST', url: '/chat', headers: { cookie }, payload: { text: 'x' } });
     }
@@ -91,7 +103,7 @@ describe('POST /chat', () => {
   /** And the other direction, since a client may only ever use the new route. */
   it('is spent by the streaming route too', async () => {
     scriptAgent();
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < BURST; i++) {
       scriptAgent({ text: 'Logged.' });
       await app.inject({
         method: 'POST',
@@ -114,7 +126,7 @@ describe('POST /chat', () => {
   /** The limit is per account, not per process — one user cannot lock out another. */
   it('counts each account separately', async () => {
     scriptAgent();
-    for (let i = 0; i < 41; i++) {
+    for (let i = 0; i < BURST + 1; i++) {
       scriptAgent({ text: 'Logged.' });
       await app.inject({ method: 'POST', url: '/chat', headers: { cookie }, payload: { text: 'x' } });
     }
@@ -137,7 +149,27 @@ describe('POST /chat', () => {
 });
 
 describe('POST /reviews/run', () => {
+  /**
+   * Two different refusals on one route, and they must not be confused.
+   *
+   * `free` does not carry reviews at all, which is 402 — a paywall, decided in
+   * the handler because a rate limiter cannot express "not included" (a ceiling
+   * of zero comes out as "come back later", for a thing that never comes back).
+   * A paid account that asks too fast gets the burst guard's 429.
+   */
+  it('refuses a free account with a paywall rather than a throttle', async () => {
+    scriptAgent({ text: 'A week.' });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/reviews/run',
+      headers: { cookie },
+      payload: {},
+    });
+    expect(response.statusCode).toBe(402);
+  });
+
   it('throttles the expensive manual trigger', async () => {
+    await query('UPDATE users SET plan = $1 WHERE id = $2', ['plus', user.id]);
     const codes: number[] = [];
     for (let i = 0; i < 6; i++) {
       scriptAgent({ text: 'A week.' });
@@ -149,7 +181,9 @@ describe('POST /reviews/run', () => {
       });
       codes.push(response.statusCode);
     }
-    expect(codes.filter((c) => c === 429)).toHaveLength(1);
+    // Three through the burst guard, then it bites for the rest of the minute.
+    expect(codes.slice(0, 3).every((c) => c === 200)).toBe(true);
+    expect(codes.slice(3).every((c) => c === 429)).toBe(true);
   });
 });
 

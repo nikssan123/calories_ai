@@ -62,7 +62,9 @@ const ITEM = {
 };
 
 beforeEach(async () => {
-  user = await createUser();
+  // `coach`: this file drives the journal's kitchen tools directly, and those
+  // are that tier. The entitlement itself is `plans.test.ts`.
+  user = await createUser({ plan: 'coach' });
   await setUserTargets(user, '2026-01-01', { kcal: 2200, protein_g: 160 });
   build();
 });
@@ -956,10 +958,10 @@ describe('suggest_recipes', () => {
    * Without a ceiling of its own, the chat box is an unmetered way to spend the
    * most expensive call in the product.
    */
-  it('refuses once the day’s recipe budget is gone', async () => {
-    const { limitsFor } = await import('../src/services/plans.ts');
+  it('refuses once the month’s recipe budget is gone', async () => {
+    const { meterFor } = await import('../src/services/plans.ts');
     const { recordUsage } = await import('../src/services/usage.ts');
-    const spent = limitsFor('free').recipeRunsPerDay;
+    const spent = meterFor('coach', 'recipe').allowed!;
 
     for (let i = 0; i < spent; i++) {
       await recordUsage({
@@ -974,14 +976,12 @@ describe('suggest_recipes', () => {
     const result = await call('suggest_recipes', {});
 
     expect(result.isError).toBe(true);
-    expect(result.text).toContain(`all ${spent} recipe suggestions`);
+    expect(result.text).toContain(`all ${spent} recipes for this month`);
     expect(actions).toEqual([]);
   });
 
-  it('lets a paid account past the free ceiling', async () => {
+  it('lets a paid account past a single run', async () => {
     const { recordUsage } = await import('../src/services/usage.ts');
-    const { query } = await import('../src/db.ts');
-    await query('UPDATE users SET plan = $1 WHERE id = $2', ['pro', user.id]);
     await recordUsage({
       provider: 'anthropic-api',
       userId: user.id,
@@ -1038,7 +1038,7 @@ async function makeRecipe(title: string, overrides: Record<string, unknown> = {}
 
 async function stock(...names: string[]) {
   const { addPantryItems } = await import('../src/services/pantry.ts');
-  return addPantryItems(user.id, 'free', names.map((name) => ({ name })));
+  return addPantryItems(user.id, 'coach', names.map((name) => ({ name })));
 }
 
 describe('get_pantry', () => {
@@ -1148,7 +1148,9 @@ describe('update_pantry', () => {
 
   it('reports a full kitchen rather than throwing', async () => {
     const { limitsFor } = await import('../src/services/plans.ts');
-    const limit = limitsFor('free').pantryItems;
+    // The fixture's plan, not `free`: `update_pantry` reads the caller's own
+    // ceiling, so filling to a smaller tier's would leave room and pass wrongly.
+    const limit = limitsFor('coach').pantryItems;
     await stock(...Array.from({ length: limit }, (_, i) => `Item ${i}`));
     build();
 
@@ -1787,20 +1789,25 @@ describe('plan_week', () => {
    * The same hole `suggest_recipes` has: the route limiter counts requests to
    * `/plan`, and a run started from a journal tool never goes there.
    */
-  it('refuses once the week’s plan allowance is gone', async () => {
+  it('refuses once the month’s plan allowance is gone', async () => {
     const { recordUsage } = await import('../src/services/usage.ts');
-    await recordUsage({
-      provider: 'anthropic-api',
-      userId: user.id,
-      kind: 'meal_plan',
-      outcome: { text: 'x', sessionId: null, numTurns: 1, costUsd: 1, model: 'claude-opus-5' } as never,
-    });
+    const { meterFor } = await import('../src/services/plans.ts');
+    const allowed = meterFor('coach', 'meal_plan').allowed!;
+
+    for (let i = 0; i < allowed; i++) {
+      await recordUsage({
+        provider: 'anthropic-api',
+        userId: user.id,
+        kind: 'meal_plan',
+        outcome: { text: 'x', sessionId: null, numTurns: 1, costUsd: 1, model: 'claude-opus-5' } as never,
+      });
+    }
     build();
 
     const result = await call('plan_week', {});
 
     expect(result.isError).toBe(true);
-    expect(result.text).toContain('all 1 meal plans');
+    expect(result.text).toContain(`all ${allowed} meal plans for this month`);
     expect(actions).toEqual([]);
   });
 });
@@ -1911,21 +1918,28 @@ describe('adapt_recipe', () => {
   });
 
   /** One budget with suggest_recipes, not a fourth door to the same spend. */
-  it('shares the daily recipe ceiling', async () => {
+  it('shares the recipe ceiling', async () => {
     await seedOne();
     const { recordUsage } = await import('../src/services/usage.ts');
-    await recordUsage({
-      provider: 'anthropic-api',
-      userId: user.id,
-      kind: 'recipe',
-      outcome: { text: 'x', sessionId: null, numTurns: 1, costUsd: 0.2, model: 'claude-opus-5' } as never,
-    });
+    const { meterFor } = await import('../src/services/plans.ts');
+    const allowed = meterFor('coach', 'recipe').allowed!;
+
+    // Spent through `suggest_recipes`' meter, then asked for through a
+    // different door. The ledger is the only thing that sees both.
+    for (let i = 0; i < allowed; i++) {
+      await recordUsage({
+        provider: 'anthropic-api',
+        userId: user.id,
+        kind: 'recipe',
+        outcome: { text: 'x', sessionId: null, numTurns: 1, costUsd: 0.2, model: 'claude-opus-5' } as never,
+      });
+    }
     build();
 
     const result = await call('adapt_recipe', { library_slug: 'creamy-pasta' });
 
     expect(result.isError).toBe(true);
-    expect(result.text).toContain('recipe runs for today');
+    expect(result.text).toContain(`all ${allowed} recipes for this month`);
   });
 });
 

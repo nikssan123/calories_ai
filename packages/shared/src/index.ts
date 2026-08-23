@@ -67,8 +67,20 @@ export type Goal = z.infer<typeof Goal>;
  * There is no billing behind this yet, and that is the point: the routes that
  * cost money read their ceilings from the plan from the first commit, so
  * gating a feature later is setting a number rather than auditing every route.
- * `free` is deliberately generous — the daily journal is the habit the product
- * lives on and must never be the thing someone hits a wall in.
+ *
+ * `free` used to be described here as "deliberately generous — the daily
+ * journal is the habit the product lives on and must never be the thing
+ * someone hits a wall in." That reasoning was correct while a model round trip
+ * was the *only* way to log a meal. It is not any more: manual entry, repeat,
+ * barcode and the offline outbox all log without spending a token, so a free
+ * account that runs out of model still has a working food diary. The wall
+ * stopped being an exit, which is what lets the AI allowance be small.
+ *
+ * Three tiers rather than two. `pro` was renamed to `plus` in `034` — same
+ * accounts, same column — because the kitchen turned out to need a tier of its
+ * own: it is output-dominated, so no amount of caching or model choice moves
+ * it, and bundling it into one paid tier put a $0.41 meal plan inside a
+ * subscription that nets a few dollars a month.
  */
 /**
  * A dietary pattern. Four, because these are the ones that change what an
@@ -80,9 +92,46 @@ export const DIETS = ['none', 'vegetarian', 'vegan', 'pescatarian'] as const;
 export const Diet = z.enum(DIETS);
 export type Diet = z.infer<typeof Diet>;
 
-export const PLANS = ['free', 'pro'] as const;
+export const PLANS = ['free', 'plus', 'coach'] as const;
 export const PlanName = z.enum(PLANS);
 export type PlanName = z.infer<typeof PlanName>;
+
+/**
+ * The metered dimensions, named once so the server and both clients agree.
+ *
+ * These are the things an allowance is counted in. They are deliberately *not*
+ * `TurnKind`: a turn kind is what the ledger recorded, and a meter is what the
+ * user was sold. `chat` covers `text_log` and `setup` together, because
+ * somebody halfway through onboarding is not spending a different budget, and
+ * `photo` is metered separately from chat despite also being a journal turn
+ * because it costs six times as much.
+ */
+export const METERS = ['chat', 'photo', 'pantry_scan', 'recipe', 'meal_plan'] as const;
+export const MeterName = z.enum(METERS);
+export type MeterName = z.infer<typeof MeterName>;
+
+/**
+ * What is left of one meter, for a screen that has to say so *before* the
+ * button is pressed.
+ *
+ * `allowed` null means the meter does not apply to this plan at all — the
+ * kitchen on `free`, which is a locked feature rather than a spent one. Zero
+ * means it applies and is gone. The two look identical in a counter and read
+ * completely differently in a sentence, so the client needs to tell them apart.
+ *
+ * `period` is what the wall says when it refuses. `ever` is the free tier's
+ * single lifetime photo: there is no reset, and a countdown that never moves is
+ * crueller than a sentence that says so.
+ */
+export const Allowance = z.object({
+  meter: MeterName,
+  allowed: z.number().nullable(),
+  used: z.number(),
+  period: z.enum(['month', 'ever']),
+  /** When the oldest run in the window ages out. Null when nothing is waiting. */
+  resets_at: z.string().nullable(),
+});
+export type Allowance = z.infer<typeof Allowance>;
 
 /** Macros in grams + energy in kcal. Shared by items, entries and daily totals. */
 export const Nutrition = z.object({
