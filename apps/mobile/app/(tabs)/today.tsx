@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path, Polyline } from 'react-native-svg';
+import Svg, { Path, Polyline, Rect } from 'react-native-svg';
 import type { DaySummary, ExerciseEntry, FoodEntry, Meal } from '@ct/shared';
 import { formatBodyWeight, formatDistance, formatMass } from '@ct/shared';
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
@@ -184,22 +184,34 @@ export default function TodayScreen() {
     >
       <View style={styles.header}>
         <StepButton direction="back" onPress={() => step(-1)} />
-        {/* The date is the way to the calendar, as on the web — the second line
-            says so on any day but today, where it is spent on the date itself. */}
+        {/* The date is the way to the calendar, as on the web — and here it is
+            the *only* way, since the bottom bar has no room for History. So it
+            wears an outline and a calendar mark at rest: on the web a pointer
+            finds it by hovering the heading, and a thumb has no such move. */}
         <Pressable
           onPress={() => router.push('/history')}
           accessibilityRole="button"
           accessibilityLabel="View calendar"
           style={({ pressed }) => [styles.headerLabel, { opacity: pressed ? 0.6 : 1 }]}
         >
-          <Text style={[t.title2, styles.centred, { color: colors.foreground }]}>
-            {isToday ? 'Today' : formatDay(day?.local_date)}
-          </Text>
-          {/* Reserved even when empty: without it the header jumps a line every
-              time you step off today. */}
-          <Text style={[t.footnoteSemibold, styles.centred, { color: colors.mutedForeground }]}>
-            {isToday && day ? formatDay(day.local_date) : 'View calendar'}
-          </Text>
+          <View
+            style={[styles.headerChip, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <Text style={[t.title2, styles.centred, { color: colors.foreground }]}>
+              {isToday ? 'Today' : formatDay(day?.local_date)}
+            </Text>
+            {/* Reserved even when empty: without it the header jumps a line every
+                time you step off today. The mark rides this line rather than the
+                heading above it — "Wednesday 23 September" already spends every
+                pixel between the two chevrons, and a glyph up there pushed it
+                into the arrows. */}
+            <View style={styles.headerSub}>
+              <CalendarMark color={colors.mutedForeground} />
+              <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+                {isToday && day ? formatDay(day.local_date) : 'View calendar'}
+              </Text>
+            </View>
+          </View>
         </Pressable>
         <StepButton direction="forward" onPress={() => step(1)} disabled={isToday} />
       </View>
@@ -432,6 +444,23 @@ function EntryRow({
  * the web one for shape.
  * ------------------------------------------------------------------------- */
 
+/** `lucide-react`'s `calendar`, at the same 24-unit grid the web draws it on. */
+function CalendarMark({ color }: { color: string }) {
+  const props = {
+    stroke: color,
+    strokeWidth: 2.4,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    fill: 'none',
+  };
+  return (
+    <Svg width={13} height={13} viewBox="0 0 24 24">
+      <Rect x="3" y="4" width="18" height="18" rx="2" {...props} />
+      <Path d="M8 2v4M16 2v4M3 10h18" {...props} />
+    </Svg>
+  );
+}
+
 function StepButton({
   direction,
   onPress,
@@ -555,7 +584,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingBottom: 4,
   },
-  headerLabel: { flex: 1 },
+  headerLabel: { flex: 1, alignItems: 'center' },
+  headerChip: { borderWidth: 2, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 3 },
+  headerSub: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
   centred: { textAlign: 'center' },
   step: { padding: 10 },
   page: { paddingHorizontal: 16, paddingTop: 16, gap: 28 },

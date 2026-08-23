@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { ChevronLeft, ChevronRight, RotateCcw, Trash2 } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, RotateCcw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { DaySummary, ExerciseEntry, FoodEntry, Meal } from '@ct/shared';
 import { formatBodyWeight, formatDistance, formatMass } from '@ct/shared';
@@ -195,19 +195,24 @@ function TodayView() {
           <ChevronLeft size={22} />
         </Button>
         {/* Stepping one day at a time made "how did last month go?" a dozen
-            taps; the header is the way into the month grid. */}
+            taps; the header is the way into the month grid — and below `lg`,
+            where the bottom bar has no room for History, it is the only way in.
+            So it wears an outline and a calendar mark at rest rather than only
+            on hover: a thumb has no hover to discover it with, and a bare
+            heading is not something anyone thinks to press.
+
+            The mark rides the second line rather than the heading, because
+            "Wednesday 23 September" already spends every pixel a phone has
+            between the two chevrons. */}
         <Link
           href="/history"
-          className="active:bg-muted/60 rounded-2xl px-4 py-1 text-center transition-colors"
+          className="border-border bg-card hover:bg-muted/60 active:bg-muted/60 rounded-2xl border-2 px-2.5 py-1 text-center transition-colors"
         >
           <h1 className="text-title-2">{isToday ? 'Today' : formatDay(day?.local_date)}</h1>
-          {isToday && day ? (
-            <p className="text-footnote text-muted-foreground font-semibold">
-              {formatDay(day.local_date)}
-            </p>
-          ) : (
-            <p className="text-footnote text-muted-foreground font-semibold">View calendar</p>
-          )}
+          <p className="text-footnote text-muted-foreground flex items-center justify-center gap-1.5 font-semibold">
+            <CalendarDays size={13} strokeWidth={2.4} className="shrink-0" />
+            {isToday && day ? formatDay(day.local_date) : 'View calendar'}
+          </p>
         </Link>
         <Button
           variant="ghost"
