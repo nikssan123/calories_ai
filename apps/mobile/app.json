@@ -18,7 +18,11 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#fff6ec"
-      }
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -55,6 +59,12 @@
     "experiments": {
       "typedRoutes": true
     },
-    "icon": "./assets/icon.png"
+    "icon": "./assets/icon.png",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "25475a2b-9d0f-478d-8a4f-dadffb0a37b8"
+      }
+    }
   }
 }
