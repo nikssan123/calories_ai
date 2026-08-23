@@ -194,7 +194,7 @@ export function foodCard(entry: FoodEntry, day: DaySummary, units: UnitSystem): 
   };
 }
 
-function exerciseCard(entry: ExerciseEntry): ChatCard {
+export function exerciseCard(entry: ExerciseEntry): ChatCard {
   return {
     type: 'exercise',
     entry_id: entry.id,

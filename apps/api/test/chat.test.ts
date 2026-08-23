@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { ChatAction } from '@ct/shared';
+import type { ChatAction, ChatCard } from '@ct/shared';
 import { query } from '../src/db.ts';
-import { insertMessage, listMessages, markEntryRemoved } from '../src/services/chat.ts';
+import {
+  insertMessage,
+  listMessages,
+  markEntryRemoved,
+  refreshEntryCards,
+} from '../src/services/chat.ts';
 import { createUser, type TestUser } from './helpers/factories.ts';
 
 let user: TestUser;
@@ -209,6 +214,106 @@ describe('markEntryRemoved', () => {
     await insertMessage(user.id, 'assistant', 'Logged.', null, null, [elsewhere]);
 
     await markEntryRemoved(user.id, ENTRY);
+
+    const rows = await query<{ actions: unknown }>(
+      'SELECT actions FROM chat_messages WHERE user_id = $1 ORDER BY created_at',
+      [user.id],
+    );
+    expect(rows[0]!.actions).toBeNull();
+    expect(rows[1]!.actions).toEqual([elsewhere]);
+  });
+});
+
+/**
+ * The sibling case: an entry that changed rather than one that went. The card
+ * is a receipt, and a receipt showing the figure a meal was *first* logged with
+ * is wrong the moment somebody corrects the portion.
+ */
+describe('refreshEntryCards', () => {
+  const ENTRY = '33333333-3333-4333-8333-333333333333';
+  const OTHER_ENTRY = '44444444-4444-4444-8444-444444444444';
+
+  const card = (kcal: number): Extract<ChatCard, { type: 'food' }> => ({
+    type: 'food',
+    entry_id: ENTRY,
+    meal: 'lunch',
+    description: 'Chicken and rice',
+    confidence: 'medium',
+    items: [{ name: 'Chicken', quantity: '200g' }],
+    kcal,
+    protein_g: 62,
+    carbs_g: 50,
+    fat_g: 8,
+    day: null,
+  });
+
+  const logged: ChatAction = {
+    kind: 'food_logged',
+    entry_id: ENTRY,
+    summary: 'lunch: Chicken and rice — 620 kcal',
+    card: card(620),
+  };
+  const elsewhere: ChatAction = { ...logged, entry_id: OTHER_ENTRY, summary: 'dinner: Soup' };
+
+  it('redraws every card drawn from the entry, and the summary with it', async () => {
+    const corrected: ChatAction = { ...logged, kind: 'food_updated', summary: 'Updated' };
+    await insertMessage(user.id, 'assistant', 'Logged.', null, null, [elsewhere, logged]);
+    await insertMessage(user.id, 'assistant', 'Fixed.', null, null, [corrected]);
+
+    await refreshEntryCards(user.id, ENTRY, card(880), 'lunch: Chicken and rice — 880 kcal');
+
+    const [first, second] = await listMessages(user.id);
+    // The card about something else keeps its own figure and its own summary.
+    expect(first!.actions[0]!.summary).toBe(elsewhere.summary);
+    expect((first!.actions[0]!.card as any).kcal).toBe(620);
+    // Both pictures of this entry now agree with the entry.
+    expect((first!.actions[1]!.card as any).kcal).toBe(880);
+    expect(first!.actions[1]!.summary).toBe('lunch: Chicken and rice — 880 kcal');
+    expect((second!.actions[0]!.card as any).kcal).toBe(880);
+  });
+
+  it('keeps the kind of the action it redraws', async () => {
+    const corrected: ChatAction = { ...logged, kind: 'food_updated', summary: 'Updated' };
+    await insertMessage(user.id, 'assistant', 'Fixed.', null, null, [corrected]);
+
+    await refreshEntryCards(user.id, ENTRY, card(880), 'now 880');
+
+    const [read] = await listMessages(user.id);
+    // A correction is still a correction; only its numbers moved.
+    expect(read!.actions[0]!.kind).toBe('food_updated');
+  });
+
+  /*
+   * An entry can be corrected and then deleted. The strike is the later fact
+   * and has to outlive the redraw, or the card goes back to claiming the food
+   * is counted.
+   */
+  it('leaves a struck card struck', async () => {
+    await insertMessage(user.id, 'assistant', 'Logged.', null, null, [logged]);
+    await markEntryRemoved(user.id, ENTRY);
+
+    await refreshEntryCards(user.id, ENTRY, card(880), 'now 880');
+
+    const [read] = await listMessages(user.id);
+    expect(read!.actions[0]!.removed).toBe(true);
+    expect((read!.actions[0]!.card as any).kcal).toBe(880);
+  });
+
+  it('will not reach into another account’s conversation', async () => {
+    const stranger = await createUser();
+    await insertMessage(stranger.id, 'assistant', 'Logged.', null, null, [logged]);
+
+    await refreshEntryCards(user.id, ENTRY, card(880), 'now 880');
+
+    const [read] = await listMessages(stranger.id);
+    expect((read!.actions[0]!.card as any).kcal).toBe(620);
+  });
+
+  it('touches nothing when no card was drawn from the entry', async () => {
+    await insertMessage(user.id, 'user', 'hello');
+    await insertMessage(user.id, 'assistant', 'Logged.', null, null, [elsewhere]);
+
+    await refreshEntryCards(user.id, ENTRY, card(880), 'now 880');
 
     const rows = await query<{ actions: unknown }>(
       'SELECT actions FROM chat_messages WHERE user_id = $1 ORDER BY created_at',

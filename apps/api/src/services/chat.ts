@@ -1,4 +1,4 @@
-import { ChatAction, type ChatMessage } from '@ct/shared';
+import { ChatAction, type ChatCard, type ChatMessage } from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import { signPhotoUrl } from './photos.ts';
 import { getSecret, PHOTO_URL_SECRET } from './secrets.ts';
@@ -89,6 +89,48 @@ export async function markEntryRemoved(userId: string, entryId: string): Promise
       WHERE user_id = $1
         AND actions @> jsonb_build_array(jsonb_build_object('entry_id', $2::text))`,
     [userId, entryId],
+  );
+}
+
+/**
+ * Redraws every card that was drawn from an entry, after that entry changed.
+ *
+ * The sibling of `markEntryRemoved`, and it exists for the same reason: a
+ * correction is not a turn either. Fix a portion on the Today screen and the
+ * journal goes on showing the figure it was logged with, because the card was
+ * written once, at the moment of the turn, and nothing has re-read the entry
+ * since. The two screens then disagree about the same meal, and the one that is
+ * wrong is the one that reads like a receipt.
+ *
+ * So the stored card is replaced in place, and the summary with it — the chip a
+ * cardless action falls back to carries the same stale number, and a card that
+ * was corrected while its one-line summary still says "620 kcal" is the same
+ * lie in a smaller font.
+ *
+ * Every action carrying the id, again: a meal that was logged and then
+ * corrected has a card for each, and both are pictures of the same entry as it
+ * is now. `removed` is deliberately left alone — an entry can be edited and
+ * later deleted, and the strike outlives the redraw.
+ */
+export async function refreshEntryCards(
+  userId: string,
+  entryId: string,
+  card: ChatCard,
+  summary: string,
+): Promise<void> {
+  await query(
+    `UPDATE chat_messages
+        SET actions = (
+              SELECT jsonb_agg(
+                       CASE WHEN action->>'entry_id' = $2
+                            THEN action || jsonb_build_object('card', $3::jsonb, 'summary', $4::text)
+                            ELSE action END
+                       ORDER BY position)
+                FROM jsonb_array_elements(actions) WITH ORDINALITY AS element(action, position)
+            )
+      WHERE user_id = $1
+        AND actions @> jsonb_build_array(jsonb_build_object('entry_id', $2::text))`,
+    [userId, entryId, JSON.stringify(card), summary],
   );
 }
 
