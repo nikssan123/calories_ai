@@ -52,6 +52,12 @@ export interface AgentCall {
   options: any;
   /** The session the caller asked to resume, if any. */
   resume: string | undefined;
+  /**
+   * The text of a streamed-input turn, captured as it is drained. A photo turn
+   * arrives as a generator, so `prompt` on its own is an exhausted iterator by
+   * the time an assertion reaches it.
+   */
+  turnText: string;
 }
 
 const script: ScriptedRun[] = [];
@@ -64,6 +70,11 @@ export const agentCalls: AgentCall[] = [];
  * between the stable and volatile halves; these assertions are about what the
  * model was told, not about where the blocks were cut.
  */
+/** The user turn as one string, whether it was streamed in or passed whole. */
+export function userTurnOf(call: AgentCall): string {
+  return typeof call.prompt === 'string' ? call.prompt : call.turnText;
+}
+
 export function systemPromptOf(call: AgentCall): string {
   const prompt = call.options?.systemPrompt;
   return Array.isArray(prompt) ? prompt.join('\n') : String(prompt ?? '');
@@ -83,12 +94,26 @@ export function resetAgent(): void {
 /** Drives one call. Used by the `vi.mock` factory in `setup.ts`. */
 export async function* runScripted(args: any): AsyncGenerator<any> {
   const run = script.shift() ?? { text: 'Logged.' };
-  agentCalls.push({ prompt: args.prompt, options: args.options, resume: args.options?.resume });
+  const call: AgentCall = {
+    prompt: args.prompt,
+    options: args.options,
+    resume: args.options?.resume,
+    turnText: '',
+  };
+  agentCalls.push(call);
 
   // Drain a streaming-input prompt so the caller's generator finishes, exactly
-  // as the real SDK would.
+  // as the real SDK would — keeping the text on the way past, since draining is
+  // the only chance anything has to read it.
   if (args.prompt && typeof args.prompt[Symbol.asyncIterator] === 'function') {
-    for await (const _ of args.prompt) void _;
+    for await (const message of args.prompt) {
+      const content = (message as any)?.message?.content;
+      if (!Array.isArray(content)) continue;
+      call.turnText += content
+        .filter((part: any) => part?.type === 'text')
+        .map((part: any) => part.text)
+        .join('\n');
+    }
   }
 
   if (run.throws) throw new Error(run.throws);

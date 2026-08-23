@@ -28,7 +28,7 @@ export async function generateWeeklyReview(
   userId: string,
   options: GenerateOptions = {},
 ): Promise<WeeklyReview> {
-  const { userId: id, ...ctx } = await getUserContext(userId);
+  const { userId: id, units, ...ctx } = await getUserContext(userId);
   const today = options.today ?? localDateFor(new Date(), ctx);
   const week = reviewWeekFor(today);
 
@@ -37,7 +37,7 @@ export async function generateWeeklyReview(
   const profile = await getUser(id);
 
   // Read tools only. A review that could log food would eventually log food.
-  const toolContext = { userId: id, ctx, now: new Date(), photoId: null, actions: [] };
+  const toolContext = { userId: id, ctx, now: new Date(), photoId: null, actions: [], units };
   const { tools, toolNames } = buildNutritionServer(toolContext, { readOnly: true });
 
   const provider = createProvider(toolContext);

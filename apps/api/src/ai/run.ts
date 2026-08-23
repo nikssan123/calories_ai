@@ -1,4 +1,5 @@
 import type { ChatAction, ChatResponse, Profile } from '@ct/shared';
+import { unitsOf } from '@ct/shared';
 import { queryOne, query as sql } from '../db.ts';
 import type { DayContext } from '../time.ts';
 import { localDateFor } from '../time.ts';
@@ -72,6 +73,7 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
     now,
     photoId: input.photo?.id ?? null,
     actions,
+    units: unitsOf(input.profile),
   };
 
   // Built before any database work so a misconfigured provider fails fast.

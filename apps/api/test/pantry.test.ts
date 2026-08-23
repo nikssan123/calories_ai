@@ -10,7 +10,7 @@ import {
   updatePantryItem,
 } from '../src/services/pantry.ts';
 import { limitsFor } from '../src/services/plans.ts';
-import { agentCalls, scriptAgent, systemPromptOf } from './helpers/agent-mock.ts';
+import { agentCalls, scriptAgent, systemPromptOf, userTurnOf } from './helpers/agent-mock.ts';
 import { createUser, type TestUser } from './helpers/factories.ts';
 
 /**
@@ -206,6 +206,22 @@ describe('scanFridgePhoto', () => {
       'mcp__nutrition__note_pantry_items',
       'mcp__nutrition__propose_recipe',
     ]);
+  });
+
+  /**
+   * The fourth agent session that writes measurements at somebody, after the
+   * journal, the review and the recipe writer — the quantities it notes land on
+   * the kitchen list and are read there.
+   */
+  it('tells an imperial account\'s scan to note quantities in ounces', async () => {
+    await query('UPDATE users SET units = $1 WHERE id = $2', ['imperial', user.id]);
+    await scanReporting([]);
+    expect(userTurnOf(agentCalls.at(-1)!)).toContain('reads imperial');
+  });
+
+  it('says nothing about units to a metric account', async () => {
+    await scanReporting([]);
+    expect(userTurnOf(agentCalls.at(-1)!)).not.toContain('reads imperial');
   });
 
   it('records the turn against its own kind', async () => {

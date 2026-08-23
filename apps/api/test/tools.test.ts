@@ -31,6 +31,7 @@ function build(overrides: Partial<ToolContext> = {}, readOnly = false) {
     now: NOW,
     photoId: null,
     actions,
+    units: 'metric',
     ...overrides,
   };
   const built = buildNutritionServer(tc, { readOnly });
@@ -167,6 +168,24 @@ describe('log_food', () => {
     expect(card.entry_id).toBe(actions[0]!.entry_id);
     expect(card.kcal).toBe(330);
     expect(card.items).toEqual([{ name: 'Chicken breast', quantity: '~200g' }]);
+  });
+
+  it('falls back to a weight the reader recognises when nothing described one', async () => {
+    build({ units: 'imperial' });
+    await call('log_food', {
+      description: 'Chicken',
+      meal: 'lunch',
+      when: null,
+      // No quantity_desc: the model weighed it and said nothing about it, so the
+      // card has to write the amount itself — and it is read, not stored, so it
+      // is written in ounces rather than in the grams the row keeps.
+      items: [{ ...ITEM, quantity_desc: null }],
+      note: null,
+      confidence: 'high',
+    });
+
+    const card = actions[0]!.card as Extract<ChatCard, { type: 'food' }>;
+    expect(card.items).toEqual([{ name: 'Chicken breast', quantity: '7.1 oz' }]);
   });
 
   /**
@@ -756,6 +775,20 @@ describe('the display tools', () => {
       actions.length = 0;
       await call('show_chart', { metric: 'weight', days: 30, caption: null });
       expect(actions[0]!.card).toMatchObject({ caption: null });
+    });
+
+    it('labels the weight chart in what the reader weighs in', async () => {
+      await addWeight(user, realToday, 80);
+
+      build({ units: 'imperial' });
+      await call('show_chart', { metric: 'weight', days: 30, caption: null });
+      const card = actions[0]!.card as Extract<ChatCard, { type: 'trend' }>;
+
+      // The average is printed beside the line, so a kilogram figure under an
+      // "lb" label would be a wrong number rather than an untranslated one.
+      expect(card.unit).toBe('lb');
+      expect(card.series.at(-1)!.value).toBeCloseTo(176.4, 1);
+      expect(card.average).toBeCloseTo(176.4, 1);
     });
 
     it('clamps the window rather than trusting the model with it', async () => {

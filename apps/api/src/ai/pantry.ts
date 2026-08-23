@@ -6,7 +6,7 @@ import { getUserContext } from '../services/user.ts';
 import { MAX_TURNS } from './client.ts';
 import { emptyCollector } from './kitchen.ts';
 import { createProvider, type AgentRequest } from './providers/index.ts';
-import { PANTRY_SCAN_PROMPT } from './prompt.ts';
+import { PANTRY_SCAN_PROMPT, unitsBrief } from './prompt.ts';
 import { buildNutritionServer, type ToolContext } from './tools.ts';
 
 /**
@@ -29,7 +29,7 @@ export async function scanFridgePhoto(
   userId: string,
   photo: ScanInput,
 ): Promise<PantryScanProposal> {
-  const { userId: id, ...ctx } = await getUserContext(userId);
+  const { userId: id, units, ...ctx } = await getUserContext(userId);
 
   // Stored like a meal photo, so the same signed-URL read serves it and a scan
   // that read the fridge wrongly can be looked at afterwards.
@@ -43,6 +43,7 @@ export async function scanFridgePhoto(
     photoId: saved.id,
     actions: [],
     kitchen,
+    units,
   };
 
   const provider = createProvider(toolContext);
@@ -55,7 +56,13 @@ export async function scanFridgePhoto(
     kind: 'pantry_scan',
     staticSystemPrompt: PANTRY_SCAN_PROMPT,
     dynamicSystemPrompt: '',
-    text: 'What food can you see in this photo?',
+    // A fourth agent session that writes measurements at somebody, after the
+    // journal, the review and the recipe writer — the quantities it notes land
+    // on the kitchen list and are read there. The prompt above is byte-stable
+    // for the cache, so the brief rides the turn instead.
+    text: ['What food can you see in this photo?', unitsBrief({ units })]
+      .filter(Boolean)
+      .join('\n\n'),
     photo: { mediaType: photo.mediaType, base64: photo.base64 },
     tools,
     toolNames,

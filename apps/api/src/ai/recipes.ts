@@ -1,4 +1,5 @@
 import type { Meal, Recipe, RecipeContext, RecipeOrigin } from '@ct/shared';
+import { unitsOf } from '@ct/shared';
 import { queryOne } from '../db.ts';
 import { mealTemplates } from '../services/history.ts';
 import { listNotes } from '../services/notes.ts';
@@ -173,7 +174,15 @@ export async function suggestRecipes(
     origin,
     job.kind === 'adapt' ? job.slug : null,
   );
-  const toolContext: ToolContext = { userId: id, ctx, now, photoId: null, actions: [], kitchen };
+  const toolContext: ToolContext = {
+    userId: id,
+    ctx,
+    now,
+    photoId: null,
+    actions: [],
+    kitchen,
+    units: unitsOf(profile),
+  };
 
   const provider = createProvider(toolContext);
   const authError = provider.checkAuth();

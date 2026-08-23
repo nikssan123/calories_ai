@@ -6,6 +6,12 @@ import { hashPassword, verifyPassword } from './auth.ts';
 
 export interface UserContext extends DayContext {
   userId: string;
+  /**
+   * Which system this person reads, for the display strings the server writes
+   * itself — a scanned portion, a card's quantity line. Nothing stored changes
+   * with it; see UNITS.md.
+   */
+  units: UnitSystem;
 }
 
 export async function getUser(userId: string): Promise<Profile> {
@@ -16,7 +22,12 @@ export async function getUser(userId: string): Promise<Profile> {
 
 export async function getUserContext(userId: string): Promise<UserContext> {
   const user = await getUser(userId);
-  return { userId: user.id, timezone: user.timezone, dayStartHour: user.day_start_hour };
+  return {
+    userId: user.id,
+    timezone: user.timezone,
+    dayStartHour: user.day_start_hour,
+    units: unitsOf(user),
+  };
 }
 
 export async function updateUser(userId: string, patch: ProfileUpdate): Promise<Profile> {

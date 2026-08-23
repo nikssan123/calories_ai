@@ -34,7 +34,8 @@ case anywhere but the onboarding prompt.
 | Food portions | g | oz, then lb past a pound | today, plan, recipes, barcode |
 | Distance | km | mi | exercise, chat exercise card |
 | Barbell load | kg | lb | workout card, chat workout card |
-| Barcode basis | per 100 g | per 1 oz | scanner |
+| Barcode basis | per 100 g | per 1 oz | scanner, web and mobile |
+| Cards the server draws | g, kg | oz, lb | food card quantities, weight trend, scan portion |
 
 ## What deliberately does not
 
@@ -81,6 +82,24 @@ have to go and find the setting. One short question beats a silent wrong default
 Afterwards it lives on the setup screen like every other preference, and changing
 it re-renders history rather than rewriting it.
 
+## The cards
+
+The one place the *server* writes a display string rather than a number.
+
+Every figure on a chat card is put there by the server — that is the rule that
+stops a model drawing a weight loss that did not happen — so the server is also
+the one that has to convert it. Three of them carry a unit:
+
+- **A food card's item line**, when the model gave no `quantity_desc` of its own.
+  The fallback is `formatMass(quantity_g)`, not a bare `${g}g`.
+- **The weight trend** from `show_chart`. The average is printed next to the
+  line, so both it and the series are converted; the shape survives either way.
+- **A scanned portion** — the `quantity_desc` on the entry and the sentence the
+  journal writes about it, both from `portionPhrase`.
+
+`ToolContext.units` and `UserContext.units` carry the preference to them. Tool
+*arguments* are untouched by this: they are metric whatever the card says.
+
 ## The agent
 
 The model is told what the person reads and told, in the same breath, that **tool
@@ -96,9 +115,11 @@ per-user byte in it would cost the prompt cache. It is emitted only for imperial
 users: metric is what the tools already do, so saying so costs tokens and buys
 nothing.
 
-The same brief goes to the review writer and the recipe writer, which are separate
-agent sessions producing prose full of numbers — a recipe that says "brown 500 g of
-mince at 180 °C" is not a recipe an American can cook from.
+The same brief goes to the review writer, the recipe writer and the fridge scan,
+which are separate agent sessions producing text full of numbers — a recipe that
+says "brown 500 g of mince at 180 °C" is not a recipe an American can cook from,
+and a kitchen list that says "500 g mince" is not one they can shop from. All
+three have a byte-stable system prompt, so the brief rides their task turn.
 
 ## The barcode scanner
 

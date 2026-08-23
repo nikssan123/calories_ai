@@ -59,7 +59,18 @@ describe('getUserContext', () => {
       userId: user.id,
       timezone: 'America/Los_Angeles',
       dayStartHour: 2,
+      units: 'metric',
     });
+  });
+
+  it('carries the units, resolved, for the strings the server writes itself', async () => {
+    const asked = await createUser({ email: 'ohio@example.com', units: 'imperial' });
+    expect((await getUserContext(asked.id)).units).toBe('imperial');
+
+    // Null is "onboarding never asked", and every reader of this wants an
+    // answer rather than a third case to handle.
+    const bare = await createUser({ email: 'new@example.com', units: null });
+    expect((await getUserContext(bare.id)).units).toBe('metric');
   });
 });
 

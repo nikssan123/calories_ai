@@ -28,7 +28,7 @@ export async function generateNudge(
   userId: string,
   options: NudgeOptions = {},
 ): Promise<Nudge | null> {
-  const { userId: id, ...ctx } = await getUserContext(userId);
+  const { userId: id, units, ...ctx } = await getUserContext(userId);
   const today = options.today ?? localDateFor(new Date(), ctx);
 
   const trigger = options.trigger ?? (await dueNudge(id, ctx, today));
@@ -38,7 +38,7 @@ export async function generateNudge(
 
   // Read tools only, like the review. A nudge that could log food would
   // eventually log food, on a schedule, without anybody asking it to.
-  const toolContext = { userId: id, ctx, now: new Date(), photoId: null, actions: [] };
+  const toolContext = { userId: id, ctx, now: new Date(), photoId: null, actions: [], units };
   const { tools, toolNames } = buildNutritionServer(toolContext, { readOnly: true });
 
   const provider = createProvider(toolContext);

@@ -3,6 +3,7 @@ import type {
   NudgeStats,
   Profile,
   ReviewStats,
+  UnitSystem,
   WeeklyReview,
   WeightEntry,
 } from '@ct/shared';
@@ -301,7 +302,7 @@ Do the thing they asked for and stop. Don't add entries they didn't mention, don
  * model does unprompted, so a line confirming it is tokens spent on every turn
  * to buy a behaviour that was already there.
  */
-export function unitsBrief(profile: Profile): string | null {
+export function unitsBrief(profile: { units?: UnitSystem | null }): string | null {
   if (unitsOf(profile) !== 'imperial') return null;
   return [
     'Units: this person reads imperial. Write every measurement to them in pounds, ounces, feet and',
