@@ -1,6 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { query } from './db.ts';
-import { hasSubscriptionAuth } from './ai/client.ts';
+import { authErrorFor } from './ai/providers/index.ts';
 import { generateNudge } from './ai/nudge.ts';
 import { generateWeeklyReview } from './ai/review.ts';
 import { sendNudgeEmail, sendWeeklyReviewEmail } from './email/notify.ts';
@@ -49,7 +49,12 @@ export async function runDueReviews(
   now: Date = new Date(),
   logger?: FastifyBaseLogger,
 ): Promise<TickResult> {
-  if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) return emptyTick();
+  // A cheap bail when the deployment has no credentials at all, rather than
+  // churning through every account to fail on each. Deliberately the
+  // deployment's lane and not any particular user's: a pass has no user in hand
+  // yet, and the per-user lane is checked where it is known — `review.ts` and
+  // `nudge.ts` both ask their own provider before running a turn.
+  if (authErrorFor()) return emptyTick();
 
   /*
    * Held for the whole pass, so two overlapping ticks — or two replicas —
@@ -161,7 +166,7 @@ export async function runDueNudges(
   now: Date = new Date(),
   logger?: FastifyBaseLogger,
 ): Promise<TickResult> {
-  if (!hasSubscriptionAuth() && !process.env.ANTHROPIC_API_KEY) return emptyTick();
+  if (authErrorFor()) return emptyTick();
 
   // Its own lock rather than the review's, for the reason the two passes are
   // started separately: they share a tick and nothing else, and a review pass

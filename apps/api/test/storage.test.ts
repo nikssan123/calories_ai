@@ -190,7 +190,7 @@ describe('presignGet', () => {
 });
 
 describe('configuration', () => {
-  const BASE = { DATABASE_URL: 'postgres://ct:ct@localhost:5433/ct' } as never;
+  const BASE: NodeJS.ProcessEnv = { DATABASE_URL: 'postgres://ct:ct@localhost:5433/ct' };
   const FULL = {
     S3_ENDPOINT: 'https://acct123.r2.cloudflarestorage.com',
     S3_BUCKET: 'meals',
@@ -267,6 +267,6 @@ describe('configuration', () => {
    * objects into the deployment's live bucket.
    */
   it('ignores developer credentials under test', () => {
-    expect(readEnv({ ...BASE, ...FULL, NODE_ENV: 'test' } as never).storage).toBeNull();
+    expect(readEnv({ ...BASE, ...FULL, NODE_ENV: 'test' }).storage).toBeNull();
   });
 });

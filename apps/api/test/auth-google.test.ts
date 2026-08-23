@@ -127,7 +127,7 @@ async function signIn(overrides: Record<string, unknown> = {}, startQuery = '') 
   return complete(handshake, cookie);
 }
 
-function redirectedTo(response: { headers: Record<string, unknown> }): string {
+function redirectedTo(response: { statusCode: number; headers: Record<string, unknown> }): string {
   expect(response.statusCode).toBe(302);
   return String(response.headers.location);
 }

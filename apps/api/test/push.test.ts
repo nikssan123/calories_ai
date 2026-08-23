@@ -137,6 +137,21 @@ describe('sendPush', () => {
     expect(await countPushTokens(user.id)).toBe(1);
   });
 
+  it('names the channel, so nothing is filed under a fallback with a machine name', async () => {
+    // Parameters declared, unused, so `mock.calls[0][1]` below is typed as the
+    // request rather than as an empty tuple.
+    const fetchImpl = vi.fn(async (_url: string, _init: RequestInit) => ok(1));
+    await sendPush(
+      [{ token: 'ExponentPushToken[k]', platform: 'android' }],
+      { title: 't', body: 'b' },
+      undefined,
+      fetchImpl as unknown as typeof fetch,
+    );
+
+    const body = JSON.parse((fetchImpl.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body[0]).toMatchObject({ channelId: 'default', sound: 'default' });
+  });
+
   it('counts the devices that accepted it', async () => {
     const fetchImpl = vi.fn(async () => ok(2));
     const result = await sendPush(

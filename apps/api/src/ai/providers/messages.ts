@@ -115,9 +115,7 @@ export function createAnthropicApiProvider(): AiProvider {
     // No server-side conversation store: every turn replays the transcript.
     needsHistory: true,
 
-    checkAuth() {
-      return process.env.ANTHROPIC_API_KEY ? null : ANTHROPIC_API_AUTH_HELP;
-    },
+    checkAuth: meteredApiAuthError,
 
     run(request: AgentRequest): Promise<Outcome> {
       return execute(request);
@@ -332,6 +330,14 @@ async function watched(
    * and would race this one.
    */
   return stream.finalMessage();
+}
+
+/**
+ * Whether this lane has a key, asked without building a provider first. See
+ * `subscriptionAuthError` in `anthropic.ts` for why it is standalone.
+ */
+export function meteredApiAuthError(): string | null {
+  return process.env.ANTHROPIC_API_KEY ? null : ANTHROPIC_API_AUTH_HELP;
 }
 
 /**

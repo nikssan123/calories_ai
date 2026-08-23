@@ -142,7 +142,7 @@ describe.skipIf(!reachable)('counters in Redis', () => {
 
 describe('configuration', () => {
   it('reads REDIS_URL, and treats blank as unset', () => {
-    const base = { DATABASE_URL: 'postgres://ct:ct@localhost:5433/ct' } as never;
+    const base: NodeJS.ProcessEnv = { DATABASE_URL: 'postgres://ct:ct@localhost:5433/ct' };
     expect(readEnv({ ...base, REDIS_URL: 'redis://localhost:6380' }).redisUrl).toBe(
       'redis://localhost:6380',
     );

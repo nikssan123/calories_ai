@@ -22,7 +22,7 @@ const MESSAGE: OutboundEmail = {
   text: 'Body',
 };
 
-function fakeFetch(response: Partial<Response> & { body?: string }) {
+function fakeFetch(response: Omit<Partial<Response>, 'body'> & { body?: string }) {
   const calls: Array<{ url: string; init: RequestInit }> = [];
   const impl = (async (url: string, init: RequestInit) => {
     calls.push({ url, init });

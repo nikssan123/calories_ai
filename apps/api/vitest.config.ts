@@ -6,10 +6,18 @@ export default defineConfig({
     setupFiles: ['./test/helpers/setup.ts'],
     // Every test shares one Postgres database and truncates between cases, so
     // they must not run concurrently. Correctness beats a faster suite here.
+    //
+    // `fileParallelism: false` is the load-bearing one — it pins the worker
+    // count to 1 by itself. `maxWorkers` says the same thing explicitly.
+    //
+    // It used to read `maxForks: 1, minForks: 1`. Vitest 4 renamed the first and
+    // removed the second, so both keys sat here being silently ignored from the
+    // upgrade until `tsconfig` was widened to cover this file. Nothing was
+    // actually running in parallel — `fileParallelism` was carrying it alone —
+    // but the config had stopped saying what it meant.
     fileParallelism: false,
     pool: 'forks',
-    maxForks: 1,
-    minForks: 1,
+    maxWorkers: 1,
     testTimeout: 20_000,
     hookTimeout: 30_000,
     coverage: {

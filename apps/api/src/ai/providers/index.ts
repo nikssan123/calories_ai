@@ -1,9 +1,9 @@
 import { env } from '../../env.ts';
 import { hasSubscriptionAuth } from '../client.ts';
 import type { ToolContext } from '../tools.ts';
-import { createAnthropicProvider } from './anthropic.ts';
-import { createAnthropicApiProvider } from './messages.ts';
-import { createOpenAiProvider } from './openai.ts';
+import { createAnthropicProvider, subscriptionAuthError } from './anthropic.ts';
+import { createAnthropicApiProvider, meteredApiAuthError } from './messages.ts';
+import { createOpenAiProvider, openAiAuthError } from './openai.ts';
 import { PROVIDERS, type AiProvider, type ProviderId } from './types.ts';
 
 export type { ProviderId } from './types.ts';
@@ -66,6 +66,32 @@ export function laneFor(email: string | null | undefined): ProviderId {
     return 'anthropic';
   }
   return providerId();
+}
+
+/**
+ * Whether a lane can authenticate, asked before a turn is built.
+ *
+ * The gates on the chat and review routes used to ask
+ * `hasSubscriptionAuth() || ANTHROPIC_API_KEY` directly, which is a
+ * Claude-shaped question asked on behalf of whichever provider is configured: it
+ * 503s a correctly configured `openai` deployment, and since the lane became a
+ * per-user decision it can also refuse a turn the user's own lane would have
+ * run, or admit one it cannot.
+ *
+ * Defaults to the deployment's lane, for the callers that have no user in hand —
+ * the scheduler's "is anything configured at all" bail. Callers that do know
+ * whose turn it is should pass `laneFor(profile.email)` and get the answer for
+ * the lane that will actually run.
+ */
+export function authErrorFor(lane: ProviderId = providerId()): string | null {
+  switch (lane) {
+    case 'openai':
+      return openAiAuthError();
+    case 'anthropic-api':
+      return meteredApiAuthError();
+    case 'anthropic':
+      return subscriptionAuthError();
+  }
 }
 
 /**

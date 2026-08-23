@@ -97,6 +97,14 @@ interface ToolCall {
   function: { name: string; arguments: string };
 }
 
+/**
+ * Whether this lane has a key, asked without building a provider first. See
+ * `subscriptionAuthError` in `anthropic.ts` for why it is standalone.
+ */
+export function openAiAuthError(): string | null {
+  return readOpenAiConfig().apiKey ? null : OPENAI_AUTH_HELP;
+}
+
 export function createOpenAiProvider(): AiProvider {
   const config = readOpenAiConfig();
 
@@ -106,9 +114,7 @@ export function createOpenAiProvider(): AiProvider {
     // No server-side conversation store: every turn replays the transcript.
     needsHistory: true,
 
-    checkAuth() {
-      return config.apiKey ? null : OPENAI_AUTH_HELP;
-    },
+    checkAuth: openAiAuthError,
 
     async run(request: AgentRequest): Promise<Outcome> {
       const usage: TokenUsage = { ...EMPTY_USAGE };

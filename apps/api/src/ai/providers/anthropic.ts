@@ -21,10 +21,7 @@ export function createAnthropicProvider(toolContext: ToolContext): AiProvider {
     // Sessions live on the Claude side; we hand back an id, not a transcript.
     needsHistory: false,
 
-    checkAuth() {
-      if (hasSubscriptionAuth() || process.env.ANTHROPIC_API_KEY) return null;
-      return AUTH_HELP;
-    },
+    checkAuth: subscriptionAuthError,
 
     run(request: AgentRequest, state: string | null): Promise<Outcome> {
       return execute(toolContext, request, state);
@@ -34,6 +31,20 @@ export function createAnthropicProvider(toolContext: ToolContext): AiProvider {
       return execute(toolContext, request, state, emit);
     },
   };
+}
+
+/**
+ * Whether this lane has something to authenticate with, asked without building
+ * a provider first.
+ *
+ * Standalone because the question now has to be answerable before a turn
+ * exists: the route gate wants to know whether *this user's* lane can run, and
+ * it asks before there is a tool context to build a provider around. The method
+ * on the provider delegates here so there is one answer, not two.
+ */
+export function subscriptionAuthError(): string | null {
+  if (hasSubscriptionAuth() || process.env.ANTHROPIC_API_KEY) return null;
+  return AUTH_HELP;
 }
 
 /**

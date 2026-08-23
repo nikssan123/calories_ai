@@ -176,10 +176,14 @@ describe('admission', () => {
 
   it('says when to come back, from the bucket rather than from a guess', async () => {
     for (let i = 0; i < 10; i++) await reserve(MODEL, 'text_log');
-    const error = await reserve(MODEL, 'text_log').catch((e) => e as ModelBusyError);
+    const error = await reserve(MODEL, 'text_log').catch((e: unknown) => e);
+    // Narrowed rather than cast: a reservation coming back here instead of a
+    // refusal is the failure this test exists to catch, and a cast would read it
+    // as a pass with two undefined properties.
+    expect(error).toBeInstanceOf(ModelBusyError);
     // A tenth of the bucket, refilling at a bucket a minute: six seconds.
-    expect(error.retryAfterSeconds).toBe(6);
-    expect(error.message).toMatch(/Try again in 6 seconds/);
+    expect((error as ModelBusyError).retryAfterSeconds).toBe(6);
+    expect((error as ModelBusyError).message).toMatch(/Try again in 6 seconds/);
   });
 
   it('refills as time passes rather than on a tick somebody has to run', async () => {

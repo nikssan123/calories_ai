@@ -145,9 +145,14 @@ that actually takes.
 | annual, at the cap | $4.45 | $23.16 | $9.60 | 54% | **−141%** |
 
 **The tier header used to say "(Sonnet)" against the photo scans and that was never
-true** — `ai/client.ts` routes `photo_log` to Opus 5 at high effort. Either the code or
-this line has to move, and the choice is worth making deliberately: photos are the
-second-largest line in every cell above.
+true** — `ai/client.ts` routes `photo_log` to Opus 5 at high effort. Decided 2026-08-23:
+**the code is right and the line was wrong.** Photos stay on Opus.
+
+That is a deliberate choice to carry the cost rather than a failure to notice it. A
+photo scan is the second-largest line in every cell above, and Sonnet would cut it —
+but reading a plate is the hardest perception task in the product and the one users
+judge it by, and a wrong number entered confidently is worse than a slower one. The
+caps are what hold the tier up; the model is what makes it worth subscribing to.
 
 ### Coach — $29.99/month or $299/year
 

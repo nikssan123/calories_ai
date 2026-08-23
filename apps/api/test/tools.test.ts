@@ -963,6 +963,7 @@ describe('suggest_recipes', () => {
 
     for (let i = 0; i < spent; i++) {
       await recordUsage({
+        provider: 'anthropic-api',
         userId: user.id,
         kind: 'recipe',
         outcome: { text: 'x', sessionId: null, numTurns: 1, costUsd: 0.2, model: 'claude-opus-5' } as never,
@@ -982,6 +983,7 @@ describe('suggest_recipes', () => {
     const { query } = await import('../src/db.ts');
     await query('UPDATE users SET plan = $1 WHERE id = $2', ['pro', user.id]);
     await recordUsage({
+      provider: 'anthropic-api',
       userId: user.id,
       kind: 'recipe',
       outcome: { text: 'x', sessionId: null, numTurns: 1, costUsd: 0.2, model: 'claude-opus-5' } as never,
@@ -1071,7 +1073,7 @@ describe('get_pantry', () => {
     build();
 
     const { json } = await call('get_pantry');
-    const byName = new Map(json.items.map((i: any) => [i.name, i]));
+    const byName = new Map<string, any>(json.items.map((i: any) => [i.name, i]));
 
     expect(byName.get('Milk').stale).toBe(true);
     expect(byName.get('Rice').stale).toBeUndefined();
@@ -1788,6 +1790,7 @@ describe('plan_week', () => {
   it('refuses once the week’s plan allowance is gone', async () => {
     const { recordUsage } = await import('../src/services/usage.ts');
     await recordUsage({
+      provider: 'anthropic-api',
       userId: user.id,
       kind: 'meal_plan',
       outcome: { text: 'x', sessionId: null, numTurns: 1, costUsd: 1, model: 'claude-opus-5' } as never,
@@ -1912,6 +1915,7 @@ describe('adapt_recipe', () => {
     await seedOne();
     const { recordUsage } = await import('../src/services/usage.ts');
     await recordUsage({
+      provider: 'anthropic-api',
       userId: user.id,
       kind: 'recipe',
       outcome: { text: 'x', sessionId: null, numTurns: 1, costUsd: 0.2, model: 'claude-opus-5' } as never,

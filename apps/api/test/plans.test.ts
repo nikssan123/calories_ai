@@ -197,6 +197,7 @@ describe('per-plan ceilings', () => {
       await recordUsage({
         userId: user.id,
         kind: 'recipe',
+        provider: 'anthropic-api',
         outcome: { text: 'x', sessionId: null, numTurns: 1, costUsd: 0.2, model: 'claude-opus-5' } as never,
       });
     }

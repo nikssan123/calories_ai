@@ -15,13 +15,15 @@ import {
  * not the wording, which is free to change.
  */
 
-// The whole row, not the interesting half: `tsconfig` covers `src` only, so
-// nothing here fails to compile when the profile grows a column, and a fixture
-// missing one reads to `dayContextPrompt` as a user who has none.
+// The whole row, not the interesting half. This used to be a discipline nothing
+// enforced — `tsconfig` covered `src` only, so a fixture silently missing a new
+// column read to `dayContextPrompt` as a user who has none. `test` is in the
+// project now, so the compiler keeps this honest instead of the comment.
 const profile: Profile = {
   id: '11111111-1111-1111-1111-111111111111',
   email: 'nik@example.com',
   email_verified: true,
+  units: 'metric',
   display_name: 'Nik',
   sex: 'male',
   birth_date: '1990-01-01',
@@ -88,6 +90,9 @@ const day: DaySummary = {
       local_date: '2026-03-10',
       duration_min: 28,
       distance_km: 5,
+      category: 'cardio',
+      detail: 'estimated',
+      sets: [],
       kcal_burned: 300,
       confidence: 'low',
       source: 'text',

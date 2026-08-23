@@ -291,6 +291,7 @@ describe('the weekly template’s own edge cases', () => {
       range: '10–16 August',
       appUrl: 'https://example.test',
       unsubscribeUrl: 'https://example.test/unsubscribe',
+      units: 'metric',
     });
 
     expect(message.text).toContain('Average a day: —');
@@ -306,6 +307,7 @@ describe('the weekly template’s own edge cases', () => {
       range: '10–16 August',
       appUrl: 'https://example.test',
       unsubscribeUrl: 'https://example.test/u',
+      units: 'metric',
     });
     expect(gained.text).toContain('+0.4 kg');
   });
