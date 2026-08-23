@@ -40,6 +40,7 @@ import { useAuth } from '@/lib/auth';
 import { duration, ease, font, type as t, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { haptics } from '@/lib/haptics';
+import { onEntryRemoved } from '@/lib/removals';
 
 /** Optimistic rows carry a local id until the server assigns the real one. */
 interface Bubble {
@@ -170,6 +171,20 @@ export default function JournalScreen() {
   }, []);
 
   /*
+   * A meal deleted somewhere else in the app, struck through here.
+   *
+   * The server writes the same mark onto the stored card, so this is not what
+   * makes it stick — it is what makes it happen now. This tab is mounted the
+   * whole time the Today tab is being used and reads its history exactly once,
+   * at launch, so without this the card sits here counting a meal the reader
+   * just watched leave the other screen, until the next cold start.
+   */
+  useEffect(
+    () => onEntryRemoved((entryId) => setBubbles((prev) => strike(prev, entryId))),
+    [],
+  );
+
+  /*
    * Reaching the end is not one scroll but a series: a photo has no height
    * until it decodes, so the column keeps growing under a scroll that has
    * already finished. `onContentSizeChange` is the RN spelling of the web's
@@ -267,6 +282,14 @@ export default function JournalScreen() {
               : b,
           ),
         );
+        // A turn can delete an entry too, and the card that logged it is
+        // somewhere above in this same conversation.
+        for (const action of result.actions) {
+          if (action.kind === 'food_deleted' && action.entry_id) {
+            const gone = action.entry_id;
+            setBubbles((prev) => strike(prev, gone));
+          }
+        }
         commitDay(result.day);
         // The turn may have changed the profile — units, diet, a name. Adopting
         // it here is what makes "switch me to pounds" take effect now rather
@@ -468,6 +491,31 @@ function toolLabel(name: string): string | null {
   const gerund = TOOL_VERBS[verb];
   if (!gerund) return null;
   return rest.length > 0 ? `${gerund} ${rest.join(' ')}` : gerund;
+}
+
+/**
+ * Marks every card drawn from an entry that has since been deleted.
+ *
+ * The mark itself is the server's — it writes it onto the stored cards as the
+ * entry goes, so a relaunch is right whatever the app was doing at the time.
+ * This is the same edit applied to the copy already on screen, because the
+ * conversation is read once at launch and would otherwise go on showing the
+ * meal until the next one.
+ *
+ * Untouched bubbles keep their identity: the rows are memoised, and rebuilding
+ * every one of them to strike a single card would redraw the whole journal.
+ */
+function strike(bubbles: Bubble[], entryId: string): Bubble[] {
+  return bubbles.map((bubble) =>
+    bubble.actions?.some((action) => action.entry_id === entryId && !action.removed)
+      ? {
+          ...bubble,
+          actions: bubble.actions.map((action) =>
+            action.entry_id === entryId ? { ...action, removed: true } : action,
+          ),
+        }
+      : bubble,
+  );
 }
 
 /**

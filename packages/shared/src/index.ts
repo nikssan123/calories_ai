@@ -1482,6 +1482,19 @@ export const ChatAction = z.object({
   summary: z.string(),
   /** Absent for actions with nothing to draw — a deletion is a line of text. */
   card: ChatCard.nullable().default(null),
+  /**
+   * The entry this card is a picture of has since been deleted.
+   *
+   * Written onto the stored action when the entry goes, wherever it goes from
+   * — the Today tab, the exercise screen, or a later turn. The card is not
+   * dropped with it: the turn did happen, and a conversation that quietly
+   * loses rows is one nobody can trust. It just stops claiming the meal counts.
+   *
+   * Optional rather than defaulted, because an action is written twenty-odd
+   * places and none of them is ever describing something already gone. Absent
+   * means present.
+   */
+  removed: z.boolean().optional(),
 });
 export type ChatAction = z.infer<typeof ChatAction>;
 

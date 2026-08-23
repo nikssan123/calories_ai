@@ -56,6 +56,42 @@ export async function replaceActions(
   return row !== null;
 }
 
+/**
+ * Strikes an entry off every card that was drawn from it.
+ *
+ * A card is a receipt for a meal, and a receipt for a meal that no longer
+ * exists is a lie the conversation keeps telling: delete last night's pasta
+ * from the Today tab and the journal goes on showing it, macros, ring and all,
+ * for as long as the history is scrolled back to. Nothing in the conversation
+ * knew, because deleting an entry is not a turn.
+ *
+ * So the cards are marked where they are stored rather than removed. The turn
+ * happened and the transcript says so; the card only stops claiming the food
+ * is still counted — see `removed` on `ChatAction`.
+ *
+ * Every action carrying the id is marked, not just the one that logged it: a
+ * meal that was logged and then corrected has a card for each, and both are
+ * pictures of the same gone entry. The containment test is what keeps this off
+ * the rest of the conversation — without it this rewrites every message the
+ * user has ever sent to set nothing.
+ */
+export async function markEntryRemoved(userId: string, entryId: string): Promise<void> {
+  await query(
+    `UPDATE chat_messages
+        SET actions = (
+              SELECT jsonb_agg(
+                       CASE WHEN action->>'entry_id' = $2
+                            THEN action || '{"removed":true}'::jsonb
+                            ELSE action END
+                       ORDER BY position)
+                FROM jsonb_array_elements(actions) WITH ORDINALITY AS element(action, position)
+            )
+      WHERE user_id = $1
+        AND actions @> jsonb_build_array(jsonb_build_object('entry_id', $2::text))`,
+    [userId, entryId],
+  );
+}
+
 export async function messageActions(
   userId: string,
   messageId: string,

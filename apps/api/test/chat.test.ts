@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { ChatAction } from '@ct/shared';
 import { query } from '../src/db.ts';
-import { insertMessage, listMessages } from '../src/services/chat.ts';
+import { insertMessage, listMessages, markEntryRemoved } from '../src/services/chat.ts';
 import { createUser, type TestUser } from './helpers/factories.ts';
 
 let user: TestUser;
@@ -133,5 +133,88 @@ describe('stored actions', () => {
 
     const [read] = await listMessages(user.id);
     expect(read!.actions).toEqual([]);
+  });
+});
+
+/**
+ * A card is a receipt for a meal, and the meal can be deleted from screens the
+ * conversation never hears about. The cards stay — the turn happened — but they
+ * stop claiming the food is counted.
+ */
+describe('markEntryRemoved', () => {
+  const ENTRY = '11111111-1111-4111-8111-111111111111';
+  const OTHER_ENTRY = '22222222-2222-4222-8222-222222222222';
+
+  const logged: ChatAction = {
+    kind: 'food_logged',
+    entry_id: ENTRY,
+    summary: 'lunch: Chicken and rice — 620 kcal',
+    card: {
+      type: 'food',
+      entry_id: ENTRY,
+      meal: 'lunch',
+      description: 'Chicken and rice',
+      confidence: 'medium',
+      items: [{ name: 'Chicken', quantity: '200g' }],
+      kcal: 620,
+      protein_g: 62,
+      carbs_g: 50,
+      fat_g: 8,
+      day: null,
+    },
+  };
+  const elsewhere: ChatAction = { ...logged, entry_id: OTHER_ENTRY, summary: 'dinner: Soup' };
+
+  it('marks every card drawn from the entry, wherever it sits in the turn', async () => {
+    // Logged, then corrected: two cards, one gone entry.
+    const corrected: ChatAction = { ...logged, kind: 'food_updated', summary: 'Updated' };
+    await insertMessage(user.id, 'assistant', 'Logged.', null, null, [elsewhere, logged]);
+    await insertMessage(user.id, 'assistant', 'Fixed.', null, null, [corrected]);
+
+    await markEntryRemoved(user.id, ENTRY);
+
+    const [first, second] = await listMessages(user.id);
+    // Order held, and the card that was about something else left alone.
+    expect(first!.actions.map((a) => a.summary)).toEqual([elsewhere.summary, logged.summary]);
+    expect(first!.actions[0]!.removed).toBeUndefined();
+    expect(first!.actions[1]!.removed).toBe(true);
+    expect(second!.actions[0]!.removed).toBe(true);
+  });
+
+  it('leaves the card itself intact, so the turn still draws', async () => {
+    await insertMessage(user.id, 'assistant', 'Logged.', null, null, [logged]);
+    await markEntryRemoved(user.id, ENTRY);
+
+    const [read] = await listMessages(user.id);
+    expect(read!.actions[0]).toEqual({ ...logged, removed: true });
+  });
+
+  it('will not reach into another account’s conversation', async () => {
+    const stranger = await createUser();
+    await insertMessage(stranger.id, 'assistant', 'Logged.', null, null, [logged]);
+
+    await markEntryRemoved(user.id, ENTRY);
+
+    const [read] = await listMessages(stranger.id);
+    expect(read!.actions[0]!.removed).toBeUndefined();
+  });
+
+  /*
+   * The containment test is the whole guard here: without it this rewrites
+   * every row the user owns, and a message that never carried an action would
+   * have its NULL replaced with one.
+   */
+  it('touches nothing when no card was drawn from the entry', async () => {
+    await insertMessage(user.id, 'user', 'hello');
+    await insertMessage(user.id, 'assistant', 'Logged.', null, null, [elsewhere]);
+
+    await markEntryRemoved(user.id, ENTRY);
+
+    const rows = await query<{ actions: unknown }>(
+      'SELECT actions FROM chat_messages WHERE user_id = $1 ORDER BY created_at',
+      [user.id],
+    );
+    expect(rows[0]!.actions).toBeNull();
+    expect(rows[1]!.actions).toEqual([elsewhere]);
   });
 });

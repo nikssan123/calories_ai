@@ -12,6 +12,7 @@ import {
   logWeight,
   updateFoodEntry,
 } from '../src/services/log.ts';
+import { insertMessage, listMessages } from '../src/services/chat.ts';
 import { addMeal, createUser, type TestUser } from './helpers/factories.ts';
 
 /**
@@ -206,6 +207,35 @@ describe('deleteFoodEntry', () => {
     expect(await deleteFoodEntry(user.id, foreign.id)).toBe(false);
     expect(await getFoodEntry(other.id, foreign.id)).not.toBeNull();
   });
+
+  /*
+   * Deleting a meal is not a turn — it happens on the day screen — so the card
+   * that logged it would otherwise sit in the journal counting food nobody ate.
+   * Marked here rather than in the route, because the tools delete too.
+   */
+  it('strikes the journal card the entry was drawn on', async () => {
+    const entry = await addMeal(user, { date: '2026-03-10', kcal: 500 });
+    await insertMessage(user.id, 'assistant', 'Logged.', null, null, [
+      { kind: 'food_logged', entry_id: entry.id, summary: 'Logged', card: null },
+    ]);
+
+    await deleteFoodEntry(user.id, entry.id);
+
+    const [read] = await listMessages(user.id);
+    expect(read!.actions[0]!.removed).toBe(true);
+  });
+
+  it('leaves the conversation alone when there was nothing to delete', async () => {
+    const foreign = await addMeal(other, { date: '2026-03-10', kcal: 500 });
+    await insertMessage(other.id, 'assistant', 'Logged.', null, null, [
+      { kind: 'food_logged', entry_id: foreign.id, summary: 'Logged', card: null },
+    ]);
+
+    expect(await deleteFoodEntry(user.id, foreign.id)).toBe(false);
+
+    const [read] = await listMessages(other.id);
+    expect(read!.actions[0]!.removed).toBeUndefined();
+  });
 });
 
 describe('exercise entries', () => {
@@ -247,6 +277,18 @@ describe('exercise entries', () => {
     const mine = await createExerciseEntry({ userId: user.id, ...base, ctx: user.ctx });
     expect(await deleteExerciseEntry(other.id, mine.id)).toBe(false);
     expect(await deleteExerciseEntry(user.id, mine.id)).toBe(true);
+  });
+
+  it('strikes the journal card the session was drawn on', async () => {
+    const mine = await createExerciseEntry({ userId: user.id, ...base, ctx: user.ctx });
+    await insertMessage(user.id, 'assistant', 'Nice run.', null, null, [
+      { kind: 'exercise_logged', entry_id: mine.id, summary: '5km run', card: null },
+    ]);
+
+    await deleteExerciseEntry(user.id, mine.id);
+
+    const [read] = await listMessages(user.id);
+    expect(read!.actions[0]!.removed).toBe(true);
   });
 });
 

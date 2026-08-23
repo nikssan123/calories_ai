@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/Skeleton';
 import { Sparkline } from '@/components/Sparkline';
 import { Stat, Stats } from '@/components/Stat';
 import { api } from '@/lib/api';
+import { entryRemoved } from '@/lib/removals';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
 import { Glyph } from '@/components/Glyph';
@@ -74,6 +75,8 @@ export default function ExerciseScreen() {
       commit: () => {
         void api
           .deleteExerciseEntry(entry.id)
+          // The journal is still holding the card this session was logged with.
+          .then(() => entryRemoved(entry.id))
           .catch((e: Error) => setError(e.message))
           .finally(() => void load(days));
       },

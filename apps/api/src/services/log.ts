@@ -8,6 +8,7 @@ import type {
   WeightEntry,
 } from '@ct/shared';
 import { query, queryOne, transaction } from '../db.ts';
+import { markEntryRemoved } from './chat.ts';
 import { type DayContext, localDateFor } from '../time.ts';
 
 /**
@@ -302,12 +303,23 @@ export async function updateFoodEntry(
   return getFoodEntry(userId, entryId);
 }
 
+/*
+ * The two deletes below reach into the conversation, which is the one direction
+ * this module otherwise never travels.
+ *
+ * It is here rather than in the callers because there are three of them — the
+ * REST route the apps use, the `delete_entry` tool, and whatever is written
+ * next — and a journal that only sometimes notices a deletion is worse than one
+ * that never does. This is the choke point every deletion already goes through.
+ */
 export async function deleteFoodEntry(userId: string, entryId: string): Promise<boolean> {
   const rows = await query<{ id: string }>(
     'DELETE FROM food_entries WHERE id = $1 AND user_id = $2 RETURNING id',
     [entryId, userId],
   );
-  return rows.length > 0;
+  if (rows.length === 0) return false;
+  await markEntryRemoved(userId, entryId);
+  return true;
 }
 
 export interface CreateExerciseInput {
@@ -425,7 +437,9 @@ export async function deleteExerciseEntry(userId: string, entryId: string): Prom
     'DELETE FROM exercise_entries WHERE id = $1 AND user_id = $2 RETURNING id',
     [entryId, userId],
   );
-  return rows.length > 0;
+  if (rows.length === 0) return false;
+  await markEntryRemoved(userId, entryId);
+  return true;
 }
 
 export async function logWeight(

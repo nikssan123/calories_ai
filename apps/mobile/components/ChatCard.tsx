@@ -69,10 +69,41 @@ export function ChatActionCard({
   onLogged?: () => void;
 }) {
   if (!action.card) return <Chip action={action} />;
+  const body = (
+    <CardBody card={action.card} messageId={messageId} today={today} onLogged={onLogged} />
+  );
+  // A gone entry is never also news, so the ring and the strike never meet.
+  if (action.removed) return <Removed>{body}</Removed>;
+  return <Touched active={touched}>{body}</Touched>;
+}
+
+/**
+ * A card whose meal is no longer logged.
+ *
+ * The entry can be deleted from anywhere — a swipe on Today, the exercise
+ * screen, a later turn — and none of those is a conversation, so the card that
+ * announced it would otherwise sit here counting a meal that stopped existing.
+ *
+ * Struck rather than dropped. The turn is a record of something that happened
+ * and deleting rows out of a transcript is how you get a journal nobody
+ * believes; what has to go is the *claim*, not the history. So the card fades
+ * back to the weight of a timestamp and says what became of it, and anything
+ * still tappable on it — a suggestion's log button, a workout's answer — is
+ * deliberately dead, because acting on it would log against an entry that is
+ * not there.
+ */
+function Removed({ children }: { children: React.ReactNode }) {
+  const colors = useColors();
   return (
-    <Touched active={touched}>
-      <CardBody card={action.card} messageId={messageId} today={today} onLogged={onLogged} />
-    </Touched>
+    <View style={styles.removed}>
+      <View style={styles.removedCard} pointerEvents="none">
+        {children}
+      </View>
+      <View style={styles.removedTag}>
+        <View style={[styles.chipDot, { backgroundColor: colors.destructive }]} />
+        <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Removed</Text>
+      </View>
+    </View>
   );
 }
 
@@ -973,6 +1004,9 @@ const styles = StyleSheet.create({
   suggestion: { gap: 8 },
   suggestionActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   cook: { height: 40, borderRadius: 999, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
+  removed: { gap: 6 },
+  removedCard: { opacity: 0.45 },
+  removedTag: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 2 },
   chipWrap: { alignSelf: 'flex-start' },
   chip: {
     flexDirection: 'row',

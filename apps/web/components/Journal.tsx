@@ -236,6 +236,14 @@ export function Journal() {
             : b,
         ),
       );
+      // A turn can delete an entry too, and the card that logged it is
+      // somewhere above in this same conversation.
+      for (const action of result.actions) {
+        if (action.kind === 'food_deleted' && action.entry_id) {
+          const gone = action.entry_id;
+          setBubbles((prev) => strike(prev, gone));
+        }
+      }
       setDay(result.day);
       // The turn may have changed the profile — units, diet, a name. Adopting
       // it here is what makes "switch me to pounds" take effect in the rail
@@ -432,6 +440,31 @@ function toolLabel(name: string): string | null {
   const gerund = TOOL_VERBS[verb];
   if (!gerund) return null;
   return rest.length > 0 ? `${gerund} ${rest.join(' ')}` : gerund;
+}
+
+/**
+ * Marks every card drawn from an entry that has since been deleted.
+ *
+ * The mark itself is the server's — it writes it onto the stored cards as the
+ * entry goes, so a page load is right whatever was deleted and wherever from.
+ * This is the same edit applied to the copy already on screen, for the one
+ * case that never reloads: a turn that deletes something, with the card that
+ * logged it further up the conversation it is answering into.
+ *
+ * Untouched bubbles keep their identity: the rows are memoised, and rebuilding
+ * every one of them to strike a single card would redraw the whole journal.
+ */
+function strike(bubbles: Bubble[], entryId: string): Bubble[] {
+  return bubbles.map((bubble) =>
+    bubble.actions?.some((action) => action.entry_id === entryId && !action.removed)
+      ? {
+          ...bubble,
+          actions: bubble.actions.map((action) =>
+            action.entry_id === entryId ? { ...action, removed: true } : action,
+          ),
+        }
+      : bubble,
+  );
 }
 
 /**

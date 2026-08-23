@@ -51,7 +51,41 @@ export function ChatActionCard({
   onLogged?: () => void;
 }) {
   if (!action.card) return <Chip action={action} />;
-  return <CardBody card={action.card} messageId={messageId} today={today} onLogged={onLogged} />;
+  const body = (
+    <CardBody card={action.card} messageId={messageId} today={today} onLogged={onLogged} />
+  );
+  return action.removed ? <Removed>{body}</Removed> : body;
+}
+
+/**
+ * A card whose meal is no longer logged.
+ *
+ * The entry can be deleted from anywhere — the day, the exercise page, a later
+ * turn — and none of those is a conversation, so the card that announced it
+ * would otherwise sit here counting a meal that stopped existing.
+ *
+ * Struck rather than dropped. The turn is a record of something that happened
+ * and deleting rows out of a transcript is how you get a journal nobody
+ * believes; what has to go is the *claim*, not the history. So the card fades
+ * back to the weight of a timestamp and says what became of it, and anything
+ * still clickable on it — a suggestion's log button, a workout's answer — is
+ * deliberately dead, because acting on it would log against an entry that is
+ * not there.
+ */
+function Removed({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="pointer-events-none opacity-45">{children}</div>
+      <div className="flex items-center gap-2 pl-0.5">
+        <span
+          aria-hidden
+          className="size-2 shrink-0 rounded-full"
+          style={{ background: 'var(--destructive)' }}
+        />
+        <span className="text-footnote text-muted-foreground font-semibold">Removed</span>
+      </div>
+    </div>
+  );
 }
 
 /** Actions with nothing to draw — a deletion — stay a line of text. */

@@ -31,6 +31,7 @@ import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors, type Palette } from '@/theme';
 import { haptics } from '@/lib/haptics';
+import { entryRemoved } from '@/lib/removals';
 import { removeAction, repeatAction, SwipeRow } from '@/components/SwipeRow';
 import { Glyph } from '@/components/Glyph';
 import { Material } from '@/components/Material';
@@ -214,6 +215,9 @@ export default function TodayScreen() {
       commit: () => {
         void api
           .deleteFoodEntry(entry.id)
+          // The journal is mounted on the next tab with this meal's card in it,
+          // and nothing there re-reads the conversation. Tell it.
+          .then(() => entryRemoved(entry.id))
           .catch((e: Error) => toast.error(e.message))
           .finally(() => void load(date));
       },
@@ -244,6 +248,7 @@ export default function TodayScreen() {
       commit: () => {
         void api
           .deleteExerciseEntry(entry.id)
+          .then(() => entryRemoved(entry.id))
           .catch((e: Error) => toast.error(e.message))
           .finally(() => void load(date));
       },
