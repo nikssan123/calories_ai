@@ -23,6 +23,7 @@ import type {
   FoodItem,
   GoogleExchange,
   LastWorkout,
+  LogFoodRequest,
   Meal,
   MealTemplate,
   LibraryRecipe,
@@ -260,6 +261,22 @@ export function createApiClient({
      * configuration, not a failure, so callers must keep the old path working
      * rather than treating this as an error.
      */
+    /**
+     * The raw ticket, for a client that can upload without holding the bytes.
+     *
+     * React Native's answer is `expo-file-system`, which streams a file URI
+     * straight to the URL — better than `uploadPhoto` below rather than worse,
+     * since a phone never has to materialise several megabytes in JS to send a
+     * photo it already has on disk.
+     *
+     * Null `url` means the deployment has no bucket: send `photo_base64`.
+     */
+    photoUploadTicket: (mediaType: PhotoMediaType) =>
+      request<PhotoUploadTicket>('/photos/upload-url', {
+        method: 'POST',
+        body: JSON.stringify({ media_type: mediaType }),
+      }),
+
     uploadPhoto: async (
       bytes: Blob | ArrayBuffer | Uint8Array,
       mediaType: PhotoMediaType,
@@ -360,6 +377,17 @@ export function createApiClient({
 
     updateProfile: (patch: ProfileUpdate) =>
       request<Profile>('/profile', { method: 'PATCH', body: JSON.stringify(patch) }),
+
+    /**
+     * Logs a meal without asking the model anything.
+     *
+     * The one create path that needs neither a reachable model nor a remote
+     * catalogue, which is what lets an offline client queue it. Send a
+     * `client_id` and the call is safe to repeat: the server logs it once
+     * however many times a retrying outbox asks. See OFFLINE.md.
+     */
+    logFoodEntry: (payload: LogFoodRequest) =>
+      request<FoodEntry>('/entries/food', { method: 'POST', body: JSON.stringify(payload) }),
 
     /**
      * Corrects an entry that is already logged.

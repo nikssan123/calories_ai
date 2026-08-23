@@ -86,9 +86,12 @@ export function FridgeScan({
 
     setScanning(true);
     try {
-      // Straight to the bucket where there is one; the data URL is the
-      // fallback for a local-disk deployment. See `uploadPhoto`.
-      const key = await api.uploadPhoto(await asBlob(prepared.dataUrl), prepared.mediaType);
+      // Straight to the bucket where there is one; the data URL is the fallback
+      // for a local-disk deployment, and for a bucket that refused the write.
+      // See `uploadPhoto`.
+      const key = await api
+        .uploadPhoto(await asBlob(prepared.dataUrl), prepared.mediaType)
+        .catch(() => null);
       const found = await api.scanFridge(
         key ? { key } : { base64: prepared.dataUrl },
         prepared.mediaType,

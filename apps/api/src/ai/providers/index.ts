@@ -9,6 +9,7 @@ import { PROVIDERS, type AiProvider, type ProviderId } from './types.ts';
 export type { ProviderId } from './types.ts';
 export type {
   AgentMessage,
+  PhotoSource,
   AgentRequest,
   AiProvider,
   Outcome,

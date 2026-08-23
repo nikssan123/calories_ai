@@ -24,7 +24,9 @@ vi.mock('../src/services/storage.ts', () => ({
   }),
 }));
 
-const { claimPhoto, reservePhotoUpload } = await import('../src/services/photos.ts');
+const { claimPhoto, presignPhotoRead, reservePhotoUpload } = await import(
+  '../src/services/photos.ts',
+);
 
 let user: TestUser;
 let other: TestUser;
@@ -111,5 +113,25 @@ describe('claiming what was uploaded', () => {
 
     expect(second!.id).toBe(first!.id);
     expect(await query('SELECT id FROM photos WHERE storage_key = $1', [key])).toHaveLength(1);
+  });
+});
+
+/**
+ * What the model is handed.
+ *
+ * The bytes went phone-to-bucket on the way in; a presigned read is what stops
+ * them coming back through this process on the way out. If this ever reverts to
+ * base64 nothing breaks and nothing errors — the photo still gets read, the API
+ * just quietly starts carrying every megabyte of it again.
+ */
+describe('handing the photo to the model', () => {
+  it('presigns a read rather than loading the bytes', async () => {
+    const ticket = await reservePhotoUpload(user.id, 'image/jpeg');
+    objects.set(ticket!.key, Buffer.from('jpegbytes'));
+    const claimed = await claimPhoto(user.id, ticket!.key, 'image/jpeg');
+
+    const url = await presignPhotoRead(claimed!.storageKey!);
+    expect(url).toContain(ticket!.key);
+    expect(url).toContain('sig=read');
   });
 });

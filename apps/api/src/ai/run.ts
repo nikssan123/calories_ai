@@ -27,6 +27,7 @@ import {
   type AgentRequest,
   type AiProvider,
   type Outcome,
+  type PhotoSource,
   type StreamSink,
 } from './providers/index.ts';
 import {
@@ -43,7 +44,7 @@ export interface RunTurnInput {
   ctx: DayContext;
   profile: Profile;
   text: string;
-  photo?: { id: string; mediaType: string; base64: string } | null;
+  photo?: ({ id: string } & PhotoSource) | null;
 }
 
 /**
@@ -197,7 +198,7 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
       [onboarding, reviewContext].filter((part): part is string => part !== null).join('\n\n---\n\n') ||
       undefined,
     text: promptText,
-    photo: input.photo ? { mediaType: input.photo.mediaType, base64: input.photo.base64 } : null,
+    photo: input.photo ? photoSource(input.photo) : null,
     tools,
     toolNames,
     history,
@@ -280,6 +281,20 @@ function drive(
 ): Promise<Outcome> {
   if (emit && provider.runStream) return provider.runStream(request, state, emit);
   return provider.run(request, state);
+}
+
+/**
+ * The photo without its row id, which the model has no use for.
+ *
+ * Written out rather than spread, because the two arms of `PhotoSource` are
+ * distinguished by which field is *absent* and spreading `{...photo}` would
+ * carry `base64: undefined` into the url arm and defeat the narrowing every
+ * provider does on it.
+ */
+function photoSource(photo: { id: string } & PhotoSource): PhotoSource {
+  return photo.url !== undefined
+    ? { mediaType: photo.mediaType, url: photo.url }
+    : { mediaType: photo.mediaType, base64: photo.base64 };
 }
 
 /**

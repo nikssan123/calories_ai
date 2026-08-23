@@ -9,6 +9,16 @@ import { UnitSystem } from './units.ts';
 /** Conversion between what is stored and what is read. See UNITS.md. */
 export * from './units.ts';
 
+/**
+ * Day boundaries and the arithmetic that turns entries into a `DaySummary`.
+ *
+ * Re-exported from here rather than left as its own entry point because every
+ * consumer already imports the shapes it operates on from this module, and a
+ * second import line to add up the rows you just fetched is friction for
+ * nothing. `day.ts` imports from here type-only, so the cycle is erased.
+ */
+export * from './day.ts';
+
 export const MEALS = ['breakfast', 'lunch', 'dinner', 'snack'] as const;
 export const Meal = z.enum(MEALS);
 export type Meal = z.infer<typeof Meal>;
@@ -1655,6 +1665,16 @@ export const ChatRequest = z.object({
    */
   photo_key: z.string().max(200).optional(),
   photo_media_type: PhotoMediaType.optional(),
+  /**
+   * Set by a client that tried the bucket, failed, and sent the bytes instead.
+   *
+   * The fallback is right for the person logging the meal — it still gets
+   * logged — and wrong for whoever runs the deployment, because a bucket that
+   * has quietly stopped accepting writes then looks identical to one nobody has
+   * configured. This is the flag that tells them apart, and the API logs it.
+   * Diagnostic only: nothing behaves differently either way.
+   */
+  photo_upload_failed: z.boolean().optional(),
 });
 export type ChatRequest = z.infer<typeof ChatRequest>;
 
@@ -2167,8 +2187,67 @@ export const RepeatRequest = z.object({
   meal: Meal.optional(),
   /** ISO timestamp. Defaults to now. */
   eaten_at: z.string().optional(),
+  /** See `LogFoodRequest.client_id` — repeat is the offline path people use. */
+  client_id: z.string().uuid().optional(),
 });
 export type RepeatRequest = z.infer<typeof RepeatRequest>;
+
+// ---- Logging a meal by hand ------------------------------------------------
+
+/**
+ * One item as somebody typing it can supply it.
+ *
+ * `FoodItem` minus the two ids the database owns. The quality panel is
+ * optional here in a way it is not on the way out: a person typing a packet's
+ * calories has the macros in front of them and almost never has the fiber, and
+ * demanding four more numbers to log a sandwich is how a manual path goes
+ * unused. Absent stays null, which is "nobody estimated this" — the same claim
+ * the model makes when it cannot tell.
+ */
+export const FoodItemInput = z.object({
+  name: z.string().min(1),
+  quantity_g: z.number().nullable().default(null),
+  quantity_desc: z.string().nullable().default(null),
+  kcal: z.number().min(0),
+  protein_g: z.number().min(0).default(0),
+  carbs_g: z.number().min(0).default(0),
+  fat_g: z.number().min(0).default(0),
+  fiber_g: z.number().min(0).nullable().default(null),
+  sodium_mg: z.number().min(0).nullable().default(null),
+  sat_fat_g: z.number().min(0).nullable().default(null),
+  sugar_g: z.number().min(0).nullable().default(null),
+});
+export type FoodItemInput = z.infer<typeof FoodItemInput>;
+
+/**
+ * A meal logged without asking the model anything.
+ *
+ * The door that was never cut. `source: 'manual'` has been in `ENTRY_SOURCES`
+ * since `001_init` and nothing has ever written it — every create path went
+ * through a tool call, a barcode lookup or a clone of something already
+ * logged, all of which need a server that is reachable and thinking.
+ *
+ * This one needs neither, which is what makes it the floor the offline path
+ * stands on. See OFFLINE.md.
+ */
+export const LogFoodRequest = z.object({
+  meal: Meal.optional(),
+  /** ISO timestamp. Defaults to now, and decides which day it counts toward. */
+  eaten_at: z.string().optional(),
+  description: z.string().min(1).max(200),
+  note: z.string().max(2000).nullable().optional(),
+  items: z.array(FoodItemInput).min(1).max(50),
+  /**
+   * The id the client gave this meal before it had a network to send it over.
+   *
+   * Sending it twice with the same key logs it once. An outbox exists to
+   * resend, and the request it resends most is one the server already wrote —
+   * the row committed and the reply was lost. Without a key that retry becomes
+   * a second breakfast, which looks exactly like a first one.
+   */
+  client_id: z.string().uuid().optional(),
+});
+export type LogFoodRequest = z.infer<typeof LogFoodRequest>;
 
 // ---- The recipe library ----------------------------------------------------
 

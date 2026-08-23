@@ -145,13 +145,21 @@ async function* promptStream(request: AgentRequest): AsyncGenerator<SDKUserMessa
   const content: SDKUserMessage['message']['content'] = [];
 
   if (request.photo) {
+    const photo = request.photo;
     content.push({
       type: 'image',
-      source: {
-        type: 'base64',
-        media_type: request.photo.mediaType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
-        data: request.photo.base64,
-      },
+      // A presigned read when the photo is in a bucket, so the bytes never enter
+      // this process on their way to the model; base64 on a local-disk
+      // deployment, where there is no URL to hand over. Same choice the direct
+      // Messages lane makes in `imageSource`.
+      source:
+        photo.url !== undefined
+          ? { type: 'url', url: photo.url }
+          : {
+              type: 'base64',
+              media_type: photo.mediaType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+              data: photo.base64,
+            },
     });
   }
   content.push({ type: 'text', text: request.text });

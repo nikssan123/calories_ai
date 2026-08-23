@@ -217,21 +217,28 @@ export function Journal() {
        * deployment stores photos on local disk, which is where the old path
        * still earns its place.
        *
-       * A failed upload is deliberately allowed to throw rather than quietly
-       * falling back to base64: the fallback would still log the meal, and a
-       * bucket that has stopped accepting writes would go unnoticed for as long
-       * as nobody read the bill.
+       * A failed upload falls back to sending the bytes rather than failing the
+       * turn: from here the meal still gets logged, which is what the person in
+       * front of it wants. What the fallback costs is visibility — a bucket
+       * that has quietly stopped accepting writes looks exactly like one nobody
+       * configured — so `photo_upload_failed` tells the two apart and the API
+       * logs it.
        */
       let photoKey: string | undefined;
+      let uploadFailed = false;
       if (payload.photoBase64) {
-        photoKey =
-          (await api.uploadPhoto(
-            await asBlob(payload.photoBase64),
-            // The composer only produces a photo alongside its media type, but
-            // the two travel as separate optional fields; jpeg is what
-            // `preparePhoto` re-encodes to and what the API assumes anyway.
-            payload.photoMediaType ?? 'image/jpeg',
-          )) ?? undefined;
+        try {
+          photoKey =
+            (await api.uploadPhoto(
+              await asBlob(payload.photoBase64),
+              // The composer only produces a photo alongside its media type, but
+              // the two travel as separate optional fields; jpeg is what
+              // `preparePhoto` re-encodes to and what the API assumes anyway.
+              payload.photoMediaType ?? 'image/jpeg',
+            )) ?? undefined;
+        } catch {
+          uploadFailed = true;
+        }
       }
 
       const result = await api.chatStream(
@@ -240,6 +247,7 @@ export function Journal() {
           photo_key: photoKey,
           photo_base64: photoKey ? undefined : payload.photoBase64,
           photo_media_type: payload.photoMediaType,
+          photo_upload_failed: uploadFailed || undefined,
         },
         // The stream is a preview of the reply, never the record of it: `result`
         // below is what actually lands in the conversation. So this only ever

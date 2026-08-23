@@ -317,6 +317,41 @@ describe('how long a cache entry is asked to live', () => {
   });
 });
 
+/**
+ * A photo reaches the model as a URL when there is one, and as bytes when there
+ * is not. Both arms are permanent: a local-disk deployment has no URL to give.
+ */
+describe('how the photo is attached', () => {
+  it('hands over a presigned read when the photo is in a bucket', async () => {
+    const seen = stubFetch(says('Logged.'));
+    await createAnthropicApiProvider().run(
+      request({ photo: { mediaType: 'image/jpeg', url: 'https://bucket.test/p.jpg?sig=read' } }),
+      null,
+    );
+
+    const content = seen[0]!.body.messages.at(-1).content;
+    expect(content[0]).toEqual({
+      type: 'image',
+      source: { type: 'url', url: 'https://bucket.test/p.jpg?sig=read' },
+    });
+    // The bytes are the thing being avoided: nothing base64-shaped on the wire.
+    expect(JSON.stringify(seen[0]!.body)).not.toContain('base64');
+  });
+
+  it('falls back to bytes when there is no URL to hand over', async () => {
+    const seen = stubFetch(says('Logged.'));
+    await createAnthropicApiProvider().run(
+      request({ photo: { mediaType: 'image/png', base64: 'aGVsbG8=' } }),
+      null,
+    );
+
+    expect(seen[0]!.body.messages.at(-1).content[0]).toEqual({
+      type: 'image',
+      source: { type: 'base64', media_type: 'image/png', data: 'aGVsbG8=' },
+    });
+  });
+});
+
 describe('the replayed transcript', () => {
   it('replays prior turns ahead of this one', async () => {
     const seen = stubFetch(says('Sure.'));

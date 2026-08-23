@@ -36,6 +36,7 @@ import { Material } from '@/components/Material';
 import { PressableChunk } from '@/components/Chunk';
 import { Skeleton } from '@/components/Skeleton';
 import { api } from '@/lib/api';
+import { uploadPhotoFile } from '@/lib/image';
 import { useAuth } from '@/lib/auth';
 import { duration, ease, font, type as t, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -253,11 +254,42 @@ export default function JournalScreen() {
       setBusy(true);
 
       try {
+        /*
+         * The photo goes phone-to-bucket, and the turn carries a key. Expo's
+         * `File.upload` streams the file the picker already wrote to disk, so
+         * the bytes never enter JS — a phone never has to hold several
+         * megabytes in memory to send a photo it is sitting on.
+         *
+         * Any failure falls back to base64, which still logs the meal, and says
+         * so in `photo_upload_failed` so a bucket that has quietly stopped
+         * accepting writes does not look like one nobody configured.
+         */
+        let photoKey: string | undefined;
+        let uploadFailed = false;
+        if (payload.photoPreview && payload.photoMediaType) {
+          try {
+            const ticket = await api.photoUploadTicket(payload.photoMediaType);
+            if (ticket.url && ticket.key) {
+              const ok = await uploadPhotoFile(
+                payload.photoPreview,
+                payload.photoMediaType,
+                ticket.url,
+              );
+              if (ok) photoKey = ticket.key;
+              else uploadFailed = true;
+            }
+          } catch {
+            uploadFailed = true;
+          }
+        }
+
         const result = await api.chatStream(
           {
             text: payload.text,
-            photo_base64: payload.photoBase64,
+            photo_key: photoKey,
+            photo_base64: photoKey ? undefined : payload.photoBase64,
             photo_media_type: payload.photoMediaType,
+            photo_upload_failed: uploadFailed || undefined,
           },
           // The stream is a preview of the reply, never the record of it:
           // `result` below is what actually lands in the conversation. So this

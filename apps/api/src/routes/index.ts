@@ -5,6 +5,7 @@ import {
   ChatRequest,
   DeleteAccountRequest,
   ExerciseCategory,
+  LogFoodRequest,
   Meal,
   PhotoUploadRequest,
   SaveRoutineRequest,
@@ -43,9 +44,9 @@ import { insertMessage, listMessages } from '../services/chat.ts';
 import { mealTemplates, repeatFoodEntry } from '../services/history.ts';
 import {
   claimPhoto,
+  presignPhotoRead,
   readPhoto,
   readPhotoById,
-  readPhotoBytes,
   reservePhotoUpload,
   savePhoto,
   verifyPhotoUrl,
@@ -54,8 +55,10 @@ import {
 import { EMAIL_UNSUBSCRIBE_SECRET, getSecret, PHOTO_URL_SECRET } from '../services/secrets.ts';
 import { SESSION_COOKIE } from '../services/auth.ts';
 import {
+  createFoodEntry,
   deleteExerciseEntry,
   deleteFoodEntry,
+  DuplicateEntryError,
   getFoodEntry,
   latestWeight,
   logWeight,
@@ -88,7 +91,7 @@ import {
 import { messageActions, refreshEntryCards, replaceActions } from '../services/chat.ts';
 import { TurnInProgressError } from '../services/turn-lock.ts';
 import { ModelBusyError } from '../ai/token-bucket.ts';
-import { addDays, dateRange, localDateFor } from '../time.ts';
+import { addDays, dateRange, inferMeal, localDateFor } from '../time.ts';
 import { stripDataUrl } from './body.ts';
 import { openEventStream } from './sse.ts';
 import { BARCODE_BURST, CHAT_LIMIT, DELETE_ACCOUNT_LIMIT, REVIEW_LIMIT } from './limits.ts';
@@ -170,21 +173,37 @@ export async function registerRoutes(app: FastifyInstance) {
      * speaking it.
      */
     const mediaType = parsed.data.photo_media_type ?? 'image/jpeg';
-    let photo: { id: string; mediaType: string; base64: string } | null = null;
+    let photo: RunTurnInput['photo'] = null;
 
     if (parsed.data.photo_key) {
       const claimed = await claimPhoto(userId, parsed.data.photo_key, mediaType);
-      if (!claimed) {
+      if (!claimed?.storageKey) {
         await reply.status(400).send({ error: 'That photo upload could not be found.' });
         return null;
       }
-      const bytes = await readPhotoBytes(claimed.id);
-      if (!bytes) {
+      // A presigned read rather than the bytes. They went phone-to-bucket on the
+      // way in and go bucket-to-model on the way out, so the whole image never
+      // enters this process in either direction.
+      const url = await presignPhotoRead(claimed.storageKey);
+      if (!url) {
         await reply.status(400).send({ error: 'That photo upload could not be read.' });
         return null;
       }
-      photo = { id: claimed.id, mediaType, base64: bytes.toString('base64') };
+      photo = { id: claimed.id, mediaType, url };
     } else if (parsed.data.photo_base64) {
+      /*
+       * Bytes, which is either a local-disk deployment doing the only thing it
+       * can or a client whose upload failed. The second is worth a line in the
+       * log: it is invisible from the outside — the meal still gets logged —
+       * and a bucket that has stopped accepting writes would otherwise be
+       * noticed only by whoever next read the bandwidth bill.
+       */
+      if (parsed.data.photo_upload_failed) {
+        request.log.warn(
+          { userId },
+          'photo upload to the bucket failed; the client fell back to base64',
+        );
+      }
       const base64 = stripDataUrl(parsed.data.photo_base64);
       const saved = await savePhoto(userId, mediaType, base64);
       photo = { id: saved.id, mediaType, base64 };
@@ -323,6 +342,65 @@ export async function registerRoutes(app: FastifyInstance) {
     const date = (request.query as any)?.date as string | undefined;
     const localDate = date ?? (await currentLocalDate(ctx));
     return buildDaySummary(userId, localDate);
+  });
+
+  /**
+   * A meal typed in rather than described.
+   *
+   * The only create path on the API that needs neither a model nor a
+   * catalogue, which is what makes it the one an offline phone can queue. See
+   * OFFLINE.md — the outbox is built on this route behaving well when it is
+   * called twice with the same `client_id`.
+   *
+   * `confidence: 'high'` is not flattery. Every other source is an estimate of
+   * what somebody ate; this is somebody stating it. The figures are as good as
+   * whatever they read them off, and the app has no grounds to second-guess a
+   * number a person typed on purpose.
+   *
+   * No chat card is written. A manual entry is not a turn — nothing in the
+   * conversation asked a question this answers, and inventing a message so the
+   * journal has something to show would put words in the model's mouth.
+   */
+  app.post('/entries/food', async (request, reply) => {
+    const { userId, ...ctx } = await getUserContext(request.userId!);
+    const parsed = LogFoodRequest.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid entry' });
+    }
+
+    const eatenAt = parsed.data.eaten_at ? new Date(parsed.data.eaten_at) : new Date();
+    if (Number.isNaN(eatenAt.getTime())) {
+      return reply.status(400).send({ error: 'That is not a time we can read.' });
+    }
+
+    try {
+      const entry = await createFoodEntry({
+        userId,
+        meal: parsed.data.meal ?? inferMeal(eatenAt, ctx.timezone),
+        eatenAt,
+        description: parsed.data.description,
+        note: parsed.data.note ?? null,
+        confidence: 'high',
+        source: 'manual',
+        photoId: null,
+        items: parsed.data.items,
+        clientId: parsed.data.client_id ?? null,
+        ctx,
+      });
+      return reply.status(201).send(entry);
+    } catch (error) {
+      /*
+       * 409 rather than a retry-shaped status on purpose. The key was spent and
+       * the entry it was spent on is gone, which means the user deleted the
+       * meal while its own retry was in flight. There is nothing to send back
+       * and nothing for the client to fix — it should drop the intent, not keep
+       * trying to resurrect a meal somebody removed.
+       */
+      if (error instanceof DuplicateEntryError) {
+        return reply.status(409).send({ error: error.message });
+      }
+      throw error;
+    }
   });
 
   app.get('/progress', async (request) => {
@@ -548,12 +626,20 @@ export async function registerRoutes(app: FastifyInstance) {
     const parsed = RepeatRequest.safeParse(request.body ?? {});
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid repeat request' });
 
-    const entry = await repeatFoodEntry(userId, (request.params as any).id, ctx, {
-      meal: parsed.data.meal,
-      eatenAt: parsed.data.eaten_at ? new Date(parsed.data.eaten_at) : undefined,
-    });
-    if (!entry) return reply.status(404).send({ error: 'Entry not found' });
-    return reply.status(201).send(entry);
+    try {
+      const entry = await repeatFoodEntry(userId, (request.params as any).id, ctx, {
+        meal: parsed.data.meal,
+        eatenAt: parsed.data.eaten_at ? new Date(parsed.data.eaten_at) : undefined,
+        clientId: parsed.data.client_id,
+      });
+      if (!entry) return reply.status(404).send({ error: 'Entry not found' });
+      return reply.status(201).send(entry);
+    } catch (error) {
+      if (error instanceof DuplicateEntryError) {
+        return reply.status(409).send({ error: error.message });
+      }
+      throw error;
+    }
   });
 
   // ---- Barcodes ------------------------------------------------------------

@@ -14,6 +14,7 @@ import {
   type AgentRequest,
   type AiProvider,
   type Outcome,
+  type PhotoSource,
   type StreamSink,
   type TokenUsage,
   type ToolDefinition,
@@ -422,16 +423,30 @@ function systemBlocks(request: AgentRequest): Anthropic.TextBlockParam[] {
 function userContent(request: AgentRequest): string | Anthropic.ContentBlockParam[] {
   if (!request.photo) return request.text;
   return [
-    {
-      type: 'image',
-      source: {
-        type: 'base64',
-        media_type: request.photo.mediaType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
-        data: request.photo.base64,
-      },
-    },
+    { type: 'image', source: imageSource(request.photo) },
     { type: 'text', text: request.text },
   ];
+}
+
+/**
+ * Where the model should get the picture from.
+ *
+ * A URL when the photo is in a bucket, which is the rest of the return on
+ * direct uploads: the bytes went phone-to-bucket, and handing the model a
+ * presigned read means they never pass through this process on the way out
+ * either. Base64 when they are on local disk, where there is nothing to hand
+ * over — a supported configuration rather than an old one, so both arms stay.
+ */
+function imageSource(photo: PhotoSource): Anthropic.ImageBlockParam['source'] {
+  // `!== undefined` rather than a truthy check, because the two arms are
+  // distinguished by the *presence* of the field and an empty string would
+  // otherwise fall through to the base64 branch with nothing in it.
+  if (photo.url !== undefined) return { type: 'url', url: photo.url };
+  return {
+    type: 'base64',
+    media_type: photo.mediaType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+    data: photo.base64,
+  };
 }
 
 /**

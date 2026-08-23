@@ -5,7 +5,7 @@ import type { PantryFind, PantryScanProposal } from '@ct/shared';
 import { PressableChunk } from '@/components/Chunk';
 import { Sheet } from '@/components/Field';
 import { api } from '@/lib/api';
-import { pickPhoto, takePhoto } from '@/lib/image';
+import { pickPhoto, takePhoto, uploadPhotoFile } from '@/lib/image';
 import { font, type as t, useColors } from '@/theme';
 
 /**
@@ -61,7 +61,23 @@ export function FridgeScan({
 
     setScanning(true);
     try {
-      const found = await api.scanFridge(prepared.dataUrl, prepared.mediaType);
+      // Phone-to-bucket where there is one; the data URL is the fallback for a
+      // local-disk deployment and for a bucket that refused the write.
+      let key: string | null = null;
+      try {
+        const ticket = await api.photoUploadTicket(prepared.mediaType);
+        if (ticket.url && ticket.key) {
+          const ok = await uploadPhotoFile(prepared.uri, prepared.mediaType, ticket.url);
+          if (ok) key = ticket.key;
+        }
+      } catch {
+        key = null;
+      }
+
+      const found = await api.scanFridge(
+        key ? { key } : { base64: prepared.dataUrl },
+        prepared.mediaType,
+      );
       // Low-confidence finds start unticked rather than absent: the model saw
       // something, and hiding its guess is worse than showing it unchosen.
       setChosen(new Set(found.found.filter((f) => f.confidence !== 'low').map((f) => f.name)));

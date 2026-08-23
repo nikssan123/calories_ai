@@ -40,6 +40,22 @@ export interface ToolResult {
   isError?: boolean;
 }
 
+/**
+ * The photo on this turn, as bytes or as somewhere to fetch them.
+ *
+ * A union rather than bytes-with-an-optional-url, because carrying both would
+ * defeat the point: `url` exists so the megabytes never enter this process at
+ * all. The client PUTs to the bucket, the API is told a key, and the model is
+ * handed a presigned read — nothing in between holds the image.
+ *
+ * `base64` is not a legacy branch. A deployment storing photos on local disk
+ * has no URL a model could fetch, and that is a supported configuration rather
+ * than an old one, so both arms are permanent.
+ */
+export type PhotoSource =
+  | { mediaType: string; base64: string; url?: undefined }
+  | { mediaType: string; url: string; base64?: undefined };
+
 export interface AgentMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -143,7 +159,7 @@ export interface AgentRequest {
   dynamicSystemPrompt?: string;
   /** This turn's user text. */
   text: string;
-  photo?: { mediaType: string; base64: string } | null;
+  photo?: PhotoSource | null;
   tools: ToolDefinition[];
   /** Fully-qualified tool names, for providers that pre-approve by name. */
   toolNames: string[];

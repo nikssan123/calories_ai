@@ -205,7 +205,16 @@ function userContent(request: AgentRequest): unknown {
     { type: 'text', text: request.text },
     {
       type: 'image_url',
-      image_url: { url: `data:${request.photo.mediaType};base64,${request.photo.base64}` },
+      // A presigned read when the photo is in a bucket, a data URL when it is on
+      // local disk. This lane takes both in the same field, which is also why it
+      // needs writing out rather than interpolating: a template literal would
+      // have accepted `base64,undefined` without complaint.
+      image_url: {
+        url:
+          request.photo.url !== undefined
+            ? request.photo.url
+            : `data:${request.photo.mediaType};base64,${request.photo.base64}`,
+      },
     },
   ];
 }

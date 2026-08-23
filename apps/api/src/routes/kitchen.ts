@@ -13,7 +13,7 @@ import {
   ShoppingExtraUpdate,
 } from '@ct/shared';
 import { authErrorFor, laneFor } from '../ai/providers/index.ts';
-import { scanFridgePhoto } from '../ai/pantry.ts';
+import { scanFridgePhoto, type ScanInput } from '../ai/pantry.ts';
 import { generateMealPlan } from '../ai/plan.ts';
 import { RecipeBudgetError, suggestRecipes } from '../ai/recipes.ts';
 import { ModelBusyError } from '../ai/token-bucket.ts';
@@ -46,7 +46,7 @@ import {
 } from '../services/library.ts';
 import { cookRecipe, getRecipe, listRecipes, setRecipeSaved } from '../services/recipes.ts';
 import { getUser, getUserContext } from '../services/user.ts';
-import { claimPhoto, readPhotoBytes } from '../services/photos.ts';
+import { claimPhoto, presignPhotoRead } from '../services/photos.ts';
 import { type DayContext, localDateFor } from '../time.ts';
 import { stripDataUrl } from './body.ts';
 import { RECIPE_BURST, SCAN_LIMIT } from './limits.ts';
@@ -172,23 +172,22 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
     if (authError) return reply.status(503).send({ error: authError });
 
     const mediaType = parsed.data.photo_media_type;
-    let base64: string;
-    let photoId: string | undefined;
+    let scan: ScanInput;
 
     if (parsed.data.photo_key) {
       const claimed = await claimPhoto(request.userId!, parsed.data.photo_key, mediaType);
-      const bytes = claimed ? await readPhotoBytes(claimed.id) : null;
-      if (!claimed || !bytes) {
+      const url = claimed?.storageKey ? await presignPhotoRead(claimed.storageKey) : null;
+      if (!claimed || !url) {
         return reply.status(400).send({ error: 'That photo upload could not be found.' });
       }
-      base64 = bytes.toString('base64');
-      photoId = claimed.id;
+      // A presigned read, so a fridge photo never enters this process either.
+      scan = { mediaType, url, photoId: claimed.id };
     } else {
-      base64 = stripDataUrl(parsed.data.photo_base64!);
+      scan = { mediaType, base64: stripDataUrl(parsed.data.photo_base64!) };
     }
 
     try {
-      return await scanFridgePhoto(request.userId!, { mediaType, base64, photoId });
+      return await scanFridgePhoto(request.userId!, scan);
     } catch (error) {
       // A spent per-minute budget is not a failed scan, and the shared funnel
       // already knows how to say so.

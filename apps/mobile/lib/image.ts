@@ -1,3 +1,4 @@
+import { File } from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import type { PhotoMediaType } from '@ct/shared';
@@ -162,4 +163,29 @@ export async function preparePhotoFromUri(
   } catch {
     return null;
   }
+}
+
+/**
+ * Put a photo the picker already wrote to disk into the bucket.
+ *
+ * `uploadAsync` streams the file the picker already wrote to disk, so the bytes
+ * never enter JS — which is the version of this the web cannot have, since a
+ * browser only ever had the image in memory. Failure returns null rather than
+ * throwing: the caller falls back to `photo_base64`, which still logs the meal.
+ * The cost of that fallback is that a bucket which has quietly stopped taking
+ * writes looks fine from here, so the caller reports it instead of swallowing it.
+ */
+export async function uploadPhotoFile(
+  uri: string,
+  mediaType: PhotoMediaType,
+  ticketUrl: string,
+): Promise<boolean> {
+  const result = await new File(uri).upload(ticketUrl, {
+    httpMethod: 'PUT',
+    headers: { 'content-type': mediaType },
+  });
+  // Resolves for any completed response, 4xx included, and rejects only when the
+  // file cannot be read or the request never happened. So the status is the
+  // thing to check, and the caller catches the rest.
+  return result.status >= 200 && result.status < 300;
 }

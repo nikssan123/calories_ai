@@ -113,6 +113,28 @@ export async function reservePhotoUpload(
 }
 
 /**
+ * How long a read handed to a *model* stays good for.
+ *
+ * Longer than the one handed to a browser, and for the opposite reason. An
+ * `<img>` spends its URL immediately; a model's is spent by somebody else's
+ * fetch at the far end of a turn that may have run a tool loop first, and a
+ * link that expired mid-turn fails the whole thing rather than showing a broken
+ * image somebody can reload past.
+ */
+const MODEL_READ_SECONDS = 900;
+
+/**
+ * Somewhere the model can fetch the photo from, instead of being handed it.
+ *
+ * Null when the deployment keeps photos on local disk — there is no URL to
+ * give, and the caller has to read the bytes as it always did.
+ */
+export async function presignPhotoRead(storageKey: string): Promise<string | null> {
+  const store = objectStore();
+  return store ? store.presignGet(storageKey, MODEL_READ_SECONDS) : null;
+}
+
+/**
  * Turn an uploaded object into a photo row, or refuse it.
  *
  * Three things have to be true, and the first is the one that matters: the key
