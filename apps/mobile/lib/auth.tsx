@@ -21,6 +21,17 @@ import { cacheProfile, forgetUser } from '@/lib/store';
  * signed out, and a session that survives because a request failed is the worst
  * possible answer.
  */
+
+/**
+ * Signed out, as far as this phone can tell on its own.
+ *
+ * Everything here past `authenticated` is a guess, and only the last resort
+ * should be guessing: whether the server takes registrations, whether it holds
+ * any accounts, whether Google is configured on it are all facts the API
+ * reports and this constant cannot know. It is the shape for an unreachable
+ * server — where the guesses are at least the ones that leave a way forward —
+ * and not for an ordinary sign-out, which has the real answer in its hand.
+ */
 const SIGNED_OUT: AuthStatus = {
   authenticated: false,
   profile: null,
@@ -150,8 +161,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
      * on this phone next.
      */
     await forgetPush();
+    /*
+     * The status logout answers with, kept rather than dropped.
+     *
+     * It is the same body `me()` returns, and the fields that are not
+     * `authenticated: false` are the ones this phone has no other way to learn:
+     * `google_enabled` and `has_accounts`. Falling back to `SIGNED_OUT` while
+     * the server was right there took "Continue with Google" off the sign-in
+     * screen for the rest of the launch — the button renders from
+     * `googleEnabled` — and opened the form on "create account" against a
+     * server full of them. The web has never had this bug because its own
+     * `signOut` has always adopted this response; this is the same fix.
+     */
+    let next = SIGNED_OUT;
     try {
-      await api.logout();
+      next = await api.logout();
     } catch {
       /* revoking the row is a courtesy; dropping the token is the point */
     }
@@ -163,7 +187,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
      * breakfast is on the screen.
      */
     if (signedInAs) void forgetUser(signedInAs);
-    setStatus(SIGNED_OUT);
+    // Stripped on the way into state exactly as `adoptSession` does it: logout
+    // does not send one, and state is where a token must never be.
+    const { token: _token, ...rest } = next;
+    setStatus(rest);
   }, [signedInAs]);
 
   const value = useMemo<AuthValue>(
