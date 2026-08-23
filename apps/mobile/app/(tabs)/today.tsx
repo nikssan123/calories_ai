@@ -9,6 +9,13 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  runOnJS,
+  useAnimatedReaction,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import Svg, { Path, Polyline, Rect } from 'react-native-svg';
 import type { DaySummary, ExerciseEntry, FoodEntry, Meal } from '@ct/shared';
 import { formatBodyWeight, formatDistance, formatMass } from '@ct/shared';
@@ -26,6 +33,7 @@ import { font, type as t, useColors, type Palette } from '@/theme';
 import { haptics } from '@/lib/haptics';
 import { removeAction, repeatAction, SwipeRow } from '@/components/SwipeRow';
 import { Glyph } from '@/components/Glyph';
+import { Material } from '@/components/Material';
 import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
 import { useCountUp } from '@/hooks/useCountUp';
 
@@ -55,6 +63,44 @@ export default function TodayScreen() {
   const router = useRouter();
   const toast = useToast();
   const undoably = useUndoableRemoval();
+
+  /*
+   * The compact bar's clock. Both shared values rather than refs: the worklet
+   * below reads them every frame, and Reanimated freezes a plain object the
+   * first time one is captured — see `Sheet`, which learned that the expensive
+   * way.
+   */
+  const scrollY = useSharedValue(0);
+  const headerHeight = useSharedValue(96);
+  /*
+   * Only so the bar can stop swallowing touches while it is invisible. Flipped
+   * from a reaction rather than read per frame, so the JS thread hears about
+   * this twice a screen rather than sixty times a second.
+   */
+  const [stuck, setStuck] = useState(false);
+  useAnimatedReaction(
+    () => scrollY.value > headerHeight.value * 0.7,
+    (past, previous) => {
+      if (past !== previous) runOnJS(setStuck)(past);
+    },
+  );
+
+  const onScroll = useAnimatedScrollHandler((event) => {
+    scrollY.value = event.contentOffset.y;
+  });
+
+  const compact = useAnimatedStyle(() => {
+    /*
+     * Fades over the second half of the header's own travel, so it arrives as
+     * the thing it replaces is leaving rather than the two overlapping at full
+     * strength — which would read as two headers rather than one changing
+     * shape.
+     */
+    const from = headerHeight.value * 0.45;
+    const to = headerHeight.value * 0.9;
+    const progress = Math.max(0, Math.min(1, (scrollY.value - from) / (to - from)));
+    return { opacity: progress, transform: [{ translateY: (1 - progress) * -6 }] };
+  });
 
   const params = useLocalSearchParams<{ date?: string }>();
   const requested = typeof params.date === 'string' && ISO_DATE.test(params.date) ? params.date : null;
@@ -224,8 +270,11 @@ export default function TodayScreen() {
   })).filter((group) => group.entries.length > 0);
 
   return (
-    <ScrollView
+    <>
+    <Animated.ScrollView
       style={styles.flex}
+      onScroll={onScroll}
+      scrollEventThrottle={16}
       contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: 32 }}
       refreshControl={
         <RefreshControl
@@ -238,7 +287,12 @@ export default function TodayScreen() {
         />
       }
     >
-      <View style={styles.header}>
+      <View
+        style={styles.header}
+        onLayout={(event) => {
+          headerHeight.value = event.nativeEvent.layout.height;
+        }}
+      >
         <StepButton direction="back" onPress={() => step(-1)} />
         {/* The date is the way to the calendar, as on the web — and here it is
             the *only* way, since the bottom bar has no room for History. So it
@@ -414,7 +468,50 @@ export default function TodayScreen() {
           )}
         </View>
       )}
-    </ScrollView>
+    </Animated.ScrollView>
+
+      {/*
+        * The compact bar.
+        *
+        * Today is a long screen — ring, macros, diet quality, every meal, the
+        * exercise, the weight, the log-again list — and the date at the top is
+        * the *only* way to History as well as the only way to step a day. So
+        * scrolling down used to put both out of reach, and getting back to
+        * yesterday meant flicking to the top first.
+        *
+        * It carries exactly what the header it replaces carries, and nothing
+        * more. A condensed header that grows a row of new controls is a second
+        * header wearing the first one's clothes.
+        */}
+      <Animated.View
+        style={[styles.compact, compact]}
+        pointerEvents={stuck ? 'auto' : 'none'}
+        accessibilityElementsHidden={!stuck}
+        importantForAccessibility={stuck ? 'auto' : 'no-hide-descendants'}
+      >
+        {/* The inset goes inside the blur, not around it: padding on the
+            wrapper would leave the status bar sitting on bare content. */}
+        <Material
+          style={[
+            styles.compactBar,
+            { paddingTop: insets.top + 10, borderBottomColor: colors.border },
+          ]}
+        >
+          <StepButton direction="back" onPress={() => step(-1)} />
+          <Pressable
+            onPress={() => router.push('/history')}
+            accessibilityRole="button"
+            accessibilityLabel="View calendar"
+            style={({ pressed }) => [styles.headerLabel, { opacity: pressed ? 0.6 : 1 }]}
+          >
+            <Text numberOfLines={1} style={[t.bodyBold, { color: colors.foreground }]}>
+              {isToday ? 'Today' : formatDay(day?.local_date)}
+            </Text>
+          </Pressable>
+          <StepButton direction="forward" onPress={() => step(1)} disabled={isToday} />
+        </Material>
+      </Animated.View>
+    </>
   );
 }
 
@@ -664,6 +761,19 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   headerLabel: { flex: 1, alignItems: 'center' },
+  /*
+   * Over the scroll rather than in it, so the content passes underneath the
+   * blur exactly as it does under the tab bar at the other end of the screen.
+   */
+  compact: { position: 'absolute', top: 0, left: 0, right: 0 },
+  compactBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    borderBottomWidth: 2,
+  },
   headerChip: { borderWidth: 2, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 3 },
   headerSub: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
   centred: { textAlign: 'center' },
