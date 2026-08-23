@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   Credentials,
   EmailVerification,
+  GoogleExchange,
   PasswordReset,
   PasswordResetRequest,
   SESSION_TRANSPORT_HEADER,
@@ -25,14 +26,18 @@ import { rememberDevice } from '../services/devices.ts';
 import {
   authorizeUrl,
   beginHandshake,
+  challengeFor,
   exchangeCode,
   GOOGLE_PROVIDER,
   GoogleAuthError,
+  packNativeState,
+  readNativeState,
   sameSecret,
   type Handshake,
+  type NativeHandshake,
 } from '../services/google.ts';
 import { signInWithProvider } from '../services/identities.ts';
-import { consumeCode, consumeToken } from '../services/tokens.ts';
+import { consumeCode, consumeHandoff, consumeToken, issueHandoff } from '../services/tokens.ts';
 import {
   authenticate,
   countAccounts,
@@ -175,6 +180,34 @@ function readHandshake(request: FastifyRequest): StoredHandshake | null {
  */
 function backToLogin(reply: FastifyReply, reason: string) {
   return reply.redirect(`${env.appUrl}/login?error=${encodeURIComponent(reason)}`);
+}
+
+/**
+ * The same sentence, said to an app instead of to a page.
+ *
+ * A word rather than a message, exactly as the web's version sends one, and the
+ * app maps it with the same table `app/login/page.tsx` holds. The copy belongs
+ * with the copy — and here there is a second reason, which is that a string
+ * assembled on the server would be one the app could not change without a
+ * release to two stores.
+ */
+function backToApp(reply: FastifyReply, redirect: string, reason: string) {
+  const separator = redirect.includes('?') ? '&' : '?';
+  return reply.redirect(`${redirect}${separator}error=${encodeURIComponent(reason)}`);
+}
+
+/**
+ * Whether a native sign-in may be handed back to this address.
+ *
+ * A prefix match against the configured list, and http(s) refused outright
+ * whatever the list says. The second half is belt and braces: an operator who
+ * puts a web origin in `MOBILE_REDIRECT_PREFIXES` has built themselves an open
+ * redirect that hands out sign-in codes, and no configuration should be able to
+ * ask for that.
+ */
+function isAppRedirect(redirect: string): boolean {
+  if (/^https?:/i.test(redirect)) return false;
+  return env.mobileRedirects.some((prefix) => redirect.startsWith(prefix));
 }
 
 export async function registerAuthRoutes(app: FastifyInstance) {
@@ -489,6 +522,43 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     const query = request.query as Record<string, unknown>;
     const timezone = typeof query.tz === 'string' ? query.tz.slice(0, 60) : '';
 
+    /*
+     * A phone asks for the same handshake with two extra parameters, and gets a
+     * signed `state` instead of a cookie. See `NativeHandshake` for why the
+     * cookie cannot work across the two origins this flow touches.
+     *
+     * Both or neither. A `redirect` without a `challenge` is a flow that would
+     * end with a code nothing can spend, and a `challenge` without a `redirect`
+     * is a flow with nowhere to end — either one alone is a caller that has
+     * misunderstood this endpoint, and answering 400 says so where quietly
+     * falling back to the browser flow would strand them at the last step.
+     */
+    const redirect = typeof query.redirect === 'string' ? query.redirect : '';
+    const challenge = typeof query.challenge === 'string' ? query.challenge : '';
+    if (redirect || challenge) {
+      if (!redirect || !challenge) {
+        return reply
+          .status(400)
+          .send({ error: 'A native sign-in needs both a redirect and a challenge.' });
+      }
+      if (!isAppRedirect(redirect)) {
+        return reply.status(400).send({ error: 'That is not an address this app signs in to.' });
+      }
+
+      const native: NativeHandshake = {
+        verifier: handshake.verifier,
+        nonce: handshake.nonce,
+        timezone,
+        challenge,
+        redirect,
+        expires: Date.now() + HANDSHAKE_MINUTES * 60 * 1000,
+      };
+      // The blob *is* the state. It carries the same proof the random one did —
+      // that this server started the handshake — and it is unforgeable for the
+      // same reason: it is signed with a secret only this server has.
+      return reply.redirect(authorizeUrl(google, { ...handshake, state: packNativeState(google, native) }));
+    }
+
     reply.setCookie(OAUTH_COOKIE, packHandshake({ ...handshake, timezone }), {
       httpOnly: true,
       /**
@@ -523,12 +593,32 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const google = env.google;
       if (!google) return reply.status(404).send({ error: NO_GOOGLE });
 
-      const handshake = readHandshake(request);
+      const query = request.query as Record<string, unknown>;
+
+      /*
+       * Which of the two flows this is, decided before anything else, because
+       * every exit below has to know where to send somebody — a page or an app.
+       *
+       * Read from `state` rather than from a parameter of its own: a caller
+       * cannot choose the answer, since the only way to produce a readable one
+       * is to have been given it by `/auth/google/start`. A browser's random
+       * state fails the signature and comes back null, which is exactly right.
+       */
+      const native =
+        typeof query.state === 'string' ? readNativeState(google, query.state) : null;
+
+      // Kept apart from the union below so that `state` — which only the
+      // cookie form carries — stays reachable where it is checked.
+      const stored = native ? null : readHandshake(request);
+      const handshake = native ?? stored;
       // Spent either way: it is good for one attempt, and leaving it behind on
-      // a failure is what turns a stale tab into a replay.
+      // a failure is what turns a stale tab into a replay. Harmless in the
+      // native flow, which never set one.
       reply.clearCookie(OAUTH_COOKIE, { path: '/' });
 
-      const query = request.query as Record<string, unknown>;
+      const fail = (reason: string) =>
+        native ? backToApp(reply, native.redirect, reason) : backToLogin(reply, reason);
+
       /*
        * Google reports a refusal in the query string rather than by failing the
        * request, and `access_denied` is not an error at all — it is somebody
@@ -536,15 +626,25 @@ export async function registerAuthRoutes(app: FastifyInstance) {
        * rather than a red message about something having gone wrong.
        */
       if (typeof query.error === 'string') {
-        return backToLogin(reply, query.error === 'access_denied' ? 'cancelled' : 'google');
+        return fail(query.error === 'access_denied' ? 'cancelled' : 'google');
       }
-      // No cookie means the handshake expired, or the browser threw it away, or
+      // No handshake means it expired, or the browser threw the cookie away, or
       // this is a callback nobody here started.
       if (!handshake) return backToLogin(reply, 'expired');
-      if (typeof query.state !== 'string' || !sameSecret(query.state, handshake.state)) {
-        return backToLogin(reply, 'state');
+      /*
+       * The state check, which the native flow has already passed.
+       *
+       * There it *is* the signature: an unforgeable blob this server minted is
+       * the same proof a random value compared against a cookie gives, reached
+       * without needing both halves to arrive at the same origin. So this
+       * compares only when there is a stored value to compare against.
+       */
+      if (stored) {
+        if (typeof query.state !== 'string' || !sameSecret(query.state, stored.state)) {
+          return fail('state');
+        }
       }
-      if (typeof query.code !== 'string' || !query.code) return backToLogin(reply, 'google');
+      if (typeof query.code !== 'string' || !query.code) return fail('google');
 
       let identity;
       try {
@@ -554,23 +654,33 @@ export async function registerAuthRoutes(app: FastifyInstance) {
         // Google's mood, and there is nothing in it a person can act on.
         request.log.warn({ err: error }, 'Google sign-in did not complete');
         const unverified = error instanceof GoogleAuthError && error.code === 'unverified_email';
-        return backToLogin(reply, unverified ? 'google_unverified' : 'google');
+        return fail(unverified ? 'google_unverified' : 'google');
       }
 
       const result = await signInWithProvider(GOOGLE_PROVIDER, identity, {
         allowSignup: await signupAllowed(),
         timezone: handshake.timezone,
       });
-      if (!result.ok) return backToLogin(reply, 'closed');
+      if (!result.ok) return fail('closed');
 
       // After the account is resolved rather than before, for the reason the
       // password path checks it after the password: it is the same answer
       // either way, and this ordering tells an outsider nothing.
-      if (await isDisabled(result.userId)) return backToLogin(reply, 'suspended');
+      if (await isDisabled(result.userId)) return fail('suspended');
 
-      const { token, expiresAt } = await createSession(result.userId);
-      setSessionCookie(reply, token, expiresAt);
-
+      /*
+       * Recorded here for both flows, before the paths split, because this is
+       * the last point at which `outcome` is known — and the suppression it
+       * drives is the difference between a new account's first email being a
+       * welcome and it being a security alert about itself.
+       *
+       * The cost of doing it here rather than at the app's own request is that
+       * a native sign-in is remembered under the system browser that ran the
+       * consent screen rather than under the app. That names the client
+       * slightly wrong and the *place* exactly right, which is what the alert
+       * is actually about — and it is stable, so signing in from the app twice
+       * raises one alert rather than one each time.
+       */
       const device = await rememberDevice(result.userId, request.headers['user-agent'], request.ip);
       // The same alert the password path sends, and suppressed on a brand-new
       // account for the same reason: the first device is not news.
@@ -583,6 +693,27 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       }
 
       /*
+       * An app gets a code to spend, not a session.
+       *
+       * The session itself is minted at `/auth/google/exchange`, from a request
+       * the phone makes: a token handed to the browser here would be a token
+       * the app can only receive by having it written into a URL, and the app
+       * is the only thing that should ever hold it.
+       */
+      if (native) {
+        const { token: handoff } = await issueHandoff(
+          result.userId,
+          identity.email,
+          native.challenge,
+        );
+        const separator = native.redirect.includes('?') ? '&' : '?';
+        return reply.redirect(`${native.redirect}${separator}code=${encodeURIComponent(handoff)}`);
+      }
+
+      const { token, expiresAt } = await createSession(result.userId);
+      setSessionCookie(reply, token, expiresAt);
+
+      /*
        * Home, not `/login`. The redirect goes to the *app*, which is a
        * different origin from this API in every deployment that has a proxy in
        * front — and the session cookie just set travels back through that same
@@ -591,4 +722,60 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       return reply.redirect(`${env.appUrl}/`);
     },
   );
+
+  /**
+   * The other half of a native sign-in: a code for a session.
+   *
+   * The only endpoint in the Google flow the app itself calls, and the reason
+   * the callback stops one step short: a session token is the one thing here
+   * that must never be written into a URL. The callback hands back a code
+   * instead, and the token is minted for a request the app makes directly.
+   *
+   * Two secrets are required and neither is sufficient. `code` came back
+   * through a custom-scheme redirect, which on Android is a channel another
+   * installed app can claim; `verifier` has been on this device since before
+   * the browser opened. An interception gets one of them.
+   */
+  app.post('/auth/google/exchange', { config: { rateLimit: TOKEN_LIMIT } }, async (request, reply) => {
+    const parsed = GoogleExchange.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'That sign-in could not be completed.' });
+    }
+
+    const handoff = await consumeHandoff(parsed.data.code, challengeFor(parsed.data.verifier));
+    /*
+     * One sentence for spent, expired, never-issued, and answered with the
+     * wrong verifier. They are the same thing to whoever is holding the phone —
+     * start again — and telling them apart would tell somebody probing which
+     * half of a stolen pair they already have.
+     */
+    if (!handoff) {
+      return reply.status(401).send({ error: 'That sign-in expired. Try again.' });
+    }
+
+    // Re-checked here rather than trusted from the callback: a minute has
+    // passed, and this is the request that actually hands out the session.
+    if (await isDisabled(handoff.userId)) {
+      return reply.status(403).send({ error: 'This account has been suspended.' });
+    }
+
+    const { token, expiresAt } = await createSession(handoff.userId);
+    // Set as well as returned. Pointless for the app, which has no cookie jar
+    // and asked for a bearer token — but this endpoint is not the app's private
+    // property, and a caller that did not ask to carry its own token should get
+    // a session the same way every other endpoint here gives one.
+    setSessionCookie(reply, token, expiresAt);
+
+    // No `rememberDevice` here: the callback already did it, where it could
+    // still tell a new account from a returning one.
+    return {
+      authenticated: true,
+      profile: await getUser(handoff.userId),
+      signup_allowed: false,
+      has_accounts: true,
+      is_admin: await isAdmin(handoff.userId),
+      google_enabled: true,
+      token: tokenForBody(request, token),
+    };
+  });
 }

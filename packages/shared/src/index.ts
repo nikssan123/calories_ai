@@ -431,6 +431,22 @@ export const SignupRequest = Credentials.extend({
 export type SignupRequest = z.infer<typeof SignupRequest>;
 
 /**
+ * The last step of signing into the native app with Google: a one-time code
+ * that came back through the app's own URL scheme, and the verifier it is
+ * bound to.
+ *
+ * Both are 256-bit values in base64url, and the length floor is the point of
+ * the schema rather than a formality — it is the one place the shape of these
+ * two secrets is stated, and a short one is a client that has generated
+ * something weaker than the flow assumes.
+ */
+export const GoogleExchange = z.object({
+  code: z.string().min(32).max(200),
+  verifier: z.string().min(32).max(200),
+});
+export type GoogleExchange = z.infer<typeof GoogleExchange>;
+
+/**
  * Sent as `x-session-transport: bearer` by a client that holds its own session
  * token rather than relying on the cookie — which in practice means the native
  * app, since a phone has no cookie jar worth trusting a 60-day session to.

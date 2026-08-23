@@ -5,6 +5,7 @@ import type { MealTemplate } from '@ct/shared';
 import { foodEmoji } from '@ct/shared/food-emoji';
 import { PressableChunk } from '@/components/Chunk';
 import { InsetGroup } from '@/components/InsetGroup';
+import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { font, type as t, useColors } from '@/theme';
 
@@ -15,14 +16,20 @@ import { font, type as t, useColors } from '@/theme';
  * this is the same idea for the screen, for the mornings when typing a sentence
  * is more than the porridge deserves.
  *
- * The web reports both halves through a toast. There is no toast here yet, so
- * the two are split by what each is worth: a failure surfaces in the card,
- * where the thing that failed still is, and a success says nothing at all —
- * the day reloads and the meal appears in it, which is the same news told by
- * the screen rather than over it.
+ * Both halves of pressing "Log" are reported over the screen rather than in it,
+ * which is the opposite of the rule everywhere else here and is the case that
+ * argued the toast into existence. This sits at the foot of Today; the ring and
+ * the totals it moves are at the head of it, a screen and a half away. Saying
+ * nothing meant tapping Log and watching nothing happen, and saying it in the
+ * card meant a receipt pinned next to the button instead of next to the number
+ * it changed.
+ *
+ * The list failing to load is still reported inline, because that one is about
+ * this card and nothing else.
  */
 export function RepeatMeals({ onLogged }: { onLogged: () => void }) {
   const colors = useColors();
+  const toast = useToast();
   const [meals, setMeals] = useState<MealTemplate[] | null>(null);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -48,11 +55,12 @@ export function RepeatMeals({ onLogged }: { onLogged: () => void }) {
   async function repeat(template: MealTemplate) {
     setBusy(template.entry_id);
     try {
-      await api.repeatFoodEntry(template.entry_id);
+      const entry = await api.repeatFoodEntry(template.entry_id);
       setError(null);
+      toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
       onLogged();
     } catch (e) {
-      setError((e as Error).message);
+      toast.error((e as Error).message);
     } finally {
       setBusy(null);
     }

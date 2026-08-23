@@ -13,7 +13,7 @@ import { query, queryOne } from '../db.ts';
  * could be turned back into a working link.
  */
 
-export type TokenPurpose = 'password_reset' | 'email_verification';
+export type TokenPurpose = 'password_reset' | 'email_verification' | 'oauth_handoff';
 
 /**
  * Long enough to be unguessable, short enough to survive a mail client that
@@ -35,6 +35,14 @@ export const TOKEN_TTL_MINUTES: Record<TokenPurpose, number> = {
    * their mail the next morning.
    */
   email_verification: 60 * 24,
+  /**
+   * Two minutes, which is the walk from Google's consent screen back into the
+   * app and nothing more. Nobody reads this one, nobody types it, and nobody
+   * comes back to it tomorrow: it is minted by a redirect and spent by the
+   * request that redirect lands on. A longer life would buy nothing and would
+   * leave a live key to an account sitting in a browser's history.
+   */
+  oauth_handoff: 2,
 };
 
 function hashToken(token: string): string {
@@ -212,6 +220,67 @@ export async function consumeCode(userId: string, code: string): Promise<CodeRes
     [live.id],
   );
   return claimed ? { ok: true, email: claimed.email } : { ok: false, reason: 'spent' };
+}
+
+// ---- Handing a browser sign-in to a native app -----------------------------
+
+/**
+ * Parks a completed Google sign-in for an app to collect.
+ *
+ * Two secrets on one row, and they answer different questions. The code is
+ * random and travels back through a custom-scheme redirect, which is a channel
+ * the app does not have exclusive claim to on Android. The challenge is the
+ * SHA-256 of a verifier the app made before it opened the browser and has not
+ * sent anywhere — so spending the row needs both the thing that was intercepted
+ * and the thing that never left the device.
+ *
+ * That is PKCE with this server in Google's chair, and it is why the code being
+ * readable in a browser's history is survivable rather than fatal.
+ */
+export async function issueHandoff(
+  userId: string,
+  email: string,
+  challenge: string,
+): Promise<IssuedToken> {
+  const token = randomBytes(TOKEN_BYTES).toString('base64url');
+  const expiresAt = new Date(Date.now() + TOKEN_TTL_MINUTES.oauth_handoff * 60 * 1000);
+
+  // No superseding here, unlike the two mailed kinds. Nothing about this row is
+  // waiting in an inbox to be found later — it dies in two minutes — and two
+  // sign-ins started on two devices at once are two people's business.
+  await query(
+    `INSERT INTO auth_tokens (user_id, purpose, token_hash, code_hash, email, expires_at)
+     VALUES ($1,'oauth_handoff',$2,$3,$4,$5)`,
+    [userId, hashToken(token), challenge, email, expiresAt.toISOString()],
+  );
+
+  return { token, expiresAt };
+}
+
+/**
+ * Spends a handoff, or returns null.
+ *
+ * One statement for the same reason `consumeToken` is one: the row is a session
+ * waiting to be issued, and "read it, check it, mark it" leaves a window where
+ * two requests are both told yes. The challenge is compared in SQL rather than
+ * in JavaScript so the whole decision stays inside that single claim.
+ *
+ * No attempt counter, unlike the six-digit code. Both halves here are 256 bits
+ * of randomness: there is nothing to throttle, because there is nothing anyone
+ * could be part-way through guessing.
+ */
+export async function consumeHandoff(
+  code: string,
+  challenge: string,
+): Promise<ConsumedToken | null> {
+  const row = await queryOne<{ user_id: string; email: string }>(
+    `UPDATE auth_tokens SET used_at = now()
+      WHERE token_hash = $1 AND purpose = 'oauth_handoff' AND code_hash = $2
+        AND used_at IS NULL AND expires_at > now()
+      RETURNING user_id, email`,
+    [hashToken(code), challenge],
+  );
+  return row ? { userId: row.user_id, email: row.email } : null;
 }
 
 export async function purgeExpiredTokens(): Promise<void> {

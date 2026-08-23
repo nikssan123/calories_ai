@@ -35,6 +35,13 @@ interface AuthValue {
   /** False on a brand-new server, so the form can open on "create account". */
   hasAccounts: boolean;
   /**
+   * Whether this server has a Google client configured. False is the honest
+   * default and the button is simply absent: OAuth needs a client registered
+   * against this deployment's callback, so there is nothing to fall back to and
+   * offering a button that 404s is worse than offering none.
+   */
+  googleEnabled: boolean;
+  /**
    * Whether the address has been proved. Load-bearing rather than cosmetic:
    * the API answers 403 to everything outside `/auth/` until it is true.
    */
@@ -54,6 +61,7 @@ const AuthContext = createContext<AuthValue>({
   profile: null,
   signupAllowed: false,
   hasAccounts: false,
+  googleEnabled: false,
   emailVerified: false,
   loading: true,
   refresh: async () => {},
@@ -122,6 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       profile: status?.profile ?? null,
       signupAllowed: status?.signup_allowed ?? false,
       hasAccounts: status?.has_accounts ?? false,
+      googleEnabled: status?.google_enabled ?? false,
       emailVerified: status?.profile?.email_verified ?? false,
       loading,
       refresh,

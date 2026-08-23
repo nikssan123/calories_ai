@@ -70,6 +70,21 @@ export interface Env {
    */
   webOrigins: string[];
   /**
+   * URL prefixes the native Google flow may hand its one-time code back to.
+   *
+   * The value arrives in the query string of an anonymous GET, so it is the one
+   * field in that handshake an attacker would most like to write: a start URL
+   * naming their own redirect, walked through by a signed-in victim, ends with
+   * a sign-in code arriving somewhere the attacker is listening. Checked
+   * against this list before anything is signed, and fails closed.
+   *
+   * The app's own scheme is always allowed and needs no configuration. Anything
+   * else — `exp://…` while running under Expo Go, which is the only way to try
+   * this without a build — is opt-in per deployment, because a default that
+   * accepts it would accept it in production too.
+   */
+  mobileRedirects: string[];
+  /**
    * Which peers may be believed when they set `X-Forwarded-For`: false for none,
    * or anything proxy-addr understands — a CIDR, or one of its named ranges.
    *
@@ -227,6 +242,19 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
      * mail client. Trailing slash trimmed here so every caller can concatenate.
      */
     appUrl,
+    /**
+     * `daysofar://` is `scheme` in `apps/mobile/app.json`, and the two have to
+     * stay in step — a build that renames it stops being able to sign in with
+     * Google until this does too. It is here rather than derived from anything
+     * because the API has no other way to know what the app is called.
+     */
+    mobileRedirects: [
+      'daysofar://',
+      ...(source.MOBILE_REDIRECT_PREFIXES ?? '')
+        .split(',')
+        .map((prefix) => prefix.trim())
+        .filter(Boolean),
+    ],
     /**
      * Defaults to the dev web server so a local checkout needs no configuration.
      * A deployment must name its real origins: once the API answers on its own

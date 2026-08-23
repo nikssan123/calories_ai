@@ -20,6 +20,7 @@ import type {
   ExerciseSummary,
   ExerciseType,
   FoodEntry,
+  GoogleExchange,
   Meal,
   MealTemplate,
   LibraryRecipe,
@@ -148,6 +149,41 @@ export function createApiClient({
       request<AuthStatus>('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
 
     logout: () => request<AuthStatus>('/auth/logout', { method: 'POST' }),
+
+    /**
+     * Where a native Google sign-in starts: a URL to open in an auth session
+     * browser, not a request to make.
+     *
+     * A URL rather than a call because the whole handshake is a chain of
+     * full-page navigations — the same reason the web renders an `<a href>`
+     * rather than a button with an onClick. `fetch` would be asked to follow a
+     * cross-origin redirect to Google's consent screen, which it will not do,
+     * and there would be nowhere to show the consent screen even if it did.
+     *
+     * `redirect` is where the browser hands control back — the app's own URL
+     * scheme — and `challenge` is the SHA-256 of a verifier the caller keeps to
+     * itself until `exchangeGoogle`.
+     */
+    googleStartUrl: ({
+      redirect,
+      challenge,
+      timezone,
+    }: {
+      redirect: string;
+      challenge: string;
+      timezone?: string;
+    }) => {
+      const params = new URLSearchParams({ redirect, challenge });
+      if (timezone) params.set('tz', timezone);
+      return `${root}/auth/google/start?${params.toString()}`;
+    },
+
+    /** Spends the code that redirect came back with. Answers as login does. */
+    exchangeGoogle: (payload: GoogleExchange) =>
+      request<AuthStatus>('/auth/google/exchange', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
 
     /**
      * Asks for a reset link. Resolves the same way whether or not the address

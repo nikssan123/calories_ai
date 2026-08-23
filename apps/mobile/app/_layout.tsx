@@ -29,6 +29,7 @@ import { Nunito_800ExtraBold } from '@expo-google-fonts/nunito/800ExtraBold';
  */
 import { Nunito_500Medium_Italic } from '@expo-google-fonts/nunito/500Medium_Italic';
 import { Nunito_800ExtraBold_Italic } from '@expo-google-fonts/nunito/800ExtraBold_Italic';
+import { ToastProvider } from '@/components/Toast';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { ThemePreferenceProvider, useThemePreference } from '@/lib/theme-preference';
 import { paletteFor, ThemeContext, useColors } from '@/theme';
@@ -93,7 +94,15 @@ function Themed() {
     <ThemeContext.Provider value={theme}>
       <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
         <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-        <Gate />
+        {/*
+          * Inside the theme and outside the navigator, which is the only place
+          * it works: a toast raised while a screen is being pushed must outlive
+          * the screen that raised it, and one mounted per screen would go with
+          * it. It draws over the stack rather than in it.
+          */}
+        <ToastProvider>
+          <Gate />
+        </ToastProvider>
       </View>
     </ThemeContext.Provider>
   );

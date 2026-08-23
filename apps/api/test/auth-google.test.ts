@@ -465,6 +465,225 @@ describe('who is let in', () => {
   });
 });
 
+// ---- The same handshake, ending in an app -----------------------------------
+
+/**
+ * The native flow, which differs from the browser one at exactly two points:
+ * there is no cookie (the handshake rides in a signed `state`, because the two
+ * legs land on two different origins) and there is no session at the end (an
+ * app gets a one-time code to spend from a request of its own).
+ *
+ * Everything in between — the claims, the account resolution, the linking — is
+ * the same code, so it is not retested here.
+ */
+describe('the native flow', () => {
+  const REDIRECT = 'daysofar://auth/google';
+  const VERIFIER = 'a'.repeat(64);
+
+  /** The app's half: SHA-256 of a secret it does not send. */
+  async function challenge(verifier = VERIFIER): Promise<string> {
+    const { createHash } = await import('node:crypto');
+    return createHash('sha256').update(verifier).digest('base64url');
+  }
+
+  async function beginNative(
+    overrides: { redirect?: string; challenge?: string } = {},
+  ): Promise<{ state: string; nonce: string; verifier: string; response: any }> {
+    const params = new URLSearchParams({
+      redirect: overrides.redirect ?? REDIRECT,
+      challenge: overrides.challenge ?? (await challenge()),
+    });
+    const response = await app.inject({ method: 'GET', url: `/auth/google/start?${params}` });
+    if (response.statusCode !== 302) return { state: '', nonce: '', verifier: '', response };
+
+    const url = new URL(String(response.headers.location));
+    const state = url.searchParams.get('state')!;
+    const payload = JSON.parse(
+      Buffer.from(state.split('.')[0]!, 'base64url').toString('utf8'),
+    );
+    return { state, nonce: payload.nonce, verifier: payload.verifier, response };
+  }
+
+  /** The whole thing, up to the code in the app's redirect. */
+  async function codeFromSignIn(overrides: Record<string, unknown> = {}): Promise<string> {
+    const { state, nonce, verifier } = await beginNative();
+    googleAnswers({
+      id_token: idToken(claimsFor({ state, nonce, verifier, timezone: '' }, overrides)),
+    });
+    const response = await app.inject({
+      method: 'GET',
+      url: `/auth/google/callback?code=auth-code&state=${encodeURIComponent(state)}`,
+    });
+    const back = new URL(redirectedTo(response));
+    return back.searchParams.get('code')!;
+  }
+
+  it('carries the handshake in a signed state instead of a cookie', async () => {
+    const { state, response } = await beginNative();
+
+    // No cookie, because the callback arrives at the *web* origin in every
+    // deployment with a proxy in front and would never be sent one set here.
+    expect(setCookie(response, 'ct_oauth')).toBeUndefined();
+    expect(state).toContain('.');
+    expect(String(response.headers.location)).toContain('accounts.google.com');
+  });
+
+  it('refuses to hand a sign-in back to a web address', async () => {
+    /*
+     * The attack this closes: a start URL naming the attacker's own challenge
+     * and their own https redirect, walked through by a signed-in victim, ends
+     * with a code the attacker can spend. `redirect` is the one field here
+     * somebody else would most like to write.
+     */
+    const { response } = await beginNative({ redirect: 'https://evil.example/callback' });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('refuses a scheme this deployment has not allowed', async () => {
+    const { response } = await beginNative({ redirect: 'someotherapp://auth/google' });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('refuses half a native sign-in, rather than quietly running a browser one', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: `/auth/google/start?redirect=${encodeURIComponent(REDIRECT)}`,
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('ends at the app with a code, and hands out no session on the way', async () => {
+    const { state, nonce, verifier } = await beginNative();
+    googleAnswers({ id_token: idToken(claimsFor({ state, nonce, verifier, timezone: '' })) });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/auth/google/callback?code=auth-code&state=${encodeURIComponent(state)}`,
+    });
+
+    const back = new URL(redirectedTo(response));
+    expect(`${back.protocol}//${back.host}${back.pathname}`).toBe(REDIRECT);
+    expect(back.searchParams.get('code')).toBeTruthy();
+    // The browser that ran the handshake is not the client that will hold the
+    // session, so it is given nothing.
+    expect(setCookie(response, 'ct_session')).toBeUndefined();
+  });
+
+  it('tells the app when the handshake failed, in the app’s own vocabulary', async () => {
+    const { state } = await beginNative();
+    const response = await app.inject({
+      method: 'GET',
+      url: `/auth/google/callback?error=access_denied&state=${encodeURIComponent(state)}`,
+    });
+
+    const back = new URL(redirectedTo(response));
+    expect(`${back.protocol}//${back.host}${back.pathname}`).toBe(REDIRECT);
+    expect(back.searchParams.get('error')).toBe('cancelled');
+  });
+
+  it('treats a tampered state as a callback nobody started', async () => {
+    const { state } = await beginNative();
+    // One byte of the payload, with the signature left alone.
+    const [payload, signature] = state.split('.');
+    const forged = `${payload!.slice(0, -1)}A.${signature}`;
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/auth/google/callback?code=auth-code&state=${encodeURIComponent(forged)}`,
+    });
+
+    // Back to the *web* login, not to an app: an unreadable state names no
+    // redirect, so there is nowhere else this could go.
+    expect(redirectedTo(response)).toBe(`${env.appUrl}/login?error=expired`);
+  });
+
+  it('spends the code for a session, and only for a client that carries one', async () => {
+    const code = await codeFromSignIn();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/google/exchange',
+      headers: { 'x-session-transport': 'bearer' },
+      payload: { code, verifier: VERIFIER },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.authenticated).toBe(true);
+    expect(body.profile.email).toBe('ada@example.com');
+    expect(body.token).toBeTruthy();
+
+    // And the token is a real session, not a value echoed back.
+    const me = await app.inject({
+      method: 'GET',
+      url: '/auth/me',
+      headers: { authorization: `Bearer ${body.token}` },
+    });
+    expect(me.json().authenticated).toBe(true);
+  });
+
+  it('will not spend the same code twice', async () => {
+    const code = await codeFromSignIn();
+    const spend = () =>
+      app.inject({
+        method: 'POST',
+        url: '/auth/google/exchange',
+        headers: { 'x-session-transport': 'bearer' },
+        payload: { code, verifier: VERIFIER },
+      });
+
+    expect((await spend()).statusCode).toBe(200);
+    expect((await spend()).statusCode).toBe(401);
+  });
+
+  it('is useless to whoever intercepted only the code', async () => {
+    /*
+     * The whole reason the redirect is safe to end a sign-in on. Another app
+     * that has claimed the scheme on Android receives this code — and cannot
+     * do anything with it, because the verifier never left the device that
+     * started the handshake.
+     */
+    const code = await codeFromSignIn();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/google/exchange',
+      headers: { 'x-session-transport': 'bearer' },
+      payload: { code, verifier: 'b'.repeat(64) },
+    });
+
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('withholds the raw token from a caller that did not ask to carry one', async () => {
+    const code = await codeFromSignIn();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/google/exchange',
+      payload: { code, verifier: VERIFIER },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().token).toBeUndefined();
+    // It got a cookie instead, like every other browser client here.
+    expect(setCookie(response, 'ct_session')).toContain('HttpOnly');
+  });
+
+  it('turns a suspended account away at the exchange, not only at the callback', async () => {
+    const code = await codeFromSignIn();
+    await query("UPDATE users SET disabled_at = now() WHERE email = 'ada@example.com'");
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/google/exchange',
+      headers: { 'x-session-transport': 'bearer' },
+      payload: { code, verifier: VERIFIER },
+    });
+
+    expect(response.statusCode).toBe(403);
+  });
+});
+
 describe('the sign-in alert', () => {
   it('is not sent to somebody whose account was created a moment ago', async () => {
     await signIn();

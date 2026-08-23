@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { GoogleEnv } from '../env.ts';
 
 /**
@@ -101,8 +101,111 @@ export function authorizeUrl(google: GoogleEnv, handshake: Handshake): string {
   return url.toString();
 }
 
-function challengeFor(verifier: string): string {
+/**
+ * PKCE's S256 transform, and the app's too.
+ *
+ * Exported because the native flow runs the same trick one layer up: the phone
+ * makes a verifier, sends only this, and proves itself later by producing the
+ * original. One implementation, so the two can never disagree about the
+ * encoding — and base64url rather than hex is not a detail, it is what every
+ * PKCE client on the other side of this will compute.
+ */
+export function challengeFor(verifier: string): string {
   return createHash('sha256').update(verifier).digest('base64url');
+}
+
+// ---- The native handshake --------------------------------------------------
+
+/**
+ * The same half-finished handshake the browser parks in a cookie, carried in
+ * `state` instead.
+ *
+ * A cookie cannot do this job for an app. The handshake is set by a request to
+ * *this* API and read by a request to the callback, which is the web app's
+ * origin in every deployment with a proxy in front — `api.daysofar.com` sets it
+ * and `daysofar.com` is asked for it back, so the browser correctly declines
+ * and every sign-in fails its own state check. `state` has no such problem:
+ * Google hands it back verbatim to whoever it redirects to.
+ *
+ * Which means it is a secret travelling through somebody else's servers and
+ * back through a URL bar, so it is signed. Without that, `redirect` would be a
+ * field an attacker could write — craft a start URL naming their own challenge
+ * and their own redirect, get a victim to walk through it, and collect a code
+ * they can spend. The signature is what makes this blob something only
+ * `/auth/google/start` can have minted, which is the whole reason that route
+ * validates the redirect before signing.
+ */
+export interface NativeHandshake {
+  verifier: string;
+  nonce: string;
+  /** The device's timezone, so a new account's first day starts in the right place. */
+  timezone: string;
+  /** SHA-256 of the verifier the app kept. Binds the handoff code to that app. */
+  challenge: string;
+  /** The app's own URL scheme, validated at `start` and trusted here. */
+  redirect: string;
+  /** Milliseconds since the epoch. Ten minutes, as the cookie has. */
+  expires: number;
+}
+
+/**
+ * Keyed on the client secret rather than on a key of its own.
+ *
+ * It is a server-held secret with exactly the right lifetime — this flow does
+ * not exist without it, and rotating it invalidates half-finished sign-ins,
+ * which is correct — and adding a second one would mean a deployment that
+ * configured Google but forgot the new variable, where the failure is a signing
+ * key that is the empty string.
+ */
+function sign(google: GoogleEnv, payload: string): string {
+  return createHmac('sha256', google.clientSecret).update(payload).digest('base64url');
+}
+
+export function packNativeState(google: GoogleEnv, value: NativeHandshake): string {
+  const payload = Buffer.from(JSON.stringify(value), 'utf8').toString('base64url');
+  return `${payload}.${sign(google, payload)}`;
+}
+
+/**
+ * Unpacks a `state`, or returns null.
+ *
+ * Null for a browser's random state as much as for a forged one: the callback
+ * serves both flows and tells them apart by asking this first, so "not a native
+ * handshake" has to be an ordinary answer rather than an error.
+ */
+export function readNativeState(google: GoogleEnv, raw: string): NativeHandshake | null {
+  const [payload, signature] = raw.split('.');
+  if (!payload || !signature) return null;
+  // Constant time, because the comparison is against a guess at a MAC.
+  if (!sameSecret(signature, sign(google, payload))) return null;
+
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    const { verifier, nonce, timezone, challenge, redirect, expires } = (parsed ??
+      {}) as Record<string, unknown>;
+    if (
+      typeof verifier !== 'string' ||
+      typeof nonce !== 'string' ||
+      typeof challenge !== 'string' ||
+      typeof redirect !== 'string' ||
+      typeof expires !== 'number'
+    ) {
+      return null;
+    }
+    // Checked after the signature, so an expired handshake and a forged one are
+    // the same answer to anyone probing.
+    if (expires <= Date.now()) return null;
+    return {
+      verifier,
+      nonce,
+      timezone: typeof timezone === 'string' ? timezone : '',
+      challenge,
+      redirect,
+      expires,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /** Who Google says this is. */

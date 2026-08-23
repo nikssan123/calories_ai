@@ -19,6 +19,7 @@ import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { NumberField } from '@/components/Field';
 import { Skeleton } from '@/components/Skeleton';
 import { Switch } from '@/components/Switch';
+import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
@@ -37,6 +38,7 @@ import { font, type as t, useColors } from '@/theme';
  */
 export default function PlanScreen() {
   const colors = useColors();
+  const toast = useToast();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const units = useUnits();
@@ -93,7 +95,10 @@ export default function PlanScreen() {
 
   async function cook(slot: MealPlanSlot) {
     try {
-      await api.cookSlot(slot.id);
+      const entry = await api.cookSlot(slot.id);
+      // The plan draws the week, never the day, so logging a night's dinner
+      // from here changes nothing anybody can see on this screen.
+      toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
       await load();
     } catch (e) {
       setError((e as Error).message);

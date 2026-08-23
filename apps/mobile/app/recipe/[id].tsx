@@ -9,6 +9,7 @@ import { PressableChunk } from '@/components/Chunk';
 import { RecipeReader } from '@/components/kitchen/RecipeReader';
 import { formatServings, scale, Servings } from '@/components/kitchen/Servings';
 import { Skeleton } from '@/components/Skeleton';
+import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
@@ -41,6 +42,7 @@ const CONFIDENCE_NOTE: Record<Recipe['confidence'], string> = {
 
 export default function GeneratedRecipeScreen() {
   const colors = useColors();
+  const toast = useToast();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const units = useUnits();
@@ -72,10 +74,14 @@ export default function GeneratedRecipeScreen() {
     if (!recipe) return;
     setCooking(true);
     try {
-      await api.cookRecipe(recipe.id, { portions: servings });
+      const entry = await api.cookRecipe(recipe.id, { portions: servings });
       // Back to Cook, which re-ranks itself against the day that just moved.
       // Staying here would leave the button that was just pressed under the
       // thumb, inviting a double log.
+      //
+      // Which is exactly why the receipt is a toast: this screen is on its way
+      // out, so anything said on it would be said to nobody.
+      toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
       router.back();
     } catch (e) {
       setError((e as Error).message);

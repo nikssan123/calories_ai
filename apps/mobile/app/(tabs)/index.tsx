@@ -50,6 +50,13 @@ interface Bubble {
   failed?: boolean;
   actions?: ChatAction[];
   /**
+   * This turn just happened, rather than having been read back from the
+   * server. The only thing it changes is whether a correction wears its ring:
+   * reopening the app must not flash every correction in the last forty
+   * messages, because none of them is news any more.
+   */
+  live?: boolean;
+  /**
    * The tool the model is running right now, while this row is still pending.
    * Set from the stream and cleared when text starts arriving again, so the
    * wait says "logging food" rather than nothing.
@@ -232,6 +239,7 @@ export default function JournalScreen() {
                   pending: false,
                   tool: undefined,
                   actions: result.actions,
+                  live: true,
                 }
               : b,
           ),
@@ -653,6 +661,10 @@ const Row = memo(function Row({
             <ChatActionCard
               key={`${action.entry_id ?? action.kind}-${i}`}
               action={action}
+              // The one action kind that is a correction rather than a new
+              // fact, and the only thing that tells the two apart on screen —
+              // both arrive as a card with a number on it.
+              touched={bubble.live === true && action.kind === 'food_updated'}
               // The workout card posts its own answer and the server rewrites
               // this message's card into a receipt — so it has to know which
               // message it is sitting on.

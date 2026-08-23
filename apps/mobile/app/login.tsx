@@ -9,26 +9,29 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Path } from 'react-native-svg';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { Logo } from '@/components/Logo';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { signInWithGoogle } from '@/lib/google';
 import { font, type as t, useColors } from '@/theme';
 
 /**
  * Sign in, or create an account.
  *
- * Two things the web version does are deliberately absent. Google sign-in is a
- * chain of full-page navigations, which on a device means an auth session
- * browser and a redirect back through the app's scheme — real work, and none of
- * it shared with the web flow, so it is its own piece. And there is no
- * `?mode=signup` to read: nothing links here from a landing page, so the form
- * opens on sign-in unless the server says it has no accounts at all.
+ * One thing the web version does is deliberately absent: there is no
+ * `?mode=signup` to read, because nothing links here from a landing page. The
+ * form opens on sign-in unless the server says it has no accounts at all.
+ *
+ * Google sign-in *is* here, and it is the one control on this screen that does
+ * not talk to the API directly — it hands off to the system's auth browser and
+ * comes back through the app's own URL scheme. See `lib/google.ts`.
  */
 export default function LoginScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { adoptSession, hasAccounts, signupAllowed, refresh, loading } = useAuth();
+  const { adoptSession, googleEnabled, hasAccounts, signupAllowed, refresh, loading } = useAuth();
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
@@ -36,6 +39,7 @@ export default function LoginScreen() {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [google, setGoogle] = useState(false);
   const [forgetting, setForgetting] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
 
@@ -84,6 +88,23 @@ export default function LoginScreen() {
       setError((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function continueWithGoogle() {
+    setGoogle(true);
+    setError(null);
+    try {
+      const status = await signInWithGoogle();
+      // Null is "they closed it", which is a decision rather than a failure and
+      // gets no message at all.
+      if (!status) return;
+      await adoptSession(status);
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setGoogle(false);
     }
   }
 
@@ -140,6 +161,39 @@ export default function LoginScreen() {
               : 'Sign in to pick up where you left off.'}
           </Text>
         </View>
+
+        {googleEnabled && (
+          <View style={styles.google}>
+            <PressableChunk
+              onPress={() => void continueWithGoogle()}
+              disabled={google || busy}
+              radius={24}
+              accessibilityRole="button"
+              contentStyle={[
+                styles.googleFace,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              {google ? (
+                <ActivityIndicator color={colors.foreground} />
+              ) : (
+                <>
+                  <GoogleMark />
+                  <Text style={[styles.googleLabel, { color: colors.foreground }]}>
+                    Continue with Google
+                  </Text>
+                </>
+              )}
+            </PressableChunk>
+
+            {/* The line that says "or", which is the whole reason it is here. */}
+            <View style={styles.orRow}>
+              <View style={[styles.rule, { backgroundColor: colors.border }]} />
+              <Text style={[t.footnote, { color: colors.mutedForeground }]}>or</Text>
+              <View style={[styles.rule, { backgroundColor: colors.border }]} />
+            </View>
+          </View>
+        )}
 
         {signup && (
           <Field label="Name (optional)">
@@ -243,6 +297,36 @@ export default function LoginScreen() {
 }
 
 /**
+ * Google's own "G", reproduced as their sign-in branding rules require: the
+ * four-colour mark, unrecoloured and unaltered, beside the words "Continue with
+ * Google". The paths are the same ones `apps/web/components/GoogleMark.tsx`
+ * carries — a mark redrawn by hand for the second client would be a mark that
+ * is subtly not Google's on one of them.
+ */
+function GoogleMark() {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 18 18">
+      <Path
+        fill="#4285F4"
+        d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"
+      />
+      <Path
+        fill="#34A853"
+        d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.859-3.048.859-2.344 0-4.328-1.583-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"
+      />
+      <Path
+        fill="#FBBC05"
+        d="M3.964 10.71a5.41 5.41 0 0 1 0-3.42V4.958H.957a9 9 0 0 0 0 8.084l3.007-2.332z"
+      />
+      <Path
+        fill="#EA4335"
+        d="M9 3.58c1.321 0 2.508.454 3.44 1.346l2.582-2.582C13.463.892 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
+      />
+    </Svg>
+  );
+}
+
+/**
  * A labelled field, on its own ledge.
  *
  * The outline and the ledge are not decoration: in a system where every other
@@ -282,6 +366,19 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   head: { marginBottom: 32, gap: 10 },
+  google: { marginBottom: 24 },
+  googleFace: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    height: 48,
+    borderWidth: 2,
+  },
+  googleLabel: { fontFamily: font.extrabold, fontSize: 16 },
+  orRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 24 },
+  // `h-0.5 rounded-full` on the web: a rule with a shape, not a hairline.
+  rule: { flex: 1, height: 2, borderRadius: 999 },
   title: { marginTop: 10 },
   field: { gap: 6, marginBottom: 16 },
   input: { height: 44, paddingHorizontal: 14 },

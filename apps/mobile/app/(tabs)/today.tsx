@@ -19,6 +19,7 @@ import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { MacroBars } from '@/components/MacroBars';
 import { RepeatMeals } from '@/components/RepeatMeals';
 import { Skeleton } from '@/components/Skeleton';
+import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
@@ -47,6 +48,7 @@ export default function TodayScreen() {
   const insets = useSafeAreaInsets();
   const units = useUnits();
   const router = useRouter();
+  const toast = useToast();
 
   const params = useLocalSearchParams<{ date?: string }>();
   const requested = typeof params.date === 'string' && ISO_DATE.test(params.date) ? params.date : null;
@@ -114,14 +116,25 @@ export default function TodayScreen() {
   const step = (days: number) =>
     setDate((current) => shiftDate(current ?? day?.local_date ?? today ?? '', days));
 
+  /*
+   * The three things on this screen that answer over it rather than in it.
+   *
+   * All three are gone by the time there is anything to say. A deleted row is
+   * taken out optimistically, so a failure has no row left to sit under and
+   * `error` — which heads the screen and belongs to the day failing to load —
+   * would report it a full scroll away from where it happened. A repeat jumps
+   * the screen back to today, which redraws everything including any inline
+   * message. So the receipt goes over the top, where it can outlive its subject.
+   */
   async function removeEntry(entry: FoodEntry) {
     setDay((prev) =>
       prev ? { ...prev, food_entries: prev.food_entries.filter((e) => e.id !== entry.id) } : prev,
     );
     try {
       await api.deleteFoodEntry(entry.id);
+      toast.success(`Removed ${entry.description}`);
     } catch (e) {
-      setError((e as Error).message);
+      toast.error((e as Error).message);
     }
     void load(date);
   }
@@ -145,8 +158,9 @@ export default function TodayScreen() {
     );
     try {
       await api.deleteExerciseEntry(entry.id);
+      toast.success(`Removed ${entry.description}`);
     } catch (e) {
-      setError((e as Error).message);
+      toast.error((e as Error).message);
     }
     void load(date);
   }
@@ -154,11 +168,12 @@ export default function TodayScreen() {
   /** Clones a past entry to now — which is today, so jump back there to show it. */
   async function repeatEntry(entry: FoodEntry) {
     try {
-      await api.repeatFoodEntry(entry.id);
+      const copy = await api.repeatFoodEntry(entry.id);
+      toast.success(`Logged ${copy.description} — ${Math.round(copy.kcal)} kcal`);
       setDate(null);
       void load(null);
     } catch (e) {
-      setError((e as Error).message);
+      toast.error((e as Error).message);
     }
   }
 

@@ -882,23 +882,48 @@ The port is finished: every screen the web has that belongs on a phone is here, 
 has been driven end to end against a live API — sign-up, verification, a streamed turn, a
 recipe run, the kitchen, the cards.
 
-Four things remain, and none of them is a screen.
+One thing remains, and it is not a screen.
 
-**No toast.** The web leans on sonner throughout; here every failure is reported inline, in
-the card or the form it belongs to. That is arguably better on a phone — a message that
-floats in at the top and leaves again is the one piece of copy nobody can re-read — but it
-is a substitution rather than a port, and a few places would read better with one.
+**Nothing has been shipped.** There is an icon and a splash now, and `eas.json` has the
+three build profiles, but no build has been made, there is no store listing, and there is
+no dev client — which the app will need the day it wants a native module Expo Go does not
+carry.
 
-**Google sign-in** is absent. It is a chain of full-page navigations, which on a device
-means `expo-auth-session` and a redirect back through the app's scheme — real work sharing
-nothing with the web flow.
+The other three are done, and two of them left something behind worth knowing.
 
-**`entry-touched`**, the one-shot ring on a card the agent has just corrected, is the last
-piece of the design language not drawn.
+**The toast** exists, and is deliberately rarer than sonner is on the web. The rule here is
+still that a message goes where its subject is — a failed sign-in under the password box,
+a card's failure in the card — and the toast is for the handful of places where the subject
+has *left the screen* by the time there is anything to say: a row deleted optimistically, a
+meal logged from the foot of Today that moves a ring at the head of it, a recipe logged by
+a screen that closes itself. `components/Toast.tsx`.
 
-**Nothing has been shipped.** There is an icon and a splash now, but no EAS build profile,
-no store listing, and no dev client — which the app will need the day it wants a native
-module Expo Go does not carry.
+**`entry-touched`** is drawn, as an overlay `View` with an animated opacity rather than the
+box-shadow RN cannot animate. It fires on a `food_updated` action arriving live, which is
+the only thing that tells a correction apart from a fresh log — both are a card with a
+number on it. It deliberately does *not* reach back and rewrite the earlier card for the
+same entry, which still shows what that meal was worth before: actions are stored with the
+message they belong to, so a card rewritten in place would disagree with the same
+conversation reopened tomorrow.
+
+**Google sign-in** works, and it is the one piece of this port that needed the API. The
+browser flow ends in a session cookie, which is exactly what a phone cannot use — the app
+is not the browser that ran the handshake. So the native path differs at two points and is
+otherwise the same code: the half-finished handshake rides in a *signed* `state` rather
+than a cookie (the two legs land on two different origins in any deployment with a proxy in
+front, and a cookie set by `api.` is never offered back to the apex), and the callback ends
+with a one-time code in the app's own URL scheme rather than a session. The app spends that
+code at `POST /auth/google/exchange` against a verifier it generated before opening the
+browser and never sent — PKCE one layer up, which is what makes a code intercepted from a
+custom-scheme redirect worth nothing on its own.
+
+Two consequences for anyone running this. The API keeps a list of prefixes it will hand a
+code back to: the app's own scheme is always on it, and `exp://` — the only address Expo Go
+can be reached at, so the only way to try this without a build — is opt-in per deployment
+through `MOBILE_REDIRECT_PREFIXES`, because a default that accepted it would accept it in
+production too. And Google itself has to have the deployment's callback registered: a local
+checkout whose client only knows the production URL gets `redirect_uri_mismatch` on the
+consent screen, on the web exactly as in the app.
 
 Two notes for whoever tests this next. Verification is not optional and not cosmetic: the
 API refuses every route outside `/auth/` with a 403 until the address is confirmed, so a

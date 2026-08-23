@@ -21,6 +21,7 @@ import { Chunk, PressableChunk } from '@/components/Chunk';
 import { RecipeTile } from '@/components/kitchen/RecipeTile';
 import { scale, Servings } from '@/components/kitchen/Servings';
 import { Sparkline } from '@/components/Sparkline';
+import { Touched } from '@/components/Touched';
 import { WorkoutCard } from '@/components/workout/WorkoutCard';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
@@ -43,6 +44,7 @@ export function ChatActionCard({
   action,
   messageId,
   today,
+  touched,
   onLogged,
 }: {
   action: ChatAction;
@@ -56,12 +58,20 @@ export function ChatActionCard({
    * it would label tonight's supper as yesterday's.
    */
   today?: string;
+  /**
+   * This card corrects an entry that was already logged, and the correction
+   * happened just now rather than in a conversation being read back. Draws the
+   * one-shot ring; see `Touched`.
+   */
+  touched?: boolean;
   /** Something was logged from a card rather than through a turn. */
   onLogged?: () => void;
 }) {
   if (!action.card) return <Chip action={action} />;
   return (
-    <CardBody card={action.card} messageId={messageId} today={today} onLogged={onLogged} />
+    <Touched active={touched}>
+      <CardBody card={action.card} messageId={messageId} today={today} onLogged={onLogged} />
+    </Touched>
   );
 }
 

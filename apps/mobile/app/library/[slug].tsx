@@ -8,6 +8,7 @@ import { PressableChunk } from '@/components/Chunk';
 import { RecipeReader } from '@/components/kitchen/RecipeReader';
 import { formatServings, scale, Servings } from '@/components/kitchen/Servings';
 import { Skeleton } from '@/components/Skeleton';
+import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { font, type as t, useColors } from '@/theme';
 
@@ -26,6 +27,7 @@ import { font, type as t, useColors } from '@/theme';
  */
 export default function LibraryRecipeScreen() {
   const colors = useColors();
+  const toast = useToast();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { slug } = useLocalSearchParams<{ slug: string }>();
@@ -57,7 +59,9 @@ export default function LibraryRecipeScreen() {
     if (!recipe) return;
     setCooking(true);
     try {
-      await api.cookLibraryRecipe(recipe.slug, { portions: servings });
+      const entry = await api.cookLibraryRecipe(recipe.slug, { portions: servings });
+      // The screen leaves with the press, so the receipt has to outlive it.
+      toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
       router.back();
     } catch (e) {
       setError((e as Error).message);
