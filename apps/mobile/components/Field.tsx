@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -11,7 +11,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -272,9 +272,73 @@ export function Sheet({
     });
   }, [open, reduced, progress]);
 
-  const scrim = useAnimatedStyle(() => ({ opacity: progress.value }));
+  /*
+   * How far a finger has pulled the sheet down, in points. Separate from
+   * `progress` rather than folded into it, because the two are answering
+   * different questions: `progress` is the sheet arriving or leaving under its
+   * own power, and this is the reader moving it. Folding them together would
+   * mean a drag that started mid-entrance fought the animation for the same
+   * value.
+   */
+  const drag = useSharedValue(0);
+
+  const dismiss = useCallback(() => {
+    'worklet';
+    runOnJS(onClose)();
+  }, [onClose]);
+
+  /*
+   * The grabber's drag.
+   *
+   * Attached to the header rather than the whole panel, which is the one
+   * decision here worth stating: the body of a sheet is a `ScrollView`, and a
+   * pan over the whole surface would have to negotiate with it on every touch —
+   * "is this a scroll or a dismiss?" — a question that is wrong about a third
+   * of the time and infuriating whenever it is. A grabber is a small, explicit
+   * place where the answer is never in doubt, which is why every phone has one.
+   *
+   * Downward only. A sheet that could be flung upward would either have to grow
+   * a second height to stop at or rubber-band back, and neither is a thing this
+   * sheet does.
+   */
+  const pull = Gesture.Pan()
+    .onChange((event) => {
+      drag.value = Math.max(0, drag.value + event.changeY);
+    })
+    .onEnd((event) => {
+      /*
+       * Distance *or* speed. A slow, deliberate pull most of the way down and a
+       * quick flick from the top are both unambiguously "close this", and
+       * judging only on distance turns the flick — which is the faster and more
+       * common of the two — into a bounce back.
+       */
+      const far = drag.value > height.value * 0.25;
+      const fast = event.velocityY > 900;
+      if (far || fast) {
+        dismiss();
+      } else {
+        drag.value = withTiming(0, { duration: 180, easing: ease.out });
+      }
+    });
+
+  /*
+   * Back to nothing whenever the sheet opens, so a sheet dismissed by dragging
+   * does not reopen already half-way down.
+   */
+  useEffect(() => {
+    if (open) drag.value = 0;
+  }, [open, drag]);
+
+  const scrim = useAnimatedStyle(() => ({
+    /*
+     * The scrim thins as the sheet is pulled away, which is what makes the
+     * gesture feel like it is moving the whole arrangement rather than sliding
+     * one card over a fixed grey pane.
+     */
+    opacity: progress.value * (1 - Math.min(1, drag.value / Math.max(1, height.value))),
+  }));
   const panel = useAnimatedStyle(() => ({
-    transform: [{ translateY: (1 - progress.value) * height.value }],
+    transform: [{ translateY: (1 - progress.value) * height.value + drag.value }],
   }));
 
   return (
@@ -312,9 +376,16 @@ export function Sheet({
             },
           ]}
         >
-          <Text style={[t.eyebrow, styles.sheetTitle, { color: colors.mutedForeground }]}>
-            {title}
-          </Text>
+          <GestureDetector gesture={pull}>
+            {/* The grabber and the title are one target: a 4pt bar is a mark,
+                not something a thumb can find. */}
+            <View>
+              <View style={[styles.grabber, { backgroundColor: colors.border }]} />
+              <Text style={[t.eyebrow, styles.sheetTitle, { color: colors.mutedForeground }]}>
+                {title}
+              </Text>
+            </View>
+          </GestureDetector>
           <ScrollView bounces={false}>{children}</ScrollView>
         </Animated.View>
       </GestureHandlerRootView>
@@ -351,7 +422,20 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
   },
-  sheetTitle: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 10 },
+  /*
+   * The one piece of chrome in this app with no outline and no ledge. A grabber
+   * is a handle rather than a surface — giving it an edge would make it look
+   * like something to press.
+   */
+  grabber: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 999,
+    marginTop: 10,
+    marginBottom: 2,
+  },
+  sheetTitle: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 },
   option: {
     flexDirection: 'row',
     alignItems: 'center',

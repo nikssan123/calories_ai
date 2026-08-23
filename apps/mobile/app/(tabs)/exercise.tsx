@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ExerciseEntry, ExerciseSummary } from '@ct/shared';
@@ -17,6 +17,7 @@ import { Glyph } from '@/components/Glyph';
 import { removeAction, SwipeRow } from '@/components/SwipeRow';
 import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
 import { Workouts } from '@/components/exercise/Workouts';
+import { useScrollToTop } from '@/hooks/useScrollToTop';
 
 /**
  * Exercise, split out of Progress so it gets a screen rather than a single row.
@@ -30,6 +31,8 @@ import { Workouts } from '@/components/exercise/Workouts';
 const WINDOWS = [14, 30, 90] as const;
 
 export default function ExerciseScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const units = useUnits();
@@ -86,6 +89,7 @@ export default function ExerciseScreen() {
 
   return (
     <ScrollView
+      ref={scrollRef}
       style={styles.flex}
       contentContainerStyle={[styles.page, { paddingTop: insets.top + 20 }]}
     >

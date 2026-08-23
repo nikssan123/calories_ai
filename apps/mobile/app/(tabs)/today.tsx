@@ -37,6 +37,7 @@ import { Glyph } from '@/components/Glyph';
 import { Material } from '@/components/Material';
 import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
 import { useCountUp } from '@/hooks/useCountUp';
+import { useScrollToTop } from '@/hooks/useScrollToTop';
 
 /** The `date` the calendar links here with. Anything else is ignored. */
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -58,6 +59,8 @@ const MEAL_EMOJI: Record<Meal, string> = {
 };
 
 export default function TodayScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const units = useUnits();
@@ -317,6 +320,7 @@ export default function TodayScreen() {
   return (
     <>
     <Animated.ScrollView
+      ref={scrollRef}
       style={styles.flex}
       onScroll={onScroll}
       scrollEventThrottle={16}

@@ -220,7 +220,7 @@ of which are easy to drop when adding more:
   untappable for 200ms is strictly worse than no stagger. Animate appearance,
   never availability.
 
-## 3. Gestures the port does not have — swipe and undo are done
+## 3. Gestures the port does not have — done
 
 ### Swipe on a row to act on it — done
 
@@ -269,22 +269,59 @@ They used to be left to the reload that followed the delete, which was fine when
 the delete went out immediately — holding it would have left the ring counting a
 meal the reader had just watched leave the screen.
 
-### Swipe down to dismiss a sheet
+### Swipe down to dismiss a sheet — done
 
-A gap the port introduced rather than inherited. `Sheet` closes by tapping the
-scrim and nothing else. Every sheet on a phone is expected to have a grabber you
-can drag, and the drag should track the finger rather than being a tap target
-that happens to live at the top.
+A gap the port introduced rather than inherited: `Sheet` closed by tapping the
+scrim and nothing else. It has a grabber now, and the drag tracks the finger.
 
-### Swipe left and right on Today to step days
+The gesture is on the header rather than the whole panel, which is the decision
+worth stating. The body of a sheet is a `ScrollView`, and a pan over the whole
+surface has to answer "is this a scroll or a dismiss?" on every touch — a
+question it gets wrong often enough to be infuriating. A grabber is a small
+explicit place where the answer is never in doubt, which is why every phone has
+one.
 
-The chevrons work and should stay for discoverability, but the gesture is free
-and is how a phone expects to move along a series. See the open question below
-before doing this one.
+It closes on distance *or* speed: a slow pull most of the way down and a quick
+flick from the top are both unambiguously "close this", and judging on distance
+alone turns the flick — the faster and commoner of the two — into a bounce back.
+The scrim thins as the sheet is pulled away, so it reads as moving the whole
+arrangement rather than sliding one card over a fixed grey pane.
 
-### Double-tap the active tab to scroll to top
+### Swipe left and right on Today to step days — **dropped**
 
-Standard, expected, and both the Journal and Progress get long enough to want it.
+Not skipped for cost: dropped because the thing it was for went away.
+
+The friction was that the chevrons live at the top of the longest screen in the
+app, so stepping a day from the bottom of a Tuesday meant scrolling up first.
+The condensing header in §2 fixed that — the chevrons are now reachable from
+anywhere on the screen — and what is left for the gesture to buy is much
+smaller.
+
+Against that: a screen-level horizontal pan would compete with swipe-to-delete
+on every row of the same screen. Both are horizontal, both start with a finger
+moving sideways, and the arbitration between them is exactly the kind that is
+wrong often enough to matter. Trading a shipped, tested gesture for a
+convenience whose problem has already been solved is a bad deal.
+
+**So a horizontal swipe in this app means one thing: act on this row.** That
+also settles the open question below — it is one axis, and the axis is spoken
+for.
+
+### Tap the active tab to scroll to top — done
+
+Standard, expected, and never reported when missing: people simply scroll, and
+conclude this is one of the apps that does not do it.
+
+A **single** tap on the already-selected tab, not the double-tap written here
+before. Double-tapping is the gesture for something a single tap cannot already
+express, and a single tap on the tab you are already on means nothing at all —
+which makes it free. Reserving it for a second press would be inventing a rule
+the platform does not have.
+
+Wired through `tabPress`, so the bar emits and each screen listens; the bar has
+no business knowing what any screen is scrolling. On Today, Progress, Exercise
+and Cook. Not the Journal: a chat's home position is the bottom, and it already
+goes there on its own.
 
 ## 4. What only a phone can do — push is built
 
@@ -389,11 +426,6 @@ leading has to be computed from the scaled size rather than baked.
 ---
 
 ## Open questions
-
-**One gesture axis or two?** Six tabs is one past where a bottom bar is usually
-said to stop, and horizontal swipe between tabs would relieve it. But that
-directly contradicts swipe-to-step-days on Today. Pick one meaning for a
-horizontal swipe and use it everywhere — two would be worse than neither.
 
 **Is the share sheet worth a third-party plugin?** Android takes an intent
 filter and nothing else. iOS needs a share *extension* — a second native target,

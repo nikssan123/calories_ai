@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,6 +22,7 @@ import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
+import { useScrollToTop } from '@/hooks/useScrollToTop';
 
 const WINDOWS = [14, 30, 90] as const;
 
@@ -41,6 +42,8 @@ const NUTRIENTS = [
 type NutrientKey = (typeof NUTRIENTS)[number]['key'];
 
 export default function ProgressScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -90,6 +93,7 @@ export default function ProgressScreen() {
 
   return (
     <ScrollView
+      ref={scrollRef}
       style={styles.flex}
       contentContainerStyle={[styles.page, { paddingTop: insets.top + 20 }]}
       keyboardShouldPersistTaps="handled"

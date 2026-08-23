@@ -932,13 +932,21 @@ the better part of half an hour; later ones are minutes. And the dev client ship
 Refresh **off** by default, which is worth turning on in the dev menu — otherwise edits
 appear to be ignored and the honest-looking conclusion is that the bundler is broken.
 
-**Push needs a credential the repository cannot hold.** The transport is built and tested —
-`push_tokens`, the Expo relay, both notification policies — but a phone cannot be issued an
-address until FCM is configured for Android and an APNs key for iOS. Both are uploaded once
-with `eas credentials`, against the EAS project already named in `app.json`. Without them
-`registerForPush` returns `unavailable`, nothing registers, and every notification goes by
-email exactly as it did before; the emulator says the quiet part out loud in logcat —
-`FirebaseApp failed to initialize because no default options were found`.
+**Push works on Android and needs one more credential for iOS.** FCM is configured — the
+emulator issues a real token, registers it, and a send through Expo's relay lands in the
+shade under the app's own channel. iOS needs an APNs key, uploaded the same way with
+`eas credentials` against the EAS project already named in `app.json`.
+
+Without a credential the app degrades quietly and on purpose: `registerForPush` returns
+`unavailable`, nothing registers, and every notification goes by email exactly as it did
+before. The tell in logcat is `FirebaseApp failed to initialize because no default options
+were found`.
+
+One trap worth knowing, because it costs an hour and looks like six other things: **the dev
+client bakes the host address in**, so when the machine's LAN IP changes the app goes white
+on launch, Metro logs no request at all, and push stops arriving despite Expo returning
+`ok`. Check `ipconfig getifaddr en0` against the URL you launched with before suspecting
+anything else.
 
 The other three are done, and two of them left something behind worth knowing.
 

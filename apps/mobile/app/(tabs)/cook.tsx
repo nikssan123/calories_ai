@@ -16,6 +16,7 @@ import { Sheet } from '@/components/Field';
 import { Skeleton } from '@/components/Skeleton';
 import { api } from '@/lib/api';
 import { font, type as t, useColors } from '@/theme';
+import { useScrollToTop } from '@/hooks/useScrollToTop';
 
 /**
  * Cook — what you could make, from what you have, that fits what is left.
@@ -34,6 +35,8 @@ import { font, type as t, useColors } from '@/theme';
  * the screen for something checked ten seconds a week.
  */
 export default function CookScreen() {
+  const scrollRef = useRef<ScrollView>(null);
+  useScrollToTop(scrollRef);
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -277,6 +280,7 @@ export default function CookScreen() {
 
   return (
     <ScrollView
+      ref={scrollRef}
       style={styles.flex}
       contentContainerStyle={[styles.page, { paddingTop: insets.top + 20 }]}
       keyboardShouldPersistTaps="handled"
