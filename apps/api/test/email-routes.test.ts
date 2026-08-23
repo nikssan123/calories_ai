@@ -506,11 +506,78 @@ describe('DELETE /account', () => {
       to: CREDENTIALS.email,
       subject: 'Your account has been deleted',
     });
-    // The record outlives the account, which is why user_id is nullable.
-    const row = await queryOne<{ user_id: string | null }>(
-      "SELECT user_id FROM email_deliveries WHERE template = 'account_deleted'",
+    // The record outlives the account, which is why user_id is nullable — but
+    // it is a record that a receipt went out, not a record of who to. The
+    // erasure a moment earlier took this address out of the table; logging it
+    // here the ordinary way would put it straight back.
+    const row = await queryOne<{ user_id: string | null; to_email: string; subject: string }>(
+      "SELECT user_id, to_email, subject FROM email_deliveries WHERE template = 'account_deleted'",
     );
     expect(row).not.toBeNull();
     expect(row!.user_id).toBeNull();
+    expect(row!.to_email).toBe('[erased]');
+    expect(row!.subject).not.toContain(CREDENTIALS.email);
+  });
+
+  it('erases the mail history, which no cascade would have taken', async () => {
+    await signUp();
+    // Everything sent up to now — the confirmation code at least — is logged
+    // against the address, and a support reply is logged against nothing at all.
+    const before = await queryOne<{ n: number }>(
+      'SELECT count(*)::int AS n FROM email_deliveries WHERE lower(to_email) = $1',
+      [CREDENTIALS.email],
+    );
+    expect(before!.n).toBeGreaterThan(0);
+
+    /*
+     * Written with a null `user_id` on purpose: that is what a message from
+     * someone who wrote in before signing in looks like, and matching on the
+     * address is the only thing that can find it.
+     */
+    await query(
+      `INSERT INTO support_emails (provider_id, from_email, to_email, subject, received_at)
+       VALUES ($1, $2, 'support@example.test', 'Cannot log a meal', now())`,
+      ['msg_erase_me', CREDENTIALS.email],
+    );
+
+    const login = await app.inject({ method: 'POST', url: '/auth/login', payload: CREDENTIALS });
+    const cookie = (login.headers['set-cookie'] as string[] | string).toString().split(';')[0]!;
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/account',
+      headers: { cookie },
+      payload: { password: CREDENTIALS.password },
+    });
+    expect(response.statusCode).toBe(200);
+
+    for (const sql of [
+      'SELECT count(*)::int AS n FROM email_deliveries WHERE lower(to_email) = $1',
+      'SELECT count(*)::int AS n FROM support_emails WHERE lower(from_email) = $1',
+    ]) {
+      expect((await queryOne<{ n: number }>(sql, [CREDENTIALS.email]))!.n).toBe(0);
+    }
+  });
+
+  it('leaves support mail from everyone else alone', async () => {
+    await signUp();
+    await query(
+      `INSERT INTO support_emails (provider_id, from_email, to_email, subject, received_at)
+       VALUES ($1, 'stranger@example.test', 'support@example.test', 'Is this free?', now())`,
+      ['msg_keep_me'],
+    );
+
+    const login = await app.inject({ method: 'POST', url: '/auth/login', payload: CREDENTIALS });
+    const cookie = (login.headers['set-cookie'] as string[] | string).toString().split(';')[0]!;
+    await app.inject({
+      method: 'DELETE',
+      url: '/account',
+      headers: { cookie },
+      payload: { password: CREDENTIALS.password },
+    });
+
+    const kept = await queryOne<{ n: number }>(
+      "SELECT count(*)::int AS n FROM support_emails WHERE provider_id = 'msg_keep_me'",
+    );
+    expect(kept!.n).toBe(1);
   });
 });

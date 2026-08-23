@@ -16,3 +16,23 @@ export const EMAILED_ROUTES = ['/reset', '/verify', '/unsubscribe'] as const;
 export function isEmailedRoute(pathname: string): boolean {
   return (EMAILED_ROUTES as readonly string[]).includes(pathname);
 }
+
+/**
+ * The privacy policy and the terms.
+ *
+ * Public for a harder reason than the landing page is. Someone has to be able
+ * to read what they are agreeing to *before* they agree to it, the app stores
+ * fetch both URLs from a listing that has never held a session, and the address
+ * in a GDPR erasure request has to be findable by someone who has already
+ * deleted their account. Every one of those is a visit with no cookie.
+ *
+ * They keep their own chrome even for a signed-in reader, unlike the emailed
+ * routes above, which lose it only for a stranger. These are documents rather
+ * than screens: the shell owns the viewport and never scrolls, and eight
+ * hundred lines of prose inside it would be a dead page with a tab bar.
+ */
+export const LEGAL_ROUTES = ['/privacy', '/terms'] as const;
+
+export function isLegalRoute(pathname: string): boolean {
+  return (LEGAL_ROUTES as readonly string[]).includes(pathname);
+}

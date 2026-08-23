@@ -268,6 +268,30 @@ toggle; `public/logo.svg`, `app/icon.svg` and `app/apple-icon.png` are the same
 geometry with the colours baked in — the last on a filled tile, since a home
 screen icon has no page behind it to sit on.
 
+## The privacy policy and the terms
+
+`/privacy` and `/terms`, at `app/privacy/` and `app/terms/` with a shared shell in
+`components/legal/`. Both are public in `AuthGate` and chrome-free in `AppFrame` for
+*everyone* rather than only for a stranger — unlike the emailed routes, which keep
+the shell once you are signed in. Three reasons: somebody has to read the terms
+before they accept them, the store listings fetch both URLs with no session, and an
+erasure request comes from a person who has already deleted their account. The shell
+is also a fixed-height box that never scrolls, and a document is not readable inside
+one.
+
+Both are linked from the landing footer, from the About group in Settings on both
+clients, and from under the button on the sign-up form — which is the moment
+something is actually being agreed to. The mobile app opens the same two web pages
+in the system browser sheet (`lib/links.ts` resolves the hostname the way
+`lib/api.ts` resolves the API's) rather than carrying a second copy of the text.
+
+**They name the actual providers**, which makes them checkable and makes them a
+maintenance burden on purpose: §4 of the policy lists Anthropic, Resend, Cloudflare,
+Google, Open Food Facts and FoodData Central by name, and §7 says exactly what
+survives `deleteAccount`. Swapping a provider, storing a new field, or changing what
+deletion leaves behind is a change to that file in the same commit. A policy nobody
+can check against the source is not telling anyone anything.
+
 ## Tests
 
 ```bash
@@ -423,6 +447,16 @@ Home broadband, mobile data and a train's wifi are the same laptop, and an alert
 fires on every commute is one people filter — which costs it its value on the day it
 matters. `known_devices` is separate from `auth_sessions` for the same reason: signing
 out and back in must not report itself as a new device.
+
+**Both mail tables go with the account.** `email_deliveries` and `support_emails` are
+`ON DELETE SET NULL`, so for a long time closing an account severed the *link* to its
+mail and kept the rows — which missed that both tables carry the address in a column of
+their own. What survived a deletion was a list of email addresses belonging to people who
+had asked to be forgotten. `deleteAccount` now erases both, matched on the address as well
+as on the id (`support_emails.user_id` is null for anyone who wrote in before signing in),
+and migration 028 clears the rows already stranded. The deletion receipt is sent *after*
+all of that, so it is the one message whose recipient is not written down — `sendEmail`
+takes `redactRecipient` and the row records that a receipt went out, not who to.
 
 ### Receiving
 

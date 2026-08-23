@@ -10,11 +10,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
+import * as WebBrowser from 'expo-web-browser';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { Logo } from '@/components/Logo';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { signInWithGoogle } from '@/lib/google';
+import { PRIVACY_URL, TERMS_URL } from '@/lib/links';
 import { font, type as t, useColors } from '@/theme';
 
 /**
@@ -263,6 +265,31 @@ export default function LoginScreen() {
           )}
         </PressableChunk>
 
+        {/* Under the button that does the agreeing, and only on the screen where
+            something is being agreed to. Both open in the browser sheet, which
+            is where the store listings point at the same two documents. */}
+        {signup && (
+          <Text style={[t.footnote, styles.consent, { color: colors.mutedForeground }]}>
+            By creating an account you agree to the{' '}
+            <Text
+              accessibilityRole="link"
+              onPress={() => void WebBrowser.openBrowserAsync(TERMS_URL).catch(() => {})}
+              style={{ color: colors.foreground, fontFamily: font.semibold }}
+            >
+              Terms
+            </Text>{' '}
+            and the{' '}
+            <Text
+              accessibilityRole="link"
+              onPress={() => void WebBrowser.openBrowserAsync(PRIVACY_URL).catch(() => {})}
+              style={{ color: colors.foreground, fontFamily: font.semibold }}
+            >
+              Privacy Policy
+            </Text>
+            .
+          </Text>
+        )}
+
         {sent && (
           <Text style={[t.footnoteSemibold, styles.switch, { color: colors.caloriesText }]}>
             {sent}
@@ -387,4 +414,7 @@ const styles = StyleSheet.create({
   submitFace: { height: 48, alignItems: 'center', justifyContent: 'center' },
   submitLabel: { fontFamily: font.extrabold, fontSize: 16 },
   switch: { marginTop: 24, textAlign: 'center' },
+  // Closer to the button than the mode switch below it: this belongs to the
+  // thing it sits under, not to the row of links at the foot of the screen.
+  consent: { marginTop: 16, textAlign: 'center', lineHeight: 18 },
 });

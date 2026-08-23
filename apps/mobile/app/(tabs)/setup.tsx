@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import * as WebBrowser from 'expo-web-browser';
 import type { ActivityLevel, DaySummary, Goal, Profile, Sex, UnitSystem } from '@ct/shared';
 import {
   bodyWeightToKg,
@@ -20,6 +21,7 @@ import { Switch } from '@/components/Switch';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { PRIVACY_URL, SUPPORT_EMAIL, TERMS_URL } from '@/lib/links';
 import { font, type as t, useColors, withAlpha } from '@/theme';
 
 /** §10: short setup. Enough to establish a starting target, nothing more. */
@@ -331,6 +333,15 @@ export default function SetupScreen() {
         >
           <Text style={[t.body, { color: colors.destructive }]}>Sign out</Text>
         </Pressable>
+      </InsetGroup>
+
+      {/* The store listings link to both of these, and the review that checks
+          them expects to find them in the app too. Opened in the system browser
+          rather than re-rendered here: one copy of each document, on the web. */}
+      <InsetGroup title="About">
+        <ExternalRow first label="Privacy policy" url={PRIVACY_URL} />
+        <ExternalRow label="Terms of service" url={TERMS_URL} />
+        <ExternalRow label="Contact support" url={`mailto:${SUPPORT_EMAIL}`} mail />
       </InsetGroup>
 
       <DeleteAccount email={profile.email} onDeleted={() => void signOut()} onError={setError} />
@@ -652,6 +663,47 @@ function EmailSettings({
         />
       </InsetRow>
     </InsetGroup>
+  );
+}
+
+/**
+ * A settings row that leaves the app.
+ *
+ * The two documents open in the system browser sheet rather than a `Linking`
+ * hand-off, which keeps the reader inside the app and one swipe from where they
+ * were — App Review dislikes a policy link that ejects you into Safari, and so
+ * does anybody reading one. `mailto:` cannot go through the sheet, so that one
+ * still goes to `Linking`.
+ */
+function ExternalRow({
+  label,
+  url,
+  mail,
+  first,
+}: {
+  label: string;
+  url: string;
+  mail?: boolean;
+  first?: boolean;
+}) {
+  const colors = useColors();
+  return (
+    <Pressable
+      accessibilityRole="link"
+      onPress={() => {
+        // Nothing to report if it fails: there is no error surface on a row
+        // like this, and a device with no browser or no mail client is not a
+        // state the settings screen can do anything about.
+        void (mail ? Linking.openURL(url) : WebBrowser.openBrowserAsync(url)).catch(() => {});
+      }}
+      style={({ pressed }) => [
+        styles.rowButton,
+        first ? null : { borderTopWidth: 2, borderTopColor: colors.border },
+        { opacity: pressed ? 0.6 : 1 },
+      ]}
+    >
+      <Text style={[t.body, { color: colors.foreground }]}>{label}</Text>
+    </Pressable>
   );
 }
 

@@ -382,19 +382,34 @@ export interface DeleteSummary {
   food_entries: number;
   chat_messages: number;
   photos: string[];
+  /** Rows erased from the two mail tables, which no cascade would have taken. */
+  emails: number;
 }
 
 /**
  * Deletes an account and everything it owns.
  *
- * Two things are not automatic. Photo *files* live in a volume rather than in
+ * Three things are not automatic. Photo *files* live in a volume rather than in
  * Postgres, so the rows would cascade away and leave orphaned bytes on disk —
- * the paths are collected first and unlinked after. And `ai_usage.user_id` is
+ * the paths are collected first and unlinked after. `ai_usage.user_id` is
  * ON DELETE SET NULL, so the cost history survives deliberately: deleting an
- * account must not retroactively change what the product costs to run.
+ * account must not retroactively change what the product costs to run, and
+ * token counts with no owner are not personal data.
+ *
+ * The third is the mail, and it is the one that used to be wrong. Both mail
+ * tables are ON DELETE SET NULL as well, on the reasoning that a record of what
+ * was sent should outlive the account it was sent to — but severing `user_id`
+ * severs a *link*, and both tables carry the address itself in a column of
+ * their own. What survived was a table of email addresses belonging to people
+ * who had asked to be forgotten. So they are erased here, by address as well as
+ * by id: `support_emails.user_id` is null for anyone who wrote in before they
+ * signed in, or from the account's address after changing it.
  */
 export async function deleteAccount(userId: string): Promise<DeleteSummary | null> {
-  const user = await queryOne<{ id: string }>('SELECT id FROM users WHERE id = $1', [userId]);
+  const user = await queryOne<{ id: string; email: string | null }>(
+    'SELECT id, email FROM users WHERE id = $1',
+    [userId],
+  );
   if (!user) return null;
 
   const photos = await query<{ file_path: string | null; storage_key: string | null }>(
@@ -406,6 +421,29 @@ export async function deleteAccount(userId: string): Promise<DeleteSummary | nul
             (SELECT count(*) FROM chat_messages WHERE user_id = $1)::int AS chat_messages`,
     [userId],
   ))!;
+
+  /*
+   * Before the user row goes, because after it there is no `user_id` left to
+   * match on — the FK would already have set both columns to null, and the
+   * address would be the only thread back to the rows. Matched case-insensitively
+   * on the same terms as the unique index that made the address an identity.
+   */
+  const email = user.email?.toLowerCase() ?? null;
+  const erased = [
+    await query(
+      `DELETE FROM email_deliveries
+        WHERE user_id = $1 OR ($2::text IS NOT NULL AND lower(to_email) = $2)
+    RETURNING 1`,
+      [userId, email],
+    ),
+    await query(
+      `DELETE FROM support_emails
+        WHERE user_id = $1 OR ($2::text IS NOT NULL AND lower(from_email) = $2)
+    RETURNING 1`,
+      [userId, email],
+    ),
+  ];
+  const emails = erased[0]!.length + erased[1]!.length;
 
   await query('DELETE FROM users WHERE id = $1', [userId]);
 
@@ -438,7 +476,7 @@ export async function deleteAccount(userId: string): Promise<DeleteSummary | nul
     );
   }
 
-  return { ...counts, photos: removed };
+  return { ...counts, photos: removed, emails };
 }
 
 /** Whether a user is currently suspended. Read by the session hook on every request. */

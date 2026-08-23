@@ -696,9 +696,15 @@ function Privacy() {
             Your meals stay yours.
           </h2>
           <p className="mt-5 max-w-xl text-[17px] leading-relaxed font-medium text-white/85">
-            No third-party sign-in, no analytics, no advertising, nothing to sell. Your meals
-            are rows in a database that exists to answer one question &mdash; what did you
-            eat today.
+            No analytics, no advertising, nothing to sell. Your meals are rows in a database
+            that exists to answer one question &mdash; what did you eat today.
+          </p>
+          <p className="mt-4 max-w-xl text-[15px] leading-relaxed font-medium text-white/70">
+            The whole of it is written down in the{' '}
+            <Link href="/privacy" className="text-white underline decoration-2 underline-offset-2">
+              privacy policy
+            </Link>
+            : what is recorded, who it reaches, and how long it stays.
           </p>
         </div>
       </Reveal>
@@ -734,9 +740,15 @@ function Footer() {
           <Logo size={22} />
           <span className="text-sm font-bold">Day So Far</span>
         </div>
-        <nav className="text-muted-foreground flex items-center gap-6 text-sm">
+        <nav className="text-muted-foreground flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
           <Link href="/login" className="hover:text-foreground transition-colors">
             Sign in
+          </Link>
+          <Link href="/privacy" className="hover:text-foreground transition-colors">
+            Privacy
+          </Link>
+          <Link href="/terms" className="hover:text-foreground transition-colors">
+            Terms
           </Link>
           <span>© {new Date().getFullYear()} Day So Far</span>
         </nav>

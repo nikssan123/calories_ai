@@ -139,6 +139,11 @@ export async function sendNewSignInEmail(
  * Everything it needs is passed in because by the time this runs there is
  * nothing left to look up — which is also why the delivery is recorded against
  * a null user. This is the one message that outlives its recipient's account.
+ *
+ * And the only one whose recipient is not written down. `deleteAccount` has
+ * just cleared this address out of `email_deliveries`; a receipt logged the
+ * ordinary way would put it back a moment later, which is how an erasure ends
+ * up being not quite one. The row still says a receipt went out and when.
  */
 export async function sendAccountDeletedEmail(
   input: {
@@ -151,6 +156,7 @@ export async function sendAccountDeletedEmail(
   return sendEmail({
     to: input.email,
     userId: null,
+    redactRecipient: true,
     logger,
     message: templates.accountDeleted({ name: input.name, counts: input.counts }),
   });

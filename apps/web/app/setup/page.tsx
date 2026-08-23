@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BadgeCheck, Check, Mail, Shield } from 'lucide-react';
+import { BadgeCheck, Check, ChevronRight, Mail, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ActivityLevel, DaySummary, Goal, Profile, Sex, UnitSystem } from '@ct/shared';
 import {
@@ -411,6 +411,24 @@ export default function SetupPage() {
         >
           Sign out
         </button>
+      </InsetGroup>
+
+      {/* Reachable from inside the app as well as from the landing page: the
+          store listings link to these, and so does the sign-up screen, but a
+          person looking for "what do they keep about me" looks in Settings. */}
+      <InsetGroup title="About">
+        <Link href="/privacy" className="flex items-center gap-2 px-4 py-3 text-body">
+          <span className="flex-1">Privacy policy</span>
+          <ChevronRight size={16} className="text-muted-foreground" />
+        </Link>
+        <Link href="/terms" className="flex items-center gap-2 px-4 py-3 text-body">
+          <span className="flex-1">Terms of service</span>
+          <ChevronRight size={16} className="text-muted-foreground" />
+        </Link>
+        <a href="mailto:support@daysofar.com" className="flex items-center gap-2 px-4 py-3 text-body">
+          <span className="flex-1">Contact support</span>
+          <ChevronRight size={16} className="text-muted-foreground" />
+        </a>
       </InsetGroup>
 
       <DeleteAccount email={profile.email} />

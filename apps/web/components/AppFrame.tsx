@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/components/AuthGate';
 import { Nav } from '@/components/Nav';
 import { Sidebar } from '@/components/Sidebar';
-import { isEmailedRoute } from '@/lib/routes';
+import { isEmailedRoute, isLegalRoute } from '@/lib/routes';
 
 /**
  * The app shell — or, for the landing page, nothing at all.
@@ -20,6 +20,13 @@ import { isEmailedRoute } from '@/lib/routes';
 export function AppFrame({ children }: { children: React.ReactNode }) {
   const { authenticated } = useAuth();
   const pathname = usePathname();
+
+  /*
+   * The policy and the terms draw their own chrome for everybody, signed in or
+   * not: they are documents, and this shell is a fixed-height box that does not
+   * scroll. Nothing else would be readable inside it.
+   */
+  if (isLegalRoute(pathname)) return <>{children}</>;
 
   /*
    * No chrome for a visitor with no session.

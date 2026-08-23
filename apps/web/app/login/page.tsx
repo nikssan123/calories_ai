@@ -220,6 +220,23 @@ export default function LoginPage() {
           >
             {busy ? 'Just a moment…' : mode === 'signup' ? 'Create account' : 'Sign in'}
           </Button>
+
+          {/* Under the button that does the agreeing, and only on the screen
+              where something is being agreed to. Signing in again is not a
+              fresh acceptance of anything. */}
+          {mode === 'signup' && (
+            <p className="text-footnote text-muted-foreground text-center leading-relaxed">
+              By creating an account you agree to the{' '}
+              <Link href="/terms" className="text-foreground font-semibold underline underline-offset-2">
+                Terms
+              </Link>{' '}
+              and the{' '}
+              <Link href="/privacy" className="text-foreground font-semibold underline underline-offset-2">
+                Privacy Policy
+              </Link>
+              .
+            </p>
+          )}
         </form>
 
         {(signupAllowed || mode === 'signup') && (

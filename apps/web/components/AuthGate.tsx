@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { usePathname, useRouter } from 'next/navigation';
 import type { AuthStatus, Profile } from '@ct/shared';
 import { api } from '@/lib/api';
-import { isEmailedRoute } from '@/lib/routes';
+import { isEmailedRoute, isLegalRoute } from '@/lib/routes';
 
 interface AuthValue {
   /** Whether there is a session at all. `profile` is null for other reasons too. */
@@ -61,7 +61,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
    * `/login` would strip the token out of the URL on the way, which turns
    * "reset my password" into a loop with no exit.
    */
-  const isPublic = onLogin || pathname === '/' || isEmailedRoute(pathname);
+  const isPublic =
+    onLogin || pathname === '/' || isEmailedRoute(pathname) || isLegalRoute(pathname);
 
   const refresh = useCallback(async () => {
     try {
@@ -101,7 +102,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       status.authenticated &&
       status.profile &&
       !status.profile.email_verified &&
-      pathname !== '/verify'
+      pathname !== '/verify' &&
+      // Except on the policy and the terms. Someone stopped at the code is
+      // mid-signup, which is exactly when a person wants to read what they
+      // just agreed to, and holding them away from it would be perverse.
+      !isLegalRoute(pathname)
     ) {
       router.replace('/verify');
     }
