@@ -1,19 +1,24 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import type { FoodEntry, Meal } from '@ct/shared';
+import type { FoodEntry, FoodItemInput, Meal } from '@ct/shared';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { api } from '@/lib/api';
 import { type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
 
 /**
- * A logged meal, reopened as the form that could have collected it.
+ * A meal as the form that could have collected it — whether or not it exists.
  *
- * The journal's card is a receipt, and until now a receipt was final: the only
- * way to fix "that was a bigger portion" was to say it in the conversation and
- * spend a model call re-estimating a meal the user could already describe
+ * The journal's card is a receipt, and until recently a receipt was final: the
+ * only way to fix "that was a bigger portion" was to say it in the conversation
+ * and spend a model call re-estimating a meal the user could already describe
  * exactly. This is the other door — the numbers themselves, typed.
+ *
+ * It now opens both ways. With an `entryId` it corrects; with null it creates,
+ * which is the manual log path an offline phone needs — see OFFLINE.md §5.
+ * Correcting a meal and entering one are the same act with a different starting
+ * state, so they are the same form rather than two that must be kept in step.
  *
  * It edits *items*, not the meal's totals, because the totals are not stored:
  * they are summed from the items on the way out. A form that let somebody set
@@ -44,23 +49,40 @@ interface DraftItem {
 
 export function FoodEditor({
   entryId,
+  initialMeal,
   onSaved,
+  onCreate,
   onCancel,
 }: {
-  entryId: string;
+  /** Null to compose a new meal rather than correct an existing one. */
+  entryId: string | null;
+  /** Which slot a new meal starts in. Ignored when correcting. */
+  initialMeal?: Meal;
   /** The corrected entry, so the card above can redraw without a reload. */
-  onSaved: (entry: FoodEntry) => void;
+  onSaved?: (entry: FoodEntry) => void;
+  /**
+   * A new meal, handed over rather than sent.
+   *
+   * The form does not know whether there is a network and should not: its
+   * caller decides whether this goes straight out or into the outbox, which is
+   * what lets the same component serve the journal and an offline Today.
+   */
+  onCreate?: (draft: { description: string; meal: Meal; items: FoodItemInput[] }) => void;
   onCancel: () => void;
 }) {
   const colors = useColors();
+  const creating = entryId === null;
   const [entry, setEntry] = useState<FoodEntry | null>(null);
   const [description, setDescription] = useState('');
-  const [meal, setMeal] = useState<Meal>('lunch');
-  const [items, setItems] = useState<DraftItem[]>([]);
+  const [meal, setMeal] = useState<Meal>(initialMeal ?? 'lunch');
+  // One blank row to type into. An empty form with an "add item" link is a form
+  // that asks to be started before it can be filled in.
+  const [items, setItems] = useState<DraftItem[]>(creating ? [blank()] : []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (entryId === null) return;
     let cancelled = false;
     api
       .foodEntry(entryId)
@@ -90,15 +112,29 @@ export function FoodEditor({
       return;
     }
 
+    const label = description.trim();
+    if (creating && label.length === 0) {
+      // The API refuses this too, but the sentence it answers with is about a
+      // field rather than about a meal, and this form knows what it is asking.
+      setError('What was it? A meal needs a name.');
+      return;
+    }
+
+    if (creating) {
+      haptics.logged();
+      onCreate?.({ description: label, meal, items: payload });
+      return;
+    }
+
     setSaving(true);
     try {
       const updated = await api.updateFoodEntry(entryId, {
-        description: description.trim() || undefined,
+        description: label || undefined,
         meal,
         items: payload,
       });
       haptics.logged();
-      onSaved(updated);
+      onSaved?.(updated);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -115,7 +151,7 @@ export function FoodEditor({
     );
   }
 
-  if (entry === null) {
+  if (entry === null && !creating) {
     return (
       <Chunk contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[t.footnote, { color: colors.mutedForeground }]}>Loading…</Text>
@@ -130,7 +166,9 @@ export function FoodEditor({
 
   return (
     <Chunk contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <Text style={[t.bodyBold, { color: colors.foreground }]}>Fix what’s wrong</Text>
+      <Text style={[t.bodyBold, { color: colors.foreground }]}>
+        {creating ? 'Log it yourself' : 'Fix what’s wrong'}
+      </Text>
 
       <TextInput
         value={description}
@@ -261,7 +299,7 @@ export function FoodEditor({
           contentStyle={[styles.save, { backgroundColor: colors.primary }]}
         >
           <Text style={[t.footnoteBold, { color: colors.primaryForeground }]}>
-            {saving ? 'Saving…' : `Save · ${Math.round(total).toLocaleString()} kcal`}
+            {saving ? 'Saving…' : `${creating ? 'Log' : 'Save'} · ${Math.round(total).toLocaleString()} kcal`}
           </Text>
         </PressableChunk>
       </View>

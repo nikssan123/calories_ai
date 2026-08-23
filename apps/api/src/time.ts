@@ -1,49 +1,26 @@
 /**
- * Day-boundary handling. "Today" is not a UTC day and not even a calendar day in
- * the user's timezone — it runs from `day_start_hour` to `day_start_hour` so that
- * a 1am snack lands on the evening it belongs to.
+ * Day-boundary handling that only the server needs.
+ *
+ * The boundary arithmetic itself moved to `@ct/shared/day` when the phone
+ * learned to add up a day it has not been able to send yet — see OFFLINE.md.
+ * It is re-exported from here so the twenty-odd modules that import it go on
+ * importing it from where it has always been.
+ *
+ * What stays is the part with no client: resolving a *model-supplied* time hint
+ * ("yesterday 8pm", a shortened ISO string) to an instant. Nothing on a phone
+ * parses English into a timestamp.
  */
 
-export interface DayContext {
-  timezone: string;
-  dayStartHour: number;
-}
+import { formatInTimeZone, localPartsFor, type DayContext } from '@ct/shared';
 
-/** The YYYY-MM-DD this instant counts toward. */
-export function localDateFor(instant: Date, { timezone, dayStartHour }: DayContext): string {
-  const shifted = new Date(instant.getTime() - dayStartHour * 60 * 60 * 1000);
-  return formatInTimeZone(shifted, timezone);
-}
-
-/** Wall-clock parts in the user's timezone, for prompting the model. */
-export function localPartsFor(instant: Date, timezone: string) {
-  const formatter = new Intl.DateTimeFormat('en-GB', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    weekday: 'long',
-    hour12: false,
-  });
-  const parts = Object.fromEntries(formatter.formatToParts(instant).map((p) => [p.type, p.value]));
-  return {
-    date: `${parts.year}-${parts.month}-${parts.day}`,
-    time: `${parts.hour}:${parts.minute}`,
-    weekday: parts.weekday ?? '',
-  };
-}
-
-function formatInTimeZone(date: Date, timeZone: string): string {
-  const formatter = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  return formatter.format(date); // en-CA yields YYYY-MM-DD
-}
+export {
+  addDays,
+  dateRange,
+  inferMeal,
+  localDateFor,
+  localPartsFor,
+  type DayContext,
+} from '@ct/shared';
 
 /**
  * ISO-shaped hints, resolved against the *user's* zone rather than the server's.
@@ -133,24 +110,6 @@ function zoneOffsetMs(instant: Date, timeZone: string): number {
   return asUtc - instant.getTime();
 }
 
-export function addDays(isoDate: string, days: number): string {
-  const [y, m, d] = isoDate.split('-').map(Number);
-  const date = new Date(Date.UTC(y!, m! - 1, d!));
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
-/** Inclusive list of dates from `start` to `end`. */
-export function dateRange(start: string, end: string): string[] {
-  const out: string[] = [];
-  let cursor = start;
-  while (cursor <= end) {
-    out.push(cursor);
-    cursor = addDays(cursor, 1);
-  }
-  return out;
-}
-
 /**
  * Resolves a model-supplied time hint ("this morning", "yesterday 8pm", an ISO
  * string, or nothing) to an instant. Deliberately forgiving: a wrong hour is
@@ -194,13 +153,4 @@ function namedHour(text: string): number | null {
   if (/\b(?:dinner|tonight|this evening|evening)\b/.test(text)) return 19;
   if (/\b(?:late night|midnight)\b/.test(text)) return 23;
   return null;
-}
-
-/** §6: pick a sensible meal rather than asking which one it was. */
-export function inferMeal(instant: Date, timezone: string): 'breakfast' | 'lunch' | 'dinner' | 'snack' {
-  const hour = Number(localPartsFor(instant, timezone).time.slice(0, 2));
-  if (hour >= 5 && hour < 11) return 'breakfast';
-  if (hour >= 11 && hour < 15) return 'lunch';
-  if (hour >= 17 && hour < 22) return 'dinner';
-  return 'snack';
 }

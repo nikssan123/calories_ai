@@ -14,6 +14,7 @@ import { MacroBars } from '@/components/MacroBars';
 import { DietQuality } from '@/components/DietQuality';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { RepeatMeals } from '@/components/RepeatMeals';
+import { FoodEditor } from '@/components/FoodEditor';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
@@ -78,6 +79,7 @@ function TodayView() {
   );
   const [today, setToday] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [composing, setComposing] = useState(false);
 
   // Later changes to the query still have to land — History links here with
   // `next/link`, which swaps the parameter without remounting this component.
@@ -352,6 +354,35 @@ function TodayView() {
 
           {/* Repeating logs at the current time, so it only belongs on today. */}
           {isToday && <RepeatMeals onLogged={() => void load(null)} />}
+
+          {/*
+            * Typing a meal in.
+            *
+            * Below Repeat rather than above it: repeating something you already
+            * eat is one click, and typing four macros per item is the fallback
+            * for a genuinely new meal. Putting the form first would make the
+            * expensive path look like the intended one.
+            */}
+          {isToday &&
+            (composing ? (
+              <FoodEditor
+                entryId={null}
+                onSaved={(entry) => {
+                  setComposing(false);
+                  toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
+                  void load(null);
+                }}
+                onCancel={() => setComposing(false)}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setComposing(true)}
+                className="text-footnote text-muted-foreground hover:text-foreground w-full py-3 text-center font-semibold"
+              >
+                + Log it yourself
+              </button>
+            ))}
           </div>
         </div>
       )}

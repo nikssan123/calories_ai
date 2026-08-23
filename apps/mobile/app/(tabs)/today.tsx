@@ -17,17 +17,22 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 import Svg, { Path, Polyline, Rect } from 'react-native-svg';
-import type { DaySummary, ExerciseEntry, FoodEntry, Meal } from '@ct/shared';
-import { formatBodyWeight, formatDistance, formatMass } from '@ct/shared';
+import type { DaySummary, ExerciseEntry, FoodEntry, FoodItemInput, Meal } from '@ct/shared';
+import { formatBodyWeight, formatDistance, formatMass, inferMeal } from '@ct/shared';
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 import { CalorieRing } from '@/components/CalorieRing';
 import { DietQuality } from '@/components/DietQuality';
+import { FoodEditor } from '@/components/FoodEditor';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { MacroBars } from '@/components/MacroBars';
 import { RepeatMeals } from '@/components/RepeatMeals';
 import { Skeleton } from '@/components/Skeleton';
 import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+import { loadDay, localToday, pendingIds, withPending } from '@/lib/day';
+import { drop, enqueue, newId, onRejected } from '@/lib/outbox';
+import { useOutbox } from '@/hooks/useOutbox';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors, type Palette } from '@/theme';
 import { haptics } from '@/lib/haptics';
@@ -109,7 +114,15 @@ export default function TodayScreen() {
   const params = useLocalSearchParams<{ date?: string }>();
   const requested = typeof params.date === 'string' && ISO_DATE.test(params.date) ? params.date : null;
 
-  const [day, setDay] = useState<DaySummary | null>(null);
+  const { profile } = useAuth();
+  const intents = useOutbox();
+  /*
+   * Whether the day on screen came off the network or off the disk. Not an
+   * error state — the numbers are the last true ones plus whatever is queued —
+   * so it is reported as a footnote rather than a banner. See OFFLINE.md §6.
+   */
+  const [live, setLive] = useState(true);
+  const [fetched, setFetched] = useState<DaySummary | null>(null);
   /*
    * The date being shown, or null for "whatever the server calls today". Held
    * as a date rather than an offset so History can link straight to a day.
@@ -129,6 +142,7 @@ export default function TodayScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [composing, setComposing] = useState(false);
 
   /*
    * Which fetch is allowed to publish its result.
@@ -140,23 +154,45 @@ export default function TodayScreen() {
    */
   const latest = useRef(0);
 
-  const load = useCallback(async (target: string | null) => {
-    const seq = ++latest.current;
-    try {
-      const summary = await api.day(target ?? undefined);
-      if (seq !== latest.current) return;
-      setDay(summary);
-      setError(null);
-      // Today is whatever the server says when asked without a date; it honours
-      // day_start_hour, so it is not always the device's calendar date.
-      if (target === null) setToday(summary.local_date);
-    } catch (e) {
-      if (seq !== latest.current) return;
-      setError((e as Error).message);
-    } finally {
-      if (seq === latest.current) setLoading(false);
-    }
-  }, []);
+  const load = useCallback(
+    async (target: string | null) => {
+      const seq = ++latest.current;
+      /*
+       * A date is resolved here rather than left to the server when there is a
+       * profile to resolve it with. Asking for "today" with no date is a
+       * question only a reachable server can answer, and it is exactly the
+       * question being asked when the network is gone — so the phone works out
+       * its own local date first, and the cache has something to be keyed by.
+       */
+      const resolved = target ?? (profile ? localToday(profile) : null);
+      try {
+        const { day: summary, live: fresh } = await loadDay(profile?.id ?? '', resolved);
+        if (seq !== latest.current) return;
+        setFetched(summary);
+        setLive(fresh);
+        setError(null);
+        // Today is whatever the server says when asked without a date; it
+        // honours day_start_hour, so it is not always the device's calendar
+        // date. Offline the phone's own answer stands in, computed the same way.
+        if (target === null) setToday(summary.local_date);
+      } catch (e) {
+        if (seq !== latest.current) return;
+        setError((e as Error).message);
+      } finally {
+        if (seq === latest.current) setLoading(false);
+      }
+    },
+    [profile],
+  );
+
+  /*
+   * What the screen actually draws: the day as fetched, plus everything still
+   * in the queue, re-added up by the same function the API uses.
+   */
+  const day = fetched === null ? null : withPending(fetched, intents);
+  const unsent = pendingIds(intents, fetched?.local_date ?? '');
+  /** Everything queued, not just what shows on this day — deletes count too. */
+  const waiting = intents.length;
 
   useEffect(() => {
     if (requested === appliedParam.current) return;
@@ -167,6 +203,7 @@ export default function TodayScreen() {
   useEffect(() => {
     void load(date);
   }, [load, date]);
+
 
   /*
    * And again every time the tab comes back.
@@ -194,6 +231,44 @@ export default function TodayScreen() {
   useEffect(() => {
     shown.current = date;
   }, [date]);
+  /*
+   * And again whenever the queue gets shorter.
+   *
+   * Without this a meal vanishes the moment it syncs: `withPending` stops
+   * drawing it as soon as the intent is gone, and the fetched day underneath is
+   * the one from before it was sent. Watching the count rather than the
+   * contents because that is the only thing that can shrink — an intent is
+   * never edited in place, only added and removed.
+   */
+  /*
+   * A meal the server refused.
+   *
+   * The queue drops it — a 400 will be a 400 next time too — but silently
+   * dropping it is how somebody's dinner disappears between looking at it and
+   * looking again. The toast is the only place this can be said, because the
+   * row it is about has already left the screen.
+   */
+  useEffect(
+    () =>
+      onRejected((intent, reason) => {
+        const what =
+          intent.kind === 'create'
+            ? intent.payload.description
+            : intent.kind === 'repeat'
+              ? intent.preview.description
+              : 'That change';
+        toast.error(`${what} could not be saved. ${reason}`);
+        void load(shown.current);
+      }),
+    [load, toast],
+  );
+
+  const queued = useRef(intents.length);
+  useEffect(() => {
+    const shrank = intents.length < queued.current;
+    queued.current = intents.length;
+    if (shrank) void load(shown.current);
+  }, [intents.length, load]);
   /*
    * Set when the tab is left, which is what makes the *first* focus silent —
    * the mount above has already fetched, and this fires on that same focus.
@@ -225,6 +300,24 @@ export default function TodayScreen() {
    */
   function removeEntry(entry: FoodEntry) {
     /*
+     * A meal that has never been sent is removed by forgetting we meant to
+     * send it. There is no row on the server to delete and no id it would
+     * accept, so a `delete` intent here would be a 404 the queue could not act
+     * on — and the undo is simply putting the intent back.
+     */
+    if (unsent.has(entry.id)) {
+      const forgotten = intents.find((intent) => intent.id === entry.id);
+      void drop(entry.id);
+      undoably(`Removed ${entry.description}`, {
+        commit: () => {},
+        restore: () => {
+          if (forgotten) void enqueue(forgotten);
+        },
+      });
+      return;
+    }
+
+    /*
      * The totals come off here rather than being left to the reload.
      *
      * They used to be corrected by the `load` that followed the delete, which
@@ -237,8 +330,8 @@ export default function TodayScreen() {
      * the day's calories and not a sum that an entry can be subtracted from.
      * It settles on the next load.
      */
-    const before = day;
-    setDay((prev) =>
+    const before = fetched;
+    setFetched((prev) =>
       prev
         ? {
             ...prev,
@@ -256,15 +349,25 @@ export default function TodayScreen() {
 
     undoably(`Removed ${entry.description}`, {
       commit: () => {
-        void api
-          .deleteFoodEntry(entry.id)
-          // The journal is mounted on the next tab with this meal's card in it,
-          // and nothing there re-reads the conversation. Tell it.
-          .then(() => entryRemoved(entry.id))
-          .catch((e: Error) => toast.error(e.message))
-          .finally(() => void load(date));
+        /*
+         * Queued rather than sent. The four seconds of undo have already
+         * elapsed, so this is the decision — and a decision made in a lift
+         * should survive the lift. The queue sends it when there is a network
+         * and, until then, `withPending` keeps the meal off the screen.
+         */
+        void enqueue({
+          kind: 'delete',
+          id: newId(),
+          userId: profile?.id ?? '',
+          entryId: entry.id,
+          queuedAt: new Date().toISOString(),
+        });
+        // The journal is mounted on the next tab with this meal's card in it,
+        // and nothing there re-reads the conversation. Tell it.
+        entryRemoved(entry.id);
+        void load(date);
       },
-      restore: () => setDay(before),
+      restore: () => setFetched(before),
     });
   }
 
@@ -275,8 +378,8 @@ export default function TodayScreen() {
    */
   function removeExercise(entry: ExerciseEntry) {
     const burn = Math.round(entry.kcal_burned);
-    const before = day;
-    setDay((prev) =>
+    const before = fetched;
+    setFetched((prev) =>
       prev
         ? {
             ...prev,
@@ -295,21 +398,68 @@ export default function TodayScreen() {
           .catch((e: Error) => toast.error(e.message))
           .finally(() => void load(date));
       },
-      restore: () => setDay(before),
+      restore: () => setFetched(before),
     });
   }
 
-  /** Clones a past entry to now — which is today, so jump back there to show it. */
-  async function repeatEntry(entry: FoodEntry) {
-    try {
-      const copy = await api.repeatFoodEntry(entry.id);
-      haptics.logged();
-      toast.success(`Logged ${copy.description} — ${Math.round(copy.kcal)} kcal`);
-      setDate(null);
-      void load(null);
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
+  /**
+   * Clones a past entry to now — which is today, so jump back there to show it.
+   *
+   * Queued rather than sent directly, which makes the offline case identical to
+   * the online one: the copy appears on today at once either way, and the only
+   * difference is how long it takes the server to hear about it. The `client_id`
+   * is what makes that safe to retry.
+   */
+  function repeatEntry(entry: FoodEntry) {
+    void enqueue({
+      kind: 'repeat',
+      id: newId(),
+      userId: profile?.id ?? '',
+      // Repeat logs at the current time, so the copy lands on today whatever
+      // day is being looked at — which is why the screen jumps back to it.
+      localDate: today ?? '',
+      entryId: entry.id,
+      meal: entry.meal,
+      preview: {
+        description: entry.description,
+        kcal: entry.kcal,
+        protein_g: entry.protein_g,
+        carbs_g: entry.carbs_g,
+        fat_g: entry.fat_g,
+      },
+      queuedAt: new Date().toISOString(),
+    });
+    haptics.logged();
+    toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
+    setDate(null);
+    void load(null);
+  }
+
+  /**
+   * A meal typed in, handed to the queue rather than to the API.
+   *
+   * Always queued, online or not. The alternative is two paths that behave
+   * differently on a good connection and only diverge where it is hardest to
+   * test — and the queue sends immediately when it can, so the online case
+   * costs a tick of the event loop and nothing else.
+   */
+  function logManually(draft: { description: string; meal: Meal; items: FoodItemInput[] }) {
+    setComposing(false);
+    void enqueue({
+      kind: 'create',
+      id: newId(),
+      userId: profile?.id ?? '',
+      localDate: day?.local_date ?? today ?? '',
+      payload: {
+        description: draft.description,
+        meal: draft.meal,
+        eaten_at: new Date().toISOString(),
+        items: draft.items,
+      },
+      queuedAt: new Date().toISOString(),
+    });
+    const kcal = draft.items.reduce((sum, item) => sum + item.kcal, 0);
+    toast.success(`Logged ${draft.description} — ${Math.round(kcal)} kcal`);
   }
 
   const byMeal = MEAL_ORDER.map((meal) => ({
@@ -423,6 +573,7 @@ export default function TodayScreen() {
                 <EntryRow
                   key={entry.id}
                   entry={entry}
+                  unsent={unsent.has(entry.id)}
                   first={i === 0}
                   index={i}
                   open={expanded === entry.id}
@@ -508,7 +659,61 @@ export default function TodayScreen() {
           )}
 
           {/* Repeating logs at the current time, so it only belongs on today. */}
-          {isToday && <RepeatMeals onLogged={() => void load(null)} />}
+          {isToday && <RepeatMeals localDate={day.local_date} onLogged={() => void load(null)} />}
+
+          {/*
+            * Typing a meal in.
+            *
+            * Below Repeat rather than above it, and that order is the whole
+            * argument of the offline work: repeating something you already eat
+            * is one tap, and typing four macros per item is the fallback for
+            * when it is genuinely a new meal. Putting the form first would make
+            * the expensive path look like the intended one.
+            */}
+          {isToday &&
+            (composing ? (
+              <FoodEditor
+                entryId={null}
+                initialMeal={inferMeal(new Date(), profile?.timezone ?? 'UTC')}
+                onCreate={logManually}
+                onCancel={() => setComposing(false)}
+              />
+            ) : (
+              <Pressable
+                onPress={() => {
+                  haptics.press();
+                  setComposing(true);
+                }}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.manual, { opacity: pressed ? 0.6 : 1 }]}
+              >
+                <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+                  + Log it yourself
+                </Text>
+              </Pressable>
+            ))}
+
+          {/*
+            * The offline footnote.
+            *
+            * A footnote and not a banner, because nothing is wrong: the numbers
+            * above are the last true ones plus everything queued, which is the
+            * same day the server will agree with shortly. An app that shouts
+            * about connectivity teaches people to distrust a screen that is
+            * currently correct. See OFFLINE.md §6.
+            */}
+          {waiting > 0 && (
+            <Text style={[t.footnote, styles.centred, { color: colors.mutedForeground }]}>
+              {waiting === 1 ? '1 change waiting to sync' : `${waiting} changes waiting to sync`}
+              {!live && ' · showing your last saved day'}
+            </Text>
+          )}
+
+          {waiting === 0 && !live && (
+            <Text style={[t.footnote, styles.centred, { color: colors.mutedForeground }]}>
+              Offline — showing your last saved day.
+            </Text>
+          )}
 
           {error && (
             <Text style={[t.footnoteSemibold, styles.centred, { color: colors.destructive }]}>
@@ -586,6 +791,7 @@ function Total({ consumed, target }: { consumed: number; target: number }) {
 
 function EntryRow({
   entry,
+  unsent,
   first,
   index,
   open,
@@ -594,6 +800,8 @@ function EntryRow({
   onRepeat,
 }: {
   entry: FoodEntry;
+  /** Logged here but not yet on the server. Drawn faint, not disabled. */
+  unsent: boolean;
   first: boolean;
   index: number;
   open: boolean;
@@ -623,8 +831,16 @@ function EntryRow({
       <Pressable
         onPress={onToggle}
         accessibilityRole="button"
+        /*
+         * Faint rather than badged. A queued meal counts toward the day in full
+         * — the arithmetic above already includes it — so it is the same row,
+         * not a lesser one; the opacity says "still on its way", which is all
+         * there is to say. A pill reading "pending" on every row would turn a
+         * tunnel into an incident.
+         */
         style={({ pressed }) => [
           styles.entry,
+          unsent ? styles.unsent : null,
           pressed ? { backgroundColor: colors.mutedWash } : null,
         ]}
       >
@@ -637,6 +853,7 @@ function EntryRow({
             {Math.round(entry.protein_g)}P · {Math.round(entry.carbs_g)}C ·{' '}
             {Math.round(entry.fat_g)}F
             {entry.confidence === 'low' && ' · rough estimate'}
+            {unsent && ' · waiting to sync'}
           </Text>
         </View>
         <Text style={[t.figure, styles.figure, { color: colors.foreground }]}>
@@ -834,6 +1051,8 @@ const styles = StyleSheet.create({
   loadingRing: { width: 176, height: 176, borderRadius: 88 },
   loadingBar: { height: 48, alignSelf: 'stretch', borderRadius: 16 },
   empty: { alignItems: 'center', paddingVertical: 40, gap: 12 },
+  manual: { alignItems: 'center', paddingVertical: 12 },
+  unsent: { opacity: 0.55 },
   mascot: { fontSize: 40, lineHeight: 46 },
   entry: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
   rowEmoji: { fontSize: 20, lineHeight: 24 },

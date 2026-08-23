@@ -19,6 +19,12 @@ export * from './units.ts';
  */
 export * from './day.ts';
 
+/**
+ * Folding client-side changes into a day before the server has heard about
+ * them. Same reasoning as `day.ts`, and it builds on it.
+ */
+export * from './pending.ts';
+
 export const MEALS = ['breakfast', 'lunch', 'dinner', 'snack'] as const;
 export const Meal = z.enum(MEALS);
 export type Meal = z.infer<typeof Meal>;

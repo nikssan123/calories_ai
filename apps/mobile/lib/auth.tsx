@@ -3,6 +3,8 @@ import type { AuthStatus, Profile } from '@ct/shared';
 import { api } from '@/lib/api';
 import { clearToken, restoreToken, saveToken } from '@/lib/session';
 import { forgetPush } from '@/lib/push';
+import { watch } from '@/lib/outbox';
+import { cacheProfile, forgetUser } from '@/lib/store';
 
 /**
  * Who this is, resolved once at the root.
@@ -102,6 +104,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, [refresh]);
 
+  /*
+   * The outbox starts draining as soon as there is a session to drain it with,
+   * and keeps watching for the app coming back to the foreground.
+   *
+   * Here rather than in a screen because a queued meal must not depend on
+   * anybody visiting the tab that queued it: someone who types a meal in a lift
+   * and then closes the app has done their part, and the send is ours.
+   */
+  useEffect(() => {
+    if (!status?.authenticated) return;
+    return watch();
+  }, [status?.authenticated]);
+
+  /*
+   * The profile is cached for its `timezone` and `day_start_hour` — without
+   * them the phone cannot work out which day a meal belongs to, and offline
+   * there is nobody to ask.
+   */
+  useEffect(() => {
+    const profile = status?.profile;
+    if (profile) void cacheProfile(profile.id, profile);
+  }, [status?.profile]);
+
   const adoptSession = useCallback(async (next: AuthStatus) => {
     if (next.token) await saveToken(next.token);
     // The token is stripped before it is put in React state: nothing rendering
@@ -114,6 +139,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const adoptProfile = useCallback((profile: Profile) => {
     setStatus((prev) => (prev ? { ...prev, profile } : prev));
   }, []);
+
+  const signedInAs = status?.profile?.id ?? null;
 
   const signOut = useCallback(async () => {
     /*
@@ -129,8 +156,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       /* revoking the row is a courtesy; dropping the token is the point */
     }
     await clearToken();
+    /*
+     * And the cached day with it. Not a security measure — the token is gone
+     * and the data was this user's own — but leaving it behind means the next
+     * person to sign in on this phone waits for a fetch while somebody else's
+     * breakfast is on the screen.
+     */
+    if (signedInAs) void forgetUser(signedInAs);
     setStatus(SIGNED_OUT);
-  }, []);
+  }, [signedInAs]);
 
   const value = useMemo<AuthValue>(
     () => ({

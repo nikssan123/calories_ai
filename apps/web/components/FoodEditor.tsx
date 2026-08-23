@@ -8,12 +8,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 /**
- * A logged meal, reopened as the form that could have collected it.
+ * A meal as the form that could have collected it — whether or not it exists.
  *
- * The journal's card is a receipt, and until now a receipt was final: the only
- * way to fix "that was a bigger portion" was to say it in the conversation and
- * spend a model call re-estimating a meal the user could already describe
+ * The journal's card is a receipt, and until recently a receipt was final: the
+ * only way to fix "that was a bigger portion" was to say it in the conversation
+ * and spend a model call re-estimating a meal the user could already describe
  * exactly. This is the other door — the numbers themselves, typed.
+ *
+ * It now opens both ways. With an `entryId` it corrects; with null it creates,
+ * which is the manual log path `POST /entries/food` exists for. The web gets no
+ * outbox and no offline mode — see OFFLINE.md §7 — but typing a meal in is
+ * useful with a network too, and the mobile form gained the same second door.
  *
  * It edits *items*, not the meal's totals, because the totals are not stored:
  * they are summed from the items on the way out. A form that let somebody set
@@ -44,22 +49,30 @@ interface DraftItem {
 
 export function FoodEditor({
   entryId,
+  initialMeal,
   onSaved,
   onCancel,
 }: {
-  entryId: string;
-  /** The corrected entry, so the card above can redraw without a reload. */
+  /** Null to compose a new meal rather than correct an existing one. */
+  entryId: string | null;
+  /** Which slot a new meal starts in. Ignored when correcting. */
+  initialMeal?: Meal;
+  /** The saved entry — corrected or newly logged — so the caller can redraw. */
   onSaved: (entry: FoodEntry) => void;
   onCancel: () => void;
 }) {
+  const creating = entryId === null;
   const [entry, setEntry] = useState<FoodEntry | null>(null);
   const [description, setDescription] = useState('');
-  const [meal, setMeal] = useState<Meal>('lunch');
-  const [items, setItems] = useState<DraftItem[]>([]);
+  const [meal, setMeal] = useState<Meal>(initialMeal ?? 'lunch');
+  // One blank row to type into. An empty form with an "add item" link is a form
+  // that asks to be started before it can be filled in.
+  const [items, setItems] = useState<DraftItem[]>(creating ? [blank()] : []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (entryId === null) return;
     let cancelled = false;
     api
       .foodEntry(entryId)
@@ -89,14 +102,20 @@ export function FoodEditor({
       return;
     }
 
+    const label = description.trim();
+    if (creating && label.length === 0) {
+      // The API refuses this too, but the sentence it answers with is about a
+      // field rather than about a meal, and this form knows what it is asking.
+      setError('What was it? A meal needs a name.');
+      return;
+    }
+
     setSaving(true);
     try {
-      const updated = await api.updateFoodEntry(entryId, {
-        description: description.trim() || undefined,
-        meal,
-        items: payload,
-      });
-      onSaved(updated);
+      const saved = entryId
+        ? await api.updateFoodEntry(entryId, { description: label || undefined, meal, items: payload })
+        : await api.logFoodEntry({ description: label, meal, items: payload });
+      onSaved(saved);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -119,7 +138,7 @@ export function FoodEditor({
     );
   }
 
-  if (entry === null) {
+  if (entry === null && !creating) {
     return (
       <Shell>
         <p className="text-footnote text-muted-foreground">Loading…</p>
@@ -134,7 +153,7 @@ export function FoodEditor({
 
   return (
     <Shell>
-      <p className="text-body font-bold">Fix what’s wrong</p>
+      <p className="text-body font-bold">{creating ? 'Log it yourself' : 'Fix what’s wrong'}</p>
 
       <Input
         value={description}
@@ -224,7 +243,9 @@ export function FoodEditor({
         </button>
         <Button onClick={() => void save()} disabled={saving} className="gap-1.5 rounded-full">
           {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
-          {saving ? 'Saving…' : `Save · ${Math.round(total).toLocaleString()} kcal`}
+          {saving
+            ? 'Saving…'
+            : `${creating ? 'Log' : 'Save'} · ${Math.round(total).toLocaleString()} kcal`}
         </Button>
       </div>
     </Shell>

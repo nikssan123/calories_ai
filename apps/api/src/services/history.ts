@@ -84,6 +84,8 @@ export async function mealTemplates(
 export interface RepeatOptions {
   meal?: Meal;
   eatenAt?: Date;
+  /** Makes the clone idempotent for a retrying outbox — see OFFLINE.md §1. */
+  clientId?: string | null;
 }
 
 /**
@@ -111,6 +113,7 @@ export async function repeatFoodEntry(
     // certain than it was the first time — and no less.
     confidence: source.confidence,
     source: 'quick',
+    clientId: options.clientId ?? null,
     // Deliberately not the original photo: this is a different meal that
     // happens to match, and the picture is of the earlier one.
     photoId: null,

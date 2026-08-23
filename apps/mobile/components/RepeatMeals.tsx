@@ -7,6 +7,9 @@ import { PressableChunk } from '@/components/Chunk';
 import { InsetGroup } from '@/components/InsetGroup';
 import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+import { enqueue, newId } from '@/lib/outbox';
+import { cachedTemplates, cacheTemplates } from '@/lib/store';
 import { font, type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
 
@@ -28,24 +31,58 @@ import { haptics } from '@/lib/haptics';
  * The list failing to load is still reported inline, because that one is about
  * this card and nothing else.
  */
-export function RepeatMeals({ onLogged }: { onLogged: () => void }) {
+export function RepeatMeals({
+  localDate,
+  onLogged,
+}: {
+  /** The day the copy lands on. Only ever today — the card is hidden otherwise. */
+  localDate: string;
+  onLogged: () => void;
+}) {
   const colors = useColors();
   const toast = useToast();
+  const { profile } = useAuth();
+  const userId = profile?.id ?? '';
   const [meals, setMeals] = useState<MealTemplate[] | null>(null);
   const [query, setQuery] = useState('');
-  const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async (search: string) => {
-    try {
-      const { meals } = await api.mealTemplates({ query: search || undefined, limit: 8 });
-      setMeals(meals);
-      setError(null);
-    } catch (e) {
-      setError((e as Error).message);
-      setMeals([]);
-    }
-  }, []);
+  const load = useCallback(
+    async (search: string) => {
+      try {
+        const { meals } = await api.mealTemplates({ query: search || undefined, limit: 8 });
+        setMeals(meals);
+        setError(null);
+        /*
+         * Only the unfiltered list is cached, and that is the point: it is the
+         * whole offline catalogue. A cache keyed by search term would fill up
+         * with answers to questions nobody asks twice, and the eight things
+         * somebody actually eats are what make logging in a basement one tap
+         * rather than four macros typed per item. See OFFLINE.md §3.
+         */
+        if (!search && userId) void cacheTemplates(userId, meals);
+      } catch (e) {
+        /*
+         * The cached list stands in, unfiltered — the search ran against the
+         * server and there is no server. Filtered here rather than silently
+         * showing everything, so a query that matches nothing offline says so
+         * instead of looking like it matched all eight.
+         */
+        const cached = userId ? await cachedTemplates(userId) : null;
+        if (cached) {
+          const needle = search.trim().toLowerCase();
+          setMeals(
+            needle ? cached.filter((m) => m.description.toLowerCase().includes(needle)) : cached,
+          );
+          setError(null);
+          return;
+        }
+        setError((e as Error).message);
+        setMeals([]);
+      }
+    },
+    [userId],
+  );
 
   useEffect(() => {
     // Debounced so typing doesn't fire a request per keystroke.
@@ -53,19 +90,34 @@ export function RepeatMeals({ onLogged }: { onLogged: () => void }) {
     return () => clearTimeout(timer);
   }, [load, query]);
 
-  async function repeat(template: MealTemplate) {
-    setBusy(template.entry_id);
-    try {
-      const entry = await api.repeatFoodEntry(template.entry_id);
-      haptics.logged();
-      setError(null);
-      toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
-      onLogged();
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setBusy(null);
-    }
+  /**
+   * Queued, not sent — the same path Today's swipe-to-repeat takes.
+   *
+   * There is no `busy` state any more because there is nothing to wait for:
+   * the intent is written and the day redraws from it immediately. A spinner
+   * here would be the app pretending to be uncertain about something it has
+   * already decided.
+   */
+  function repeat(template: MealTemplate) {
+    void enqueue({
+      kind: 'repeat',
+      id: newId(),
+      userId,
+      localDate,
+      entryId: template.entry_id,
+      preview: {
+        description: template.description,
+        kcal: template.kcal,
+        protein_g: template.protein_g,
+        carbs_g: template.carbs_g,
+        fat_g: template.fat_g,
+      },
+      queuedAt: new Date().toISOString(),
+    });
+    haptics.logged();
+    setError(null);
+    toast.success(`Logged ${template.description} — ${Math.round(template.kcal)} kcal`);
+    onLogged();
   }
 
   // Nothing to repeat yet, and no search running: stay out of the way entirely.
@@ -128,8 +180,7 @@ export function RepeatMeals({ onLogged }: { onLogged: () => void }) {
             <PressableChunk
               depth={3}
               radius={999}
-              onPress={() => void repeat(template)}
-              disabled={busy !== null}
+              onPress={() => repeat(template)}
               accessibilityRole="button"
               accessibilityLabel={`Log ${template.description} again`}
               contentStyle={[
@@ -138,9 +189,7 @@ export function RepeatMeals({ onLogged }: { onLogged: () => void }) {
               ]}
             >
               <Plus color={colors.secondaryForeground} />
-              <Text style={[styles.logLabel, { color: colors.secondaryForeground }]}>
-                {busy === template.entry_id ? 'Adding…' : 'Log'}
-              </Text>
+              <Text style={[styles.logLabel, { color: colors.secondaryForeground }]}>Log</Text>
             </PressableChunk>
           </View>
         ))

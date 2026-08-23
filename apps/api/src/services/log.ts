@@ -67,13 +67,52 @@ export interface CreateFoodInput {
   source: EntrySource;
   photoId?: string | null;
   items: FoodItemInput[];
+  /**
+   * An id the client made up before it had a network — see OFFLINE.md §1.
+   *
+   * Its only job is to make this insert repeatable. An outbox resends the
+   * request it never got an answer to, and "no answer" covers the case where
+   * the row was written and the reply was lost, which is the common one on a
+   * phone. With a key we recognise the second attempt; without one we log
+   * breakfast twice and nothing ever tells the user which meal is the ghost.
+   */
+  clientId?: string | null;
   ctx: DayContext;
 }
 
 export async function createFoodEntry(input: CreateFoodInput): Promise<FoodEntry> {
   const localDate = localDateFor(input.eatenAt, input.ctx);
 
-  const entryId = await transaction(async (client) => {
+  const outcome = await transaction<{ id: string } | { spent: string | null }>(async (client) => {
+    /*
+     * The key is claimed before the entry is written, not after.
+     *
+     * Claiming first is what makes a concurrent duplicate wait rather than
+     * race: `ON CONFLICT DO NOTHING` against an uncommitted row blocks on the
+     * other transaction's speculative insertion, so by the time the loser sees
+     * the conflict the winner has committed and `entry_id` is already set.
+     * Claiming afterwards would leave both inserts free to write a meal each.
+     */
+    if (input.clientId) {
+      const { rows: claimed } = await client.query<{ client_id: string }>(
+        `INSERT INTO food_entry_client_keys (user_id, client_id)
+         VALUES ($1,$2)
+         ON CONFLICT (user_id, client_id) DO NOTHING
+         RETURNING client_id`,
+        [input.userId, input.clientId],
+      );
+
+      if (claimed.length === 0) {
+        // Spent already. `entry_id` is the entry it bought, or null if that
+        // entry has since been deleted — which is a refusal, not a re-insert.
+        const { rows: existing } = await client.query<{ entry_id: string | null }>(
+          'SELECT entry_id FROM food_entry_client_keys WHERE user_id = $1 AND client_id = $2',
+          [input.userId, input.clientId],
+        );
+        return { spent: existing[0]?.entry_id ?? null };
+      }
+    }
+
     const { rows } = await client.query<{ id: string }>(
       `INSERT INTO food_entries
          (user_id, meal, eaten_at, local_date, description, note, confidence, source, photo_id)
@@ -100,13 +139,41 @@ export async function createFoodEntry(input: CreateFoodInput): Promise<FoodEntry
         [id, ...itemValues(item, index)],
       );
     }
-    return id;
+
+    if (input.clientId) {
+      await client.query(
+        'UPDATE food_entry_client_keys SET entry_id = $3 WHERE user_id = $1 AND client_id = $2',
+        [input.userId, input.clientId, id],
+      );
+    }
+    return { id };
   });
 
-  const entry = await getFoodEntry(input.userId, entryId);
+  if ('spent' in outcome) {
+    if (outcome.spent === null) {
+      throw new DuplicateEntryError('That entry has already been logged and removed.');
+    }
+    const previous = await getFoodEntry(input.userId, outcome.spent);
+    if (!previous) {
+      throw new DuplicateEntryError('That entry has already been logged and removed.');
+    }
+    return previous;
+  }
+
+  const entry = await getFoodEntry(input.userId, outcome.id);
   if (!entry) throw new Error('Food entry vanished immediately after insert');
   return entry;
 }
+
+/**
+ * A `client_id` that was spent on an entry no longer there.
+ *
+ * Its own type because the route has to tell it apart from a genuine failure.
+ * This is a 409 the client should stop retrying: the meal was logged, the user
+ * deleted it, and the queued copy that is still asking for it must be dropped
+ * rather than backed off from and tried again forever.
+ */
+export class DuplicateEntryError extends Error {}
 
 export async function getFoodEntry(userId: string, entryId: string): Promise<FoodEntry | null> {
   const entries = await listFoodEntries(userId, { entryId });

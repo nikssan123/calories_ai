@@ -1,16 +1,10 @@
-import type {
-  DayQuality,
-  DaySummary,
-  DietQuality,
-  FoodItem,
-  Progress,
-  TrendPoint,
-} from '@ct/shared';
-export { QUALITY_COVERAGE_FLOOR } from '@ct/shared';
+import type { DaySummary, DietQuality, Progress, TrendPoint } from '@ct/shared';
+import { qualityTargetsFor, rollUpDay } from '@ct/shared';
+export { dayQuality, QUALITY_COVERAGE_FLOOR } from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import { addDays, dateRange, type DayContext, localDateFor } from '../time.ts';
 import { listExerciseEntries, listFoodEntries, listWeights } from './log.ts';
-import { qualityTargetsFor, targetsForDate } from './targets.ts';
+import { targetsForDate } from './targets.ts';
 import { getUser } from './user.ts';
 
 /** The four columns the diet quality panel is made of. */
@@ -30,36 +24,11 @@ export async function buildDaySummary(
     ]),
   ]);
 
-  const consumed = foodEntries.reduce(
-    (acc, entry) => ({
-      kcal: acc.kcal + entry.kcal,
-      protein_g: acc.protein_g + entry.protein_g,
-      carbs_g: acc.carbs_g + entry.carbs_g,
-      fat_g: acc.fat_g + entry.fat_g,
-    }),
-    { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
-  );
-
-  const burned_kcal = exerciseEntries.reduce((sum, e) => sum + e.kcal_burned, 0);
-
-  return {
-    local_date: localDate,
-    consumed: {
-      kcal: Math.round(consumed.kcal),
-      protein_g: Math.round(consumed.protein_g),
-      carbs_g: Math.round(consumed.carbs_g),
-      fat_g: Math.round(consumed.fat_g),
-    },
-    quality: dayQuality(
-      foodEntries.flatMap((entry) => entry.items),
-      targets.kcal,
-    ),
-    burned_kcal: Math.round(burned_kcal),
-    // Reported, but §9 says the UI must not lead with it.
-    net_kcal: Math.round(consumed.kcal - burned_kcal),
+  return rollUpDay({
+    localDate,
+    foodEntries,
+    exerciseEntries,
     targets,
-    food_entries: foodEntries,
-    exercise_entries: exerciseEntries,
     weight: weightRow
       ? {
           id: weightRow.id,
@@ -68,43 +37,7 @@ export async function buildDaySummary(
           weight_kg: Number(weightRow.weight_kg),
         }
       : null,
-  };
-}
-
-/**
- * A day's quality panel, summed from the items rather than from the entries.
- *
- * Items, because coverage is a share of calories and only an item knows how
- * many of the day's calories it brought. `fiber_g` is the sentinel for the
- * whole panel: the four are estimated together or not at all — one tool call
- * fills all of them — so tracking four separate coverages would be four copies
- * of the same number and a way for them to disagree.
- */
-export function dayQuality(items: FoodItem[], targetKcal: number): DayQuality {
-  const measured = items.filter((item) => item.fiber_g !== null);
-  const totalKcal = items.reduce((sum, item) => sum + item.kcal, 0);
-  const measuredKcal = measured.reduce((sum, item) => sum + item.kcal, 0);
-
-  // No food at all is full coverage of nothing, not a gap: an empty day should
-  // not be reported as "partly measured" when there is nothing to measure.
-  const coverage = totalKcal > 0 ? measuredKcal / totalKcal : 1;
-
-  const sum = (field: 'fiber_g' | 'sodium_mg' | 'sat_fat_g' | 'sugar_g'): number | null => {
-    const values = items
-      .map((item) => item[field])
-      .filter((value): value is number => value !== null);
-    if (values.length === 0) return null;
-    return Math.round(values.reduce((a, b) => a + b, 0));
-  };
-
-  return {
-    fiber_g: sum('fiber_g'),
-    sodium_mg: sum('sodium_mg'),
-    sat_fat_g: sum('sat_fat_g'),
-    sugar_g: sum('sugar_g'),
-    coverage: Math.round(coverage * 100) / 100,
-    targets: qualityTargetsFor(targetKcal),
-  };
+  });
 }
 
 export async function currentLocalDate(ctx: DayContext): Promise<string> {
