@@ -253,6 +253,7 @@ describe('accounts', () => {
   it('lists accounts with their activity and spend', async () => {
     await addMeal(owner, { date: '2026-03-01', kcal: 500 });
     await recordUsage({
+      provider: 'anthropic-api',
       userId: owner.id,
       kind: 'text_log',
       outcome: { text: '', sessionId: null, numTurns: 1, costUsd: 0.05, costSource: 'reported' },
@@ -409,6 +410,7 @@ describe('actions', () => {
      */
     it('keeps the AI cost history, orphaned', async () => {
       await recordUsage({
+        provider: 'anthropic-api',
         userId: member.id,
         kind: 'text_log',
         outcome: { text: '', sessionId: null, numTurns: 1, costUsd: 0.05, costSource: 'reported' },
@@ -587,6 +589,7 @@ describe('actions', () => {
 describe('the cost routes', () => {
   it('answers the viability question in one response', async () => {
     await recordUsage({
+      provider: 'anthropic-api',
       userId: owner.id,
       kind: 'text_log',
       outcome: {
@@ -616,6 +619,7 @@ describe('the cost routes', () => {
 
   it('serves the raw turn log', async () => {
     await recordUsage({
+      provider: 'anthropic-api',
       userId: owner.id,
       kind: 'photo_log',
       outcome: { text: '', sessionId: null, numTurns: 1, costUsd: 0.3, costSource: 'reported' },

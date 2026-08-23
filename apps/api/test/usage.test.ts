@@ -9,9 +9,17 @@ import {
   estimateCost,
   recentUsage,
   recordUsage,
+  type RecordUsageInput,
 } from '../src/services/usage.ts';
 import { MODELS } from '../src/ai/client.ts';
 import type { TurnKind } from '../src/ai/providers/types.ts';
+
+/**
+ * These tests are about the arithmetic, not the routing, so they all file under
+ * the metered lane. `lanes.test.ts` is where the lane column itself is pinned.
+ */
+const record = (input: Omit<RecordUsageInput, 'provider'>) =>
+  recordUsage({ ...input, provider: 'anthropic-api' });
 import { runTurn } from '../src/ai/run.ts';
 import { getUser } from '../src/services/user.ts';
 import { scriptAgent } from './helpers/agent-mock.ts';
@@ -64,7 +72,7 @@ describe('the kinds the table accepts', () => {
     const kinds = Object.keys(MODELS) as TurnKind[];
 
     for (const kind of kinds) {
-      await recordUsage({ userId: user.id, kind, outcome: { ...OUTCOME, model: MODELS[kind].model } });
+      await record({ userId: user.id, kind, outcome: { ...OUTCOME, model: MODELS[kind].model } });
     }
 
     const rows = await query<{ kind: string }>(
@@ -77,7 +85,7 @@ describe('the kinds the table accepts', () => {
 
 describe('recordUsage', () => {
   it('writes one row per turn with the tokens split by kind', async () => {
-    await recordUsage({ userId: user.id, kind: 'text_log', outcome: OUTCOME });
+    await record({ userId: user.id, kind: 'text_log', outcome: OUTCOME });
 
     const [row] = await rows();
     expect(row).toMatchObject({
@@ -99,7 +107,7 @@ describe('recordUsage', () => {
    * Averaging it away would flatter every figure on the panel.
    */
   it('records a failed turn, and marks it failed', async () => {
-    await recordUsage({
+    await record({
       userId: user.id,
       kind: 'photo_log',
       outcome: { ...OUTCOME, error: 'The agent stopped early (error_max_turns).' },
@@ -112,7 +120,7 @@ describe('recordUsage', () => {
   });
 
   it('prices a turn from the rate card when the provider reported nothing', async () => {
-    await recordUsage({
+    await record({
       userId: user.id,
       kind: 'text_log',
       outcome: { ...OUTCOME, costUsd: 0, costSource: 'unknown' },
@@ -125,7 +133,7 @@ describe('recordUsage', () => {
 
   /** No rate card covers a local model, and inventing one would be worse. */
   it('leaves an unpriceable model at zero and says so', async () => {
-    await recordUsage({
+    await record({
       userId: user.id,
       kind: 'text_log',
       outcome: { ...OUTCOME, model: 'llama-3-local', costUsd: 0, costSource: 'unknown' },
@@ -141,7 +149,7 @@ describe('recordUsage', () => {
    * reporting a gap, not a free turn.
    */
   it('re-prices a reported zero from the rate card', async () => {
-    await recordUsage({
+    await record({
       userId: user.id,
       kind: 'text_log',
       outcome: { ...OUTCOME, costUsd: 0, costSource: 'reported' },
@@ -152,7 +160,7 @@ describe('recordUsage', () => {
   });
 
   it('prefers the provider figure over the rate card when it has one', async () => {
-    await recordUsage({
+    await record({
       userId: user.id,
       kind: 'text_log',
       outcome: { ...OUTCOME, costUsd: 0.999 },
@@ -163,7 +171,7 @@ describe('recordUsage', () => {
   });
 
   it('keeps the per-model breakdown for a turn that touched several', async () => {
-    await recordUsage({
+    await record({
       userId: user.id,
       kind: 'review',
       outcome: {
@@ -181,7 +189,7 @@ describe('recordUsage', () => {
   });
 
   it('falls back to the routed model when the provider named none', async () => {
-    await recordUsage({
+    await record({
       userId: user.id,
       kind: 'photo_log',
       outcome: { ...OUTCOME, model: undefined },
@@ -196,7 +204,7 @@ describe('recordUsage', () => {
    */
   it('never lets a write failure escape into the turn', async () => {
     await expect(
-      recordUsage({
+      record({
         userId: 'not-a-uuid',
         kind: 'text_log',
         outcome: OUTCOME,
@@ -233,13 +241,13 @@ describe('a real turn', () => {
 
 describe('reporting', () => {
   beforeEach(async () => {
-    await recordUsage({ userId: user.id, kind: 'text_log', outcome: OUTCOME });
-    await recordUsage({
+    await record({ userId: user.id, kind: 'text_log', outcome: OUTCOME });
+    await record({
       userId: user.id,
       kind: 'photo_log',
       outcome: { ...OUTCOME, model: 'claude-opus-5', costUsd: 0.3 },
     });
-    await recordUsage({
+    await record({
       userId: user.id,
       kind: 'text_log',
       outcome: { ...OUTCOME, error: 'boom' },
@@ -307,7 +315,7 @@ describe('economics', () => {
 
   it('derives cost per turn and scales spend to a month', async () => {
     for (let i = 0; i < 4; i++) {
-      await recordUsage({ userId: user.id, kind: 'text_log', outcome: { ...OUTCOME, costUsd: 0.25 } });
+      await record({ userId: user.id, kind: 'text_log', outcome: { ...OUTCOME, costUsd: 0.25 } });
     }
 
     const result = await economics(30);
@@ -327,15 +335,15 @@ describe('economics', () => {
    * projection fourfold.
    */
   it('scales a seven-day window up to a month', async () => {
-    await recordUsage({ userId: user.id, kind: 'text_log', outcome: { ...OUTCOME, costUsd: 7 } });
+    await record({ userId: user.id, kind: 'text_log', outcome: { ...OUTCOME, costUsd: 7 } });
     const result = await economics(7);
     expect(result.cost_per_user_month_usd).toBeCloseTo(30, 4);
   });
 
   it('reports the heaviest account separately from the mean', async () => {
     const light = await createUser();
-    await recordUsage({ userId: light.id, kind: 'text_log', outcome: { ...OUTCOME, costUsd: 0.01 } });
-    await recordUsage({ userId: user.id, kind: 'text_log', outcome: { ...OUTCOME, costUsd: 5 } });
+    await record({ userId: light.id, kind: 'text_log', outcome: { ...OUTCOME, costUsd: 0.01 } });
+    await record({ userId: user.id, kind: 'text_log', outcome: { ...OUTCOME, costUsd: 5 } });
 
     const result = await economics(30);
     expect(result.heaviest_user_month_usd).toBeCloseTo(5, 4);
@@ -344,8 +352,8 @@ describe('economics', () => {
 
   /** An undercount that does not announce itself is the worst kind. */
   it('reports the share of turns nobody could price', async () => {
-    await recordUsage({ userId: user.id, kind: 'text_log', outcome: OUTCOME });
-    await recordUsage({
+    await record({ userId: user.id, kind: 'text_log', outcome: OUTCOME });
+    await record({
       userId: user.id,
       kind: 'text_log',
       outcome: { ...OUTCOME, model: 'llama-3-local', costUsd: 0, costSource: 'unknown' },

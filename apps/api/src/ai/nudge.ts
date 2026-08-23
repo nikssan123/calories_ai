@@ -64,7 +64,7 @@ export async function generateNudge(
   // No `resume`, for the same reason a review does not: this must not inherit
   // the journal's conversation, and it must not pollute it either.
   const outcome = await provider.run(request, null);
-  await recordUsage({ userId: id, kind: 'nudge', outcome });
+  await recordUsage({ userId: id, kind: 'nudge', outcome, provider: provider.id });
   if (outcome.error) throw new Error(outcome.error);
 
   const content = outcome.text?.trim() || fallbackNudge(trigger.stats);

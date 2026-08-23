@@ -78,7 +78,7 @@ export async function scanFridgePhoto(
     };
 
   const outcome = await provider.run(request, null);
-  await recordUsage({ userId: id, kind: 'pantry_scan', outcome });
+  await recordUsage({ userId: id, kind: 'pantry_scan', outcome, provider: provider.id });
   if (outcome.error) throw new Error(outcome.error);
 
   // Which of these the kitchen already holds, so the confirmation screen can

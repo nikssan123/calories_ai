@@ -124,3 +124,42 @@ describe('which provider gets built', () => {
     expect(createProvider(toolContext).id).toBe('anthropic-api');
   });
 });
+
+/**
+ * The cost ledger has to name the lane that ran, not the lane configured.
+ *
+ * This is the bug the per-user routing shipped with, and it is worth a test
+ * rather than a fix because of how it failed: `ai_usage.provider` was written
+ * from `providerId()`, which was right for exactly as long as a deployment had
+ * one lane. Afterwards every subscription turn was filed under `anthropic-api`,
+ * nothing errored, and the cost column quietly mixed money that was billed with
+ * money a subscription had already paid for. It took somebody asking "did my
+ * turn use the subscription?" to notice.
+ */
+describe('what the cost ledger records', () => {
+  it('files a turn under the lane that ran it, not the deployment default', async () => {
+    process.env.AI_PROVIDER = 'anthropic-api';
+    const { recordUsage } = await import('../src/services/usage.ts');
+    const { query } = await import('../src/db.ts');
+    const { createUser } = await import('./helpers/factories.ts');
+
+    const user = await createUser();
+    const outcome = {
+      text: 'Logged.',
+      model: 'claude-sonnet-5',
+      sessionId: 's1',
+      numTurns: 1,
+      costUsd: 0.02,
+      costSource: 'reported' as const,
+      usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0 },
+    };
+
+    await recordUsage({ userId: user.id, kind: 'text_log', outcome, provider: 'anthropic' });
+
+    const rows = await query<{ provider: string }>(
+      'SELECT provider FROM ai_usage WHERE user_id = $1',
+      [user.id],
+    );
+    expect(rows[0]!.provider).toBe('anthropic');
+  });
+});

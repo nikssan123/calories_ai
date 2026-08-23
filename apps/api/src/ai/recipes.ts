@@ -252,7 +252,12 @@ export async function suggestRecipes(
   // Before the error check, exactly as the journal does it: a run that spent
   // tokens on two good recipes and then timed out is precisely the kind of cost
   // that must not go unrecorded.
-  await recordUsage({ userId: id, kind: job.kind === 'plan' ? 'meal_plan' : 'recipe', outcome });
+  await recordUsage({
+    userId: id,
+    kind: job.kind === 'plan' ? 'meal_plan' : 'recipe',
+    outcome,
+    provider: provider.id,
+  });
   if (outcome.error) throw new Error(outcome.error);
 
   /*

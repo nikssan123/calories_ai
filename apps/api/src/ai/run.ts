@@ -223,7 +223,7 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
 
   // Before the error check: a turn that spent tokens and then failed is exactly
   // the turn the cost report must not lose.
-  await recordUsage({ userId: input.userId, kind: request.kind, outcome });
+  await recordUsage({ userId: input.userId, kind: request.kind, outcome, provider: provider.id });
 
   if (outcome.error) throw new Error(outcome.error);
   if (!outcome.text) outcome.text = 'Logged.';

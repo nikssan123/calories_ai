@@ -64,7 +64,7 @@ export async function generateWeeklyReview(
   // Deliberately no `resume`: a review must not inherit — or pollute — the
   // journal's conversation. `recentReviewPrompt` carries it back the other way.
   const outcome = await provider.run(request, null);
-  await recordUsage({ userId: id, kind: 'review', outcome });
+  await recordUsage({ userId: id, kind: 'review', outcome, provider: provider.id });
   if (outcome.error) throw new Error(outcome.error);
 
   const content = outcome.text || fallbackReview(stats);

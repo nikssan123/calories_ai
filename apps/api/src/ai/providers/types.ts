@@ -267,9 +267,19 @@ export type StreamEvent =
  */
 export type StreamSink = (event: StreamEvent) => void;
 
+/**
+ * The lanes, as written in `AI_PROVIDER`.
+ *
+ * Here on the seam rather than in the factory that reads the variable, because
+ * it is now also what `ai_usage` files a turn under — and a row that says which
+ * lane ran has to be spelled the same way the provider spells itself.
+ */
+export const PROVIDERS = ['anthropic', 'anthropic-api', 'openai'] as const;
+export type ProviderId = (typeof PROVIDERS)[number];
+
 export interface AiProvider {
   /** Stable id, as written in AI_PROVIDER. */
-  readonly id: string;
+  readonly id: ProviderId;
   /** Human label for logs and error messages. */
   readonly label: string;
   /**

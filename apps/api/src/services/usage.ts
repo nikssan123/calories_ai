@@ -1,7 +1,7 @@
 import { query, queryOne } from '../db.ts';
 import { anthropicRate, openAiRate, priceUsage, round6 } from '../ai/pricing.ts';
 import { MODELS } from '../ai/client.ts';
-import { providerId } from '../ai/providers/index.ts';
+import type { ProviderId } from '../ai/providers/index.ts';
 import type { CostSource, Outcome, TurnKind } from '../ai/providers/types.ts';
 import { limitsFor } from './plans.ts';
 import type { PlanName } from '@ct/shared';
@@ -19,6 +19,22 @@ export interface RecordUsageInput {
   userId: string;
   kind: TurnKind;
   outcome: Outcome;
+  /**
+   * Which lane actually ran the turn, which is no longer the same question as
+   * which lane the deployment is configured for.
+   *
+   * This used to be read off `providerId()` at insert time, and that was
+   * correct for exactly as long as a deployment had one lane. It stopped being
+   * correct the day `SUBSCRIPTION_EMAILS` arrived and did not announce it: every
+   * subscription-lane turn was filed under `anthropic-api`, silently, and the
+   * cost column went on mixing money that was really billed with money that a
+   * subscription had already covered. Nothing broke, which is why it took a
+   * person asking "did my turn use the subscription?" to find it.
+   *
+   * Required rather than defaulted for that reason. A caller that forgets it is
+   * a compile error now, instead of a plausible-looking row.
+   */
+  provider: ProviderId;
 }
 
 /**
@@ -138,7 +154,7 @@ export async function recordUsage(input: RecordUsageInput): Promise<void> {
        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
       [
         input.userId,
-        providerId(),
+        input.provider,
         input.kind,
         model,
         Math.round(usage.inputTokens),

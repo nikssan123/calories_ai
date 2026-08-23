@@ -4,8 +4,9 @@ import type { ToolContext } from '../tools.ts';
 import { createAnthropicProvider } from './anthropic.ts';
 import { createAnthropicApiProvider } from './messages.ts';
 import { createOpenAiProvider } from './openai.ts';
-import type { AiProvider } from './types.ts';
+import { PROVIDERS, type AiProvider, type ProviderId } from './types.ts';
 
+export type { ProviderId } from './types.ts';
 export type {
   AgentMessage,
   AgentRequest,
@@ -23,8 +24,7 @@ export type {
  * key. The subscription is the right thing in development and the wrong thing
  * in production, where a process per turn is what caps the box.
  */
-const PROVIDERS = ['anthropic', 'anthropic-api', 'openai'] as const;
-export type ProviderId = (typeof PROVIDERS)[number];
+
 
 export function providerId(source: NodeJS.ProcessEnv = process.env): ProviderId {
   const requested = (source.AI_PROVIDER ?? 'anthropic').trim().toLowerCase();
