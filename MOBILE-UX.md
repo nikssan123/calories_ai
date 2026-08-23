@@ -10,6 +10,12 @@ wrong one for finishing it — because a phone can do things the browser was nev
 asked about, and it has habits the browser does not. Nothing below is a bug.
 This is the list of what the port did not think to ask for.
 
+Two of the sections are about *feel* rather than capability — haptics and
+motion — and they are first on purpose. The app's whole visual language is
+physical objects, and a phone is the only device that can finish that idea.
+Reanimated is already carrying most of the weight; what it has not been asked to
+do yet is the part people would notice.
+
 Ordered by what I would do first, which is not the same as by size.
 
 ---
@@ -42,7 +48,129 @@ existing `useReducedMotion` contract says the spring is decoration and the
 information must survive it, which is an argument for the buzz rather than
 against it.
 
-## 2. Gestures the port does not have
+## 2. Motion
+
+**Reanimated is already in the app and already doing real work.** The ring's arc
+springs open and its figure counts up, the macro bars stagger in at 70ms apart,
+cards drop and bounce on arrival, the switch thumb overshoots, a meal's band
+grows out of the day it landed in, the sheet fades its scrim and slides its
+panel. None of that needs redoing.
+
+What follows is the part it has not been asked to do — and one rule that matters
+more than any item on the list.
+
+### The rule: extend the vocabulary, do not start a second one
+
+The app has a motion language already, lifted whole from the web: three cubic
+béziers — `ease.spring` (overshoots and settles), `ease.pop` (overshoots harder)
+and `ease.out` (settles without overshoot) — and two durations, `duration.spring`
+at 700ms and `duration.quick` at 180ms.
+
+Anything new should be expressible in those. An animation that needs a fourth
+curve is usually an animation that belongs to a different app. The value of a
+small vocabulary is that a screen full of independently-authored motion still
+reads as one object behaving consistently, and that is exactly what is easy to
+lose when "add some animation" is the brief.
+
+### The bottom tabs
+
+**Today each of the six tabs owns its own lozenge and cross-fades it in place.**
+Tap Cook and Today's lozenge fades out while Cook's fades in — which is two
+objects appearing and disappearing at once. It works, and it is the wrong mental
+model: the lozenge is the *selection*, and there is only ever one selection.
+
+Make it one lozenge that travels. A single `Animated.View` in the bar, its
+`translateX` and width driven to the measured position of the active tab with
+`ease.spring`, so it overshoots slightly and settles — the same curve the ring
+and the bars already use. Selection then reads as a thing sliding to where you
+pointed, which is both truer and considerably more satisfying.
+
+Two smaller things on top of it:
+
+- **A pop on the icon that was just chosen**, `ease.pop` over `duration.quick`,
+  scale 1 → 1.12 → 1. Only the arriving one; popping the departing icon as well
+  would draw the eye to where you just left.
+- **Colour and weight crossfading as the lozenge lands** rather than switching
+  on the frame of the tap, so the label appears to be lit by the lozenge's
+  arrival rather than to change independently of it.
+
+Deliberately *not*: per-tab character animations — the flame flickering, the
+chef's hat lifting. Charming the first time and noise by the fortieth log of the
+week, and the tab bar is on screen for the entire session.
+
+### Shared element transitions — the showpiece
+
+Tapping a recipe tile currently pushes a screen in from the right, and the tile's
+picture and the reader's hero are two unrelated images of the same dish.
+
+Have the tile's image **grow into the hero**. `react-native-screens` supports
+shared element transitions through expo-router, so the tile and the reader
+declare the same tag and the transition is handled natively.
+
+This is the single most impressive thing available here, and it happens to sit
+on the path people actually walk: Cook is a grid you scan and then commit to,
+which is precisely the interaction a shared element is *for* — it answers "where
+did that come from?" without a word. The same trick would work from a History
+day cell into Today.
+
+### Lists
+
+- **Entrance stagger.** `FadeInDown` with a per-item delay on Today's meal
+  groups, Exercise's sessions and Cook's tiles. Use 70ms, which is what
+  `MacroBars` already staggers at, so the whole app has one rhythm rather than
+  three.
+- **Layout animations on removal**, and this one is not optional if swipe-to-
+  delete happens: without `Layout` and an `exiting` animation, a swiped row
+  vanishes and the list snaps shut underneath your thumb. With them the gap
+  closes and the gesture feels finished. These two features should ship together.
+
+### Numbers that move
+
+`CalorieRing` already counts its figure up rather than swapping it, and that is
+the most-noticed animation in the app. Nothing else does it — not Today's total,
+not the Progress headline figures, not the plan's per-night kcal.
+
+Lift `useCountUp` out of `CalorieRing` into a hook and use it wherever a figure
+changes in response to something the user just did. Not on first paint of a
+screen: counting up from zero on every navigation is a tax, not a delight.
+
+### Scroll-driven
+
+- **Today's header condensing as you scroll** — the large date shrinking into a
+  compact title. This is a very iOS thing and Reanimated does it properly, on the
+  UI thread via `useAnimatedScrollHandler`, so it tracks the finger exactly
+  rather than lagging a frame behind it.
+- **The tab bar retracting on scroll-down** in the Journal is tempting and I
+  would hold it: the bar already disappears for the keyboard, and two independent
+  reasons for the same chrome to vanish is how a layout starts feeling
+  unpredictable.
+
+### Skeletons
+
+`Skeleton` pulses its opacity between 1 and 0.45. A shimmer — a light band
+sweeping across the shape — reads as "working" where a pulse reads as "waiting",
+and the two are worth distinguishing on a screen where a recipe run genuinely
+takes half a minute.
+
+### The discipline
+
+Three constraints, all of which the existing animations already honour and all
+of which are easy to drop when adding more:
+
+- **Reduced motion means jumping to the end state, never showing less.** The one
+  exception is a loop, which has no end state worth arriving at — Confetti does
+  not fire at all, and the skeleton settles at the dim end rather than never
+  settling.
+- **Everything on the UI thread.** `useAnimatedStyle` and
+  `useAnimatedScrollHandler`, never per-frame `setState`. The journal learned
+  this the expensive way: a streamed reply lands as tens of state updates a
+  second, and re-rendering forty bubbles for each of them is why `Row` is
+  memoised.
+- **Nothing may delay input.** An entrance stagger that leaves the third tile
+  untappable for 200ms is strictly worse than no stagger. Animate appearance,
+  never availability.
+
+## 3. Gestures the port does not have
 
 ### Swipe on a row to act on it
 
@@ -93,7 +221,7 @@ before doing this one.
 
 Standard, expected, and both the Journal and Progress get long enough to want it.
 
-## 3. What only a phone can do
+## 4. What only a phone can do
 
 This is where the value is, as opposed to the polish.
 
@@ -134,7 +262,7 @@ The ring is the app's face and it is currently three taps away from the home
 screen. A widget showing today's ring, and a long-press quick action that opens
 straight into the composer with the keyboard already up.
 
-## 4. What a phone needs and a desktop does not
+## 5. What a phone needs and a desktop does not
 
 ### An offline queue for turns
 
@@ -146,7 +274,7 @@ Phones lose signal in supermarkets, gyms and lifts, which is precisely where and
 when people log food. "I will send this when you are back" is the difference
 between an app you can rely on and one you learn not to trust in a basement.
 
-## 5. Two bugs in waiting
+## 6. Two bugs in waiting
 
 Neither is broken today. Both will be reported eventually.
 
@@ -190,8 +318,13 @@ transport is built rather than after.
 
 ---
 
-## If only two things get done
+## If only three things get done
 
-Haptics and swipe-to-delete-with-undo. Together they are about a day, they touch
-every list and every button in the app, and they are the two that change how the
-whole thing feels rather than what it can do.
+Haptics, the travelling tab lozenge, and swipe-to-delete-with-undo — the last of
+which drags list layout animations along with it and should not ship without
+them.
+
+Together they are a day or two, they touch every list, every button and the one
+piece of chrome that is on screen for the whole session, and they change how the
+app *feels* rather than what it can do. The shared element transition is the one
+to do fourth, because it is the one people would mention to someone else.
