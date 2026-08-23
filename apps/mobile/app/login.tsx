@@ -36,6 +36,8 @@ export default function LoginScreen() {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [forgetting, setForgetting] = useState(false);
+  const [sent, setSent] = useState<string | null>(null);
 
   /*
    * Only a server with no accounts at all opens on "create account"; otherwise a
@@ -82,6 +84,30 @@ export default function LoginScreen() {
       setError((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  /*
+   * Asks for the link and stops there. Spending it happens on the web, because
+   * the link goes to a mailbox and opens in a browser — but *asking* has to be
+   * possible from here, or someone who forgot their password on a phone has no
+   * way in at all and the sign-in screen is a dead end.
+   */
+  async function forgot() {
+    const address = email.trim();
+    if (!address) {
+      setError('Put your email in first and I’ll send a link.');
+      return;
+    }
+    setForgetting(true);
+    setError(null);
+    try {
+      const result = await api.forgotPassword(address);
+      setSent(result.message);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setForgetting(false);
     }
   }
 
@@ -182,6 +208,22 @@ export default function LoginScreen() {
             </Text>
           )}
         </PressableChunk>
+
+        {sent && (
+          <Text style={[t.footnoteSemibold, styles.switch, { color: colors.caloriesText }]}>
+            {sent}
+          </Text>
+        )}
+
+        {!signup && (
+          <Text
+            accessibilityRole="button"
+            onPress={() => void forgot()}
+            style={[t.footnoteSemibold, styles.switch, { color: colors.mutedForeground }]}
+          >
+            {forgetting ? 'Sending…' : 'Forgot your password?'}
+          </Text>
+        )}
 
         {(signup || signupAllowed) && (
           <Text

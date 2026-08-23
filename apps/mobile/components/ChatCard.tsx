@@ -8,7 +8,7 @@ import Animated, {
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
-import type { ChatAction, ChatCard as Card, ExerciseEntry, UnitSystem } from '@ct/shared';
+import type { ChatAction, ChatCard as Card, ExerciseEntry, Recipe, UnitSystem } from '@ct/shared';
 import {
   formatBodyWeight,
   formatDistance,
@@ -17,8 +17,9 @@ import {
   toLoad,
 } from '@ct/shared';
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
-import { Chunk } from '@/components/Chunk';
+import { Chunk, PressableChunk } from '@/components/Chunk';
 import { RecipeTile } from '@/components/kitchen/RecipeTile';
+import { scale, Servings } from '@/components/kitchen/Servings';
 import { Sparkline } from '@/components/Sparkline';
 import { WorkoutCard } from '@/components/workout/WorkoutCard';
 import { api } from '@/lib/api';
@@ -118,7 +119,7 @@ function CardBody({
     case 'plan':
       return <PlanCard card={card} />;
     case 'recipes':
-      return <RecipesCard card={card} />;
+      return <RecipesCard card={card} onLogged={onLogged} />;
     case 'workout_prompt':
       // Needs a real message id to answer onto. An optimistic bubble has none
       // yet, but it also cannot be carrying a card the model drew.
@@ -136,28 +137,93 @@ function CardBody({
  * user has to act on. A summary here would send someone to another tab to do
  * the one tap the card could have taken itself.
  */
-function RecipesCard({ card }: { card: Extract<Card, { type: 'recipes' }> }) {
-  const router = useRouter();
+function RecipesCard({
+  card,
+  onLogged,
+}: {
+  card: Extract<Card, { type: 'recipes' }>;
+  onLogged?: () => void;
+}) {
   return (
     <Land style={styles.recipes}>
       {card.recipes.map((recipe) => (
-        <RecipeTile
-          key={recipe.id}
-          title={recipe.title}
-          summary={recipe.summary}
-          kcal={recipe.kcal}
-          protein_g={recipe.protein_g}
-          servingLabel="per portion"
-          emoji={foodEmoji(recipe.title)}
-          needs={recipe.ingredients.filter((i) => i.missing).map((i) => i.name)}
-          minutes={recipe.minutes}
-          steps={recipe.steps.length}
-          saved={recipe.saved}
-          onPress={() => router.push(`/recipe/${recipe.id}`)}
-          onToggleSave={() => void api.saveRecipe(recipe.id, !recipe.saved).catch(() => {})}
-        />
+        <SuggestedRecipe key={recipe.id} recipe={recipe} onLogged={onLogged} />
       ))}
     </Land>
+  );
+}
+
+/**
+ * One suggestion, with the tap it is for attached.
+ *
+ * The tile alone would only take you to the recipe's own screen, and this card
+ * is the one place where that is not enough: a suggestion is a thing to act on
+ * rather than a picture of something that already happened, and sending someone
+ * to another screen to do the one tap the card could take itself is the whole
+ * reason the web draws its full card here instead of a summary.
+ */
+function SuggestedRecipe({ recipe, onLogged }: { recipe: Recipe; onLogged?: () => void }) {
+  const colors = useColors();
+  const router = useRouter();
+  const [servings, setServings] = useState(1);
+  const [saved, setSaved] = useState(recipe.saved);
+  const [cooking, setCooking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function cook() {
+    setCooking(true);
+    try {
+      await api.cookRecipe(recipe.id, { portions: servings });
+      onLogged?.();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setCooking(false);
+    }
+  }
+
+  return (
+    <View style={styles.suggestion}>
+      <RecipeTile
+        title={recipe.title}
+        summary={recipe.summary}
+        kcal={recipe.kcal}
+        protein_g={recipe.protein_g}
+        servingLabel="per portion"
+        emoji={foodEmoji(recipe.title)}
+        needs={recipe.ingredients.filter((i) => i.missing).map((i) => i.name)}
+        minutes={recipe.minutes}
+        steps={recipe.steps.length}
+        saved={saved}
+        onPress={() => router.push(`/recipe/${recipe.id}`)}
+        onToggleSave={() => {
+          const next = !saved;
+          setSaved(next);
+          void api.saveRecipe(recipe.id, next).catch(() => setSaved(!next));
+        }}
+      />
+
+      <View style={styles.suggestionActions}>
+        <Servings value={servings} onChange={setServings} unit="portion" style={styles.flex} />
+        <PressableChunk
+          depth={3}
+          radius={999}
+          color={colors.caloriesDeep}
+          onPress={() => void cook()}
+          disabled={cooking}
+          accessibilityRole="button"
+          contentStyle={[styles.cook, { backgroundColor: colors.primary }]}
+        >
+          <Text style={[t.footnoteBold, { color: colors.primaryForeground }]}>
+            {cooking ? 'Logging…' : `I ate this · ${Math.round(scale(recipe.kcal, servings))}`}
+          </Text>
+        </PressableChunk>
+      </View>
+
+      {error && (
+        <Text style={[t.footnoteSemibold, { color: colors.destructive }]}>{error}</Text>
+      )}
+    </View>
   );
 }
 
@@ -891,7 +957,10 @@ function formatDate(isoDate: string): string {
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
   shell: { borderWidth: 2, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 14 },
-  recipes: { gap: 8 },
+  recipes: { gap: 12 },
+  suggestion: { gap: 8 },
+  suggestionActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  cook: { height: 40, borderRadius: 999, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
   chipWrap: { alignSelf: 'flex-start' },
   chip: {
     flexDirection: 'row',
