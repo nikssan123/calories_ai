@@ -7,6 +7,7 @@ import type {
   ChatCard,
   ExerciseCategory,
   ExerciseEntry,
+  ExerciseSet,
   ExerciseType,
   LastWorkout,
   MuscleGroup,
@@ -74,6 +75,26 @@ interface Draft {
   sets: { reps: string; weight: string; minutes: string }[];
 }
 
+/**
+ * Enough of a session for the card to reopen on it.
+ *
+ * Deliberately not `ExerciseEntry`: the journal holds a *card*, not an entry,
+ * and the card carries the work but not the bookkeeping — no `source`, no
+ * `local_date`. Asking for the whole entry would mean a fetch on every tap of
+ * an edit button to collect fields this form never reads.
+ *
+ * `performed_at` is optional for the same reason. Omitted, the server leaves
+ * the session on the day it already had, which is the right answer for a
+ * correction that says nothing about when.
+ */
+export interface EditableSession {
+  id: string;
+  category: ExerciseCategory | null;
+  duration_min: number | null;
+  sets: ExerciseSet[];
+  performed_at?: string;
+}
+
 export function WorkoutCard({
   card,
   editing,
@@ -93,7 +114,7 @@ export function WorkoutCard({
    * be a second layout to build, to keep in step and to learn — for a form that
    * already knows how to collect exactly this.
    */
-  editing?: ExerciseEntry;
+  editing?: EditableSession;
   /**
    * The chat message this card is answering, when it is sitting in the
    * conversation. Absent when the card was opened from the Exercise tab, where
@@ -721,7 +742,7 @@ const CATEGORY_TRACKS: Record<ExerciseCategory, ExerciseType['tracks']> = {
  * the reader uses — it went in as kilograms, and the field it lands in is the
  * same field it was typed into.
  */
-function draftsFrom(entry: ExerciseEntry, types: ExerciseType[], units: UnitSystem): Draft[] {
+function draftsFrom(entry: EditableSession, types: ExerciseType[], units: UnitSystem): Draft[] {
   const category = entry.category ?? 'strength';
   const byName = new Map(types.map((type) => [type.name.toLowerCase(), type]));
   const byPosition = new Map<number, Draft>();

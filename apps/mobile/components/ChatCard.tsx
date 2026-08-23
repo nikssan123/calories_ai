@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Line } from 'react-native-svg';
 import Animated, {
   useAnimatedStyle,
@@ -151,7 +151,7 @@ function CardBody({
     case 'food':
       return <FoodCard card={card} today={today} />;
     case 'exercise':
-      return <ExerciseCard card={card} />;
+      return <ExerciseCard card={card} onLogged={onLogged} />;
     case 'weight':
       return <WeightCard card={card} />;
     case 'trend':
@@ -690,25 +690,87 @@ function dayWord(isoDate: string, today?: string): string {
   return `on ${formatDate(isoDate)}`;
 }
 
-function ExerciseCard({ card }: { card: Extract<Card, { type: 'exercise' }> }) {
+/**
+ * A session, and the way back into it.
+ *
+ * The card was write-once until now: submitted from memory, usually while still
+ * catching your breath, and the set you mistyped only becomes visible once it
+ * is already a receipt. From there the only route back was to delete the
+ * session and log it again.
+ *
+ * Editing reopens the same form that collected it rather than a second one —
+ * see `EditableSession`. The result is swapped in locally because nothing
+ * re-reads the conversation after a correction; the server has already redrawn
+ * the stored card, so a reload agrees with what is on screen.
+ */
+function ExerciseCard({
+  card,
+  onLogged,
+}: {
+  card: Extract<Card, { type: 'exercise' }>;
+  onLogged?: () => void;
+}) {
   const colors = useColors();
   const units = useUnits();
+  const [edited, setEdited] = useState<Extract<Card, { type: 'exercise' }> | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Derived rather than seeded into state, so a card redrawn by its parent is
+  // not shadowed by a stale copy taken at mount.
+  const shown = edited ?? card;
+
   const detail = [
-    card.distance_km !== null ? formatDistance(card.distance_km, units) : null,
-    card.duration_min !== null ? `${Math.round(card.duration_min)} min` : null,
+    shown.distance_km !== null ? formatDistance(shown.distance_km, units) : null,
+    shown.duration_min !== null ? `${Math.round(shown.duration_min)} min` : null,
   ].filter(Boolean);
+
+  if (editing) {
+    return (
+      <>
+        <WorkoutCard
+          editing={{
+            id: shown.entry_id,
+            category: shown.category,
+            duration_min: shown.duration_min,
+            sets: shown.sets,
+          }}
+          onLogged={(entry) => {
+            setEdited(toExerciseCard(entry));
+            setEditing(false);
+            onLogged?.();
+          }}
+          onError={setError}
+        />
+        <Pressable
+          onPress={() => {
+            setEditing(false);
+            setError(null);
+          }}
+          accessibilityRole="button"
+          hitSlop={8}
+          style={({ pressed }) => [styles.editRow, { opacity: pressed ? 0.6 : 1 }]}
+        >
+          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Cancel</Text>
+        </Pressable>
+        {error && (
+          <Text style={[t.footnoteSemibold, { color: colors.destructive }]}>{error}</Text>
+        )}
+      </>
+    );
+  }
 
   return (
     <Shell>
       <View style={styles.headRow}>
         <View style={styles.headBody}>
-          <Text style={styles.emoji}>{exerciseEmoji(card.description)}</Text>
+          <Text style={styles.emoji}>{exerciseEmoji(shown.description)}</Text>
           <Text numberOfLines={1} style={[t.bodyBold, styles.flex, { color: colors.foreground }]}>
-            {card.description}
+            {shown.description}
           </Text>
         </View>
         <Text style={[t.figure, styles.figure, { color: colors.exerciseText }]}>
-          −{card.kcal_burned.toLocaleString()}
+          −{shown.kcal_burned.toLocaleString()}
           <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}> kcal</Text>
         </Text>
       </View>
@@ -720,13 +782,29 @@ function ExerciseCard({ card }: { card: Extract<Card, { type: 'exercise' }> }) {
       </Text>
 
       {/*
+        Quiet, and on the receipt rather than behind a long-press: a correction
+        is an ordinary thing to want and a gesture nobody can see is a feature
+        nobody finds. Weighted like the subline above it, because it is not
+        what the card is for.
+      */}
+      <Pressable
+        onPress={() => setEditing(true)}
+        accessibilityRole="button"
+        accessibilityLabel={`Edit ${shown.description}`}
+        hitSlop={8}
+        style={({ pressed }) => [styles.editRow, { opacity: pressed ? 0.6 : 1 }]}
+      >
+        <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Edit</Text>
+      </Pressable>
+
+      {/*
         The sets, where there were any. A strength session summed to one calorie
         figure is the least interesting thing about it — the number nobody
         trained for. What was actually done is the load and the reps.
       */}
-      {card.sets.length > 0 && (
+      {shown.sets.length > 0 && (
         <View style={styles.sets}>
-          {groupSets(card.sets, units).map((group) => (
+          {groupSets(shown.sets, units).map((group) => (
             <View key={group.name} style={styles.setRow}>
               <Text numberOfLines={1} style={[t.footnote, styles.flex, { color: colors.foreground }]}>
                 {group.name}
@@ -1059,6 +1137,8 @@ const styles = StyleSheet.create({
   legendLabel: { flexShrink: 1 },
   legendRight: { flexShrink: 0 },
   subline: { marginTop: 6 },
+  /** Aligned right so it reads as an action on the card, not a line of it. */
+  editRow: { marginTop: 8, alignSelf: 'flex-end' },
   caption: { marginTop: 8 },
   sets: { gap: 4, marginTop: 10 },
   setRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },

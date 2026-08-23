@@ -16,7 +16,7 @@ import { AUTH_HELP, authDescription, hasSubscriptionAuth } from '../ai/client.ts
 import { env } from '../env.ts';
 import { generateWeeklyReview } from '../ai/review.ts';
 import { runTurn, type RunTurnInput } from '../ai/run.ts';
-import { foodCard } from '../ai/tools.ts';
+import { exerciseCard, foodCard } from '../ai/tools.ts';
 import { itemShape } from '../ai/shapes.ts';
 import { sendAccountDeletedEmail } from '../email/notify.ts';
 import {
@@ -80,7 +80,7 @@ import {
   saveSchedule,
   weekSchedule,
 } from '../services/routines.ts';
-import { messageActions, replaceActions } from '../services/chat.ts';
+import { messageActions, refreshEntryCards, replaceActions } from '../services/chat.ts';
 import { TurnInProgressError } from '../services/turn-lock.ts';
 import { ModelBusyError } from '../ai/token-bucket.ts';
 import { addDays, dateRange, localDateFor } from '../time.ts';
@@ -369,6 +369,19 @@ export async function registerRoutes(app: FastifyInstance) {
       ctx,
     });
     if (!updated) return reply.status(404).send({ error: 'Entry not found' });
+
+    /*
+     * The journal is redrawn to match. A correction is not a turn, so nothing
+     * in the conversation would otherwise hear about it, and the card that
+     * logged this meal would go on showing the figure it was logged with while
+     * the Today screen shows the corrected one.
+     */
+    await refreshEntryCards(
+      userId,
+      updated.id,
+      foodCard(updated, await buildDaySummary(userId, updated.local_date), ctx.units),
+      `${updated.meal}: ${updated.description} — ${Math.round(updated.kcal)} kcal`,
+    );
     return updated;
   });
 
@@ -399,6 +412,15 @@ export async function registerRoutes(app: FastifyInstance) {
       ctx,
     });
     if (!entry) return reply.status(404).send({ error: 'Entry not found' });
+
+    // Same as the meal above: redraw the receipt this session already left in
+    // the conversation, or it goes on showing the sets it was logged with.
+    await refreshEntryCards(
+      userId,
+      entry.id,
+      exerciseCard(entry),
+      `${entry.description} — ~${Math.round(entry.kcal_burned)} kcal`,
+    );
     return entry;
   });
 

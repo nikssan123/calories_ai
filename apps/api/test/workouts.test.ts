@@ -320,6 +320,33 @@ describe('updateWorkout', () => {
     expect(still!.sets.map((s) => s.reps)).toEqual([8]);
   });
 
+  /*
+   * The client fixing a rep count has no reason to echo back a timestamp it is
+   * not changing, and a default of "now" would move the session off the day
+   * whose totals it belongs to.
+   */
+  it('leaves the session on its own day when the correction says nothing about when', async () => {
+    const performedAt = new Date('2026-03-04T18:00:00.000Z');
+    const entry = await logWorkout({
+      userId: user.id,
+      category: 'strength',
+      exercises: [bench([8], 80)],
+      performedAt,
+      ctx: user.ctx,
+    });
+
+    const edited = await updateWorkout({
+      entryId: entry.id,
+      userId: user.id,
+      category: 'strength',
+      exercises: [bench([10], 80)],
+      ctx: user.ctx,
+    });
+
+    expect(edited!.performed_at).toBe(entry.performed_at);
+    expect(edited!.local_date).toBe(entry.local_date);
+  });
+
   it('answers null for an entry that does not exist', async () => {
     const edited = await updateWorkout({
       entryId: '00000000-0000-0000-0000-000000000000',

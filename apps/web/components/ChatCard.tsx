@@ -118,7 +118,7 @@ function CardBody({
     case 'food':
       return <FoodCard card={card} today={today} />;
     case 'exercise':
-      return <ExerciseCard card={card} />;
+      return <ExerciseCard card={card} onLogged={onLogged} />;
     case 'weight':
       return <WeightCard card={card} />;
     case 'trend':
@@ -536,24 +536,77 @@ function dayWord(isoDate: string, today?: string): string {
   return `on ${formatDate(isoDate)}`;
 }
 
-function ExerciseCard({ card }: { card: Extract<Card, { type: 'exercise' }> }) {
+/**
+ * A session, and the way back into it.
+ *
+ * The card was write-once until now: submitted from memory, usually while still
+ * catching your breath, and the set you mistyped only becomes visible once it
+ * is already a receipt. From there the only route back was to delete the
+ * session and log it again.
+ *
+ * Editing reopens the same form that collected it rather than a second one —
+ * see `EditableSession`. The result is swapped in locally because nothing
+ * re-reads the conversation after a correction; the server has already redrawn
+ * the stored card, so a reload agrees with what is on screen.
+ */
+function ExerciseCard({
+  card,
+  onLogged,
+}: {
+  card: Extract<Card, { type: 'exercise' }>;
+  onLogged?: () => void;
+}) {
   const units = useUnits();
+  const [edited, setEdited] = useState<Extract<Card, { type: 'exercise' }> | null>(null);
+  const [editing, setEditing] = useState(false);
+
+  // Derived rather than seeded into state, so a card redrawn by its parent is
+  // not shadowed by a stale copy taken at mount.
+  const shown = edited ?? card;
+
   const detail = [
-    card.distance_km !== null ? formatDistance(card.distance_km, units) : null,
-    card.duration_min !== null ? `${Math.round(card.duration_min)} min` : null,
+    shown.distance_km !== null ? formatDistance(shown.distance_km, units) : null,
+    shown.duration_min !== null ? `${Math.round(shown.duration_min)} min` : null,
   ].filter(Boolean);
+
+  if (editing) {
+    return (
+      <>
+        <WorkoutCard
+          editing={{
+            id: shown.entry_id,
+            category: shown.category,
+            duration_min: shown.duration_min,
+            sets: shown.sets,
+          }}
+          onLogged={(entry) => {
+            setEdited(toExerciseCard(entry));
+            setEditing(false);
+            onLogged?.();
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => setEditing(false)}
+          className="text-footnote text-muted-foreground hover:text-foreground mt-1.5 ml-auto block font-semibold"
+        >
+          Cancel
+        </button>
+      </>
+    );
+  }
 
   return (
     <Shell>
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           <span aria-hidden className="shrink-0 text-[22px] leading-none">
-            {exerciseEmoji(card.description)}
+            {exerciseEmoji(shown.description)}
           </span>
-          <p className="min-w-0 flex-1 truncate text-body font-bold">{card.description}</p>
+          <p className="min-w-0 flex-1 truncate text-body font-bold">{shown.description}</p>
         </div>
         <span className="text-figure shrink-0 text-body text-[var(--exercise-text)]">
-          −{card.kcal_burned.toLocaleString()}
+          −{shown.kcal_burned.toLocaleString()}
           <span className="text-muted-foreground text-footnote font-semibold"> kcal</span>
         </span>
       </div>
@@ -564,6 +617,21 @@ function ExerciseCard({ card }: { card: Extract<Card, { type: 'exercise' }> }) {
       </p>
 
       {/*
+        Quiet, and on the receipt rather than behind a hover: a correction is an
+        ordinary thing to want, and an affordance nobody can see is a feature
+        nobody finds. Weighted like the subline above it, because it is not what
+        the card is for.
+      */}
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        aria-label={`Edit ${shown.description}`}
+        className="text-footnote text-muted-foreground hover:text-foreground mt-1.5 ml-auto block font-semibold"
+      >
+        Edit
+      </button>
+
+      {/*
         The sets, where there were any.
         
         A strength session summed to one calorie figure is the least interesting
@@ -571,9 +639,9 @@ function ExerciseCard({ card }: { card: Extract<Card, { type: 'exercise' }> }) {
         is the load and the reps, so the card shows those and lets the burn stay
         the small print it deserves to be.
       */}
-      {card.sets.length > 0 && (
+      {shown.sets.length > 0 && (
         <div className="mt-2.5 space-y-1">
-          {groupSets(card.sets, units).map((group) => (
+          {groupSets(shown.sets, units).map((group) => (
             <div key={group.name} className="flex items-baseline justify-between gap-3">
               <span className="text-footnote min-w-0 flex-1 truncate">{group.name}</span>
               <span className="text-footnote text-muted-foreground shrink-0 tabular-nums">

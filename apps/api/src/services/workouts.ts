@@ -184,7 +184,18 @@ export async function updateWorkout(
   const existing = await getExerciseEntry(input.userId, input.entryId);
   if (!existing) return null;
 
-  const priced = await priceSession(input);
+  /*
+   * A correction that says nothing about when leaves the session where it is.
+   *
+   * `priceSession` falls through to now, which is right for a log and wrong
+   * here: a client fixing a rep count has no reason to echo back a timestamp it
+   * is not changing, and defaulting to now would silently move Tuesday's
+   * session onto today — off the day whose totals it belongs to.
+   */
+  const priced = await priceSession({
+    ...input,
+    performedAt: input.performedAt ?? new Date(existing.performed_at),
+  });
 
   await transaction(async (client) => {
     await client.query(
