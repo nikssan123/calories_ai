@@ -14,6 +14,7 @@
     },
     "android": {
       "package": "com.daysofar.app",
+      "googleServicesFile": "./google-services.json",
       "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",

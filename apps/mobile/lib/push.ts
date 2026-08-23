@@ -90,7 +90,20 @@ export async function registerForPush(
      */
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {
-        name: 'Day So Far',
+        /*
+         * What it carries, not who sent it. Android already files channels
+         * under the app, so a channel called "Day So Far" inside Day So Far
+         * tells the reader nothing on the one screen where they are deciding
+         * what to switch off.
+         */
+        name: 'Reviews and nudges',
+        /*
+         * `DEFAULT` rather than `HIGH`: it makes a sound and sits in the shade,
+         * and it does not throw a banner over whatever the reader was doing.
+         * The whole argument for putting these on a phone was that the switch
+         * already promised "at most one a week" — arriving louder than the
+         * email did would be taking that back.
+         */
         importance: Notifications.AndroidImportance.DEFAULT,
       });
     }

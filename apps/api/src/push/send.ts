@@ -76,6 +76,14 @@ export async function sendPush(
       // The app's own notification settings decide the rest. `default` is the
       // sound a person expects from something they asked to be told.
       sound: 'default' as const,
+      /*
+       * Named, or Android files it under a fallback channel of Expo's — which
+       * is invisible until somebody opens the app's notification settings and
+       * finds their weekly review sorted under a category with a machine's name
+       * on it. The client creates this channel before it ever asks for a token,
+       * so by the time anything can be sent there is somewhere to put it.
+       */
+      channelId: 'default',
     }));
 
     let tickets: ExpoTicket[];
