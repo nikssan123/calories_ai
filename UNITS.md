@@ -131,7 +131,13 @@ scanner's three portion pills become:
 
 - **the serving** — unchanged, and this is what a US label leads with anyway
 - **100 g → 1 oz** — the basis pill, in the unit the person's deli counter uses
-- **Weigh it** — a stepper in grams or in ounces, half-ounce steps
+- **Weigh it** — a figure *typed* in grams or in ounces, with 5 g and
+  half-ounce steps beside it for nudging rather than for arriving. Somebody who
+  put their lunch on a scale already knows it was 137 g, and a stepper that can
+  only reach multiples of five is asking them to round an exact number into a
+  wrong one. Its bounds are the API's own (5 kg, and a positive gram) rather
+  than tidier ones, because a typed figure that gets silently clamped is a
+  wrong number logged.
 
-All three still resolve to grams before the request leaves the browser, so
+All three still resolve to grams before the request leaves the client, so
 `POST /barcode/log` never learns that any of this happened.
