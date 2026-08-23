@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Circle, Path, Polyline, Rect } from 'react-native-svg';
 import type { ChatMessage, PhotoMediaType } from '@ct/shared';
@@ -8,6 +8,7 @@ import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { PressableChunk } from '@/components/Chunk';
 import { pickPhoto, takePhoto, type PreparedPhoto } from '@/lib/image';
 import { font, type as t, useColors } from '@/theme';
+import { useSharedPhoto } from '@/lib/share';
 
 export interface ComposerPayload {
   text: string;
@@ -48,6 +49,21 @@ export function Composer({
   const colors = useColors();
   const [text, setText] = useState('');
   const [photo, setPhoto] = useState<PreparedPhoto | null>(null);
+
+  /*
+   * A photo shared in from another app lands here, in the same state the camera
+   * button fills — so everything downstream, the preview and the send and the
+   * bubble that follows, cannot tell the two apart.
+   *
+   * Attached and not sent. This is a message about somebody's meal, and putting
+   * one in the conversation on their behalf is not the app's to do.
+   */
+  const { pending, taken } = useSharedPhoto();
+  useEffect(() => {
+    if (!pending) return;
+    setPhoto(pending);
+    taken();
+  }, [pending, taken]);
   const [busy, setBusy] = useState(false);
 
   const canSend = (text.trim().length > 0 || photo !== null) && !disabled;

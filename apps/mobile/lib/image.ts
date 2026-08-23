@@ -1,6 +1,7 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import type { PhotoMediaType } from '@ct/shared';
+import { Image } from 'react-native';
 
 /**
  * Getting a photo off the phone and onto the API.
@@ -130,4 +131,35 @@ export async function pickPhoto(): Promise<PreparedPhoto | null> {
   });
   const asset = result.canceled ? null : result.assets[0];
   return asset ? prepare(asset) : null;
+}
+
+/**
+ * The same treatment, for a photo that arrived from somewhere else.
+ *
+ * A share hands over a URI and, on a good day, the dimensions with it. `prepare`
+ * needs both, so the fallback asks the image itself — which costs a decode, and
+ * is still cheaper than uploading a 12MP original because a `width` came through
+ * null.
+ *
+ * Returns null rather than throwing on anything it cannot read. A share sheet
+ * can hand over a file that has already been cleaned up, a format nothing here
+ * decodes, or a URI belonging to an app that has since been killed; none of
+ * those is worth an error screen in front of somebody who was trying to log
+ * their lunch.
+ */
+export async function preparePhotoFromUri(
+  uri: string,
+  size?: { width: number | null; height: number | null },
+): Promise<PreparedPhoto | null> {
+  try {
+    const known =
+      size && size.width !== null && size.height !== null
+        ? { width: size.width, height: size.height }
+        : await new Promise<{ width: number; height: number }>((resolve, reject) => {
+            Image.getSize(uri, (width, height) => resolve({ width, height }), reject);
+          });
+    return await prepare({ uri, ...known } as Asset);
+  } catch {
+    return null;
+  }
 }

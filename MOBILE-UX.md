@@ -327,15 +327,45 @@ goes there on its own.
 
 This is where the value is, as opposed to the polish.
 
-### A share-sheet target
+### A share-sheet target — built, unverified on this emulator
 
-Photograph a meal in the camera app, share, pick Day So Far, and land in the
-composer with the photo attached.
+Photograph a meal in the camera app, share, pick Day So Far, land in the journal
+with it attached and the cursor waiting. The product's pitch is *say what you
+ate or photograph it*, and the photo half used to begin with "first, open the
+app".
 
-The product's whole pitch is *say what you ate or photograph it*, and the photo
-half currently begins with "first, open the app". Being in the share sheet moves
-the app to where the photo already is. This is the single most on-brand thing on
-the list after Siri.
+**The dependency question is answered: one plugin, and it earns it.**
+`expo-share-intent` peers on `expo: ^57` — our exact SDK — was published last
+month, and depends on nothing we do not already have. It covers the iOS share
+extension *and* the Android intent filters, which was the condition: doing only
+Android would split the platforms on a whole feature, a bigger version of the
+split this design refuses everywhere else.
+
+Images only, one at a time. A shared link or PDF has no meaning here, and an app
+that appears in every share sheet for every file type is one people learn to
+scroll past.
+
+It stops at *attached*, never *sent* — the same rule the barcode scanner follows
+on a miss. The message is about somebody's meal, and putting one in the
+conversation on their behalf is not the app's to do. A share arriving while
+signed out is not lost either: the photo waits in context, the guard sends the
+reader to sign in, and the composer picks it up when the journal finally mounts.
+
+**What could not be proven here.** The intent filter is installed and registered
+— `dumpsys` shows `com.daysofar.app/.MainActivity` handling `SEND` for
+`image/*` — but the app does not appear in the emulator's share sheet, and a
+directly-injected intent is worse than useless as a test:
+`ExpoShareIntentModule.getFileInfo` does `resolver.query(...)!!` followed by an
+unguarded `moveToFirst()`, so any URI whose metadata it cannot read takes the
+whole app down rather than reporting an error. Ours could not be read because
+the app declares only the legacy `READ_EXTERNAL_STORAGE`, which Android 13+
+ignores for media.
+
+That last part is worth carrying forward regardless of the emulator: **a share
+of an unreadable URI crashes the app**, and it is upstream code, so the guard
+has to be a bug report or a patch rather than a `try` on our side.
+
+This needs a real phone, exactly as push did.
 
 ### Push notifications — built; needs one credential
 
@@ -427,11 +457,10 @@ leading has to be computed from the scaled size rather than baked.
 
 ## Open questions
 
-**Is the share sheet worth a third-party plugin?** Android takes an intent
-filter and nothing else. iOS needs a share *extension* — a second native target,
-which Expo cannot generate without a community config plugin. Doing only Android
-would split the platforms on a whole feature, which is a bigger version of the
-split this design refuses everywhere else; so it is one dependency or neither.
+All three are answered, and each answer is recorded where the work is: a nudge
+that reaches a phone does not also reach an inbox; a horizontal swipe means
+"act on this row" and nothing else; and the share sheet was worth one plugin,
+because it buys both platforms rather than splitting them.
 
 ---
 
@@ -460,5 +489,10 @@ built: **push notifications**, including the answer to how loud a nudge may be.
 Only a credential stands between that and a phone actually buzzing, and it is
 the account holder's to add.
 
-Left in §4: the share-sheet target, App Intents, a widget. The first of those
-still needs a decision before it needs code — see Open questions.
+The share-sheet target is built too, on one plugin that covers both platforms.
+Like push before it, the last mile is a real phone: the intent filter is
+registered but the emulator will not offer the app, and the plugin crashes
+outright on a URI whose metadata it cannot read.
+
+Left in §4: App Intents and a widget. Both are native code per platform, and
+App Intents needs an Apple Developer account before it can be run at all.

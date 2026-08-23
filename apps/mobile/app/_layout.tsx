@@ -32,6 +32,7 @@ import { Nunito_500Medium_Italic } from '@expo-google-fonts/nunito/500Medium_Ita
 import { Nunito_800ExtraBold_Italic } from '@expo-google-fonts/nunito/800ExtraBold_Italic';
 import * as Notifications from 'expo-notifications';
 import { ToastProvider } from '@/components/Toast';
+import { SharedPhotoRoot } from '@/lib/share';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { ThemePreferenceProvider, useThemePreference } from '@/lib/theme-preference';
 import { paletteFor, ThemeContext, useColors } from '@/theme';
@@ -115,7 +116,15 @@ function Themed() {
           * it. It draws over the stack rather than in it.
           */}
         <ToastProvider>
-          <Gate />
+          {/*
+            * Inside the toast and outside the navigator, like the toast itself.
+            * A share can arrive while the app is signed out — the photo waits in
+            * context, the guard sends the reader to the sign-in screen, and the
+            * composer picks it up when the journal finally mounts.
+            */}
+          <SharedPhotoRoot>
+            <Gate />
+          </SharedPhotoRoot>
         </ToastProvider>
       </View>
     </ThemeContext.Provider>
