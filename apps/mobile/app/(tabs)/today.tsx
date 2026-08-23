@@ -22,8 +22,10 @@ import { Skeleton } from '@/components/Skeleton';
 import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
-import { font, type as t, useColors } from '@/theme';
+import { font, type as t, useColors, type Palette } from '@/theme';
 import { haptics } from '@/lib/haptics';
+import { SwipeRow, type SwipeAction } from '@/components/SwipeRow';
+import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
 
 /** The `date` the calendar links here with. Anything else is ignored. */
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -50,6 +52,7 @@ export default function TodayScreen() {
   const units = useUnits();
   const router = useRouter();
   const toast = useToast();
+  const undoably = useUndoableRemoval();
 
   const params = useLocalSearchParams<{ date?: string }>();
   const requested = typeof params.date === 'string' && ISO_DATE.test(params.date) ? params.date : null;
@@ -121,23 +124,53 @@ export default function TodayScreen() {
    * The three things on this screen that answer over it rather than in it.
    *
    * All three are gone by the time there is anything to say. A deleted row is
-   * taken out optimistically, so a failure has no row left to sit under and
+   * taken out optimistically — and now offers its own way back, see
+   * `useUndoableRemoval` — so a failure has no row left to sit under and
    * `error` — which heads the screen and belongs to the day failing to load —
    * would report it a full scroll away from where it happened. A repeat jumps
    * the screen back to today, which redraws everything including any inline
    * message. So the receipt goes over the top, where it can outlive its subject.
    */
-  async function removeEntry(entry: FoodEntry) {
+  function removeEntry(entry: FoodEntry) {
+    /*
+     * The totals come off here rather than being left to the reload.
+     *
+     * They used to be corrected by the `load` that followed the delete, which
+     * was fine when the delete went out immediately. Now that it is held for
+     * four seconds, leaving them would mean the ring above kept counting a meal
+     * the reader had just watched leave the screen — and the ring is the first
+     * thing they look at.
+     *
+     * `quality` is not adjusted, because it cannot be: coverage is a share of
+     * the day's calories and not a sum that an entry can be subtracted from.
+     * It settles on the next load.
+     */
+    const before = day;
     setDay((prev) =>
-      prev ? { ...prev, food_entries: prev.food_entries.filter((e) => e.id !== entry.id) } : prev,
+      prev
+        ? {
+            ...prev,
+            food_entries: prev.food_entries.filter((e) => e.id !== entry.id),
+            consumed: {
+              kcal: prev.consumed.kcal - entry.kcal,
+              protein_g: prev.consumed.protein_g - entry.protein_g,
+              carbs_g: prev.consumed.carbs_g - entry.carbs_g,
+              fat_g: prev.consumed.fat_g - entry.fat_g,
+            },
+            net_kcal: prev.net_kcal - entry.kcal,
+          }
+        : prev,
     );
-    try {
-      await api.deleteFoodEntry(entry.id);
-      toast.success(`Removed ${entry.description}`);
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-    void load(date);
+
+    undoably(`Removed ${entry.description}`, {
+      commit: () => {
+        void api
+          .deleteFoodEntry(entry.id)
+          .catch((e: Error) => toast.error(e.message))
+          .finally(() => void load(date));
+      },
+      restore: () => setDay(before),
+    });
   }
 
   /**
@@ -145,8 +178,9 @@ export default function TodayScreen() {
    * items under it — so the burn is corrected in the journal and removed here.
    * Totals are adjusted optimistically because they head the section.
    */
-  async function removeExercise(entry: ExerciseEntry) {
+  function removeExercise(entry: ExerciseEntry) {
     const burn = Math.round(entry.kcal_burned);
+    const before = day;
     setDay((prev) =>
       prev
         ? {
@@ -157,13 +191,16 @@ export default function TodayScreen() {
           }
         : prev,
     );
-    try {
-      await api.deleteExerciseEntry(entry.id);
-      toast.success(`Removed ${entry.description}`);
-    } catch (e) {
-      toast.error((e as Error).message);
-    }
-    void load(date);
+
+    undoably(`Removed ${entry.description}`, {
+      commit: () => {
+        void api
+          .deleteExerciseEntry(entry.id)
+          .catch((e: Error) => toast.error(e.message))
+          .finally(() => void load(date));
+      },
+      restore: () => setDay(before),
+    });
   }
 
   /** Clones a past entry to now — which is today, so jump back there to show it. */
@@ -308,39 +345,49 @@ export default function TodayScreen() {
               footer="Shown separately from your target — exercise burn is a rough estimate."
             >
               {day.exercise_entries.map((entry, i) => (
-                <InsetRow key={entry.id} first={i === 0}>
-                  <Text style={styles.rowEmoji}>{exerciseEmoji(entry.description)}</Text>
-                  <View style={styles.rowBody}>
-                    <Text
-                      numberOfLines={1}
-                      style={[t.bodySemibold, { color: colors.foreground }]}
-                    >
-                      {entry.description}
-                    </Text>
-                    {(entry.distance_km !== null || entry.duration_min !== null) && (
-                      <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-                        {[
-                          entry.distance_km !== null
-                            ? formatDistance(entry.distance_km, units)
-                            : null,
-                          entry.duration_min !== null
-                            ? `${Math.round(entry.duration_min)} min`
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
+                <SwipeRow
+                  key={entry.id}
+                  // The divider stays out here so it holds still while the row
+                  // slides out from under it.
+                  style={
+                    i === 0 ? null : { borderTopWidth: 2, borderTopColor: colors.border }
+                  }
+                  actions={[removeAction(colors, entry.description, () => removeExercise(entry))]}
+                >
+                  <InsetRow first>
+                    <Text style={styles.rowEmoji}>{exerciseEmoji(entry.description)}</Text>
+                    <View style={styles.rowBody}>
+                      <Text
+                        numberOfLines={1}
+                        style={[t.bodySemibold, { color: colors.foreground }]}
+                      >
+                        {entry.description}
                       </Text>
-                    )}
-                  </View>
-                  <Text style={[t.bodyBold, t.tnum, { color: colors.exerciseText }]}>
-                    ~{Math.round(entry.kcal_burned)}
-                  </Text>
-                  <IconButton
-                    icon="trash"
-                    label={`Delete ${entry.description}`}
-                    onPress={() => void removeExercise(entry)}
-                  />
-                </InsetRow>
+                      {(entry.distance_km !== null || entry.duration_min !== null) && (
+                        <Text style={[t.footnote, { color: colors.mutedForeground }]}>
+                          {[
+                            entry.distance_km !== null
+                              ? formatDistance(entry.distance_km, units)
+                              : null,
+                            entry.duration_min !== null
+                              ? `${Math.round(entry.duration_min)} min`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </Text>
+                      )}
+                    </View>
+                    <Text style={[t.bodyBold, t.tnum, { color: colors.exerciseText }]}>
+                      ~{Math.round(entry.kcal_burned)}
+                    </Text>
+                    <IconButton
+                      icon="trash"
+                      label={`Delete ${entry.description}`}
+                      onPress={() => removeExercise(entry)}
+                    />
+                  </InsetRow>
+                </SwipeRow>
               ))}
             </InsetGroup>
           )}
@@ -392,7 +439,19 @@ function EntryRow({
   const approx = entry.confidence !== 'high';
 
   return (
-    <View style={first ? null : { borderTopWidth: 2, borderTopColor: colors.border }}>
+    <SwipeRow
+      style={first ? null : { borderTopWidth: 2, borderTopColor: colors.border }}
+      /*
+       * Both of the things the expanded row already offers, reachable without
+       * expanding it. The order matters: delete is furthest from the edge the
+       * thumb comes in on, so the one that cannot be taken back is the one that
+       * takes the longer pull.
+       */
+      actions={[
+        repeatAction(colors, entry.description, onRepeat),
+        removeAction(colors, entry.description, onDelete),
+      ]}
+    >
       <Pressable
         onPress={onToggle}
         accessibilityRole="button"
@@ -451,7 +510,7 @@ function EntryRow({
           </View>
         </View>
       )}
-    </View>
+    </SwipeRow>
   );
 }
 
@@ -531,6 +590,33 @@ function Glyph({ icon, color, size = 15 }: { icon: 'trash' | 'repeat'; color: st
       )}
     </Svg>
   );
+}
+
+/**
+ * The two things a pulled row offers, built here rather than at each call site
+ * so that "delete" is the same red, the same width and the same word wherever
+ * it is reached from.
+ */
+function removeAction(colors: Palette, what: string, onPress: () => void): SwipeAction {
+  return {
+    label: 'Delete',
+    announce: `Delete ${what}`,
+    tint: colors.destructive,
+    ink: colors.destructiveForeground,
+    icon: <Glyph icon="trash" color={colors.destructiveForeground} size={19} />,
+    onPress,
+  };
+}
+
+function repeatAction(colors: Palette, what: string, onPress: () => void): SwipeAction {
+  return {
+    label: 'Repeat',
+    announce: `Log ${what} again`,
+    tint: colors.primary,
+    ink: colors.primaryForeground,
+    icon: <Glyph icon="repeat" color={colors.primaryForeground} size={19} />,
+    onPress,
+  };
 }
 
 function IconButton({ icon, label, onPress }: { icon: 'trash' | 'repeat'; label: string; onPress: () => void }) {

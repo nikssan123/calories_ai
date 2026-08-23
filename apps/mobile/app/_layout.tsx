@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 /*
@@ -44,6 +45,8 @@ import { paletteFor, ThemeContext, useColors } from '@/theme';
  */
 void SplashScreen.preventAutoHideAsync();
 
+const FILL = { flex: 1 } as const;
+
 export default function RootLayout() {
   /*
    * Every weight is a face. RN does not synthesise weights across a family, so
@@ -70,13 +73,22 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <SafeAreaProvider>
-      <ThemePreferenceProvider>
-        <AuthProvider>
-          <Themed />
-        </AuthProvider>
-      </ThemePreferenceProvider>
-    </SafeAreaProvider>
+    /*
+     * Outermost, and it has to be: every gesture in the app is recognised
+     * inside this view, and a `Swipeable` mounted outside one silently does
+     * nothing on Android rather than failing loudly. It arrived late — the
+     * library has been in the tree since Reanimated pulled it in, but nothing
+     * asked it for a gesture until rows became swipeable.
+     */
+    <GestureHandlerRootView style={FILL}>
+      <SafeAreaProvider>
+        <ThemePreferenceProvider>
+          <AuthProvider>
+            <Themed />
+          </AuthProvider>
+        </ThemePreferenceProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 

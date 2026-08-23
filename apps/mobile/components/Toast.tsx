@@ -8,7 +8,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { Chunk } from '@/components/Chunk';
+import { Chunk, PressableChunk } from '@/components/Chunk';
 import { duration, ease, font, type as t, useColors, type Palette } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 
@@ -43,14 +43,39 @@ interface Toast {
   id: number;
   variant: Variant;
   text: string;
+  action?: ToastAction;
+}
+
+/**
+ * One thing the reader can do about what just happened, offered rather than
+ * asked.
+ *
+ * This exists for undo, and undo is the reason the app has no confirmation
+ * dialogs. A confirm taxes everybody a tap to protect the rare mistake and
+ * interrupts the thing they were doing to ask whether they meant it; acting at
+ * once and offering the reversal is faster in the common case and safer in the
+ * rare one, because it also catches the mis-tap nobody noticed until the row
+ * had gone.
+ *
+ * It is the only interactive part of a toast and it stays that way. Anything
+ * needing a second decision does not belong in a strip that leaves on a timer.
+ */
+export interface ToastAction {
+  label: string;
+  run: () => void;
 }
 
 /**
  * Four seconds, which is sonner's default and is about right for a sentence
  * nobody has to act on. Anything a person must *decide* about does not belong
  * in a toast in the first place.
+ *
+ * Exported because an undo has to agree with it. The caller holding the
+ * reversal open has to stop holding it at the same moment the offer leaves the
+ * screen, and two independently-chosen four seconds would drift the first time
+ * either was tuned.
  */
-const LIFETIME_MS = 4000;
+export const TOAST_LIFETIME_MS = 4000;
 
 /**
  * Three at once, oldest evicted.
@@ -62,10 +87,10 @@ const LIFETIME_MS = 4000;
 const MAX_VISIBLE = 3;
 
 interface ToastValue {
-  success: (text: string) => void;
-  error: (text: string) => void;
+  success: (text: string, action?: ToastAction) => void;
+  error: (text: string, action?: ToastAction) => void;
   /** Plain, for something that is neither good news nor a failure. */
-  message: (text: string) => void;
+  message: (text: string, action?: ToastAction) => void;
 }
 
 const noop = () => {};
@@ -90,15 +115,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
   }, []);
 
-  const push = useCallback((variant: Variant, text: string) => {
-    setToasts((prev) => [...prev, { id: nextId.current++, variant, text }].slice(-MAX_VISIBLE));
+  const push = useCallback((variant: Variant, text: string, action?: ToastAction) => {
+    setToasts((prev) =>
+      [...prev, { id: nextId.current++, variant, text, action }].slice(-MAX_VISIBLE),
+    );
   }, []);
 
   const value = useMemo<ToastValue>(
     () => ({
-      success: (text) => push('success', text),
-      error: (text) => push('error', text),
-      message: (text) => push('message', text),
+      success: (text, action) => push('success', text, action),
+      error: (text, action) => push('error', text, action),
+      message: (text, action) => push('message', text, action),
     }),
     [push],
   );
@@ -171,7 +198,7 @@ function Row({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number) => vo
       easing: reduced ? ease.out : ease.pop,
     });
 
-    const timer = setTimeout(dismiss, LIFETIME_MS);
+    const timer = setTimeout(dismiss, TOAST_LIFETIME_MS);
     return () => clearTimeout(timer);
   }, [dismiss, progress, reduced]);
 
@@ -188,7 +215,8 @@ function Row({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number) => vo
         onPress={dismiss}
         accessibilityRole="button"
         // A finger has no hover, so sonner's close button has nothing to appear
-        // on. The whole toast is the dismiss target instead.
+        // on. The whole toast is the dismiss target instead — except for the
+        // action, which is its own button and announces itself.
         accessibilityLabel={`${toast.text}. Tap to dismiss.`}
         accessibilityLiveRegion="polite"
       >
@@ -205,6 +233,33 @@ function Row({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number) => vo
           <Text style={[t.footnoteSemibold, styles.text, { color: colors.foreground }]}>
             {toast.text}
           </Text>
+          {toast.action && (
+            /*
+             * Its own pressable inside the dismissing one. The responder
+             * system gives the touch to the innermost handler, so this takes
+             * the tap rather than the tap-to-dismiss behind it — and then
+             * dismisses anyway, because an offer that has been taken up has
+             * nothing left to say.
+             */
+            <PressableChunk
+              depth={2}
+              radius={999}
+              onPress={() => {
+                toast.action?.run();
+                dismiss();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={toast.action.label}
+              contentStyle={[
+                styles.action,
+                { backgroundColor: colors.background, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[t.footnoteBold, { color: colors.foreground }]}>
+                {toast.action.label}
+              </Text>
+            </PressableChunk>
+          )}
         </Chunk>
       </Pressable>
     </Animated.View>
@@ -277,4 +332,11 @@ const styles = StyleSheet.create({
   // 600, as the web's `[data-sonner-toast]` block sets. `flex: 1` so a long
   // message wraps inside the card rather than pushing its own edge off screen.
   text: { flex: 1, fontFamily: font.semibold },
+  /*
+   * A chunky pill, at `chunk-sm` depth rather than the toast's own 5. It sits
+   * on a card that is already lifted off the screen, and a second full-depth
+   * ledge inside the first reads as a button floating away from the thing it
+   * belongs to.
+   */
+  action: { paddingHorizontal: 12, paddingVertical: 5, borderWidth: 2, borderRadius: 999 },
 });
