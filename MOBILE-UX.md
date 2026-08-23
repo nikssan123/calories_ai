@@ -63,7 +63,7 @@ existing `useReducedMotion` contract says the spring is decoration and the
 information must survive it, which is an argument for the buzz rather than
 against it.
 
-## 2. Motion — the tab bar is done, the rest is not
+## 2. Motion — mostly done; one item is blocked
 
 **Reanimated is already in the app and already doing real work.** The ring's arc
 springs open and its figure counts up, the macro bars stagger in at 70ms apart,
@@ -118,20 +118,34 @@ and 886, overshoots to 1040 and settles back to 990. Six equal columns meant the
 geometry fell out of one measurement of the row, so no tab had to report its own
 — which stops being true the moment a tab is given a different width.
 
-### Shared element transitions — the showpiece
+### Shared element transitions — **blocked, not skipped**
 
-Tapping a recipe tile currently pushes a screen in from the right, and the tile's
-picture and the reader's hero are two unrelated images of the same dish.
+Tapping a recipe tile pushes a screen in from the right, and the tile's picture
+and the reader's hero are two unrelated images of the same dish. Having the
+tile's image **grow into the hero** is still the single most impressive thing
+available here.
 
-Have the tile's image **grow into the hero**. `react-native-screens` supports
-shared element transitions through expo-router, so the tile and the reader
-declare the same tag and the transition is handled natively.
+It cannot be built on this stack today. `sharedTransitionTag` is still in
+Reanimated 4.5.1's types and still accepted as a prop, and it does nothing:
+`AnimatedComponent._configureSharedTransition` returns immediately unless the
+`ENABLE_SHARED_ELEMENT_TRANSITIONS` static feature flag is on. It defaults to
+false, and only `setDynamicFeatureFlag` is exported — static flags are baked in
+at build time. So this needs a patched Reanimated *and* a custom dev build, and
+even then the native half looks half-landed: Android logs `Could not find
+generated setter for class REASharedTransitionBoundaryManager` on launch.
 
-This is the single most impressive thing available here, and it happens to sit
-on the path people actually walk: Cook is a grid you scan and then commit to,
-which is precisely the interaction a shared element is *for* — it answers "where
-did that come from?" without a word. The same trick would work from a History
-day cell into Today.
+Both ends were wired up and tested before this was understood; the screens
+simply cross-slid. The tags were reverted rather than left in as props that
+promise something they do not deliver.
+
+**Revisit when** the app moves off Expo Go to a dev build — which push
+notifications and App Intents both need anyway, so this is likely to become
+free rather than to stay impossible.
+
+It sits on the path people actually walk: Cook is a grid you scan and then
+commit to, which is precisely the interaction a shared element is *for* — it
+answers "where did that come from?" without a word. The same trick would work
+from a History day cell into Today.
 
 ### Lists
 
@@ -141,15 +155,18 @@ day cell into Today.
   groups, Exercise's sessions and Cook's tiles. Use 70ms, which is what
   `MacroBars` already staggers at, so the whole app has one rhythm rather than
   three.
-### Numbers that move
+### Numbers that move — done for Today
 
-`CalorieRing` already counts its figure up rather than swapping it, and that is
-the most-noticed animation in the app. Nothing else does it — not Today's total,
-not the Progress headline figures, not the plan's per-night kcal.
+`useCountUp` is out of `CalorieRing` and in `hooks/`. Today's total and the three
+macro figures now travel rather than swap, which matters most where the change
+was something the reader just did — they are looking straight at it, waiting for
+an answer, and the ring beside them was already moving.
 
-Lift `useCountUp` out of `CalorieRing` into a hook and use it wherever a figure
-changes in response to something the user just did. Not on first paint of a
-screen: counting up from zero on every navigation is a tax, not a delight.
+It starts from the value it is first handed, so opening a screen counts nothing
+up. Counting from zero on every navigation is a tax dressed as a delight, and it
+lands exactly when someone is trying to read the number.
+
+**Still to do:** the Progress headline figures and the plan's per-night kcal.
 
 ### Scroll-driven
 
@@ -162,12 +179,14 @@ screen: counting up from zero on every navigation is a tax, not a delight.
   reasons for the same chrome to vanish is how a layout starts feeling
   unpredictable.
 
-### Skeletons
+### Skeletons — done
 
-`Skeleton` pulses its opacity between 1 and 0.45. A shimmer — a light band
-sweeping across the shape — reads as "working" where a pulse reads as "waiting",
-and the two are worth distinguishing on a screen where a recipe run genuinely
-takes half a minute.
+`Skeleton` used to pulse its opacity between 1 and 0.45. It now sweeps a light
+band across itself, which reads as *working* where a pulse reads as *waiting* —
+worth distinguishing on the one screen where the wait is genuinely long, since
+half a minute of pulsing starts to look like something has hung. Drawn with an
+SVG gradient, which the app already depends on, rather than adding a gradient
+library for one band.
 
 ### The discipline
 
@@ -357,5 +376,15 @@ native window and the app's gesture root does not reach inside one; and `Sheet`
 was animating its slide from a guessed height, because it read a ref that a
 worklet had already frozen.
 
-**The shared element transition is the one to do fourth**, because it is the one
-people would mention to someone else.
+Since then most of §2 has followed: the lists stagger in and close behind a
+delete, Today's figures travel instead of swapping, and skeletons shimmer.
+
+**The shared element transition — the one people would mention to someone else —
+turns out to need a custom dev build**, because Reanimated gates it behind a
+build-time flag with no public setter. It is not skipped, it is queued behind
+the same dev build that push notifications and App Intents need.
+
+So the next thing that can actually be built here is the condensing Today
+header, and after that the phone-only capabilities in §4 — all of which want
+that dev build too. That is the fork in the road: everything cheap has been
+done, and what is left starts by leaving Expo Go.
