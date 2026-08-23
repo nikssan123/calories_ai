@@ -323,11 +323,11 @@ no business knowing what any screen is scrolling. On Today, Progress, Exercise
 and Cook. Not the Journal: a chat's home position is the bottom, and it already
 goes there on its own.
 
-## 4. What only a phone can do — push is built
+## 4. What only a phone can do — the two that matter are done
 
 This is where the value is, as opposed to the polish.
 
-### A share-sheet target — built, unverified on this emulator
+### A share-sheet target — done, verified on hardware
 
 Photograph a meal in the camera app, share, pick Day So Far, land in the journal
 with it attached and the cursor waiting. The product's pitch is *say what you
@@ -351,23 +351,24 @@ conversation on their behalf is not the app's to do. A share arriving while
 signed out is not lost either: the photo waits in context, the guard sends the
 reader to sign in, and the composer picks it up when the journal finally mounts.
 
-**What could not be proven here.** The intent filter is installed and registered
-— `dumpsys` shows `com.daysofar.app/.MainActivity` handling `SEND` for
-`image/*` — but the app does not appear in the emulator's share sheet, and a
-directly-injected intent is worse than useless as a test:
-`ExpoShareIntentModule.getFileInfo` does `resolver.query(...)!!` followed by an
-unguarded `moveToFirst()`, so any URI whose metadata it cannot read takes the
-whole app down rather than reporting an error. Ours could not be read because
-the app declares only the legacy `READ_EXTERNAL_STORAGE`, which Android 13+
-ignores for media.
+Driven on a Galaxy S25 Ultra: Day So Far appears in the system share sheet
+beside Drive and Discord, picking it opens the journal, and the photo arrives in
+the composer with its remove button and a live send button. Nothing is sent.
 
-That last part is worth carrying forward regardless of the emulator: **a share
-of an unreadable URI crashes the app**, and it is upstream code, so the guard
-has to be a bug report or a patch rather than a `try` on our side.
+**The emulator was the anomaly, and it cost an afternoon.** There, the app never
+appeared in the share sheet at all despite `dumpsys` showing the filter
+registered; on the phone it is offered immediately. Worth remembering the next
+time an intent filter looks broken.
 
-This needs a real phone, exactly as push did.
+**One upstream hazard found on the way, still unfixed.**
+`ExpoShareIntentModule.getFileInfo` does `resolver.query(...)!!` and then an
+unguarded `moveToFirst()`, so a URI whose metadata it cannot read takes the
+whole app down instead of reporting an error. It did not bite on the phone,
+because the real Sharesheet grants read permission on the URI it hands over —
+but anything that shares a URI we cannot stat will crash us, and no `try` on
+our side can catch native code. That is a patch or a bug report upstream.
 
-### Push notifications — built; needs one credential
+### Push notifications — done on Android, verified on hardware
 
 The profile carried `notify_weekly_review` and `notify_nudges` from the
 beginning and both sent **email**. The switches existed; the transport did not.
@@ -393,13 +394,16 @@ where it is an answer to something the reader just did rather than a modal in
 the way of an app they opened. Saying no is not reported: the preference still
 holds and the notification still goes by email.
 
-**What is left is a credential, not code.** Getting a token on Android needs FCM
-— the emulator says so plainly, `FirebaseApp failed to initialize because no
-default options were found` — and iOS needs an APNs key. Both are uploaded once
-to the EAS project (`eas credentials`), and both belong to the account holder
-rather than to the repository. Until then `registerForPush` returns
-`unavailable`, nothing is registered, and every notification goes by email
-exactly as it did before: verified on the emulator, switch on, no error shown.
+FCM is configured and the whole chain is proven on a Galaxy S25 Ultra: turning
+the switch on raises the permission dialog, granting it registers a real token,
+and a send through Expo's relay lands in the shade under the app's own channel.
+Signing out gives the address up — verified by accident, which is the best kind.
+
+**iOS still needs an APNs key**, uploaded the same way with `eas credentials`,
+and that needs an Apple Developer account. Until a credential exists on a given
+platform the app degrades quietly and deliberately: `registerForPush` returns
+`unavailable`, nothing registers, and every notification goes by email exactly
+as it did before.
 
 ### Siri, via App Intents
 
@@ -489,10 +493,16 @@ built: **push notifications**, including the answer to how loud a nudge may be.
 Only a credential stands between that and a phone actually buzzing, and it is
 the account holder's to add.
 
-The share-sheet target is built too, on one plugin that covers both platforms.
-Like push before it, the last mile is a real phone: the intent filter is
-registered but the emulator will not offer the app, and the plugin crashes
-outright on a URI whose metadata it cannot read.
+Both are now proven on a real phone, which is where this kind of work has to
+end: push arrives in the shade under the app's own channel, and Day So Far sits
+in the system share sheet and drops a photographed meal straight into the
+composer.
 
-Left in §4: App Intents and a widget. Both are native code per platform, and
-App Intents needs an Apple Developer account before it can be run at all.
+The emulator was wrong about both, in opposite directions — it silently dropped
+notifications after the laptop changed IP, and it never offered the app as a
+share target at all. Neither was a bug in the app, and both cost hours. **Test
+this class of feature on hardware first.**
+
+Left in §4: App Intents and a widget, both native code per platform, and App
+Intents needs an Apple Developer account before it can be run at all. iOS push
+and the iOS share extension need that same account.

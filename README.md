@@ -932,10 +932,16 @@ the better part of half an hour; later ones are minutes. And the dev client ship
 Refresh **off** by default, which is worth turning on in the dev menu — otherwise edits
 appear to be ignored and the honest-looking conclusion is that the bundler is broken.
 
-**Push works on Android and needs one more credential for iOS.** FCM is configured — the
-emulator issues a real token, registers it, and a send through Expo's relay lands in the
-shade under the app's own channel. iOS needs an APNs key, uploaded the same way with
-`eas credentials` against the EAS project already named in `app.json`.
+**Push works on Android and needs one more credential for iOS.** FCM is configured, and
+the chain is proven on a real phone: the switch raises the permission dialog, granting it
+registers a token, a send through Expo's relay lands in the shade under the app's own
+channel, and signing out gives the address up again. iOS needs an APNs key, uploaded the
+same way with `eas credentials` against the EAS project already named in `app.json`.
+
+**The app is in the share sheet.** Photograph a meal anywhere, share, pick Day So Far, and
+it lands in the composer attached — verified on hardware. Emulators are unreliable for
+both of these: ours never offered the app as a share target at all despite the filter being
+registered, and it dropped notifications silently. Test them on a phone.
 
 Without a credential the app degrades quietly and on purpose: `registerForPush` returns
 `unavailable`, nothing registers, and every notification goes by email exactly as it did
