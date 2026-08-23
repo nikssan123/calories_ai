@@ -66,6 +66,13 @@ async function entries() {
   );
 }
 
+async function journal() {
+  return query<any>(
+    'SELECT role, content, actions FROM chat_messages WHERE user_id = $1 ORDER BY created_at',
+    [user.id],
+  );
+}
+
 describe('GET /barcode/:code', () => {
   it('answers with the packet, per 100g', async () => {
     stubOff(SPREAD);
@@ -130,7 +137,7 @@ describe('POST /barcode/:code/log', () => {
     const response = await post(`/barcode/${CODE}/log`, { grams: 30, meal: 'snack' });
 
     expect(response.statusCode).toBe(201);
-    expect(response.json()).toMatchObject({
+    expect(response.json().entry).toMatchObject({
       meal: 'snack',
       source: 'barcode',
       confidence: 'high',
@@ -155,12 +162,14 @@ describe('POST /barcode/:code/log', () => {
   it('logs a fraction of a serving as the fraction, not as a decimal', async () => {
     stubOff(SPREAD);
     // Three quarters off the picker's ladder. It arrives as 0.75 and has to
-    // read back as ¾ — "0.8 servings" is a portion nobody chose.
+    // read back as ¾ — "0.8 servings" is a portion nobody chose. The weight
+    // beside it is written by `formatMass`, which is whole grams: the stored
+    // 11.3 is the arithmetic, and 11 g is the portion.
     const response = await post(`/barcode/${CODE}/log`, { servings: 0.75 });
 
     expect(response.statusCode).toBe(201);
     expect(await entries()).toMatchObject([
-      { quantity_g: 11.3, quantity_desc: '¾ serving (11.3 g) — 15 g' },
+      { quantity_g: 11.3, quantity_desc: '¾ serving (11 g) — 15 g' },
     ]);
   });
 
@@ -172,6 +181,30 @@ describe('POST /barcode/:code/log', () => {
 
     expect(response.statusCode).toBe(201);
     expect(await entries()).toMatchObject([{ quantity_desc: '⅓ serving (5 g) — 15 g' }]);
+  });
+
+  it('writes the portion in the units the person reads', async () => {
+    // The grams are what is stored and what every macro is computed from; the
+    // sentence and the entry's own description are the two places a reader sees
+    // the amount, so they are the two places it has to be in ounces.
+    const american = await createUser({ email: 'ohio@example.com', units: 'imperial' });
+    const session = await appFor(american);
+    stubOff(SPREAD);
+
+    const response = await session.app.inject({
+      method: 'POST',
+      url: `/barcode/${CODE}/log`,
+      headers: { cookie: session.cookie },
+      payload: { grams: 30 },
+    } as never);
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json().entry.items[0]).toMatchObject({
+      quantity_g: 30,
+      quantity_desc: '1.1 oz',
+    });
+    expect(response.json().message.content).toBe('Scanned — Ferrero Hazelnut spread, 1.1 oz.');
+    await session.app.close();
   });
 
   it('refuses servings against a label that never named one', async () => {
@@ -197,6 +230,52 @@ describe('POST /barcode/:code/log', () => {
     expect(await entries()).toHaveLength(0);
   });
 
+  it('writes the scan into the journal, with the card the model would have drawn', async () => {
+    stubOff(SPREAD);
+    const response = await post(`/barcode/${CODE}/log`, { grams: 30, meal: 'snack' });
+    const { entry, message } = response.json();
+
+    // The scanner logs without a turn, so nothing else was ever going to write
+    // this down — a meal in the ring and nowhere in the conversation.
+    expect(await journal()).toMatchObject([
+      { role: 'assistant', content: 'Scanned — Ferrero Hazelnut spread, 30 g.' },
+    ]);
+    expect(message.actions).toMatchObject([
+      {
+        kind: 'food_logged',
+        entry_id: entry.id,
+        card: { type: 'food', entry_id: entry.id, meal: 'snack', kcal: 162 },
+      },
+    ]);
+    // The same card a reopened app would show, rather than one the client
+    // has to draw for itself.
+    expect(message.actions[0].card.day).toMatchObject({
+      local_date: entry.local_date,
+      kcal_before: 0,
+      kcal_after: 162,
+    });
+  });
+
+  it('says the portion in the words the user picked, since the card cannot', async () => {
+    stubOff(SPREAD);
+    await post(`/barcode/${CODE}/log`, { servings: 0.75 });
+
+    // A one-item card lists no items, so without this the amount — the whole
+    // point of the portion picker — is nowhere on screen. And it is the
+    // fraction that was tapped rather than the decimal it travelled as.
+    const [message] = await journal();
+    expect(message.content).toContain('¾ serving');
+    // The label's own footnote about a serving stays on the entry, where a
+    // correction screen can use it. In a sentence it is a second dash.
+    expect(message.content).not.toContain('— 15 g');
+  });
+
+  it('leaves the journal alone when nothing was logged', async () => {
+    stubOff(null, 404);
+    await post(`/barcode/${CODE}/log`, { grams: 30 });
+    expect(await journal()).toHaveLength(0);
+  });
+
   it('picks the meal from the clock when the caller does not say', async () => {
     stubOff(SPREAD);
     const response = await post(`/barcode/${CODE}/log`, {
@@ -205,6 +284,6 @@ describe('POST /barcode/:code/log', () => {
     });
 
     // 13:30 in Sofia, which is lunch.
-    expect(response.json()).toMatchObject({ meal: 'lunch', local_date: '2026-03-16' });
+    expect(response.json().entry).toMatchObject({ meal: 'lunch', local_date: '2026-03-16' });
   });
 });

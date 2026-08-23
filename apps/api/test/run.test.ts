@@ -78,6 +78,25 @@ describe('when the agent session is dropped', () => {
     expect(await storedSession()).toBe('sess-today');
   });
 
+  it('does not let a scan receipt stand in for a conversation', async () => {
+    await seedPriorTurn(2);
+    // What the barcode route writes: no model ran, so this is a receipt rather
+    // than a turn. Counting it would make the first typed message of the day
+    // look like a continuation of yesterday, and carry a whole day of
+    // transcript into every model call of every turn to come.
+    await query(
+      `INSERT INTO chat_messages (user_id, role, content, tool_trace)
+       VALUES ($1, 'assistant', 'Scanned — Hazelnut spread, 30 g.', '{"kind":"scan"}')`,
+      [user.id],
+    );
+    await setSession('sess-yesterday');
+    scriptAgent({ text: 'Logged.', sessionId: 'sess-today' });
+
+    await turn('Breakfast');
+
+    expect(agentCalls.at(-1)!.resume).toBeUndefined();
+  });
+
   it('rotates a session that has run away inside a single day', async () => {
     // The guard against one very long day reaching the context window on its
     // own. Ordinary days are nowhere near this.

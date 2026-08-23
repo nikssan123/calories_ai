@@ -160,6 +160,26 @@ export default function JournalScreen() {
     void api.day().then(setDay).catch(() => {});
   }, []);
 
+  /**
+   * A scan, arriving in the conversation.
+   *
+   * The scanner logs through its own route rather than a turn, so nothing here
+   * had written the meal down — the packet went into the status bar and the
+   * Today tab and left the journal with a gap where a meal should be. The
+   * server now stores the message with the card on it and returns it, so this
+   * is the same row a relaunch would show, put in without waiting for one.
+   */
+  const onScanned = useCallback(
+    (message: ChatMessage) => {
+      // Scanning is a request to be at the end of the conversation, wherever
+      // the reader had scrolled back to — the same as sending.
+      pinned.current = true;
+      setBubbles((prev) => [...prev, toBubble(message)]);
+      refreshDay();
+    },
+    [refreshDay],
+  );
+
   const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     pinned.current =
@@ -347,8 +367,9 @@ export default function JournalScreen() {
       <Composer
         onSend={(p) => void send(p)}
         // A scanned packet is logged by the scanner itself, without a turn — so
-        // the status bar above has to be told to re-read itself.
-        onLogged={refreshDay}
+        // the message it produced is dropped into the conversation here, and the
+        // status bar above told to re-read itself.
+        onLogged={onScanned}
         disabled={busy}
       />
     </KeyboardAvoidingView>

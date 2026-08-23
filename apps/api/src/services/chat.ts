@@ -140,10 +140,22 @@ async function photoSecret(row: { photo_id: string | null }): Promise<string | n
  * Read separately from `listMessages` because the caller needs it before the
  * turn runs, and on providers that keep their own session there is no transcript
  * to read it off.
+ *
+ * Scan receipts do not count. They are written by the barcode route without a
+ * model ever running, so one is not evidence that a conversation happened —
+ * and treating it as one is expensive: a packet scanned at breakfast would
+ * make the first typed message of the day look like a continuation, keeping
+ * yesterday's session and its whole transcript alive for another day. That is
+ * the bill `shouldStartFreshSession` exists to stop, and the bug it exists to
+ * stop — yesterday's meals running into this morning's photograph. A nudge is
+ * deliberately still counted: the user may be answering it, and dropping the
+ * history under their reply would leave the model reading half a conversation.
  */
 export async function lastMessageAt(userId: string): Promise<Date | null> {
   const row = await queryOne<{ created_at: string }>(
-    'SELECT created_at FROM chat_messages WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1',
+    `SELECT created_at FROM chat_messages
+      WHERE user_id = $1 AND tool_trace->>'kind' IS DISTINCT FROM 'scan'
+   ORDER BY created_at DESC LIMIT 1`,
     [userId],
   );
   return row ? new Date(row.created_at) : null;

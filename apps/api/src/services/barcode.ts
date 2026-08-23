@@ -1,4 +1,12 @@
-import { type BarcodeProduct, type BarcodeSource, type FoodEntry, type Meal, formatServings } from '@ct/shared';
+import {
+  type BarcodeProduct,
+  type BarcodeSource,
+  type FoodEntry,
+  type Meal,
+  type UnitSystem,
+  formatMass,
+  formatServings,
+} from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import { env } from '../env.ts';
 import { createFoodEntry } from './log.ts';
@@ -521,6 +529,8 @@ export interface ScanLogOptions {
   meal?: Meal;
   eatenAt?: Date;
   ctx: DayContext;
+  /** Which system the portion is written back in. The entry stays in grams. */
+  units: UnitSystem;
 }
 
 /**
@@ -563,7 +573,7 @@ export async function logScannedProduct(
       {
         name: describe(product),
         quantity_g: grams,
-        quantity_desc: portionDescription(product, grams, options.servings),
+        quantity_desc: portionDescription(product, grams, options.servings, options.units),
         kcal: round(product.kcal_100g * share),
         protein_g: round(product.protein_100g * share),
         carbs_g: round(product.carbs_100g * share),
@@ -601,10 +611,33 @@ function portionDescription(
   product: BarcodeProduct,
   grams: number,
   servings: number | undefined,
+  units: UnitSystem,
 ): string {
-  if (servings === undefined) return `${round(grams)} g`;
+  if (servings === undefined) return portionPhrase(grams, servings, units);
   const label = product.serving_desc ? ` — ${product.serving_desc}` : '';
+  return `${portionPhrase(grams, servings, units)}${label}`;
+}
+
+/**
+ * The same amount without the footnote, for a sentence.
+ *
+ * `portionDescription` ends with what the label calls a serving — "2 servings
+ * (30 g) — 15 g" — which earns its place on a correction screen, where the
+ * question is whether the app read the packet right. In the line of prose above
+ * the journal card it is a second dash and a number nobody asked for, so the
+ * portion is shared and the footnote is not.
+ */
+export function portionPhrase(
+  grams: number,
+  servings: number | undefined,
+  units: UnitSystem,
+): string {
+  // The weight is written in whatever this person reads, because it is the one
+  // number on the card they might argue with — "100 g" of cereal to somebody
+  // who owns a pound scale is a figure they have to convert before they can
+  // tell whether it is right. The grams are still what was stored.
+  if (servings === undefined) return formatMass(grams, units);
   // Singular for anything up to one, because "¾ servings" is not English.
   const plural = servings <= 1 ? 'serving' : 'servings';
-  return `${formatServings(servings)} ${plural} (${round(grams)} g)${label}`;
+  return `${formatServings(servings)} ${plural} (${formatMass(grams, units)})`;
 }

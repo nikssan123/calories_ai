@@ -13,6 +13,7 @@ import { AUTH_HELP, authDescription, hasSubscriptionAuth } from '../ai/client.ts
 import { env } from '../env.ts';
 import { generateWeeklyReview } from '../ai/review.ts';
 import { runTurn, type RunTurnInput } from '../ai/run.ts';
+import { foodCard } from '../ai/tools.ts';
 import { sendAccountDeletedEmail } from '../email/notify.ts';
 import {
   fetchReceivedEmail,
@@ -27,11 +28,12 @@ import {
   InvalidPortionError,
   logScannedProduct,
   lookupBarcode,
+  portionPhrase,
 } from '../services/barcode.ts';
 import { attachBody, recordBodyFailure, recordSupportEmail } from '../services/support.ts';
 import { deleteAccount } from '../services/admin.ts';
 import { proposeTargets } from '../services/adaptive.ts';
-import { listMessages } from '../services/chat.ts';
+import { insertMessage, listMessages } from '../services/chat.ts';
 import { mealTemplates, repeatFoodEntry } from '../services/history.ts';
 import {
   savePhoto,
@@ -421,7 +423,7 @@ export async function registerRoutes(app: FastifyInstance) {
         return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid portion' });
       }
 
-      const { userId, ...ctx } = await getUserContext(request.userId!);
+      const { userId, units, ...ctx } = await getUserContext(request.userId!);
       try {
         const product = await lookupBarcode((request.params as any).code);
         if (!product) return reply.status(404).send({ error: 'Nobody has catalogued that one yet' });
@@ -432,8 +434,44 @@ export async function registerRoutes(app: FastifyInstance) {
           meal: parsed.data.meal,
           eatenAt: parsed.data.eaten_at ? new Date(parsed.data.eaten_at) : undefined,
           ctx,
+          units,
         });
-        return reply.status(201).send(entry);
+
+        /*
+         * And into the conversation, which is where this app keeps what it did.
+         *
+         * A scan is the one log that happens without a turn — the model is not
+         * called, so nothing was ever going to write it down. That left a meal
+         * that appeared in the ring and the day and nowhere in the journal: a
+         * hole in the record for anyone scrolling back, and no way to correct
+         * the portion from the place every other meal is corrected. So the
+         * server writes the message itself, carrying the same card the
+         * `log_barcode` tool draws when the model does this in conversation.
+         *
+         * The sentence says the portion because the card cannot: a scan is one
+         * item, and the card only lists items when there is more than one — so
+         * "30 g" would otherwise be nowhere on screen, on the feature whose
+         * entire point is the amount.
+         */
+        const day = await buildDaySummary(userId, entry.local_date);
+        const portion = portionPhrase(entry.items[0]?.quantity_g ?? 0, parsed.data.servings, units);
+        const message = await insertMessage(
+          userId,
+          'assistant',
+          `Scanned — ${entry.description}, ${portion}.`,
+          null,
+          { kind: 'scan', barcode: product.barcode },
+          [
+            {
+              kind: 'food_logged',
+              entry_id: entry.id,
+              summary: `${entry.meal}: ${entry.description} — ${Math.round(entry.kcal)} kcal`,
+              card: foodCard(entry, day, units),
+            },
+          ],
+        );
+
+        return reply.status(201).send({ entry, message });
       } catch (error) {
         return barcodeFailure(error, reply);
       }

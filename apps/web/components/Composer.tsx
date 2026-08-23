@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, Camera, ImageIcon, ScanBarcode, X } from 'lucide-react';
 import { toast } from 'sonner';
-import type { PhotoMediaType } from '@ct/shared';
+import type { ChatMessage, PhotoMediaType } from '@ct/shared';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -30,9 +30,11 @@ export function Composer({
   onSend: (payload: ComposerPayload) => void;
   /**
    * Something was logged without going through the conversation — a scanned
-   * packet — so the day beside it has to re-read itself.
+   * packet. The server writes it into the journal itself and hands back the
+   * message, so this carries it up rather than only saying that it happened:
+   * the conversation grows by that row and the day beside it re-reads itself.
    */
-  onLogged: () => void;
+  onLogged: (message: ChatMessage) => void;
   disabled: boolean;
 }) {
   const [text, setText] = useState('');

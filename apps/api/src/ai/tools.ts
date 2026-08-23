@@ -12,8 +12,9 @@ import type {
   MealPlan,
   PantryItem,
   Progress,
+  UnitSystem,
 } from '@ct/shared';
-import { DIETS, UNIT_SYSTEMS } from '@ct/shared';
+import { DIETS, UNIT_SYSTEMS, bodyWeightUnit, formatMass, toBodyWeight } from '@ct/shared';
 import { query } from '../db.ts';
 import { addDays, type DayContext, inferMeal, localDateFor, resolveWhen } from '../time.ts';
 import {
@@ -79,6 +80,12 @@ export interface ToolContext {
   userId: string;
   ctx: DayContext;
   now: Date;
+  /**
+   * Which system the person reads. Only the cards use it — a card's numbers are
+   * put there by the server, so the server is the one that has to convert them.
+   * Tool *arguments* stay metric whatever this says; see UNITS.md.
+   */
+  units: UnitSystem;
   /** Set when the turn included a photo, so logged entries link back to it. */
   photoId: string | null;
   /** Collected during the turn and returned to the client for rendering. */
@@ -150,8 +157,12 @@ function pickTotals(entry: { kcal: number; protein_g: number; carbs_g: number; f
  * quantities round, and an update returns the merged entry rather than the
  * patch — and a card showing the request instead of the result would be a
  * confident picture of something that did not happen.
+ *
+ * Exported because the scanner logs without a turn and still owes the journal
+ * a card. Two builders would be two answers to "where did this meal leave the
+ * day?", and the wrong one would be discovered in a screenshot.
  */
-function foodCard(entry: FoodEntry, day: DaySummary): ChatCard {
+export function foodCard(entry: FoodEntry, day: DaySummary, units: UnitSystem): ChatCard {
   const kcalAfter = Math.round(day.consumed.kcal);
   return {
     type: 'food',
@@ -161,8 +172,10 @@ function foodCard(entry: FoodEntry, day: DaySummary): ChatCard {
     confidence: entry.confidence,
     items: entry.items.map((item) => ({
       name: item.name,
+      // The fallback is a weight nobody described, so it is the one the reader's
+      // own scale would show — grams for most people, ounces for the rest.
       quantity:
-        item.quantity_desc ?? (item.quantity_g === null ? null : `${Math.round(item.quantity_g)}g`),
+        item.quantity_desc ?? (item.quantity_g === null ? null : formatMass(item.quantity_g, units)),
     })),
     ...pickTotals(entry),
     /*
@@ -246,6 +259,7 @@ function trendCard(
   days: number,
   caption: string | null,
   progress: Progress,
+  units: UnitSystem,
 ): Extract<ChatCard, { type: 'trend' }> {
   const base = { type: 'trend' as const, metric, caption };
   const window = `last ${days} days`;
@@ -255,10 +269,20 @@ function trendCard(
       return {
         ...base,
         title: `Weight · ${window}`,
-        unit: 'kg',
+        // The only trend with a body unit on it. The series is converted too:
+        // the line's shape survives a linear conversion, but the average printed
+        // beside it would otherwise be a kilogram figure labelled "lb".
+        unit: bodyWeightUnit(units),
         target: null,
-        average: progress.weight.average_7d_kg,
-        series: progress.weight.series,
+        average:
+          progress.weight.average_7d_kg === null
+            ? null
+            : toBodyWeight(progress.weight.average_7d_kg, units),
+        series: progress.weight.series.map((point) => ({
+          ...point,
+          value: point.value === null ? null : toBodyWeight(point.value, units),
+          average: point.average === null ? null : toBodyWeight(point.average, units),
+        })),
       };
     case 'protein':
       return {
@@ -339,7 +363,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         kind: 'food_logged',
         entry_id: entry.id,
         summary: `${entry.meal}: ${entry.description} — ${Math.round(entry.kcal)} kcal`,
-        card: foodCard(entry, day),
+        card: foodCard(entry, day, tc.units),
       });
 
       return ok({
@@ -395,7 +419,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         kind: 'food_updated',
         entry_id: entry.id,
         summary: `Updated ${entry.description} — now ${Math.round(entry.kcal)} kcal`,
-        card: foodCard(entry, day),
+        card: foodCard(entry, day, tc.units),
       });
 
       const movedFrom = before && before.local_date !== entry.local_date ? before.local_date : null;
@@ -958,7 +982,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
     async (args) => {
       const days = Math.min(Math.max(args.days ?? 30, 7), 365);
       const progress = await buildProgress(tc.userId, tc.ctx, days);
-      const card = trendCard(args.metric, days, args.caption, progress);
+      const card = trendCard(args.metric, days, args.caption, progress, tc.units);
 
       tc.actions.push({
         kind: 'card_shown',
@@ -1444,7 +1468,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         kind: 'food_logged',
         entry_id: entry.id,
         summary: `${entry.meal}: ${entry.description} — ${Math.round(entry.kcal)} kcal`,
-        card: foodCard(entry, day),
+        card: foodCard(entry, day, tc.units),
       });
 
       return ok({
@@ -1760,7 +1784,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         kind: 'food_logged',
         entry_id: entry.id,
         summary: `${entry.meal}: ${entry.description} — ${Math.round(entry.kcal)} kcal`,
-        card: foodCard(entry, day),
+        card: foodCard(entry, day, tc.units),
       });
 
       return ok({
@@ -1986,7 +2010,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         kind: 'food_logged',
         entry_id: entry.id,
         summary: `${entry.meal}: ${entry.description} — ${Math.round(entry.kcal)} kcal`,
-        card: foodCard(entry, day),
+        card: foodCard(entry, day, tc.units),
       });
 
       return ok({
@@ -2129,6 +2153,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
           meal: (args.meal as Meal | null) ?? undefined,
           eatenAt: resolveWhen(args.when ?? undefined, tc.now, tc.ctx),
           ctx: tc.ctx,
+          units: tc.units,
         });
       } catch (error) {
         if (error instanceof InvalidPortionError || error instanceof InvalidBarcodeError) {
@@ -2142,7 +2167,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         kind: 'food_logged',
         entry_id: entry.id,
         summary: `${entry.meal}: ${entry.description} — ${Math.round(entry.kcal)} kcal`,
-        card: foodCard(entry, day),
+        card: foodCard(entry, day, tc.units),
       });
 
       return ok({

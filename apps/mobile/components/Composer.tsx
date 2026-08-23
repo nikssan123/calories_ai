@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Circle, Path, Polyline, Rect } from 'react-native-svg';
-import type { PhotoMediaType } from '@ct/shared';
+import type { ChatMessage, PhotoMediaType } from '@ct/shared';
 import { Material } from '@/components/Material';
 import { Sheet } from '@/components/Field';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
@@ -38,9 +38,11 @@ export function Composer({
   onSend: (payload: ComposerPayload) => void;
   /**
    * Something was logged without going through the conversation — a scanned
-   * packet — so the day above it has to re-read itself.
+   * packet. The server writes it into the journal itself and hands back the
+   * message, so this carries it up rather than only saying that it happened:
+   * the conversation grows by that row and the day above it re-reads itself.
    */
-  onLogged: () => void;
+  onLogged: (message: ChatMessage) => void;
   disabled: boolean;
 }) {
   const colors = useColors();
@@ -197,9 +199,9 @@ export function Composer({
       <BarcodeScanner
         open={scanning}
         onClose={() => setScanning(false)}
-        onLogged={() => {
+        onLogged={(message) => {
           setScanning(false);
-          onLogged();
+          onLogged(message);
         }}
         onLabelPhoto={(prepared) => {
           setPhoto(prepared);

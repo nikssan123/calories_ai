@@ -126,6 +126,26 @@ export function Journal() {
     void api.day().then(setDay).catch(() => {});
   }, []);
 
+  /**
+   * A scan, arriving in the conversation.
+   *
+   * The scanner logs through its own route rather than a turn, so nothing here
+   * had written the meal down — the packet went into the ring and the day and
+   * left the journal with a gap where a meal should be. The server now stores
+   * the message with the card on it and returns it, so this is the same row a
+   * reload would show, put in without waiting for one.
+   */
+  const onScanned = useCallback(
+    (message: ChatMessage) => {
+      // Scanning is a request to be at the end of the conversation, wherever
+      // the reader had scrolled back to — the same as sending.
+      pinned.current = true;
+      setBubbles((prev) => [...prev, toBubble(message)]);
+      refreshDay();
+    },
+    [refreshDay],
+  );
+
   const stickToBottom = useCallback(() => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
@@ -334,9 +354,9 @@ export function Journal() {
             <Composer
               onSend={(p) => void send(p)}
               // A scanned packet is logged by the scanner itself, without a
-              // turn — so, like the workout card above, the day beside the
-              // conversation has to be told to re-read itself.
-              onLogged={refreshDay}
+              // turn — so the message it produced is dropped into the
+              // conversation here, and the day beside it re-read.
+              onLogged={onScanned}
               disabled={busy}
             />
           </div>

@@ -1054,6 +1054,22 @@ export const ChatResponse = z.object({
 export type ChatResponse = z.infer<typeof ChatResponse>;
 
 /**
+ * What a scan leaves behind.
+ *
+ * The entry, because the scanner card is what asked for it — and the journal
+ * message it was written into, because a scan is a log the conversation never
+ * saw. The chat tool that logs a barcode already draws its card as part of a
+ * turn; the scanner has no turn to draw one in, so the server writes the
+ * message and hands it back here rather than making the client re-read a page
+ * of history to find the one row it just caused.
+ */
+export const BarcodeLogResponse = z.object({
+  entry: FoodEntry,
+  message: ChatMessage,
+});
+export type BarcodeLogResponse = z.infer<typeof BarcodeLogResponse>;
+
+/**
  * What `POST /chat/stream` sends, frame by frame.
  *
  * A turn takes twenty seconds, and twenty silent seconds read as broken. These

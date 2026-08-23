@@ -5,7 +5,7 @@ import { Camera, ImageIcon, Loader2, ScanBarcode } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   type BarcodeProduct,
-  type FoodEntry,
+  type ChatMessage,
   type UnitSystem,
   GRAMS_PER_OZ,
   SERVING_STEPS,
@@ -55,8 +55,11 @@ export function BarcodeScanner({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** The entry landed; the day beside the conversation is now stale. */
-  onLogged: (entry: FoodEntry) => void;
+  /**
+   * The entry landed, and the server wrote it into the conversation. Hands the
+   * message up so the journal can grow by that row and re-read the day.
+   */
+  onLogged: (message: ChatMessage) => void;
   /**
    * The miss path. Hands a photograph of the nutrition panel back to whoever
    * opened this, which is the composer — so the fallback is not a second
@@ -245,9 +248,9 @@ export function BarcodeScanner({
             {stage.at === 'found' ? (
               <PortionCard
                 product={stage.product}
-                onLogged={(entry) => {
+                onLogged={(message) => {
                   onOpenChange(false);
-                  onLogged(entry);
+                  onLogged(message);
                 }}
                 onRescan={() => setStage({ at: 'scanning' })}
               />
@@ -318,10 +321,17 @@ export function BarcodeScanner({
  * The middle pill and the "Weigh it" stepper, per measurement system.
  *
  * Two tables rather than a conversion, because these are not the same numbers
- * in different clothes. Grams step by 5 from 5 to 2 kg because that is what a
- * kitchen scale does; ounces step by a half because a half ounce is the finest
- * graduation most American scales show and 5 g steps rendered in ounces would
- * be a stepper whose every press produces a new decimal.
+ * in different clothes. Grams step by 5 because that is what a kitchen scale
+ * does; ounces step by a half because a half ounce is the finest graduation
+ * most American scales show, and 5 g steps rendered in ounces would be a
+ * stepper whose every press produces a new decimal.
+ *
+ * But the steps are for nudging — the figure between them is typed. A scale
+ * reading 137 g should not have to be talked down to 135, and thirteen presses
+ * to get from 100 g to 165 g is not portion control, it is a tax on being
+ * accurate. So the bounds below are the API's own rather than tidier ones: a
+ * number somebody typed and watched get silently clamped is a wrong number
+ * logged, which is the one thing this card exists to prevent.
  */
 const BASIS: Record<
   UnitSystem,
@@ -335,6 +345,8 @@ const BASIS: Record<
     weighMin: number;
     weighMax: number;
     weighStep: number;
+    /** Digits a typed figure keeps. Grams are whole; ounces go to a tenth. */
+    weighDecimals: number;
   }
 > = {
   metric: {
@@ -342,9 +354,10 @@ const BASIS: Record<
     grams: 100,
     gramsPerStepUnit: 1,
     weighDefault: 100,
-    weighMin: 5,
-    weighMax: 2000,
+    weighMin: 1,
+    weighMax: 5000,
     weighStep: 5,
+    weighDecimals: 0,
   },
   imperial: {
     label: '1 oz',
@@ -352,9 +365,10 @@ const BASIS: Record<
     gramsPerStepUnit: GRAMS_PER_OZ,
     // Four ounces is a small plated portion — the same place 100 g sits.
     weighDefault: 4,
-    weighMin: 0.5,
-    weighMax: 70,
+    weighMin: 0.1,
+    weighMax: 176,
     weighStep: 0.5,
+    weighDecimals: 1,
   },
 };
 
@@ -379,7 +393,7 @@ function PortionCard({
   onRescan,
 }: {
   product: BarcodeProduct;
-  onLogged: (entry: FoodEntry) => void;
+  onLogged: (message: ChatMessage) => void;
   onRescan: () => void;
 }) {
   const units = useUnits();
@@ -429,12 +443,12 @@ function PortionCard({
       // Servings are sent as servings rather than converted here, so that the
       // entry reads back as the decision the user made rather than as the
       // arithmetic that followed from it.
-      const entry = await api.logBarcode(
+      const { entry, message } = await api.logBarcode(
         product.barcode,
         mode === 'serving' ? { servings } : { grams: eatenGrams },
       );
       toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
-      onLogged(entry);
+      onLogged(message);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -510,6 +524,7 @@ function PortionCard({
           min={basis.weighMin}
           max={basis.weighMax}
           step={basis.weighStep}
+          decimals={basis.weighDecimals}
         />
       )}
 
@@ -598,12 +613,25 @@ function Missed({
 }
 
 /**
- * A stepper, because a phone keyboard over a camera sheet is a bad time.
+ * A stepper, because a phone keyboard over a camera sheet is a bad time — and
+ * a figure you can type into, because sometimes it is exactly what you want.
  *
  * Two ways of moving, for two kinds of quantity. Grams are linear and step by a
  * fixed amount. Servings walk a `ladder` of the fractions people eat packets in
  * — a fixed step can only ever offer multiples of itself, which is how a picker
  * ends up unable to say three quarters of a bar.
+ *
+ * The linear one is also an input. Anyone weighing their food has a number
+ * already — off a scale, off the packet — and arriving at it five grams at a
+ * time is the sort of small friction that ends with people rounding to whatever
+ * the buttons can reach. The ladder stays a plain figure: a keyboard has no way
+ * to say ⅔ of a bar, so typing there could only ever produce a worse answer
+ * than the rung beside it.
+ *
+ * Typing commits on every keystroke rather than on blur, so the calorie figure
+ * above moves as the digits land — and so a "137" still sitting in a focused
+ * field cannot be logged as the 100 it replaced. Blur only tidies: rounds to
+ * the unit's precision and lifts anything below the floor.
  */
 function Stepper({
   label,
@@ -614,6 +642,7 @@ function Stepper({
   min,
   max,
   step,
+  decimals,
   ladder,
   format,
 }: {
@@ -627,14 +656,30 @@ function Stepper({
   min?: number;
   max?: number;
   step?: number;
+  /** Digits a typed figure keeps, once it settles. */
+  decimals?: number;
   /** Ascending amounts to move between, instead of a fixed step. */
   ladder?: number[];
   format?: (value: number) => string;
 }) {
   const rung = ladder ? nearestRung(ladder, value) : -1;
 
+  /*
+   * What is in the field while it is being typed in, which is not always a
+   * number: "1", "13", "137" all pass through on the way to a weight, and "1."
+   * is a legitimate thing to be halfway through writing. Held as the string the
+   * user is looking at so the field never rewrites itself under the cursor.
+   */
+  const [draft, setDraft] = useState<string | null>(null);
+
   const atMin = ladder ? rung === 0 : value <= (min ?? 0);
   const atMax = ladder ? rung === ladder.length - 1 : value >= (max ?? Infinity);
+
+  const settle = (raw: number) => {
+    const factor = 10 ** (decimals ?? 0);
+    const rounded = Math.round(raw * factor) / factor;
+    return Math.min(max ?? Infinity, Math.max(min ?? 0, rounded));
+  };
 
   const move = (delta: number) => {
     if (ladder) {
@@ -642,11 +687,14 @@ function Stepper({
       onChange(ladder[next] ?? value);
       return;
     }
-    const size = step ?? 1;
-    onChange(
-      Math.min(max ?? Infinity, Math.max(min ?? 0, Math.round((value + delta) / size) * size)),
-    );
+    // Plain addition rather than a snap to the nearest multiple: 137 g + 5 is
+    // 142, not 140. A press means "a bit more", and quietly discarding the
+    // precision someone just typed in order to land on a rounder number is
+    // exactly the behaviour they typed to get away from.
+    onChange(settle(value + delta));
   };
+
+  const shown = draft ?? String(settle(value));
 
   return (
     <div className="flex items-center justify-between gap-2">
@@ -664,10 +712,44 @@ function Stepper({
         >
           −
         </button>
-        <span className="text-figure w-16 text-center text-body tnum" aria-live="polite">
-          {format ? format(value) : value % 1 === 0 ? value : value.toFixed(1)}{' '}
-          {suffix ?? ''}
-        </span>
+        {ladder ? (
+          <span className="text-figure w-16 text-center text-body tnum" aria-live="polite">
+            {format ? format(value) : value % 1 === 0 ? value : value.toFixed(1)}
+          </span>
+        ) : (
+          <span className="flex w-20 items-center justify-center gap-1">
+            <input
+              // Not `type="number"`: its spinners are a second, worse stepper
+              // beside this one, and a scroll wheel over a focused one changes
+              // the amount. `inputMode` gets the numeric keypad regardless.
+              type="text"
+              inputMode="decimal"
+              aria-label={suffix ? `How much did you have, in ${suffix}` : label}
+              value={shown}
+              onChange={(e) => {
+                const text = e.currentTarget.value;
+                setDraft(text);
+                const parsed = Number(text.replace(',', '.'));
+                if (Number.isFinite(parsed) && parsed > 0) {
+                  onChange(Math.min(max ?? Infinity, parsed));
+                }
+              }}
+              onFocus={(e) => e.currentTarget.select()}
+              onBlur={() => {
+                setDraft(null);
+                onChange(settle(value));
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  e.currentTarget.blur();
+                }
+              }}
+              className="text-figure w-11 bg-transparent text-right text-body tnum outline-none"
+            />
+            <span className="text-muted-foreground text-footnote">{suffix ?? ''}</span>
+          </span>
+        )}
         <button
           type="button"
           onClick={() => move(step ?? 1)}

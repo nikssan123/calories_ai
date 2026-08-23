@@ -1,10 +1,20 @@
 import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import type { BarcodeProduct, FoodEntry } from '@ct/shared';
-import { formatMass } from '@ct/shared';
+import type { BarcodeProduct, ChatMessage, UnitSystem } from '@ct/shared';
+import { GRAMS_PER_OZ, formatMass, massUnit } from '@ct/shared';
 import { ApiError } from '@ct/api-client';
 import { PressableChunk } from '@/components/Chunk';
 import { api } from '@/lib/api';
@@ -41,7 +51,11 @@ export function BarcodeScanner({
 }: {
   open: boolean;
   onClose: () => void;
-  onLogged: (entry: FoodEntry) => void;
+  /**
+   * The entry landed, and the server wrote it into the conversation. Hands the
+   * message up so the journal can grow by that row and re-read the day.
+   */
+  onLogged: (message: ChatMessage) => void;
   /**
    * A miss hands the label photo back to the composer rather than dead-ending.
    * The user still presses send: this is a message about their meal, and
@@ -189,12 +203,73 @@ export function BarcodeScanner({
 }
 
 /**
+ * What every figure on the card is quoted against, and how the third pill moves.
+ *
+ * Both catalogues normalise to per-100 g and the cache stores that, but 100 g
+ * is a European convention: the American equivalent is the ounce, which is what
+ * a deli counter and a recipe both use. So the pill reads "1 oz" and the
+ * arithmetic underneath is unchanged — it still resolves to grams before the
+ * request leaves the phone, and the API never learns any of this happened.
+ *
+ * The weighed amounts are two tables rather than a conversion, because they are
+ * not the same numbers in different clothes. Grams step by 5 because that is
+ * what a kitchen scale does; ounces step by a half because a half ounce is the
+ * finest graduation most American scales show, and 5 g steps rendered in ounces
+ * would be a stepper whose every press produces a new decimal. The bounds are
+ * the API's own rather than tidier ones: a figure somebody typed and watched
+ * get silently clamped is a wrong number logged.
+ */
+const BASIS: Record<
+  UnitSystem,
+  {
+    label: string;
+    grams: number;
+    /** One step-unit in grams, so the stepper can hold ounces and log grams. */
+    gramsPerStepUnit: number;
+    weighDefault: number;
+    weighMin: number;
+    weighMax: number;
+    weighStep: number;
+    /** Digits a typed figure keeps. Grams are whole; ounces go to a tenth. */
+    weighDecimals: number;
+  }
+> = {
+  metric: {
+    label: '100 g',
+    grams: 100,
+    gramsPerStepUnit: 1,
+    weighDefault: 100,
+    weighMin: 1,
+    weighMax: 5000,
+    weighStep: 5,
+    weighDecimals: 0,
+  },
+  imperial: {
+    label: '1 oz',
+    grams: GRAMS_PER_OZ,
+    gramsPerStepUnit: GRAMS_PER_OZ,
+    // Four ounces is a small plated portion — the same place 100 g sits.
+    weighDefault: 4,
+    weighMin: 0.1,
+    weighMax: 176,
+    weighStep: 0.5,
+    weighDecimals: 1,
+  },
+};
+
+/**
  * How much of it was eaten.
  *
  * Never guessed. The packet says what the food is; only a person can say how
  * much of it they had, and a scanner that logs "one serving" because that is
  * the easiest thing to assume is the failure mode this whole app exists to
  * avoid — a wrong number is trusted, a missing one is not.
+ *
+ * Which is also why there are three pills and not two. Somebody who put their
+ * lunch on a scale knows it was 137 g, and a card that can only offer them a
+ * serving or a flat 100 g is asking them to round an exact number into a wrong
+ * one. So "Weigh it" takes the figure directly — typed, with the steps beside
+ * it for nudging rather than for arriving.
  */
 function Portion({
   product,
@@ -203,20 +278,41 @@ function Portion({
   onError,
 }: {
   product: BarcodeProduct;
-  onLogged: (entry: FoodEntry) => void;
+  onLogged: (message: ChatMessage) => void;
   onRescan: () => void;
   onError: (message: string) => void;
 }) {
   const colors = useColors();
   const units = useUnits();
-  const [mode, setMode] = useState<'serving' | 'hundred'>(
+  const basis = BASIS[units];
+  const [mode, setMode] = useState<'serving' | 'hundred' | 'custom'>(
     product.serving_g === null ? 'hundred' : 'serving',
   );
   const [servings, setServings] = useState(1);
+  /*
+   * Held in whichever unit the stepper is showing rather than in grams, so that
+   * stepping never lands on a number the display has to round away — and beside
+   * it, whatever is in the field mid-typing, which is not always a number: "1",
+   * "13", "137" all pass through on the way to a weight, and "1." is a
+   * legitimate thing to be halfway through writing.
+   */
+  const [weighed, setWeighed] = useState(basis.weighDefault);
+  const [draft, setDraft] = useState<string | null>(null);
   const [logging, setLogging] = useState(false);
 
+  /** Rounded to the unit's precision and inside the API's bounds. */
+  const settle = (raw: number) => {
+    const factor = 10 ** basis.weighDecimals;
+    const rounded = Math.round(raw * factor) / factor;
+    return Math.min(basis.weighMax, Math.max(basis.weighMin, rounded));
+  };
+
   const eatenGrams =
-    mode === 'serving' ? servings * (product.serving_g ?? 100) : 100;
+    mode === 'serving'
+      ? servings * (product.serving_g ?? basis.grams)
+      : mode === 'hundred'
+        ? basis.grams
+        : weighed * basis.gramsPerStepUnit;
   const share = eatenGrams / 100;
 
   async function log() {
@@ -225,11 +321,11 @@ function Portion({
       // Servings are sent as servings rather than converted here, so the entry
       // reads back as the decision the user made rather than as the arithmetic
       // that followed from it.
-      const entry = await api.logBarcode(
+      const { message } = await api.logBarcode(
         product.barcode,
         mode === 'serving' ? { servings } : { grams: eatenGrams },
       );
-      onLogged(entry);
+      onLogged(message);
     } catch (e) {
       onError((e as Error).message);
     } finally {
@@ -238,71 +334,113 @@ function Portion({
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.product}>
-      <View>
-        {product.brand && (
-          <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>{product.brand}</Text>
-        )}
-        <Text style={[styles.productName, { color: colors.foreground }]}>{product.name}</Text>
-        <Text style={[t.footnote, styles.per100, { color: colors.mutedForeground }]}>
-          {Math.round(product.kcal_100g)} kcal · {Math.round(product.protein_100g)}g protein per
-          100g
-        </Text>
-      </View>
-
-      <View style={styles.modes}>
-        {product.serving_g !== null && (
-          <Mode
-            on={mode === 'serving'}
-            onPress={() => setMode('serving')}
-            label={product.serving_desc?.trim() && product.serving_desc.trim().length <= 10
-              ? product.serving_desc.trim()
-              : formatMass(product.serving_g, units)}
-          />
-        )}
-        <Mode on={mode === 'hundred'} onPress={() => setMode('hundred')} label="100 g" />
-      </View>
-
-      {mode === 'serving' && (
-        <View style={styles.stepper}>
-          <Text style={[t.body, { color: colors.foreground }]}>How many?</Text>
-          <View style={[styles.steps, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-            <Step sign="minus" onPress={() => setServings((s) => Math.max(0.5, s - 0.5))} />
-            <Text style={[t.figure, styles.count, { color: colors.foreground }]}>{servings}</Text>
-            <Step sign="plus" onPress={() => setServings((s) => Math.min(20, s + 0.5))} />
-          </View>
+    <KeyboardAvoidingView style={styles.flex} behavior="padding">
+      {/* `handled` so that the first tap on "I ate this" logs, rather than
+          being swallowed dismissing the keypad the weight was typed on. */}
+      <ScrollView contentContainerStyle={styles.product} keyboardShouldPersistTaps="handled">
+        <View>
+          {product.brand && (
+            <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>{product.brand}</Text>
+          )}
+          <Text style={[styles.productName, { color: colors.foreground }]}>{product.name}</Text>
+          <Text style={[t.footnote, styles.basis, { color: colors.mutedForeground }]}>
+            {Math.round((product.kcal_100g * basis.grams) / 100)} kcal ·{' '}
+            {Math.round((product.protein_100g * basis.grams) / 100)}g protein per {basis.label}
+          </Text>
         </View>
-      )}
 
-      <View style={[styles.total, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[t.figure, styles.totalFigure, { color: colors.foreground }]}>
-          {Math.round(product.kcal_100g * share)}
-        </Text>
-        <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-          kcal · {Math.round(product.protein_100g * share)}g protein ·{' '}
-          {formatMass(eatenGrams, units)}
-        </Text>
-      </View>
+        <View style={styles.modes}>
+          {product.serving_g !== null && (
+            <Mode
+              on={mode === 'serving'}
+              onPress={() => setMode('serving')}
+              label={product.serving_desc?.trim() && product.serving_desc.trim().length <= 10
+                ? product.serving_desc.trim()
+                : formatMass(product.serving_g, units)}
+            />
+          )}
+          <Mode on={mode === 'hundred'} onPress={() => setMode('hundred')} label={basis.label} />
+          <Mode on={mode === 'custom'} onPress={() => setMode('custom')} label="Weigh it" />
+        </View>
 
-      <PressableChunk
-        radius={999}
-        color={colors.caloriesDeep}
-        onPress={() => void log()}
-        disabled={logging}
-        accessibilityRole="button"
-        contentStyle={[styles.button, { backgroundColor: colors.primary }]}
-      >
-        <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
-          {logging ? 'Logging…' : 'I ate this'}
-        </Text>
-      </PressableChunk>
+        {mode === 'serving' && (
+          <View style={styles.stepper}>
+            <Text style={[t.body, { color: colors.foreground }]}>How many?</Text>
+            <View style={[styles.steps, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+              <Step sign="minus" onPress={() => setServings((s) => Math.max(0.5, s - 0.5))} />
+              <Text style={[t.figure, styles.count, { color: colors.foreground }]}>{servings}</Text>
+              <Step sign="plus" onPress={() => setServings((s) => Math.min(20, s + 0.5))} />
+            </View>
+          </View>
+        )}
 
-      <Pressable onPress={onRescan} accessibilityRole="button" hitSlop={8}>
-        <Text style={[t.footnoteSemibold, styles.centred, { color: colors.mutedForeground }]}>
-          Scan another
-        </Text>
-      </Pressable>
-    </ScrollView>
+        {mode === 'custom' && (
+          <View style={styles.stepper}>
+            <Text style={[t.body, { color: colors.foreground }]}>How much?</Text>
+            <View style={[styles.steps, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+              <Step sign="minus" onPress={() => setWeighed((w) => settle(w - basis.weighStep))} />
+              <View style={styles.typed}>
+                <TextInput
+                  value={draft ?? String(settle(weighed))}
+                  /*
+                   * Committed on every keystroke rather than on blur, so the
+                   * total below moves as the digits land — and so a "137" still
+                   * sitting in a focused field cannot be logged as the 100 it
+                   * replaced. Blur only tidies.
+                   */
+                  onChangeText={(text) => {
+                    setDraft(text);
+                    const parsed = Number(text.replace(',', '.'));
+                    if (Number.isFinite(parsed) && parsed > 0) {
+                      setWeighed(Math.min(basis.weighMax, parsed));
+                    }
+                  }}
+                  onBlur={() => {
+                    setDraft(null);
+                    setWeighed((w) => settle(w));
+                  }}
+                  keyboardType="decimal-pad"
+                  selectTextOnFocus
+                  accessibilityLabel={`How much did you have, in ${massUnit(units)}`}
+                  style={[styles.typedInput, { color: colors.foreground, fontFamily: font.display }]}
+                />
+                <Text style={[t.footnote, { color: colors.mutedForeground }]}>{massUnit(units)}</Text>
+              </View>
+              <Step sign="plus" onPress={() => setWeighed((w) => settle(w + basis.weighStep))} />
+            </View>
+          </View>
+        )}
+
+        <View style={[styles.total, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[t.figure, styles.totalFigure, { color: colors.foreground }]}>
+            {Math.round(product.kcal_100g * share)}
+          </Text>
+          <Text style={[t.footnote, { color: colors.mutedForeground }]}>
+            kcal · {Math.round(product.protein_100g * share)}g protein ·{' '}
+            {formatMass(eatenGrams, units)}
+          </Text>
+        </View>
+
+        <PressableChunk
+          radius={999}
+          color={colors.caloriesDeep}
+          onPress={() => void log()}
+          disabled={logging}
+          accessibilityRole="button"
+          contentStyle={[styles.button, { backgroundColor: colors.primary }]}
+        >
+          <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
+            {logging ? 'Logging…' : 'I ate this'}
+          </Text>
+        </PressableChunk>
+
+        <Pressable onPress={onRescan} accessibilityRole="button" hitSlop={8}>
+          <Text style={[t.footnoteSemibold, styles.centred, { color: colors.mutedForeground }]}>
+            Scan another
+          </Text>
+        </Pressable>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -401,6 +539,7 @@ function Step({ sign, onPress }: { sign: 'minus' | 'plus'; onPress: () => void }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  flex: { flex: 1 },
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -423,7 +562,7 @@ const styles = StyleSheet.create({
   centred: { textAlign: 'center' },
   product: { padding: 20, gap: 16 },
   productName: { fontFamily: font.display, fontSize: 18, lineHeight: 24, marginTop: 4 },
-  per100: { marginTop: 6 },
+  basis: { marginTop: 6 },
   modes: { flexDirection: 'row', gap: 8 },
   mode: { borderWidth: 2, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
   modeLabel: { fontFamily: font.bold, fontSize: 14, lineHeight: 20 },
@@ -431,6 +570,14 @@ const styles = StyleSheet.create({
   steps: { flexDirection: 'row', alignItems: 'center', borderWidth: 2, borderRadius: 999 },
   step: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   count: { width: 44, textAlign: 'center', fontSize: 16, lineHeight: 24 },
+  typed: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 2 },
+  typedInput: {
+    minWidth: 44,
+    textAlign: 'right',
+    fontSize: 16,
+    lineHeight: 24,
+    paddingVertical: 0,
+  },
   total: {
     flexDirection: 'row',
     alignItems: 'baseline',

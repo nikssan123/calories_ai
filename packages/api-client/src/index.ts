@@ -3,6 +3,7 @@ import type {
   Acknowledged,
   AdaptiveProposal,
   BarcodeLogRequest,
+  BarcodeLogResponse,
   BarcodeProduct,
   Calendar,
   AdminOverview,
@@ -381,9 +382,13 @@ export function createApiClient({
      * How much of it was eaten. Grams or servings, one or the other, and never
      * folded into the lookup above: the packet says what the food is and only a
      * person can say how much of it they had.
+     *
+     * Comes back with the journal message the scan was written into as well as
+     * the entry, so the conversation can grow by the one row this caused
+     * instead of re-reading its history to find it.
      */
     logBarcode: (code: string, portion: BarcodeLogRequest) =>
-      request<FoodEntry>(`/barcode/${encodeURIComponent(code)}/log`, {
+      request<BarcodeLogResponse>(`/barcode/${encodeURIComponent(code)}/log`, {
         method: 'POST',
         body: JSON.stringify(portion),
       }),
