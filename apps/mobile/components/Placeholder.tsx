@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Logo } from '@/components/Logo';
+import { Lockup } from '@/components/Lockup';
 import { type as t, useColors } from '@/theme';
 
 /**
@@ -18,7 +18,7 @@ export function Placeholder({ title, blurb }: { title: string; blurb: string }) 
 
   return (
     <View style={[styles.wrap, { paddingTop: insets.top }]}>
-      <Logo size={44} />
+      <Lockup size={64} />
       <Text style={[t.title2, styles.centred, { color: colors.foreground }]}>{title}</Text>
       <Text style={[t.body, styles.centred, { color: colors.mutedForeground }]}>{blurb}</Text>
       <Text style={[t.footnoteSemibold, styles.centred, { color: colors.mutedForeground }]}>

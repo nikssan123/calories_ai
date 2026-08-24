@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import * as WebBrowser from 'expo-web-browser';
 import { Chunk, PressableChunk } from '@/components/Chunk';
-import { Logo } from '@/components/Logo';
+import { Lockup } from '@/components/Lockup';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { signInWithGoogle } from '@/lib/google';
@@ -153,7 +153,7 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.head}>
-          <Logo size={52} />
+          <Lockup size={64} />
           <Text style={[t.largeTitle, styles.title, { color: colors.foreground }]}>
             {signup ? 'Create your account' : 'Welcome back'}
           </Text>

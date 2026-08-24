@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Chunk, PressableChunk } from '@/components/Chunk';
-import { Logo } from '@/components/Logo';
+import { Lockup } from '@/components/Lockup';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { font, type as t, useColors } from '@/theme';
@@ -77,7 +77,7 @@ export default function VerifyScreen() {
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        <Logo size={52} />
+        <Lockup size={64} />
         <Text style={[t.largeTitle, styles.title, { color: colors.foreground }]}>
           Check your email
         </Text>
