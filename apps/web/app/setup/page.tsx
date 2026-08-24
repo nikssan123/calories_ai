@@ -91,6 +91,7 @@ export default function SetupPage() {
   const [day, setDay] = useState<DaySummary | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -104,11 +105,24 @@ export default function SetupPage() {
     })();
   }, []);
 
+  /*
+   * The receipt leaves on its own, and takes the bar with it. Without the
+   * timer the strip would be a permanent fixture reading "Saved" — a line of
+   * chrome at the foot of the screen saying that nothing needs doing, which is
+   * the state the screen is in almost all of the time.
+   */
+  useEffect(() => {
+    if (!saved) return;
+    const timer = setTimeout(() => setSaved(false), SAVED_LINGER_MS);
+    return () => clearTimeout(timer);
+  }, [saved]);
+
   const units = unitsOf(profile);
 
   function patch<K extends keyof Profile>(key: K, value: Profile[K]) {
     setProfile((prev) => (prev ? { ...prev, [key]: value } : prev));
     setDirty(true);
+    setSaved(false);
   }
 
   async function save() {
@@ -132,7 +146,7 @@ export default function SetupPage() {
       setProfile(updated);
       setDay(await api.day());
       setDirty(false);
-      toast.success('Saved');
+      setSaved(true);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -150,303 +164,357 @@ export default function SetupPage() {
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-5 pb-8 lg:px-6">
-      <div className="mx-auto w-full max-w-4xl space-y-7">
-      <div>
-        <h1 className="text-large-title">You</h1>
-        <p className="text-muted-foreground mt-1.5 text-body font-medium">
-          Enough to work out a starting target. It adjusts as real data comes in.
-        </p>
-      </div>
-
-      {day && (
-        <div className="bg-card border-border chunk rounded-[var(--radius)] border-2 p-5 text-center">
-          <p className="text-eyebrow text-muted-foreground">Your daily target</p>
-          <p className="text-figure mt-1.5 text-[2.75rem] leading-none">
-            {day.targets.kcal.toLocaleString()}
-            <span className="text-muted-foreground ml-1.5 text-lg font-bold">kcal</span>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-5 pb-8 lg:px-6">
+        <div className="mx-auto w-full max-w-4xl space-y-7">
+        <div>
+          <h1 className="text-large-title">You</h1>
+          <p className="text-muted-foreground mt-1.5 text-body font-medium">
+            Enough to work out a starting target. It adjusts as real data comes in.
           </p>
-          <div className="text-footnote mt-4 flex flex-wrap justify-center gap-2">
-            <MacroChip label="Protein" value={day.targets.protein_g} color="var(--protein)" />
-            <MacroChip label="Carbs" value={day.targets.carbs_g} color="var(--carbs)" />
-            <MacroChip label="Fat" value={day.targets.fat_g} color="var(--fat)" />
+        </div>
+
+        {day && (
+          <div className="bg-card border-border chunk rounded-[var(--radius)] border-2 p-5 text-center">
+            <p className="text-eyebrow text-muted-foreground">Your daily target</p>
+            <p className="text-figure mt-1.5 text-[2.75rem] leading-none">
+              {day.targets.kcal.toLocaleString()}
+              <span className="text-muted-foreground ml-1.5 text-lg font-bold">kcal</span>
+            </p>
+            <div className="text-footnote mt-4 flex flex-wrap justify-center gap-2">
+              <MacroChip label="Protein" value={day.targets.protein_g} color="var(--protein)" />
+              <MacroChip label="Carbs" value={day.targets.carbs_g} color="var(--carbs)" />
+              <MacroChip label="Fat" value={day.targets.fat_g} color="var(--fat)" />
+            </div>
+
+            {/*
+              * Under the number, not tucked into a footer nobody reaches.
+              *
+              * A figure this size, presented alone, reads as a prescription. It is
+              * an average for a body of these dimensions, and it does not know
+              * anything about the person — which is exactly the sentence someone
+              * pregnant, or managing diabetes, needs to have read before they
+              * start treating it as an instruction.
+              */}
+            <p className="text-footnote text-muted-foreground mx-auto mt-5 max-w-md font-medium">
+              A population average for someone your size, not medical advice. It is corrected from
+              your own logged data after a fortnight. If you are pregnant or breastfeeding, or
+              managing a condition like diabetes or kidney disease, get your number from a
+              clinician and set it by hand here.
+            </p>
           </div>
-
-          {/*
-            * Under the number, not tucked into a footer nobody reaches.
-            *
-            * A figure this size, presented alone, reads as a prescription. It is
-            * an average for a body of these dimensions, and it does not know
-            * anything about the person — which is exactly the sentence someone
-            * pregnant, or managing diabetes, needs to have read before they
-            * start treating it as an instruction.
-            */}
-          <p className="text-footnote text-muted-foreground mx-auto mt-5 max-w-md font-medium">
-            A population average for someone your size, not medical advice. It is corrected from
-            your own logged data after a fortnight. If you are pregnant or breastfeeding, or
-            managing a condition like diabetes or kidney disease, get your number from a
-            clinician and set it by hand here.
-          </p>
-        </div>
-      )}
-
-      <div className="grid gap-7 lg:grid-cols-2 lg:items-start">
-      <InsetGroup title="About you">
-        <InsetRow>
-          <span className="flex-1 text-body">Name</span>
-          <Input
-            value={profile.display_name ?? ''}
-            onChange={(e) => patch('display_name', e.target.value || null)}
-            placeholder="Optional"
-            className={cn(FIELD_INPUT, 'w-44')}
-          />
-        </InsetRow>
-
-        <InsetRow>
-          <span className="flex-1 text-body">Sex</span>
-          <Select
-            value={profile.sex ?? ''}
-            onValueChange={(v) => patch('sex', (v || null) as Sex | null)}
-          >
-            <SelectTrigger className={cn(FIELD, 'w-auto gap-2 pr-2.5')}>
-              {/* Without flex-none the value stretches to fill the trigger and
-                  strands itself in the middle of the row. */}
-              <SelectValue placeholder="—" className="flex-none">
-                {(value) => SEX_LABELS[value as Sex] ?? '—'}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.keys(SEX_LABELS) as Sex[]).map((sex) => (
-                <SelectItem key={sex} value={sex}>
-                  {SEX_LABELS[sex]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </InsetRow>
-
-        <InsetRow>
-          <span className="flex-1 text-body">Date of birth</span>
-          <Input
-            type="date"
-            value={profile.birth_date ?? ''}
-            onChange={(e) => patch('birth_date', e.target.value || null)}
-            // The native picker is drawn by the browser, not by us; it reads
-            // `color-scheme` off <html>, which <ThemeSync> now sets.
-            className={cn(FIELD_INPUT, 'w-44')}
-          />
-        </InsetRow>
-
-        {/*
-          * Above the two fields it governs, so switching it visibly rewrites
-          * them rather than changing something further down the page that the
-          * eye has already left.
-          */}
-        <InsetRow>
-          <span className="flex-1 text-body">Units</span>
-          <ToggleGroup
-            value={[units]}
-            onValueChange={(values) => {
-              const next = values[0];
-              if (next === 'metric' || next === 'imperial') patch('units', next);
-            }}
-            className="bg-muted rounded-full p-0.5"
-          >
-            {(Object.keys(UNIT_LABELS) as UnitSystem[]).map((system) => (
-              <ToggleGroupItem
-                key={system}
-                value={system}
-                aria-label={`${UNIT_LABELS[system]} — ${UNIT_EXAMPLES[system]}`}
-                className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-9 rounded-full px-3.5 text-footnote font-bold transition-colors"
-              >
-                {UNIT_LABELS[system]}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-        </InsetRow>
-
-        <InsetRow>
-          <span className="flex-1 text-body">Height</span>
-          {units === 'imperial' ? (
-            <HeightFeetInches value={profile.height_cm} onChange={(v) => patch('height_cm', v)} />
-          ) : (
-            <NumberField
-              value={profile.height_cm}
-              onChange={(v) => patch('height_cm', v)}
-              unit="cm"
-            />
-          )}
-        </InsetRow>
-
-        <InsetRow>
-          <span className="flex-1 text-body">Target weight</span>
-          {/*
-            * Converted on the way in and back out on the way to the API, so the
-            * column stays kilograms whatever this field says. Typing 165 lb
-            * stores 74.8 kg; the number that comes back rounds to 165 again.
-            */}
-          <NumberField
-            value={
-              profile.target_weight_kg === null
-                ? null
-                : toBodyWeight(profile.target_weight_kg, units)
-            }
-            onChange={(v) =>
-              patch('target_weight_kg', v === null ? null : bodyWeightToKg(v, units))
-            }
-            unit={bodyWeightUnit(units)}
-            step="0.1"
-          />
-        </InsetRow>
-      </InsetGroup>
-
-      <InsetGroup title="Goal">
-        <div className="grid grid-cols-3 gap-2 p-2">
-          {(Object.keys(GOAL_LABELS) as Goal[]).map((goal) => {
-            const active = profile.goal === goal;
-            return (
-              <button
-                key={goal}
-                type="button"
-                onClick={() => patch('goal', goal)}
-                className={cn(
-                  'chunk-press rounded-2xl border-2 py-2.5 text-sm font-bold [--chunk-depth:3px]',
-                  active
-                    ? 'bg-primary text-primary-foreground border-transparent [--chunk-color:var(--calories-deep)]'
-                    : 'bg-muted text-muted-foreground border-border hover:text-foreground',
-                )}
-              >
-                {GOAL_LABELS[goal]}
-              </button>
-            );
-          })}
-        </div>
-        <InsetRow>
-          <span className="flex-1 text-body">Activity</span>
-          <Select
-            value={profile.activity_level ?? ''}
-            onValueChange={(v) => patch('activity_level', (v || null) as ActivityLevel | null)}
-          >
-            <SelectTrigger className={cn(FIELD, 'w-auto gap-2 pr-2.5')}>
-              <SelectValue placeholder="—" className="flex-none">
-                {(value) => ACTIVITY_SHORT[value as ActivityLevel] ?? '—'}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.keys(ACTIVITY_LABELS) as ActivityLevel[]).map((level) => (
-                <SelectItem key={level} value={level}>
-                  {ACTIVITY_LABELS[level]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </InsetRow>
-      </InsetGroup>
-
-      <InsetGroup
-        title="Day"
-        footer="Food eaten before the day starts counts toward the previous day — so a 1am snack lands on the evening it belongs to."
-      >
-        <InsetRow>
-          <span className="shrink-0 text-body">Time zone</span>
-          <Input
-            value={profile.timezone}
-            onChange={(e) => patch('timezone', e.target.value)}
-            className={cn(FIELD_INPUT, 'min-w-0 flex-1')}
-          />
-        </InsetRow>
-        <InsetRow>
-          <span className="flex-1 text-body">Day starts at</span>
-          <Select
-            value={String(profile.day_start_hour)}
-            onValueChange={(v) => patch('day_start_hour', Number(v))}
-          >
-            <SelectTrigger className={cn(FIELD, 'tnum w-auto gap-2 pr-2.5')}>
-              <SelectValue className="flex-none">
-                {(value) => `${String(value).padStart(2, '0')}:00`}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {Array.from({ length: 9 }, (_, i) => i).map((hour) => (
-                <SelectItem key={hour} value={String(hour)}>
-                  {String(hour).padStart(2, '0')}:00
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </InsetRow>
-      </InsetGroup>
-
-      <DietRules profile={profile} onChange={setProfile} />
-
-      <InsetGroup title="Appearance" footer="System follows your device, including its light and dark schedule.">
-        <div className="p-3">
-          <ThemeToggle />
-        </div>
-      </InsetGroup>
-
-      <EmailSettings profile={profile} onChange={setProfile} />
-
-      <InsetGroup title="Account">
-        <InsetRow>
-          <span className="flex-1 text-body">Signed in as</span>
-          <span className="text-muted-foreground truncate text-body">
-            {profile.email ?? '—'}
-          </span>
-        </InsetRow>
-        {/* The sidebar carries this from `lg` up; on a phone there is no
-            sidebar, so the account group is where it can live. */}
-        {isAdmin && (
-          <Link
-            href="/admin"
-            className="flex items-center gap-2 px-4 py-3 text-body text-[var(--calories-text)]"
-          >
-            <Shield size={16} /> Admin
-          </Link>
         )}
-        <button
-          type="button"
-          onClick={() => void signOut()}
-          className="text-destructive w-full px-4 py-3 text-left text-body"
+
+        <div className="grid gap-7 lg:grid-cols-2 lg:items-start">
+        <InsetGroup title="About you">
+          <InsetRow>
+            <span className="flex-1 text-body">Name</span>
+            <Input
+              value={profile.display_name ?? ''}
+              onChange={(e) => patch('display_name', e.target.value || null)}
+              placeholder="Optional"
+              className={cn(FIELD_INPUT, 'w-44')}
+            />
+          </InsetRow>
+
+          <InsetRow>
+            <span className="flex-1 text-body">Sex</span>
+            <Select
+              value={profile.sex ?? ''}
+              onValueChange={(v) => patch('sex', (v || null) as Sex | null)}
+            >
+              <SelectTrigger className={cn(FIELD, 'w-auto gap-2 pr-2.5')}>
+                {/* Without flex-none the value stretches to fill the trigger and
+                    strands itself in the middle of the row. */}
+                <SelectValue placeholder="—" className="flex-none">
+                  {(value) => SEX_LABELS[value as Sex] ?? '—'}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(SEX_LABELS) as Sex[]).map((sex) => (
+                  <SelectItem key={sex} value={sex}>
+                    {SEX_LABELS[sex]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </InsetRow>
+
+          <InsetRow>
+            <span className="flex-1 text-body">Date of birth</span>
+            <Input
+              type="date"
+              value={profile.birth_date ?? ''}
+              onChange={(e) => patch('birth_date', e.target.value || null)}
+              // The native picker is drawn by the browser, not by us; it reads
+              // `color-scheme` off <html>, which <ThemeSync> now sets.
+              className={cn(FIELD_INPUT, 'w-44')}
+            />
+          </InsetRow>
+
+          {/*
+            * Above the two fields it governs, so switching it visibly rewrites
+            * them rather than changing something further down the page that the
+            * eye has already left.
+            */}
+          <InsetRow>
+            <span className="flex-1 text-body">Units</span>
+            <ToggleGroup
+              value={[units]}
+              onValueChange={(values) => {
+                const next = values[0];
+                if (next === 'metric' || next === 'imperial') patch('units', next);
+              }}
+              className="bg-muted rounded-full p-0.5"
+            >
+              {(Object.keys(UNIT_LABELS) as UnitSystem[]).map((system) => (
+                <ToggleGroupItem
+                  key={system}
+                  value={system}
+                  aria-label={`${UNIT_LABELS[system]} — ${UNIT_EXAMPLES[system]}`}
+                  className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-9 rounded-full px-3.5 text-footnote font-bold transition-colors"
+                >
+                  {UNIT_LABELS[system]}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </InsetRow>
+
+          <InsetRow>
+            <span className="flex-1 text-body">Height</span>
+            {units === 'imperial' ? (
+              <HeightFeetInches value={profile.height_cm} onChange={(v) => patch('height_cm', v)} />
+            ) : (
+              <NumberField
+                value={profile.height_cm}
+                onChange={(v) => patch('height_cm', v)}
+                unit="cm"
+              />
+            )}
+          </InsetRow>
+
+          <InsetRow>
+            <span className="flex-1 text-body">Target weight</span>
+            {/*
+              * Converted on the way in and back out on the way to the API, so the
+              * column stays kilograms whatever this field says. Typing 165 lb
+              * stores 74.8 kg; the number that comes back rounds to 165 again.
+              */}
+            <NumberField
+              value={
+                profile.target_weight_kg === null
+                  ? null
+                  : toBodyWeight(profile.target_weight_kg, units)
+              }
+              onChange={(v) =>
+                patch('target_weight_kg', v === null ? null : bodyWeightToKg(v, units))
+              }
+              unit={bodyWeightUnit(units)}
+              step="0.1"
+            />
+          </InsetRow>
+        </InsetGroup>
+
+        <InsetGroup title="Goal">
+          <div className="grid grid-cols-3 gap-2 p-2">
+            {(Object.keys(GOAL_LABELS) as Goal[]).map((goal) => {
+              const active = profile.goal === goal;
+              return (
+                <button
+                  key={goal}
+                  type="button"
+                  onClick={() => patch('goal', goal)}
+                  className={cn(
+                    'chunk-press rounded-2xl border-2 py-2.5 text-sm font-bold [--chunk-depth:3px]',
+                    active
+                      ? 'bg-primary text-primary-foreground border-transparent [--chunk-color:var(--calories-deep)]'
+                      : 'bg-muted text-muted-foreground border-border hover:text-foreground',
+                  )}
+                >
+                  {GOAL_LABELS[goal]}
+                </button>
+              );
+            })}
+          </div>
+          <InsetRow>
+            <span className="flex-1 text-body">Activity</span>
+            <Select
+              value={profile.activity_level ?? ''}
+              onValueChange={(v) => patch('activity_level', (v || null) as ActivityLevel | null)}
+            >
+              <SelectTrigger className={cn(FIELD, 'w-auto gap-2 pr-2.5')}>
+                <SelectValue placeholder="—" className="flex-none">
+                  {(value) => ACTIVITY_SHORT[value as ActivityLevel] ?? '—'}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(ACTIVITY_LABELS) as ActivityLevel[]).map((level) => (
+                  <SelectItem key={level} value={level}>
+                    {ACTIVITY_LABELS[level]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </InsetRow>
+        </InsetGroup>
+
+        <InsetGroup
+          title="Day"
+          footer="Food eaten before the day starts counts toward the previous day — so a 1am snack lands on the evening it belongs to."
         >
-          Sign out
-        </button>
-      </InsetGroup>
+          <InsetRow>
+            <span className="shrink-0 text-body">Time zone</span>
+            <Input
+              value={profile.timezone}
+              onChange={(e) => patch('timezone', e.target.value)}
+              className={cn(FIELD_INPUT, 'min-w-0 flex-1')}
+            />
+          </InsetRow>
+          <InsetRow>
+            <span className="flex-1 text-body">Day starts at</span>
+            <Select
+              value={String(profile.day_start_hour)}
+              onValueChange={(v) => patch('day_start_hour', Number(v))}
+            >
+              <SelectTrigger className={cn(FIELD, 'tnum w-auto gap-2 pr-2.5')}>
+                <SelectValue className="flex-none">
+                  {(value) => `${String(value).padStart(2, '0')}:00`}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 9 }, (_, i) => i).map((hour) => (
+                  <SelectItem key={hour} value={String(hour)}>
+                    {String(hour).padStart(2, '0')}:00
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </InsetRow>
+        </InsetGroup>
 
-      {/* Reachable from inside the app as well as from the landing page: the
-          store listings link to these, and so does the sign-up screen, but a
-          person looking for "what do they keep about me" looks in Settings. */}
-      <InsetGroup title="About">
-        <Link href="/privacy" className="flex items-center gap-2 px-4 py-3 text-body">
-          <span className="flex-1">Privacy policy</span>
-          <ChevronRight size={16} className="text-muted-foreground" />
-        </Link>
-        <Link href="/terms" className="flex items-center gap-2 px-4 py-3 text-body">
-          <span className="flex-1">Terms of service</span>
-          <ChevronRight size={16} className="text-muted-foreground" />
-        </Link>
-        <a href="mailto:support@daysofar.com" className="flex items-center gap-2 px-4 py-3 text-body">
-          <span className="flex-1">Contact support</span>
-          <ChevronRight size={16} className="text-muted-foreground" />
-        </a>
-      </InsetGroup>
+        <DietRules profile={profile} onChange={setProfile} />
 
-      <DeleteAccount email={profile.email} />
+        <InsetGroup title="Appearance" footer="System follows your device, including its light and dark schedule.">
+          <div className="p-3">
+            <ThemeToggle />
+          </div>
+        </InsetGroup>
 
+        <EmailSettings profile={profile} onChange={setProfile} />
+
+        <InsetGroup title="Account">
+          <InsetRow>
+            <span className="flex-1 text-body">Signed in as</span>
+            <span className="text-muted-foreground truncate text-body">
+              {profile.email ?? '—'}
+            </span>
+          </InsetRow>
+          {/* The sidebar carries this from `lg` up; on a phone there is no
+              sidebar, so the account group is where it can live. */}
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className="flex items-center gap-2 px-4 py-3 text-body text-[var(--calories-text)]"
+            >
+              <Shield size={16} /> Admin
+            </Link>
+          )}
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            className="text-destructive w-full px-4 py-3 text-left text-body"
+          >
+            Sign out
+          </button>
+        </InsetGroup>
+
+        {/* Reachable from inside the app as well as from the landing page: the
+            store listings link to these, and so does the sign-up screen, but a
+            person looking for "what do they keep about me" looks in Settings. */}
+        <InsetGroup title="About">
+          <Link href="/privacy" className="flex items-center gap-2 px-4 py-3 text-body">
+            <span className="flex-1">Privacy policy</span>
+            <ChevronRight size={16} className="text-muted-foreground" />
+          </Link>
+          <Link href="/terms" className="flex items-center gap-2 px-4 py-3 text-body">
+            <span className="flex-1">Terms of service</span>
+            <ChevronRight size={16} className="text-muted-foreground" />
+          </Link>
+          <a href="mailto:support@daysofar.com" className="flex items-center gap-2 px-4 py-3 text-body">
+            <span className="flex-1">Contact support</span>
+            <ChevronRight size={16} className="text-muted-foreground" />
+          </a>
+        </InsetGroup>
+
+        <DeleteAccount email={profile.email} />
+
+        </div>
+
+        </div>
       </div>
 
-      <Button
-        onClick={() => void save()}
-        disabled={saving || !dirty}
-        size="lg"
-        className="h-12 w-full rounded-2xl text-body font-semibold transition-transform active:scale-[0.98] lg:w-56"
-      >
-        {saving ? 'Saving…' : dirty ? 'Save' : (
-          <>
-            <Check size={17} /> Saved
-          </>
-        )}
-      </Button>
+      <SaveBar dirty={dirty} saving={saving} saved={saved} onSave={() => void save()} />
+    </div>
+  );
+}
+
+/** How long "Saved" stays up before the bar leaves. Long enough to read. */
+const SAVED_LINGER_MS = 2200;
+
+/**
+ * The save control, pinned to the foot of the screen rather than parked at the
+ * end of it.
+ *
+ * It used to be the last thing on the page, below Delete account. So changing
+ * your units at the top did nothing anybody could see: the new value sat in a
+ * control, the button that would commit it was a screen and a half further
+ * down, and the way most people found out was coming back later to a profile
+ * that had not changed. Nothing on the screen said the change was being *held*
+ * rather than kept.
+ *
+ * The bar arrives the moment something is unsaved and says so in words, so the
+ * work outstanding and the button that finishes it are the same object in the
+ * same place. It leaves again once there is nothing to do — including the
+ * receipt, which is here rather than in a toast at the top of the window
+ * because this one is about something still on screen.
+ */
+function SaveBar({
+  dirty,
+  saving,
+  saved,
+  onSave,
+}: {
+  dirty: boolean;
+  saving: boolean;
+  saved: boolean;
+  onSave: () => void;
+}) {
+  if (!dirty && !saving && !saved) return null;
+
+  return (
+    <div className="material border-border animate-in fade-in slide-in-from-bottom-4 z-20 border-t-2">
+      <div className="mx-auto flex w-full max-w-4xl items-center gap-3 px-4 py-3 lg:px-6">
+        {/* Announced, because for a screen-reader the arrival of the bar is the
+            only thing that happened when the field changed. */}
+        <p aria-live="polite" className="text-footnote text-muted-foreground flex-1 font-semibold">
+          {saving ? (
+            'Saving…'
+          ) : dirty ? (
+            'Unsaved changes'
+          ) : (
+            <span className="inline-flex items-center gap-1.5">
+              <Check size={15} /> Saved
+            </span>
+          )}
+        </p>
+        <Button
+          onClick={onSave}
+          disabled={saving || !dirty}
+          size="lg"
+          className="h-11 rounded-2xl px-7 text-body font-semibold transition-transform active:scale-[0.98]"
+        >
+          Save
+        </Button>
       </div>
     </div>
   );

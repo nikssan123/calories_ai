@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { ReduceMotion, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as WebBrowser from 'expo-web-browser';
 import type { ActivityLevel, DaySummary, Goal, Profile, Sex, UnitSystem } from '@ct/shared';
@@ -19,6 +20,7 @@ import { PressableChunk } from '@/components/Chunk';
 import { DietRules } from '@/components/DietRules';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { NumberField, Picker, Sheet, TextField } from '@/components/Field';
+import { Material } from '@/components/Material';
 import { Skeleton } from '@/components/Skeleton';
 import { Switch } from '@/components/Switch';
 import { ThemeToggle } from '@/components/ThemeToggle';
@@ -28,7 +30,7 @@ import { useEntitlements } from '@/lib/entitlements';
 import { billingAvailable, restore } from '@/lib/billing';
 import { meterNoun, TIER_NAMES, TIER_PITCHES } from '@/lib/plan-copy';
 import { PRIVACY_URL, SUPPORT_EMAIL, TERMS_URL } from '@/lib/links';
-import { font, type as t, useColors, withAlpha } from '@/theme';
+import { duration, font, type as t, useColors, withAlpha } from '@/theme';
 import { registerForPush } from '@/lib/push';
 import { applyReminders, loadReminders, type ReminderSettings } from '@/lib/reminders';
 
@@ -69,7 +71,15 @@ export default function SetupScreen() {
   const [day, setDay] = useState<DaySummary | null>(null);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /*
+   * Kept apart from `error`, which belongs to whatever part of the screen
+   * raised it — a profile that would not load, a deletion that failed. This one
+   * is about the write the bar just attempted, and it is reported in the bar,
+   * because that is where the person pressing Save is looking.
+   */
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -83,11 +93,25 @@ export default function SetupScreen() {
     })();
   }, []);
 
+  /*
+   * The receipt leaves on its own, and takes the bar with it. Without the timer
+   * the strip would be a permanent fixture reading "Saved" — a line of chrome
+   * across the foot of the screen saying that nothing needs doing, which is the
+   * state the screen is in almost all of the time.
+   */
+  useEffect(() => {
+    if (!saved) return;
+    const timer = setTimeout(() => setSaved(false), SAVED_LINGER_MS);
+    return () => clearTimeout(timer);
+  }, [saved]);
+
   const units = unitsOf(profile);
 
   function patch<K extends keyof Profile>(key: K, value: Profile[K]) {
     setProfile((prev) => (prev ? { ...prev, [key]: value } : prev));
     setDirty(true);
+    setSaved(false);
+    setSaveError(null);
   }
 
   async function save() {
@@ -115,9 +139,10 @@ export default function SetupScreen() {
       adoptProfile(updated);
       setDay(await api.day());
       setDirty(false);
-      setError(null);
+      setSaved(true);
+      setSaveError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setSaveError((e as Error).message);
     } finally {
       setSaving(false);
     }
@@ -136,247 +161,323 @@ export default function SetupScreen() {
   }
 
   return (
-    <ScrollView
-      style={styles.flex}
-      contentContainerStyle={[styles.page, { paddingTop: insets.top + 20 }]}
-      keyboardShouldPersistTaps="handled"
-    >
-      <View>
-        <Text style={[t.largeTitle, { color: colors.foreground }]}>You</Text>
-        <Text style={[t.body, styles.blurb, { color: colors.mutedForeground }]}>
-          Enough to work out a starting target. It adjusts as real data comes in.
-        </Text>
-      </View>
+    <View style={styles.flex}>
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={[styles.page, { paddingTop: insets.top + 20 }]}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View>
+          <Text style={[t.largeTitle, { color: colors.foreground }]}>You</Text>
+          <Text style={[t.body, styles.blurb, { color: colors.mutedForeground }]}>
+            Enough to work out a starting target. It adjusts as real data comes in.
+          </Text>
+        </View>
 
-      {day && <TargetCard day={day} />}
+        {day && <TargetCard day={day} />}
 
-      <InsetGroup title="About you">
-        <InsetRow first>
-          <Text style={[t.body, styles.label, { color: colors.foreground }]}>Name</Text>
-          <TextField
-            value={profile.display_name ?? ''}
-            onChangeText={(v) => patch('display_name', v || null)}
-            placeholder="Optional"
-            style={styles.wide}
-          />
-        </InsetRow>
+        <InsetGroup title="About you">
+          <InsetRow first>
+            <Text style={[t.body, styles.label, { color: colors.foreground }]}>Name</Text>
+            <TextField
+              value={profile.display_name ?? ''}
+              onChangeText={(v) => patch('display_name', v || null)}
+              placeholder="Optional"
+              style={styles.wide}
+            />
+          </InsetRow>
 
-        <InsetRow>
-          <Text style={[t.body, styles.label, { color: colors.foreground }]}>Sex</Text>
-          <Picker
-            label="Sex"
-            value={profile.sex}
-            options={Object.keys(SEX_LABELS) as Sex[]}
-            onChange={(v) => patch('sex', v)}
-            render={(v) => SEX_LABELS[v]}
-          />
-        </InsetRow>
+          <InsetRow>
+            <Text style={[t.body, styles.label, { color: colors.foreground }]}>Sex</Text>
+            <Picker
+              label="Sex"
+              value={profile.sex}
+              options={Object.keys(SEX_LABELS) as Sex[]}
+              onChange={(v) => patch('sex', v)}
+              render={(v) => SEX_LABELS[v]}
+            />
+          </InsetRow>
 
-        <InsetRow>
-          <Text style={[t.body, styles.label, { color: colors.foreground }]}>Date of birth</Text>
-          <BirthDate value={profile.birth_date} onChange={(v) => patch('birth_date', v)} />
-        </InsetRow>
+          <InsetRow>
+            <Text style={[t.body, styles.label, { color: colors.foreground }]}>Date of birth</Text>
+            <BirthDate value={profile.birth_date} onChange={(v) => patch('birth_date', v)} />
+          </InsetRow>
 
-        {/* Above the two fields it governs, so switching it visibly rewrites
-            them rather than changing something further down that the eye has
-            already left. */}
-        <InsetRow>
-          <Text style={[t.body, styles.label, { color: colors.foreground }]}>Units</Text>
-          <View style={[styles.segment, { backgroundColor: colors.muted }]}>
-            {(Object.keys(UNIT_LABELS) as UnitSystem[]).map((system) => {
-              const active = units === system;
+          {/* Above the two fields it governs, so switching it visibly rewrites
+              them rather than changing something further down that the eye has
+              already left. */}
+          <InsetRow>
+            <Text style={[t.body, styles.label, { color: colors.foreground }]}>Units</Text>
+            <View style={[styles.segment, { backgroundColor: colors.muted }]}>
+              {(Object.keys(UNIT_LABELS) as UnitSystem[]).map((system) => {
+                const active = units === system;
+                return (
+                  <Pressable
+                    key={system}
+                    onPress={() => patch('units', system)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${UNIT_LABELS[system]} — ${UNIT_EXAMPLES[system]}`}
+                    accessibilityState={{ selected: active }}
+                    style={[
+                      styles.segmentItem,
+                      active ? { backgroundColor: colors.primary } : null,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        t.footnoteBold,
+                        { color: active ? colors.primaryForeground : colors.mutedForeground },
+                      ]}
+                    >
+                      {UNIT_LABELS[system]}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </InsetRow>
+
+          <InsetRow>
+            <Text style={[t.body, styles.label, { color: colors.foreground }]}>Height</Text>
+            {units === 'imperial' ? (
+              <HeightFeetInches value={profile.height_cm} onChange={(v) => patch('height_cm', v)} />
+            ) : (
+              <NumberField
+                value={profile.height_cm}
+                onChange={(v) => patch('height_cm', v)}
+                unit="cm"
+              />
+            )}
+          </InsetRow>
+
+          <InsetRow>
+            <Text style={[t.body, styles.label, { color: colors.foreground }]}>Target weight</Text>
+            {/* Converted on the way in and back out on the way to the API, so the
+                column stays kilograms whatever this field says. Typing 165 lb
+                stores 74.8 kg; the number that comes back rounds to 165 again. */}
+            <NumberField
+              value={
+                profile.target_weight_kg === null
+                  ? null
+                  : toBodyWeight(profile.target_weight_kg, units)
+              }
+              onChange={(v) =>
+                patch('target_weight_kg', v === null ? null : bodyWeightToKg(v, units))
+              }
+              unit={bodyWeightUnit(units)}
+              decimal
+            />
+          </InsetRow>
+        </InsetGroup>
+
+        <InsetGroup title="Goal">
+          <View style={styles.goals}>
+            {(Object.keys(GOAL_LABELS) as Goal[]).map((goal) => {
+              const active = profile.goal === goal;
               return (
-                <Pressable
-                  key={system}
-                  onPress={() => patch('units', system)}
+                <PressableChunk
+                  key={goal}
+                  depth={3}
+                  radius={24}
+                  color={active ? colors.caloriesDeep : undefined}
+                  onPress={() => patch('goal', goal)}
                   accessibilityRole="button"
-                  accessibilityLabel={`${UNIT_LABELS[system]} — ${UNIT_EXAMPLES[system]}`}
                   accessibilityState={{ selected: active }}
-                  style={[
-                    styles.segmentItem,
-                    active ? { backgroundColor: colors.primary } : null,
+                  style={styles.flex}
+                  contentStyle={[
+                    styles.goal,
+                    active
+                      ? { backgroundColor: colors.primary, borderColor: 'transparent' }
+                      : { backgroundColor: colors.muted, borderColor: colors.border },
                   ]}
                 >
                   <Text
                     style={[
-                      t.footnoteBold,
+                      styles.goalLabel,
                       { color: active ? colors.primaryForeground : colors.mutedForeground },
                     ]}
                   >
-                    {UNIT_LABELS[system]}
+                    {GOAL_LABELS[goal]}
                   </Text>
-                </Pressable>
+                </PressableChunk>
               );
             })}
           </View>
-        </InsetRow>
 
-        <InsetRow>
-          <Text style={[t.body, styles.label, { color: colors.foreground }]}>Height</Text>
-          {units === 'imperial' ? (
-            <HeightFeetInches value={profile.height_cm} onChange={(v) => patch('height_cm', v)} />
-          ) : (
-            <NumberField
-              value={profile.height_cm}
-              onChange={(v) => patch('height_cm', v)}
-              unit="cm"
+          <InsetRow>
+            <Text style={[t.body, styles.label, { color: colors.foreground }]}>Activity</Text>
+            <Picker
+              label="Activity"
+              value={profile.activity_level}
+              options={Object.keys(ACTIVITY_LABELS) as ActivityLevel[]}
+              onChange={(v) => patch('activity_level', v)}
+              render={(v, place) => (place === 'trigger' ? ACTIVITY_SHORT[v] : ACTIVITY_LABELS[v])}
             />
-          )}
-        </InsetRow>
+          </InsetRow>
+        </InsetGroup>
 
-        <InsetRow>
-          <Text style={[t.body, styles.label, { color: colors.foreground }]}>Target weight</Text>
-          {/* Converted on the way in and back out on the way to the API, so the
-              column stays kilograms whatever this field says. Typing 165 lb
-              stores 74.8 kg; the number that comes back rounds to 165 again. */}
-          <NumberField
-            value={
-              profile.target_weight_kg === null
-                ? null
-                : toBodyWeight(profile.target_weight_kg, units)
-            }
-            onChange={(v) =>
-              patch('target_weight_kg', v === null ? null : bodyWeightToKg(v, units))
-            }
-            unit={bodyWeightUnit(units)}
-            decimal
-          />
-        </InsetRow>
-      </InsetGroup>
-
-      <InsetGroup title="Goal">
-        <View style={styles.goals}>
-          {(Object.keys(GOAL_LABELS) as Goal[]).map((goal) => {
-            const active = profile.goal === goal;
-            return (
-              <PressableChunk
-                key={goal}
-                depth={3}
-                radius={24}
-                color={active ? colors.caloriesDeep : undefined}
-                onPress={() => patch('goal', goal)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                style={styles.flex}
-                contentStyle={[
-                  styles.goal,
-                  active
-                    ? { backgroundColor: colors.primary, borderColor: 'transparent' }
-                    : { backgroundColor: colors.muted, borderColor: colors.border },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.goalLabel,
-                    { color: active ? colors.primaryForeground : colors.mutedForeground },
-                  ]}
-                >
-                  {GOAL_LABELS[goal]}
-                </Text>
-              </PressableChunk>
-            );
-          })}
-        </View>
-
-        <InsetRow>
-          <Text style={[t.body, styles.label, { color: colors.foreground }]}>Activity</Text>
-          <Picker
-            label="Activity"
-            value={profile.activity_level}
-            options={Object.keys(ACTIVITY_LABELS) as ActivityLevel[]}
-            onChange={(v) => patch('activity_level', v)}
-            render={(v, place) => (place === 'trigger' ? ACTIVITY_SHORT[v] : ACTIVITY_LABELS[v])}
-          />
-        </InsetRow>
-      </InsetGroup>
-
-      <InsetGroup
-        title="Day"
-        footer="Food eaten before the day starts counts toward the previous day — so a 1am snack lands on the evening it belongs to."
-      >
-        <InsetRow first>
-          <Text style={[t.body, { color: colors.foreground }]}>Time zone</Text>
-          <TextField
-            value={profile.timezone}
-            onChangeText={(v) => patch('timezone', v)}
-            style={styles.flex}
-          />
-        </InsetRow>
-        <InsetRow>
-          <Text style={[t.body, styles.label, { color: colors.foreground }]}>Day starts at</Text>
-          <Picker
-            label="Day starts at"
-            value={String(profile.day_start_hour)}
-            options={Array.from({ length: 9 }, (_, i) => String(i))}
-            onChange={(v) => patch('day_start_hour', Number(v))}
-            render={(v) => `${v.padStart(2, '0')}:00`}
-          />
-        </InsetRow>
-      </InsetGroup>
-
-      <DietRules profile={profile} onChange={setProfile} onError={setError} />
-
-      <InsetGroup
-        title="Appearance"
-        footer="System follows your device, including its light and dark schedule."
-      >
-        <View style={styles.appearance}>
-          <ThemeToggle />
-        </View>
-      </InsetGroup>
-
-      <EmailSettings profile={profile} onChange={setProfile} onError={setError} />
-
-      <PhoneReminders />
-
-      <PlanSettings />
-
-      <InsetGroup title="Account">
-        <InsetRow first>
-          <Text style={[t.body, styles.label, { color: colors.foreground }]}>Signed in as</Text>
-          <Text numberOfLines={1} style={[t.body, { color: colors.mutedForeground }]}>
-            {profile.email ?? '—'}
-          </Text>
-        </InsetRow>
-        <Pressable
-          onPress={() => void signOut()}
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.rowButton, { opacity: pressed ? 0.6 : 1 }]}
+        <InsetGroup
+          title="Day"
+          footer="Food eaten before the day starts counts toward the previous day — so a 1am snack lands on the evening it belongs to."
         >
-          <Text style={[t.body, { color: colors.destructive }]}>Sign out</Text>
-        </Pressable>
-      </InsetGroup>
+          <InsetRow first>
+            <Text style={[t.body, { color: colors.foreground }]}>Time zone</Text>
+            <TextField
+              value={profile.timezone}
+              onChangeText={(v) => patch('timezone', v)}
+              style={styles.flex}
+            />
+          </InsetRow>
+          <InsetRow>
+            <Text style={[t.body, styles.label, { color: colors.foreground }]}>Day starts at</Text>
+            <Picker
+              label="Day starts at"
+              value={String(profile.day_start_hour)}
+              options={Array.from({ length: 9 }, (_, i) => String(i))}
+              onChange={(v) => patch('day_start_hour', Number(v))}
+              render={(v) => `${v.padStart(2, '0')}:00`}
+            />
+          </InsetRow>
+        </InsetGroup>
 
-      {/* The store listings link to both of these, and the review that checks
-          them expects to find them in the app too. Opened in the system browser
-          rather than re-rendered here: one copy of each document, on the web. */}
-      <InsetGroup title="About">
-        <ExternalRow first label="Privacy policy" url={PRIVACY_URL} />
-        <ExternalRow label="Terms of service" url={TERMS_URL} />
-        <ExternalRow label="Contact support" url={`mailto:${SUPPORT_EMAIL}`} mail />
-      </InsetGroup>
+        <DietRules profile={profile} onChange={setProfile} onError={setError} />
 
-      <DeleteAccount email={profile.email} onDeleted={() => void signOut()} onError={setError} />
+        <InsetGroup
+          title="Appearance"
+          footer="System follows your device, including its light and dark schedule."
+        >
+          <View style={styles.appearance}>
+            <ThemeToggle />
+          </View>
+        </InsetGroup>
 
-      {error && (
-        <Text style={[t.footnoteSemibold, styles.centred, { color: colors.destructive }]}>
-          {error}
+        <EmailSettings profile={profile} onChange={setProfile} onError={setError} />
+
+        <PhoneReminders />
+
+        <PlanSettings />
+
+        <InsetGroup title="Account">
+          <InsetRow first>
+            <Text style={[t.body, styles.label, { color: colors.foreground }]}>Signed in as</Text>
+            <Text numberOfLines={1} style={[t.body, { color: colors.mutedForeground }]}>
+              {profile.email ?? '—'}
+            </Text>
+          </InsetRow>
+          <Pressable
+            onPress={() => void signOut()}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.rowButton, { opacity: pressed ? 0.6 : 1 }]}
+          >
+            <Text style={[t.body, { color: colors.destructive }]}>Sign out</Text>
+          </Pressable>
+        </InsetGroup>
+
+        {/* The store listings link to both of these, and the review that checks
+            them expects to find them in the app too. Opened in the system browser
+            rather than re-rendered here: one copy of each document, on the web. */}
+        <InsetGroup title="About">
+          <ExternalRow first label="Privacy policy" url={PRIVACY_URL} />
+          <ExternalRow label="Terms of service" url={TERMS_URL} />
+          <ExternalRow label="Contact support" url={`mailto:${SUPPORT_EMAIL}`} mail />
+        </InsetGroup>
+
+        <DeleteAccount email={profile.email} onDeleted={() => void signOut()} onError={setError} />
+
+        {error && (
+          <Text style={[t.footnoteSemibold, styles.centred, { color: colors.destructive }]}>
+            {error}
+          </Text>
+        )}
+      </ScrollView>
+
+      <SaveBar
+        dirty={dirty}
+        saving={saving}
+        saved={saved}
+        error={saveError}
+        onSave={() => void save()}
+      />
+    </View>
+  );
+}
+
+/** How long "Saved" stays up before the bar leaves. Long enough to read. */
+const SAVED_LINGER_MS = 2200;
+
+/**
+ * The save control, pinned to the foot of the screen rather than parked at the
+ * end of it.
+ *
+ * It used to be the last thing in the scroll, below Delete account. So changing
+ * your units at the top of the screen did nothing anybody could see: the new
+ * value sat in a control, the button that would commit it was two thumb-flicks
+ * away, and the way most people found out was coming back later to a profile
+ * that had not changed. Nothing said the change was being *held* rather than
+ * kept.
+ *
+ * The bar arrives the moment something is unsaved and says so in words, so the
+ * work outstanding and the button that finishes it are one object in one place.
+ * It leaves again when there is nothing to do — after holding the receipt long
+ * enough to be read, because here the bar *is* the receipt: a toast is for
+ * something that has left the screen, and this has not.
+ *
+ * Above the tab bar rather than over it, so the six destinations stay reachable
+ * with a change in hand. Leaving the screen does not discard anything — the
+ * edits are still in state when the tab comes back.
+ */
+function SaveBar({
+  dirty,
+  saving,
+  saved,
+  error,
+  onSave,
+}: {
+  dirty: boolean;
+  saving: boolean;
+  saved: boolean;
+  error: string | null;
+  onSave: () => void;
+}) {
+  const colors = useColors();
+
+  if (!dirty && !saving && !saved) return null;
+
+  return (
+    <Animated.View
+      /*
+       * `ReduceMotion.System`: the bar has no end state worth jumping to — it
+       * is either there or it is not — so honouring the OS switch costs the
+       * reader nothing.
+       */
+      entering={SlideInDown.duration(duration.quick).reduceMotion(ReduceMotion.System)}
+      exiting={SlideOutDown.duration(duration.quick).reduceMotion(ReduceMotion.System)}
+    >
+      <Material style={[styles.bar, { borderTopColor: colors.border }]}>
+        <Text
+          accessibilityLiveRegion="polite"
+          style={[
+            t.footnoteSemibold,
+            styles.barStatus,
+            { color: error ? colors.destructive : colors.mutedForeground },
+          ]}
+        >
+          {saving ? 'Saving…' : (error ?? (dirty ? 'Unsaved changes' : 'Saved'))}
         </Text>
-      )}
-
-      <PressableChunk
-        onPress={() => void save()}
-        disabled={saving || !dirty}
-        radius={24}
-        color={colors.caloriesDeep}
-        accessibilityRole="button"
-        contentStyle={[styles.save, { backgroundColor: colors.primary }]}
-      >
-        <Text style={[styles.saveLabel, { color: colors.primaryForeground }]}>
-          {saving ? 'Saving…' : dirty ? 'Save' : 'Saved'}
-        </Text>
-      </PressableChunk>
-    </ScrollView>
+        <PressableChunk
+          onPress={onSave}
+          disabled={saving || !dirty}
+          reserve
+          radius={22}
+          color={colors.caloriesDeep}
+          accessibilityRole="button"
+          accessibilityLabel="Save changes"
+          contentStyle={[styles.save, { backgroundColor: colors.primary }]}
+        >
+          <Text style={[styles.saveLabel, { color: colors.primaryForeground }]}>Save</Text>
+        </PressableChunk>
+      </Material>
+    </Animated.View>
   );
 }
 
@@ -1258,6 +1359,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cancel: { paddingHorizontal: 16, paddingVertical: 12 },
-  save: { height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  bar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderTopWidth: 2,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  barStatus: { flex: 1 },
+  save: {
+    height: 44,
+    borderRadius: 22,
+    paddingHorizontal: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   saveLabel: { fontFamily: font.semibold, fontSize: 16, lineHeight: 24 },
 });
