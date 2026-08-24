@@ -44,11 +44,19 @@ export const TIER_NAMES: Record<PlanName, string> = {
   coach: 'Coach',
 };
 
-/** One line on what a tier is *for*, above the list of what it holds. */
+/**
+ * One line on what a tier is *for*, above the list of what it holds.
+ *
+ * One short line, because on the wall it sits above a price and a list that
+ * both say something concrete — a second sentence here is read by nobody and
+ * pushes the tier below it off the screen. Coach's does not open with "Plus,
+ * and": the card says that itself, in its own row, from the tier below it
+ * rather than from a string that has to be kept in step by hand.
+ */
 export const TIER_PITCHES: Record<PlanName, string> = {
   free: 'A complete food diary, offline and unmetered.',
-  plus: 'The journal, every day — and a weekly read on how it went.',
-  coach: 'Plus, and a kitchen: your fridge, recipes from it, a planned week.',
+  plus: 'The journal every day, and a weekly read on it.',
+  coach: 'The kitchen too: cook from your fridge, plan the week.',
 };
 
 /**
@@ -124,17 +132,71 @@ export function wallBody(allowance: Allowance): string {
  * `PlanTier`. Meters the tier does not carry are simply absent: a list that
  * says "0 recipes" is a list of what you are not getting, which is a strange
  * thing for a page asking for money to lead with.
+ *
+ * **Grouped, and diffed against the tier below.** One meter per line was the
+ * obvious shape and it made Coach a seven-line wall of numbers that nobody
+ * read — five of them meters, two of them things Plus already had, all of them
+ * the same weight. So the meters are joined into the two lines somebody
+ * actually shops on, "the journal" and "the kitchen", and anything the cheaper
+ * tier already carries is dropped: the card states *Everything in Plus* once,
+ * above the list (see `carriesFrom`), which is both shorter and the thing a
+ * repeated line was failing to say.
  */
-export function tierLines(tier: PlanTier): string[] {
-  const lines: string[] = [];
-  for (const { meter, allowed, period } of tier.meters) {
-    if (allowed === null || allowed === 0) continue;
-    const noun = meterNoun(meter, allowed);
-    lines.push(period === 'ever' ? `${allowed} ${noun}, to try` : `${allowed} ${noun} a month`);
-  }
-  if (tier.reviews_per_day > 0) lines.push('A weekly review of how you ate');
-  if (tier.nudges_per_week > 0) lines.push('A nudge when you go quiet');
+const JOURNAL: MeterName[] = ['chat', 'photo'];
+const KITCHEN: MeterName[] = ['pantry_scan', 'recipe', 'meal_plan'];
+
+export function tierLines(tier: PlanTier, below?: PlanTier): string[] {
+  const lines = [...meterLines(tier, JOURNAL), ...meterLines(tier, KITCHEN)];
+
+  // The two unmetered extras, on one line and only where they are new. Both
+  // are a sentence rather than a count, so joining them costs no clarity and
+  // saves the taller card its seventh row.
+  const review = tier.reviews_per_day > 0 && !(below && below.reviews_per_day > 0);
+  const nudge = tier.nudges_per_week > 0 && !(below && below.nudges_per_week > 0);
+  if (review && nudge) lines.push('A weekly review, and a nudge when you go quiet');
+  else if (review) lines.push('A weekly review of how you ate');
+  else if (nudge) lines.push('A nudge when you go quiet');
+
   return lines;
+}
+
+/**
+ * One line per period, for a group of meters.
+ *
+ * Per period rather than per group, because the suffix is a claim about
+ * billing: free's grants are for all time and a paid tier's come back every
+ * month, and a tier that ever mixed the two would otherwise get one of them
+ * wrong on a line that names both.
+ */
+function meterLines(tier: PlanTier, group: MeterName[]): string[] {
+  const byPeriod = new Map<'month' | 'ever', string[]>();
+  for (const meter of group) {
+    const entry = tier.meters.find((candidate) => candidate.meter === meter);
+    if (!entry || entry.allowed === null || entry.allowed === 0) continue;
+    const parts = byPeriod.get(entry.period) ?? [];
+    parts.push(`${entry.allowed} ${meterNoun(meter, entry.allowed)}`);
+    byPeriod.set(entry.period, parts);
+  }
+  return [...byPeriod].map(([period, parts]) =>
+    period === 'ever' ? `${sentenceList(parts)}, to try` : `${sentenceList(parts)} a month`,
+  );
+}
+
+/** "a", "a and b", "a, b and c". */
+function sentenceList(parts: string[]): string {
+  if (parts.length <= 1) return parts[0] ?? '';
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+}
+
+/**
+ * The one row that says a tier contains the cheaper one whole.
+ *
+ * Null for the cheapest paid tier, which contains nothing below it worth
+ * naming — free is not a thing anybody upgrades *from* on this screen, it is
+ * the list at the bottom of it.
+ */
+export function carriesFrom(below: PlanTier | undefined): string | null {
+  return below && below.plan !== 'free' ? `Everything in ${TIER_NAMES[below.plan]}` : null;
 }
 
 /**

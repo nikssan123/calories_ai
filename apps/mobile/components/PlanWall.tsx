@@ -113,7 +113,11 @@ export function PlanWall({
             <PressableChunk
               depth={3}
               radius={999}
-              onPress={() => router.push('/upgrade')}
+              /* The tier the button names, carried to the wall so it opens on
+                 the one it just offered. Without it the paywall picks its own
+                 default — the cheapest tier above the current plan — and a
+                 kitchen that asks for Coach lands on Plus preselected. */
+              onPress={() => router.push({ pathname: '/upgrade', params: { plan: next } })}
               accessibilityRole="button"
               contentStyle={[
                 styles.button,
@@ -177,7 +181,8 @@ export function LockedPanel({
         <PressableChunk
           color={colors.caloriesDeep}
           radius={999}
-          onPress={() => router.push('/upgrade')}
+          /* Same as the wall's: the panel names a tier, so it opens on it. */
+          onPress={() => router.push({ pathname: '/upgrade', params: { plan: next } })}
           accessibilityRole="button"
           /* Not `actions`: that one is a *container*, and its `gap` lands
              between a chunk's surface and its `Overhang` — which stretches the

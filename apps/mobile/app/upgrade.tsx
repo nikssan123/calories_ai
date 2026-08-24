@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -15,7 +15,13 @@ import {
   restore,
   type Buyable,
 } from '@/lib/billing';
-import { ALWAYS_FREE, TIER_NAMES, TIER_PITCHES, tierLines } from '@/lib/plan-copy';
+import {
+  ALWAYS_FREE,
+  carriesFrom,
+  TIER_NAMES,
+  TIER_PITCHES,
+  tierLines,
+} from '@/lib/plan-copy';
 import { haptics } from '@/lib/haptics';
 import { type as t, useColors, withAlpha } from '@/theme';
 
@@ -35,6 +41,12 @@ import { type as t, useColors, withAlpha } from '@/theme';
  * happens if you do not pay, and this product has an unusually good answer —
  * the diary keeps working, offline, forever. Hiding that to make the tiers look
  * more necessary would be selling the wrong thing.
+ *
+ * Everything a card holds is one of three things — a price, a short line on
+ * what the tier is for, and at most three lines of what it grants — and that
+ * ceiling is the design. The version before this one gave every meter its own
+ * row, which made Coach seven rows of near-identical text and made the page
+ * something to be scrolled past rather than read. See `tierLines`.
  */
 export default function UpgradeScreen() {
   const colors = useColors();
@@ -42,16 +54,33 @@ export default function UpgradeScreen() {
   const insets = useSafeAreaInsets();
   const toast = useToast();
   const { plan, tiers, refresh } = useEntitlements();
+  /*
+   * The tier the screen that sent us here was talking about.
+   *
+   * A wall that says "See what Coach adds" and opens on Plus is the app
+   * answering a different question than the one that was asked — and it did,
+   * because the default below picks the cheapest tier that is not the current
+   * one. Every caller that names a tier in its button passes it (`PlanWall`,
+   * `LockedPanel`); the ones that do not are the general "see the plans" links,
+   * and the default is right for those.
+   */
+  const { plan: asked } = useLocalSearchParams<{ plan?: string }>();
 
   const paid = tiers.filter((tier) => tier.plan !== 'free');
   const [offers, setOffers] = useState<Buyable[] | null>(null);
   const [chosen, setChosen] = useState<PlanName | null>(null);
   /*
-   * Yearly first, because it is the cheaper of the two per month and the one
-   * somebody would pick if they compared. Opening on monthly and letting them
-   * find the saving is the version of this screen that quietly charges more.
+   * Monthly first.
+   *
+   * Yearly was the opening default and the argument for it was that it is the
+   * cheaper of the two per month. That is true and it is still not the right
+   * first number to show: the first thing somebody wants from a paywall is what
+   * this costs, and "$249.99" is the answer to a question nobody asked on the
+   * day they are deciding whether to pay at all. The month is what `plans.ts`
+   * markets; the year is the discount taken once they know they want it, which
+   * is what the toggle's own saving badge is for.
    */
-  const [period, setPeriod] = useState<'month' | 'year'>('year');
+  const [period, setPeriod] = useState<'month' | 'year'>('month');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -63,14 +92,15 @@ export default function UpgradeScreen() {
   }, []);
 
   /*
-   * Opens on the cheapest tier they are not already on, which is the one the
-   * wall that sent them here would have named. Held until `tiers` arrives so
-   * the selection is never a guess that moves under the finger.
+   * What the wall that sent them here named, and failing that the cheapest tier
+   * they are not already on. Held until `tiers` arrives so the selection is
+   * never a guess that moves under the finger.
    */
   useEffect(() => {
     if (chosen || paid.length === 0) return;
-    setChosen(paid.find((tier) => tier.plan !== plan)?.plan ?? paid[0]!.plan);
-  }, [chosen, paid, plan]);
+    const named = paid.find((tier) => tier.plan === asked)?.plan;
+    setChosen(named ?? paid.find((tier) => tier.plan !== plan)?.plan ?? paid[0]!.plan);
+  }, [asked, chosen, paid, plan]);
 
   const offerFor = useCallback(
     (candidate: PlanName, want: 'month' | 'year' = period) =>
@@ -200,10 +230,15 @@ export default function UpgradeScreen() {
         than a checkbox on each card: the period applies to whichever tier they
         end up choosing, so putting it on the cards would ask the same question
         twice and allow two answers.
+
+        Monthly is first and is the one that opens — see `period`. The saving is
+        on the yearly side rather than in a banner, which is where it belongs:
+        it is the reason to press that half, and it is the only place on the
+        page arguing for the longer commitment.
       */}
       {periods.has('month') && periods.has('year') && (
         <View style={[styles.periods, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-          {(['year', 'month'] as const).map((option) => {
+          {(['month', 'year'] as const).map((option) => {
             const on = period === option;
             return (
               <Pressable
@@ -235,12 +270,17 @@ export default function UpgradeScreen() {
       )}
 
       <View style={styles.tiers}>
-        {paid.map((tier) => (
+        {paid.map((tier, index) => (
           <TierCard
             key={tier.plan}
             name={TIER_NAMES[tier.plan]}
             pitch={TIER_PITCHES[tier.plan]}
-            lines={tierLines(tier)}
+            // What the tier below already gave them, said once instead of
+            // repeated as rows. `index - 1` rather than the whole ladder: the
+            // cards are drawn cheapest first, so the previous one is the tier
+            // this one contains.
+            carries={carriesFrom(paid[index - 1])}
+            lines={tierLines(tier, paid[index - 1])}
             price={offerFor(tier.plan)?.price ?? null}
             perMonth={offerFor(tier.plan)?.perMonth ?? null}
             period={offerFor(tier.plan)?.period ?? null}
@@ -339,6 +379,11 @@ export default function UpgradeScreen() {
 /**
  * One tier.
  *
+ * Four zones, in the order somebody shopping reads them: which one this is and
+ * what it costs on one line, what it is for on the next, then a rule, then what
+ * it grants. The rule is doing real work — it is what separates the sales line
+ * from the contents, and without it the pitch reads as the first bullet.
+ *
  * The price is `null` until the store answers and stays null on a build that
  * cannot reach one — and the card is drawn either way, because what the tier
  * holds is generated from the server's own ceilings and is true regardless. A
@@ -348,6 +393,7 @@ export default function UpgradeScreen() {
 function TierCard({
   name,
   pitch,
+  carries,
   lines,
   price,
   perMonth,
@@ -358,6 +404,8 @@ function TierCard({
 }: {
   name: string;
   pitch: string;
+  /** "Everything in Plus", on the tier that contains the one below it. */
+  carries: string | null;
   lines: string[];
   price: string | null;
   perMonth: string | null;
@@ -384,25 +432,47 @@ function TierCard({
         ]}
       >
         <View style={styles.tierHead}>
-          <Text style={[t.title2, { color: colors.foreground }]}>{name}</Text>
+          <View style={styles.tierName}>
+            {/* The dot, because a border and a slightly deeper ledge are a
+                difference somebody has to look for. Which tier is armed decides
+                what the button at the bottom buys, so it is worth a glyph. */}
+            <Radio on={selected} />
+            <Text style={[t.title2, { color: colors.foreground }]}>{name}</Text>
+          </View>
+
           {current ? (
             <View style={[styles.tag, { backgroundColor: withAlpha(colors.primary, 0.2) }]}>
               <Text style={[t.footnoteBold, { color: colors.caloriesText }]}>Your plan</Text>
             </View>
           ) : (
             price && (
-              <Text style={[t.bodyBold, { color: colors.foreground }]}>{price}</Text>
+              <View style={styles.price}>
+                <Text style={[t.title2, t.tnum, { color: colors.foreground }]}>{price}</Text>
+                <Text style={[t.footnote, { color: colors.mutedForeground }]}>
+                  {period === 'year' ? 'a year' : 'a month'}
+                </Text>
+              </View>
             )
           )}
         </View>
 
         <Text style={[t.footnote, { color: colors.mutedForeground }]}>{pitch}</Text>
 
+        <View style={[styles.rule, { backgroundColor: colors.border }]} />
+
         <View style={styles.tierLines}>
+          {carries && (
+            <View style={styles.line}>
+              <Check color={colors.primary} />
+              <Text style={[t.footnoteBold, styles.lineText, { color: colors.foreground }]}>
+                {carries}
+              </Text>
+            </View>
+          )}
           {lines.map((line) => (
-            <View key={line} style={styles.freeRow}>
-              <Check color={selected ? colors.primary : colors.mutedForeground} />
-              <Text style={[t.footnote, styles.freeText, { color: colors.foreground }]}>
+            <View key={line} style={styles.line}>
+              <Check color={colors.primary} />
+              <Text style={[t.footnote, styles.lineText, { color: colors.foreground }]}>
                 {line}
               </Text>
             </View>
@@ -412,16 +482,44 @@ function TierCard({
         {/* The store's own per-month figure, never an annual price divided by
             twelve here — the rounding and the currency are the store's to get
             right, and in most of the world our arithmetic would be wrong.
-            
+
             Only on a yearly package: on a monthly one it would restate the
             price directly above it. */}
         {period === 'year' && perMonth && !current && (
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-            {perMonth} a month, billed yearly
+            Works out at {perMonth} a month.
           </Text>
         )}
       </Chunk>
     </Pressable>
+  );
+}
+
+/** Which tier the button at the bottom would buy. */
+function Radio({ on }: { on: boolean }) {
+  const colors = useColors();
+  return (
+    <View
+      style={[
+        styles.radio,
+        on
+          ? { backgroundColor: colors.primary, borderColor: colors.primary }
+          : { backgroundColor: 'transparent', borderColor: colors.input },
+      ]}
+    >
+      {on && (
+        <Svg width={12} height={12} viewBox="0 0 24 24">
+          <Path
+            d="M20 6 9 17l-5-5"
+            stroke={colors.primaryForeground}
+            strokeWidth={3.6}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+          />
+        </Svg>
+      )}
+    </View>
   );
 }
 
@@ -466,8 +564,21 @@ const styles = StyleSheet.create({
   tiers: { gap: 20, marginTop: 4 },
   tier: { borderWidth: 2, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 16, gap: 8 },
   tierHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  tierName: { flexDirection: 'row', alignItems: 'center', gap: 9, flexShrink: 1 },
+  radio: {
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // The cadence sits under the figure rather than beside it, so two cards'
+  // prices line up on the same baseline whatever their currency is worth.
+  price: { alignItems: 'flex-end' },
+  rule: { height: 2, borderRadius: 999, marginTop: 2 },
+  tierLines: { gap: 6, marginTop: 2 },
   tag: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },
-  tierLines: { gap: 5, marginTop: 2 },
   cta: {
     height: 52,
     borderRadius: 999,
@@ -478,10 +589,12 @@ const styles = StyleSheet.create({
   notice: { borderWidth: 2, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 12 },
   restore: { alignItems: 'center', paddingVertical: 10 },
   free: { gap: 7, marginTop: 10 },
+  line: { flexDirection: 'row', gap: 8 },
   freeRow: { flexDirection: 'row', gap: 8 },
   // The tick sits on the first line's optical centre rather than its box centre,
   // which is what keeps a two-line item from hanging its mark in the gutter.
   check: { marginTop: 2 },
+  lineText: { flexShrink: 1 },
   freeText: { flexShrink: 1 },
   smallPrint: { marginTop: 6 },
 });

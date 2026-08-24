@@ -62,7 +62,7 @@ export function WeeklyReview({ onError }: { onError: (message: string) => void }
       // A 402 here means the tiers arrived late or the plan changed under us.
       // Sending them to the wall is a better answer than a red sentence about
       // a feature that is simply not bought — see `planLimitOf`.
-      if (planLimitOf(e)) router.push('/upgrade');
+      if (planLimitOf(e)) router.push({ pathname: '/upgrade', params: { plan: upsell?.plan } });
       else onError((e as Error).message);
     } finally {
       setWriting(false);
@@ -105,7 +105,13 @@ export function WeeklyReview({ onError }: { onError: (message: string) => void }
           <PressableChunk
             depth={3}
             radius={999}
-            onPress={() => (locked ? router.push('/upgrade') : void writeNow())}
+            onPress={() =>
+              // The tier this button names — "Part of Plus" — is the one the
+              // paywall should open on.
+              locked
+                ? router.push({ pathname: '/upgrade', params: { plan: upsell?.plan } })
+                : void writeNow()
+            }
             disabled={writing}
             accessibilityRole="button"
             style={styles.writeWrap}
