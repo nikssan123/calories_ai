@@ -686,14 +686,14 @@ const PLANS = [
   },
   {
     name: 'Plus',
-    monthly: '$14.99',
-    annual: '$149.99',
+    monthly: '$9.99',
+    annual: '$99.99',
     monthlyCadence: 'a month, cancel whenever',
-    annualCadence: 'a year — $12.50 a month, two months free',
+    annualCadence: 'a year — $8.33 a month, two months free',
     pitch: 'Talk to it instead of typing.',
     points: [
-      '100 messages a month — three a day, which is three meals',
-      '10 photo scans a month, and more by the bundle when you want them',
+      '60 messages a month — typing a meal in stays free and unlimited',
+      '8 photo scans a month, and more by the bundle when you want them',
       'A weekly read of how the fortnight actually went',
       'A target that moves with the evidence',
     ],
@@ -702,13 +702,13 @@ const PLANS = [
   },
   {
     name: 'Coach',
-    monthly: '$29.99',
-    annual: '$299.99',
+    monthly: '$24.99',
+    annual: '$249.99',
     monthlyCadence: 'a month, cancel whenever',
-    annualCadence: 'a year — $25.00 a month, two months free',
+    annualCadence: 'a year — $20.83 a month, two months free',
     pitch: 'And it decides what you are cooking.',
     points: [
-      'Everything in Plus, and 25 photo scans a month',
+      'Everything in Plus, with 150 messages and 25 photo scans a month',
       '8 recipes a month, written against what is in your kitchen',
       '2 weeks of dinners planned, with the shopping list',
       '10 fridge scans to fill the kitchen in without typing',
@@ -836,7 +836,7 @@ function Pricing({ start }: { start: Cta }) {
           Every account starts on Free — there is no trial to forget to cancel, because there
           is nothing to cancel until you decide otherwise. Monthly counts reset a day at a
           time rather than all at once on a date you have to remember. Run out of photo scans
-          and you can buy more on their own, from $4.99 for ten; they do not expire, and they
+          and you can buy more on their own, from $3.99 for ten; they do not expire, and they
           are only used once the month’s included ones are gone. If you stop paying, the diary
           keeps working; it is the messages and the scans that stop.
         </p>
