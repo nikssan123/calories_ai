@@ -1,10 +1,9 @@
-import { env } from '../../env.ts';
-import { hasSubscriptionAuth } from '../client.ts';
+import { providerId } from '../lane.ts';
 import type { ToolContext } from '../tools.ts';
 import { createAnthropicProvider, subscriptionAuthError } from './anthropic.ts';
 import { createAnthropicApiProvider, meteredApiAuthError } from './messages.ts';
 import { createOpenAiProvider, openAiAuthError } from './openai.ts';
-import { PROVIDERS, type AiProvider, type ProviderId } from './types.ts';
+import type { AiProvider, ProviderId } from './types.ts';
 
 export type { ProviderId } from './types.ts';
 export type {
@@ -24,50 +23,14 @@ export type {
  * signed-in `claude` binary, or a direct call to the Messages API on a metered
  * key. The subscription is the right thing in development and the wrong thing
  * in production, where a process per turn is what caps the box.
+ *
+ * Which of them a given person gets — and whether anybody is billed for it —
+ * is decided in `lane.ts`, re-exported here so the callers that already reach
+ * for this barrel still find those answers where they have always been. The
+ * definitions moved out because the session hook and the plan meters ask the
+ * same questions and have no business importing a provider to do it.
  */
-
-
-export function providerId(source: NodeJS.ProcessEnv = process.env): ProviderId {
-  const requested = (source.AI_PROVIDER ?? 'anthropic').trim().toLowerCase();
-  if (!(PROVIDERS as readonly string[]).includes(requested)) {
-    throw new Error(
-      `Unknown AI_PROVIDER "${requested}". Supported: ${PROVIDERS.join(', ')}.`,
-    );
-  }
-  return requested as ProviderId;
-}
-
-/**
- * Which lane this person's turns run on.
- *
- * `AI_PROVIDER` sets the deployment's lane and `SUBSCRIPTION_EMAILS` names the
- * exceptions: the addresses belonging to whoever runs the box, whose turns go
- * through the Claude Code subscription instead of being billed to the key.
- *
- * The asymmetry is deliberate. The allowlist can only ever move somebody *onto*
- * the subscription, never off it, so a deployment already running `anthropic`
- * for everyone — a personal install, or development — is unaffected by whatever
- * the list says. There is no configuration in which naming an address makes a
- * turn cost money that would otherwise have been free.
- *
- * Case-insensitive, and a user with no address on file is never on the list:
- * `null` is not an address, and an account without one is exactly the anonymous
- * signup the metered lane is for.
- *
- * The login has to actually exist, which is the second half of the guarantee.
- * Without `.credentials.json` the Agent SDK falls back to `ANTHROPIC_API_KEY`
- * and this lane becomes the metered one plus a subprocess — billed the same and
- * slower, for nobody's benefit. Better to leave the listed address on whatever
- * the deployment already does and let the absent credentials be a thing someone
- * notices, than to quietly hand it the worse of the two lanes.
- */
-export function laneFor(email: string | null | undefined): ProviderId {
-  const address = email?.trim().toLowerCase();
-  if (address && env.subscriptionEmails.includes(address) && hasSubscriptionAuth()) {
-    return 'anthropic';
-  }
-  return providerId();
-}
+export { laneFor, providerId, unmeteredFor } from '../lane.ts';
 
 /**
  * Whether a lane can authenticate, asked before a turn is built.

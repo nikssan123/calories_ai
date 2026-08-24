@@ -136,6 +136,10 @@ function byMeter(list: Allowance[]): Record<MeterName, Allowance> {
     keyed[meter] = list.find((allowance) => allowance.meter === meter) ?? {
       meter,
       allowed: null,
+      // A meter the server did not mention is a locked one, not a free-for-all:
+      // this is the fallback for an older API, and guessing the generous way
+      // round would draw a live button that 402s on press.
+      unlimited: false,
       used: 0,
       period: 'month',
       resets_at: null,

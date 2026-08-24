@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { query } from '../src/db.ts';
-import { limitsFor, meterFor } from '../src/services/plans.ts';
+import { METERS, PLANS } from '@ct/shared';
+import { limitsFor, meterFor, tiers } from '../src/services/plans.ts';
 import { accountGate, getUser } from '../src/services/user.ts';
 import { scriptAgent } from './helpers/agent-mock.ts';
 import { appFor, createUser, type TestUser } from './helpers/factories.ts';
@@ -103,6 +104,56 @@ describe('limitsFor', () => {
   });
 
   /**
+   * The account nobody is billed for.
+   *
+   * Not a fourth tier — it is not in `PLANS`, nothing upgrades to it, and
+   * `tiers()` must never offer it — but it is a set of ceilings, and what it
+   * lifts is exactly the set that is priced in dollars.
+   */
+  describe('unmetered', () => {
+    it('lifts every meter that is sold, on any plan', () => {
+      for (const plan of ['free', 'plus', 'coach'] as const) {
+        for (const meter of METERS) {
+          expect(meterFor(plan, meter, true), `${plan}/${meter}`).toMatchObject({
+            unlimited: true,
+            allowed: null,
+          });
+        }
+      }
+    });
+
+    /**
+     * The loop guard stays, and it matters more here rather than less: a stuck
+     * client on this lane spends the operator's own Claude rate limit and no
+     * invoice ever turns up to say it happened. They get the top tier's number.
+     */
+    it("keeps the burst guard, at the top tier's number", () => {
+      expect(limitsFor('free', true).chatTurnsPerHour).toBe(limitsFor('coach').chatTurnsPerHour);
+      expect(limitsFor('free', true).chatTurnsPerHour).toBeGreaterThan(0);
+    });
+
+    /** Being messaged more often is not a thing a free bill buys either. */
+    it('does not nudge an unmetered account more often', () => {
+      expect(limitsFor('free', true).nudgesPerWeek).toBe(limitsFor('coach').nudgesPerWeek);
+    });
+
+    it('opens the features a plan gates rather than meters', () => {
+      expect(limitsFor('free', true).reviewsPerDay).toBeGreaterThan(0);
+      expect(limitsFor('free', true).pantryItems).toBe(limitsFor('coach').pantryItems);
+    });
+
+    /** It is not for sale, so the wall must never draw it as a tier. */
+    it('stays out of the ladder the wall reads', () => {
+      expect(tiers().map((tier) => tier.plan)).toEqual([...PLANS]);
+      for (const tier of tiers()) {
+        for (const meter of tier.meters) {
+          expect(meter, `${tier.plan}/${meter.meter}`).not.toHaveProperty('unlimited');
+        }
+      }
+    });
+  });
+
+  /**
    * This runs inside the rate limiter. A column that somehow holds something
    * unexpected should cost that account a low ceiling, not a 500 on every
    * request it makes.
@@ -120,7 +171,15 @@ describe('resolving the plan', () => {
 
   it('reads the plan in the same query as the rest of the gate', async () => {
     await setPlan(user.id, 'plus');
-    expect(await accountGate(user.id)).toEqual({ disabled: false, verified: true, plan: 'plus' });
+    expect(await accountGate(user.id)).toEqual({
+      disabled: false,
+      verified: true,
+      plan: 'plus',
+      // Resolved from the address on the same row. False throughout the suite:
+      // `helpers/setup.ts` sets a key, so nothing here runs on a subscription.
+      // `unmetered.test.ts` is where the other answer is exercised.
+      unmetered: false,
+    });
   });
 
   /** Granted by paying, never by the client claiming it. */

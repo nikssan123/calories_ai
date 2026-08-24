@@ -5,6 +5,7 @@ import { addDays, type DayContext, localDateFor } from '../time.ts';
 import { dailyIntake, estimateTdee } from './adaptive.ts';
 import { dailyTotals } from './summary.ts';
 import { qualityTargetsFor, targetsForDate } from './targets.ts';
+import { unmeteredFor } from '../ai/lane.ts';
 import { limitsFor } from './plans.ts';
 import { getUser } from './user.ts';
 
@@ -88,7 +89,8 @@ export async function dueNudge(
   // Cheapest question first, and the one that answers for most people on most
   // days: the rate limit needs two indexed lookups, and everything below it is
   // a week of the log.
-  if (!(await withinRateLimit(userId, today, limitsFor(user.plan).nudgesPerWeek))) return null;
+  const perWeek = limitsFor(user.plan, unmeteredFor(user.email)).nudgesPerWeek;
+  if (!(await withinRateLimit(userId, today, perWeek))) return null;
 
   const from = addDays(today, -WINDOW_DAYS);
   const to = addDays(today, -1);

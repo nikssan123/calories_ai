@@ -189,7 +189,12 @@ export async function registerRoutes(app: FastifyInstance) {
     const wantsPhoto = Boolean(parsed.data.photo_key || parsed.data.photo_base64);
     let allowance: Allowance;
     try {
-      allowance = await requireAllowance(userId, profile.plan, wantsPhoto ? 'photo' : 'chat');
+      allowance = await requireAllowance(
+        userId,
+        profile.plan,
+        wantsPhoto ? 'photo' : 'chat',
+        request.unmetered,
+      );
     } catch (error) {
       if (error instanceof PlanLimitError) {
         await reply.status(402).send({ error: error.message, allowance: error.allowance });
@@ -255,10 +260,14 @@ export async function registerRoutes(app: FastifyInstance) {
      * than counting again after the fact is not a shortcut — the ledger row is
      * written inside `runTurn`, so a second count would race it and could
      * truthfully report a turn that has already happened as not having.
+     *
+     * Except on an unmetered account, where nothing was counted in the first
+     * place: incrementing there would start a tally against a ceiling that does
+     * not exist, and `/entitlements` would go on answering zero.
      */
     return {
       input: { userId, ctx, profile, text: parsed.data.text, photo },
-      allowance: { ...allowance, used: allowance.used + 1 },
+      allowance: allowance.unlimited ? allowance : { ...allowance, used: allowance.used + 1 },
     };
   }
 
@@ -1031,7 +1040,7 @@ export async function registerRoutes(app: FastifyInstance) {
    */
   app.get('/entitlements', async (request) => {
     const allowances = await Promise.all(
-      METERS.map((meter) => allowanceFor(request.userId!, request.plan, meter)),
+      METERS.map((meter) => allowanceFor(request.userId!, request.plan, meter, request.unmetered)),
     );
     return { plan: request.plan, allowances, tiers: tiers() } satisfies Entitlements;
   });
@@ -1269,7 +1278,7 @@ export async function registerRoutes(app: FastifyInstance) {
    * later for a feature that is never coming back. Not included is 402.
    */
   app.post('/reviews/run', { config: { rateLimit: REVIEW_BURST } }, async (request, reply) => {
-    const perDay = limitsFor(request.plan).reviewsPerDay;
+    const perDay = limitsFor(request.plan, request.unmetered).reviewsPerDay;
     if (perDay === 0) {
       return reply.status(402).send({ error: 'Weekly reviews are part of Plus.' });
     }

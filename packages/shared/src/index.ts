@@ -118,6 +118,8 @@ export type MeterName = z.infer<typeof MeterName>;
  * kitchen on `free`, which is a locked feature rather than a spent one. Zero
  * means it applies and is gone. The two look identical in a counter and read
  * completely differently in a sentence, so the client needs to tell them apart.
+ * `unlimited` is the third of those states and the only cheerful one; read it
+ * through `meterLocked`/`meterSpent` rather than testing `allowed` directly.
  *
  * `period` is what the wall says when it refuses. `ever` is the free tier's
  * single lifetime photo: there is no reset, and a countdown that never moves is
@@ -130,6 +132,21 @@ export const Allowance = z.object({
   period: z.enum(['month', 'ever']),
   /** When the oldest run in the window ages out. Null when nothing is waiting. */
   resets_at: z.string().nullable(),
+  /**
+   * No ceiling at all, and therefore no wall: this account's turns are paid for
+   * by a subscription rather than a token at a time, so there is nothing for a
+   * meter to protect. See `unmeteredFor` on the API.
+   *
+   * A third state rather than a large `allowed`, for the same reason `allowed`
+   * is nullable at all — the counter cannot express it and the sentence has to.
+   * When it is set, `allowed` is null and `used` is zero: nothing was counted,
+   * because counting it would have changed nothing.
+   *
+   * Defaulted so a client built against the older shape still parses, and so
+   * that every existing `allowed === null` check keeps reading "locked" unless
+   * it has been taught otherwise.
+   */
+  unlimited: z.boolean().default(false),
   /**
    * Scans bought outright, still unspent. Photos only; zero everywhere else.
    *
@@ -209,15 +226,24 @@ export type Entitlements = z.infer<typeof Entitlements>;
  * introduced to prevent.
  */
 export function meterLocked(allowance: Allowance): boolean {
-  return allowance.allowed === null;
+  return !allowance.unlimited && allowance.allowed === null;
 }
 
 export function meterSpent(allowance: Allowance): boolean {
+  if (allowance.unlimited) return false;
   return allowance.allowed === null || allowance.used >= allowance.allowed;
 }
 
-/** How many are left. Zero on a locked meter, which is true and is not a count. */
+/**
+ * How many are left. Zero on a locked meter, which is true and is not a count.
+ *
+ * `Infinity` on an unlimited one, which is also true and is also not a count —
+ * ask `unlimited` before putting this in a sentence. It is deliberately not
+ * zero: a caller that forgets draws "Infinity left", which is a visible bug,
+ * where zero would quietly read as spent on a meter that never can be.
+ */
 export function meterRemaining(allowance: Allowance): number {
+  if (allowance.unlimited) return Number.POSITIVE_INFINITY;
   return allowance.allowed === null ? 0 : Math.max(0, allowance.allowed - allowance.used);
 }
 

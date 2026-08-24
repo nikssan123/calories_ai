@@ -50,6 +50,17 @@ import { METERS, PLANS, type MeterName, type PlanName, type PlanTier } from '@ct
 export interface Meter {
   allowed: number | null;
   period: 'month' | 'ever';
+  /**
+   * No ceiling at all — a third state, and the reason it is a flag rather than
+   * a magic number in `allowed`.
+   *
+   * Only `UNMETERED` below carries it, and no tier ever will: a tier that is
+   * sold has to be sized, and `Infinity` in a column that the wall renders as
+   * "3 messages left" is how a paywall ends up saying "Infinity messages left".
+   * Null already means "not on this plan" and zero already means "gone", so
+   * this is the one state the pair could not express.
+   */
+  unlimited?: boolean;
 }
 
 export interface PlanLimits {
@@ -446,7 +457,55 @@ export function tiers(): PlanTier[] {
   });
 }
 
-export function limitsFor(plan: PlanName): PlanLimits {
+/**
+ * `period` is carried even here, because `Allowance` has to answer with one and
+ * a month is the truthful thing to say about a window nobody is counting.
+ */
+const NO_CEILING: Meter = { allowed: null, period: 'month', unlimited: true };
+
+/**
+ * The account nobody is billed for.
+ *
+ * Every ceiling in this file is a cost control — the tiers are sized in dollars
+ * off `ai_usage`, the free grant is lifetime because a monthly one is a
+ * recurring bill, and the wall exists so that a $0.15 scan is paid for by
+ * somebody. A turn on the Claude Code subscription has already been paid for at
+ * a flat rate by whoever signed the box in, so there is no margin for a meter
+ * to protect: it would only be refusing work that has no marginal price.
+ * `unmeteredFor` in `ai/lane.ts` decides who this is, and it is an address in
+ * the environment rather than a column, so nobody can acquire it by signing up.
+ *
+ * Coach with the five meters removed, rather than a table of its own, because
+ * the numbers left over are not about money and do not stop being right when
+ * the bill goes away:
+ *
+ *   - `chatTurnsPerHour` is the loop guard. It matters *more* here, not less: a
+ *     stuck client on this lane spends the operator's own Claude rate limit,
+ *     the one their terminal is sharing, and no invoice ever shows up to say
+ *     so. Twenty an hour is still several times a real burst of logging.
+ *   - `nudgesPerWeek` is a product decision. Two nudges a week is spam whoever
+ *     is paying for the tokens.
+ *   - `pantryItems` is a usability cap on a list somebody has to read.
+ *   - `reviewsPerDay` is Coach's twenty, which no human reaches by hand.
+ */
+const UNMETERED: PlanLimits = {
+  ...LIMITS.coach,
+  chat: NO_CEILING,
+  photo: NO_CEILING,
+  pantryScan: NO_CEILING,
+  recipe: NO_CEILING,
+  mealPlan: NO_CEILING,
+};
+
+/**
+ * What this account is allowed to spend.
+ *
+ * `unmetered` is not a fourth tier and deliberately does not appear in `PLANS`
+ * or in `tiers()`: it is not for sale, nothing upgrades to it, and the wall must
+ * never offer it. It is what a plan means on a box where the turns are free.
+ */
+export function limitsFor(plan: PlanName, unmetered = false): PlanLimits {
+  if (unmetered) return UNMETERED;
   // An unrecognised value falls back to the strictest plan rather than throwing.
   // This runs on the hot path of every chat turn, and a plan column that somehow
   // holds something unexpected should cost someone a low ceiling, not a 500.
@@ -454,8 +513,8 @@ export function limitsFor(plan: PlanName): PlanLimits {
 }
 
 /** The meter one plan applies to a given dimension. */
-export function meterFor(plan: PlanName, meter: MeterName): Meter {
-  const limits = limitsFor(plan);
+export function meterFor(plan: PlanName, meter: MeterName, unmetered = false): Meter {
+  const limits = limitsFor(plan, unmetered);
   switch (meter) {
     case 'chat':
       return limits.chat;

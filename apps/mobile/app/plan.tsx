@@ -12,7 +12,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import type { MealPlan, MealPlanSlot, ShoppingList } from '@ct/shared';
-import { formatMass } from '@ct/shared';
+import { formatMass, meterLocked } from '@ct/shared';
 import { foodEmoji } from '@ct/shared/food-emoji';
 import { PressableChunk } from '@/components/Chunk';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
@@ -60,9 +60,13 @@ export default function PlanScreen() {
    * `allowed: null` outside Coach, and the button below spends the single most
    * expensive action in the product — roughly $0.63 of model — so it is the
    * last one that should be live on a plan that does not carry it.
+   *
+   * Through `meterLocked` rather than testing `allowed` directly, because an
+   * unmetered account has a null ceiling for the opposite reason: nobody is
+   * billed for its turns, so there is nothing to lock.
    */
   const { allowances } = useEntitlements();
-  const planLocked = allowances ? allowances.meal_plan.allowed === null : false;
+  const planLocked = allowances ? meterLocked(allowances.meal_plan) : false;
 
   const [wants, setWants] = useState('');
   const [servings, setServings] = useState<number | null>(null);

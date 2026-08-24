@@ -139,6 +139,43 @@ tracker. That is the same bet that document recommends: pantry → recipe → pl
 shopping list is a meal-planning product, a different market with a higher anchor and
 the one thing in the comparison table nobody else has.
 
+## Who the meters do not apply to
+
+**An account whose turns run on the Claude Code subscription is unmetered.** Not a
+higher tier — no tier at all: `chat`, `photo`, `pantry_scan`, `recipe` and
+`meal_plan` all answer `unlimited`, the wall never appears, and the locked kitchen
+opens. `SUBSCRIPTION_EMAILS` decides who that is, one address at a time, and
+`unmeteredFor` in `ai/lane.ts` is the predicate.
+
+Every number in this document is a cost control. The tiers are sized in dollars off
+`ai_usage`, the free grant is lifetime rather than monthly because a monthly one is
+a recurring bill, and the wall exists so that a $0.15 scan is paid for by somebody.
+None of that is true of a turn on the subscription: it is already paid for, flat, by
+whoever signed the box in. Metering it protects no margin — it just refuses work
+that has no marginal price.
+
+Three things this deliberately does *not* do:
+
+- **It is not the lane on its own.** `laneFor` says `anthropic` for an allowlisted
+  address, but the Agent SDK bills an `ANTHROPIC_API_KEY` ahead of the credentials
+  file when one is set — same lane, real invoice. The entitlement is built on
+  `onSubscription`, which rules that out. An account that is genuinely being billed
+  is never quietly handed an unlimited plan.
+- **It does not lift the loop guard.** `chatTurnsPerHour` stays, at Coach's twenty.
+  It matters more on this lane, not less: a stuck client spends the operator's own
+  Claude rate limit — the one their terminal is sharing — and no invoice ever turns
+  up to say it happened. Same for `nudgesPerWeek`, which caps what the app sends
+  unasked and is a product decision whoever is paying.
+- **It does not touch the ledger.** Every turn still writes its `ai_usage` row. That
+  is the only place a subscription's consumption is visible at all, and the one lane
+  with no invoice must not also be the one lane with no numbers.
+
+On a deployment whose `AI_PROVIDER` is `anthropic` — a personal install, or
+development — everybody's turns are on that subscription, so everybody is unmetered.
+That is the honest answer rather than a hole: there is no per-token bill on that box
+for a ceiling to be protecting. The tiers start meaning something the day it is
+configured with a key.
+
 ## The honest part
 
 **These ceilings cover their costs and they are not yet competitive.**

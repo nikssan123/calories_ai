@@ -132,7 +132,12 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid items' });
     }
     try {
-      const items = await addPantryItems(request.userId!, request.plan, parsed.data.items);
+      const items = await addPantryItems(
+        request.userId!,
+        request.plan,
+        parsed.data.items,
+        request.unmetered,
+      );
       return reply.status(201).send({ items });
     } catch (error) {
       // A full kitchen is a 409, not a 500: the request was well formed and the
@@ -176,7 +181,7 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
     // Before the photo is claimed or presigned: a locked kitchen should cost
     // nothing to refuse, and the paywall reads better than a dead scanner.
     try {
-      await requireAllowance(request.userId!, request.plan, 'pantry_scan');
+      await requireAllowance(request.userId!, request.plan, 'pantry_scan', request.unmetered);
     } catch (error) {
       if (error instanceof PlanLimitError) {
         return reply.status(402).send({ error: error.message, allowance: error.allowance });
@@ -222,7 +227,10 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
       const result = await suggestRecipes(request.userId!, brief(parsed.data));
       // The fresh number, so the screen can shut the button behind the run that
       // just spent the last of it rather than on the next page load.
-      return { ...result, allowance: await allowanceFor(request.userId!, request.plan, 'recipe') };
+      return {
+        ...result,
+        allowance: await allowanceFor(request.userId!, request.plan, 'recipe', request.unmetered),
+      };
     } catch (error) {
       request.log.error({ err: error }, 'recipe suggestion failed');
       return recipeFailure(error, reply);
@@ -239,7 +247,7 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
       // Carried on the list the Cook screen already fetches on load, rather
       // than a request of its own: the answer is one row, and a second round
       // trip to learn whether a button works is a second thing to go wrong.
-      allowanceFor(request.userId!, request.plan, 'recipe'),
+      allowanceFor(request.userId!, request.plan, 'recipe', request.unmetered),
     ]);
     return { recipes, allowance };
   });

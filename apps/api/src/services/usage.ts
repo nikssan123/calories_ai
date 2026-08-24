@@ -153,8 +153,9 @@ export async function allowanceFor(
   userId: string,
   plan: PlanName,
   meter: MeterName,
+  unmetered = false,
 ): Promise<Allowance> {
-  const { allowed, period } = meterFor(plan, meter);
+  const { allowed, period, unlimited } = meterFor(plan, meter, unmetered);
   const kinds = METER_KINDS[meter];
 
   /*
@@ -168,16 +169,31 @@ export async function allowanceFor(
    */
   const credits = meter === 'photo' ? await photoCreditBalance(userId) : 0;
 
+  /*
+   * Nobody is billed for this account's turns, so there is nothing to count and
+   * no window to count it in. `used` is zero because no count was run, not
+   * because none happened — the ledger still records every turn, which is the
+   * only way a subscription's consumption is visible at all.
+   *
+   * After the credit balance rather than before it: bought scans are stock this
+   * person owns, and a settings screen that reported none because they happen
+   * to be unmetered would be wrong about something they paid for. They are
+   * simply never spent — `requireAllowance` returns above the line that would.
+   */
+  if (unlimited) {
+    return { meter, allowed: null, unlimited: true, used: 0, period, resets_at: null, credits };
+  }
+
   // A meter the plan does not carry at all. No count is run: the answer does
   // not depend on it, and this is on the hot path.
   if (allowed === null) {
-    return { meter, allowed: null, used: 0, period, resets_at: null, credits };
+    return { meter, allowed: null, unlimited: false, used: 0, period, resets_at: null, credits };
   }
 
   const days = period === 'month' ? 30 : null;
   const used = await turnsInWindow(userId, kinds, days);
   if (used < allowed || period === 'ever') {
-    return { meter, allowed, used, period, resets_at: null, credits };
+    return { meter, allowed, unlimited: false, used, period, resets_at: null, credits };
   }
 
   // Spent, and on a window that moves. When the oldest run still inside it
@@ -192,6 +208,7 @@ export async function allowanceFor(
   return {
     meter,
     allowed,
+    unlimited: false,
     used,
     period,
     resets_at: row?.at ? new Date(new Date(row.at).getTime() + 30 * 86_400_000).toISOString() : null,
@@ -260,8 +277,13 @@ export async function requireAllowance(
   userId: string,
   plan: PlanName,
   meter: MeterName,
+  unmetered = false,
 ): Promise<Allowance> {
-  const allowance = await allowanceFor(userId, plan, meter);
+  const allowance = await allowanceFor(userId, plan, meter, unmetered);
+  // No ceiling, so nothing to be past. Ahead of the comparison because a null
+  // `allowed` reads as "not on this plan" to the line below, and on this
+  // account it means the opposite.
+  if (allowance.unlimited) return allowance;
   if (allowance.allowed !== null && allowance.used < allowance.allowed) return allowance;
 
   /*

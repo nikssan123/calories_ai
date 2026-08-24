@@ -11,6 +11,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const ORIGINAL_ENV = { ...process.env };
 
+/**
+ * Empty rather than deleted, because `env.ts` reloads the `.env` files on every
+ * re-import and fills in whatever `process.env` does not already have. A key
+ * removed here would simply come back from the developer's own file — and the
+ * whole point of these cases is a deployment with no key at all.
+ */
+const NO_KEY = '';
+
 /** Fresh modules per case: `env.ts` reads the environment once, at import. */
 async function lanes(vars: Record<string, string | undefined>, signedIn: boolean) {
   vi.resetModules();
@@ -21,6 +29,9 @@ async function lanes(vars: Record<string, string | undefined>, signedIn: boolean
   vi.doMock('../src/ai/client.ts', async () => ({
     ...(await vi.importActual<object>('../src/ai/client.ts')),
     hasSubscriptionAuth: () => signedIn,
+    // Mirrors the real one, over the mocked file check: credentials are only
+    // what pays while there is no key in the environment to take precedence.
+    onSubscription: () => signedIn && !process.env.ANTHROPIC_API_KEY,
   }));
   return import('../src/ai/providers/index.ts');
 }
@@ -103,6 +114,88 @@ describe('who runs on the subscription', () => {
     );
     expect(laneFor('me@example.com')).toBe('anthropic');
     expect(laneFor('astranger@example.com')).toBe('openai');
+  });
+});
+
+/**
+ * Who pays, which is a different question from which lane runs — and the one
+ * the plan meters are built on.
+ *
+ * Every ceiling in `plans.ts` is priced in dollars off `ai_usage`. A turn on
+ * the subscription does not spend any, so metering it refuses work that has no
+ * marginal price. What must never happen is the inverse: an account that is
+ * really being billed, quietly handed an unlimited plan.
+ */
+describe('who is metered', () => {
+  /** The addresses belonging to whoever runs the box, on a billed deployment. */
+  it('lifts the meters for the addresses running on the subscription', async () => {
+    const { unmeteredFor } = await lanes(
+      {
+        AI_PROVIDER: 'anthropic-api',
+        SUBSCRIPTION_EMAILS: 'me@example.com',
+        ANTHROPIC_API_KEY: NO_KEY,
+      },
+      true,
+    );
+    expect(unmeteredFor('me@example.com')).toBe(true);
+    expect(unmeteredFor('ME@Example.com ')).toBe(true);
+    // Everybody else on that deployment is billed a token at a time, and their
+    // plan is the whole of what stands between the product and the bill.
+    expect(unmeteredFor('astranger@example.com')).toBe(false);
+    expect(unmeteredFor(null)).toBe(false);
+  });
+
+  /**
+   * The one that would be silent. `laneFor` says `anthropic` here and the turn
+   * really does run through the Agent SDK — but with a key in the environment
+   * the SDK bills it, so the same lane is a real invoice. An entitlement built
+   * on the lane alone would hand that account unlimited turns at $0.15 a scan.
+   */
+  it('keeps metering when a key is what actually pays', async () => {
+    const { laneFor, unmeteredFor } = await lanes(
+      {
+        AI_PROVIDER: 'anthropic-api',
+        SUBSCRIPTION_EMAILS: 'me@example.com',
+        ANTHROPIC_API_KEY: 'sk-ant-test',
+      },
+      true,
+    );
+    expect(laneFor('me@example.com')).toBe('anthropic');
+    expect(unmeteredFor('me@example.com')).toBe(false);
+  });
+
+  /**
+   * A personal install or a development box: `AI_PROVIDER` is `anthropic` and
+   * everybody's turns are on the operator's subscription, so everybody is
+   * unmetered. That is the honest answer rather than a hole — there is no
+   * per-token bill on that deployment for a ceiling to be protecting.
+   */
+  it('lifts them for everyone on a deployment that runs on the subscription', async () => {
+    const { unmeteredFor } = await lanes(
+      { AI_PROVIDER: 'anthropic', SUBSCRIPTION_EMAILS: '', ANTHROPIC_API_KEY: NO_KEY },
+      true,
+    );
+    expect(unmeteredFor('anyone@example.com')).toBe(true);
+    expect(unmeteredFor(null)).toBe(true);
+  });
+
+  /** No login at all: the SDK falls back to the key, so the turn is billed. */
+  it('meters everybody when there is no login behind the lane', async () => {
+    const { unmeteredFor } = await lanes(
+      { AI_PROVIDER: 'anthropic', SUBSCRIPTION_EMAILS: 'me@example.com' },
+      false,
+    );
+    expect(unmeteredFor('me@example.com')).toBe(false);
+    expect(unmeteredFor('anyone@example.com')).toBe(false);
+  });
+
+  /** A third-party lane is billed by a third party. Nothing here is free. */
+  it('never lifts them on another vendor', async () => {
+    const { unmeteredFor } = await lanes(
+      { AI_PROVIDER: 'openai', SUBSCRIPTION_EMAILS: '', ANTHROPIC_API_KEY: NO_KEY },
+      true,
+    );
+    expect(unmeteredFor('anyone@example.com')).toBe(false);
   });
 });
 

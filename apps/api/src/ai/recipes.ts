@@ -11,7 +11,7 @@ import { getUser, getUserContext } from '../services/user.ts';
 import { inferMeal, localDateFor } from '../time.ts';
 import { MAX_TURNS } from './client.ts';
 import { emptyCollector } from './kitchen.ts';
-import { createProvider, laneFor, type AgentRequest } from './providers/index.ts';
+import { createProvider, laneFor, unmeteredFor, type AgentRequest } from './providers/index.ts';
 import {
   RECIPES_PER_RUN,
   RECIPE_SYSTEM_PROMPT,
@@ -126,7 +126,12 @@ export async function suggestRecipes(
    * right, and the fix is to meter the month directly rather than to pick a
    * smaller daily number and hope nobody is consistent.
    */
-  await requireAllowance(id, profile.plan, job.kind === 'plan' ? 'meal_plan' : 'recipe');
+  await requireAllowance(
+    id,
+    profile.plan,
+    job.kind === 'plan' ? 'meal_plan' : 'recipe',
+    unmeteredFor(profile.email),
+  );
 
   /*
    * What is left, floored at zero.

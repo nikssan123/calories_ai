@@ -25,9 +25,24 @@ export function hasSubscriptionAuth(): boolean {
   return existsSync(CREDENTIALS_PATH);
 }
 
+/**
+ * Whether the agent lane is actually running on the subscription — which is a
+ * different question from whether it *could*, and the difference is money.
+ *
+ * `hasSubscriptionAuth` says a login exists on disk. It does not say the login
+ * is what pays: an `ANTHROPIC_API_KEY` in the environment takes precedence
+ * inside the SDK, so credentials plus a key is a metered turn wearing a
+ * subscription's clothes. This is the predicate for "nobody is billed per
+ * token", and it is the one `lane.ts` builds an entitlement on top of — so it
+ * has to be the strict one.
+ */
+export function onSubscription(): boolean {
+  return !process.env.ANTHROPIC_API_KEY && hasSubscriptionAuth();
+}
+
 export function authDescription(): string {
-  if (process.env.ANTHROPIC_API_KEY) return 'anthropic-api-key';
-  return hasSubscriptionAuth() ? 'claude-code-subscription' : 'none';
+  if (onSubscription()) return 'claude-code-subscription';
+  return process.env.ANTHROPIC_API_KEY ? 'anthropic-api-key' : 'none';
 }
 
 export const AUTH_HELP =

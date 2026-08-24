@@ -1,5 +1,6 @@
 import type { PlanName, Profile, ProfileUpdate, UnitSystem } from '@ct/shared';
 import { unitsOf } from '@ct/shared';
+import { unmeteredFor } from '../ai/lane.ts';
 import { query, queryOne } from '../db.ts';
 import type { DayContext } from '../time.ts';
 import { hashPassword, verifyPassword } from './auth.ts';
@@ -200,6 +201,16 @@ export interface AccountGate {
    * rate limiter has to know the ceiling before the handler runs.
    */
   plan: PlanName;
+  /**
+   * Whether this account's turns are on the subscription rather than the
+   * metered key, which decides whether the plan's ceilings apply to it at all.
+   *
+   * Resolved from the address on the same row, so it costs nothing extra here
+   * and nothing at all downstream — see `unmeteredFor`. The address itself is
+   * deliberately not returned: it is not the session hook's business, and
+   * everything that needs one already reads the profile.
+   */
+  unmetered: boolean;
 }
 
 export async function accountGate(userId: string): Promise<AccountGate> {
@@ -207,13 +218,15 @@ export async function accountGate(userId: string): Promise<AccountGate> {
     disabled_at: string | null;
     email_verified_at: string | null;
     plan: PlanName;
-  }>('SELECT disabled_at, email_verified_at, plan FROM users WHERE id = $1', [userId]);
+    email: string | null;
+  }>('SELECT disabled_at, email_verified_at, plan, email FROM users WHERE id = $1', [userId]);
   return {
     disabled: row?.disabled_at != null,
     // A missing row is treated as unverified, but the session hook will already
     // have failed to resolve it — this is belt and braces, not a live path.
     verified: row?.email_verified_at != null,
     plan: row?.plan ?? 'free',
+    unmetered: unmeteredFor(row?.email),
   };
 }
 
@@ -339,7 +352,13 @@ function toProfile(row: any): Profile {
  * owner to write a review for.
  */
 export async function listActiveUsers(): Promise<
-  Array<{ id: string; timezone: string; day_start_hour: number; plan: PlanName }>
+  Array<{
+    id: string;
+    timezone: string;
+    day_start_hour: number;
+    plan: PlanName;
+    email: string | null;
+  }>
 > {
   /*
    * `plan` is selected because both scheduled passes are entitlements, not
@@ -350,9 +369,20 @@ export async function listActiveUsers(): Promise<
    * a review every Monday and a nudge every week, whatever they were paying,
    * which is roughly $0.65 and $0.11 a month of model time per free account
    * against a tier whose whole design is a steady state of zero.
+   *
+   * `email` rides along for the other half of that question. It is already in
+   * the WHERE clause, and both passes have to know whether this account's turns
+   * are billed at all before they read a ceiling written in dollars — see
+   * `unmeteredFor`.
    */
-  return query<{ id: string; timezone: string; day_start_hour: number; plan: PlanName }>(
-    `SELECT id, timezone, day_start_hour, plan
+  return query<{
+    id: string;
+    timezone: string;
+    day_start_hour: number;
+    plan: PlanName;
+    email: string | null;
+  }>(
+    `SELECT id, timezone, day_start_hour, plan, email
        FROM users
       WHERE email IS NOT NULL AND is_setup_complete = TRUE
    ORDER BY created_at ASC`,

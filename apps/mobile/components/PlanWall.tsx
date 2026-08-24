@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } fro
 import Svg, { Path, Rect } from 'react-native-svg';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import type { Allowance, MeterName } from '@ct/shared';
-import { meterRemaining } from '@ct/shared';
+import { meterLocked, meterRemaining } from '@ct/shared';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { useEntitlements } from '@/lib/entitlements';
 import { remainingLine, TIER_NAMES, tierFor, wallBody, wallTitle } from '@/lib/plan-copy';
@@ -224,7 +224,9 @@ export function MeterChip({
   // Nothing to say while it is unknown, unmetered, comfortable, or already
   // spent — the last because a spent meter has the wall, and a chip repeating
   // the wall's news underneath it is the nagging this component avoids.
-  if (!allowance || allowance.allowed === null) return null;
+  // `meterLocked` covers the unmetered account too: its ceiling is null because
+  // there is no bill behind it, and counting down from infinity is not a thing.
+  if (!allowance || meterLocked(allowance) || allowance.unlimited) return null;
   const left = meterRemaining(allowance);
   if (left === 0 || left > SHOW_FROM) return null;
 

@@ -21,13 +21,20 @@ import { limitsFor, type PlanLimits } from '../services/plans.ts';
  */
 function planLimit(pick: (limits: PlanLimits) => number, timeWindow: string) {
   return {
-    max: (request: FastifyRequest) => pick(limitsFor(request.plan)),
+    max: (request: FastifyRequest) => pick(limitsFor(request.plan, request.unmetered)),
     timeWindow,
   };
 }
 
 /**
  * The journal. The one limit that is about runaway loops, not about money.
+ *
+ * Which is why it is the one ceiling an unmetered account still has. Everything
+ * the plan *sells* is lifted for somebody whose turns run on the subscription —
+ * see `UNMETERED` in `plans.ts` — but a client stuck in a loop is a worse
+ * problem on that lane rather than a better one: it spends the operator's own
+ * Claude rate limit, the one their terminal is sharing, and no invoice ever
+ * turns up to say it happened. They get the top tier's number, not no number.
  *
  * Attached with `app.rateLimit()` and shared by `/chat` and `/chat/stream`
  * rather than declared on each — see the note where it is used. This plugin

@@ -44,6 +44,7 @@ export async function addPantryItems(
   userId: string,
   plan: PlanName,
   items: PantryItemInput[],
+  unmetered = false,
 ): Promise<PantryItem[]> {
   if (items.length === 0) return listPantry(userId);
 
@@ -64,7 +65,7 @@ export async function addPantryItems(
   const known = new Set(existing.map((i) => i.name.toLowerCase()));
   const additions = batch.filter((i) => !known.has(i.name.toLowerCase()));
 
-  const limit = limitsFor(plan).pantryItems;
+  const limit = limitsFor(plan, unmetered).pantryItems;
   if (existing.length + additions.length > limit) throw new PantryFullError(limit);
 
   const values: string[] = [];

@@ -11,6 +11,7 @@ import { expirePlans } from './services/billing.ts';
 import { dueNudge, NUDGE_HOUR } from './services/nudges.ts';
 import { reviewForWeek, reviewWeekFor } from './services/reviews.ts';
 import { listActiveUsers } from './services/user.ts';
+import { unmeteredFor } from './ai/lane.ts';
 import { limitsFor } from './services/plans.ts';
 import { localDateFor, localPartsFor } from './time.ts';
 
@@ -103,7 +104,7 @@ async function reviewPass(now: Date, logger?: FastifyBaseLogger): Promise<TickRe
        * free already refuses there. A second gate here would be a second place
        * that decides the same thing.
        */
-      if (limitsFor(user.plan).reviewsPerDay === 0) {
+      if (limitsFor(user.plan, unmeteredFor(user.email)).reviewsPerDay === 0) {
         result.skipped += 1;
         continue;
       }

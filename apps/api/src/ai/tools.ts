@@ -16,6 +16,7 @@ import type {
 } from '@ct/shared';
 import { DIETS, MUSCLE_GROUPS, UNIT_SYSTEMS, bodyWeightUnit, formatMass, toBodyWeight } from '@ct/shared';
 import { query } from '../db.ts';
+import { unmeteredFor } from './lane.ts';
 import { addDays, type DayContext, inferMeal, localDateFor, resolveWhen } from '../time.ts';
 import {
   createExerciseEntry,
@@ -1488,6 +1489,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
               is_staple: item.is_staple,
               source: 'typed' as const,
             })),
+            unmeteredFor(profile.email),
           );
         } catch (error) {
           if (error instanceof PantryFullError) return fail(error.message);

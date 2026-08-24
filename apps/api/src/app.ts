@@ -32,6 +32,17 @@ declare module 'fastify' {
      * every route that consults it demands a session anyway.
      */
     plan: PlanName;
+    /**
+     * Whether this account's turns run on the Claude Code subscription rather
+     * than a metered key — and therefore whether the plan's ceilings apply to
+     * it at all. From the same read as the three above.
+     *
+     * It sits on the request for the same reason `plan` does: the per-plan rate
+     * limits are evaluated before any handler runs, so an answer fetched inside
+     * one would arrive after the decision it was meant to inform. Anonymous
+     * requests read `false`, which is the safe way round.
+     */
+    unmetered: boolean;
   }
 }
 
@@ -150,6 +161,7 @@ export async function buildApp(
   app.decorateRequest('userId', null);
   app.decorateRequest('emailVerified', false);
   app.decorateRequest('plan', 'free');
+  app.decorateRequest('unmetered', false);
 
   /** Resolve the session on every request; route guards decide what to do with it. */
   app.addHook('onRequest', async (request) => {
@@ -167,6 +179,7 @@ export async function buildApp(
     request.userId = gate?.disabled ? null : userId;
     request.emailVerified = gate?.verified ?? false;
     request.plan = gate?.plan ?? 'free';
+    request.unmetered = gate?.unmetered ?? false;
   });
 
   // `/photos/` is public because a signed URL carries its own authorisation and

@@ -10,6 +10,8 @@ import {
   bodyWeightUnit,
   cmToFeetInches,
   feetInchesToCm,
+  meterLocked,
+  meterRemaining,
   toBodyWeight,
   unitsOf,
 } from '@ct/shared';
@@ -570,9 +572,13 @@ function PlanSettings() {
    * on a tier that never sold any is a list of what you do not have, which is
    * the tone this whole screen is trying not to take — the locked ones are the
    * paywall's subject, not the settings screen's.
+   *
+   * An unmetered account keeps its rows: they say "Unlimited" rather than a
+   * count, which is the one thing this screen exists to tell somebody who is
+   * not going to hit a wall.
    */
   const carried = allowances
-    ? Object.values(allowances).filter((allowance) => allowance.allowed !== null)
+    ? Object.values(allowances).filter((allowance) => !meterLocked(allowance))
     : [];
 
   async function restorePurchase() {
@@ -599,7 +605,7 @@ function PlanSettings() {
       </InsetRow>
 
       {carried.map((allowance) => {
-        const left = Math.max(0, (allowance.allowed ?? 0) - allowance.used);
+        const left = meterRemaining(allowance);
         return (
           <InsetRow key={allowance.meter}>
             <Text style={[t.body, styles.label, { color: colors.mutedForeground }]}>
@@ -608,7 +614,9 @@ function PlanSettings() {
               {sentence(meterNoun(allowance.meter, 2))}
             </Text>
             <Text style={[t.bodySemibold, t.tnum, { color: colors.foreground }]}>
-              {left} left{allowance.period === 'ever' ? '' : ' this month'}
+              {allowance.unlimited
+                ? 'Unlimited'
+                : `${left} left${allowance.period === 'ever' ? '' : ' this month'}`}
             </Text>
           </InsetRow>
         );
