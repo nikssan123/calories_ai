@@ -14,6 +14,7 @@ import {
 import { PHOTO_ACCEPT, preparePhoto, type PreparedPhoto, useHasCameraApp } from '@/lib/image';
 import { BarcodeScanner } from '@/components/BarcodeScanner';
 import { cn } from '@/lib/utils';
+import { useT } from '@/lib/i18n';
 
 export interface ComposerPayload {
   text: string;
@@ -37,6 +38,7 @@ export function Composer({
   onLogged: (message: ChatMessage) => void;
   disabled: boolean;
 }) {
+  const t = useT();
   const [text, setText] = useState('');
   const [photo, setPhoto] = useState<PreparedPhoto | null>(
     null,
@@ -90,7 +92,7 @@ export function Composer({
       variant="ghost"
       onClick={onClick}
       disabled={disabled}
-      aria-label="Add a photo or scan a packet"
+      aria-label={t('composer.addPhoto')}
       className="text-muted-foreground size-10 shrink-0 rounded-full"
     >
       <Camera size={22} strokeWidth={2.2} />
@@ -114,12 +116,12 @@ export function Composer({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={photo.dataUrl}
-            alt="Selected meal"
+            alt={t('composer.selectedMeal')}
             className="border-border chunk h-20 w-20 rounded-2xl border-2 object-cover"
           />
           <button
             type="button"
-            aria-label="Remove photo"
+            aria-label={t('composer.removePhoto')}
             onClick={() => setPhoto(null)}
             className="bg-foreground text-background border-card absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full border-2"
           >
@@ -171,7 +173,7 @@ export function Composer({
                 className="gap-2.5 px-2 py-2 text-[0.9375rem]"
               >
                 <Camera />
-                Take a photo
+                {t('composer.takePhoto')}
               </DropdownMenuItem>
             )}
             <DropdownMenuItem
@@ -179,14 +181,14 @@ export function Composer({
               className="gap-2.5 px-2 py-2 text-[0.9375rem]"
             >
               <ImageIcon />
-              Choose a photo
+              {t('composer.choosePhoto')}
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => setScanning(true)}
               className="gap-2.5 px-2 py-2 text-[0.9375rem]"
             >
               <ScanBarcode />
-              Scan a barcode
+              {t('composer.scanBarcode')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -228,7 +230,7 @@ export function Composer({
             }
           }}
           rows={1}
-          placeholder="Two eggs and toast…"
+          placeholder={t('composer.placeholder')}
           disabled={disabled}
           className={cn(
             'border-input bg-card placeholder:text-muted-foreground focus:border-ring max-h-33 min-h-10 flex-1 resize-none rounded-[1.25rem] border-2 px-4 py-[0.5rem] text-base leading-6 font-medium outline-none disabled:opacity-60',
@@ -243,7 +245,7 @@ export function Composer({
           size="icon"
           onClick={submit}
           disabled={!canSend}
-          aria-label="Send"
+          aria-label={t('composer.send')}
           // The default variant already brings the ledge and the press; all
           // this adds is the shape and a deeper travel to suit the size.
           className="size-10 shrink-0 rounded-full disabled:opacity-30"
@@ -265,7 +267,7 @@ export function Composer({
          */
         onLabelPhoto={(prepared) => {
           setPhoto(prepared);
-          setText((current) => current || 'This is the label — log what I ate off it.');
+          setText((current) => current || t('composer.labelHint'));
           textRef.current?.focus();
         }}
       />

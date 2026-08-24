@@ -6,7 +6,7 @@ import { getUser, getUserContext } from '../services/user.ts';
 import { MAX_TURNS } from './client.ts';
 import { emptyCollector } from './kitchen.ts';
 import { createProvider, laneFor, type AgentRequest } from './providers/index.ts';
-import { PANTRY_SCAN_PROMPT, unitsBrief } from './prompt.ts';
+import { PANTRY_SCAN_PROMPT, languageBrief, unitsBrief } from './prompt.ts';
 import { buildNutritionServer, type ToolContext } from './tools.ts';
 
 /**
@@ -37,7 +37,7 @@ export async function scanFridgePhoto(
   userId: string,
   photo: ScanInput,
 ): Promise<PantryScanProposal> {
-  const { userId: id, units, ...ctx } = await getUserContext(userId);
+  const { userId: id, units, locale, ...ctx } = await getUserContext(userId);
 
   // Stored like a meal photo, so the same signed-URL read serves it and a scan
   // that read the fridge wrongly can be looked at afterwards. Already stored
@@ -75,7 +75,13 @@ export async function scanFridgePhoto(
     // journal, the review and the recipe writer — the quantities it notes land
     // on the kitchen list and are read there. The prompt above is byte-stable
     // for the cache, so the brief rides the turn instead.
-    text: ['What food can you see in this photo?', unitsBrief({ units })]
+    // The labels this run writes are read by a human before they are confirmed,
+    // so they belong in that human's language.
+    text: [
+      'What food can you see in this photo?',
+      languageBrief({ locale }),
+      unitsBrief({ units }),
+    ]
       .filter(Boolean)
       .join('\n\n'),
     photo:

@@ -328,6 +328,7 @@ describe('the weekly template’s own edge cases', () => {
       appUrl: 'https://example.test',
       unsubscribeUrl: 'https://example.test/unsubscribe',
       units: 'metric',
+      locale: 'en',
     });
 
     expect(message.text).toContain('Average a day: —');
@@ -343,6 +344,7 @@ describe('the weekly template’s own edge cases', () => {
       appUrl: 'https://example.test',
       unsubscribeUrl: 'https://example.test/u',
       units: 'metric' as const,
+      locale: 'en' as const,
     };
 
     expect(templates.weeklyReview({ ...base, stats: STATS }).text).not.toContain('target moved');
@@ -377,6 +379,7 @@ describe('the weekly template’s own edge cases', () => {
       appUrl: 'https://example.test',
       unsubscribeUrl: 'https://example.test/u',
       units: 'metric',
+      locale: 'en',
     });
     expect(gained.text).toContain('+0.4 kg');
   });

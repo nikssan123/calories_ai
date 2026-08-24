@@ -13,20 +13,22 @@ import {
   Shield,
   User,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/AuthGate';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/utils';
+import { useT, type StringKey } from '@/lib/i18n';
 
 /** A vertical list has room for History, which the phone's bottom bar does not. */
-const TABS = [
-  { href: '/', label: 'Journal', Icon: MessageSquareText },
-  { href: '/today', label: 'Today', Icon: Flame },
-  { href: '/history', label: 'History', Icon: CalendarDays },
-  { href: '/progress', label: 'Progress', Icon: ChartLine },
-  { href: '/exercise', label: 'Exercise', Icon: PersonStanding },
-  { href: '/cook', label: 'Cook', Icon: ChefHat },
-  { href: '/setup', label: 'You', Icon: User },
-] as const;
+const TABS: readonly { href: string; label: StringKey; Icon: LucideIcon }[] = [
+  { href: '/', label: 'nav.journal', Icon: MessageSquareText },
+  { href: '/today', label: 'nav.today', Icon: Flame },
+  { href: '/history', label: 'nav.history', Icon: CalendarDays },
+  { href: '/progress', label: 'nav.progress', Icon: ChartLine },
+  { href: '/exercise', label: 'nav.exercise', Icon: PersonStanding },
+  { href: '/cook', label: 'nav.cook', Icon: ChefHat },
+  { href: '/setup', label: 'nav.you', Icon: User },
+];
 
 /**
  * Desktop navigation. Replaces the bottom tab bar from `lg` up — the same
@@ -35,6 +37,7 @@ const TABS = [
 export function Sidebar() {
   const pathname = usePathname();
   const { profile, isAdmin, signOut } = useAuth();
+  const t = useT();
 
   if (pathname === '/login') return null;
 
@@ -71,7 +74,7 @@ export function Sidebar() {
                     strokeWidth={active ? 2.6 : 2.1}
                     style={active ? { color: 'var(--calories-text)' } : undefined}
                   />
-                  {label}
+                  {t(label)}
                 </Link>
               </li>
             );
@@ -98,7 +101,7 @@ export function Sidebar() {
                   strokeWidth={pathname === '/admin' ? 2.6 : 2.1}
                   style={pathname === '/admin' ? { color: 'var(--calories-text)' } : undefined}
                 />
-                Admin
+                {t('nav.admin')}
               </Link>
             </li>
           </ul>
@@ -111,7 +114,7 @@ export function Sidebar() {
         className="text-muted-foreground hover:text-foreground m-3 flex items-center gap-3 rounded-2xl px-3 py-2 text-body font-bold transition-colors"
       >
         <LogOut size={20} strokeWidth={2.1} />
-        Sign out
+        {t('nav.signOut')}
       </button>
     </aside>
   );

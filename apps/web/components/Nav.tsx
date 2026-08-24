@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChartLine, ChefHat, Flame, MessageSquareText, PersonStanding, User } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useT, type StringKey } from '@/lib/i18n';
 
 /**
  * Six, which is one past where a bottom bar is usually said to stop.
@@ -18,17 +20,24 @@ import { cn } from '@/lib/utils';
  * History is still not here. It is reached by tapping the date on Today, and
  * the sidebar, which has no such constraint, lists it outright.
  */
-const TABS = [
-  { href: '/', label: 'Journal', Icon: MessageSquareText },
-  { href: '/today', label: 'Today', Icon: Flame },
-  { href: '/progress', label: 'Progress', Icon: ChartLine },
-  { href: '/exercise', label: 'Exercise', Icon: PersonStanding },
-  { href: '/cook', label: 'Cook', Icon: ChefHat },
-  { href: '/setup', label: 'You', Icon: User },
-] as const;
+/*
+ * The label is a message *key*, not a word. Resolved at render rather than
+ * here, because this array is module scope and a hook cannot run in it — and
+ * because a tab bar that read its words once at import would keep them after
+ * somebody changed language in the settings two screens away.
+ */
+const TABS: readonly { href: string; label: StringKey; Icon: LucideIcon }[] = [
+  { href: '/', label: 'nav.journal', Icon: MessageSquareText },
+  { href: '/today', label: 'nav.today', Icon: Flame },
+  { href: '/progress', label: 'nav.progress', Icon: ChartLine },
+  { href: '/exercise', label: 'nav.exercise', Icon: PersonStanding },
+  { href: '/cook', label: 'nav.cook', Icon: ChefHat },
+  { href: '/setup', label: 'nav.you', Icon: User },
+];
 
 export function Nav() {
   const pathname = usePathname();
+  const t = useT();
 
   // The sign-in screen is not part of the tabbed app.
   if (pathname === '/login') return null;
@@ -74,7 +83,7 @@ export function Nav() {
                     active ? 'font-extrabold' : 'font-bold',
                   )}
                 >
-                  {label}
+                  {t(label)}
                 </span>
               </Link>
             </li>

@@ -4,14 +4,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Calendar, CalendarDay } from '@ct/shared';
-import { formatBodyWeight } from '@ct/shared';
+import type { Calendar, CalendarDay, Locale } from '@ct/shared';
+import { formatBodyWeight, formatDay, formatMonth } from '@ct/shared';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { InsetGroup } from '@/components/InsetGroup';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { useLocale, useT } from '@/lib/i18n';
 
 /**
  * A month at a time, as a grid.
@@ -25,6 +26,8 @@ import { cn } from '@/lib/utils';
 const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 export default function HistoryPage() {
+  const locale = useLocale();
+  const t = useT();
   // Month cursor as a first-of-month ISO date, so all arithmetic is on dates
   // rather than on a Date object in some ambient timezone.
   const [month, setMonth] = useState<string | null>(null);
@@ -71,24 +74,24 @@ export default function HistoryPage() {
     <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-5 pb-8 lg:px-6">
       <div className="mx-auto w-full max-w-5xl space-y-6">
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-large-title">History</h1>
+          <h1 className="text-large-title">{t('history.title')}</h1>
           <div className="flex items-center gap-1">
             <Button
               variant="ghost"
               size="icon"
-              aria-label="Previous month"
+              aria-label={t('history.previousMonth')}
               onClick={() => setMonth((m) => (m ? shiftMonth(m, -1) : m))}
               className="text-muted-foreground rounded-full"
             >
               <ChevronLeft size={20} />
             </Button>
             <span className="min-w-36 text-center text-body font-medium">
-              {month ? monthLabel(month) : ''}
+              {month ? monthLabel(month, locale) : ''}
             </span>
             <Button
               variant="ghost"
               size="icon"
-              aria-label="Next month"
+              aria-label={t('history.nextMonth')}
               onClick={() => setMonth((m) => (m ? shiftMonth(m, 1) : m))}
               className="text-muted-foreground rounded-full"
             >
@@ -132,7 +135,7 @@ export default function HistoryPage() {
             </div>
 
             <div className="mt-6 space-y-6 lg:mt-0">
-              <InsetGroup title={selected ? formatFullDate(selected) : 'Day'}>
+              <InsetGroup title={selected ? formatFullDate(selected, locale) : 'Day'}>
                 {selectedDay && selectedDay.logged ? (
                   <div className="space-y-3 px-4 py-3.5">
                     <div className="flex items-baseline justify-between gap-3">
@@ -170,11 +173,11 @@ export default function HistoryPage() {
                 )}
               </InsetGroup>
 
-              <InsetGroup title="📆  This month">
+              <InsetGroup title={`📆  ${t('history.thisMonth')}`}>
                 <div className="divide-border grid grid-cols-3 divide-x-2">
-                  <Stat label="Logged" value={`${logged.length}`} unit="days" />
+                  <Stat label={t('history.logged')} value={`${logged.length}`} unit="days" />
                   <Stat
-                    label="Avg intake"
+                    label={t('history.avgIntake')}
                     value={
                       logged.length === 0
                         ? '—'
@@ -185,7 +188,7 @@ export default function HistoryPage() {
                     unit="kcal"
                   />
                   <Stat
-                    label="On target"
+                    label={t('history.onTarget')}
                     value={`${
                       logged.filter((d) => d.target_kcal > 0 && d.kcal <= d.target_kcal).length
                     }`}
@@ -228,6 +231,7 @@ function DayCell({
   onSelect: () => void;
   placeAbove: boolean;
 }) {
+  const locale = useLocale();
   const logged = day?.logged ?? false;
   const ratio = logged && day!.target_kcal > 0 ? day!.kcal / day!.target_kcal : null;
   const tone = toneFor(logged ? ratio : undefined);
@@ -239,10 +243,10 @@ function DayCell({
         onClick={onSelect}
         aria-label={
           logged
-            ? `${formatFullDate(date)}, ${day!.kcal} kcal${
+            ? `${formatFullDate(date, locale)}, ${day!.kcal} kcal${
                 day!.target_kcal > 0 ? ` of ${day!.target_kcal}` : ''
               }`
-            : `${formatFullDate(date)}, nothing logged`
+            : `${formatFullDate(date, locale)}, nothing logged`
         }
         aria-pressed={selected}
         className={cn(
@@ -285,6 +289,7 @@ function DayHoverCard({
   day: CalendarDay;
   placeAbove: boolean;
 }) {
+  const locale = useLocale();
   const over = day.target_kcal > 0 && day.kcal > day.target_kcal;
   const units = useUnits();
 
@@ -301,7 +306,7 @@ function DayHoverCard({
         'group-focus-within:scale-100 group-focus-within:opacity-100',
       )}
     >
-      <p className="text-footnote text-muted-foreground font-bold">{formatFullDate(date)}</p>
+      <p className="text-footnote text-muted-foreground font-bold">{formatFullDate(date, locale)}</p>
 
       <p className="mt-0.5 flex items-baseline gap-1">
         <span className={cn('text-figure text-[17px]', over && 'text-foreground')}>
@@ -355,12 +360,13 @@ function toneFor(ratio: number | null | undefined): { background: string; text: 
 }
 
 function Legend() {
+  const t = useT();
   const swatches: Array<{ label: string; ratio: number | null }> = [
-    { label: 'Under', ratio: 0.5 },
-    { label: 'On target', ratio: 0.95 },
-    { label: 'Over', ratio: 1.2 },
+    { label: t('history.under'), ratio: 0.5 },
+    { label: t('history.onTarget'), ratio: 0.95 },
+    { label: t('history.over'), ratio: 1.2 },
     // Logged before any target existed — see toneFor.
-    { label: 'No target', ratio: null },
+    { label: t('history.noTarget'), ratio: null },
   ];
   return (
     <div className="text-footnote text-muted-foreground mt-3.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 px-1 font-semibold">
@@ -426,21 +432,7 @@ function monthGrid(firstOfMonth: string): Array<string | null> {
   ];
 }
 
-function monthLabel(firstOfMonth: string): string {
-  const [y, m] = firstOfMonth.split('-').map(Number);
-  return new Date(Date.UTC(y!, m! - 1, 1)).toLocaleDateString('en-GB', {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
-}
+const monthLabel = (firstOfMonth: string, locale: Locale) =>
+  formatMonth(firstOfMonth, locale, true);
 
-function formatFullDate(isoDate: string): string {
-  const [y, m, d] = isoDate.split('-').map(Number);
-  return new Date(Date.UTC(y!, m! - 1, d!)).toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    timeZone: 'UTC',
-  });
-}
+const formatFullDate = (isoDate: string, locale: Locale) => formatDay(isoDate, locale);

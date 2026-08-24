@@ -7,6 +7,7 @@ import {
   PasswordResetRequest,
   SESSION_TRANSPORT_HEADER,
   SignupRequest,
+  localeFromAcceptLanguage,
 } from '@ct/shared';
 import { env } from '../env.ts';
 import {
@@ -239,11 +240,28 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       return reply.status(409).send({ error: 'That email is already registered.' });
     }
 
+    /*
+     * Two sources for the language, in order of how much they are worth.
+     *
+     * What the client sent is a real answer: the native app read the device's
+     * language, the browser read `navigator.language`. `Accept-Language` is the
+     * fallback for anything that sent neither, and null when this app speaks
+     * none of the languages the header names — which leaves the column null and
+     * the journal free to learn it from how they write.
+     *
+     * This matters here and nowhere else in the auth flow because the very
+     * first thing the account receives is a confirmation email, sent before
+     * there is a profile for anyone to read a preference off.
+     */
+    const locale =
+      parsed.data.locale ?? localeFromAcceptLanguage(request.headers['accept-language'] ?? null);
+
     const userId = await createAccount(
       parsed.data.email,
       parsed.data.password,
       parsed.data.display_name ?? null,
       parsed.data.timezone ?? '',
+      locale,
     );
     const { token, expiresAt } = await createSession(userId);
     setSessionCookie(reply, token, expiresAt);

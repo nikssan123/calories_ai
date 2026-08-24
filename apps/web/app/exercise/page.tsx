@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { ExerciseEntry, ExerciseSummary } from '@ct/shared';
-import { distanceUnit, formatDistance, toDistance } from '@ct/shared';
+import type { ExerciseEntry, ExerciseSummary, Locale } from '@ct/shared';
+import { distanceUnit, formatDay, formatDistance, toDistance } from '@ct/shared';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { exerciseEmoji } from '@ct/shared/food-emoji';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Workouts } from '@/components/exercise/Workouts';
+import { useLocale } from '@/lib/i18n';
 
 /**
  * Exercise, split out of Progress so it gets a screen rather than a single row.
@@ -27,6 +28,7 @@ import { Workouts } from '@/components/exercise/Workouts';
 const WINDOWS = [14, 30, 90] as const;
 
 export default function ExercisePage() {
+  const locale = useLocale();
   const [summary, setSummary] = useState<ExerciseSummary | null>(null);
   const [days, setDays] = useState<number>(30);
   const units = useUnits();
@@ -187,7 +189,7 @@ export default function ExercisePage() {
                     <p className="truncate text-body font-semibold">{entry.description}</p>
                     <p className="text-footnote text-muted-foreground font-medium">
                       {[
-                        formatDate(entry.local_date),
+                        formatDate(entry.local_date, locale),
                         entry.distance_km !== null ? formatDistance(entry.distance_km, units) : null,
                         entry.duration_min !== null
                           ? `${Math.round(entry.duration_min)} min`
@@ -236,6 +238,7 @@ function DayReadout({
   kcal: number;
   sessions: ExerciseEntry[];
 }) {
+  const locale = useLocale();
   const units = useUnits();
   const distance = sessions.reduce((sum, s) => sum + (s.distance_km ?? 0), 0);
   const minutes = sessions.reduce((sum, s) => sum + (s.duration_min ?? 0), 0);
@@ -251,7 +254,7 @@ function DayReadout({
       {/* Date and figure share a line. The card is parked on top of the chart
           it is explaining, so every line it costs is a bar you cannot see. */}
       <div className="flex items-baseline gap-3">
-        <p className="text-footnote text-muted-foreground font-bold">{formatDate(date)}</p>
+        <p className="text-footnote text-muted-foreground font-bold">{formatDate(date, locale)}</p>
         {sessions.length === 0 ? (
           <p className="text-footnote ml-auto font-semibold">Rest day</p>
         ) : (
@@ -309,12 +312,5 @@ function formatDuration(minutes: number): string {
   return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
 }
 
-function formatDate(isoDate: string): string {
-  const [y, m, d] = isoDate.split('-').map(Number);
-  return new Date(Date.UTC(y!, m! - 1, d!)).toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  });
-}
+const formatDate = (isoDate: string, locale: Locale) =>
+  formatDay(isoDate, locale, { weekday: 'short', day: 'numeric', month: 'short' });

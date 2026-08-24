@@ -14,6 +14,8 @@ import {
   meterLocked,
   meterRemaining,
   toBodyWeight,
+  formatDay,
+  localeOf,
   unitsOf,
 } from '@ct/shared';
 import { PressableChunk } from '@/components/Chunk';
@@ -30,7 +32,9 @@ import { useEntitlements } from '@/lib/entitlements';
 import { billingAvailable, restore } from '@/lib/billing';
 import { meterNoun, TIER_NAMES, TIER_PITCHES } from '@/lib/plan-copy';
 import { PRIVACY_URL, SUPPORT_EMAIL, TERMS_URL } from '@/lib/links';
-import { duration, font, type as t, useColors, withAlpha } from '@/theme';
+import { duration, font, type as t, useColors, useType, withAlpha } from '@/theme';
+import { LanguagePicker } from '@/components/LanguagePicker';
+import { setPreferredLocale, useLocale, useT, type StringKey } from '@/lib/i18n';
 import { registerForPush } from '@/lib/push';
 import { applyReminders, loadReminders, type ReminderSettings } from '@/lib/reminders';
 
@@ -45,17 +49,24 @@ const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
 };
 
 /** Short forms for the collapsed row; the sheet shows the full description. */
-const ACTIVITY_SHORT: Record<ActivityLevel, string> = {
-  sedentary: 'Sedentary',
-  light: 'Light',
-  moderate: 'Moderate',
-  active: 'Active',
-  very_active: 'Very active',
+const ACTIVITY_SHORT: Record<ActivityLevel, StringKey> = {
+  sedentary: 'activity.sedentary',
+  light: 'activity.light',
+  moderate: 'activity.moderate',
+  active: 'activity.active',
+  very_active: 'activity.veryActive',
 };
 
-const SEX_LABELS: Record<Sex, string> = { male: 'Male', female: 'Female' };
-const GOAL_LABELS: Record<Goal, string> = { lose: 'Lose', maintain: 'Maintain', gain: 'Gain' };
-const UNIT_LABELS: Record<UnitSystem, string> = { metric: 'Metric', imperial: 'Imperial' };
+const SEX_LABELS: Record<Sex, StringKey> = { male: 'sex.male', female: 'sex.female' };
+const GOAL_LABELS: Record<Goal, StringKey> = {
+  lose: 'goal.lose',
+  maintain: 'goal.maintain',
+  gain: 'goal.gain',
+};
+const UNIT_LABELS: Record<UnitSystem, StringKey> = {
+  metric: 'units.metric',
+  imperial: 'units.imperial',
+};
 /** What each one actually means, since "imperial" is a word and not a number. */
 const UNIT_EXAMPLES: Record<UnitSystem, string> = {
   metric: 'kg · cm · km · g',
@@ -106,6 +117,9 @@ export default function SetupScreen() {
   }, [saved]);
 
   const units = unitsOf(profile);
+  const locale = localeOf(profile);
+  const t = useType();
+  const tr = useT();
 
   function patch<K extends keyof Profile>(key: K, value: Profile[K]) {
     setProfile((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -130,6 +144,7 @@ export default function SetupScreen() {
         // Never null on the way out. Saving this screen is somebody looking at
         // the control and leaving it where it is, which is an answer.
         units: unitsOf(profile),
+        locale: localeOf(profile),
         day_start_hour: profile.day_start_hour,
       });
       setProfile(updated);
@@ -194,7 +209,7 @@ export default function SetupScreen() {
               value={profile.sex}
               options={Object.keys(SEX_LABELS) as Sex[]}
               onChange={(v) => patch('sex', v)}
-              render={(v) => SEX_LABELS[v]}
+              render={(v) => tr(SEX_LABELS[v])}
             />
           </InsetRow>
 
@@ -203,11 +218,35 @@ export default function SetupScreen() {
             <BirthDate value={profile.birth_date} onChange={(v) => patch('birth_date', v)} />
           </InsetRow>
 
+          {/* Above Units, and above the fields both of them rewrite. Language
+              moves more of the screen than units does, so it goes first. */}
+          <InsetRow>
+            <Text style={[t.body, styles.label, { color: colors.foreground }]}>
+              {tr('setup.language')}
+            </Text>
+            <LanguagePicker
+              value={locale}
+              onChange={(next) => {
+                /*
+                 * Two writes, deliberately. The profile is the durable answer
+                 * and the one the server writes emails from; the stored
+                 * preference is what the sign-in screen reads next time this
+                 * device is signed out, which would otherwise still be showing
+                 * whatever the device language was months ago.
+                 */
+                patch('locale', next);
+                setPreferredLocale(next);
+              }}
+            />
+          </InsetRow>
+
           {/* Above the two fields it governs, so switching it visibly rewrites
               them rather than changing something further down that the eye has
               already left. */}
           <InsetRow>
-            <Text style={[t.body, styles.label, { color: colors.foreground }]}>Units</Text>
+            <Text style={[t.body, styles.label, { color: colors.foreground }]}>
+              {tr('setup.units')}
+            </Text>
             <View style={[styles.segment, { backgroundColor: colors.muted }]}>
               {(Object.keys(UNIT_LABELS) as UnitSystem[]).map((system) => {
                 const active = units === system;
@@ -216,7 +255,7 @@ export default function SetupScreen() {
                     key={system}
                     onPress={() => patch('units', system)}
                     accessibilityRole="button"
-                    accessibilityLabel={`${UNIT_LABELS[system]} — ${UNIT_EXAMPLES[system]}`}
+                    accessibilityLabel={`${tr(UNIT_LABELS[system])} — ${UNIT_EXAMPLES[system]}`}
                     accessibilityState={{ selected: active }}
                     style={[
                       styles.segmentItem,
@@ -229,7 +268,7 @@ export default function SetupScreen() {
                         { color: active ? colors.primaryForeground : colors.mutedForeground },
                       ]}
                     >
-                      {UNIT_LABELS[system]}
+                      {tr(UNIT_LABELS[system])}
                     </Text>
                   </Pressable>
                 );
@@ -297,7 +336,7 @@ export default function SetupScreen() {
                       { color: active ? colors.primaryForeground : colors.mutedForeground },
                     ]}
                   >
-                    {GOAL_LABELS[goal]}
+                    {tr(GOAL_LABELS[goal])}
                   </Text>
                 </PressableChunk>
               );
@@ -311,7 +350,7 @@ export default function SetupScreen() {
               value={profile.activity_level}
               options={Object.keys(ACTIVITY_LABELS) as ActivityLevel[]}
               onChange={(v) => patch('activity_level', v)}
-              render={(v, place) => (place === 'trigger' ? ACTIVITY_SHORT[v] : ACTIVITY_LABELS[v])}
+              render={(v, place) => (place === 'trigger' ? tr(ACTIVITY_SHORT[v]) : ACTIVITY_LABELS[v])}
             />
           </InsetRow>
         </InsetGroup>
@@ -548,16 +587,12 @@ function BirthDate({
   onChange: (value: string | null) => void;
 }) {
   const colors = useColors();
+  const locale = useLocale();
   const [open, setOpen] = useState(false);
 
   const parsed = value ? new Date(`${value}T12:00:00Z`) : null;
-  const shown = parsed
-    ? parsed.toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        timeZone: 'UTC',
-      })
+  const shown = value
+    ? formatDay(value, locale, { day: 'numeric', month: 'short', year: 'numeric' })
     : '—';
 
   const picker = (

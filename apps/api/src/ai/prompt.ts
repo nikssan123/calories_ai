@@ -8,7 +8,13 @@ import type {
   WeeklyReview,
   WeightEntry,
 } from '@ct/shared';
-import { formatBodyWeight, formatHeight, unitsOf } from '@ct/shared';
+import {
+  LOCALE_ENGLISH_NAMES,
+  formatBodyWeight,
+  formatHeight,
+  localeOf,
+  unitsOf,
+} from '@ct/shared';
 import type { AgentNote } from '../services/notes.ts';
 import { MIN_TARGET_KCAL } from '../services/targets.ts';
 import type { Wellbeing } from '../services/wellbeing.ts';
@@ -405,6 +411,42 @@ export function unitsBrief(profile: { units?: UnitSystem | null }): string | nul
   ].join(' ');
 }
 
+/**
+ * What language to write in, said only when it is not the one the model
+ * defaults to.
+ *
+ * The journal mostly gets this right without being told: the stable prompt
+ * already says to reply in the language it was written to in, and there is a
+ * user sentence in front of every turn for that rule to catch. This exists for
+ * the turns where there is not one — Monday's review, generated from a stats
+ * blob; a nudge, generated from a pattern; a recipe, generated from a pantry;
+ * a photo sent with no caption. Those are the four that have been quietly
+ * English for every non-English user since they were written.
+ *
+ * English gets nothing, for the same reason metric gets nothing from
+ * `unitsBrief`: it is what the model does unprompted, and a line confirming it
+ * is tokens spent on every turn to buy a behaviour that was already there.
+ *
+ * The tool-argument sentence is not boilerplate carried over from `unitsBrief`.
+ * It is the same class of bug and it is worse here: a model writing Bulgarian
+ * prose will reach for a Bulgarian enum value unless told the arguments are an
+ * API, and `log_food` does not take "закуска" where it expects "breakfast".
+ */
+export function languageBrief(profile: { locale?: string | null }): string | null {
+  const locale = localeOf(profile);
+  if (locale === 'en') return null;
+  const name = LOCALE_ENGLISH_NAMES[locale];
+  return [
+    `Language: write to this person in ${name}. Not a translation of an English draft \u2014 write`,
+    `it in ${name}, the way somebody who thinks in it would.`,
+    'Food names stay in whatever language they were given to you in: if they logged "chicken breast"',
+    'that is what the entry is called, because it is what they will recognise in a list later.',
+    'Numbers and units are unchanged \u2014 "~650 kcal" is the same everywhere, and so are g, mg and',
+    'kg. **Tool arguments never change.** Every field name and every enum value is English whatever',
+    'the conversation is in.',
+  ].join(' ');
+}
+
 export function dayContextPrompt(
   profile: Profile,
   day: DaySummary,
@@ -453,6 +495,15 @@ export function dayContextPrompt(
 
   const brief = unitsBrief(profile);
   if (brief) lines.push(brief);
+
+  /*
+   * Belt and braces. The journal already gets this right from the sentence in
+   * front of it, and this makes it right on the turn that has no sentence: a
+   * bare photo with a caption of nothing, which today gives the language rule
+   * in the stable prompt nothing at all to work from.
+   */
+  const language = languageBrief(profile);
+  if (language) lines.push(language);
 
   /*
    * What they will not eat, carried on every turn.
@@ -743,7 +794,12 @@ export function reviewTaskPrompt(stats: ReviewStats, profile: Profile): string {
   // The stats arrive in kilograms whoever is reading, so a review written
   // without this says "down 0.4 kg" to somebody who owns a pound scale.
   const units = unitsBrief(profile);
-  return `Write the weekly review for ${stats.week_start} to ${stats.week_end}.${name}${units ? `\n\n${units}` : ''}
+  // The one that matters most. A review is generated from `ReviewStats` with no
+  // user prose anywhere near it, so nothing else in this call says what
+  // language the person who receives it reads.
+  const language = languageBrief(profile);
+  const briefs = [language, units].filter((part): part is string => part !== null);
+  return `Write the weekly review for ${stats.week_start} to ${stats.week_end}.${name}${briefs.length > 0 ? `\n\n${briefs.join('\n\n')}` : ''}
 
 Here are the week's numbers. They are already computed — use them as given.
 
@@ -813,12 +869,16 @@ export function nudgeTaskPrompt(stats: NudgeStats, profile: Profile): string {
   const name = profile.display_name ? `${profile.display_name}'s` : 'Their';
 
   const units = unitsBrief(profile);
+  // Same problem as the review: a nudge is generated from a pattern, not from
+  // anything they wrote, so without this it arrives in English however they log.
+  const language = languageBrief(profile);
   const lines: string[] = [
     `Write the nudge. ${name} log, over the last week:`,
     `- Days logged: ${stats.days_logged} of 7`,
   ];
   // Macros and calories are unit-neutral, but a stalled-scale nudge quotes a
   // weight, and a nudge is one short message that gets exactly one reading.
+  if (language) lines.push('', language);
   if (units) lines.push('', units);
   if (stats.mean_kcal !== null) {
     lines.push(`- Average intake: ${stats.mean_kcal} kcal against a ${stats.target_kcal} target`);
@@ -962,6 +1022,13 @@ export interface RecipeTaskInput {
    * it, so it has to arrive with the task.
    */
   units?: string | null;
+  /**
+   * `languageBrief` for this account, or null. Same problem as `units` and the
+   * same fix: this agent runs off a pantry and a budget with no user sentence
+   * anywhere in front of it, so nothing else in the request says what language
+   * the person who ordered the recipe reads.
+   */
+  language?: string | null;
 }
 
 /** One night of a planned week: the date, its name, and what it has to fit. */
@@ -1104,7 +1171,12 @@ export function recipeTaskPrompt(input: RecipeTaskInput): string {
    */
   const unitsLine = input.units ? `## How to write the numbers\n\n${input.units}\n\n` : '';
 
-  const context = `${unitsLine}## What is left of today
+  /* Above the numbers, because it governs the whole card and not just them. */
+  const languageLine = input.language
+    ? `## What language to write it in\n\n${input.language}\n\n`
+    : '';
+
+  const context = `${languageLine}${unitsLine}## What is left of today
 
 ${budget.kcal_remaining} kcal and ${budget.protein_remaining}g protein.
 

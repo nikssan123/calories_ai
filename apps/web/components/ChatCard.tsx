@@ -3,17 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';
-import type { ChatAction, ChatCard as Card, ExerciseEntry, FoodEntry, UnitSystem } from '@ct/shared';
-import {
-  bodyWeightToKg,
-  bodyWeightUnit,
-  formatBodyWeight,
-  formatDistance,
-  formatWeightDelta,
-  loadUnit,
-  toBodyWeight,
-  toLoad,
-} from '@ct/shared';
+import type { ChatAction, ChatCard as Card, ExerciseEntry, FoodEntry, Locale, UnitSystem } from '@ct/shared';
+import { bodyWeightToKg, bodyWeightUnit, formatBodyWeight, formatDay, formatDistance, formatWeightDelta, loadUnit, toBodyWeight, toLoad } from '@ct/shared';
 import { useUnits } from '@/lib/units';
 import { RecipeCard } from '@/components/kitchen/RecipeCard';
 import { api } from '@/lib/api';
@@ -24,6 +15,7 @@ import { WorkoutCard } from '@/components/workout/WorkoutCard';
 import { Sparkline } from '@/components/Sparkline';
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 import { cn } from '@/lib/utils';
+import { useLocale } from '@/lib/i18n';
 
 /**
  * The visual half of a turn — and the thing this app should be recognised by.
@@ -500,6 +492,7 @@ function DayProgress({
   kcal: number;
   today?: string;
 }) {
+  const locale = useLocale();
   const target = Math.max(1, Math.round(day.target_kcal));
   const before = Math.max(0, Math.round(day.kcal_before));
   // Defensive: a card written before a deletion elsewhere could otherwise ask
@@ -527,7 +520,7 @@ function DayProgress({
         role="img"
         aria-label={[
           `${after.toLocaleString()} of ${target.toLocaleString()} kcal`,
-          dayWord(day.local_date, today),
+          dayWord(day.local_date, locale, today),
           `— this meal ${kcal.toLocaleString()}.`,
           over
             ? `${Math.abs(remaining).toLocaleString()} over.`
@@ -591,7 +584,7 @@ function DayProgress({
             ? `${Math.abs(remaining).toLocaleString()} over`
             : `${remaining.toLocaleString()} left`}
         </span>
-        {dayWord(day.local_date, today) && ` ${dayWord(day.local_date, today)}`}
+        {dayWord(day.local_date, locale, today) && ` ${dayWord(day.local_date, locale, today)}`}
       </div>
     </div>
   );
@@ -627,9 +620,9 @@ function bandFill(mine: boolean, over: boolean): string {
  * today's day. Silent, too, when nobody has told us which day is current; a
  * guess is the one answer that could be wrong without looking wrong.
  */
-function dayWord(isoDate: string, today?: string): string {
+function dayWord(isoDate: string, locale: Locale, today?: string): string {
   if (today === undefined || isoDate === today) return '';
-  return `on ${formatDate(isoDate)}`;
+  return `on ${formatDate(isoDate, locale)}`;
 }
 
 /**
@@ -971,6 +964,7 @@ function TrendCard({ card }: { card: Extract<Card, { type: 'trend' }> }) {
 }
 
 function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
+  const locale = useLocale();
   const remaining = card.targets.kcal - card.consumed.kcal;
   const over = remaining < 0;
   const pct = Math.min(100, (card.consumed.kcal / Math.max(1, card.targets.kcal)) * 100);
@@ -1029,7 +1023,7 @@ function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
         <p className="tnum text-footnote text-muted-foreground mt-2">
           <span className="font-bold text-[var(--exercise-text)]">−{card.burned_kcal} burned</span>
           {' · '}
-          {formatDate(card.local_date)}
+          {formatDate(card.local_date, locale)}
         </p>
       )}
       {card.caption && (
@@ -1062,6 +1056,7 @@ function ReviewCard({
   /** The message's own text. Absent only if a client forgets to pass it. */
   prose?: string;
 }) {
+  const locale = useLocale();
   const units = useUnits();
   const [open, setOpen] = useState(false);
 
@@ -1090,7 +1085,7 @@ function ReviewCard({
       <div className="flex items-baseline justify-between gap-3">
         <p className="text-body font-bold">Last week</p>
         <span className="text-footnote text-muted-foreground shrink-0 font-semibold">
-          {formatDate(card.week_start)} – {formatDate(card.week_end)}
+          {formatDate(card.week_start, locale)} – {formatDate(card.week_end, locale)}
         </span>
       </div>
 
@@ -1208,11 +1203,5 @@ function addDays(date: string, days: number): string {
   return at.toISOString().slice(0, 10);
 }
 
-function formatDate(isoDate: string): string {
-  const [y, m, d] = isoDate.split('-').map(Number);
-  return new Date(Date.UTC(y!, m! - 1, d!)).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  });
-}
+const formatDate = (isoDate: string, locale: Locale) =>
+  formatDay(isoDate, locale, { day: 'numeric', month: 'short' });

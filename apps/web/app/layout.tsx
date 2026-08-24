@@ -5,6 +5,7 @@ import { AppFrame } from '@/components/AppFrame';
 import { AuthGate } from '@/components/AuthGate';
 import { Toaster } from '@/components/ui/sonner';
 import { THEME_INIT_SCRIPT, ThemeSync } from '@/components/ThemeSync';
+import { LOCALE_INIT_SCRIPT, LocaleSync } from '@/lib/i18n';
 import { KeyboardInset } from '@/components/KeyboardInset';
 
 /*
@@ -17,13 +18,30 @@ import { KeyboardInset } from '@/components/KeyboardInset';
  * bowls do the work a thick outline does elsewhere in the system.
  */
 const nunito = Nunito({
-  subsets: ['latin'],
+  /*
+   * Cyrillic rides along because Nunito is also the Cyrillic *display* face —
+   * see `--font-display-cyrillic` in globals.css. Google serves each subset as
+   * its own file behind a `unicode-range`, so a reader who never types a
+   * Cyrillic character never downloads it: the cost of this line to an English
+   * session is zero bytes.
+   */
+  subsets: ['latin', 'cyrillic'],
   variable: '--font-nunito',
   display: 'swap',
   // The body runs at 500 and figures at 800, so the whole range has to ship.
-  weight: ['400', '500', '600', '700', '800'],
+  // 900 is the extra one: it is what stands in for Baloo where Baloo cannot go.
+  weight: ['400', '500', '600', '700', '800', '900'],
 });
 
+/*
+ * Latin only, and not by omission.
+ *
+ * Baloo 2 has no Cyrillic glyphs at all — not a subset Google declines to
+ * serve, but 0 codepoints in U+0400–04FF in the font itself. Asking for a
+ * subset it does not have would fail the build; asking for it at render time
+ * is what produces the mixed-face heading this whole arrangement exists to
+ * avoid. See LANGUAGES.md, "The font problem".
+ */
 const baloo = Baloo_2({
   subsets: ['latin'],
   variable: '--font-baloo',
@@ -83,14 +101,30 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     // Browser extensions commonly inject attributes onto <body>, which would
     // otherwise surface as a hydration mismatch in development.
+    /*
+      * `lang` is corrected before paint by LOCALE_INIT_SCRIPT and again by
+      * <LocaleSync> once the session resolves. It stays "en" in the markup so
+      * the server-rendered HTML is stable — the attribute is what swaps the
+      * display face, and a value that depended on the request would have to
+      * vary the cached page to say so.
+      */
     <html lang="en" className={`${nunito.variable} ${baloo.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: LOCALE_INIT_SCRIPT }} />
       </head>
       <body suppressHydrationWarning>
         <ThemeSync />
         <KeyboardInset />
         <AuthGate>
+          {/*
+            * Inside the gate, not beside it. `useAuth` reads a context with a
+            * default value rather than throwing, so a <LocaleSync> mounted as a
+            * sibling would compile, run, and quietly see `profile: null`
+            * forever — the account's language would never reach the document
+            * and the display face would never swap for anyone signed in.
+            */}
+          <LocaleSync />
           <AppFrame>{children}</AppFrame>
         </AuthGate>
         <Toaster position="top-center" />

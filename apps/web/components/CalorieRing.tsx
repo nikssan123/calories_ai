@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { useT } from '@/lib/i18n';
 
 /**
  * The day, as one fat shape.
@@ -86,6 +87,7 @@ export function CalorieRing({
   strokeWidth?: number;
   className?: string;
 }) {
+  const t = useT();
   const gradient = `ring-${useId().replace(/:/g, '')}`;
   // The ledge, scaled with the stroke so a small ring in the day rail does not
   // wear a shadow half as thick as its own track.
@@ -177,13 +179,13 @@ export function CalorieRing({
           {Math.round(shown).toLocaleString()}
         </span>
         <span className="text-footnote text-muted-foreground mt-1 font-bold">
-          {over ? 'over' : 'to go'}
+          {over ? t('today.over') : t('today.toGo')}
         </span>
         {/* Tabular but not at figure weight: the burn is context for the number
             above it, and set heavy it read as the louder of the two. */}
         {burned > 0 && (
           <span className="tnum text-footnote mt-1 font-semibold text-[var(--exercise-text)]">
-            +{Math.round(burned)} burned
+            {t('today.burned')(String(Math.round(burned)))}
           </span>
         )}
       </div>

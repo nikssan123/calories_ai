@@ -9,6 +9,7 @@ import { useAuth } from '@/components/AuthGate';
 import { AUTH_BUTTON, AUTH_FIELD, AuthScreen } from '@/components/AuthScreen';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useT } from '@/lib/i18n';
 
 /**
  * The gate a new account passes through.
@@ -37,6 +38,7 @@ export default function VerifyPage() {
 
 /** Arrived from the link. Nothing to ask; just do it. */
 function SpendLink({ token }: { token: string }) {
+  const t = useT();
   const [state, setState] = useState<'working' | 'done' | 'failed'>('working');
   const [message, setMessage] = useState('');
   const { authenticated, refresh } = useAuth();
@@ -68,20 +70,20 @@ function SpendLink({ token }: { token: string }) {
   if (state === 'failed') {
     return (
       <AuthScreen
-        title="That link didn't work"
+        title={t('verify.linkFailed')}
         subtitle={`${message} You can enter the code from the email instead.`}
       >
         <Button render={<Link href="/verify" />} className={AUTH_BUTTON}>
-          Enter the code
+          {t('verify.enterCode')}
         </Button>
       </AuthScreen>
     );
   }
 
   return (
-    <AuthScreen title="Email confirmed" subtitle={message}>
+    <AuthScreen title={t('verify.confirmed')} subtitle={message}>
       <Button render={<Link href={authenticated ? '/' : '/login'} />} className={AUTH_BUTTON}>
-        {authenticated ? 'Start your journal' : 'Sign in'}
+        {authenticated ? t('verify.startJournal') : t('auth.signIn')}
       </Button>
     </AuthScreen>
   );
@@ -89,6 +91,7 @@ function SpendLink({ token }: { token: string }) {
 
 /** The gate proper: signed in, address unproved, six digits to go. */
 function EnterCode() {
+  const t = useT();
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [resending, setResending] = useState(false);
@@ -100,8 +103,8 @@ function EnterCode() {
   if (!authenticated) {
     return (
       <AuthScreen
-        title="Check your inbox"
-        subtitle="Sign in first, then enter the code we emailed you."
+        title={t('verify.checkInbox')}
+        subtitle={t('verify.signInFirst')}
       >
         <Button render={<Link href="/login" />} className={AUTH_BUTTON}>
           Sign in
@@ -112,7 +115,7 @@ function EnterCode() {
 
   if (profile?.email_verified) {
     return (
-      <AuthScreen title="Already confirmed" subtitle="This address is set up and ready.">
+      <AuthScreen title={t('verify.alreadyConfirmed')} subtitle={t('verify.readyMessage')}>
         <Button render={<Link href="/" />} className={AUTH_BUTTON}>
           Start your journal
         </Button>
@@ -151,7 +154,7 @@ function EnterCode() {
 
   return (
     <AuthScreen
-      title="Confirm your email"
+      title={t('verify.title')}
       subtitle={
         <>
           We sent a six-digit code to{' '}
@@ -163,7 +166,7 @@ function EnterCode() {
         <>
           Wrong address?{' '}
           <button type="button" onClick={() => void signOut()} className="text-foreground font-medium">
-            Sign out and start again
+            {t('verify.signOutAndRestart')}
           </button>
         </>
       }
@@ -178,11 +181,11 @@ function EnterCode() {
           autoComplete="one-time-code"
           inputMode="numeric"
           placeholder="123456"
-          aria-label="Six-digit code"
+          aria-label={t('verify.sixDigitCode')}
           className={`${AUTH_FIELD} text-center font-mono text-2xl tracking-[0.4em]`}
         />
         <Button type="submit" disabled={busy || code.length !== 6} className={AUTH_BUTTON}>
-          {busy ? 'Confirming…' : 'Confirm'}
+          {busy ? t('verify.confirming') : t('verify.confirm')}
         </Button>
       </form>
 
@@ -192,7 +195,7 @@ function EnterCode() {
         disabled={resending}
         className="text-muted-foreground mt-4 w-full text-center text-sm"
       >
-        {resending ? 'Sending…' : 'Send a new code'}
+        {resending ? t('verify.sending') : t('verify.sendNewCode')}
       </button>
     </AuthScreen>
   );

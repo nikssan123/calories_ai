@@ -3,8 +3,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Polyline } from 'react-native-svg';
-import type { Calendar, CalendarDay } from '@ct/shared';
-import { formatBodyWeight } from '@ct/shared';
+import type { Calendar, CalendarDay, Locale } from '@ct/shared';
+import { formatBodyWeight, formatDay, formatMonth } from '@ct/shared';
 import { Chunk } from '@/components/Chunk';
 import { InsetGroup } from '@/components/InsetGroup';
 import { Skeleton } from '@/components/Skeleton';
@@ -12,6 +12,7 @@ import { Stat, Stats } from '@/components/Stat';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors, useTheme, type Scheme } from '@/theme';
+import { useLocale, useT } from '@/lib/i18n';
 
 /**
  * A month at a time, as a grid.
@@ -32,6 +33,8 @@ import { font, type as t, useColors, useTheme, type Scheme } from '@/theme';
 const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 export default function HistoryScreen() {
+  const locale = useLocale();
+  const tr = useT();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -87,7 +90,7 @@ export default function HistoryScreen() {
     >
       <View style={styles.topBar}>
         <Chevron direction="back" label="Back" onPress={() => router.back()} />
-        <Text style={[t.largeTitle, styles.heading, { color: colors.foreground }]}>History</Text>
+        <Text style={[t.largeTitle, styles.heading, { color: colors.foreground }]}>{tr('history.title')}</Text>
       </View>
 
       <View style={styles.monthBar}>
@@ -97,7 +100,7 @@ export default function HistoryScreen() {
           onPress={() => setMonth((m) => (m ? shiftMonth(m, -1) : m))}
         />
         <Text style={[t.body, styles.monthLabel, { color: colors.foreground }]}>
-          {month ? monthLabel(month) : ''}
+          {month ? monthLabel(month, locale) : ''}
         </Text>
         <Chevron
           direction="forward"
@@ -148,7 +151,7 @@ export default function HistoryScreen() {
             <Legend />
           </Chunk>
 
-          <InsetGroup title={selected ? formatFullDate(selected) : 'Day'}>
+          <InsetGroup title={selected ? formatFullDate(selected, locale) : 'Day'}>
             {selectedDay && selectedDay.logged ? (
               <View style={styles.detail}>
                 <View style={styles.detailHead}>
@@ -194,11 +197,11 @@ export default function HistoryScreen() {
             )}
           </InsetGroup>
 
-          <InsetGroup title="📆  This month">
+          <InsetGroup title={`📆  ${tr('history.thisMonth')}`}>
             <Stats>
-              <Stat label="Logged" value={`${logged.length}`} unit="days" first />
+              <Stat label={tr('history.logged')} value={`${logged.length}`} unit="days" first />
               <Stat
-                label="Avg intake"
+                label={tr('history.avgIntake')}
                 value={
                   logged.length === 0
                     ? '—'
@@ -209,7 +212,7 @@ export default function HistoryScreen() {
                 unit="kcal"
               />
               <Stat
-                label="On target"
+                label={tr('history.onTarget')}
                 value={`${
                   logged.filter((d) => d.target_kcal > 0 && d.kcal <= d.target_kcal).length
                 }`}
@@ -252,16 +255,17 @@ function DayCell({
   onSelect: () => void;
 }) {
   const colors = useColors();
+  const locale = useLocale();
   const { scheme } = useTheme();
   const logged = day?.logged ?? false;
   const ratio = logged && day!.target_kcal > 0 ? day!.kcal / day!.target_kcal : null;
   const tone = toneFor(scheme, logged ? ratio : undefined);
 
   const label = logged
-    ? `${formatFullDate(date)}, ${day!.kcal} kcal${
+    ? `${formatFullDate(date, locale)}, ${day!.kcal} kcal${
         day!.target_kcal > 0 ? ` of ${day!.target_kcal}` : ''
       }`
-    : `${formatFullDate(date)}, nothing logged`;
+    : `${formatFullDate(date, locale)}, nothing logged`;
 
   return (
     <View style={styles.cell}>
@@ -352,13 +356,14 @@ function toneFor(scheme: Scheme, ratio: number | null | undefined): Tone {
 
 function Legend() {
   const colors = useColors();
+  const tr = useT();
   const { scheme } = useTheme();
   const swatches: Array<{ label: string; ratio: number | null }> = [
-    { label: 'Under', ratio: 0.5 },
-    { label: 'On target', ratio: 0.95 },
-    { label: 'Over', ratio: 1.2 },
+    { label: tr('history.under'), ratio: 0.5 },
+    { label: tr('history.onTarget'), ratio: 0.95 },
+    { label: tr('history.over'), ratio: 1.2 },
     // Logged before any target existed — see toneFor.
-    { label: 'No target', ratio: null },
+    { label: tr('history.noTarget'), ratio: null },
   ];
 
   return (
@@ -441,24 +446,10 @@ function monthGrid(firstOfMonth: string): Array<string | null> {
   ];
 }
 
-function monthLabel(firstOfMonth: string): string {
-  const [y, m] = firstOfMonth.split('-').map(Number);
-  return new Date(Date.UTC(y!, m! - 1, 1)).toLocaleDateString('en-GB', {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
-}
+const monthLabel = (firstOfMonth: string, locale: Locale) =>
+  formatMonth(firstOfMonth, locale, true);
 
-function formatFullDate(isoDate: string): string {
-  const [y, m, d] = isoDate.split('-').map(Number);
-  return new Date(Date.UTC(y!, m! - 1, d!)).toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    timeZone: 'UTC',
-  });
-}
+const formatFullDate = (isoDate: string, locale: Locale) => formatDay(isoDate, locale);
 
 const CELL_RADIUS = 16;
 /** `gap-1.5` between cells, as a share of the row each cell has to give up. */

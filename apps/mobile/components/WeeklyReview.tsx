@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
+import { formatDay } from '@ct/shared';
 import { useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import type { AdaptiveProposal, WeeklyReview as Review } from '@ct/shared';
+import type { AdaptiveProposal, Locale, WeeklyReview as Review } from '@ct/shared';
 import { PressableChunk } from '@/components/Chunk';
 import { InsetGroup } from '@/components/InsetGroup';
 import { api, planLimitOf } from '@/lib/api';
@@ -10,6 +11,7 @@ import { useEntitlements } from '@/lib/entitlements';
 import { TIER_NAMES } from '@/lib/plan-copy';
 import { font, type as t, useColors } from '@/theme';
 import { useRefreshOnReturn } from '@/hooks/useRefreshOnReturn';
+import { useLocale } from '@/lib/i18n';
 
 /**
  * Last week, and what it did to the target.
@@ -20,6 +22,7 @@ import { useRefreshOnReturn } from '@/hooks/useRefreshOnReturn';
  * what it is waiting for.
  */
 export function WeeklyReview({ onError }: { onError: (message: string) => void }) {
+  const locale = useLocale();
   const colors = useColors();
   const router = useRouter();
   const { plan, tiers } = useEntitlements();
@@ -93,7 +96,7 @@ export function WeeklyReview({ onError }: { onError: (message: string) => void }
       {review ? (
         <View style={styles.body}>
           <Text style={[t.footnoteBold, { color: colors.mutedForeground }]}>
-            {formatRange(review.week_start, review.week_end)}
+            {formatRange(review.week_start, review.week_end, locale)}
           </Text>
           {/* The review is prose the model wrote, and it comes with its own
               paragraph breaks — RN keeps them, so nothing has to parse it. */}
@@ -209,15 +212,10 @@ function TargetChange({
   );
 }
 
-function formatRange(start: string, end: string): string {
-  const format = (iso: string, withMonth: boolean) => {
-    const [y, m, d] = iso.split('-').map(Number);
-    return new Date(Date.UTC(y!, m! - 1, d!)).toLocaleDateString('en-GB', {
-      day: 'numeric',
-      month: withMonth ? 'long' : undefined,
-      timeZone: 'UTC',
-    });
-  };
+function formatRange(start: string, end: string, locale: Locale): string {
+  // The month is named once when both ends share it and twice when they do not.
+  const format = (iso: string, withMonth: boolean) =>
+    formatDay(iso, locale, { day: 'numeric', ...(withMonth ? { month: 'long' } : {}) });
   const sameMonth = start.slice(0, 7) === end.slice(0, 7);
   return `${format(start, !sameMonth)} – ${format(end, true)}`;
 }

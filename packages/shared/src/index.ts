@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Locale } from './locale.ts';
 import { UnitSystem } from './units.ts';
 
 /**
@@ -8,6 +9,9 @@ import { UnitSystem } from './units.ts';
 
 /** Conversion between what is stored and what is read. See UNITS.md. */
 export * from './units.ts';
+
+/** Which language the app is drawn in. Rendering only. See LANGUAGES.md. */
+export * from './locale.ts';
 
 /**
  * Day boundaries and the arithmetic that turns entries into a `DaySummary`.
@@ -1033,6 +1037,16 @@ export const Profile = z.object({
    * UNITS.md.
    */
   units: UnitSystem.nullable(),
+  /**
+   * Which language they read the app in. Null means nobody has asked yet —
+   * the same shape as `units` above and for the same reason, except that this
+   * one is never asked by onboarding. A null locale is not an incomplete
+   * profile; it is somebody who has only ever used the app in one language and
+   * has never had cause to say so. Everything that draws a string goes through
+   * `localeOf()`, which resolves null to English. Nothing stored changes with
+   * it — not a food name, not a tool argument. See LANGUAGES.md.
+   */
+  locale: Locale.nullable(),
   /** §"Day boundaries": 4 means 1am counts toward the previous day. */
   day_start_hour: z.number().int().min(0).max(12),
   is_setup_complete: z.boolean(),
@@ -1096,6 +1110,15 @@ export const SignupRequest = Credentials.extend({
   display_name: z.string().max(80).nullable().optional(),
   /** Sent by the browser so the very first day boundary is already correct. */
   timezone: z.string().max(60).optional(),
+  /**
+   * The device or browser language, so the confirmation email is in it.
+   *
+   * This is the one place a locale is needed before there is a profile to read
+   * one from. Optional, and the server falls back to `Accept-Language` when it
+   * is absent — a native client knows its own device language and a browser
+   * knows `navigator.language`, but neither is guaranteed to have sent it.
+   */
+  locale: Locale.optional(),
 });
 export type SignupRequest = z.infer<typeof SignupRequest>;
 
@@ -2030,8 +2053,19 @@ export function roundEstimate(kcal: number): number {
   return kcal >= 100 ? Math.round(kcal / 10) * 10 : Math.round(kcal);
 }
 
-export function formatKcal(kcal: number, confidence: Confidence = 'medium'): string {
-  const n = Math.round(kcal).toLocaleString('en-US');
+/**
+ * `kcal` is the same word in every language this ships in, so only the grouping
+ * separator moves: `1,240 kcal` in English, `1 240 kcal` in Bulgarian. The
+ * locale is a parameter rather than the runtime's, because this also runs on
+ * the server, where the runtime's locale is the container's and has nothing to
+ * do with who is reading the number.
+ */
+export function formatKcal(
+  kcal: number,
+  confidence: Confidence = 'medium',
+  locale: Locale = 'en',
+): string {
+  const n = Math.round(kcal).toLocaleString(locale);
   return confidence === 'high' ? `${n} kcal` : `~${n} kcal`;
 }
 

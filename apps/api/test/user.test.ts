@@ -60,7 +60,18 @@ describe('getUserContext', () => {
       timezone: 'America/Los_Angeles',
       dayStartHour: 2,
       units: 'metric',
+      locale: 'en',
     });
+  });
+
+  it('carries the locale, resolved, for the strings the server writes itself', async () => {
+    const bulgarian = await createUser({ email: 'sofia@example.com', locale: 'bg' });
+    expect((await getUserContext(bulgarian.id)).locale).toBe('bg');
+
+    // Null is "nobody has asked", and every reader of this wants an answer
+    // rather than the absence of one. Same bargain as `units` below.
+    const never = await createUser({ email: 'unasked@example.com', locale: null });
+    expect((await getUserContext(never.id)).locale).toBe('en');
   });
 
   it('carries the units, resolved, for the strings the server writes itself', async () => {

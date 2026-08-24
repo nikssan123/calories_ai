@@ -1,5 +1,6 @@
 import type { ReviewStats, UnitSystem } from '@ct/shared';
-import { formatWeightDelta } from '@ct/shared';
+import { formatWeightDelta, type Locale } from '@ct/shared';
+import { emailMessages, type EmailMessages } from './messages.ts';
 import { type Block, type RenderedEmail, renderEmail } from './layout.ts';
 
 /**
@@ -37,8 +38,17 @@ export interface EmailMessage extends RenderedEmail {
 }
 
 /** A first name to open with, or nothing — never "Hi null". */
-function greeting(name: string | null): string {
-  return name?.trim() ? `Hi ${name.trim().split(/\s+/)[0]},` : 'Hi,';
+/**
+ * The opening line.
+ *
+ * Takes a catalogue rather than a locale because the two shapes it needs — with
+ * a name and without — are different sentences in several languages, not one
+ * sentence with an optional word: Spanish ends the greeting with a colon and
+ * French does not, and neither is a substring of the other.
+ */
+function greeting(name: string | null, m: EmailMessages = emailMessages('en')): string {
+  const first = name?.trim().split(/\s+/)[0];
+  return first ? m['review.greeting'](first) : m['review.greetingNoName'];
 }
 
 const IF_NOT_YOU =
@@ -200,9 +210,9 @@ export function accountDeleted(input: {
         {
           kind: 'facts',
           items: [
-            { label: 'Meals logged', value: plural(counts.food_entries, 'entry', 'entries') },
-            { label: 'Messages', value: plural(counts.chat_messages, 'message', 'messages') },
-            { label: 'Photos', value: plural(counts.photos, 'photo', 'photos') },
+            { label: 'Meals logged', value: pluralEn(counts.food_entries, 'entry', 'entries') },
+            { label: 'Messages', value: pluralEn(counts.chat_messages, 'message', 'messages') },
+            { label: 'Photos', value: pluralEn(counts.photos, 'photo', 'photos') },
           ],
         },
         {
@@ -281,27 +291,34 @@ export function weeklyReview(input: {
   unsubscribeUrl: string;
   /** The stats arrive in kilograms; this is what the reader's scale says. */
   units: UnitSystem;
+  /**
+   * Which language the chrome is in. `content` is already in it — the review
+   * was generated with `languageBrief` in front of it — so this governs the
+   * labels around the prose and nothing else.
+   */
+  locale: Locale;
 }): EmailMessage {
-  const { stats, units } = input;
+  const { stats, units, locale } = input;
+  const m = emailMessages(locale);
 
   const items: Array<{ label: string; value: string; hint?: string }> = [
     {
-      label: 'Days logged',
+      label: m['review.daysLogged'],
       value: `${stats.days_logged}/7`,
       hint:
         stats.previous_days_logged === stats.days_logged
-          ? 'same as the week before'
-          : `${stats.previous_days_logged} the week before`,
+          ? m['review.sameAsBefore']
+          : m['review.weekBefore'](stats.previous_days_logged),
     },
     {
-      label: 'Average a day',
+      label: m['review.averageADay'],
       value: stats.mean_kcal === null ? '—' : `${round(stats.mean_kcal)} kcal`,
       hint: averageHint(stats),
     },
     {
-      label: 'Days on target',
+      label: m['review.daysOnTarget'],
       value: `${stats.days_on_target}`,
-      hint: `within 10% of ${round(stats.target_kcal)} kcal`,
+      hint: m['review.withinTarget'](String(round(stats.target_kcal))),
     },
     /*
      * The fourth cell is whichever of the three there is something to say
@@ -312,24 +329,24 @@ export function weeklyReview(input: {
     ...(stats.weight_change_kg !== null
       ? [
           {
-            label: 'Weight',
+            label: m['review.weight'],
             value: formatWeightDelta(stats.weight_change_kg, units),
-            hint: 'across the week',
+            hint: m['review.acrossTheWeek'],
           },
         ]
       : stats.exercise_sessions > 0
         ? [
             {
-              label: `Burned over ${plural(stats.exercise_sessions, 'session', 'sessions')}`,
+              label: m['review.burnedOver'](stats.exercise_sessions),
               value: `${round(stats.exercise_kcal)} kcal`,
-              hint: 'on top of the target',
+              hint: m['review.onTopOfTarget'],
             },
           ]
         : [
             {
-              label: 'Protein a day',
+              label: m['review.proteinADay'],
               value: stats.mean_protein_g === null ? '—' : `${Math.round(stats.mean_protein_g)} g`,
-              hint: `target ${Math.round(stats.target_protein_g)} g`,
+              hint: m['review.proteinTarget'](String(Math.round(stats.target_protein_g))),
             },
           ]),
   ];
@@ -341,16 +358,16 @@ export function weeklyReview(input: {
     category: 'product',
     unsubscribeUrl: input.unsubscribeUrl,
     ...renderEmail({
-      subject: `Your week: ${input.range}`,
-      preheader: summaryLine(stats, units),
-      heading: 'Last week, in review',
+      subject: m['review.subject'](input.range),
+      preheader: summaryLine(stats, units, locale, m),
+      heading: m['review.heading'],
       subheading: input.range,
       blocks: [
-        { kind: 'text', text: greeting(input.name) },
+        { kind: 'text', text: greeting(input.name, m) },
         { kind: 'stats', items },
-        weekStrip(stats),
+        weekStrip(stats, m),
         { kind: 'rule' },
-        { kind: 'subhead', text: 'How it read' },
+        { kind: 'subhead', text: m['review.howItRead'] },
         // Paragraph by paragraph rather than one block with newlines in it: the
         // layout renders a text block as a single `<p>`, so a joined excerpt
         // would arrive as one slab with its breaks silently gone.
@@ -366,17 +383,17 @@ export function weeklyReview(input: {
           : []),
         ...(stats.top_foods.length > 0
           ? [
-              { kind: 'subhead' as const, text: 'On repeat' },
+              { kind: 'subhead' as const, text: m['review.onRepeat'] },
               {
                 kind: 'facts' as const,
                 items: stats.top_foods.slice(0, 3).map((food) => ({
                   label: food.name,
-                  value: `${plural(food.times, 'time', 'times')} · ${round(food.kcal)} kcal`,
+                  value: `${m['review.times'](food.times)} · ${round(food.kcal)} kcal`,
                 })),
               },
             ]
           : []),
-        { kind: 'button', label: 'Read the whole review', url: `${input.appUrl}/progress` },
+        { kind: 'button', label: m['review.readWholeReview'], url: `${input.appUrl}/progress` },
       ],
       unsubscribeUrl: input.unsubscribeUrl,
     }),
@@ -392,7 +409,7 @@ export function weeklyReview(input: {
  * daily rows existed has none at all, and then every day reads as missing,
  * which is the honest answer for a week this email cannot see inside.
  */
-function weekStrip(stats: ReviewStats): Block {
+function weekStrip(stats: ReviewStats, m: EmailMessages): Block {
   const band = stats.target_kcal * 0.1;
   const byDate = new Map(stats.days.map((day) => [day.local_date, day.kcal]));
 
@@ -400,7 +417,7 @@ function weekStrip(stats: ReviewStats): Block {
     const date = addDays(stats.week_start, index);
     const kcal = byDate.get(date);
     return {
-      label: WEEKDAYS[new Date(`${date}T00:00:00Z`).getUTCDay()]!,
+      label: m['review.weekdays'][new Date(`${date}T00:00:00Z`).getUTCDay()]!,
       value: kcal === undefined ? null : round(kcal),
       tone:
         kcal === undefined
@@ -420,12 +437,10 @@ function weekStrip(stats: ReviewStats): Block {
     // "the green ones" would be describing something that is not there.
     caption:
       stats.days_logged === 0
-        ? 'Nothing logged this week.'
-        : `${plural(stats.days_logged, 'day', 'days')} logged, ${hits} of them within 10% of target.`,
+        ? m['review.nothingThisWeek']
+        : m['review.stripCaption'](stats.days_logged, hits),
   };
 }
-
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
 /** Calendar arithmetic on an ISO date, without dragging a timezone into it. */
 function addDays(date: string, days: number): string {
@@ -503,13 +518,30 @@ function excerpt(content: string, paragraphs = 2): string[] {
   return parts.length > paragraphs ? [...head, '…'] : head;
 }
 
-function summaryLine(stats: ReviewStats, units: UnitSystem): string {
-  if (stats.mean_kcal === null) return `${stats.days_logged} days logged.`;
+function summaryLine(
+  stats: ReviewStats,
+  units: UnitSystem,
+  locale: Locale,
+  m: EmailMessages,
+): string {
+  if (stats.mean_kcal === null) return m['review.summaryNoMean'](stats.days_logged);
   const weight =
-    stats.weight_change_kg === null ? '' : `, weight ${formatWeightDelta(stats.weight_change_kg, units)}`;
-  return `${stats.days_logged} days logged, averaging ${Math.round(stats.mean_kcal)} kcal${weight}.`;
+    stats.weight_change_kg === null
+      ? ''
+      : m['review.summaryWeight'](formatWeightDelta(stats.weight_change_kg, units));
+  return m['review.summary'](stats.days_logged, Math.round(stats.mean_kcal), weight);
 }
 
-function plural(count: number, one: string, many: string): string {
+/**
+ * English's two forms, for the templates that are still only in English.
+ *
+ * Named for the language it knows rather than for the job, because that is the
+ * whole of its correctness: it hardcodes English's *categories* and English's
+ * *vocabulary*, and using it inside a translated template is what put "5 days
+ * logged" in the middle of a Bulgarian review. The weekly review now takes its
+ * plurals from `email/messages.ts`; the transactional mail below has not been
+ * translated yet, and until it is, this is right for it.
+ */
+function pluralEn(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`;
 }

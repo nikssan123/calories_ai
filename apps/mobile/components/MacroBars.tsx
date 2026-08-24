@@ -6,6 +6,7 @@ import { duration, ease, type as t, useColors, type Palette } from '@/theme';
 import { Confetti } from '@/components/Confetti';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useCountUp } from '@/hooks/useCountUp';
+import { useT, type StringKey } from '@/lib/i18n';
 
 /**
  * Protein, carbs, fat as three fat tracks.
@@ -22,12 +23,12 @@ import { useCountUp } from '@/hooks/useCountUp';
  * "you have reached your calorie limit" is not.
  */
 const MACROS = [
-  { key: 'protein_g', label: 'Protein', emoji: '💪', fill: 'protein', ink: 'proteinText' },
-  { key: 'carbs_g', label: 'Carbs', emoji: '🌾', fill: 'carbs', ink: 'carbsText' },
-  { key: 'fat_g', label: 'Fat', emoji: '🥑', fill: 'fat', ink: 'fatText' },
+  { key: 'protein_g', label: 'macro.protein', emoji: '💪', fill: 'protein', ink: 'proteinText' },
+  { key: 'carbs_g', label: 'macro.carbs', emoji: '🌾', fill: 'carbs', ink: 'carbsText' },
+  { key: 'fat_g', label: 'macro.fat', emoji: '🥑', fill: 'fat', ink: 'fatText' },
 ] as const satisfies readonly {
   key: keyof Nutrition & keyof Targets;
-  label: string;
+  label: StringKey;
   emoji: string;
   fill: keyof Palette;
   ink: keyof Palette;
@@ -68,6 +69,7 @@ function MacroTrack({
   target: number;
   index: number;
 }) {
+  const tr = useT();
   const colors = useColors();
   // The bar and the figure move together, on the same clock as the ring's.
   const shown = useCountUp(value, 900);
@@ -120,7 +122,7 @@ function MacroTrack({
           numberOfLines={1}
           style={[t.footnoteSemibold, styles.label, { color: colors.mutedForeground }]}
         >
-          {macro.label}
+          {tr(macro.label)}
         </Text>
       </View>
 

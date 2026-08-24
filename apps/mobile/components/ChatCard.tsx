@@ -16,24 +16,8 @@ import Animated, {
   withDelay,
   withTiming,
 } from 'react-native-reanimated';
-import type {
-  ChatAction,
-  ChatCard as Card,
-  ExerciseEntry,
-  FoodEntry,
-  Recipe,
-  UnitSystem,
-} from '@ct/shared';
-import {
-  bodyWeightToKg,
-  bodyWeightUnit,
-  formatBodyWeight,
-  formatDistance,
-  formatWeightDelta,
-  loadUnit,
-  toBodyWeight,
-  toLoad,
-} from '@ct/shared';
+import type { ChatAction, ChatCard as Card, ExerciseEntry, FoodEntry, Locale, Recipe, UnitSystem } from '@ct/shared';
+import { bodyWeightToKg, bodyWeightUnit, formatBodyWeight, formatDay, formatDistance, formatWeightDelta, loadUnit, toBodyWeight, toLoad } from '@ct/shared';
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { FoodEditor } from '@/components/FoodEditor';
@@ -47,6 +31,7 @@ import { useUnits } from '@/lib/units';
 import { duration, ease, font, type as t, useColors, withAlpha, type Palette } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { haptics } from '@/lib/haptics';
+import { useLocale } from '@/lib/i18n';
 
 /**
  * The visual half of a turn — and the thing this app should be recognised by.
@@ -599,6 +584,7 @@ function DayProgress({
   day: NonNullable<Extract<Card, { type: 'food' }>['day']>;
   today?: string;
 }) {
+  const locale = useLocale();
   const colors = useColors();
 
   const target = Math.max(1, Math.round(day.target_kcal));
@@ -626,7 +612,7 @@ function DayProgress({
     { key: 'meal-over', kcal: Math.max(0, after - Math.max(before, target)), mine: true, over: true },
   ].filter((band) => band.kcal > 0);
   const last = bands.length - 1;
-  const word = dayWord(day.local_date, today);
+  const word = dayWord(day.local_date, locale, today);
 
   return (
     <View style={styles.progress}>
@@ -778,9 +764,9 @@ function bandFill(colors: Palette, mine: boolean, over: boolean): string {
  * otherwise mislead: a meal logged onto yesterday, whose bar would read as
  * today's. Silent, too, when nobody has told us which day is current.
  */
-function dayWord(isoDate: string, today?: string): string {
+function dayWord(isoDate: string, locale: Locale, today?: string): string {
   if (today === undefined || isoDate === today) return '';
-  return `on ${formatDate(isoDate)}`;
+  return `on ${formatDate(isoDate, locale)}`;
 }
 
 /**
@@ -1158,6 +1144,7 @@ function TrendCard({ card }: { card: Extract<Card, { type: 'trend' }> }) {
 }
 
 function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
+  const locale = useLocale();
   const colors = useColors();
   const remaining = card.targets.kcal - card.consumed.kcal;
   const over = remaining < 0;
@@ -1216,7 +1203,7 @@ function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
           <Text style={{ fontFamily: font.bold, color: colors.exerciseText }}>
             −{card.burned_kcal} burned
           </Text>
-          {` · ${formatDate(card.local_date)}`}
+          {` · ${formatDate(card.local_date, locale)}`}
         </Text>
       )}
       {card.caption && (
@@ -1309,6 +1296,7 @@ function ReviewCard({
   /** The message's own text. Absent only if a client forgets to pass it. */
   prose?: string;
 }) {
+  const locale = useLocale();
   const colors = useColors();
   const units = useUnits();
   const [open, setOpen] = useState(false);
@@ -1338,7 +1326,7 @@ function ReviewCard({
       <View style={styles.headRow}>
         <Text style={[t.bodyBold, styles.flex, { color: colors.foreground }]}>Last week</Text>
         <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-          {formatDate(card.week_start)} – {formatDate(card.week_end)}
+          {formatDate(card.week_start, locale)} – {formatDate(card.week_end, locale)}
         </Text>
       </View>
 
@@ -1492,14 +1480,8 @@ function addDays(date: string, days: number): string {
   return at.toISOString().slice(0, 10);
 }
 
-function formatDate(isoDate: string): string {
-  const [y, m, d] = isoDate.split('-').map(Number);
-  return new Date(Date.UTC(y!, m! - 1, d!)).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  });
-}
+const formatDate = (isoDate: string, locale: Locale) =>
+  formatDay(isoDate, locale, { day: 'numeric', month: 'short' });
 
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },

@@ -11,6 +11,7 @@ import {
   cmToFeetInches,
   feetInchesToCm,
   toBodyWeight,
+  localeOf,
   unitsOf,
 } from '@ct/shared';
 import { api } from '@/lib/api';
@@ -23,6 +24,8 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { LanguagePicker } from '@/components/LanguagePicker';
+import { setPreferredLocale, useT, type StringKey } from '@/lib/i18n';
 import {
   Select,
   SelectContent,
@@ -57,20 +60,20 @@ const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
   very_active: 'Physical job or twice-daily training',
 };
 
-const SEX_LABELS: Record<Sex, string> = { male: 'Male', female: 'Female' };
+const SEX_LABELS: Record<Sex, StringKey> = { male: 'sex.male', female: 'sex.female' };
 
 /** Short forms for the collapsed row; the menu shows the full description. */
-const ACTIVITY_SHORT: Record<ActivityLevel, string> = {
-  sedentary: 'Sedentary',
-  light: 'Light',
-  moderate: 'Moderate',
-  active: 'Active',
-  very_active: 'Very active',
+const ACTIVITY_SHORT: Record<ActivityLevel, StringKey> = {
+  sedentary: 'activity.sedentary',
+  light: 'activity.light',
+  moderate: 'activity.moderate',
+  active: 'activity.active',
+  very_active: 'activity.veryActive',
 };
 
-const UNIT_LABELS: Record<UnitSystem, string> = {
-  metric: 'Metric',
-  imperial: 'Imperial',
+const UNIT_LABELS: Record<UnitSystem, StringKey> = {
+  metric: 'units.metric',
+  imperial: 'units.imperial',
 };
 
 /** What each one actually means, since "imperial" is a word and not a number. */
@@ -79,10 +82,10 @@ const UNIT_EXAMPLES: Record<UnitSystem, string> = {
   imperial: 'lb · ft · mi · oz',
 };
 
-const GOAL_LABELS: Record<Goal, string> = {
-  lose: 'Lose',
-  maintain: 'Maintain',
-  gain: 'Gain',
+const GOAL_LABELS: Record<Goal, StringKey> = {
+  lose: 'goal.lose',
+  maintain: 'goal.maintain',
+  gain: 'goal.gain',
 };
 
 export default function SetupPage() {
@@ -118,6 +121,8 @@ export default function SetupPage() {
   }, [saved]);
 
   const units = unitsOf(profile);
+  const locale = localeOf(profile);
+  const t = useT();
 
   function patch<K extends keyof Profile>(key: K, value: Profile[K]) {
     setProfile((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -141,6 +146,7 @@ export default function SetupPage() {
         // Never null on the way out. Saving this screen is somebody looking at
         // the control and leaving it where it is, which is an answer.
         units: unitsOf(profile),
+        locale: localeOf(profile),
         day_start_hour: profile.day_start_hour,
       });
       setProfile(updated);
@@ -168,7 +174,7 @@ export default function SetupPage() {
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-5 pb-8 lg:px-6">
         <div className="mx-auto w-full max-w-4xl space-y-7">
         <div>
-          <h1 className="text-large-title">You</h1>
+          <h1 className="text-large-title">{t('setup.title')}</h1>
           <p className="text-muted-foreground mt-1.5 text-body font-medium">
             Enough to work out a starting target. It adjusts as real data comes in.
           </p>
@@ -206,9 +212,9 @@ export default function SetupPage() {
         )}
 
         <div className="grid gap-7 lg:grid-cols-2 lg:items-start">
-        <InsetGroup title="About you">
+        <InsetGroup title={t('setup.about')}>
           <InsetRow>
-            <span className="flex-1 text-body">Name</span>
+            <span className="flex-1 text-body">{t('setup.displayName')}</span>
             <Input
               value={profile.display_name ?? ''}
               onChange={(e) => patch('display_name', e.target.value || null)}
@@ -218,7 +224,7 @@ export default function SetupPage() {
           </InsetRow>
 
           <InsetRow>
-            <span className="flex-1 text-body">Sex</span>
+            <span className="flex-1 text-body">{t('setup.sex')}</span>
             <Select
               value={profile.sex ?? ''}
               onValueChange={(v) => patch('sex', (v || null) as Sex | null)}
@@ -227,13 +233,13 @@ export default function SetupPage() {
                 {/* Without flex-none the value stretches to fill the trigger and
                     strands itself in the middle of the row. */}
                 <SelectValue placeholder="—" className="flex-none">
-                  {(value) => SEX_LABELS[value as Sex] ?? '—'}
+                  {(value) => (SEX_LABELS[value as Sex] ? t(SEX_LABELS[value as Sex]) : '—')}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {(Object.keys(SEX_LABELS) as Sex[]).map((sex) => (
                   <SelectItem key={sex} value={sex}>
-                    {SEX_LABELS[sex]}
+                    {t(SEX_LABELS[sex])}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -241,7 +247,7 @@ export default function SetupPage() {
           </InsetRow>
 
           <InsetRow>
-            <span className="flex-1 text-body">Date of birth</span>
+            <span className="flex-1 text-body">{t('setup.birthDate')}</span>
             <Input
               type="date"
               value={profile.birth_date ?? ''}
@@ -257,8 +263,33 @@ export default function SetupPage() {
             * them rather than changing something further down the page that the
             * eye has already left.
             */}
+          {/*
+            * Above Units, and above the fields both of them rewrite. Changing
+            * either one visibly redraws the rows beneath it rather than
+            * altering something further down the page the eye has already left
+            * — and language moves more of the screen than units does, so it is
+            * the one that goes first.
+            */}
           <InsetRow>
-            <span className="flex-1 text-body">Units</span>
+            <span className="flex-1 text-body">{t('setup.language')}</span>
+            <LanguagePicker
+              value={locale}
+              onChange={(next) => {
+                /*
+                 * Two writes, deliberately. The profile is the durable answer
+                 * and the one the server writes emails from; the stored
+                 * preference is what the sign-in screen reads next time this
+                 * browser is signed out, which would otherwise still be showing
+                 * whatever the browser guessed months ago.
+                 */
+                patch('locale', next);
+                setPreferredLocale(next);
+              }}
+            />
+          </InsetRow>
+
+          <InsetRow>
+            <span className="flex-1 text-body">{t('setup.units')}</span>
             <ToggleGroup
               value={[units]}
               onValueChange={(values) => {
@@ -271,17 +302,17 @@ export default function SetupPage() {
                 <ToggleGroupItem
                   key={system}
                   value={system}
-                  aria-label={`${UNIT_LABELS[system]} — ${UNIT_EXAMPLES[system]}`}
+                  aria-label={`${t(UNIT_LABELS[system])} — ${UNIT_EXAMPLES[system]}`}
                   className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-9 rounded-full px-3.5 text-footnote font-bold transition-colors"
                 >
-                  {UNIT_LABELS[system]}
+                  {t(UNIT_LABELS[system])}
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
           </InsetRow>
 
           <InsetRow>
-            <span className="flex-1 text-body">Height</span>
+            <span className="flex-1 text-body">{t('setup.height')}</span>
             {units === 'imperial' ? (
               <HeightFeetInches value={profile.height_cm} onChange={(v) => patch('height_cm', v)} />
             ) : (
@@ -294,7 +325,7 @@ export default function SetupPage() {
           </InsetRow>
 
           <InsetRow>
-            <span className="flex-1 text-body">Target weight</span>
+            <span className="flex-1 text-body">{t('setup.targetWeight')}</span>
             {/*
               * Converted on the way in and back out on the way to the API, so the
               * column stays kilograms whatever this field says. Typing 165 lb
@@ -315,7 +346,7 @@ export default function SetupPage() {
           </InsetRow>
         </InsetGroup>
 
-        <InsetGroup title="Goal">
+        <InsetGroup title={t('setup.goal')}>
           <div className="grid grid-cols-3 gap-2 p-2">
             {(Object.keys(GOAL_LABELS) as Goal[]).map((goal) => {
               const active = profile.goal === goal;
@@ -331,20 +362,20 @@ export default function SetupPage() {
                       : 'bg-muted text-muted-foreground border-border hover:text-foreground',
                   )}
                 >
-                  {GOAL_LABELS[goal]}
+                  {t(GOAL_LABELS[goal])}
                 </button>
               );
             })}
           </div>
           <InsetRow>
-            <span className="flex-1 text-body">Activity</span>
+            <span className="flex-1 text-body">{t('setup.activity')}</span>
             <Select
               value={profile.activity_level ?? ''}
               onValueChange={(v) => patch('activity_level', (v || null) as ActivityLevel | null)}
             >
               <SelectTrigger className={cn(FIELD, 'w-auto gap-2 pr-2.5')}>
                 <SelectValue placeholder="—" className="flex-none">
-                  {(value) => ACTIVITY_SHORT[value as ActivityLevel] ?? '—'}
+                  {(value) => (ACTIVITY_SHORT[value as ActivityLevel] ? t(ACTIVITY_SHORT[value as ActivityLevel]) : '—')}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -363,7 +394,7 @@ export default function SetupPage() {
           footer="Food eaten before the day starts counts toward the previous day — so a 1am snack lands on the evening it belongs to."
         >
           <InsetRow>
-            <span className="shrink-0 text-body">Time zone</span>
+            <span className="shrink-0 text-body">{t('setup.timezone')}</span>
             <Input
               value={profile.timezone}
               onChange={(e) => patch('timezone', e.target.value)}
@@ -371,7 +402,7 @@ export default function SetupPage() {
             />
           </InsetRow>
           <InsetRow>
-            <span className="flex-1 text-body">Day starts at</span>
+            <span className="flex-1 text-body">{t('setup.dayStartsAt')}</span>
             <Select
               value={String(profile.day_start_hour)}
               onValueChange={(v) => patch('day_start_hour', Number(v))}
@@ -394,7 +425,7 @@ export default function SetupPage() {
 
         <DietRules profile={profile} onChange={setProfile} />
 
-        <InsetGroup title="Appearance" footer="System follows your device, including its light and dark schedule.">
+        <InsetGroup title={t('setup.appearance')} footer="System follows your device, including its light and dark schedule.">
           <div className="p-3">
             <ThemeToggle />
           </div>
@@ -402,7 +433,7 @@ export default function SetupPage() {
 
         <EmailSettings profile={profile} onChange={setProfile} />
 
-        <InsetGroup title="Account">
+        <InsetGroup title={t('setup.account')}>
           <InsetRow>
             <span className="flex-1 text-body">Signed in as</span>
             <span className="text-muted-foreground truncate text-body">
@@ -441,7 +472,7 @@ export default function SetupPage() {
             <ChevronRight size={16} className="text-muted-foreground" />
           </Link>
           <a href="mailto:support@daysofar.com" className="flex items-center gap-2 px-4 py-3 text-body">
-            <span className="flex-1">Contact support</span>
+            <span className="flex-1">{t('setup.contactSupport')}</span>
             <ChevronRight size={16} className="text-muted-foreground" />
           </a>
         </InsetGroup>
@@ -537,6 +568,7 @@ function EmailSettings({
   profile: Profile;
   onChange: (profile: Profile) => void;
 }) {
+  const t = useT();
   const [sending, setSending] = useState(false);
 
   // No address means the pre-accounts placeholder row, which nothing can be
@@ -578,7 +610,7 @@ function EmailSettings({
 
   return (
     <InsetGroup
-      title="Email"
+      title={t('setup.email')}
       footer={
         profile.notify_weekly_review
           ? 'The weekly review arrives on Monday mornings. Emails about your account — a password change, a sign-in from a device we have not seen — are always sent.'
@@ -588,13 +620,13 @@ function EmailSettings({
       {profile.email_verified ? (
         <InsetRow>
           <BadgeCheck size={17} className="text-[var(--calories-text)]" />
-          <span className="flex-1 text-body">Address confirmed</span>
+          <span className="flex-1 text-body">{t('setup.addressConfirmed')}</span>
         </InsetRow>
       ) : (
         <div className="flex flex-col gap-2.5 px-4 py-3.5">
           <div className="flex items-center gap-3">
             <Mail size={17} className="text-muted-foreground" />
-            <span className="flex-1 text-body">Address not confirmed</span>
+            <span className="flex-1 text-body">{t('setup.addressNotConfirmed')}</span>
           </div>
           <p className="text-muted-foreground text-[13px] leading-relaxed font-medium">
             Until you confirm {profile.email}, a forgotten password cannot be reset — there would
@@ -662,6 +694,7 @@ function EmailSettings({
  * control cannot be hit by accident.
  */
 function DeleteAccount({ email }: { email: string | null }) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [deleting, setDeleting] = useState(false);
@@ -675,7 +708,7 @@ function DeleteAccount({ email }: { email: string | null }) {
       // data: AuthGate re-runs, finds no session, and lands on /login.
       window.location.replace('/login');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Could not delete the account.');
+      toast.error(error instanceof Error ? error.message : t('setup.deleteFailed'));
       setDeleting(false);
     }
   }
@@ -683,7 +716,7 @@ function DeleteAccount({ email }: { email: string | null }) {
   if (!email) return null;
 
   return (
-    <InsetGroup title="Danger zone">
+    <InsetGroup title={t('setup.dangerZone')}>
       {!open ? (
         <button
           type="button"

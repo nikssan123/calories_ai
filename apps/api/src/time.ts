@@ -81,7 +81,24 @@ function instantFromLocalParts(
   return new Date(wall - zoneOffsetMs(first, timeZone));
 }
 
-/** How far ahead of UTC `timeZone` runs at `instant`, in milliseconds. */
+/**
+ * How far ahead of UTC `timeZone` runs at `instant`, in milliseconds.
+ *
+ * **The `en-GB` below is not a display locale and must not become one.**
+ *
+ * Every other `en-GB` in this repo was replaced by `formatDay(date, locale)`
+ * when the app learned to speak other languages — see LANGUAGES.md phase 5.
+ * These are different: `formatToParts` is being used to pull the *numbers* out
+ * of an instant so `localPartsFor` can assemble a `YYYY-MM-DD`, and the tag is
+ * chosen for its stable numeric output, not because anybody reads it. A user's
+ * locale flowing in here would change which day a meal counts toward — in a
+ * calendar that does not number days the way this arithmetic assumes, it would
+ * corrupt the day boundary silently and for everyone in that language.
+ *
+ * If this ever needs to change, it changes toward *more* determinism — an
+ * ISO-style tag like `en-CA`, or explicit `Intl` options — never toward the
+ * reader.
+ */
 function zoneOffsetMs(instant: Date, timeZone: string): number {
   if (Number.isNaN(instant.getTime())) return 0;
   const parts = Object.fromEntries(

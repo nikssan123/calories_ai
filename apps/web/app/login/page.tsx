@@ -8,6 +8,8 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthGate';
 import { GoogleMark } from '@/components/GoogleMark';
 import { Logo } from '@/components/Logo';
+import { LanguagePicker } from '@/components/LanguagePicker';
+import { preferredLocale, setPreferredLocale, useLocale, useT } from '@/lib/i18n';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -46,6 +48,8 @@ export default function LoginPage() {
   const [timezone, setTimezone] = useState('');
   const router = useRouter();
   const { refresh } = useAuth();
+  const t = useT();
+  const locale = useLocale();
 
   useEffect(() => {
     // The landing page's primary CTA asks for the sign-up form by name. Read
@@ -66,7 +70,7 @@ export default function LoginPage() {
     const failure = params.get('error');
     if (failure) {
       if (failure !== 'cancelled') {
-        toast.error(SIGN_IN_ERRORS[failure] ?? 'Something went wrong signing in. Try again.');
+        toast.error(SIGN_IN_ERRORS[failure] ?? t('auth.genericFailure'));
       }
       params.delete('error');
       const rest = params.toString();
@@ -98,6 +102,14 @@ export default function LoginPage() {
           display_name: name || null,
           // Sent so the very first day boundary is right without asking.
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          /*
+           * The same answer the picker above is showing. It matters before the
+           * account exists at all: the confirmation email goes out during this
+           * request, before there is a profile for anybody to read a preference
+           * off, so if this is not sent the first thing a Bulgarian speaker
+           * receives from the app is in English.
+           */
+          locale: preferredLocale(),
         });
       } else {
         await api.login({ email, password });
@@ -114,15 +126,29 @@ export default function LoginPage() {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto flex min-h-full w-full max-w-sm flex-col justify-center px-6 py-12">
+        {/*
+          * Above everything, and the first control on the screen.
+          *
+          * This is the earliest point the app can be asked, and the only one
+          * that reaches the confirmation email — so it is worth the space at
+          * the top of the very first screen rather than being left for the
+          * settings page to fix afterwards. It is pre-filled from
+          * `navigator.language`, so for most people it is already right and
+          * costs them nothing but the glance that confirms it.
+          */}
+        <div className="mb-6 flex justify-end">
+          <LanguagePicker value={locale} onChange={setPreferredLocale} />
+        </div>
+
         <div className="mb-8">
           <Logo size={52} className="mb-5" />
           <h1 className="text-large-title">
-            {mode === 'signup' ? 'Create your account' : 'Welcome back'}
+            {mode === 'signup' ? t('auth.createAccountTitle') : t('auth.signIn')}
           </h1>
           <p className="text-muted-foreground mt-2 text-body">
             {mode === 'signup'
               ? 'Then tell the journal a little about yourself and it will work out your targets.'
-              : 'Sign in to pick up where you left off.'}
+              : t('auth.signInSubtitle')}
           </p>
         </div>
 
@@ -142,7 +168,7 @@ export default function LoginPage() {
               )}
             >
               <GoogleMark className="size-5" />
-              Continue with Google
+              {t('auth.continueWithGoogle')}
             </a>
 
             {/* The line that says "or", which is the whole reason it is here. */}
@@ -158,7 +184,7 @@ export default function LoginPage() {
           {mode === 'signup' && (
             <div className="space-y-1.5">
               <Label htmlFor="name" className="text-footnote text-muted-foreground">
-                Name (optional)
+                {t('auth.nameOptional')}
               </Label>
               <Input
                 id="name"
@@ -172,7 +198,7 @@ export default function LoginPage() {
 
           <div className="space-y-1.5">
             <Label htmlFor="email" className="text-footnote text-muted-foreground">
-              Email
+              {t('auth.email')}
             </Label>
             <Input
               id="email"
@@ -187,7 +213,7 @@ export default function LoginPage() {
 
           <div className="space-y-1.5">
             <Label htmlFor="password" className="text-footnote text-muted-foreground">
-              Password
+              {t('auth.password')}
             </Label>
             <Input
               id="password"
@@ -200,14 +226,14 @@ export default function LoginPage() {
               className="bg-card border-border chunk h-12 rounded-[1.125rem] border-2 text-body"
             />
             {mode === 'signup' ? (
-              <p className="text-footnote text-muted-foreground">At least 8 characters.</p>
+              <p className="text-footnote text-muted-foreground">{t('auth.passwordHint')}</p>
             ) : (
               // Under the field it belongs to, not buried at the bottom of the
               // screen: someone who needs this link is looking at the password
               // box wondering why it will not work.
               <div className="pt-0.5 text-right">
                 <Link href="/reset" className="text-footnote text-muted-foreground">
-                  Forgot your password?
+                  {t('auth.forgotPassword')}
                 </Link>
               </div>
             )}
@@ -218,7 +244,7 @@ export default function LoginPage() {
             disabled={busy || !email || password.length < 8}
             className="h-12 w-full rounded-2xl text-base font-extrabold"
           >
-            {busy ? 'Just a moment…' : mode === 'signup' ? 'Create account' : 'Sign in'}
+            {busy ? t('auth.oneMoment') : mode === 'signup' ? t('auth.createAccount') : t('auth.signIn')}
           </Button>
 
           {/* Under the button that does the agreeing, and only on the screen
@@ -232,7 +258,7 @@ export default function LoginPage() {
               </Link>{' '}
               and the{' '}
               <Link href="/privacy" className="text-foreground font-semibold underline underline-offset-2">
-                Privacy Policy
+                {t('auth.privacyPolicy')}
               </Link>
               .
             </p>
@@ -247,11 +273,11 @@ export default function LoginPage() {
           >
             {mode === 'signup' ? (
               <>
-                Already have an account? <span className="text-foreground font-medium">Sign in</span>
+                {t('auth.haveAccount')} <span className="text-foreground font-medium">{t('auth.signIn')}</span>
               </>
             ) : (
               <>
-                New here? <span className="text-foreground font-medium">Create an account</span>
+                {t('auth.newHere')} <span className="text-foreground font-medium">{t('auth.createAccount')}</span>
               </>
             )}
           </button>

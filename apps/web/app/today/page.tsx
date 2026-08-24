@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { CalendarDays, ChevronLeft, ChevronRight, RotateCcw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { DaySummary, ExerciseEntry, FoodEntry, Meal } from '@ct/shared';
-import { formatBodyWeight, formatDistance, formatMass } from '@ct/shared';
+import { formatBodyWeight, formatDay, formatDistance, formatMass } from '@ct/shared';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { CalorieRing } from '@/components/CalorieRing';
@@ -18,16 +18,18 @@ import { FoodEditor } from '@/components/FoodEditor';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
+import { useLocale, useT, type MessageKey } from '@/lib/i18n';
 
 /** The `?date=` the calendar links here with. Anything else is ignored. */
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const MEAL_ORDER: Meal[] = ['breakfast', 'lunch', 'dinner', 'snack'];
-const MEAL_LABEL: Record<Meal, string> = {
-  breakfast: 'Breakfast',
-  lunch: 'Lunch',
-  dinner: 'Dinner',
-  snack: 'Snacks',
+/** Message keys rather than words — resolved per render, see Nav.tsx. */
+const MEAL_LABEL: Record<Meal, MessageKey> = {
+  breakfast: 'meal.breakfast',
+  lunch: 'meal.lunch',
+  dinner: 'meal.dinner',
+  snack: 'meal.snack',
 };
 
 /** The section headings get a picture too, so the day skims as a menu. */
@@ -63,6 +65,8 @@ function TodaySkeleton() {
 function TodayView() {
   const requested = useSearchParams().get('date');
   const units = useUnits();
+  const locale = useLocale();
+  const t = useT();
 
   const [day, setDay] = useState<DaySummary | null>(null);
   /*
@@ -191,7 +195,7 @@ function TodayView() {
           variant="ghost"
           size="icon"
           onClick={() => step(-1)}
-          aria-label="Previous day"
+          aria-label={t('today.previousDay')}
           className="text-muted-foreground rounded-full"
         >
           <ChevronLeft size={22} />
@@ -210,10 +214,12 @@ function TodayView() {
           href="/history"
           className="border-border bg-card hover:bg-muted/60 active:bg-muted/60 rounded-2xl border-2 px-2.5 py-1 text-center transition-colors"
         >
-          <h1 className="text-title-2">{isToday ? 'Today' : formatDay(day?.local_date)}</h1>
+          <h1 className="text-title-2">
+            {isToday ? t('today.title') : day ? formatDay(day.local_date, locale) : ''}
+          </h1>
           <p className="text-footnote text-muted-foreground flex items-center justify-center gap-1.5 font-semibold">
             <CalendarDays size={13} strokeWidth={2.4} className="shrink-0" />
-            {isToday && day ? formatDay(day.local_date) : 'View calendar'}
+            {isToday && day ? formatDay(day.local_date, locale) : t('today.viewCalendar')}
           </p>
         </Link>
         <Button
@@ -221,7 +227,7 @@ function TodayView() {
           size="icon"
           onClick={() => step(1)}
           disabled={isToday}
-          aria-label="Next day"
+          aria-label={t('today.nextDay')}
           className="text-muted-foreground rounded-full disabled:opacity-25"
         >
           <ChevronRight size={22} />
@@ -267,9 +273,9 @@ function TodayView() {
                 🍽️
               </span>
               <p className="text-muted-foreground text-body font-medium">
-                Nothing logged yet.
+                {t('today.nothingLogged')}
                 <br />
-                Tell the journal what you ate.
+                {t('today.nothingLoggedHint')}
               </p>
             </div>
           )}
@@ -277,7 +283,7 @@ function TodayView() {
           {byMeal.map(({ meal, entries }) => (
             <InsetGroup
               key={meal}
-              title={`${MEAL_EMOJI[meal]}  ${MEAL_LABEL[meal]}`}
+              title={`${MEAL_EMOJI[meal]}  ${t(MEAL_LABEL[meal])}`}
               trailing={
                 <span className="tnum text-footnote text-muted-foreground font-bold">
                   {Math.round(entries.reduce((sum, e) => sum + e.kcal, 0))} kcal
@@ -297,7 +303,7 @@ function TodayView() {
 
           {day.exercise_entries.length > 0 && (
             <InsetGroup
-              title="🏃  Exercise"
+              title={`🏃  ${t('today.exercise')}`}
               trailing={
                 <span className="tnum text-footnote font-bold text-[var(--exercise-text)]">
                   −{day.burned_kcal} kcal
@@ -342,9 +348,9 @@ function TodayView() {
           )}
 
           {day.weight && (
-            <InsetGroup title="⚖️  Weight">
+            <InsetGroup title={`⚖️  ${t('today.weight')}`}>
               <InsetRow>
-                <span className="flex-1 text-body font-semibold">Weighed</span>
+                <span className="flex-1 text-body font-semibold">{t('today.weighed')}</span>
                 <span className="text-figure text-body">
                   {formatBodyWeight(day.weight.weight_kg, units)}
                 </span>
@@ -402,6 +408,7 @@ function EntryRow({
   const [open, setOpen] = useState(false);
   const approx = entry.confidence !== 'high';
   const units = useUnits();
+  const t = useT();
 
   return (
     <div>
@@ -418,7 +425,7 @@ function EntryRow({
           <p className="tnum text-footnote text-muted-foreground font-medium">
             {Math.round(entry.protein_g)}P · {Math.round(entry.carbs_g)}C ·{' '}
             {Math.round(entry.fat_g)}F
-            {entry.confidence === 'low' && ' · rough estimate'}
+            {entry.confidence === 'low' && ` · ${t('today.roughEstimate')}`}
           </p>
         </div>
         <span className="text-figure text-body">
@@ -449,11 +456,11 @@ function EntryRow({
           </ul>
           <div className="flex items-center gap-2 pt-1">
             <p className="text-footnote text-muted-foreground flex-1 font-medium">
-              To change this, say so in the journal — “there was more rice”.
+              {t('today.changeHint')}
             </p>
             <Button variant="ghost" size="sm" onClick={onRepeat} className="h-8 gap-1.5 px-2">
               <RotateCcw size={15} />
-              Log again
+              {t('today.logAgain')}
             </Button>
             <Button
               variant="ghost"
@@ -469,17 +476,6 @@ function EntryRow({
       )}
     </div>
   );
-}
-
-function formatDay(isoDate?: string): string {
-  if (!isoDate) return '';
-  const [y, m, d] = isoDate.split('-').map(Number);
-  return new Date(Date.UTC(y!, m! - 1, d!)).toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    timeZone: 'UTC',
-  });
 }
 
 function shiftDate(isoDate: string, days: number): string {

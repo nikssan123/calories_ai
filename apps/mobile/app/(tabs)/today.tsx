@@ -19,8 +19,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Svg, { Path, Polyline, Rect } from 'react-native-svg';
-import type { DaySummary, ExerciseEntry, FoodEntry, FoodItemInput, Meal } from '@ct/shared';
-import { formatBodyWeight, formatDistance, formatMass, inferMeal } from '@ct/shared';
+import type { DaySummary, ExerciseEntry, FoodEntry, FoodItemInput, Locale, Meal } from '@ct/shared';
+import { formatBodyWeight, formatDay, formatDistance, formatMass, inferMeal } from '@ct/shared';
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 import { CalorieRing } from '@/components/CalorieRing';
 import { DietQuality } from '@/components/DietQuality';
@@ -47,16 +47,18 @@ import { useCountUp } from '@/hooks/useCountUp';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { writeDaySnapshot } from '@/lib/snapshot';
+import { useLocale, useT, type StringKey } from '@/lib/i18n';
 
 /** The `date` the calendar links here with. Anything else is ignored. */
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const MEAL_ORDER: Meal[] = ['breakfast', 'lunch', 'dinner', 'snack'];
-const MEAL_LABEL: Record<Meal, string> = {
-  breakfast: 'Breakfast',
-  lunch: 'Lunch',
-  dinner: 'Dinner',
-  snack: 'Snacks',
+/** Message keys rather than words — resolved per render, see (tabs)/_layout.tsx. */
+const MEAL_LABEL: Record<Meal, StringKey> = {
+  breakfast: 'meal.breakfast',
+  lunch: 'meal.lunch',
+  dinner: 'meal.dinner',
+  snack: 'meal.snack',
 };
 
 /** The section headings get a picture too, so the day skims as a menu. */
@@ -68,6 +70,8 @@ const MEAL_EMOJI: Record<Meal, string> = {
 };
 
 export default function TodayScreen() {
+  const locale = useLocale();
+  const tr = useT();
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTop(scrollRef);
   const colors = useColors();
@@ -629,14 +633,14 @@ export default function TodayScreen() {
         <Pressable
           onPress={() => router.push('/history')}
           accessibilityRole="button"
-          accessibilityLabel="View calendar"
+          accessibilityLabel={tr('today.viewCalendar')}
           style={({ pressed }) => [styles.headerLabel, { opacity: pressed ? 0.6 : 1 }]}
         >
           <View
             style={[styles.headerChip, { backgroundColor: colors.card, borderColor: colors.border }]}
           >
             <Text style={[t.title2, styles.centred, { color: colors.foreground }]}>
-              {isToday ? 'Today' : formatDay(day?.local_date)}
+              {isToday ? tr('today.title') : formatLocalDay(day?.local_date, locale)}
             </Text>
             {/* Reserved even when empty: without it the header jumps a line every
                 time you step off today. The mark rides this line rather than the
@@ -646,7 +650,7 @@ export default function TodayScreen() {
             <View style={styles.headerSub}>
               <CalendarMark color={colors.mutedForeground} />
               <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-                {isToday && day ? formatDay(day.local_date) : 'View calendar'}
+                {isToday && day ? formatLocalDay(day.local_date, locale) : tr('today.viewCalendar')}
               </Text>
             </View>
           </View>
@@ -685,7 +689,9 @@ export default function TodayScreen() {
             <View style={styles.empty}>
               <Text style={styles.mascot}>🍽️</Text>
               <Text style={[t.body, styles.centred, { color: colors.mutedForeground }]}>
-                Nothing logged yet.{'\n'}Tell the journal what you ate.
+                {tr('today.nothingLogged')}
+                {'\n'}
+                {tr('today.nothingLoggedHint')}
               </Text>
             </View>
           )}
@@ -727,7 +733,7 @@ export default function TodayScreen() {
           {byMeal.map(({ meal, entries }) => (
             <InsetGroup
               key={meal}
-              title={`${MEAL_EMOJI[meal]}  ${MEAL_LABEL[meal]}`}
+              title={`${MEAL_EMOJI[meal]}  ${tr(MEAL_LABEL[meal])}`}
               trailing={
                 <Text style={[t.footnoteBold, t.tnum, { color: colors.mutedForeground }]}>
                   {Math.round(entries.reduce((sum, e) => sum + e.kcal, 0))} kcal
@@ -811,10 +817,10 @@ export default function TodayScreen() {
           )}
 
           {day.weight && (
-            <InsetGroup title="⚖️  Weight">
+            <InsetGroup title={`⚖️  ${tr('today.weight')}`}>
               <InsetRow first>
                 <Text style={[t.bodySemibold, styles.rowBody, { color: colors.foreground }]}>
-                  Weighed
+                  {tr('today.weighed')}
                 </Text>
                 <Text style={[t.figure, styles.figure, { color: colors.foreground }]}>
                   {formatBodyWeight(day.weight.weight_kg, units)}
@@ -891,11 +897,11 @@ export default function TodayScreen() {
           <Pressable
             onPress={() => router.push('/history')}
             accessibilityRole="button"
-            accessibilityLabel="View calendar"
+            accessibilityLabel={tr('today.viewCalendar')}
             style={({ pressed }) => [styles.headerLabel, { opacity: pressed ? 0.6 : 1 }]}
           >
             <Text numberOfLines={1} style={[t.bodyBold, { color: colors.foreground }]}>
-              {isToday ? 'Today' : formatDay(day?.local_date)}
+              {isToday ? tr('today.title') : formatLocalDay(day?.local_date, locale)}
             </Text>
           </Pressable>
           <StepButton direction="forward" onPress={() => step(1)} disabled={isToday} />
@@ -945,6 +951,7 @@ function EntryRow({
   onDelete: () => void;
   onRepeat: () => void;
 }) {
+  const tr = useT();
   const colors = useColors();
   const units = useUnits();
   const approx = entry.confidence !== 'high';
@@ -1024,9 +1031,9 @@ function EntryRow({
 
           <View style={styles.actions}>
             <Text style={[t.footnote, styles.rowBody, { color: colors.mutedForeground }]}>
-              To change this, say so in the journal — “there was more rice”.
+              {tr('today.changeHint')}
             </Text>
-            <TextButton icon="repeat" label="Log again" onPress={onRepeat} />
+            <TextButton icon="repeat" label={tr('today.logAgain')} onPress={onRepeat} />
             <TextButton icon="trash" label="Delete" onPress={onDelete} tone={colors.destructive} />
           </View>
         </View>
@@ -1067,13 +1074,14 @@ function StepButton({
   onPress: () => void;
   disabled?: boolean;
 }) {
+  const tr = useT();
   const colors = useColors();
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
-      accessibilityLabel={direction === 'back' ? 'Previous day' : 'Next day'}
+      accessibilityLabel={direction === 'back' ? tr('today.previousDay') : tr('today.nextDay')}
       hitSlop={8}
       style={({ pressed }) => [
         styles.step,
@@ -1135,16 +1143,9 @@ function TextButton({
   );
 }
 
-function formatDay(isoDate?: string): string {
-  if (!isoDate) return '';
-  const [y, m, d] = isoDate.split('-').map(Number);
-  return new Date(Date.UTC(y!, m! - 1, d!)).toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    timeZone: 'UTC',
-  });
-}
+/** Named apart from the shared `formatDay` it wraps, which takes no undefined. */
+const formatLocalDay = (isoDate: string | undefined, locale: Locale) =>
+  isoDate ? formatDay(isoDate, locale) : '';
 
 function shiftDate(isoDate: string, days: number): string {
   const [y, m, d] = isoDate.split('-').map(Number);

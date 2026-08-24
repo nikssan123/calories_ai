@@ -14,7 +14,8 @@ import { Chunk, PressableChunk } from '@/components/Chunk';
 import { Lockup } from '@/components/Lockup';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { font, type as t, useColors } from '@/theme';
+import { font, useColors, useType } from '@/theme';
+import { useT } from '@/lib/i18n';
 
 /**
  * The six digits that open the rest of the app.
@@ -31,6 +32,8 @@ import { font, type as t, useColors } from '@/theme';
  * Six digits typed from the same email work without leaving the app at all.
  */
 export default function VerifyScreen() {
+  const t = useType();
+  const tr = useT();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { profile, refresh, signOut } = useAuth();
@@ -79,12 +82,10 @@ export default function VerifyScreen() {
       >
         <Lockup size={64} />
         <Text style={[t.largeTitle, styles.title, { color: colors.foreground }]}>
-          Check your email
+          {tr('verify.checkEmail')}
         </Text>
         <Text style={[t.body, styles.blurb, { color: colors.mutedForeground }]}>
-          {profile?.email
-            ? `We sent six digits to ${profile.email}. Enter them and you're in.`
-            : 'We sent you six digits. Enter them and you’re in.'}
+          {profile?.email ? tr('verify.sentTo')(profile.email) : tr('verify.sentBlind')}
         </Text>
 
         <Chunk radius={18} style={styles.field}>
@@ -127,7 +128,7 @@ export default function VerifyScreen() {
           {busy ? (
             <ActivityIndicator color={colors.primaryForeground} />
           ) : (
-            <Text style={[styles.submitLabel, { color: colors.primaryForeground }]}>Confirm</Text>
+            <Text style={[styles.submitLabel, { color: colors.primaryForeground }]}>{tr('verify.confirm')}</Text>
           )}
         </PressableChunk>
 

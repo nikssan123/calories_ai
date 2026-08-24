@@ -8,7 +8,9 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { DISPLAY_LEADING, duration, ease, type as t, useColors } from '@/theme';
+import { DISPLAY_LEADING, duration, ease, useColors, useType } from '@/theme';
+import { formatNumber } from '@ct/shared';
+import { useLocale, useT } from '@/lib/i18n';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useCountUp } from '@/hooks/useCountUp';
 
@@ -47,6 +49,9 @@ export function CalorieRing({
   strokeWidth?: number;
   style?: StyleProp<ViewStyle>;
 }) {
+  const t = useType();
+  const tr = useT();
+  const locale = useLocale();
   const colors = useColors();
   const reduced = useReducedMotion();
   const gradient = `ring-${useId().replace(/:/g, '')}`;
@@ -164,16 +169,16 @@ export function CalorieRing({
               { fontSize: figure, lineHeight: figure * DISPLAY_LEADING, color: colors.foreground },
             ]}
           >
-            {Math.round(shown).toLocaleString()}
+            {formatNumber(Math.round(shown), locale)}
           </Animated.Text>
           <Text style={[t.footnoteBold, styles.caption, { color: colors.mutedForeground }]}>
-            {over ? 'over' : 'to go'}
+            {over ? tr('today.over') : tr('today.toGo')}
           </Text>
           {/* Tabular but not at figure weight: the burn is context for the
               number above it, and set heavy it read as the louder of the two. */}
           {burned > 0 && (
             <Text style={[t.footnoteSemibold, t.tnum, styles.caption, { color: colors.exerciseText }]}>
-              +{Math.round(burned)} burned
+              {tr('today.burned')(String(Math.round(burned)))}
             </Text>
           )}
         </View>

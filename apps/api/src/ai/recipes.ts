@@ -16,6 +16,7 @@ import {
   RECIPES_PER_RUN,
   RECIPE_SYSTEM_PROMPT,
   recipeTaskPrompt,
+  languageBrief,
   unitsBrief,
   type PlanDay,
 } from './prompt.ts';
@@ -201,6 +202,10 @@ export async function suggestRecipes(
       wants: options.wants ?? null,
       rules: { diet: profile.diet, avoids: profile.avoids },
       units: unitsBrief(profile),
+      // A recipe written in English for somebody who logs in Bulgarian is the
+      // feature failing at the last step: they described the meal in their own
+      // words and got the method back in someone else's.
+      language: languageBrief(profile),
       constraints: {
         minutes: options.minutes ?? null,
         portions: options.portions ?? null,

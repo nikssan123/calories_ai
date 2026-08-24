@@ -14,7 +14,16 @@ import type {
   Progress,
   UnitSystem,
 } from '@ct/shared';
-import { DIETS, MUSCLE_GROUPS, UNIT_SYSTEMS, bodyWeightUnit, formatMass, toBodyWeight } from '@ct/shared';
+import {
+  DIETS,
+  LOCALES,
+  LOCALE_ENGLISH_NAMES,
+  MUSCLE_GROUPS,
+  UNIT_SYSTEMS,
+  bodyWeightUnit,
+  formatMass,
+  toBodyWeight,
+} from '@ct/shared';
 import { query } from '../db.ts';
 import { unmeteredFor } from './lane.ts';
 import { addDays, type DayContext, inferMeal, localDateFor, resolveWhen } from '../time.ts';
@@ -994,7 +1003,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
 
   const setProfile = tool(
     'set_profile',
-    'Save what you have learned about the user during setup: sex, date of birth, height, activity level, goal, target weight, which units they read. Call it as soon as you learn a value — do not wait until you have them all. Targets are recalculated automatically each time. To record their current weight use log_weight instead; that is a measurement, not a profile field. It also holds what they will not eat, which is the one thing here you may learn long after setup is over.',
+    'Save what you have learned about the user during setup: sex, date of birth, height, activity level, goal, target weight, which units they read, which language they read. Call it as soon as you learn a value — do not wait until you have them all. Targets are recalculated automatically each time. To record their current weight use log_weight instead; that is a measurement, not a profile field. It also holds what they will not eat, which is the one thing here you may learn long after setup is over.',
     {
       sex: z.enum(['male', 'female']).nullable().default(null),
       birth_date: z.string().nullable().default(null).describe('YYYY-MM-DD. If they give only an age, convert it to an approximate birth date.'),
@@ -1006,6 +1015,15 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         .default(null)
         .describe(
           'Which system they read: "imperial" for pounds, ounces, feet and miles, "metric" for kilos, grams and kilometres. Set it from how they answer rather than asking twice — someone who says they are 5\'10" and 180 lb has told you. It changes nothing about what you store here, only how you write numbers back to them.',
+        ),
+      locale: z
+        .enum(LOCALES)
+        .nullable()
+        .default(null)
+        .describe(
+          // Built from the enum rather than written out, so adding a language
+          // is one line in `shared/locale.ts` and the model is told about it.
+          `Which language to draw the app in for them: ${LOCALES.map((locale) => `"${locale}" for ${LOCALE_ENGLISH_NAMES[locale]}`).join(', ')}. Set it from how they write rather than asking — somebody who has logged three meals in Bulgarian has told you, and asking a question they have already answered is worse than guessing. It changes only what the screens and emails say; food names, stored values and every argument you pass to a tool are unaffected. Do not set it because they used one foreign word.`,
         ),
       activity_level: z
         .enum(['sedentary', 'light', 'moderate', 'active', 'very_active'])

@@ -23,6 +23,15 @@ import { Nunito_600SemiBold } from '@expo-google-fonts/nunito/600SemiBold';
 import { Nunito_700Bold } from '@expo-google-fonts/nunito/700Bold';
 import { Nunito_800ExtraBold } from '@expo-google-fonts/nunito/800ExtraBold';
 /*
+ * The Cyrillic display face. Baloo 2 has no Cyrillic glyphs at all, so every
+ * heading and every figure in a Bulgarian session is drawn by this instead —
+ * see DISPLAY_FACES in `theme/typography.ts`. Loaded unconditionally rather
+ * than on demand: it is 132 KB against the 1.26 MB of Baloo already here, and
+ * making it conditional would mean re-registering a family name at runtime,
+ * which expo-font does not do once a name is loaded.
+ */
+import { Nunito_900Black } from '@expo-google-fonts/nunito/900Black';
+/*
  * The two italics exist for the journal alone: the model writes *emphasis* and
  * the markdown renderer has to draw it. `fontStyle: 'italic'` is the same empty
  * request as `fontWeight` — with no italic face loaded iOS quietly falls back to
@@ -65,6 +74,7 @@ export default function RootLayout() {
     Nunito_600SemiBold,
     Nunito_700Bold,
     Nunito_800ExtraBold,
+    Nunito_900Black,
     Nunito_500Medium_Italic,
     Nunito_800ExtraBold_Italic,
     Baloo2_600SemiBold,

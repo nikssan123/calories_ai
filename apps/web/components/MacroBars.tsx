@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Nutrition, Targets } from '@ct/shared';
 import { Confetti } from '@/components/Confetti';
 import { cn } from '@/lib/utils';
+import { useT, type StringKey } from '@/lib/i18n';
 
 /**
  * Protein, carbs, fat as three fat tracks.
@@ -21,9 +22,9 @@ import { cn } from '@/lib/utils';
  */
 
 const MACROS = [
-  { key: 'protein_g', label: 'Protein', emoji: '💪', color: 'var(--protein)', text: 'var(--protein-text)' },
-  { key: 'carbs_g', label: 'Carbs', emoji: '🌾', color: 'var(--carbs)', text: 'var(--carbs-text)' },
-  { key: 'fat_g', label: 'Fat', emoji: '🥑', color: 'var(--fat)', text: 'var(--fat-text)' },
+  { key: 'protein_g', label: 'macro.protein', emoji: '💪', color: 'var(--protein)', text: 'var(--protein-text)' },
+  { key: 'carbs_g', label: 'macro.carbs', emoji: '🌾', color: 'var(--carbs)', text: 'var(--carbs-text)' },
+  { key: 'fat_g', label: 'macro.fat', emoji: '🥑', color: 'var(--fat)', text: 'var(--fat-text)' },
 ] as const;
 
 export function MacroBars({
@@ -61,6 +62,7 @@ function MacroTrack({
   target: number;
   index: number;
 }) {
+  const t = useT();
   const pct = Math.min(100, target > 0 ? (value / target) * 100 : 0);
   const met = target > 0 && value >= target;
 
@@ -91,7 +93,7 @@ function MacroTrack({
           {macro.emoji}
         </span>
         <span className="text-footnote text-muted-foreground truncate font-semibold">
-          {macro.label}
+          {t(macro.label)}
         </span>
       </div>
 

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { ExerciseEntry, ExerciseSummary } from '@ct/shared';
-import { distanceUnit, formatDistance, toDistance } from '@ct/shared';
+import type { ExerciseEntry, ExerciseSummary, Locale } from '@ct/shared';
+import { distanceUnit, formatDay, formatDistance, toDistance } from '@ct/shared';
 import { exerciseEmoji } from '@ct/shared/food-emoji';
 import { Chunk } from '@/components/Chunk';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
@@ -18,6 +18,7 @@ import { removeAction, SwipeRow } from '@/components/SwipeRow';
 import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
 import { Workouts } from '@/components/exercise/Workouts';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
+import { useLocale } from '@/lib/i18n';
 
 /**
  * Exercise, split out of Progress so it gets a screen rather than a single row.
@@ -31,6 +32,7 @@ import { useScrollToTop } from '@/hooks/useScrollToTop';
 const WINDOWS = [14, 30, 90] as const;
 
 export default function ExerciseScreen() {
+  const locale = useLocale();
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTop(scrollRef);
   const colors = useColors();
@@ -219,7 +221,7 @@ export default function ExerciseScreen() {
                     </Text>
                     <Text style={[t.footnote, { color: colors.mutedForeground }]}>
                       {[
-                        formatDate(entry.local_date),
+                        formatDate(entry.local_date, locale),
                         entry.distance_km !== null ? formatDistance(entry.distance_km, units) : null,
                         entry.duration_min !== null ? `${Math.round(entry.duration_min)} min` : null,
                       ]
@@ -272,6 +274,7 @@ function DayReadout({
   kcal: number;
   sessions: ExerciseEntry[];
 }) {
+  const locale = useLocale();
   const colors = useColors();
   const units = useUnits();
   const distance = sessions.reduce((sum, s) => sum + (s.distance_km ?? 0), 0);
@@ -288,7 +291,7 @@ function DayReadout({
       {/* Date and figure share a line. The card is parked on top of the chart
           it is explaining, so every line it costs is a bar you cannot see. */}
       <View style={styles.readoutHead}>
-        <Text style={[t.footnoteBold, { color: colors.mutedForeground }]}>{formatDate(date)}</Text>
+        <Text style={[t.footnoteBold, { color: colors.mutedForeground }]}>{formatDate(date, locale)}</Text>
         {sessions.length === 0 ? (
           <Text style={[t.footnoteSemibold, { color: colors.foreground }]}>Rest day</Text>
         ) : (
@@ -332,15 +335,8 @@ function formatDuration(minutes: number): string {
   return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
 }
 
-function formatDate(isoDate: string): string {
-  const [y, m, d] = isoDate.split('-').map(Number);
-  return new Date(Date.UTC(y!, m! - 1, d!)).toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  });
-}
+const formatDate = (isoDate: string, locale: Locale) =>
+  formatDay(isoDate, locale, { weekday: 'short', day: 'numeric', month: 'short' });
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },

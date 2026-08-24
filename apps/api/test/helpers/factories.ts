@@ -39,6 +39,9 @@ export async function createUser(overrides: Record<string, unknown> = {}): Promi
     // Set, not null: a null here is "onboarding has not asked yet", which would
     // make every fixture look like a half-finished account.
     units: 'metric',
+    // Same bargain as `units` above: set rather than null, so a fixture does not
+    // look like an account nobody has ever asked about its language.
+    locale: 'en',
     day_start_hour: DEFAULT_CTX.dayStartHour,
     is_setup_complete: true,
     onboarding_completed_at: new Date().toISOString(),

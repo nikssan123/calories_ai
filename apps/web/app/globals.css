@@ -315,6 +315,45 @@
     sans-serif;
   --font-display:
     var(--font-baloo), var(--font-nunito), ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+
+  /*
+   * The display face for languages Baloo cannot draw.
+   *
+   * Baloo 2 has no Cyrillic glyphs, so a Bulgarian heading set in it falls back
+   * per-glyph to whatever the OS offers — on the largest text on every screen,
+   * which is the most visible possible way for a localisation to look
+   * unfinished. Nunito at 900 stands in: same rounded terminals, already
+   * loaded, and its 220 Cyrillic glyphs have been in the bundle all along.
+   *
+   * **To try Comfortaa instead**, this is one of the two places to change:
+   * add the face in `app/layout.tsx` and name its variable here. Nothing else
+   * in the app refers to the Cyrillic display face by name. The mobile twin of
+   * this decision lives in `apps/mobile/theme/typography.ts`.
+   */
+  --font-display-cyrillic:
+    var(--font-nunito), ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+}
+
+/*
+ * The swap, keyed off the language the document declares.
+ *
+ * `<html lang>` rather than a class because it is the attribute that is already
+ * true — screen readers and hyphenation read it too — and because it is set
+ * before paint by the same inline script that settles the theme, so a heading
+ * is never drawn twice.
+ *
+ * The weight moves with the face. Baloo at 800 and Nunito at 800 are not the
+ * same colour on the page: Nunito's counters are more open, so it reads lighter
+ * at a given weight and needs the extra step to carry a heading.
+ */
+:root:lang(bg) {
+  --font-display: var(--font-display-cyrillic);
+}
+
+:lang(bg) h1,
+:lang(bg) h2,
+:lang(bg) .text-figure {
+  font-weight: 900;
 }
 
 @layer base {

@@ -24,6 +24,7 @@ const profile: Profile = {
   email: 'nik@example.com',
   email_verified: true,
   units: 'metric',
+  locale: 'en',
   display_name: 'Nik',
   sex: 'male',
   birth_date: '1990-01-01',

@@ -1,5 +1,5 @@
-import type { PlanName, Profile, ProfileUpdate, UnitSystem } from '@ct/shared';
-import { unitsOf } from '@ct/shared';
+import type { Locale, PlanName, Profile, ProfileUpdate, UnitSystem } from '@ct/shared';
+import { localeOf, unitsOf } from '@ct/shared';
 import { unmeteredFor } from '../ai/lane.ts';
 import { query, queryOne } from '../db.ts';
 import type { DayContext } from '../time.ts';
@@ -13,6 +13,12 @@ export interface UserContext extends DayContext {
    * with it; see UNITS.md.
    */
   units: UnitSystem;
+  /**
+   * Which language the strings the server writes itself are in — a scanned
+   * portion's phrase, a card's quantity line. Same standing as `units`: it
+   * changes what is rendered and nothing that is stored.
+   */
+  locale: Locale;
 }
 
 export async function getUser(userId: string): Promise<Profile> {
@@ -28,6 +34,7 @@ export async function getUserContext(userId: string): Promise<UserContext> {
     timezone: user.timezone,
     dayStartHour: user.day_start_hour,
     units: unitsOf(user),
+    locale: localeOf(user),
   };
 }
 
@@ -42,6 +49,7 @@ export async function updateUser(userId: string, patch: ProfileUpdate): Promise<
     goal: patch.goal,
     timezone: patch.timezone,
     units: patch.units,
+    locale: patch.locale,
     day_start_hour: patch.day_start_hour,
     notify_weekly_review: patch.notify_weekly_review,
     notify_nudges: patch.notify_nudges,
@@ -128,6 +136,15 @@ export async function createAccount(
   password: string | null,
   displayName: string | null,
   timezone: string,
+  /**
+   * The device or browser language, when the client knew one.
+   *
+   * Stored at signup rather than left null because the very first thing this
+   * account receives is a confirmation email, and that is sent before there is
+   * a profile for anyone to read a preference off. Null when we could not tell,
+   * which leaves the journal free to learn it from how they write.
+   */
+  locale: Locale | null = null,
 ): Promise<string> {
   const passwordHash = password === null ? null : await hashPassword(password);
 
@@ -143,18 +160,19 @@ export async function createAccount(
           SET email = $1, password_hash = $2,
               display_name = COALESCE(display_name, $3),
               timezone = COALESCE(NULLIF($4, ''), timezone),
+              locale = COALESCE($5, locale),
               updated_at = now()
-        WHERE id = $5`,
-      [email, passwordHash, displayName, timezone, orphan.id],
+        WHERE id = $6`,
+      [email, passwordHash, displayName, timezone, locale, orphan.id],
     );
     return orphan.id;
   }
 
   const row = await queryOne<{ id: string }>(
-    `INSERT INTO users (email, password_hash, display_name, timezone)
-     VALUES ($1,$2,$3, COALESCE(NULLIF($4, ''), 'UTC'))
+    `INSERT INTO users (email, password_hash, display_name, timezone, locale)
+     VALUES ($1,$2,$3, COALESCE(NULLIF($4, ''), 'UTC'), $5)
      RETURNING id`,
-    [email, passwordHash, displayName, timezone],
+    [email, passwordHash, displayName, timezone, locale],
   );
   return row!.id;
 }
@@ -180,6 +198,13 @@ export interface EmailRecipient {
   timezone: string;
   /** Which units the mail should be written in. Same reason as `timezone`. */
   units: UnitSystem;
+  /**
+   * Which language the mail is written in. The AI-written half of a review is
+   * already in it — `languageBrief` saw to that when the review was generated —
+   * so this is for the chrome around it: the stat block's labels, the footer,
+   * and the whole of the transactional mail, none of which passes a model.
+   */
+  locale: Locale;
   /** Product email goes only to an address someone has proved they can read. */
   verified: boolean;
   notifyWeeklyReview: boolean;
@@ -242,7 +267,7 @@ export async function accountGate(userId: string): Promise<AccountGate> {
 
 export async function getEmailRecipient(userId: string): Promise<EmailRecipient | null> {
   const row = await queryOne<any>(
-    `SELECT id, email, display_name, timezone, units, email_verified_at,
+    `SELECT id, email, display_name, timezone, units, locale, email_verified_at,
             notify_weekly_review, notify_nudges, notify_milestones, notify_daily_recap
        FROM users WHERE id = $1 AND email IS NOT NULL`,
     [userId],
@@ -253,7 +278,7 @@ export async function getEmailRecipient(userId: string): Promise<EmailRecipient 
 /** The same, found by address. For flows that start before there is a session. */
 export async function findRecipientByEmail(email: string): Promise<EmailRecipient | null> {
   const row = await queryOne<any>(
-    `SELECT id, email, display_name, timezone, units, email_verified_at,
+    `SELECT id, email, display_name, timezone, units, locale, email_verified_at,
             notify_weekly_review, notify_nudges, notify_milestones, notify_daily_recap
        FROM users WHERE lower(email) = lower($1)`,
     [email],
@@ -268,6 +293,7 @@ function toRecipient(row: any): EmailRecipient {
     displayName: row.display_name,
     timezone: row.timezone,
     units: unitsOf(row),
+    locale: localeOf(row),
     verified: row.email_verified_at !== null,
     notifyWeeklyReview: row.notify_weekly_review,
     notifyNudges: row.notify_nudges,
@@ -350,6 +376,7 @@ function toProfile(row: any): Profile {
     goal: row.goal,
     timezone: row.timezone,
     units: row.units ?? null,
+    locale: row.locale ?? null,
     day_start_hour: Number(row.day_start_hour),
     is_setup_complete: row.is_setup_complete,
     notify_weekly_review: row.notify_weekly_review,

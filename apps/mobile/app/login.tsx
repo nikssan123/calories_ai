@@ -17,7 +17,9 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { signInWithGoogle } from '@/lib/google';
 import { PRIVACY_URL, TERMS_URL } from '@/lib/links';
-import { font, type as t, useColors } from '@/theme';
+import { font, type as t, useColors, useType } from '@/theme';
+import { LanguagePicker } from '@/components/LanguagePicker';
+import { preferredLocale, setPreferredLocale, useLocale, useT } from '@/lib/i18n';
 
 /**
  * Sign in, or create an account.
@@ -32,6 +34,9 @@ import { font, type as t, useColors } from '@/theme';
  */
 export default function LoginScreen() {
   const colors = useColors();
+  const t = useType();
+  const tr = useT();
+  const locale = useLocale();
   const insets = useSafeAreaInsets();
   const { adoptSession, googleEnabled, hasAccounts, signupAllowed, refresh, loading } = useAuth();
 
@@ -77,6 +82,13 @@ export default function LoginScreen() {
             display_name: name.trim() || null,
             // Sent so the very first day boundary is right without asking.
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            /*
+             * And the language, for the same kind of reason. The confirmation
+             * email goes out during this request — before there is a profile
+             * for anybody to read a preference off — so without this the first
+             * thing a Bulgarian speaker hears from the app is in English.
+             */
+            locale: preferredLocale(),
           })
         : await api.login({ email: email.trim(), password });
 
@@ -152,15 +164,26 @@ export default function LoginScreen() {
         ]}
         keyboardShouldPersistTaps="handled"
       >
+        {/*
+          * The first control on the first screen, and the earliest point the
+          * app can be asked. It is pre-filled from the device's language, so
+          * for most people it is already right and costs nothing but the
+          * glance that confirms it — and it is the only picker that reaches
+          * the confirmation email.
+          */}
+        <View style={styles.languageRow}>
+          <LanguagePicker value={locale} onChange={setPreferredLocale} />
+        </View>
+
         <View style={styles.head}>
           <Lockup size={64} />
           <Text style={[t.largeTitle, styles.title, { color: colors.foreground }]}>
-            {signup ? 'Create your account' : 'Welcome back'}
+            {signup ? tr('auth.createAccountTitle') : tr('auth.signIn')}
           </Text>
           <Text style={[t.body, { color: colors.mutedForeground }]}>
             {signup
               ? 'Then tell the journal a little about yourself and it will work out your targets.'
-              : 'Sign in to pick up where you left off.'}
+              : tr('auth.signInSubtitle')}
           </Text>
         </View>
 
@@ -182,7 +205,7 @@ export default function LoginScreen() {
                 <>
                   <GoogleMark />
                   <Text style={[styles.googleLabel, { color: colors.foreground }]}>
-                    Continue with Google
+                    {tr('auth.continueWithGoogle')}
                   </Text>
                 </>
               )}
@@ -260,7 +283,7 @@ export default function LoginScreen() {
             <ActivityIndicator color={colors.primaryForeground} />
           ) : (
             <Text style={[styles.submitLabel, { color: colors.primaryForeground }]}>
-              {signup ? 'Create account' : 'Sign in'}
+              {signup ? tr('auth.createAccount') : tr('auth.signIn')}
             </Text>
           )}
         </PressableChunk>
@@ -302,7 +325,7 @@ export default function LoginScreen() {
             onPress={() => void forgot()}
             style={[t.footnoteSemibold, styles.switch, { color: colors.mutedForeground }]}
           >
-            {forgetting ? 'Sending…' : 'Forgot your password?'}
+            {forgetting ? tr('verify.sending') : tr('auth.forgotPassword')}
           </Text>
         )}
 
@@ -315,7 +338,7 @@ export default function LoginScreen() {
             }}
             style={[t.footnoteSemibold, styles.switch, { color: colors.mutedForeground }]}
           >
-            {signup ? 'Already have an account? Sign in' : 'Create an account'}
+            {signup ? `${tr('auth.haveAccount')} ${tr('auth.signIn')}` : tr('auth.createAccount')}
           </Text>
         )}
       </ScrollView>
@@ -383,6 +406,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const styles = StyleSheet.create({
+  languageRow: { alignItems: 'flex-end', marginBottom: 20 },
   flex: { flex: 1 },
   scroll: {
     flexGrow: 1,

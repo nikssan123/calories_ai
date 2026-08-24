@@ -216,6 +216,7 @@ export async function sendWeeklyReviewEmail(
       appUrl: env.appUrl,
       unsubscribeUrl: link.url,
       units: recipient.units,
+      locale: recipient.locale,
     }),
   });
 }

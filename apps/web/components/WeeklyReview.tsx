@@ -1,12 +1,15 @@
 'use client';
 
+import { formatDay } from '@ct/shared';
+
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
-import type { AdaptiveProposal, WeeklyReview as Review } from '@ct/shared';
+import type { AdaptiveProposal, Locale, WeeklyReview as Review } from '@ct/shared';
 import { api } from '@/lib/api';
 import { InsetGroup } from '@/components/InsetGroup';
 import { Button } from '@/components/ui/button';
+import { useLocale } from '@/lib/i18n';
 
 /**
  * Last week, and what it did to the target.
@@ -17,6 +20,7 @@ import { Button } from '@/components/ui/button';
  * what it is waiting for.
  */
 export function WeeklyReview() {
+  const locale = useLocale();
   const [review, setReview] = useState<Review | null>(null);
   const [adaptive, setAdaptive] = useState<AdaptiveProposal | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,7 +61,7 @@ export function WeeklyReview() {
       {review ? (
         <div className="space-y-3 px-4 py-4">
           <p className="text-footnote text-muted-foreground font-bold">
-            {formatRange(review.week_start, review.week_end)}
+            {formatRange(review.week_start, review.week_end, locale)}
           </p>
           <p className="text-body leading-relaxed whitespace-pre-line">{review.content}</p>
           {change?.eligible && <TargetChange proposal={change} tense="past" />}
@@ -120,15 +124,12 @@ function TargetChange({
   );
 }
 
-function formatRange(start: string, end: string): string {
-  const format = (iso: string, withMonth: boolean) => {
-    const [y, m, d] = iso.split('-').map(Number);
-    return new Date(Date.UTC(y!, m! - 1, d!)).toLocaleDateString('en-GB', {
-      day: 'numeric',
-      month: withMonth ? 'long' : undefined,
-      timeZone: 'UTC',
-    });
-  };
+function formatRange(start: string, end: string, locale: Locale): string {
+  // The month is named once when both ends share it — "18 – 22 August" — and
+  // twice when they do not. Dropping it from the first half is what makes the
+  // common case read as one range rather than two dates.
+  const format = (iso: string, withMonth: boolean) =>
+    formatDay(iso, locale, { day: 'numeric', ...(withMonth ? { month: 'long' } : {}) });
   const sameMonth = start.slice(0, 7) === end.slice(0, 7);
   return `${format(start, !sameMonth)} – ${format(end, true)}`;
 }

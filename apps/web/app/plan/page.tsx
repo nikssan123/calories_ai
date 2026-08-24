@@ -14,14 +14,8 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type {
-  MealPlan,
-  MealPlanBrief,
-  MealPlanSlot,
-  ShoppingItem,
-  ShoppingList,
-} from '@ct/shared';
-import { formatMass } from '@ct/shared';
+import type { Locale, MealPlan, MealPlanBrief, MealPlanSlot, ShoppingItem, ShoppingList } from '@ct/shared';
+import { formatMass, monthName } from '@ct/shared';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
@@ -31,6 +25,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { foodEmoji } from '@ct/shared/food-emoji';
 import { cn } from '@/lib/utils';
+import { useLocale } from '@/lib/i18n';
 
 /**
  * The week ahead — seven dinner slots and the shop they imply.
@@ -46,6 +41,7 @@ import { cn } from '@/lib/utils';
  * carrying four wrong entries for every right one reads as wrong throughout.
  */
 export default function PlanPage() {
+  const locale = useLocale();
   const [plan, setPlan] = useState<MealPlan | null>(null);
   const [list, setList] = useState<ShoppingList | null>(null);
   const [loading, setLoading] = useState(true);
@@ -148,7 +144,7 @@ export default function PlanPage() {
             <div className="space-y-7">
               {plan && planned ? (
                 <InsetGroup
-                  title={`📅  ${rangeLabel(plan)}`}
+                  title={`📅  ${rangeLabel(plan, locale)}`}
                   footer="Open a night to read the method, or skip it if you are out."
                 >
                   {plan.slots.map((slot) => (
@@ -616,13 +612,10 @@ function Shopping({
 }
 
 /** "18–22 March", from the week's own first and last night. */
-function rangeLabel(plan: MealPlan): string {
+function rangeLabel(plan: MealPlan, locale: Locale): string {
   const first = plan.slots[0]?.local_date ?? plan.week_start;
   const last = plan.slots.at(-1)?.local_date ?? plan.week_start;
-  const month = (date: string) =>
-    new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: 'UTC' }).format(
-      new Date(`${date}T12:00:00Z`),
-    );
+  const month = (date: string) => monthName(new Date(`${date}T12:00:00Z`), locale);
   const day = (date: string) => String(Number(date.slice(8)));
 
   return month(first) === month(last)

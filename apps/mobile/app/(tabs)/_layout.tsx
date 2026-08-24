@@ -14,6 +14,7 @@ import { duration, ease, font, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
 import { haptics } from '@/lib/haptics';
+import { useT, type StringKey } from '@/lib/i18n';
 
 /**
  * Six, which is one past where a bottom bar is usually said to stop.
@@ -28,17 +29,24 @@ import { haptics } from '@/lib/haptics';
  * History is not here. On the web it is reached by tapping the date on Today,
  * and that is how it is reached here too.
  */
+/*
+ * The label is a message *key*, not a word. Resolved at render, because this
+ * array is module scope and a hook cannot run in it — and because a tab bar
+ * that read its words once at import would keep them after somebody changed
+ * language in the settings two screens away.
+ */
 const TABS = [
-  { name: 'index', label: 'Journal', icon: 'chat' },
-  { name: 'today', label: 'Today', icon: 'flame' },
-  { name: 'progress', label: 'Progress', icon: 'chart' },
-  { name: 'exercise', label: 'Exercise', icon: 'person' },
-  { name: 'cook', label: 'Cook', icon: 'chef' },
-  { name: 'setup', label: 'You', icon: 'user' },
-] as const;
+  { name: 'index', label: 'nav.journal', icon: 'chat' },
+  { name: 'today', label: 'nav.today', icon: 'flame' },
+  { name: 'progress', label: 'nav.progress', icon: 'chart' },
+  { name: 'exercise', label: 'nav.exercise', icon: 'person' },
+  { name: 'cook', label: 'nav.cook', icon: 'chef' },
+  { name: 'setup', label: 'nav.you', icon: 'user' },
+] as const satisfies readonly { name: string; label: StringKey; icon: string }[];
 
 export default function TabsLayout() {
   const colors = useColors();
+  const t = useT();
   return (
     <Tabs
       // Named for the same reason the Stack's is — see app/_layout.tsx.
@@ -46,7 +54,7 @@ export default function TabsLayout() {
       tabBar={(props) => <TabBar {...props} />}
     >
       {TABS.map((tab) => (
-        <Tabs.Screen key={tab.name} name={tab.name} options={{ title: tab.label }} />
+        <Tabs.Screen key={tab.name} name={tab.name} options={{ title: t(tab.label) }} />
       ))}
     </Tabs>
   );
@@ -81,6 +89,7 @@ function TabBar({
   navigation: { navigate: (name: string) => void; emit: (event: { type: 'tabPress'; target: string; canPreventDefault: true }) => { defaultPrevented: boolean } };
 }) {
   const colors = useColors();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
 
@@ -148,7 +157,7 @@ function TabBar({
           />
         )}
         {state.routes.map((route, index) => {
-          const tab = TABS.find((t) => t.name === route.name);
+          const tab = TABS.find((candidate) => candidate.name === route.name);
           if (!tab) return null;
           const active = state.index === index;
 
@@ -157,7 +166,7 @@ function TabBar({
               key={route.key}
               accessibilityRole="button"
               accessibilityState={active ? { selected: true } : {}}
-              accessibilityLabel={tab.label}
+              accessibilityLabel={t(tab.label)}
               onPress={() => {
                 // Every chunky control in the app answers a press; the bar is
                 // not chunky and would otherwise be the one thing that does
@@ -201,6 +210,7 @@ function TabBar({
  */
 function TabItem({ tab, active }: { tab: (typeof TABS)[number]; active: boolean }) {
   const colors = useColors();
+  const t = useT();
   const reduced = useReducedMotion();
   const on = useSharedValue(active ? 1 : 0);
   const pop = useSharedValue(1);
@@ -247,7 +257,7 @@ function TabItem({ tab, active }: { tab: (typeof TABS)[number]; active: boolean 
           numberOfLines={1}
           style={[styles.label, { fontFamily: font.bold, color: colors.mutedForeground }]}
         >
-          {tab.label}
+          {t(tab.label)}
         </Text>
         <Animated.Text
           numberOfLines={1}
@@ -259,7 +269,7 @@ function TabItem({ tab, active }: { tab: (typeof TABS)[number]; active: boolean 
             fade,
           ]}
         >
-          {tab.label}
+          {t(tab.label)}
         </Animated.Text>
       </View>
     </>

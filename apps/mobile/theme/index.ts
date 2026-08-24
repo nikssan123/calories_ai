@@ -1,9 +1,11 @@
 import { createContext, useContext } from 'react';
 import { dark, light, type Palette } from './colors';
+import { typeFor } from './typography';
+import { useLocale } from '@/lib/i18n';
 
 export type { Palette } from './colors';
 export { dark, light, withAlpha } from './colors';
-export { DISPLAY_LEADING, font, MONO, type } from './typography';
+export { DISPLAY_LEADING, displayFacesFor, font, MONO, type, typeFor } from './typography';
 export { CHUNK_DEPTH, duration, ease, RADIUS } from './motion';
 
 export type Scheme = 'light' | 'dark';
@@ -25,5 +27,19 @@ export const useTheme = (): ThemeValue => useContext(ThemeContext);
 
 /** The palette alone, which is what nearly every call site actually wants. */
 export const useColors = (): Palette => useContext(ThemeContext).colors;
+
+/**
+ * The type scale for the language in force.
+ *
+ * The same bargain as `useColors`: a screen reads its scale from here rather
+ * than importing the module-level `type`, because the display face depends on
+ * the script the same way the palette depends on the scheme — and a component
+ * that imported the constant directly would keep drawing Cyrillic headings in
+ * a face with no Cyrillic in it.
+ *
+ * Every call site that only ever renders Latin — a number, an icon label — can
+ * keep using `type` directly, and most do.
+ */
+export const useType = (): ReturnType<typeof typeFor> => typeFor(useLocale());
 
 export const paletteFor = (scheme: Scheme): Palette => (scheme === 'dark' ? dark : light);

@@ -88,6 +88,14 @@ export function LegalPage({
 
 /** `2026-08-23` → `23 August 2026`. Written out because `08/09` is two dates. */
 function longDate(iso: string): string {
+  /*
+   * The one display `en-GB` the localisation pass deliberately left alone.
+   *
+   * Privacy and Terms are not translated — they are legal text, and a
+   * dictionary translation of a document somebody may have to rely on is worse
+   * than an English one they can read. While the page around it is English, its
+   * "last updated" line is too. See LANGUAGES.md.
+   */
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'long',

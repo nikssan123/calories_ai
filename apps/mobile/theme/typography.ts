@@ -1,4 +1,5 @@
 import { Platform, StyleSheet, type TextStyle } from 'react-native';
+import type { Locale } from '@ct/shared';
 
 /**
  * The type scale from `globals.css`, and the one trap in porting it.
@@ -27,6 +28,46 @@ export const font = {
   displayBold: 'Baloo2_700Bold',
   display: 'Baloo2_800ExtraBold',
 } as const;
+
+/**
+ * The display face, per script.
+ *
+ * Baloo 2 has no Cyrillic glyphs — 0 codepoints in U+0400–04FF in the font
+ * file itself, not merely a subset Google declines to serve. So a Bulgarian
+ * heading set in it does not degrade gracefully; it falls back per glyph to
+ * whatever the OS offers, on the largest text on every screen. Nunito stands
+ * in: same rounded terminals, already bundled, and its 220 Cyrillic glyphs have
+ * been shipping in this app since the first build.
+ *
+ * A step heavier than the Latin face on purpose. Nunito's counters are more
+ * open than Baloo's, so at a given weight it reads lighter; 900 against Baloo's
+ * 800 is what makes the two look like the same amount of ink.
+ *
+ * **To try Comfortaa instead**, this table and the `useFonts` call in
+ * `app/_layout.tsx` are the only two places to change. Nothing else in the app
+ * names the Cyrillic display face. Its web twin is `--font-display-cyrillic` in
+ * `apps/web/app/globals.css`. Note that Comfortaa stops at 700, so its heaviest
+ * cut is a step *below* Baloo rather than above — look at the ring's figure
+ * before committing to it.
+ */
+const DISPLAY_FACES = {
+  latin: {
+    semibold: font.displaySemibold,
+    bold: font.displayBold,
+    extrabold: font.display,
+  },
+  cyrillic: {
+    semibold: 'Nunito_700Bold',
+    bold: 'Nunito_800ExtraBold',
+    extrabold: 'Nunito_900Black',
+  },
+} as const;
+
+/** Which of the two a locale needs. Everything not listed draws in Latin. */
+const CYRILLIC_LOCALES: ReadonlySet<Locale> = new Set(['bg']);
+
+export const displayFacesFor = (locale: Locale) =>
+  CYRILLIC_LOCALES.has(locale) ? DISPLAY_FACES.cyrillic : DISPLAY_FACES.latin;
 
 /**
  * The platform's monospace face, for a code span or fence in a reply.
@@ -137,3 +178,47 @@ export const type = StyleSheet.create({
   },
   tnum,
 });
+
+/**
+ * The type scale in a given language.
+ *
+ * `type` above is the Latin scale and stays exported: it is what a StyleSheet
+ * at module scope can use, and it is still correct for every screen an English
+ * reader sees. This is the same scale with the display face swapped for one
+ * that can draw the script — which is only ever the three styles that use the
+ * display face, because the body face has covered Cyrillic all along.
+ *
+ * Built once per locale rather than per render. A `StyleSheet.create` per frame
+ * would allocate a new style object every time and defeat RN's style
+ * registry — every `Text` in the app would re-reconcile on any state change.
+ */
+/**
+ * The scale's shape with the face names widened.
+ *
+ * `type` is a `StyleSheet.create` over object literals, so TypeScript infers
+ * `fontFamily: "Baloo2_800ExtraBold"` — the literal, not `string`. Useful
+ * nowhere, and it makes a scale carrying a different face fail to be the same
+ * type as the one it is standing in for. `TextStyle` is what these are.
+ */
+export type TypeScale = { [K in keyof typeof type]: TextStyle };
+
+const SCALES = new Map<Locale, TypeScale>();
+
+export function typeFor(locale: Locale): TypeScale {
+  const cached = SCALES.get(locale);
+  if (cached) return cached;
+
+  const faces = displayFacesFor(locale);
+  const scale =
+    faces === DISPLAY_FACES.latin
+      ? type
+      : StyleSheet.create({
+          ...type,
+          largeTitle: { ...type.largeTitle, fontFamily: faces.extrabold },
+          title2: { ...type.title2, fontFamily: faces.extrabold },
+          figure: { ...type.figure, fontFamily: faces.extrabold },
+        });
+
+  SCALES.set(locale, scale);
+  return scale;
+}
