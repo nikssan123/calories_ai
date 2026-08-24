@@ -112,8 +112,37 @@ export const MODELS: Record<TurnKind, ModelChoice> = {
   // way — assuming is what put photo_log on Opus for a year.
   pantry_scan: { model: 'claude-sonnet-5', effort: 'high' },
   // The suggestions themselves. Occasional, read end to end, and the thing
-  // people would actually pay for — so it goes where the review goes.
-  recipe: { model: 'claude-opus-5', effort: 'high' },
+  // people would actually pay for — which is the argument that kept this on
+  // Opus, and it is the same argument `photo_log` was on Opus for.
+  //
+  // Measured, 2026-08-24: 12 pantry scenarios x 3 runs. There is no weighed
+  // ground truth for "is this a good recipe", so this scores the rules
+  // `RECIPE_SYSTEM_PROMPT` itself states — fit the budget, two missing
+  // ingredients at most, never mark a staple missing, hard dietary limits are
+  // absolute — plus Atwater consistency, which checks each ingredient's
+  // calories against its own macros (4p + 4c + 9f).
+  //
+  //                 budget overshoot   Atwater err   diet/allergy   $/recipe
+  //   opus-5 high         64%             4.9%            0          $0.0401
+  //   sonnet-5 high       40%             5.4%            0          $0.0169
+  //   sonnet-5 none       45%             5.0%            1          $0.0166
+  //
+  // Sonnet at high effort matched Opus on arithmetic (+0.43pp, CI [-0.64,
+  // +1.42] — nothing) and beat it on the rule the prompt states most plainly:
+  // Opus overshot the day's remaining calories on 64% of recipes, Sonnet on
+  // 40%, a 13.6pp paired difference with CI [-20.2, -7.1]. "A meal that
+  // overshoots is a worse answer than a smaller one" is in the prompt, and the
+  // cheaper model was following it more often.
+  //
+  // **The effort stays, and that is the whole reason it was tested separately.**
+  // It is worth 0.3c a recipe and it is the difference between zero dietary
+  // failures and one: `sonnet-none` put peanut butter in a vegan recipe for an
+  // account with a nut allergy on file. One failure in 33 is a thin sample, but
+  // the asymmetry is not thin — an allergy violation is the worst output this
+  // product can produce, and the insurance costs nothing. This is also the
+  // opposite of the `photo_log` result, where high effort bought nothing, which
+  // is exactly why "the photo answer generalises" was not assumed here.
+  recipe: { model: 'claude-sonnet-5', effort: 'high' },
   // Two sentences, from stats that were computed before the call. There is no
   // reasoning to do here and no long-form writing — the hard part was deciding
   // to send it at all, and that happened in SQL. Sonnet, and it would be waste
@@ -125,6 +154,16 @@ export const MODELS: Record<TurnKind, ModelChoice> = {
   // the thing people would pay for, and the constraint that makes it good —
   // seven dishes that vary, share a shop and land a batch on the right night —
   // is exactly the kind a smaller model drops halfway through.
+  //
+  // **Deliberately not moved with `recipe`, and this is a decision rather than
+  // an oversight.** The two share this file's prompt and its tool, so it is
+  // tempting to carry the measurement across — but the recipe test asked for
+  // one dish and a plan is seven that have to differ from each other, share a
+  // single shop, and put the batch-cooked one on the right night. None of those
+  // constraints existed in what was measured, and they are precisely the kind
+  // that degrade quietly rather than visibly. Assuming a nearby result carries
+  // is what put both of these on Opus in the first place. It wants its own 12
+  // scenarios before it moves.
   meal_plan: { model: 'claude-opus-5', effort: 'high' },
 };
 

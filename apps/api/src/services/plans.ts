@@ -115,7 +115,7 @@ export interface PlanLimits {
  *
  *   text log, blended                $0.041    post-fix window at the 5m TTL
  *   photo scan, Sonnet 5             $0.151    was $0.356 on Opus at 1h; see below
- *   recipe, Opus 5                   $0.284    n=1
+ *   recipe, Sonnet 5                 $0.170    was $0.284 on Opus; see below
  *   meal plan, Opus 5                $0.630    scaled from local; not yet run here
  *   weekly review, Opus 5            $0.024    n=3, measured
  *   nudge, Sonnet 5                  $0.025    measured
@@ -352,14 +352,14 @@ const LIMITS: Record<PlanName, PlanLimits> = {
    *   150 chat        x $0.041   $6.15
    *    25 photo       x $0.151   $3.78
    *    10 fridge scan x $0.041   $0.41
-   *     8 recipe      x $0.284   $2.27
+   *     8 recipe      x $0.170   $1.36
    *     2 meal plan   x $0.630   $1.26
    *       review      4.3 x $0.024  $0.10
    *       nudge       4.3 x $0.025  $0.11
    *                              ------
-   *                              $14.08  against $17.71 annual store  -> 20%
-   *                                      against $21.24 monthly store -> 34%
-   *                                      against $23.97 monthly web   -> 41%
+   *                              $13.17  against $17.71 annual store  -> 26%
+   *                                      against $21.24 monthly store -> 38%
+   *                                      against $23.97 monthly web   -> 45%
    *
    * ---- Where 150 and 25 come from ---------------------------------------------
    *
@@ -381,25 +381,30 @@ const LIMITS: Record<PlanName, PlanLimits> = {
    * every Coach subscriber for the habits of the heaviest one, and most of them
    * do not photograph two meals a day.
    *
-   * That account on this tier plus one 25-bundle: $17.85 of cost against $28.03
-   * of revenue, 36%. Which is the point of selling stock separately — the
+   * That account on this tier plus one 25-bundle: $16.94 of cost against $28.03
+   * of revenue, 40%. Which is the point of selling stock separately — the
    * heaviest user is the *best* customer rather than the one who breaks the
    * model, and nobody else subsidises them.
    *
-   * ---- The kitchen is now most of the bill ------------------------------------
+   * ---- The kitchen, after the one measurement that was left ------------------
    *
-   * $3.94 of this $14.08 is fridge scans, recipes and plans, and the cache TTL
-   * that took 29% off everything else did not touch $3.53 of it: caching only
-   * helps input, and a meal plan is ~10k tokens of *output*.
+   * $3.03 of this $13.17 is fridge scans, recipes and plans. It was $3.94 until
+   * `recipe` moved to Sonnet on 2026-08-24 — 12 pantry scenarios, 3 runs each,
+   * scored on the rules `RECIPE_SYSTEM_PROMPT` states rather than on taste.
+   * Sonnet matched Opus on ingredient arithmetic and overshot the day's
+   * remaining calories less often (40% against 64%), at 0.42x the price. See
+   * `ai/client.ts` for the table and for why the effort stays.
    *
-   * It is also the last part of the routing table still resting on an argument
-   * rather than a measurement. `recipe` and `meal_plan` sit on Opus 5 at high
-   * effort for the same reason `photo_log` did — that they are the hard,
-   * valuable turns — and that reason turned out to be worth nothing on 30
-   * weighed plates. Nobody has run the equivalent here. At Sonnet's list rates
-   * it would be $2.12 instead of $3.53, which is most of the gap between this
-   * tier's 20% annual margin and a comfortable one. Worth measuring before it is
-   * priced around, and worth *not* assuming either way.
+   * `meal_plan` did not move and is now $1.26 of the $3.03. It is the same
+   * prompt and the same tool, which is exactly why it is worth saying that the
+   * recipe result was *not* carried across: a plan is seven dishes that have to
+   * differ, share one shop, and land the batch on the right night, and none of
+   * that was in what was measured. It is also the last turn in the product
+   * still routed on an argument rather than a number.
+   *
+   * Whatever it costs, caching will not help it: a meal plan is ~10k tokens of
+   * output, and the cache only ever helps input.
+   *
    */
   coach: {
     chat: { allowed: 150, period: 'month' },

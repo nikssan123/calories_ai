@@ -146,7 +146,21 @@ describe('the kitchen', () => {
     );
   });
 
-  it('writes recipes on the best model, like the review', async () => {
+  /**
+   * This used to assert that a recipe ran on the same model as the review — the
+   * best one — on the reasoning that it is read end to end and is the thing
+   * people would pay for. That reasoning is intact and the routing changed
+   * anyway, because on 2026-08-24 it was finally measured: 12 pantry scenarios,
+   * 3 runs each, scored against the rules `RECIPE_SYSTEM_PROMPT` states. Sonnet
+   * matched Opus on ingredient arithmetic and overshot the day's calorie budget
+   * less often, at 0.42x the cost.
+   *
+   * So what is pinned now is the pair that did not converge — a recipe still
+   * runs the toolset it is supposed to, and it still carries an effort, which is
+   * the setting that measured as the difference between zero dietary failures
+   * and one.
+   */
+  it('writes recipes on the measured model, with its effort pinned', async () => {
     const tools = await import('../src/ai/tools.ts');
     const spy = vi.spyOn(tools, 'buildNutritionServer');
 
@@ -183,7 +197,24 @@ describe('the kitchen', () => {
     await suggestRecipes(user.id);
 
     expect(modelOf()).toBe(MODELS.recipe.model);
-    expect(modelOf()).toBe(MODELS.review.model);
+    expect(MODELS.recipe.model).toBe('claude-sonnet-5');
+    // Not a detail: `sonnet-none` put peanut butter in a vegan recipe for an
+    // account with a nut allergy, and `sonnet-high` did not. The effort is what
+    // separates them and it costs 0.3c.
+    expect(MODELS.recipe.effort).toBe('high');
+  });
+
+  /**
+   * A meal plan is seven dishes that have to differ from one another, share one
+   * shop and land the batch on the right night. None of that was in the recipe
+   * measurement, so the recipe result was deliberately not carried across —
+   * assuming a nearby result generalises is what put both of these on Opus in
+   * the first place. Pinned so that moving it is a decision somebody makes on
+   * purpose, with numbers, rather than a tidy-up.
+   */
+  it('leaves the weekly plan on the model nobody has measured yet', () => {
+    expect(MODELS.meal_plan.model).toBe('claude-opus-5');
+    expect(MODELS.meal_plan.effort).toBe('high');
   });
 });
 
