@@ -171,6 +171,12 @@ export function Composer({
           radius={999}
           color={colors.caloriesDeep}
           onPress={submit}
+          // No press buzz. Sending is the one control in the app that is
+          // answered rather than acted on: the reply streams back a moment
+          // later and, if the turn logged something, `haptics.logged` fires
+          // for it. A light impact on the way out only crowds that, and it
+          // fires on every sentence — the thing this composer is for.
+          haptic={false}
           disabled={!canSend}
           accessibilityRole="button"
           accessibilityLabel="Send"
