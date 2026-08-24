@@ -8,12 +8,15 @@ import {
   ExerciseCategory,
   LogFoodRequest,
   Meal,
+  METERS,
   PhotoUploadRequest,
   SaveRoutineRequest,
   SaveScheduleRequest,
   ProfileUpdate,
   RepeatRequest,
   WorkoutRequest,
+  type Allowance,
+  type Entitlements,
 } from '@ct/shared';
 import { authDescription } from '../ai/client.ts';
 import { authErrorFor, laneFor } from '../ai/providers/index.ts';
@@ -82,7 +85,7 @@ import {
 } from '../services/user.ts';
 import { forgetPushToken, registerPushToken } from '../services/push-tokens.ts';
 import { applyEvent, type RevenueCatEvent } from '../services/billing.ts';
-import { limitsFor } from '../services/plans.ts';
+import { limitsFor, tiers } from '../services/plans.ts';
 import {
   allowanceFor,
   PlanLimitError,
@@ -147,7 +150,7 @@ export async function registerRoutes(app: FastifyInstance) {
   async function prepareTurn(
     request: FastifyRequest,
     reply: FastifyReply,
-  ): Promise<RunTurnInput | null> {
+  ): Promise<{ input: RunTurnInput; allowance: Allowance } | null> {
     const parsed = ChatRequest.safeParse(request.body);
     if (!parsed.success) {
       await reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid request' });
@@ -184,8 +187,9 @@ export async function registerRoutes(app: FastifyInstance) {
      * what was spent and when it comes back without asking a second endpoint.
      */
     const wantsPhoto = Boolean(parsed.data.photo_key || parsed.data.photo_base64);
+    let allowance: Allowance;
     try {
-      await requireAllowance(userId, profile.plan, wantsPhoto ? 'photo' : 'chat');
+      allowance = await requireAllowance(userId, profile.plan, wantsPhoto ? 'photo' : 'chat');
     } catch (error) {
       if (error instanceof PlanLimitError) {
         await reply.status(402).send({ error: error.message, allowance: error.allowance });
@@ -244,7 +248,18 @@ export async function registerRoutes(app: FastifyInstance) {
       photo = { id: saved.id, mediaType, base64 };
     }
 
-    return { userId, ctx, profile, text: parsed.data.text, photo };
+    /*
+     * The allowance rides back out with the reply, and it is the *post*-turn
+     * number: `requireAllowance` counted what had been spent before this turn
+     * was permitted, and this turn is about to be spent. Adding one here rather
+     * than counting again after the fact is not a shortcut — the ledger row is
+     * written inside `runTurn`, so a second count would race it and could
+     * truthfully report a turn that has already happened as not having.
+     */
+    return {
+      input: { userId, ctx, profile, text: parsed.data.text, photo },
+      allowance: { ...allowance, used: allowance.used + 1 },
+    };
   }
 
   /*
@@ -269,11 +284,11 @@ export async function registerRoutes(app: FastifyInstance) {
   const chatLimit = app.rateLimit(CHAT_LIMIT);
 
   app.post('/chat', { onRequest: chatLimit }, async (request, reply) => {
-    const input = await prepareTurn(request, reply);
-    if (!input) return reply;
+    const prepared = await prepareTurn(request, reply);
+    if (!prepared) return reply;
 
     try {
-      return await runTurn(input);
+      return { ...(await runTurn(prepared.input)), allowance: prepared.allowance };
     } catch (error) {
       // Not a failure, and not logged as one: they have a turn in flight and
       // pressed send again. A fast, honest rejection is the right answer for a
@@ -334,13 +349,14 @@ export async function registerRoutes(app: FastifyInstance) {
    * the web client comes back to find.
    */
   app.post('/chat/stream', { onRequest: chatLimit }, async (request, reply) => {
-    const input = await prepareTurn(request, reply);
-    if (!input) return reply;
+    const prepared = await prepareTurn(request, reply);
+    if (!prepared) return reply;
 
     const stream = openEventStream(request, reply);
 
     try {
-      const response = await runTurn(input, (event) => stream.send(event));
+      const turn = await runTurn(prepared.input, (event) => stream.send(event));
+      const response = { ...turn, allowance: prepared.allowance };
       stream.send({ type: 'done', response });
       return stream.close();
     } catch (error) {
@@ -989,6 +1005,35 @@ export async function registerRoutes(app: FastifyInstance) {
       `Weight ${entry.weight_kg} kg on ${entry.local_date}`,
     );
     return entry;
+  });
+
+  // ---- Entitlements ---------------------------------------------------------
+
+  /**
+   * What this account is entitled to, and what the other tiers hold.
+   *
+   * `/entitlements` rather than the obvious `/plan`, which is already taken —
+   * by the *meal* plan, in `kitchen.ts`. Registering a second `GET /plan` does
+   * not shadow it or merge with it; Fastify refuses to boot at all, which is at
+   * least a loud way to find out.
+   *
+   * The one request behind every surface that has an opinion about money: the
+   * wall in the journal, the locked kitchen, the plan row in settings. All of
+   * them need more than one meter at a time and two of them need the *next*
+   * tier as well, so this answers the whole question rather than one fifth of
+   * it five times.
+   *
+   * The five counts run in parallel because four of the five are `period:
+   * 'ever'` or `allowed: null` on the free tier — the common case — and those
+   * cost either one indexed count or nothing at all. Serialised they would
+   * still be fast; in parallel this is one round trip's worth of latency for a
+   * screen somebody is waiting on.
+   */
+  app.get('/entitlements', async (request) => {
+    const allowances = await Promise.all(
+      METERS.map((meter) => allowanceFor(request.userId!, request.plan, meter)),
+    );
+    return { plan: request.plan, allowances, tiers: tiers() } satisfies Entitlements;
   });
 
   // ---- Profile & targets ---------------------------------------------------

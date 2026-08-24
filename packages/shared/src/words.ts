@@ -35,5 +35,19 @@ export function untilWords(iso: string, now: Date = new Date()): string {
   const hours = Math.round(minutes / 60);
   if (hours === 1) return 'in about an hour';
   if (hours < 24) return `in about ${hours} hours`;
-  return 'tomorrow';
+  if (hours < 48) return 'tomorrow';
+  /*
+   * Past a day the vagueness has to keep scaling, and it did not.
+   *
+   * This used to end at 'tomorrow', which was true for every caller it had: the
+   * recipe budget is a rolling twenty-four hours and can never point further
+   * out than that. The monthly meters can — a spent journal allowance comes
+   * back when the oldest turn ages out of a *thirty*-day window — and 'tomorrow'
+   * for something four weeks away is not vague, it is wrong, and it is wrong in
+   * the direction that brings somebody back to find nothing.
+   */
+  const days = Math.round(hours / 24);
+  if (days < 14) return `in ${days} days`;
+  if (days < 45) return 'in a few weeks';
+  return 'in a while';
 }

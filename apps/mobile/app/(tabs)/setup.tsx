@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -21,6 +22,9 @@ import { Switch } from '@/components/Switch';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { useEntitlements } from '@/lib/entitlements';
+import { billingAvailable, restore } from '@/lib/billing';
+import { meterNoun, TIER_NAMES, TIER_PITCHES } from '@/lib/plan-copy';
 import { PRIVACY_URL, SUPPORT_EMAIL, TERMS_URL } from '@/lib/links';
 import { font, type as t, useColors, withAlpha } from '@/theme';
 import { registerForPush } from '@/lib/push';
@@ -320,6 +324,8 @@ export default function SetupScreen() {
 
       <EmailSettings profile={profile} onChange={setProfile} onError={setError} />
 
+      <PlanSettings />
+
       <InsetGroup title="Account">
         <InsetRow first>
           <Text style={[t.body, styles.label, { color: colors.foreground }]}>Signed in as</Text>
@@ -537,6 +543,110 @@ function HeightFeetInches({
  * a preference, and the only one there is. Emails about the account itself are
  * not listed as a choice because they are not one.
  */
+/**
+ * The plan, where somebody goes looking for it.
+ *
+ * Every other surface that mentions money in this app appears because something
+ * was refused — the wall in the journal, the locked kitchen. That is the right
+ * way round for a nudge and the wrong way round for a *fact*: "what am I on,
+ * and how much of it is left" is a question people ask when nothing at all is
+ * wrong, and an app that will only answer it by blocking them first is one that
+ * feels like it is hiding the meter.
+ *
+ * So this is the calm version, and it is the only one that is always reachable.
+ * It leads with what is left rather than with a price, which is also the order
+ * that makes it useful to somebody who is already paying — the group every
+ * other plan surface in the app has nothing to say to.
+ */
+function PlanSettings() {
+  const colors = useColors();
+  const router = useRouter();
+  const { plan, allowances, refresh } = useEntitlements();
+  const [restoring, setRestoring] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  /*
+   * Only the meters this plan actually carries. A row reading "0 recipes left"
+   * on a tier that never sold any is a list of what you do not have, which is
+   * the tone this whole screen is trying not to take — the locked ones are the
+   * paywall's subject, not the settings screen's.
+   */
+  const carried = allowances
+    ? Object.values(allowances).filter((allowance) => allowance.allowed !== null)
+    : [];
+
+  async function restorePurchase() {
+    setRestoring(true);
+    setNote(null);
+    try {
+      setNote(
+        (await restore(refresh))
+          ? 'Restored.'
+          : 'No subscription found on this store account.',
+      );
+    } catch (e) {
+      setNote((e as Error).message);
+    } finally {
+      setRestoring(false);
+    }
+  }
+
+  return (
+    <InsetGroup title="Plan" footer={note ?? TIER_PITCHES[plan]}>
+      <InsetRow first>
+        <Text style={[t.body, styles.label, { color: colors.foreground }]}>You&apos;re on</Text>
+        <Text style={[t.bodyBold, { color: colors.foreground }]}>{TIER_NAMES[plan]}</Text>
+      </InsetRow>
+
+      {carried.map((allowance) => {
+        const left = Math.max(0, (allowance.allowed ?? 0) - allowance.used);
+        return (
+          <InsetRow key={allowance.meter}>
+            <Text style={[t.body, styles.label, { color: colors.mutedForeground }]}>
+              {/* Sentence case off the plural, so the row reads "Photo scans"
+                  rather than a label invented separately from the wall's. */}
+              {sentence(meterNoun(allowance.meter, 2))}
+            </Text>
+            <Text style={[t.bodySemibold, t.tnum, { color: colors.foreground }]}>
+              {left} left{allowance.period === 'ever' ? '' : ' this month'}
+            </Text>
+          </InsetRow>
+        );
+      })}
+
+      <Pressable
+        onPress={() => router.push('/upgrade')}
+        accessibilityRole="button"
+        style={({ pressed }) => [styles.rowButton, { opacity: pressed ? 0.6 : 1 }]}
+      >
+        <Text style={[t.body, { color: colors.caloriesText }]}>
+          {plan === 'coach' ? 'See what your plan includes' : 'See the plans'}
+        </Text>
+      </Pressable>
+
+      {/* Both stores require a restore control, and it is the one thing on this
+          screen that has to work for somebody who is already paying and cross. */}
+      {billingAvailable && (
+        <Pressable
+          onPress={() => void restorePurchase()}
+          disabled={restoring}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.rowButton, { opacity: pressed || restoring ? 0.6 : 1 }]}
+        >
+          <Text style={[t.body, { color: colors.mutedForeground }]}>
+            {restoring ? 'Checking the store…' : 'Restore a purchase'}
+          </Text>
+        </Pressable>
+      )}
+    </InsetGroup>
+  );
+}
+
+/** "photo scans" -> "Photo scans". */
+function sentence(word: string): string {
+  return word.charAt(0).toUpperCase() + word.slice(1);
+}
+
 function EmailSettings({
   profile,
   onChange,

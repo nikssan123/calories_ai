@@ -413,4 +413,92 @@ describe('the journal meter', () => {
     // on a calendar the user would have to keep.
     expect(response.json().allowance.resets_at).toEqual(expect.any(String));
   });
+
+  /**
+   * The count comes back *with* the reply, so the client can warn before the
+   * wall rather than at it.
+   *
+   * The number has to be post-turn. The gate counts what was spent before this
+   * turn is permitted, and then the turn is spent — a reply that reported the
+   * pre-turn figure would say "1 left" on the very turn that used the last one,
+   * and the next send would be a refusal the interface had just promised would
+   * not happen.
+   */
+  it('answers a successful turn with what is left of the meter', async () => {
+    await spend('text_log', 18);
+
+    const response = await chat();
+    expect(response.statusCode).toBe(200);
+    expect(response.json().allowance).toMatchObject({
+      meter: 'chat',
+      allowed: 20,
+      used: 19,
+      period: 'ever',
+    });
+  });
+
+  /** A photo turn spends the photo meter, and says so rather than the chat one. */
+  it('reports the photo meter on a photo turn', async () => {
+    const response = await chat({ text: 'What is this?', photo_base64: 'iVBORw0KGgo=' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().allowance).toMatchObject({ meter: 'photo', allowed: 1, used: 1 });
+  });
+});
+
+/**
+ * One request behind every screen that talks about money.
+ *
+ * It exists because the wall needs more than one meter at a time and also needs
+ * the *next* tier's ceilings — and because a paywall assembled from a feature
+ * list typed into a component goes stale the first time one of these numbers
+ * moves. The tiers are shipped from `plans.ts` so they cannot.
+ */
+describe('GET /entitlements', () => {
+  const get = () => app.inject({ method: 'GET', url: '/entitlements', headers: { cookie } });
+
+  it('reports the plan, every meter, and what each tier holds', async () => {
+    const body = (await get()).json();
+
+    expect(body.plan).toBe('free');
+    expect(body.allowances.map((a: { meter: string }) => a.meter)).toEqual([
+      'chat',
+      'photo',
+      'pantry_scan',
+      'recipe',
+      'meal_plan',
+    ]);
+    expect(body.allowances[0]).toMatchObject({ allowed: 20, used: 0, period: 'ever' });
+    // A locked meter, which the wall has to tell from a spent one.
+    expect(body.allowances.find((a: { meter: string }) => a.meter === 'recipe')).toMatchObject({
+      allowed: null,
+    });
+
+    expect(body.tiers.map((t: { plan: string }) => t.plan)).toEqual(['free', 'plus', 'coach']);
+    const coach = body.tiers.find((t: { plan: string }) => t.plan === 'coach');
+    expect(coach.meters.find((m: { meter: string }) => m.meter === 'recipe').allowed).toBe(
+      meterFor('coach', 'recipe').allowed,
+    );
+    expect(coach.reviews_per_day).toBe(limitsFor('coach').reviewsPerDay);
+  });
+
+  it('counts what has been spent', async () => {
+    const { recordUsage } = await import('../src/services/usage.ts');
+    for (let i = 0; i < 3; i++) {
+      await recordUsage({
+        userId: user.id,
+        kind: 'text_log',
+        provider: 'anthropic-api',
+        outcome: { text: 'x', sessionId: null, numTurns: 1, costUsd: 0.066, model: 'claude-sonnet-5' } as never,
+      });
+    }
+    const body = (await get()).json();
+    expect(body.allowances[0]).toMatchObject({ meter: 'chat', used: 3 });
+  });
+
+  /** `/plan` is the meal plan and has been since the kitchen shipped. */
+  it('does not collide with the meal plan', async () => {
+    const meal = await app.inject({ method: 'GET', url: '/plan', headers: { cookie } });
+    expect(meal.statusCode).toBe(200);
+    expect(meal.json()).toHaveProperty('week_start');
+  });
 });

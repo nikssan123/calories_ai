@@ -339,10 +339,20 @@ function toProfile(row: any): Profile {
  * owner to write a review for.
  */
 export async function listActiveUsers(): Promise<
-  Array<{ id: string; timezone: string; day_start_hour: number }>
+  Array<{ id: string; timezone: string; day_start_hour: number; plan: PlanName }>
 > {
-  return query<{ id: string; timezone: string; day_start_hour: number }>(
-    `SELECT id, timezone, day_start_hour
+  /*
+   * `plan` is selected because both scheduled passes are entitlements, not
+   * chores. The weekly review and the model-written nudge are sold — they are
+   * `reviewsPerDay` and `nudgesPerWeek` in `plans.ts`, and both are zero on
+   * free — and the scheduler is the one caller that can spend them without a
+   * request ever arriving. Without this column it did: every active account got
+   * a review every Monday and a nudge every week, whatever they were paying,
+   * which is roughly $0.65 and $0.11 a month of model time per free account
+   * against a tier whose whole design is a steady state of zero.
+   */
+  return query<{ id: string; timezone: string; day_start_hour: number; plan: PlanName }>(
+    `SELECT id, timezone, day_start_hour, plan
        FROM users
       WHERE email IS NOT NULL AND is_setup_complete = TRUE
    ORDER BY created_at ASC`,

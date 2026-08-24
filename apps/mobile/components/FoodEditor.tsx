@@ -50,6 +50,7 @@ interface DraftItem {
 export function FoodEditor({
   entryId,
   initialMeal,
+  initialDescription,
   onSaved,
   onCreate,
   onCancel,
@@ -58,6 +59,18 @@ export function FoodEditor({
   entryId: string | null;
   /** Which slot a new meal starts in. Ignored when correcting. */
   initialMeal?: Meal;
+  /**
+   * What to put in the name field. Ignored when correcting, where the entry
+   * supplies it.
+   *
+   * This exists for the wall in the journal. Somebody who typed "chicken and
+   * rice for lunch", was told their free messages are gone and is then handed
+   * an empty form has been asked to type their dinner twice — which is the
+   * moment a limit stops reading as a plan and starts reading as a punishment.
+   * The sentence they already wrote is the one thing that must survive the
+   * refusal.
+   */
+  initialDescription?: string;
   /** The corrected entry, so the card above can redraw without a reload. */
   onSaved?: (entry: FoodEntry) => void;
   /**
@@ -73,7 +86,7 @@ export function FoodEditor({
   const colors = useColors();
   const creating = entryId === null;
   const [entry, setEntry] = useState<FoodEntry | null>(null);
-  const [description, setDescription] = useState('');
+  const [description, setDescription] = useState(creating ? (initialDescription ?? '') : '');
   const [meal, setMeal] = useState<Meal>(initialMeal ?? 'lunch');
   // One blank row to type into. An empty form with an "add item" link is a form
   // that asks to be started before it can be filled in.

@@ -4,7 +4,8 @@ import Animated, { FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import type { DaySummary, LibraryRecipe, PantryItem, Recipe, RecipeAllowance, RecipeBrief } from '@ct/shared';
+import type { Allowance, DaySummary, LibraryRecipe, PantryItem, Recipe, RecipeBrief } from '@ct/shared';
+import { meterLocked, meterSpent } from '@ct/shared';
 import { listWords, untilWords } from '@ct/shared/words';
 import { foodEmoji } from '@ct/shared/food-emoji';
 import { Chunk, PressableChunk } from '@/components/Chunk';
@@ -12,9 +13,11 @@ import { Brief, BriefToggle } from '@/components/kitchen/Brief';
 import { FridgeScan } from '@/components/kitchen/FridgeScan';
 import { daysSince, Pantry, STALE_DAYS } from '@/components/kitchen/Pantry';
 import { RecipeTile } from '@/components/kitchen/RecipeTile';
+import { LockedPanel } from '@/components/PlanWall';
 import { Sheet } from '@/components/Field';
 import { Skeleton } from '@/components/Skeleton';
-import { api } from '@/lib/api';
+import { api, planLimitOf } from '@/lib/api';
+import { useEntitlements } from '@/lib/entitlements';
 import { font, type as t, useColors } from '@/theme';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
 
@@ -65,7 +68,12 @@ export default function CookScreen() {
   const [importing, setImporting] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [thinkingNote, setThinkingNote] = useState('');
-  const [allowance, setAllowance] = useState<RecipeAllowance | null>(null);
+  const [allowance, setAllowance] = useState<Allowance | null>(null);
+  /*
+   * The plan a wall would be argued from, and the re-read that shuts the
+   * controls when one is hit. See `refused` below.
+   */
+  const { adopt } = useEntitlements();
   const [tab, setTab] = useState<'ideas' | 'library'>('ideas');
   const [error, setError] = useState<string | null>(null);
 
@@ -138,7 +146,20 @@ export default function CookScreen() {
    * Null while it is still loading — an unknown budget is not a spent one, and
    * disabling on "do not know yet" would make the screen start broken.
    */
-  const spent = allowance !== null && allowance.used >= allowance.allowed;
+  const spent = allowance !== null && meterSpent(allowance);
+  /*
+   * Not sold on this plan at all, which is a different screen and not merely a
+   * different sentence.
+   *
+   * This is what the free tier is: `recipe`, `pantry_scan` and `meal_plan` are
+   * all `allowed: null` there. The check used to be `used >= allowed` alone,
+   * which against a null ceiling is `0 >= null` — *false* — so this screen drew
+   * a live "Find me something" button, a live fridge scanner and a live week
+   * planner, and every one of them died on a 402 the moment it was pressed.
+   * That is the exact failure the nullable ceiling exists to prevent; see
+   * `meterSpent`.
+   */
+  const locked = allowance !== null && meterLocked(allowance);
 
   const fresh = (items ?? []).filter((i) => !i.is_staple);
   const staleCount = fresh.filter((i) => daysSince(i.last_seen_at) >= STALE_DAYS).length;
@@ -152,7 +173,7 @@ export default function CookScreen() {
    * which is the part no recipe site could say.
    */
   const plan = (() => {
-    if (spent && allowance) {
+    if (spent && allowance?.allowed != null) {
       const back = allowance.resets_at
         ? ` You'll have another ${untilWords(allowance.resets_at)}.`
         : '';
@@ -174,6 +195,29 @@ export default function CookScreen() {
     if (remaining.kcal === 0) return `${from} — and you're at your target today, so I'll keep it light.`;
     return `${from}, aiming at the ${remaining.kcal} kcal and ${remaining.protein}g protein you have left.`;
   })();
+
+  /**
+   * A failure, sorted into the two kinds this screen has.
+   *
+   * A 402 is not a fault and must not be drawn as one — but it also means this
+   * screen's copy of the allowance is out of date, and that is the part worth
+   * acting on: the button that was just pressed should be shut before it can be
+   * pressed a second time. Adopting the allowance the refusal carried does
+   * both, because every control here is disabled off `spent` and `locked`.
+   *
+   * The panel it turns into does the talking, so nothing is set on `error` —
+   * a red sentence *and* a wall would be the same news told twice, once
+   * wrongly.
+   */
+  function refused(e: unknown): void {
+    const limit = planLimitOf(e);
+    if (limit?.allowance) {
+      setAllowance(limit.allowance);
+      adopt(limit.allowance);
+      return;
+    }
+    setError((e as Error).message);
+  }
 
   /*
    * Saving is the one thing done from the grid, because it is the one thing you
@@ -228,7 +272,8 @@ export default function CookScreen() {
       setImportOpen(false);
       setError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setImportOpen(false);
+      refused(e);
     } finally {
       setImporting(false);
     }
@@ -269,9 +314,10 @@ export default function CookScreen() {
       setRecipes(result.recipes);
       setMessage(result.message);
       setAllowance(result.allowance);
+      adopt(result.allowance);
       setError(null);
     } catch (e) {
-      setError((e as Error).message);
+      refused(e);
     } finally {
       running.current = false;
       setThinking(false);
@@ -331,11 +377,32 @@ export default function CookScreen() {
               setKitchenOpen(false);
               await cookFromPhoto(found);
             }}
-            onError={setError}
+            onError={refused}
           />
         )}
       </Sheet>
 
+      {/*
+        The kitchen, when the kitchen is not on this plan.
+        
+        It replaces the controls rather than disabling them, and that is the
+        decision worth stating: a row of greyed buttons is a screen telling you
+        what you cannot have, four times, with no way to act on it. One panel
+        says the same thing once and has somewhere to go.
+        
+        The library below stays exactly as it is — it is a static collection and
+        costs nothing to serve, so there is no reason to lock it and every
+        reason not to: it is the part of this tab a free account can actually
+        use, and hiding it would make the whole tab dead weight.
+      */}
+      {locked ? (
+        <LockedPanel
+          style={styles.ask}
+          meter="recipe"
+          title="The kitchen is part of Coach"
+          body="Photograph your fridge, get a recipe written around what's in it, and plan a week of dinners from there. The recipe library below stays free — browse it, cook from it, log it."
+        />
+      ) : (
       <View style={styles.ask}>
         <PressableChunk
           radius={999}
@@ -384,7 +451,7 @@ export default function CookScreen() {
             onSaved={loadKitchen}
             onCook={cookFromPhoto}
             canCook={!spent && !thinking}
-            onError={setError}
+            onError={refused}
           />
           <BriefToggle value={brief} onPress={() => setBriefOpen(true)} />
           <Pressable
@@ -434,6 +501,7 @@ export default function CookScreen() {
           </Pressable>
         </View>
       </View>
+      )}
 
       {/*
         The filters, with the button repeated at the foot — so setting one and
@@ -585,10 +653,24 @@ export default function CookScreen() {
           {recipes.length === 0 ? (
             <View style={styles.empty}>
               <Text style={styles.mascot}>👩‍🍳</Text>
+              {/* Which sentence depends on whether the button it names is on
+                  the screen. Pointing somebody at "Find me something" on a plan
+                  where that control has been replaced by a lock is the kind of
+                  copy that makes an app feel broken rather than limited. */}
               <Text style={[t.body, styles.centred, { color: colors.mutedForeground }]}>
-                Nothing yet. Press{' '}
-                <Text style={{ color: colors.foreground }}>Find me something</Text> and I&rsquo;ll
-                invent a recipe from what&rsquo;s in your kitchen.
+                {locked ? (
+                  <>
+                    Nothing here yet. The{' '}
+                    <Text style={{ color: colors.foreground }}>Library</Text> tab above is full of
+                    recipes you can cook and log for nothing.
+                  </>
+                ) : (
+                  <>
+                    Nothing yet. Press{' '}
+                    <Text style={{ color: colors.foreground }}>Find me something</Text> and
+                    I&rsquo;ll invent a recipe from what&rsquo;s in your kitchen.
+                  </>
+                )}
               </Text>
             </View>
           ) : (

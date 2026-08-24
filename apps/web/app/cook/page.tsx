@@ -9,9 +9,10 @@ import type {
   LibraryRecipe,
   PantryItem,
   Recipe,
-  RecipeAllowance,
+  Allowance,
   RecipeBrief,
 } from '@ct/shared';
+import { meterLocked, meterSpent } from '@ct/shared';
 import { api } from '@/lib/api';
 import { Pantry, daysSince, STALE_DAYS } from '@/components/kitchen/Pantry';
 import { FridgeScan } from '@/components/kitchen/FridgeScan';
@@ -107,7 +108,7 @@ export default function CookPage() {
    * a live button, a request, and a toast that slid away — which reads as the
    * button being broken, not as a limit being reached.
    */
-  const [allowance, setAllowance] = useState<RecipeAllowance | null>(null);
+  const [allowance, setAllowance] = useState<Allowance | null>(null);
   /*
    * Which half of the answer is on screen. Starts on your own, even when it is
    * empty.
@@ -211,10 +212,13 @@ export default function CookPage() {
    * Null while it is still loading — an unknown budget is not a spent one, and
    * disabling on "do not know yet" would make the page start broken.
    */
-  const spent = allowance !== null && allowance.used >= allowance.allowed;
+  const spent = allowance !== null && meterSpent(allowance);
+  /** Not sold on this plan at all, which is a different sentence from spent. */
+  const locked = allowance !== null && meterLocked(allowance);
 
   const plan = (() => {
-    if (spent) {
+    if (locked) return `Writing recipes is part of Coach.`;
+    if (spent && allowance?.allowed != null) {
       const back = allowance.resets_at ? ` You'll have another ${untilWords(allowance.resets_at)}.` : '';
       return `That's your ${allowance.allowed === 1 ? 'one recipe run' : `${allowance.allowed} recipe runs`} for today.${back}`;
     }

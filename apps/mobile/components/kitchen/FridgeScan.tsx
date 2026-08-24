@@ -35,7 +35,13 @@ export function FridgeScan({
   onCook: (names: string[]) => Promise<void>;
   /** False when there is no recipe budget left to cook with. */
   canCook?: boolean;
-  onError: (message: string) => void;
+  /**
+   * Something went wrong. The error itself rather than its message, because a
+   * 402 is a price rather than a fault and the caller is the one that knows
+   * what to do about it — see `refused` on the Cook screen. Anything else is
+   * still just a sentence.
+   */
+  onError: (error: unknown) => void;
   /**
    * Where it is being drawn. A chip in Cook's quiet row of ways in; a full-width
    * button inside the kitchen sheet, where photographing a shelf is one of the
@@ -82,12 +88,12 @@ export function FridgeScan({
       // something, and hiding its guess is worse than showing it unchosen.
       setChosen(new Set(found.found.filter((f) => f.confidence !== 'low').map((f) => f.name)));
       if (found.found.length === 0) {
-        onError(found.note ?? "I couldn't make out any food in that photo.");
+        onError(new Error(found.note ?? "I couldn't make out any food in that photo."));
       } else {
         setProposal(found);
       }
     } catch (e) {
-      onError((e as Error).message);
+      onError(e);
     } finally {
       setScanning(false);
     }
@@ -114,7 +120,7 @@ export function FridgeScan({
       onSaved();
       if (then === 'cook') await onCook(items.map((f) => f.name));
     } catch (e) {
-      onError((e as Error).message);
+      onError(e);
     } finally {
       setSaving(null);
     }

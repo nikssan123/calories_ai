@@ -34,6 +34,7 @@ import * as Notifications from 'expo-notifications';
 import { ToastProvider } from '@/components/Toast';
 import { SharedPhotoRoot } from '@/lib/share';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { EntitlementsProvider } from '@/lib/entitlements';
 import { ThemePreferenceProvider, useThemePreference } from '@/lib/theme-preference';
 import { paletteFor, ThemeContext, useColors } from '@/theme';
 import { registerForPush } from '@/lib/push';
@@ -87,7 +88,15 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <ThemePreferenceProvider>
           <AuthProvider>
-            <Themed />
+            {/*
+              * Inside the session and outside the theme, because it is the
+              * session it depends on: it fetches on sign-in, drops what it
+              * holds on sign-out, and tells the store which account a purchase
+              * belongs to. Nothing about it is visual.
+              */}
+            <EntitlementsProvider>
+              <Themed />
+            </EntitlementsProvider>
           </AuthProvider>
         </ThemePreferenceProvider>
       </SafeAreaProvider>
@@ -230,6 +239,15 @@ function Gate() {
         <Stack.Screen name="recipe/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="library/[slug]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="plan" options={{ animation: 'slide_from_right' }} />
+        {/*
+          * Reached from a wall in the journal, a locked kitchen and the plan row
+          * in settings — three places, none of them a tab, which is what makes
+          * it a pushed screen. `slide_from_bottom` rather than the horizontal
+          * push the others use: it is asking for something rather than going
+          * somewhere, and the vertical entrance is the one people already read
+          * as "this is a decision you can back out of".
+          */}
+        <Stack.Screen name="upgrade" options={{ animation: 'slide_from_bottom' }} />
       </Stack.Protected>
       <Stack.Protected guard={!authenticated}>
         <Stack.Screen name="login" />

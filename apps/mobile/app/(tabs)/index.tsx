@@ -21,23 +21,32 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import type {
+  Allowance,
   ChatAction,
   ChatMessage,
   ChatStreamEvent,
   DaySummary,
+  FoodItemInput,
+  Meal,
   OnboardingState,
   UnitSystem,
 } from '@ct/shared';
-import { unitsOf } from '@ct/shared';
+import { inferMeal, unitsOf } from '@ct/shared';
 import { ChatActionCard } from '@/components/ChatCard';
 import { Composer, type ComposerPayload } from '@/components/Composer';
+import { FoodEditor } from '@/components/FoodEditor';
 import { Markdown } from '@/components/Markdown';
 import { Material } from '@/components/Material';
 import { PressableChunk } from '@/components/Chunk';
+import { MeterChip, PencilGlyph, PlanWall } from '@/components/PlanWall';
 import { Skeleton } from '@/components/Skeleton';
-import { api } from '@/lib/api';
+import { useToast } from '@/components/Toast';
+import { api, planLimitOf } from '@/lib/api';
 import { uploadPhotoFile } from '@/lib/image';
 import { useAuth } from '@/lib/auth';
+import { useEntitlements } from '@/lib/entitlements';
+import { enqueue, newId } from '@/lib/outbox';
+import { useOutbox } from '@/hooks/useOutbox';
 import { duration, ease, font, type as t, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { haptics } from '@/lib/haptics';
@@ -66,6 +75,19 @@ interface Bubble {
    * wait says "logging food" rather than nothing.
    */
   tool?: string;
+  /**
+   * This turn was refused because the plan is spent, and the row is the wall
+   * rather than a reply.
+   *
+   * A field on the bubble rather than a modal over the screen, and that is the
+   * whole design: the refusal lands in the transcript where the answer would
+   * have been, scrolls with it, and is still there tomorrow. Nothing is
+   * dismissed and nothing is covered — see `PlanWall`.
+   *
+   * `text` is what they were trying to say, carried so the manual form can open
+   * with their own sentence already in it.
+   */
+  wall?: { allowance: Allowance | null; message: string; text: string };
 }
 
 /** Near enough to the end that a new message should still carry the view. */
@@ -102,6 +124,8 @@ export default function JournalScreen() {
   const colors = useColors();
   const { profile, refresh: refreshAuth, adoptProfile } = useAuth();
   const units = unitsOf(profile);
+  const toast = useToast();
+  const { adopt, refresh: refreshPlan } = useEntitlements();
 
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [day, setDay] = useState<DaySummary | null>(null);
@@ -132,6 +156,14 @@ export default function JournalScreen() {
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  /*
+   * The count, hidden for this launch.
+   *
+   * Deliberately not persisted. It comes back next launch because the number it
+   * reports will have changed by then — and a warning somebody silenced once,
+   * forever, is a warning that fails at the only moment it was for.
+   */
+  const [dismissedCount, setDismissedCount] = useState(false);
 
   const scroller = useRef<ScrollView>(null);
   /*
@@ -142,6 +174,20 @@ export default function JournalScreen() {
   const pinned = useRef(true);
   /** Guards the one-time setup kickoff against re-renders and remounts. */
   const kickedOff = useRef(false);
+  /**
+   * The day, for the callbacks that need only its date.
+   *
+   * Same reason as `bubblesRef`: `logManually` is a prop on memoised rows and
+   * must not be rebuilt every time the day's calorie total moves, but the local
+   * date it queues against has to be the current one. This app's day turns over
+   * at 4am, so taking the date off the device clock instead would file a meal
+   * eaten at 1am under tomorrow.
+   */
+  const dayRef = useRef<DaySummary | null>(null);
+  useEffect(() => {
+    dayRef.current = day;
+  }, [day]);
+
   /** Lets `send` see the messages it started from without depending on them. */
   const bubblesRef = useRef<Bubble[]>([]);
   useEffect(() => {
@@ -210,6 +256,58 @@ export default function JournalScreen() {
   const refreshDay = useCallback(() => {
     void api.day().then(setDay).catch(() => {});
   }, []);
+
+  /*
+   * A queued meal that has landed, folded into the status bar.
+   *
+   * The manual form on the wall below writes to the outbox rather than to the
+   * API — the same path Today uses, so an offline log behaves identically from
+   * either screen — and the outbox sends on its own schedule. Watching the
+   * queue *shrink* is the signal that something reached the server, and it is
+   * the only one there is: nothing else on this screen is told.
+   *
+   * A count rather than the contents, because a meal added and a meal sent in
+   * the same tick would net to zero on any comparison finer than this one and
+   * neither would be worth the redraw.
+   */
+  const queued = useOutbox().length;
+  const wasQueued = useRef(queued);
+  useEffect(() => {
+    if (queued < wasQueued.current) refreshDay();
+    wasQueued.current = queued;
+  }, [queued, refreshDay]);
+
+  /**
+   * A meal typed into the wall, handed to the queue rather than to the API.
+   *
+   * Identical to Today's manual path on purpose, down to going through the
+   * outbox on a perfect connection: two code paths that differ only under bad
+   * network are two code paths that diverge where it is hardest to notice. The
+   * `client_id` is what makes the retry safe.
+   *
+   * Nothing about this spends a meter, which is the entire point of offering it
+   * here — see `plans.ts` on why the free tier can be as small as it is.
+   */
+  const logManually = useCallback(
+    (draft: { description: string; meal: Meal; items: FoodItemInput[] }) => {
+      void enqueue({
+        kind: 'create',
+        id: newId(),
+        userId: profile?.id ?? '',
+        localDate: dayRef.current?.local_date ?? '',
+        payload: {
+          description: draft.description,
+          meal: draft.meal,
+          eaten_at: new Date().toISOString(),
+          items: draft.items,
+        },
+        queuedAt: new Date().toISOString(),
+      });
+      const kcal = draft.items.reduce((sum, item) => sum + item.kcal, 0);
+      toast.success(`Logged ${draft.description} — ${Math.round(kcal)} kcal`);
+    },
+    [profile?.id, toast],
+  );
 
   /**
    * A scan, arriving in the conversation.
@@ -328,6 +426,9 @@ export default function JournalScreen() {
           }
         }
         commitDay(result.day);
+        // What the turn just spent, so the count above the composer is right
+        // without a request of its own. See `ChatResponse.allowance`.
+        if (result.allowance) adopt(result.allowance);
         // The turn may have changed the profile — units, diet, a name. Adopting
         // it here is what makes "switch me to pounds" take effect now rather
         // than at the next launch.
@@ -342,6 +443,40 @@ export default function JournalScreen() {
           }
         }
       } catch (e) {
+        /*
+         * A price, not a fault, and told apart before anything else.
+         *
+         * This is the branch this whole screen used to get wrong: a 402 fell
+         * through to the transport handler below and became a red sentence in
+         * the conversation, which reads as the app being broken at the exact
+         * moment it is asking to be paid for. It is also the one failure where
+         * nothing was attempted — no turn ran, no meal was logged — so there is
+         * nothing to reconcile and asking the server about it would be a wasted
+         * round trip on a screen somebody is waiting on.
+         *
+         * The row becomes the wall instead, carrying what they typed so the
+         * free path opens with their own sentence in it.
+         */
+        const limit = planLimitOf(e);
+        if (limit) {
+          if (limit.allowance) adopt(limit.allowance);
+          else void refreshPlan();
+          setBubbles((prev) =>
+            prev.map((b) =>
+              b.key === replyKey
+                ? {
+                    ...b,
+                    content: '',
+                    pending: false,
+                    tool: undefined,
+                    wall: { ...limit, text: payload.text },
+                  }
+                : b,
+            ),
+          );
+          return;
+        }
+
         /*
          * A lost response is not a lost turn. The server commits the message
          * and the reply together at the very end, so a connection that dies
@@ -368,7 +503,7 @@ export default function JournalScreen() {
         setBusy(false);
       }
     },
-    [onboarding?.complete, refreshAuth, adoptProfile, commitDay],
+    [onboarding?.complete, refreshAuth, adoptProfile, commitDay, adopt, refreshPlan],
   );
 
   // A new account opens straight into setup: the agent introduces itself and
@@ -450,10 +585,23 @@ export default function JournalScreen() {
             key={bubble.key}
             bubble={bubble}
             today={day?.local_date}
+            timezone={profile?.timezone}
             onLogged={refreshDay}
+            onLogManually={logManually}
           />
         ))}
       </ScrollView>
+
+      {/*
+        The count, three messages out, and only then.
+        
+        Above the composer rather than in the conversation: it is about the app
+        rather than about the food, and a line that reappears in the transcript
+        every time you open the journal is an advert. Here it sits with the
+        controls, says a number, and goes away when it is dismissed or when
+        there is nothing left to count. See `MeterChip`.
+      */}
+      {!dismissedCount && <MeterChip meter="chat" onDismiss={() => setDismissedCount(true)} />}
 
       <Composer
         onSend={(p) => void send(p)}
@@ -708,11 +856,16 @@ function Bar({ pct, color }: { pct: number; color: string }) {
 const Row = memo(function Row({
   bubble,
   today,
+  timezone,
   onLogged,
+  onLogManually,
 }: {
   bubble: Bubble;
   today?: string;
+  /** For guessing which meal a manually typed entry belongs to. */
+  timezone?: string;
   onLogged: () => void;
+  onLogManually: (draft: { description: string; meal: Meal; items: FoodItemInput[] }) => void;
 }) {
   const colors = useColors();
 
@@ -741,6 +894,14 @@ const Row = memo(function Row({
             </View>
           )}
         </View>
+      </View>
+    );
+  }
+
+  if (bubble.wall) {
+    return (
+      <View style={styles.assistantRow}>
+        <Wall wall={bubble.wall} timezone={timezone} onLogManually={onLogManually} />
       </View>
     );
   }
@@ -786,6 +947,83 @@ const Row = memo(function Row({
     </View>
   );
 });
+
+/**
+ * A refused turn, and the two ways forward from it.
+ *
+ * The manual form opens *inside the conversation*, under the wall, rather than
+ * sending anybody to the Today tab to find it. That is the part that makes this
+ * an answer rather than a redirect: the sentence they typed is still on screen
+ * two rows up, the form opens with it already in the name field, and the meal
+ * ends up in the same day it would have.
+ *
+ * `logged` is what happens afterwards, and it matters more than it looks. A
+ * form that simply closed would leave the wall sitting there as the last word
+ * on a turn that did, in the end, work — so the card says so instead, and says
+ * the thing worth knowing: that path is always open and never costs anything.
+ */
+function Wall({
+  wall,
+  timezone,
+  onLogManually,
+}: {
+  wall: NonNullable<Bubble['wall']>;
+  timezone?: string;
+  onLogManually: (draft: { description: string; meal: Meal; items: FoodItemInput[] }) => void;
+}) {
+  const colors = useColors();
+  const [open, setOpen] = useState(false);
+  const [logged, setLogged] = useState(false);
+
+  if (logged) {
+    return (
+      <View style={styles.wallDone}>
+        <PencilGlyph color={colors.mutedForeground} size={13} />
+        <Text style={[t.footnoteSemibold, styles.wallDoneText, { color: colors.mutedForeground }]}>
+          Logged by hand — that way is always open, and never counts against
+          anything.
+        </Text>
+      </View>
+    );
+  }
+
+  if (open) {
+    return (
+      <View style={styles.wallForm}>
+        <FoodEditor
+          entryId={null}
+          initialMeal={inferMeal(new Date(), timezone ?? 'UTC')}
+          // Their own words, so the refusal did not cost them the sentence.
+          initialDescription={wall.text}
+          onCreate={(draft) => {
+            onLogManually(draft);
+            setLogged(true);
+          }}
+          onCancel={() => setOpen(false)}
+        />
+      </View>
+    );
+  }
+
+  return (
+    <PlanWall
+      allowance={wall.allowance}
+      message={wall.message}
+      /*
+       * Only where there is genuinely a free way to do the same thing. That is
+       * true of both journal meters — a message and a photo scan are both ways
+       * of saying what you ate, and typing it in says the same thing for
+       * nothing. It would not be true of a meal plan, which is why this is a
+       * check rather than an assumption.
+       */
+      onLogManually={
+        !wall.allowance || wall.allowance.meter === 'chat' || wall.allowance.meter === 'photo'
+          ? () => setOpen(true)
+          : undefined
+      }
+    />
+  );
+}
 
 /**
  * The dots are for silence, not for waiting.
@@ -884,6 +1122,11 @@ function ChatSkeleton() {
 const TUCK = 16;
 
 const styles = StyleSheet.create({
+  // The wall and the form it opens both sit at the assistant row's own width,
+  // with the ledge's overhang held open so the card below does not ride up it.
+  wallForm: { paddingBottom: 4 },
+  wallDone: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 2 },
+  wallDoneText: { flexShrink: 1 },
   flex: { flex: 1 },
   status: { borderBottomWidth: 2, paddingHorizontal: 16, paddingBottom: 10 },
   statusSkeleton: { height: 16, width: 160, borderRadius: 8 },

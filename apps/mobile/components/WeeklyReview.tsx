@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import type { AdaptiveProposal, WeeklyReview as Review } from '@ct/shared';
 import { PressableChunk } from '@/components/Chunk';
 import { InsetGroup } from '@/components/InsetGroup';
-import { api } from '@/lib/api';
+import { api, planLimitOf } from '@/lib/api';
+import { useEntitlements } from '@/lib/entitlements';
+import { TIER_NAMES } from '@/lib/plan-copy';
 import { font, type as t, useColors } from '@/theme';
 
 /**
@@ -17,6 +20,22 @@ import { font, type as t, useColors } from '@/theme';
  */
 export function WeeklyReview({ onError }: { onError: (message: string) => void }) {
   const colors = useColors();
+  const router = useRouter();
+  const { plan, tiers } = useEntitlements();
+  /*
+   * Whether writing one is on this plan at all.
+   *
+   * Read off the tier rather than hardcoded to `free`, because the ceiling is
+   * `reviewsPerDay` in `plans.ts` and that is where it should stay decided —
+   * this component should not be the second place that knows which tiers
+   * include a review.
+   *
+   * Undefined while the tiers are still in flight, which is treated as *not*
+   * locked: a paying account must never see a frame of this offering to sell
+   * them something they already have.
+   */
+  const locked = tiers.find((tier) => tier.plan === plan)?.reviews_per_day === 0;
+  const upsell = tiers.find((tier) => tier.plan !== plan && tier.reviews_per_day > 0);
   const [review, setReview] = useState<Review | null>(null);
   const [adaptive, setAdaptive] = useState<AdaptiveProposal | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,7 +59,11 @@ export function WeeklyReview({ onError }: { onError: (message: string) => void }
       setReview(await api.runReview());
       await load();
     } catch (e) {
-      onError((e as Error).message);
+      // A 402 here means the tiers arrived late or the plan changed under us.
+      // Sending them to the wall is a better answer than a red sentence about
+      // a feature that is simply not bought — see `planLimitOf`.
+      if (planLimitOf(e)) router.push('/upgrade');
+      else onError((e as Error).message);
     } finally {
       setWriting(false);
     }
@@ -73,10 +96,16 @@ export function WeeklyReview({ onError }: { onError: (message: string) => void }
             numbers actually showed, and whether your target needs to move. No lectures, just
             the picture.
           </Text>
+          {/*
+            The one button, and which one it is depends on whether this is
+            bought. Same shape, same place, same weight — a locked feature that
+            visibly rearranges the screen makes the limit feel like damage,
+            where swapping the verb makes it feel like a choice.
+          */}
           <PressableChunk
             depth={3}
             radius={999}
-            onPress={() => void writeNow()}
+            onPress={() => (locked ? router.push('/upgrade') : void writeNow())}
             disabled={writing}
             accessibilityRole="button"
             style={styles.writeWrap}
@@ -95,7 +124,11 @@ export function WeeklyReview({ onError }: { onError: (message: string) => void }
               />
             </Svg>
             <Text style={[t.footnoteBold, { color: colors.secondaryForeground }]}>
-              {writing ? 'Writing…' : 'Write one now'}
+              {locked
+                ? `Part of ${upsell ? TIER_NAMES[upsell.plan] : 'Plus'}`
+                : writing
+                  ? 'Writing…'
+                  : 'Write one now'}
             </Text>
           </PressableChunk>
         </View>

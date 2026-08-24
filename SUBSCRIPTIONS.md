@@ -2,9 +2,10 @@
 
 **Built, as of 2026-08-24.** The tiers below are in `apps/api/src/services/plans.ts`,
 the meters are enforced off the cost ledger in `services/usage.ts`, and `users.plan`
-carries `free | plus | coach` after `034`. What is *not* built is Stripe and the
-paywall screen — the entitlement decides, but nothing yet takes money or explains
-itself beyond one sentence.
+carries `free | plus | coach` after `034`. The phone now explains itself too — the
+count above the composer, the wall in the journal, the locked panels, and
+`app/upgrade.tsx` behind them, all off `GET /entitlements`. What is *not* built is
+Stripe, and the web says nothing about any of this.
 
 Previous versions of this document priced the tiers from a cost model. This one
 prices them from production. The difference between the two is the whole content of
@@ -193,14 +194,38 @@ refactor.
 2. ~~The lifetime photo counter.~~ **Done** — `period: 'ever'` on the free meters.
 3. **Stripe.** Checkout, the webhook, and the column write. Annual as the default
    selection. Sell on the web where the post-Epic link-out window allows it; keep IAP
-   at 15% as the convenient path.
-4. **The wall itself.** One sentence and two buttons. The sentences exist
-   (`sentenceFor` in `usage.ts`) and the API returns the allowance with every 402, so
-   what is missing is the screen. This is the surface that earns the revenue.
+   at 15% as the convenient path. The store half is done — RevenueCat's webhook in
+   `services/billing.ts`, and `lib/billing.ts` on the phone.
+4. ~~The wall itself.~~ **Done, on mobile** — `components/PlanWall.tsx` and
+   `app/upgrade.tsx`, fed by `GET /entitlements`.
+
+   It is not one sentence and two buttons, and the reason is the argument this
+   document already makes for the free tier. If the wall stopped being an exit
+   because typing a meal in is unmetered, then the wall's *primary* button has to be
+   that — not the checkout. So a refused turn lands in the transcript as a card that
+   opens the manual form inline, with the sentence they just typed already in it,
+   and offers the upgrade beside it rather than instead of it.
+
+   Three surfaces, not one, because a limit that is only ever met as a refusal is a
+   trap however well it is worded:
+
+   - **The count**, above the composer, from three turns out. `ChatResponse` now
+     carries the allowance the turn just spent, so this costs no request.
+   - **The wall**, in the conversation, where the reply would have been.
+   - **The locked panel**, drawn *instead of* the controls on Cook and the week
+     planner rather than next to disabled ones.
+
+   The web has none of this yet, and should not until there is something on it to
+   pay with.
 5. **A billing period.** The meters roll over 30 days rather than resetting on a
    date, deliberately — there is no billing period to anchor to yet, and a rolling
    window has no cliff. When Stripe lands, `allowanceFor` is the one function that
    has to learn about it.
+6. **A templated push for free accounts.** The model-written nudge is a paid feature
+   and `dueNudge` has always refused one on `free` — but the templated replacement
+   this document promises in its place ("which FCM already sends and which costs
+   nothing") was never built, so the free tier is simply silent. That is the correct
+   spend and the wrong product.
 
 ## Open questions
 
@@ -211,4 +236,22 @@ refactor.
 - **Whether Haiku is really unusable for the escalated languages.** The largest
   remaining lever, and it is a quality question rather than a cost one.
 - **Conversion.** Every free-tier number is a guess until there is a paywall to
-  measure it against.
+  measure it against. There is one now, on mobile; nothing measures it yet.
+
+## A leak this closed
+
+**The scheduled weekly review ignored the plan.** `POST /reviews/run` has answered
+402 to a free account since the meters landed, which made the entitlement look
+covered — but that route is the door somebody knocks on, and `reviewPass` knocks on
+its own every Monday for every active account. Free accounts were refused the button
+and then had the review published for them anyway, at roughly $0.15 a week each.
+
+Against the table above that is **$0.65/month per free account**, on a tier this
+document states has a steady state of $0.00 — enough to make the lifetime-grant
+argument in §"Free" wrong by a factor of five over a year. Fixed by selecting `plan`
+in `listActiveUsers` and skipping accounts whose `reviewsPerDay` is zero.
+
+The nudge pass needed no equivalent: `dueNudge` reads `nudgesPerWeek` off the plan
+as its first question. The general lesson is the one worth keeping — an entitlement
+enforced only at the route is enforced only against requests, and the scheduler is
+not a request.

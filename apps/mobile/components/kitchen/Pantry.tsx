@@ -44,7 +44,8 @@ export function Pantry({
    * end in dinner rather than dead-ending at a list.
    */
   onCook: (names: string[]) => Promise<void>;
-  onError: (message: string) => void;
+  /** The error, not its message — see `FridgeScan`, which this forwards to. */
+  onError: (error: unknown) => void;
 }) {
   const colors = useColors();
   const undoably = useUndoableRemoval();
@@ -80,7 +81,7 @@ export function Pantry({
       setDraft('');
       onChanged();
     } catch (e) {
-      onError((e as Error).message);
+      onError(e);
     } finally {
       setBusy(false);
     }
@@ -91,7 +92,7 @@ export function Pantry({
       await api.updatePantryItem(item.id, { seen: true });
       onChanged();
     } catch (e) {
-      onError((e as Error).message);
+      onError(e);
     }
   }
 
@@ -103,7 +104,7 @@ export function Pantry({
         void api
           .deletePantryItem(item.id)
           .then(onChanged)
-          .catch((e: Error) => onError(e.message));
+          .catch(onError);
       },
       restore: () => setHidden((prev) => prev.filter((id) => id !== item.id)),
     });

@@ -18,7 +18,15 @@ const MONDAY_MORNING = new Date('2026-03-16T06:30:00Z');
 let user: TestUser;
 
 beforeEach(async () => {
-  user = await createUser();
+  /*
+   * On a plan that carries a review, because that is what these tests are
+   * about — the timing. Both scheduled passes are entitlements now (`plans.ts`
+   * puts `reviewsPerDay` and `nudgesPerWeek` at zero on free), so a default
+   * `free` fixture would make every case below pass for the wrong reason: the
+   * clock would be right and nothing would publish. The entitlement itself is
+   * covered separately at the foot of `runDueReviews`.
+   */
+  user = await createUser({ plan: 'plus' });
   // Something in the week under review, or the account is treated as dormant.
   await addMeal(user, { date: '2026-03-11', kcal: 2100 });
 });
@@ -73,6 +81,27 @@ describe('runDueReviews', () => {
     expect(result).toMatchObject({ considered: 1, generated: [], skipped: 1 });
   });
 
+  /**
+   * The entitlement, on the one path that can spend it unasked.
+   *
+   * `POST /reviews/run` has answered 402 to a free account since the meters
+   * landed, and that made this look covered — but the route is the door
+   * somebody knocks on, and this pass knocks on its own every Monday for every
+   * active account. Free accounts were refused the button and posted the
+   * review anyway, at roughly $0.15 a week each, against a tier whose whole
+   * design is a steady state of zero.
+   */
+  it('skips an account whose plan does not include a review', async () => {
+    const free = await createUser({ plan: 'free', timezone: 'Europe/Sofia' });
+    await addMeal(free, { date: '2026-03-11', kcal: 2100 });
+    scriptAgent({ text: 'A steady week.' });
+
+    const result = await runDueReviews(MONDAY_MORNING);
+
+    expect(result.generated).toEqual([user.id]);
+    expect(await listReviews(free.id)).toEqual([]);
+  });
+
   it('catches up later the same day after a restart, but only once', async () => {
     scriptAgent({ text: 'Caught up.' });
     // 14:30 Sofia — hours after the publishing hour the process slept through.
@@ -117,7 +146,7 @@ describe('runDueReviews', () => {
   });
 
   it('keeps going when one account fails, and reports it', async () => {
-    const second = await createUser();
+    const second = await createUser({ plan: 'plus' });
     await addMeal(second, { date: '2026-03-11', kcal: 2000 });
 
     scriptAgent({ throws: 'model unavailable' }, { text: 'The other one worked.' });
@@ -154,7 +183,7 @@ describe('runDueReviews', () => {
   });
 
   it('serves each timezone at its own Monday morning', async () => {
-    const la = await createUser({ timezone: 'America/Los_Angeles' });
+    const la = await createUser({ timezone: 'America/Los_Angeles', plan: 'plus' });
     await addMeal(la, { date: '2026-03-11', kcal: 2000 });
 
     scriptAgent({ text: 'Sofia.' });
@@ -197,7 +226,7 @@ describe('the weekly review email', () => {
   });
 
   it('is not sent to an account that turned it off', async () => {
-    const quiet = await createUser({ notify_weekly_review: false });
+    const quiet = await createUser({ notify_weekly_review: false, plan: 'plus' });
     await addMeal(quiet, { date: '2026-03-11', kcal: 2000 });
     scriptAgent({ text: 'One.' }, { text: 'Two.' });
 

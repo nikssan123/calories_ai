@@ -16,6 +16,7 @@ import { formatMass } from '@ct/shared';
 import { foodEmoji } from '@ct/shared/food-emoji';
 import { PressableChunk } from '@/components/Chunk';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
+import { LockedPanel } from '@/components/PlanWall';
 import { NumberField } from '@/components/Field';
 import { Skeleton } from '@/components/Skeleton';
 import { Switch } from '@/components/Switch';
@@ -26,6 +27,7 @@ import { font, type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
 import { removeAction, SwipeRow } from '@/components/SwipeRow';
 import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
+import { useEntitlements } from '@/lib/entitlements';
 
 /**
  * The week's dinners, and the shop that follows from them.
@@ -52,6 +54,15 @@ export default function PlanScreen() {
   const [loading, setLoading] = useState(true);
   const [thinking, setThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /*
+   * Whether a week can be planned at all on this account. `meal_plan` is
+   * `allowed: null` outside Coach, and the button below spends the single most
+   * expensive action in the product — roughly $0.63 of model — so it is the
+   * last one that should be live on a plan that does not carry it.
+   */
+  const { allowances } = useEntitlements();
+  const planLocked = allowances ? allowances.meal_plan.allowed === null : false;
 
   const [wants, setWants] = useState('');
   const [servings, setServings] = useState<number | null>(null);
@@ -199,6 +210,22 @@ export default function PlanScreen() {
         </>
       ) : (
         <>
+          {/*
+            The form, or the reason there is no form. Same slot in the page —
+            a locked feature that leaves a dead form behind is a screen inviting
+            somebody to fill in four fields for a button that will refuse them.
+            
+            Everything below stays: a week already planned, its dinners and its
+            shopping list are theirs, and they do not stop being theirs because
+            a subscription lapsed.
+          */}
+          {planLocked ? (
+            <LockedPanel
+              meter="meal_plan"
+              title="Planning a week is part of Coach"
+              body="Seven dinners against your targets and what's already in your kitchen, batched where it helps, with the shopping list written for you."
+            />
+          ) : (
           <InsetGroup
             title="🗓  Plan it"
             footer="Seven dinners against your targets and what's already in the kitchen. Batching means one cook covering two nights."
@@ -270,6 +297,7 @@ export default function PlanScreen() {
               </PressableChunk>
             </View>
           </InsetGroup>
+          )}
 
           {plan && (
             <InsetGroup title="🍽  Dinners">

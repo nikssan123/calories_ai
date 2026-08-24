@@ -1,6 +1,7 @@
 import Constants from 'expo-constants';
 import { fetch as expoFetch } from 'expo/fetch';
-import { createApiClient } from '@ct/api-client';
+import { ApiError, createApiClient } from '@ct/api-client';
+import { Allowance } from '@ct/shared';
 import { currentToken } from '@/lib/session';
 
 /**
@@ -54,3 +55,25 @@ export const api = createApiClient({
    */
   fetchImpl: expoFetch as unknown as typeof fetch,
 });
+
+/**
+ * A refusal that is a price rather than a fault.
+ *
+ * The API answers **402** when a meter is spent and **429** when somebody is
+ * simply going too fast, and the difference is the whole reason both statuses
+ * exist: one is a paywall and the other is a retry. Collapsing them — which is
+ * what a client that only reads `error.message` does — is how a plan limit ends
+ * up looking like a bug in the app.
+ *
+ * The allowance rides along in the body on every 402 that has one, so the
+ * screen can name the number without a second request. Parsed defensively: a
+ * 402 from something that has not learned to send one is still a wall, and
+ * falling back to the sentence the server wrote is a worse wall but a correct
+ * one.
+ */
+export function planLimitOf(error: unknown): { allowance: Allowance | null; message: string } | null {
+  if (!(error instanceof ApiError) || error.status !== 402) return null;
+  const body = error.body as { allowance?: unknown } | undefined;
+  const parsed = Allowance.safeParse(body?.allowance);
+  return { allowance: parsed.success ? parsed.data : null, message: error.message };
+}

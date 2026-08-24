@@ -1,4 +1,4 @@
-import type { MeterName, PlanName } from '@ct/shared';
+import { METERS, PLANS, type MeterName, type PlanName, type PlanTier } from '@ct/shared';
 
 /**
  * What each plan is allowed to spend.
@@ -273,6 +273,33 @@ const LIMITS: Record<PlanName, PlanLimits> = {
     nudgesPerWeek: 1,
   },
 };
+
+/**
+ * Every tier, in the shape the wall reads.
+ *
+ * This exists so that the screen selling a plan and the file enforcing it
+ * cannot disagree. The alternative — a feature list typed into a paywall
+ * component — survives exactly until the first time one of the numbers above
+ * moves, and then the app is advertising a ceiling it does not honour, which is
+ * the one kind of copy error that is also a refund request.
+ *
+ * Ordered as `PLANS` is, which is cheapest first, because that is the order the
+ * wall has to draw them in.
+ */
+export function tiers(): PlanTier[] {
+  return PLANS.map((plan) => {
+    const limits = limitsFor(plan);
+    return {
+      plan,
+      meters: METERS.map((meter) => {
+        const { allowed, period } = meterFor(plan, meter);
+        return { meter, allowed, period };
+      }),
+      reviews_per_day: limits.reviewsPerDay,
+      nudges_per_week: limits.nudgesPerWeek,
+    };
+  });
+}
 
 export function limitsFor(plan: PlanName): PlanLimits {
   // An unrecognised value falls back to the strictest plan rather than throwing.

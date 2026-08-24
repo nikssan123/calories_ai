@@ -206,6 +206,10 @@ describe('listActiveUsers', () => {
     await query("INSERT INTO users (display_name, is_setup_complete) VALUES (NULL, TRUE)");
 
     const active = await listActiveUsers();
-    expect(active).toEqual([{ id: ready.id, timezone: 'Europe/Sofia', day_start_hour: 4 }]);
+    // The plan rides along because both scheduled passes are entitlements —
+    // see the note on the query.
+    expect(active).toEqual([
+      { id: ready.id, timezone: 'Europe/Sofia', day_start_hour: 4, plan: 'free' },
+    ]);
   });
 });

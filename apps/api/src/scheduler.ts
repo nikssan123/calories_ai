@@ -11,6 +11,7 @@ import { expirePlans } from './services/billing.ts';
 import { dueNudge, NUDGE_HOUR } from './services/nudges.ts';
 import { reviewForWeek, reviewWeekFor } from './services/reviews.ts';
 import { listActiveUsers } from './services/user.ts';
+import { limitsFor } from './services/plans.ts';
 import { localDateFor, localPartsFor } from './time.ts';
 
 /**
@@ -81,6 +82,28 @@ async function reviewPass(now: Date, logger?: FastifyBaseLogger): Promise<TickRe
 
     try {
       if (!isReviewTime(now, ctx.timezone)) {
+        result.skipped += 1;
+        continue;
+      }
+
+      /*
+       * The review is sold, and this is the only path that can spend one
+       * without anybody asking.
+       *
+       * `POST /reviews/run` has answered 402 to a plan with no reviews since
+       * the entitlement landed, but that guards the door somebody knocks on.
+       * This pass knocks on its own, every Monday, for every active account —
+       * so until now a free account was refused the button and then posted the
+       * result anyway. `SUBSCRIPTIONS.md` prices the review into Plus at
+       * 4.3 x $0.15 a month and states the free tier's steady state as $0.00;
+       * both were true of the tiers and false of the deployment.
+       *
+       * The nudge pass below needs no equivalent: `dueNudge` reads
+       * `nudgesPerWeek` off the plan as its very first question, so the zero on
+       * free already refuses there. A second gate here would be a second place
+       * that decides the same thing.
+       */
+      if (limitsFor(user.plan).reviewsPerDay === 0) {
         result.skipped += 1;
         continue;
       }

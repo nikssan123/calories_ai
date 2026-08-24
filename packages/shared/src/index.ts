@@ -130,8 +130,96 @@ export const Allowance = z.object({
   period: z.enum(['month', 'ever']),
   /** When the oldest run in the window ages out. Null when nothing is waiting. */
   resets_at: z.string().nullable(),
+  /**
+   * Scans bought outright, still unspent. Photos only; zero everywhere else.
+   *
+   * Deliberately a separate number rather than being folded into `allowed`.
+   * They behave differently and a screen has to be able to say so: the grant
+   * comes back every month and these do not come back at all, they are stock.
+   * A single "37 left" would be true this month and a lie the next, which is
+   * the same mistake `allowed: null` versus `0` exists to avoid.
+   *
+   * Defaulted so a client built against the older shape still parses.
+   */
+  credits: z.number().default(0),
 });
 export type Allowance = z.infer<typeof Allowance>;
+
+/**
+ * What one tier is worth, as the tier itself rather than as this account's
+ * remainder.
+ *
+ * The wall has to say what paying buys, and there are only two places that
+ * sentence can be written: next to the numbers in `plans.ts`, or a second time
+ * in a paywall screen. The second is how a tier quietly changes and the screen
+ * selling it goes on advertising last month's ceilings — so the ceilings are
+ * shipped to the client and the copy is generated from them.
+ *
+ * Prices are deliberately *not* here. A store knows what this person's currency
+ * is and what the local tax does to the number; a server hardcoding "$79.99"
+ * would be wrong in most of the world. The price comes off the store's own
+ * product, and this carries only what the money gets you.
+ */
+export const PlanTier = z.object({
+  plan: PlanName,
+  meters: z.array(
+    z.object({
+      meter: MeterName,
+      allowed: z.number().nullable(),
+      period: z.enum(['month', 'ever']),
+    }),
+  ),
+  reviews_per_day: z.number().int(),
+  nudges_per_week: z.number().int(),
+});
+export type PlanTier = z.infer<typeof PlanTier>;
+
+/**
+ * Everything a screen needs to talk about money, in one request.
+ *
+ * One endpoint rather than a meter at a time, because every surface that has an
+ * opinion about the plan needs more than one of these at once: the wall names
+ * what was spent *and* what the next tier holds, and the settings screen lists
+ * all five. Five round trips to draw one card is the kind of thing that makes a
+ * paywall feel slow, and a paywall that feels slow does not get read.
+ */
+export const Entitlements = z.object({
+  plan: PlanName,
+  /** One per meter, in `METERS` order. */
+  allowances: z.array(Allowance),
+  /** Every tier, including the one they are on, so the wall can compare. */
+  tiers: z.array(PlanTier),
+});
+export type Entitlements = z.infer<typeof Entitlements>;
+
+/**
+ * The three questions every screen asks an allowance, answered once.
+ *
+ * `allowed: null` and `used >= allowed` both mean "this button will 402", and
+ * every surface that draws a button has to collapse them — but they read
+ * completely differently in a sentence, so the distinction has to survive as
+ * far as the copy. Two predicates rather than one enum because that is how the
+ * call sites actually branch: shut the button on `spent`, choose the words on
+ * `locked`.
+ *
+ * Written here rather than in either client because both of them had a copy,
+ * and both copies were the same bug: `used >= allowed` against a null `allowed`
+ * is `0 >= null`, which is *false*, so a locked kitchen drew an enabled button
+ * that failed on press. That is the exact shape of failure the null was
+ * introduced to prevent.
+ */
+export function meterLocked(allowance: Allowance): boolean {
+  return allowance.allowed === null;
+}
+
+export function meterSpent(allowance: Allowance): boolean {
+  return allowance.allowed === null || allowance.used >= allowance.allowed;
+}
+
+/** How many are left. Zero on a locked meter, which is true and is not a count. */
+export function meterRemaining(allowance: Allowance): number {
+  return allowance.allowed === null ? 0 : Math.max(0, allowance.allowed - allowance.used);
+}
 
 /** Macros in grams + energy in kcal. Shared by items, entries and daily totals. */
 export const Nutrition = z.object({
@@ -1636,6 +1724,22 @@ export const ChatResponse = z.object({
    * Free to include — the turn already read it.
    */
   profile: Profile,
+  /**
+   * What is left of the meter this turn just spent.
+   *
+   * Optional because it is an addition and an older client must not fail to
+   * parse a reply without it — but present on every turn the current API
+   * serves, and free: the gate counted this exact number a moment ago in order
+   * to decide the turn was allowed at all, so this is that count plus the turn,
+   * not a second query.
+   *
+   * It exists so the journal can warn *before* the wall instead of at it. A
+   * limit that arrives as a refusal is a trap; the same limit arriving as
+   * “three left” two turns earlier is a plan. Nothing else on the client can
+   * know this without asking, and asking after every turn to draw a quiet line
+   * of small text is not worth a round trip.
+   */
+  allowance: Allowance.optional(),
 });
 export type ChatResponse = z.infer<typeof ChatResponse>;
 
