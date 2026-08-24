@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, Plus, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PantryItem } from '@ct/shared';
 import { api } from '@/lib/api';
@@ -15,9 +15,9 @@ import { cn } from '@/lib/utils';
  *
  * The screen's job is to make the list easy to *correct*, not easy to maintain:
  * nobody keeps an inventory current, so everything here is built around a
- * ten-second pass before asking for ideas. Ages are shown out loud, a stale item
- * is one tap from confirmed or gone, and staples fold away because "do you still
- * have salt" is not a question worth anyone's screen space.
+ * ten-second pass before asking for ideas. A stale item is one click from
+ * confirmed or gone, and staples fold away because "do you still have salt" is
+ * not a question worth anyone's screen space.
  *
  * In a dialog, and that is the important part. The kitchen is a *precondition*
  * for the question the Cook screen exists to answer, not the answer — but it
@@ -25,14 +25,34 @@ import { cn } from '@/lib/utils';
  * so the recipes started below the fold. It is a chip in the title row now, and
  * this is what the chip opens.
  *
- * A dialog rather than a panel because of what sharing a screen did to it. Open
- * in the page, its "add ingredients" field sat two hundred pixels above the ask
- * box in an identical pill, and two identical inputs stacked like that read as
- * one feature implemented twice. They are not remotely the same: this writes
- * rows to a list that outlives the visit, and that one is a phrase steering a
- * single question. A modal makes the page behind it inert, so exactly one of
- * the two is ever live — and being somewhere else is the clearest possible
- * statement that it is something else.
+ * # Shaped like a kitchen, not like a ledger
+ *
+ * The version before this was a stack of full-width rows: label, field, hint,
+ * a full-width camera button, then one bordered row per ingredient carrying a
+ * name and a second line of prose underneath it. Twelve tins of things became
+ * twenty-four lines of text and three screens of scrolling, and the reaction it
+ * got — "a lot of text and just a list" — is the correct reading of that shape.
+ * A ledger is for things you audit. This is a bag of shopping.
+ *
+ * So three changes, each removing something rather than decorating it:
+ *
+ *   1. **One compose row.** The field, the add and the camera sit on a single
+ *      line. The label above the field said "Add to the list" over a field
+ *      whose placeholder already read "chicken, rice, peppers", and the hint
+ *      below it said the list only has to be roughly right — which is what the
+ *      dialog's own subtitle says, one inch higher. Three sentences, one fact.
+ *
+ *   2. **Ingredients are chips.** A name is one or two words; giving each one a
+ *      44px row, a divider and a subtitle was spending a whole line on a word.
+ *      Wrapped chips put a stocked kitchen on one screen and, more importantly,
+ *      make it look like a quantity of *food* rather than a table of records.
+ *
+ *   3. **The age moved to where it does something.** "Added today" under every
+ *      single item was the bulk of the text and none of the information: the
+ *      age only matters when it is old enough to doubt. Anything past
+ *      STALE_DAYS is lifted out into its own group at the top, with the age
+ *      spelled out and both answers next to it; everything fresher just shows
+ *      its name. The list stops narrating and starts asking.
  *
  * The camera is here and also under the ask, which is a repeat rather than the
  * duplicate it looks like: both open the same dialog, and that dialog is where
@@ -62,6 +82,8 @@ export function Pantry({
 
   const staples = items.filter((i) => i.is_staple);
   const fresh = items.filter((i) => !i.is_staple);
+  const stale = fresh.filter((i) => daysSince(i.last_seen_at) >= STALE_DAYS);
+  const current = fresh.filter((i) => daysSince(i.last_seen_at) < STALE_DAYS);
 
   async function add() {
     const name = draft.trim();
@@ -105,139 +127,192 @@ export function Pantry({
   }
 
   return (
-    <div className="divide-border divide-y-2">
+    <div className="space-y-4 p-4">
       {/*
-        Squared off, labelled, and with a button that says the verb.
-        
-        This field and the ask box used to be the same pill — same height, same
-        radius, same grey placeholder — sitting two hundred pixels apart, and
-        the honest reaction to that is the one it got: two inputs that look
-        identical are two inputs that do the same thing. They do not. This one
-        writes a row to a list that persists; that one is a phrase attached to a
-        single question and then thrown away. Different jobs get different
-        shapes, and this one is shaped like the list editor it is.
+        One line: what you type, the verb, and the camera.
+
+        The field is a pill rather than the squared box it was. The reason it
+        was squared — that it looked identical to the ask box on the page
+        behind, two hundred pixels away — stopped applying when this moved into
+        a modal: the page underneath is inert and mostly hidden, so there is no
+        longer a pair to tell apart. What is left is a field that wants to look
+        like the round, chunky controls it is sitting between.
       */}
-      <div className="p-3">
-        <label
-          htmlFor="pantry-add"
-          className="text-footnote text-muted-foreground mb-1.5 block font-medium"
+      <div className="flex items-center gap-2">
+        <Input
+          id="pantry-add"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void add();
+          }}
+          placeholder="chicken, rice, peppers"
+          aria-label="Add to the list"
+          className="bg-muted/60 border-border h-11 min-w-0 flex-1 rounded-full border-2 px-4 text-body"
+        />
+        <Button
+          variant="secondary"
+          size="icon-lg"
+          disabled={!draft.trim() || busy}
+          onClick={() => void add()}
+          aria-label="Add to the list"
+          title="Add to the list"
+          className="rounded-full"
         >
-          Add to the list
-        </label>
-        <div className="flex items-center gap-2">
-          <Input
-            id="pantry-add"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void add();
-            }}
-            placeholder="chicken, rice, peppers"
-            className="bg-muted/60 border-border h-11 rounded-xl border-2 px-3 text-body"
-          />
-          <Button
-            variant="secondary"
-            disabled={!draft.trim() || busy}
-            onClick={() => void add()}
-            className="h-11 shrink-0 gap-1.5 rounded-xl px-4"
-          >
-            <Plus size={16} />
-            Add
-          </Button>
-        </div>
-        <p className="text-footnote text-muted-foreground mt-1.5 font-medium">
-          A rough list is plenty — it only has to be close enough to cook from.
-        </p>
+          <Plus size={18} />
+        </Button>
+        <FridgeScan variant="icon" onSaved={onChanged} onCook={onCook} />
       </div>
 
-      {/* Photographing a shelf is a way of filling this list, so the button for
-          it belongs on the list. It opens the same dialog the chip under the
-          ask opens, and that dialog still offers both endings — the panel this
-          sits in is shut by default, so the two triggers are never on screen
-          at the same time unless you went looking for the kitchen. */}
-      <FridgeScan variant="button" onSaved={onChanged} onCook={onCook} />
+      {/*
+        The only part of the list that is asking you something, in the only
+        shape that can ask: a group of its own, at the top, with both answers
+        sitting next to each item.
 
-      {fresh.length === 0 ? (
-        <p className="text-muted-foreground px-4 py-4 text-body">
-          Nothing here yet. Add a few things, or photograph your fridge.
-        </p>
-      ) : (
-        fresh.map((item) => {
-          const days = daysSince(item.last_seen_at);
-          const stale = days >= STALE_DAYS;
-          return (
-            <div key={item.id} className="flex items-center gap-3 px-4 py-3">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-body">
+        These used to be ordinary rows distinguished by the colour of their
+        subtitle, which is a distinction nobody makes while scanning — and the
+        "Still have it" button appeared and disappeared row by row, so the
+        column of controls had holes in it. Lifted out, the group is a short,
+        finite job you can finish, and the chips below it are all things you
+        have already vouched for.
+      */}
+      {stale.length > 0 && (
+        <section className="border-border bg-muted/40 rounded-2xl border-2 p-3">
+          <h3 className="text-eyebrow mb-2 text-[var(--fat-text)]">
+            Still there? · {stale.length}
+          </h3>
+          <ul className="space-y-1.5">
+            {stale.map((item) => (
+              <li key={item.id} className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-body">
                   {item.name}
                   {item.quantity_desc && (
                     <span className="text-muted-foreground"> · {item.quantity_desc}</span>
                   )}
-                </p>
-                <p
-                  className={cn(
-                    'text-footnote',
-                    stale ? 'text-[var(--fat-text)]' : 'text-muted-foreground',
-                  )}
-                >
-                  {describeAge(days)}
-                </p>
-              </div>
-
-              {/* Only offered once an item is old enough to doubt. Before that
-                  it is a button that changes nothing, which teaches people to
-                  ignore it for the fortnight when it starts to matter. */}
-              {stale && (
+                </span>
+                <span className="text-footnote text-muted-foreground tnum shrink-0 font-medium">
+                  {daysSince(item.last_seen_at)}d
+                </span>
                 <Button
                   size="sm"
                   variant="secondary"
                   onClick={() => void confirm(item)}
-                  className="h-8 shrink-0 rounded-full px-3"
+                  className="shrink-0 rounded-full px-3"
                 >
-                  Still have it
+                  Yes
                 </Button>
-              )}
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => void remove(item)}
-                className="text-muted-foreground hover:text-foreground size-8 shrink-0"
-                aria-label={`Remove ${item.name}`}
-              >
-                <Trash2 size={15} />
-              </Button>
-            </div>
-          );
-        })
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={() => void remove(item)}
+                  className="text-muted-foreground hover:text-foreground shrink-0 rounded-full"
+                  aria-label={`Remove ${item.name}`}
+                >
+                  <Trash2 size={15} />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
+      {/* Everything you have vouched for, as a quantity rather than a table. */}
+      {fresh.length === 0 ? (
+        <p className="text-muted-foreground py-2 text-body">
+          Nothing here yet. Type a few things above, or photograph your shelf.
+        </p>
+      ) : (
+        current.length > 0 && (
+          <section>
+            <h3 className="text-eyebrow text-muted-foreground mb-2">
+              In the kitchen · {current.length}
+            </h3>
+            <div className="flex flex-wrap gap-1.5">
+              {current.map((item) => (
+                <Chip key={item.id} item={item} onRemove={() => void remove(item)} />
+              ))}
+            </div>
+          </section>
+        )
+      )}
+
+      {/*
+        Staples, still folded. They are the least interesting rows in the list —
+        you own salt — and unfolded they doubled its length for no decision.
+        The toggle is a heading now rather than a sentence, so it reads as the
+        third section of the panel rather than as a stray link at the bottom.
+      */}
       {staples.length > 0 && (
-        <div className="px-4 py-3">
+        <section>
           <button
             type="button"
             onClick={() => setShowStaples((v) => !v)}
-            className="text-footnote text-muted-foreground hover:text-foreground"
+            aria-expanded={showStaples}
+            className="text-eyebrow text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
           >
-            {showStaples ? 'Hide' : `and ${staples.length} staples`}
+            Staples · {staples.length}
+            <ChevronDown
+              size={13}
+              className={cn(
+                'transition-transform duration-[var(--dur-quick)]',
+                showStaples && 'rotate-180',
+              )}
+            />
           </button>
           {showStaples && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {staples.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => void remove(item)}
-                  className="bg-muted border-border text-footnote hover:bg-secondary rounded-full border-2 px-3 py-1 font-semibold"
-                  aria-label={`Remove ${item.name}`}
-                >
-                  {item.name}
-                </button>
+                <Chip key={item.id} item={item} onRemove={() => void remove(item)} muted />
               ))}
             </div>
           )}
-        </div>
+        </section>
       )}
     </div>
+  );
+}
+
+/**
+ * One ingredient.
+ *
+ * The × is its own button inside the chip rather than the whole chip being the
+ * target. Staples used to work the other way — tap the word, it is gone — which
+ * is survivable for a list of six condiments you barely look at and not for the
+ * list the recipe is written from. A visible target for the destructive half
+ * also means the chip itself can stay inert, which is what lets thirty of them
+ * sit in a block without the block reading as thirty buttons.
+ */
+function Chip({
+  item,
+  onRemove,
+  muted = false,
+}: {
+  item: PantryItem;
+  onRemove: () => void;
+  muted?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        'border-border text-footnote flex max-w-full items-center gap-1 rounded-full border-2 py-1 pr-1 pl-3 font-semibold',
+        muted ? 'bg-muted' : 'bg-secondary',
+      )}
+    >
+      <span className="min-w-0 truncate">
+        {item.name}
+        {item.quantity_desc && (
+          <span className="text-muted-foreground font-medium"> · {item.quantity_desc}</span>
+        )}
+      </span>
+      <button
+        type="button"
+        onClick={onRemove}
+        aria-label={`Remove ${item.name}`}
+        className="text-muted-foreground hover:bg-card hover:text-foreground grid size-5 shrink-0 place-items-center rounded-full transition-colors"
+      >
+        <X size={12} strokeWidth={3} />
+      </button>
+    </span>
   );
 }
 
@@ -245,11 +320,4 @@ export function daysSince(iso: string): number {
   const then = new Date(iso).getTime();
   if (!Number.isFinite(then)) return 0;
   return Math.max(0, Math.floor((Date.now() - then) / (24 * 60 * 60 * 1000)));
-}
-
-function describeAge(days: number): string {
-  if (days === 0) return 'Added today';
-  if (days === 1) return 'Added yesterday';
-  if (days < STALE_DAYS) return `${days} days ago`;
-  return `${days} days ago — still there?`;
 }

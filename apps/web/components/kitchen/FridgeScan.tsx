@@ -62,7 +62,7 @@ export function FridgeScan({
    * you had to choose before you had seen the photo. Here the fork is at the
    * end either way, so which trigger you used never decides anything.
    */
-  variant?: 'chip' | 'button';
+  variant?: 'chip' | 'button' | 'icon';
 }) {
   const [scanning, setScanning] = useState(false);
   const [proposal, setProposal] = useState<PantryScanProposal | null>(null);
@@ -188,6 +188,27 @@ export function FridgeScan({
         >
           {scanning ? 'Reading the photo…' : 'from a photo'}
         </ActionChip>
+      ) : variant === 'icon' ? (
+        /*
+          The same trigger, with its label taken away — used where it stands
+          beside the add field rather than under it. A camera glyph is one of
+          the few icons that genuinely needs no word, and the row it joins is
+          the whole reason: an input, a plus and a camera on one line reads as
+          "three ways to put something in the list", where the full-width
+          button underneath read as a second feature the list happened to sit
+          below. The words survive in the tooltip and the label.
+        */
+        <Button
+          variant="secondary"
+          size="icon-lg"
+          disabled={scanning}
+          onClick={() => (hasCameraApp ? cameraRef : fileRef).current?.click()}
+          aria-label={scanning ? 'Reading the photo…' : 'Scan my fridge'}
+          title="Scan my fridge"
+          className="rounded-full"
+        >
+          {scanning ? <Loader2 size={17} className="animate-spin" /> : <Camera size={17} />}
+        </Button>
       ) : (
         <div className="border-border border-t-2 px-4 py-3">
           <Button

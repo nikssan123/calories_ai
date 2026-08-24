@@ -43,15 +43,21 @@ export function FridgeScan({
    */
   onError: (error: unknown) => void;
   /**
-   * Where it is being drawn. A chip in Cook's quiet row of ways in; a full-width
-   * button inside the kitchen sheet, where photographing a shelf is one of the
-   * two ways to fill the list it is sitting on.
+   * Where it is being drawn. A chip in Cook's quiet row of ways in; a
+   * full-width button where photographing a shelf is the whole offer; a bare
+   * camera square inside the kitchen sheet, where it stands beside the add
+   * field as the second of two ways to fill the list.
    *
-   * Both open the same thing, and that is a repeat rather than the duplicate it
-   * looks like — the two are never on screen together, because the kitchen is
-   * shut until you ask for it.
+   * The icon keeps its label in `accessibilityLabel` only. That is affordable
+   * for exactly one glyph — a camera is understood without a word — and it is
+   * what lets the field, the plus and the camera share one line instead of
+   * stacking into three blocks.
+   *
+   * All three open the same thing, and that is a repeat rather than the
+   * duplicate it looks like — no two are ever on screen together, because the
+   * kitchen is shut until you ask for it.
    */
-  variant?: 'chip' | 'button';
+  variant?: 'chip' | 'button' | 'icon';
 }) {
   const colors = useColors();
   const [choosing, setChoosing] = useState(false);
@@ -143,10 +149,11 @@ export function FridgeScan({
         onPress={() => setChoosing(true)}
         disabled={scanning}
         accessibilityRole="button"
+        accessibilityLabel={variant === 'icon' ? 'Photograph your shelf' : undefined}
         style={({ pressed }) => [
-          variant === 'chip' ? styles.chip : styles.wide,
+          variant === 'chip' ? styles.chip : variant === 'icon' ? styles.square : styles.wide,
           {
-            backgroundColor: colors.card,
+            backgroundColor: variant === 'icon' ? colors.secondary : colors.card,
             borderColor: colors.border,
             opacity: scanning || pressed ? 0.6 : 1,
           },
@@ -162,7 +169,7 @@ export function FridgeScan({
           >
             <Path
               d="M14.5 4h-5L8 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-4l-1.5-2ZM12 16.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"
-              stroke={colors.mutedForeground}
+              stroke={variant === 'icon' ? colors.secondaryForeground : colors.mutedForeground}
               strokeWidth={2}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -170,14 +177,20 @@ export function FridgeScan({
             />
           </Svg>
         )}
-        <Text
-          style={[
-            variant === 'chip' ? t.footnote : t.bodySemibold,
-            { color: variant === 'chip' ? colors.mutedForeground : colors.foreground },
-          ]}
-        >
-          {scanning ? 'Looking…' : variant === 'chip' ? 'scan your fridge' : 'Photograph your shelf'}
-        </Text>
+        {variant !== 'icon' && (
+          <Text
+            style={[
+              variant === 'chip' ? t.footnote : t.bodySemibold,
+              { color: variant === 'chip' ? colors.mutedForeground : colors.foreground },
+            ]}
+          >
+            {scanning
+              ? 'Looking…'
+              : variant === 'chip'
+                ? 'scan your fridge'
+                : 'Photograph your shelf'}
+          </Text>
+        )}
       </Pressable>
 
       <Sheet open={choosing} title="Photograph your shelf" onClose={() => setChoosing(false)}>
@@ -351,5 +364,15 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginHorizontal: 12,
     marginBottom: 12,
+  },
+  /* Square rather than round, and the same 44 as the field it stands beside —
+     a target smaller than that is one a thumb has to aim at. */
+  square: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 44,
+    height: 44,
+    borderWidth: 2,
+    borderRadius: 999,
   },
 });
