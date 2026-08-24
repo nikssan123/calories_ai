@@ -149,7 +149,7 @@ export function BarcodeScanner({
         </View>
 
         {stage.at === 'scanning' || stage.at === 'looking' ? (
-          <View style={styles.viewfinder}>
+          <View style={[styles.viewfinder, permission?.granted && styles.live]}>
             {permission?.granted ? (
               <>
                 <CameraView
@@ -175,23 +175,30 @@ export function BarcodeScanner({
               </>
             ) : (
               <View style={styles.permission}>
+                <Text style={styles.mascot}>📷</Text>
                 <Text style={[t.body, styles.centred, { color: colors.foreground }]}>
                   {permission === null
                     ? 'Checking the camera…'
-                    : 'The scanner needs the camera. Nothing is uploaded — the code is read on the phone.'}
+                    : 'The scanner needs the camera.'}
                 </Text>
                 {permission !== null && !permission.granted && (
-                  <PressableChunk
-                    radius={999}
-                    color={colors.caloriesDeep}
-                    onPress={() => void requestPermission()}
-                    accessibilityRole="button"
-                    contentStyle={[styles.button, { backgroundColor: colors.primary }]}
-                  >
-                    <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
-                      Allow the camera
+                  <>
+                    <Text style={[t.footnote, styles.centred, { color: colors.mutedForeground }]}>
+                      Nothing is uploaded — the code is read on the phone.
                     </Text>
-                  </PressableChunk>
+                    <PressableChunk
+                      radius={999}
+                      color={colors.caloriesDeep}
+                      onPress={() => void requestPermission()}
+                      accessibilityRole="button"
+                      style={styles.permissionButton}
+                      contentStyle={[styles.button, { backgroundColor: colors.primary }]}
+                    >
+                      <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
+                        Allow the camera
+                      </Text>
+                    </PressableChunk>
+                  </>
                 )}
               </View>
             )}
@@ -559,7 +566,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
   },
-  viewfinder: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
+  viewfinder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  /* Black only behind a running camera. The permission panel is page furniture,
+     and on a black backdrop its themed text was brown-on-black in light mode. */
+  live: { backgroundColor: '#000' },
   window: {
     width: '72%',
     aspectRatio: 1.6,
@@ -569,7 +579,8 @@ const styles = StyleSheet.create({
   },
   hint: { position: 'absolute', bottom: 48 },
   hintText: { color: '#fff' },
-  permission: { padding: 32, gap: 16, alignItems: 'center' },
+  permission: { alignSelf: 'stretch', padding: 32, gap: 12, alignItems: 'center' },
+  permissionButton: { alignSelf: 'stretch', marginTop: 12 },
   centred: { textAlign: 'center' },
   product: { padding: 20, gap: 16 },
   productName: { fontFamily: font.display, fontSize: 18, lineHeight: 24, marginTop: 4 },
@@ -599,7 +610,13 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   totalFigure: { fontSize: 28, lineHeight: 36 },
-  button: { height: 48, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  button: {
+    height: 48,
+    borderRadius: 999,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   missed: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
   mascot: { fontSize: 40, lineHeight: 48 },
   missedButton: { alignSelf: 'stretch', marginTop: 12 },
