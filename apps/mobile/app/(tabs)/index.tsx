@@ -76,6 +76,12 @@ interface Bubble {
    */
   tool?: string;
   /**
+   * What the turn said on its way to the answer — the sentence before a tool
+   * call, which the server does not persist. Shown while the row is pending
+   * and dropped when the reply lands. See `applyEvent`.
+   */
+  steps?: string[];
+  /**
    * This turn was refused because the plan is spent, and the row is the wall
    * rather than a reply.
    *
@@ -411,6 +417,9 @@ export default function JournalScreen() {
                   content: result.message.content,
                   pending: false,
                   tool: undefined,
+                  // The trace was scaffolding for the wait. The reply it was
+                  // standing in for is here now, and it says the same things.
+                  steps: undefined,
                   actions: result.actions,
                   live: true,
                 }
@@ -469,6 +478,7 @@ export default function JournalScreen() {
                     content: '',
                     pending: false,
                     tool: undefined,
+                    steps: undefined,
                     wall: { ...limit, text: payload.text },
                   }
                 : b,
@@ -494,7 +504,14 @@ export default function JournalScreen() {
           setBubbles((prev) =>
             prev.map((b) =>
               b.key === replyKey
-                ? { ...b, content: message, pending: false, tool: undefined, failed: true }
+                ? {
+                    ...b,
+                    content: message,
+                    pending: false,
+                    tool: undefined,
+                    steps: undefined,
+                    failed: true,
+                  }
                 : b,
             ),
           );
@@ -618,20 +635,35 @@ export default function JournalScreen() {
 /**
  * One streamed frame folded into the row it belongs to.
  *
- * The clearing on `tool` is the part that is easy to get wrong by leaving it
- * out. Text before a tool call is a preamble — "Let me log that" — and is not
- * part of the reply the server persists, which is the model's final message. So
- * keeping it on screen buys a moment of extra text and pays for it with a
- * visible jump when the real answer replaces it.
+ * Text before a tool call is a preamble — "Let me log that" — and is not part
+ * of the reply the server persists, which is the model's final message. So it
+ * cannot stay in the body of the bubble: the real answer would replace it and
+ * a sentence the reader was halfway through would change under them.
+ *
+ * It does not get deleted either, which is what this used to do and what read
+ * as a bug — a line appearing, vanishing a second later, and the whole reply
+ * arriving after it. On `tool` the preamble moves into `steps`, where it stays
+ * beside the dots as the trace of what the turn is doing, until the reply it
+ * was announcing arrives and takes over. Nothing on screen is ever removed
+ * before the thing that replaces it exists.
  */
 function applyEvent(bubble: Bubble, event: ChatStreamEvent): Bubble {
   switch (event.type) {
     case 'text':
       return { ...bubble, content: bubble.content + event.text, tool: undefined };
-    case 'tool':
-      return { ...bubble, content: '', tool: event.name };
+    case 'tool': {
+      const said = bubble.content.trim();
+      return {
+        ...bubble,
+        content: '',
+        steps: said ? [...(bubble.steps ?? []), said] : bubble.steps,
+        tool: event.name,
+      };
+    }
     case 'reset':
-      return { ...bubble, content: '', tool: undefined };
+      // A run that died and is being started over. Its trace described that
+      // run, so it goes with it.
+      return { ...bubble, content: '', steps: undefined, tool: undefined };
     default:
       // `done` and `error` never reach here — the client resolves or throws on
       // them — but a frame from a newer server should be ignored, not rendered.
@@ -918,6 +950,22 @@ const Row = memo(function Row({
 
   return (
     <View style={styles.assistantRow}>
+      {/*
+        What the turn said before it went to work, kept where it cannot be
+        mistaken for the answer: quiet, one line per step, and gone the moment
+        the reply arrives. It is the same words the model wrote, so it reads as
+        the turn narrating itself rather than as a message that changed its mind.
+      */}
+      {bubble.pending && bubble.steps && bubble.steps.length > 0 && (
+        <View style={styles.steps}>
+          {bubble.steps.map((step, i) => (
+            <Text key={i} style={[t.footnote, { color: colors.mutedForeground }]}>
+              {step}
+            </Text>
+          ))}
+        </View>
+      )}
+
       {waiting ? (
         <Waiting label={label} />
       ) : review ? null : (
@@ -1198,6 +1246,7 @@ const styles = StyleSheet.create({
   actions: { gap: 6 },
   receipt: { borderWidth: 2, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },
   waiting: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
+  steps: { gap: 4, paddingBottom: 2 },
   dots: { flexDirection: 'row', gap: 8 },
   dot: { width: 10, height: 10, borderRadius: 5 },
   skeleton: { gap: 20, paddingTop: 16 },

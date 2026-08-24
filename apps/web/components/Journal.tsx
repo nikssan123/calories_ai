@@ -36,6 +36,12 @@ interface Bubble {
    * wait says "logging food" rather than nothing.
    */
   tool?: string;
+  /**
+   * What the turn said on its way to the answer — the sentence before a tool
+   * call, which the server does not persist. Shown while the row is pending
+   * and dropped when the reply lands. See `applyEvent`.
+   */
+  steps?: string[];
 }
 
 /** Near enough to the end that a new message should still carry the view. */
@@ -264,6 +270,9 @@ export function Journal() {
                 content: result.message.content,
                 pending: false,
                 tool: undefined,
+                // The trace was scaffolding for the wait. The reply it was
+                // standing in for is here now, and it says the same things.
+                steps: undefined,
                 actions: result.actions,
               }
             : b,
@@ -306,7 +315,14 @@ export function Journal() {
         setBubbles((prev) =>
           prev.map((b) =>
             b.key === `${localKey}-reply`
-              ? { ...b, content: message, pending: false, tool: undefined, failed: true }
+              ? {
+                  ...b,
+                  content: message,
+                  pending: false,
+                  tool: undefined,
+                  steps: undefined,
+                  failed: true,
+                }
               : b,
           ),
         );
@@ -413,21 +429,35 @@ export function Journal() {
 /**
  * One streamed frame folded into the row it belongs to.
  *
- * The clearing on `tool` is the part that is easy to get wrong by leaving it
- * out. Text before a tool call is a preamble — "Let me log that" — and is not
- * part of the reply the server persists, which is the model's final message. So
- * keeping it on screen buys a moment of extra text and pays for it with a
- * visible jump when the real answer replaces it. Clearing means what was
- * streamed and what was stored are the same sentence.
+ * Text before a tool call is a preamble — "Let me log that" — and is not part
+ * of the reply the server persists, which is the model's final message. So it
+ * cannot stay in the body of the bubble: the real answer would replace it and
+ * a sentence the reader was halfway through would change under them.
+ *
+ * It does not get deleted either, which is what this used to do and what read
+ * as a bug — a line appearing, vanishing a second later, and the whole reply
+ * arriving after it. On `tool` the preamble moves into `steps`, where it stays
+ * beside the spinner as the trace of what the turn is doing, until the reply
+ * it was announcing arrives and takes over. Nothing on screen is ever removed
+ * before the thing that replaces it exists.
  */
 function applyEvent(bubble: Bubble, event: ChatStreamEvent): Bubble {
   switch (event.type) {
     case 'text':
       return { ...bubble, content: bubble.content + event.text, tool: undefined };
-    case 'tool':
-      return { ...bubble, content: '', tool: event.name };
+    case 'tool': {
+      const said = bubble.content.trim();
+      return {
+        ...bubble,
+        content: '',
+        steps: said ? [...(bubble.steps ?? []), said] : bubble.steps,
+        tool: event.name,
+      };
+    }
     case 'reset':
-      return { ...bubble, content: '', tool: undefined };
+      // A run that died and is being started over. Its trace described that
+      // run, so it goes with it.
+      return { ...bubble, content: '', steps: undefined, tool: undefined };
     default:
       // `done` and `error` never reach here — the client resolves or throws on
       // them — but a frame from a newer server should be ignored, not rendered.
@@ -676,6 +706,20 @@ const Bubble = memo(function Bubble({
 
   return (
     <div className="max-w-[92%] space-y-2.5">
+      {/*
+        What the turn said before it went to work, kept where it cannot be
+        mistaken for the answer: quiet, one line per step, and gone the moment
+        the reply arrives. It is the same words the model wrote, so it reads as
+        the turn narrating itself rather than as a message that changed its mind.
+      */}
+      {bubble.pending && bubble.steps && bubble.steps.length > 0 && (
+        <div className="text-muted-foreground text-footnote space-y-1 leading-relaxed">
+          {bubble.steps.map((step, i) => (
+            <p key={i}>{step}</p>
+          ))}
+        </div>
+      )}
+
       {waiting ? (
         <div className="flex items-center gap-2 py-2" aria-label={label ?? 'Thinking'}>
           <div className="flex gap-2">
