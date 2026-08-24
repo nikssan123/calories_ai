@@ -691,6 +691,11 @@ function Stepper({
     // 142, not 140. A press means "a bit more", and quietly discarding the
     // precision someone just typed in order to land on a rounder number is
     // exactly the behaviour they typed to get away from.
+    //
+    // The draft goes, though: it is what the field is *showing*, and a step
+    // that moved the total while "137" sat on unchanged in the box would be
+    // two different answers on screen at once.
+    setDraft(null);
     onChange(settle(value + delta));
   };
 
@@ -717,7 +722,13 @@ function Stepper({
             {format ? format(value) : value % 1 === 0 ? value : value.toFixed(1)}
           </span>
         ) : (
-          <span className="flex w-20 items-center justify-center gap-1">
+          /*
+            Bordered rather than bare. The figure has always been typable and
+            people stepped to it five grams at a time anyway, because a number
+            sitting between two buttons reads as the stepper's readout — the
+            same lesson every other field in the app already carries.
+          */
+          <span className="border-input bg-card focus-within:border-ring flex h-8 w-[5.5rem] items-center justify-center gap-1 rounded-full border-2 px-2">
             <input
               // Not `type="number"`: its spinners are a second, worse stepper
               // beside this one, and a scroll wheel over a focused one changes

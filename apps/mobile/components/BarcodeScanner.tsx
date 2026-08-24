@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -14,7 +14,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import type { BarcodeProduct, ChatMessage, UnitSystem } from '@ct/shared';
-import { GRAMS_PER_OZ, formatMass, massUnit } from '@ct/shared';
+import { GRAMS_PER_OZ, SERVING_STEPS, formatMass, formatServings, massUnit } from '@ct/shared';
 import { ApiError } from '@ct/api-client';
 import { PressableChunk } from '@/components/Chunk';
 import { api } from '@/lib/api';
@@ -232,9 +232,12 @@ export function BarcodeScanner({
  * not the same numbers in different clothes. Grams step by 5 because that is
  * what a kitchen scale does; ounces step by a half because a half ounce is the
  * finest graduation most American scales show, and 5 g steps rendered in ounces
- * would be a stepper whose every press produces a new decimal. The bounds are
- * the API's own rather than tidier ones: a figure somebody typed and watched
- * get silently clamped is a wrong number logged.
+ * would be a stepper whose every press produces a new decimal. Neither step is
+ * how you *arrive* at 137 g — the field is, and holding a step is — so both stay
+ * the size of "a bit more" rather than shrinking to something that could cross
+ * the range one press at a time. The bounds are the API's own rather than tidier
+ * ones: a figure somebody typed and watched get silently clamped is a wrong
+ * number logged.
  */
 const BASIS: Record<
   UnitSystem,
@@ -287,6 +290,12 @@ const BASIS: Record<
  * serving or a flat 100 g is asking them to round an exact number into a wrong
  * one. So "Weigh it" takes the figure directly — typed, with the steps beside
  * it for nudging rather than for arriving.
+ *
+ * The servings walk `SERVING_STEPS` rather than stepping by a fixed half, for
+ * the same reason and in the other direction: half a tin, a third of a pizza,
+ * three quarters of a bar are the answers people actually give, and a fixed
+ * step can only ever offer multiples of itself. Nothing on a half-serving
+ * ladder can say a third at all.
  */
 function Portion({
   product,
@@ -306,6 +315,7 @@ function Portion({
     product.serving_g === null ? 'hundred' : 'serving',
   );
   const [servings, setServings] = useState(1);
+  const rung = nearestRung(servings);
   /*
    * Held in whichever unit the stepper is showing rather than in grams, so that
    * stepping never lands on a number the display has to round away — and beside
@@ -322,6 +332,16 @@ function Portion({
     const factor = 10 ** basis.weighDecimals;
     const rounded = Math.round(raw * factor) / factor;
     return Math.min(basis.weighMax, Math.max(basis.weighMin, rounded));
+  };
+
+  /*
+   * A step off a typed figure. The field keeps a `draft` while it is focused
+   * and the keypad does not go away when a step is pressed, so without dropping
+   * it here a "137" would stay on screen while the total below moved to 142.
+   */
+  const nudge = (direction: 1 | -1) => {
+    setDraft(null);
+    setWeighed((w) => settle(w + direction * basis.weighStep));
   };
 
   const eatenGrams =
@@ -385,19 +405,41 @@ function Portion({
           <View style={styles.stepper}>
             <Text style={[t.body, { color: colors.foreground }]}>How many?</Text>
             <View style={[styles.steps, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-              <Step sign="minus" onPress={() => setServings((s) => Math.max(0.5, s - 0.5))} />
-              <Text style={[t.figure, styles.count, { color: colors.foreground }]}>{servings}</Text>
-              <Step sign="plus" onPress={() => setServings((s) => Math.min(20, s + 0.5))} />
+              <Step
+                sign="minus"
+                disabled={rung === 0}
+                onStep={() => setServings((s) => climb(s, -1))}
+              />
+              <Text style={[t.figure, styles.count, { color: colors.foreground }]}>
+                {formatServings(servings)}
+              </Text>
+              <Step
+                sign="plus"
+                disabled={rung === SERVING_STEPS.length - 1}
+                onStep={() => setServings((s) => climb(s, 1))}
+              />
             </View>
           </View>
         )}
 
         {mode === 'custom' && (
           <View style={styles.stepper}>
-            <Text style={[t.body, { color: colors.foreground }]}>How much?</Text>
+            <View style={styles.stepperLabel}>
+              <Text style={[t.body, { color: colors.foreground }]}>How much?</Text>
+              {/* The field was already typable and nobody found it: a bare
+                  figure between two buttons reads as the stepper's readout, so
+                  people pressed + until they got close and logged that. */}
+              <Text style={[t.footnote, styles.typeHint, { color: colors.mutedForeground }]}>
+                Tap the figure to type it
+              </Text>
+            </View>
             <View style={[styles.steps, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-              <Step sign="minus" onPress={() => setWeighed((w) => settle(w - basis.weighStep))} />
-              <View style={styles.typed}>
+              <Step
+                sign="minus"
+                disabled={weighed <= basis.weighMin}
+                onStep={() => nudge(-1)}
+              />
+              <View style={[styles.typed, { backgroundColor: colors.card, borderColor: colors.input }]}>
                 <TextInput
                   value={draft ?? String(settle(weighed))}
                   /*
@@ -424,7 +466,11 @@ function Portion({
                 />
                 <Text style={[t.footnote, { color: colors.mutedForeground }]}>{massUnit(units)}</Text>
               </View>
-              <Step sign="plus" onPress={() => setWeighed((w) => settle(w + basis.weighStep))} />
+              <Step
+                sign="plus"
+                disabled={weighed >= basis.weighMax}
+                onStep={() => nudge(1)}
+              />
             </View>
           </View>
         )}
@@ -533,14 +579,86 @@ function Mode({ on, onPress, label }: { on: boolean; onPress: () => void; label:
   );
 }
 
-function Step({ sign, onPress }: { sign: 'minus' | 'plus'; onPress: () => void }) {
+/**
+ * One press of a stepper, and — held down — a run of them.
+ *
+ * Five grams is the right size for "a bit more" and the wrong size for crossing
+ * sixty of them to reach what the scale said, which was eight presses and the
+ * reason people gave up and logged a round number instead. Holding the button
+ * runs the same step on a repeat, so the far end of the range costs a finger
+ * held down rather than a count of taps.
+ *
+ * The repeat is armed on touch-down but only starts after a pause, because a
+ * `Pressable` inside a `ScrollView` sees touch-down before the scroll is
+ * recognised. A flick past a stepper cancels the press well inside that pause,
+ * which is what keeps scrolling the sheet from moving the number.
+ */
+function Step({
+  sign,
+  disabled,
+  onStep,
+}: {
+  sign: 'minus' | 'plus';
+  disabled?: boolean;
+  onStep: () => void;
+}) {
   const colors = useColors();
+  const armed = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const running = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** Whether the hold already moved the number, so the release does not again. */
+  const repeated = useRef(false);
+
+  const stop = useCallback(() => {
+    if (armed.current) clearTimeout(armed.current);
+    if (running.current) clearInterval(running.current);
+    armed.current = null;
+    running.current = null;
+  }, []);
+
+  /*
+   * Two ways a hold can end without a finger lifting: the sheet closes under
+   * it, and the value reaches the end of its range, which disables the button
+   * mid-press and takes the touch — and its `onPressOut` — with it. Either one
+   * would leave the repeat ticking on its own.
+   */
+  useEffect(() => {
+    if (disabled) stop();
+    return stop;
+  }, [disabled, stop]);
+
+  const step = () => {
+    // The faintest one there is: this fires ten times a second under a hold.
+    haptics.selected();
+    onStep();
+  };
+
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        if (repeated.current) {
+          repeated.current = false;
+          return;
+        }
+        step();
+      }}
+      onPressIn={() => {
+        repeated.current = false;
+        armed.current = setTimeout(() => {
+          running.current = setInterval(() => {
+            repeated.current = true;
+            step();
+          }, 90);
+        }, 400);
+      }}
+      onPressOut={stop}
+      disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={sign === 'plus' ? 'More' : 'Less'}
-      style={({ pressed }) => [styles.step, { opacity: pressed ? 0.5 : 1 }]}
+      accessibilityState={{ disabled: Boolean(disabled) }}
+      style={({ pressed }) => [
+        styles.step,
+        { opacity: disabled ? 0.35 : pressed ? 0.5 : 1 },
+      ]}
     >
       <Svg width={15} height={15} viewBox="0 0 24 24">
         <Path
@@ -553,6 +671,29 @@ function Step({ sign, onPress }: { sign: 'minus' | 'plus'; onPress: () => void }
       </Svg>
     </Pressable>
   );
+}
+
+/**
+ * Which rung the serving ladder is standing on. Nearest rather than exact,
+ * because a third is 0.333… and an equality test against it is a coin flip.
+ */
+function nearestRung(value: number): number {
+  let best = 0;
+  let closest = Infinity;
+  SERVING_STEPS.forEach((candidate, index) => {
+    const gap = Math.abs(candidate - value);
+    if (gap < closest) {
+      closest = gap;
+      best = index;
+    }
+  });
+  return best;
+}
+
+/** One rung up or down, stopping at the ends rather than wrapping. */
+function climb(value: number, direction: 1 | -1): number {
+  const next = Math.min(SERVING_STEPS.length - 1, Math.max(0, nearestRung(value) + direction));
+  return SERVING_STEPS[next] ?? value;
 }
 
 const styles = StyleSheet.create({
@@ -589,15 +730,35 @@ const styles = StyleSheet.create({
   mode: { borderWidth: 2, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
   modeLabel: { fontFamily: font.bold, fontSize: 14, lineHeight: 20 },
   stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  steps: { flexDirection: 'row', alignItems: 'center', borderWidth: 2, borderRadius: 999 },
+  stepperLabel: { flexShrink: 1 },
+  typeHint: { marginTop: 2 },
+  steps: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderRadius: 999,
+    flexShrink: 0,
+  },
   step: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   count: { width: 44, textAlign: 'center', fontSize: 16, lineHeight: 24 },
-  typed: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 2 },
+  /* Its own inset pill inside the stepper, because a bare figure between two
+     buttons is a readout. `Field` learned the same thing: a field has to look
+     like a field or nobody types in it. */
+  typed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    height: 30,
+    marginVertical: 3,
+    borderWidth: 2,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+  },
   typedInput: {
-    minWidth: 44,
+    minWidth: 40,
     textAlign: 'right',
     fontSize: 16,
-    lineHeight: 24,
+    lineHeight: 20,
     paddingVertical: 0,
   },
   total: {
