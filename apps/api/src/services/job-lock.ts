@@ -25,6 +25,17 @@ import { pool } from '../db.ts';
 
 export const REVIEW_JOB = 'weekly-reviews';
 export const NUDGE_JOB = 'nudges';
+/**
+ * The alerts pass has its own, for the reason the other two do — but note that
+ * the argument above only half applies here. Nothing in that pass calls a
+ * model, so no run of it takes forty seconds and no two ticks realistically
+ * overlap. What it still needs the lock for is the second replica, where the
+ * race arrives with no overlap at all: two processes reading the same due check
+ * in the same millisecond, both finding a streak uncongratulated. The unique
+ * index behind `saveAlert` is the thing that actually settles that; this lock
+ * is what stops both of them doing the work to find out.
+ */
+export const ALERT_JOB = 'alerts';
 
 /**
  * Runs `fn` holding the named lock, or returns null without running it because

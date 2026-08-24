@@ -45,6 +45,8 @@ export async function updateUser(userId: string, patch: ProfileUpdate): Promise<
     day_start_hour: patch.day_start_hour,
     notify_weekly_review: patch.notify_weekly_review,
     notify_nudges: patch.notify_nudges,
+    notify_milestones: patch.notify_milestones,
+    notify_daily_recap: patch.notify_daily_recap,
     diet: patch.diet,
     avoids: patch.avoids,
   };
@@ -182,6 +184,14 @@ export interface EmailRecipient {
   verified: boolean;
   notifyWeeklyReview: boolean;
   notifyNudges: boolean;
+  /**
+   * The two push-only preferences. They live on this type despite its name
+   * because it is already the one read that answers "who is this person and
+   * what do they want to hear" — see `push/notify.ts`, which has used it for
+   * every push since there were any.
+   */
+  notifyMilestones: boolean;
+  notifyDailyRecap: boolean;
 }
 
 /**
@@ -232,7 +242,8 @@ export async function accountGate(userId: string): Promise<AccountGate> {
 
 export async function getEmailRecipient(userId: string): Promise<EmailRecipient | null> {
   const row = await queryOne<any>(
-    `SELECT id, email, display_name, timezone, units, email_verified_at, notify_weekly_review, notify_nudges
+    `SELECT id, email, display_name, timezone, units, email_verified_at,
+            notify_weekly_review, notify_nudges, notify_milestones, notify_daily_recap
        FROM users WHERE id = $1 AND email IS NOT NULL`,
     [userId],
   );
@@ -242,7 +253,8 @@ export async function getEmailRecipient(userId: string): Promise<EmailRecipient 
 /** The same, found by address. For flows that start before there is a session. */
 export async function findRecipientByEmail(email: string): Promise<EmailRecipient | null> {
   const row = await queryOne<any>(
-    `SELECT id, email, display_name, timezone, units, email_verified_at, notify_weekly_review, notify_nudges
+    `SELECT id, email, display_name, timezone, units, email_verified_at,
+            notify_weekly_review, notify_nudges, notify_milestones, notify_daily_recap
        FROM users WHERE lower(email) = lower($1)`,
     [email],
   );
@@ -259,6 +271,8 @@ function toRecipient(row: any): EmailRecipient {
     verified: row.email_verified_at !== null,
     notifyWeeklyReview: row.notify_weekly_review,
     notifyNudges: row.notify_nudges,
+    notifyMilestones: row.notify_milestones,
+    notifyDailyRecap: row.notify_daily_recap,
   };
 }
 
@@ -340,6 +354,8 @@ function toProfile(row: any): Profile {
     is_setup_complete: row.is_setup_complete,
     notify_weekly_review: row.notify_weekly_review,
     notify_nudges: row.notify_nudges,
+    notify_milestones: row.notify_milestones,
+    notify_daily_recap: row.notify_daily_recap,
     plan: row.plan,
     diet: row.diet,
     avoids: row.avoids ?? [],

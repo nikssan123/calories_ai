@@ -88,25 +88,7 @@ export async function registerForPush(
      * before the first send, since there is no later moment we are guaranteed
      * to reach.
      */
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('default', {
-        /*
-         * What it carries, not who sent it. Android already files channels
-         * under the app, so a channel called "Day So Far" inside Day So Far
-         * tells the reader nothing on the one screen where they are deciding
-         * what to switch off.
-         */
-        name: 'Reviews and nudges',
-        /*
-         * `DEFAULT` rather than `HIGH`: it makes a sound and sits in the shade,
-         * and it does not throw a banner over whatever the reader was doing.
-         * The whole argument for putting these on a phone was that the switch
-         * already promised "at most one a week" — arriving louder than the
-         * email did would be taking that back.
-         */
-        importance: Notifications.AndroidImportance.DEFAULT,
-      });
-    }
+    if (Platform.OS === 'android') await ensureChannels();
 
     const { data: token } = await Notifications.getExpoPushTokenAsync({
       projectId: projectId(),
@@ -123,6 +105,53 @@ export async function registerForPush(
      */
     return 'unavailable';
   }
+}
+
+/**
+ * The categories the server can send into, all created before the first token
+ * exists — because there is no later moment we are guaranteed to reach, and an
+ * Android push with no channel to land in is dropped silently, with the send
+ * reported as a success.
+ *
+ * Four rather than one, and the split is the only notification control Android
+ * gives a reader that is finer than the whole app. With a single channel,
+ * somebody who has had enough of the nightly recap has exactly one way to stop
+ * it: silence everything, including the warning that their subscription lapses
+ * on Thursday. Each name below is what the notification *is*, not who sent it —
+ * a category called "Day So Far", inside Day So Far, tells the reader nothing
+ * on the one screen where they are choosing what to keep.
+ *
+ * Names and importance are set once per install and then owned by the reader:
+ * Android ignores later changes to a channel that exists, which is the correct
+ * behaviour and the reason to get these right the first time.
+ */
+async function ensureChannels(): Promise<void> {
+  /*
+   * `DEFAULT` throughout rather than `HIGH`: these make a sound and sit in the
+   * shade, and none of them throws a banner over whatever the reader was doing.
+   * The whole argument for putting any of this on a phone was that the switches
+   * promise at most one a week — arriving louder than the email did would be
+   * taking that back. The one exception lives in `reminders.ts`, where the
+   * reader chose the hour themselves and an alarm they cannot see has failed.
+   */
+  const importance = Notifications.AndroidImportance.DEFAULT;
+  await Notifications.setNotificationChannelAsync('default', {
+    name: 'Reviews and nudges',
+    importance,
+  });
+  await Notifications.setNotificationChannelAsync('milestones', {
+    name: 'Streaks and goals',
+    importance,
+  });
+  await Notifications.setNotificationChannelAsync('recap', {
+    name: 'Evening recap',
+    importance,
+  });
+  await Notifications.setNotificationChannelAsync('account', {
+    // Not a preference in the app, and it should not read as one here either.
+    name: 'Your subscription',
+    importance,
+  });
 }
 
 /**

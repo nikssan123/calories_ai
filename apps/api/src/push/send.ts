@@ -28,6 +28,18 @@ export interface PushMessage {
   body: string;
   /** Read by the app to decide where a tap should land. */
   data?: Record<string, string>;
+  /**
+   * Which Android category this belongs in. Defaults to the one the reviews and
+   * nudges have always used.
+   *
+   * It is a per-message choice rather than a constant because the channel is
+   * the only control Android gives a reader that is finer than the whole app:
+   * one channel means the person who wants to keep the streak notices and lose
+   * the evening recap has exactly one option, which is silencing both. The
+   * client creates every name this file can send before it ever registers a
+   * token — see `lib/push.ts` — so there is always somewhere to put one.
+   */
+  channelId?: string;
 }
 
 export type PushStatus = 'sent' | 'skipped' | 'failed';
@@ -80,10 +92,10 @@ export async function sendPush(
        * Named, or Android files it under a fallback channel of Expo's — which
        * is invisible until somebody opens the app's notification settings and
        * finds their weekly review sorted under a category with a machine's name
-       * on it. The client creates this channel before it ever asks for a token,
-       * so by the time anything can be sent there is somewhere to put it.
+       * on it. The client creates these channels before it ever asks for a
+       * token, so by the time anything can be sent there is somewhere to put it.
        */
-      channelId: 'default',
+      channelId: message.channelId ?? 'default',
     }));
 
     let tickets: ExpoTicket[];

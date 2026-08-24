@@ -4,29 +4,42 @@ import { authErrorFor } from './ai/providers/index.ts';
 import { generateNudge } from './ai/nudge.ts';
 import { generateWeeklyReview } from './ai/review.ts';
 import { sendNudgeEmail, sendWeeklyReviewEmail } from './email/notify.ts';
-import { nudgeReachedAPhone, sendNudgePush, sendWeeklyReviewPush } from './push/notify.ts';
+import {
+  nudgeReachedAPhone,
+  sendAlertPush,
+  sendNudgePush,
+  sendWeeklyReviewPush,
+} from './push/notify.ts';
+import { dueAlert, saveAlert } from './services/alerts.ts';
 import { sweepBarcodeCache } from './services/barcode.ts';
-import { NUDGE_JOB, REVIEW_JOB, withJobLock } from './services/job-lock.ts';
+import { ALERT_JOB, NUDGE_JOB, REVIEW_JOB, withJobLock } from './services/job-lock.ts';
 import { expirePlans } from './services/billing.ts';
 import { dueNudge, NUDGE_HOUR } from './services/nudges.ts';
 import { reviewForWeek, reviewWeekFor } from './services/reviews.ts';
-import { listActiveUsers } from './services/user.ts';
+import { getEmailRecipient, listActiveUsers } from './services/user.ts';
 import { unmeteredFor } from './ai/lane.ts';
 import { limitsFor } from './services/plans.ts';
 import { localDateFor, localPartsFor } from './time.ts';
 
 /**
- * The scheduled jobs: the weekly review, and the nudges.
+ * The scheduled jobs: the weekly review, the nudges, and the alerts.
  *
  * There is no cron and no queue: the API ticks hourly and asks each user's own
  * clock whether their week has turned over. That keeps the schedule correct for
  * every timezone at once, and it means a restart cannot miss a review — the
  * next tick sees the same unwritten week and picks it up.
  *
- * Both passes are built on the same idea and the same safety property. Whether
- * work is due is answered by looking for the row it would have written, not by
- * trusting the schedule, so running the tick more often than intended is
+ * All three passes are built on the same idea and the same safety property.
+ * Whether work is due is answered by looking for the row it would have written,
+ * not by trusting the schedule, so running the tick more often than intended is
  * harmless and running it late still does the work.
+ *
+ * The third pass is the odd one and the difference is worth stating once here:
+ * the review and the nudge are *inference*, so both are metered, both are
+ * priced into a tier, and both stop dead when the deployment has no model
+ * credentials. Alerts are arithmetic. Nothing below them costs a token, so
+ * nothing below them reads a plan, and the pass deliberately runs on a
+ * deployment with no API key at all.
  */
 
 /** Local weekday and hour a review is published at. Monday morning. */
@@ -272,6 +285,115 @@ export function isNudgeTime(now: Date, timezone: string): boolean {
   return Number(time.slice(0, 2)) >= NUDGE_HOUR;
 }
 
+/**
+ * One alert pass.
+ *
+ * The third sibling, and the one that is not an entitlement. `runDueReviews`
+ * and `runDueNudges` both open by asking `authErrorFor()` whether this
+ * deployment can reach a model at all, and both consult the plan before
+ * spending anything. Neither question applies here — a streak is counted, a
+ * goal weight is compared, an expiry date is subtracted — so neither is asked,
+ * and the effect is the one that matters: this is the only thing in the file
+ * that speaks to a free account.
+ *
+ * Like the nudge pass, nothing here decides to send. The clock is this loop's
+ * whole job; `dueAlert` owns everything else, including the preferences.
+ */
+export async function runDueAlerts(
+  now: Date = new Date(),
+  logger?: FastifyBaseLogger,
+): Promise<TickResult> {
+  const result = await withJobLock(ALERT_JOB, () => alertPass(now, logger));
+  if (result === null) {
+    logger?.info('alert pass already running; skipped this tick');
+    return emptyTick();
+  }
+  return result;
+}
+
+async function alertPass(now: Date, logger?: FastifyBaseLogger): Promise<TickResult> {
+  const result: TickResult = emptyTick();
+
+  for (const user of await listActiveUsers()) {
+    result.considered += 1;
+    const ctx = { timezone: user.timezone, dayStartHour: user.day_start_hour };
+
+    try {
+      /*
+       * The recipient, for the two preferences and the units a weight is
+       * written in. Read here and passed down rather than looked up inside
+       * `dueAlert`, because it is also the row that says whether there is an
+       * account to speak to at all — the placeholder row has no address, and
+       * neither does an account mid-deletion.
+       */
+      const recipient = await getEmailRecipient(user.id);
+      if (!recipient) {
+        result.skipped += 1;
+        continue;
+      }
+
+      const today = localDateFor(now, ctx);
+      const due = await dueAlert({
+        userId: user.id,
+        prefs: {
+          units: recipient.units,
+          notifyMilestones: recipient.notifyMilestones,
+          notifyDailyRecap: recipient.notifyDailyRecap,
+        },
+        now,
+        hour: localHourFor(now, ctx.timezone),
+        today,
+      });
+      if (!due) {
+        result.skipped += 1;
+        continue;
+      }
+
+      /*
+       * Written first, then sent — the opposite order to the two passes above,
+       * and for a reason peculiar to a message with no model behind it.
+       *
+       * A review is written because generating it is the expensive, unrepeatable
+       * part; the mail afterwards is an afterthought that can fail harmlessly.
+       * Here the *send* is the expensive, unrepeatable part: there is no artifact
+       * to lose, and the only thing that can go wrong twice is a phone buzzing
+       * twice. So the unique index goes first and the loser of the race says
+       * nothing.
+       */
+      const alert = await saveAlert(user.id, due, today);
+      if (!alert) {
+        // Another pass got there first — the unique index did its job.
+        result.skipped += 1;
+        continue;
+      }
+
+      result.generated.push(user.id);
+      logger?.info({ userId: user.id, kind: alert.kind }, 'alert published');
+
+      /*
+       * The phone, and only the phone. Every one of these is a sentence with
+       * nothing behind it to go and read, which is the same argument that keeps
+       * a nudge off email once it has reached a pocket — and unlike a nudge
+       * there is no fallback, because none of them is worth an email on its own.
+       * Somebody with no device registered simply hears nothing, which is the
+       * honest outcome for a channel they have not opted into.
+       */
+      await sendAlertPush(user.id, alert, logger);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      result.failed.push({ userId: user.id, error: message });
+      logger?.error({ err: error, userId: user.id }, 'alert failed');
+    }
+  }
+
+  return result;
+}
+
+/** The hour it is where the reader is, 0-23. */
+function localHourFor(now: Date, timezone: string): number {
+  return Number(localPartsFor(now, timezone).time.slice(0, 2));
+}
+
 async function hasEntriesBetween(userId: string, from: string, to: string): Promise<boolean> {
   const rows = await query<{ ok: boolean }>(
     `SELECT TRUE AS ok FROM food_entries
@@ -294,6 +416,12 @@ export function tick(logger?: FastifyBaseLogger): void {
   // be the reason nobody gets a nudge, and neither waits on the other.
   runDueNudges(now, logger).catch((error) => {
     logger?.error({ err: error }, 'nudge scheduler tick failed');
+  });
+  // Third and independent, for the same reason again — and with more force,
+  // since this is the only pass of the three that a deployment without model
+  // credentials still has anything to do.
+  runDueAlerts(now, logger).catch((error) => {
+    logger?.error({ err: error }, 'alert scheduler tick failed');
   });
   // Not a user's clock at all — one DELETE over a small shared table, riding a
   // tick that already exists rather than earning a scheduler of its own. Every

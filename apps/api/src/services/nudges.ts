@@ -8,6 +8,7 @@ import { qualityTargetsFor, targetsForDate } from './targets.ts';
 import { unmeteredFor } from '../ai/lane.ts';
 import { limitsFor } from './plans.ts';
 import { getUser } from './user.ts';
+import { withinInterruptionBudget } from './interruptions.ts';
 
 /**
  * Deciding whether to speak first, and remembering that we did.
@@ -26,17 +27,17 @@ import { getUser } from './user.ts';
 /** Local hour a nudge is published at. Evening — after dinner, before bed. */
 export const NUDGE_HOUR = 18;
 
-/** At most one, ever, in a rolling week. A coach that pings four times a week gets uninstalled. */
-export const MIN_DAYS_BETWEEN_NUDGES = 7;
-
 /**
- * And never in the day after the Monday review.
+ * At most one, ever, in a rolling week — and no longer counted here.
  *
- * The review is the one thing the app already sends unprompted, and it says
- * everything a nudge would in more detail. Two messages about the same week,
- * a day apart, reads as an app that has lost track of itself.
+ * The rule has not changed; its home has. A nudge is no longer the only thing
+ * that can interrupt somebody, and a ceiling each sender keeps to on its own is
+ * not a ceiling: two features honestly obeying "at most one a week" is two
+ * messages a week. `interruptions.ts` now holds the promise and counts the
+ * union, and these re-exports exist so that the rule reads the same from here.
  */
-export const QUIET_DAYS_AFTER_REVIEW = 1;
+export { MIN_DAYS_BETWEEN_INTERRUPTIONS as MIN_DAYS_BETWEEN_NUDGES } from './interruptions.ts';
+export { QUIET_DAYS_AFTER_REVIEW } from './interruptions.ts';
 
 /** Nothing logged for this many days is worth mentioning. */
 export const DORMANT_AFTER_DAYS = 3;
@@ -90,7 +91,7 @@ export async function dueNudge(
   // days: the rate limit needs two indexed lookups, and everything below it is
   // a week of the log.
   const perWeek = limitsFor(user.plan, unmeteredFor(user.email)).nudgesPerWeek;
-  if (!(await withinRateLimit(userId, today, perWeek))) return null;
+  if (!(await withinInterruptionBudget(userId, today, perWeek))) return null;
 
   const from = addDays(today, -WINDOW_DAYS);
   const to = addDays(today, -1);
@@ -176,40 +177,6 @@ export async function dueNudge(
   }
 
   return null;
-}
-
-/**
- * The hard limits, in code.
- *
- * Deliberately not prompt guidance and deliberately not a scheduler detail:
- * this is the rule that decides whether the feature is welcome, and it belongs
- * somewhere a future caller cannot route around by accident.
- */
-async function withinRateLimit(
-  userId: string,
-  today: string,
-  allowancePerWeek: number,
-): Promise<boolean> {
-  if (allowancePerWeek < 1) return false;
-
-  const recent = await queryOne<{ n: string }>(
-    `SELECT count(*) AS n FROM nudges
-      WHERE user_id = $1 AND local_date > $2`,
-    [userId, addDays(today, -MIN_DAYS_BETWEEN_NUDGES)],
-  );
-  if (Number(recent?.n ?? 0) >= allowancePerWeek) return false;
-
-  const review = await queryOne<{ created_at: string }>(
-    `SELECT created_at FROM weekly_reviews
-      WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1`,
-    [userId],
-  );
-  if (review) {
-    const days = (Date.parse(`${today}T00:00:00Z`) - Date.parse(review.created_at)) / 86_400_000;
-    if (days <= QUIET_DAYS_AFTER_REVIEW) return false;
-  }
-
-  return true;
 }
 
 async function lastLoggedDate(userId: string): Promise<string | null> {

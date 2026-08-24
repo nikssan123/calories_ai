@@ -1,5 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify';
-import type { Nudge, WeeklyReview } from '@ct/shared';
+import type { Alert, AlertKind, Nudge, WeeklyReview } from '@ct/shared';
 import { getEmailRecipient } from '../services/user.ts';
 import { pushTokensFor } from '../services/push-tokens.ts';
 import { sendPush, type PushResult } from './send.ts';
@@ -28,6 +28,8 @@ import { sendPush, type PushResult } from './send.ts';
  * The weekly review is the exception, and it earns it: the mail carries the
  * whole thing — the writing, the stats, the layout — and the push is a notice
  * that it arrived. Those are two different messages, so both may go.
+ *
+ * `sendAlertPush` breaks the third rule below on purpose, and says why.
  */
 
 const SKIPPED = (reason: string): PushResult => ({ status: 'skipped', reason });
@@ -85,6 +87,69 @@ export async function sendNudgePush(
   return sendPush(
     devices,
     { title: 'Day So Far', body: nudge.content, data: { route: '/', nudge: nudge.id } },
+    logger,
+  );
+}
+
+/**
+ * Where a tap lands, per kind.
+ *
+ * Here rather than in the `alerts` row, because it is not part of the record of
+ * having spoken — it is this client's opinion about which screen answers the
+ * sentence, and a route renamed next year must not rewrite what was sent last
+ * year.
+ */
+const ALERT_ROUTES: Record<AlertKind, string> = {
+  streak: '/progress',
+  goal_reached: '/progress',
+  daily_recap: '/',
+  plan_expiring: '/upgrade',
+};
+
+/**
+ * Which Android category each one belongs in.
+ *
+ * Three, not one, and the split is by what a reader would plausibly want to
+ * switch off on its own: the celebrations, the nightly summary, and the account.
+ * Somebody who is tired of the evening recap should be able to lose it without
+ * also losing a warning that their subscription lapses on Thursday.
+ */
+const ALERT_CHANNELS: Record<AlertKind, string> = {
+  streak: 'milestones',
+  goal_reached: 'milestones',
+  daily_recap: 'recap',
+  plan_expiring: 'account',
+};
+
+/**
+ * An alert, already written down, on the phone.
+ *
+ * **The only sender here that consults no preference**, which is worth being
+ * loud about because every rule above says it should. The preference has
+ * already been consulted — in `dueAlert`, before the row existed — and the
+ * reason it happens there rather than here is the row itself: two alert kinds
+ * spend a frequency budget shared with the nudge at the moment they are
+ * written. Checking the switch at this end would mean writing the record of a
+ * message that is never sent, and quietly spending somebody's one interruption
+ * a week on silence.
+ *
+ * So the contract is inverted for this one path: an alert that exists is an
+ * alert that was wanted, and this function's whole job is the address.
+ */
+export async function sendAlertPush(
+  userId: string,
+  alert: Alert,
+  logger?: FastifyBaseLogger,
+): Promise<PushResult> {
+  const devices = await pushTokensFor(userId);
+  return sendPush(
+    devices,
+    {
+      title: alert.title,
+      body: alert.body,
+      data: { route: ALERT_ROUTES[alert.kind], alert: alert.id },
+      channelId: ALERT_CHANNELS[alert.kind],
+    },
     logger,
   );
 }

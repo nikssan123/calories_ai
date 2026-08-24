@@ -39,6 +39,8 @@ const profile: Profile = {
   avoids: [],
   notify_weekly_review: true,
   notify_nudges: false,
+  notify_milestones: true,
+  notify_daily_recap: false,
 };
 
 const day: DaySummary = {

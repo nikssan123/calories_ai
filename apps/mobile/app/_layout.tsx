@@ -38,6 +38,7 @@ import { EntitlementsProvider } from '@/lib/entitlements';
 import { ThemePreferenceProvider, useThemePreference } from '@/lib/theme-preference';
 import { paletteFor, ThemeContext, useColors } from '@/theme';
 import { registerForPush } from '@/lib/push';
+import { restoreReminders } from '@/lib/reminders';
 
 /*
  * Held until the fonts are in and the session has resolved.
@@ -180,6 +181,19 @@ function Gate() {
   useEffect(() => {
     if (authenticated && emailVerified) void registerForPush();
   }, [authenticated, emailVerified]);
+
+  /*
+   * And re-arm the alarms the reader set on this phone.
+   *
+   * Unconditional, unlike the registration above — no session, no address and
+   * no verification, because none of them is involved: a local reminder is an
+   * OS-level alarm with no account behind it, and gating it on a signed-in
+   * session would silently stop reminding somebody whose token expired
+   * overnight, which is the moment a reminder is most useful.
+   */
+  useEffect(() => {
+    void restoreReminders();
+  }, []);
 
   /*
    * Where a tap lands.

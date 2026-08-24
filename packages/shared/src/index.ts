@@ -1058,6 +1058,17 @@ export const Profile = z.object({
    * message waiting in the journal is not an interruption.
    */
   notify_nudges: z.boolean(),
+  /**
+   * The two rarest things the app says: a streak worth noticing, and a goal
+   * weight actually reached. Push only — there is no email behind either, so
+   * this can only reach a device that already accepted notifications.
+   */
+  notify_milestones: z.boolean(),
+  /**
+   * Tonight's numbers, once, in the evening. The only daily thing the app
+   * sends, which is why it is the only one that is off until asked for.
+   */
+  notify_daily_recap: z.boolean(),
 });
 export type Profile = z.infer<typeof Profile>;
 
@@ -2209,6 +2220,52 @@ export const Nudge = z.object({
   created_at: z.string(),
 });
 export type Nudge = z.infer<typeof Nudge>;
+
+// ---- Alerts ----------------------------------------------------------------
+
+/**
+ * The things worth saying that need nobody to word them.
+ *
+ * The distinction from `NUDGE_KINDS` is not importance, it is whether the
+ * sentence is *derivable*. A nudge is raised when a week of the log implies
+ * something the numbers do not state — a plateau, a habit slipping — and what
+ * to say about it depends on the person. Everything here is already a
+ * sentence before anybody writes it: a count reached, a target crossed, a date
+ * approaching. Handing those to a model would buy nothing but latency, a
+ * per-turn cost and the risk of it saying something else.
+ *
+ * That difference is what lets these go to every tier. Nudges and reviews are
+ * priced because they are inference; these are arithmetic, so the free account
+ * that hears nothing today can hear all four.
+ */
+export const ALERT_KINDS = [
+  /** Consecutive logged days reached a round number worth noticing. */
+  'streak',
+  /** The scale reached the goal weight, in the direction the goal points. */
+  'goal_reached',
+  /** Tonight's calories and protein against tonight's targets. */
+  'daily_recap',
+  /** A paid plan lapses in a few days and nothing has renewed it. */
+  'plan_expiring',
+] as const;
+export const AlertKind = z.enum(ALERT_KINDS);
+export type AlertKind = z.infer<typeof AlertKind>;
+
+export const Alert = z.object({
+  id: z.string().uuid(),
+  kind: AlertKind,
+  /**
+   * What this one is about — the streak run and its milestone, the goal weight,
+   * the expiry instant, the date. Opaque to every reader except the unique
+   * index that makes a second send a no-op.
+   */
+  subject: z.string(),
+  local_date: z.string(),
+  title: z.string(),
+  body: z.string(),
+  created_at: z.string(),
+});
+export type Alert = z.infer<typeof Alert>;
 
 // ---- The week ahead --------------------------------------------------------
 

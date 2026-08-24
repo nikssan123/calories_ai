@@ -30,6 +30,7 @@ import { meterNoun, TIER_NAMES, TIER_PITCHES } from '@/lib/plan-copy';
 import { PRIVACY_URL, SUPPORT_EMAIL, TERMS_URL } from '@/lib/links';
 import { font, type as t, useColors, withAlpha } from '@/theme';
 import { registerForPush } from '@/lib/push';
+import { applyReminders, loadReminders, type ReminderSettings } from '@/lib/reminders';
 
 /** §10: short setup. Enough to establish a starting target, nothing more. */
 
@@ -325,6 +326,8 @@ export default function SetupScreen() {
       </InsetGroup>
 
       <EmailSettings profile={profile} onChange={setProfile} onError={setError} />
+
+      <PhoneReminders />
 
       <PlanSettings />
 
@@ -692,7 +695,11 @@ function EmailSettings({
    * never shows a state the server does not hold.
    */
   async function setPreference(
-    field: 'notify_weekly_review' | 'notify_nudges',
+    field:
+      | 'notify_weekly_review'
+      | 'notify_nudges'
+      | 'notify_milestones'
+      | 'notify_daily_recap',
     enabled: boolean,
   ) {
     const previous = profile[field];
@@ -796,7 +803,226 @@ function EmailSettings({
           accessibilityLabel="Send me nudges"
         />
       </InsetRow>
+
+      {/* On by default, unlike the two above, and the copy says why it is
+          allowed to be: there is no inbox behind it, so the only address it can
+          reach is one this phone already volunteered. */}
+      <InsetRow>
+        <View style={styles.label}>
+          <Text style={[t.body, { color: colors.foreground }]}>Streaks and goals</Text>
+          <Text style={[t.footnote, { color: colors.mutedForeground }]}>
+            A run of logged days worth noticing, and the day the scale reaches the number you
+            set. Rare by construction, and never emailed — these go to your phone or nowhere.
+          </Text>
+        </View>
+        <Switch
+          value={profile.notify_milestones}
+          onValueChange={(v) => void setPreference('notify_milestones', v)}
+          accessibilityLabel="Tell me about streaks and goals"
+        />
+      </InsetRow>
+
+      {/* The only daily thing the app sends, which is the whole of the copy's
+          job: somebody switching this on should know that is what they are
+          agreeing to. */}
+      <InsetRow>
+        <View style={styles.label}>
+          <Text style={[t.body, { color: colors.foreground }]}>Evening recap</Text>
+          <Text style={[t.footnote, { color: colors.mutedForeground }]}>
+            Tonight's calories and protein against tonight's targets, at nine. Every day you
+            have logged something — the one notification here that is not occasional.
+          </Text>
+        </View>
+        <Switch
+          value={profile.notify_daily_recap}
+          onValueChange={(v) => void setPreference('notify_daily_recap', v)}
+          accessibilityLabel="Send me the evening recap"
+        />
+      </InsetRow>
     </InsetGroup>
+  );
+}
+
+/** Expo counts from Sunday. */
+const WEEKDAYS = ['1', '2', '3', '4', '5', '6', '7'] as const;
+const WEEKDAY_LABELS: Record<string, string> = {
+  '1': 'Sunday',
+  '2': 'Monday',
+  '3': 'Tuesday',
+  '4': 'Wednesday',
+  '5': 'Thursday',
+  '6': 'Friday',
+  '7': 'Saturday',
+};
+
+/**
+ * The two alarms that never involve the server.
+ *
+ * Its own group rather than two more switches in "Telling you things", and the
+ * separation is the honest one: everything in that group is a decision made in
+ * a datacentre and delivered to an account. These are set on this phone, kept
+ * on this phone, and fire whether or not there is a network, a session or a
+ * subscription. Filing them together would invite the reasonable assumption
+ * that turning one on somewhere else brings it with you, and it does not.
+ *
+ * There is nothing to save and no server to fail: `applyReminders` returns what
+ * actually took effect — including a switch forced back off by a refused
+ * permission — and the state is set from its answer rather than from the tap.
+ */
+function PhoneReminders() {
+  const colors = useColors();
+  const [settings, setSettings] = useState<ReminderSettings | null>(null);
+
+  useEffect(() => {
+    void loadReminders().then(setSettings);
+  }, []);
+
+  async function update(next: ReminderSettings) {
+    // Optimistic, then corrected. Scheduling asks the OS for a permission and
+    // can take a beat behind a dialog, and a switch that waits for that reads
+    // as a switch that did not register the tap.
+    setSettings(next);
+    setSettings(await applyReminders(next));
+  }
+
+  // Nothing until the stored settings land. A frame of both switches off, for
+  // somebody who has had a reminder set for a month, is a lie worth avoiding.
+  if (!settings) return null;
+
+  return (
+    <InsetGroup
+      title="Reminders on this phone"
+      footer="Set here, kept here. These need no account and no connection, they arrive whatever your plan is, and they do not follow you to a new phone."
+    >
+      <InsetRow first>
+        <View style={styles.label}>
+          <Text style={[t.body, { color: colors.foreground }]}>Log your day</Text>
+          <Text style={[t.footnote, { color: colors.mutedForeground }]}>
+            A nudge from your own phone, at an hour you pick. It knows nothing about what you
+            have logged — it is an alarm, not an opinion.
+          </Text>
+        </View>
+        <Switch
+          value={settings.log.enabled}
+          onValueChange={(v) =>
+            void update({ ...settings, log: { ...settings.log, enabled: v } })
+          }
+          accessibilityLabel="Remind me to log"
+        />
+      </InsetRow>
+
+      {settings.log.enabled && (
+        <InsetRow>
+          <Text style={[t.body, styles.label, { color: colors.foreground }]}>At</Text>
+          <TimeField
+            label="Reminder time"
+            hour={settings.log.hour}
+            minute={settings.log.minute}
+            onChange={(hour, minute) => void update({ ...settings, log: { ...settings.log, hour, minute } })}
+          />
+        </InsetRow>
+      )}
+
+      <InsetRow>
+        <View style={styles.label}>
+          <Text style={[t.body, { color: colors.foreground }]}>Weigh in</Text>
+          <Text style={[t.footnote, { color: colors.mutedForeground }]}>
+            Once a week, before breakfast. Weighing daily measures yesterday's salt more than
+            it measures you, which is why this one is not offered daily.
+          </Text>
+        </View>
+        <Switch
+          value={settings.weighIn.enabled}
+          onValueChange={(v) =>
+            void update({ ...settings, weighIn: { ...settings.weighIn, enabled: v } })
+          }
+          accessibilityLabel="Remind me to weigh in"
+        />
+      </InsetRow>
+
+      {settings.weighIn.enabled && (
+        <InsetRow>
+          <Text style={[t.body, styles.label, { color: colors.foreground }]}>On</Text>
+          <View style={styles.reminderWhen}>
+            <Picker
+              label="Weigh-in day"
+              value={String(settings.weighIn.weekday)}
+              options={WEEKDAYS}
+              onChange={(v) =>
+                void update({ ...settings, weighIn: { ...settings.weighIn, weekday: Number(v) } })
+              }
+              render={(v, place) =>
+                place === 'sheet' ? WEEKDAY_LABELS[v]! : WEEKDAY_LABELS[v]!.slice(0, 3)
+              }
+            />
+            <TimeField
+              label="Weigh-in time"
+              hour={settings.weighIn.hour}
+              minute={settings.weighIn.minute}
+              onChange={(hour, minute) =>
+                void update({ ...settings, weighIn: { ...settings.weighIn, hour, minute } })
+              }
+            />
+          </View>
+        </InsetRow>
+      )}
+    </InsetGroup>
+  );
+}
+
+/**
+ * An hour and a minute, through the platform's own wheels.
+ *
+ * The same treatment `BirthDate` gets and for the same reason: the wheels are
+ * the part a thumb already knows how to use, and the frame around them is the
+ * part that should be this app's on both platforms rather than Material's on
+ * one and nothing on the other.
+ */
+function TimeField({
+  label,
+  hour,
+  minute,
+  onChange,
+}: {
+  label: string;
+  hour: number;
+  minute: number;
+  onChange: (hour: number, minute: number) => void;
+}) {
+  const colors = useColors();
+  const [open, setOpen] = useState(false);
+
+  const shown = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+
+  return (
+    <>
+      <Pressable
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        style={({ pressed }) => [
+          styles.timeField,
+          { borderColor: colors.border, backgroundColor: colors.muted, opacity: pressed ? 0.6 : 1 },
+        ]}
+      >
+        <Text style={[t.bodySemibold, { color: colors.foreground }]}>{shown}</Text>
+      </Pressable>
+
+      <Sheet open={open} title={label} onClose={() => setOpen(false)}>
+        <DateTimePicker
+          // Any date at all: only the clock face is read back out. The first of
+          // January is chosen for being a day with no daylight-saving seam in
+          // any zone this could be opened in.
+          value={new Date(2000, 0, 1, hour, minute)}
+          mode="time"
+          display="spinner"
+          onChange={(event, date) => {
+            if (event.type === 'dismissed' || !date) return;
+            onChange(date.getHours(), date.getMinutes());
+          }}
+        />
+      </Sheet>
+    </>
   );
 }
 
@@ -996,6 +1222,18 @@ const styles = StyleSheet.create({
   },
   goalLabel: { fontFamily: font.bold, fontSize: 14, lineHeight: 20 },
   appearance: { padding: 12 },
+  reminderWhen: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  timeField: {
+    height: 40,
+    // Wide enough for "20:00" plus the breathing room the date field has, so
+    // the two read as the same control on the same screen.
+    minWidth: 88,
+    borderRadius: 999,
+    borderWidth: 2,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   rowButton: { paddingHorizontal: 16, paddingVertical: 14 },
   unverified: { paddingHorizontal: 16, paddingVertical: 14, gap: 10 },
   hint: { lineHeight: 20 },
