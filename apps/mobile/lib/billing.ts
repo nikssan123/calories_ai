@@ -173,16 +173,29 @@ export interface Buyable {
  * Coach and the webhook thinks it is Plus, the wall sells one thing and the
  * account gets another.
  *
- * The RevenueCat *package* identifier is checked first only because a dashboard
- * is free to name packages `$rc_annual`, which says nothing about the tier; the
- * product id is the reliable half and is what decides it.
+ * It matches a tier name as a whole *token* anywhere in the identifier rather
+ * than only as the prefix, and that is what makes it work on both stores.
+ * `planFor` on the server can take the prefix because Play reports
+ * `plus:annual` — but Apple product ids cannot contain a colon, so an iOS SKU
+ * is something like `com.daysofar.app.plus.monthly`, and a prefix rule finds
+ * `com` there and gives up. A tier that fails to match does not fail loudly: it
+ * is simply absent from the paywall, which looks like a dashboard that was
+ * never configured.
+ *
+ * Whole tokens, so `plus` matches and nothing matches inside a longer word.
+ * `photo_10` splits to `photo`/`10` and is correctly not a tier — the bundles
+ * are sold somewhere else.
+ *
+ * The product id is checked before the package identifier because a dashboard
+ * is free to name packages `$rc_annual`, which says nothing about the tier.
  */
 function planOf(pkg: PurchasesPackage): Exclude<PlanName, 'free'> | null {
-  const candidates = [pkg.product.identifier, pkg.identifier];
-  for (const candidate of candidates) {
-    const head = candidate.split(':')[0]?.toLowerCase() ?? '';
-    if ((PLANS as readonly string[]).includes(head) && head !== 'free') {
-      return head as Exclude<PlanName, 'free'>;
+  for (const candidate of [pkg.product.identifier, pkg.identifier]) {
+    const tokens = candidate.toLowerCase().split(/[^a-z0-9]+/);
+    for (const token of tokens) {
+      if ((PLANS as readonly string[]).includes(token) && token !== 'free') {
+        return token as Exclude<PlanName, 'free'>;
+      }
     }
   }
   return null;
