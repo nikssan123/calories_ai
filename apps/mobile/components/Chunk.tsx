@@ -37,6 +37,11 @@ import { haptics } from '@/lib/haptics';
  * which is what makes a column of cards `gap: 28` apart read the same here as
  * on the web. `reserve` is the port of `chunk-slot`, for the few places that
  * genuinely need the travel held open.
+ *
+ * It occupies no space *outward*, though, rather than by being drawn outside
+ * the chunk's own box. The ledge is held inside the bounds by `Overhang`, and
+ * the box is pulled back over its neighbour with a negative margin — see both
+ * for why an out-of-bounds ledge cost the send button its bottom edge.
  */
 export function Chunk({
   depth = CHUNK_DEPTH,
@@ -61,9 +66,10 @@ export function Chunk({
 }) {
   const colors = useColors();
   return (
-    <View style={[reserve ? { marginBottom: depth } : null, style]}>
+    <View style={[reserve ? null : { marginBottom: -depth }, style]}>
       <Ledge depth={depth} radius={radius} color={color ?? colors.chunk} />
       <View style={[{ borderRadius: radius }, contentStyle]}>{children}</View>
+      <Overhang depth={depth} />
     </View>
   );
 }
@@ -159,7 +165,7 @@ export function PressableChunk({
             }
       }
       style={[
-        reserve ? { marginBottom: depth } : null,
+        reserve ? null : { marginBottom: -depth },
         disabled ? styles.disabled : null,
         style,
       ]}
@@ -169,6 +175,7 @@ export function PressableChunk({
       <Animated.View style={[{ borderRadius: radius }, contentStyle, surface]}>
         {children}
       </Animated.View>
+      <Overhang depth={depth} />
     </Pressable>
   );
 }
@@ -177,6 +184,9 @@ export function PressableChunk({
  * The slab under the surface. Inset to the top by its own depth so only the
  * bottom edge shows — a full-height copy would paint a dark halo out of the
  * sides on any surface with a transparent corner.
+ *
+ * It stops at the bottom of the chunk's box rather than hanging below it, which
+ * is `Overhang`'s whole reason for existing.
  */
 function Ledge({ depth, radius, color }: { depth: number; radius: number; color: string }) {
   return (
@@ -184,10 +194,28 @@ function Ledge({ depth, radius, color }: { depth: number; radius: number; color:
       pointerEvents="none"
       style={[
         StyleSheet.absoluteFill,
-        { top: depth, bottom: -depth, borderRadius: radius, backgroundColor: color },
+        { top: depth, borderRadius: radius, backgroundColor: color },
       ]}
     />
   );
+}
+
+/**
+ * The ledge's own depth, as layout, so the chunk's box contains every pixel it
+ * draws. Paired with the negative `marginBottom` above, which takes the same
+ * depth straight back off again — so the space the chunk *occupies* is still
+ * the surface alone, exactly as a `box-shadow` does.
+ *
+ * This is not tidiness. A view that draws outside its bounds is at the mercy of
+ * anything that composites it, and on Android two things do. `overflow: hidden`
+ * on an ancestor is the obvious one. The other is `needsOffscreenAlphaCompositing`,
+ * which the disabled state above needs and which renders the group into a
+ * buffer the size of its bounds — so the ledge, hanging below them, was
+ * *clipped away*, and the app's most permanently-disabled control, the send
+ * button on an empty composer, sat there with its bottom edge sliced off.
+ */
+function Overhang({ depth }: { depth: number }) {
+  return <View pointerEvents="none" style={{ height: depth }} />;
 }
 
 const styles = StyleSheet.create({

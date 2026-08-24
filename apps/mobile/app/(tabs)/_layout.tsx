@@ -164,7 +164,15 @@ function TabBar({
                 // not. Fired whether or not it navigates — pressing the tab
                 // you are already on is still a press, and silence there reads
                 // as a missed tap.
-                haptics.press();
+                //
+                // `selected` rather than `press`, which is what this was and
+                // what made the bar the heaviest-feeling thing in the app: six
+                // targets across the bottom of every screen, each answering a
+                // thumb that is resting there anyway with the same buzz a
+                // button gives. Nothing here goes down and comes back up —
+                // a tab is a choice among six, so it gets the tick a choice
+                // gets. See `lib/haptics`.
+                haptics.selected();
                 const event = navigation.emit({
                   type: 'tabPress',
                   target: route.key,

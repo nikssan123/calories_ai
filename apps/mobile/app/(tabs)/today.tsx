@@ -311,6 +311,91 @@ export default function TodayScreen() {
     setDate((current) => shiftDate(current ?? day?.local_date ?? today ?? '', days));
 
   /*
+   * Swipe the day across.
+   *
+   * MOBILE-UX §3 dropped this once, and the reason was sound: a screen-level
+   * horizontal pan competes with swipe-to-delete on every row of this same
+   * screen, and losing a shipped gesture to a convenience is a bad trade. What
+   * has changed is that the arbitration turns out to be stateable rather than
+   * guessy — a finger that lands on a meal is talking about that meal, and
+   * `DeferToRows` says so to the gesture system, so the pan can only take over
+   * where there is no row under the thumb. That is most of the screen: the
+   * ring, the macros, the quality panel, the headings, the space beside them.
+   *
+   * The page follows the finger rather than waiting for the lift, because a
+   * gesture that answers only on release is indistinguishable from one that is
+   * not there — and this one has to be discoverable by trying it.
+   */
+  const reduced = useReducedMotion();
+  const drift = useSharedValue(0);
+  /*
+   * Mirrored into a shared value because the wall at today has to be felt on
+   * the drag itself. Read off the JS thread it would arrive a frame late, which
+   * on the one gesture the app refuses is exactly where it would be noticed.
+   */
+  const atToday = useSharedValue(true);
+  useEffect(() => {
+    atToday.value = isToday;
+  }, [isToday, atToday]);
+
+  /*
+   * `step` closes over the day on screen, so it is a new function every render;
+   * the gesture is not, and must not be, or the relation the rows hold against
+   * it would be rebuilt on every scroll frame. The ref is the seam between the
+   * two.
+   */
+  const stepper = useRef(step);
+  useEffect(() => {
+    stepper.current = step;
+  });
+  const stepBy = useCallback((days: number) => {
+    haptics.selected();
+    stepper.current(days);
+  }, []);
+
+  const days = useMemo(
+    () =>
+      Gesture.Pan()
+        /*
+         * Deliberate, and sideways. The activation offset is wide because this
+         * is the longest screen in the app and almost every finger on it is
+         * trying to scroll; `failOffsetY` gives the gesture up the moment one
+         * of them turns out to be.
+         */
+        .activeOffsetX([-24, 24])
+        .failOffsetY([-16, 16])
+        .onChange((event) => {
+          /*
+           * Damped either way, and damped nearly flat past today. Tomorrow has
+           * not happened, so the edge has to read as a wall the page is up
+           * against rather than as a swipe that was ignored.
+           */
+          const wall = event.translationX < 0 && atToday.value;
+          drift.value = event.translationX * (wall ? 0.08 : 0.32);
+        })
+        .onEnd((event) => {
+          // Distance *or* speed, like the sheet's dismiss: a slow drag most of
+          // the way and a quick flick both plainly mean "the next one".
+          const decided = Math.abs(event.translationX) > 64 || Math.abs(event.velocityX) > 550;
+          const forward = event.translationX < 0;
+          if (decided && !(forward && atToday.value)) runOnJS(stepBy)(forward ? 1 : -1);
+          /*
+           * Home either way. The day itself is what changes; the page does not
+           * travel to the new one, because there is nothing to travel to until
+           * it has loaded and a screen sliding onto a skeleton is worse than a
+           * screen that simply settles.
+           */
+          drift.value = withTiming(0, {
+            duration: reduced ? 0 : duration.pop,
+            easing: ease.spring,
+          });
+        }),
+    [atToday, drift, reduced, stepBy],
+  );
+
+  const sliding = useAnimatedStyle(() => ({ transform: [{ translateX: drift.value }] }));
+
+  /*
    * The three things on this screen that answer over it rather than in it.
    *
    * All three are gone by the time there is anything to say. A deleted row is
@@ -492,9 +577,13 @@ export default function TodayScreen() {
 
   return (
     <>
+    {/* Around the scroller and not inside it, so every row on the screen —
+        including any added later — inherits the right to outrank the pan. */}
+    <DeferToRows gesture={days}>
+    <GestureDetector gesture={days}>
     <Animated.ScrollView
       ref={scrollRef}
-      style={styles.flex}
+      style={[styles.flex, sliding]}
       onScroll={onScroll}
       scrollEventThrottle={16}
       contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: 32 }}
@@ -746,6 +835,8 @@ export default function TodayScreen() {
         </View>
       )}
     </Animated.ScrollView>
+    </GestureDetector>
+    </DeferToRows>
 
       {/*
         * The compact bar.

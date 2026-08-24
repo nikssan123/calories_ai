@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
 /**
@@ -9,10 +10,11 @@ import * as Haptics from 'expo-haptics';
  * can go. A phone is the one device that can finish it, and until now the app
  * looked physical and felt like nothing.
  *
- * Three intents, named for what happened rather than for how strong they are,
+ * Four intents, named for what happened rather than for how strong they are,
  * so the call sites read as events and the calibration stays in one file:
  *
  * - `press` — a chunky control went down. Light, because it fires constantly.
+ * - `selected` — a choice moved. The faintest one there is; see below.
  * - `logged` — a number moved. The receipt for the app's whole purpose.
  * - `captured` — the camera got it. Medium, and the only one that fires while
  *   the user is not looking at the screen.
@@ -56,6 +58,33 @@ export const haptics = {
    * were only scrolling.
    */
   press: () => fire(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)),
+
+  /**
+   * A choice moved: the tab bar, and anything else where the finger picks one
+   * of a row rather than pushing an object down.
+   *
+   * The faintest thing either platform will do, and it has to be — this fires
+   * on a control the thumb rests on, six times across the bottom of every
+   * screen, and `press` there was reported as simply too much.
+   *
+   * Two different calls to get one feeling, because the platforms disagree
+   * about what "selection" costs. iOS has `UISelectionFeedbackGenerator`, which
+   * is a genuine notch below a light impact. Android's `selectionAsync` is not:
+   * expo-haptics drives it through `Vibrator` with the *same* 50ms waveform as
+   * a light impact, so asking for it there would have changed nothing. What
+   * Android has instead is `performHapticFeedback`, the constants its own
+   * keyboard and pickers use — calibrated per device by the OEM rather than by
+   * a millisecond count we guessed, and honouring the system touch-feedback
+   * switch for free. `Clock_Tick` is the lightest of them that exists on every
+   * API level; `Segment_Tick` is the better name for what this means and is
+   * quietly missing below API 30, which would leave older phones silent.
+   */
+  selected: () =>
+    fire(() =>
+      Platform.OS === 'android'
+        ? Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Clock_Tick)
+        : Haptics.selectionAsync(),
+    ),
 
   /**
    * Something was logged: a meal, a weigh-in, a session, a cooked recipe.

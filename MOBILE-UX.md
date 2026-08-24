@@ -57,6 +57,20 @@ promise, because the phone is the one device that can finish it.
   exact instant the user needs to know it worked, and they are holding a tin at
   an awkward angle and cannot see the screen well.
 
+A fourth arrived from use: **a selection tick on the tab bar**, which shipped on
+the light impact above and was reported as simply too strong. It is the one
+control a thumb rests on, six targets across the bottom of every screen, and
+nothing there goes down and comes back up — a tab is a choice among six, not an
+object being pressed, so it gets what a choice gets. Two calls make one feeling,
+because the platforms disagree about what a selection costs: iOS has
+`UISelectionFeedbackGenerator`, a genuine notch below a light impact, while
+expo-haptics drives Android's `selectionAsync` through `Vibrator` with the *same*
+50ms waveform as a light impact — so asking for it there would have changed
+nothing. Android instead gets `performHapticFeedback`, the constants its own
+keyboard and pickers use: calibrated per device by the OEM rather than by a
+millisecond count we guessed, and honouring the system touch-feedback switch for
+free.
+
 Reduced motion should not silence these. Haptics are not motion, and for someone
 who turned animation off they are *more* of the feedback rather than less — the
 existing `useReducedMotion` contract says the spring is decoration and the
@@ -287,25 +301,42 @@ alone turns the flick — the faster and commoner of the two — into a bounce b
 The scrim thins as the sheet is pulled away, so it reads as moving the whole
 arrangement rather than sliding one card over a fixed grey pane.
 
-### Swipe left and right on Today to step days — **dropped**
+### Swipe left and right on Today to step days — done, after being dropped once
 
-Not skipped for cost: dropped because the thing it was for went away.
+Dropped here first, and the argument for dropping it was only half right.
 
-The friction was that the chevrons live at the top of the longest screen in the
-app, so stepping a day from the bottom of a Tuesday meant scrolling up first.
-The condensing header in §2 fixed that — the chevrons are now reachable from
-anywhere on the screen — and what is left for the gesture to buy is much
-smaller.
+The friction it answers is that the chevrons live at the top of the longest
+screen in the app, so stepping a day from the bottom of a Tuesday meant
+scrolling up first. The condensing header in §2 did fix that, which is what the
+first pass took as settling the question.
 
-Against that: a screen-level horizontal pan would compete with swipe-to-delete
-on every row of the same screen. Both are horizontal, both start with a finger
-moving sideways, and the arbitration between them is exactly the kind that is
-wrong often enough to matter. Trading a shipped, tested gesture for a
-convenience whose problem has already been solved is a bad deal.
+The real objection was the other one: a screen-level horizontal pan competes
+with swipe-to-delete on every row of the same screen. Both are horizontal, both
+start with a finger moving sideways, and the arbitration between them is exactly
+the kind that is wrong often enough to matter — so trading a shipped, tested
+gesture for a convenience looked like a bad deal.
 
-**So a horizontal swipe in this app means one thing: act on this row.** That
-also settles the open question below — it is one axis, and the axis is spoken
-for.
+What that missed is that the arbitration is *stateable* rather than a
+judgement made frame by frame. A finger that lands on a meal is talking about
+that meal; a finger anywhere else — the ring, the macros, the quality panel, the
+headings, the space beside them, which is most of the screen — is talking about
+the day. `blocksExternalGesture` is precisely that sentence in the gesture
+system's own terms: the screen's pan waits for the row's to fail, and can only
+take over where there is no row under the thumb. It is wired as a context
+(`DeferToRows` in `components/SwipeRow`) rather than a prop, so the rule belongs
+to the screen and a row added to Today next year inherits it without anyone
+remembering.
+
+The page follows the finger while it is down — damped to about a third, and
+nearly flat past today, so the edge of the calendar reads as a wall the page is
+up against rather than as a swipe that was ignored. It springs home on release
+rather than travelling to the new day, because there is nothing to travel to
+until the day has loaded, and a screen sliding onto a skeleton is worse than one
+that simply settles while the ring and the totals count themselves across.
+
+**So a horizontal swipe still means one thing wherever a row can hear it: act on
+this row.** That is what settles the open question below — the axis is spoken
+for, and the day-step is what is left over when no row wants it.
 
 ### Tap the active tab to scroll to top — done
 

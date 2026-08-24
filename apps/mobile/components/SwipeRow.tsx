@@ -1,4 +1,6 @@
+import { createContext, useContext } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import type { GestureType } from 'react-native-gesture-handler';
 import Animated, {
   FadeInDown,
   FadeOut,
@@ -27,6 +29,33 @@ export interface SwipeAction {
   ink: string;
   icon: React.ReactNode;
   onPress: () => void;
+}
+
+/**
+ * A screen-level gesture that every row swipe inside it outranks.
+ *
+ * Today has one: a horizontal pan that steps the day. Both it and a row swipe
+ * begin with a finger moving sideways, so one of them has to give, and the
+ * answer is not a judgement call — a finger that starts on a meal is talking
+ * about that meal. `blocksExternalGesture` says exactly that to the gesture
+ * system: the screen's pan waits for the row's to fail, so it can only ever
+ * take over where there is no row under the thumb.
+ *
+ * A context rather than a prop, because the rule belongs to the screen and not
+ * to any one list on it — a row added to Today next year inherits it without
+ * anyone remembering to thread it through. Screens with no such gesture provide
+ * nothing and their rows behave exactly as they always did.
+ */
+const Outranked = createContext<GestureType | undefined>(undefined);
+
+export function DeferToRows({
+  gesture,
+  children,
+}: {
+  gesture: GestureType;
+  children: React.ReactNode;
+}) {
+  return <Outranked.Provider value={gesture}>{children}</Outranked.Provider>;
 }
 
 /**
@@ -77,6 +106,7 @@ export function SwipeRow({
   children: React.ReactNode;
 }) {
   const colors = useColors();
+  const outranked = useContext(Outranked);
 
   /*
    * A row with nothing to offer is not a swipeable row that happens to be
@@ -119,6 +149,8 @@ export function SwipeRow({
         friction={2}
         rightThreshold={40}
         overshootRight={false}
+        // The row wins over whatever the screen is doing with the same axis.
+        blocksExternalGesture={outranked}
         // The row is transparent over the card it sits on, so without a ground
         // of its own the panel behind would read straight through it.
         childrenContainerStyle={{ backgroundColor: colors.card }}
