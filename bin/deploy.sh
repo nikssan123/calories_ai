@@ -139,9 +139,31 @@ mobile_build() {
     # --no-wait so this returns with a build URL rather than holding the
     # terminal for the queue. --non-interactive so a missing credential fails
     # loudly instead of opening a prompt nobody is watching.
+    #
+    # Teed rather than captured: eas prints the queue position, the fingerprint
+    # and the credential summary as it goes, and swallowing all of that to reach
+    # one line would trade a live view of a slow command for a tidier ending.
+    # The log is only re-read to pull the URL back out, because that one line is
+    # the whole point of the run and it lands several screens above the prompt.
+    local log; log="$(mktemp)"
     ( cd "$dir" && npx eas-cli build --platform android \
-        --profile "$MOBILE_PROFILE" --non-interactive --no-wait ) \
-        || die "eas build failed"
+        --profile "$MOBILE_PROFILE" --non-interactive --no-wait ) 2>&1 | tee "$log"
+    local status=${PIPESTATUS[0]}
+
+    local url
+    url="$(grep -oE 'https://expo\.dev/[^ ]*builds/[0-9a-f-]+' "$log" | head -1 || true)"
+    rm -f "$log"
+
+    (( status == 0 )) || die "eas build failed"
+
+    echo
+    if [[ -n "$url" ]]; then
+        say "build queued: $url"
+    else
+        # A URL that did not match is not a failed build — eas has changed that
+        # line before. Say where to look rather than implying nothing started.
+        say "build queued — watch it at https://expo.dev/accounts/$(npx eas-cli whoami 2>/dev/null | head -1)/builds"
+    fi
 }
 
 if (( MOBILE_ONLY )); then
@@ -430,3 +452,14 @@ echo "    logs:            ssh <host> 'cd $REPO && $COMPOSE logs -f api'"
 
 exit $FAIL
 REMOTE
+
+# The phone, after the host and only if the host succeeded.
+#
+# `set -e` is doing the gating: the ssh above exits non-zero when the remote
+# verification found problems, so a deploy that came up unhealthy never reaches
+# this line. Building a client against an API that just failed its own health
+# check is the wrong order to find that out in.
+if (( MOBILE )); then
+    echo
+    mobile_build
+fi
