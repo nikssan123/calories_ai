@@ -1,0 +1,313 @@
+# Play Store listing
+
+Written 2026-08-24. Android-only; iOS is parked until Android runs.
+
+Companion to `COMPETITION.md` (§6 — distribution is the whole game) and `LANGUAGES.md`.
+Everything here is copy you can paste into Play Console, plus the reasoning for why it
+is worded that way.
+
+**One rule governs every line below: nothing is claimed that the app cannot do today,
+and nothing the app can do is left out.**
+
+Checked against the code, not against the planning docs — `COMPETITION.md` is dated
+2026-08-22 and is already stale on this point. **Offline logging is built** (`OFFLINE.md`:
+"All of it is built"; `apps/mobile/lib/outbox.ts`), so it is sold below rather than
+disclosed. Still genuinely absent: **Health Connect sync** (`INTEGRATIONS.md`: "Nothing
+here is built"), **voice input**, and **a searchable food catalogue**. Those three stay
+out of the copy.
+
+---
+
+## 1. Why Play ASO is not App Store ASO
+
+Three differences change the whole approach:
+
+| | Apple | Play |
+|---|---|---|
+| Keyword field | 100 chars, separate | **None** |
+| Description indexed | No | **Yes — all 4,000 chars** |
+| A/B testing | None built in | **Store listing experiments, free** |
+
+So on Play the long description *is* the keyword field. Density and natural repetition
+matter in a way they never did on iOS, and the copy has to do double duty: rank, and
+convert. Play also weights **retention and uninstall rate** far more heavily than Apple
+weights anything — which is the real reason not to overclaim.
+
+---
+
+## 2. Title — 30 characters
+
+```
+Day So Far: Calorie Counter
+```
+
+27 chars. `Calorie Counter` is the highest-volume term in the category and the title is
+the heaviest-weighted field on Play, so it gets the exact match.
+
+The brand keeps first position because "Day So Far" is genuinely good — it says the
+product's actual idea (a day in progress, not a ledger you settle at midnight) and it is
+short enough that keeping it costs almost nothing.
+
+**Rejected:**
+
+- `Day So Far` alone — wastes the single strongest ranking asset in the listing.
+- `Day So Far: AI Calorie Tracker` (30) — "AI" is a crowded, low-intent modifier and
+  `tracker` indexes slightly below `counter`. Both terms still appear below, which is
+  enough on Play.
+- `Calorie Counter: Day So Far` — keyword-first reads like a content farm and hurts the
+  branded-search flywheel you want later.
+
+---
+
+## 3. Short description — 80 characters
+
+```
+Just say what you ate. AI food diary, macro tracker and calorie counting.
+```
+
+73 chars. Indexed, and shown above the fold before anyone taps "more".
+
+The first sentence is the differentiator, not a keyword — the one thing no competitor in
+`COMPETITION.md §2` can say. The second carries `food diary`, `macro tracker` and
+`calorie counting`, none of which fit in the title.
+
+**Alternate to test later:**
+
+```
+Say what you ate, get calories and macros. Food diary and calorie counter.
+```
+
+---
+
+## 4. Long description — 4,000 characters
+
+Paste as-is. Play renders limited HTML; the `<b>` tags below are supported.
+
+```
+Most calorie counters make you find your food in a database. Day So Far just asks what you ate.
+
+"Two eggs, toast and some cheese." That is a logged breakfast — 407 calories, 24g protein, already counted against your day. No searching, no scrolling, no picking the right one of forty entries called "toast".
+
+<b>How calorie counting works here</b>
+
+1. Write a sentence about your meal
+2. Day So Far turns it into calories, protein, carbs and fat
+3. Your day updates
+
+<b>Change your mind, in words</b>
+
+Say "there was more rice" and the entry you already logged changes. Not a correction appended underneath it, not a delete-and-retype — the meal itself updates. Every other food diary makes you go back and edit the row by hand.
+
+<b>It keeps working without a signal</b>
+
+Supermarket basements, gyms, lifts and planes are where people actually log food, and where most calorie counting apps give up. Enter a meal offline and it is saved on your phone, counts toward your day immediately, and syncs by itself when you are back. Nothing is lost, and nothing is logged twice. Photo logging, barcode lookup and the conversational journal need a connection.
+
+<b>A calorie counter that knows what you actually cook</b>
+
+Log in any language. A plate of musaka, a bowl of tarator, whatever your grandmother called it — a sentence parser does not need a barcode or a US chain-restaurant entry to understand a home-cooked meal. This is where most calorie counting apps quietly fail, and it is the whole reason this food log exists.
+
+<b>What you get</b>
+
+• <b>Log by writing</b> — a sentence, not a search box
+• <b>Offline logging</b> — enter meals anywhere, they sync when you reconnect
+• <b>Barcode scanner</b> — for the packaged half of your diet
+• <b>Photo logging</b> — snap the plate or snap the label
+• <b>Macro tracker</b> — protein, carbs and fat, plus fiber, sodium and sugar
+• <b>Adaptive calorie targets</b> — your goal recalculates from what you actually eat and how your weight actually moves, not from a formula you filled in once
+• <b>Home screen widget</b> — calories remaining without opening the app
+• <b>Weekly review</b> — written from your real numbers, not a template
+• <b>Exercise logging</b> — in the same sentence-first way as food
+• <b>Metric or imperial</b> — switch any time; your history re-renders, nothing is rewritten
+
+<b>The kitchen</b>
+
+Photograph what is in your fridge. Get recipes that use it, a meal plan built from those recipes, and a shopping list for the gaps. Calorie counting is the part every nutrition tracker does. Deciding what to eat is the part that actually stops people.
+
+<b>A day that ends when yours does</b>
+
+A 1am snack counts toward the evening it belongs to, not tomorrow morning. Set your day to start whenever you actually wake up, and stop losing late meals to the calendar.
+
+<b>Who it is for</b>
+
+People counting calories for weight loss, maintenance or gaining. People who cook rather than buy. People who have tried a food diary before, logged for nine days, and stopped because logging a home-cooked dinner took four minutes.
+
+<b>Free, Plus and Coach</b>
+
+Log your food for free. Plus adds the weekly review, more journal turns and more photo scans. Coach adds the kitchen — fridge scans, recipes and meal plans.
+
+<b>Honest about what is missing</b>
+
+No Health Connect sync yet, so workouts and weight from a watch have to go in by hand for now. It is being built, and we would rather say so here than have you find out after installing.
+
+Day So Far is a calorie counter, food diary and macro tracker for people tired of scrolling a database to log a sandwich.
+```
+
+### Keyword map
+
+Play counts what is in the text, so this is the audit that matters:
+
+| Term | Target | In copy |
+|---|---:|---:|
+| calorie / calories | 10–12 | 12 |
+| calorie counting | 3–4 | 4 |
+| calorie counter | 3 | 3 |
+| food diary | 3 | 3 |
+| recipes | 3 | 3 |
+| barcode | 2–3 | 3 |
+| offline | 2 | 2 |
+| macros | 2 | 2 |
+| meal plan | 2 | 2 |
+| food log | 1–2 | 1 |
+| nutrition tracker | 1 | 1 |
+| weight loss | 1 | 1 |
+
+3,616 of the 4,000 available characters, 620 words, 1.9% density on the primary term —
+inside the band where Play indexes it and a human still reads it as English. Do not push
+past ~3%.
+
+**Paste it unwrapped.** Play preserves the literal line breaks you give it, so a
+hard-wrapped paragraph renders ragged on a phone. Each paragraph above is one long line;
+only the bullets and the numbered steps have their own.
+
+### The pricing paragraph is a placeholder
+
+`SUBSCRIPTIONS.md` prices three tiers, but `COMPETITION.md` recommends a **7-day
+card-required trial** with the free logbook as the post-trial fallback — and that trial is
+not built. The paragraph above is deliberately neutral so it is true either way, which
+also makes it weak copy.
+
+Rewrite it the day monetization is decided. It matters beyond the listing: at freemium's
+2.1% conversion an install is worth ~$0.95 and no paid channel clears that; at a hard
+trial's 10.7% it is worth ~$4.80 and Meta becomes affordable. The listing and the ad
+budget both hang on the same decision.
+
+### On the offline section
+
+`COMPETITION.md §2` lists offline logging as a **blocker** and §6.4 predicts it as a
+day-one 1-star driver. Both are out of date — `OFFLINE.md` closes with "All of it is
+built", and `lib/outbox.ts` carries create, repeat, delete and patch through a persisted
+queue with idempotency keys and optimistic reads.
+
+That makes it a differentiator worth a paragraph of its own rather than a disclosure. An
+AI-first tracker that survives a basement is unusual precisely *because* the log path
+normally needs a model round trip — the thing the competitors' local databases give them
+for free is the thing that was hard here.
+
+**The scope sentence is not optional.** `OFFLINE.md §4` puts photos, chat turns, barcode
+lookup, recipe generation and the weekly review deliberately out of scope, and the
+headline "just say what you ate" is itself the *online* path — offline you enter the meal
+directly. Naming what needs a connection is what keeps the paragraph from becoming the
+1-star generator it was written to avoid.
+
+### On the "honest about what is missing" section
+
+Unusual, and deliberate. `COMPETITION.md §6.4` predicts Health Connect as a day-one
+1-star driver. A listing that pre-empts it converts slightly worse and retains
+meaningfully better, and Play's ranking weights **uninstalls** far more than it weights
+install count. Cut the paragraph the week the integration ships, not before.
+
+---
+
+## 5. Graphics
+
+Play needs more than screenshots, and two of these are hard requirements:
+
+| Asset | Spec | Required |
+|---|---|---|
+| Icon | 512×512 PNG | Yes |
+| **Feature graphic** | **1024×500** | **Yes — listing will not publish without it** |
+| Screenshots | 2–8, min 320px, 9:16 | Yes (min 2) |
+| Promo video | YouTube URL | No, but Play surfaces it prominently |
+
+### Screenshot order
+
+The first three are visible without scrolling. They carry the whole listing.
+
+| # | Frame | Caption |
+|---|---|---|
+| 1 | Sentence typed → structured meal appears | **Just say what you ate** |
+| 2 | "there was more rice" → the entry updates | **Change your mind? Just say so** |
+| 3 | Today view, ring at ~60% | **Your day, as it happens** |
+| 4 | Widget on a real home screen | **Without opening the app** |
+| 5 | A meal logged in airplane mode, pending badge showing | **Works in the basement gym** |
+| 6 | Barcode scanner on a product | **Scan the packaged stuff** |
+| 7 | Fridge photo → recipe list | **Cook what you already have** |
+| 8 | Weekly review | **A real read on your week** |
+
+Frames 1 and 2 are the entire pitch and nobody else in the category can screenshot them.
+Frame 4 is there because `COMPETITION.md §2` lists widgets as a competitor advantage —
+`widget/DayWidget.tsx` closed that gap on Android and the listing should say so.
+
+Frame 5 replaced a progress-trend frame showing adaptive targets. Adaptive TDEE is
+**parity, not lead** by your own §2 — MacroFactor owns that claim and reviewers credit
+them for it. Offline is a claim you can make and the AI-first competitors cannot.
+
+Caption text belongs *in the image*, large. Play does not render captions separately, and
+most installs are decided on frames 1–3 at thumbnail size.
+
+---
+
+## 6. Before you publish: the microphone problem
+
+`app.json:25` declares `android.permission.RECORD_AUDIO`. Nothing in the codebase uses
+it — no `expo-av`, no `expo-audio`, no speech recognition anywhere in `apps/mobile`.
+
+That dead permission surfaces on your store listing as **Microphone**, next to Camera, on
+a calorie tracker that never records anything. It measurably depresses install conversion,
+and it obliges you to answer for audio in the Data Safety form.
+
+Delete the line unless voice logging ships in the same release.
+
+---
+
+## 7. Localization
+
+`packages/shared/src/locale.ts` ships `['en', 'bg']`. The listing should never run ahead
+of the app: a Bulgarian listing that installs into an English tab bar is a 1-star review
+with extra steps, which is the trap flagged at the end of `LANGUAGES.md`.
+
+**Order, and why:**
+
+| # | Locale | Rationale |
+|---|---|---|
+| 1 | `en` | Baseline |
+| 2 | `bg` | Already in the code, founder-market, and the cuisine argument is strongest where you can verify it yourself |
+| 3 | `pl` | ~38M, high Android share, real payment willingness, heavily home-cooked |
+| 4 | `ro` | Adjacent cuisine to `bg`, Android-dominant, cheap CPMs |
+| 5 | `tr` | Very high Android share and very cheap installs — but weak ARPU and currency risk, so volume test only |
+
+`es` and `pt-BR` are the obvious scale plays and the obvious traps: huge Android
+install bases, the lowest ARPU in the category, and every competitor already localized.
+Go there when you are buying installs profitably somewhere else first.
+
+Play's **custom store listings** let you target a country without shipping app
+localization — useful for testing demand in a market before committing translation work,
+and only for that.
+
+---
+
+## 8. What to A/B, and when
+
+Play's store listing experiments are free and built in. They are also useless below a few
+thousand store visits a week — the tool will simply never reach significance, and
+`COMPETITION.md §6.6` puts month one in the hundreds. So this section is for later, in
+this order:
+
+1. **Icon** — the largest single lever on tap-through, and the cheapest to vary.
+2. **Screenshot 1**, then the order of 1–3.
+3. **Short description** — test the alternate in §3.
+4. **Feature graphic.**
+
+**Do not A/B the long description.** It is your indexed keyword surface; churning it
+resets ranking signal for a conversion gain you cannot measure at this volume.
+
+---
+
+## 9. Sequence
+
+1. Delete `RECORD_AUDIO` (§6).
+2. Title, short description, long description (§2–4).
+3. Feature graphic + 8 screenshots (§5).
+4. Ship `bg` app localization, then the `bg` listing (§7).
+5. Only then buy traffic — see the trial-model precondition in the ads discussion:
+   at freemium's 2.1% conversion an install is worth ~$0.95 and no paid channel clears it.
