@@ -53,6 +53,29 @@ export function testDatabaseUrl(url: string): string {
   return parsed.toString();
 }
 
+export interface BillingEnv {
+  /**
+   * The shared secret RevenueCat sends as the `Authorization` header, set on
+   * their dashboard alongside the webhook URL.
+   *
+   * Absent means the endpoint refuses everything, which is the only safe
+   * default for a public URL whose whole authentication *is* this value. An
+   * unauthenticated billing webhook is a free-subscription dispenser: the body
+   * names the account and the tier, so anybody who finds the path can grant
+   * themselves Coach forever.
+   */
+  revenueCatSecret: string | null;
+  /**
+   * Whether to honour purchases marked SANDBOX.
+   *
+   * A sandbox purchase costs nothing, so accepting one in production would let
+   * any tester grant themselves a paid plan. On by default outside production
+   * — which is exactly where somebody is trying to test the flow and would
+   * otherwise be debugging a silent no-op.
+   */
+  acceptSandbox: boolean;
+}
+
 export interface Env {
   databaseUrl: string;
   port: number;
@@ -120,6 +143,7 @@ export interface Env {
    */
   storage: StorageEnv | null;
   email: EmailEnv;
+  billing: BillingEnv;
   /**
    * Google sign-in, or null when this deployment has not configured it. Null is
    * the honest default: OAuth needs a client registered against *this* server's
@@ -360,6 +384,13 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
       // Forced off under test for the same reason the API key is: a real secret
       // in the developer's .env must not let the suite accept a live webhook.
       webhookSecret: isTest ? null : (source.RESEND_WEBHOOK_SECRET ?? null),
+    },
+    billing: {
+      // Forced off under test for the same reason the email secret is: a real
+      // secret in a developer's .env must not let the suite accept a live
+      // webhook. The tests set it explicitly where they need one.
+      revenueCatSecret: isTest ? null : (source.REVENUECAT_WEBHOOK_SECRET ?? null),
+      acceptSandbox: source.BILLING_ACCEPT_SANDBOX === 'true' || source.NODE_ENV !== 'production',
     },
     isTest,
   };

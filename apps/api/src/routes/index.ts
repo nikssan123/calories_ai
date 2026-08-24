@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
@@ -80,6 +81,7 @@ import {
   updateUser,
 } from '../services/user.ts';
 import { forgetPushToken, registerPushToken } from '../services/push-tokens.ts';
+import { applyEvent, type RevenueCatEvent } from '../services/billing.ts';
 import { limitsFor } from '../services/plans.ts';
 import {
   allowanceFor,
@@ -1151,6 +1153,66 @@ export async function registerRoutes(app: FastifyInstance) {
     const { userId, ...ctx } = await getUserContext(request.userId!);
     const { stats } = await buildFullReviewStats(userId, ctx);
     return stats;
+  });
+
+  /**
+   * What a store says happened, arriving through RevenueCat.
+   *
+   * Public — see `PUBLIC_PREFIXES` — because the caller is a server with no
+   * session, so the shared secret is the whole of the authentication. That
+   * makes the missing-secret branch a refusal rather than a warning: the body
+   * of this request names an account and a tier, so an endpoint that cannot
+   * authenticate its caller is a free-subscription dispenser for anyone who
+   * finds the path.
+   *
+   * **Answers 200 to almost everything.** A non-2xx makes RevenueCat redeliver,
+   * which is right for "we were down" and wrong for every other outcome here —
+   * an event for a deleted account, a product this build has never heard of, or
+   * a type invented since this was written are all permanent, and retrying them
+   * for hours changes nothing except the log. Only a genuine failure to record
+   * the event earns a 500. What happened is in the `reason` field, and in
+   * `billing_events` regardless.
+   */
+  app.post('/billing/revenuecat', async (request, reply) => {
+    const secret = env.billing.revenueCatSecret;
+    if (!secret) {
+      request.log.warn('billing webhook received but REVENUECAT_WEBHOOK_SECRET is not set');
+      return reply.status(503).send({ error: 'Billing is not configured.' });
+    }
+
+    const offered = request.headers.authorization ?? '';
+    // Constant-time, because a plain `!==` leaks the secret one byte at a time
+    // to anyone willing to time a few thousand requests. Length is compared
+    // first since timingSafeEqual throws on a mismatch — that comparison is not
+    // constant-time, but the length of a secret is not the secret.
+    const a = Buffer.from(offered);
+    const b = Buffer.from(secret);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) {
+      request.log.warn({ ip: request.ip }, 'billing webhook failed authentication');
+      return reply.status(401).send({ error: 'Bad credentials.' });
+    }
+
+    const event = (request.body as { event?: RevenueCatEvent } | null)?.event;
+    if (!event?.id || !event.type || !event.app_user_id) {
+      return reply.status(400).send({ error: 'Malformed event.' });
+    }
+
+    try {
+      const result = await applyEvent(event, { acceptSandbox: env.billing.acceptSandbox });
+      // Logged at info rather than debug: this is the audit trail for money,
+      // and the reasons that are *not* `ok` are the ones somebody will be
+      // reading back when a customer says they paid and got nothing.
+      request.log.info(
+        { eventId: event.id, type: event.type, ...result },
+        'billing event processed',
+      );
+      return { ok: true, ...result };
+    } catch (error) {
+      // The one case worth a retry: we could not write it down. Everything else
+      // above is a decision; this is an outage.
+      request.log.error({ err: error, eventId: event.id }, 'billing event failed');
+      return reply.status(500).send({ error: 'Could not record that event.' });
+    }
   });
 
   /**

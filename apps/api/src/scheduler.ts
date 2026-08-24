@@ -7,6 +7,7 @@ import { sendNudgeEmail, sendWeeklyReviewEmail } from './email/notify.ts';
 import { nudgeReachedAPhone, sendNudgePush, sendWeeklyReviewPush } from './push/notify.ts';
 import { sweepBarcodeCache } from './services/barcode.ts';
 import { NUDGE_JOB, REVIEW_JOB, withJobLock } from './services/job-lock.ts';
+import { expirePlans } from './services/billing.ts';
 import { dueNudge, NUDGE_HOUR } from './services/nudges.ts';
 import { reviewForWeek, reviewWeekFor } from './services/reviews.ts';
 import { listActiveUsers } from './services/user.ts';
@@ -277,6 +278,28 @@ export function tick(logger?: FastifyBaseLogger): void {
   sweepBarcodeCache().catch((error) => {
     logger?.error({ err: error }, 'barcode cache sweep failed');
   });
+  /*
+   * The backstop under every store subscription.
+   *
+   * A store notification is not a Stripe webhook. Play publishes through
+   * Pub/Sub and RevenueCat forwards, and either hop can drop one while this API
+   * is restarting, misconfigured, or briefly answering 500. Without this pass a
+   * single missed EXPIRATION is a paid tier served free *forever*, and nothing
+   * surfaces it — the row looks exactly like a paying customer's.
+   *
+   * Hourly is deliberately coarse. The alternative is polling every
+   * subscription's true state against the store, which costs an API call per
+   * subscriber per tick to answer a question a date already answers. Somebody
+   * keeping their plan for up to an hour past expiry is not a problem worth a
+   * quota.
+   */
+  expirePlans(now)
+    .then((n) => {
+      if (n > 0) logger?.info({ expired: n }, 'plans returned to free');
+    })
+    .catch((error) => {
+      logger?.error({ err: error }, 'plan expiry sweep failed');
+    });
 }
 
 /** Starts the hourly tick. Returns a stop function for shutdown and for tests. */

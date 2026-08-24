@@ -175,7 +175,20 @@ export async function buildApp(
   // same reason and more sharply: an unsubscribe link is followed from a mail
   // client by someone who wants *less* from us, and making them sign in first
   // to be left alone is how a sender earns a spam complaint.
-  const PUBLIC_PREFIXES = ['/health', '/auth/', '/photos/', '/email/'];
+  //
+  // The billing entry is the full route rather than a `/billing/` prefix, and
+  // deliberately so: a store's webhook has to arrive without a session, but
+  // anything else under `/billing` — what a person is paying, when it renews —
+  // is theirs and must stay behind one. A prefix here would make the next route
+  // added to that namespace public by default, which is the wrong way round for
+  // the part of the product that touches money.
+  const PUBLIC_PREFIXES = [
+    '/health',
+    '/auth/',
+    '/photos/',
+    '/email/',
+    '/billing/revenuecat',
+  ];
 
   /**
    * The one thing an unconfirmed account may still do: leave.
