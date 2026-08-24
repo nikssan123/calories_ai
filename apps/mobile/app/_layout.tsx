@@ -190,6 +190,9 @@ function Gate() {
    * OS-level alarm with no account behind it, and gating it on a signed-in
    * session would silently stop reminding somebody whose token expired
    * overnight, which is the moment a reminder is most useful.
+   *
+   * Silent in the same way, and for the same reason: `restoreReminders` re-arms
+   * what the permission already allows and asks for nothing it does not have.
    */
   useEffect(() => {
     void restoreReminders();

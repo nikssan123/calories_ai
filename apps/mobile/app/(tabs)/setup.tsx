@@ -881,8 +881,11 @@ function PhoneReminders() {
     // Optimistic, then corrected. Scheduling asks the OS for a permission and
     // can take a beat behind a dialog, and a switch that waits for that reads
     // as a switch that did not register the tap.
+    //
+    // The tap is also what earns the dialog: `applyReminders` stays silent
+    // unless it is told otherwise, so this is the only place that asks.
     setSettings(next);
-    setSettings(await applyReminders(next));
+    setSettings(await applyReminders(next, { requestPermissions: true }));
   }
 
   // Nothing until the stored settings land. A frame of both switches off, for

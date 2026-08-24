@@ -101,13 +101,21 @@ export async function loadReminders(): Promise<ReminderSettings> {
  * said no is a control lying about the state of the world — so a refusal comes
  * back as `enabled: false` and the screen renders the truth.
  *
+ * **Never asks unprompted**, on the same rule `registerForPush` follows:
+ * `requestPermissions` is false unless the caller was a tap, so the launch-time
+ * repair below cannot raise a dialog at somebody who has just opened the app
+ * and been asked nothing.
+ *
  * Cancel-then-schedule rather than diffing: there are two of these, the ids are
  * fixed, and a cancel for something that was never scheduled is a no-op. The
  * arithmetic to work out what changed would be longer than the work it saves.
  */
-export async function applyReminders(next: ReminderSettings): Promise<ReminderSettings> {
+export async function applyReminders(
+  next: ReminderSettings,
+  { requestPermissions = false }: { requestPermissions?: boolean } = {},
+): Promise<ReminderSettings> {
   const wanted = next.log.enabled || next.weighIn.enabled;
-  const allowed = wanted ? await ensurePermission() : true;
+  const allowed = wanted ? await ensurePermission({ requestPermissions }) : true;
 
   const settings: ReminderSettings = allowed
     ? next
@@ -115,6 +123,19 @@ export async function applyReminders(next: ReminderSettings): Promise<ReminderSe
         log: { ...next.log, enabled: false },
         weighIn: { ...next.weighIn, enabled: false },
       };
+
+  /*
+   * A refusal is only worth writing down when somebody actually refused.
+   *
+   * After a tap the forced-off state is the truth and storage should agree with
+   * the switch. A launch that merely finds the permission missing has settled
+   * nothing — saving there would erase a reminder set weeks ago, and it would
+   * stay erased after the permission came back, because the next launch would
+   * read the settings it had just overwritten. So this path touches neither the
+   * store nor the OS: it returns what is in force and leaves the phone as it
+   * found it.
+   */
+  if (!allowed && !requestPermissions) return settings;
 
   await save(settings);
 
@@ -185,6 +206,14 @@ export async function applyReminders(next: ReminderSettings): Promise<ReminderSe
  * permission revoked and later granted again, an Android upgrade that dropped a
  * channel. Cheap, idempotent, and it fixes the failure nobody would report
  * because its symptom is silence.
+ *
+ * Silent by construction. Two of those cases — a restore that carried the
+ * settings across but not the permission, an Android upgrade into the era where
+ * notifications need one — are exactly the states where asking would succeed,
+ * which is what makes it worth refusing to: the dialog would land on a cold
+ * launch, about an alarm set on a phone the reader may no longer be holding.
+ * The reminder stays stored and re-arms itself the moment the permission is
+ * back, whether it comes back from Settings or from the switch.
  */
 export async function restoreReminders(): Promise<void> {
   const stored = await loadReminders();
@@ -200,17 +229,20 @@ export async function clearReminders(): Promise<void> {
 }
 
 /**
- * The permission, asked for at the moment it is an answer to something.
+ * The permission, asked for only at the moment it is an answer to something.
  *
  * The same rule `registerForPush` follows and the same reason: `canAskAgain` is
  * the difference between "not yet" and "no", and asking past it resolves
  * instantly to denied — which would read as the person having just refused
  * rather than months ago, in Settings, about something else.
  */
-async function ensurePermission(): Promise<boolean> {
+async function ensurePermission(
+  { requestPermissions }: { requestPermissions: boolean },
+): Promise<boolean> {
   try {
     const existing = await Notifications.getPermissionsAsync();
     if (existing.granted) return true;
+    if (!requestPermissions) return false;
     if (!existing.canAskAgain) return false;
     return (await Notifications.requestPermissionsAsync()).granted;
   } catch {
