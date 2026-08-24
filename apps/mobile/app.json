@@ -61,6 +61,14 @@
         }
       ],
       [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Day So Far uses the microphone so you can say what you ate instead of typing it.",
+          "speechRecognitionPermission": "Day So Far turns what you say into the sentence it logs. Your phone does the listening.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "Day So Far opens your photos so you can log a meal you already photographed.",

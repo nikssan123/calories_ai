@@ -12,9 +12,11 @@ and nothing the app can do is left out.**
 Checked against the code, not against the planning docs — `COMPETITION.md` is dated
 2026-08-22 and is already stale on this point. **Offline logging is built** (`OFFLINE.md`:
 "All of it is built"; `apps/mobile/lib/outbox.ts`), so it is sold below rather than
-disclosed. Still genuinely absent: **Health Connect sync** (`INTEGRATIONS.md`: "Nothing
-here is built"), **voice input**, and **a searchable food catalogue**. Those three stay
-out of the copy.
+disclosed. **Voice input is built too**, as of 2026-08-24 — `apps/mobile/lib/voice.ts`,
+dictation straight into the composer — so it is sold below as well; it was listed here as
+absent until that day. Still genuinely absent: **Health Connect sync** (`INTEGRATIONS.md`:
+"Nothing here is built") and **a searchable food catalogue**. Those two stay out of the
+copy.
 
 ---
 
@@ -109,6 +111,7 @@ Log in any language. A plate of musaka, a bowl of tarator, whatever your grandmo
 <b>What you get</b>
 
 • <b>Log by writing</b> — a sentence, not a search box
+• <b>Log by speaking</b> — say the meal out loud; your phone does the listening
 • <b>Offline logging</b> — enter meals anywhere, they sync when you reconnect
 • <b>Barcode scanner</b> — for the packaged half of your diet
 • <b>Photo logging</b> — snap the plate or snap the label
@@ -161,7 +164,7 @@ Play counts what is in the text, so this is the audit that matters:
 | nutrition tracker | 1 | 1 |
 | weight loss | 1 | 1 |
 
-3,616 of the 4,000 available characters, 620 words, 1.9% density on the primary term —
+3,695 of the 4,000 available characters, 635 words, 1.9% density on the primary term —
 inside the band where Play indexes it and a human still reads it as English. Do not push
 past ~3%.
 
@@ -247,16 +250,25 @@ most installs are decided on frames 1–3 at thumbnail size.
 
 ---
 
-## 6. Before you publish: the microphone problem
+## 6. The microphone permission — settled 2026-08-24
 
-`app.json:25` declares `android.permission.RECORD_AUDIO`. Nothing in the codebase uses
-it — no `expo-av`, no `expo-audio`, no speech recognition anywhere in `apps/mobile`.
+This section used to say: `app.json` declares `android.permission.RECORD_AUDIO`, nothing
+uses it, delete the line unless voice logging ships in the same release. **Voice logging
+shipped in the same release**, so the permission stays and is now honest.
 
-That dead permission surfaces on your store listing as **Microphone**, next to Camera, on
-a calorie tracker that never records anything. It measurably depresses install conversion,
-and it obliges you to answer for audio in the Data Safety form.
+What that leaves for the store:
 
-Delete the line unless voice logging ships in the same release.
+- The listing still shows **Microphone** next to Camera. That is a real conversion cost
+  and now buys something — the mic is the second-largest control in the composer, and the
+  screenshot set should show it rather than let the permission arrive unexplained.
+- **Data Safety: no audio is collected.** Recognition runs through Android's own
+  `SpeechRecognizer`. No recording reaches this project's servers, so there is nothing to
+  declare as collected or shared — only the resulting text, which is already declared as
+  part of the conversation.
+- Where the phone has no offline language pack, Android hands the audio to Google's
+  network recogniser instead of doing it on-device. That is a flow between the phone and
+  Google rather than anything this app receives, and it is disclosed as such in `/privacy`
+  §4 under Google.
 
 ---
 
@@ -305,7 +317,8 @@ resets ranking signal for a conversion gain you cannot measure at this volume.
 
 ## 9. Sequence
 
-1. Delete `RECORD_AUDIO` (§6).
+1. ~~Delete `RECORD_AUDIO`~~ — **done differently**: voice shipped, so the permission is
+   kept and earned (§6).
 2. Title, short description, long description (§2–4).
 3. Feature graphic + 8 screenshots (§5).
 4. Ship `bg` app localization, then the `bg` listing (§7).

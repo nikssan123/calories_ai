@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Circle, Path, Polyline, Rect } from 'react-native-svg';
 import type { ChatMessage, PhotoMediaType } from '@ct/shared';
@@ -9,6 +9,7 @@ import { PressableChunk } from '@/components/Chunk';
 import { pickPhoto, takePhoto, type PreparedPhoto } from '@/lib/image';
 import { font, type as t, useColors } from '@/theme';
 import { useSharedPhoto } from '@/lib/share';
+import { useDictation } from '@/lib/voice';
 
 export interface ComposerPayload {
   text: string;
@@ -66,10 +67,49 @@ export function Composer({
   }, [pending, taken]);
   const [busy, setBusy] = useState(false);
 
+  /*
+   * Dictation writes into this same box, so everything after it — the send, the
+   * outbox, the turn itself — cannot tell a spoken meal from a typed one.
+   *
+   * `spoken` holds whatever had already been typed when the microphone opened,
+   * because a recogniser revises the whole utterance rather than appending to
+   * it: every result replaces the dictated tail, and this is the head it is
+   * replaced *after*. Without it, starting to type and then finishing out loud
+   * would silently eat the typing.
+   */
+  const spoken = useRef('');
+  const dictation = useDictation(
+    useCallback((transcript: string) => {
+      setText(spoken.current ? `${spoken.current} ${transcript}` : transcript);
+    }, []),
+  );
+
+  function talk() {
+    if (dictation.listening) {
+      dictation.stop();
+      return;
+    }
+    spoken.current = text.trim();
+    dictation.start();
+  }
+
   const canSend = (text.trim().length > 0 || photo !== null) && !disabled;
+
+  /*
+   * The microphone stands where the send button stands, and takes its turn
+   * there: an empty composer has nothing to send and every reason to offer the
+   * faster way of filling itself, and a full one has the opposite. The bar
+   * stays three controls wide either way, which is the whole reason to do it
+   * this way rather than adding a fourth.
+   *
+   * `listening` holds the slot open regardless, or the first word recognised
+   * would flip the button to Send and take away the only way to stop.
+   */
+  const talking = dictation.supported && (dictation.listening || !canSend);
 
   function submit() {
     if (!canSend) return;
+    if (dictation.listening) dictation.stop();
     onSend({
       // A photo on its own is a valid log — give the model a default instruction.
       text: text.trim() || "Here's what I'm eating — log it.",
@@ -79,6 +119,7 @@ export function Composer({
     });
     setText('');
     setPhoto(null);
+    spoken.current = '';
   }
 
   /*
@@ -147,8 +188,16 @@ export function Composer({
 
         <TextInput
           value={text}
-          onChangeText={setText}
-          placeholder="Two eggs and toast…"
+          onChangeText={(next) => {
+            setText(next);
+            // Answering the complaint by typing is an answer. Keeping it on
+            // screen while they do makes it an accusation.
+            if (dictation.problem) dictation.dismiss();
+          }}
+          // The one place the app says it is listening. A field that names the
+          // state it is in needs no separate indicator over it, and the words
+          // land in this exact spot a moment later.
+          placeholder={dictation.listening ? 'Listening…' : 'Two eggs and toast…'}
           placeholderTextColor={colors.mutedForeground}
           editable={!disabled}
           multiline
@@ -163,42 +212,84 @@ export function Composer({
           ]}
         />
 
-        <PressableChunk
-          // The default button depth. `size-10` on the web overrides the size
-          // but not `--chunk-depth`, which stays at 4 — only the `sm` sizes
-          // step it down to 3.
-          depth={4}
-          radius={999}
-          color={colors.caloriesDeep}
-          onPress={submit}
+        {talking ? (
+          <PressableChunk
+            depth={4}
+            radius={999}
+            // The default ledge rather than a darker red of its own. A stop
+            // button is a state the app is in, not a destructive act, and the
+            // palette has no `destructiveDeep` because nothing has needed one.
+            color={dictation.listening ? undefined : colors.input}
+            onPress={talk}
+            disabled={disabled || busy}
+            accessibilityRole="button"
+            accessibilityLabel={dictation.listening ? 'Stop listening' : 'Say what you ate'}
+            accessibilityState={{ busy: dictation.listening }}
+            style={{ opacity: disabled || busy ? 0.3 : 1 }}
+            contentStyle={[
+              styles.send,
+              { backgroundColor: dictation.listening ? colors.destructive : colors.card },
+            ]}
+          >
+            {dictation.listening ? (
+              <Svg width={21} height={21} viewBox="0 0 24 24">
+                <Rect
+                  x={7}
+                  y={7}
+                  width={10}
+                  height={10}
+                  rx={2.5}
+                  fill={colors.destructiveForeground}
+                />
+              </Svg>
+            ) : (
+              <MicGlyph color={colors.mutedForeground} />
+            )}
+          </PressableChunk>
+        ) : (
+          <PressableChunk
+            // The default button depth. `size-10` on the web overrides the size
+            // but not `--chunk-depth`, which stays at 4 — only the `sm` sizes
+            // step it down to 3.
+            depth={4}
+            radius={999}
+            color={colors.caloriesDeep}
+            onPress={submit}
           // No press buzz. Sending is the one control in the app that is
           // answered rather than acted on: the reply streams back a moment
-          // later and, if the turn logged something, `haptics.logged` fires
-          // for it. A light impact on the way out only crowds that, and it
-          // fires on every sentence — the thing this composer is for.
-          haptic={false}
-          disabled={!canSend}
-          accessibilityRole="button"
-          accessibilityLabel="Send"
-          // `disabled:opacity-30`, rather than the 0.5 a disabled chunk carries
-          // by default. Nothing else in the app spends this long disabled — it
-          // is the resting state of an empty composer — and at 0.5 it still
-          // reads as a button waiting to be pressed.
-          style={{ opacity: canSend ? 1 : 0.3 }}
-          contentStyle={[styles.send, { backgroundColor: colors.primary }]}
-        >
-          <Svg width={21} height={21} viewBox="0 0 24 24">
-            <Path
-              d="M12 19V5M5 12l7-7 7 7"
-              stroke={colors.primaryForeground}
-              strokeWidth={3}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-          </Svg>
-        </PressableChunk>
+            // later and, if the turn logged something, `haptics.logged` fires
+            // for it. A light impact on the way out only crowds that, and it
+            // fires on every sentence — the thing this composer is for.
+            haptic={false}
+            disabled={!canSend}
+            accessibilityRole="button"
+            accessibilityLabel="Send"
+            // `disabled:opacity-30`, rather than the 0.5 a disabled chunk
+            // carries by default. On a phone with no recogniser this is still
+            // the resting state of an empty composer, and at 0.5 it reads as a
+            // button waiting to be pressed.
+            style={{ opacity: canSend ? 1 : 0.3 }}
+            contentStyle={[styles.send, { backgroundColor: colors.primary }]}
+          >
+            <Svg width={21} height={21} viewBox="0 0 24 24">
+              <Path
+                d="M12 19V5M5 12l7-7 7 7"
+                stroke={colors.primaryForeground}
+                strokeWidth={3}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+              />
+            </Svg>
+          </PressableChunk>
+        )}
       </View>
+
+      {dictation.problem && (
+        <Text style={[t.footnote, styles.problem, { color: colors.mutedForeground }]}>
+          {dictation.problem}
+        </Text>
+      )}
 
       {/*
         The scanner sits here as a third peer rather than in a tab of its own,
@@ -313,6 +404,35 @@ function Choice({
   );
 }
 
+/**
+ * A capsule, the arc that hears it, and the stem it stands on. Drawn at the
+ * same 2.2 weight as the camera it swaps places with, so the two controls read
+ * as the same family at the two ends of the bar.
+ */
+function MicGlyph({ color, size = 21 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Rect
+        x={9}
+        y={2.5}
+        width={6}
+        height={11}
+        rx={3}
+        stroke={color}
+        strokeWidth={2.2}
+        fill="none"
+      />
+      <Path
+        d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"
+        stroke={color}
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        fill="none"
+      />
+    </Svg>
+  );
+}
+
 function CameraGlyph({ color, size = 22 }: { color: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
@@ -378,4 +498,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 14,
   },
+  // Under the field it is about, indented past the camera to sit under the
+  // text rather than under the whole bar.
+  problem: { paddingTop: 8, paddingLeft: 48, paddingRight: 8 },
 });

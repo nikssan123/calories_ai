@@ -66,8 +66,9 @@ export default function PrivacyPage() {
           <li>Photos of food you upload, and any barcode you scan.</li>
           <li>Exercise, workouts and weight entries.</li>
           <li>
-            The conversation itself — what you typed and what the assistant answered — kept as
-            a record separate from the meals it produced.
+            The conversation itself — what you typed, or dictated, and what the assistant
+            answered — kept as a record separate from the meals it produced. A dictated meal is
+            stored as the words it became; the recording is never sent here and never kept.
           </li>
           <li>Recipes, meal plans, shopping lists and pantry items you create.</li>
         </List>
@@ -149,9 +150,15 @@ export default function PrivacyPage() {
             at them. <Out href="https://www.cloudflare.com/privacypolicy/">Privacy policy</Out>.
           </Row>
           <Row label="Google">
-            Only if you choose to sign in with Google, and only then. Google learns that you
-            signed in to this app; this app learns your Google id and address. Sign in with a
-            password instead and Google is not involved at all.
+            Two things, each only if you choose it. <b>Signing in with Google:</b> Google learns
+            that you signed in to this app, and this app learns your Google id and address —
+            sign in with a password instead and that half never happens. <b>Dictating a meal on
+            Android:</b> the phone&rsquo;s own speech recognition turns what you say into text.
+            Where the phone has an offline language pack, that happens on the device and no
+            audio leaves it; where it does not, Android hands the recording to Google to
+            transcribe. Either way the recording is between your phone and Google — it is never
+            sent to this app, which receives only the finished sentence, in the box, for you to
+            send or delete.
           </Row>
           <Row label="Open Food Facts">
             Consulted when you scan a barcode. It receives the number on the packet and nothing
