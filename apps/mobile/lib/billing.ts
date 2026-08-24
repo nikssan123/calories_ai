@@ -138,20 +138,29 @@ export async function forgetBilling(): Promise<void> {
   }
 }
 
-/** One buyable tier, as the wall draws it. */
+/** One buyable tier at one billing period, as the wall draws it. */
 export interface Buyable {
   plan: Exclude<PlanName, 'free'>;
+  /**
+   * How often it renews. Both are sold — `plans.ts` prices a month and a year
+   * — so this is a dimension the wall has to offer rather than choose. An
+   * earlier version of this file kept only the longest package per tier, which
+   * silently hid every monthly SKU and left the small print claiming annual
+   * billing for a plan somebody was about to be charged for monthly.
+   */
+  period: 'month' | 'year';
   /** What to hand back to `purchase()`. */
   pkg: PurchasesPackage;
   /** Localised and tax-inclusive where the store says so: "£69.99". */
   price: string;
   /**
-   * The same price expressed monthly, for an annual package. Null when the
-   * store does not compute one — never derived here, because dividing an
-   * annual price by twelve gets the rounding and the currency wrong in most of
-   * the world.
+   * The same price expressed monthly. The store computes it; it is never
+   * derived here, because dividing an annual price by twelve gets the rounding
+   * and the currency wrong in most of the world.
    */
   perMonth: string | null;
+  /** The raw figure, for comparing a year against twelve months. */
+  amount: number;
 }
 
 /**
@@ -180,13 +189,18 @@ function planOf(pkg: PurchasesPackage): Exclude<PlanName, 'free'> | null {
 }
 
 /**
- * What is on sale, one package per tier.
+ * Everything on sale, one entry per tier *and* period.
  *
- * Annual is preferred where an offering carries both, which is the pricing
- * decision in `SUBSCRIPTIONS.md` — the tiers are sized against an annual net,
- * and a monthly plan at a twelfth of the annual price does not cover its own
- * COGS at these ceilings. If a dashboard only configures monthly, that is what
- * is shown; this picks, it does not filter.
+ * It filters rather than picks. `plans.ts` prices both a month and a year for
+ * each tier, and which of those somebody wants is a decision they get to make —
+ * an earlier version of this preferred the longest package and returned one per
+ * tier, which is the same as not selling monthly at all.
+ *
+ * The period is read off the store's own `pricePerYear`/`price` rather than the
+ * package identifier, because `PACKAGE_TYPE` is only meaningful when a
+ * dashboard used the standard package names and a custom one says nothing. An
+ * annual subscription is the one whose price *is* its yearly price; a monthly
+ * one's yearly figure is roughly twelve times what it charges.
  *
  * Returns an empty list rather than throwing on every failure path, including
  * "no offering configured yet". The wall handles an empty list as its own
@@ -203,31 +217,30 @@ export async function buyables(): Promise<Buyable[]> {
   }
   if (!offering) return [];
 
-  const best = new Map<Exclude<PlanName, 'free'>, PurchasesPackage>();
+  const found: Buyable[] = [];
   for (const pkg of offering.availablePackages) {
     const plan = planOf(pkg);
     if (!plan) continue;
-    const held = best.get(plan);
-    // `pricePerYearString` is only non-null on a subscription the store knows
-    // the period of, and an annual package is the one whose price *is* its
-    // yearly price — so the longest period wins by comparing them.
-    if (!held || (pkg.product.pricePerYear ?? 0) > (held.product.pricePerYear ?? 0)) {
-      best.set(plan, pkg);
-    }
+    const { price, pricePerYear, priceString, pricePerMonthString } = pkg.product;
+    /*
+     * Within 1% of its own yearly figure means this charge *is* the year. The
+     * tolerance is there because a store may round the derived figure; it does
+     * not need to be tighter, since the alternative period is twelve times away.
+     */
+    const annual = pricePerYear !== null && Math.abs(pricePerYear - price) < price * 0.01;
+    found.push({
+      plan,
+      period: annual ? 'year' : 'month',
+      pkg,
+      price: priceString,
+      perMonth: pricePerMonthString,
+      amount: price,
+    });
   }
 
-  return PLANS.filter((plan): plan is Exclude<PlanName, 'free'> => plan !== 'free')
-    .map((plan) => {
-      const pkg = best.get(plan);
-      if (!pkg) return null;
-      return {
-        plan,
-        pkg,
-        price: pkg.product.priceString,
-        perMonth: pkg.product.pricePerMonthString,
-      } satisfies Buyable;
-    })
-    .filter((entry): entry is Buyable => entry !== null);
+  // Cheapest tier first, so the wall draws them in the order `PLANS` declares.
+  const order = (plan: PlanName) => PLANS.indexOf(plan as never);
+  return found.sort((a, b) => order(a.plan) - order(b.plan));
 }
 
 /** Somebody closed the store sheet. Not a failure, and not worth a message. */

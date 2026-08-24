@@ -46,6 +46,12 @@ export default function UpgradeScreen() {
   const paid = tiers.filter((tier) => tier.plan !== 'free');
   const [offers, setOffers] = useState<Buyable[] | null>(null);
   const [chosen, setChosen] = useState<PlanName | null>(null);
+  /*
+   * Yearly first, because it is the cheaper of the two per month and the one
+   * somebody would pick if they compared. Opening on monthly and letting them
+   * find the saving is the version of this screen that quietly charges more.
+   */
+  const [period, setPeriod] = useState<'month' | 'year'>('year');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -67,9 +73,34 @@ export default function UpgradeScreen() {
   }, [chosen, paid, plan]);
 
   const offerFor = useCallback(
-    (candidate: PlanName) => offers?.find((offer) => offer.plan === candidate) ?? null,
-    [offers],
+    (candidate: PlanName, want: 'month' | 'year' = period) =>
+      offers?.find((offer) => offer.plan === candidate && offer.period === want) ??
+      // A tier configured for only one period still sells. The toggle is hidden
+      // in that case (see `periods`), so this is the single option, not a
+      // silent substitution of one billing cycle for another.
+      offers?.find((offer) => offer.plan === candidate) ??
+      null,
+    [offers, period],
   );
+
+  /** Which periods the store actually offers, so a toggle with one side is not drawn. */
+  const periods = new Set(offers?.map((offer) => offer.period) ?? []);
+
+  /**
+   * What a year saves against twelve of the monthly charge, as a percentage.
+   *
+   * Arithmetic on two of the store's own figures in one currency, which is
+   * safe — unlike deriving a *displayed* price, which is why `perMonth` is
+   * still the store's string and never a division done here.
+   */
+  const saving = (() => {
+    if (!chosen) return null;
+    const year = offerFor(chosen, 'year');
+    const month = offerFor(chosen, 'month');
+    if (!year || !month || month.amount <= 0) return null;
+    const pct = Math.round((1 - year.amount / (month.amount * 12)) * 100);
+    return pct >= 5 ? pct : null;
+  })();
 
   async function buy() {
     const offer = chosen ? offerFor(chosen) : null;
@@ -164,6 +195,45 @@ export default function UpgradeScreen() {
           : `You're on ${TIER_NAMES[plan]}.`}
       </Text>
 
+      {/*
+        Monthly or yearly, and only when both exist. A segmented control rather
+        than a checkbox on each card: the period applies to whichever tier they
+        end up choosing, so putting it on the cards would ask the same question
+        twice and allow two answers.
+      */}
+      {periods.has('month') && periods.has('year') && (
+        <View style={[styles.periods, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+          {(['year', 'month'] as const).map((option) => {
+            const on = period === option;
+            return (
+              <Pressable
+                key={option}
+                onPress={() => {
+                  haptics.selected();
+                  setPeriod(option);
+                }}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: on }}
+                style={[
+                  styles.period,
+                  on && { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+              >
+                <Text
+                  style={[
+                    t.footnoteBold,
+                    { color: on ? colors.foreground : colors.mutedForeground },
+                  ]}
+                >
+                  {option === 'year' ? 'Yearly' : 'Monthly'}
+                  {option === 'year' && saving !== null ? ` · save ${saving}%` : ''}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
       <View style={styles.tiers}>
         {paid.map((tier) => (
           <TierCard
@@ -173,6 +243,7 @@ export default function UpgradeScreen() {
             lines={tierLines(tier)}
             price={offerFor(tier.plan)?.price ?? null}
             perMonth={offerFor(tier.plan)?.perMonth ?? null}
+            period={offerFor(tier.plan)?.period ?? null}
             current={tier.plan === plan}
             selected={tier.plan === chosen}
             onPress={() => {
@@ -250,8 +321,16 @@ export default function UpgradeScreen() {
       </View>
 
       <Text style={[t.footnote, styles.smallPrint, { color: colors.mutedForeground }]}>
-        Billed once a year through the store. Cancel any time from your store account — you keep
-        what you paid for until the period ends.
+        {/*
+          The period of the package actually selected, not the toggle's. They
+          can differ: `offerFor` falls back to a tier's only configured period,
+          so a Coach sold monthly-only under a "Yearly" toggle would otherwise
+          be described here as billed once a year — which is the one sentence on
+          this screen that has to be literally true.
+        */}
+        {(offer?.period ?? period) === 'year' ? 'Billed once a year' : 'Billed monthly'} through
+        the store, and it renews until you stop it. Cancel any time from your store account — you
+        keep what you paid for until the period ends.
       </Text>
     </ScrollView>
   );
@@ -272,6 +351,7 @@ function TierCard({
   lines,
   price,
   perMonth,
+  period,
   current,
   selected,
   onPress,
@@ -281,6 +361,8 @@ function TierCard({
   lines: string[];
   price: string | null;
   perMonth: string | null;
+  /** What `price` buys, so the sub-line cannot claim the wrong billing cycle. */
+  period: 'month' | 'year' | null;
   current: boolean;
   selected: boolean;
   onPress: () => void;
@@ -329,8 +411,11 @@ function TierCard({
 
         {/* The store's own per-month figure, never an annual price divided by
             twelve here — the rounding and the currency are the store's to get
-            right, and in most of the world our arithmetic would be wrong. */}
-        {perMonth && !current && (
+            right, and in most of the world our arithmetic would be wrong.
+            
+            Only on a yearly package: on a monthly one it would restate the
+            price directly above it. */}
+        {period === 'year' && perMonth && !current && (
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
             {perMonth} a month, billed yearly
           </Text>
@@ -362,6 +447,22 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: 'row', justifyContent: 'flex-end' },
   close: { padding: 6, marginRight: -6 },
   lede: { marginTop: -6 },
+  periods: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    padding: 3,
+    borderRadius: 999,
+    borderWidth: 2,
+    gap: 2,
+  },
+  period: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 2,
+    // Transparent rather than absent, so selecting one does not resize the row.
+    borderColor: 'transparent',
+  },
   tiers: { gap: 20, marginTop: 4 },
   tier: { borderWidth: 2, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 16, gap: 8 },
   tierHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
