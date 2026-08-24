@@ -66,11 +66,11 @@ describe('agent client', () => {
   });
 
 
-  it('prefers an API key when one is set', () => {
+  it('names the API key when one is set', () => {
     const original = process.env.ANTHROPIC_API_KEY;
     process.env.ANTHROPIC_API_KEY = 'sk-test';
     try {
-      expect(authDescription()).toBe('anthropic-api-key');
+      expect(authDescription()).toContain('anthropic-api-key');
     } finally {
       process.env.ANTHROPIC_API_KEY = original;
     }
@@ -81,8 +81,12 @@ describe('agent client', () => {
    * spy on the export cannot reach it. Re-import the module against a fake home
    * directory instead — which also makes the result independent of whether the
    * machine running the suite happens to be signed into Claude Code.
+   *
+   * `doUnmock` because `helpers/setup.ts` pins that same function to false for
+   * the whole suite, and this is the one test whose subject *is* the credential
+   * on disk. It needs the real check over the fake home, not the pin.
    */
-  it('falls back to the subscription, then to nothing', async () => {
+  it('reports every credential on the box, not the winner', async () => {
     const { mkdtemp, mkdir, writeFile } = await import('node:fs/promises');
     const { tmpdir } = await import('node:os');
     const { join } = await import('node:path');
@@ -92,6 +96,7 @@ describe('agent client', () => {
     const home = await mkdtemp(join(tmpdir(), 'ct-home-'));
 
     vi.resetModules();
+    vi.doUnmock('../src/ai/client.ts');
     vi.doMock('node:os', () => ({ homedir: () => home, default: { homedir: () => home } }));
     try {
       const cold = await import('../src/ai/client.ts');
@@ -103,14 +108,23 @@ describe('agent client', () => {
       expect(cold.hasSubscriptionAuth()).toBe(true);
       expect(cold.authDescription()).toBe('claude-code-subscription');
 
+      /*
+       * Both, and this is the case that matters. A box running `anthropic-api`
+       * for the public and the subscription for a few addresses holds both on
+       * purpose, and each pays for a different set of turns. Naming only the
+       * key there hid the question every silent failure on this path comes down
+       * to — is the login actually on the volume? — behind a shell on the host.
+       */
       process.env.ANTHROPIC_API_KEY = 'sk-test';
-      expect(cold.authDescription()).toBe('anthropic-api-key');
+      expect(cold.authDescription()).toBe('claude-code-subscription+anthropic-api-key');
     } finally {
       vi.doUnmock('node:os');
       vi.resetModules();
       process.env.ANTHROPIC_API_KEY = original;
       await rm(home, { recursive: true, force: true });
     }
+    // Left unmocked deliberately: `vi.mock` in a setup file is re-applied per
+    // test file, and nothing after this one in here reads the credential.
   });
 
   it('answers whether the subscription credentials file exists', () => {

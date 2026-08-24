@@ -1,5 +1,5 @@
 import { env } from '../env.ts';
-import { hasSubscriptionAuth, onSubscription } from './client.ts';
+import { hasSubscriptionAuth } from './client.ts';
 import { PROVIDERS, type ProviderId } from './providers/types.ts';
 
 /**
@@ -68,10 +68,20 @@ export function laneFor(email: string | null | undefined): ProviderId {
  * paid for, at a flat rate, by whoever signed the box in. Metering it does not
  * protect a margin, it just refuses work that has no marginal price.
  *
- * So this is the one predicate that lifts the meters, and it is deliberately
- * stricter than `laneFor(...) === 'anthropic'`. That lane runs on the SDK, and
- * the SDK bills an `ANTHROPIC_API_KEY` when one is set even with credentials on
- * disk — same lane, real invoice. `onSubscription` is what rules that out.
+ * So this is the one predicate that lifts the meters, and what makes it safe is
+ * `subscriptionEnv` in `providers/anthropic.ts`: the `claude` subprocess is
+ * spawned without `ANTHROPIC_API_KEY` whenever there is a login to use, so a
+ * turn on this lane cannot quietly be billed to the key instead. The two are
+ * one mechanism read from two ends — this asks whether the login pays, that
+ * makes it true — and the condition is deliberately the same on both sides.
+ * `lanes.test.ts` pins them together, because deleting the `env:` line would
+ * turn this from an entitlement into a hole.
+ *
+ * It used to ask for the *absence* of a key in the environment, which was the
+ * right question before that spawn existed and became wrong the moment it did:
+ * on a box running both lanes there is always a key, so the meter was never
+ * lifted for anybody and `SUBSCRIPTION_EMAILS` moved the lane without moving
+ * the wall — the operator's own accounts paywalled on their own deployment.
  *
  * Note what it means on a deployment whose `AI_PROVIDER` is `anthropic` — a
  * personal install, or development: `laneFor` answers `anthropic` for everyone,
@@ -80,5 +90,5 @@ export function laneFor(email: string | null | undefined): ProviderId {
  * ceilings only start meaning something the day it is configured with a key.
  */
 export function unmeteredFor(email: string | null | undefined): boolean {
-  return laneFor(email) === 'anthropic' && onSubscription();
+  return laneFor(email) === 'anthropic' && hasSubscriptionAuth();
 }

@@ -183,7 +183,18 @@ services:
       # Claude Code subscription instead of the metered key. Empty — the default
       # — means every turn is billed. It can only ever move somebody *onto* the
       # subscription, so it is inert on a deployment already running `anthropic`
-      # for everyone. The `claude-home` volume below is what it depends on.
+      # for everyone. The `claude-home` volume below is what it depends on: with
+      # no `.credentials.json` on it a listed address is left on the metered
+      # lane, silently, which is the failure this setting has. `/health` names
+      # both credentials, so it is the one place to check the login is there.
+      #
+      # It lifts the plan meters as well as moving the lane — a ceiling in
+      # plans.ts is a dollar figure and a subscription turn spends none — so a
+      # listed address has no paywall on any of the five sold dimensions.
+      #
+      # Non-empty means API_REPLICAS must stay at 1, whatever AI_PROVIDER says.
+      # Every replica runs its own `claude` against this one shared credentials
+      # file, and two of them refreshing one OAuth token is how a login is lost.
       SUBSCRIPTION_EMAILS:
       # The input-tokens-per-minute ceiling the key is entitled to, which is what
       # arms the token bucket. Absent means ungoverned: right for the

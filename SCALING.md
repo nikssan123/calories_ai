@@ -697,6 +697,18 @@ Three things make it work, and the middle one is the one that would have made it
   money, or take longer, than not naming it. That property is what makes the setting safe
   to leave in place while the deployment's own lane changes underneath it.
 
+**The plan meters follow the same line, and for a month they did not.** A ceiling in
+`plans.ts` is priced in dollars off `ai_usage`, and a turn on the subscription spends
+none of them, so `unmeteredFor` lifts all five sold meters for an address on this lane.
+It was written asking for the *absence* of `ANTHROPIC_API_KEY` — the correct question
+before `subscriptionEnv` existed, and wrong the moment it did, because the whole point of
+the split is a host that carries both credentials. So on the only deployment the feature
+was built for, `SUBSCRIPTION_EMAILS` moved the lane and left the wall exactly where it
+was: the operator's own accounts paid for their turns on the key and then met a paywall
+telling them to subscribe. Fixed 2026-08-24 — the predicate now asks
+`hasSubscriptionAuth()`, the same condition `subscriptionEnv` strips the key on, and
+`lanes.test.ts` pins the two together because the safety argument spans both files.
+
 **The replica constraint follows the lane, and now follows it per user.** Any traffic on
 the subscription lane means a `claude` subprocess against one shared `.credentials.json`,
 and two replicas refreshing one OAuth token is how a login gets lost. So while
@@ -710,7 +722,9 @@ single replica and one free to scale, is the way out and is not worth building y
 1. ~~**Move this deployment to `anthropic-api`**~~ — **done, 2026-08-23.**
    `ANTHROPIC_API_KEY`, `AI_PROVIDER=anthropic-api` and `ANTHROPIC_ITPM=10000000` are in
    the host's `.env`; `https://daysofar.com/api/health` reports
-   `{"ok":true,"auth":"anthropic-api-key"}`. The ITPM is the account's published ceiling,
+   `{"ok":true,"auth":"anthropic-api-key"}` — and reports
+   `claude-code-subscription+anthropic-api-key` once a login is on the `claude-home`
+   volume, which is how to check that it is there without a shell on the host. The ITPM is the account's published ceiling,
    read off the `anthropic-ratelimit-input-tokens-limit` response header rather than
    guessed — 10M/min on Haiku 4.5, Sonnet 5 and Opus 5 alike. This is the point where the
    bill started.

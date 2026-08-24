@@ -130,8 +130,14 @@ async function execute(
  * Only when there is a login to fall back on. A deployment holding a key and no
  * credentials file has exactly one credential, and taking it away would turn a
  * working configuration into a broken one to make a point.
+ *
+ * Exported for one assertion. `unmeteredFor` in `lane.ts` lifts the plan meters
+ * on exactly the condition below — `hasSubscriptionAuth()` — and it is only
+ * entitled to because this strips the key on the same condition. That coupling
+ * is the whole safety argument and it spans two files, so `lanes.test.ts` pins
+ * the pair rather than trusting the comments to stay in step.
  */
-function subscriptionEnv(): Record<string, string | undefined> | undefined {
+export function subscriptionEnv(): Record<string, string | undefined> | undefined {
   if (!hasSubscriptionAuth()) return undefined;
   const { ANTHROPIC_API_KEY: _billed, ...rest } = process.env;
   return rest;

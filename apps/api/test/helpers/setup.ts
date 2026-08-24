@@ -16,11 +16,32 @@ vi.mock('@anthropic-ai/claude-agent-sdk', async (importOriginal) => {
 });
 
 /**
- * A key is present so `hasSubscriptionAuth()` is not consulted: whether the
- * developer happens to be signed into Claude Code must not change what the
- * suite asserts. Nothing reaches the network — `query` is mocked above.
+ * A key is present so the `anthropic` lane can authenticate without one:
+ * `subscriptionAuthError` accepts either credential, and with the login mocked
+ * away below the key is the one left. Nothing reaches the network — `query` is
+ * mocked above.
  */
 process.env.ANTHROPIC_API_KEY ??= 'test-key-not-used';
+
+/**
+ * Nobody in the suite is signed into Claude Code, whatever the machine says.
+ *
+ * Whether the developer happens to have `~/.claude/.credentials.json` must not
+ * change what a single test asserts, and it now would: `unmeteredFor` lifts
+ * every plan ceiling on a deployment whose lane is `anthropic` — which is the
+ * suite's, by default — as soon as a login exists. Signed in, the whole of
+ * `plans.test.ts` would assert against an account with no meters; in CI it
+ * would pass. That is the worst available split.
+ *
+ * This used to fall out of the key above, back when a key in the environment
+ * beat a login on disk everywhere. `subscriptionEnv` ended that, so the
+ * guarantee has to be made rather than inherited. Tests about the credential
+ * itself — `lanes.test.ts`, `wiring.test.ts` — mock or re-import over this.
+ */
+vi.mock('../../src/ai/client.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../src/ai/client.ts')>()),
+  hasSubscriptionAuth: () => false,
+}));
 
 /**
  * Reference data, carried across the truncate that would otherwise destroy it.

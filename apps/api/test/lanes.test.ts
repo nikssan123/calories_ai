@@ -29,9 +29,6 @@ async function lanes(vars: Record<string, string | undefined>, signedIn: boolean
   vi.doMock('../src/ai/client.ts', async () => ({
     ...(await vi.importActual<object>('../src/ai/client.ts')),
     hasSubscriptionAuth: () => signedIn,
-    // Mirrors the real one, over the mocked file check: credentials are only
-    // what pays while there is no key in the environment to take precedence.
-    onSubscription: () => signedIn && !process.env.ANTHROPIC_API_KEY,
   }));
   return import('../src/ai/providers/index.ts');
 }
@@ -146,12 +143,18 @@ describe('who is metered', () => {
   });
 
   /**
-   * The one that would be silent. `laneFor` says `anthropic` here and the turn
-   * really does run through the Agent SDK — but with a key in the environment
-   * the SDK bills it, so the same lane is a real invoice. An entitlement built
-   * on the lane alone would hand that account unlimited turns at $0.15 a scan.
+   * The shape a real deployment running both lanes is in: a key, because the
+   * public is billed to it, *and* a login, because three addresses are not.
+   *
+   * This case used to assert the opposite, on the reasoning that the SDK
+   * prefers a key it can see and so the subscription lane was a real invoice
+   * wearing a subscription's clothes. That was true once and `subscriptionEnv`
+   * made it false — the subprocess is spawned without the key — but the
+   * predicate was never moved, so the only deployment the whole feature exists
+   * for was the one deployment where it did nothing. The account paid for the
+   * turns twice: once on the key, once at a paywall.
    */
-  it('keeps metering when a key is what actually pays', async () => {
+  it('lifts the meters on a box that holds a key for everybody else', async () => {
     const { laneFor, unmeteredFor } = await lanes(
       {
         AI_PROVIDER: 'anthropic-api',
@@ -161,7 +164,46 @@ describe('who is metered', () => {
       true,
     );
     expect(laneFor('me@example.com')).toBe('anthropic');
-    expect(unmeteredFor('me@example.com')).toBe(false);
+    expect(unmeteredFor('me@example.com')).toBe(true);
+    // And the key still pays for everyone it is there to pay for, wall and all.
+    expect(laneFor('astranger@example.com')).toBe('anthropic-api');
+    expect(unmeteredFor('astranger@example.com')).toBe(false);
+  });
+
+  /**
+   * The other half of that claim, and the reason it is safe to make.
+   *
+   * `unmeteredFor` says a turn on this lane costs nobody anything per token.
+   * The only thing making that true is `subscriptionEnv` handing the `claude`
+   * subprocess an environment with `ANTHROPIC_API_KEY` removed. Same condition,
+   * two files: if one is ever changed without the other, an account is either
+   * paywalled for free turns or given unlimited billed ones, and neither says
+   * so anywhere. So the pair is asserted together.
+   */
+  it('strips the key from the subprocess on exactly the same condition', async () => {
+    for (const signedIn of [true, false]) {
+      vi.resetModules();
+      process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
+      vi.doMock('../src/ai/client.ts', async () => ({
+        ...(await vi.importActual<object>('../src/ai/client.ts')),
+        hasSubscriptionAuth: () => signedIn,
+      }));
+      const { subscriptionEnv } = await import('../src/ai/providers/anthropic.ts');
+      const spawned = subscriptionEnv();
+
+      if (signedIn) {
+        // Replaced, minus the one variable — and only that one. HOME is how the
+        // subprocess finds `.credentials.json` at all.
+        expect(spawned).toBeDefined();
+        expect(spawned).not.toHaveProperty('ANTHROPIC_API_KEY');
+        expect(spawned?.PATH).toBe(process.env.PATH);
+      } else {
+        // No login to fall back on: the key is the only credential on the box
+        // and taking it away would break a working deployment to make a point.
+        expect(spawned).toBeUndefined();
+      }
+      vi.doUnmock('../src/ai/client.ts');
+    }
   });
 
   /**
@@ -179,7 +221,11 @@ describe('who is metered', () => {
     expect(unmeteredFor(null)).toBe(true);
   });
 
-  /** No login at all: the SDK falls back to the key, so the turn is billed. */
+  /**
+   * No login at all: `subscriptionEnv` returns undefined, the subprocess gets
+   * the ambient environment, and the SDK bills the key. The lane is the metered
+   * one plus a process, and the meters have to stay on.
+   */
   it('meters everybody when there is no login behind the lane', async () => {
     const { unmeteredFor } = await lanes(
       { AI_PROVIDER: 'anthropic', SUBSCRIPTION_EMAILS: 'me@example.com' },

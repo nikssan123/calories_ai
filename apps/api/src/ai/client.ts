@@ -11,12 +11,15 @@ import type { ModelChoice, TurnKind } from './providers/types.ts';
 export type { ModelChoice } from './providers/types.ts';
 
 /**
- * Auth: this app runs the agent on your Claude Code subscription rather than a
- * metered API key. The Agent SDK picks up the OAuth credentials that `claude`
- * writes to ~/.claude/.credentials.json, so there is no key to configure.
+ * Auth: the agent lane runs on a Claude Code subscription rather than a metered
+ * API key. The Agent SDK picks up the OAuth credentials that `claude` writes to
+ * ~/.claude/.credentials.json, so there is no key to configure for it.
  *
- * An ANTHROPIC_API_KEY in the environment would take precedence and bill per
- * token instead, so `env.ts` deliberately does not set one.
+ * A deployment may hold both. `ANTHROPIC_API_KEY` is what the `anthropic-api`
+ * lane bills, and the two lanes now run side by side on one box — see
+ * `lane.ts`. The SDK does prefer a key to the login when it can see one, which
+ * is why `providers/anthropic.ts` spawns the subprocess without it. Nothing in
+ * this file needs to reason about that beyond reporting what is on the box.
  */
 
 const CREDENTIALS_PATH = join(homedir(), '.claude', '.credentials.json');
@@ -26,23 +29,26 @@ export function hasSubscriptionAuth(): boolean {
 }
 
 /**
- * Whether the agent lane is actually running on the subscription — which is a
- * different question from whether it *could*, and the difference is money.
+ * What this box can authenticate with — all of it, not the winner.
  *
- * `hasSubscriptionAuth` says a login exists on disk. It does not say the login
- * is what pays: an `ANTHROPIC_API_KEY` in the environment takes precedence
- * inside the SDK, so credentials plus a key is a metered turn wearing a
- * subscription's clothes. This is the predicate for "nobody is billed per
- * token", and it is the one `lane.ts` builds an entitlement on top of — so it
- * has to be the strict one.
+ * It used to name one, on the assumption that a key in the environment beat a
+ * login on disk everywhere. That stopped being true when the lanes became a
+ * per-person decision: a deployment running `anthropic-api` for the public and
+ * the subscription for a handful of addresses holds both credentials on
+ * purpose, and each one pays for a different set of turns.
+ *
+ * Reporting the winner on a box like that actively hid the thing an operator
+ * needs to see. `/health` said `anthropic-api-key` whether or not anybody was
+ * signed in, so the one question behind every silent failure on this path —
+ * *are the credentials actually on the volume?* — could not be answered without
+ * a shell on the host. Both, joined, or `none`.
  */
-export function onSubscription(): boolean {
-  return !process.env.ANTHROPIC_API_KEY && hasSubscriptionAuth();
-}
-
 export function authDescription(): string {
-  if (onSubscription()) return 'claude-code-subscription';
-  return process.env.ANTHROPIC_API_KEY ? 'anthropic-api-key' : 'none';
+  const found = [
+    hasSubscriptionAuth() ? 'claude-code-subscription' : null,
+    process.env.ANTHROPIC_API_KEY ? 'anthropic-api-key' : null,
+  ].filter(Boolean);
+  return found.length > 0 ? found.join('+') : 'none';
 }
 
 export const AUTH_HELP =
