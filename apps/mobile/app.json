@@ -10,10 +10,22 @@
     "backgroundColor": "#fff6ec",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.daysofar.app"
+      "bundleIdentifier": "com.daysofar.app",
+      "associatedDomains": ["applinks:daysofar.com"]
     },
     "android": {
       "package": "com.daysofar.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            { "scheme": "https", "host": "daysofar.com", "pathPrefix": "/progress" },
+            { "scheme": "https", "host": "daysofar.com", "pathPrefix": "/today" }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ],
       "googleServicesFile": "./google-services.json",
       "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
