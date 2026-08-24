@@ -241,6 +241,20 @@ services:
       # means POST /email/inbound refuses everything, which is the only safe
       # default for a public endpoint whose whole authentication is a signature.
       RESEND_WEBHOOK_SECRET: ${RESEND_WEBHOOK_SECRET:-}
+      # The shared secret RevenueCat sends as the `Authorization` header on its
+      # webhook, set on their dashboard next to the URL. Unset means
+      # POST /billing/revenuecat refuses everything, which is the only safe
+      # default: the endpoint is public and the body names an account and a
+      # tier, so anybody who finds the path could otherwise grant themselves
+      # Coach forever. Absent from this file until now, which meant a secret set
+      # in .env never reached the container and every purchase was a silent
+      # no-op.
+      REVENUECAT_WEBHOOK_SECRET: ${REVENUECAT_WEBHOOK_SECRET:-}
+      # Whether to honour purchases the store marks SANDBOX. Off in production
+      # by default and it should stay off — a sandbox purchase costs nothing, so
+      # accepting one here is a free Coach plan for anybody with a tester
+      # account. Set it true only to prove the webhook end to end, then unset.
+      BILLING_ACCEPT_SANDBOX: ${BILLING_ACCEPT_SANDBOX:-}
       # Signing in with Google. Both halves or the button is not offered at all,
       # which is the right default here: this stack has no way to guess a client
       # registered against its own callback URL. The OAuth client in the Google
