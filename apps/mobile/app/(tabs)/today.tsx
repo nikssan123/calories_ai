@@ -688,6 +688,40 @@ export default function TodayScreen() {
             </View>
           )}
 
+          {/*
+            * Typing a meal in.
+            *
+            * At the head of the log rather than the foot of the screen. It used
+            * to sit under Repeat, on the argument that repeating something you
+            * already eat is one tap and typing four macros per item is the
+            * fallback — but a day with three meals, a run and a weight buried
+            * the fallback a screen and a half down, and a fallback nobody can
+            * reach is not one. The order still says which is which: this is a
+            * line of muted text, and Repeat is a card of chunky Log buttons.
+            */}
+          {isToday &&
+            (composing ? (
+              <FoodEditor
+                entryId={null}
+                initialMeal={inferMeal(new Date(), profile?.timezone ?? 'UTC')}
+                onCreate={logManually}
+                onCancel={() => setComposing(false)}
+              />
+            ) : (
+              <Pressable
+                onPress={() => {
+                  haptics.press();
+                  setComposing(true);
+                }}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.manual, { opacity: pressed ? 0.6 : 1 }]}
+              >
+                <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+                  + Log it yourself
+                </Text>
+              </Pressable>
+            ))}
+
           {byMeal.map(({ meal, entries }) => (
             <InsetGroup
               key={meal}
@@ -789,38 +823,6 @@ export default function TodayScreen() {
 
           {/* Repeating logs at the current time, so it only belongs on today. */}
           {isToday && <RepeatMeals localDate={day.local_date} onLogged={() => void load(null)} />}
-
-          {/*
-            * Typing a meal in.
-            *
-            * Below Repeat rather than above it, and that order is the whole
-            * argument of the offline work: repeating something you already eat
-            * is one tap, and typing four macros per item is the fallback for
-            * when it is genuinely a new meal. Putting the form first would make
-            * the expensive path look like the intended one.
-            */}
-          {isToday &&
-            (composing ? (
-              <FoodEditor
-                entryId={null}
-                initialMeal={inferMeal(new Date(), profile?.timezone ?? 'UTC')}
-                onCreate={logManually}
-                onCancel={() => setComposing(false)}
-              />
-            ) : (
-              <Pressable
-                onPress={() => {
-                  haptics.press();
-                  setComposing(true);
-                }}
-                accessibilityRole="button"
-                style={({ pressed }) => [styles.manual, { opacity: pressed ? 0.6 : 1 }]}
-              >
-                <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-                  + Log it yourself
-                </Text>
-              </Pressable>
-            ))}
 
           {/*
             * The offline footnote.
