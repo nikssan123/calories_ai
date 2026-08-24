@@ -6,16 +6,25 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_KEY": "goog_pkTRtlOHQdxQVrNgaSoayjXQRNL"
+      }
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_KEY": "goog_pkTRtlOHQdxQVrNgaSoayjXQRNL"
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_KEY": "goog_pkTRtlOHQdxQVrNgaSoayjXQRNL"
+      }
     }
   },
   "submit": {
