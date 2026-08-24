@@ -122,14 +122,28 @@ describe('weekly review', () => {
  * confirming the answer, while a recipe is the output someone would pay for.
  */
 describe('the kitchen', () => {
-  it('reads a fridge on the cheaper vision model than a plate', async () => {
+  /**
+   * This used to assert that a fridge ran on a *cheaper* model than a plate,
+   * and that the two must never converge. They have converged, deliberately:
+   * `photo_log` came down to Sonnet on 2026-08-24 after 30 weighed plates
+   * showed Opus was not better at reading one, so the gap this described was
+   * never a quality gap, only an unmeasured assumption about one.
+   *
+   * What survives is the direction, which is the part that was actually load
+   * bearing: naming what is on a shelf — with a person confirming the list
+   * before anything is cooked from it — must never cost *more* than estimating
+   * a portion nobody checks. Equal is fine. Dearer is a bug.
+   */
+  it('never reads a fridge on a dearer model than a plate', async () => {
     scriptAgent({ text: 'Eggs and not much else.' });
     await scanFridgePhoto(user.id, { mediaType: 'image/jpeg', base64: 'iVBORw0KGgo=' });
 
     expect(modelOf()).toBe(MODELS.pantry_scan.model);
-    // The point of the split. If these ever converge, the confirmation step has
-    // stopped paying for itself and the comment in client.ts is wrong.
-    expect(MODELS.pantry_scan.model).not.toBe(MODELS.photo_log.model);
+
+    const rank = ['claude-haiku-4-5', 'claude-sonnet-5', 'claude-opus-5'];
+    expect(rank.indexOf(MODELS.pantry_scan.model)).toBeLessThanOrEqual(
+      rank.indexOf(MODELS.photo_log.model),
+    );
   });
 
   it('writes recipes on the best model, like the review', async () => {

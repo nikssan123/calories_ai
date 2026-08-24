@@ -5,7 +5,7 @@ import { listMessages } from '../src/services/chat.ts';
 import { getUser } from '../src/services/user.ts';
 import { saveReview } from '../src/services/reviews.ts';
 import { agentCalls, scriptAgent, systemPromptOf } from './helpers/agent-mock.ts';
-import { MAX_SESSION_MESSAGES } from '../src/ai/client.ts';
+import { MAX_SESSION_MESSAGES, MODELS } from '../src/ai/client.ts';
 import type { StreamEvent } from '../src/ai/providers/types.ts';
 import { addMeal, addWeight, createUser, setUserTargets, type TestUser } from './helpers/factories.ts';
 
@@ -497,9 +497,12 @@ describe('routing a turn by its language', () => {
   });
 
   /*
-   * A photo is a `photo_log` and already runs on Opus, which writes Bulgarian
-   * perfectly well. The language check must not reach it — there is nothing to
-   * fix there and a downgrade would be the only thing it could achieve.
+   * A photo is a `photo_log`, and the language check must not reach it: that
+   * check only ever routes *upward*, out of Haiku, and `photo_log` is not on
+   * Haiku. Asserted against `MODELS` rather than a literal so it keeps testing
+   * the thing it is named for — that the photo kept its own routing — rather
+   * than re-pinning whichever model that happens to be. It was Opus when this
+   * was written and is Sonnet now, and neither is the point.
    */
   it('leaves a photo turn on its own model whatever language it is captioned in', async () => {
     scriptAgent({ text: 'Записано.' });
@@ -514,6 +517,6 @@ describe('routing a turn by its language', () => {
       photo: { id: photo.id, mediaType: 'image/png', base64: 'AAAA' },
     });
 
-    expect(agentCalls[0]!.options.model).toBe('claude-opus-5');
+    expect(agentCalls[0]!.options.model).toBe(MODELS.photo_log.model);
   });
 });

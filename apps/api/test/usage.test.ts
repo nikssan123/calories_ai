@@ -195,7 +195,7 @@ describe('recordUsage', () => {
       outcome: { ...OUTCOME, model: undefined },
     });
     const [row] = await rows();
-    expect(row.model).toBe('claude-opus-5');
+    expect(row.model).toBe(MODELS.photo_log.model);
   });
 
   /**

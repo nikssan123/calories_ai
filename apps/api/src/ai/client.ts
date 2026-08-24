@@ -97,10 +97,19 @@ export const MODELS: Record<TurnKind, ModelChoice> = {
   // Once a week. The only long-form writing in the product, and the one output
   // the user actually reads end to end.
   review: { model: 'claude-opus-5', effort: 'high' },
-  // Reading a fridge photo. Cheaper than photo_log on purpose: the job is
-  // naming what is on a shelf, not estimating how much of it is on a plate, and
-  // the user confirms the list before a single recipe is built on it. If real
-  // scans come back poor this is a one-word change.
+  // Reading a fridge photo. The job is naming what is on a shelf, not
+  // estimating how much of it is on a plate, and the user confirms the list
+  // before a single recipe is built on it. If real scans come back poor this is
+  // a one-word change.
+  //
+  // This used to say "cheaper than photo_log on purpose". It is not any more —
+  // photo_log came down to the same model on 2026-08-24 — and the `effort` here
+  // now makes a fridge scan the dearer of the two. That is an inversion of the
+  // argument above and it is left standing on purpose: high effort measured as
+  // worthless for *portion estimation*, which is not this task, and enumerating
+  // a shelf is where dropping it would plausibly start missing jars. Worth the
+  // same 30-plate treatment before it is touched, rather than assumed either
+  // way — assuming is what put photo_log on Opus for a year.
   pantry_scan: { model: 'claude-sonnet-5', effort: 'high' },
   // The suggestions themselves. Occasional, read end to end, and the thing
   // people would actually pay for — so it goes where the review goes.
