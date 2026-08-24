@@ -102,7 +102,7 @@ Say "there was more rice" and the entry you already logged changes. Not a correc
 
 <b>It keeps working without a signal</b>
 
-Supermarket basements, gyms, lifts and planes are where people actually log food, and where most calorie counting apps give up. Enter a meal offline and it is saved on your phone, counts toward your day immediately, and syncs by itself when you are back. Nothing is lost, and nothing is logged twice. Photo logging, barcode lookup and the conversational journal need a connection.
+Supermarket basements, gyms, lifts and planes are where people actually log food, and where most calorie counting apps give up. Enter a meal offline and it is saved on your phone, counts toward your day immediately, and syncs by itself when you are back. Nothing is lost, and nothing is logged twice.
 
 <b>A calorie counter that knows what you actually cook</b>
 
@@ -138,10 +138,6 @@ People counting calories for weight loss, maintenance or gaining. People who coo
 
 Log your food for free. Plus adds the weekly review, more journal turns and more photo scans. Coach adds the kitchen — fridge scans, recipes and meal plans.
 
-<b>Honest about what is missing</b>
-
-No Health Connect sync yet, so workouts and weight from a watch have to go in by hand for now. It is being built, and we would rather say so here than have you find out after installing.
-
 Day So Far is a calorie counter, food diary and macro tracker for people tired of scrolling a database to log a sandwich.
 ```
 
@@ -164,7 +160,7 @@ Play counts what is in the text, so this is the audit that matters:
 | nutrition tracker | 1 | 1 |
 | weight loss | 1 | 1 |
 
-3,695 of the 4,000 available characters, 635 words, 1.9% density on the primary term —
+3,390 of the 4,000 available characters, 583 words, 1.9% density on the primary term —
 inside the band where Play indexes it and a human still reads it as English. Do not push
 past ~3%.
 
@@ -196,18 +192,27 @@ AI-first tracker that survives a basement is unusual precisely *because* the log
 normally needs a model round trip — the thing the competitors' local databases give them
 for free is the thing that was hard here.
 
-**The scope sentence is not optional.** `OFFLINE.md §4` puts photos, chat turns, barcode
-lookup, recipe generation and the weekly review deliberately out of scope, and the
-headline "just say what you ate" is itself the *online* path — offline you enter the meal
-directly. Naming what needs a connection is what keeps the paragraph from becoming the
-1-star generator it was written to avoid.
+**The scope sentence was removed on 2026-08-25**, on the owner's instruction that nothing
+describing a shortfall belongs in the listing. `OFFLINE.md §4` still puts photos, chat
+turns, barcode lookup, recipe generation and the weekly review out of scope, so the risk
+this sentence existed to cover is unchanged — a reader may assume a photo logs offline.
+
+What makes the removal defensible rather than misleading is that the paragraph only ever
+claims *entering a meal* works offline, and that claim is true. It no longer volunteers
+what else does not. If offline expectations show up in the reviews, this is the first
+thing to put back.
 
 ### On the "honest about what is missing" section
 
-Unusual, and deliberate. `COMPETITION.md §6.4` predicts Health Connect as a day-one
-1-star driver. A listing that pre-empts it converts slightly worse and retains
-meaningfully better, and Play's ranking weights **uninstalls** far more than it weights
-install count. Cut the paragraph the week the integration ships, not before.
+**Cut on 2026-08-25, by the owner's call**, along with the offline scope sentence: the
+listing sells what the app does and stays quiet about what it does not.
+
+The argument it replaced is worth keeping visible, because it is a bet either way.
+`COMPETITION.md §6.4` predicts Health Connect as a day-one 1-star driver, and a listing
+that pre-empts it converts slightly worse but retains meaningfully better — which matters
+because Play weights **uninstalls** far more than install count. The wager now is that the
+install gain beats the review cost. The metric that settles it is uninstall rate in the
+first week, not conversion.
 
 ---
 
