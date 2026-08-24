@@ -275,6 +275,10 @@ function Gate() {
           * as "this is a decision you can back out of".
           */}
         <Stack.Screen name="upgrade" options={{ animation: 'slide_from_bottom' }} />
+        {/* No animation: it replaces the wall rather than covering it, and a
+            second slide-from-bottom on a screen that is already at the bottom
+            reads as a bounce. */}
+        <Stack.Screen name="purchased" options={{ animation: 'fade', gestureEnabled: false }} />
       </Stack.Protected>
       <Stack.Protected guard={!authenticated}>
         <Stack.Screen name="login" />

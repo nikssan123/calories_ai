@@ -1,4 +1,6 @@
 import { Platform } from 'react-native';
+import * as Linking from 'expo-linking';
+import Constants from 'expo-constants';
 import type {
   default as PurchasesSdk,
   LOG_LEVEL as LogLevel,
@@ -310,6 +312,44 @@ export async function restore(confirm: () => Promise<PlanName>): Promise<boolean
   if (!API_KEY || !Purchases || configuredFor === null) return false;
   await Purchases.restorePurchases();
   return awaitPlan(confirm);
+}
+
+/**
+ * The store's own subscription page, which is the only place a subscription can
+ * actually be cancelled.
+ *
+ * Neither store lets an app cancel on somebody's behalf, and Apple requires a
+ * link to this page from inside any app that sells an auto-renewing
+ * subscription (review guideline 3.1.2). Saying "cancel any time in Settings"
+ * in prose and leaving them to find it is the version that gets rejected, and
+ * more to the point it is the version that makes somebody who wants to leave
+ * feel held.
+ *
+ * `managementURL` first, because RevenueCat knows which store the subscription
+ * was actually bought from — which is not always the one this build is running
+ * on, for anyone who bought on a phone and later signed in on a tablet or came
+ * across from the web. It is null when there is nothing to manage, and the
+ * platform's own page is the right answer then too: it is where a lapsed or
+ * transferred subscription is visible.
+ */
+const STORE_SUBSCRIPTIONS =
+  Platform.OS === 'ios'
+    ? 'https://apps.apple.com/account/subscriptions'
+    : 'https://play.google.com/store/account/subscriptions' +
+      `?package=${Constants.expoConfig?.android?.package ?? ''}`;
+
+export async function manageSubscription(): Promise<void> {
+  const Purchases = purchases();
+  let url: string | null = null;
+  if (Purchases && configuredFor !== null) {
+    try {
+      url = (await Purchases.getCustomerInfo()).managementURL ?? null;
+    } catch {
+      // The store being unreachable is not a reason to strand somebody on this
+      // control — its own page still opens, and still lists the subscription.
+    }
+  }
+  await Linking.openURL(url ?? STORE_SUBSCRIPTIONS);
 }
 
 /**

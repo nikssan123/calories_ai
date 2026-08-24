@@ -10,6 +10,7 @@ import { useEntitlements } from '@/lib/entitlements';
 import {
   billingAvailable,
   buyables,
+  manageSubscription,
   purchase,
   PurchaseCancelled,
   restore,
@@ -137,22 +138,21 @@ export default function UpgradeScreen() {
     if (!offer || busy) return;
     setBusy(true);
     try {
-      const landed = await purchase(offer, refresh);
-      if (landed) {
-        haptics.logged();
-        toast.success(`You're on ${TIER_NAMES[offer.plan]}. Thank you.`);
-        router.back();
-      } else {
-        /*
-         * Bought, but the entitlement has not arrived yet. Not an error and
-         * carefully not worded as one — the receipt exists, the webhook is in
-         * flight, and `expirePlans` on the API is the backstop if it is lost.
-         * Telling somebody who has just paid that something failed is the worst
-         * sentence on this screen.
-         */
-        toast.message('Payment received — your plan will unlock in a moment.');
-        router.back();
-      }
+      await purchase(offer, refresh);
+      /*
+       * One destination for both outcomes.
+       *
+       * `purchase` resolves false when the entitlement has not arrived yet, and
+       * that used to be its own toast — a sentence that vanished while the
+       * webhook was still in flight, leaving somebody who had just been charged
+       * with a wall and no plan. `app/purchased.tsx` draws the wait and the
+       * arrival as one screen and goes on polling, so there is nothing left for
+       * this branch to decide.
+       *
+       * `replace` rather than `push`: going back from a plan somebody now owns
+       * should not land on the page that was selling it.
+       */
+      router.replace({ pathname: '/purchased', params: { plan: offer.plan } });
     } catch (error) {
       // Closing the store sheet is an answer, not a failure. Saying anything
       // at all here would be the app arguing with a decision.
@@ -328,18 +328,48 @@ export default function UpgradeScreen() {
         </Chunk>
       )}
 
+      {/*
+        Restore, and — for somebody who already pays — the way out.
+
+        "Already paid? Restore it" tested badly and deserved to: it names the
+        verb the stores use and not the situation anyone is actually in. Nobody
+        arrives here thinking "I would like to restore a transaction"; they
+        arrive on a new phone, or after a reinstall, or having paid two minutes
+        ago and still looking at a wall. So the control is titled by the
+        symptom, and the line under it says plainly what pressing it does —
+        which is the part that was missing, not the button.
+      */}
       {billingAvailable && (
-        <Pressable
-          onPress={() => void restorePurchase()}
-          disabled={busy}
-          accessibilityRole="button"
-          hitSlop={8}
-          style={({ pressed }) => [styles.restore, { opacity: pressed || busy ? 0.5 : 1 }]}
-        >
-          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-            Already paid? Restore it
-          </Text>
-        </Pressable>
+        <View style={styles.afters}>
+          <Pressable
+            onPress={() => void restorePurchase()}
+            disabled={busy}
+            accessibilityRole="button"
+            hitSlop={8}
+            style={({ pressed }) => [styles.restore, { opacity: pressed || busy ? 0.5 : 1 }]}
+          >
+            <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+              {busy ? 'Checking the store…' : 'Paid but not showing? Restore it'}
+            </Text>
+            <Text style={[t.footnote, styles.restoreNote, { color: colors.mutedForeground }]}>
+              Re-reads this store account and puts back anything you have already
+              bought. It never charges you again.
+            </Text>
+          </Pressable>
+
+          {plan !== 'free' && (
+            <Pressable
+              onPress={() => void manageSubscription()}
+              accessibilityRole="button"
+              hitSlop={8}
+              style={({ pressed }) => [styles.restore, { opacity: pressed ? 0.5 : 1 }]}
+            >
+              <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+                Manage or cancel subscription
+              </Text>
+            </Pressable>
+          )}
+        </View>
       )}
 
       {/*
@@ -587,7 +617,9 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   notice: { borderWidth: 2, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 12 },
+  afters: { marginTop: 2 },
   restore: { alignItems: 'center', paddingVertical: 10 },
+  restoreNote: { textAlign: 'center', marginTop: 3, paddingHorizontal: 24 },
   free: { gap: 7, marginTop: 10 },
   line: { flexDirection: 'row', gap: 8 },
   freeRow: { flexDirection: 'row', gap: 8 },

@@ -29,7 +29,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useEntitlements } from '@/lib/entitlements';
-import { billingAvailable, restore } from '@/lib/billing';
+import { billingAvailable, manageSubscription, restore } from '@/lib/billing';
 import { meterNoun, TIER_NAMES, TIER_PITCHES } from '@/lib/plan-copy';
 import { PRIVACY_URL, SUPPORT_EMAIL, TERMS_URL } from '@/lib/links';
 import { duration, font, type as t, useColors, useType, withAlpha } from '@/theme';
@@ -771,8 +771,27 @@ function PlanSettings() {
         </Text>
       </Pressable>
 
+      {/* Only for somebody who has something to manage. On free it would open a
+          store page listing nothing, which reads as a dead end rather than a
+          control — and the row is the one somebody goes looking for when they
+          want out, so it has to lead somewhere the first time. */}
+      {billingAvailable && plan !== 'free' && (
+        <Pressable
+          onPress={() => void manageSubscription()}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.rowButton, { opacity: pressed ? 0.6 : 1 }]}
+        >
+          <Text style={[t.body, { color: colors.mutedForeground }]}>
+            Manage or cancel subscription
+          </Text>
+        </Pressable>
+      )}
+
       {/* Both stores require a restore control, and it is the one thing on this
-          screen that has to work for somebody who is already paying and cross. */}
+          screen that has to work for somebody who is already paying and cross.
+          Named for the situation rather than the verb: "Restore a purchase" is
+          the store's word for it, and somebody on a new phone wondering where
+          their plan went does not necessarily recognise themselves in it. */}
       {billingAvailable && (
         <Pressable
           onPress={() => void restorePurchase()}
@@ -781,7 +800,7 @@ function PlanSettings() {
           style={({ pressed }) => [styles.rowButton, { opacity: pressed || restoring ? 0.6 : 1 }]}
         >
           <Text style={[t.body, { color: colors.mutedForeground }]}>
-            {restoring ? 'Checking the store…' : 'Restore a purchase'}
+            {restoring ? 'Checking the store…' : 'Paid but not showing? Restore it'}
           </Text>
         </Pressable>
       )}
