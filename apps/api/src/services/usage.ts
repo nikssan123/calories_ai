@@ -4,6 +4,7 @@ import { MODELS } from '../ai/client.ts';
 import type { ProviderId } from '../ai/providers/index.ts';
 import type { CostSource, Outcome, TurnKind } from '../ai/providers/types.ts';
 import { limitsFor, meterFor } from './plans.ts';
+import { photoCreditBalance, spendPhotoCredit } from './credits.ts';
 import type { Allowance, MeterName, PlanName } from '@ct/shared';
 
 /**
@@ -156,16 +157,27 @@ export async function allowanceFor(
   const { allowed, period } = meterFor(plan, meter);
   const kinds = METER_KINDS[meter];
 
+  /*
+   * Bought scans, which sit outside the plan entirely.
+   *
+   * Only photos are sold this way — see `PHOTO_BUNDLES` — so every other meter
+   * skips the query rather than paying for a sum that is always zero. It is
+   * read even when the monthly grant still has room, because a screen that has
+   * to say "10 left this month, plus 12 you bought" needs both halves before
+   * the button is pressed, not after.
+   */
+  const credits = meter === 'photo' ? await photoCreditBalance(userId) : 0;
+
   // A meter the plan does not carry at all. No count is run: the answer does
   // not depend on it, and this is on the hot path.
   if (allowed === null) {
-    return { meter, allowed: null, used: 0, period, resets_at: null };
+    return { meter, allowed: null, used: 0, period, resets_at: null, credits };
   }
 
   const days = period === 'month' ? 30 : null;
   const used = await turnsInWindow(userId, kinds, days);
   if (used < allowed || period === 'ever') {
-    return { meter, allowed, used, period, resets_at: null };
+    return { meter, allowed, used, period, resets_at: null, credits };
   }
 
   // Spent, and on a window that moves. When the oldest run still inside it
@@ -183,6 +195,7 @@ export async function allowanceFor(
     used,
     period,
     resets_at: row?.at ? new Date(new Date(row.at).getTime() + 30 * 86_400_000).toISOString() : null,
+    credits,
   };
 }
 
@@ -224,9 +237,19 @@ function sentenceFor({ meter, allowed, period }: Allowance): string {
 
   if (allowed === null) return `Your plan does not include ${many}.`;
   const noun = allowed === 1 ? one : many;
+
+  /*
+   * Photos are the one meter you can buy more of without changing plan, so
+   * theirs is the one sentence that ends in an offer rather than a date. Said
+   * here and not in the client for the reason the rest of this function is
+   * here: a wall that advertises a bundle the server has stopped selling is a
+   * dead end with a button on it.
+   */
+  const more = meter === 'photo' ? ' You can add more without changing plan.' : '';
+
   return period === 'ever'
-    ? `That is your ${allowed} free ${noun}. Typing a meal in is still unlimited.`
-    : `That is all ${allowed} ${noun} for this month.`;
+    ? `That is your ${allowed} free ${noun}. Typing a meal in is still unlimited.${more}`
+    : `That is all ${allowed} ${noun} for this month.${more}`;
 }
 
 /**
@@ -239,10 +262,30 @@ export async function requireAllowance(
   meter: MeterName,
 ): Promise<Allowance> {
   const allowance = await allowanceFor(userId, plan, meter);
-  if (allowance.allowed === null || allowance.used >= allowance.allowed) {
-    throw new PlanLimitError(allowance);
+  if (allowance.allowed !== null && allowance.used < allowance.allowed) return allowance;
+
+  /*
+   * The month's grant is gone. Bought scans are what stands between here and
+   * the wall, and they are spent at *permission* time rather than after the
+   * turn succeeds.
+   *
+   * That looks harsh and it is the consistent choice: a failed turn already
+   * counts against the monthly meter, because `recordUsage` writes a row for
+   * every turn including the ones that failed and `turnsInWindow` counts rows
+   * rather than successes. Spending a credit only on success would make the
+   * two halves of the same allowance behave differently — bought scans
+   * quietly more forgiving than granted ones — which is the sort of difference
+   * nobody can predict from the outside and everybody notices once.
+   *
+   * `spendPhotoCredit` re-checks the balance inside its own statement, so two
+   * photo turns racing for the last credit cannot both win. A false return is
+   * the wall, not an error.
+   */
+  if (allowance.credits > 0 && (await spendPhotoCredit(userId))) {
+    return { ...allowance, credits: allowance.credits - 1 };
   }
-  return allowance;
+
+  throw new PlanLimitError(allowance);
 }
 
 export async function turnsInLastWeek(userId: string, kind: TurnKind): Promise<number> {

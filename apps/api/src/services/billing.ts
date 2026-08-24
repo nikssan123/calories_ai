@@ -1,5 +1,7 @@
 import { query, queryOne } from '../db.ts';
 import { PLANS, type PlanName } from '@ct/shared';
+import { PHOTO_BUNDLES, type PhotoBundleId } from './plans.ts';
+import { grantPhotoCredits } from './credits.ts';
 
 /**
  * Turning a store's word for what happened into a plan on an account.
@@ -64,6 +66,28 @@ export function planFor(event: RevenueCatEvent): PlanName | null {
     if (plan) return plan;
   }
   return paid((event.product_id ?? '').split(':')[0] ?? '');
+}
+
+/**
+ * Which photo bundle a purchase is, if it is one at all.
+ *
+ * Same two sources as `planFor` and the same order, for the same reasons — the
+ * entitlement list is what RevenueCat is for but depends on a dashboard this
+ * code cannot see, and the product id is the one that is always there. Play's
+ * `product:base_plan` shape is split on the colon here too, so `photo_25` and
+ * `photo_25:oneoff` are the same bundle.
+ *
+ * Returns null for anything not in `PHOTO_BUNDLES`, which is what makes this
+ * safe to run in front of `planFor`: a tier purchase is not a bundle and falls
+ * straight through.
+ */
+export function bundleFor(event: RevenueCatEvent): PhotoBundleId | null {
+  const ids = [...(event.entitlement_ids ?? []), (event.product_id ?? '').split(':')[0] ?? ''];
+  for (const id of ids) {
+    const bundle = PHOTO_BUNDLES.find((b) => b.id === id);
+    if (bundle) return bundle.id;
+  }
+  return null;
 }
 
 /**
@@ -172,6 +196,27 @@ export async function applyEvent(
       [user.id],
     );
     return { applied: true, reason: 'ok' };
+  }
+
+  /*
+   * A photo bundle, which is stock rather than a tier.
+   *
+   * Checked before `planFor` because it is the same `NON_RENEWING_PURCHASE`
+   * shape a tier would arrive in, and without this it falls through to
+   * `unknown_plan`: the event is logged, 200 is returned, the money is taken
+   * and nothing is granted. That is the worst of the failure modes available
+   * here, because it is silent on both ends.
+   *
+   * `grantPhotoCredits` is idempotent on the event id in its own right. It is
+   * belt and braces over the `billing_events` insert above — that one already
+   * refuses a redelivery — but the two protect different things: this one also
+   * covers the same purchase arriving under a second event id, which is what a
+   * store migration or a replayed backfill looks like.
+   */
+  const bundle = bundleFor(event);
+  if (bundle) {
+    const granted = await grantPhotoCredits(user.id, bundle, event.id);
+    return granted ? { applied: true, reason: 'ok' } : { applied: false, reason: 'duplicate' };
   }
 
   const plan = planFor(event);

@@ -111,62 +111,142 @@ export interface PlanLimits {
  * ---- Measured, on production, 2026-08-23 -------------------------------------
  *
  * Everything below is priced off `ai_usage` on the live deployment rather than
- * modelled. 60 turns, 3 accounts, 4 days, $8.80 — and the deployment is running
- * the caching work (`dc247d5` has every one of those commits in its history),
- * so these are post-fix numbers, not a preview of them.
+ * modelled.
  *
- *   text log, Haiku 4.5              $0.025    n=11
- *   text log, Sonnet 5 (escalated)   $0.078    n=36
- *   text log, blended                $0.066    77% of real traffic escalates
- *   photo scan, Opus 5               $0.420    n=10, most recent day
+ *   text log, blended                $0.058    post-fix window, n=26
+ *   photo scan, Sonnet 5             $0.213    was $0.356 on Opus; see below
  *   recipe, Opus 5                   $0.284    n=1
  *   meal plan, Opus 5                $0.630    scaled from local; not yet run here
- *   weekly review                    $0.150    estimated, still
+ *   weekly review, Opus 5            $0.024    n=3, measured
  *   nudge, Sonnet 5                  $0.025    measured
+ *   pantry scan, Sonnet 5            $0.058    n=1
  *
- * **These are 5–13x what `SUBSCRIPTIONS.md` prices against**, and the gap is not
- * drift — it is two assumptions in that document that production has now
- * falsified:
+ * Three of those moved after the last revision of this file, and every one of
+ * them moved because somebody finally ran the query instead of quoting the
+ * table:
  *
- * 1. **The escalated path is the normal path, not the exception.** That document
- *    calls the escalated share "the largest unknown" and prices every table at
- *    the Haiku figure anyway. It is 77%. Sonnet is 3x Haiku, so the headline
- *    per-log cost was understated by roughly that before anything else.
+ * 1. **The caching work landed inside the sample.** The old figures averaged
+ *    four days that straddled it — cache writes per turn fell 24,149 -> 9,134
+ *    across them — so the honest blended text log is the post-fix window's
+ *    $0.058, not the whole sample's $0.106. The old file quoted $0.066, which
+ *    was neither: it was the last day taken on its own.
+ * 2. **The photo scan came down by 40% on 2026-08-24**, when 30 weighed plates
+ *    showed Opus was not better than Sonnet at reading one. See
+ *    `ai/client.ts`.
+ * 3. **The weekly review was never $0.150.** That number was marked "estimated,
+ *    still" and listed as an open question while three real reviews sat in the
+ *    ledger at $0.024. It was 6x too high, and it was load-bearing in both tier
+ *    tables.
  *
- * 2. **There is no warm column at this traffic.** 100% of production turns wrote
- *    cache. Not 27% — all of them. A shared prefix only stays resident if
- *    *somebody* is running turns, and at three accounts nobody is. The warm
- *    column in that document is real, but it is a property of volume the product
- *    does not have yet, which makes it exactly the wrong column to price a
- *    launch against: early users are the most expensive users.
+ * **The escalated path is the normal path.** 77% of production text logs run on
+ * Sonnet rather than Haiku, because `ai/language.ts` routes them there. An
+ * earlier version of this file filed that under "the largest unknown" and priced
+ * every table at the Haiku figure anyway. It is not an unknown and it is not
+ * going away by itself: both accounts logging in production write Bulgarian, one
+ * escalates on 88% of turns and the other on 64%, so this is the market rather
+ * than a mistake. The blended figure above already carries it.
  *
- * Where the money actually goes, on a $0.0787 Sonnet text log:
+ * **There is no warm cache column at this traffic.** 100% of production turns
+ * write cache — not the 27% a gap distribution predicted. A shared prefix only
+ * stays resident while *somebody* is running turns, and at five accounts nobody
+ * is. Early users are the most expensive users, and every number above is
+ * priced accordingly.
  *
- *   cache write   9,134 tok x $6/M    $0.0548   **70%**
- *   cache read   49,955 tok x $0.30/M $0.0150    19%
- *   output          538 tok x $15/M   $0.0081    10%
- *   fresh input     263 tok x $3/M    $0.0008     1%
+ * Where the money goes, on the heaviest account's $0.0942 Sonnet text log:
  *
- * Seventy per cent of a journal turn is the cache write, and it is paid on every
- * single turn. That, not model choice and not the transcript length, is the cost
- * structure — and it is why the allowances below are as small as they are. See
- * the note at the foot of this file for what would move it.
+ *   cache write  12,234 tok x $6/M    $0.0734   **78%**
+ *   cache read   46,975 tok x $0.30/M $0.0141    15%
+ *   output          447 tok x $15/M   $0.0067     7%
+ *
+ * Nearly four fifths of a journal turn is the cache write, paid on every single
+ * turn. Not model choice, not transcript length — the write. Dropping
+ * `ANTHROPIC_CACHE_TTL` to `5m` takes the write multiplier from 2x to 1.25x and
+ * that turn from $0.0942 to $0.0667, a 29% cut for one line of configuration,
+ * and it is the single largest thing anyone could do to the numbers below. It
+ * becomes wrong again the moment turns arrive close enough together to read
+ * what they wrote, so it is a setting to revisit with traffic rather than a
+ * permanent answer.
  */
 
 /*
- * ---- Net revenue, and why it is two numbers ---------------------------------
+ * ---- Sold by the month, with a year on offer --------------------------------
  *
- *                        annual   store 15%   Stripe web
- *   Plus     $79.99/yr             $5.67/mo    $6.45/mo
- *   Coach   $149.99/yr            $10.62/mo   $12.10/mo
+ * This used to be annual-only, and annual-only is a good deal for whoever is
+ * selling and a commitment for somebody who has been using the app for a week.
+ * The month is what is marketed now; the year is the discount you take once you
+ * know you want it. Both are listed here, and the year is priced at ~17% off
+ * twelve months — two months free, which is the number people recognise — so
+ * the trade is legible rather than a maze.
  *
- * Stripe is 2.9% + $0.30, landing once a year on an annual plan rather than
- * twelve times, which is most of the gap. `COMPETITION.md` is right that the
- * web is worth selling on while the post-Epic link-out window is open.
+ *                monthly    store 15%   Stripe web  |    annual   store/mo   Stripe/mo
+ *   Plus         $14.99       $12.74      $14.26    |  $149.99     $10.62     $12.11
+ *   Coach        $29.99       $25.49      $28.82    |  $299.99     $21.25     $24.25
  *
- * Every ceiling below is sized against the **store** column — the worse one —
- * so that the tier holds up on the channel we control least.
+ * Two net columns because the channel takes a different cut: a store takes 15%
+ * of everything, Stripe takes 2.9% + $0.30, and the fixed 30c is why an annual
+ * charge lands so much better there than twelve monthly ones. `COMPETITION.md`
+ * is right that the web is worth selling on while the post-Epic link-out window
+ * is open.
+ *
+ * **Every ceiling below is sized against the annual store column** — $10.62 and
+ * $21.25 — because that is the worst of the four. A tier that holds there holds
+ * everywhere, and the monthly figures are the same tier bought a costlier way.
+ *
+ * On the prices themselves being higher than the last version of this file: the
+ * old $79.99/yr bought 30 chat turns and 2 photos a month, which is one log a
+ * day and a fortnightly photograph, and `SUBSCRIPTIONS.md` said in as many words
+ * that those ceilings were honest and not competitive. The ceilings below are
+ * roughly 3x and 10x that. They are what somebody who actually uses the app
+ * every day needs — measured, see the note on `coach` — and they cost what they
+ * cost. Charging $6.67/mo for them would be choosing a price first and then
+ * discovering the bill.
  */
+
+/**
+ * What a tier costs, in USD, on the two channels.
+ *
+ * Reference values, not the source of truth for a checkout. `PlanTier` in
+ * `@ct/shared` deliberately ships no prices to the client for the reason given
+ * there — a store knows the local currency and what tax does to the number, and
+ * a server hardcoding "$14.99" is wrong in most of the world. These exist so
+ * the margins in this file can be recomputed when a cost moves, and so the
+ * store products have something to be reconciled against.
+ */
+export const PRICING: Record<Exclude<PlanName, 'free'>, { monthlyUsd: number; annualUsd: number }> =
+  {
+    plus: { monthlyUsd: 14.99, annualUsd: 149.99 },
+    coach: { monthlyUsd: 29.99, annualUsd: 299.99 },
+  };
+
+/**
+ * Photo scans bought outright, on top of whatever the plan already grants.
+ *
+ * Photos are the one meter worth selling this way, and the reason is in the
+ * cost table above: a scan is $0.213 against a chat turn's $0.058, so it is the
+ * line that decides whether a heavy month fits inside a tier. Metering chat by
+ * the bundle would be metering the daily habit — the thing the product needs
+ * people to do without thinking about it — but nobody photographs a plate
+ * absent-mindedly. A photo is already a deliberate act, so putting a price on
+ * more of them does not discourage anything the app depends on.
+ *
+ * Consumable and **not expiring**. A bundle is stock, not a second
+ * subscription: it is drawn down only once the month's included scans are gone,
+ * and what is left is still there next month. An expiring top-up is a refund
+ * the seller quietly keeps, and it would also make the wall have to explain two
+ * different clocks.
+ *
+ * The unit price falls with size (50c, 40c, 36c) and so does the margin (50%,
+ * 37%, 30%). That is the usual shape and it is the right way round here: the
+ * big bundle is bought by the people whose scans cost the most to serve, so
+ * they should be the ones paying closest to cost.
+ */
+export const PHOTO_BUNDLES = [
+  { id: 'photo_10', scans: 10, priceUsd: 4.99 },
+  { id: 'photo_25', scans: 25, priceUsd: 9.99 },
+  { id: 'photo_50', scans: 50, priceUsd: 17.99 },
+] as const;
+
+export type PhotoBundleId = (typeof PHOTO_BUNDLES)[number]['id'];
 
 const LIMITS: Record<PlanName, PlanLimits> = {
   /*
@@ -201,30 +281,32 @@ const LIMITS: Record<PlanName, PlanLimits> = {
   },
 
   /*
-   * Plus — $79.99/yr. The journal, metered.
+   * Plus — $14.99/mo or $149.99/yr. The journal, metered.
    *
-   * COGS at the ceiling, measured:
+   * COGS at the ceiling, on measured post-fix costs:
    *
-   *   30 chat   x $0.066   $1.98
-   *    2 photo  x $0.420   $0.84
-   *    review   4.3 x $0.15  $0.65
-   *    nudge    4.3 x $0.025 $0.11
-   *                        ------
-   *                        $3.58   against $5.67 net  ->  37% margin
-   *                                against $6.45 web  ->  44%
+   *   100 chat   x $0.058   $5.80
+   *    10 photo  x $0.213   $2.13
+   *       review 4.3 x $0.024  $0.10
+   *       nudge  4.3 x $0.025  $0.11
+   *                          ------
+   *                          $8.14   against $10.62 annual store net -> 23%
+   *                                  against $12.74 monthly store    -> 36%
+   *                                  against $14.26 monthly Stripe   -> 43%
    *
-   * **These ceilings are honest and they are not yet competitive.** Thirty
-   * journal turns a month is about one a day, against a field where Cal AI
-   * sells effectively unlimited scanning for $29.99/yr. The number is small
-   * because the per-turn cost is 13x what the pricing doc assumed, not because
-   * the tier is designed this way — and it is the per-turn cost that has to
-   * move, which is a cost-structure change rather than a pricing one. See the
-   * foot of this file. Until then this is the ceiling that covers its own bill,
-   * which is the property that was asked for.
+   * 100 chat turns is three a day, which is what logging three meals actually
+   * looks like rather than what a spreadsheet hoped it would. The previous
+   * version of this tier granted 30, and it was 30 because a chat turn was
+   * believed to cost $0.066 when in fact it cost $0.106 — the fix for which was
+   * never a smaller number, it was the caching work, and that has landed.
+   *
+   * Ten photos rather than two, and they are still the expensive half: $2.13 of
+   * this $8.14. Somebody who wants more buys a bundle. That is the whole design
+   * — a tier priced for the normal case, and stock for the month that is not.
    */
   plus: {
-    chat: { allowed: 30, period: 'month' },
-    photo: { allowed: 2, period: 'month' },
+    chat: { allowed: 100, period: 'month' },
+    photo: { allowed: 10, period: 'month' },
     pantryScan: { allowed: null, period: 'month' },
     recipe: { allowed: null, period: 'month' },
     mealPlan: { allowed: null, period: 'month' },
@@ -235,35 +317,56 @@ const LIMITS: Record<PlanName, PlanLimits> = {
   },
 
   /*
-   * Coach — $149.99/yr. Plus, and the kitchen.
+   * Coach — $29.99/mo or $299.99/yr. Plus, and the kitchen.
    *
-   *   35 chat        x $0.066   $2.31
-   *    3 photo       x $0.420   $1.26
-   *   10 fridge scan x $0.058   $0.58
-   *    8 recipe      x $0.284   $2.27
-   *    2 meal plan   x $0.630   $1.26
-   *      review      4.3 x $0.15  $0.65
-   *      nudge       4.3 x $0.025 $0.11
-   *                             ------
-   *                             $8.44  against $10.62 net -> 21% margin
-   *                                    against $12.10 web -> 30%
+   *   100 chat        x $0.058   $5.80
+   *    25 photo       x $0.213   $5.33
+   *    10 fridge scan x $0.058   $0.58
+   *     8 recipe      x $0.284   $2.27
+   *     2 meal plan   x $0.630   $1.26
+   *       review      4.3 x $0.024  $0.10
+   *       nudge       4.3 x $0.025  $0.11
+   *                              ------
+   *                              $15.45  against $21.25 annual store  -> 27%
+   *                                      against $25.49 monthly store -> 39%
+   *                                      against $28.82 monthly web   -> 46%
    *
-   * Thinner than Plus on purpose, and it is the kitchen that makes it thin:
-   * $4.11 of the $8.44 is fridge scans, recipes and plans. That half cannot be improved by
-   * anything at the foot of this file, because caching only ever helps input
-   * and a meal plan is ~10k tokens of *output*. The kitchen is the one part of
-   * this product whose cost is irreducible, which is exactly why it is sold
-   * separately instead of bundled into Plus.
+   * ---- Where 100 and 25 come from ---------------------------------------------
    *
-   * $149.99 is above the ~$80/yr ceiling `COMPETITION.md` identifies for
-   * anything called a tracker. That is deliberate and is the same bet that
-   * document recommends: pantry -> recipe -> plan -> shopping list is a
-   * meal-planning product, which is a different market with a higher anchor and
-   * the one thing in the comparison table nobody else has.
+   * The heaviest real account on the deployment, read off `ai_usage` rather than
+   * imagined: 6.25 chat turns and 2.0 photos a day across four active days,
+   * which is 188 and 60 a month. Dropping that account's first day — an 18-turn
+   * onboarding burst that is not what a steady month looks like — leaves 3.3
+   * chat and 1.67 photos a day, so **100 chat and 50 photos a month**.
+   *
+   * Chat is granted in full. Photos are granted at half, and the other half is a
+   * bundle, because the two numbers cost very different amounts to serve: 100
+   * chat turns is $5.80 and 50 photos is $10.65. Sizing the tier to the full
+   * photo rate would mean pricing every Coach subscriber for the habits of the
+   * heaviest one, and most of them do not photograph two meals a day.
+   *
+   * That account on this tier plus one 25-bundle: $20.77 of cost against $33.98
+   * of revenue, 39%. Which is the point of selling stock separately — the
+   * heaviest user is the *best* customer rather than the one who breaks the
+   * model, and nobody else subsidises them.
+   *
+   * ---- The kitchen is still the thin half -------------------------------------
+   *
+   * $4.11 of this $15.45 is fridge scans, recipes and plans, and none of it can
+   * be improved by anything at the foot of this file: caching only ever helps
+   * input, and a meal plan is ~10k tokens of *output*. It is the one irreducible
+   * cost in the product, which is exactly why it is sold up here rather than
+   * folded into Plus.
+   *
+   * $299.99/yr is far above the ~$80/yr ceiling `COMPETITION.md` identifies for
+   * anything called a tracker. That is deliberate and is the bet that document
+   * recommends: pantry -> recipe -> plan -> shopping list is a meal-planning
+   * product, a different market with a higher anchor, and the one thing in the
+   * comparison table nobody else has.
    */
   coach: {
-    chat: { allowed: 35, period: 'month' },
-    photo: { allowed: 3, period: 'month' },
+    chat: { allowed: 100, period: 'month' },
+    photo: { allowed: 25, period: 'month' },
     pantryScan: { allowed: 10, period: 'month' },
     recipe: { allowed: 8, period: 'month' },
     mealPlan: { allowed: 2, period: 'month' },
