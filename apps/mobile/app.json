@@ -84,16 +84,32 @@
       [
         "react-native-android-widget",
         {
+          "fonts": ["./assets/fonts/Baloo2_800ExtraBold.ttf"],
           "widgets": [
             {
-              "name": "Day",
-              "label": "Day So Far",
-              "description": "Today's ring, and a tap into the journal.",
-              "minWidth": "150dp",
-              "minHeight": "150dp",
+              "name": "Ring",
+              "label": "Day So Far \u00b7 ring",
+              "description": "Today's ring. Tap to open the journal.",
+              "minWidth": "110dp",
+              "minHeight": "110dp",
               "targetCellWidth": 2,
               "targetCellHeight": 2,
-              "resizeMode": "none",
+              "maxResizeWidth": "250dp",
+              "maxResizeHeight": "250dp",
+              "resizeMode": "horizontal|vertical",
+              "updatePeriodMillis": 1800000
+            },
+            {
+              "name": "Day",
+              "label": "Day So Far \u00b7 day",
+              "description": "The ring with the numbers beside it, or a bar at one row high.",
+              "minWidth": "250dp",
+              "minHeight": "48dp",
+              "targetCellWidth": 4,
+              "targetCellHeight": 2,
+              "maxResizeWidth": "400dp",
+              "maxResizeHeight": "160dp",
+              "resizeMode": "horizontal|vertical",
               "updatePeriodMillis": 1800000
             }
           ]

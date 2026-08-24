@@ -73,13 +73,22 @@ async function repaintWidget(): Promise<void> {
      * screen — nor of iOS, where it does not exist at all.
      */
     const { requestWidgetUpdate } = await import('react-native-android-widget');
-    const { DayWidget } = await import('@/widget/DayWidget');
+    const { paint } = await import('@/widget/handler');
     const snapshot = await readDaySnapshot();
-    await requestWidgetUpdate({
-      widgetName: 'Day',
-      renderWidget: () => <DayWidget snapshot={snapshot} />,
-      widgetNotFound: () => {},
-    });
+    /*
+     * Each name separately, because `requestWidgetUpdate` is keyed by one — and
+     * both are asked for even when neither is on a home screen, which costs a
+     * no-op and saves knowing which the reader chose.
+     */
+    await Promise.all(
+      (['Ring', 'Day'] as const).map((widgetName) =>
+        requestWidgetUpdate({
+          widgetName,
+          renderWidget: (info) => paint(info, snapshot),
+          widgetNotFound: () => {},
+        }),
+      ),
+    );
   } catch {
     /* A home screen with no widget on it, or a platform with no widgets. */
   }

@@ -1,128 +1,183 @@
 import { FlexWidget, OverlapWidget, SvgWidget, TextWidget } from 'react-native-android-widget';
 import { ringSvg } from './ring';
+import { DISPLAY, OPEN_JOURNAL, type WidgetPalette } from './theme';
+import { Empty } from './Empty';
 import type { DaySnapshot } from '@/lib/snapshot';
 
 /**
- * The ring, on the home screen.
+ * The wide one, which changes shape rather than scaling.
  *
- * The ring is the app's face and it was three taps away. This is the whole
- * argument for the widget: the number somebody checks most is the one they
- * should not have to open anything to see.
+ * Two rows and it is the ring plus the sentence underneath it from Today — what
+ * is left, what that is out of, and the burn if there was any. Dragged down to
+ * one row the ring goes entirely and a bar takes its place, because a 40dp
+ * circle is a dot, not a dial, and the number is the part worth keeping.
  *
- * It shows what is *left*, not what is eaten, for the same reason the ring
- * inside the app does — "767 to go" is a decision you can act on and "1,333
- * eaten" is a fact you then have to do arithmetic on.
- *
- * The palette is written out rather than imported from `theme/colors`. A widget
- * is drawn by the launcher, in a process with no React context and no theme
- * provider, and reaching for `useColors()` here would be reaching for something
- * that does not exist. The values are the light palette's, and the two must be
- * kept in step by hand — which is the price of drawing outside the app.
+ * That is the whole argument for a resizable widget: not the same picture at
+ * two sizes, but the right picture for the room available.
  */
+export function DayWidget({
+  snapshot,
+  colors,
+  width,
+  height,
+}: {
+  snapshot: DaySnapshot | null;
+  colors: WidgetPalette;
+  width: number;
+  height: number;
+}) {
+  if (!snapshot) return <Empty colors={colors} />;
 
-const PALETTE = {
-  background: '#fff6ec',
-  card: '#ffffff',
-  foreground: '#31261e',
-  mutedForeground: '#77685b',
-  calories: '#12b76a',
-  muted: '#f3e8d9',
-  border: '#eadcc9',
-  // `as const`, because the library types a colour as a hex *literal* rather
-  // than a string — which catches a typo'd swatch at build time instead of
-  // painting a transparent widget nobody can see to report.
-} as const;
+  const remaining = snapshot.target - snapshot.consumed;
+  const over = remaining < 0;
+  const ratio = snapshot.target > 0 ? snapshot.consumed / snapshot.target : 0;
 
-/**
- * Tapping it opens the journal, which is the only thing anybody wants from a
- * ring they just looked at: the number prompted a thought about food, and the
- * journal is where a thought about food goes.
- *
- * `OPEN_URI` against the app's own scheme rather than `OPEN_APP`, so the tap
- * lands somewhere chosen instead of wherever the app happened to be left.
- */
-const OPEN_JOURNAL = { clickAction: 'OPEN_URI', clickActionData: { uri: 'daysofar:///' } } as const;
+  const label = over ? 'over' : 'left';
+  const spoken = `${Math.abs(remaining).toLocaleString()} kcal ${label} today`;
+  const shell = {
+    ...OPEN_JOURNAL,
+    accessibilityLabel: spoken,
+    style: {
+      height: 'match_parent' as const,
+      width: 'match_parent' as const,
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      borderWidth: 2,
+      borderRadius: 28,
+    },
+  };
 
-export function DayWidget({ snapshot }: { snapshot: DaySnapshot | null }) {
   /*
-   * Nothing to show is its own state, not a zeroed day. A ring at 0 of 2,000
-   * for somebody who has never opened the app is a lie told confidently; this
-   * says what is actually true, which is that we have not looked yet.
+   * 108dp is roughly a two-row cell on a normal launcher. Below it there is not
+   * enough height for a ring that still reads as one, so the layout changes
+   * instead of shrinking.
    */
-  if (!snapshot) {
+  if (height < 108) {
+    const track = Math.max(40, width - 36);
+    /*
+     * Measured against the height the launcher actually gave us, because a row
+     * is not a fixed number of points: the first cut used a comfortable padding
+     * and a 26pt figure, overflowed a one-row cell by about four points, and
+     * Android answered by clipping the bar off the bottom — silently, so the
+     * widget simply looked like it had no bar.
+     */
+    const pad = 10;
+    const barHeight = 6;
+    const gap = 6;
+    const figure = Math.max(15, Math.min(24, Math.round((height - pad * 2 - barHeight - gap) * 0.7)));
     return (
       <FlexWidget
-        {...OPEN_JOURNAL}
-        accessibilityLabel="Open Day So Far"
+        {...shell}
         style={{
-          height: 'match_parent',
-          width: 'match_parent',
+          ...shell.style,
           justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: PALETTE.background,
-          borderRadius: 24,
-          padding: 16,
+          paddingHorizontal: 16,
+          paddingVertical: pad,
         }}
       >
-        <TextWidget
-          text="Open Day So Far"
-          style={{ fontSize: 15, color: PALETTE.mutedForeground, fontFamily: 'Nunito' }}
-        />
+        <FlexWidget
+          style={{ width: 'match_parent', flexDirection: 'row', alignItems: 'center' }}
+        >
+          <TextWidget
+            text={Math.abs(remaining).toLocaleString()}
+            style={{ fontSize: figure, fontFamily: DISPLAY, color: colors.foreground }}
+          />
+          <TextWidget
+            text={` ${label}`}
+            style={{
+              fontSize: Math.max(10, Math.round(figure * 0.5)),
+              fontWeight: '600',
+              color: colors.mutedForeground,
+            }}
+          />
+          <FlexWidget style={{ flex: 1 }} />
+          <TextWidget
+            text={`${snapshot.consumed.toLocaleString()} / ${snapshot.target.toLocaleString()}`}
+            style={{
+              fontSize: Math.max(10, Math.round(figure * 0.48)),
+              fontWeight: '600',
+              color: colors.mutedForeground,
+            }}
+          />
+        </FlexWidget>
+        {/*
+          * The bar is two nested boxes rather than a drawn shape: `RemoteViews`
+          * has no percentage widths, so the fill is measured in dp from the
+          * width the launcher reported.
+          */}
+        <FlexWidget
+          style={{
+            height: barHeight,
+            width: track,
+            backgroundColor: colors.muted,
+            borderRadius: 999,
+            marginTop: gap,
+          }}
+        >
+          <FlexWidget
+            style={{
+              height: barHeight,
+              width: Math.round(track * Math.min(1, Math.max(0, ratio))),
+              backgroundColor: over ? colors.foreground : colors.calories,
+              borderRadius: 999,
+            }}
+          />
+        </FlexWidget>
       </FlexWidget>
     );
   }
 
-  const remaining = snapshot.target - snapshot.consumed;
-  const over = remaining < 0;
-  const spoken = over
-    ? `${Math.abs(remaining).toLocaleString()} kcal over today`
-    : `${remaining.toLocaleString()} kcal left today`;
+  const box = Math.max(0, Math.min(height - 26, Math.round(width * 0.42)));
+  const stroke = Math.max(8, Math.round(box * 0.13));
 
   return (
     <FlexWidget
-      {...OPEN_JOURNAL}
-      accessibilityLabel={spoken}
-      style={{
-        height: 'match_parent',
-        width: 'match_parent',
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: PALETTE.background,
-        borderRadius: 24,
-        padding: 8,
-      }}
+      {...shell}
+      style={{ ...shell.style, flexDirection: 'row', alignItems: 'center', padding: 12 }}
     >
-      {/*
-        * The figure sits inside the ring, as it does in the app. `OverlapWidget`
-        * is the only way to stack anything in `RemoteViews` — there is no
-        * absolute positioning out here.
-        */}
-      <OverlapWidget style={{ height: 132, width: 132 }}>
+      <OverlapWidget style={{ height: box, width: box }}>
         <SvgWidget
           svg={ringSvg({
             consumed: snapshot.consumed,
             target: snapshot.target,
-            size: 132,
-            strokeWidth: 16,
-            track: PALETTE.muted,
-            fill: PALETTE.calories,
-            over: PALETTE.foreground,
+            size: box,
+            strokeWidth: stroke,
+            track: colors.muted,
+            fill: colors.calories,
+            over: colors.foreground,
           })}
-          style={{ height: 132, width: 132 }}
+          style={{ height: box, width: box }}
         />
         <FlexWidget
-          style={{ height: 132, width: 132, justifyContent: 'center', alignItems: 'center' }}
+          style={{ height: box, width: box, justifyContent: 'center', alignItems: 'center' }}
         >
           <TextWidget
             text={Math.abs(remaining).toLocaleString()}
-            style={{ fontSize: 30, color: PALETTE.foreground, fontFamily: 'Baloo2' }}
-          />
-          <TextWidget
-            text={over ? 'over' : 'to go'}
-            style={{ fontSize: 12, color: PALETTE.mutedForeground, fontFamily: 'Nunito' }}
+            style={{
+              fontSize: Math.max(16, Math.round(box * 0.27)),
+              fontFamily: DISPLAY,
+              color: colors.foreground,
+            }}
           />
         </FlexWidget>
       </OverlapWidget>
+
+      <FlexWidget style={{ flex: 1, marginLeft: 14, justifyContent: 'center' }}>
+        <TextWidget
+          text={`${Math.abs(remaining).toLocaleString()} ${label}`}
+          style={{ fontSize: 17, fontWeight: 'bold', color: colors.foreground }}
+        />
+        <TextWidget
+          text={`${snapshot.consumed.toLocaleString()} of ${snapshot.target.toLocaleString()} kcal`}
+          style={{ fontSize: 12, fontWeight: '600', color: colors.mutedForeground, marginTop: 2 }}
+        />
+        {snapshot.burned > 0 && (
+          <TextWidget
+            text={`−${snapshot.burned.toLocaleString()} burned`}
+            style={{ fontSize: 12, fontWeight: '600', color: colors.burn, marginTop: 2 }}
+          />
+        )}
+      </FlexWidget>
     </FlexWidget>
   );
 }
