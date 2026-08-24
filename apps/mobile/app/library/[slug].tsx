@@ -10,6 +10,7 @@ import { formatServings, scale, Servings } from '@/components/kitchen/Servings';
 import { Skeleton } from '@/components/Skeleton';
 import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
+import { recipeImageUrl } from '@/lib/links';
 import { font, type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
 
@@ -126,7 +127,7 @@ export default function LibraryRecipeScreen() {
       eyebrow="From the library"
       title={recipe.title}
       summary={recipe.summary}
-      photo={recipe.image_path ? api.photoUrl(recipe.image_path) : null}
+      photo={recipeImageUrl(recipe.image_path)}
       kcal={scale(recipe.kcal, servings)}
       protein_g={scale(recipe.protein_g, servings)}
       carbs_g={scale(recipe.carbs_g, servings)}

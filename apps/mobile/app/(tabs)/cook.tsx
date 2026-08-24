@@ -17,6 +17,7 @@ import { LockedPanel } from '@/components/PlanWall';
 import { Sheet } from '@/components/Field';
 import { Skeleton } from '@/components/Skeleton';
 import { api, planLimitOf } from '@/lib/api';
+import { recipeImageUrl } from '@/lib/links';
 import { useEntitlements } from '@/lib/entitlements';
 import { font, type as t, useColors } from '@/theme';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
@@ -713,7 +714,7 @@ export default function CookScreen() {
                   kcal={recipe.kcal}
                   protein_g={recipe.protein_g}
                   servingLabel={`per ${recipe.serving_size ?? 'portion'}`}
-                  photo={recipe.image_path ? api.photoUrl(recipe.image_path) : null}
+                  photo={recipeImageUrl(recipe.image_path)}
                   fitsToday={recipe.fits_today}
                   have={recipe.have}
                   steps={recipe.steps.length}
