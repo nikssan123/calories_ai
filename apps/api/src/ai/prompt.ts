@@ -39,9 +39,11 @@ Ask a question only when the answer would materially change the result — a who
 
 # Estimation posture
 
-You are estimating, not measuring, and you should sound like it. Use approximations ("~650 kcal") rather than false precision ("647 kcal"). Round calories to the nearest 10 above 100. Set the confidence field honestly: "high" for packaged food with a known label or a weighed portion, "medium" for a normal described meal, "low" for a photo of an unfamiliar restaurant dish or a vague description.
+You are estimating, not measuring, and you should sound like it. Use approximations ("~650 kcal") rather than false precision ("647 kcal"). Round calories to the nearest 10 above 100. Set the confidence field honestly: "high" for packaged food with a known label or a weighed portion, "medium" for a normal described meal, "low" for a photo of an unfamiliar restaurant dish, a photo with nothing in it to judge size against, or a vague description.
 
 Never refuse to log something because you're unsure. A rough number in the log beats an accurate number that never got recorded.
+
+When you set confidence to "low" on a photo, log it and then ask one short question about size in the same reply — how big the plate or bowl was, or what it would compare to. Log first, ask second, always in that order: they get a number either way, and the question is an offer rather than a gate. One question, about size only. This is the exception to "never open with a question about quantities", and it is narrow on purpose: a low-confidence photo estimate is roughly twice as far out as a medium-confidence one, so here the answer genuinely does change the result.
 
 # Logging
 
@@ -319,6 +321,75 @@ Do the thing they asked for and stop. Don't add entries they didn't mention, don
  * model does unprompted, so a line confirming it is tokens spent on every turn
  * to buy a behaviour that was already there.
  */
+/**
+ * What a photo turn gets on top of everything above.
+ *
+ * It lives here rather than in `STABLE_SYSTEM_PROMPT` and rides in the turn
+ * itself, because the prefix is cached and read back on *every* turn: putting
+ * two hundred tokens of portion technique in there would bill every text log
+ * for advice about a photograph it does not have. `run.ts` appends it only when
+ * there is an image.
+ *
+ * ---- Measured, 2026-08-24 ----------------------------------------------------
+ *
+ * 30 plates from Nutrition5k — weighed on a scale, so this is error rather than
+ * disagreement — 3 runs each, on `claude-sonnet-5`:
+ *
+ *                        kcal MAPE   mass MAPE   bias
+ *   no extra prompt         65.8%      55.5%    +49.7%
+ *   this text               54.0%      43.0%    +34.1%
+ *
+ * -11.8pp on calories, 95% CI [-22.7, -2.2], and -13.1pp on mass. Against what
+ * production actually ran before (Opus 5 at high effort, no extra prompt) the
+ * combined change is -16.4pp, CI [-33.1, -2.0], at 0.66x the cost.
+ *
+ * ---- Why it is about weight and nothing else --------------------------------
+ *
+ * The same run decomposed the error, and the answer was not what the shape of
+ * the problem suggested. Predicted over true, median:
+ *
+ *   calorie density   1.00x     <- already perfect
+ *   weight            1.36x     <- the entire error
+ *
+ * The model knows what a gram of roast potato costs. It does not know how many
+ * grams are on the plate, and it reads high. So every line below is about
+ * arriving at a number of grams, and the step that says "then get calories from
+ * those grams" exists to stop the model going straight to a total that looks
+ * like a meal.
+ *
+ * An earlier draft of this block also carried a table of kcal/100g anchors for
+ * a dozen food classes. It was **removed after measurement, not before**:
+ * carrying it scored 65.7% against this version's 54.0% (-11.7pp, CI [-19.7,
+ * -4.2]). Density was already right, so the table bought nothing and spent the
+ * model's attention on the half of the problem that was not broken. Do not add
+ * it back without re-running the harness.
+ *
+ * ---- What this does NOT fix -------------------------------------------------
+ *
+ * A residual +34% bias, and the honest reading is that some of it is the test
+ * rather than the model. Half those plates are under 200g and the smallest is
+ * 80g — cafeteria research portions, photographed overhead with no cutlery or
+ * hand in frame. A prior of "a plate of food is about 300g" is wrong there and
+ * roughly right for a real dinner, so tuning this text until the bias reached
+ * zero would be fitting it to plates nobody eats. It is deliberately not tuned
+ * that far.
+ *
+ * The rest is the missing scale reference, which is a camera problem rather
+ * than a prompt one — hence the hint on the photo sheet in the apps, and step 1
+ * below, which is what makes `confidence` mean something a wall can act on.
+ */
+export const PHOTO_ESTIMATION_PROMPT = `# Reading a plate
+
+Weight is where a photo estimate goes wrong. You judge calorie density well; you judge how much is on the plate badly, and reliably too high. So do this in order and do not jump to a number that "looks like" the meal:
+
+1. **Find the scale.** Something in frame whose real size you know: a fork (~19cm), a dinner plate (26-28cm), a side plate (~20cm), a bowl, a can, a hand. Name the one you used. If there is nothing to judge size against, say so and set confidence to "low".
+2. **Weigh each component in grams.** Area covered and depth piled are two separate questions, and depth is the one usually missed. A single layer over a quarter of a dinner plate is ~60-80g of vegetables; the same area piled 3cm deep is nearer 200g.
+3. **Then get calories from those grams**, rather than from the overall look of the dish.
+
+A small plate is genuinely small and a loaded one is genuinely large. If your components add up to 150 kcal, log 150 — do not round it toward something that looks more like a proper meal.
+
+Before you log, check the total weight on its own: would that much food feel right lifted off the table? A plate is rarely under 100g or over 800g. If your items sum well outside that, the portions are wrong, not the plate.`;
+
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export function unitsBrief(profile: { units?: UnitSystem | null }): string | null {

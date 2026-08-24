@@ -61,8 +61,36 @@ export const MODELS: Record<TurnKind, ModelChoice> = {
   // was reasoning nobody reads, on a task that is not a reasoning task.
   text_log: { model: 'claude-haiku-4-5' },
   // The hardest task in the product — estimating a portion from plate and
-  // cutlery cues. Opus 5's high-resolution vision is the point of paying here.
-  photo_log: { model: 'claude-opus-5', effort: 'high' },
+  // cutlery cues — and for a long time that argument alone kept it on Opus at
+  // high effort, at six times the cost of a text log and no measurement behind
+  // it.
+  //
+  // Measured, 2026-08-24: 30 plates from Nutrition5k (weighed on a scale, so
+  // this is error rather than disagreement), 3 runs each, four configurations.
+  //
+  //   opus-5 high    kcal MAPE 70.3%   protein 53%   $0.0206/scan
+  //   sonnet-5 high            66.1%           56%   $0.0121
+  //   sonnet-5 none            65.8%           58%   $0.0119
+  //   haiku-4.5                81.7%          126%   $0.0037
+  //
+  // Sonnet was better on 19 of 30 plates. The paired difference is 4.3pp in
+  // Sonnet's favour with a 95% CI of [-4.7, +13.5], so what the test rules out
+  // is an Opus advantage bigger than ~5pp — not a difference too small to see,
+  // but a difference in the wrong direction to be worth 1.7x. The instrument
+  // has resolution: it separates Haiku decisively on the same 30 plates, and
+  // Haiku is why this is not `claude-haiku-4-5` — 126% protein error and it
+  // returned `items` as a JSON *string* on 100% of calls.
+  //
+  // `effort` goes with it. High effort bought 0.3pp on Sonnet, which is noise,
+  // and cost a second of latency on the one turn the user watches a spinner
+  // through.
+  //
+  // What the same run showed is that model choice was never the lever here:
+  // every configuration compresses toward a typical meal, over-reading small
+  // plates by ~70-100% and under-reading large ones by ~50%, correlating with
+  // the truth at only r≈0.4. That is what `PHOTO_ESTIMATION_PROMPT` addresses,
+  // and it is worth more than any row in the table above.
+  photo_log: { model: 'claude-sonnet-5' },
   // Once per account, and the first thing a new user experiences. It has to map
   // vague answers ("pretty active") onto enums without interrogating anyone.
   setup: { model: 'claude-opus-5', effort: 'high' },

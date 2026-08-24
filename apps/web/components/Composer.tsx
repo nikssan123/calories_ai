@@ -149,6 +149,22 @@ export function Composer({
             sideOffset={8}
             className="w-auto min-w-44"
           >
+            {/*
+              The one thing that most improves a photo estimate, said where it
+              can still be acted on. Kept identical in wording to the mobile
+              sheet — the same advice phrased two ways reads as two different
+              rules.
+
+              Measured on 30 weighed plates: the model reads calorie *density*
+              almost exactly right (1.00x) and the weight on the plate 36% too
+              high. A size reference is what closes that gap — with nothing in
+              frame to judge against there is no telling a side plate from a
+              dinner plate, and every gram after that is a guess.
+            */}
+            <p className="text-muted-foreground max-w-56 px-2 pt-1.5 pb-2 text-[0.8125rem] leading-snug">
+              Tip: leave a fork, spoon or your hand in the shot — it tells us how big
+              the plate is, which is the hardest part to guess.
+            </p>
             {hasCameraApp && (
               <DropdownMenuItem
                 onClick={() => cameraRef.current?.click()}

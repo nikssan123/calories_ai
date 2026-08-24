@@ -200,6 +200,26 @@ export function Composer({
         sentence, told to the phone in a different grammar.
       */}
       <Sheet open={choosing} title="Add a photo" onClose={() => setChoosing(false)}>
+        {/*
+          The one thing that most improves a photo estimate, said once, where it
+          can still be acted on.
+
+          Measured on 30 weighed plates: the model reads calorie *density* almost
+          exactly right (1.00x) and the weight on the plate 36% too high, and
+          that gap is what a size reference closes — with nothing in frame to
+          judge against, there is no way to tell a side plate from a dinner
+          plate, and every gram after that is a guess. Prompt changes took the
+          error part of the way; the rest of it is in the photograph, so it has
+          to be asked for here.
+
+          Phrased as a tip rather than a requirement because a photo without a
+          fork in it is still worth logging, and a sheet that reads like a
+          checklist is one people stop opening.
+        */}
+        <Text style={[t.footnote, styles.hint, { color: colors.mutedForeground }]}>
+          Tip: leave a fork, spoon or your hand in the shot — it tells us how big
+          the plate is, which is the hardest part to guess.
+        </Text>
         <Choice label="Take a photo" icon="camera" onPress={() => void attach('camera')} />
         <Choice label="Choose a photo" icon="image" onPress={() => void attach('library')} />
         <Choice
@@ -345,5 +365,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 2,
     paddingHorizontal: 20,
     paddingVertical: 16,
+  },
+  // No top border: it sits above the first Choice, which draws its own, and two
+  // rules stacked would read as an empty row between the title and the list.
+  hint: {
+    paddingHorizontal: 20,
+    paddingBottom: 14,
   },
 });

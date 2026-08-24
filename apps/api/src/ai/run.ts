@@ -34,6 +34,7 @@ import {
   dayContextPrompt,
   dayRolloverNotice,
   onboardingPrompt,
+  PHOTO_ESTIMATION_PROMPT,
   recentReviewPrompt,
   STABLE_SYSTEM_PROMPT,
 } from './prompt.ts';
@@ -145,7 +146,22 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
   const { listRoutines } = await import('../services/routines.ts');
   const routines = await listRoutines(input.userId).catch(() => []);
 
-  const promptText = `${dayContextPrompt(input.profile, day, currentWeight, notes, wellbeing, routines)}\n\n---\n\n${rollover}${input.text}`;
+  /*
+   * Portion technique, and only when there is a photograph to apply it to.
+   *
+   * It goes in the turn rather than in `STABLE_SYSTEM_PROMPT` for the reason
+   * that block is cached at all: the prefix is written and read back on every
+   * turn, so two hundred tokens of advice about reading a plate would be billed
+   * to every text log that has no plate to read. Here it is paid for by the
+   * turns that use it.
+   *
+   * Ahead of the day context rather than after it, so the person's own message
+   * stays the last thing in the turn — the same ordering, and the same reason,
+   * as the block below.
+   */
+  const photoGuidance = input.photo ? `${PHOTO_ESTIMATION_PROMPT}\n\n---\n\n` : '';
+
+  const promptText = `${photoGuidance}${dayContextPrompt(input.profile, day, currentWeight, notes, wellbeing, routines)}\n\n---\n\n${rollover}${input.text}`;
 
   /*
    * Providers that keep no session of their own get the transcript replayed —

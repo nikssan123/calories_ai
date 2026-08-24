@@ -19,10 +19,28 @@ describe('agent client', () => {
     // The highest-volume path takes the cheapest model; the rare and the hard
     // ones take the expensive one. That split is the unit economics.
     expect(MODELS.text_log.model).toBe('claude-haiku-4-5');
-    expect(MODELS.photo_log.model).toBe('claude-opus-5');
     expect(MODELS.setup.model).toBe('claude-opus-5');
     expect(MODELS.review.model).toBe('claude-opus-5');
     expect(MAX_TURNS).toBeGreaterThan(1);
+  });
+
+  /**
+   * Photos are the exception to the split above, and the only routing decision
+   * in the file with a measurement behind it rather than an argument.
+   *
+   * 30 weighed plates, 3 runs each: Opus 5 at high effort scored 70.3% kcal
+   * MAPE against Sonnet 5's 65.8% at 1.7x the price — Sonnet better on 19 of
+   * 30, with a 95% CI that rules out an Opus advantage above ~5pp. Asserted
+   * rather than left as a comment because "the hard one takes the expensive
+   * model" is a rule this deliberately breaks, and the next person to tidy it
+   * back toward Opus should have to delete a number to do it.
+   *
+   * Not Haiku: the same run put it at 81.7% kcal and 126% protein error, and it
+   * returned `items` as a JSON string rather than an array on every call.
+   */
+  it('routes photos to Sonnet, which measured better than Opus and costs less', () => {
+    expect(MODELS.photo_log.model).toBe('claude-sonnet-5');
+    expect(MODELS.photo_log.effort).toBeUndefined();
   });
 
   /**
@@ -39,7 +57,10 @@ describe('agent client', () => {
   });
 
   it('pins reasoning effort on every kind that accepts one', () => {
-    for (const kind of ['photo_log', 'setup', 'review'] as const) {
+    // `photo_log` is not in this list any more: high effort measured 0.3pp
+    // better on Sonnet, which is noise, and cost a second of latency on the one
+    // turn a person actually watches a spinner through.
+    for (const kind of ['setup', 'review'] as const) {
       expect(MODELS[kind].effort).toBe('high');
     }
   });
