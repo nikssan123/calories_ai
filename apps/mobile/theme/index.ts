@@ -7,6 +7,7 @@ export type { Palette } from './colors';
 export { dark, light, withAlpha } from './colors';
 export { DISPLAY_LEADING, displayFacesFor, font, MONO, type, typeFor } from './typography';
 export { CHUNK_DEPTH, duration, ease, RADIUS } from './motion';
+export { column, COLUMN, spread, SPREAD, useWide, WIDE } from './layout';
 
 export type Scheme = 'light' | 'dark';
 
