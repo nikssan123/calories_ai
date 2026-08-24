@@ -179,7 +179,10 @@ export function LockedPanel({
           radius={999}
           onPress={() => router.push('/upgrade')}
           accessibilityRole="button"
-          style={styles.actions}
+          /* Not `actions`: that one is a *container*, and its `gap` lands
+             between a chunk's surface and its `Overhang` — which stretches the
+             ledge to 14px and reads as a button dropped in mud. */
+          style={styles.loneAction}
           contentStyle={[styles.button, { backgroundColor: colors.primary }]}
         >
           <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
@@ -353,6 +356,7 @@ const styles = StyleSheet.create({
   title: { flexShrink: 1 },
   badge: { width: 30, height: 30, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   actions: { gap: 10, marginTop: 4 },
+  loneAction: { marginTop: 4 },
   button: {
     height: 46,
     borderRadius: 999,
