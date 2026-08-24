@@ -381,18 +381,34 @@ export default function TodayScreen() {
           if (decided && !(forward && atToday.value)) runOnJS(stepBy)(forward ? 1 : -1);
           /*
            * Home either way. The day itself is what changes; the page does not
-           * travel to the new one, because there is nothing to travel to until
-           * it has loaded and a screen sliding onto a skeleton is worse than a
-           * screen that simply settles.
+           * travel to the new one, because `loadDay` goes to the network before
+           * it answers — so for the length of that round trip the only thing
+           * there is to slide in is the day you just swiped away from, and
+           * sliding the old numbers in to have them change under the reader is
+           * worse than a screen that simply settles.
+           *
+           * Settled with `ease.out` and not the spring: the spring is for a
+           * number arriving somewhere, and its overshoot is the whole point of
+           * it. Here there is nowhere to arrive — the page is going back where
+           * it started — so an overshoot reads as the screen coming loose.
            */
           drift.value = withTiming(0, {
-            duration: reduced ? 0 : duration.pop,
-            easing: ease.spring,
+            duration: reduced ? 0 : duration.quick,
+            easing: ease.out,
           });
         }),
     [atToday, drift, reduced, stepBy],
   );
 
+  /*
+   * Carried by the content and not by the scroller.
+   *
+   * On the `ScrollView` itself this moved the viewport — its own background and
+   * its clip bounds went with it, so the drag slid the whole window sideways
+   * off the screen behind it, and slid it *under* the compact bar, which is
+   * outside the scroller and stayed exactly where it was. The frame is meant to
+   * be the thing that holds still while the day inside it moves.
+   */
   const sliding = useAnimatedStyle(() => ({ transform: [{ translateX: drift.value }] }));
 
   /*
@@ -583,7 +599,7 @@ export default function TodayScreen() {
     <GestureDetector gesture={days}>
     <Animated.ScrollView
       ref={scrollRef}
-      style={[styles.flex, sliding]}
+      style={styles.flex}
       onScroll={onScroll}
       scrollEventThrottle={16}
       contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: 32 }}
@@ -598,6 +614,7 @@ export default function TodayScreen() {
         />
       }
     >
+      <Animated.View style={sliding}>
       <View
         style={styles.header}
         onLayout={(event) => {
@@ -834,6 +851,7 @@ export default function TodayScreen() {
           )}
         </View>
       )}
+      </Animated.View>
     </Animated.ScrollView>
     </GestureDetector>
     </DeferToRows>
