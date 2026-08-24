@@ -6,6 +6,8 @@
 #   bin/deploy.sh --dry-run        # show exactly what would happen, change nothing
 #   bin/deploy.sh --ref <sha>      # deploy (or roll back to) a specific commit
 #   bin/deploy.sh --build always   # force a rebuild of both images
+#   bin/deploy.sh --mobile         # ...and start an EAS Android build after it
+#   bin/deploy.sh --mobile-only    # just the EAS build; the host is not touched
 #
 # Deployment model, for context on why this script is shaped the way it is:
 #
@@ -36,11 +38,16 @@ PUSH=0
 BUILD_MODE="auto"      # auto | always | never
 PULL_BASE=0
 DRY=0
+MOBILE=0
+MOBILE_ONLY=0
+MOBILE_PROFILE="production"
 
 usage() {
     sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//; $d'
     cat <<'USAGE'
 Options:
+  --mobile [PROFILE] after deploying, start an EAS Android build (default: production)
+  --mobile-only      start the EAS build and skip the host deploy entirely
   --host USER@HOST   target host           (default: $DEPLOY_SSH_HOST)
   --path DIR         repo path on host     (default: $DEPLOY_PATH or /srv/calorytracker)
   --ref REF          commit/branch to deploy (default: origin/main)
@@ -61,6 +68,16 @@ while [[ $# -gt 0 ]]; do
         --build) BUILD_MODE="$2"; shift 2 ;;
         --pull)  PULL_BASE=1; shift ;;
         --dry-run) DRY=1; shift ;;
+        # An optional value: `--mobile preview` takes it, `--mobile --push` does
+        # not. Anything starting with a dash is the next flag, not a profile.
+        --mobile)
+            MOBILE=1; shift
+            [[ $# -gt 0 && "$1" != -* ]] && { MOBILE_PROFILE="$1"; shift; }
+            ;;
+        --mobile-only)
+            MOBILE=1; MOBILE_ONLY=1; shift
+            [[ $# -gt 0 && "$1" != -* ]] && { MOBILE_PROFILE="$1"; shift; }
+            ;;
         -h|--help) usage; exit 0 ;;
         *) echo "unknown option: $1" >&2; usage >&2; exit 64 ;;
     esac
@@ -70,7 +87,7 @@ case "$BUILD_MODE" in auto|always|never) ;; *)
     echo "--build must be auto, always or never" >&2; exit 64 ;;
 esac
 
-if [[ -z "$HOST" ]]; then
+if [[ -z "$HOST" && $MOBILE_ONLY -eq 0 ]]; then
     echo "No target host. Set DEPLOY_SSH_HOST or pass --host user@host." >&2
     exit 64
 fi
@@ -78,6 +95,59 @@ fi
 say()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m !!\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31mFATAL\033[0m %s\n' "$*" >&2; exit 1; }
+
+# ---------------------------------------------------------------- mobile release
+#
+# The phone is a different axis from the host and deliberately stays opt-in: a
+# server deploy is the common case and does not need a 20-minute build behind it.
+# `--mobile` bolts one on after a successful deploy; `--mobile-only` is the
+# release that is purely a client change.
+#
+# **It builds HEAD, not origin, which is the opposite of every other rule in
+# this script.** EAS uploads a `git archive` of the current commit, so an
+# unpushed commit *does* ship — the "only pushed work can deploy" guarantee at
+# the top of this file covers the host and nothing else. Uncommitted changes are
+# excluded, which is the trap worth knowing: an edit you can see in the editor
+# will not be in the build, and a commit nobody else has will be.
+#
+# No `eas submit` here, on purpose. A build is an artifact and costs a queue
+# slot; a submission is a release to real installs and wants a human deciding
+# the day it happens.
+mobile_build() {
+    local dir="$REPO/apps/mobile"
+    [[ -f "$dir/eas.json" ]] || die "no apps/mobile/eas.json — nothing to build"
+
+    node -e '
+      const profiles = require(process.argv[1]).build ?? {};
+      if (!profiles[process.argv[2]]) {
+        console.error(`no "${process.argv[2]}" profile in eas.json — have: ${Object.keys(profiles).join(", ")}`);
+        process.exit(1);
+      }
+    ' "$dir/eas.json" "$MOBILE_PROFILE" || exit 64
+
+    local head; head="$(git rev-parse --short HEAD)"
+    local unpushed; unpushed="$(git rev-list --count origin/main..HEAD 2>/dev/null || echo 0)"
+    say "EAS build: android/$MOBILE_PROFILE from $head ($(git log -1 --format=%s))"
+    (( unpushed > 0 )) && warn "$unpushed commit(s) on HEAD are not on origin and WILL be in this build"
+
+    if (( DRY )); then
+        echo "       would run: (cd apps/mobile && npx eas-cli build --platform android \\"
+        echo "                     --profile $MOBILE_PROFILE --non-interactive --no-wait)"
+        return 0
+    fi
+
+    # --no-wait so this returns with a build URL rather than holding the
+    # terminal for the queue. --non-interactive so a missing credential fails
+    # loudly instead of opening a prompt nobody is watching.
+    ( cd "$dir" && npx eas-cli build --platform android \
+        --profile "$MOBILE_PROFILE" --non-interactive --no-wait ) \
+        || die "eas build failed"
+}
+
+if (( MOBILE_ONLY )); then
+    mobile_build
+    exit 0
+fi
 
 # ---------------------------------------------------------------- local preflight
 
