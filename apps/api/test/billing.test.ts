@@ -175,6 +175,21 @@ describe('applying an event', () => {
     expect(await query('SELECT id FROM billing_events WHERE id = $1', [e.id])).toHaveLength(1);
   });
 
+  /**
+   * A purchase made before `logIn`, or a TRANSFER carrying the id it moved
+   * from. RevenueCat's ids are not all UUIDs and `users.id` is, so without a
+   * shape check the lookup is a type error rather than a miss — a 500 on an
+   * event that would be redelivered for hours and fail identically every time.
+   */
+  it('records an event for an anonymous RevenueCat id', async () => {
+    const e = event({ app_user_id: '$RCAnonymousID:8f3a1c0e4b7d4f2a9c6e5b1d3a7f0c92' });
+    expect(await applyEvent(e as never, { acceptSandbox: false })).toEqual({
+      applied: false,
+      reason: 'unknown_user',
+    });
+    expect(await query('SELECT id FROM billing_events WHERE id = $1', [e.id])).toHaveLength(1);
+  });
+
   it('does not grant a product it has never heard of', async () => {
     expect(await apply({ product_id: 'enterprise:annual', entitlement_ids: [] })).toEqual({
       applied: false,

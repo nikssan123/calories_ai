@@ -132,6 +132,20 @@ export function effectOf(type: string): Effect {
   }
 }
 
+/**
+ * An `app_user_id` shaped like a `users.id`.
+ *
+ * RevenueCat's id space is wider than ours. A client that purchases before
+ * `logIn` — or after `logOut`, which moves the SDK to a fresh anonymous id —
+ * sends `$RCAnonymousID:…`, and a TRANSFER carries the id it moved *from*.
+ * None of those are UUIDs and `users.id` is, so the lookup below fails as a
+ * Postgres type error rather than an empty result: 22P02 throws, the route
+ * turns it into a 500, and RevenueCat redelivers an event that cannot ever
+ * succeed. Checking the shape first makes all of it `unknown_user`, which is
+ * what it already was.
+ */
+const USER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export interface ApplyResult {
   applied: boolean;
   reason: 'ok' | 'duplicate' | 'unknown_user' | 'unknown_plan' | 'ignored' | 'wrong_environment';
@@ -179,9 +193,9 @@ export async function applyEvent(
   );
   if (!inserted) return { applied: false, reason: 'duplicate' };
 
-  const user = await queryOne<{ id: string }>('SELECT id FROM users WHERE id = $1', [
-    event.app_user_id,
-  ]);
+  const user = USER_ID.test(event.app_user_id)
+    ? await queryOne<{ id: string }>('SELECT id FROM users WHERE id = $1', [event.app_user_id])
+    : null;
   if (!user) return { applied: false, reason: 'unknown_user' };
 
   await query('UPDATE billing_events SET user_id = $1 WHERE id = $2', [user.id, event.id]);
