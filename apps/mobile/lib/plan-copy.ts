@@ -215,6 +215,25 @@ export const ALWAYS_FREE = [
 ];
 
 /**
+ * A meter that is gone, said in passing rather than announced.
+ *
+ * `wallTitle` is the headline version of this and cannot be borrowed for it:
+ * "That's your 20 free messages" is a sentence about a thing that just
+ * happened, and it reads as a non-sequitur on a surface the reader arrived at
+ * for some other reason — the empty diet-quality panel, days later. Same
+ * number, same distinction between a lifetime grant and a monthly one, no
+ * event.
+ */
+export function spentLine(allowance: Allowance): string {
+  const count = allowance.allowed ?? 0;
+  const noun = meterNoun(allowance.meter, count);
+  const verb = count === 1 ? 'is' : 'are';
+  return allowance.period === 'ever'
+    ? `Your ${count} free ${noun} ${verb} spent`
+    : `This month's ${count} ${noun} ${verb} spent`;
+}
+
+/**
  * The quiet line, shown while there is still something left.
  *
  * Only ever a count and a noun. No "upgrade now", no exclamation mark — the

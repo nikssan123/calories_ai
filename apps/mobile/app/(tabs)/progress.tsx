@@ -14,6 +14,7 @@ import {
 } from '@ct/shared';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
+import { QualityBlank } from '@/components/DietQuality';
 import { Skeleton } from '@/components/Skeleton';
 import { Sparkline } from '@/components/Sparkline';
 import { Stat, Stats } from '@/components/Stat';
@@ -315,7 +316,7 @@ export default function ProgressScreen() {
             </View>
           </InsetGroup>
 
-          {progress.quality.days_measured > 0 && (
+          {progress.quality.days_measured > 0 ? (
             <InsetGroup
               title="🥦  Diet quality"
               footer={
@@ -380,6 +381,24 @@ export default function ProgressScreen() {
                   );
                 })}
               </Stats>
+            </InsetGroup>
+          ) : (
+            /*
+              Nothing measured in the window, which used to hide the card
+              entirely. On the free tier that is the steady state rather than a
+              rare one — these four only come from a model reading a meal — so
+              the card stays, empty, and says what fills it. See
+              `components/DietQuality`.
+            */
+            <InsetGroup title="🥦  Diet quality">
+              <Stats>
+                {NUTRIENTS.map((n, index) => (
+                  <Stat key={n.key} first={index === 0} label={n.label} value="—" unit={n.unit} />
+                ))}
+              </Stats>
+              <View style={[styles.blank, { borderTopColor: colors.border }]}>
+                <QualityBlank />
+              </View>
             </InsetGroup>
           )}
 
@@ -510,6 +529,7 @@ const styles = StyleSheet.create({
   // The chips already own the space above, so the figure sits closer to them
   // than a card's first row normally would.
   qualityPad: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12 },
+  blank: { borderTopWidth: 2, paddingHorizontal: 16, paddingVertical: 14 },
   chip: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6 },
   empty: { paddingVertical: 8 },
   headline: { flexDirection: 'row', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' },

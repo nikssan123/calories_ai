@@ -677,7 +677,9 @@ export default function TodayScreen() {
 
           <MacroBars consumed={day.consumed} targets={day.targets} />
 
-          <DietQuality quality={day.quality} />
+          {/* `logged` so a day with nothing in it keeps its own empty state
+              rather than gaining a second one — see `DietQuality`. */}
+          <DietQuality quality={day.quality} logged={byMeal.length > 0} />
 
           {byMeal.length === 0 && day.exercise_entries.length === 0 && (
             <View style={styles.empty}>

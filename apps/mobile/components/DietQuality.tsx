@@ -1,9 +1,12 @@
 import { useEffect } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useRouter } from 'expo-router';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import type { DayQuality } from '@ct/shared';
-import { QUALITY_COVERAGE_FLOOR } from '@ct/shared';
-import { Chunk } from '@/components/Chunk';
+import { QUALITY_COVERAGE_FLOOR, meterSpent } from '@ct/shared';
+import { Chunk, PressableChunk } from '@/components/Chunk';
+import { useEntitlements } from '@/lib/entitlements';
+import { spentLine, TIER_NAMES, tierFor } from '@/lib/plan-copy';
 import { duration, ease, type as t, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 
@@ -31,25 +34,51 @@ const ROWS = [
 
 export function DietQuality({
   quality,
+  logged = true,
   style,
 }: {
   quality: DayQuality;
+  /**
+   * Whether the day has anything in it at all.
+   *
+   * A blank day already says it is blank, in its own words, a few pixels
+   * lower; the panel below explaining that nobody estimated the fiber in
+   * nothing is the same news twice.
+   */
+  logged?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
   const colors = useColors();
 
-  // Nothing estimated means nothing to say. An empty panel of dashes would
-  // invite the reading that today had no fiber in it.
-  if (ROWS.every((row) => quality[row.key] === null)) return null;
+  /*
+   * Nothing estimated used to mean nothing drawn, and that was wrong for the
+   * account it happened to most.
+   *
+   * These four figures only ever come from a model reading a meal, so a day
+   * logged by hand, by repeat or by barcode carries none of them — which is
+   * most days on the free tier, once its twenty turns are gone. The panel
+   * vanishing left that account with no way to discover the feature existed,
+   * let alone that it is what the journal buys them: the app quietly removed
+   * its own best argument at exactly the moment it needed to make it.
+   *
+   * So the tracks stay, empty, with the reason written underneath. The values
+   * are dashes rather than blurred numbers on purpose — a blurred figure
+   * claims the app knows something it is withholding, and nobody has estimated
+   * this. What is being sold is the estimate, not access to it.
+   */
+  const measured = ROWS.some((row) => quality[row.key] !== null);
+  if (!measured && !logged) return null;
 
-  const partial = quality.coverage < QUALITY_COVERAGE_FLOOR;
+  const partial = measured && quality.coverage < QUALITY_COVERAGE_FLOOR;
 
   return (
     <View style={style}>
       <View style={styles.header}>
         <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>🥦&nbsp;&nbsp;Diet quality</Text>
-        {partial && (
-          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>partly measured</Text>
+        {(partial || !measured) && (
+          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+            {measured ? 'partly measured' : 'not estimated'}
+          </Text>
         )}
       </View>
 
@@ -69,9 +98,12 @@ export function DietQuality({
               row={row}
               value={quality[row.key]}
               target={quality.targets[row.key]}
+              blank={!measured}
             />
           ))}
         </View>
+
+        {!measured && <QualityBlank style={styles.blank} />}
       </Chunk>
 
       {partial && (
@@ -84,14 +116,101 @@ export function DietQuality({
   );
 }
 
+/**
+ * Why the tracks are empty, and what fills them.
+ *
+ * Exported because Progress has the same hole for the same reason — its quality
+ * card is hidden whenever the window measured nothing — and the explanation has
+ * to be one sentence written once rather than two that drift.
+ *
+ * Two states, and which one shows is a fact about the account rather than a
+ * guess: while there is any metered way left to log a meal, the answer is to
+ * use it, and only when every one of them is spent does the answer cost money.
+ * Selling a plan to somebody who still has turns in the one they are on is how
+ * a nudge becomes an advert.
+ */
+export function QualityBlank({ style }: { style?: StyleProp<ViewStyle> }) {
+  const colors = useColors();
+  const router = useRouter();
+  const { plan, tiers, allowances } = useEntitlements();
+
+  const chat = allowances?.chat ?? null;
+  const photo = allowances?.photo ?? null;
+  /*
+   * Spent on both ways in — text and photo — because either one would fill
+   * these, and bought scans count: a bundle sitting unused is a photo this
+   * account can still take, whatever the month's grant says.
+   *
+   * Null while the first fetch is out, which reads as *not* spent. A paying
+   * account must never see a frame of this offering to sell it something it
+   * already has, and the cost of being wrong the other way is one quiet
+   * sentence that stays true a second later.
+   */
+  const stuck =
+    chat !== null &&
+    photo !== null &&
+    meterSpent(chat) &&
+    meterSpent(photo) &&
+    photo.credits === 0;
+  const next = stuck ? tierFor('chat', tiers, plan) : null;
+  const carried = next
+    ? tiers.find((tier) => tier.plan === next)?.meters.find((entry) => entry.meter === 'chat')
+    : undefined;
+
+  /*
+   * The second sentence, and it is the whole point of the panel staying on
+   * screen: never end on what is missing. Either there is a free way to fill
+   * these in — which there usually is — or there is a number to compare
+   * against the one that ran out.
+   */
+  const tail =
+    next && chat && carried?.allowed
+      ? `${spentLine(chat)} — ${TIER_NAMES[next]} includes ${carried.allowed} a month.`
+      : 'Tell the journal what you ate and they fill themselves in.';
+
+  return (
+    <View style={[styles.blankBody, style]}>
+      <Text style={[t.footnote, styles.blankLine, { color: colors.mutedForeground }]}>
+        These four are the model’s estimate, so only meals the journal logs carry them — typed,
+        repeated and scanned ones leave them blank. {tail}
+      </Text>
+
+      {next && (
+        <PressableChunk
+          depth={3}
+          radius={999}
+          /* The tier the sentence names is the one the paywall opens on — see
+             the note in `PlanWall`. */
+          onPress={() => router.push({ pathname: '/upgrade', params: { plan: next } })}
+          accessibilityRole="button"
+          style={styles.blankAction}
+          contentStyle={[
+            styles.blankButton,
+            { backgroundColor: colors.secondary, borderColor: colors.border },
+          ]}
+        >
+          <Text style={[t.footnoteBold, { color: colors.secondaryForeground }]}>
+            See what {TIER_NAMES[next]} adds
+          </Text>
+        </PressableChunk>
+      )}
+    </View>
+  );
+}
+
 function QualityTrack({
   row,
   value,
   target,
+  blank,
 }: {
   row: (typeof ROWS)[number];
   value: number | null;
   target: { value: number; direction: 'floor' | 'ceiling' };
+  /** The whole panel is empty, so the cell shows the target it would be read
+      against rather than repeating "not estimated" four times over a sentence
+      that already says it once. */
+  blank?: boolean;
 }) {
   const colors = useColors();
   const floor = target.direction === 'floor';
@@ -134,7 +253,17 @@ function QualityTrack({
 
       <View style={styles.figureRow}>
         {value === null ? (
-          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>not estimated</Text>
+          blank ? (
+            <>
+              <Text style={[t.figure, styles.figure, { color: colors.mutedForeground }]}>—</Text>
+              <Text style={[t.footnoteSemibold, t.tnum, { color: colors.mutedForeground }]}>
+                /{target.value.toLocaleString()}
+                {row.unit}
+              </Text>
+            </>
+          ) : (
+            <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>not estimated</Text>
+          )
         ) : (
           <>
             <Text
@@ -182,4 +311,16 @@ const styles = StyleSheet.create({
   bar: { height: 6, borderRadius: 999, borderWidth: 1, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 999 },
   footer: { paddingHorizontal: 6, paddingTop: 2 },
+  blank: { marginTop: 14 },
+  blankBody: { gap: 10 },
+  blankLine: { lineHeight: 19 },
+  blankAction: { alignSelf: 'flex-start' },
+  blankButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 34,
+    borderRadius: 999,
+    borderWidth: 2,
+    paddingHorizontal: 14,
+  },
 });
