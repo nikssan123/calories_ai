@@ -9,6 +9,7 @@ import { api, planLimitOf } from '@/lib/api';
 import { useEntitlements } from '@/lib/entitlements';
 import { TIER_NAMES } from '@/lib/plan-copy';
 import { font, type as t, useColors } from '@/theme';
+import { useRefreshOnReturn } from '@/hooks/useRefreshOnReturn';
 
 /**
  * Last week, and what it did to the target.
@@ -52,6 +53,18 @@ export function WeeklyReview({ onError }: { onError: (message: string) => void }
   useEffect(() => {
     void load();
   }, [load]);
+
+  /*
+   * And again whenever this screen is returned to.
+   *
+   * The one fetch on mount is not enough for this panel in particular: the
+   * review it is showing is written by a Monday-morning pass on the server, and
+   * the push announcing it opens `/progress` — a tab that has been mounted
+   * since launch and will happily go on showing the empty state under a
+   * notification that just said the week was ready. Same for the adaptive
+   * proposal beneath it, which moves on the same schedule.
+   */
+  useRefreshOnReturn(load);
 
   async function writeNow() {
     setWriting(true);

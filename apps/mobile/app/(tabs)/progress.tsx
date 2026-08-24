@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,6 +23,7 @@ import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
+import { useRefreshOnReturn } from '@/hooks/useRefreshOnReturn';
 
 const WINDOWS = [14, 30, 90] as const;
 
@@ -61,16 +62,27 @@ export default function ProgressScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        setProgress(await api.progress(days));
-        setError(null);
-      } catch (e) {
-        setError((e as Error).message);
-      }
-    })();
+  const load = useCallback(async () => {
+    try {
+      setProgress(await api.progress(days));
+      setError(null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
   }, [days]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  /*
+   * A phone is left open for weeks, and these numbers move without anyone
+   * touching this screen — a meal logged on Today, a week's review published
+   * overnight. Fetching only on mount is what makes a notification that says
+   * the week is ready land on a screen still showing the last time it was
+   * looked at; see `useRefreshOnReturn`.
+   */
+  useRefreshOnReturn(load);
 
   async function submitWeight() {
     const value = Number(weightInput);
