@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ArrowRight } from 'lucide-react';
 import type { ChatAction, ChatCard as Card, ExerciseEntry, FoodEntry, UnitSystem } from '@ct/shared';
 import {
   bodyWeightToKg,
@@ -43,6 +44,7 @@ export function ChatActionCard({
   messageId,
   today,
   onLogged,
+  text,
 }: {
   action: ChatAction;
   /** The message this card sits on — the workout card answers onto it. */
@@ -56,10 +58,24 @@ export function ChatActionCard({
    */
   today?: string;
   onLogged?: () => void;
+  /**
+   * The message's own words, for the one card that folds them into itself.
+   *
+   * Every other card here sits *under* the reply it belongs to. The review card
+   * swallows it, because the reply in that case is six hundred words and the
+   * card exists precisely so nobody has to scroll them — see `ReviewCard`.
+   */
+  text?: string;
 }) {
   if (!action.card) return <Chip action={action} />;
   const body = (
-    <CardBody card={action.card} messageId={messageId} today={today} onLogged={onLogged} />
+    <CardBody
+      card={action.card}
+      messageId={messageId}
+      today={today}
+      onLogged={onLogged}
+      text={text}
+    />
   );
   return action.removed ? <Removed>{body}</Removed> : body;
 }
@@ -115,11 +131,13 @@ function CardBody({
   messageId,
   today,
   onLogged,
+  text,
 }: {
   card: Card;
   messageId?: string;
   today?: string;
   onLogged?: () => void;
+  text?: string;
 }) {
   switch (card.type) {
     case 'food':
@@ -136,6 +154,8 @@ function CardBody({
       return <RecipesCard card={card} />;
     case 'plan':
       return <PlanCard card={card} />;
+    case 'review':
+      return <ReviewCard card={card} prose={text} />;
     case 'workout_prompt':
       // Needs a real message id to answer onto. An optimistic bubble has none
       // yet, but it also cannot be carrying a card the model drew.
@@ -1033,6 +1053,175 @@ function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
       )}
     </Shell>
   );
+}
+
+/**
+ * Monday's review, folded.
+ *
+ * The one card in the journal that is bigger than the reply it belongs to, and
+ * the only one that is allowed to be — because it *is* the reply. A review is
+ * six or seven hundred words arriving in a thread whose every other turn is a
+ * sentence, and the numbers it is about are buried three paragraphs in. Left as
+ * prose it is a wall you scroll past on the one morning of the week there is
+ * something to read.
+ *
+ * So the arithmetic comes out and goes on top — the week as seven days you can
+ * count, the two figures that matter, and the target change if there was one —
+ * and the prose sits underneath at one paragraph, with the rest a click away.
+ * Nothing is hidden that was not already scrolled past.
+ */
+function ReviewCard({
+  card,
+  prose,
+}: {
+  card: Extract<Card, { type: 'review' }>;
+  /** The message's own text. Absent only if a client forgets to pass it. */
+  prose?: string;
+}) {
+  const units = useUnits();
+  const [open, setOpen] = useState(false);
+
+  // Paragraphs rather than a line clamp: a clamp cuts mid-sentence and cannot
+  // say how much is left, and a paragraph is the honest unit of prose anyway.
+  const paragraphs = (prose ?? '').trim().split(/\n{2,}/).filter(Boolean);
+  const rest = Math.max(0, paragraphs.length - 1);
+  const shown = open ? paragraphs : paragraphs.slice(0, 1);
+
+  const band = card.target_kcal * 0.1;
+  const byDate = new Map(card.days.map((day) => [day.local_date, day.kcal]));
+  // Walked rather than mapped, because the gaps are the point and they exist
+  // by omission: `days` only carries the days that were logged.
+  const week = Array.from({ length: 7 }, (_, index) => {
+    const date = addDays(card.week_start, index);
+    const kcal = byDate.get(date);
+    return {
+      date,
+      kcal: kcal ?? null,
+      hit: kcal !== undefined && Math.abs(kcal - card.target_kcal) <= band,
+    };
+  });
+
+  return (
+    <Shell>
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-body font-bold">Last week</p>
+        <span className="text-footnote text-muted-foreground shrink-0 font-semibold">
+          {formatDate(card.week_start)} – {formatDate(card.week_end)}
+        </span>
+      </div>
+
+      <div className="mt-3 flex gap-1">
+        {week.map((day) => (
+          <div
+            key={day.date}
+            title={day.kcal === null ? 'Nothing logged' : `${day.kcal.toLocaleString()} kcal`}
+            className={cn(
+              'text-footnote flex h-[30px] flex-1 items-center justify-center rounded-[9px] border-2 font-bold',
+              day.hit
+                ? 'border-transparent'
+                : day.kcal !== null
+                  ? 'bg-muted border-transparent'
+                  : 'text-muted-foreground border-border',
+            )}
+            style={
+              day.hit
+                ? { background: 'var(--calories)', color: 'var(--primary-foreground)' }
+                : undefined
+            }
+          >
+            {WEEKDAY_INITIALS[new Date(`${day.date}T00:00:00Z`).getUTCDay()]}
+          </div>
+        ))}
+      </div>
+      <p className="text-footnote text-muted-foreground mt-2">
+        {card.days_logged === 0
+          ? 'Nothing logged this week.'
+          : `${card.days_logged} day${card.days_logged === 1 ? '' : 's'} logged, ${card.days_on_target} within 10% of target.`}
+      </p>
+
+      <div className="mt-3.5 flex gap-3">
+        <Figure
+          value={card.mean_kcal === null ? '—' : Math.round(card.mean_kcal).toLocaleString()}
+          unit=" kcal"
+          label={`a day, against ${card.target_kcal.toLocaleString()}`}
+        />
+        {card.weight_change_kg !== null ? (
+          <Figure value={formatWeightDelta(card.weight_change_kg, units)} label="on the scale" />
+        ) : card.exercise_sessions > 0 ? (
+          <Figure
+            value={card.exercise_kcal.toLocaleString()}
+            unit=" kcal"
+            label={`burned over ${card.exercise_sessions} session${card.exercise_sessions === 1 ? '' : 's'}`}
+          />
+        ) : (
+          <Figure
+            value={card.mean_protein_g === null ? '—' : `${Math.round(card.mean_protein_g)}`}
+            unit=" g"
+            label={`protein a day, against ${Math.round(card.target_protein_g)}`}
+          />
+        )}
+      </div>
+
+      {card.target_change && (
+        <div className="bg-muted border-border mt-3.5 rounded-2xl border-2 px-3.5 py-3">
+          <div className="tnum text-body flex items-center gap-2 font-bold">
+            <span className="text-muted-foreground">
+              {card.target_change.from_kcal.toLocaleString()}
+            </span>
+            <ArrowRight size={14} className="text-muted-foreground" />
+            <span className="text-[var(--calories-text)]">
+              {card.target_change.to_kcal.toLocaleString()} kcal
+            </span>
+          </div>
+          <p className="text-footnote text-muted-foreground mt-1.5">
+            {card.target_change.explanation}
+          </p>
+        </div>
+      )}
+
+      {shown.length > 0 && (
+        <div className="border-border mt-3.5 flex flex-col gap-2.5 border-t-2 pt-3">
+          {shown.map((paragraph, index) => (
+            <p key={index} className="text-body leading-relaxed">
+              {paragraph}
+            </p>
+          ))}
+        </div>
+      )}
+
+      {rest > 0 && (
+        <button
+          type="button"
+          onClick={() => setOpen((was) => !was)}
+          className="text-footnote mt-2.5 font-bold text-[var(--calories-text)]"
+        >
+          {open ? 'Show less' : `Read the rest (${rest} more)`}
+        </button>
+      )}
+    </Shell>
+  );
+}
+
+/** A number and what it is a number of. Two of them make the review's top line. */
+function Figure({ value, unit, label }: { value: string; unit?: string; label: string }) {
+  return (
+    <div className="min-w-0 flex-1">
+      <p className="text-figure tnum text-[20px] leading-[26px]">
+        {value}
+        {unit ? <span className="text-muted-foreground text-footnote font-semibold">{unit}</span> : null}
+      </p>
+      <p className="text-footnote text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+const WEEKDAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const;
+
+/** Calendar arithmetic on an ISO date, without dragging a timezone into it. */
+function addDays(date: string, days: number): string {
+  const at = new Date(`${date}T00:00:00Z`);
+  at.setUTCDate(at.getUTCDate() + days);
+  return at.toISOString().slice(0, 10);
 }
 
 function formatDate(isoDate: string): string {

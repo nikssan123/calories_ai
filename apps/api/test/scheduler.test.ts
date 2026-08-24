@@ -211,7 +211,7 @@ describe('the weekly review email', () => {
 
     expect(mailbox()).toHaveLength(1);
     expect(mailbox()[0]).toMatchObject({ to: user.email, subject: 'Your week: 9–15 March' });
-    expect(mailbox()[0]!.text).toContain('> A steady week.');
+    expect(mailbox()[0]!.text).toContain('A steady week.');
   });
 
   it('is sent once, however many times the tick runs that day', async () => {

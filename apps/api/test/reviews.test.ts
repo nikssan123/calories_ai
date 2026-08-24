@@ -4,6 +4,7 @@ import {
   buildReviewStats,
   latestReview,
   listReviews,
+  reviewCard,
   reviewForWeek,
   reviewWeekFor,
   saveReview,
@@ -85,6 +86,19 @@ describe('buildReviewStats', () => {
     await addMeal(user, { date: '2026-03-09', kcal: 1800, protein_g: 160 });
     await addMeal(user, { date: '2026-03-10', kcal: 1800, protein_g: 100 });
     expect((await buildReviewStats(user.id, WEEK)).days_protein_hit).toBe(1);
+  });
+
+  it('carries every logged day, in order, and only the logged ones', async () => {
+    await addMeal(user, { date: '2026-03-11', kcal: 2200, protein_g: 160 });
+    await addMeal(user, { date: '2026-03-09', kcal: 1800, protein_g: 140 });
+
+    // The gaps are the point: the strip in the email and the card in the
+    // journal are both drawn by walking the seven dates and finding nothing
+    // for the days nobody logged, so an empty day must not arrive as a zero.
+    expect((await buildReviewStats(user.id, WEEK)).days).toEqual([
+      { local_date: '2026-03-09', kcal: 1800, protein_g: 140 },
+      { local_date: '2026-03-11', kcal: 2200, protein_g: 160 },
+    ]);
   });
 
   it('picks out the highest and lowest days', async () => {
@@ -175,6 +189,7 @@ describe('persistence', () => {
     target_protein_g: 150,
     days_on_target: 3,
     days_protein_hit: 4,
+    days: [],
     previous_mean_kcal: null,
     previous_days_logged: 0,
     weight_start_kg: null,
@@ -228,5 +243,48 @@ describe('persistence', () => {
     const other = await createUser();
     await saveReview(other.id, stats(WEEK.start), 'Theirs.', null);
     expect(await listReviews(user.id)).toEqual([]);
+  });
+});
+
+describe('reviewCard', () => {
+  it('projects the stats the journal draws, and drops the rest', async () => {
+    await addMeal(user, { date: '2026-03-09', kcal: 1800, protein_g: 140 });
+    const stats = await buildReviewStats(user.id, WEEK);
+
+    expect(reviewCard(stats)).toMatchObject({
+      type: 'review',
+      week_start: WEEK.start,
+      week_end: WEEK.end,
+      days_logged: 1,
+      target_kcal: 2000,
+      days: [{ local_date: '2026-03-09', kcal: 1800 }],
+      target_change: null,
+    });
+  });
+
+  it('shows a target change only when the pass actually made one', async () => {
+    const stats = await buildReviewStats(user.id, WEEK);
+    const proposal = {
+      blocked_by: null,
+      estimate: null,
+      current: { kcal: 2000, protein_g: 150, carbs_g: 200, fat_g: 66, is_custom: false, source: 'calculated' as const },
+      proposed: { kcal: 2120, protein_g: 150, carbs_g: 215, fat_g: 70, is_custom: false, source: 'adaptive' as const },
+      delta_kcal: 120,
+      explanation: 'Six weeks of data put maintenance higher than we assumed.',
+    };
+
+    // A blocked proposal is a *reason a target did not move*. Drawing it as an
+    // arrow between two numbers would announce a change that never happened.
+    expect(reviewCard({ ...stats, adaptive: { ...proposal, eligible: false } })).toMatchObject({
+      target_change: null,
+    });
+
+    expect(reviewCard({ ...stats, adaptive: { ...proposal, eligible: true } })).toMatchObject({
+      target_change: {
+        from_kcal: 2000,
+        to_kcal: 2120,
+        explanation: 'Six weeks of data put maintenance higher than we assumed.',
+      },
+    });
   });
 });

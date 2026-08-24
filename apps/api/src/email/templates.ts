@@ -261,10 +261,16 @@ export function accountRestored(input: { name: string | null; appUrl: string }):
 /**
  * Monday's review, in the inbox.
  *
- * The prose is the agent's, quoted rather than paraphrased, and it is truncated
- * rather than sent whole: the email exists to get someone back into the app on
- * the one morning of the week there is something new to read, not to replace
- * the screen it lives on.
+ * The email is not a copy of the Progress screen, and it is not a teaser for it
+ * either — it is the week, answered. Someone reading this on a phone at seven
+ * in the morning should be able to close it knowing four numbers, the shape of
+ * the week and whether their target moved, without tapping anything.
+ *
+ * So the arithmetic leads and the prose follows, truncated: the model's
+ * paragraphs are the best part of the review but they are also six hundred
+ * words, and an email that reprints them leaves the screen it links to with
+ * nothing to offer. Every number here is already on `stats`; nothing is
+ * computed twice.
  */
 export function weeklyReview(input: {
   name: string | null;
@@ -278,17 +284,57 @@ export function weeklyReview(input: {
 }): EmailMessage {
   const { stats, units } = input;
 
-  const items: Array<{ label: string; value: string }> = [
-    { label: 'Days logged', value: `${stats.days_logged}/7` },
+  const items: Array<{ label: string; value: string; hint?: string }> = [
+    {
+      label: 'Days logged',
+      value: `${stats.days_logged}/7`,
+      hint:
+        stats.previous_days_logged === stats.days_logged
+          ? 'same as the week before'
+          : `${stats.previous_days_logged} the week before`,
+    },
     {
       label: 'Average a day',
-      value: stats.mean_kcal === null ? '—' : `${Math.round(stats.mean_kcal)} kcal`,
+      value: stats.mean_kcal === null ? '—' : `${round(stats.mean_kcal)} kcal`,
+      hint: averageHint(stats),
     },
-    { label: 'On target', value: `${stats.days_on_target} days` },
+    {
+      label: 'Days on target',
+      value: `${stats.days_on_target}`,
+      hint: `within 10% of ${round(stats.target_kcal)} kcal`,
+    },
+    /*
+     * The fourth cell is whichever of the three there is something to say
+     * about. A grid with a hole in it reads as a bug, and so does an em dash in
+     * the last slot — but a week that had nothing on the scale usually had
+     * something in the gym, and one that had neither still had protein.
+     */
+    ...(stats.weight_change_kg !== null
+      ? [
+          {
+            label: 'Weight',
+            value: formatWeightDelta(stats.weight_change_kg, units),
+            hint: 'across the week',
+          },
+        ]
+      : stats.exercise_sessions > 0
+        ? [
+            {
+              label: `Burned over ${plural(stats.exercise_sessions, 'session', 'sessions')}`,
+              value: `${round(stats.exercise_kcal)} kcal`,
+              hint: 'on top of the target',
+            },
+          ]
+        : [
+            {
+              label: 'Protein a day',
+              value: stats.mean_protein_g === null ? '—' : `${Math.round(stats.mean_protein_g)} g`,
+              hint: `target ${Math.round(stats.target_protein_g)} g`,
+            },
+          ]),
   ];
-  if (stats.weight_change_kg !== null) {
-    items.push({ label: 'Weight', value: formatWeightDelta(stats.weight_change_kg, units) });
-  }
+
+  const change = stats.adaptive?.eligible ? stats.adaptive : null;
 
   return {
     template: 'weekly_review',
@@ -298,15 +344,107 @@ export function weeklyReview(input: {
       subject: `Your week: ${input.range}`,
       preheader: summaryLine(stats, units),
       heading: 'Last week, in review',
+      subheading: input.range,
       blocks: [
         { kind: 'text', text: greeting(input.name) },
         { kind: 'stats', items },
-        { kind: 'quote', text: excerpt(input.content) },
-        { kind: 'button', label: 'Read the full review', url: `${input.appUrl}/progress` },
+        weekStrip(stats),
+        { kind: 'rule' },
+        { kind: 'subhead', text: 'How it read' },
+        // Paragraph by paragraph rather than one block with newlines in it: the
+        // layout renders a text block as a single `<p>`, so a joined excerpt
+        // would arrive as one slab with its breaks silently gone.
+        ...excerpt(input.content).map((text): Block => ({ kind: 'text', text })),
+        ...(change
+          ? [
+              {
+                kind: 'callout' as const,
+                title: `Your target moved to ${round(change.proposed.kcal)} kcal`,
+                text: change.explanation,
+              },
+            ]
+          : []),
+        ...(stats.top_foods.length > 0
+          ? [
+              { kind: 'subhead' as const, text: 'On repeat' },
+              {
+                kind: 'facts' as const,
+                items: stats.top_foods.slice(0, 3).map((food) => ({
+                  label: food.name,
+                  value: `${plural(food.times, 'time', 'times')} · ${round(food.kcal)} kcal`,
+                })),
+              },
+            ]
+          : []),
+        { kind: 'button', label: 'Read the whole review', url: `${input.appUrl}/progress` },
       ],
       unsubscribeUrl: input.unsubscribeUrl,
     }),
   };
+}
+
+/**
+ * The week as seven cells, in the order the days happened.
+ *
+ * Built by walking the seven dates rather than by reading the array, because
+ * `stats.days` only holds days that were logged — the gaps are the whole point
+ * of the picture and they exist by omission. A review written before those
+ * daily rows existed has none at all, and then every day reads as missing,
+ * which is the honest answer for a week this email cannot see inside.
+ */
+function weekStrip(stats: ReviewStats): Block {
+  const band = stats.target_kcal * 0.1;
+  const byDate = new Map(stats.days.map((day) => [day.local_date, day.kcal]));
+
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = addDays(stats.week_start, index);
+    const kcal = byDate.get(date);
+    return {
+      label: WEEKDAYS[new Date(`${date}T00:00:00Z`).getUTCDay()]!,
+      value: kcal === undefined ? null : round(kcal),
+      tone:
+        kcal === undefined
+          ? ('missing' as const)
+          : Math.abs(kcal - stats.target_kcal) <= band
+            ? ('hit' as const)
+            : ('logged' as const),
+    };
+  });
+
+  const hits = days.filter((day) => day.tone === 'hit').length;
+  return {
+    kind: 'week',
+    days,
+    // Says in words what the fill says in colour, because the plain-text
+    // alternative of this block has no colour to read and a caption about
+    // "the green ones" would be describing something that is not there.
+    caption:
+      stats.days_logged === 0
+        ? 'Nothing logged this week.'
+        : `${plural(stats.days_logged, 'day', 'days')} logged, ${hits} of them within 10% of target.`,
+  };
+}
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
+/** Calendar arithmetic on an ISO date, without dragging a timezone into it. */
+function addDays(date: string, days: number): string {
+  const at = new Date(`${date}T00:00:00Z`);
+  at.setUTCDate(at.getUTCDate() + days);
+  return at.toISOString().slice(0, 10);
+}
+
+/** "Down 157 on the week before" — the comparison that makes a mean mean anything. */
+function averageHint(stats: ReviewStats): string | undefined {
+  if (stats.mean_kcal === null || stats.previous_mean_kcal === null) return undefined;
+  const delta = Math.round(stats.mean_kcal - stats.previous_mean_kcal);
+  if (delta === 0) return 'level with the week before';
+  return `${delta > 0 ? 'up' : 'down'} ${round(Math.abs(delta))} on the week before`;
+}
+
+/** Thousands separated, because four-figure calories are read, not parsed. */
+function round(value: number): string {
+  return Math.round(value).toLocaleString('en-GB');
 }
 
 /**
@@ -347,11 +485,22 @@ function subjectFrom(content: string): string {
   return first.length > 78 ? `${first.slice(0, 75).trimEnd()}…` : first;
 }
 
-/** The first two paragraphs, and a marker if there was more. */
-function excerpt(content: string, paragraphs = 2): string {
-  const parts = content.trim().split(/\n{2,}/);
-  const head = parts.slice(0, paragraphs).join('\n\n');
-  return parts.length > paragraphs ? `${head}\n\n…` : head;
+/**
+ * The first two paragraphs, as paragraphs, and a marker if there were more.
+ *
+ * Returns the list rather than a joined string because the layout's text block
+ * is one `<p>`: handing it a blob with blank lines in it produces a slab of
+ * HTML with the breaks gone, and the review's paragraphing is most of what
+ * makes it readable.
+ */
+function excerpt(content: string, paragraphs = 2): string[] {
+  const parts = content
+    .trim()
+    .split(/\n{2,}/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const head = parts.slice(0, paragraphs);
+  return parts.length > paragraphs ? [...head, '…'] : head;
 }
 
 function summaryLine(stats: ReviewStats, units: UnitSystem): string {

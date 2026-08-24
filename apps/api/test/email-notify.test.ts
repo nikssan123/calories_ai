@@ -40,6 +40,18 @@ const STATS: ReviewStats = {
   target_protein_g: 160,
   days_on_target: 4,
   days_protein_hit: 3,
+  // A real week, so the strip in the email has gaps and hits to draw: Thursday
+  // was never logged, and four of the six landed inside the band — which is
+  // what `days_on_target` above says, and the two have to agree or the picture
+  // contradicts the number printed beside it.
+  days: [
+    { local_date: '2026-08-10', kcal: 2180, protein_g: 155 },
+    { local_date: '2026-08-11', kcal: 2240, protein_g: 160 },
+    { local_date: '2026-08-12', kcal: 2050, protein_g: 141 },
+    { local_date: '2026-08-14', kcal: 2205, protein_g: 158 },
+    { local_date: '2026-08-15', kcal: 2620, protein_g: 149 },
+    { local_date: '2026-08-16', kcal: 1725, protein_g: 149 },
+  ],
   previous_mean_kcal: 2300,
   previous_days_logged: 5,
   weight_start_kg: 84.2,
@@ -211,24 +223,48 @@ describe('account notices', () => {
 });
 
 describe('sendWeeklyReviewEmail', () => {
-  it('quotes the review and links to the screen it lives on', async () => {
+  it('leads with the numbers and links to the screen the rest lives on', async () => {
     const user = await createUser({ display_name: 'Nik' });
     expect(await sendWeeklyReviewEmail(user.id, review())).toMatchObject({ status: 'sent' });
 
     const message = lastEmail()!;
     expect(message.subject).toBe('Your week: 10–16 August');
-    expect(message.text).toContain('> You logged six days.');
+    expect(message.text).toContain('You logged six days.');
     expect(message.text).toContain(`${env.appUrl}/progress`);
     expect(message.text).toContain('Days logged: 6/7');
-    expect(message.text).toContain('2143 kcal');
+    expect(message.text).toContain('2,143 kcal');
     expect(message.text).toContain('-0.6 kg');
+  });
+
+  it('says what each figure is next to, so a number means something', async () => {
+    const user = await createUser();
+    await sendWeeklyReviewEmail(user.id, review());
+
+    const message = lastEmail()!;
+    // A mean with nothing beside it is a number; a mean with last week's beside
+    // it is the only part of this email that says whether anything is moving.
+    expect(message.text).toContain('down 157 on the week before');
+    expect(message.text).toContain('5 the week before');
+    expect(message.text).toContain('within 10% of 2,200 kcal');
+  });
+
+  it('draws the week as seven days, gaps and all', async () => {
+    const user = await createUser();
+    await sendWeeklyReviewEmail(user.id, review());
+
+    const message = lastEmail()!;
+    // Thursday is the day the fixture never logged, and it has to survive as a
+    // gap rather than being dropped out of the row.
+    expect(message.text).toMatch(/Thu\s+—/);
+    expect(message.text).toMatch(/Mon\s+2,180\s+\(on target\)/);
+    expect(message.text).toContain('6 days logged, 4 of them within 10% of target.');
   });
 
   it('truncates the prose rather than reprinting the whole screen', async () => {
     const user = await createUser();
     await sendWeeklyReviewEmail(user.id, review());
 
-    expect(lastEmail()!.text).toContain('> Protein was the weak spot.');
+    expect(lastEmail()!.text).toContain('Protein was the weak spot.');
     expect(lastEmail()!.text).not.toContain('Aim for one more day.');
     expect(lastEmail()!.text).toContain('…');
   });
@@ -297,6 +333,39 @@ describe('the weekly template’s own edge cases', () => {
     expect(message.text).toContain('Average a day: —');
     expect(message.text).not.toContain('Weight:');
     expect(message.text).toContain('Days logged: 0/7');
+  });
+
+  it('boxes off a target change, and says nothing when there was none', () => {
+    const base = {
+      name: null,
+      content: 'x',
+      range: '10–16 August',
+      appUrl: 'https://example.test',
+      unsubscribeUrl: 'https://example.test/u',
+      units: 'metric' as const,
+    };
+
+    expect(templates.weeklyReview({ ...base, stats: STATS }).text).not.toContain('target moved');
+
+    const moved = templates.weeklyReview({
+      ...base,
+      stats: {
+        ...STATS,
+        adaptive: {
+          eligible: true,
+          blocked_by: null,
+          estimate: null,
+          current: { kcal: 2200, protein_g: 160, carbs_g: 220, fat_g: 70, is_custom: false, source: 'calculated' as const },
+          proposed: { kcal: 2320, protein_g: 160, carbs_g: 240, fat_g: 74, is_custom: false, source: 'adaptive' as const },
+          delta_kcal: 120,
+          explanation: 'You lost faster than the plan asked for.',
+        },
+      },
+    });
+    // Wrapped at 72 like every other paragraph, so the assertion is on a
+    // fragment that a line break cannot land inside.
+    expect(moved.text).toContain('Your target moved to 2,320 kcal');
+    expect(moved.text).toContain('You lost faster than the plan');
   });
 
   it('signs a gain as well as a loss', () => {

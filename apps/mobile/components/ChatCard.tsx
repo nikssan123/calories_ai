@@ -9,7 +9,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import Svg, { Line } from 'react-native-svg';
+import Svg, { Line, Path } from 'react-native-svg';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -66,6 +66,7 @@ export function ChatActionCard({
   today,
   touched,
   onLogged,
+  text,
 }: {
   action: ChatAction;
   /** The message this card sits on — the workout card answers onto it. */
@@ -86,10 +87,24 @@ export function ChatActionCard({
   touched?: boolean;
   /** Something was logged from a card rather than through a turn. */
   onLogged?: () => void;
+  /**
+   * The message's own words, for the one card that folds them into itself.
+   *
+   * Every other card here sits *under* the reply it belongs to. The review card
+   * swallows it, because the reply in that case is six hundred words and the
+   * card exists precisely so nobody has to scroll them — see `ReviewCard`.
+   */
+  text?: string;
 }) {
   if (!action.card) return <Chip action={action} />;
   const body = (
-    <CardBody card={action.card} messageId={messageId} today={today} onLogged={onLogged} />
+    <CardBody
+      card={action.card}
+      messageId={messageId}
+      today={today}
+      onLogged={onLogged}
+      text={text}
+    />
   );
   // A gone entry is never also news, so the ring and the strike never meet.
   if (action.removed) return <Removed>{body}</Removed>;
@@ -160,11 +175,13 @@ function CardBody({
   messageId,
   today,
   onLogged,
+  text,
 }: {
   card: Card;
   messageId?: string;
   today?: string;
   onLogged?: () => void;
+  text?: string;
 }) {
   switch (card.type) {
     case 'food':
@@ -181,6 +198,8 @@ function CardBody({
       return <PlanCard card={card} />;
     case 'recipes':
       return <RecipesCard card={card} onLogged={onLogged} />;
+    case 'review':
+      return <ReviewCard card={card} prose={text} />;
     case 'workout_prompt':
       // Needs a real message id to answer onto. An optimistic bubble has none
       // yet, but it also cannot be carrying a card the model drew.
@@ -1300,6 +1319,212 @@ function PlanCard({ card }: { card: Extract<Card, { type: 'plan' }> }) {
   );
 }
 
+/**
+ * Monday's review, folded.
+ *
+ * The one card in the journal that is bigger than the reply it belongs to, and
+ * the only one that is allowed to be — because it *is* the reply. A review is
+ * six or seven hundred words arriving in a thread whose every other turn is a
+ * sentence, and the numbers it is about are buried three paragraphs in. Left as
+ * prose it is a wall you scroll past on the one morning of the week there is
+ * something to read.
+ *
+ * So the arithmetic comes out and goes on top — the week as seven days you can
+ * count, the two figures that matter, and the target change if there was one —
+ * and the prose sits underneath at one paragraph, with the rest a tap away.
+ * Nothing is hidden that was not already scrolled past.
+ */
+function ReviewCard({
+  card,
+  prose,
+}: {
+  card: Extract<Card, { type: 'review' }>;
+  /** The message's own text. Absent only if a client forgets to pass it. */
+  prose?: string;
+}) {
+  const colors = useColors();
+  const units = useUnits();
+  const [open, setOpen] = useState(false);
+
+  // Paragraphs rather than a line clamp: RN cannot clamp a stack of Texts by
+  // line, and a paragraph is the honest unit of a piece of prose anyway.
+  const paragraphs = (prose ?? '').trim().split(/\n{2,}/).filter(Boolean);
+  const rest = Math.max(0, paragraphs.length - 1);
+  const shown = open ? paragraphs : paragraphs.slice(0, 1);
+
+  const band = card.target_kcal * 0.1;
+  const byDate = new Map(card.days.map((day) => [day.local_date, day.kcal]));
+  // Walked rather than mapped, because the gaps are the point and they exist
+  // by omission: `days` only carries the days that were logged.
+  const week = Array.from({ length: 7 }, (_, index) => {
+    const date = addDays(card.week_start, index);
+    const kcal = byDate.get(date);
+    return {
+      date,
+      kcal: kcal ?? null,
+      hit: kcal !== undefined && Math.abs(kcal - card.target_kcal) <= band,
+    };
+  });
+
+  return (
+    <Shell>
+      <View style={styles.headRow}>
+        <Text style={[t.bodyBold, styles.flex, { color: colors.foreground }]}>Last week</Text>
+        <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+          {formatDate(card.week_start)} – {formatDate(card.week_end)}
+        </Text>
+      </View>
+
+      <View style={styles.weekStrip}>
+        {week.map((day) => (
+          <View
+            key={day.date}
+            style={[
+              styles.weekDay,
+              {
+                backgroundColor: day.hit
+                  ? colors.calories
+                  : day.kcal !== null
+                    ? colors.muted
+                    : 'transparent',
+                borderColor: day.kcal !== null ? 'transparent' : colors.border,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                t.footnoteBold,
+                {
+                  color: day.hit
+                    ? colors.primaryForeground
+                    : day.kcal !== null
+                      ? colors.foreground
+                      : colors.mutedForeground,
+                },
+              ]}
+            >
+              {WEEKDAY_INITIALS[new Date(`${day.date}T00:00:00Z`).getUTCDay()]}
+            </Text>
+          </View>
+        ))}
+      </View>
+      <Text style={[t.footnote, styles.caption, { color: colors.mutedForeground }]}>
+        {card.days_logged === 0
+          ? 'Nothing logged this week.'
+          : `${card.days_logged} day${card.days_logged === 1 ? '' : 's'} logged, ${card.days_on_target} within 10% of target.`}
+      </Text>
+
+      <View style={styles.reviewFigures}>
+        <Figure
+          value={card.mean_kcal === null ? '—' : `${Math.round(card.mean_kcal).toLocaleString()}`}
+          unit=" kcal"
+          label={`a day, against ${card.target_kcal.toLocaleString()}`}
+        />
+        {card.weight_change_kg !== null ? (
+          <Figure
+            value={formatWeightDelta(card.weight_change_kg, units)}
+            label="on the scale"
+          />
+        ) : card.exercise_sessions > 0 ? (
+          <Figure
+            value={card.exercise_kcal.toLocaleString()}
+            unit=" kcal"
+            label={`burned over ${card.exercise_sessions} session${card.exercise_sessions === 1 ? '' : 's'}`}
+          />
+        ) : (
+          <Figure
+            value={card.mean_protein_g === null ? '—' : `${Math.round(card.mean_protein_g)}`}
+            unit=" g"
+            label={`protein a day, against ${Math.round(card.target_protein_g)}`}
+          />
+        )}
+      </View>
+
+      {card.target_change && (
+        <View
+          style={[styles.reviewChange, { backgroundColor: colors.muted, borderColor: colors.border }]}
+        >
+          <View style={styles.reviewChangeRow}>
+            <Text style={[t.bodyBold, t.tnum, { color: colors.mutedForeground }]}>
+              {card.target_change.from_kcal.toLocaleString()}
+            </Text>
+            <Svg width={14} height={14} viewBox="0 0 24 24">
+              <Path
+                d="M5 12h14M13 6l6 6-6 6"
+                stroke={colors.mutedForeground}
+                strokeWidth={2.4}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+              />
+            </Svg>
+            <Text style={[t.bodyBold, t.tnum, { color: colors.caloriesText }]}>
+              {card.target_change.to_kcal.toLocaleString()} kcal
+            </Text>
+          </View>
+          <Text style={[t.footnote, styles.reviewChangeWhy, { color: colors.mutedForeground }]}>
+            {card.target_change.explanation}
+          </Text>
+        </View>
+      )}
+
+      {shown.length > 0 && (
+        <View style={[styles.reviewProse, { borderTopColor: colors.border }]}>
+          {shown.map((paragraph, index) => (
+            <Text
+              key={index}
+              style={[t.body, styles.reviewParagraph, { color: colors.foreground }]}
+            >
+              {paragraph}
+            </Text>
+          ))}
+        </View>
+      )}
+
+      {rest > 0 && (
+        <Pressable
+          onPress={() => {
+            haptics.selected();
+            setOpen((was) => !was);
+          }}
+          accessibilityRole="button"
+          hitSlop={8}
+          style={styles.reviewMore}
+        >
+          <Text style={[t.footnoteBold, { color: colors.caloriesText }]}>
+            {open ? 'Show less' : `Read the rest (${rest} more)`}
+          </Text>
+        </Pressable>
+      )}
+    </Shell>
+  );
+}
+
+/** A number and what it is a number of. Two of them make the review's top line. */
+function Figure({ value, unit, label }: { value: string; unit?: string; label: string }) {
+  const colors = useColors();
+  return (
+    <View style={styles.flex}>
+      <Text style={[t.figure, styles.reviewFigure, { color: colors.foreground }]}>
+        {value}
+        {unit ? (
+          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{unit}</Text>
+        ) : null}
+      </Text>
+      <Text style={[t.footnote, { color: colors.mutedForeground }]}>{label}</Text>
+    </View>
+  );
+}
+
+const WEEKDAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const;
+
+/** Calendar arithmetic on an ISO date, without dragging a timezone into it. */
+function addDays(date: string, days: number): string {
+  const at = new Date(`${date}T00:00:00Z`);
+  at.setUTCDate(at.getUTCDate() + days);
+  return at.toISOString().slice(0, 10);
+}
+
 function formatDate(isoDate: string): string {
   const [y, m, d] = isoDate.split('-').map(Number);
   return new Date(Date.UTC(y!, m! - 1, d!)).toLocaleDateString('en-GB', {
@@ -1391,6 +1616,23 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginTop: 10,
   },
+  weekStrip: { flexDirection: 'row', gap: 4, marginTop: 12 },
+  weekDay: {
+    flex: 1,
+    height: 30,
+    borderRadius: 9,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewFigures: { flexDirection: 'row', gap: 12, marginTop: 14 },
+  reviewChange: { borderWidth: 2, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, marginTop: 14 },
+  reviewChangeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  reviewChangeWhy: { marginTop: 6, lineHeight: 20 },
+  reviewFigure: { fontSize: 20, lineHeight: 26 },
+  reviewProse: { borderTopWidth: 2, marginTop: 14, paddingTop: 12, gap: 10 },
+  reviewParagraph: { lineHeight: 24 },
+  reviewMore: { marginTop: 10, alignSelf: 'flex-start' },
   nights: { gap: 6, marginTop: 10 },
   night: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
   weekday: { width: 36 },

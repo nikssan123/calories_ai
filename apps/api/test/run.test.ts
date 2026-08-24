@@ -402,6 +402,7 @@ describe('runTurn', () => {
         target_protein_g: 160,
         days_on_target: 4,
         days_protein_hit: 3,
+        days: [],
         previous_mean_kcal: null,
         previous_days_logged: 0,
         weight_start_kg: null,

@@ -1,4 +1,4 @@
-import type { AdaptiveProposal, ReviewStats, WeeklyReview } from '@ct/shared';
+import type { AdaptiveProposal, ChatAction, ChatCard, ReviewStats, WeeklyReview } from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import { addDays, type DayContext, localDateFor } from '../time.ts';
 import { dailyIntake, proposeTargets } from './adaptive.ts';
@@ -58,6 +58,11 @@ export async function buildReviewStats(
       (d) => Math.abs(d.kcal - targets.kcal) <= targets.kcal * ON_TARGET_BAND,
     ).length,
     days_protein_hit: intake.filter((d) => d.protein_g >= targets.protein_g).length,
+    days: intake.map((d) => ({
+      local_date: d.local_date,
+      kcal: Math.round(d.kcal),
+      protein_g: Math.round(d.protein_g),
+    })),
     previous_mean_kcal: mean(previousIntake.map((d) => d.kcal)),
     previous_days_logged: previousIntake.length,
     weight_start_kg: start,
@@ -105,6 +110,55 @@ export async function buildFullReviewStats(
   const week = reviewWeekFor(today);
   const adaptive = await proposeTargets(userId, ctx, today);
   return { week, stats: await buildReviewStats(userId, week, adaptive) };
+}
+
+/**
+ * The review, as the journal draws it.
+ *
+ * A review is published as a chat message like anything else the agent says,
+ * and without this it arrives as six hundred words of unbroken prose — the
+ * longest turn in the app, in the one place built for one-line ones. The card
+ * takes the numbers back out of the paragraphs and puts them on top, which is
+ * also what makes it foldable underneath: nobody has to read the prose to find
+ * out how the week went.
+ *
+ * A projection, not the stats blob. See the card's own note in `shared`.
+ */
+export function reviewCard(stats: ReviewStats): ChatCard {
+  const change = stats.adaptive;
+  return {
+    type: 'review',
+    week_start: stats.week_start,
+    week_end: stats.week_end,
+    days_logged: stats.days_logged,
+    mean_kcal: stats.mean_kcal,
+    target_kcal: stats.target_kcal,
+    days_on_target: stats.days_on_target,
+    mean_protein_g: stats.mean_protein_g,
+    target_protein_g: stats.target_protein_g,
+    weight_change_kg: stats.weight_change_kg,
+    exercise_sessions: stats.exercise_sessions,
+    exercise_kcal: stats.exercise_kcal,
+    days: stats.days.map((day) => ({ local_date: day.local_date, kcal: day.kcal })),
+    target_change:
+      change?.eligible === true
+        ? {
+            from_kcal: change.current.kcal,
+            to_kcal: change.proposed.kcal,
+            explanation: change.explanation,
+          }
+        : null,
+  };
+}
+
+/** The action the card rides in on. The summary is what a cardless client shows. */
+export function reviewAction(stats: ReviewStats): ChatAction {
+  return {
+    kind: 'review_written',
+    entry_id: null,
+    summary: `Weekly review, ${stats.week_start} to ${stats.week_end}`,
+    card: reviewCard(stats),
+  };
 }
 
 // ---- Persistence -----------------------------------------------------------

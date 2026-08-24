@@ -45,9 +45,42 @@ export type Block =
   | { kind: 'button'; label: string; url: string }
   /** Label/value rows — sign-in details, what a deletion removed. */
   | { kind: 'facts'; items: Array<{ label: string; value: string }> }
-  /** Numbers worth reading at a glance, across the width. */
-  | { kind: 'stats'; items: Array<{ label: string; value: string }> }
-  /** Someone else's words — in practice the journal's own prose. */
+  /**
+   * Numbers worth reading at a glance — two to a row, each in its own cell.
+   *
+   * Deliberately a grid rather than a strip: four figures shared across 520
+   * points give each one about a word's width, and the first thing to break is
+   * the number, which wraps under its own thousands separator. Two columns
+   * survive a phone without the media query having to stack them into four
+   * full-width rows nobody scrolls past.
+   */
+  | { kind: 'stats'; items: Array<{ label: string; value: string; hint?: string }> }
+  /**
+   * A week, as seven cells. The one picture in the whole system.
+   *
+   * `tone` is the state, not a colour, so the palette stays this module's
+   * business: `hit` is a day that landed on target, `logged` a day that was
+   * written down, `missing` one that was not.
+   */
+  | {
+      kind: 'week';
+      days: Array<{ label: string; value: string | null; tone: 'hit' | 'logged' | 'missing' }>;
+      caption?: string;
+    }
+  /** A section label — small, upper, and the only thing that breaks the page up. */
+  | { kind: 'subhead'; text: string }
+  /** One thing worth boxing off: a title and a sentence, in the accent tint. */
+  | { kind: 'callout'; title: string; text: string }
+  /** A hairline. Nothing else in a mail client separates two sections honestly. */
+  | { kind: 'rule' }
+  /**
+   * Someone else's words, set off by a rule down the side.
+   *
+   * Unused at the time of writing — the weekly review used to arrive quoted and
+   * now leads with its numbers instead — but kept because the *next* message
+   * that carries something the product did not write will want it, and this is
+   * the one place that knows how to draw a quote in seven mail engines.
+   */
   | { kind: 'quote'; text: string }
   /** Small print attached to the block above it. */
   | { kind: 'note'; text: string }
@@ -64,6 +97,13 @@ export interface EmailContent {
    */
   preheader: string;
   heading: string;
+  /**
+   * The line under the heading — a date range, a period, the thing that says
+   * *which* week or month this one is about. Sits in the heading's own block
+   * rather than arriving as a first paragraph, because it is a label on the
+   * title and reads as one.
+   */
+  subheading?: string;
   blocks: Block[];
   /** Present only on mail someone is allowed to stop receiving. */
   unsubscribeUrl?: string;
@@ -112,12 +152,27 @@ function renderHtml(content: EmailContent): string {
     .ct-accent { color: #34d9a4 !important; }
     .ct-btn    { background-color: #34d9a4 !important; }
     .ct-btn a  { color: #0d1512 !important; }
+    /* The week strip carries its text colour on the cell's children rather than
+       the cell, because the three states invert differently: a filled day keeps
+       dark text on the light accent, an empty one goes the other way. */
+    .ct-day-hit     { background-color: #34d9a4 !important; }
+    .ct-day-hit div { color: #0d1512 !important; }
+    .ct-day-logged     { background-color: #16211d !important; }
+    .ct-day-logged div { color: #f5f3ef !important; }
+    .ct-day-missing     { background-color: #232120 !important; }
+    .ct-day-missing div { color: #7d7a75 !important; }
   }
   /* Phones: let the card use the full width rather than keeping side gutters
      that cost a third of a small screen. */
   @media only screen and (max-width: 620px) {
     .ct-pad { padding-left: 24px !important; padding-right: 24px !important; }
-    .ct-stat { display: block !important; width: 100% !important; padding-bottom: 16px !important; }
+    /* The stat grid keeps its two columns — see the block's own note — but the
+       figures come down a step so a five-character number still fits one line. */
+    .ct-fig { font-size: 20px !important; }
+    /* Seven cells across a 280pt card: the number inside a day goes, the day
+       itself stays. A week you can count is worth more than seven totals you
+       have to squint at. */
+    .ct-day-value { display: none !important; }
   }
 </style>
 </head>
@@ -141,7 +196,12 @@ function renderHtml(content: EmailContent): string {
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
               <tr>
                 <td class="ct-pad" style="padding:36px 40px 40px;">
-                  <h1 class="ct-ink" style="margin:0 0 20px;font-family:${FONT};font-size:24px;line-height:1.3;font-weight:600;letter-spacing:-0.02em;color:${PALETTE.ink};">${escapeHtml(content.heading)}</h1>
+                  <h1 class="ct-ink" style="margin:0 0 ${content.subheading ? '6px' : '20px'};font-family:${FONT};font-size:24px;line-height:1.3;font-weight:600;letter-spacing:-0.02em;color:${PALETTE.ink};">${escapeHtml(content.heading)}</h1>
+${
+  content.subheading
+    ? `                  <p class="ct-muted" style="margin:0 0 24px;font-family:${FONT};font-size:14px;line-height:1.5;font-weight:600;color:${PALETTE.muted};">${escapeHtml(content.subheading)}</p>`
+    : ''
+}
 ${blocks}
                 </td>
               </tr>
@@ -207,22 +267,70 @@ ${block.items
   .join('\n')}
 </table>`;
 
-    case 'stats':
-      return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="ct-tint" style="background-color:${PALETTE.tint};border-radius:12px;margin:0 0 20px;">
-  <tr>
-    <td style="padding:18px 20px;">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
-${block.items
-  .map(
-    (item) => `        <td class="ct-stat" valign="top" style="font-family:${FONT};padding-right:12px;">
-          <div class="ct-ink" style="font-size:22px;font-weight:600;letter-spacing:-0.02em;color:${PALETTE.ink};">${escapeHtml(item.value)}</div>
-          <div class="ct-muted" style="font-size:12px;color:${PALETTE.muted};padding-top:2px;">${escapeHtml(item.label)}</div>
-        </td>`,
-  )
-  .join('\n')}
-      </tr></table>
-    </td>
+    case 'stats': {
+      // Two to a row, each figure in its own tinted cell, and a spacer column
+      // between them — `border-spacing` is not reliable enough to hang the
+      // gutter on, and margins on a `<td>` do nothing at all.
+      const rows: string[] = [];
+      for (let i = 0; i < block.items.length; i += 2) {
+        rows.push(`  <tr>
+${statCell(block.items[i]!)}
+    <td width="12" style="width:12px;font-size:0;line-height:0;">&nbsp;</td>
+${block.items[i + 1] ? statCell(block.items[i + 1]!) : '    <td width="50%">&nbsp;</td>'}
   </tr>
+  <tr><td colspan="3" height="12" style="height:12px;font-size:0;line-height:0;">&nbsp;</td></tr>`);
+      }
+      return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 12px;">
+${rows.join('\n')}
+</table>`;
+    }
+
+    case 'week': {
+      /*
+       * Seven equal cells, one per day, coloured by what happened on it.
+       *
+       * Every other way of drawing a week in an email is worse: a bar chart
+       * needs per-cell heights, which the Word engine behind Outlook rounds to
+       * whatever it feels like, and an image needs a network fetch most inboxes
+       * block by default. Seven filled boxes are just table cells, so they
+       * render identically everywhere and mean the same thing at a glance —
+       * how many days got written down, and how many of those landed.
+       */
+      const tone = {
+        hit: { bg: PALETTE.accent, fg: PALETTE.accentInk, cls: 'ct-day-hit' },
+        logged: { bg: PALETTE.tint, fg: PALETTE.ink, cls: 'ct-day-logged' },
+        missing: { bg: PALETTE.hairline, fg: PALETTE.muted, cls: 'ct-day-missing' },
+      } as const;
+      return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 8px;">
+  <tr>
+${block.days
+  .map((day, index) => {
+    const t = tone[day.tone];
+    return `    ${index === 0 ? '' : '<td width="6" style="width:6px;font-size:0;line-height:0;">&nbsp;</td>\n    '}<td width="13%" align="center" class="${t.cls}" style="background-color:${t.bg};border-radius:10px;padding:10px 2px;font-family:${FONT};">
+      <div style="font-size:11px;font-weight:700;letter-spacing:0.04em;color:${t.fg};">${escapeHtml(day.label)}</div>
+      ${day.value ? `<div class="ct-day-value" style="font-size:11px;color:${t.fg};opacity:0.75;padding-top:3px;">${escapeHtml(day.value)}</div>` : ''}
+    </td>`;
+  })
+  .join('\n')}
+  </tr>
+</table>
+${block.caption ? `<p class="ct-muted" style="margin:0 0 20px;font-family:${FONT};font-size:12px;line-height:1.6;color:${PALETTE.muted};">${escapeHtml(block.caption)}</p>` : ''}`;
+    }
+
+    case 'subhead':
+      return `<p class="ct-muted" style="margin:0 0 10px;font-family:${FONT};font-size:11px;line-height:1.4;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${PALETTE.muted};">${escapeHtml(block.text)}</p>`;
+
+    case 'callout':
+      return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="ct-tint" style="background-color:${PALETTE.tint};border-radius:12px;margin:0 0 20px;">
+  <tr><td style="padding:16px 18px;font-family:${FONT};">
+    <div class="ct-accent" style="font-size:14px;font-weight:700;color:${PALETTE.accent};">${escapeHtml(block.title)}</div>
+    <div class="ct-ink" style="font-size:14px;line-height:1.6;color:${PALETTE.ink};padding-top:4px;">${escapeHtml(block.text)}</div>
+  </td></tr>
+</table>`;
+
+    case 'rule':
+      return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:4px 0 24px;">
+  <tr><td class="ct-rule" style="border-top:1px solid ${PALETTE.hairline};font-size:0;line-height:0;">&nbsp;</td></tr>
 </table>`;
 
     case 'code':
@@ -251,6 +359,18 @@ ${block.text
   }
 }
 
+/** One figure, its label, and the aside under it, in a tinted half-width cell. */
+function statCell(item: { label: string; value: string; hint?: string }): string {
+  return `    <td width="50%" valign="top" class="ct-tint" style="width:50%;background-color:${PALETTE.tint};border-radius:12px;padding:14px 16px;font-family:${FONT};">
+      <div class="ct-ink ct-fig" style="font-size:24px;font-weight:600;letter-spacing:-0.02em;line-height:1.15;color:${PALETTE.ink};">${escapeHtml(item.value)}</div>
+      <div class="ct-muted" style="font-size:12px;line-height:1.4;color:${PALETTE.muted};padding-top:4px;">${escapeHtml(item.label)}</div>${
+        item.hint
+          ? `\n      <div class="ct-muted" style="font-size:11px;line-height:1.4;color:${PALETTE.muted};opacity:0.85;padding-top:2px;">${escapeHtml(item.hint)}</div>`
+          : ''
+      }
+    </td>`;
+}
+
 function para(inner: string, margin = 'margin:0 0 16px;'): string {
   return `<p class="ct-ink" style="${margin}font-family:${FONT};font-size:15px;line-height:1.65;color:${PALETTE.ink};">${inner}</p>`;
 }
@@ -268,7 +388,7 @@ Day So Far — the calorie journal you talk to.${unsubscribe}
 // ---- Plain text ------------------------------------------------------------
 
 function renderText(content: EmailContent): string {
-  const parts = [content.heading, ''];
+  const parts = [content.heading, ...(content.subheading ? [content.subheading] : []), ''];
 
   for (const block of content.blocks) {
     switch (block.kind) {
@@ -286,7 +406,40 @@ function renderText(content: EmailContent): string {
         break;
       case 'facts':
       case 'stats':
-        parts.push(...block.items.map((item) => `  ${item.label}: ${item.value}`), '');
+        parts.push(
+          ...block.items.map(
+            (item) =>
+              `  ${item.label}: ${item.value}${'hint' in item && item.hint ? ` (${item.hint})` : ''}`,
+          ),
+          '',
+        );
+        break;
+      case 'week':
+        // The colours are the whole content of this block in HTML, so the text
+        // alternative has to say in words what the fill says in green: which
+        // days were logged, which of them landed, and which are simply blank.
+        parts.push(
+          ...block.days.map(
+            (day) =>
+              `  ${day.label.padEnd(4)}${day.value ?? '—'}${day.tone === 'hit' ? '  (on target)' : ''}`,
+          ),
+        );
+        if (block.caption) parts.push(block.caption);
+        parts.push('');
+        break;
+      case 'subhead':
+        // Underscored rather than shouted: a heading in a plain-text mail is a
+        // line with something under it, and has been since before HTML.
+        parts.push(block.text, '-'.repeat(block.text.length), '');
+        break;
+      case 'callout':
+        // Wrapped as one string rather than title-plus-wrapped-text, or the
+        // first line comes out as long as the title made it and the rest sits
+        // at 72 under it.
+        parts.push(wrap(`${block.title}: ${block.text}`), '');
+        break;
+      case 'rule':
+        parts.push('---', '');
         break;
       case 'quote':
         // Quoted the way mail has always quoted, so it reads as someone else's

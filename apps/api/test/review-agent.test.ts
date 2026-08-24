@@ -63,6 +63,29 @@ describe('generateWeeklyReview', () => {
     expect(row!.tool_trace).toMatchObject({ kind: 'weekly_review', week_start: WEEK.start });
   });
 
+  it('publishes the card with the prose, so the journal has something to fold', async () => {
+    await addMeal(user, { date: '2026-03-10', kcal: 2100, protein_g: 155 });
+    scriptAgent({ text: 'A quiet week.' });
+    const review = await generateWeeklyReview(user.id, { today: MONDAY });
+
+    const row = await queryOne<{ actions: any }>('SELECT actions FROM chat_messages WHERE id = $1', [
+      review.message_id,
+    ]);
+    // Without this the review arrives in the journal as six hundred unbroken
+    // words — the longest turn in the app, in the place built for one-liners.
+    expect(row!.actions).toMatchObject([
+      {
+        kind: 'review_written',
+        card: {
+          type: 'review',
+          week_start: WEEK.start,
+          days_logged: 1,
+          days: [{ local_date: '2026-03-10', kcal: 2100 }],
+        },
+      },
+    ]);
+  });
+
   it('hands the model the computed numbers rather than asking it to recall them', async () => {
     await addMeal(user, { date: '2026-03-10', kcal: 2100, protein_g: 155 });
     scriptAgent({ text: 'Fine.' });
@@ -156,6 +179,7 @@ describe('fallbackReview', () => {
     target_protein_g: 160,
     days_on_target: 0,
     days_protein_hit: 0,
+    days: [],
     previous_mean_kcal: null,
     previous_days_logged: 0,
     weight_start_kg: null,

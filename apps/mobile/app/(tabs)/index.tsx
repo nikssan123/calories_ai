@@ -908,12 +908,19 @@ const Row = memo(function Row({
 
   const label = bubble.tool ? toolLabel(bubble.tool) : null;
   const waiting = bubble.pending && !bubble.content;
+  /*
+   * The weekly review is the one turn whose card *replaces* the words rather
+   * than illustrating them: the card folds the prose into itself, so drawing
+   * both would print the review twice — once unfolded above the thing built to
+   * fold it. Every other card in the app sits under its reply.
+   */
+  const review = bubble.actions?.find((action) => action.card?.type === 'review');
 
   return (
     <View style={styles.assistantRow}>
       {waiting ? (
         <Waiting label={label} />
-      ) : (
+      ) : review ? null : (
         <Markdown
           text={bubble.content}
           style={
@@ -940,6 +947,8 @@ const Row = memo(function Row({
               messageId={bubble.key}
               today={today}
               onLogged={onLogged}
+              // Only the review card reads this; see the note above.
+              text={bubble.content}
             />
           ))}
         </View>

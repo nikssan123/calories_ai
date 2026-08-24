@@ -2,7 +2,7 @@ import type { ReviewStats, WeeklyReview } from '@ct/shared';
 import { query } from '../db.ts';
 import { insertMessage } from '../services/chat.ts';
 import { applyAdaptiveTargets } from '../services/adaptive.ts';
-import { buildReviewStats, reviewWeekFor, saveReview } from '../services/reviews.ts';
+import { buildReviewStats, reviewAction, reviewWeekFor, saveReview } from '../services/reviews.ts';
 import { getUser, getUserContext } from '../services/user.ts';
 import { recordUsage } from '../services/usage.ts';
 import { localDateFor } from '../time.ts';
@@ -68,11 +68,16 @@ export async function generateWeeklyReview(
   if (outcome.error) throw new Error(outcome.error);
 
   const content = outcome.text || fallbackReview(stats);
-  const message = await insertMessage(id, 'assistant', content, null, {
-    kind: 'weekly_review',
-    week_start: week.start,
-    cost_usd: outcome.costUsd,
-  });
+  // The card rides along with the prose: the journal folds the paragraphs away
+  // behind it, so the week's numbers are the part you land on.
+  const message = await insertMessage(
+    id,
+    'assistant',
+    content,
+    null,
+    { kind: 'weekly_review', week_start: week.start, cost_usd: outcome.costUsd },
+    [reviewAction(stats)],
+  );
 
   await markReviewed(id);
   return saveReview(id, stats, content, message.id);

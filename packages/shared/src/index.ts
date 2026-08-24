@@ -1683,6 +1683,46 @@ export const ChatCard = z.discriminatedUnion('type', [
       }),
     ),
   }),
+  /**
+   * Monday's review, drawn instead of recited.
+   *
+   * The review is the longest thing this app ever says — six or seven hundred
+   * words of prose in a conversation whose every other turn is a sentence. On
+   * the Progress screen that is fine; in the journal it is a wall you scroll
+   * past, and the numbers it is *about* are buried three paragraphs in.
+   *
+   * So the card carries the arithmetic and the week's shape, and the prose sits
+   * under it folded. A projection rather than the whole `ReviewStats`, for the
+   * same reason as the plan card above: this needs eight numbers and a week of
+   * daily totals, not the thirty-odd fields the model was given to write from.
+   */
+  z.object({
+    type: z.literal('review'),
+    week_start: z.string(),
+    week_end: z.string(),
+    days_logged: z.number().int(),
+    /** Null on a week with nothing logged — an ordinary state for a new account. */
+    mean_kcal: z.number().nullable(),
+    target_kcal: z.number(),
+    /** Days within +/-10% of the calorie target. */
+    days_on_target: z.number().int(),
+    mean_protein_g: z.number().nullable(),
+    target_protein_g: z.number(),
+    /** Kilograms, as everything on the wire is. The client formats it. */
+    weight_change_kg: z.number().nullable(),
+    exercise_sessions: z.number().int(),
+    exercise_kcal: z.number(),
+    /** One entry per logged day, in date order. Missing days are simply absent. */
+    days: z.array(z.object({ local_date: z.string(), kcal: z.number() })),
+    /**
+     * The target change this review applied, when it applied one. Flattened out
+     * of `AdaptiveProposal`, which is declared further down this file and is
+     * mostly diagnostics the card has no use for.
+     */
+    target_change: z
+      .object({ from_kcal: z.number(), to_kcal: z.number(), explanation: z.string() })
+      .nullable(),
+  }),
 ]);
 export type ChatCard = z.infer<typeof ChatCard>;
 
@@ -1699,6 +1739,7 @@ export const ChatAction = z.object({
     'workout_asked',
     'plan_made',
     'plan_shown',
+    'review_written',
   ]),
   entry_id: z.string().uuid().nullable(),
   summary: z.string(),
@@ -2134,6 +2175,18 @@ export const ReviewStats = z.object({
   target_protein_g: z.number(),
   /** Days within ±10% of the calorie target. */
   days_on_target: z.number(),
+  /**
+   * Every logged day of the week, in date order, so the review can be *drawn*
+   * rather than only summarised — the email's week strip and the journal
+   * card's bars both read off this, and a mean with no shape behind it hides
+   * the two-thousand-calorie Saturday that explains the whole week.
+   *
+   * Defaulted, because reviews written before this existed are still on disk
+   * and a stats blob missing a field must not fail to parse.
+   */
+  days: z
+    .array(z.object({ local_date: z.string(), kcal: z.number(), protein_g: z.number() }))
+    .default([]),
   days_protein_hit: z.number(),
   /** Same fields for the week before, so the review can say "up from". */
   previous_mean_kcal: z.number().nullable(),
