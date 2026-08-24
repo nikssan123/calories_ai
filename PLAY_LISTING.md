@@ -324,3 +324,56 @@ resets ranking signal for a conversion gain you cannot measure at this volume.
 4. Ship `bg` app localization, then the `bg` listing (§7).
 5. Only then buy traffic — see the trial-model precondition in the ads discussion:
    at freemium's 2.1% conversion an install is worth ~$0.95 and no paid channel clears it.
+
+---
+
+## 10. Getting the build there
+
+`eas.json`'s `submit.production` now names a track:
+
+```json
+"submit": {
+  "production": {
+    "android": { "track": "internal", "releaseStatus": "completed" }
+  }
+}
+```
+
+**`internal`, not `production`.** Internal testing is available to its testers within
+minutes and skips the review queue, which is what you want a command to do
+unattended. Promotion to production is a decision, and it stays a button somebody
+presses in Play Console — the same argument `bin/deploy.sh` makes for not running
+`eas submit` after a build: an artifact costs a queue slot, a release reaches real
+installs.
+
+**There is deliberately no `serviceAccountKeyPath`.** The key authorises publishing as
+this developer account, and the rule this repo already states for the Firebase one
+applies here too — it is uploaded once to EAS rather than living in the tree. With no
+path in `eas.json`, `eas submit` uses the key stored against the project.
+
+### The key does not exist yet
+
+Checked against EAS on 2026-08-24: `com.daysofar.app` has Android credentials (the
+upload keystore) but `googleServiceAccountKeyForSubmissions` is empty. Until that is
+fixed, `eas submit` will stop and ask for one. To make it:
+
+1. Google Cloud Console → the project behind your Play account → **IAM & Admin →
+   Service Accounts → Create**. No roles are needed at the GCP end.
+2. On that account: **Keys → Add key → JSON**. This download is the secret.
+3. Google Play Console → **Users and permissions → Invite new user**, paste the
+   service account's email, and grant it *Release to testing tracks* — plus
+   *Release to production* only when you want the same command to be able to.
+4. Play Console → **API access** → confirm the account is linked to the project.
+5. Upload it once: `eas credentials -p android` → **Google Service Account** →
+   *Manage your Google Service Account Key for Play Store submissions*.
+
+Then the whole path is:
+
+```bash
+eas build --platform android --profile production
+eas submit --platform android --profile production --latest
+```
+
+**Propagation is not instant.** A newly granted service account is commonly refused by
+the Publishing API for a few minutes to a few hours after step 3. A first submit that
+fails on permissions is usually this, not a wrong key.
