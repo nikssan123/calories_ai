@@ -469,7 +469,7 @@ function FoodReceipt({
         Edit
       </button>
 
-      {card.day && <DayProgress day={card.day} kcal={card.kcal} approx={approx} today={today} />}
+      {card.day && <DayProgress day={card.day} kcal={card.kcal} today={today} />}
     </Shell>
   );
 }
@@ -493,13 +493,11 @@ function FoodReceipt({
 function DayProgress({
   day,
   kcal,
-  approx,
   today,
 }: {
   day: NonNullable<Extract<Card, { type: 'food' }>['day']>;
+  /** Only the picture's description now — the figure itself is in the header. */
   kcal: number;
-  /** Estimated rather than measured — marked here exactly as in the header. */
-  approx: boolean;
   today?: string;
 }) {
   const target = Math.max(1, Math.round(day.target_kcal));
@@ -576,38 +574,24 @@ function DayProgress({
         of it: it says where the day is going and never says where it has got
         to. The two figures are the same pair the ring on the dashboard carries,
         in the same order, so glancing between them is not translation work.
-      */}
-      <div className="mt-2 flex items-baseline justify-between gap-3">
-        <span className="text-footnote text-muted-foreground flex min-w-0 items-center gap-1.5 font-semibold">
-          <span
-            aria-hidden
-            className="size-2.5 shrink-0 rounded-full"
-            style={{ background: bandFill(true, over && before >= target) }}
-          />
-          <span className="truncate">this meal</span>
-          {/* The band's own figure, on the band's own label. The header carries
-              it too, but the header is about the plate and this line is about
-              the day — and a legend that names a colour without saying what it
-              is worth leaves the reader to measure the bar by eye. */}
-          <span className="tnum text-foreground shrink-0 font-extrabold">
-            {approx && '~'}
-            {kcal.toLocaleString()}
-          </span>
-        </span>
 
-        <span className="tnum text-footnote text-muted-foreground shrink-0 font-semibold">
-          {/* The day so far leads, at ink weight: it is the figure the bar is
-              a picture of, and the one they came to the card for. */}
-          <span className="text-foreground font-extrabold">{after.toLocaleString()}</span> of{' '}
-          {target.toLocaleString()}
-          {' · '}
-          <span className={cn('font-bold', over && 'text-foreground')}>
-            {over
-              ? `${Math.abs(remaining).toLocaleString()} over`
-              : `${remaining.toLocaleString()} left`}
-          </span>
-          {dayWord(day.local_date, today) && ` ${dayWord(day.local_date, today)}`}
+        This meal's own figure is not among them: the header states it, two
+        lines up and in the largest type on the card. A legend repeating it made
+        the same number appear twice inside one card, which reads as two
+        different facts until you have checked that it isn't.
+      */}
+      <div className="tnum text-footnote text-muted-foreground mt-2 font-semibold">
+        {/* The day so far leads, at ink weight: it is the figure the bar is
+            a picture of, and the one they came to the card for. */}
+        <span className="text-foreground font-extrabold">{after.toLocaleString()}</span> of{' '}
+        {target.toLocaleString()}
+        {' · '}
+        <span className={cn('font-bold', over && 'text-foreground')}>
+          {over
+            ? `${Math.abs(remaining).toLocaleString()} over`
+            : `${remaining.toLocaleString()} left`}
         </span>
+        {dayWord(day.local_date, today) && ` ${dayWord(day.local_date, today)}`}
       </div>
     </div>
   );

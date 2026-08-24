@@ -572,7 +572,7 @@ function FoodReceipt({
         <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Edit</Text>
       </Pressable>
 
-      {card.day && <DayProgress day={card.day} kcal={card.kcal} approx={approx} today={today} />}
+      {card.day && <DayProgress day={card.day} today={today} />}
     </Shell>
   );
 }
@@ -594,14 +594,9 @@ function FoodReceipt({
  */
 function DayProgress({
   day,
-  kcal,
-  approx,
   today,
 }: {
   day: NonNullable<Extract<Card, { type: 'food' }>['day']>;
-  kcal: number;
-  /** Estimated rather than measured — marked here exactly as in the header. */
-  approx: boolean;
   today?: string;
 }) {
   const colors = useColors();
@@ -661,42 +656,14 @@ function DayProgress({
         of it: it says where the day is going and never says where it has got
         to. The two figures are the same pair the ring on Today carries, in the
         same order, so glancing between them is not translation work.
+
+        This meal's own figure is not among them: the header states it, two
+        lines up and in the largest type on the card. A legend repeating it made
+        the same number appear twice inside one card, which reads as two
+        different facts until you have checked that it isn't.
       */}
       <View style={styles.legend}>
-        <View style={styles.legendLeft}>
-          <View
-            style={[
-              styles.legendDot,
-              { backgroundColor: bandFill(colors, true, over && before >= target) },
-            ]}
-          />
-          {/* `truncate`, which on this line is load-bearing rather than
-              defensive: the two halves together are wider than a phone at the
-              narrow end, and without it RN wraps — dropping "meal" onto a
-              second line that the baseline-aligned row then hides. */}
-          <Text
-            numberOfLines={1}
-            style={[t.footnoteSemibold, styles.legendLabel, { color: colors.mutedForeground }]}
-          >
-            this meal
-          </Text>
-          {/* The band's own figure, on the band's own label. The header carries
-              it too, but the header is about the plate and this line is about
-              the day. */}
-          <Text
-            style={[
-              t.footnote,
-              t.tnum,
-              styles.legendRight,
-              { fontFamily: font.extrabold, color: colors.foreground },
-            ]}
-          >
-            {approx && '~'}
-            {kcal.toLocaleString()}
-          </Text>
-        </View>
-
-        <Text style={[t.footnoteSemibold, t.tnum, styles.legendRight, { color: colors.mutedForeground }]}>
+        <Text style={[t.footnoteSemibold, t.tnum, { color: colors.mutedForeground }]}>
           {/* The day so far leads, at ink weight: it is the figure the bar is a
               picture of, and the one they came to the card for. */}
           <Text style={{ fontFamily: font.extrabold, color: colors.foreground }}>
@@ -1584,17 +1551,7 @@ const styles = StyleSheet.create({
   band: { height: '100%', transformOrigin: 'left center' },
   bandEnd: { borderTopRightRadius: 999, borderBottomRightRadius: 999 },
   notch: { position: 'absolute', top: 0, bottom: 0, width: 2, opacity: 0.7 },
-  legend: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginTop: 8,
-  },
-  legendLeft: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1, minWidth: 0 },
-  legendDot: { width: 10, height: 10, borderRadius: 5 },
-  legendLabel: { flexShrink: 1 },
-  legendRight: { flexShrink: 0 },
+  legend: { marginTop: 8 },
   subline: { marginTop: 6 },
   /** Aligned right so it reads as an action on the card, not a line of it. */
   editRow: { marginTop: 8, alignSelf: 'flex-end' },
