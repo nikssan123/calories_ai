@@ -32,6 +32,8 @@ apps/web/public/zxing_reader.wasm
 # project, and it is uploaded once to EAS rather than living here at all.
 google-services.json
 apps/mobile/google-services.json
+play-service-account.json
+apps/mobile/play-service-account.json
 *-firebase-adminsdk-*.json
 GoogleService-Info.plist
 apps/mobile/GoogleService-Info.plist

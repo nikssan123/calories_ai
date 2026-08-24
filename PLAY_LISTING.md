@@ -346,26 +346,37 @@ presses in Play Console — the same argument `bin/deploy.sh` makes for not runn
 `eas submit` after a build: an artifact costs a queue slot, a release reaches real
 installs.
 
-**There is deliberately no `serviceAccountKeyPath`.** The key authorises publishing as
-this developer account, and the rule this repo already states for the Firebase one
-applies here too — it is uploaded once to EAS rather than living in the tree. With no
-path in `eas.json`, `eas submit` uses the key stored against the project.
+**The key is named by path, and the file is gitignored.** Storing it on EAS instead
+would be tidier — that is the rule `.gitignore` states for the Firebase key — but the
+only way to put it there is `eas credentials -p android`, an interactive TUI, and it
+failed here. `eas submit` on 22.2.0 has no key-path flag, so the remaining route is
+`serviceAccountKeyPath` in this file. `play-service-account.json` is ignored in both
+the repo root and `apps/mobile/`, and nothing reads it at build time — only submit.
 
 ### The key does not exist yet
 
 Checked against EAS on 2026-08-24: `com.daysofar.app` has Android credentials (the
 upload keystore) but `googleServiceAccountKeyForSubmissions` is empty. Until that is
-fixed, `eas submit` will stop and ask for one. To make it:
+fixed, `eas submit` will stop and ask for one.
 
-1. Google Cloud Console → the project behind your Play account → **IAM & Admin →
-   Service Accounts → Create**. No roles are needed at the GCP end.
-2. On that account: **Keys → Add key → JSON**. This download is the secret.
-3. Google Play Console → **Users and permissions → Invite new user**, paste the
-   service account's email, and grant it *Release to testing tracks* — plus
-   *Release to production* only when you want the same command to be able to.
-4. Play Console → **API access** → confirm the account is linked to the project.
-5. Upload it once: `eas credentials -p android` → **Google Service Account** →
-   *Manage your Google Service Account Key for Play Store submissions*.
+Drive it from Play Console rather than from Google Cloud — the console links the two
+projects for you, and doing it the other way round leaves an account GCP knows about
+and Play does not:
+
+1. Play Console → **Setup → API access**. Link a Google Cloud project if it asks.
+2. **Create new service account** — the link takes you to Google Cloud Console.
+3. There: **Create service account**, give it a name, and skip the optional roles.
+   None are needed; the permission that matters is granted back in Play.
+4. On that account: **Keys → Add key → Create new key → JSON**. That download is the
+   secret.
+5. Back in Play Console → **API access** → the account now appears → **Grant access**.
+   Under *Releases* tick **Release to testing tracks**; add *Release to production*
+   only when you want one command to be able to reach real installs. Then **Invite
+   user**.
+6. Save the downloaded JSON as `apps/mobile/play-service-account.json`. That is the
+   path `eas.json` already names, and it is gitignored. (If `eas credentials -p android`
+   works for you, uploading it to EAS instead is better — then delete both the file and
+   the `serviceAccountKeyPath` line.)
 
 Then the whole path is:
 
