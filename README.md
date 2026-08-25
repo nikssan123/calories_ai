@@ -458,6 +458,46 @@ and migration 028 clears the rows already stranded. The deletion receipt is sent
 all of that, so it is the one message whose recipient is not written down — `sendEmail`
 takes `redactRecipient` and the row records that a receipt went out, not who to.
 
+### Landing in the inbox
+
+Sending mail and having it *arrive* are different problems, and the second one is mostly
+DNS. Resend hands you three records when you add a domain, and the domain will report
+itself verified once they resolve — but the record that decides whether Gmail files the
+message under Primary or under Spam is a fourth one nobody asks for.
+
+| Record | Name | Value | Who asks for it |
+|---|---|---|---|
+| TXT | `resend._domainkey` | the `p=…` key from the dashboard | Resend — DKIM signing |
+| TXT | `send` | `v=spf1 include:amazonses.com ~all` | Resend — SPF for the return path |
+| MX | `send` | `feedback-smtp.<region>.amazonses.com`, priority 10 | Resend — bounces |
+| TXT | `_dmarc` | `v=DMARC1; p=none; rua=mailto:dmarc@<domain>` | **Nobody. Add it anyway.** |
+
+DKIM and SPF prove a message is yours. DMARC is what says you care whether the proof
+passed, and a domain without one looks identical to a domain that has never thought about
+mail — which for a domain registered last week is exactly the wrong impression to give.
+`p=none` changes nothing about how anyone treats the mail and only asks for reports; it is
+worth having on the day the domain is created, and worth moving to `p=quarantine` once
+those reports show your own sends passing.
+
+The `send` subdomain is not decoration. It is the envelope sender, which is what SPF is
+actually checked against, and it shares an organizational domain with the From address —
+so DMARC's default relaxed alignment is satisfied and the root domain's own SPF record
+never needs to learn that Resend exists.
+
+**Leave click tracking off.** Resend can rewrite every link in a message to point at a
+tracking host, and doing so needs a CNAME on `www` — a name that on this domain already
+belongs to the web app, so the record cannot be given and the domain sits at
+`partially_failed` indefinitely. Were it given, every link would display one hostname and
+resolve to another, which is the oldest phishing tell there is and is read as one.
+`email/layout.ts` loads nothing from the network on purpose — no images, no fonts, no
+pixel — and this is the dashboard setting that quietly undoes that.
+
+Bounces are the other half of a reputation. Confirmation codes go to addresses nobody has
+yet proved they can read, so a handful of junk signups is a handful of bounces charged
+against the domain, and a few percent is plenty when the denominator is in the dozens.
+Both `email_deliveries` and Resend's own log show them, and they are the first place to
+look when mail that used to arrive stops arriving.
+
 ### Receiving
 
 Several of these messages end with "reply to this email", so the domain receives as well
@@ -1053,7 +1093,7 @@ Not automated: it needs secrets and an interactive Claude login, and happens onc
 ```bash
 # DNS first — A records for daysofar.com and api.daysofar.com pointing at the VPS.
 # Caddy issues the certificate over HTTP-01 on first request, which cannot work
-# until DNS resolves. Email needs its own records; see the Email section above.
+# until DNS resolves. Email needs four more of its own — see Landing in the inbox.
 
 git clone <this repo> /srv/calorytracker && cd /srv/calorytracker
 
