@@ -263,24 +263,97 @@ would move the package size meaningfully.
 
 ## What is not done
 
-- **The string pass is partial.** 113 of 137 catalogue keys are wired to call
-  sites — and every one of the five languages has all 137, because the compiler
-  will not build otherwise. Done: both tab bars, Today, History, the composer,
-  Settings, sign-in, the confirm-email screens, the ring, the macro bars. Not
-  yet: Cook/kitchen, Progress, Exercise, the workout card, the barcode scanner,
-  the food editor, and the journal's own status verbs. Those screens still render English strings
-  from source; nothing is broken, they are simply not routed through `useT` yet.
-- **The email chrome covers the weekly review only** — but covers all of it now:
-  the stat block, the greeting, the week strip's caption and its seven weekday
-  names, the button, the preheader. The transactional mail — confirm, reset,
-  password changed, new sign-in, deleted — is ~800 words still in English in
-  `templates.ts` and `layout.ts`, and is what `pluralEn()` still serves.
+*Updated 2026-08-25, after the string pass finished. What follows is what is
+still English; everything the earlier draft listed as "not yet" is done.*
+
+- **The transactional mail.** Confirm, reset, password-changed, new-sign-in and
+  deleted are ~800 words still in English in `email/templates.ts` and
+  `email/layout.ts`, and are what `pluralEn()` still serves. The weekly review
+  is translated; these are not.
 - **The landing page**, on purpose. It is ~1,000 words of the most carefully
   written copy in the repo, it is rewritten often, and localising it needs the
   `[locale]` routing this deliberately avoided plus `hreflang`, `sitemap.ts` and
   `robots.ts`, none of which exist. Ship the app in Bulgarian, see whether
   anyone arrives, and localise the front door once there is evidence it is the
   door they are trying.
+- **Privacy and Terms**, on purpose, for the reason above.
+- **The admin panel**, on purpose. One operator, who wrote it.
+- **`TIER_NAMES`** — "Free", "Plus", "Coach". These are what the stores charge
+  for, and a screen that renames the thing the receipt names is a support
+  ticket. `TIER_PITCHES` beside them *is* translated, because that is a
+  sentence about the tier rather than its name.
+
+## What the string pass actually took
+
+The catalogues were never the hard part and the compiler had been guarding the
+wrong half. `MessageKey` proves every catalogue has every key; nothing proved
+every string went through a catalogue, and by 2026-08-25 the untranslated call
+sites were most of the app — Cook, Progress, Exercise, Plan, the scanner, the
+food editor, the paywall and the journal's own status verbs.
+
+**607 keys per language on web, 747 on mobile**, five languages each: 6,770
+messages. Worth writing down are the four that were not just typing.
+
+**Plurals are `Intl.PluralRules` everywhere now, including where the noun
+travels alone.** `plural()` returns "20 messages", which is right wherever the
+count and the noun sit together. The paywall separates them — "That's your 20
+free messages" puts a word between — so `pluralWord()` was added beside it,
+returning the agreeing noun without the formatting. The old `NOUNS: Record<
+MeterName, [string, string]>` in `plan-copy.ts` was a pair of strings per meter,
+which is English's answer to plurals and nobody else's.
+
+**Three lists of English words became `Intl` calls.** `WEEKDAY_NAMES` was seven
+strings that both Workouts screens shortened with `.slice(0, 3)` — three letters
+is English's abbreviation and nobody else's, and `weekdayName(weekday, locale,
+style)` now asks `Intl` for `long`, `short` or `narrow`. `listWords` joined with
+a hardcoded "and"; `Intl.ListFormat` knows every language's conjunction,
+including the "e" Spanish switches to before a word starting in `i`. `untilWords`
+carried its vagueness in English adjectives — "in about an hour", "in a few
+weeks" — and now carries it in the *unit* instead, rounding to the coarsest one
+that still answers the question and handing it to `Intl.RelativeTimeFormat`.
+
+**The tool-status verbs lost their object, and that was the fix.** `toolLabel`
+turned `log_food` into "Logging food" by appending the rest of the tool name —
+free in English and untranslatable everywhere else, because the object is a raw
+identifier. A Bulgarian session read "Записвам food". The answer was not a
+second table of twenty nouns: the whole argument for keying on the verb was that
+a table of every tool name goes stale. The object was carrying almost nothing —
+you know what you just typed — so the label is the verb alone.
+
+**Six `.toLocaleString()` calls with no locale, and two `.toUpperCase()`.** The
+first group follows the runtime's locale, which on a server-rendered page is the
+container's; they are `formatNumber(value, locale)` now. The second is why
+`capitalise` takes a locale: `toUpperCase()` is not the same map in every
+language, and Turkish's dotless i is the standard example this app will meet.
+
+**`intlLocale()`, because this app's English is British and CLDR's is not.**
+Eleven display sites used to hardcode `en-GB`; when they became one `locale`
+parameter, `'en'` started reaching `Intl` bare — and bare `en` is American. So
+`formatDay` had been rendering "Wednesday, September 23" under a heading that
+says "Fibre" ever since, and `Intl.ListFormat` would have added a serial comma
+to "chicken, rice and peppers" the moment `listWords` stopped joining by hand.
+One function maps `Locale` → the tag `Intl` should see, `'en'` → `'en-GB'`, and
+every `Intl` call in `locale.ts` and `words.ts` goes through it. Deliberately
+*not* widening the `Locale` enum: `users.locale` is a column, and a region
+subtag only the formatter cares about is not worth a migration.
+
+## The check that was missing
+
+`pnpm messages` evaluates every message in every language and fails on anything
+that throws, returns a non-string, prints `undefined`, or silently drops an
+argument it was handed. It is the other half of the completeness check:
+
+- `pnpm -r typecheck` proves every catalogue has every key, with the right
+  signature.
+- `pnpm messages` proves every value *runs* — a message that takes two arguments
+  and interpolates one still typechecks, and so does one whose template
+  references a parameter that has since been renamed.
+
+Neither of them proves a string goes through a catalogue at all. That is the
+lint still worth writing: fail on a bare string literal in JSX under `apps/web`
+and `apps/mobile`, with an allowlist for the deliberate cases above. Until it
+exists, "is it translated" is a thing somebody has to remember — and the
+evidence that nobody does is that this section had to be rewritten.
 
 ## What it cost
 

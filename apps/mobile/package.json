@@ -7,7 +7,8 @@
     "start": "expo start",
     "ios": "expo run:ios",
     "android": "expo run:android",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "messages": "tsx scripts/catalogue-smoke.mts"
   },
   "dependencies": {
     "@ct/api-client": "workspace:*",
@@ -49,6 +50,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
-    "babel-preset-expo": "~57.0.7"
+    "babel-preset-expo": "~57.0.7",
+    "tsx": "^4.19.2"
   }
 }

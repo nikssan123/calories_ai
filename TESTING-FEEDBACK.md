@@ -15,7 +15,8 @@ finished and was not.
 **Reported:** "there are a lot and I mean a lot of places where the copy is not
 translated."
 
-**Status:** fixing.
+**Status:** fixed — web and mobile. The transactional mail is still English; see
+"What is still English" below.
 
 ### What was actually true
 
@@ -23,45 +24,53 @@ The i18n machinery was never the problem, and neither were the catalogues. Five
 languages, a compiler-enforced completeness check, and every key present in every
 language — `pnpm -r typecheck` will not build otherwise.
 
-The gap is the **call sites**. `built-plans/LANGUAGES.md` closes with a section
-called "What is not done" that says so in as many words: 113 of 137 keys wired,
+The gap was the **call sites**. `built-plans/LANGUAGES.md` closed with a section
+called "What is not done" that said so in as many words: 113 of 137 keys wired,
 and a named list of screens that "still render English strings from source".
 
-That list was written as a to-do. What a tester on a Bulgarian phone experiences
-is the tab bar in Bulgarian, Today in Bulgarian, then Cook, Progress and Exercise
-in English — which reads worse than an app that never claimed to speak your
-language at all. A half-translated app is not 50% of a translated one.
+That list was written as a to-do. What a tester on a Bulgarian phone experienced
+was the tab bar in Bulgarian, Today in Bulgarian, then Cook, Progress and
+Exercise in English — which reads worse than an app that never claimed to speak
+your language at all. A half-translated app is not 50% of a translated one.
 
-Measured on 2026-08-25, across both clients, skipping the admin panel:
+### What changed
 
-| Area | Web | Mobile |
-|---|---|---|
-| Cook, the kitchen dialogs, both recipe pages | English | English |
-| Progress, the diet-quality card, the weekly review | English | English |
-| Exercise, the workout list, the workout card | English | English |
-| Plan the week | English | English |
-| The barcode scanner | English | English |
-| The food editor | English | English |
-| The journal's own status verbs | English | English |
-| Repeat-a-meal, the day rail | English | English |
-| Reset password, unsubscribe | English | — |
-| The paywall and upgrade screens | — | English |
+**607 keys per language on web, 747 on mobile**, five languages each: 6,770
+messages, all of them rendering. Cook and both recipe pages, the kitchen
+dialogs, Progress, the diet-quality card, the weekly review, Exercise, the
+workout list and card, Plan and the shopping list, the barcode scanner, the food
+editor, repeat-a-meal, the day rail, the journal's status verbs, reset and
+unsubscribe on web, and the whole paywall on mobile.
 
-Three more that are not screens and were easy to miss:
+Four things in there were not just typing, and are written up properly in
+LANGUAGES.md under "What the string pass actually took":
 
-- **`@ct/shared/words`.** `listWords` hardcodes English's "and"; `untilWords`
-  hardcodes "in about 3 hours", "tomorrow", "in a few weeks". Both are called
-  from Cook and both recipe pages in both clients, so they leak English into
-  sentences that are otherwise fully translated.
-- **The transactional email.** Confirm, reset, password-changed, new-sign-in and
-  deleted are ~800 words still in English in `email/templates.ts` and
-  `email/layout.ts`. The weekly review is the only mail that was done.
-- **`pluralEn()`**, which exists only to serve the above.
+- **Plurals now include the case where the noun travels without its number.**
+  The paywall says "That's your 20 free messages" — a word between the count and
+  the noun — so `pluralWord()` joins `plural()` in `shared/locale.ts`. What it
+  replaced was `Record<MeterName, [string, string]>`: a singular and a plural per
+  meter, which is English's answer to plurals and nobody else's.
+- **Three lists of English words became `Intl` calls.** `WEEKDAY_NAMES` (seven
+  strings, shortened with `.slice(0, 3)` — three letters is English's
+  abbreviation and nobody else's), `listWords` (a hardcoded "and"), and
+  `untilWords` (whose vagueness lived in English adjectives). They are
+  `Intl.DateTimeFormat`, `Intl.ListFormat` and `Intl.RelativeTimeFormat` now, so
+  a sixth language costs nothing there.
+- **The journal's status verbs lost their object.** `toolLabel` turned
+  `log_food` into "Logging food" by appending the rest of the tool name, so a
+  Bulgarian session read "Записвам food". Not fixed with a second table of
+  twenty nouns — the whole argument for keying on the verb was that a table of
+  every tool name goes stale — but by dropping the object, which was carrying
+  almost nothing.
+- **Six `.toLocaleString()` calls had no locale**, so they followed the runtime's
+  rather than the reader's, and two `.toUpperCase()` calls had none either.
 
-### What is English on purpose, and stays that way
+### What is still English
 
-Worth writing down here because it will otherwise be re-reported every trial:
-
+- **The transactional mail** — confirm, reset, password-changed, new-sign-in,
+  deleted. ~800 words in `email/templates.ts` and `email/layout.ts`, still served
+  by `pluralEn()`. The weekly review is translated; these are not. This is the
+  one item from the original report that is not closed.
 - **Food names.** "кюфте" logged is "кюфте" listed. It is what they will search for.
 - **Numbers and units.** `kcal`, `g`, `kg` are the same everywhere. Only the
   thousands separator moves, via `formatNumber`.
@@ -71,20 +80,26 @@ Worth writing down here because it will otherwise be re-reported every trial:
   `hreflang` and a sitemap, none of which this app has. Testers arrive from a Play
   listing, not from the web, so it is not on the path this trial exercises.
 - **The admin panel.** One operator, who wrote it.
+- **"Free", "Plus" and "Coach".** What the stores charge for. A screen that
+  renames the thing the receipt names is a support ticket.
 
 ### The lesson worth keeping
 
-LANGUAGES.md ends with "the second language is where the habit either sticks or
+LANGUAGES.md ended with "the second language is where the habit either sticks or
 quietly rots", and then the habit rotted in the same release — not through
 carelessness, but because the completeness check only ever looked at one half of
 the problem. The compiler proves every catalogue has every key. Nothing proved
 every string goes through a catalogue.
 
-So the check to add is the other direction: a lint that fails on a bare string
-literal in JSX under `apps/web/app`, `apps/web/components`, `apps/mobile/app` and
-`apps/mobile/components`, with an allowlist for the deliberate cases above. Until
-that exists, "is it translated" is a thing somebody has to remember, and this
-section is the evidence that nobody does.
+Half of that gap is now closed by `pnpm messages`, which calls every message in
+every language and fails on anything that throws, returns a non-string, prints
+`undefined`, or silently drops an argument. A message that takes two arguments
+and interpolates one typechecks perfectly; that check catches it.
+
+The other half is still open, and it is the one that would have caught this
+report: a lint that fails on a bare string literal in JSX under `apps/web` and
+`apps/mobile`, with an allowlist for the deliberate cases above. Until it exists,
+"is it translated" is a thing somebody has to remember.
 
 ---
 

@@ -13,6 +13,7 @@
     "dev:web": "pnpm --filter @ct/web dev",
     "dev:mobile": "pnpm --filter @ct/mobile start",
     "typecheck": "pnpm -r typecheck",
+    "messages": "pnpm --filter @ct/web messages && pnpm --filter @ct/mobile messages",
     "test": "pnpm --filter @ct/api test",
     "test:coverage": "pnpm --filter @ct/api test:coverage",
     "build": "pnpm -r build",
