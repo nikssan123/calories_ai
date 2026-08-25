@@ -391,6 +391,54 @@ describe('log_exercise', () => {
   });
 });
 
+/**
+ * The card asks which kind, and the week has often already answered.
+ *
+ * `NOW` is a Tuesday where this user lives, so a routine put on weekday 2 is
+ * the one their plan says they are doing when they say they trained.
+ */
+describe('ask_workout', () => {
+  async function planTuesday() {
+    const { saveRoutine, saveSchedule } = await import('../src/services/routines.ts');
+    const swim = await saveRoutine({
+      userId: user.id,
+      name: 'Swim',
+      category: 'cardio',
+      durationMin: 45,
+    });
+    await saveSchedule(user.id, [{ weekday: 2, routine_id: swim.id }]);
+  }
+
+  it('opens on the kind their week plans for the day', async () => {
+    await planTuesday();
+    await call('ask_workout', { category: null, when: null, heard: 'gym session' });
+    expect(actions[0]!.card).toMatchObject({
+      type: 'workout_prompt',
+      suggested_category: 'cardio',
+    });
+  });
+
+  it('reads the plan for the day it happened on, not for today', async () => {
+    await planTuesday();
+    // Monday, which they have declared nothing about — so the card must still
+    // ask rather than offering them Tuesday's swim.
+    await call('ask_workout', { category: null, when: 'yesterday', heard: 'went to the gym' });
+    expect((actions[0]!.card as { suggested_category: string | null }).suggested_category).toBeNull();
+  });
+
+  it('leaves the kind to them when the week says nothing', async () => {
+    await call('ask_workout', { category: null, when: null, heard: null });
+    expect((actions[0]!.card as { suggested_category: string | null }).suggested_category).toBeNull();
+  });
+
+  /** A plan is a default, and never an argument with what they just said. */
+  it('does not overrule what the model actually heard', async () => {
+    await planTuesday();
+    await call('ask_workout', { category: 'strength', when: null, heard: 'leg day' });
+    expect(actions[0]!.card).toMatchObject({ suggested_category: 'strength' });
+  });
+});
+
 describe('log_weight', () => {
   it('records a weigh-in against the right local day', async () => {
     const { json } = await call('log_weight', { weight_kg: 84.2, when: null });

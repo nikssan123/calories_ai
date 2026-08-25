@@ -790,7 +790,6 @@ export const ROUTINE_MATCH_CERTAIN = 0.75;
 /** Enough alike to stop offering to save what is plainly already saved. */
 export const ROUTINE_MATCH_LIKELY = 0.55;
 
-/** The routine a session most resembles, or null when none is close enough. */
 /**
  * One day of the training week, and where the app's opinion about it came from.
  *
@@ -842,6 +841,34 @@ export const WEEKDAY_NAMES = [
 /** Monday-first ordering for display, since almost nobody plans a week from Sunday. */
 export const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
+/**
+ * Which routine a weekday belongs to, with what they said beating what the app
+ * worked out.
+ *
+ * The same precedence `weekSchedule` applies on the server and the week screen
+ * draws, kept in one place so that all three agree by construction. That they
+ * do is not a nicety: the card badges "today" off this, and a card naming a
+ * different workout from the schedule screen two taps away reads as a bug in
+ * whichever one the reader happens to trust less.
+ *
+ * Declared and learned can name different routines for the same day, and this
+ * is the whole of what resolves it — the decision outranks the observation, and
+ * an observation that has quietly gone stale never gets to argue. Only one
+ * answer either way: a declared day is unique by primary key, and a learned one
+ * is unique because a routine must own more than half its own sessions on that
+ * weekday to claim it at all.
+ */
+export function routineOnWeekday<
+  T extends { scheduled_weekdays: number[]; usual_weekday: number | null },
+>(routines: T[], weekday: number): T | null {
+  return (
+    routines.find((routine) => routine.scheduled_weekdays.includes(weekday)) ??
+    routines.find((routine) => routine.usual_weekday === weekday) ??
+    null
+  );
+}
+
+/** The routine a session most resembles, or null when none is close enough. */
 export function matchRoutine<T extends { exercises: { type_id: string | null }[] }>(
   sessionTypeIds: string[],
   routines: T[],

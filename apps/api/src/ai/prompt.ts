@@ -544,14 +544,25 @@ export function dayContextPrompt(
    * what a push day is, which is a whole extra round trip to answer a question
    * the context could have answered for nothing.
    *
-   * The usual weekday rides along because it is what makes the reply sound like
-   * the app knows them: it is Monday, chest day is a Monday habit, and saying
-   * so is the difference between a tracker and something that pays attention.
+   * The weekday rides along because it is what makes the reply sound like the
+   * app knows them: it is Monday, chest day is a Monday habit, and saying so is
+   * the difference between a tracker and something that pays attention.
+   *
+   * Declared before inferred, and worded differently, because they are not the
+   * same claim and the model will repeat whichever it is handed. A day they set
+   * is a plan and can be spoken of in advance — "leg day tomorrow" is only safe
+   * to say about a schedule. A day the app noticed is an observation about the
+   * past, and "usually" is the most it can honestly carry.
    */
   if (routines.length > 0) {
     const names = routines.map((routine) => {
-      const habit = routine.usual_weekday === null ? '' : ` (usually ${WEEKDAYS[routine.usual_weekday]})`;
-      return `"${routine.name}"${habit}`;
+      const days =
+        routine.scheduled_weekdays.length > 0
+          ? ` (planned for ${routine.scheduled_weekdays.map((day) => WEEKDAYS[day]).join(', ')})`
+          : routine.usual_weekday === null
+            ? ''
+            : ` (usually ${WEEKDAYS[routine.usual_weekday]})`;
+      return `"${routine.name}"${days}`;
     });
     lines.push(
       `- Their saved workouts: ${names.join(', ')}. When they say they did one, log_routine records it by name.`,

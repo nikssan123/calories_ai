@@ -6,6 +6,7 @@ import {
   localDateFor,
   localPartsFor,
   resolveWhen,
+  weekdayFor,
 } from '../src/time.ts';
 
 /**
@@ -69,6 +70,25 @@ describe('localPartsFor', () => {
 
   it('renders midnight as 00, not 24', () => {
     expect(localPartsFor(new Date('2026-03-09T22:00:00Z'), 'Europe/Sofia').time).toBe('00:00');
+  });
+});
+
+describe('weekdayFor', () => {
+  it('is an ordinary afternoon’s own weekday', () => {
+    // 2026-03-10 is a Tuesday.
+    expect(weekdayFor(new Date('2026-03-10T14:00:00Z'), SOFIA)).toBe(2);
+  });
+
+  it('names the day where they are rather than where the server is', () => {
+    const la = { timezone: 'America/Los_Angeles', dayStartHour: 4 };
+    // 04:00 UTC on Tuesday the 2nd is still 21:00 on Monday in Los Angeles.
+    expect(weekdayFor(new Date('2026-06-02T04:00:00Z'), la)).toBe(1);
+  });
+
+  it('counts a 1am session toward the day it is logged against', () => {
+    // 01:30 Sofia on Wednesday the 11th, which the 04:00 rollover puts back on
+    // Tuesday — and Tuesday is the day whose plan it should be read against.
+    expect(weekdayFor(new Date('2026-03-10T23:30:00Z'), SOFIA)).toBe(2);
   });
 });
 

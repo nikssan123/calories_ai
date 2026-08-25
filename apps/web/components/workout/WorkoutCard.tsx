@@ -24,6 +24,7 @@ import {
   matchRoutine,
   nameFromMuscles,
   namingStyleOf,
+  routineOnWeekday,
   toLoad,
 } from '@ct/shared';
 import { api } from '@/lib/api';
@@ -377,11 +378,21 @@ export function WorkoutCard({
   const filled = drafts.filter((d) => toExercise(d, units) !== null);
   const ready = minutes !== null || filled.length > 0;
   const today = new Date().getDay();
-  // Today's habit first, then whatever was done most recently. The suggestion
-  // is only ever an ordering — nothing is preselected, because logging the
-  // wrong workout is a worse outcome than one extra tap.
+  /*
+   * Today's workout first, then whatever was done most recently.
+   *
+   * Read through `routineOnWeekday` rather than straight off `usual_weekday`,
+   * which is what this did until a week somebody filled in by hand turned out
+   * to change nothing here: they could declare Monday a push day, open the card
+   * on Monday, and still be handed whatever the history had happened to notice.
+   * A declared day now wins, exactly as it does on the week screen.
+   *
+   * Still only an ordering — nothing is preselected, because logging the wrong
+   * workout is a worse outcome than one extra tap.
+   */
+  const todays = routineOnWeekday(routines, today);
   const ordered = [...routines].sort(
-    (a, b) => Number(b.usual_weekday === today) - Number(a.usual_weekday === today),
+    (a, b) => Number(b.id === todays?.id) - Number(a.id === todays?.id),
   );
   /*
    * Anything they can log, they can save.
@@ -467,7 +478,7 @@ export function WorkoutCard({
                   >
                     <span aria-hidden>{routine.emoji}</span>
                     {routine.name}
-                    {routine.usual_weekday === today && !on && (
+                    {routine.id === todays?.id && !on && (
                       <span className="text-muted-foreground">{t('workout.today')}</span>
                     )}
                   </button>

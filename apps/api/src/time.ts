@@ -11,7 +11,7 @@
  * parses English into a timestamp.
  */
 
-import { formatInTimeZone, localPartsFor, type DayContext } from '@ct/shared';
+import { formatInTimeZone, localDateFor, localPartsFor, type DayContext } from '@ct/shared';
 
 export {
   addDays,
@@ -125,6 +125,24 @@ function zoneOffsetMs(instant: Date, timeZone: string): number {
     Number(parts.second),
   );
   return asUtc - instant.getTime();
+}
+
+/**
+ * Which weekday an instant falls on, 0 = Sunday, for the person it happened to.
+ *
+ * Taken from the local *date* rather than from the calendar weekday of the
+ * instant, and the difference is the day start: a session at 01:00 on Tuesday
+ * is logged against Monday, so Monday is the day whose plan it should be read
+ * against. Going through `localDateFor` is what keeps the two answers the same.
+ *
+ * The number, not the name, because everything that stores a weekday counts
+ * from Sunday — `routine_days`, Postgres' EXTRACT(DOW), JavaScript's getDay —
+ * and a name would only have to be turned back into one of these.
+ */
+export function weekdayFor(instant: Date, ctx: DayContext): number {
+  // Parsed as UTC on purpose: the date string has already been shifted into
+  // their zone, and re-interpreting it in the server's would shift it twice.
+  return new Date(`${localDateFor(instant, ctx)}T00:00:00Z`).getUTCDay();
 }
 
 /**

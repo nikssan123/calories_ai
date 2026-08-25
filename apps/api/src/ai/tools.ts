@@ -12,6 +12,7 @@ import type {
   MealPlan,
   PantryItem,
   Progress,
+  Routine,
   UnitSystem,
 } from '@ct/shared';
 import {
@@ -26,7 +27,14 @@ import {
 } from '@ct/shared';
 import { query } from '../db.ts';
 import { unmeteredFor } from './lane.ts';
-import { addDays, type DayContext, inferMeal, localDateFor, resolveWhen } from '../time.ts';
+import {
+  addDays,
+  type DayContext,
+  inferMeal,
+  localDateFor,
+  resolveWhen,
+  weekdayFor,
+} from '../time.ts';
 import {
   createExerciseEntry,
   createFoodEntry,
@@ -612,6 +620,13 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
    * time, so a kind and a duration finish the job. The sets are the training
    * record, which is worth having and is not worth making anyone type twice —
    * the card offers their last session of that kind back instead.
+   *
+   * The one thing the card cannot ask for without slowing itself down is the
+   * kind, when the model was given no hint about it. That is where the week
+   * earns its keep: somebody who has said Monday is legs has already answered
+   * the question, and opening the card on anything else makes them answer it
+   * twice. Only the kind is taken from the plan — which routine is still theirs
+   * to tap, because logging the wrong workout is worse than one more tap.
    */
   const askWorkout = tool(
     'ask_workout',
@@ -629,14 +644,24 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         .describe('What you understood, in a few words — "gym session this morning". Shown on the card so the question does not feel blind.'),
     },
     async (args) => {
+      const performedAt = resolveWhen(args.when ?? undefined, tc.now, tc.ctx);
+      // Only when the model heard nothing about the kind, and against the day
+      // the session happened on rather than today: "went to the gym yesterday"
+      // is a question about yesterday's plan.
+      let planned: Routine | null = null;
+      if (!args.category) {
+        const { routineForWeekday } = await import('../services/routines.ts');
+        planned = await routineForWeekday(tc.userId, weekdayFor(performedAt, tc.ctx));
+      }
+
       tc.actions.push({
         kind: 'workout_asked',
         entry_id: null,
         summary: args.heard ?? 'Workout',
         card: {
           type: 'workout_prompt',
-          suggested_category: (args.category as never) ?? null,
-          performed_at: resolveWhen(args.when ?? undefined, tc.now, tc.ctx).toISOString(),
+          suggested_category: ((args.category ?? planned?.category) as never) ?? null,
+          performed_at: performedAt.toISOString(),
           heard: args.heard,
         },
       });

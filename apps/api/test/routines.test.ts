@@ -827,6 +827,26 @@ describe('the schedule', () => {
     expect(await routineForWeekday(user.id, 5)).toBeNull();
   });
 
+  /**
+   * The same precedence `weekSchedule` applies, asked the way the card asks it.
+   *
+   * Worth its own test because these are two different callers of one rule, and
+   * the failure it guards against is silent: a card badging Tuesday as Pull
+   * while the week screen two taps away says Push reads as a bug in whichever
+   * of them the reader trusts less.
+   */
+  it('hands the card the declared day over the inferred one', async () => {
+    const a = await push();
+    const b = await pull();
+    // Two Mondays of Pull, which is a habit until they say otherwise.
+    await session('2026-03-02', [{ name: 'Barbell row', sets: [{ reps: 8 }] }], b.id);
+    await session('2026-03-09', [{ name: 'Barbell row', sets: [{ reps: 8 }] }], b.id);
+    expect((await routineForWeekday(user.id, 1))?.name).toBe('Pull');
+
+    await saveSchedule(user.id, [{ weekday: 1, routine_id: a.id }]);
+    expect((await routineForWeekday(user.id, 1))?.name).toBe('Push');
+  });
+
   it('will not schedule another account’s routine', async () => {
     const other = await createUser();
     const theirs = await saveRoutine({

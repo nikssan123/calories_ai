@@ -8,7 +8,13 @@ import type {
   RoutineExercise,
   SetValues,
 } from '@ct/shared';
-import { ROUTINE_MATCH_CERTAIN, matchRoutine, nameFromMuscles, namingStyleOf } from '@ct/shared';
+import {
+  ROUTINE_MATCH_CERTAIN,
+  matchRoutine,
+  nameFromMuscles,
+  namingStyleOf,
+  routineOnWeekday,
+} from '@ct/shared';
 import { query, queryOne, transaction } from '../db.ts';
 import { findExerciseType } from './workouts.ts';
 
@@ -310,12 +316,12 @@ export async function routineForWeekday(
   weekday: number,
   category?: ExerciseCategory | null,
 ): Promise<Routine | null> {
+  // What they said first, then what they do — the shared rule, so that this and
+  // the card and the week screen cannot drift into disagreeing. The category
+  // filter still applies to both: a declared leg day is not the answer on a
+  // cardio card.
   const routines = await listRoutines(userId, { category });
-  // What they said first, then what they do. A category filter still applies to
-  // both: a declared leg day is not the answer on a cardio card.
-  const declared = routines.find((routine) => routine.scheduled_weekdays.includes(weekday));
-  if (declared) return declared;
-  return routines.find((routine) => routine.usual_weekday === weekday) ?? null;
+  return routineOnWeekday(routines, weekday);
 }
 
 // ---- Writing them -----------------------------------------------------------
