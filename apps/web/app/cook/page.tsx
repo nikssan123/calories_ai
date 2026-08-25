@@ -55,7 +55,7 @@ import { useLocale, useT } from '@/lib/i18n';
  *   Cook  ·  🧺 5 things ▾      the kitchen as a chip, opening a dialog
  *   [ What do you fancy?    ] [ Find me something ]
  *   Aiming at 900 kcal…              Anything specific?
- *   📷 from a photo · 📋 paste one · 📅 plan the week
+ *   📷 From a photo · 📋 Paste one · 📅 Plan the week
  *   (For you) (Library)
  *   the grid
  *

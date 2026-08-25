@@ -233,7 +233,7 @@ export const de: Messages = {
   'brief.minutes': (count) => `${count} Min`,
   'brief.meal': 'Mahlzeit',
   'brief.cook': 'Kochen',
-  'brief.justTonight': 'nur für heute',
+  'brief.justTonight': 'Nur für heute',
   'brief.portions': (count) => n(count, { one: 'Portion', other: 'Portionen' }),
   'brief.proteinAtLeast': 'Eiweiß mindestens',
   'brief.caloriesAtMost': 'Kalorien höchstens',
@@ -254,7 +254,7 @@ export const de: Messages = {
   'scan.noFood': 'Auf dem Foto konnte ich nichts Essbares erkennen.',
   'scan.added': (count) => `${n(count, { one: 'Sache', other: 'Sachen' })} hinzugefügt`,
   'scan.reading': 'Lese das Foto…',
-  'scan.fromPhoto': 'von einem Foto',
+  'scan.fromPhoto': 'Von einem Foto',
   'scan.scanMyFridge': 'Kühlschrank scannen',
   'scan.whatICanSee': 'Was ich sehe',
   'scan.tapWrong': 'Tipp alles an, was ich falsch habe.',
@@ -277,7 +277,7 @@ export const de: Messages = {
   'pantry.staples': (count) => `Vorräte · ${count}`,
 
   // ---- A recipe you already have ------------------------------------------
-  'import.chip': 'eins einfügen',
+  'import.chip': 'Eins einfügen',
   'import.title': 'Ein Rezept, das du schon hast',
   'import.desc': 'Ich rechne die Kalorien aus und lasse das Kochen in Ruhe.',
   'import.unreadable': 'Das konnte ich nicht als Rezept lesen.',
