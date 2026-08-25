@@ -1,5 +1,5 @@
-import type { ChatAction, ChatResponse, Profile } from '@ct/shared';
-import { unitsOf } from '@ct/shared';
+import type { ChatAction, ChatResponse, Locale, Profile } from '@ct/shared';
+import { localeOf, unitsOf } from '@ct/shared';
 import { queryOne, query as sql } from '../db.ts';
 import type { DayContext } from '../time.ts';
 import { localDateFor } from '../time.ts';
@@ -19,7 +19,7 @@ import { recordUsage } from '../services/usage.ts';
 import { withTurnLock } from '../services/turn-lock.ts';
 import { checkWellbeing } from '../services/wellbeing.ts';
 import { MAX_SESSION_MESSAGES, MAX_TURNS, TEXT_LOG_UNSUPPORTED_LANGUAGE } from './client.ts';
-import { needsCapableModel } from './language.ts';
+import { needsCapableModel, writingNeedsCapableModel } from './language.ts';
 import {
   createProvider,
   laneFor,
@@ -46,6 +46,15 @@ export interface RunTurnInput {
   profile: Profile;
   text: string;
   photo?: ({ id: string } & PhotoSource) | null;
+  /**
+   * The language the client says it is drawing the app in, for an account whose
+   * profile has none of its own.
+   *
+   * Absent from every server-initiated turn — a review, a nudge — because there
+   * is no client in the room to ask. Those are written from the stored
+   * preference or, failing that, in English.
+   */
+  spokenLocale?: Locale | null;
 }
 
 /**
@@ -86,6 +95,24 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
 
   const day = await buildDaySummary(input.userId, today);
   const { tools, toolNames } = buildNutritionServer(toolContext);
+
+  /*
+   * Which language to write this turn in, resolved once.
+   *
+   * The stored preference is an answer and wins. A null column is not English —
+   * it is nobody having been asked — and while it stays null the client has
+   * been drawing the entire app in the device's language. Answering such a turn
+   * in English puts an English reply under a Bulgarian interface, which reads
+   * worse than either language would on its own.
+   *
+   * Applied to the profile the *prompts* are built from and to nothing else.
+   * `missingProfileFields` below deliberately reads the stored profile: a guess
+   * off a device must not be able to end setup, or the one question that would
+   * have turned it into an answer never gets asked.
+   */
+  const speaking: Profile = input.profile.locale
+    ? input.profile
+    : { ...input.profile, locale: input.spokenLocale ?? null };
 
   // Setup mode is additive: the agent keeps every logging capability while it
   // collects the missing profile values.
@@ -161,7 +188,7 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
    */
   const photoGuidance = input.photo ? `${PHOTO_ESTIMATION_PROMPT}\n\n---\n\n` : '';
 
-  const promptText = `${photoGuidance}${dayContextPrompt(input.profile, day, currentWeight, notes, wellbeing, routines)}\n\n---\n\n${rollover}${input.text}`;
+  const promptText = `${photoGuidance}${dayContextPrompt(speaking, day, currentWeight, notes, wellbeing, routines)}\n\n---\n\n${rollover}${input.text}`;
 
   /*
    * Providers that keep no session of their own get the transcript replayed —
@@ -200,7 +227,7 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
      * on its own, and would otherwise reset the decision every few turns and
      * flip the model back and forth mid-conversation.
      */
-    model: kind === 'text_log' && (await escalateForLanguage(input, history))
+    model: kind === 'text_log' && (await escalateForLanguage(input, history, speaking))
       ? TEXT_LOG_UNSUPPORTED_LANGUAGE
       : undefined,
     // What is left on the dynamic side is only what is stable *within* a
@@ -385,7 +412,24 @@ const LANGUAGE_LOOKBACK = 6;
 async function escalateForLanguage(
   input: RunTurnInput,
   history: AgentMessage[],
+  speaking: Profile,
 ): Promise<boolean> {
+  /*
+   * The language being written settles it before anything is read, because the
+   * two questions come apart: an account whose app is in Bulgarian is owed a
+   * Bulgarian reply to "ok" and to a photo with no caption, neither of which
+   * the detector below has anything to work with. Cheap, too — no transcript is
+   * loaded for the account this decides.
+   *
+   * `speaking` rather than `input.profile`, though today the two can only
+   * differ on a turn that never reaches here: a null `locale` is a missing
+   * profile field, so such an account is in setup mode and `kind` is `setup`,
+   * which is on a capable model already. Written against the language actually
+   * being spoken anyway — the question this answers is "what am I about to
+   * write", and reading it off the stored column would be right by coincidence.
+   */
+  if (writingNeedsCapableModel(localeOf(speaking))) return true;
+
   const prior = history.length > 0 ? history : await loadRecent(input.userId, LANGUAGE_LOOKBACK);
   const userTexts = prior.filter((m) => m.role === 'user').map((m) => m.content);
   return needsCapableModel([input.text, ...userTexts.reverse()]);

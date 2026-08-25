@@ -4,7 +4,7 @@ import { runTurn } from '../src/ai/run.ts';
 import { listMessages } from '../src/services/chat.ts';
 import { getUser } from '../src/services/user.ts';
 import { saveReview } from '../src/services/reviews.ts';
-import { agentCalls, scriptAgent, systemPromptOf } from './helpers/agent-mock.ts';
+import { agentCalls, scriptAgent, systemPromptOf, userTurnOf } from './helpers/agent-mock.ts';
 import { MAX_SESSION_MESSAGES, MODELS } from '../src/ai/client.ts';
 import type { StreamEvent } from '../src/ai/providers/types.ts';
 import { addMeal, addWeight, createUser, setUserTargets, type TestUser } from './helpers/factories.ts';
@@ -386,6 +386,59 @@ describe('runTurn', () => {
     expect(systemPromptOf(agentCalls.at(-1)!)).toContain('current weight');
   });
 
+  /*
+   * The mismatch that made this necessary: the app draws itself in the device's
+   * language while `users.locale` is null, and the reply came back in English
+   * underneath it. The client says what it is drawing in; the stored preference
+   * still outranks it.
+   */
+  describe('the language a turn is answered in', () => {
+    async function turnAs(
+      overrides: Record<string, unknown>,
+      spokenLocale: 'en' | 'bg' | 'de' | 'es' | 'fr' | null,
+    ) {
+      const account = await createUser(overrides);
+      const profile = await getUser(account.id);
+      scriptAgent({ text: 'Добре.' });
+      await runTurn({
+        userId: account.id,
+        ctx: account.ctx,
+        profile,
+        text: 'две яйца',
+        spokenLocale,
+      });
+      return agentCalls.at(-1)!;
+    }
+
+    it('follows the app when the account has never been asked', async () => {
+      const call = await turnAs({ locale: null }, 'bg');
+      expect(userTurnOf(call)).toContain('Bulgarian');
+    });
+
+    it('follows the stored preference over what the client claims', async () => {
+      const call = await turnAs({ locale: 'de' }, 'bg');
+      expect(userTurnOf(call)).toContain('German');
+      expect(userTurnOf(call)).not.toContain('Bulgarian');
+    });
+
+    it('says nothing at all when both are English', async () => {
+      const call = await turnAs({ locale: null }, 'en');
+      expect(userTurnOf(call)).not.toContain('Language:');
+    });
+
+    /*
+     * The trap in doing this at all. A guess off a device is not an answer, and
+     * if it were allowed to fill the gap in the profile, setup would finish
+     * without ever asking — leaving the account permanently on a language
+     * nobody chose, which is the bug this was meant to fix rather than move.
+     */
+    it('leaves the question on setup’s list, guess or no guess', async () => {
+      const call = await turnAs({ locale: null, sex: null, is_setup_complete: false }, 'bg');
+      expect(systemPromptOf(call)).toContain('which language they read');
+      expect(userTurnOf(call)).toContain('Bulgarian');
+    });
+  });
+
   it('carries a recent weekly review into the journal’s context', async () => {
     const { localDateFor, addDays } = await import('../src/time.ts');
     const today = localDateFor(new Date(), user.ctx);
@@ -495,6 +548,35 @@ describe('routing a turn by its language', () => {
     await turn('ок');
 
     expect(agentCalls[1]!.options.model).toBe('claude-sonnet-5');
+  });
+
+  /*
+   * The other half of the same problem, and the one the detector cannot see:
+   * the language being *written* is not always the language in front of it.
+   * An account reading Bulgarian is owed a Bulgarian reply to "ok" — and to a
+   * photo with no caption — and Haiku writes Bulgarian with invented words in
+   * it whatever prompted the reply.
+   */
+  it('escalates for the language it must answer in, not just the one it was asked in', async () => {
+    const bulgarian = await createUser({ locale: 'bg' });
+    // Weighed, so this is a `text_log` and not `setup` — the other kinds are on
+    // capable models already and this decision never reaches them.
+    await addWeight(bulgarian, '2026-03-01', 85);
+    const profile = await getUser(bulgarian.id);
+    scriptAgent({ text: 'Добре.' });
+    await runTurn({ userId: bulgarian.id, ctx: bulgarian.ctx, profile, text: 'ok' });
+
+    expect(agentCalls[0]!.options.model).toBe('claude-sonnet-5');
+  });
+
+  it('leaves the cheap model alone for the four languages it writes well', async () => {
+    const german = await createUser({ locale: 'de' });
+    await addWeight(german, '2026-03-01', 85);
+    const profile = await getUser(german.id);
+    scriptAgent({ text: 'Notiert.' });
+    await runTurn({ userId: german.id, ctx: german.ctx, profile, text: 'two eggs and toast' });
+
+    expect(agentCalls[0]!.options.model).toBe('claude-haiku-4-5');
   });
 
   /*

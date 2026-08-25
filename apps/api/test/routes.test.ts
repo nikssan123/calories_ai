@@ -7,7 +7,7 @@ import { insertMessage } from '../src/services/chat.ts';
 import { targetsForDate } from '../src/services/targets.ts';
 import { getUser } from '../src/services/user.ts';
 import { localDateFor } from '../src/time.ts';
-import { scriptAgent } from './helpers/agent-mock.ts';
+import { agentCalls, scriptAgent, userTurnOf } from './helpers/agent-mock.ts';
 import {
   addMeal,
   addWeight,
@@ -595,6 +595,45 @@ describe('chat', () => {
       actions: [],
       day: { local_date: today },
     });
+  });
+
+  /*
+   * The wire half of the language fallback. `run.test.ts` proves the turn is
+   * written in what it is handed; this proves the client's answer survives the
+   * body schema and reaches it, which is where a field like this dies quietly.
+   */
+  it('answers in the language the client says it is drawing', async () => {
+    const bulgarian = await createUser({ locale: null, units: 'metric' });
+    const { app: freshApp, cookie: freshCookie } = await appFor(bulgarian);
+    try {
+      scriptAgent({ text: 'Добре.' });
+      await freshApp.inject({
+        method: 'POST',
+        url: '/chat',
+        headers: { cookie: freshCookie },
+        payload: { text: 'две яйца', locale: 'bg' },
+      });
+      expect(userTurnOf(agentCalls.at(-1)!)).toContain('Bulgarian');
+    } finally {
+      await freshApp.close();
+    }
+  });
+
+  /*
+   * A language is cosmetic, so it must never be able to cost somebody a meal.
+   * An app updated ahead of the API sends a locale this deploy has not heard of
+   * — the turn still runs, in English, rather than 400ing every log until the
+   * server catches up.
+   */
+  it('ignores a language it does not speak rather than refusing the turn', async () => {
+    scriptAgent({ text: 'Logged.' });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/chat',
+      ...auth({ payload: { text: 'two eggs', locale: 'sv' } }),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(userTurnOf(agentCalls.at(-1)!)).not.toContain('Language:');
   });
 
   it.each([{}, { text: '' }, { text: 'x'.repeat(4001) }])('rejects %j', async (payload) => {

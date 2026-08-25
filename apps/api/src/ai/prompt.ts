@@ -725,19 +725,20 @@ export function onboardingPrompt(
   /*
    * Two different jobs, depending on whether anyone has ever been told.
    *
-   * A null locale is in `missing` as a real question, and the client is drawing
-   * this conversation in whatever the device said — which for this account is a
-   * language this app does not speak, since a device language it *does* speak
-   * would have been stored at signup. So: ask, and mean it.
+   * A locale that is set was still a guess — a picker they may never have
+   * looked at, or the device language stored at signup. That is not worth a
+   * question and it is worth a sentence: the offer costs one clause and is the
+   * only moment the app ever mentions that it has four other languages in it.
    *
-   * A locale that is set was a guess by a picker they may never have looked at.
-   * That is not worth a question, and it is worth a sentence: the offer costs
-   * one clause and is the only moment the app ever mentions that it has four
-   * other languages in it.
+   * A null locale is in `missing` as a real question. Note that the language
+   * this very brief is being written in may not be English even so: the client
+   * sends what it is drawing itself in, and `runTurn` answers in that while the
+   * column stays null. So the question is "is this the one you want", asked in
+   * the language it is already using — not "do you speak English".
    */
   const languageState = profile.locale
     ? `They are reading in ${LOCALE_ENGLISH_NAMES[localeOf(profile)]}, so this is an offer rather than a question — one clause, and drop it the moment they show no interest.`
-    : 'Nobody has ever asked this account, and the app has fallen back to English for want of anything better. This is a real question and it is on the list below; ask it plainly.';
+    : 'Nobody has ever asked this account: the language you are writing in was guessed off their device, and until they say otherwise it stays a guess. This is a real question and it is on the list above — ask it plainly, in the language you are already writing, and call set_profile with the answer even when the answer is the language you were using.';
 
   return `# Setup mode — this account is new
 

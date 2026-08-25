@@ -1947,6 +1947,31 @@ export const ChatRequest = z.object({
    * Diagnostic only: nothing behaves differently either way.
    */
   photo_upload_failed: z.boolean().optional(),
+  /**
+   * The language the app is *drawing in* as this turn is sent.
+   *
+   * A fallback, never an override: `users.locale` wins whenever it is set, and
+   * this is only consulted for an account nobody has ever asked — where the
+   * column is null, the client has fallen back to the device's language, and
+   * the reply would otherwise arrive in English under a Bulgarian interface.
+   *
+   * That mismatch is the whole reason this field exists. The migration that
+   * added the column says null is what "lets the client fall back to the
+   * device's language for a first session"; without this, the *server* had no
+   * way to hear about that fallback and wrote the first session in English.
+   *
+   * Deliberately not stored. A device language is a guess, and the difference
+   * between a guess and an answer is what makes setup ask the question at all —
+   * see `missingProfileFields`.
+   *
+   * `.catch` rather than a bare enum, and it is load-bearing. A locale is
+   * cosmetic — LANGUAGES.md says the whole feature has to fail soft — and a
+   * strict enum here would let it reject the turn instead: an app updated ahead
+   * of the API, sending a language this deploy has not heard of, would have
+   * every meal log 400 rather than merely arrive in English. Store rollouts
+   * make that skew the normal case, not the exotic one.
+   */
+  locale: Locale.optional().catch(undefined),
 });
 export type ChatRequest = z.infer<typeof ChatRequest>;
 

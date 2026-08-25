@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { needsCapableModel } from '../src/ai/language.ts';
+import { needsCapableModel, writingNeedsCapableModel } from '../src/ai/language.ts';
 import { MODELS, TEXT_LOG_UNSUPPORTED_LANGUAGE } from '../src/ai/client.ts';
 
 /**
@@ -94,6 +94,38 @@ describe('language routing', () => {
     expect(needsCapableModel([])).toBe(false);
     expect(needsCapableModel(['', '   '])).toBe(false);
     expect(needsCapableModel(['2 x 150g', '~650'])).toBe(false);
+  });
+});
+
+/*
+ * The other direction: what the reply has to be *written* in, which is not
+ * always what the turn in front of it is written in. "ok" and a captionless
+ * photo say nothing to the detector and are still owed an answer in the
+ * language the app is drawn in.
+ */
+describe('the language being written', () => {
+  it('escalates Bulgarian, the one shipped language Haiku writes badly', () => {
+    expect(writingNeedsCapableModel('bg')).toBe(true);
+  });
+
+  it('leaves the other four on the cheap model', () => {
+    for (const locale of ['en', 'de', 'es', 'fr'] as const) {
+      expect(writingNeedsCapableModel(locale)).toBe(false);
+    }
+  });
+
+  /*
+   * The two lists have to agree, or a language would escalate when somebody
+   * writes it and not when we write it — the same reply, two models, decided by
+   * who happened to type last.
+   */
+  it('agrees with what the detector says about the same language', () => {
+    expect(needsCapableModel(['две яйца и филия хляб с масло'])).toBe(
+      writingNeedsCapableModel('bg'),
+    );
+    expect(needsCapableModel(['zwei Eier und eine Scheibe Brot mit Butter'])).toBe(
+      writingNeedsCapableModel('de'),
+    );
   });
 });
 

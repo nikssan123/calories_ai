@@ -267,7 +267,20 @@ export async function registerRoutes(app: FastifyInstance) {
      * not exist, and `/entitlements` would go on answering zero.
      */
     return {
-      input: { userId, ctx, profile, text: parsed.data.text, photo },
+      input: {
+        userId,
+        ctx,
+        profile,
+        text: parsed.data.text,
+        photo,
+        /*
+         * What the app is drawing itself in, for this turn to be answered in
+         * when the profile has no preference of its own. Carried as the guess
+         * it is — see `ChatRequest.locale` for why it is never stored, and
+         * `runTurn` for where the stored answer takes precedence over it.
+         */
+        spokenLocale: parsed.data.locale ?? null,
+      },
       allowance: allowance.unlimited ? allowance : { ...allowance, used: allowance.used + 1 },
     };
   }

@@ -1,4 +1,5 @@
 import { franc } from 'franc';
+import type { Locale } from '@ct/shared';
 
 /**
  * Which model a journal turn needs, decided by the language it is written in.
@@ -126,6 +127,36 @@ export function needsCapableModel(samples: string[]): boolean {
   // English, or close enough to it that Haiku is safe. Anything else is a
   // language we could not name, and naming it is the whole basis for the list.
   return /[^\x00-\x7F]/.test(sample);
+}
+
+/**
+ * The same question asked of the language we are about to *write in*, rather
+ * than the one in front of us.
+ *
+ * `needsCapableModel` reads what the person typed, which is the right signal
+ * right up until the two come apart — and they come apart constantly. Somebody
+ * whose app is in Bulgarian sends "ok", or a photo with no caption at all, and
+ * the detector correctly reports nothing worth escalating for; the reply is
+ * still due in Bulgarian, and Haiku still writes it with invented words in it.
+ * The measurement at the top of this file is about the writing, so the language
+ * being written is a first-class input to the decision.
+ *
+ * Only the five this app ships in, mapped to the codes the allowlist is keyed
+ * by. Of them exactly one — Bulgarian — is off the list, so in practice this
+ * says: an account reading Bulgarian is answered by the capable model whatever
+ * it types. That costs about two and a half cents a turn and buys sentences
+ * made of real words, which is the trade this whole file already makes.
+ */
+const FRANC_CODES: Record<Locale, string> = {
+  en: 'eng',
+  bg: 'bul',
+  de: 'deu',
+  es: 'spa',
+  fr: 'fra',
+};
+
+export function writingNeedsCapableModel(locale: Locale): boolean {
+  return !HAIKU_LANGUAGES.has(FRANC_CODES[locale]);
 }
 
 const CYRILLIC = /\p{Script=Cyrillic}/u;
