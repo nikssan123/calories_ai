@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { LOCALES } from '@ct/shared';
 import { query } from '../src/db.ts';
 import { runTurn } from '../src/ai/run.ts';
 import { isKickoff, openingMessage } from '../src/ai/greeting.ts';
@@ -93,6 +94,16 @@ describe('the opening turn', () => {
     // The clause names the other four and not the one it is written in.
     expect(response.message.content).toContain('Deutsch');
     expect(response.message.content).not.toContain('Български,');
+  });
+
+  it('stays inside the word budget the brief sets for it', () => {
+    // "About forty words and never more than sixty" — `onboardingPrompt`. This
+    // is somebody's first screen. Counted on whitespace, so the em dashes and
+    // the four language names are counted as words too, which is why the guard
+    // sits at 55 rather than at 60.
+    for (const locale of LOCALES) {
+      expect(openingMessage(locale).split(/\s+/).length).toBeLessThanOrEqual(55);
+    }
   });
 
   it('names the languages it is not writing in', () => {

@@ -83,15 +83,15 @@ export function isKickoff(text: string): boolean {
  */
 const GREETINGS: Record<Locale, (others: string) => string> = {
   en: (others) =>
-    `Hi — I'm your food journal. Tell me what you ate and I'll track it; I can also help with recipes, what's in your kitchen and your training. I write in ${others} too. To start: how tall are you, and roughly what do you weigh? Kilos or pounds — whichever you think in.`,
+    `Hi — I'm your food journal. Tell me what you ate and I'll track it, and I can help with recipes and what's in your kitchen. Also in ${others}. How tall are you, and roughly what do you weigh — kilos or pounds?`,
   bg: (others) =>
-    `Здравей — аз съм твоят хранителен дневник. Кажи ми какво си ял и ще го запиша; мога да помогна и с рецепти, с това, което имаш в кухнята, и с тренировките. Пиша и на ${others}. За начало: колко си висок и колко тежиш горе-долу? В килограми или в паунди — както ти е удобно.`,
+    `Здравей — аз съм твоят хранителен дневник. Кажи ми какво си ял и ще го запиша; помагам и с рецепти и с това, което имаш в кухнята. Също на ${others}. Колко си висок и колко тежиш горе-долу — в килограми или паунди?`,
   de: (others) =>
-    `Hallo — ich bin dein Ernährungstagebuch. Sag mir, was du gegessen hast, und ich trage es ein; ich helfe auch bei Rezepten, bei dem, was in deiner Küche steht, und beim Training. Ich schreibe auch auf ${others}. Zum Anfang: Wie groß bist du, und was wiegst du ungefähr? In Kilo oder in Pfund — wie du magst.`,
+    `Hallo — ich bin dein Ernährungstagebuch. Sag mir, was du gegessen hast, und ich trage es ein; ich helfe auch bei Rezepten und deiner Küche. Auch auf ${others}. Wie groß bist du, und was wiegst du ungefähr — in Kilo oder Pfund?`,
   es: (others) =>
-    `Hola — soy tu diario de comidas. Dime qué has comido y lo apunto; también puedo ayudarte con recetas, con lo que tienes en la cocina y con tu entrenamiento. También escribo en ${others}. Para empezar: ¿cuánto mides y cuánto pesas más o menos? En kilos o en libras — como lo pienses tú.`,
+    `Hola — soy tu diario de comidas. Dime qué has comido y lo apunto; también ayudo con recetas y con lo que tienes en la cocina. También en ${others}. ¿Cuánto mides y cuánto pesas más o menos — en kilos o en libras?`,
   fr: (others) =>
-    `Salut — je suis ton journal alimentaire. Dis-moi ce que tu as mangé et je le note ; je peux aussi t'aider avec les recettes, ce qu'il y a dans ta cuisine et ton entraînement. J'écris aussi en ${others}. Pour commencer : combien mesures-tu, et combien pèses-tu à peu près ? En kilos ou en livres — comme tu préfères.`,
+    `Salut — je suis ton journal alimentaire. Dis-moi ce que tu as mangé et je le note ; j'aide aussi avec les recettes et ta cuisine. Aussi en ${others}. Combien mesures-tu, et combien pèses-tu à peu près — en kilos ou en livres ?`,
 };
 
 export function openingMessage(locale: Locale): string {
