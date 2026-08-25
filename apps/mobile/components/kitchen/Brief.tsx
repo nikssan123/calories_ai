@@ -2,6 +2,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import Svg, { Path } from 'react-native-svg';
 import type { Meal, RecipeBrief } from '@ct/shared';
 import { NumberField } from '@/components/Field';
+import { useT, type StringKey } from '@/lib/i18n';
 import { font, type as t, useColors } from '@/theme';
 
 /**
@@ -19,6 +20,14 @@ import { font, type as t, useColors } from '@/theme';
 
 const MINUTES = [15, 30, 60] as const;
 const MEALS: Meal[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+
+/** The meal chips say what the rest of the app says. See the web twin. */
+const MEAL_KEYS: Record<Meal, StringKey> = {
+  breakfast: 'meal.breakfast',
+  lunch: 'meal.lunch',
+  dinner: 'meal.dinner',
+  snack: 'meal.snack',
+};
 
 /**
  * How many fields are actually constraining the answer.
@@ -48,6 +57,7 @@ export function briefCount(value: RecipeBrief): number {
  */
 export function BriefToggle({ value, onPress }: { value: RecipeBrief; onPress: () => void }) {
   const colors = useColors();
+  const tr = useT();
   const active = briefCount(value);
 
   return (
@@ -68,7 +78,9 @@ export function BriefToggle({ value, onPress }: { value: RecipeBrief; onPress: (
           fill="none"
         />
       </Svg>
-      <Text style={[t.footnote, { color: colors.mutedForeground }]}>Anything specific?</Text>
+      <Text style={[t.footnote, { color: colors.mutedForeground }]}>
+        {tr('cook.anythingSpecific')}
+      </Text>
       {active > 0 && (
         <View style={[styles.badge, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
           <Text style={[styles.badgeText, { color: colors.secondaryForeground }]}>{active}</Text>
@@ -86,6 +98,7 @@ export function Brief({
   onChange: (next: RecipeBrief) => void;
 }) {
   const colors = useColors();
+  const tr = useT();
   const set = (patch: Partial<RecipeBrief>) => onChange({ ...value, ...patch });
 
   return (
@@ -98,13 +111,13 @@ export function Brief({
       */}
       <View>
         <Text style={[t.footnote, styles.label, { color: colors.mutedForeground }]}>
-          Anything else?
+          {tr('brief.anythingElse')}
         </Text>
         <TextInput
           value={value.wants ?? ''}
           onChangeText={(next) => set({ wants: next || undefined })}
           maxLength={300}
-          placeholder={'"one-pan", "use up the spinach", "no coriander"'}
+          placeholder={tr('brief.wantsPlaceholder')}
           placeholderTextColor={colors.mutedForeground}
           style={[
             t.body,
@@ -118,24 +131,24 @@ export function Brief({
         />
       </View>
 
-      <Row label="Time">
+      <Row label={tr('brief.time')}>
         {MINUTES.map((m) => (
           <Chip
             key={m}
             on={value.minutes === m}
             onPress={() => set({ minutes: value.minutes === m ? null : m })}
-            label={`${m} min`}
+            label={tr('brief.minutes')(m)}
           />
         ))}
       </Row>
 
-      <Row label="Meal">
+      <Row label={tr('brief.meal')}>
         {MEALS.map((m) => (
           <Chip
             key={m}
             on={value.meal === m}
             onPress={() => set({ meal: value.meal === m ? null : m })}
-            label={m}
+            label={tr(MEAL_KEYS[m])}
           />
         ))}
       </Row>
@@ -143,13 +156,13 @@ export function Brief({
       {/* More than one portion is batch prep: the quantities scale and the
           macros stay per portion, so cooking four and eating one logs exactly
           what it logged before. */}
-      <Row label="Cook">
+      <Row label={tr('brief.cook')}>
         {[1, 2, 4].map((p) => (
           <Chip
             key={p}
             on={(value.portions ?? 1) === p}
             onPress={() => set({ portions: p === 1 ? null : p })}
-            label={p === 1 ? 'just tonight' : `${p} portions`}
+            label={p === 1 ? tr('brief.justTonight') : tr('brief.portions')(p)}
           />
         ))}
       </Row>
@@ -157,7 +170,7 @@ export function Brief({
       <View style={styles.numbers}>
         <View style={styles.number}>
           <Text style={[t.footnote, styles.label, { color: colors.mutedForeground }]}>
-            Protein at least
+            {tr('brief.proteinAtLeast')}
           </Text>
           <NumberField
             value={value.protein_min ?? null}
@@ -168,7 +181,7 @@ export function Brief({
         </View>
         <View style={styles.number}>
           <Text style={[t.footnote, styles.label, { color: colors.mutedForeground }]}>
-            Calories at most
+            {tr('brief.caloriesAtMost')}
           </Text>
           <NumberField
             value={value.kcal_max ?? null}

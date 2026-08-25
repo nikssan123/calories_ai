@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { font, type as t, useColors } from '@/theme';
+import { useT } from '@/lib/i18n';
 
 /**
  * How much of it you actually ate.
@@ -32,13 +33,14 @@ export function Servings({
   style?: StyleProp<ViewStyle>;
 }) {
   const colors = useColors();
+  const tr = useT();
   const step = (delta: number) =>
     onChange(clamp(Math.round((value + delta) / SERVING_STEP) * SERVING_STEP));
 
   return (
     <View style={[styles.row, style]}>
       <View style={styles.label}>
-        <Text style={[t.body, { color: colors.foreground }]}>How much did you have?</Text>
+        <Text style={[t.body, { color: colors.foreground }]}>{tr('recipe.howMuch')}</Text>
         <Text numberOfLines={1} style={[t.footnote, { color: colors.mutedForeground }]}>
           {formatServings(value)} × {unit}
         </Text>
@@ -49,7 +51,7 @@ export function Servings({
           sign="minus"
           onPress={() => step(-SERVING_STEP)}
           disabled={value <= SERVING_STEP}
-          label="Less"
+          label={tr('recipe.less')}
         />
         <Text
           accessibilityLabel={`${formatServings(value)} servings`}
@@ -61,7 +63,7 @@ export function Servings({
           sign="plus"
           onPress={() => step(SERVING_STEP)}
           disabled={value >= MAX_SERVINGS}
-          label="More"
+          label={tr('recipe.more')}
         />
       </View>
     </View>

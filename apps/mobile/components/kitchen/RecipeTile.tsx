@@ -1,6 +1,7 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Polyline } from 'react-native-svg';
 import { listWords } from '@ct/shared/words';
+import { useLocale, useT } from '@/lib/i18n';
 import { Chunk } from '@/components/Chunk';
 import { font, type as t, useColors } from '@/theme';
 
@@ -61,6 +62,8 @@ export function RecipeTile({
   onToggleSave: () => void;
 }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
 
   return (
     <Chunk
@@ -120,20 +123,20 @@ export function RecipeTile({
                   />
                 </Svg>
                 <Text style={[t.footnoteSemibold, { color: colors.caloriesText }]}>
-                  Fits what&rsquo;s left of today
+                  {tr('recipe.fitsToday')}
                 </Text>
               </View>
             )}
 
             {have && have.length > 0 && (
               <Text numberOfLines={1} style={[t.footnote, { color: colors.caloriesText }]}>
-                Uses your {listWords(have)}
+                {tr('recipe.usesYour')(listWords(have, locale))}
               </Text>
             )}
 
             {needs && needs.length > 0 && (
               <Text numberOfLines={1} style={[t.footnote, { color: colors.fatText }]}>
-                You&rsquo;d need {listWords(needs)}
+                {tr('recipe.youdNeed')(listWords(needs, locale))}
               </Text>
             )}
 
@@ -141,7 +144,7 @@ export function RecipeTile({
               {typeof minutes === 'number' && (
                 <View style={styles.fact}>
                   <Clock color={colors.mutedForeground} />
-                  <Text style={[t.footnote, { color: colors.mutedForeground }]}>{minutes} min</Text>
+                  <Text style={[t.footnote, { color: colors.mutedForeground }]}>{tr('brief.minutes')(minutes)}</Text>
                 </View>
               )}
               <View style={styles.fact}>
@@ -156,7 +159,7 @@ export function RecipeTile({
                   />
                 </Svg>
                 <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-                  {steps} {steps === 1 ? 'step' : 'steps'}
+                  {tr('recipe.steps')(steps)}
                 </Text>
               </View>
             </View>

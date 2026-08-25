@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { LibraryRecipe } from '@ct/shared';
+import { formatNumber, type LibraryRecipe } from '@ct/shared';
 import { listWords } from '@ct/shared/words';
 import { PressableChunk } from '@/components/Chunk';
 import { RecipeReader } from '@/components/kitchen/RecipeReader';
@@ -13,6 +13,7 @@ import { api } from '@/lib/api';
 import { recipeImageUrl } from '@/lib/links';
 import { font, type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
+import { useLocale, useT } from '@/lib/i18n';
 
 /**
  * A recipe off the shelf.
@@ -29,6 +30,8 @@ import { haptics } from '@/lib/haptics';
  */
 export default function LibraryRecipeScreen() {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const toast = useToast();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -64,7 +67,9 @@ export default function LibraryRecipeScreen() {
       const entry = await api.cookLibraryRecipe(recipe.slug, { portions: servings });
       haptics.logged();
       // The screen leaves with the press, so the receipt has to outlive it.
-      toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
+      toast.success(
+        tr('recipe.logged')(entry.description, formatNumber(Math.round(entry.kcal), locale)),
+      );
       router.back();
     } catch (e) {
       setError((e as Error).message);
@@ -78,7 +83,7 @@ export default function LibraryRecipeScreen() {
     try {
       const { recipes } = await api.adaptLibraryRecipe(recipe.slug);
       const [adapted] = recipes;
-      if (!adapted) throw new Error('Nothing came back from that.');
+      if (!adapted) throw new Error(tr('recipe.nothingCameBack'));
       // Straight to the rework, replacing this screen: going "back" from the
       // adaptation should reach Cook, not the original it was made from.
       router.replace(`/recipe/${adapted.id}`);
@@ -103,7 +108,7 @@ export default function LibraryRecipeScreen() {
     return (
       <View style={[styles.centre, { paddingTop: insets.top + 64 }]}>
         <Text style={[t.body, { color: colors.foreground }]}>
-          That recipe isn&rsquo;t in the library.
+          {tr('recipe.notInLibrary')}
         </Text>
       </View>
     );
@@ -119,12 +124,12 @@ export default function LibraryRecipeScreen() {
     );
   }
 
-  const unit = recipe.serving_size ?? 'portion';
+  const unit = recipe.serving_size ?? tr('recipe.portion');
 
   return (
     <RecipeReader
-      backLabel="Cook"
-      eyebrow="From the library"
+      backLabel={tr('cook.title')}
+      eyebrow={tr('recipe.fromLibrary')}
       title={recipe.title}
       summary={recipe.summary}
       photo={recipeImageUrl(recipe.image_path)}
@@ -132,17 +137,22 @@ export default function LibraryRecipeScreen() {
       protein_g={scale(recipe.protein_g, servings)}
       carbs_g={scale(recipe.carbs_g, servings)}
       fat_g={scale(recipe.fat_g, servings)}
-      servingLabel={servings === 1 ? `per ${unit}` : `for ${formatServings(servings)} × ${unit}`}
+      servingLabel={
+        servings === 1
+          ? tr('cook.per')(unit)
+          : tr('recipe.forServings')(formatServings(servings), unit)
+      }
       portions={recipe.portions}
       ingredients={recipe.ingredients.map((i) => ({ text: i.text, note: i.note }))}
-      ingredientsNote="Measured for the finished dish, as published — so there are no per-ingredient numbers to show."
+      ingredientsNote={tr('recipe.ingredientsNote')}
       steps={recipe.steps}
       saved={saved}
       onToggleSave={() => void toggleSaved()}
       footnote={
         <>
-          {recipe.source} · public domain
-          {recipe.have.length > 0 && ` · uses your ${listWords(recipe.have)}`}
+          {recipe.source} · {tr('recipe.publicDomain')}
+          {recipe.have.length > 0 &&
+            ` · ${tr('recipe.usesYour')(listWords(recipe.have, locale)).toLocaleLowerCase(locale)}`}
           {error && ` — ${error}`}
         </>
       }
@@ -163,7 +173,7 @@ export default function LibraryRecipeScreen() {
             >
               {adapting && <ActivityIndicator size="small" color={colors.secondaryForeground} />}
               <Text style={[styles.buttonLabel, { color: colors.secondaryForeground }]}>
-                {adapting ? 'Reworking…' : 'Make it fit me'}
+                {adapting ? tr('recipe.reworking') : tr('recipe.makeItFit')}
               </Text>
             </PressableChunk>
 
@@ -177,7 +187,11 @@ export default function LibraryRecipeScreen() {
               contentStyle={[styles.button, { backgroundColor: colors.primary }]}
             >
               <Text style={[styles.buttonLabel, { color: colors.primaryForeground }]}>
-                {cooking ? 'Logging…' : `I ate this · ${Math.round(scale(recipe.kcal, servings))}`}
+                {cooking
+                  ? tr('recipe.logging')
+                  : tr('recipe.iAteThisPlain')(
+                      formatNumber(Math.round(scale(recipe.kcal, servings)), locale),
+                    )}
               </Text>
             </PressableChunk>
           </View>

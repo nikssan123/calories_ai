@@ -9,6 +9,7 @@ import { useEntitlements } from '@/lib/entitlements';
 import { spentLine, TIER_NAMES, tierFor } from '@/lib/plan-copy';
 import { duration, ease, type as t, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useT, type StringKey } from '@/lib/i18n';
 
 /**
  * Fiber, sodium, saturated fat and sugar, under the macros.
@@ -26,11 +27,11 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
  * plain foreground when crossed. Never red: going over is still not an alarm.
  */
 const ROWS = [
-  { key: 'fiber_g', label: 'Fiber', emoji: '🌱', unit: 'g' },
-  { key: 'sodium_mg', label: 'Sodium', emoji: '🧂', unit: 'mg' },
-  { key: 'sat_fat_g', label: 'Sat fat', emoji: '🧈', unit: 'g' },
-  { key: 'sugar_g', label: 'Sugar', emoji: '🍬', unit: 'g' },
-] as const;
+  { key: 'fiber_g', label: 'macro.fiber', emoji: '🌱', unit: 'g' },
+  { key: 'sodium_mg', label: 'nutrient.sodium', emoji: '🧂', unit: 'mg' },
+  { key: 'sat_fat_g', label: 'nutrient.satFat', emoji: '🧈', unit: 'g' },
+  { key: 'sugar_g', label: 'nutrient.sugar', emoji: '🍬', unit: 'g' },
+] as const satisfies readonly { key: string; label: StringKey; emoji: string; unit: string }[];
 
 export function DietQuality({
   quality,
@@ -49,6 +50,7 @@ export function DietQuality({
   style?: StyleProp<ViewStyle>;
 }) {
   const colors = useColors();
+  const tr = useT();
 
   /*
    * Nothing estimated used to mean nothing drawn, and that was wrong for the
@@ -74,10 +76,10 @@ export function DietQuality({
   return (
     <View style={style}>
       <View style={styles.header}>
-        <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>🥦&nbsp;&nbsp;Diet quality</Text>
+        <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>{tr('quality.title')}</Text>
         {(partial || !measured) && (
           <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-            {measured ? 'partly measured' : 'not estimated'}
+            {measured ? tr('quality.partlyMeasured') : tr('quality.notEstimated')}
           </Text>
         )}
       </View>
@@ -131,6 +133,7 @@ export function DietQuality({
  */
 export function QualityBlank({ style }: { style?: StyleProp<ViewStyle> }) {
   const colors = useColors();
+  const tr = useT();
   const router = useRouter();
   const { plan, tiers, allowances } = useEntitlements();
 
@@ -165,14 +168,17 @@ export function QualityBlank({ style }: { style?: StyleProp<ViewStyle> }) {
    */
   const tail =
     next && chat && carried?.allowed
-      ? `${spentLine(chat)} — ${TIER_NAMES[next]} includes ${carried.allowed} a month.`
-      : 'Tell the journal what you ate and they fill themselves in.';
+      ? tr('quality.spentTail')(
+          spentLine(chat, tr),
+          TIER_NAMES[next],
+          String(carried.allowed),
+        )
+      : tr('quality.fillThemselvesIn');
 
   return (
     <View style={[styles.blankBody, style]}>
       <Text style={[t.footnote, styles.blankLine, { color: colors.mutedForeground }]}>
-        These four are the model’s estimate, so only meals the journal logs carry them — typed,
-        repeated and scanned ones leave them blank. {tail}
+        {tr('quality.estimateNote')(tail)}
       </Text>
 
       {next && (
@@ -213,6 +219,7 @@ function QualityTrack({
   blank?: boolean;
 }) {
   const colors = useColors();
+  const tr = useT();
   const floor = target.direction === 'floor';
   const pct = value === null ? 0 : Math.min(100, (value / target.value) * 100);
 
@@ -247,7 +254,7 @@ function QualityTrack({
           numberOfLines={1}
           style={[t.footnoteSemibold, styles.label, { color: colors.mutedForeground }]}
         >
-          {row.label}
+          {tr(row.label)}
         </Text>
       </View>
 
@@ -262,7 +269,9 @@ function QualityTrack({
               </Text>
             </>
           ) : (
-            <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>not estimated</Text>
+            <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+              {tr('quality.notEstimated')}
+            </Text>
           )
         ) : (
           <>

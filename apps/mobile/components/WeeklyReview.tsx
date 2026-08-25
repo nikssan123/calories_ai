@@ -9,6 +9,7 @@ import { InsetGroup } from '@/components/InsetGroup';
 import { api, planLimitOf } from '@/lib/api';
 import { useEntitlements } from '@/lib/entitlements';
 import { TIER_NAMES } from '@/lib/plan-copy';
+import { useT } from '@/lib/i18n';
 import { font, type as t, useColors } from '@/theme';
 import { useRefreshOnReturn } from '@/hooks/useRefreshOnReturn';
 import { useLocale } from '@/lib/i18n';
@@ -24,6 +25,7 @@ import { useLocale } from '@/lib/i18n';
 export function WeeklyReview({ onError }: { onError: (message: string) => void }) {
   const locale = useLocale();
   const colors = useColors();
+  const tr = useT();
   const router = useRouter();
   const { plan, tiers } = useEntitlements();
   /*
@@ -92,7 +94,7 @@ export function WeeklyReview({ onError }: { onError: (message: string) => void }
   const change = review?.stats.adaptive ?? adaptive;
 
   return (
-    <InsetGroup title={review ? '📅  Last week' : '📅  Weekly review'}>
+    <InsetGroup title={review ? tr('review.lastWeek') : tr('review.title')}>
       {review ? (
         <View style={styles.body}>
           <Text style={[t.footnoteBold, { color: colors.mutedForeground }]}>
@@ -149,8 +151,8 @@ export function WeeklyReview({ onError }: { onError: (message: string) => void }
               {locked
                 ? `Part of ${upsell ? TIER_NAMES[upsell.plan] : 'Plus'}`
                 : writing
-                  ? 'Writing…'
-                  : 'Write one now'}
+                  ? tr('review.writing')
+                  : tr('review.writeOne')}
             </Text>
           </PressableChunk>
         </View>
@@ -184,6 +186,7 @@ function TargetChange({
   tense: 'past' | 'future';
 }) {
   const colors = useColors();
+  const tr = useT();
   return (
     <View style={[styles.change, { backgroundColor: colors.muted, borderColor: colors.border }]}>
       <View style={styles.changeRow}>

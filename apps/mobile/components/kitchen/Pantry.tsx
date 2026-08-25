@@ -9,6 +9,7 @@ import { type as t, useColors, type Palette } from '@/theme';
 import { removeAction, SwipeRow } from '@/components/SwipeRow';
 import { Glyph } from '@/components/Glyph';
 import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
+import { useT } from '@/lib/i18n';
 
 /**
  * What is in the kitchen.
@@ -80,6 +81,7 @@ export function Pantry({
   onError: (error: unknown) => void;
 }) {
   const colors = useColors();
+  const tr = useT();
   const undoably = useUndoableRemoval();
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
@@ -133,7 +135,7 @@ export function Pantry({
   function remove(item: PantryItem) {
     setHidden((prev) => [...prev, item.id]);
 
-    undoably(`Removed ${item.name}`, {
+    undoably(tr('pantry.removed')(item.name), {
       commit: () => {
         void api
           .deletePantryItem(item.id)
@@ -158,9 +160,9 @@ export function Pantry({
           onChangeText={setDraft}
           onSubmitEditing={() => void add()}
           returnKeyType="done"
-          placeholder="chicken, rice, peppers"
+          placeholder={tr('pantry.addPlaceholder')}
           placeholderTextColor={colors.mutedForeground}
-          accessibilityLabel="Add to the list"
+          accessibilityLabel={tr('pantry.addToList')}
           style={[
             t.body,
             styles.composeInput,
@@ -177,7 +179,7 @@ export function Pantry({
           onPress={() => void add()}
           disabled={!draft.trim() || busy}
           accessibilityRole="button"
-          accessibilityLabel="Add to the list"
+          accessibilityLabel={tr('pantry.addToList')}
           style={{ opacity: !draft.trim() || busy ? 0.4 : 1 }}
           contentStyle={[
             styles.composeButton,
@@ -217,7 +219,7 @@ export function Pantry({
           ]}
         >
           <Text style={[t.eyebrow, styles.askingHeading, { color: colors.fatText }]}>
-            Still there? · {stale.length}
+            {tr('pantry.stillThere')(stale.length)}
           </Text>
           {stale.map((item, i) => (
             <SwipeRow
@@ -248,7 +250,7 @@ export function Pantry({
                 <Pressable
                   onPress={() => void confirm(item)}
                   accessibilityRole="button"
-                  accessibilityLabel={`I still have ${item.name}`}
+                  accessibilityLabel={tr('pantry.iStillHave')(item.name)}
                   style={({ pressed }) => [
                     styles.still,
                     {
@@ -258,12 +260,12 @@ export function Pantry({
                     },
                   ]}
                 >
-                  <Text style={[t.footnoteBold, { color: colors.secondaryForeground }]}>Yes</Text>
+                  <Text style={[t.footnoteBold, { color: colors.secondaryForeground }]}>{tr('pantry.yes')}</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => remove(item)}
                   accessibilityRole="button"
-                  accessibilityLabel={`Remove ${item.name}`}
+                  accessibilityLabel={tr('pantry.remove')(item.name)}
                   hitSlop={8}
                   style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
                 >
@@ -278,13 +280,13 @@ export function Pantry({
       {/* Everything you have vouched for, as a quantity rather than a table. */}
       {fresh.length === 0 ? (
         <Text style={[t.body, styles.empty, { color: colors.mutedForeground }]}>
-          Nothing here yet. Type a few things above, or photograph your shelf.
+          {tr('pantry.emptyHint')}
         </Text>
       ) : (
         current.length > 0 && (
           <View style={styles.section}>
             <Text style={[t.eyebrow, styles.heading, { color: colors.mutedForeground }]}>
-              In the kitchen · {current.length}
+              {tr('pantry.inTheKitchen')(current.length)}
             </Text>
             <View style={styles.chips}>
               {current.map((item) => (
@@ -317,7 +319,7 @@ export function Pantry({
             style={({ pressed }) => [styles.staplesToggle, { opacity: pressed ? 0.6 : 1 }]}
           >
             <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>
-              Staples · {staples.length}
+              {tr('pantry.staples')(staples.length)}
             </Text>
             <Svg width={13} height={13} viewBox="0 0 24 24">
               <Path
@@ -371,6 +373,7 @@ function Chip({
   onRemove: () => void;
   fill: string;
 }) {
+  const tr = useT();
   return (
     <View style={[styles.chip, { backgroundColor: fill, borderColor: colors.border }]}>
       <Text
@@ -388,7 +391,7 @@ function Chip({
       <Pressable
         onPress={onRemove}
         accessibilityRole="button"
-        accessibilityLabel={`Remove ${item.name}`}
+        accessibilityLabel={tr('pantry.remove')(item.name)}
         hitSlop={8}
         style={({ pressed }) => [styles.chipX, { opacity: pressed ? 0.4 : 1 }]}
       >

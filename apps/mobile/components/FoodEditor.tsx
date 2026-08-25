@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import type { FoodEntry, FoodItemInput, Meal } from '@ct/shared';
+import { formatNumber, type FoodEntry, type FoodItemInput, type Meal } from '@ct/shared';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { api } from '@/lib/api';
 import { type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
+import { useLocale, useT, type StringKey } from '@/lib/i18n';
 
 /**
  * A meal as the form that could have collected it — whether or not it exists.
@@ -30,11 +31,11 @@ import { haptics } from '@/lib/haptics';
  * would put a full nutrition table in every turn to serve the rare correction.
  */
 
-const MEALS: { key: Meal; label: string }[] = [
-  { key: 'breakfast', label: 'Breakfast' },
-  { key: 'lunch', label: 'Lunch' },
-  { key: 'dinner', label: 'Dinner' },
-  { key: 'snack', label: 'Snack' },
+const MEALS: { key: Meal; label: StringKey }[] = [
+  { key: 'breakfast', label: 'meal.breakfast' },
+  { key: 'lunch', label: 'meal.lunch' },
+  { key: 'dinner', label: 'meal.dinner' },
+  { key: 'snack', label: 'meal.snackOne' },
 ];
 
 /** Held as strings so a half-typed number is not rounded out from under them. */
@@ -84,6 +85,8 @@ export function FoodEditor({
   onCancel: () => void;
 }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const creating = entryId === null;
   const [entry, setEntry] = useState<FoodEntry | null>(null);
   const [description, setDescription] = useState(creating ? (initialDescription ?? '') : '');
@@ -121,7 +124,7 @@ export function FoodEditor({
     // The API refuses an empty meal, and rightly — a meal with nothing in it is
     // a deletion, which is a different button with a different confirmation.
     if (payload.length === 0) {
-      setError('A meal needs at least one item. Delete it instead?');
+      setError(tr('editor.needsAnItem'));
       return;
     }
 
@@ -129,7 +132,7 @@ export function FoodEditor({
     if (creating && label.length === 0) {
       // The API refuses this too, but the sentence it answers with is about a
       // field rather than about a meal, and this form knows what it is asking.
-      setError('What was it? A meal needs a name.');
+      setError(tr('editor.needsAName'));
       return;
     }
 
@@ -159,7 +162,7 @@ export function FoodEditor({
     return (
       <Chunk contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <Text style={[t.footnoteSemibold, { color: colors.destructive }]}>{error}</Text>
-        <Quiet label="Close" onPress={onCancel} />
+        <Quiet label={tr('common.close')} onPress={onCancel} />
       </Chunk>
     );
   }
@@ -167,7 +170,7 @@ export function FoodEditor({
   if (entry === null && !creating) {
     return (
       <Chunk contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[t.footnote, { color: colors.mutedForeground }]}>Loading…</Text>
+        <Text style={[t.footnote, { color: colors.mutedForeground }]}>{tr('common.loading')}</Text>
       </Chunk>
     );
   }
@@ -180,14 +183,14 @@ export function FoodEditor({
   return (
     <Chunk contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <Text style={[t.bodyBold, { color: colors.foreground }]}>
-        {creating ? 'Log it yourself' : 'Fix what’s wrong'}
+        {creating ? tr('editor.logItYourself') : tr('editor.fixWhatsWrong')}
       </Text>
 
       <TextInput
         value={description}
         onChangeText={setDescription}
-        accessibilityLabel="What this was"
-        placeholder="What was it?"
+        accessibilityLabel={tr('editor.whatThisWas')}
+        placeholder={tr('editor.whatWasIt')}
         placeholderTextColor={colors.mutedForeground}
         style={[
           t.bodySemibold,
@@ -223,7 +226,7 @@ export function FoodEditor({
                   { color: on ? colors.primaryForeground : colors.mutedForeground },
                 ]}
               >
-                {label}
+                {tr(label)}
               </Text>
             </Pressable>
           );
@@ -237,7 +240,7 @@ export function FoodEditor({
               value={item.name}
               onChangeText={(name) => patch(i, { name })}
               accessibilityLabel={`Item ${i + 1} name`}
-              placeholder="Item"
+              placeholder={tr('editor.itemPlaceholder')}
               placeholderTextColor={colors.mutedForeground}
               style={[
                 t.bodySemibold,
@@ -271,7 +274,7 @@ export function FoodEditor({
             onChange={(quantity) => patch(i, { quantity })}
             label={`Item ${i + 1} quantity`}
             unit=""
-            placeholder="how much"
+            placeholder={tr('editor.howMuch')}
             wide
           />
 
@@ -285,7 +288,7 @@ export function FoodEditor({
       ))}
 
       <Quiet
-        label="another item"
+        label={tr('editor.anotherItemLabel')}
         plus
         onPress={() => {
           haptics.press();
@@ -299,7 +302,7 @@ export function FoodEditor({
 
       <View style={[styles.foot, { borderTopColor: colors.border }]}>
         <Pressable onPress={onCancel} accessibilityRole="button" hitSlop={8}>
-          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Cancel</Text>
+          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('common.cancel')}</Text>
         </Pressable>
         <PressableChunk
           depth={3}
@@ -312,7 +315,12 @@ export function FoodEditor({
           contentStyle={[styles.save, { backgroundColor: colors.primary }]}
         >
           <Text style={[t.footnoteBold, { color: colors.primaryForeground }]}>
-            {saving ? 'Saving…' : `${creating ? 'Log' : 'Save'} · ${Math.round(total).toLocaleString()} kcal`}
+            {saving
+              ? tr('setup.saving')
+              : tr('editor.saveTotal')(
+                  creating ? tr('editor.log') : tr('common.save'),
+                  formatNumber(Math.round(total), locale),
+                )}
           </Text>
         </PressableChunk>
       </View>
@@ -322,6 +330,8 @@ export function FoodEditor({
 
 function Quiet({ label, onPress, plus }: { label: string; onPress: () => void; plus?: boolean }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   return (
     <Pressable
       onPress={onPress}
@@ -361,6 +371,8 @@ function Cell({
   wide?: boolean;
 }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   return (
     <View
       style={[

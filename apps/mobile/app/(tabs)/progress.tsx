@@ -9,6 +9,7 @@ import {
   bodyWeightToKg,
   bodyWeightUnit,
   formatBodyWeight,
+  formatNumber,
   formatWeightDelta,
   toBodyWeight,
 } from '@ct/shared';
@@ -26,6 +27,7 @@ import { font, type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
 import { useRefreshOnReturn } from '@/hooks/useRefreshOnReturn';
+import { useLocale, useT, type StringKey } from '@/lib/i18n';
 
 const WINDOWS = [14, 30, 90] as const;
 
@@ -36,11 +38,11 @@ const WINDOWS = [14, 30, 90] as const;
  * direction picks the phrasing rather than a single line covering both.
  */
 const NUTRIENTS = [
-  { key: 'fiber_g', label: 'Fiber', unit: 'g' },
-  { key: 'sodium_mg', label: 'Sodium', unit: 'mg' },
-  { key: 'sat_fat_g', label: 'Sat fat', unit: 'g' },
-  { key: 'sugar_g', label: 'Sugar', unit: 'g' },
-] as const;
+  { key: 'fiber_g', label: 'macro.fiber', unit: 'g' },
+  { key: 'sodium_mg', label: 'nutrient.sodium', unit: 'mg' },
+  { key: 'sat_fat_g', label: 'nutrient.satFat', unit: 'g' },
+  { key: 'sugar_g', label: 'nutrient.sugar', unit: 'g' },
+] as const satisfies readonly { key: string; label: StringKey; unit: string }[];
 
 type NutrientKey = (typeof NUTRIENTS)[number]['key'];
 
@@ -48,6 +50,8 @@ export default function ProgressScreen() {
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTop(scrollRef);
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const units = useUnits();
@@ -117,7 +121,7 @@ export default function ProgressScreen() {
           finished, which is why there is no condition around it. */}
       <SetupBanner />
       <View style={styles.header}>
-        <Text style={[t.largeTitle, { color: colors.foreground }]}>Progress</Text>
+        <Text style={[t.largeTitle, { color: colors.foreground }]}>{tr('progress.title')}</Text>
         <Chunk
           depth={2}
           radius={999}
@@ -159,7 +163,7 @@ export default function ProgressScreen() {
       ) : (
         <>
           {/* §12: lead with the trend, not any individual day. */}
-          <InsetGroup title="⚖️  Weight">
+          <InsetGroup title={tr('progress.weightTitle')}>
             <View style={styles.pad}>
               {progress.weight.current_kg === null ? (
                 <Text style={[t.body, styles.empty, { color: colors.mutedForeground }]}>
@@ -216,7 +220,7 @@ export default function ProgressScreen() {
             <Stats>
               <Stat
                 first
-                label="7-day avg"
+                label={tr('progress.avg7d')}
                 value={
                   progress.weight.average_7d_kg === null
                     ? '—'
@@ -225,7 +229,7 @@ export default function ProgressScreen() {
                 unit={bodyWeightUnit(units)}
               />
               <Stat
-                label="Since start"
+                label={tr('progress.sinceStart')}
                 value={
                   progress.weight.change_since_start_kg === null
                     ? '—'
@@ -234,7 +238,7 @@ export default function ProgressScreen() {
                 unit={bodyWeightUnit(units)}
               />
               <Stat
-                label="To target"
+                label={tr('progress.toTarget')}
                 value={
                   progress.weight.to_target_kg === null
                     ? '—'
@@ -273,21 +277,21 @@ export default function ProgressScreen() {
                 style={{ opacity: !weightInput || saving ? 0.3 : 1 }}
                 contentStyle={[styles.logSave, { backgroundColor: colors.primary }]}
               >
-                <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>Save</Text>
+                <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>{tr('common.save')}</Text>
               </PressableChunk>
             </View>
           </InsetGroup>
 
-          <InsetGroup title="🔥  Calories">
+          <InsetGroup title={tr('progress.caloriesTitle')}>
             <View style={styles.pad}>
               <View style={styles.headline}>
                 <Text style={[t.largeTitle, t.tnum, { color: colors.foreground }]}>
                   {progress.calories.average_kcal === null
                     ? '—'
-                    : progress.calories.average_kcal.toLocaleString()}
+                    : formatNumber(progress.calories.average_kcal, locale)}
                 </Text>
                 <Text style={[t.footnote, styles.aside, { color: colors.mutedForeground }]}>
-                  avg/day · target {progress.calories.target_kcal.toLocaleString()}
+                  {tr('progress.avgDayTarget')(formatNumber(progress.calories.target_kcal, locale))}
                 </Text>
               </View>
               <Sparkline
@@ -299,23 +303,26 @@ export default function ProgressScreen() {
             </View>
           </InsetGroup>
 
-          <InsetGroup title="💪  Protein">
+          <InsetGroup title={tr('progress.proteinTitle')}>
             <View style={styles.pad}>
               <View style={styles.headline}>
                 <Text style={[t.largeTitle, t.tnum, { color: colors.foreground }]}>
                   {progress.protein.average_g === null ? '—' : `${progress.protein.average_g}g`}
                 </Text>
                 <Text style={[t.footnote, styles.aside, { color: colors.mutedForeground }]}>
-                  avg/day · target {progress.protein.target_g}g
+                  {tr('progress.avgDayTarget')(`${progress.protein.target_g}g`)}
                 </Text>
               </View>
               {progress.protein.days_logged > 0 && (
                 <Text style={[t.footnote, styles.note, { color: colors.mutedForeground }]}>
-                  {'Hit the target on '}
+                  {`${tr('progress.hitTargetBefore')} `}
                   <Text style={{ fontFamily: font.extrabold, color: colors.foreground }}>
-                    {progress.protein.days_target_hit} of {progress.protein.days_logged}
+                    {tr('progress.ofDays')(
+                      String(progress.protein.days_target_hit),
+                      String(progress.protein.days_logged),
+                    )}
                   </Text>
-                  {' logged days.'}
+                  {` ${tr('progress.hitTargetAfter')}`}
                 </Text>
               )}
             </View>
@@ -323,10 +330,13 @@ export default function ProgressScreen() {
 
           {progress.quality.days_measured > 0 ? (
             <InsetGroup
-              title="🥦  Diet quality"
+              title={tr('progress.qualityTitle')}
               footer={
                 progress.quality.coverage < QUALITY_COVERAGE_FLOOR
-                  ? `Averaged over ${progress.quality.days_measured} day${progress.quality.days_measured === 1 ? '' : 's'} — ${Math.round(progress.quality.coverage * 100)}% of what you logged carries these figures.`
+                  ? tr('progress.qualityFooter')(
+                      tr('progress.days')(progress.quality.days_measured),
+                      String(Math.round(progress.quality.coverage * 100)),
+                    )
                   : undefined
               }
             >
@@ -346,7 +356,9 @@ export default function ProgressScreen() {
                       key={n.key}
                       onPress={() => setNutrient(n.key)}
                       accessibilityRole="button"
-                      accessibilityLabel={`Chart ${n.label.toLowerCase()}`}
+                      accessibilityLabel={tr('progress.chartNutrient')(
+                        tr(n.label).toLocaleLowerCase(locale),
+                      )}
                       accessibilityState={{ selected: active }}
                       style={({ pressed }) => [
                         styles.chip,
@@ -363,7 +375,7 @@ export default function ProgressScreen() {
                           { color: active ? colors.foreground : colors.mutedForeground },
                         ]}
                       >
-                        {n.label}
+                        {tr(n.label)}
                       </Text>
                     </Pressable>
                   );
@@ -379,8 +391,8 @@ export default function ProgressScreen() {
                     <Stat
                       key={n.key}
                       first={index === 0}
-                      label={n.label}
-                      value={value === null ? '—' : value.toLocaleString()}
+                      label={tr(n.label)}
+                      value={value === null ? '—' : formatNumber(value, locale)}
                       unit={n.unit}
                     />
                   );
@@ -395,10 +407,10 @@ export default function ProgressScreen() {
               the card stays, empty, and says what fills it. See
               `components/DietQuality`.
             */
-            <InsetGroup title="🥦  Diet quality">
+            <InsetGroup title={tr('progress.qualityTitle')}>
               <Stats>
                 {NUTRIENTS.map((n, index) => (
-                  <Stat key={n.key} first={index === 0} label={n.label} value="—" unit={n.unit} />
+                  <Stat key={n.key} first={index === 0} label={tr(n.label)} value="—" unit={n.unit} />
                 ))}
               </Stats>
               <View style={[styles.blank, { borderTopColor: colors.border }]}>
@@ -409,13 +421,13 @@ export default function ProgressScreen() {
 
           {/* Exercise has its own tab; this is the pointer, not the data. */}
           <InsetGroup
-            title="🏃  Exercise"
-            footer="Ask the journal anything about this data — “why haven’t I lost weight this week?”"
+            title={tr('progress.exerciseTitle')}
+            footer={tr('progress.exerciseFooter')}
           >
             <Pressable
               onPress={() => router.navigate('/exercise')}
               accessibilityRole="button"
-              accessibilityLabel="Open the exercise tab"
+              accessibilityLabel={tr('progress.openExerciseTab')}
               style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
             >
               <InsetRow first style={styles.pointer}>
@@ -425,8 +437,10 @@ export default function ProgressScreen() {
                       {progress.exercise.sessions}
                     </Text>
                     <Text style={[t.footnote, styles.aside, { color: colors.mutedForeground }]}>
-                      sessions · ~{progress.exercise.total_kcal.toLocaleString()} kcal over {days}{' '}
-                      days
+                      {tr('progress.sessionsOver')(
+                        formatNumber(progress.exercise.total_kcal, locale),
+                        String(days),
+                      )}
                     </Text>
                   </View>
                 </View>
@@ -474,6 +488,8 @@ function QualityChart({
   nutrient: NutrientKey;
 }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const { label, unit } = NUTRIENTS.find((n) => n.key === nutrient)!;
   const average = quality.average[nutrient];
   const target = quality.targets[nutrient];
@@ -483,12 +499,14 @@ function QualityChart({
     <View style={styles.qualityPad}>
       <View style={styles.headline}>
         <Text style={[t.largeTitle, t.tnum, { color: colors.foreground }]}>
-          {average === null ? '—' : `${average.toLocaleString()}${unit}`}
+          {average === null ? '—' : `${formatNumber(average, locale)}${unit}`}
         </Text>
         <Text style={[t.footnote, styles.aside, { color: colors.mutedForeground }]}>
-          {label.toLowerCase()} avg/day · {floor ? 'aim for' : 'keep under'}{' '}
-          {target.value.toLocaleString()}
-          {unit}
+          {tr('progress.qualityLine')(
+            tr(label).toLocaleLowerCase(locale),
+            floor ? tr('progress.aimFor') : tr('progress.keepUnder'),
+            `${formatNumber(target.value, locale)}${unit}`,
+          )}
         </Text>
       </View>
       <Sparkline

@@ -10,6 +10,7 @@ import { useEntitlements } from '@/lib/entitlements';
 import { remainingLine, TIER_NAMES, tierFor, wallBody, wallTitle } from '@/lib/plan-copy';
 import { duration, ease, type as t, useColors, withAlpha, type Palette } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useLocale, useT } from '@/lib/i18n';
 
 /**
  * What a limit looks like when it is a price rather than a fault.
@@ -47,11 +48,13 @@ export function PlanWall({
   style?: StyleProp<ViewStyle>;
 }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const router = useRouter();
   const { plan, tiers } = useEntitlements();
 
-  const title = allowance ? wallTitle(allowance) : (message ?? 'Your plan is spent');
-  const body = allowance ? wallBody(allowance) : undefined;
+  const title = allowance ? wallTitle(allowance, tr, locale) : (message ?? tr('plans.spent'));
+  const body = allowance ? wallBody(allowance, tr, locale) : undefined;
   /*
    * Which tier answers this. Without an allowance — a 402 from something that
    * does not send one — it falls back to the cheapest tier above the one they
@@ -127,7 +130,7 @@ export function PlanWall({
               <Text style={[t.bodySemibold, { color: colors.foreground }]}>
                 {/* Names the tier, because "Upgrade" does not say what for and
                     the tier that answers this meter is not always the top one. */}
-                See what {TIER_NAMES[next]} adds
+                {tr('plans.seeWhatAdds')(TIER_NAMES[next])}
               </Text>
             </PressableChunk>
           )}
@@ -160,6 +163,8 @@ export function LockedPanel({
   style?: StyleProp<ViewStyle>;
 }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const router = useRouter();
   const { plan, tiers } = useEntitlements();
   const next = tierFor(meter, tiers, plan);
@@ -225,6 +230,8 @@ export function MeterChip({
   style?: StyleProp<ViewStyle>;
 }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const router = useRouter();
   const { allowances } = useEntitlements();
   const allowance = allowances?.[meter] ?? null;
@@ -243,20 +250,20 @@ export function MeterChip({
       <Pressable
         onPress={() => router.push('/upgrade')}
         accessibilityRole="button"
-        accessibilityLabel={`${remainingLine(allowance, left)}. See the plans.`}
+        accessibilityLabel={tr('plans.remainingHint')(remainingLine(allowance, left, tr))}
         hitSlop={6}
         style={({ pressed }) => [styles.chip, { opacity: pressed ? 0.55 : 1 }]}
       >
         <View style={[styles.chipDot, { backgroundColor: colors.primary }]} />
         <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-          {remainingLine(allowance, left)}
+          {remainingLine(allowance, left, tr)}
         </Text>
       </Pressable>
       {onDismiss && (
         <Pressable
           onPress={onDismiss}
           accessibilityRole="button"
-          accessibilityLabel="Hide"
+          accessibilityLabel={tr('plans.hide')}
           hitSlop={10}
           style={({ pressed }) => [styles.chipClose, { opacity: pressed ? 0.4 : 0.7 }]}
         >

@@ -12,6 +12,7 @@ import { enqueue, newId } from '@/lib/outbox';
 import { cachedTemplates, cacheTemplates } from '@/lib/store';
 import { font, type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
+import { useT, type StringKey } from '@/lib/i18n';
 
 /**
  * The eight things you actually eat.
@@ -40,6 +41,7 @@ export function RepeatMeals({
   onLogged: () => void;
 }) {
   const colors = useColors();
+  const tr = useT();
   const toast = useToast();
   const { profile } = useAuth();
   const userId = profile?.id ?? '';
@@ -125,14 +127,14 @@ export function RepeatMeals({
 
   return (
     <InsetGroup
-      title="Log again"
-      footer="Logs it at today's time. If the portion was different, just say so in the journal and I'll fix it."
+      title={tr('today.logAgain')}
+      footer={tr('repeat.footer')}
     >
       <View style={styles.search}>
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Search your meals"
+          placeholder={tr('repeat.search')}
           placeholderTextColor={colors.mutedForeground}
           autoCapitalize="none"
           autoCorrect={false}
@@ -146,7 +148,7 @@ export function RepeatMeals({
       </View>
 
       {meals === null ? (
-        <Text style={[t.body, styles.notice, { color: colors.mutedForeground }]}>Loading…</Text>
+        <Text style={[t.body, styles.notice, { color: colors.mutedForeground }]}>{tr('common.loading')}</Text>
       ) : meals.length === 0 ? (
         <Text style={[t.body, styles.notice, { color: colors.mutedForeground }]}>
           Nothing matching “{query}”.
@@ -189,7 +191,7 @@ export function RepeatMeals({
               ]}
             >
               <Plus color={colors.secondaryForeground} />
-              <Text style={[styles.logLabel, { color: colors.secondaryForeground }]}>Log</Text>
+              <Text style={[styles.logLabel, { color: colors.secondaryForeground }]}>{tr('editor.log')}</Text>
             </PressableChunk>
           </View>
         ))

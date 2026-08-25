@@ -10,6 +10,7 @@ import { pickPhoto, takePhoto, type PreparedPhoto } from '@/lib/image';
 import { font, type as t, useColors } from '@/theme';
 import { useSharedPhoto } from '@/lib/share';
 import { useDictation } from '@/lib/voice';
+import { useT, type StringKey } from '@/lib/i18n';
 
 export interface ComposerPayload {
   text: string;
@@ -48,6 +49,7 @@ export function Composer({
   disabled: boolean;
 }) {
   const colors = useColors();
+  const tr = useT();
   const [text, setText] = useState('');
   const [photo, setPhoto] = useState<PreparedPhoto | null>(null);
 
@@ -154,7 +156,7 @@ export function Composer({
           <Pressable
             onPress={() => setPhoto(null)}
             accessibilityRole="button"
-            accessibilityLabel="Remove photo"
+            accessibilityLabel={tr('composer.removePhoto')}
             hitSlop={8}
             style={[
               styles.remove,
@@ -179,7 +181,7 @@ export function Composer({
           onPress={() => setChoosing(true)}
           disabled={disabled || busy}
           accessibilityRole="button"
-          accessibilityLabel="Add a photo"
+          accessibilityLabel={tr('composer.addPhotoShort')}
           hitSlop={6}
           style={({ pressed }) => [styles.attach, { opacity: pressed || busy ? 0.5 : 1 }]}
         >
@@ -197,7 +199,7 @@ export function Composer({
           // The one place the app says it is listening. A field that names the
           // state it is in needs no separate indicator over it, and the words
           // land in this exact spot a moment later.
-          placeholder={dictation.listening ? 'Listening…' : 'Two eggs and toast…'}
+          placeholder={dictation.listening ? tr('composer.listening') : tr('composer.placeholder')}
           placeholderTextColor={colors.mutedForeground}
           editable={!disabled}
           multiline
@@ -223,7 +225,7 @@ export function Composer({
             onPress={talk}
             disabled={disabled || busy}
             accessibilityRole="button"
-            accessibilityLabel={dictation.listening ? 'Stop listening' : 'Say what you ate'}
+            accessibilityLabel={dictation.listening ? tr('composer.stopListening') : tr('composer.sayWhatYouAte')}
             accessibilityState={{ busy: dictation.listening }}
             style={{ opacity: disabled || busy ? 0.3 : 1 }}
             contentStyle={[
@@ -263,7 +265,7 @@ export function Composer({
             haptic={false}
             disabled={!canSend}
             accessibilityRole="button"
-            accessibilityLabel="Send"
+            accessibilityLabel={tr('composer.send')}
             // `disabled:opacity-30`, rather than the 0.5 a disabled chunk
             // carries by default. On a phone with no recogniser this is still
             // the resting state of an empty composer, and at 0.5 it reads as a
@@ -296,7 +298,7 @@ export function Composer({
         because a barcode is another way of saying what you ate — the same
         sentence, told to the phone in a different grammar.
       */}
-      <Sheet open={choosing} title="Add a photo" onClose={() => setChoosing(false)}>
+      <Sheet open={choosing} title={tr('composer.addPhotoShort')} onClose={() => setChoosing(false)}>
         {/*
           The one thing that most improves a photo estimate, said once, where it
           can still be acted on.
@@ -317,10 +319,10 @@ export function Composer({
           Tip: leave a fork, spoon or your hand in the shot — it tells us how big
           the plate is, which is the hardest part to guess.
         </Text>
-        <Choice label="Take a photo" icon="camera" onPress={() => void attach('camera')} />
-        <Choice label="Choose a photo" icon="image" onPress={() => void attach('library')} />
+        <Choice label={tr('composer.takePhoto')} icon="camera" onPress={() => void attach('camera')} />
+        <Choice label={tr('composer.choosePhoto')} icon="image" onPress={() => void attach('library')} />
         <Choice
-          label="Scan a barcode"
+          label={tr('composer.scanBarcode')}
           icon="barcode"
           onPress={() => {
             setChoosing(false);
@@ -338,7 +340,7 @@ export function Composer({
         }}
         onLabelPhoto={(prepared) => {
           setPhoto(prepared);
-          setText((current) => current || 'This is the label — log what I ate off it.');
+          setText((current) => current || tr('composer.labelHint'));
         }}
       />
     </Material>
@@ -355,6 +357,7 @@ function Choice({
   onPress: () => void;
 }) {
   const colors = useColors();
+  const tr = useT();
   return (
     <Pressable
       onPress={onPress}

@@ -9,6 +9,7 @@ import { useEntitlements } from '@/lib/entitlements';
 import { carriesFrom, TIER_NAMES, TIER_PITCHES, tierLines } from '@/lib/plan-copy';
 import { haptics } from '@/lib/haptics';
 import { type as t, useColors, withAlpha } from '@/theme';
+import { useLocale, useT } from '@/lib/i18n';
 
 /**
  * What somebody sees immediately after paying.
@@ -37,6 +38,8 @@ import { type as t, useColors, withAlpha } from '@/theme';
  */
 export default function PurchasedScreen() {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { plan, tiers, refresh } = useEntitlements();
@@ -118,18 +121,20 @@ export default function PurchasedScreen() {
       <Mark landed={landed} />
 
       <Text style={[t.largeTitle, styles.title, { color: colors.foreground }]}>
-        {landed && bought ? `You're on ${TIER_NAMES[bought]}.` : 'Payment received.'}
+        {landed && bought
+          ? tr('plans.youreOnPlan')(TIER_NAMES[bought])
+          : tr('plans.paymentReceived')}
       </Text>
 
       <Text style={[t.body, styles.lede, { color: colors.mutedForeground }]}>
         {landed && bought
-          ? TIER_PITCHES[bought]
+          ? tr(TIER_PITCHES[bought])
           : waited
             ? // Deliberately not an apology and not an instruction. There is
               // nothing for them to do, `expirePlans` is not involved, and the
               // honest shape of this is "it is coming, you are not out of pocket".
-              'The store has your payment and the plan is still on its way. It will unlock on its own — there is nothing to pay again.'
-            : 'The store has your payment. Your plan unlocks in a moment.'}
+              tr('plans.pendingLong')
+            : tr('plans.pendingShort')}
       </Text>
 
       {landed && tier && (
@@ -137,12 +142,17 @@ export default function PurchasedScreen() {
           depth={5}
           contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
         >
-          <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>What that opens</Text>
+          <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>
+            {tr('plans.whatThatOpens')}
+          </Text>
 
           <View style={styles.lines}>
             {(() => {
-              const carries = carriesFrom(below);
-              return [...(carries ? [carries] : []), ...tierLines(tier, below)].map((line) => (
+              const carries = carriesFrom(below, tr);
+              return [
+                ...(carries ? [carries] : []),
+                ...tierLines(tier, tr, locale, below),
+              ].map((line) => (
                 <View key={line} style={styles.line}>
                   <Check color={colors.primary} />
                   <Text style={[t.footnote, styles.lineText, { color: colors.foreground }]}>
@@ -163,12 +173,12 @@ export default function PurchasedScreen() {
         contentStyle={[styles.cta, { backgroundColor: colors.primary }]}
       >
         <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
-          {landed ? 'Start logging' : 'Back to the journal'}
+          {landed ? tr('plans.startLogging') : tr('plans.backToJournal')}
         </Text>
       </PressableChunk>
 
       <Text style={[t.footnote, styles.fine, { color: colors.mutedForeground }]}>
-        Manage or cancel it any time in Subscriptions on the store.
+        {tr('plans.manageOnStore')}
       </Text>
     </ScrollView>
   );
@@ -183,6 +193,8 @@ export default function PurchasedScreen() {
  */
 function Mark({ landed }: { landed: boolean }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   return (
     <View style={[styles.mark, { backgroundColor: withAlpha(colors.primary, 0.2) }]}>
       <Svg width={40} height={40} viewBox="0 0 24 24">

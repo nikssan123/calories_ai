@@ -1,6 +1,18 @@
-import type { Allowance, MeterName, PlanName, PlanTier } from '@ct/shared';
+import type { Allowance, Locale, MeterName, PlanName, PlanTier } from '@ct/shared';
 import { meterLocked } from '@ct/shared';
-import { untilWords } from '@ct/shared/words';
+import { listWords, untilWords } from '@ct/shared/words';
+import type { MessageKey, StringKey, useT } from '@/lib/i18n';
+
+/**
+ * The catalogue, passed in rather than read from a hook.
+ *
+ * Nothing in here is a component — these are the sentences six screens
+ * assemble — so `useT()` cannot be called. Threading the lookup through is the
+ * price of keeping the vocabulary in one file, and it is worth paying: the
+ * alternative is six components each translating their own fragment, which is
+ * exactly the duplication this module exists to prevent.
+ */
+type T = ReturnType<typeof useT>;
 
 /**
  * The words the app uses about money, in one file.
@@ -24,18 +36,24 @@ import { untilWords } from '@ct/shared/words';
  *    wrong.
  */
 
-/** Singular and plural, per meter. Matches `sentenceFor` on the API. */
-const NOUNS: Record<MeterName, [string, string]> = {
-  chat: ['message', 'messages'],
-  photo: ['photo scan', 'photo scans'],
-  pantry_scan: ['fridge scan', 'fridge scans'],
-  recipe: ['recipe', 'recipes'],
-  meal_plan: ['meal plan', 'meal plans'],
-};
+/**
+ * The noun for each meter, agreeing with a count.
+ *
+ * A pair of strings before, which is English's answer to plurals and nobody
+ * else's — see `plural()` in `shared/locale.ts`. Each catalogue now supplies
+ * whatever categories its language has, and this table only says which key
+ * belongs to which meter. Matches `sentenceFor` on the API.
+ */
+const NOUN_KEYS = {
+  chat: 'meter.chat',
+  photo: 'meter.photo',
+  pantry_scan: 'meter.pantryScan',
+  recipe: 'meter.recipe',
+  meal_plan: 'meter.mealPlan',
+} as const satisfies Record<MeterName, MessageKey>;
 
-export function meterNoun(meter: MeterName, count: number): string {
-  const [one, many] = NOUNS[meter];
-  return count === 1 ? one : many;
+export function meterNoun(meter: MeterName, count: number, t: T): string {
+  return t(NOUN_KEYS[meter])(count);
 }
 
 export const TIER_NAMES: Record<PlanName, string> = {
@@ -53,10 +71,10 @@ export const TIER_NAMES: Record<PlanName, string> = {
  * and": the card says that itself, in its own row, from the tier below it
  * rather than from a string that has to be kept in step by hand.
  */
-export const TIER_PITCHES: Record<PlanName, string> = {
-  free: 'A complete food diary, offline and unmetered.',
-  plus: 'The journal every day, and a weekly read on it.',
-  coach: 'The kitchen too: cook from your fridge, plan the week.',
+export const TIER_PITCHES: Record<PlanName, StringKey> = {
+  free: 'tier.pitchFree',
+  plus: 'tier.pitchPlus',
+  coach: 'tier.pitchCoach',
 };
 
 /**
@@ -85,17 +103,17 @@ export function tierFor(meter: MeterName, tiers: PlanTier[], current: PlanName):
  * finished using, not a thing the app is refusing to do. The distinction is the
  * whole difference between a paywall and an error dialog.
  */
-export function wallTitle(allowance: Allowance): string {
+export function wallTitle(allowance: Allowance, t: T, locale: Locale): string {
   const { meter, allowed, period } = allowance;
   if (meterLocked(allowance)) {
-    const [, many] = NOUNS[meter];
-    return `${capitalise(many)} aren't on your plan`;
+    // Two, so every language picks its plural category rather than English's.
+    return t('wall.notOnPlan')(capitalise(meterNoun(meter, 2, t), locale));
   }
   const count = allowed ?? 0;
-  const noun = meterNoun(meter, count);
+  const noun = meterNoun(meter, count, t);
   return period === 'ever'
-    ? `That's your ${count} free ${noun}`
-    : `That's all ${count} ${noun} this month`;
+    ? t('wall.freeGrant')(count, noun)
+    : t('wall.monthlyGrant')(count, noun);
 }
 
 /**
@@ -107,21 +125,19 @@ export function wallTitle(allowance: Allowance): string {
  * small as it is. The kitchen has no such fallback, so it says what comes back
  * and when instead of inventing one.
  */
-export function wallBody(allowance: Allowance): string {
-  const back = allowance.resets_at ? ` They come back ${untilWords(allowance.resets_at)}.` : '';
+const BODY_KEYS = {
+  chat: 'wall.bodyChat',
+  photo: 'wall.bodyPhoto',
+  pantry_scan: 'wall.bodyPantryScan',
+  recipe: 'wall.bodyRecipe',
+  meal_plan: 'wall.bodyMealPlan',
+} as const satisfies Record<MeterName, StringKey>;
 
-  switch (allowance.meter) {
-    case 'chat':
-      return `Typing a meal in yourself is unlimited, and always free — I'll show you where.${back}`;
-    case 'photo':
-      return `You can still type the meal in, repeat one you've had before, or scan its barcode. None of those are metered.${back}`;
-    case 'pantry_scan':
-      return `Your kitchen list still works — you can add what's in it by hand.${back}`;
-    case 'recipe':
-      return `Everything you've already cooked is still saved, and the recipe library is free to browse.${back}`;
-    case 'meal_plan':
-      return `The week you last planned is still there, and you can still cook from a saved recipe.${back}`;
-  }
+export function wallBody(allowance: Allowance, t: T, locale: Locale): string {
+  const back = allowance.resets_at
+    ? t('wall.comeBack')(untilWords(allowance.resets_at, locale))
+    : '';
+  return `${t(BODY_KEYS[allowance.meter])}${back}`;
 }
 
 /**
@@ -145,17 +161,20 @@ export function wallBody(allowance: Allowance): string {
 const JOURNAL: MeterName[] = ['chat', 'photo'];
 const KITCHEN: MeterName[] = ['pantry_scan', 'recipe', 'meal_plan'];
 
-export function tierLines(tier: PlanTier, below?: PlanTier): string[] {
-  const lines = [...meterLines(tier, JOURNAL), ...meterLines(tier, KITCHEN)];
+export function tierLines(tier: PlanTier, t: T, locale: Locale, below?: PlanTier): string[] {
+  const lines = [
+    ...meterLines(tier, JOURNAL, t, locale),
+    ...meterLines(tier, KITCHEN, t, locale),
+  ];
 
   // The two unmetered extras, on one line and only where they are new. Both
   // are a sentence rather than a count, so joining them costs no clarity and
   // saves the taller card its seventh row.
   const review = tier.reviews_per_day > 0 && !(below && below.reviews_per_day > 0);
   const nudge = tier.nudges_per_week > 0 && !(below && below.nudges_per_week > 0);
-  if (review && nudge) lines.push('A weekly review, and a nudge when you go quiet');
-  else if (review) lines.push('A weekly review of how you ate');
-  else if (nudge) lines.push('A nudge when you go quiet');
+  if (review && nudge) lines.push(t('tier.reviewAndNudge'));
+  else if (review) lines.push(t('tier.review'));
+  else if (nudge) lines.push(t('tier.nudge'));
 
   return lines;
 }
@@ -168,24 +187,22 @@ export function tierLines(tier: PlanTier, below?: PlanTier): string[] {
  * month, and a tier that ever mixed the two would otherwise get one of them
  * wrong on a line that names both.
  */
-function meterLines(tier: PlanTier, group: MeterName[]): string[] {
+function meterLines(tier: PlanTier, group: MeterName[], t: T, locale: Locale): string[] {
   const byPeriod = new Map<'month' | 'ever', string[]>();
   for (const meter of group) {
     const entry = tier.meters.find((candidate) => candidate.meter === meter);
     if (!entry || entry.allowed === null || entry.allowed === 0) continue;
     const parts = byPeriod.get(entry.period) ?? [];
-    parts.push(`${entry.allowed} ${meterNoun(meter, entry.allowed)}`);
+    parts.push(t('tier.countNoun')(entry.allowed, meterNoun(meter, entry.allowed, t)));
     byPeriod.set(entry.period, parts);
   }
+  // `listWords` rather than a hand-rolled join: the conjunction and the serial
+  // comma are a per-language question, and `Intl.ListFormat` already answers it.
   return [...byPeriod].map(([period, parts]) =>
-    period === 'ever' ? `${sentenceList(parts)}, to try` : `${sentenceList(parts)} a month`,
+    period === 'ever'
+      ? t('tier.toTry')(listWords(parts, locale))
+      : t('tier.aMonth')(listWords(parts, locale)),
   );
-}
-
-/** "a", "a and b", "a, b and c". */
-function sentenceList(parts: string[]): string {
-  if (parts.length <= 1) return parts[0] ?? '';
-  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
 /**
@@ -195,8 +212,8 @@ function sentenceList(parts: string[]): string {
  * naming — free is not a thing anybody upgrades *from* on this screen, it is
  * the list at the bottom of it.
  */
-export function carriesFrom(below: PlanTier | undefined): string | null {
-  return below && below.plan !== 'free' ? `Everything in ${TIER_NAMES[below.plan]}` : null;
+export function carriesFrom(below: PlanTier | undefined, t: T): string | null {
+  return below && below.plan !== 'free' ? t('tier.everythingIn')(TIER_NAMES[below.plan]) : null;
 }
 
 /**
@@ -207,11 +224,11 @@ export function carriesFrom(below: PlanTier | undefined): string | null {
  * price, because somebody deciding whether to pay is entitled to know exactly
  * what happens if they do not.
  */
-export const ALWAYS_FREE = [
-  'Typing meals in, and correcting them',
-  'Repeat a meal, and barcode scanning',
-  'Your whole history, the ring, and the streak',
-  'Logging with no signal at all',
+export const ALWAYS_FREE: StringKey[] = [
+  'free.typing',
+  'free.repeat',
+  'free.history',
+  'free.offline',
 ];
 
 /**
@@ -224,13 +241,15 @@ export const ALWAYS_FREE = [
  * number, same distinction between a lifetime grant and a monthly one, no
  * event.
  */
-export function spentLine(allowance: Allowance): string {
+export function spentLine(allowance: Allowance, t: T): string {
   const count = allowance.allowed ?? 0;
-  const noun = meterNoun(allowance.meter, count);
-  const verb = count === 1 ? 'is' : 'are';
+  const noun = meterNoun(allowance.meter, count, t);
+  // The verb agrees inside each catalogue rather than out here: English needs
+  // is/are, Bulgarian needs neither, and a verb chosen in this file would be
+  // English's answer imposed on every language.
   return allowance.period === 'ever'
-    ? `Your ${count} free ${noun} ${verb} spent`
-    : `This month's ${count} ${noun} ${verb} spent`;
+    ? t('spent.everGrant')(count, noun)
+    : t('spent.monthly')(count, noun);
 }
 
 /**
@@ -240,10 +259,11 @@ export function spentLine(allowance: Allowance): string {
  * whole design of this warning is that it appears three turns early, so it has
  * time to be a fact rather than an interruption.
  */
-export function remainingLine(allowance: Allowance, left: number): string {
-  return `${left} ${meterNoun(allowance.meter, left)} left`;
+export function remainingLine(allowance: Allowance, left: number, t: T): string {
+  return t('wall.remaining')(left, meterNoun(allowance.meter, left, t));
 }
 
-function capitalise(word: string): string {
-  return word.charAt(0).toUpperCase() + word.slice(1);
+/** Locale-aware, because `toUpperCase()` is not the same map everywhere. */
+function capitalise(word: string, locale: Locale): string {
+  return word.charAt(0).toLocaleUpperCase(locale) + word.slice(1);
 }

@@ -28,6 +28,7 @@ import { haptics } from '@/lib/haptics';
 import { removeAction, SwipeRow } from '@/components/SwipeRow';
 import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
 import { useEntitlements } from '@/lib/entitlements';
+import { useLocale, useT } from '@/lib/i18n';
 
 /**
  * The week's dinners, and the shop that follows from them.
@@ -43,6 +44,8 @@ import { useEntitlements } from '@/lib/entitlements';
  */
 export default function PlanScreen() {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const toast = useToast();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -201,11 +204,11 @@ export default function PlanScreen() {
               fill="none"
             />
           </Svg>
-          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Cook</Text>
+          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('plan.cookTab')}</Text>
         </Pressable>
       </View>
 
-      <Text style={[t.largeTitle, { color: colors.foreground }]}>The week</Text>
+      <Text style={[t.largeTitle, { color: colors.foreground }]}>{tr('plan.theWeek')}</Text>
 
       {loading ? (
         <>
@@ -226,19 +229,19 @@ export default function PlanScreen() {
           {planLocked ? (
             <LockedPanel
               meter="meal_plan"
-              title="Planning a week is part of Coach"
+              title={tr('plan.locked')}
               body="Seven dinners against your targets and what's already in your kitchen, batched where it helps, with the shopping list written for you."
             />
           ) : (
           <InsetGroup
-            title="🗓  Plan it"
+            title={tr('plan.planItTitle')}
             footer="Seven dinners against your targets and what's already in the kitchen. Batching means one cook covering two nights."
           >
             <View style={styles.form}>
               <TextInput
                 value={wants}
                 onChangeText={setWants}
-                placeholder="Anything in mind? — “nothing with fish”"
+                placeholder={tr('plan.wantsPlaceholderShort')}
                 placeholderTextColor={colors.mutedForeground}
                 style={[
                   t.body,
@@ -259,7 +262,7 @@ export default function PlanScreen() {
                   <NumberField
                     value={servings}
                     onChange={setServings}
-                    unit="people"
+                    unit={tr('plan.peopleUnit')}
                     style={styles.numberField}
                   />
                 </View>
@@ -270,7 +273,7 @@ export default function PlanScreen() {
                   <NumberField
                     value={minutes}
                     onChange={setMinutes}
-                    unit="min"
+                    unit={tr('plan.minUnit')}
                     style={styles.numberField}
                   />
                 </View>
@@ -278,12 +281,12 @@ export default function PlanScreen() {
 
               <View style={styles.batchRow}>
                 <View style={styles.flex}>
-                  <Text style={[t.body, { color: colors.foreground }]}>Batch where it helps</Text>
+                  <Text style={[t.body, { color: colors.foreground }]}>{tr('plan.batchWhereItHelps')}</Text>
                   <Text style={[t.footnote, { color: colors.mutedForeground }]}>
                     One cook covering two nights.
                   </Text>
                 </View>
-                <Switch value={batch} onValueChange={setBatch} accessibilityLabel="Batch cooking" />
+                <Switch value={batch} onValueChange={setBatch} accessibilityLabel={tr('plan.batchCooking')} />
               </View>
 
               <PressableChunk
@@ -296,7 +299,7 @@ export default function PlanScreen() {
               >
                 {thinking && <ActivityIndicator size="small" color={colors.primaryForeground} />}
                 <Text style={[styles.planLabel, { color: colors.primaryForeground }]}>
-                  {thinking ? 'Planning…' : plan ? 'Plan it again' : 'Plan the week'}
+                  {thinking ? tr('plan.planning') : plan ? tr('plan.again') : tr('plan.planTheWeek')}
                 </Text>
               </PressableChunk>
             </View>
@@ -304,7 +307,7 @@ export default function PlanScreen() {
           )}
 
           {plan && (
-            <InsetGroup title="🍽  Dinners">
+            <InsetGroup title={tr('plan.dinnersTitle')}>
               {plan.slots.map((slot, i) => (
                 <Night
                   key={slot.id}
@@ -320,7 +323,7 @@ export default function PlanScreen() {
 
           {list && (
             <InsetGroup
-              title="🧾  Shopping"
+              title={tr('shopping.titleShort')}
               footer={
                 list.have_already.length > 0
                   ? `Left off because you already have them: ${list.have_already.join(', ')}.`
@@ -333,7 +336,7 @@ export default function PlanScreen() {
                   onChangeText={setDraft}
                   onSubmitEditing={() => void addLine()}
                   returnKeyType="done"
-                  placeholder="Add something else"
+                  placeholder={tr('shopping.addSomethingElse')}
                   placeholderTextColor={colors.mutedForeground}
                   style={[
                     t.body,
@@ -349,7 +352,7 @@ export default function PlanScreen() {
                   onPress={() => void addLine()}
                   disabled={!draft.trim()}
                   accessibilityRole="button"
-                  accessibilityLabel="Add"
+                  accessibilityLabel={tr('common.add')}
                   style={({ pressed }) => [
                     styles.addButton,
                     {
@@ -497,6 +500,8 @@ function Night({
   onClear: () => void;
 }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const cooked = slot.cooked_at !== null;
 
   return (
@@ -543,7 +548,7 @@ function Night({
                   },
                 ]}
               >
-                <Text style={[t.footnoteBold, { color: colors.secondaryForeground }]}>Cooked</Text>
+                <Text style={[t.footnoteBold, { color: colors.secondaryForeground }]}>{tr('plan.cooked')}</Text>
               </Pressable>
               <Pressable
                 onPress={onClear}
@@ -566,7 +571,7 @@ function Night({
           )}
         </>
       ) : (
-        <Text style={[t.body, styles.flex, { color: colors.mutedForeground }]}>Nothing planned</Text>
+        <Text style={[t.body, styles.flex, { color: colors.mutedForeground }]}>{tr('plan.nothingPlanned')}</Text>
       )}
     </InsetRow>
   );

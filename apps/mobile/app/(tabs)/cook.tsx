@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import type { Allowance, DaySummary, LibraryRecipe, PantryItem, Recipe, RecipeBrief } from '@ct/shared';
-import { meterLocked, meterSpent } from '@ct/shared';
+import { formatNumber, meterLocked, meterSpent } from '@ct/shared';
 import { listWords, untilWords } from '@ct/shared/words';
 import { foodEmoji } from '@ct/shared/food-emoji';
 import { Chunk, PressableChunk } from '@/components/Chunk';
@@ -22,6 +22,7 @@ import { recipeImageUrl } from '@/lib/links';
 import { useEntitlements } from '@/lib/entitlements';
 import { font, type as t, useColors } from '@/theme';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
+import { useLocale, useT } from '@/lib/i18n';
 
 /**
  * Cook — what you could make, from what you have, that fits what is left.
@@ -44,6 +45,8 @@ export default function CookScreen() {
   useScrollToTop(scrollRef);
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const tr = useT();
+  const locale = useLocale();
   const router = useRouter();
 
   const [day, setDay] = useState<DaySummary | null>(null);
@@ -177,9 +180,9 @@ export default function CookScreen() {
   const plan = (() => {
     if (spent && allowance?.allowed != null) {
       const back = allowance.resets_at
-        ? ` You'll have another ${untilWords(allowance.resets_at)}.`
+        ? tr('cook.planSpentBack')(untilWords(allowance.resets_at, locale))
         : '';
-      return `That's your ${allowance.allowed === 1 ? 'one recipe run' : `${allowance.allowed} recipe runs`} for today.${back}`;
+      return `${tr('cook.planSpent')(tr('cook.runs')(allowance.allowed))}${back}`;
     }
     /*
      * An empty kitchen is a different promise, not a smaller one. Saying "from
@@ -188,14 +191,16 @@ export default function CookScreen() {
      * account ever reads.
      */
     if (items !== null && items.length === 0) {
-      return `Your kitchen is empty, so I'll suggest things one small shop would cover — and name what to buy.`;
+      return tr('cook.planEmptyKitchen');
     }
-    const from = brief.wants?.trim()
-      ? `I'll work from what you asked for and what's in your kitchen`
-      : `I'll invent a recipe from what's in your kitchen`;
+    const from = brief.wants?.trim() ? tr('cook.planFromWants') : tr('cook.planFromKitchen');
     if (!remaining) return `${from}.`;
-    if (remaining.kcal === 0) return `${from} — and you're at your target today, so I'll keep it light.`;
-    return `${from}, aiming at the ${remaining.kcal} kcal and ${remaining.protein}g protein you have left.`;
+    if (remaining.kcal === 0) return tr('cook.planAtTarget')(from);
+    return tr('cook.planAiming')(
+      from,
+      formatNumber(remaining.kcal, locale),
+      formatNumber(remaining.protein, locale),
+    );
   })();
 
   /**
@@ -295,9 +300,9 @@ export default function CookScreen() {
      */
     setThinkingNote(
       focus?.length
-        ? `Writing a recipe around the ${listWords(focus.slice(0, 4))} in your photo…`
+        ? tr('cook.writingAround')(listWords(focus.slice(0, 4), locale))
         : asked
-          ? `Writing a recipe for “${asked}”, from what's in your kitchen…`
+          ? tr('cook.writingFor')(asked)
           : "Writing a recipe from what's in your kitchen…",
     );
     // Moved to the front: the skeletons are the answer to "what is it doing",
@@ -343,7 +348,7 @@ export default function CookScreen() {
         screen for something checked ten seconds a week.
       */}
       <View style={styles.titleRow}>
-        <Text style={[t.largeTitle, { color: colors.foreground }]}>Cook</Text>
+        <Text style={[t.largeTitle, { color: colors.foreground }]}>{tr('cook.title')}</Text>
         {items !== null && (
           <Chunk
             depth={2}
@@ -360,13 +365,11 @@ export default function CookScreen() {
             >
               <Text style={styles.chipGlyph}>🧺</Text>
               <Text style={[t.footnoteSemibold, { color: colors.foreground }]}>
-                {fresh.length === 0
-                  ? 'Your kitchen is empty'
-                  : `${fresh.length} ${fresh.length === 1 ? 'thing' : 'things'}`}
+                {fresh.length === 0 ? tr('cook.kitchenEmpty') : tr('cook.things')(fresh.length)}
               </Text>
               {staleCount > 0 && (
                 <Text style={[t.footnoteSemibold, { color: colors.fatText }]}>
-                  · {staleCount} to check
+                  {tr('cook.toCheck')(staleCount)}
                 </Text>
               )}
             </Pressable>
@@ -374,7 +377,7 @@ export default function CookScreen() {
         )}
       </View>
 
-      <Sheet open={kitchenOpen} title="Your kitchen" onClose={() => setKitchenOpen(false)}>
+      <Sheet open={kitchenOpen} title={tr('cook.yourKitchen')} onClose={() => setKitchenOpen(false)}>
         {items && (
           <Pantry
             items={items}
@@ -405,8 +408,8 @@ export default function CookScreen() {
         <LockedPanel
           style={styles.ask}
           meter="recipe"
-          title="The kitchen is part of Coach"
-          body="Photograph your fridge, get a recipe written around what's in it, and plan a week of dinners from there. The recipe library below stays free — browse it, cook from it, log it."
+          title={tr('cook.kitchenLocked')}
+          body={tr('cook.kitchenLockedBody')}
         />
       ) : (
       <View style={styles.ask}>
@@ -434,7 +437,11 @@ export default function CookScreen() {
               { color: spent ? colors.secondaryForeground : colors.primaryForeground },
             ]}
           >
-            {thinking ? 'Thinking…' : spent ? 'Nothing left today' : 'Find me something'}
+            {thinking
+              ? tr('cook.thinking')
+              : spent
+                ? tr('cook.nothingLeftToday')
+                : tr('cook.findMeSomething')}
           </Text>
         </PressableChunk>
 
@@ -483,7 +490,9 @@ export default function CookScreen() {
                 fill="none"
               />
             </Svg>
-            <Text style={[t.footnote, { color: colors.mutedForeground }]}>paste one</Text>
+            <Text style={[t.footnote, { color: colors.mutedForeground }]}>
+              {tr('import.chip')}
+            </Text>
           </Pressable>
           <Pressable
             onPress={() => router.push('/plan')}
@@ -503,7 +512,9 @@ export default function CookScreen() {
                 fill="none"
               />
             </Svg>
-            <Text style={[t.footnote, { color: colors.mutedForeground }]}>plan the week</Text>
+            <Text style={[t.footnote, { color: colors.mutedForeground }]}>
+              {tr('cook.planTheWeek')}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -514,7 +525,7 @@ export default function CookScreen() {
         running is a single gesture rather than set, close, then go looking for
         the button again.
       */}
-      <Sheet open={briefOpen} title="Anything specific?" onClose={() => setBriefOpen(false)}>
+      <Sheet open={briefOpen} title={tr('cook.anythingSpecific')} onClose={() => setBriefOpen(false)}>
         <Brief value={brief} onChange={setBrief} />
         <View style={[styles.sheetFoot, { borderTopColor: colors.border }]}>
           <PressableChunk
@@ -540,7 +551,7 @@ export default function CookScreen() {
                 { color: spent ? colors.secondaryForeground : colors.primaryForeground },
               ]}
             >
-              {spent ? 'Nothing left today' : 'Find me something'}
+              {spent ? tr('cook.nothingLeftToday') : tr('cook.findMeSomething')}
             </Text>
           </PressableChunk>
         </View>
@@ -548,18 +559,18 @@ export default function CookScreen() {
 
       <Sheet
         open={importOpen}
-        title="A recipe you already have"
+        title={tr('import.title')}
         onClose={() => !importing && setImportOpen(false)}
       >
         <View style={styles.importBody}>
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-            I&rsquo;ll work out the calories and leave the cooking alone.
+            {tr('import.desc')}
           </Text>
           <TextInput
             value={importText}
             onChangeText={setImportText}
             multiline
-            placeholder="Paste or type the recipe — ingredients and method, however you have it written."
+            placeholder={tr('import.placeholder')}
             placeholderTextColor={colors.mutedForeground}
             style={[
               t.body,
@@ -581,7 +592,7 @@ export default function CookScreen() {
             contentStyle={[styles.find, { backgroundColor: colors.primary }]}
           >
             <Text style={[styles.findLabel, { color: colors.primaryForeground }]}>
-              {importing ? 'Reading it…' : 'Work out the calories'}
+              {importing ? tr('cook.readingIt') : tr('cook.workOutCalories')}
             </Text>
           </PressableChunk>
         </View>
@@ -613,8 +624,8 @@ export default function CookScreen() {
                   ]}
                 >
                   {key === 'ideas'
-                    ? `For you${recipes.length > 0 ? ` · ${recipes.length}` : ''}`
-                    : 'Library'}
+                    ? `${tr('cook.forYou')}${recipes.length > 0 ? ` · ${recipes.length}` : ''}`
+                    : tr('cook.library')}
                 </Text>
               </Pressable>
             );
@@ -627,7 +638,7 @@ export default function CookScreen() {
         <TextInput
           value={librarySearch}
           onChangeText={setLibrarySearch}
-          placeholder="Search the library"
+          placeholder={tr('cook.searchLibrary')}
           placeholderTextColor={colors.mutedForeground}
           style={[
             t.body,
@@ -666,15 +677,15 @@ export default function CookScreen() {
               <Text style={[t.body, styles.centred, { color: colors.mutedForeground }]}>
                 {locked ? (
                   <>
-                    Nothing here yet. The{' '}
-                    <Text style={{ color: colors.foreground }}>Library</Text> tab above is full of
-                    recipes you can cook and log for nothing.
+                    {tr('cook.emptyLockedBefore')}{' '}
+                    <Text style={{ color: colors.foreground }}>{tr('cook.library')}</Text>{' '}
+                    {tr('cook.emptyLockedAfter')}
                   </>
                 ) : (
                   <>
-                    Nothing yet. Press{' '}
-                    <Text style={{ color: colors.foreground }}>Find me something</Text> and
-                    I&rsquo;ll invent a recipe from what&rsquo;s in your kitchen.
+                    {tr('cook.emptyBefore')}{' '}
+                    <Text style={{ color: colors.foreground }}>{tr('cook.findMeSomething')}</Text>{' '}
+                    {tr('cook.emptyAfterShort')}
                   </>
                 )}
               </Text>
@@ -687,7 +698,7 @@ export default function CookScreen() {
                   summary={recipe.summary}
                   kcal={recipe.kcal}
                   protein_g={recipe.protein_g}
-                  servingLabel="per portion"
+                  servingLabel={tr('cook.perPortion')}
                   emoji={foodEmoji(recipe.title)}
                   needs={recipe.ingredients.filter((i) => i.missing).map((i) => i.name)}
                   minutes={recipe.minutes}
@@ -707,7 +718,7 @@ export default function CookScreen() {
           </>
         ) : library.length === 0 ? (
           <Text style={[t.body, styles.centred, styles.aside, { color: colors.mutedForeground }]}>
-            Nothing matching &ldquo;{librarySearch}&rdquo;.
+            {tr('cook.nothingMatching')(librarySearch)}
           </Text>
         ) : (
           <>
@@ -718,7 +729,11 @@ export default function CookScreen() {
                   summary={recipe.summary}
                   kcal={recipe.kcal}
                   protein_g={recipe.protein_g}
-                  servingLabel={`per ${recipe.serving_size ?? 'portion'}`}
+                  servingLabel={
+                    recipe.serving_size
+                      ? tr('cook.per')(recipe.serving_size)
+                      : tr('cook.perPortion')
+                  }
                   photo={recipeImageUrl(recipe.image_path)}
                   fitsToday={recipe.fits_today}
                   have={recipe.have}
@@ -730,8 +745,7 @@ export default function CookScreen() {
               </Arriving>
           ))}
           <Text style={[t.footnote, styles.aside, { color: colors.mutedForeground }]}>
-            Real recipes from the USDA&rsquo;s public-domain collection, sorted by how much of one
-            you already have.
+            {tr('cook.libraryNote')}
           </Text>
         </>
       )}

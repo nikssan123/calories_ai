@@ -32,6 +32,7 @@ import { duration, ease, font, type as t, useColors, withAlpha, type Palette } f
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { haptics } from '@/lib/haptics';
 import { useLocale } from '@/lib/i18n';
+import { useT, type StringKey } from '@/lib/i18n';
 
 /**
  * The visual half of a turn — and the thing this app should be recognised by.
@@ -113,6 +114,7 @@ export function ChatActionCard({
  */
 function Removed({ children }: { children: React.ReactNode }) {
   const colors = useColors();
+  const tr = useT();
   return (
     <View style={styles.removed}>
       <View style={styles.removedCard} pointerEvents="none">
@@ -120,7 +122,7 @@ function Removed({ children }: { children: React.ReactNode }) {
       </View>
       <View style={styles.removedTag}>
         <View style={[styles.chipDot, { backgroundColor: colors.destructive }]} />
-        <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Removed</Text>
+        <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('chat.removed')}</Text>
       </View>
     </View>
   );
@@ -129,6 +131,7 @@ function Removed({ children }: { children: React.ReactNode }) {
 /** Actions with nothing to draw — a deletion — stay a line of text. */
 function Chip({ action }: { action: ChatAction }) {
   const colors = useColors();
+  const tr = useT();
   return (
     <Land>
       <Chunk
@@ -229,6 +232,7 @@ function RecipesCard({
  */
 function SuggestedRecipe({ recipe, onLogged }: { recipe: Recipe; onLogged?: () => void }) {
   const colors = useColors();
+  const tr = useT();
   const router = useRouter();
   const [servings, setServings] = useState(1);
   const [saved, setSaved] = useState(recipe.saved);
@@ -255,7 +259,7 @@ function SuggestedRecipe({ recipe, onLogged }: { recipe: Recipe; onLogged?: () =
         summary={recipe.summary}
         kcal={recipe.kcal}
         protein_g={recipe.protein_g}
-        servingLabel="per portion"
+        servingLabel={tr('cook.perPortion')}
         emoji={foodEmoji(recipe.title)}
         needs={recipe.ingredients.filter((i) => i.missing).map((i) => i.name)}
         minutes={recipe.minutes}
@@ -270,7 +274,7 @@ function SuggestedRecipe({ recipe, onLogged }: { recipe: Recipe; onLogged?: () =
       />
 
       <View style={styles.suggestionActions}>
-        <Servings value={servings} onChange={setServings} unit="portion" style={styles.flex} />
+        <Servings value={servings} onChange={setServings} unit={tr('recipe.portion')} style={styles.flex} />
         <PressableChunk
           depth={3}
           radius={999}
@@ -281,7 +285,7 @@ function SuggestedRecipe({ recipe, onLogged }: { recipe: Recipe; onLogged?: () =
           contentStyle={[styles.cook, { backgroundColor: colors.primary }]}
         >
           <Text style={[t.footnoteBold, { color: colors.primaryForeground }]}>
-            {cooking ? 'Logging…' : `I ate this · ${Math.round(scale(recipe.kcal, servings))}`}
+            {cooking ? tr('recipe.logging') : `I ate this · ${Math.round(scale(recipe.kcal, servings))}`}
           </Text>
         </PressableChunk>
       </View>
@@ -313,6 +317,7 @@ function WorkoutPrompt({
   const [logged, setLogged] = useState<ExerciseEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
   const colors = useColors();
+  const tr = useT();
 
   if (logged) return <ExerciseCard card={toExerciseCard(logged)} />;
 
@@ -382,6 +387,7 @@ function Land({ children, style }: { children: React.ReactNode; style?: StylePro
 
 function Shell({ children }: { children: React.ReactNode }) {
   const colors = useColors();
+  const tr = useT();
   return (
     <Land>
       <Chunk
@@ -393,11 +399,11 @@ function Shell({ children }: { children: React.ReactNode }) {
   );
 }
 
-const MEAL_LABEL: Record<string, string> = {
-  breakfast: 'Breakfast',
-  lunch: 'Lunch',
-  dinner: 'Dinner',
-  snack: 'Snack',
+const MEAL_LABEL: Record<string, StringKey> = {
+  breakfast: 'meal.breakfast',
+  lunch: 'meal.lunch',
+  dinner: 'meal.dinner',
+  snack: 'meal.snackOne',
 };
 
 /**
@@ -418,6 +424,7 @@ function FoodCard({
   onLogged?: () => void;
 }) {
   const colors = useColors();
+  const tr = useT();
   const [edited, setEdited] = useState<Extract<Card, { type: 'food' }> | null>(null);
   const [editing, setEditing] = useState(false);
 
@@ -480,6 +487,7 @@ function FoodReceipt({
   onEdit: () => void;
 }) {
   const colors = useColors();
+  const tr = useT();
   const approx = card.confidence !== 'high';
   const macros = [
     { value: card.protein_g, label: 'P', fill: colors.protein, text: colors.proteinText },
@@ -503,8 +511,8 @@ function FoodReceipt({
               {card.description}
             </Text>
             <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-              {MEAL_LABEL[card.meal] ?? card.meal}
-              {card.confidence === 'low' && ' · rough estimate'}
+              {MEAL_LABEL[card.meal] ? tr(MEAL_LABEL[card.meal]!) : card.meal}
+              {card.confidence === 'low' && ` · ${tr('today.roughEstimate')}`}
             </Text>
           </View>
         </View>
@@ -554,7 +562,7 @@ function FoodReceipt({
         hitSlop={8}
         style={({ pressed }) => [styles.editRow, { opacity: pressed ? 0.6 : 1 }]}
       >
-        <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Edit</Text>
+        <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('common.edit')}</Text>
       </Pressable>
 
       {card.day && <DayProgress day={card.day} today={today} />}
@@ -586,6 +594,7 @@ function DayProgress({
 }) {
   const locale = useLocale();
   const colors = useColors();
+  const tr = useT();
 
   const target = Math.max(1, Math.round(day.target_kcal));
   const before = Math.max(0, Math.round(day.kcal_before));
@@ -790,6 +799,7 @@ function ExerciseCard({
   onLogged?: () => void;
 }) {
   const colors = useColors();
+  const tr = useT();
   const units = useUnits();
   const [edited, setEdited] = useState<Extract<Card, { type: 'exercise' }> | null>(null);
   const [editing, setEditing] = useState(false);
@@ -830,7 +840,7 @@ function ExerciseCard({
           hitSlop={8}
           style={({ pressed }) => [styles.editRow, { opacity: pressed ? 0.6 : 1 }]}
         >
-          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Cancel</Text>
+          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('common.cancel')}</Text>
         </Pressable>
         {error && (
           <Text style={[t.footnoteSemibold, { color: colors.destructive }]}>{error}</Text>
@@ -855,9 +865,9 @@ function ExerciseCard({
       </View>
 
       <Text style={[t.footnote, styles.subline, { color: colors.mutedForeground }]}>
-        {detail.length > 0 ? detail.join(' · ') : 'Burn is an estimate'}
+        {detail.length > 0 ? detail.join(' · ') : tr('chat.burnEstimate')}
         {/* §9 restated where the burn is: it is not a credit to spend. */}
-        {' · not added to your budget'}
+        {tr('chat.notAddedToBudget')}
       </Text>
 
       {/*
@@ -873,7 +883,7 @@ function ExerciseCard({
         hitSlop={8}
         style={({ pressed }) => [styles.editRow, { opacity: pressed ? 0.6 : 1 }]}
       >
-        <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Edit</Text>
+        <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('common.edit')}</Text>
       </Pressable>
 
       {/*
@@ -955,6 +965,7 @@ function WeightCard({
   onLogged?: () => void;
 }) {
   const colors = useColors();
+  const tr = useT();
   const units = useUnits();
   const [weight, setWeight] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
@@ -967,7 +978,7 @@ function WeightCard({
   async function save() {
     const typed = Number(draft);
     if (!Number.isFinite(typed) || typed <= 0) {
-      setError('That is not a weight.');
+      setError(tr('chat.notAWeight'));
       return;
     }
     setSaving(true);
@@ -997,7 +1008,7 @@ function WeightCard({
           <TextInput
             value={draft}
             onChangeText={(next) => setDraft(next.replace(/[^0-9.]/g, ''))}
-            accessibilityLabel="Weight"
+            accessibilityLabel={tr('today.weight')}
             keyboardType="decimal-pad"
             autoFocus
             style={[
@@ -1028,7 +1039,7 @@ function WeightCard({
             accessibilityRole="button"
             hitSlop={8}
           >
-            <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Cancel</Text>
+            <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('common.cancel')}</Text>
           </Pressable>
           <PressableChunk
             depth={3}
@@ -1041,7 +1052,7 @@ function WeightCard({
             contentStyle={[styles.weightSave, { backgroundColor: colors.primary }]}
           >
             <Text style={[t.footnoteBold, { color: colors.primaryForeground }]}>
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? tr('setup.saving') : tr('common.save')}
             </Text>
           </PressableChunk>
         </View>
@@ -1080,11 +1091,11 @@ function WeightCard({
             setEditing(true);
           }}
           accessibilityRole="button"
-          accessibilityLabel="Edit this weigh-in"
+          accessibilityLabel={tr('chat.editWeighIn')}
           hitSlop={8}
           style={({ pressed }) => [styles.editRow, { opacity: pressed ? 0.6 : 1 }]}
         >
-          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Edit</Text>
+          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('common.edit')}</Text>
         </Pressable>
       )}
     </Shell>
@@ -1093,6 +1104,7 @@ function WeightCard({
 
 function TrendCard({ card }: { card: Extract<Card, { type: 'trend' }> }) {
   const colors = useColors();
+  const tr = useT();
   const metricColor: Record<string, string> = {
     calories: colors.calories,
     protein: colors.protein,
@@ -1146,13 +1158,14 @@ function TrendCard({ card }: { card: Extract<Card, { type: 'trend' }> }) {
 function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
   const locale = useLocale();
   const colors = useColors();
+  const tr = useT();
   const remaining = card.targets.kcal - card.consumed.kcal;
   const over = remaining < 0;
   const pct = Math.min(100, (card.consumed.kcal / Math.max(1, card.targets.kcal)) * 100);
   const macros = [
-    { key: 'protein_g', label: 'Protein', color: colors.proteinText },
-    { key: 'carbs_g', label: 'Carbs', color: colors.carbsText },
-    { key: 'fat_g', label: 'Fat', color: colors.fatText },
+    { key: 'protein_g', label: tr('macro.protein'), color: colors.proteinText },
+    { key: 'carbs_g', label: tr('macro.carbs'), color: colors.carbsText },
+    { key: 'fat_g', label: tr('macro.fat'), color: colors.fatText },
   ] as const;
 
   return (
@@ -1225,6 +1238,7 @@ function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
  */
 function PlanCard({ card }: { card: Extract<Card, { type: 'plan' }> }) {
   const colors = useColors();
+  const tr = useT();
   const planned = card.nights.filter((night) => night.title !== null);
 
   return (
@@ -1259,7 +1273,7 @@ function PlanCard({ card }: { card: Extract<Card, { type: 'plan' }> }) {
                 night.cooked ? styles.cooked : null,
               ]}
             >
-              {night.title ?? 'Nothing planned'}
+              {night.title ?? tr('chat.nothingPlanned')}
             </Text>
             {night.kcal !== null && (
               <Text style={[t.footnoteBold, t.tnum, { color: colors.mutedForeground }]}>
@@ -1298,6 +1312,7 @@ function ReviewCard({
 }) {
   const locale = useLocale();
   const colors = useColors();
+  const tr = useT();
   const units = useUnits();
   const [open, setOpen] = useState(false);
 
@@ -1324,7 +1339,7 @@ function ReviewCard({
   return (
     <Shell>
       <View style={styles.headRow}>
-        <Text style={[t.bodyBold, styles.flex, { color: colors.foreground }]}>Last week</Text>
+        <Text style={[t.bodyBold, styles.flex, { color: colors.foreground }]}>{tr('chat.lastWeek')}</Text>
         <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
           {formatDate(card.week_start, locale)} – {formatDate(card.week_end, locale)}
         </Text>
@@ -1365,7 +1380,7 @@ function ReviewCard({
       </View>
       <Text style={[t.footnote, styles.caption, { color: colors.mutedForeground }]}>
         {card.days_logged === 0
-          ? 'Nothing logged this week.'
+          ? tr('chat.nothingLoggedThisWeek')
           : `${card.days_logged} day${card.days_logged === 1 ? '' : 's'} logged, ${card.days_on_target} within 10% of target.`}
       </Text>
 
@@ -1378,7 +1393,7 @@ function ReviewCard({
         {card.weight_change_kg !== null ? (
           <Figure
             value={formatWeightDelta(card.weight_change_kg, units)}
-            label="on the scale"
+            label={tr('chat.onTheScale')}
           />
         ) : card.exercise_sessions > 0 ? (
           <Figure
@@ -1447,7 +1462,7 @@ function ReviewCard({
           style={styles.reviewMore}
         >
           <Text style={[t.footnoteBold, { color: colors.caloriesText }]}>
-            {open ? 'Show less' : `Read the rest (${rest} more)`}
+            {open ? tr('chat.showLess') : `Read the rest (${rest} more)`}
           </Text>
         </Pressable>
       )}
@@ -1458,6 +1473,7 @@ function ReviewCard({
 /** A number and what it is a number of. Two of them make the review's top line. */
 function Figure({ value, unit, label }: { value: string; unit?: string; label: string }) {
   const colors = useColors();
+  const tr = useT();
   return (
     <View style={styles.flex}>
       <Text style={[t.figure, styles.reviewFigure, { color: colors.foreground }]}>

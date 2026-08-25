@@ -9,6 +9,7 @@ import type {
   ExerciseTracks,
   ExerciseType,
   LastWorkout,
+  Locale,
   MuscleGroup,
   Routine,
   UnitSystem,
@@ -29,6 +30,7 @@ import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
+import { useLocale, useT, type StringKey } from '@/lib/i18n';
 
 /**
  * The question a session prompts, answered in the conversation.
@@ -51,12 +53,12 @@ import { haptics } from '@/lib/haptics';
  * answered days ago.
  */
 
-const CATEGORY_LABEL: Record<ExerciseCategory, string> = {
-  strength: 'Weights',
-  cardio: 'Cardio',
-  class: 'A class',
-  sport: 'Sport',
-  flexibility: 'Stretching',
+const CATEGORY_LABEL: Record<ExerciseCategory, StringKey> = {
+  strength: 'workout.strength',
+  cardio: 'workout.cardio',
+  class: 'workout.classMobile',
+  sport: 'workout.sport',
+  flexibility: 'workout.flexibilityMobile',
 };
 
 /**
@@ -132,6 +134,8 @@ export function WorkoutCard({
   onError: (message: string) => void;
 }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const units = useUnits();
 
   const [category, setCategory] = useState<ExerciseCategory>(
@@ -242,7 +246,7 @@ export function WorkoutCard({
         )
       : // Nothing to read muscles off. The kind is all this session is, so it is
         // also the most it can honestly be called.
-        CATEGORY_LABEL[category];
+        tr(CATEGORY_LABEL[category]);
 
   function patchSet(exercise: number, set: number, next: Partial<DraftSet>) {
     setExercises((prev) =>
@@ -364,7 +368,7 @@ export function WorkoutCard({
           from_entry_id: entry.id,
           duration_min: minutes,
         })
-          .catch(() => onError('Logged, but the workout did not save'));
+          .catch(() => onError(tr('workout.routineNotSavedMobile')));
       }
 
       haptics.logged();
@@ -383,7 +387,7 @@ export function WorkoutCard({
       contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
     >
       <Text style={[t.bodyBold, { color: colors.foreground }]}>
-        {editing ? 'Fix what’s wrong' : 'What did you do?'}
+        {editing ? tr('workout.fixWhatsWrong') : tr('workout.whatDidYouDo')}
       </Text>
       {card?.heard && (
         <Text style={[t.footnote, styles.heard, { color: colors.mutedForeground }]}>
@@ -425,7 +429,7 @@ export function WorkoutCard({
                   { color: on ? colors.primaryForeground : colors.mutedForeground },
                 ]}
               >
-                {CATEGORY_LABEL[key]}
+                {tr(CATEGORY_LABEL[key])}
               </Text>
             </Pressable>
           );
@@ -437,7 +441,7 @@ export function WorkoutCard({
       {ordered.length > 0 && (
         <>
           <Text style={[t.footnote, styles.label, { color: colors.mutedForeground }]}>
-            Your workouts
+            {tr('workout.yourWorkouts')}
           </Text>
           <View style={styles.chips}>
             {ordered.map((routine) => {
@@ -464,7 +468,7 @@ export function WorkoutCard({
                     ]}
                   >
                     {routine.emoji} {routine.name}
-                    {routine.usual_weekday === today && !on ? ' · today' : ''}
+                    {routine.usual_weekday === today && !on ? tr('workout.today') : ''}
                   </Text>
                 </Pressable>
               );
@@ -474,7 +478,7 @@ export function WorkoutCard({
       )}
 
       {/* The whole required answer. Everything under it is optional. */}
-      <Text style={[t.footnote, styles.label, { color: colors.mutedForeground }]}>How long?</Text>
+      <Text style={[t.footnote, styles.label, { color: colors.mutedForeground }]}>{tr('workout.howLong')}</Text>
       <View style={styles.durations}>
         {DURATIONS.map((value) => {
           const on = minutes === value;
@@ -546,7 +550,7 @@ export function WorkoutCard({
                       <Cell
                         value={set.reps}
                         onChange={(reps) => patchSet(i, j, { reps })}
-                        unit="reps"
+                        unit={tr('workout.reps')}
                       />
                       <Cell
                         value={set.weight}
@@ -559,7 +563,7 @@ export function WorkoutCard({
                     <Cell
                       value={set.minutes}
                       onChange={(m) => patchSet(i, j, { minutes: m })}
-                      unit="min"
+                      unit={tr('workout.min')}
                     />
                   )}
                 </View>
@@ -593,7 +597,7 @@ export function WorkoutCard({
               session is exactly the friction that stops people logging at all. */}
           <View style={[styles.picker, { borderTopColor: colors.border }]}>
             {types === null ? (
-              <Text style={[t.footnote, { color: colors.mutedForeground }]}>Loading…</Text>
+              <Text style={[t.footnote, { color: colors.mutedForeground }]}>{tr('common.loading')}</Text>
             ) : (
               <View style={styles.chips}>
                 {types
@@ -648,7 +652,7 @@ export function WorkoutCard({
               style={({ pressed }) => [styles.quiet, { opacity: pressed ? 0.6 : 1 }]}
             >
               <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-                ↻ same as {when(last.local_date)}
+                {tr('workout.sameAsShort')(when(last.local_date, locale, tr))}
               </Text>
             </Pressable>
           )}
@@ -675,8 +679,8 @@ export function WorkoutCard({
             <TextInput
               value={saveAs}
               onChangeText={setSaveAs}
-              accessibilityLabel="Name for this workout"
-              placeholder="Name it"
+              accessibilityLabel={tr('workout.nameForThis')}
+              placeholder={tr('workout.nameIt')}
               placeholderTextColor={colors.mutedForeground}
               style={[
                 t.bodySemibold,
@@ -691,7 +695,7 @@ export function WorkoutCard({
             <Pressable
               onPress={() => setSaveAs(null)}
               accessibilityRole="button"
-              accessibilityLabel="Don’t save this as a workout"
+              accessibilityLabel={tr('workout.dontSave')}
               hitSlop={8}
             >
               <Svg width={13} height={13} viewBox="0 0 24 24">
@@ -722,10 +726,10 @@ export function WorkoutCard({
             {editing
               ? saving
                 ? 'Saving…'
-                : 'Save changes'
+                : tr('workout.saveChanges')
               : saving
                 ? 'Logging…'
-                : 'Log it'}
+                : tr('workout.logIt')}
           </Text>
         </PressableChunk>
       </View>
@@ -753,6 +757,8 @@ function Cell({
   decimal?: boolean;
 }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   return (
     <View style={[styles.cell, { backgroundColor: colors.mutedField, borderColor: colors.border }]}>
       <TextInput
@@ -869,13 +875,15 @@ function nearestDuration(min: number): number {
  * "Tuesday" for anything inside the last week, a date beyond it. A session two
  * months old is worth offering back but not worth calling recent.
  */
-function when(localDate: string): string {
+function when(localDate: string, locale: Locale, tr: ReturnType<typeof useT>): string {
   const then = new Date(`${localDate}T12:00:00`);
   const days = Math.round((Date.now() - then.getTime()) / 86_400_000);
-  if (days <= 0) return 'today';
-  if (days === 1) return 'yesterday';
-  if (days < 7) return then.toLocaleDateString(undefined, { weekday: 'long' });
-  return then.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  if (days <= 0) return tr('common.today').toLocaleLowerCase(locale);
+  if (days === 1) return tr('common.yesterday').toLocaleLowerCase(locale);
+  // `undefined` used to mean "whatever locale the OS is in", which is not the
+  // language the rest of this sentence is written in.
+  if (days < 7) return then.toLocaleDateString(locale, { weekday: 'long' });
+  return then.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
 }
 
 const styles = StyleSheet.create({

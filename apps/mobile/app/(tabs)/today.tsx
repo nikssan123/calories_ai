@@ -265,8 +265,8 @@ export default function TodayScreen() {
             ? intent.payload.description
             : intent.kind === 'repeat'
               ? intent.preview.description
-              : 'That change';
-        toast.error(`${what} could not be saved. ${reason}`);
+              : tr('today.thatChange');
+        toast.error(tr('today.couldNotSave')(what, reason));
         void load(shown.current);
       }),
     [load, toast],
@@ -767,14 +767,14 @@ export default function TodayScreen() {
 
           {day.exercise_entries.length > 0 && (
             <InsetGroup
-              title="🏃  Exercise"
+              title={tr('today.exerciseTitle')}
               trailing={
                 <Text style={[t.footnoteBold, t.tnum, { color: colors.exerciseText }]}>
                   −{day.burned_kcal} kcal
                 </Text>
               }
               // §9: exercise is reported beside food, never netted off the target.
-              footer="Shown separately from your target — exercise burn is a rough estimate."
+              footer={tr('today.exerciseFooter')}
             >
               {day.exercise_entries.map((entry, i) => (
                 <SwipeRow
@@ -852,8 +852,8 @@ export default function TodayScreen() {
             */}
           {waiting > 0 && (
             <Text style={[t.footnote, styles.centred, { color: colors.mutedForeground }]}>
-              {waiting === 1 ? '1 change waiting to sync' : `${waiting} changes waiting to sync`}
-              {!live && ' · showing your last saved day'}
+              {tr('today.waitingToSync')(waiting)}
+              {!live && tr('today.lastSavedDay')}
             </Text>
           )}
 
@@ -1002,10 +1002,13 @@ function EntryRow({
             {entry.description}
           </Text>
           <Text style={[t.footnote, t.tnum, { color: colors.mutedForeground }]}>
-            {Math.round(entry.protein_g)}P · {Math.round(entry.carbs_g)}C ·{' '}
-            {Math.round(entry.fat_g)}F
-            {entry.confidence === 'low' && ' · rough estimate'}
-            {unsent && ' · waiting to sync'}
+            {tr('today.macroLine')(
+              String(Math.round(entry.protein_g)),
+              String(Math.round(entry.carbs_g)),
+              String(Math.round(entry.fat_g)),
+            )}
+            {entry.confidence === 'low' && ` · ${tr('today.roughEstimate')}`}
+            {unsent && tr('today.unsent')}
           </Text>
         </View>
         <Text style={[t.figure, styles.figure, { color: colors.foreground }]}>
@@ -1043,7 +1046,7 @@ function EntryRow({
               {tr('today.changeHint')}
             </Text>
             <TextButton icon="repeat" label={tr('today.logAgain')} onPress={onRepeat} />
-            <TextButton icon="trash" label="Delete" onPress={onDelete} tone={colors.destructive} />
+            <TextButton icon="trash" label={tr('common.delete')} onPress={onDelete} tone={colors.destructive} />
           </View>
         </View>
       )}

@@ -6,6 +6,7 @@ import { PressableChunk } from '@/components/Chunk';
 import { Sheet } from '@/components/Field';
 import { api } from '@/lib/api';
 import { pickPhoto, takePhoto, uploadPhotoFile } from '@/lib/image';
+import { useT } from '@/lib/i18n';
 import { font, type as t, useColors } from '@/theme';
 
 /**
@@ -60,6 +61,7 @@ export function FridgeScan({
   variant?: 'chip' | 'button' | 'icon';
 }) {
   const colors = useColors();
+  const tr = useT();
   const [choosing, setChoosing] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [proposal, setProposal] = useState<PantryScanProposal | null>(null);
@@ -149,7 +151,7 @@ export function FridgeScan({
         onPress={() => setChoosing(true)}
         disabled={scanning}
         accessibilityRole="button"
-        accessibilityLabel={variant === 'icon' ? 'Photograph your shelf' : undefined}
+        accessibilityLabel={variant === 'icon' ? tr('scan.photographShelf') : undefined}
         style={({ pressed }) => [
           variant === 'chip' ? styles.chip : variant === 'icon' ? styles.square : styles.wide,
           {
@@ -185,22 +187,22 @@ export function FridgeScan({
             ]}
           >
             {scanning
-              ? 'Looking…'
+              ? tr('scan.looking')
               : variant === 'chip'
-                ? 'scan your fridge'
-                : 'Photograph your shelf'}
+                ? tr('scan.scanYourFridge')
+                : tr('scan.photographShelf')}
           </Text>
         )}
       </Pressable>
 
-      <Sheet open={choosing} title="Photograph your shelf" onClose={() => setChoosing(false)}>
-        <Choice label="Take a photo" onPress={() => void scan('camera')} />
-        <Choice label="Choose a photo" onPress={() => void scan('library')} />
+      <Sheet open={choosing} title={tr('scan.photographShelf')} onClose={() => setChoosing(false)}>
+        <Choice label={tr('composer.takePhoto')} onPress={() => void scan('camera')} />
+        <Choice label={tr('composer.choosePhoto')} onPress={() => void scan('library')} />
       </Sheet>
 
       <Sheet
         open={proposal !== null}
-        title="Is this what I'm looking at?"
+        title={tr('scan.isThisIt')}
         onClose={() => !busy && setProposal(null)}
       >
         {proposal && (
@@ -252,7 +254,7 @@ export function FridgeScan({
                       <Text style={[t.body, { color: colors.foreground }]}>{find.name}</Text>
                       {(find.quantity_desc || find.confidence === 'low') && (
                         <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-                          {[find.quantity_desc, find.confidence === 'low' ? 'not sure' : null]
+                          {[find.quantity_desc, find.confidence === 'low' ? tr('scan.notSure') : null]
                             .filter(Boolean)
                             .join(' · ')}
                         </Text>
@@ -276,7 +278,7 @@ export function FridgeScan({
                 ]}
               >
                 <Text style={[t.bodyBold, { color: colors.secondaryForeground }]}>
-                  {saving === 'stock' ? 'Adding…' : 'Add to kitchen'}
+                  {saving === 'stock' ? tr('scan.adding') : tr('scan.addToKitchenShort')}
                 </Text>
               </PressableChunk>
 
@@ -291,7 +293,7 @@ export function FridgeScan({
                   contentStyle={[styles.button, { backgroundColor: colors.primary }]}
                 >
                   <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
-                    {saving === 'cook' ? 'Cooking…' : 'Cook from these'}
+                    {saving === 'cook' ? tr('scan.cooking') : tr('scan.cookFromThese')}
                   </Text>
                 </PressableChunk>
               )}

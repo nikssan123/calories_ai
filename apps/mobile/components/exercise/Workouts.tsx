@@ -2,13 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import type { ExerciseType, Routine, WeekSchedule } from '@ct/shared';
-import { WEEKDAY_NAMES, WEEK_ORDER } from '@ct/shared';
+import { WEEK_ORDER, weekdayName } from '@ct/shared';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { PressableChunk } from '@/components/Chunk';
 import { WorkoutCard } from '@/components/workout/WorkoutCard';
 import { api } from '@/lib/api';
 import { haptics } from '@/lib/haptics';
 import { font, type as t, useColors } from '@/theme';
+import { useLocale, useT } from '@/lib/i18n';
 
 /**
  * Saved workouts and the week they sit in, on the Exercise screen.
@@ -25,6 +26,8 @@ import { font, type as t, useColors } from '@/theme';
  */
 export function Workouts({ onLogged }: { onLogged: () => void }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const [routines, setRoutines] = useState<Routine[] | null>(null);
   const [week, setWeek] = useState<WeekSchedule | null>(null);
   const [logging, setLogging] = useState(false);
@@ -108,7 +111,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
           onError={setError}
         />
         <Pressable onPress={() => setLogging(false)} accessibilityRole="button" hitSlop={8}>
-          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Cancel</Text>
+          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('common.cancel')}</Text>
         </Pressable>
       </View>
     );
@@ -133,46 +136,45 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
         accessibilityRole="button"
         contentStyle={[styles.logButton, { backgroundColor: colors.primary }]}
       >
-        <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>+ Log a workout</Text>
+        <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>{tr('workouts.logActionMobile')}</Text>
       </PressableChunk>
 
       <InsetGroup
-        title="🏋️  Saved workouts"
+        title={tr('workouts.savedTitle')}
         trailing={
           <Pressable onPress={() => setEditing('new')} accessibilityRole="button" hitSlop={8}>
-            <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Build one</Text>
+            <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('workouts.buildOne')}</Text>
           </Pressable>
         }
         footer={
           failed
             ? undefined
             : routines && routines.length > 0
-              ? 'One tap fills the whole card in, with the weights you used last time.'
+              ? tr('workouts.reuseHint')
               : // Says where the session went. Empty here does not mean nothing
                 // was logged — the sessions are in the history further down the
                 // screen — and this panel sitting empty right after logging one
                 // is exactly the moment that reads as a lost workout.
-                'Sessions you log appear in the history below. This list is only for workouts you want to repeat.'
+                tr('workouts.whereSessionsGo')
         }
       >
         {failed ? (
           <View style={styles.failedBlock}>
             <Text style={[t.body, styles.centred, { color: colors.mutedForeground }]}>
-              Couldn’t load your saved workouts.
+              {tr('workouts.loadFailed')}
             </Text>
             <Pressable onPress={() => void load()} accessibilityRole="button" hitSlop={8}>
-              <Text style={[t.footnoteSemibold, { color: colors.foreground }]}>Try again</Text>
+              <Text style={[t.footnoteSemibold, { color: colors.foreground }]}>{tr('common.retry')}</Text>
             </Pressable>
           </View>
         ) : routines === null ? (
           <InsetRow>
-            <Text style={[t.footnote, { color: colors.mutedForeground }]}>Loading…</Text>
+            <Text style={[t.footnote, { color: colors.mutedForeground }]}>{tr('common.loading')}</Text>
           </InsetRow>
         ) : routines.length === 0 ? (
           <View style={styles.empty}>
             <Text style={[t.body, styles.centred, { color: colors.mutedForeground }]}>
-              No workouts saved yet. A saved workout is a list you reuse — log a session with its
-              exercises and take the offer to name it, or build one here.
+              {tr('workouts.noneSavedMobile')}
             </Text>
           </View>
         ) : (
@@ -188,11 +190,13 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
                       count. "0 exercises" would describe it as empty when it is
                       simply measured the other way. */}
                   {routine.exercises.length > 0
-                    ? `${routine.exercises.length} exercise${routine.exercises.length === 1 ? '' : 's'}`
-                    : `${routine.duration_min} min`}
-                  {routine.times_done > 0 ? ` · done ${routine.times_done}×` : ''}
+                    ? tr('workouts.exerciseCount')(routine.exercises.length)
+                    : tr('exercise.minutes')(String(routine.duration_min))}
+                  {routine.times_done > 0 ? tr('workouts.doneTimes')(String(routine.times_done)) : ''}
                   {routine.scheduled_weekdays.length > 0
-                    ? ` · ${routine.scheduled_weekdays.map((d) => WEEKDAY_NAMES[d]!.slice(0, 3)).join(', ')}`
+                    ? ` · ${routine.scheduled_weekdays
+                        .map((d) => weekdayName(d, locale, 'short'))
+                        .join(', ')}`
                     : ''}
                 </Text>
               </View>
@@ -202,7 +206,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
                 accessibilityLabel={`Edit ${routine.name}`}
                 hitSlop={8}
               >
-                <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Edit</Text>
+                <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('common.edit')}</Text>
               </Pressable>
               <Pressable
                 onPress={() => void remove(routine)}
@@ -219,8 +223,8 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
 
       {!failed && routines !== null && routines.length > 0 && (
         <InsetGroup
-          title="🗓️  Your week"
-          footer="Days you set are fixed. Days you leave open follow whatever you actually keep doing."
+          title={tr('workouts.weekTitle')}
+          footer={tr('workouts.weekFooter')}
         >
           {WEEK_ORDER.map((weekday) => {
             const day = week?.find((d) => d.weekday === weekday);
@@ -228,7 +232,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
             return (
               <InsetRow key={weekday}>
                 <Text style={[t.body, styles.dayName, { color: colors.foreground }]}>
-                  {WEEKDAY_NAMES[weekday]!.slice(0, 3)}
+                  {weekdayName(weekday, locale, 'short')}
                 </Text>
                 {/* A row of chips rather than a picker: a phone select is a
                     modal, and choosing between four things does not deserve one. */}
@@ -240,7 +244,10 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
                         key={routine.id}
                         onPress={() => void setDay(weekday, on ? null : routine.id)}
                         accessibilityRole="button"
-                        accessibilityLabel={`${routine.name} on ${WEEKDAY_NAMES[weekday]}`}
+                        accessibilityLabel={tr('workouts.routineOn')(
+                          routine.name,
+                          weekdayName(weekday, locale),
+                        )}
                         accessibilityState={{ selected: on }}
                         style={({ pressed }) => [
                           styles.dayChip,
@@ -269,7 +276,11 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
                   style={[t.footnote, styles.daySource, { color: colors.mutedForeground }]}
                   numberOfLines={1}
                 >
-                  {declared ? 'set' : day?.source === 'learned' ? `${day.routine_name}?` : ''}
+                  {declared
+                    ? tr('workouts.set')
+                    : day?.source === 'learned'
+                      ? tr('workouts.learnedGuess')(day.routine_name ?? '')
+                      : ''}
                 </Text>
               </InsetRow>
             );
@@ -289,6 +300,8 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
  */
 function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: () => void }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const [name, setName] = useState(routine?.name ?? '');
   const [types, setTypes] = useState<ExerciseType[] | null>(null);
   const [chosen, setChosen] = useState<{ name: string; typeId: string | null; sets: number }[]>(
@@ -338,16 +351,16 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
   }
 
   return (
-    <InsetGroup title={routine ? '✏️  Edit workout' : '🏋️  Build a workout'}>
+    <InsetGroup title={routine ? tr('workouts.editTitle') : tr('workouts.buildTitle')}>
       <View style={styles.editor}>
         {error && <Text style={[t.footnote, { color: colors.destructive }]}>{error}</Text>}
 
         <TextInput
           value={name}
           onChangeText={setName}
-          placeholder="Push, Chest day, Legs A…"
+          placeholder={tr('workouts.namePlaceholder')}
           placeholderTextColor={colors.mutedForeground}
-          accessibilityLabel="Workout name"
+          accessibilityLabel={tr('workouts.nameLabel')}
           style={[
             t.bodySemibold,
             styles.nameField,
@@ -385,7 +398,7 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
         ))}
 
         {types === null ? (
-          <Text style={[t.footnote, { color: colors.mutedForeground }]}>Loading…</Text>
+          <Text style={[t.footnote, { color: colors.mutedForeground }]}>{tr('common.loading')}</Text>
         ) : (
           <View style={styles.chips}>
             {types
@@ -417,7 +430,7 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
 
         <View style={styles.editorFoot}>
           <Pressable onPress={onDone} accessibilityRole="button" hitSlop={8}>
-            <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Cancel</Text>
+            <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('common.cancel')}</Text>
           </Pressable>
           <PressableChunk
             depth={3}
@@ -430,7 +443,7 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
             contentStyle={[styles.save, { backgroundColor: colors.primary }]}
           >
             <Text style={[t.footnoteBold, { color: colors.primaryForeground }]}>
-              {saving ? 'Saving…' : 'Save'}
+              {saving ? tr('setup.saving') : tr('common.save')}
             </Text>
           </PressableChunk>
         </View>
@@ -441,6 +454,8 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
 
 function Stepper({ value, onChange }: { value: number; onChange: (next: number) => void }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const step = (delta: number) => () => {
     haptics.press();
     onChange(Math.min(30, Math.max(1, value + delta)));
@@ -450,7 +465,7 @@ function Stepper({ value, onChange }: { value: number; onChange: (next: number) 
       <Pressable
         onPress={step(-1)}
         accessibilityRole="button"
-        accessibilityLabel="One fewer set"
+        accessibilityLabel={tr('workouts.oneFewerSetShort')}
         hitSlop={6}
         style={[styles.stepButton, { backgroundColor: colors.card }]}
       >
@@ -462,7 +477,7 @@ function Stepper({ value, onChange }: { value: number; onChange: (next: number) 
       <Pressable
         onPress={step(1)}
         accessibilityRole="button"
-        accessibilityLabel="One more set"
+        accessibilityLabel={tr('workouts.oneMoreSetShort')}
         hitSlop={6}
         style={[styles.stepButton, { backgroundColor: colors.card }]}
       >

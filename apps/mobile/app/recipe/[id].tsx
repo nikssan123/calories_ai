@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Recipe } from '@ct/shared';
-import { formatMass } from '@ct/shared';
+import { formatDay, formatMass, formatNumber } from '@ct/shared';
 import { foodEmoji } from '@ct/shared/food-emoji';
 import { PressableChunk } from '@/components/Chunk';
 import { RecipeReader } from '@/components/kitchen/RecipeReader';
@@ -14,6 +14,7 @@ import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
+import { useLocale, useT, type StringKey } from '@/lib/i18n';
 
 /**
  * A recipe written for this person, on its own screen.
@@ -29,20 +30,22 @@ import { haptics } from '@/lib/haptics';
  * underneath them were arrived at differently.
  */
 
-const ORIGIN_EYEBROW: Record<Recipe['origin'], string> = {
-  invented: 'Made for your kitchen',
-  adapted: 'Adapted for you',
-  imported: 'Your own recipe',
+const ORIGIN_EYEBROW: Record<Recipe['origin'], StringKey> = {
+  invented: 'recipe.madeForKitchen',
+  adapted: 'recipe.adaptedForYou',
+  imported: 'recipe.yourOwn',
 };
 
-const CONFIDENCE_NOTE: Record<Recipe['confidence'], string> = {
-  high: 'The numbers here are as good as this app gets without weighing anything.',
-  medium: 'The numbers are an estimate — close enough to log, worth a second look if it matters.',
-  low: 'These numbers are a rough guess. Weigh what you can if the day is tight.',
+const CONFIDENCE_NOTE: Record<Recipe['confidence'], StringKey> = {
+  high: 'recipe.confidenceHigh',
+  medium: 'recipe.confidenceMedium',
+  low: 'recipe.confidenceLow',
 };
 
 export default function GeneratedRecipeScreen() {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const toast = useToast();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -83,7 +86,9 @@ export default function GeneratedRecipeScreen() {
       //
       // Which is exactly why the receipt is a toast: this screen is on its way
       // out, so anything said on it would be said to nobody.
-      toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
+      toast.success(
+        tr('recipe.logged')(entry.description, formatNumber(Math.round(entry.kcal), locale)),
+      );
       router.back();
     } catch (e) {
       setError((e as Error).message);
@@ -124,8 +129,8 @@ export default function GeneratedRecipeScreen() {
 
   return (
     <RecipeReader
-      backLabel="Cook"
-      eyebrow={ORIGIN_EYEBROW[recipe.origin]}
+      backLabel={tr('cook.title')}
+      eyebrow={tr(ORIGIN_EYEBROW[recipe.origin])}
       title={recipe.title}
       summary={recipe.summary}
       emoji={foodEmoji(recipe.title)}
@@ -133,7 +138,9 @@ export default function GeneratedRecipeScreen() {
       protein_g={scale(recipe.protein_g, servings)}
       carbs_g={scale(recipe.carbs_g, servings)}
       fat_g={scale(recipe.fat_g, servings)}
-      servingLabel={servings === 1 ? 'per portion' : `for ${formatServings(servings)} portions`}
+      servingLabel={
+        servings === 1 ? tr('cook.perPortion') : tr('recipe.forPortions')(formatServings(servings))
+      }
       portions={recipe.portions}
       minutes={recipe.minutes}
       ingredients={recipe.ingredients.map((i) => ({
@@ -146,15 +153,18 @@ export default function GeneratedRecipeScreen() {
       onToggleSave={() => void toggleSaved()}
       footnote={
         <>
-          {CONFIDENCE_NOTE[recipe.confidence]}
+          {tr(CONFIDENCE_NOTE[recipe.confidence])}
           {recipe.generated_for &&
-            ` Written against the ${Math.round(recipe.generated_for.kcal_remaining)} kcal you had left on ${recipe.generated_for.local_date}.`}
+            tr('recipe.writtenAgainst')(
+              formatNumber(Math.round(recipe.generated_for.kcal_remaining), locale),
+              formatDay(recipe.generated_for.local_date, locale),
+            )}
           {error && ` ${error}`}
         </>
       }
       actions={
         <View style={styles.actions}>
-          <Servings value={servings} onChange={setServings} unit="portion" />
+          <Servings value={servings} onChange={setServings} unit={tr('recipe.portion')} />
           <PressableChunk
             radius={999}
             color={colors.caloriesDeep}
@@ -165,8 +175,10 @@ export default function GeneratedRecipeScreen() {
           >
             <Text style={[styles.cookLabel, { color: colors.primaryForeground }]}>
               {cooking
-                ? 'Logging…'
-                : `I ate this · ${Math.round(scale(recipe.kcal, servings))} kcal`}
+                ? tr('recipe.logging')
+                : tr('recipe.iAteThis')(
+                    formatNumber(Math.round(scale(recipe.kcal, servings)), locale),
+                  )}
             </Text>
           </PressableChunk>
         </View>

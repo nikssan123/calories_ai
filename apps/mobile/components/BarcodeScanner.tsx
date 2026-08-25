@@ -22,6 +22,7 @@ import { pickPhoto, takePhoto, type PreparedPhoto } from '@/lib/image';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
+import { useT } from '@/lib/i18n';
 
 /**
  * A packet, read off its barcode.
@@ -65,6 +66,7 @@ export function BarcodeScanner({
   onLabelPhoto: (photo: PreparedPhoto) => void;
 }) {
   const colors = useColors();
+  const tr = useT();
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const [stage, setStage] = useState<Stage>({ at: 'scanning' });
@@ -128,11 +130,11 @@ export function BarcodeScanner({
     <Modal visible={open} animationType="slide" onRequestClose={close}>
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
         <View style={[styles.bar, { paddingTop: insets.top + 8, borderBottomColor: colors.border }]}>
-          <Text style={[t.bodyBold, { color: colors.foreground }]}>Scan a barcode</Text>
+          <Text style={[t.bodyBold, { color: colors.foreground }]}>{tr('barcode.title')}</Text>
           <Pressable
             onPress={close}
             accessibilityRole="button"
-            accessibilityLabel="Close"
+            accessibilityLabel={tr('common.close')}
             hitSlop={10}
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
           >
@@ -169,7 +171,7 @@ export function BarcodeScanner({
                 <View style={styles.window} pointerEvents="none" />
                 <View style={styles.hint} pointerEvents="none">
                   <Text style={[t.footnoteSemibold, styles.hintText]}>
-                    {stage.at === 'looking' ? 'Looking it up…' : 'Point at the barcode'}
+                    {stage.at === 'looking' ? tr('barcode.lookingUp') : tr('barcode.pointAtBarcode')}
                   </Text>
                 </View>
               </>
@@ -178,8 +180,8 @@ export function BarcodeScanner({
                 <Text style={styles.mascot}>📷</Text>
                 <Text style={[t.body, styles.centred, { color: colors.foreground }]}>
                   {permission === null
-                    ? 'Checking the camera…'
-                    : 'The scanner needs the camera.'}
+                    ? tr('barcode.checkingCamera')
+                    : tr('barcode.needsCamera')}
                 </Text>
                 {permission !== null && !permission.granted && (
                   <>
@@ -309,6 +311,7 @@ function Portion({
   onError: (message: string) => void;
 }) {
   const colors = useColors();
+  const tr = useT();
   const units = useUnits();
   const basis = BASIS[units];
   const [mode, setMode] = useState<'serving' | 'hundred' | 'custom'>(
@@ -398,12 +401,12 @@ function Portion({
             />
           )}
           <Mode on={mode === 'hundred'} onPress={() => setMode('hundred')} label={basis.label} />
-          <Mode on={mode === 'custom'} onPress={() => setMode('custom')} label="Weigh it" />
+          <Mode on={mode === 'custom'} onPress={() => setMode('custom')} label={tr('barcode.weighIt')} />
         </View>
 
         {mode === 'serving' && (
           <View style={styles.stepper}>
-            <Text style={[t.body, { color: colors.foreground }]}>How many?</Text>
+            <Text style={[t.body, { color: colors.foreground }]}>{tr('barcode.howMany')}</Text>
             <View style={[styles.steps, { backgroundColor: colors.muted, borderColor: colors.border }]}>
               <Step
                 sign="minus"
@@ -425,7 +428,7 @@ function Portion({
         {mode === 'custom' && (
           <View style={styles.stepper}>
             <View style={styles.stepperLabel}>
-              <Text style={[t.body, { color: colors.foreground }]}>How much?</Text>
+              <Text style={[t.body, { color: colors.foreground }]}>{tr('barcode.howMuch')}</Text>
               {/* The field was already typable and nobody found it: a bare
                   figure between two buttons reads as the stepper's readout, so
                   people pressed + until they got close and logged that. */}
@@ -494,7 +497,7 @@ function Portion({
           contentStyle={[styles.button, { backgroundColor: colors.primary }]}
         >
           <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
-            {logging ? 'Logging…' : 'I ate this'}
+            {logging ? tr('recipe.logging') : tr('barcode.iAteThis')}
           </Text>
         </PressableChunk>
 
@@ -523,6 +526,7 @@ function Missed({
   onRescan: () => void;
 }) {
   const colors = useColors();
+  const tr = useT();
   return (
     <View style={styles.missed}>
       <Text style={styles.mascot}>🔍</Text>
@@ -548,7 +552,7 @@ function Missed({
       </PressableChunk>
 
       <Pressable onPress={onRescan} accessibilityRole="button" hitSlop={8}>
-        <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Scan another</Text>
+        <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('barcode.scanAnother')}</Text>
       </Pressable>
     </View>
   );
@@ -556,6 +560,7 @@ function Missed({
 
 function Mode({ on, onPress, label }: { on: boolean; onPress: () => void; label: string }) {
   const colors = useColors();
+  const tr = useT();
   return (
     <Pressable
       onPress={onPress}
@@ -603,6 +608,7 @@ function Step({
   onStep: () => void;
 }) {
   const colors = useColors();
+  const tr = useT();
   const armed = useRef<ReturnType<typeof setTimeout> | null>(null);
   const running = useRef<ReturnType<typeof setInterval> | null>(null);
   /** Whether the hold already moved the number, so the release does not again. */
@@ -653,7 +659,7 @@ function Step({
       onPressOut={stop}
       disabled={disabled}
       accessibilityRole="button"
-      accessibilityLabel={sign === 'plus' ? 'More' : 'Less'}
+      accessibilityLabel={sign === 'plus' ? tr('recipe.more') : tr('recipe.less')}
       accessibilityState={{ disabled: Boolean(disabled) }}
       style={({ pressed }) => [
         styles.step,

@@ -30,7 +30,7 @@ import type {
   Meal,
   UnitSystem,
 } from '@ct/shared';
-import { inferMeal, unitsOf } from '@ct/shared';
+import { formatNumber, inferMeal, unitsOf } from '@ct/shared';
 import { ChatActionCard } from '@/components/ChatCard';
 import { Composer, type ComposerPayload } from '@/components/Composer';
 import { FoodEditor } from '@/components/FoodEditor';
@@ -51,7 +51,7 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { haptics } from '@/lib/haptics';
 import { onEntryRemoved } from '@/lib/removals';
 import { writeDaySnapshot } from '@/lib/snapshot';
-import { useT } from '@/lib/i18n';
+import { useLocale, useT, type StringKey } from '@/lib/i18n';
 import { useOnboarding } from '@/lib/onboarding';
 
 /** Optimistic rows carry a local id until the server assigns the real one. */
@@ -105,20 +105,14 @@ const NEAR_BOTTOM_PX = 64;
  * because a distance without one is not a sentence anybody says — so there are
  * two lists rather than a placeholder to substitute into.
  */
-const PROMPTS: Record<UnitSystem, string[]> = {
-  metric: [
-    'Two eggs, toast and coffee',
-    'Chicken and rice for lunch',
-    'Went for a 5km run',
-    'Am I eating enough protein?',
-  ],
-  imperial: [
-    'Two eggs, toast and coffee',
-    'Chicken and rice for lunch',
-    'Went for a 3 mile run',
-    'Am I eating enough protein?',
-  ],
-};
+const RUN_DISTANCE: Record<UnitSystem, string> = { metric: '5km', imperial: '3 mile' };
+
+const prompts = (tr: ReturnType<typeof useT>, units: UnitSystem): string[] => [
+  tr('journal.promptEggs'),
+  tr('journal.promptLunch'),
+  tr('journal.promptRun')(RUN_DISTANCE[units]),
+  tr('journal.promptProtein'),
+];
 
 /**
  * The product itself: one continuous conversation.
@@ -131,6 +125,15 @@ export default function JournalScreen() {
   const colors = useColors();
   const { profile, refresh: refreshAuth, adoptProfile } = useAuth();
   const units = unitsOf(profile);
+  /*
+   * The language this screen is drawn in, which is also the language the reply
+   * has to come back in. Sent with every turn: the profile's preference wins on
+   * the server, and this is what answers for an account that has none — where
+   * the app is following the device and the model would otherwise write English
+   * underneath a Bulgarian interface. See `ChatRequest.locale`.
+   */
+  const locale = useLocale();
+  const tr = useT();
   const toast = useToast();
   const { adopt, refresh: refreshPlan } = useEntitlements();
 
@@ -402,6 +405,7 @@ export default function JournalScreen() {
             photo_base64: photoKey ? undefined : payload.photoBase64,
             photo_media_type: payload.photoMediaType,
             photo_upload_failed: uploadFailed || undefined,
+            locale,
           },
           // The stream is a preview of the reply, never the record of it:
           // `result` below is what actually lands in the conversation. So this
@@ -525,7 +529,16 @@ export default function JournalScreen() {
         setBusy(false);
       }
     },
-    [onboarding?.complete, refreshOnboarding, refreshAuth, adoptProfile, commitDay, adopt, refreshPlan],
+    [
+      locale,
+      onboarding?.complete,
+      refreshOnboarding,
+      refreshAuth,
+      adoptProfile,
+      commitDay,
+      adopt,
+      refreshPlan,
+    ],
   );
 
   // A new account opens straight into setup: the agent introduces itself and
@@ -535,8 +548,14 @@ export default function JournalScreen() {
     if (!onboarding || onboarding.complete) return;
     if (bubbles.length > 0) return;
     kickedOff.current = true;
-    void send({ text: "Hi — I'm new here. Let's get set up." });
-  }, [loading, onboarding, bubbles.length, send]);
+    /*
+     * In their language, not in English. This sentence is sent *as the user* —
+     * it is the first bubble in the transcript and the sentence the model
+     * answers — so an English one under a Bulgarian interface both reads wrong
+     * and quietly argues for an English reply.
+     */
+    void send({ text: tr('journal.kickoff') });
+  }, [loading, onboarding, bubbles.length, send, tr]);
 
   return (
     <KeyboardAvoidingView
@@ -574,14 +593,13 @@ export default function JournalScreen() {
                 that otherwise offers a new account a wall of text. */}
             <Text style={styles.mascot}>🍽️</Text>
             <Text style={[t.largeTitle, { color: colors.foreground }]}>
-              What have you eaten today?
+              {tr('journal.emptyTitle')}
             </Text>
             <Text style={[t.body, styles.blurb, { color: colors.mutedForeground }]}>
-              Type it or take a photo — whatever&apos;s easiest. No forms, nothing to search for.
-              Say what happened and I&apos;ll work out the rest.
+              {tr('journal.emptyBody')}
             </Text>
             <View style={styles.prompts}>
-              {PROMPTS[units].map((prompt) => (
+              {prompts(tr, units).map((prompt) => (
                 <PressableChunk
                   key={prompt}
                   depth={3}
@@ -684,35 +702,39 @@ function applyEvent(bubble: Bubble, event: ChatStreamEvent): Bubble {
  * place to update whenever a tool is added. An unknown verb falls through to
  * the plain dots.
  */
-const TOOL_VERBS: Record<string, string> = {
-  log: 'Logging',
-  update: 'Updating',
-  delete: 'Removing',
-  get: 'Checking',
-  search: 'Looking back',
-  find: 'Finding',
-  set: 'Saving',
-  show: 'Drawing',
-  suggest: 'Thinking up',
-  import: 'Importing',
-  adapt: 'Adapting',
-  save: 'Saving',
-  plan: 'Planning',
-  cook: 'Cooking',
-  repeat: 'Repeating',
-  remember: 'Remembering',
-  forget: 'Forgetting',
-  lookup: 'Looking up',
-  run: 'Running',
-  define: 'Defining',
-  ask: 'Asking about',
+const TOOL_VERBS: Record<string, StringKey> = {
+  log: 'tool.log',
+  update: 'tool.update',
+  delete: 'tool.delete',
+  get: 'tool.get',
+  search: 'tool.search',
+  find: 'tool.find',
+  set: 'tool.set',
+  show: 'tool.show',
+  suggest: 'tool.suggest',
+  import: 'tool.import',
+  adapt: 'tool.adapt',
+  save: 'tool.save',
+  plan: 'tool.plan',
+  cook: 'tool.cook',
+  repeat: 'tool.repeat',
+  remember: 'tool.remember',
+  forget: 'tool.forget',
+  lookup: 'tool.lookup',
+  run: 'tool.run',
+  define: 'tool.define',
+  ask: 'tool.ask',
 };
 
-function toolLabel(name: string): string | null {
-  const [verb = '', ...rest] = name.split('_');
-  const gerund = TOOL_VERBS[verb];
-  if (!gerund) return null;
-  return rest.length > 0 ? `${gerund} ${rest.join(' ')}` : gerund;
+/**
+ * The verb alone, and deliberately not the object — see the web twin. The tool
+ * name's second half is an identifier, so appending it printed half a sentence
+ * in English inside an otherwise translated status line.
+ */
+function toolLabel(name: string, tr: ReturnType<typeof useT>): string | null {
+  const [verb = ''] = name.split('_');
+  const key = TOOL_VERBS[verb];
+  return key ? tr(key) : null;
 }
 
 /**
@@ -785,6 +807,7 @@ function StatusBar({
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const tr = useT();
+  const locale = useLocale();
   const frame = [styles.status, { borderBottomColor: colors.border, paddingTop: insets.top + 10 }];
 
   if (loading || !day) {
@@ -812,9 +835,9 @@ function StatusBar({
     <Material style={frame}>
       <View style={styles.statusRow}>
         <Text style={[t.figure, styles.statusFigure, { color: colors.foreground }]}>
-          {Math.round(consumed.kcal).toLocaleString()}
+          {formatNumber(Math.round(consumed.kcal), locale)}
           <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-            {` / ${targets.kcal.toLocaleString()} kcal`}
+            {` / ${formatNumber(targets.kcal, locale)} kcal`}
           </Text>
         </Text>
         {/* Ink rather than red — see the note on --destructive in globals.css. */}
@@ -826,8 +849,8 @@ function StatusBar({
           ]}
         >
           {over
-            ? `${Math.abs(remaining).toLocaleString()} over`
-            : `${remaining.toLocaleString()} left`}
+            ? tr('journal.over')(formatNumber(Math.abs(remaining), locale))
+            : tr('journal.left')(formatNumber(remaining, locale))}
         </Text>
       </View>
 
@@ -843,9 +866,9 @@ function StatusBar({
       {day.burned_kcal > 0 && (
         <Text style={[t.footnoteSemibold, t.tnum, styles.burn, { color: colors.mutedForeground }]}>
           <Text style={{ fontFamily: font.bold, color: colors.exerciseText }}>
-            −{day.burned_kcal.toLocaleString()} burned
+            {tr('journal.burned')(formatNumber(day.burned_kcal, locale))}
           </Text>
-          {` · net ${day.net_kcal.toLocaleString()} kcal`}
+          {tr('journal.net')(formatNumber(day.net_kcal, locale))}
         </Text>
       )}
     </Material>
@@ -904,6 +927,7 @@ const Row = memo(function Row({
   onLogManually: (draft: { description: string; meal: Meal; items: FoodItemInput[] }) => void;
 }) {
   const colors = useColors();
+  const tr = useT();
 
   if (bubble.role === 'user') {
     return (
@@ -942,7 +966,7 @@ const Row = memo(function Row({
     );
   }
 
-  const label = bubble.tool ? toolLabel(bubble.tool) : null;
+  const label = bubble.tool ? toolLabel(bubble.tool, tr) : null;
   const waiting = bubble.pending && !bubble.content;
   /*
    * The weekly review is the one turn whose card *replaces* the words rather
@@ -1096,10 +1120,11 @@ function Wall({
  */
 function Waiting({ label }: { label: string | null }) {
   const colors = useColors();
+  const tr = useT();
   const dots = [colors.protein, colors.carbs, colors.fat];
 
   return (
-    <View style={styles.waiting} accessibilityLabel={label ?? 'Thinking'}>
+    <View style={styles.waiting} accessibilityLabel={label ?? tr('journal.thinking')}>
       <View style={styles.dots}>
         {dots.map((color, i) => (
           <Dot key={color} color={color} index={i} />

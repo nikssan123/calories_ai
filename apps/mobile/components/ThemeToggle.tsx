@@ -2,12 +2,13 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { Chunk } from '@/components/Chunk';
 import { useThemePreference, type ThemePreference } from '@/lib/theme-preference';
+import { useT, type StringKey } from '@/lib/i18n';
 import { font, useColors } from '@/theme';
 
-const OPTIONS: Array<{ value: ThemePreference; label: string }> = [
-  { value: 'system', label: 'System' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
+const OPTIONS: Array<{ value: ThemePreference; label: StringKey }> = [
+  { value: 'system', label: 'theme.system' },
+  { value: 'light', label: 'theme.light' },
+  { value: 'dark', label: 'theme.dark' },
 ];
 
 /**
@@ -22,12 +23,13 @@ const OPTIONS: Array<{ value: ThemePreference; label: string }> = [
  */
 export function ThemeToggle() {
   const colors = useColors();
+  const tr = useT();
   const { preference, setPreference } = useThemePreference();
 
   return (
     <View
       accessibilityRole="radiogroup"
-      accessibilityLabel="Theme"
+      accessibilityLabel={tr('theme.label')}
       style={[styles.group, { backgroundColor: colors.muted, borderColor: colors.border }]}
     >
       {OPTIONS.map(({ value, label }) => {
@@ -46,7 +48,7 @@ export function ThemeToggle() {
                 { color: active ? colors.foreground : colors.mutedForeground },
               ]}
             >
-              {label}
+              {tr(label)}
             </Text>
           </View>
         );

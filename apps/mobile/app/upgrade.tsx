@@ -24,6 +24,7 @@ import {
   tierLines,
 } from '@/lib/plan-copy';
 import { haptics } from '@/lib/haptics';
+import { useLocale, useT } from '@/lib/i18n';
 import { type as t, useColors, withAlpha } from '@/theme';
 
 /**
@@ -51,6 +52,8 @@ import { type as t, useColors, withAlpha } from '@/theme';
  */
 export default function UpgradeScreen() {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const toast = useToast();
@@ -168,10 +171,10 @@ export default function UpgradeScreen() {
     try {
       const found = await restore(refresh);
       if (found) {
-        toast.success('Restored. Welcome back.');
+        toast.success(tr('plans.restored'));
         router.back();
       } else {
-        toast.message('No subscription found on this store account.');
+        toast.message(tr('plans.noneFound'));
       }
     } catch (error) {
       toast.error((error as Error).message);
@@ -202,7 +205,7 @@ export default function UpgradeScreen() {
         <Pressable
           onPress={() => router.back()}
           accessibilityRole="button"
-          accessibilityLabel="Close"
+          accessibilityLabel={tr('common.close')}
           hitSlop={12}
           style={({ pressed }) => [styles.close, { opacity: pressed ? 0.5 : 1 }]}
         >
@@ -218,11 +221,9 @@ export default function UpgradeScreen() {
         </Pressable>
       </View>
 
-      <Text style={[t.largeTitle, { color: colors.foreground }]}>Keep it going.</Text>
+      <Text style={[t.largeTitle, { color: colors.foreground }]}>{tr('plans.keepItGoing')}</Text>
       <Text style={[t.body, styles.lede, { color: colors.mutedForeground }]}>
-        {plan === 'free'
-          ? "You're on Free. Everything you type in stays free — these buy the parts that think."
-          : `You're on ${TIER_NAMES[plan]}.`}
+        {plan === 'free' ? tr('plans.onFree') : tr('plans.onPlan')(TIER_NAMES[plan])}
       </Text>
 
       {/*
@@ -260,8 +261,10 @@ export default function UpgradeScreen() {
                     { color: on ? colors.foreground : colors.mutedForeground },
                   ]}
                 >
-                  {option === 'year' ? 'Yearly' : 'Monthly'}
-                  {option === 'year' && saving !== null ? ` · save ${saving}%` : ''}
+                  {option === 'year' ? tr('plans.yearly') : tr('plans.monthly')}
+                  {option === 'year' && saving !== null
+                    ? tr('plans.savePercent')(String(saving))
+                    : ''}
                 </Text>
               </Pressable>
             );
@@ -274,13 +277,13 @@ export default function UpgradeScreen() {
           <TierCard
             key={tier.plan}
             name={TIER_NAMES[tier.plan]}
-            pitch={TIER_PITCHES[tier.plan]}
+            pitch={tr(TIER_PITCHES[tier.plan])}
             // What the tier below already gave them, said once instead of
             // repeated as rows. `index - 1` rather than the whole ladder: the
             // cards are drawn cheapest first, so the previous one is the tier
             // this one contains.
-            carries={carriesFrom(paid[index - 1])}
-            lines={tierLines(tier, paid[index - 1])}
+            carries={carriesFrom(paid[index - 1], tr)}
+            lines={tierLines(tier, tr, locale, paid[index - 1])}
             price={offerFor(tier.plan)?.price ?? null}
             perMonth={offerFor(tier.plan)?.perMonth ?? null}
             period={offerFor(tier.plan)?.period ?? null}
@@ -306,7 +309,7 @@ export default function UpgradeScreen() {
           contentStyle={[styles.cta, { backgroundColor: colors.primary }]}
         >
           <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
-            {busy ? 'One moment…' : `Get ${chosen ? TIER_NAMES[chosen] : ''}`}
+            {busy ? tr('plans.oneMoment') : tr('plans.get')(chosen ? TIER_NAMES[chosen] : '')}
           </Text>
         </PressableChunk>
       )}
@@ -321,9 +324,9 @@ export default function UpgradeScreen() {
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
             {billingAvailable
               ? offers === null
-                ? 'Checking the store…'
-                : "The store has nothing on sale for this app yet. Nothing is locked that wasn't before — come back and it'll be here."
-              : "This build can't reach the store, so there's nothing to buy from here yet."}
+                ? tr('plans.checkingStore')
+                : tr('plans.nothingOnSale')
+              : tr('plans.noStore')}
           </Text>
         </Chunk>
       )}
@@ -349,11 +352,10 @@ export default function UpgradeScreen() {
             style={({ pressed }) => [styles.restore, { opacity: pressed || busy ? 0.5 : 1 }]}
           >
             <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-              {busy ? 'Checking the store…' : 'Paid but not showing? Restore it'}
+              {busy ? tr('plans.checkingStore') : tr('plans.paidNotShowing')}
             </Text>
             <Text style={[t.footnote, styles.restoreNote, { color: colors.mutedForeground }]}>
-              Re-reads this store account and puts back anything you have already
-              bought. It never charges you again.
+              {tr('plans.restoreNote')}
             </Text>
           </Pressable>
 
@@ -365,7 +367,7 @@ export default function UpgradeScreen() {
               style={({ pressed }) => [styles.restore, { opacity: pressed ? 0.5 : 1 }]}
             >
               <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-                Manage or cancel subscription
+                {tr('plans.manage')}
               </Text>
             </Pressable>
           )}
@@ -379,12 +381,14 @@ export default function UpgradeScreen() {
         worse than it is.
       */}
       <View style={styles.free}>
-        <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>Free on every plan</Text>
-        {ALWAYS_FREE.map((line) => (
-          <View key={line} style={styles.freeRow}>
+        <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>
+          {tr('plans.freeOnEvery')}
+        </Text>
+        {ALWAYS_FREE.map((key) => (
+          <View key={key} style={styles.freeRow}>
             <Check color={colors.primary} />
             <Text style={[t.footnote, styles.freeText, { color: colors.mutedForeground }]}>
-              {line}
+              {tr(key)}
             </Text>
           </View>
         ))}
@@ -398,9 +402,11 @@ export default function UpgradeScreen() {
           be described here as billed once a year — which is the one sentence on
           this screen that has to be literally true.
         */}
-        {(offer?.period ?? period) === 'year' ? 'Billed once a year' : 'Billed monthly'} through
-        the store, and it renews until you stop it. Cancel any time from your store account — you
-        keep what you paid for until the period ends.
+        {tr('plans.smallPrint')(
+          (offer?.period ?? period) === 'year'
+            ? tr('plans.billedYearly')
+            : tr('plans.billedMonthly'),
+        )}
       </Text>
     </ScrollView>
   );
@@ -446,6 +452,8 @@ function TierCard({
   onPress: () => void;
 }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
 
   return (
     <Pressable onPress={onPress} accessibilityRole="radio" accessibilityState={{ selected }}>
@@ -472,14 +480,16 @@ function TierCard({
 
           {current ? (
             <View style={[styles.tag, { backgroundColor: withAlpha(colors.primary, 0.2) }]}>
-              <Text style={[t.footnoteBold, { color: colors.caloriesText }]}>Your plan</Text>
+              <Text style={[t.footnoteBold, { color: colors.caloriesText }]}>
+                {tr('plans.yourPlan')}
+              </Text>
             </View>
           ) : (
             price && (
               <View style={styles.price}>
                 <Text style={[t.title2, t.tnum, { color: colors.foreground }]}>{price}</Text>
                 <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-                  {period === 'year' ? 'a year' : 'a month'}
+                  {period === 'year' ? tr('plans.aYear') : tr('plans.aMonth')}
                 </Text>
               </View>
             )
@@ -528,6 +538,8 @@ function TierCard({
 /** Which tier the button at the bottom would buy. */
 function Radio({ on }: { on: boolean }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   return (
     <View
       style={[

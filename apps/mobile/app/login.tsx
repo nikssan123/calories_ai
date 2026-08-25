@@ -131,7 +131,7 @@ export default function LoginScreen() {
   async function forgot() {
     const address = email.trim();
     if (!address) {
-      setError('Put your email in first and I’ll send a link.');
+      setError(tr('auth.emailFirst'));
       return;
     }
     setForgetting(true);
@@ -182,7 +182,7 @@ export default function LoginScreen() {
           </Text>
           <Text style={[t.body, { color: colors.mutedForeground }]}>
             {signup
-              ? 'Then tell the journal a little about yourself and it will work out your targets.'
+              ? tr('auth.createAccountSubtitle')
               : tr('auth.signInSubtitle')}
           </Text>
         </View>
@@ -214,14 +214,14 @@ export default function LoginScreen() {
             {/* The line that says "or", which is the whole reason it is here. */}
             <View style={styles.orRow}>
               <View style={[styles.rule, { backgroundColor: colors.border }]} />
-              <Text style={[t.footnote, { color: colors.mutedForeground }]}>or</Text>
+              <Text style={[t.footnote, { color: colors.mutedForeground }]}>{tr('auth.or')}</Text>
               <View style={[styles.rule, { backgroundColor: colors.border }]} />
             </View>
           </View>
         )}
 
         {signup && (
-          <Field label="Name (optional)">
+          <Field label={tr('auth.nameOptional')}>
             <TextInput
               value={name}
               onChangeText={setName}
@@ -233,7 +233,7 @@ export default function LoginScreen() {
           </Field>
         )}
 
-        <Field label="Email">
+        <Field label={tr('auth.email')}>
           <TextInput
             value={email}
             onChangeText={setEmail}
@@ -246,7 +246,7 @@ export default function LoginScreen() {
           />
         </Field>
 
-        <Field label="Password">
+        <Field label={tr('auth.password')}>
           <TextInput
             value={password}
             onChangeText={setPassword}

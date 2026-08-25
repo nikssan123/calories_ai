@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { ReduceMotion, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as WebBrowser from 'expo-web-browser';
-import type { ActivityLevel, DaySummary, Goal, Profile, Sex, UnitSystem } from '@ct/shared';
+import type { ActivityLevel, DaySummary, Goal, Locale, Profile, Sex, UnitSystem } from '@ct/shared';
 import {
   bodyWeightToKg,
   bodyWeightUnit,
@@ -17,6 +17,7 @@ import {
   formatDay,
   localeOf,
   unitsOf,
+  weekdayName,
 } from '@ct/shared';
 import { PressableChunk } from '@/components/Chunk';
 import { DietRules } from '@/components/DietRules';
@@ -41,12 +42,12 @@ import { applyReminders, loadReminders, type ReminderSettings } from '@/lib/remi
 
 /** §10: short setup. Enough to establish a starting target, nothing more. */
 
-const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
-  sedentary: 'Desk job, little exercise',
-  light: 'Light exercise 1–3 days/week',
-  moderate: 'Moderate exercise 3–5 days/week',
-  active: 'Hard exercise 6–7 days/week',
-  very_active: 'Physical job or twice-daily training',
+const ACTIVITY_LABELS: Record<ActivityLevel, StringKey> = {
+  sedentary: 'setup.activitySedentary',
+  light: 'setup.activityLight',
+  moderate: 'setup.activityModerate',
+  active: 'setup.activityActive',
+  very_active: 'setup.activityVeryActive',
 };
 
 /** Short forms for the collapsed row; the sheet shows the full description. */
@@ -194,7 +195,7 @@ export default function SetupScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View>
-          <Text style={[t.largeTitle, { color: colors.foreground }]}>You</Text>
+          <Text style={[t.largeTitle, { color: colors.foreground }]}>{tr('setup.title')}</Text>
           <Text style={[t.body, styles.blurb, { color: colors.mutedForeground }]}>
             Enough to work out a starting target. It adjusts as real data comes in.
           </Text>
@@ -202,21 +203,21 @@ export default function SetupScreen() {
 
         {day && <TargetCard day={day} />}
 
-        <InsetGroup title="About you">
+        <InsetGroup title={tr('setup.about')}>
           <InsetRow first>
-            <Text style={[t.body, styles.label, { color: colors.foreground }]}>Name</Text>
+            <Text style={[t.body, styles.label, { color: colors.foreground }]}>{tr('setup.displayName')}</Text>
             <TextField
               value={profile.display_name ?? ''}
               onChangeText={(v) => patch('display_name', v || null)}
-              placeholder="Optional"
+              placeholder={tr('setup.optional')}
               style={styles.wide}
             />
           </InsetRow>
 
           <InsetRow>
-            <Text style={[t.body, styles.label, { color: colors.foreground }]}>Sex</Text>
+            <Text style={[t.body, styles.label, { color: colors.foreground }]}>{tr('setup.sex')}</Text>
             <Picker
-              label="Sex"
+              label={tr('setup.sex')}
               value={profile.sex}
               options={Object.keys(SEX_LABELS) as Sex[]}
               onChange={(v) => patch('sex', v)}
@@ -225,7 +226,7 @@ export default function SetupScreen() {
           </InsetRow>
 
           <InsetRow>
-            <Text style={[t.body, styles.label, { color: colors.foreground }]}>Date of birth</Text>
+            <Text style={[t.body, styles.label, { color: colors.foreground }]}>{tr('setup.birthDate')}</Text>
             <BirthDate value={profile.birth_date} onChange={(v) => patch('birth_date', v)} />
           </InsetRow>
 
@@ -288,7 +289,7 @@ export default function SetupScreen() {
           </InsetRow>
 
           <InsetRow>
-            <Text style={[t.body, styles.label, { color: colors.foreground }]}>Height</Text>
+            <Text style={[t.body, styles.label, { color: colors.foreground }]}>{tr('setup.height')}</Text>
             {units === 'imperial' ? (
               <HeightFeetInches value={profile.height_cm} onChange={(v) => patch('height_cm', v)} />
             ) : (
@@ -301,7 +302,7 @@ export default function SetupScreen() {
           </InsetRow>
 
           <InsetRow>
-            <Text style={[t.body, styles.label, { color: colors.foreground }]}>Target weight</Text>
+            <Text style={[t.body, styles.label, { color: colors.foreground }]}>{tr('setup.targetWeight')}</Text>
             {/* Converted on the way in and back out on the way to the API, so the
                 column stays kilograms whatever this field says. Typing 165 lb
                 stores 74.8 kg; the number that comes back rounds to 165 again. */}
@@ -320,7 +321,7 @@ export default function SetupScreen() {
           </InsetRow>
         </InsetGroup>
 
-        <InsetGroup title="Goal">
+        <InsetGroup title={tr('setup.goal')}>
           <View style={styles.goals}>
             {(Object.keys(GOAL_LABELS) as Goal[]).map((goal) => {
               const active = profile.goal === goal;
@@ -355,23 +356,20 @@ export default function SetupScreen() {
           </View>
 
           <InsetRow>
-            <Text style={[t.body, styles.label, { color: colors.foreground }]}>Activity</Text>
+            <Text style={[t.body, styles.label, { color: colors.foreground }]}>{tr('setup.activity')}</Text>
             <Picker
-              label="Activity"
+              label={tr('setup.activity')}
               value={profile.activity_level}
               options={Object.keys(ACTIVITY_LABELS) as ActivityLevel[]}
               onChange={(v) => patch('activity_level', v)}
-              render={(v, place) => (place === 'trigger' ? tr(ACTIVITY_SHORT[v]) : ACTIVITY_LABELS[v])}
+              render={(v, place) => (place === 'trigger' ? tr(ACTIVITY_SHORT[v]) : tr(ACTIVITY_LABELS[v]))}
             />
           </InsetRow>
         </InsetGroup>
 
-        <InsetGroup
-          title="Day"
-          footer="Food eaten before the day starts counts toward the previous day — so a 1am snack lands on the evening it belongs to."
-        >
+        <InsetGroup title={tr('setup.dayTitle')} footer={tr('setup.dayFooter')}>
           <InsetRow first>
-            <Text style={[t.body, { color: colors.foreground }]}>Time zone</Text>
+            <Text style={[t.body, { color: colors.foreground }]}>{tr('setup.timezone')}</Text>
             <TextField
               value={profile.timezone}
               onChangeText={(v) => patch('timezone', v)}
@@ -379,9 +377,9 @@ export default function SetupScreen() {
             />
           </InsetRow>
           <InsetRow>
-            <Text style={[t.body, styles.label, { color: colors.foreground }]}>Day starts at</Text>
+            <Text style={[t.body, styles.label, { color: colors.foreground }]}>{tr('setup.dayStartsAt')}</Text>
             <Picker
-              label="Day starts at"
+              label={tr('setup.dayStartsAt')}
               value={String(profile.day_start_hour)}
               options={Array.from({ length: 9 }, (_, i) => String(i))}
               onChange={(v) => patch('day_start_hour', Number(v))}
@@ -392,10 +390,7 @@ export default function SetupScreen() {
 
         <DietRules profile={profile} onChange={setProfile} onError={setError} />
 
-        <InsetGroup
-          title="Appearance"
-          footer="System follows your device, including its light and dark schedule."
-        >
+        <InsetGroup title={tr('setup.appearance')} footer={tr('setup.appearanceFooter')}>
           <View style={styles.appearance}>
             <ThemeToggle />
           </View>
@@ -407,9 +402,9 @@ export default function SetupScreen() {
 
         <PlanSettings />
 
-        <InsetGroup title="Account">
+        <InsetGroup title={tr('setup.account')}>
           <InsetRow first>
-            <Text style={[t.body, styles.label, { color: colors.foreground }]}>Signed in as</Text>
+            <Text style={[t.body, styles.label, { color: colors.foreground }]}>{tr('setup.signedInAs')}</Text>
             <Text numberOfLines={1} style={[t.body, { color: colors.mutedForeground }]}>
               {profile.email ?? '—'}
             </Text>
@@ -419,17 +414,17 @@ export default function SetupScreen() {
             accessibilityRole="button"
             style={({ pressed }) => [styles.rowButton, { opacity: pressed ? 0.6 : 1 }]}
           >
-            <Text style={[t.body, { color: colors.destructive }]}>Sign out</Text>
+            <Text style={[t.body, { color: colors.destructive }]}>{tr('nav.signOut')}</Text>
           </Pressable>
         </InsetGroup>
 
         {/* The store listings link to both of these, and the review that checks
             them expects to find them in the app too. Opened in the system browser
             rather than re-rendered here: one copy of each document, on the web. */}
-        <InsetGroup title="About">
-          <ExternalRow first label="Privacy policy" url={PRIVACY_URL} />
-          <ExternalRow label="Terms of service" url={TERMS_URL} />
-          <ExternalRow label="Contact support" url={`mailto:${SUPPORT_EMAIL}`} mail />
+        <InsetGroup title={tr('setup.aboutTitle')}>
+          <ExternalRow first label={tr('setup.privacyPolicy')} url={PRIVACY_URL} />
+          <ExternalRow label={tr('setup.termsOfService')} url={TERMS_URL} />
+          <ExternalRow label={tr('setup.contactSupport')} url={`mailto:${SUPPORT_EMAIL}`} mail />
         </InsetGroup>
 
         <DeleteAccount email={profile.email} onDeleted={() => void signOut()} onError={setError} />
@@ -490,6 +485,8 @@ function SaveBar({
   onSave: () => void;
 }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
 
   if (!dirty && !saving && !saved) return null;
 
@@ -512,7 +509,7 @@ function SaveBar({
             { color: error ? colors.destructive : colors.mutedForeground },
           ]}
         >
-          {saving ? 'Saving…' : (error ?? (dirty ? 'Unsaved changes' : 'Saved'))}
+          {saving ? tr('setup.saving') : (error ?? (dirty ? tr('setup.unsavedChanges') : tr('setup.saved')))}
         </Text>
         <PressableChunk
           onPress={onSave}
@@ -521,10 +518,10 @@ function SaveBar({
           radius={22}
           color={colors.caloriesDeep}
           accessibilityRole="button"
-          accessibilityLabel="Save changes"
+          accessibilityLabel={tr('setup.saveChanges')}
           contentStyle={[styles.save, { backgroundColor: colors.primary }]}
         >
-          <Text style={[styles.saveLabel, { color: colors.primaryForeground }]}>Save</Text>
+          <Text style={[styles.saveLabel, { color: colors.primaryForeground }]}>{tr('setup.save')}</Text>
         </PressableChunk>
       </Material>
     </Animated.View>
@@ -533,19 +530,21 @@ function SaveBar({
 
 function TargetCard({ day }: { day: DaySummary }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   return (
     <InsetGroup>
       <View style={styles.target}>
-        <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>Your daily target</Text>
+        <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>{tr('setup.dailyTarget')}</Text>
         <Text style={[t.figure, styles.targetFigure, { color: colors.foreground }]}>
           {day.targets.kcal.toLocaleString()}
           <Text style={[styles.targetUnit, { color: colors.mutedForeground }]}> kcal</Text>
         </Text>
 
         <View style={styles.chips}>
-          <MacroChip label="Protein" value={day.targets.protein_g} color={colors.protein} />
-          <MacroChip label="Carbs" value={day.targets.carbs_g} color={colors.carbs} />
-          <MacroChip label="Fat" value={day.targets.fat_g} color={colors.fat} />
+          <MacroChip label={tr('macro.protein')} value={day.targets.protein_g} color={colors.protein} />
+          <MacroChip label={tr('macro.carbs')} value={day.targets.carbs_g} color={colors.carbs} />
+          <MacroChip label={tr('macro.fat')} value={day.targets.fat_g} color={colors.fat} />
         </View>
 
         {/*
@@ -569,6 +568,8 @@ function TargetCard({ day }: { day: DaySummary }) {
 
 function MacroChip({ label, value, color }: { label: string; value: number; color: string }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   return (
     <View style={[styles.chip, { backgroundColor: colors.muted, borderColor: colors.border }]}>
       <View style={[styles.chipDot, { backgroundColor: color }]} />
@@ -598,6 +599,7 @@ function BirthDate({
   onChange: (value: string | null) => void;
 }) {
   const colors = useColors();
+  const tr = useT();
   const locale = useLocale();
   const [open, setOpen] = useState(false);
 
@@ -629,7 +631,7 @@ function BirthDate({
       <Pressable
         onPress={() => setOpen(true)}
         accessibilityRole="button"
-        accessibilityLabel="Date of birth"
+        accessibilityLabel={tr('setup.birthDate')}
         style={({ pressed }) => [
           styles.dateField,
           { borderColor: colors.border, backgroundColor: colors.muted, opacity: pressed ? 0.6 : 1 },
@@ -640,7 +642,7 @@ function BirthDate({
         </Text>
       </Pressable>
 
-      <Sheet open={open} title="Date of birth" onClose={() => setOpen(false)}>
+      <Sheet open={open} title={tr('setup.birthDate')} onClose={() => setOpen(false)}>
         {picker}
       </Sheet>
     </>
@@ -712,6 +714,8 @@ function HeightFeetInches({
  */
 function PlanSettings() {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const router = useRouter();
   const { plan, allowances, refresh } = useEntitlements();
   const [restoring, setRestoring] = useState(false);
@@ -736,9 +740,7 @@ function PlanSettings() {
     setNote(null);
     try {
       setNote(
-        (await restore(refresh))
-          ? 'Restored.'
-          : 'No subscription found on this store account.',
+        (await restore(refresh)) ? tr('plans.restoredShort') : tr('plans.noneFound'),
       );
     } catch (e) {
       setNote((e as Error).message);
@@ -748,9 +750,11 @@ function PlanSettings() {
   }
 
   return (
-    <InsetGroup title="Plan" footer={note ?? TIER_PITCHES[plan]}>
+    <InsetGroup title={tr('plans.planTitle')} footer={note ?? tr(TIER_PITCHES[plan])}>
       <InsetRow first>
-        <Text style={[t.body, styles.label, { color: colors.foreground }]}>You&apos;re on</Text>
+        <Text style={[t.body, styles.label, { color: colors.foreground }]}>
+          {tr('plans.youreOn')}
+        </Text>
         <Text style={[t.bodyBold, { color: colors.foreground }]}>{TIER_NAMES[plan]}</Text>
       </InsetRow>
 
@@ -761,12 +765,14 @@ function PlanSettings() {
             <Text style={[t.body, styles.label, { color: colors.mutedForeground }]}>
               {/* Sentence case off the plural, so the row reads "Photo scans"
                   rather than a label invented separately from the wall's. */}
-              {sentence(meterNoun(allowance.meter, 2))}
+              {sentence(meterNoun(allowance.meter, 2, tr), locale)}
             </Text>
             <Text style={[t.bodySemibold, t.tnum, { color: colors.foreground }]}>
               {allowance.unlimited
-                ? 'Unlimited'
-                : `${left} left${allowance.period === 'ever' ? '' : ' this month'}`}
+                ? tr('plans.unlimited')
+                : allowance.period === 'ever'
+                  ? tr('plans.leftEver')(String(left))
+                  : tr('plans.leftThisMonth')(String(left))}
             </Text>
           </InsetRow>
         );
@@ -778,7 +784,7 @@ function PlanSettings() {
         style={({ pressed }) => [styles.rowButton, { opacity: pressed ? 0.6 : 1 }]}
       >
         <Text style={[t.body, { color: colors.caloriesText }]}>
-          {plan === 'coach' ? 'See what your plan includes' : 'See the plans'}
+          {plan === 'coach' ? tr('plans.seeWhatIncludes') : tr('plans.seeThePlans')}
         </Text>
       </Pressable>
 
@@ -793,7 +799,7 @@ function PlanSettings() {
           style={({ pressed }) => [styles.rowButton, { opacity: pressed ? 0.6 : 1 }]}
         >
           <Text style={[t.body, { color: colors.mutedForeground }]}>
-            Manage or cancel subscription
+            {tr('plans.manage')}
           </Text>
         </Pressable>
       )}
@@ -811,7 +817,7 @@ function PlanSettings() {
           style={({ pressed }) => [styles.rowButton, { opacity: pressed || restoring ? 0.6 : 1 }]}
         >
           <Text style={[t.body, { color: colors.mutedForeground }]}>
-            {restoring ? 'Checking the store…' : 'Paid but not showing? Restore it'}
+            {restoring ? tr('plans.checkingStore') : tr('plans.paidNotShowing')}
           </Text>
         </Pressable>
       )}
@@ -819,9 +825,14 @@ function PlanSettings() {
   );
 }
 
-/** "photo scans" -> "Photo scans". */
-function sentence(word: string): string {
-  return word.charAt(0).toUpperCase() + word.slice(1);
+/**
+ * "photo scans" -> "Photo scans".
+ *
+ * Locale-aware, because `toUpperCase()` is not the same map in every language —
+ * Turkish's dotless i is the standard example, and this app will meet it.
+ */
+function sentence(word: string, locale: Locale): string {
+  return word.charAt(0).toLocaleUpperCase(locale) + word.slice(1);
 }
 
 function EmailSettings({
@@ -834,6 +845,8 @@ function EmailSettings({
   onError: (message: string) => void;
 }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
 
@@ -894,11 +907,11 @@ function EmailSettings({
 
   return (
     <InsetGroup
-      title="Telling you things"
+      title={tr('setup.tellingYouThings')}
       footer={
         profile.notify_weekly_review
-          ? 'The weekly review arrives on Monday mornings. Emails about your account — a password change, a sign-in from a device we have not seen — are always sent.'
-          : 'Emails about your account — a password change, a sign-in from a device we have not seen — are always sent.'
+          ? tr('setup.emailFooterWithReview')
+          : tr('setup.emailFooter')
       }
     >
       {profile.email_verified ? (
@@ -909,10 +922,9 @@ function EmailSettings({
         </InsetRow>
       ) : (
         <View style={styles.unverified}>
-          <Text style={[t.body, { color: colors.foreground }]}>Address not confirmed</Text>
+          <Text style={[t.body, { color: colors.foreground }]}>{tr('setup.addressNotConfirmed')}</Text>
           <Text style={[t.footnote, styles.hint, { color: colors.mutedForeground }]}>
-            Until you confirm {profile.email}, a forgotten password cannot be reset — there would
-            be no way to know the mailbox is yours.
+            {tr('setup.confirmFirst')(profile.email ?? '')}
           </Text>
           {sent ? (
             <Text style={[t.footnoteSemibold, { color: colors.caloriesText }]}>{sent}</Text>
@@ -930,7 +942,7 @@ function EmailSettings({
               ]}
             >
               <Text style={[t.footnoteBold, { color: colors.foreground }]}>
-                {sending ? 'Sending…' : 'Send the link again'}
+                {sending ? tr('verify.sending') : tr('setup.sendLinkAgain')}
               </Text>
             </PressableChunk>
           )}
@@ -939,7 +951,7 @@ function EmailSettings({
 
       <InsetRow>
         <View style={styles.label}>
-          <Text style={[t.body, { color: colors.foreground }]}>Weekly review</Text>
+          <Text style={[t.body, { color: colors.foreground }]}>{tr('setup.weeklyReview')}</Text>
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
             Last week, summarised, on Monday.
           </Text>
@@ -947,7 +959,7 @@ function EmailSettings({
         <Switch
           value={profile.notify_weekly_review}
           onValueChange={(v) => void setPreference('notify_weekly_review', v)}
-          accessibilityLabel="Send me the weekly review"
+          accessibilityLabel={tr('setup.sendMeReview')}
         />
       </InsetRow>
 
@@ -956,7 +968,7 @@ function EmailSettings({
           say something, so the honest pitch is the ceiling. */}
       <InsetRow>
         <View style={styles.label}>
-          <Text style={[t.body, { color: colors.foreground }]}>Nudges</Text>
+          <Text style={[t.body, { color: colors.foreground }]}>{tr('setup.nudges')}</Text>
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
             At most one a week, when something in your log is worth a mention. They always
             appear in the journal; this sends it to your phone as well — or to your email,
@@ -966,7 +978,7 @@ function EmailSettings({
         <Switch
           value={profile.notify_nudges}
           onValueChange={(v) => void setPreference('notify_nudges', v)}
-          accessibilityLabel="Send me nudges"
+          accessibilityLabel={tr('setup.sendMeNudges')}
         />
       </InsetRow>
 
@@ -975,7 +987,7 @@ function EmailSettings({
           reach is one this phone already volunteered. */}
       <InsetRow>
         <View style={styles.label}>
-          <Text style={[t.body, { color: colors.foreground }]}>Streaks and goals</Text>
+          <Text style={[t.body, { color: colors.foreground }]}>{tr('setup.streaksAndGoals')}</Text>
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
             A run of logged days worth noticing, and the day the scale reaches the number you
             set. Rare by construction, and never emailed — these go to your phone or nowhere.
@@ -984,7 +996,7 @@ function EmailSettings({
         <Switch
           value={profile.notify_milestones}
           onValueChange={(v) => void setPreference('notify_milestones', v)}
-          accessibilityLabel="Tell me about streaks and goals"
+          accessibilityLabel={tr('setup.tellMeStreaks')}
         />
       </InsetRow>
 
@@ -993,16 +1005,15 @@ function EmailSettings({
           agreeing to. */}
       <InsetRow>
         <View style={styles.label}>
-          <Text style={[t.body, { color: colors.foreground }]}>Evening recap</Text>
+          <Text style={[t.body, { color: colors.foreground }]}>{tr('setup.eveningRecap')}</Text>
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-            Tonight's calories and protein against tonight's targets, at nine. Every day you
-            have logged something — the one notification here that is not occasional.
+            {tr('setup.eveningRecapHint')}
           </Text>
         </View>
         <Switch
           value={profile.notify_daily_recap}
           onValueChange={(v) => void setPreference('notify_daily_recap', v)}
-          accessibilityLabel="Send me the evening recap"
+          accessibilityLabel={tr('setup.sendMeRecap')}
         />
       </InsetRow>
     </InsetGroup>
@@ -1011,15 +1022,13 @@ function EmailSettings({
 
 /** Expo counts from Sunday. */
 const WEEKDAYS = ['1', '2', '3', '4', '5', '6', '7'] as const;
-const WEEKDAY_LABELS: Record<string, string> = {
-  '1': 'Sunday',
-  '2': 'Monday',
-  '3': 'Tuesday',
-  '4': 'Wednesday',
-  '5': 'Thursday',
-  '6': 'Friday',
-  '7': 'Saturday',
-};
+/**
+ * Expo's 1–7 is Sunday-first, which is also `weekdayName`'s 0–6 shifted by one.
+ * A hardcoded English list before; `Intl` now names the day in whatever the app
+ * is being read in.
+ */
+const weekdayLabel = (value: string, locale: Locale): string =>
+  weekdayName(Number(value) - 1, locale);
 
 /**
  * The two alarms that never involve the server.
@@ -1037,6 +1046,8 @@ const WEEKDAY_LABELS: Record<string, string> = {
  */
 function PhoneReminders() {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const [settings, setSettings] = useState<ReminderSettings | null>(null);
 
   useEffect(() => {
@@ -1060,12 +1071,12 @@ function PhoneReminders() {
 
   return (
     <InsetGroup
-      title="Reminders on this phone"
-      footer="Set here, kept here. These need no account and no connection, they arrive whatever your plan is, and they do not follow you to a new phone."
+      title={tr('setup.remindersTitle')}
+      footer={tr('setup.remindersFooter')}
     >
       <InsetRow first>
         <View style={styles.label}>
-          <Text style={[t.body, { color: colors.foreground }]}>Log your day</Text>
+          <Text style={[t.body, { color: colors.foreground }]}>{tr('setup.logYourDay')}</Text>
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
             A nudge from your own phone, at an hour you pick. It knows nothing about what you
             have logged — it is an alarm, not an opinion.
@@ -1076,15 +1087,15 @@ function PhoneReminders() {
           onValueChange={(v) =>
             void update({ ...settings, log: { ...settings.log, enabled: v } })
           }
-          accessibilityLabel="Remind me to log"
+          accessibilityLabel={tr('setup.remindMeToLog')}
         />
       </InsetRow>
 
       {settings.log.enabled && (
         <InsetRow>
-          <Text style={[t.body, styles.label, { color: colors.foreground }]}>At</Text>
+          <Text style={[t.body, styles.label, { color: colors.foreground }]}>{tr('setup.at')}</Text>
           <TimeField
-            label="Reminder time"
+            label={tr('setup.reminderTime')}
             hour={settings.log.hour}
             minute={settings.log.minute}
             onChange={(hour, minute) => void update({ ...settings, log: { ...settings.log, hour, minute } })}
@@ -1094,7 +1105,7 @@ function PhoneReminders() {
 
       <InsetRow>
         <View style={styles.label}>
-          <Text style={[t.body, { color: colors.foreground }]}>Weigh in</Text>
+          <Text style={[t.body, { color: colors.foreground }]}>{tr('setup.weighIn')}</Text>
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
             Once a week, before breakfast. Weighing daily measures yesterday's salt more than
             it measures you, which is why this one is not offered daily.
@@ -1105,27 +1116,29 @@ function PhoneReminders() {
           onValueChange={(v) =>
             void update({ ...settings, weighIn: { ...settings.weighIn, enabled: v } })
           }
-          accessibilityLabel="Remind me to weigh in"
+          accessibilityLabel={tr('setup.remindMeToWeigh')}
         />
       </InsetRow>
 
       {settings.weighIn.enabled && (
         <InsetRow>
-          <Text style={[t.body, styles.label, { color: colors.foreground }]}>On</Text>
+          <Text style={[t.body, styles.label, { color: colors.foreground }]}>{tr('setup.on')}</Text>
           <View style={styles.reminderWhen}>
             <Picker
-              label="Weigh-in day"
+              label={tr('setup.weighInDay')}
               value={String(settings.weighIn.weekday)}
               options={WEEKDAYS}
               onChange={(v) =>
                 void update({ ...settings, weighIn: { ...settings.weighIn, weekday: Number(v) } })
               }
               render={(v, place) =>
-                place === 'sheet' ? WEEKDAY_LABELS[v]! : WEEKDAY_LABELS[v]!.slice(0, 3)
+                place === 'sheet'
+                  ? weekdayLabel(v, locale)
+                  : weekdayName(Number(v) - 1, locale, 'short')
               }
             />
             <TimeField
-              label="Weigh-in time"
+              label={tr('setup.weighInTime')}
               hour={settings.weighIn.hour}
               minute={settings.weighIn.minute}
               onChange={(hour, minute) =>
@@ -1159,6 +1172,8 @@ function TimeField({
   onChange: (hour: number, minute: number) => void;
 }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const [open, setOpen] = useState(false);
 
   const shown = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
@@ -1216,6 +1231,8 @@ function ExternalRow({
   first?: boolean;
 }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   return (
     <Pressable
       accessibilityRole="link"
@@ -1254,6 +1271,8 @@ function DeleteAccount({
   onError: (message: string) => void;
 }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [deleting, setDeleting] = useState(false);
@@ -1275,27 +1294,27 @@ function DeleteAccount({
   }
 
   return (
-    <InsetGroup title="Danger zone">
+    <InsetGroup title={tr('setup.dangerZone')}>
       {!open ? (
         <Pressable
           onPress={() => setOpen(true)}
           accessibilityRole="button"
           style={({ pressed }) => [styles.rowButton, { opacity: pressed ? 0.6 : 1 }]}
         >
-          <Text style={[t.body, { color: colors.destructive }]}>Delete account</Text>
+          <Text style={[t.body, { color: colors.destructive }]}>{tr('setup.deleteAccount')}</Text>
         </Pressable>
       ) : (
         <View style={styles.danger}>
           <Text style={[t.footnote, styles.hint, { color: colors.mutedForeground }]}>
-            This erases every meal, photo, weight and conversation on{' '}
-            <Text style={{ fontFamily: font.extrabold, color: colors.foreground }}>{email}</Text>,
-            on every device, and cannot be undone. Enter your password to confirm.
+            {tr('setup.deleteWarningBefore')}{' '}
+            <Text style={{ fontFamily: font.extrabold, color: colors.foreground }}>{email}</Text>
+            {tr('setup.deleteWarningAfter')}
           </Text>
 
           <TextField
             value={password}
             onChangeText={setPassword}
-            placeholder="Password"
+            placeholder={tr('auth.password')}
             align="left"
           />
 
@@ -1316,7 +1335,7 @@ function DeleteAccount({
               ]}
             >
               <Text style={[t.bodyBold, { color: colors.destructive }]}>
-                {deleting ? 'Deleting…' : 'Delete everything'}
+                {deleting ? tr('setup.deleting') : tr('setup.deleteEverything')}
               </Text>
             </PressableChunk>
             <Pressable
@@ -1328,7 +1347,7 @@ function DeleteAccount({
               accessibilityRole="button"
               style={({ pressed }) => [styles.cancel, { opacity: pressed ? 0.6 : 1 }]}
             >
-              <Text style={[t.body, { color: colors.mutedForeground }]}>Cancel</Text>
+              <Text style={[t.body, { color: colors.mutedForeground }]}>{tr('common.cancel')}</Text>
             </Pressable>
           </View>
         </View>

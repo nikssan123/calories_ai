@@ -6,6 +6,7 @@ import { DIETS } from '@ct/shared';
 import { InsetGroup } from '@/components/InsetGroup';
 import { api } from '@/lib/api';
 import { font, type as t, useColors } from '@/theme';
+import { useT, type StringKey } from '@/lib/i18n';
 
 /**
  * What the kitchen must never suggest.
@@ -20,11 +21,11 @@ import { font, type as t, useColors } from '@/theme';
  * trusting the answer, so the wording has to be honest about what it is worth.
  */
 
-const LABELS: Record<Diet, string> = {
-  none: 'No restriction',
-  vegetarian: 'Vegetarian',
-  vegan: 'Vegan',
-  pescatarian: 'Pescatarian',
+const LABELS: Record<Diet, StringKey> = {
+  none: 'diet.none',
+  vegetarian: 'diet.vegetarian',
+  vegan: 'diet.vegan',
+  pescatarian: 'diet.pescatarian',
 };
 
 export function DietRules({
@@ -37,6 +38,7 @@ export function DietRules({
   onError: (message: string) => void;
 }) {
   const colors = useColors();
+  const tr = useT();
   const [draft, setDraft] = useState('');
 
   /*
@@ -69,8 +71,8 @@ export function DietRules({
 
   return (
     <InsetGroup
-      title="What you don't eat"
-      footer="Applied to every recipe suggestion as a hard limit, not a preference. It does not change how the journal logs what you actually eat — tell it what you had and it records it."
+      title={tr('diet.title')}
+      footer={tr('diet.footer')}
     >
       <View style={styles.diets}>
         {DIETS.map((diet) => {
@@ -96,7 +98,7 @@ export function DietRules({
                   { color: active ? colors.foreground : colors.mutedForeground },
                 ]}
               >
-                {LABELS[diet]}
+                {tr(LABELS[diet])}
               </Text>
             </Pressable>
           );
@@ -110,7 +112,7 @@ export function DietRules({
             onChangeText={setDraft}
             onSubmitEditing={addAvoid}
             returnKeyType="done"
-            placeholder="Anything else — an allergy, a dislike"
+            placeholder={tr('diet.avoidPlaceholder')}
             placeholderTextColor={colors.mutedForeground}
             style={[
               t.body,
@@ -122,7 +124,7 @@ export function DietRules({
             onPress={addAvoid}
             disabled={!draft.trim()}
             accessibilityRole="button"
-            accessibilityLabel="Add"
+            accessibilityLabel={tr('common.add')}
             style={({ pressed }) => [
               styles.add,
               {

@@ -89,14 +89,14 @@ export default function HistoryScreen() {
       contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: insets.bottom + 32 }}
     >
       <View style={styles.topBar}>
-        <Chevron direction="back" label="Back" onPress={() => router.back()} />
+        <Chevron direction="back" label={tr('history.back')} onPress={() => router.back()} />
         <Text style={[t.largeTitle, styles.heading, { color: colors.foreground }]}>{tr('history.title')}</Text>
       </View>
 
       <View style={styles.monthBar}>
         <Chevron
           direction="back"
-          label="Previous month"
+          label={tr('history.previousMonth')}
           onPress={() => setMonth((m) => (m ? shiftMonth(m, -1) : m))}
         />
         <Text style={[t.body, styles.monthLabel, { color: colors.foreground }]}>
@@ -104,7 +104,7 @@ export default function HistoryScreen() {
         </Text>
         <Chevron
           direction="forward"
-          label="Next month"
+          label={tr('history.nextMonth')}
           onPress={() => setMonth((m) => (m ? shiftMonth(m, 1) : m))}
         />
       </View>
@@ -151,7 +151,7 @@ export default function HistoryScreen() {
             <Legend />
           </Chunk>
 
-          <InsetGroup title={selected ? formatFullDate(selected, locale) : 'Day'}>
+          <InsetGroup title={selected ? formatFullDate(selected, locale) : tr('history.day')}>
             {selectedDay && selectedDay.logged ? (
               <View style={styles.detail}>
                 <View style={styles.detailHead}>
@@ -187,7 +187,7 @@ export default function HistoryScreen() {
                   hitSlop={8}
                   style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
                 >
-                  <Text style={[t.bodyBold, { color: colors.caloriesText }]}>Open in Today →</Text>
+                  <Text style={[t.bodyBold, { color: colors.caloriesText }]}>{tr('history.openInToday')}</Text>
                 </Pressable>
               </View>
             ) : (
@@ -199,7 +199,7 @@ export default function HistoryScreen() {
 
           <InsetGroup title={`📆  ${tr('history.thisMonth')}`}>
             <Stats>
-              <Stat label={tr('history.logged')} value={`${logged.length}`} unit="days" first />
+              <Stat label={tr('history.logged')} value={`${logged.length}`} unit={tr('history.days')} first />
               <Stat
                 label={tr('history.avgIntake')}
                 value={
@@ -216,7 +216,7 @@ export default function HistoryScreen() {
                 value={`${
                   logged.filter((d) => d.target_kcal > 0 && d.kcal <= d.target_kcal).length
                 }`}
-                unit="days"
+                unit={tr('history.days')}
               />
             </Stats>
           </InsetGroup>
@@ -378,7 +378,7 @@ function Legend() {
       ))}
       <View style={styles.legendItem}>
         <View style={[styles.legendDot, { backgroundColor: colors.exercise }]} />
-        <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>Exercise</Text>
+        <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('today.exercise')}</Text>
       </View>
     </View>
   );

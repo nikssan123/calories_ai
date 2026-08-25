@@ -5,6 +5,7 @@ import Svg, { Path, Polyline } from 'react-native-svg';
 import { Chunk } from '@/components/Chunk';
 import { Material } from '@/components/Material';
 import { font, type as t, useColors } from '@/theme';
+import { useT } from '@/lib/i18n';
 
 /**
  * A recipe, laid out to be cooked from.
@@ -85,6 +86,7 @@ export function RecipeReader({
   actions: React.ReactNode;
 }) {
   const colors = useColors();
+  const tr = useT();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -126,7 +128,7 @@ export function RecipeReader({
               onPress={onToggleSave}
               accessibilityRole="button"
               accessibilityState={{ selected: saved }}
-              accessibilityLabel={saved ? 'Unsave this recipe' : 'Save this recipe'}
+              accessibilityLabel={saved ? tr('recipe.unsaveThis') : tr('recipe.saveThis')}
               style={({ pressed }) => [styles.saveInner, { opacity: pressed ? 0.6 : 1 }]}
             >
               <Svg width={14} height={14} viewBox="0 0 24 24">
@@ -140,7 +142,7 @@ export function RecipeReader({
                 />
               </Svg>
               <Text style={[t.footnoteSemibold, { color: colors.foreground }]}>
-                {saved ? 'Saved' : 'Save'}
+                {saved ? tr('recipe.saved') : tr('recipe.save')}
               </Text>
             </Pressable>
           </Chunk>
@@ -193,15 +195,15 @@ export function RecipeReader({
             </Text>
           </View>
           <View style={styles.macros}>
-            <Macro label="Protein" value={protein_g} color={colors.protein} />
-            <Macro label="Carbs" value={carbs_g} color={colors.carbs} />
-            <Macro label="Fat" value={fat_g} color={colors.fat} />
+            <Macro label={tr('macro.protein')} value={protein_g} color={colors.protein} />
+            <Macro label={tr('macro.carbs')} value={carbs_g} color={colors.carbs} />
+            <Macro label={tr('macro.fat')} value={fat_g} color={colors.fat} />
           </View>
         </Chunk>
 
         <View>
           <Text style={[t.eyebrow, styles.sectionTitle, { color: colors.mutedForeground }]}>
-            Ingredients
+            {tr('recipe.ingredients')}
           </Text>
           <Chunk
             contentStyle={[
@@ -231,7 +233,7 @@ export function RecipeReader({
                   {item.missing && (
                     <Text style={[t.footnote, { color: colors.fatText }]}>
                       {' '}
-                      · not in your kitchen
+                      {tr('recipe.notInKitchen')}
                     </Text>
                   )}
                 </Text>
@@ -252,7 +254,7 @@ export function RecipeReader({
 
         <View>
           <Text style={[t.eyebrow, styles.sectionTitle, { color: colors.mutedForeground }]}>
-            Method
+            {tr('recipe.method')}
           </Text>
           <View style={styles.steps}>
             {steps.map((step, index) => (

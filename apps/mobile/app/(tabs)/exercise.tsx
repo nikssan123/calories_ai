@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ExerciseEntry, ExerciseSummary, Locale } from '@ct/shared';
-import { distanceUnit, formatDay, formatDistance, toDistance } from '@ct/shared';
+import { distanceUnit, formatDay, formatDistance, formatNumber, toDistance } from '@ct/shared';
 import { exerciseEmoji } from '@ct/shared/food-emoji';
 import { Chunk } from '@/components/Chunk';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
@@ -19,7 +19,7 @@ import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
 import { Workouts } from '@/components/exercise/Workouts';
 import { SetupBanner } from '@/components/SetupBanner';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
-import { useLocale } from '@/lib/i18n';
+import { useLocale, useT } from '@/lib/i18n';
 
 /**
  * Exercise, split out of Progress so it gets a screen rather than a single row.
@@ -34,6 +34,7 @@ const WINDOWS = [14, 30, 90] as const;
 
 export default function ExerciseScreen() {
   const locale = useLocale();
+  const tr = useT();
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTop(scrollRef);
   const colors = useColors();
@@ -98,7 +99,7 @@ export default function ExerciseScreen() {
     >
       <SetupBanner />
       <View style={styles.header}>
-        <Text style={[t.largeTitle, { color: colors.foreground }]}>Exercise</Text>
+        <Text style={[t.largeTitle, { color: colors.foreground }]}>{tr('exercise.title')}</Text>
         <Chunk
           depth={2}
           radius={999}
@@ -147,22 +148,25 @@ export default function ExerciseScreen() {
           <View style={styles.empty}>
             <Text style={styles.mascot}>🏃</Text>
             <Text style={[t.body, styles.centred, { color: colors.mutedForeground }]}>
-              Nothing logged in the last {days} days.{'\n'}
-              Tell the journal — “went for a {units === 'imperial' ? '3 mile' : '5km'} run”.
+              {tr('exercise.nothingLogged')(String(days))}
+              {'\n'}
+              {tr('exercise.tellTheJournal')(units === 'imperial' ? '3 mile' : '5km')}
             </Text>
           </View>
         </InsetGroup>
       ) : (
         <>
-          <InsetGroup title="🔁  Consistency">
+          <InsetGroup title={tr('exercise.consistencyTitle')}>
             <View style={styles.pad}>
               <View style={styles.headline}>
                 <Text style={[t.largeTitle, t.tnum, { color: colors.foreground }]}>
                   {summary.active_days}
                 </Text>
                 <Text style={[t.footnote, styles.aside, { color: colors.mutedForeground }]}>
-                  active of {summary.days} days · {summary.sessions} session
-                  {summary.sessions === 1 ? '' : 's'}
+                  {tr('exercise.activeOf')(
+                    String(summary.days),
+                    tr('exercise.sessionsCount')(summary.sessions),
+                  )}
                 </Text>
               </View>
               <Sparkline
@@ -182,9 +186,9 @@ export default function ExerciseScreen() {
             </View>
 
             <Stats>
-              <Stat first label="Burned" value={summary.total_kcal.toLocaleString()} unit="kcal" />
+              <Stat first label={tr('exercise.burned')} value={formatNumber(summary.total_kcal, locale)} unit="kcal" />
               <Stat
-                label="Distance"
+                label={tr('exercise.distance')}
                 value={
                   summary.total_distance_km === null
                     ? '—'
@@ -193,7 +197,7 @@ export default function ExerciseScreen() {
                 unit={distanceUnit(units)}
               />
               <Stat
-                label="Time"
+                label={tr('exercise.time')}
                 value={
                   summary.total_duration_min === null
                     ? '—'
@@ -205,8 +209,8 @@ export default function ExerciseScreen() {
           </InsetGroup>
 
           <InsetGroup
-            title="🏃  Sessions"
-            footer={`Burn is an estimate and is never netted off your calorie target. Correct one in the journal — “that run was closer to ${units === 'imperial' ? '4.5 miles' : '7km'}”.`}
+            title={tr('exercise.sessionsTitle')}
+            footer={tr('exercise.burnNote')(units === 'imperial' ? '4.5 miles' : '7km')}
           >
             {summary.entries.map((entry, i) => (
               <SwipeRow
@@ -225,7 +229,9 @@ export default function ExerciseScreen() {
                       {[
                         formatDate(entry.local_date, locale),
                         entry.distance_km !== null ? formatDistance(entry.distance_km, units) : null,
-                        entry.duration_min !== null ? `${Math.round(entry.duration_min)} min` : null,
+                        entry.duration_min !== null
+                          ? tr('exercise.minutes')(String(Math.round(entry.duration_min)))
+                          : null,
                       ]
                         .filter(Boolean)
                         .join(' · ')}
@@ -277,6 +283,7 @@ function DayReadout({
   sessions: ExerciseEntry[];
 }) {
   const locale = useLocale();
+  const tr = useT();
   const colors = useColors();
   const units = useUnits();
   const distance = sessions.reduce((sum, s) => sum + (s.distance_km ?? 0), 0);
@@ -295,10 +302,10 @@ function DayReadout({
       <View style={styles.readoutHead}>
         <Text style={[t.footnoteBold, { color: colors.mutedForeground }]}>{formatDate(date, locale)}</Text>
         {sessions.length === 0 ? (
-          <Text style={[t.footnoteSemibold, { color: colors.foreground }]}>Rest day</Text>
+          <Text style={[t.footnoteSemibold, { color: colors.foreground }]}>{tr('exercise.restDay')}</Text>
         ) : (
           <Text style={[t.footnote, t.tnum, styles.readoutFigure, { color: colors.exerciseText }]}>
-            {Math.round(kcal).toLocaleString()}
+            {formatNumber(Math.round(kcal), locale)}
             <Text style={[styles.readoutUnit, { color: colors.mutedForeground }]}>
               {` kcal${detail ? ` · ${detail}` : ''}`}
             </Text>
@@ -320,7 +327,7 @@ function DayReadout({
           ))}
           {sessions.length > 3 && (
             <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-              +{sessions.length - 3} more
+              {tr('exercise.moreSessions')(String(sessions.length - 3))}
             </Text>
           )}
         </View>
