@@ -98,6 +98,28 @@ export function localeFromAcceptLanguage(header: string | null | undefined): Loc
   return null;
 }
 
+/**
+ * The BCP-47 tag to hand `Intl`, which is not always the tag we store.
+ *
+ * `'en'` is the odd one. This app's English is British — "Fibre", "Metric",
+ * "colour" — and CLDR's bare `en` is American, so asking `Intl` for `en` gets
+ * "Wednesday, September 23" under a heading that says "Fibre", and
+ * `Intl.ListFormat` puts a serial comma in "chicken, rice, and peppers" where
+ * the hand-rolled join it replaced did not.
+ *
+ * Kept apart from the `Locale` enum on purpose: `users.locale` is a column, and
+ * widening it to region-qualified tags would mean a migration and a `CHECK` for
+ * a distinction only the formatter cares about. Every `Intl` call in this file
+ * goes through here; nothing else needs to know.
+ *
+ * The other four are their own tags already — `bg`, `de`, `fr` have no split
+ * this app cares about, and `es` resolves to the Peninsular forms the Spanish
+ * catalogue is written in.
+ */
+export function intlLocale(locale: Locale): string {
+  return locale === 'en' ? 'en-GB' : locale;
+}
+
 // ---- Dates -----------------------------------------------------------------
 //
 // Eleven display sites used to hardcode 'en-GB' and spell the same six lines
@@ -120,7 +142,7 @@ export function formatDay(
 ): string {
   const [y, m, d] = date.split('-').map(Number);
   if (!y || !m || !d) return date;
-  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(locale, {
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString(intlLocale(locale), {
     ...options,
     timeZone: 'UTC',
   });
@@ -130,7 +152,7 @@ export function formatDay(
 export function formatMonth(date: string, locale: Locale, year = false): string {
   const [y, m] = date.split('-').map(Number);
   if (!y || !m) return date;
-  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString(locale, {
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString(intlLocale(locale), {
     month: 'long',
     ...(year ? { year: 'numeric' } : {}),
     timeZone: 'UTC',
@@ -139,7 +161,37 @@ export function formatMonth(date: string, locale: Locale, year = false): string 
 
 /** Just the month's name, for a plan header that already says the year. */
 export function monthName(date: Date, locale: Locale): string {
-  return new Intl.DateTimeFormat(locale, { month: 'long', timeZone: 'UTC' }).format(date);
+  return new Intl.DateTimeFormat(intlLocale(locale), { month: 'long', timeZone: 'UTC' }).format(
+    date,
+  );
+}
+
+/**
+ * A weekday's name, from the 0–6 the schedule stores.
+ *
+ * This replaced `WEEKDAY_NAMES`, a seven-string English array that both
+ * Workouts screens read — and, worse, that both of them shortened with
+ * `.slice(0, 3)`. Three letters is English's abbreviation and nobody else's:
+ * German wants "Mo." with the stop, French "lun.", and Bulgarian's "понеделник"
+ * shortens to "пн" rather than to "пон". `Intl` knows all of that and an array
+ * cannot. `narrow` covers the third case — the single letters down the weekly
+ * review's day strip, which were `['S','M','T','W','T','F','S']` and are "П" in
+ * three different places in Bulgarian.
+ *
+ * The anchor is a Sunday, so `weekday` indexes off it directly and the caller
+ * keeps using the same 0–6 the database stores. Read back in UTC for the same
+ * reason `formatDay` does: a weekday is a name here, not an instant.
+ */
+export function weekdayName(
+  weekday: number,
+  locale: Locale,
+  style: 'long' | 'short' | 'narrow' = 'long',
+): string {
+  // 2024-01-07 was a Sunday.
+  const date = new Date(Date.UTC(2024, 0, 7 + (((weekday % 7) + 7) % 7)));
+  return new Intl.DateTimeFormat(intlLocale(locale), { weekday: style, timeZone: 'UTC' }).format(
+    date,
+  );
 }
 
 // ---- Numbers ---------------------------------------------------------------
@@ -153,7 +205,7 @@ export function monthName(date: Date, locale: Locale): string {
  * nothing to do with who is reading.
  */
 export function formatNumber(value: number, locale: Locale): string {
-  return value.toLocaleString(locale);
+  return value.toLocaleString(intlLocale(locale));
 }
 
 // ---- Plurals ---------------------------------------------------------------
@@ -188,9 +240,28 @@ export type PluralForms = Partial<Record<Intl.LDMLPluralRule, string>> & { other
  * the right separator rather than the runtime's.
  */
 export function plural(count: number, forms: PluralForms, locale: Locale): string {
-  const rule = new Intl.PluralRules(locale).select(count);
+  const rule = new Intl.PluralRules(intlLocale(locale)).select(count);
   return `${formatNumber(count, locale)} ${forms[rule] ?? forms.other}`;
 }
+
+/**
+ * The agreeing noun on its own, without the number in front of it.
+ *
+ * `plural()` returns "20 messages", which is the right answer wherever the
+ * count and the noun sit together. The paywall's sentences separate them —
+ * "That's your 20 free messages" puts a word between — so it needs the category
+ * without the formatting. Same rules, same forms, one less thing rendered.
+ */
+export function pluralWord(count: number, forms: PluralForms, locale: Locale): string {
+  const rule = new Intl.PluralRules(intlLocale(locale)).select(count);
+  return forms[rule] ?? forms.other;
+}
+
+/** `pluralWord` with the locale already bound. See `pluralFor`. */
+export const pluralWordFor =
+  (locale: Locale) =>
+  (count: number, forms: PluralForms): string =>
+    pluralWord(count, forms, locale);
 
 /**
  * `plural` with the locale already bound.
