@@ -15,6 +15,7 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
 import { haptics } from '@/lib/haptics';
 import { useT, type StringKey } from '@/lib/i18n';
+import { useOnboarding } from '@/lib/onboarding';
 
 /**
  * Six, which is one past where a bottom bar is usually said to stop.
@@ -43,6 +44,25 @@ const TABS = [
   { name: 'cook', label: 'nav.cook', icon: 'chef' },
   { name: 'setup', label: 'nav.you', icon: 'user' },
 ] as const satisfies readonly { name: string; label: StringKey; icon: string }[];
+
+/**
+ * What a brand-new account is offered, before it has answered anything or
+ * logged anything.
+ *
+ * The other four are screens about data that does not exist yet, drawn against
+ * a target that was not calculated for this person — which is the whole of the
+ * problem this closes. Somebody could open the app, walk straight past the
+ * conversation into Today, and start logging against a generic default number
+ * that nothing on that screen admitted was generic.
+ *
+ * `setup` is in here and it is not a compromise. It is the settings screen: the
+ * language picker, the sign-out, the delete-account button, and a form that can
+ * finish setup by hand for somebody who would rather not be asked. Holding a
+ * new account on a single screen with no way off it is not a gate, it is a
+ * trap — and the one week this shipped into is the week people are trying the
+ * app for the first time and deciding whether to keep it.
+ */
+const DURING_SETUP: ReadonlySet<string> = new Set(['index', 'setup']);
 
 export default function TabsLayout() {
   const colors = useColors();
@@ -92,15 +112,31 @@ function TabBar({
   const t = useT();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
+  const { gated } = useOnboarding();
 
   /*
-   * Six equal columns, so the lozenge's geometry falls out of one measurement
-   * of the row and no tab has to report its own. `flex: 1` six times is the
-   * only reason this is allowed to be arithmetic rather than six `onLayout`s,
-   * and it stops being true the moment a tab is given a different width.
+   * Which of the six are on offer. Filtered here rather than by leaving screens
+   * undeclared, because the routes have to keep existing: a notification tapped
+   * during setup, or a share sheet handing the app a photo, navigates to one of
+   * them by name, and a route that is not in the navigator is a crash rather
+   * than a redirect. This hides the door; it does not remove the room.
+   */
+  const shown = gated ? state.routes.filter((route) => DURING_SETUP.has(route.name)) : state.routes;
+  /*
+   * Where the lozenge is, in the row as drawn. -1 is a screen that is open but
+   * not offered — the notification case above — and the pill is simply withheld
+   * rather than parked on a tab that is not the current one.
+   */
+  const selected = shown.findIndex((route) => route.key === state.routes[state.index]?.key);
+
+  /*
+   * Equal columns, so the lozenge's geometry falls out of one measurement of
+   * the row and no tab has to report its own. `flex: 1` per column is the only
+   * reason this is allowed to be arithmetic rather than an `onLayout` each, and
+   * it stops being true the moment a tab is given a different width.
    */
   const [rowWidth, setRowWidth] = useState(0);
-  const columns = state.routes.length;
+  const columns = shown.length;
   const columnWidth = columns > 0 ? rowWidth / columns : 0;
   const lozengeWidth = Math.min(LOZENGE_MAX_WIDTH, columnWidth);
 
@@ -109,13 +145,14 @@ function TabBar({
    * not of anything in pixels — so a rotation or a font-size change that
    * re-measures the row moves the pill without re-animating it.
    */
-  const travel = useSharedValue(state.index);
+  const travel = useSharedValue(selected);
   useEffect(() => {
-    travel.value = withTiming(state.index, {
+    if (selected < 0) return;
+    travel.value = withTiming(selected, {
       duration: reduced ? 0 : duration.pop,
       easing: ease.spring,
     });
-  }, [state.index, travel, reduced]);
+  }, [selected, travel, reduced]);
 
   const sliding = useAnimatedStyle(() => ({
     transform: [
@@ -145,8 +182,9 @@ function TabBar({
           setRowWidth((previous) => (previous === width ? previous : width));
         }}
       >
-        {/* Withheld until the row has a width, so it cannot animate in from 0. */}
-        {rowWidth > 0 && (
+        {/* Withheld until the row has a width, so it cannot animate in from 0,
+            and while nothing in the row is the open screen. */}
+        {rowWidth > 0 && selected >= 0 && (
           <Animated.View
             pointerEvents="none"
             style={[
@@ -156,10 +194,10 @@ function TabBar({
             ]}
           />
         )}
-        {state.routes.map((route, index) => {
+        {shown.map((route, index) => {
           const tab = TABS.find((candidate) => candidate.name === route.name);
           if (!tab) return null;
-          const active = state.index === index;
+          const active = selected === index;
 
           return (
             <Pressable

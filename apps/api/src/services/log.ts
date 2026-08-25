@@ -180,6 +180,27 @@ export async function getFoodEntry(userId: string, entryId: string): Promise<Foo
   return entries[0] ?? null;
 }
 
+/**
+ * Whether this account has ever logged a meal — asked once, on a screen that
+ * needs to know whether somebody is still at the very beginning.
+ *
+ * Food and nothing else, deliberately. Weight would seem to belong and does
+ * not: setup itself calls `log_weight` to record what they say they weigh, so
+ * counting it would make every account look like it had started logging before
+ * it had answered a single question.
+ *
+ * `EXISTS` rather than a count, because the only question is whether the number
+ * is zero and a user with four thousand entries should not pay to have them
+ * counted for it.
+ */
+export async function hasLoggedFood(userId: string): Promise<boolean> {
+  const row = await queryOne<{ present: boolean }>(
+    'SELECT EXISTS (SELECT 1 FROM food_entries WHERE user_id = $1) AS present',
+    [userId],
+  );
+  return row?.present ?? false;
+}
+
 interface ListFoodOptions {
   localDate?: string;
   from?: string;

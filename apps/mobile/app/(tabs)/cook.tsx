@@ -16,6 +16,7 @@ import { RecipeTile } from '@/components/kitchen/RecipeTile';
 import { LockedPanel } from '@/components/PlanWall';
 import { Sheet } from '@/components/Field';
 import { Skeleton } from '@/components/Skeleton';
+import { SetupBanner } from '@/components/SetupBanner';
 import { api, planLimitOf } from '@/lib/api';
 import { recipeImageUrl } from '@/lib/links';
 import { useEntitlements } from '@/lib/entitlements';
@@ -332,6 +333,10 @@ export default function CookScreen() {
       contentContainerStyle={[styles.page, { paddingTop: insets.top + 20 }]}
       keyboardShouldPersistTaps="handled"
     >
+      {/* Every plan on this screen is built to a calorie and protein number, so
+          it says the same thing the other screens do while those numbers are
+          still generic. */}
+      <SetupBanner />
       {/*
         The title, and the kitchen as one chip beside it. The kitchen is a
         precondition, not an answer — it does not get the top third of the

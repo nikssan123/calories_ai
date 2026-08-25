@@ -109,6 +109,11 @@ export const fr: Messages = {
   'setup.saving': 'Enregistrement…',
   'setup.saved': 'Enregistré',
 
+  // ---- Configuration inachevée ---------------------------------------------
+  'setup.placeholder': 'Ces chiffres sont provisoires.',
+  'setup.placeholderAction': 'Terminez la configuration dans le journal.',
+  'setup.inProgress': 'Configuration en cours — votre objectif est provisoire en attendant.',
+
   'sex.male': 'Homme',
   'sex.female': 'Femme',
 

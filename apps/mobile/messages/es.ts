@@ -107,6 +107,11 @@ export const es: Messages = {
   'setup.saving': 'Guardando…',
   'setup.saved': 'Guardado',
 
+  // ---- Configuración sin terminar ------------------------------------------
+  'setup.placeholder': 'Estas cifras son provisionales.',
+  'setup.placeholderAction': 'Termina la configuración en el diario.',
+  'setup.inProgress': 'Configurando — tu objetivo es provisional hasta que terminemos.',
+
   'sex.male': 'Hombre',
   'sex.female': 'Mujer',
 

@@ -42,6 +42,7 @@ import { entryRemoved } from '@/lib/removals';
 import { DeferToRows, removeAction, repeatAction, SwipeRow } from '@/components/SwipeRow';
 import { Glyph } from '@/components/Glyph';
 import { Material } from '@/components/Material';
+import { SetupBanner } from '@/components/SetupBanner';
 import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
 import { useCountUp } from '@/hooks/useCountUp';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
@@ -618,6 +619,14 @@ export default function TodayScreen() {
         />
       }
     >
+      {/*
+        Outside the sliding view, so it stays put while the day swipes under it
+        — it is about the account, not about the day being read. The ring, the
+        macro bars and every "left to go" on this screen are drawn against a
+        target that is generic until setup is finished; this is the only thing
+        that says so.
+      */}
+      <SetupBanner style={styles.setupBanner} />
       <Animated.View style={sliding}>
       <View
         style={styles.header}
@@ -1156,6 +1165,7 @@ function shiftDate(isoDate: string, days: number): string {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  setupBanner: { marginHorizontal: 16, marginBottom: 12 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

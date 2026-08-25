@@ -108,6 +108,11 @@ export const de: Messages = {
   'setup.saving': 'Wird gespeichert…',
   'setup.saved': 'Gespeichert',
 
+  // ---- Einrichtung noch nicht abgeschlossen --------------------------------
+  'setup.placeholder': 'Diese Zahlen sind vorläufig.',
+  'setup.placeholderAction': 'Schließe die Einrichtung im Journal ab.',
+  'setup.inProgress': 'Einrichtung läuft — dein Ziel ist vorläufig, bis wir fertig sind.',
+
   'sex.male': 'Männlich',
   'sex.female': 'Weiblich',
 

@@ -44,6 +44,7 @@ import { ToastProvider } from '@/components/Toast';
 import { SharedPhotoRoot } from '@/lib/share';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { EntitlementsProvider } from '@/lib/entitlements';
+import { OnboardingProvider } from '@/lib/onboarding';
 import { ThemePreferenceProvider, useThemePreference } from '@/lib/theme-preference';
 import { paletteFor, ThemeContext, useColors } from '@/theme';
 import { registerForPush } from '@/lib/push';
@@ -106,7 +107,15 @@ export default function RootLayout() {
               * belongs to. Nothing about it is visual.
               */}
             <EntitlementsProvider>
-              <Themed />
+              {/*
+                * Beside the entitlements and for the same reasons: it depends on
+                * the session, it is not visual, and the thing that reads it is
+                * the tab bar — which is outside every screen that could have
+                * held it. See `lib/onboarding.tsx`.
+                */}
+              <OnboardingProvider>
+                <Themed />
+              </OnboardingProvider>
             </EntitlementsProvider>
           </AuthProvider>
         </ThemePreferenceProvider>

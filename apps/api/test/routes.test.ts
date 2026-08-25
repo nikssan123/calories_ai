@@ -518,7 +518,11 @@ describe('profile routes', () => {
         url: '/onboarding',
         headers: { cookie: freshCookie },
       });
-      expect(response.json()).toEqual({ complete: false, missing: ['sex', 'goal'] });
+      expect(response.json()).toEqual({
+        complete: false,
+        missing: ['sex', 'goal'],
+        logged: false,
+      });
     } finally {
       await freshApp.close();
     }
@@ -526,7 +530,30 @@ describe('profile routes', () => {
     expect((await app.inject({ method: 'GET', url: '/onboarding', ...auth() })).json()).toEqual({
       complete: true,
       missing: [],
+      logged: false,
     });
+  });
+
+  /*
+   * The other half of the question, and the one that decides whether a client
+   * still has somebody penned on the journal: setup unfinished but a meal
+   * logged is a person who has told you what they came for.
+   */
+  it('reports that something has been logged, whatever setup says', async () => {
+    const fresh = await createUser({ sex: null, is_setup_complete: false });
+    await addMeal(fresh, { date: localDateFor(new Date(), fresh.ctx), kcal: 200 });
+
+    const { app: freshApp, cookie: freshCookie } = await appFor(fresh);
+    try {
+      const response = await freshApp.inject({
+        method: 'GET',
+        url: '/onboarding',
+        headers: { cookie: freshCookie },
+      });
+      expect(response.json()).toMatchObject({ complete: false, logged: true });
+    } finally {
+      await freshApp.close();
+    }
   });
 });
 

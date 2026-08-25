@@ -1255,6 +1255,18 @@ export type AccountDeletion = z.infer<typeof AccountDeletion>;
 export const OnboardingState = z.object({
   complete: z.boolean(),
   missing: z.array(z.string()),
+  /**
+   * Whether this account has ever logged a meal.
+   *
+   * Not part of "is setup finished" — it is the other half of the question the
+   * clients actually ask, which is whether to show somebody the rest of the
+   * app yet. A new account is held on the journal until one of these two is
+   * true: setup finished, or they went ahead and logged something anyway. The
+   * second is somebody telling you what they came for, and the answer to it is
+   * to get out of the way — with every target on those screens labelled a
+   * placeholder until the first is true as well.
+   */
+  logged: z.boolean(),
 });
 export type OnboardingState = z.infer<typeof OnboardingState>;
 

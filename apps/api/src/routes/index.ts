@@ -64,6 +64,7 @@ import {
   deleteFoodEntry,
   DuplicateEntryError,
   getFoodEntry,
+  hasLoggedFood,
   latestWeight,
   logWeight,
   updateFoodEntry,
@@ -1177,10 +1178,23 @@ export async function registerRoutes(app: FastifyInstance) {
     };
   });
 
+  /**
+   * Where a new account stands, for the clients that decide what to show it.
+   *
+   * `complete` answers "does this app know enough to draw a real target"; the
+   * journal opens in setup mode when it does not. `logged` answers the other
+   * one — whether anything has been logged at all — which is what lets a client
+   * hold somebody on the journal until setup is finished *or* they have gone
+   * ahead and used the thing they came for. See `OnboardingState`.
+   */
   app.get('/onboarding', async (request) => {
     const profile = await getUser(request.userId!);
     const missing = missingProfileFields(profile);
-    return { complete: profile.is_setup_complete && missing.length === 0, missing };
+    return {
+      complete: profile.is_setup_complete && missing.length === 0,
+      missing,
+      logged: await hasLoggedFood(request.userId!),
+    };
   });
 
   /**

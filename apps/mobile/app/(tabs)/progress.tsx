@@ -19,6 +19,7 @@ import { Skeleton } from '@/components/Skeleton';
 import { Sparkline } from '@/components/Sparkline';
 import { Stat, Stats } from '@/components/Stat';
 import { WeeklyReview } from '@/components/WeeklyReview';
+import { SetupBanner } from '@/components/SetupBanner';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
@@ -111,6 +112,10 @@ export default function ProgressScreen() {
       contentContainerStyle={[styles.page, { paddingTop: insets.top + 20 }]}
       keyboardShouldPersistTaps="handled"
     >
+      {/* Above the heading, because every line on this screen is plotted
+          against a target — see `<SetupBanner>`. Renders nothing once setup is
+          finished, which is why there is no condition around it. */}
+      <SetupBanner />
       <View style={styles.header}>
         <Text style={[t.largeTitle, { color: colors.foreground }]}>Progress</Text>
         <Chunk

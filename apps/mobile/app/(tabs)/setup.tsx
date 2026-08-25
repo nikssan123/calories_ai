@@ -28,6 +28,7 @@ import { Switch } from '@/components/Switch';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { useOnboarding } from '@/lib/onboarding';
 import { useEntitlements } from '@/lib/entitlements';
 import { billingAvailable, manageSubscription, restore } from '@/lib/billing';
 import { meterNoun, TIER_NAMES, TIER_PITCHES } from '@/lib/plan-copy';
@@ -77,6 +78,7 @@ export default function SetupScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { signOut, adoptProfile } = useAuth();
+  const { refresh: refreshOnboarding } = useOnboarding();
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [day, setDay] = useState<DaySummary | null>(null);
@@ -152,6 +154,15 @@ export default function SetupScreen() {
       // without this the journal keeps rendering kilos at someone who just
       // asked for pounds until the next launch.
       adoptProfile(updated);
+      /*
+       * Saving this form can be what finishes setup — every field the
+       * conversation asks for is on this screen, and the server marks the
+       * account onboarded the moment the last one lands. Without this the tab
+       * bar would stay reduced and the placeholder banners would stay up until
+       * the next launch, for somebody who has just filled in the whole thing by
+       * hand rather than being asked.
+       */
+      void refreshOnboarding();
       setDay(await api.day());
       setDirty(false);
       setSaved(true);

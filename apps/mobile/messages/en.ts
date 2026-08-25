@@ -109,6 +109,16 @@ export const en = {
   'setup.saving': 'Saving…',
   'setup.saved': 'Saved',
 
+  // ---- Setup still unfinished ---------------------------------------------
+  //
+  // Said on every screen that draws a target, because until the conversation
+  // has finished the target was calculated for nobody in particular. See
+  // `<SetupBanner>`.
+  'setup.placeholder': 'These numbers are placeholders.',
+  'setup.placeholderAction': 'Finish setting up in the journal.',
+  /** The journal's own status bar, which has the space for one line only. */
+  'setup.inProgress': 'Setting up — your target is a placeholder until we finish.',
+
   'sex.male': 'Male',
   'sex.female': 'Female',
 

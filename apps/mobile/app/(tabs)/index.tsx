@@ -28,7 +28,6 @@ import type {
   DaySummary,
   FoodItemInput,
   Meal,
-  OnboardingState,
   UnitSystem,
 } from '@ct/shared';
 import { inferMeal, unitsOf } from '@ct/shared';
@@ -52,6 +51,8 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { haptics } from '@/lib/haptics';
 import { onEntryRemoved } from '@/lib/removals';
 import { writeDaySnapshot } from '@/lib/snapshot';
+import { useT } from '@/lib/i18n';
+import { useOnboarding } from '@/lib/onboarding';
 
 /** Optimistic rows carry a local id until the server assigns the real one. */
 interface Bubble {
@@ -159,7 +160,14 @@ export default function JournalScreen() {
     // the journal is always today — see `today.tsx` for the case that is not.
     void writeDaySnapshot(next);
   }, []);
-  const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
+  /*
+   * Setup, held for the whole app rather than for this screen.
+   *
+   * It used to live here, and that is exactly why setup was skippable: this
+   * screen knew the profile was half empty and the five screens drawing targets
+   * off it did not. See `lib/onboarding.tsx`.
+   */
+  const { state: onboarding, pending: setupPending, refresh: refreshOnboarding } = useOnboarding();
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   /*
@@ -204,13 +212,8 @@ export default function JournalScreen() {
     let cancelled = false;
     void (async () => {
       try {
-        const [history, today, state] = await Promise.all([
-          api.history(40),
-          api.day(),
-          api.onboarding(),
-        ]);
+        const [history, today] = await Promise.all([api.history(40), api.day()]);
         if (cancelled) return;
-        setOnboarding(state);
         setBubbles(history.messages.map(toBubble));
         consumed.current = today.consumed.kcal;
         setDay(today);
@@ -443,13 +446,15 @@ export default function JournalScreen() {
         // than at the next launch.
         adoptProfile(result.profile);
 
-        // set_profile may have completed setup during this turn.
+        /*
+         * set_profile may have completed setup during this turn — and the meal
+         * this turn logged may have opened the rest of the app without setup
+         * being finished at all. Both are answered by the same question, asked
+         * of the one place the tab bar can also read it from.
+         */
         if (!onboarding?.complete) {
-          const state = await api.onboarding().catch(() => null);
-          if (state) {
-            setOnboarding(state);
-            if (state.complete) void refreshAuth();
-          }
+          const state = await refreshOnboarding();
+          if (state?.complete) void refreshAuth();
         }
       } catch (e) {
         /*
@@ -520,7 +525,7 @@ export default function JournalScreen() {
         setBusy(false);
       }
     },
-    [onboarding?.complete, refreshAuth, adoptProfile, commitDay, adopt, refreshPlan],
+    [onboarding?.complete, refreshOnboarding, refreshAuth, adoptProfile, commitDay, adopt, refreshPlan],
   );
 
   // A new account opens straight into setup: the agent introduces itself and
@@ -549,7 +554,7 @@ export default function JournalScreen() {
        */
       behavior="padding"
     >
-      <StatusBar day={day} loading={loading} setupPending={onboarding?.complete === false} />
+      <StatusBar day={day} loading={loading} setupPending={setupPending} />
 
       <ScrollView
         ref={scroller}
@@ -779,6 +784,7 @@ function StatusBar({
 }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const tr = useT();
   const frame = [styles.status, { borderBottomColor: colors.border, paddingTop: insets.top + 10 }];
 
   if (loading || !day) {
@@ -792,9 +798,7 @@ function StatusBar({
   if (setupPending) {
     return (
       <Material style={frame}>
-        <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-          Setting up — your target is a placeholder until we finish.
-        </Text>
+        <Text style={[t.footnote, { color: colors.mutedForeground }]}>{tr('setup.inProgress')}</Text>
       </Material>
     );
   }
