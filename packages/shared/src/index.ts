@@ -1946,6 +1946,36 @@ export const PHOTO_MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'imag
 export const PhotoMediaType = z.enum(PHOTO_MEDIA_TYPES);
 export type PhotoMediaType = z.infer<typeof PhotoMediaType>;
 
+/**
+ * A packet somebody scanned while writing their message.
+ *
+ * The barcode travels, never the panel. The figures are not the client's to
+ * assert — the API looks the code up in the same cache the scanner reads and
+ * takes the numbers from there — because a client that could post its own
+ * kcal figures could log a chocolate bar as celery.
+ *
+ * The portion is optional, and its absence is meaningful rather than missing.
+ * Somebody who wrote "half a tin of beans" has already said how much, and a
+ * sheet that asks again is asking twice; when it is here it is because they
+ * set it deliberately, and it wins over anything the sentence implies.
+ */
+export const ScannedAttachment = z.object({
+  barcode: z.string().min(8).max(14),
+  grams: z.number().positive().max(5000).optional(),
+  servings: z.number().positive().max(50).optional(),
+});
+export type ScannedAttachment = z.infer<typeof ScannedAttachment>;
+
+/**
+ * How many packets one message may carry.
+ *
+ * Each one is a catalogue lookup that has to finish before the turn can start,
+ * and a meal assembled from more than a few packets is a shopping trip. The
+ * ceiling lives here rather than in the composer so that it is the API's own
+ * and every client inherits it.
+ */
+export const MAX_SCANNED_ATTACHMENTS = 8;
+
 export const ChatRequest = z.object({
   text: z.string().min(1).max(4000),
   /**
@@ -1998,6 +2028,16 @@ export const ChatRequest = z.object({
    * every meal log 400 rather than merely arrive in English. Store rollouts
    * make that skew the normal case, not the exotic one.
    */
+  /**
+   * Packets scanned into this message, in the order they were scanned.
+   *
+   * Additive to the sentence rather than a replacement for it: the words say
+   * what the meal was and how much of each thing went in, and these say what
+   * some of those things exactly are. The turn is still a turn — one model
+   * call, one entry — which is the whole difference between this and
+   * `POST /barcode/:code/log`, where a packet is the entire meal.
+   */
+  scanned: z.array(ScannedAttachment).max(MAX_SCANNED_ATTACHMENTS).optional(),
   locale: Locale.optional().catch(undefined),
 });
 export type ChatRequest = z.infer<typeof ChatRequest>;

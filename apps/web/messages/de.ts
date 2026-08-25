@@ -88,6 +88,8 @@ export const de: Messages = {
   'composer.choosePhoto': 'Foto auswählen',
   'composer.scanBarcode': 'Barcode scannen',
   'composer.removePhoto': 'Foto entfernen',
+  'composer.setAmountFor': (name: string) => `Menge für ${name} festlegen`,
+  'composer.removeScan': (name: string) => `${name} entfernen`,
   'composer.selectedMeal': 'Ausgewählte Mahlzeit',
   'composer.labelHint': 'Das ist das Etikett — erfasse danach, was ich gegessen habe.',
 
@@ -528,6 +530,12 @@ export const de: Messages = {
   'barcode.notFoundBody': 'Die hat noch niemand erfasst — viele Eigenmarken werden es nie. Fotografier stattdessen die Nährwerttabelle, und ich lese sie vom Etikett ab.',
   'barcode.photographLabel': 'Etikett fotografieren',
   'barcode.scanDifferent': 'Andere Packung scannen',
+  'barcode.addToMessage': 'Zur Nachricht hinzufügen',
+  'barcode.setTheAmount': 'Menge festlegen',
+  'barcode.added': (name: string) => `${name} — hinzugefügt`,
+  'barcode.addedToMessage': (count: number) =>
+    `${n(count, { one: 'Packung', other: 'Packungen' })} zur Nachricht hinzugefügt`,
+  'barcode.nothingAddedYet': 'Noch nichts hinzugefügt',
   'repeat.footer': 'Wird mit der heutigen Uhrzeit eingetragen. War die Portion anders, sag es einfach im Journal und ich korrigier es.',
   'repeat.search': 'Deine Mahlzeiten durchsuchen',
   'repeat.kcalProtein': (kcal, protein) => `${kcal} kcal · ${protein} g Eiweiß`,

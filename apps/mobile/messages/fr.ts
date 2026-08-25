@@ -91,6 +91,8 @@ export const fr: Messages = {
   'composer.choosePhoto': 'Choisir une photo',
   'composer.scanBarcode': 'Scanner un code-barres',
   'composer.removePhoto': 'Retirer la photo',
+  'composer.setAmountFor': (name: string) => `Indiquer la quantité de ${name}`,
+  'composer.removeScan': (name: string) => `Retirer ${name}`,
   'composer.selectedMeal': 'Repas sélectionné',
   'composer.labelHint': 'Voici l’étiquette — enregistre ce que j’ai mangé à partir d’elle.',
 
@@ -650,6 +652,12 @@ export const fr: Messages = {
   'barcode.howMany': 'Combien ?',
   'barcode.howMuch': 'Quelle quantité ?',
   'barcode.scanAnother': 'En scanner un autre',
+  'barcode.addToMessage': 'Ajouter à mon message',
+  'barcode.setTheAmount': 'Indiquer la quantité',
+  'barcode.added': (name: string) => `${name} — ajouté`,
+  'barcode.addedToMessage': (count: number) =>
+    `${n(count, { one: 'paquet', other: 'paquets' })} dans ton message`,
+  'barcode.nothingAddedYet': 'Rien d’ajouté pour l’instant',
   'composer.listening': 'J’écoute…',
   'composer.stopListening': 'Arrêter d’écouter',
   'composer.sayWhatYouAte': 'Dis ce que tu as mangé',

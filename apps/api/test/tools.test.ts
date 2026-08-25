@@ -152,6 +152,73 @@ describe('log_food', () => {
     });
   });
 
+  /*
+   * ODbL asks for attribution wherever the data is shown, and an entry read
+   * back in six months is still showing it. Left to the model this would be a
+   * legal obligation riding on whether a tool call remembered a sentence.
+   */
+  it('credits the catalogue when the turn carried scanned packets', async () => {
+    const product = {
+      barcode: '5000112637922',
+      brand: 'Old El Paso',
+      name: 'Soft Tortillas Original',
+      kcal_100g: 312,
+      protein_100g: 8.1,
+      carbs_100g: 51.4,
+      fat_100g: 7.2,
+      serving_g: 62,
+      serving_desc: '1 tortilla',
+      source: 'off' as const,
+      source_url: null,
+    };
+
+    build({ scanned: [{ product }] });
+    const { json } = await call('log_food', {
+      description: 'Burrito',
+      meal: 'lunch', when: null, items: [ITEM], note: null, confidence: 'medium',
+    });
+    expect(await getFoodEntry(user.id, json.entry_id)).toMatchObject({
+      note: 'Data from Open Food Facts',
+      // A mixed entry was made out of a sentence. Calling it 'barcode' would
+      // promise a correction screen that every figure came off a panel.
+      source: 'text',
+    });
+  });
+
+  it('keeps the model’s own note and adds the credit to it', async () => {
+    const product = {
+      barcode: '0016000275287',
+      brand: null,
+      name: 'Cheerios',
+      kcal_100g: 375,
+      protein_100g: 11.7,
+      carbs_100g: 73.5,
+      fat_100g: 6.7,
+      serving_g: null,
+      serving_desc: null,
+      source: 'fdc' as const,
+      source_url: null,
+    };
+
+    build({ scanned: [{ product }] });
+    const { json } = await call('log_food', {
+      description: 'Cereal',
+      meal: 'breakfast', when: null, items: [ITEM], note: 'ate it standing up', confidence: 'medium',
+    });
+    const entry = await getFoodEntry(user.id, json.entry_id);
+    expect(entry?.note).toContain('ate it standing up');
+    expect(entry?.note).toContain('Data from USDA FoodData Central');
+  });
+
+  it('credits nothing when no packet was scanned', async () => {
+    build();
+    const { json } = await call('log_food', {
+      description: 'Chicken',
+      meal: 'lunch', when: null, items: [ITEM], note: null, confidence: 'medium',
+    });
+    expect(await getFoodEntry(user.id, json.entry_id)).toMatchObject({ note: null });
+  });
+
   it('records an action for the client to render', async () => {
     await call('log_food', {
       description: 'Chicken and rice',

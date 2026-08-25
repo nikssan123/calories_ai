@@ -99,6 +99,8 @@ export const bg: Messages = {
   'composer.choosePhoto': 'Избери снимка',
   'composer.scanBarcode': 'Сканирай баркод',
   'composer.removePhoto': 'Премахни снимката',
+  'composer.setAmountFor': (name: string) => `Задай количеството за ${name}`,
+  'composer.removeScan': (name: string) => `Премахни ${name}`,
   'composer.selectedMeal': 'Избрано хранене',
   'composer.labelHint': 'Това е етикетът — запиши каквото изядох по него.',
 
@@ -532,6 +534,12 @@ export const bg: Messages = {
   'barcode.notFoundBody': 'Никой още не е описал тази — много собствени марки никога не биват. Снимай хранителната таблица и ще я прочета от етикета.',
   'barcode.photographLabel': 'Снимай етикета',
   'barcode.scanDifferent': 'Сканирай друга опаковка',
+  'barcode.addToMessage': 'Добави към съобщението',
+  'barcode.setTheAmount': 'Задай количеството',
+  'barcode.added': (name: string) => `${name} — добавено`,
+  'barcode.addedToMessage': (count: number) =>
+    `${n(count, { one: 'опаковка', other: 'опаковки' })} към съобщението`,
+  'barcode.nothingAddedYet': 'Още нищо не е добавено',
   'repeat.footer': 'Записва го с днешния час. Ако порцията е била различна, просто кажи в дневника и ще я оправя.',
   'repeat.search': 'Търси в храненията си',
   'repeat.kcalProtein': (kcal, protein) => `${kcal} kcal · ${protein}g протеин`,

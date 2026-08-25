@@ -603,3 +603,76 @@ describe('routing a turn by its language', () => {
     expect(agentCalls[0]!.options.model).toBe(MODELS.photo_log.model);
   });
 });
+
+describe('packets scanned into the message', () => {
+  const tortillas = {
+    barcode: '5000112637922',
+    brand: 'Old El Paso',
+    name: 'Soft Tortillas Original',
+    kcal_100g: 312,
+    protein_100g: 8.1,
+    carbs_100g: 51.4,
+    fat_100g: 7.2,
+    serving_g: 62,
+    serving_desc: '1 tortilla',
+    source: 'off' as const,
+    source_url: null,
+  };
+
+  async function scannedTurn(text: string, scanned: unknown[], misses = 0) {
+    const profile = await getUser(user.id);
+    return runTurn({
+      userId: user.id,
+      ctx: user.ctx,
+      profile,
+      text,
+      scanned: scanned as never,
+      scannedMisses: misses,
+    });
+  }
+
+  it('puts the label figures in the turn, after the day and before the message', async () => {
+    scriptAgent({ text: 'Logged.' });
+    await scannedTurn('burrito I made — two tortillas', [{ product: tortillas }]);
+
+    const turnText = userTurnOf(agentCalls[0]!);
+    expect(turnText).toContain('312 kcal');
+    expect(turnText).toContain('Old El Paso Soft Tortillas Original');
+
+    /*
+     * The person's own sentence stays the last thing in the turn — the place a
+     * model's attention is sharpest, and where it was before any of this
+     * existed. A block of panels after it would be the feature quietly making
+     * every scanned meal read worse than an unscanned one.
+     */
+    expect(turnText.indexOf('312 kcal')).toBeLessThan(turnText.indexOf('burrito I made'));
+    expect(turnText.trim().endsWith('burrito I made — two tortillas')).toBe(true);
+  });
+
+  /*
+   * The same discipline the day context and the rollover notice keep: what the
+   * turn shows the model and what the journal shows the person are two
+   * different strings, and only one of them is theirs.
+   */
+  it('leaves the persisted message exactly what they typed', async () => {
+    scriptAgent({ text: 'Logged.' });
+    await scannedTurn('burrito I made — two tortillas', [{ product: tortillas }]);
+
+    const messages = await listMessages(user.id);
+    const mine = messages.find((m) => m.role === 'user');
+    expect(mine?.content).toBe('burrito I made — two tortillas');
+    expect(mine?.content).not.toContain('312');
+  });
+
+  it('adds nothing to a turn that scanned nothing', async () => {
+    scriptAgent({ text: 'Logged.' });
+    await turn('two eggs and toast');
+    expect(userTurnOf(agentCalls[0]!)).not.toContain('Packets they scanned');
+  });
+
+  it('tells the model about the scans that could not be looked up', async () => {
+    scriptAgent({ text: 'Logged.' });
+    await scannedTurn('burrito', [{ product: tortillas }], 2);
+    expect(userTurnOf(agentCalls[0]!)).toContain('2 packets were also scanned');
+  });
+});

@@ -36,8 +36,10 @@ import {
   onboardingPrompt,
   PHOTO_ESTIMATION_PROMPT,
   recentReviewPrompt,
+  scannedProductsPrompt,
   STABLE_SYSTEM_PROMPT,
 } from './prompt.ts';
+import type { ScannedProduct } from '../services/barcode.ts';
 import { buildNutritionServer, type ToolContext } from './tools.ts';
 
 export interface RunTurnInput {
@@ -55,6 +57,24 @@ export interface RunTurnInput {
    * preference or, failing that, in English.
    */
   spokenLocale?: Locale | null;
+  /**
+   * Packets scanned into this message, already resolved to their panels.
+   *
+   * Looked up by the route rather than by the model's own `lookup_barcode`
+   * tool, which could have done it: that would be a tool round-trip per packet,
+   * each one a model call, for figures the process can fetch in parallel off a
+   * cache that already holds most of them. The tool stays for what it was
+   * written for — a barcode somebody reads aloud mid-conversation.
+   */
+  scanned?: ScannedProduct[];
+  /**
+   * How many attached codes the catalogue could not answer for.
+   *
+   * Carried separately rather than folded into the list, because "we dropped
+   * two" is something the reply has to be able to say. A turn that silently
+   * shortened the list would produce an estimate wearing a scan's confidence.
+   */
+  scannedMisses?: number;
 }
 
 /**
@@ -86,6 +106,7 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
     photoId: input.photo?.id ?? null,
     actions,
     units: unitsOf(input.profile),
+    scanned: input.scanned ?? [],
   };
 
   // Built before any database work so a misconfigured provider fails fast.
@@ -188,7 +209,19 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
    */
   const photoGuidance = input.photo ? `${PHOTO_ESTIMATION_PROMPT}\n\n---\n\n` : '';
 
-  const promptText = `${photoGuidance}${dayContextPrompt(speaking, day, currentWeight, notes, wellbeing, routines)}\n\n---\n\n${rollover}${input.text}`;
+  /*
+   * The packets, as close to their sentence as the ordering allows.
+   *
+   * After the day context rather than beside the photo guidance, and the two
+   * are not the same kind of thing: the photo block is technique, stable and
+   * about how to read any plate, while this is data about this turn. Data
+   * belongs next to the words it is about, so it sits in the last position
+   * anything but the message itself may occupy.
+   */
+  const scannedBlock = scannedProductsPrompt(input.scanned ?? [], input.scannedMisses ?? 0);
+  const scanned = scannedBlock ? `${scannedBlock}\n\n---\n\n` : '';
+
+  const promptText = `${photoGuidance}${dayContextPrompt(speaking, day, currentWeight, notes, wellbeing, routines)}\n\n---\n\n${scanned}${rollover}${input.text}`;
 
   /*
    * Providers that keep no session of their own get the transcript replayed —

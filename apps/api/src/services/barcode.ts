@@ -523,6 +523,27 @@ export class InvalidPortionError extends Error {
   }
 }
 
+/**
+ * A packet somebody scanned into a message, once the catalogue has answered.
+ *
+ * The pairing is the point: a product is a fact about a shelf, and the amount
+ * beside it is a claim about a person, and this type is the one place they are
+ * allowed to travel together — because by here a human has put them together
+ * on purpose. Everything upstream keeps them apart, which is why `lookupBarcode`
+ * returns a panel and nothing else.
+ *
+ * Both amounts are optional and their absence is meaningful. It means the
+ * message said how much, in words, and nobody was made to tap through a picker
+ * to repeat themselves.
+ */
+export interface ScannedProduct {
+  product: BarcodeProduct;
+  /** Grams, when they were typed or weighed. Wins over `servings`. */
+  grams?: number;
+  /** Servings off the label's own serving size, when the label named one. */
+  servings?: number;
+}
+
 export interface ScanLogOptions {
   grams?: number;
   servings?: number;

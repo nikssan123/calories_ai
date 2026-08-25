@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Circle, Path, Polyline, Rect } from 'react-native-svg';
-import type { ChatMessage, PhotoMediaType } from '@ct/shared';
+import type { ChatMessage, PhotoMediaType, ScannedAttachment, UnitSystem } from '@ct/shared';
+import { formatMass, formatServings } from '@ct/shared';
 import { Material } from '@/components/Material';
 import { Sheet } from '@/components/Field';
-import { BarcodeScanner } from '@/components/BarcodeScanner';
+import { BarcodeScanner, PortionSheet, type Scan } from '@/components/BarcodeScanner';
 import { PressableChunk } from '@/components/Chunk';
 import { pickPhoto, takePhoto, type PreparedPhoto } from '@/lib/image';
 import { font, type as t, useColors } from '@/theme';
 import { useSharedPhoto } from '@/lib/share';
+import { useUnits } from '@/lib/units';
 import { useDictation } from '@/lib/voice';
 import { useT, type StringKey } from '@/lib/i18n';
 
@@ -18,6 +20,15 @@ export interface ComposerPayload {
   photoMediaType?: PhotoMediaType;
   /** The local file URI, so the sent bubble can show the photo immediately. */
   photoPreview?: string;
+  /**
+   * Packets scanned into this message, as codes rather than as panels.
+   *
+   * The figures are deliberately left behind: the API looks each code up in the
+   * same cache the scanner just read, so nothing the phone believes about a
+   * product can become nutrition. What travels is only what a person did —
+   * which packets, and how much of each, where they said.
+   */
+  scanned?: ScannedAttachment[];
 }
 
 /**
@@ -28,10 +39,10 @@ export interface ComposerPayload {
  * the phone half of that component and nothing else — translucent material,
  * hairline along the top, conversation scrolling underneath it.
  *
- * The barcode scanner is the one peer missing from the menu. On the web it is
- * `BarcodeDetector` with a `zxing-wasm` fallback, neither of which exists in
- * RN; it wants `expo-camera`'s native scanner, which is a rebuild rather than
- * a port and is its own piece of work.
+ * A scanned packet lands here too, as a chip above the field. That is the whole
+ * feature: a barcode stops being an alternative to describing a meal and
+ * becomes part of one, so "burrito I made" can carry the exact tortillas
+ * without the sentence having to name a single number.
  */
 export function Composer({
   onSend,
@@ -52,6 +63,9 @@ export function Composer({
   const tr = useT();
   const [text, setText] = useState('');
   const [photo, setPhoto] = useState<PreparedPhoto | null>(null);
+  const [scanned, setScanned] = useState<Scan[]>([]);
+  /** Which chip's amount is being set, if any. Index rather than barcode: see below. */
+  const [amending, setAmending] = useState<number | null>(null);
 
   /*
    * A photo shared in from another app lands here, in the same state the camera
@@ -95,7 +109,17 @@ export function Composer({
     dictation.start();
   }
 
-  const canSend = (text.trim().length > 0 || photo !== null) && !disabled;
+  const canSend = (text.trim().length > 0 || photo !== null || scanned.length > 0) && !disabled;
+
+  /*
+   * Whether a scan should join the message or become one.
+   *
+   * Words already written, or packets already attached, mean a message is being
+   * assembled and the next scan is a component of it. An empty composer means
+   * there is no sentence for a packet to be part of, so it gets the picker and
+   * the free path to the journal that has always been behind it.
+   */
+  const attaching = text.trim().length > 0 || scanned.length > 0;
 
   /*
    * The microphone stands where the send button stands, and takes its turn
@@ -118,9 +142,18 @@ export function Composer({
       photoBase64: photo?.dataUrl,
       photoMediaType: photo?.mediaType,
       photoPreview: photo?.uri,
+      scanned:
+        scanned.length > 0
+          ? scanned.map((scan) => ({
+              barcode: scan.product.barcode,
+              grams: scan.grams,
+              servings: scan.servings,
+            }))
+          : undefined,
     });
     setText('');
     setPhoto(null);
+    setScanned([]);
     spoken.current = '';
   }
 
@@ -173,6 +206,28 @@ export function Composer({
               />
             </Svg>
           </Pressable>
+        </View>
+      )}
+
+      {/*
+        Inset to the same 44 the photo thumbnail uses, so the chips line up
+        under the field rather than under the camera button — they belong to
+        the sentence, and the eye should read them as part of it.
+
+        A column rather than a wrapping row: a brand and a product name is
+        rarely short enough for two to share a line, and pills that wrap
+        mid-name look like they broke rather than like they stacked.
+      */}
+      {scanned.length > 0 && (
+        <View style={styles.chips}>
+          {scanned.map((scan, index) => (
+            <Chip
+              key={scan.product.barcode}
+              scan={scan}
+              onPress={() => setAmending(index)}
+              onRemove={() => setScanned((held) => held.filter((_, i) => i !== index))}
+            />
+          ))}
         </View>
       )}
 
@@ -342,9 +397,133 @@ export function Composer({
           setPhoto(prepared);
           setText((current) => current || tr('composer.labelHint'));
         }}
+        attaching={attaching}
+        attachedCount={scanned.length}
+        /*
+         * A packet already on the message is not added twice.
+         *
+         * Two tins of the same beans is a thing people eat, and it is a thing
+         * they say in words — the chip answers "what", never "how many". So a
+         * repeat is far more likely a second read of the tin still in frame,
+         * and a silent no-op is the right answer to it. The scanner flashes the
+         * name either way, which is true: it did read it.
+         */
+        onAttach={(scan) =>
+          setScanned((held) =>
+            held.some((one) => one.product.barcode === scan.product.barcode)
+              ? held
+              : [...held, scan],
+          )
+        }
+      />
+
+      <PortionSheet
+        scan={amending === null ? null : (scanned[amending] ?? null)}
+        onClose={() => setAmending(null)}
+        onPick={(portion) =>
+          setScanned((held) =>
+            held.map((one, i) =>
+              i === amending ? { product: one.product, ...portion } : one,
+            ),
+          )
+        }
       />
     </Material>
   );
+}
+
+/**
+ * One scanned packet, sitting on the message.
+ *
+ * Two targets in one pill, which is the only fiddly part of it: the body opens
+ * the picker and the cross removes it, and at this size they have to be told
+ * apart by touch rather than by aim. The cross gets its own filled circle and
+ * its own hit slop for that reason — a chip that deleted itself when somebody
+ * meant to correct the amount would be the worst failure available here, since
+ * the packet is usually back in the cupboard by then.
+ *
+ * The amount is shown only when there is one. A chip reading "· 30 g" earned
+ * it on the picker; a bare name means the sentence is carrying the amount,
+ * which is the normal case and needs no apology.
+ */
+function Chip({
+  scan,
+  onPress,
+  onRemove,
+}: {
+  scan: Scan;
+  onPress: () => void;
+  onRemove: () => void;
+}) {
+  const colors = useColors();
+  const tr = useT();
+  const units = useUnits();
+  const name = scan.product.brand
+    ? `${scan.product.brand} ${scan.product.name}`
+    : scan.product.name;
+  const amount = amountLabel(scan, units);
+
+  return (
+    <View style={[styles.chip, { backgroundColor: colors.card, borderColor: colors.input }]}>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={tr('composer.setAmountFor')(name)}
+        hitSlop={{ top: 8, bottom: 8, left: 8 }}
+        style={({ pressed }) => [styles.chipBody, { opacity: pressed ? 0.6 : 1 }]}
+      >
+        <Svg width={14} height={14} viewBox="0 0 24 24">
+          <Path
+            d="M3 5v14M6 5v14M10 5v14M14 5v11M18 5v14M21 5v14"
+            stroke={colors.mutedForeground}
+            strokeWidth={2}
+            strokeLinecap="round"
+            fill="none"
+          />
+        </Svg>
+        <Text
+          numberOfLines={1}
+          style={[t.footnoteSemibold, styles.chipName, { color: colors.foreground }]}
+        >
+          {name}
+          {amount !== null && (
+            <Text style={[t.footnote, { color: colors.mutedForeground }]}>{` · ${amount}`}</Text>
+          )}
+        </Text>
+      </Pressable>
+
+      <Pressable
+        onPress={onRemove}
+        accessibilityRole="button"
+        accessibilityLabel={tr('composer.removeScan')(name)}
+        hitSlop={{ top: 8, bottom: 8, right: 8 }}
+        style={({ pressed }) => [
+          styles.chipRemove,
+          { backgroundColor: colors.muted, opacity: pressed ? 0.6 : 1 },
+        ]}
+      >
+        <Svg width={10} height={10} viewBox="0 0 24 24">
+          <Path
+            d="M18 6 6 18M6 6l12 12"
+            stroke={colors.mutedForeground}
+            strokeWidth={3.2}
+            strokeLinecap="round"
+            fill="none"
+          />
+        </Svg>
+      </Pressable>
+    </View>
+  );
+}
+
+/**
+ * How much of it, in the reader's own units — or nothing at all, when the
+ * sentence is the one carrying the amount.
+ */
+function amountLabel(scan: Scan, units: UnitSystem): string | null {
+  if (scan.grams !== undefined) return formatMass(scan.grams, units);
+  if (scan.servings !== undefined) return formatServings(scan.servings);
+  return null;
 }
 
 function Choice({
@@ -474,6 +653,27 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   send: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 999 },
+  chips: { alignItems: 'flex-start', gap: 8, marginLeft: 44, marginBottom: 8 },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    maxWidth: '100%',
+    borderWidth: 2,
+    borderRadius: 999,
+    paddingLeft: 12,
+    paddingRight: 6,
+    paddingVertical: 5,
+  },
+  chipBody: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
+  chipName: { flexShrink: 1 },
+  chipRemove: {
+    width: 20,
+    height: 20,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   thumbWrap: { width: 80, marginLeft: 44, marginBottom: 8 },
   thumb: { width: 80, height: 80, borderRadius: 16 },
   remove: {

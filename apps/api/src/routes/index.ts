@@ -255,6 +255,37 @@ export async function registerRoutes(app: FastifyInstance) {
     }
 
     /*
+     * The packets, turned into panels before the turn is allowed to start.
+     *
+     * In parallel because they are independent and this blocks the reply: eight
+     * is the ceiling, most are cache hits, and doing them one after another
+     * would put a supermarket's worth of round trips in front of a sentence.
+     *
+     * A code that cannot be resolved is dropped rather than fatal. There are
+     * two ways that happens — nobody has catalogued the packet, or the
+     * catalogue could not be reached — and neither is worth refusing to log
+     * somebody's dinner over. What the turn must not do is pass the loss off
+     * silently, so the count travels with the survivors and the prompt says so.
+     */
+    const attached = parsed.data.scanned ?? [];
+    const settled = await Promise.all(
+      attached.map(async (attachment) => {
+        try {
+          const product = await lookupBarcode(attachment.barcode);
+          return product
+            ? { product, grams: attachment.grams, servings: attachment.servings }
+            : null;
+        } catch (error) {
+          if (error instanceof InvalidBarcodeError || error instanceof BarcodeUnavailableError) {
+            return null;
+          }
+          throw error;
+        }
+      }),
+    );
+    const scanned = settled.filter((entry) => entry !== null);
+
+    /*
      * The allowance rides back out with the reply, and it is the *post*-turn
      * number: `requireAllowance` counted what had been spent before this turn
      * was permitted, and this turn is about to be spent. Adding one here rather
@@ -273,6 +304,8 @@ export async function registerRoutes(app: FastifyInstance) {
         profile,
         text: parsed.data.text,
         photo,
+        scanned,
+        scannedMisses: settled.length - scanned.length,
         /*
          * What the app is drawing itself in, for this turn to be answered in
          * when the profile has no preference of its own. Carried as the guess

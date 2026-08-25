@@ -55,6 +55,7 @@ import {
   InvalidPortionError,
   logScannedProduct,
   lookupBarcode,
+  type ScannedProduct,
 } from '../services/barcode.ts';
 import {
   addPantryItems,
@@ -106,6 +107,17 @@ export interface ToolContext {
   units: UnitSystem;
   /** Set when the turn included a photo, so logged entries link back to it. */
   photoId: string | null;
+  /**
+   * Packets the user scanned into this message, already resolved.
+   *
+   * The tools do not read the figures — those reach the model through the
+   * turn prompt, which is where facts about a meal belong. What this is for is
+   * the licence: Open Food Facts is ODbL and asks for attribution wherever its
+   * data is shown, and an entry read back in six months is still showing it.
+   * Leaving that to the model would make a legal obligation depend on whether
+   * a tool call remembered a sentence.
+   */
+  scanned?: ScannedProduct[];
   /** Collected during the turn and returned to the client for rendering. */
   actions: ChatAction[];
   /**
@@ -180,6 +192,29 @@ function pickTotals(entry: { kcal: number; protein_g: number; carbs_g: number; f
  * a card. Two builders would be two answers to "where did this meal leave the
  * day?", and the wrong one would be discovered in a screenshot.
  */
+/**
+ * Credit for label data that went into an entry, kept beside whatever the model
+ * had to say about it.
+ *
+ * Open Food Facts is ODbL and asks for attribution wherever the data is shown;
+ * `logScannedProduct` writes the same line for a scan logged on its own, and
+ * this is that obligation surviving the trip through a conversation.
+ *
+ * It over-credits rather than under-credits, deliberately. A message describing
+ * breakfast and lunch is two `log_food` calls and both get the line even if
+ * only one of them contains the packet, because the alternative is matching
+ * model-authored item names back to products — which fails quietly, and fails
+ * in the direction of an entry that used somebody's data without saying so.
+ */
+function scanAttribution(note: string | null, scanned: ScannedProduct[]): string | null {
+  if (scanned.length === 0) return note;
+  const names = [...new Set(scanned.map((s) => s.product.source))].map((source) =>
+    source === 'off' ? 'Open Food Facts' : 'USDA FoodData Central',
+  );
+  const credit = `Data from ${names.join(' and ')}`;
+  return note ? `${note} \u2014 ${credit}` : credit;
+}
+
 export function foodCard(entry: FoodEntry, day: DaySummary, units: UnitSystem): ChatCard {
   const kcalAfter = Math.round(day.consumed.kcal);
   return {
@@ -368,8 +403,12 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         meal: (args.meal as Meal | null) ?? inferMeal(eatenAt, tc.ctx.timezone),
         eatenAt,
         description: args.description,
-        note: args.note,
+        note: scanAttribution(args.note, tc.scanned ?? []),
         confidence: args.confidence as Confidence,
+        // Still 'text', even with packets attached. The source says how the
+        // entry was *made*, and this one was made out of a sentence that
+        // happened to have labels stapled to it — calling it 'barcode' would
+        // promise a correction screen that every figure came off a panel.
         source: (tc.photoId ? 'photo' : 'text') as EntrySource,
         photoId: tc.photoId,
         items: toItems(args.items),

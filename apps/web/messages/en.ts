@@ -102,6 +102,8 @@ export const en = {
   'composer.choosePhoto': 'Choose a photo',
   'composer.scanBarcode': 'Scan a barcode',
   'composer.removePhoto': 'Remove photo',
+  'composer.setAmountFor': (name: string) => `Set the amount for ${name}`,
+  'composer.removeScan': (name: string) => `Remove ${name}`,
   'composer.selectedMeal': 'Selected meal',
   'composer.labelHint': 'This is the label — log what I ate off it.',
 
@@ -623,6 +625,12 @@ export const en = {
     'Nobody has catalogued that one yet — plenty of own-brands never are. Snap the nutrition panel instead and I’ll read it off the label.',
   'barcode.photographLabel': 'Photograph the label',
   'barcode.scanDifferent': 'Scan a different packet',
+  'barcode.addToMessage': 'Add to my message',
+  'barcode.setTheAmount': 'Set the amount',
+  'barcode.added': (name: string) => `${name} — added`,
+  'barcode.addedToMessage': (count: number) =>
+    `${n(count, { one: 'packet', other: 'packets' })} added to your message`,
+  'barcode.nothingAddedYet': 'Nothing added yet',
 
   'repeat.footer':
     'Logs it at today’s time. If the portion was different, just say so in the journal and I’ll fix it.',

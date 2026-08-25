@@ -49,11 +49,31 @@ type Stage =
   | { at: 'found'; product: BarcodeProduct }
   | { at: 'missed' };
 
+/**
+ * A packet on its way into a message, rather than into the log.
+ *
+ * The amount is optional and its absence is the normal case: somebody who has
+ * already written "half a tin of beans" has said how much, and a picker that
+ * insists on hearing it again is asking twice. It is here when they set it
+ * deliberately, and then it outranks the sentence.
+ */
+export interface Scan {
+  product: BarcodeProduct;
+  grams?: number;
+  servings?: number;
+}
+
+/** Either way of saying how much, as the picker hands it back. */
+type Portioned = { grams?: number; servings?: number };
+
 export function BarcodeScanner({
   open,
   onOpenChange,
   onLogged,
   onLabelPhoto,
+  attaching,
+  attachedCount,
+  onAttach,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -68,6 +88,22 @@ export function BarcodeScanner({
    * feature but the meal-photo flow that already works, entered from here.
    */
   onLabelPhoto: (photo: PreparedPhoto) => void;
+  /**
+   * Whether there are words in the composer waiting for these packets.
+   *
+   * The one piece of state that decides what a scan *is*. Mid-sentence, a
+   * packet is a component of something being described, so it goes straight
+   * into the message and the camera stays up. With an empty composer there is
+   * no sentence for it to be part of, so it is the meal itself and gets the
+   * picker it has always had — which is also the free path, since a scan
+   * logged on its own never troubles a model.
+   *
+   * Not hidden state: they typed it, a moment ago, on the page underneath.
+   */
+  attaching: boolean;
+  /** How many are already on the message, for the tally under the viewfinder. */
+  attachedCount: number;
+  onAttach: (scan: Scan) => void;
 }) {
   const t = useT();
   const [stage, setStage] = useState<Stage>({ at: 'scanning' });
@@ -88,7 +124,28 @@ export function BarcodeScanner({
     async (code: string) => {
       setStage({ at: 'looking', code });
       try {
-        setStage({ at: 'found', product: await api.barcode(code) });
+        const product = await api.barcode(code);
+        /*
+         * Mid-sentence: into the message, and the camera never stops. Somebody
+         * assembling a burrito out of three packets is holding all three, and a
+         * card between each pair of scans is three dismissals for a meal they
+         * have already described in words.
+         *
+         * No portion goes with it. The sentence carries the amount, and the
+         * chip can be clicked later by anyone who weighed it. The toast is the
+         * only confirmation there is, which is why it names the product: the
+         * viewfinder looks identical afterwards, so without it there would be
+         * no telling one read from two.
+         */
+        if (attaching) {
+          onAttach({ product });
+          toast.success(
+            t('barcode.added')(product.brand ? `${product.brand} ${product.name}` : product.name),
+          );
+          setStage({ at: 'scanning' });
+          return;
+        }
+        setStage({ at: 'found', product });
       } catch (error) {
         const status = (error as { status?: number }).status;
         // A 404 is the miss and has its own screen. Anything else is a real
@@ -102,7 +159,7 @@ export function BarcodeScanner({
         }
       }
     },
-    [],
+    [attaching, onAttach, t],
   );
 
   /*
@@ -253,6 +310,17 @@ export function BarcodeScanner({
                   onOpenChange(false);
                   onLogged(message);
                 }}
+                /*
+                 * Offered even here, where the composer was empty when the
+                 * camera opened. Somebody who scans first and types after has
+                 * not done anything wrong, and a card whose only exit logs the
+                 * packet as a meal of its own would make them undo it to say
+                 * what it went into.
+                 */
+                onAttach={(portion) => {
+                  onAttach({ product: stage.product, ...portion });
+                  onOpenChange(false);
+                }}
                 onRescan={() => setStage({ at: 'scanning' })}
               />
             ) : stage.at === 'missed' ? (
@@ -306,6 +374,32 @@ export function BarcodeScanner({
                   {reading ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
                   {reading ? t('barcode.reading') : t('barcode.photographInstead')}
                 </Button>
+
+                {/*
+                  The running total, and the way out.
+
+                  Only mid-sentence: a scan that ends in the portion card has
+                  its own buttons, and a tally under them would be a second
+                  answer to "what happens now". Here there is no card to end the
+                  flow, so something has to say how many landed and where the
+                  door is — and the count is the only correction available for a
+                  packet read twice, since it is what makes the second visible.
+                */}
+                {attaching && (
+                  <div className="border-border mt-3 flex items-center justify-between gap-3 border-t-2 pt-3">
+                    <p className="text-footnote text-muted-foreground min-w-0 truncate font-semibold">
+                      {attachedCount === 0
+                        ? t('barcode.nothingAddedYet')
+                        : t('barcode.addedToMessage')(attachedCount)}
+                    </p>
+                    <Button
+                      onClick={() => onOpenChange(false)}
+                      className="h-10 shrink-0 rounded-full px-6"
+                    >
+                      {t('common.done')}
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </DialogContent>
@@ -385,14 +479,64 @@ const BASIS: Record<
  * underneath is unchanged — everything still resolves to grams before the
  * request leaves the browser, and the API never learns any of this happened.
  */
+/**
+ * The picker on its own, for a chip somebody wants to be exact about.
+ *
+ * The same card the scanner shows, reached from the other end: there, a packet
+ * has just been read and the question is what to do with it; here it is already
+ * on the message and the only question left is how much. So there is no camera,
+ * no "scan another", and one button.
+ *
+ * Keyed on the product so that opening it for a second chip remounts rather
+ * than inheriting the first one's stepper — `PortionCard` seeds its state once,
+ * which is right for a fresh scan and wrong for a card reopened over a
+ * different product.
+ */
+export function PortionDialog({
+  scan,
+  onOpenChange,
+  onPick,
+}: {
+  scan: Scan | null;
+  onOpenChange: (open: boolean) => void;
+  onPick: (portion: Portioned) => void;
+}) {
+  const t = useT();
+
+  return (
+    <Dialog open={scan !== null} onOpenChange={onOpenChange}>
+      {scan && (
+        <DialogContent title={t('barcode.setTheAmount')} description={t('barcode.sayHowMuch')}>
+          <PortionCard
+            key={scan.product.barcode}
+            product={scan.product}
+            initial={{ grams: scan.grams, servings: scan.servings }}
+            onAttach={(portion) => {
+              onPick(portion);
+              onOpenChange(false);
+            }}
+          />
+        </DialogContent>
+      )}
+    </Dialog>
+  );
+}
+
 function PortionCard({
   product,
   onLogged,
+  onAttach,
   onRescan,
+  initial,
 }: {
   product: BarcodeProduct;
-  onLogged: (message: ChatMessage) => void;
-  onRescan: () => void;
+  /** Straight to the journal, without a model. Absent when this card is only picking. */
+  onLogged?: (message: ChatMessage) => void;
+  /** Onto the message being written, for the sentence to give the amount to. */
+  onAttach?: (portion: Portioned) => void;
+  onRescan?: () => void;
+  /** An amount already settled, for a chip being amended rather than a new scan. */
+  initial?: Portioned;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -401,13 +545,26 @@ function PortionCard({
 
   // Defaults to the serving when the label gave one, and to the basis amount
   // when it did not — never to a guess dressed up as a serving.
+  //
+  // Opened on whichever pill the amount is already expressed in, so that
+  // amending a chip starts from the answer rather than from the default. A card
+  // that reopened on "1 serving" after somebody typed 137 g would be offering
+  // to lose their number.
   const [mode, setMode] = useState<'serving' | 'hundred' | 'custom'>(
-    product.serving_g === null ? 'hundred' : 'serving',
+    initial?.servings !== undefined && product.serving_g !== null
+      ? 'serving'
+      : initial?.grams !== undefined
+        ? 'custom'
+        : product.serving_g === null
+          ? 'hundred'
+          : 'serving',
   );
-  const [servings, setServings] = useState(1);
+  const [servings, setServings] = useState(initial?.servings ?? 1);
   // Held in whichever unit the stepper is showing, not in grams, so that
   // stepping never lands on a number the display has to round away.
-  const [weighed, setWeighed] = useState(basis.weighDefault);
+  const [weighed, setWeighed] = useState(
+    initial?.grams === undefined ? basis.weighDefault : initial.grams / basis.gramsPerStepUnit,
+  );
   const [logging, setLogging] = useState(false);
 
   const eatenGrams =
@@ -417,6 +574,13 @@ function PortionCard({
         ? basis.grams
         : weighed * basis.gramsPerStepUnit;
   const share = eatenGrams / 100;
+
+  /*
+   * Servings stay servings rather than being converted here, so that whatever
+   * receives this — the log, or a chip on a message — reads back as the
+   * decision the user made rather than as the arithmetic that followed from it.
+   */
+  const portion: Portioned = mode === 'serving' ? { servings } : { grams: eatenGrams };
 
   // What goes on the first pill, and what goes under the row.
   //
@@ -440,17 +604,11 @@ function PortionCard({
   async function log() {
     setLogging(true);
     try {
-      // Servings are sent as servings rather than converted here, so that the
-      // entry reads back as the decision the user made rather than as the
-      // arithmetic that followed from it.
-      const { entry, message } = await api.logBarcode(
-        product.barcode,
-        mode === 'serving' ? { servings } : { grams: eatenGrams },
-      );
+      const { entry, message } = await api.logBarcode(product.barcode, portion);
       toast.success(
         t('recipe.logged')(entry.description, formatNumber(Math.round(entry.kcal), locale)),
       );
-      onLogged(message);
+      onLogged?.(message);
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -538,16 +696,29 @@ function PortionCard({
         />
       )}
 
-      <Button
-        onClick={() => void log()}
-        disabled={logging}
-        className="h-11 w-full gap-2 rounded-full"
-      >
-        {logging && <Loader2 size={15} className="animate-spin" />}
-        {logging
-          ? t('recipe.logging')
-          : t('recipe.iAteThis')(formatNumber(Math.round(product.kcal_100g * share), locale))}
-      </Button>
+      {onLogged && (
+        <Button
+          onClick={() => void log()}
+          disabled={logging}
+          className="h-11 w-full gap-2 rounded-full"
+        >
+          {logging && <Loader2 size={15} className="animate-spin" />}
+          {logging
+            ? t('recipe.logging')
+            : t('recipe.iAteThis')(formatNumber(Math.round(product.kcal_100g * share), locale))}
+        </Button>
+      )}
+
+      {onAttach && (
+        <Button
+          variant={onLogged ? 'secondary' : 'default'}
+          onClick={() => onAttach(portion)}
+          disabled={logging}
+          className="h-11 w-full rounded-full"
+        >
+          {onLogged ? t('barcode.addToMessage') : t('barcode.setTheAmount')}
+        </Button>
+      )}
 
       <div className="text-footnote text-muted-foreground flex items-center justify-between gap-3">
         {/*
@@ -571,6 +742,7 @@ function PortionCard({
         <button
           type="button"
           onClick={onRescan}
+          hidden={!onRescan}
           className="hover:text-foreground shrink-0 font-semibold"
         >
           {t('barcode.wrongPacket')}

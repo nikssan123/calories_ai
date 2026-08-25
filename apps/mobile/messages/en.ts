@@ -109,6 +109,8 @@ export const en = {
   'composer.choosePhoto': 'Choose a photo',
   'composer.scanBarcode': 'Scan a barcode',
   'composer.removePhoto': 'Remove photo',
+  'composer.setAmountFor': (name: string) => `Set the amount for ${name}`,
+  'composer.removeScan': (name: string) => `Remove ${name}`,
   'composer.selectedMeal': 'Selected meal',
   'composer.labelHint': 'This is the label — log what I ate off it.',
 
@@ -775,6 +777,12 @@ export const en = {
   'barcode.howMany': 'How many?',
   'barcode.howMuch': 'How much?',
   'barcode.scanAnother': 'Scan another',
+  'barcode.addToMessage': 'Add to my message',
+  'barcode.setTheAmount': 'Set the amount',
+  'barcode.added': (name: string) => `${name} — added`,
+  'barcode.addedToMessage': (count: number) =>
+    `${n(count, { one: 'packet', other: 'packets' })} added to your message`,
+  'barcode.nothingAddedYet': 'Nothing added yet',
 
   'composer.listening': 'Listening…',
   'composer.stopListening': 'Stop listening',

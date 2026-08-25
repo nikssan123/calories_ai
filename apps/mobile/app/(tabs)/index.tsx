@@ -405,6 +405,7 @@ export default function JournalScreen() {
             photo_base64: photoKey ? undefined : payload.photoBase64,
             photo_media_type: payload.photoMediaType,
             photo_upload_failed: uploadFailed || undefined,
+            scanned: payload.scanned,
             locale,
           },
           // The stream is a preview of the reply, never the record of it:

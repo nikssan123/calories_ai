@@ -636,6 +636,78 @@ describe('chat', () => {
     expect(userTurnOf(agentCalls.at(-1)!)).not.toContain('Language:');
   });
 
+  /*
+   * The wire half of the scanner. `run.test.ts` proves the panels reach the
+   * model once they are resolved; this proves the codes survive the body schema
+   * and get resolved at all — which is where a field like this dies quietly.
+   *
+   * The row is planted in the cache rather than stubbed through `fetch`,
+   * because what is under test is the route reaching the same cache the
+   * scanner reads, not Open Food Facts.
+   */
+  it('looks up the packets attached to a message and hands the model their labels', async () => {
+    await query(
+      `INSERT INTO barcode_products
+         (barcode, found, brand, name, kcal_100g, protein_100g, carbs_100g, fat_100g,
+          serving_g, serving_desc, source, source_url)
+       VALUES ('5000112637922', true, 'Old El Paso', 'Soft Tortillas Original',
+               312, 8.1, 51.4, 7.2, 62, '1 tortilla', 'off', null)
+       ON CONFLICT (barcode) DO NOTHING`,
+    );
+
+    scriptAgent({ text: 'Logged.' });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/chat',
+      ...auth({
+        payload: {
+          text: 'burrito I made — two tortillas',
+          scanned: [{ barcode: '5000112637922', servings: 2 }],
+        },
+      }),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const turnText = userTurnOf(agentCalls.at(-1)!);
+    expect(turnText).toContain('Old El Paso Soft Tortillas Original');
+    expect(turnText).toContain('312 kcal');
+    // The portion the user settled on the picker, resolved against the label.
+    expect(turnText).toContain('2 \u00d7 62g = 124g');
+  });
+
+  /*
+   * A code nobody has catalogued must not cost somebody their dinner. It is
+   * dropped, the turn runs, and the model is told to say which part it guessed
+   * at — an estimate wearing a scan's confidence is the one outcome worse than
+   * not having scanned.
+   */
+  it('runs the turn anyway when a packet cannot be looked up, and says so', async () => {
+    vi.stubGlobal('fetch', async () => ({ ok: false, status: 404, json: async () => ({}) }));
+    scriptAgent({ text: 'Logged.' });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/chat',
+      ...auth({
+        payload: { text: 'that new cereal', scanned: [{ barcode: '4006381333931' }] },
+      }),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const turnText = userTurnOf(agentCalls.at(-1)!);
+    expect(turnText).toContain('One packet was also scanned and could not be looked up');
+    expect(turnText).not.toContain('per 100g');
+  });
+
+  it.each([
+    { text: 'x', scanned: [{ barcode: '123' }] },
+    { text: 'x', scanned: [{ barcode: '5000112637922', grams: 0 }] },
+    { text: 'x', scanned: Array.from({ length: 9 }, () => ({ barcode: '5000112637922' })) },
+  ])('rejects a bad scan list %#', async (payload) => {
+    const response = await app.inject({ method: 'POST', url: '/chat', ...auth({ payload }) });
+    expect(response.statusCode).toBe(400);
+  });
+
   it.each([{}, { text: '' }, { text: 'x'.repeat(4001) }])('rejects %j', async (payload) => {
     const response = await app.inject({ method: 'POST', url: '/chat', ...auth({ payload }) });
     expect(response.statusCode).toBe(400);

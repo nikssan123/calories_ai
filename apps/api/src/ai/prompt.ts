@@ -1,4 +1,5 @@
 import type {
+  BarcodeProduct,
   DaySummary,
   NudgeStats,
   Profile,
@@ -17,6 +18,7 @@ import {
   localeOf,
   unitsOf,
 } from '@ct/shared';
+import type { ScannedProduct } from '../services/barcode.ts';
 import type { AgentNote } from '../services/notes.ts';
 import { MIN_TARGET_KCAL } from '../services/targets.ts';
 import type { Wellbeing } from '../services/wellbeing.ts';
@@ -397,6 +399,86 @@ Weight is where a photo estimate goes wrong. You judge calorie density well; you
 A small plate is genuinely small and a loaded one is genuinely large. If your components add up to 150 kcal, log 150 — do not round it toward something that looks more like a proper meal.
 
 Before you log, check the total weight on its own: would that much food feel right lifted off the table? A plate is rarely under 100g or over 800g. If your items sum well outside that, the portions are wrong, not the plate.`;
+
+/**
+ * The packets attached to a message, handed over as facts rather than hints.
+ *
+ * This block is the feature. The chips in the composer and the camera that
+ * stays open are only how the codes get here; this is where they stop being
+ * barcodes and become the difference between a burrito that was guessed at and
+ * one that was half read off a label.
+ *
+ * Per-100g, and not per-portion, which is the decision worth defending. How
+ * much went in is in the sentence — "two tortillas", "half a tin" — and the
+ * model can read that far better than this function can, because it can see
+ * the words and this function only sees a code. What the model is *not* better
+ * at is knowing what is in a tortilla, so the panel is handed over closed: use
+ * these numbers, scale them, do not adjust them toward what you expected a
+ * tortilla to be.
+ *
+ * A portion that was set on the sheet is stated as settled rather than as a
+ * suggestion, because somebody who tapped through a picker has already answered
+ * the question the sentence left open, and asking the model to weigh their
+ * answer against the prose is how a typed 137 becomes a rounded 150.
+ *
+ * The misses are named out loud for the same reason the scanner has a miss
+ * screen at all: a reply that quietly estimates a scanned item is claiming a
+ * precision it does not have, and the person holding the packet has no way to
+ * tell. Better they hear which part did not come back.
+ */
+export function scannedProductsPrompt(scanned: ScannedProduct[], misses: number): string | null {
+  if (scanned.length === 0 && misses === 0) return null;
+
+  const lines: string[] = ['# Packets they scanned', ''];
+
+  if (scanned.length > 0) {
+    lines.push(
+      'These figures came off the products themselves, out of a food catalogue. They are label data, not estimates: use them exactly, scale them to however much the message says was eaten, and do not round them toward what the food "should" be. Do not call lookup_barcode for any of these \u2014 they are already looked up.',
+      '',
+    );
+    for (const { product, grams, servings } of scanned) {
+      const name = product.brand ? `${product.brand} ${product.name}` : product.name;
+      const panel = `${product.kcal_100g} kcal, ${product.protein_100g}g protein, ${product.carbs_100g}g carbs, ${product.fat_100g}g fat per 100g`;
+      const serving =
+        product.serving_g === null
+          ? 'the label gives no serving size'
+          : `one serving is ${product.serving_g}g${product.serving_desc ? ` (${product.serving_desc})` : ''}`;
+      lines.push(`- **${name}** \u2014 ${panel}; ${serving}. ${settledAmount(product, grams, servings)}`);
+    }
+    lines.push(
+      '',
+      'Log the meal with log_food as one entry, one item per distinct food, exactly as you would have without the scans \u2014 a scanned item is an item like any other, the only difference being that its numbers are known. Estimate the rest of the meal as usual. Set confidence to "high" only if every item in the entry came off a label; if any part of it is your own estimate, "medium" is the honest answer.',
+    );
+  }
+
+  if (misses > 0) {
+    const which = misses === 1 ? 'One packet was' : `${misses} packets were`;
+    const parts = misses === 1 ? 'which part is a guess' : 'which parts are guesses';
+    lines.push(
+      '',
+      `${which} also scanned and could not be looked up \u2014 either nobody has catalogued ${misses === 1 ? 'it' : 'them'} or the catalogue could not be reached. Estimate ${misses === 1 ? 'that item' : 'those items'} from the description like any other food, and say plainly in your reply that ${misses === 1 ? 'a scan' : `${misses} scans`} did not come back, so they know ${parts}.`,
+    );
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * What the person already settled about the amount, if they settled anything.
+ *
+ * Servings are resolved to grams here rather than left as a multiplication for
+ * the model to do, because it is the kind of arithmetic that is free to get
+ * right in code and occasionally wrong in prose — and the label's own serving
+ * size is right here.
+ */
+function settledAmount(product: BarcodeProduct, grams?: number, servings?: number): string {
+  if (grams !== undefined) return `They set the amount themselves: ${grams}g. Use that.`;
+  if (servings !== undefined && product.serving_g !== null) {
+    const total = Math.round(servings * product.serving_g * 10) / 10;
+    return `They set the amount themselves: ${servings} \u00d7 ${product.serving_g}g = ${total}g. Use that.`;
+  }
+  return 'They did not set an amount \u2014 read it out of their message.';
+}
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 

@@ -8,8 +8,10 @@ import {
   recentReviewPrompt,
   REVIEW_SYSTEM_PROMPT,
   reviewTaskPrompt,
+  scannedProductsPrompt,
   STABLE_SYSTEM_PROMPT,
 } from '../src/ai/prompt.ts';
+import type { ScannedProduct } from '../src/services/barcode.ts';
 
 /**
  * The prompt is the product. These assert the facts the model must be given —
@@ -552,5 +554,106 @@ describe('the review agent’s prompts', () => {
   it('omits the name when there is none', () => {
     const stats = { week_start: 'a', week_end: 'b' } as unknown as ReviewStats;
     expect(reviewTaskPrompt(stats, { ...profile, display_name: null })).not.toContain('Their name is');
+  });
+});
+
+describe('scannedProductsPrompt', () => {
+  const tortillas: ScannedProduct['product'] = {
+    barcode: '5000112637922',
+    brand: 'Old El Paso',
+    name: 'Soft Tortillas Original',
+    kcal_100g: 312,
+    protein_100g: 8.1,
+    carbs_100g: 51.4,
+    fat_100g: 7.2,
+    serving_g: 62,
+    serving_desc: '1 tortilla',
+    source: 'off',
+    source_url: 'https://world.openfoodfacts.org/product/5000112637922',
+  };
+
+  it('says nothing when nothing was scanned', () => {
+    expect(scannedProductsPrompt([], 0)).toBeNull();
+  });
+
+  it('hands over the panel per 100g, and the serving the label named', () => {
+    const prompt = scannedProductsPrompt([{ product: tortillas }], 0)!;
+    expect(prompt).toContain('Old El Paso Soft Tortillas Original');
+    expect(prompt).toContain('312 kcal');
+    expect(prompt).toContain('8.1g protein');
+    expect(prompt).toContain('per 100g');
+    expect(prompt).toContain('one serving is 62g');
+    expect(prompt).toContain('1 tortilla');
+  });
+
+  /*
+   * The whole reason the figures are sent at all. A model that treats them as
+   * a starting point for its own estimate has given back exactly the error the
+   * scan was there to remove.
+   */
+  it('forbids re-estimating them, and forbids looking them up again', () => {
+    const prompt = scannedProductsPrompt([{ product: tortillas }], 0)!;
+    expect(prompt).toContain('not estimates');
+    expect(prompt).toMatch(/do not call lookup_barcode/i);
+  });
+
+  it('leaves the amount to the sentence when nobody set one', () => {
+    const prompt = scannedProductsPrompt([{ product: tortillas }], 0)!;
+    expect(prompt).toContain('did not set an amount');
+  });
+
+  it('states a typed weight as settled', () => {
+    const prompt = scannedProductsPrompt([{ product: tortillas, grams: 137 }], 0)!;
+    expect(prompt).toContain('137g');
+    expect(prompt).toContain('Use that');
+    expect(prompt).not.toContain('did not set an amount');
+  });
+
+  /*
+   * Resolved here rather than left as a multiplication in prose: it is free to
+   * get right in code and occasionally wrong in a sentence.
+   */
+  it('resolves servings against the label’s own serving size', () => {
+    const prompt = scannedProductsPrompt([{ product: tortillas, servings: 2 }], 0)!;
+    expect(prompt).toContain('2 \u00d7 62g = 124g');
+  });
+
+  /*
+   * A label that never named a serving cannot answer "2 servings" of anything,
+   * so a servings figure against one falls back to the sentence rather than
+   * inventing a quantity to multiply.
+   */
+  it('will not resolve servings for a label that gave no serving size', () => {
+    const loose = { ...tortillas, serving_g: null, serving_desc: null };
+    const prompt = scannedProductsPrompt([{ product: loose, servings: 2 }], 0)!;
+    expect(prompt).toContain('the label gives no serving size');
+    expect(prompt).toContain('did not set an amount');
+  });
+
+  it('asks for medium confidence unless every item came off a label', () => {
+    const prompt = scannedProductsPrompt([{ product: tortillas }], 0)!;
+    expect(prompt).toContain('"high" only if every item');
+    expect(prompt).toContain('"medium"');
+  });
+
+  /*
+   * The dropped scans are the honest half. An estimate wearing a scan's
+   * confidence is the one outcome worse than not scanning at all, and the
+   * person holding the packet has no way to tell from the reply.
+   */
+  it('names the scans that did not come back, and asks the reply to say so', () => {
+    const one = scannedProductsPrompt([{ product: tortillas }], 1)!;
+    expect(one).toContain('One packet was also scanned and could not be looked up');
+    expect(one).toContain('which part is a guess');
+
+    const several = scannedProductsPrompt([{ product: tortillas }], 3)!;
+    expect(several).toContain('3 packets were also scanned');
+    expect(several).toContain('which parts are guesses');
+  });
+
+  it('still speaks up when every scan missed', () => {
+    const prompt = scannedProductsPrompt([], 2)!;
+    expect(prompt).toContain('2 packets were also scanned');
+    expect(prompt).not.toContain('per 100g');
   });
 });

@@ -84,6 +84,8 @@ export const es: Messages = {
   'composer.choosePhoto': 'Elegir una foto',
   'composer.scanBarcode': 'Escanear un código de barras',
   'composer.removePhoto': 'Quitar la foto',
+  'composer.setAmountFor': (name: string) => `Indicar la cantidad de ${name}`,
+  'composer.removeScan': (name: string) => `Quitar ${name}`,
   'composer.selectedMeal': 'Comida seleccionada',
   'composer.labelHint': 'Esta es la etiqueta: registra lo que he comido a partir de ella.',
 
@@ -516,6 +518,12 @@ export const es: Messages = {
   'barcode.notFoundBody': 'Nadie ha catalogado ese todavía — muchas marcas blancas nunca lo están. Haz una foto de la tabla nutricional y lo leo de la etiqueta.',
   'barcode.photographLabel': 'Fotografiar la etiqueta',
   'barcode.scanDifferent': 'Escanear otro paquete',
+  'barcode.addToMessage': 'Añadir a mi mensaje',
+  'barcode.setTheAmount': 'Indicar la cantidad',
+  'barcode.added': (name: string) => `${name} — añadido`,
+  'barcode.addedToMessage': (count: number) =>
+    `${n(count, { one: 'paquete', other: 'paquetes' })} en tu mensaje`,
+  'barcode.nothingAddedYet': 'Aún no has añadido nada',
   'repeat.footer': 'Se apunta con la hora de hoy. Si la ración fue distinta, dilo en el diario y lo arreglo.',
   'repeat.search': 'Busca en tus comidas',
   'repeat.kcalProtein': (kcal, protein) => `${kcal} kcal · ${protein} g de proteína`,

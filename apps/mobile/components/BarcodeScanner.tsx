@@ -39,6 +39,23 @@ import { useT } from '@/lib/i18n';
  * journal can read it. So a miss offers the label photo rather than an apology.
  */
 
+/**
+ * A packet on its way into a message, rather than into the log.
+ *
+ * The amount is optional and its absence is the normal case: somebody who has
+ * already written "half a tin of beans" has said how much, and a picker that
+ * insists on hearing it again is asking twice. It is here when they set it
+ * deliberately, and then it outranks the sentence.
+ */
+export interface Scan {
+  product: BarcodeProduct;
+  grams?: number;
+  servings?: number;
+}
+
+/** Either way of saying how much, as the picker hands it back. */
+type Portioned = { grams?: number; servings?: number };
+
 type Stage =
   | { at: 'scanning' }
   | { at: 'looking'; code: string }
@@ -50,6 +67,9 @@ export function BarcodeScanner({
   onClose,
   onLogged,
   onLabelPhoto,
+  attaching,
+  attachedCount,
+  onAttach,
 }: {
   open: boolean;
   onClose: () => void;
@@ -64,6 +84,22 @@ export function BarcodeScanner({
    * putting one in the conversation without them is not the app's to do.
    */
   onLabelPhoto: (photo: PreparedPhoto) => void;
+  /**
+   * Whether there are words in the composer waiting for these packets.
+   *
+   * The one piece of state that decides what a scan *is*. Mid-sentence, a
+   * packet is a component of something being described, so it goes straight
+   * into the message and the camera stays up. With an empty composer there is
+   * no sentence for it to be part of, so it is the meal itself and gets the
+   * picker it has always had — which is also the free path, since a scan
+   * logged on its own never troubles a model.
+   *
+   * Not hidden state: they typed it, a moment ago, on the screen underneath.
+   */
+  attaching: boolean;
+  /** How many are already on the message, for the tally along the bottom. */
+  attachedCount: number;
+  onAttach: (scan: Scan) => void;
 }) {
   const colors = useColors();
   const tr = useT();
@@ -71,6 +107,32 @@ export function BarcodeScanner({
   const [permission, requestPermission] = useCameraPermissions();
   const [stage, setStage] = useState<Stage>({ at: 'scanning' });
   const [error, setError] = useState<string | null>(null);
+  const [logging, setLogging] = useState(false);
+
+  /*
+   * The packet that just landed, held on screen long enough to be read.
+   *
+   * The whole point of scanning without a sheet is that nothing stops, which
+   * leaves nothing to confirm that anything happened either — the buzz says
+   * "I have it" and the viewfinder looks identical afterwards. So the name
+   * comes back for a couple of seconds, which is the smallest thing that can
+   * distinguish "read the tortillas" from "read the tortillas twice".
+   */
+  const [caught, setCaught] = useState<string | null>(null);
+  const fading = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flash = useCallback((name: string) => {
+    setCaught(name);
+    if (fading.current) clearTimeout(fading.current);
+    fading.current = setTimeout(() => setCaught(null), 2400);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (fading.current) clearTimeout(fading.current);
+    },
+    [],
+  );
 
   /*
    * The native scanner fires continuously while a code is in frame — several
@@ -94,7 +156,24 @@ export function BarcodeScanner({
 
     setStage({ at: 'looking', code });
     try {
-      setStage({ at: 'found', product: await api.barcode(code) });
+      const product = await api.barcode(code);
+      /*
+       * Mid-sentence: into the message, and the camera never leaves. Somebody
+       * assembling a burrito out of three packets is holding all three, and a
+       * sheet between each pair of scans is three dismissals for a meal they
+       * have already described in words.
+       *
+       * No portion goes with it. The sentence carries the amount, and the chip
+       * can be tapped later by anyone who weighed it.
+       */
+      if (attaching) {
+        onAttach({ product });
+        flash(product.brand ? `${product.brand} ${product.name}` : product.name);
+        claimed.current = false;
+        setStage({ at: 'scanning' });
+        return;
+      }
+      setStage({ at: 'found', product });
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) {
         setStage({ at: 'missed' });
@@ -104,7 +183,7 @@ export function BarcodeScanner({
         claimed.current = false;
       }
     }
-  }, []);
+  }, [attaching, onAttach, flash]);
 
   function rescan() {
     claimed.current = false;
@@ -116,7 +195,34 @@ export function BarcodeScanner({
     claimed.current = false;
     setStage({ at: 'scanning' });
     setError(null);
+    setCaught(null);
     onClose();
+  }
+
+  /** A packet the picker settled an amount for. Deliberate, so the sheet ends. */
+  function attach(product: BarcodeProduct, portion: Portioned) {
+    onAttach({ product, ...portion });
+    haptics.logged();
+    close();
+  }
+
+  /**
+   * The meal *is* the packet. Unchanged, and unchanged on purpose: this is the
+   * path that reaches the journal without a model in it, and putting a paid
+   * turn in front of every scan of a cereal box is the thing that would be
+   * quietly lost by routing everything through the composer.
+   */
+  async function logIt(product: BarcodeProduct, portion: Portioned) {
+    setLogging(true);
+    try {
+      const { message } = await api.logBarcode(product.barcode, portion);
+      haptics.logged();
+      onLogged(message);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLogging(false);
+    }
   }
 
   async function labelPhoto(source: 'camera' | 'library') {
@@ -174,6 +280,31 @@ export function BarcodeScanner({
                     {stage.at === 'looking' ? tr('barcode.lookingUp') : tr('barcode.pointAtBarcode')}
                   </Text>
                 </View>
+                {caught && (
+                  <View
+                    style={[styles.caught, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    pointerEvents="none"
+                  >
+                    <View style={[styles.tick, { backgroundColor: colors.primary }]}>
+                      <Svg width={12} height={12} viewBox="0 0 24 24">
+                        <Path
+                          d="M5 13l4 4L19 7"
+                          stroke={colors.primaryForeground}
+                          strokeWidth={3.4}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          fill="none"
+                        />
+                      </Svg>
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      style={[t.footnoteSemibold, styles.caughtName, { color: colors.foreground }]}
+                    >
+                      {tr('barcode.added')(caught)}
+                    </Text>
+                  </View>
+                )}
               </>
             ) : (
               <View style={styles.permission}>
@@ -206,9 +337,71 @@ export function BarcodeScanner({
             )}
           </View>
         ) : stage.at === 'found' ? (
-          <Portion product={stage.product} onLogged={onLogged} onRescan={rescan} onError={setError} />
+          <Portion
+            product={stage.product}
+            primary={{
+              label: tr('barcode.iAteThis'),
+              onPress: (portion) => void logIt(stage.product, portion),
+            }}
+            /*
+             * Offered even here, where the composer was empty when the camera
+             * opened. Somebody who scans first and types after has not done
+             * anything wrong, and a sheet whose only exit logs the packet as a
+             * meal of its own would make them undo it to say what it went into.
+             */
+            secondary={{
+              label: tr('barcode.addToMessage'),
+              onPress: (portion) => attach(stage.product, portion),
+            }}
+            onRescan={rescan}
+            busy={logging}
+            busyLabel={tr('recipe.logging')}
+          />
         ) : (
           <Missed onLabelPhoto={labelPhoto} onRescan={rescan} />
+        )}
+
+        {/*
+          The running total, and the way out.
+
+          Only while the camera is up, and only mid-sentence: a scan that ends
+          in the picker has its own buttons, and a tally under them would be a
+          second answer to "what happens now". Here there is no sheet to end
+          the flow, so something has to say how many landed and where the door
+          is — the count is also the only correction available for a packet
+          scanned twice, since it is what makes the second one visible.
+        */}
+        {attaching && (stage.at === 'scanning' || stage.at === 'looking') && (
+          <View
+            style={[
+              styles.tally,
+              {
+                borderTopColor: colors.border,
+                backgroundColor: colors.background,
+                paddingBottom: insets.bottom + 14,
+              },
+            ]}
+          >
+            <Text
+              numberOfLines={1}
+              style={[t.footnoteSemibold, styles.tallyText, { color: colors.mutedForeground }]}
+            >
+              {attachedCount === 0
+                ? tr('barcode.nothingAddedYet')
+                : tr('barcode.addedToMessage')(attachedCount)}
+            </Text>
+            <PressableChunk
+              radius={999}
+              color={colors.caloriesDeep}
+              onPress={close}
+              accessibilityRole="button"
+              contentStyle={[styles.done, { backgroundColor: colors.primary }]}
+            >
+              <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
+                {tr('common.done')}
+              </Text>
+            </PressableChunk>
+          </View>
         )}
 
         {error && (
@@ -301,23 +494,42 @@ const BASIS: Record<
  */
 function Portion({
   product,
-  onLogged,
+  primary,
+  secondary,
   onRescan,
-  onError,
+  busy,
+  busyLabel,
+  initial,
 }: {
   product: BarcodeProduct;
-  onLogged: (message: ChatMessage) => void;
-  onRescan: () => void;
-  onError: (message: string) => void;
+  primary: PortionAction;
+  secondary?: PortionAction;
+  onRescan?: () => void;
+  busy?: boolean;
+  busyLabel?: string;
+  /** An amount already settled, for a chip being amended rather than a new scan. */
+  initial?: Portioned;
 }) {
   const colors = useColors();
   const tr = useT();
   const units = useUnits();
   const basis = BASIS[units];
+  /*
+   * Opened on whichever pill the amount is already expressed in, so that
+   * amending a chip starts from the answer rather than from the default. A
+   * sheet that reopened on "1 serving" after somebody typed 137g would be
+   * offering to lose their number.
+   */
   const [mode, setMode] = useState<'serving' | 'hundred' | 'custom'>(
-    product.serving_g === null ? 'hundred' : 'serving',
+    initial?.servings !== undefined && product.serving_g !== null
+      ? 'serving'
+      : initial?.grams !== undefined
+        ? 'custom'
+        : product.serving_g === null
+          ? 'hundred'
+          : 'serving',
   );
-  const [servings, setServings] = useState(1);
+  const [servings, setServings] = useState(initial?.servings ?? 1);
   const rung = nearestRung(servings);
   /*
    * Held in whichever unit the stepper is showing rather than in grams, so that
@@ -326,9 +538,10 @@ function Portion({
    * "13", "137" all pass through on the way to a weight, and "1." is a
    * legitimate thing to be halfway through writing.
    */
-  const [weighed, setWeighed] = useState(basis.weighDefault);
+  const [weighed, setWeighed] = useState(
+    initial?.grams === undefined ? basis.weighDefault : initial.grams / basis.gramsPerStepUnit,
+  );
   const [draft, setDraft] = useState<string | null>(null);
-  const [logging, setLogging] = useState(false);
 
   /** Rounded to the unit's precision and inside the API's bounds. */
   const settle = (raw: number) => {
@@ -355,24 +568,12 @@ function Portion({
         : weighed * basis.gramsPerStepUnit;
   const share = eatenGrams / 100;
 
-  async function log() {
-    setLogging(true);
-    try {
-      // Servings are sent as servings rather than converted here, so the entry
-      // reads back as the decision the user made rather than as the arithmetic
-      // that followed from it.
-      const { message } = await api.logBarcode(
-        product.barcode,
-        mode === 'serving' ? { servings } : { grams: eatenGrams },
-      );
-      haptics.logged();
-      onLogged(message);
-    } catch (e) {
-      onError((e as Error).message);
-    } finally {
-      setLogging(false);
-    }
-  }
+  /*
+   * Servings stay servings rather than being converted here, so that whatever
+   * receives this — the log, or a chip on a message — reads back as the
+   * decision the user made rather than as the arithmetic that followed from it.
+   */
+  const portion: Portioned = mode === 'serving' ? { servings } : { grams: eatenGrams };
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior="padding">
@@ -491,24 +692,117 @@ function Portion({
         <PressableChunk
           radius={999}
           color={colors.caloriesDeep}
-          onPress={() => void log()}
-          disabled={logging}
+          onPress={() => primary.onPress(portion)}
+          disabled={busy}
           accessibilityRole="button"
           contentStyle={[styles.button, { backgroundColor: colors.primary }]}
         >
           <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
-            {logging ? tr('recipe.logging') : tr('barcode.iAteThis')}
+            {busy && busyLabel ? busyLabel : primary.label}
           </Text>
         </PressableChunk>
 
-        <Pressable onPress={onRescan} accessibilityRole="button" hitSlop={8}>
-          <Text style={[t.footnoteSemibold, styles.centred, { color: colors.mutedForeground }]}>
-            Scan another
-          </Text>
-        </Pressable>
+        {secondary && (
+          <PressableChunk
+            radius={999}
+            onPress={() => secondary.onPress(portion)}
+            disabled={busy}
+            accessibilityRole="button"
+            contentStyle={[
+              styles.button,
+              styles.outlined,
+              { backgroundColor: colors.card, borderColor: colors.input },
+            ]}
+          >
+            <Text style={[t.bodyBold, { color: colors.foreground }]}>{secondary.label}</Text>
+          </PressableChunk>
+        )}
+
+        {onRescan && (
+          <Pressable onPress={onRescan} accessibilityRole="button" hitSlop={8}>
+            <Text style={[t.footnoteSemibold, styles.centred, { color: colors.mutedForeground }]}>
+              {tr('barcode.scanAnother')}
+            </Text>
+          </Pressable>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
+}
+
+/**
+ * The picker on its own, for a chip somebody wants to be exact about.
+ *
+ * The same component the scanner shows, reached from the other end: there, a
+ * packet has just been read and the question is what to do with it; here it is
+ * already on the message and the only question left is how much. So there is no
+ * camera, no "scan another", and one button.
+ *
+ * Keyed on the scan so that opening it for a second chip remounts rather than
+ * inheriting the first one's stepper — `Portion` seeds its state once, which is
+ * exactly right for a fresh scan and exactly wrong for a sheet reopened over a
+ * different product.
+ */
+export function PortionSheet({
+  scan,
+  onClose,
+  onPick,
+}: {
+  scan: Scan | null;
+  onClose: () => void;
+  onPick: (portion: Portioned) => void;
+}) {
+  const colors = useColors();
+  const tr = useT();
+  const insets = useSafeAreaInsets();
+
+  return (
+    <Modal visible={scan !== null} animationType="slide" onRequestClose={onClose}>
+      <View style={[styles.screen, { backgroundColor: colors.background }]}>
+        <View style={[styles.bar, { paddingTop: insets.top + 8, borderBottomColor: colors.border }]}>
+          <Text style={[t.bodyBold, { color: colors.foreground }]}>{tr('barcode.howMuch')}</Text>
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel={tr('common.close')}
+            hitSlop={10}
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+          >
+            <Svg width={20} height={20} viewBox="0 0 24 24">
+              <Path
+                d="M18 6 6 18M6 6l12 12"
+                stroke={colors.mutedForeground}
+                strokeWidth={2.6}
+                strokeLinecap="round"
+                fill="none"
+              />
+            </Svg>
+          </Pressable>
+        </View>
+
+        {scan && (
+          <Portion
+            key={scan.product.barcode}
+            product={scan.product}
+            initial={{ grams: scan.grams, servings: scan.servings }}
+            primary={{
+              label: tr('barcode.setTheAmount'),
+              onPress: (portion) => {
+                onPick(portion);
+                onClose();
+              },
+            }}
+          />
+        )}
+      </View>
+    </Modal>
+  );
+}
+
+/** One of the picker's buttons: what it says, and what it does with the amount. */
+interface PortionAction {
+  label: string;
+  onPress: (portion: Portioned) => void;
 }
 
 /**
@@ -726,6 +1020,40 @@ const styles = StyleSheet.create({
   },
   hint: { position: 'absolute', bottom: 48 },
   hintText: { color: '#fff' },
+  /* Above the hint rather than over the window: the packet in frame is the
+     thing being aimed, and a card across it would cover what it is confirming. */
+  caught: {
+    position: 'absolute',
+    bottom: 84,
+    maxWidth: '86%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 2,
+    borderRadius: 999,
+    paddingVertical: 7,
+    paddingLeft: 10,
+    paddingRight: 14,
+  },
+  tick: { width: 20, height: 20, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  caughtName: { flexShrink: 1 },
+  tally: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    borderTopWidth: 2,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  tallyText: { flexShrink: 1 },
+  done: {
+    height: 40,
+    borderRadius: 999,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   permission: { alignSelf: 'stretch', padding: 32, gap: 12, alignItems: 'center' },
   permissionButton: { alignSelf: 'stretch', marginTop: 12 },
   centred: { textAlign: 'center' },
@@ -784,6 +1112,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  /* The border eats two of the 48, which is what keeps a filled button and an
+     outlined one the same height standing next to each other. */
+  outlined: { height: 48, borderWidth: 2 },
   missed: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
   mascot: { fontSize: 40, lineHeight: 48 },
   missedButton: { alignSelf: 'stretch', marginTop: 12 },
