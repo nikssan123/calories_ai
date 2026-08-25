@@ -19,6 +19,7 @@ import { recordUsage } from '../services/usage.ts';
 import { withTurnLock } from '../services/turn-lock.ts';
 import { checkWellbeing } from '../services/wellbeing.ts';
 import { MAX_SESSION_MESSAGES, MAX_TURNS, TEXT_LOG_UNSUPPORTED_LANGUAGE } from './client.ts';
+import { isKickoff, openingMessage } from './greeting.ts';
 import { needsCapableModel, writingNeedsCapableModel } from './language.ts';
 import {
   createProvider,
@@ -97,6 +98,20 @@ export async function runTurn(input: RunTurnInput, emit?: StreamSink): Promise<C
 async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<ChatResponse> {
   const now = new Date();
   const today = localDateFor(now, input.ctx);
+
+  /*
+   * The opening message costs nothing and runs no model. See `greeting.ts` —
+   * it is a template the brief already specifies to the word, and paying Opus
+   * $0.17 to render it was the single most expensive thing a new account did.
+   *
+   * First, before the provider is built or the day is read: a turn that is
+   * going to be answered from a table should not do the work of one that is
+   * not.
+   */
+  if (!input.photo) {
+    const opening = await openingTurn(input, today);
+    if (opening) return opening;
+  }
 
   const actions: ChatAction[] = [];
   const toolContext: ToolContext = {
@@ -485,6 +500,57 @@ async function escalateForLanguage(
  * standing preferences live in `agent_notes`. What goes is the conversational
  * thread — and a day boundary is precisely where there is no thread to cut.
  */
+/**
+ * The greeting, when this turn is a client asking for one and nothing else.
+ *
+ * Three conditions, and all of them matter:
+ *
+ * - **The text is the kickoff sentinel.** Anything else is a person talking,
+ *   and a person who opens with "I had porridge" gets that logged rather than
+ *   greeted — see §3 of `TESTING-FEEDBACK.md`, which is the whole argument for
+ *   not gating a new account behind setup.
+ * - **The transcript is empty.** A second kickoff — a reinstall, a client that
+ *   re-fires the effect — is not an opening.
+ * - **Setup is unfinished.** An account that has already been through it has no
+ *   opening message to be given.
+ *
+ * Returns null when any of them fails, and the caller carries on into the model
+ * path exactly as before.
+ *
+ * The user's own message is persisted alongside, as the normal path does, so
+ * the conversation still reads as a conversation. Nothing is written to
+ * `ai_usage`: no model ran, so there is no cost to record and no meter to
+ * spend — a greeting must not eat one of the free tier's twenty lifetime turns.
+ */
+async function openingTurn(input: RunTurnInput, today: string): Promise<ChatResponse | null> {
+  if (!isKickoff(input.text)) return null;
+  if (await lastMessageAt(input.userId)) return null;
+  if (missingProfileFields(input.profile).length === 0 && (await latestWeight(input.userId))) {
+    return null;
+  }
+
+  /*
+   * The same resolution `speaking` uses below and for the same reason: a null
+   * column is not English, it is nobody having been asked, and the client has
+   * been drawing the whole app in the device's language meanwhile. English is
+   * the last resort rather than the default.
+   */
+  const locale = input.profile.locale ?? input.spokenLocale ?? 'en';
+
+  await insertMessage(input.userId, 'user', input.text, null, null);
+  const message = await insertMessage(input.userId, 'assistant', openingMessage(locale), null, {
+    kind: 'setup',
+    model: null,
+    cost_usd: 0,
+  });
+
+  const [day, profile] = await Promise.all([
+    buildDaySummary(input.userId, today),
+    getUser(input.userId),
+  ]);
+  return { message, actions: [], day, profile };
+}
+
 async function shouldStartFreshSession(
   input: RunTurnInput,
   today: string,
