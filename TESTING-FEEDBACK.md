@@ -321,3 +321,107 @@ down faithfully. Nobody was looking at them.
   a product nobody is buying.
 - The web has no paywall to buy from at all, so none of this is testable there —
   the same "the trial is on Play, so the phone was fixed first" as §3.
+
+---
+
+## 5. The first message is a brochure · 2026-08-25
+
+**Reported:** "The initial onboarding message respond of the ai is too long and
+boring — it used to be better."
+
+**Status:** fixed — API.
+
+### What was actually true
+
+It used to be better, and there are commits for when it stopped being. Three
+separate edits gave the opening message another job, every one of them a fix for
+something real, and not one of them said how long it had to do all of it in:
+
+- **40aff72** — the opening sentence must "reach past logging", because the only
+  description of the app anywhere in the product described a food log (the same
+  gap §1 of `prompt.test.ts` calls "knows it is more than a calorie logger").
+- **057acd0** — metric-or-imperial rides on the first question as a clause,
+  rather than being a question of its own.
+- **1662b90** — language goes in the opening message too, naming all five in
+  their own names. That is §2 above, fixed earlier the same day.
+
+Each clause was bought honestly. Nothing was ever taken out to pay for them, and
+nothing capped the total, so the first thing a new account read had become a
+product tour with a question stapled to the end. Reproduced against
+`claude-opus-5` at high effort — the model `setup` actually runs on — with a
+fresh English profile:
+
+> Welcome — glad you're here. I'm your food-and-training log, but the useful part
+> is that it's all one conversation: you tell me what you ate in whatever words
+> come naturally, and I'll also keep track of what's in your kitchen, save your
+> recipes, plan a week of dinners with the shopping list that follows, and record
+> your gym sessions. (I can do all this in Български, Deutsch, Español or Français
+> too, if any of those would suit you better than English.)
+>
+> To give you a calorie target that actually means something rather than the
+> generic one sitting there now, I need a handful of basics. Let's start with two:
+> how tall are you, and roughly what do you weigh at the moment? Kilos and
+> centimetres, or pounds and feet — whichever you think in.
+
+**135 words, two paragraphs**, and the same shape on every sample: an inventory
+sentence, a parenthesis about languages, then a sentence explaining why it is
+about to ask a question, then the question. The Bulgarian opening ran 107. The
+crush also produced its own small bug — one sample offered four languages with
+"if **either** of those would suit you" — which is what a clause looks like when
+it is being asked to carry more than it can.
+
+Note what is *not* in that message: nothing about the person. It is the app
+talking about the app, which is the definition of boring, and "brochure" is the
+right word for it — it reads like something written to be published rather than
+said to somebody.
+
+### What changed
+
+All of it in `onboardingPrompt`, which is the whole of setup mode:
+
+- **A hard cap: about forty words, never more than sixty.** Three parts and no
+  fourth — hello and what you do, the language clause, one question. Stated as a
+  cap rather than a preference, because the three edits above are evidence that
+  the next feature wanting a clause in the first message will also get one.
+- **The capability sentence gestures instead of listing.** Two things beyond
+  logging, a few words each, and an explicit line that this is *not* the "what
+  can you do" answer — nobody has asked yet, and an inventory in the first
+  message reads as marketing and gets skimmed like it.
+- **No sentence justifying the questions.** The model wrote one every single
+  time ("to give you a target that actually means something rather than the
+  generic one sitting there now") because the brief explained the generic-default
+  problem to it and never said not to pass it on. Just ask.
+- **The language clause names only the languages it is not already writing in.**
+  Offering somebody the language they are currently reading is noise, and it was
+  costing a word out of a budget that now has one.
+- **The budget extends past the first message** — two or three sentences per
+  setup turn, one question, and no reading the collected fields back.
+
+After, same model and profile, three samples: **62, 56 and 45 words** in English,
+**36 and 44** in Bulgarian, all of them one short paragraph and one question, with
+the language list correct in both directions. A test in `prompt.test.ts` locks
+the cap and the no-inventory line.
+
+### The lesson worth keeping
+
+A prompt has no line budget the way a screen has a pixel budget. Adding a
+sentence to it is free to write, invisible in review, and lands in full on the
+one message the entire product gets judged by — so three good fixes composed into
+a bad first impression without any of them being wrong. The instruction that was
+missing was never "say less about the kitchen"; it was a number.
+
+And the specific sequencing is worth keeping in view: **§2's fix is what broke
+this**, hours earlier, in the same day's work off the same trial. A clause in the
+opening message is not free, and the report that asks for one should be read
+alongside the space it has to come out of.
+
+### Not covered
+
+- Nothing measures the length of what the model actually writes. The cap is
+  words in a prompt and a `toMatch` on the prompt text — not an assertion about
+  output. What would catch the next regression is an eval that generates the
+  opening turn and counts, which is also what the photo work in `prompt.ts`
+  already has a harness shape for.
+- The per-turn budget for the *rest* of setup is stated but unmeasured: the
+  throwaway harness had no tools wired, so a second turn had nothing real to call
+  and the sample was worthless. The opening is the measured claim.

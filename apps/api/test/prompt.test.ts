@@ -423,6 +423,27 @@ describe('onboardingPrompt', () => {
     expect(prompt).toMatch(/reach past logging/i);
   });
 
+  /*
+   * And the other half of that, which the fix for it cost.
+   *
+   * Three separate edits told the opening message to do more — reach past
+   * logging, carry the units clause, raise language — and none of them said
+   * how long it had to do it in. Measured on `claude-opus-5`, a new English
+   * account was opening with 135 words in two paragraphs, most of it a list of
+   * everything the app can do. A budget is the only thing that holds against
+   * the next feature that wants a clause in the first message.
+   */
+  it('puts a hard cap on the opening message', () => {
+    const prompt = onboardingPrompt(profile, ['sex'], null);
+    expect(prompt).toMatch(/never more than sixty/i);
+    // The specific failure: the capability tour, which is the answer to a
+    // question nobody has asked yet.
+    expect(prompt).toMatch(/not the "what can you do" answer/i);
+    // And the same budget on the turns after it, or setup gets long later
+    // instead of at the start.
+    expect(prompt).toMatch(/no recap of what has been collected/i);
+  });
+
   it('mentions the name only when there is one', () => {
     expect(onboardingPrompt(profile, ['sex'], null)).toContain('Their name is Nik');
     expect(onboardingPrompt({ ...profile, display_name: null }, ['sex'], null)).not.toContain('Their name is');
