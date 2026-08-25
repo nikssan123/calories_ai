@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthGate';
 import { AUTH_BUTTON, AuthScreen } from '@/components/AuthScreen';
 import { Button } from '@/components/ui/button';
+import { useT } from '@/lib/i18n';
 
 /**
  * The end of the "turn off weekly emails" link.
@@ -24,6 +25,7 @@ export default function UnsubscribePage() {
   const { authenticated, refresh } = useAuth();
   // Effects run twice in development; the request is harmless to repeat, but
   // the second answer would overwrite the first for no reason.
+  const t = useT();
   const started = useRef(false);
 
   useEffect(() => {
@@ -35,7 +37,7 @@ export default function UnsubscribePage() {
     const signature = params.get('s');
     if (!user || !signature) {
       setState('failed');
-      setMessage('That unsubscribe link is incomplete.');
+      setMessage(t('unsubscribe.incompleteLink'));
       return;
     }
 
@@ -50,20 +52,20 @@ export default function UnsubscribePage() {
         setState('failed');
       }
     })();
-  }, [authenticated, refresh]);
+  }, [authenticated, refresh, t]);
 
   if (state === 'working') {
-    return <AuthScreen title="Unsubscribing…" subtitle="One moment." />;
+    return <AuthScreen title={t('unsubscribe.working')} subtitle={t('unsubscribe.oneMoment')} />;
   }
 
   if (state === 'failed') {
     return (
       <AuthScreen
-        title="That link didn't work"
-        subtitle={`${message} You can also turn the weekly email off from your account settings.`}
+        title={t('verify.linkFailed')}
+        subtitle={t('unsubscribe.failedSubtitle')(message)}
       >
         <Button render={<Link href="/setup" />} className={AUTH_BUTTON}>
-          Open settings
+          {t('unsubscribe.openSettings')}
         </Button>
       </AuthScreen>
     );
@@ -71,21 +73,20 @@ export default function UnsubscribePage() {
 
   return (
     <AuthScreen
-      title="Unsubscribed"
+      title={t('unsubscribe.done')}
       subtitle={message}
       footer={
         <>
-          Changed your mind? Turn it back on in{' '}
+          {t('unsubscribe.changedMind')}{' '}
           <Link href="/setup" className="text-foreground font-medium">
-            your account settings
+            {t('unsubscribe.yourSettings')}
           </Link>
           .
         </>
       }
     >
       <p className="text-muted-foreground text-[13px] leading-relaxed">
-        Emails about your account itself — a password change, a sign-in from a new device — will
-        still be sent. Those are not something to unsubscribe from.
+        {t('unsubscribe.accountMailStays')}
       </p>
     </AuthScreen>
   );

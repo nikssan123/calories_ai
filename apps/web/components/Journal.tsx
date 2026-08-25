@@ -10,7 +10,8 @@ import type {
   OnboardingState,
   UnitSystem,
 } from '@ct/shared';
-import { unitsOf } from '@ct/shared';
+import { formatNumber, unitsOf } from '@ct/shared';
+import { useLocale, useT, type StringKey } from '@/lib/i18n';
 import { api } from '@/lib/api';
 import { asBlob } from '@/lib/image';
 import { ChatActionCard } from '@/components/ChatCard';
@@ -52,20 +53,14 @@ const NEAR_BOTTOM_PX = 64;
  * because a distance without one is not a sentence anybody says — so there are
  * two lists rather than a placeholder to substitute into.
  */
-const PROMPTS: Record<UnitSystem, string[]> = {
-  metric: [
-    'Two eggs, toast and coffee',
-    'Chicken and rice for lunch',
-    'Went for a 5km run',
-    'Am I eating enough protein?',
-  ],
-  imperial: [
-    'Two eggs, toast and coffee',
-    'Chicken and rice for lunch',
-    'Went for a 3 mile run',
-    'Am I eating enough protein?',
-  ],
-};
+const RUN_DISTANCE: Record<UnitSystem, string> = { metric: '5km', imperial: '3 mile' };
+
+const prompts = (t: ReturnType<typeof useT>, units: UnitSystem): string[] => [
+  t('journal.promptEggs'),
+  t('journal.promptLunch'),
+  t('journal.promptRun')(RUN_DISTANCE[units]),
+  t('journal.promptProtein'),
+];
 
 /**
  * The product itself: one continuous conversation, with the day beside it on a
@@ -74,7 +69,16 @@ const PROMPTS: Record<UnitSystem, string[]> = {
  */
 export function Journal() {
   const { profile, refresh: refreshAuth, adoptProfile } = useAuth();
+  const t = useT();
   const units = unitsOf(profile);
+  /*
+   * The language this page is drawn in, which is also the language the reply
+   * has to come back in. Sent with every turn: the profile's preference wins on
+   * the server, and this answers for an account that has none — where the page
+   * is following the browser and the model would otherwise write English
+   * underneath a Bulgarian interface. See `ChatRequest.locale`.
+   */
+  const locale = useLocale();
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [day, setDay] = useState<DaySummary | null>(null);
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
@@ -254,6 +258,7 @@ export function Journal() {
           photo_base64: photoKey ? undefined : payload.photoBase64,
           photo_media_type: payload.photoMediaType,
           photo_upload_failed: uploadFailed || undefined,
+          locale,
         },
         // The stream is a preview of the reply, never the record of it: `result`
         // below is what actually lands in the conversation. So this only ever
@@ -331,7 +336,7 @@ export function Journal() {
     } finally {
       setBusy(false);
     }
-  }, [onboarding?.complete, refreshAuth, adoptProfile]);
+  }, [locale, onboarding?.complete, refreshAuth, adoptProfile]);
 
   // A new account opens straight into setup: the agent introduces itself and
   // asks for what it needs, rather than pointing at a settings form.
@@ -340,8 +345,8 @@ export function Journal() {
     if (!onboarding || onboarding.complete) return;
     if (bubbles.length > 0) return;
     kickedOff.current = true;
-    void send({ text: "Hi — I'm new here. Let's get set up." });
-  }, [loading, onboarding, bubbles.length, send]);
+    void send({ text: t('journal.kickoff') });
+  }, [loading, onboarding, bubbles.length, send, t]);
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -367,13 +372,12 @@ export function Journal() {
             <span aria-hidden className="animate-bob mb-3 block text-[44px] leading-none">
               🍽️
             </span>
-            <h1 className="text-large-title">What have you eaten today?</h1>
+            <h1 className="text-large-title">{t('journal.emptyTitle')}</h1>
             <p className="text-muted-foreground mt-3 text-body leading-relaxed">
-              Type it or take a photo — whatever's easiest. No forms, nothing to search for.
-              Say what happened and I'll work out the rest.
+              {t('journal.emptyBody')}
             </p>
             <div className="mt-7 flex flex-wrap gap-2">
-              {PROMPTS[units].map((prompt) => (
+              {prompts(t, units).map((prompt) => (
                 <button
                   key={prompt}
                   type="button"
@@ -474,35 +478,46 @@ function applyEvent(bubble: Bubble, event: ChatStreamEvent): Bubble {
  * that silently goes stale. An unknown verb falls through to the plain spinner,
  * which is no worse than what was there before any of this.
  */
-const TOOL_VERBS: Record<string, string> = {
-  log: 'Logging',
-  update: 'Updating',
-  delete: 'Removing',
-  get: 'Checking',
-  search: 'Looking back',
-  find: 'Finding',
-  set: 'Saving',
-  show: 'Drawing',
-  suggest: 'Thinking up',
-  import: 'Importing',
-  adapt: 'Adapting',
-  save: 'Saving',
-  plan: 'Planning',
-  cook: 'Cooking',
-  repeat: 'Repeating',
-  remember: 'Remembering',
-  forget: 'Forgetting',
-  lookup: 'Looking up',
-  run: 'Running',
-  define: 'Defining',
-  ask: 'Asking about',
+const TOOL_VERBS: Record<string, StringKey> = {
+  log: 'tool.log',
+  update: 'tool.update',
+  delete: 'tool.delete',
+  get: 'tool.get',
+  search: 'tool.search',
+  find: 'tool.find',
+  set: 'tool.set',
+  show: 'tool.show',
+  suggest: 'tool.suggest',
+  import: 'tool.import',
+  adapt: 'tool.adapt',
+  save: 'tool.save',
+  plan: 'tool.plan',
+  cook: 'tool.cook',
+  repeat: 'tool.repeat',
+  remember: 'tool.remember',
+  forget: 'tool.forget',
+  lookup: 'tool.lookup',
+  run: 'tool.run',
+  define: 'tool.define',
+  ask: 'tool.ask',
 };
 
-function toolLabel(name: string): string | null {
-  const [verb = '', ...rest] = name.split('_');
-  const gerund = TOOL_VERBS[verb];
-  if (!gerund) return null;
-  return rest.length > 0 ? `${gerund} ${rest.join(' ')}` : gerund;
+/**
+ * The verb alone, and deliberately not the object.
+ *
+ * This used to append the rest of the tool name — `log_food` became "Logging
+ * food" — which was free in English and untranslatable everywhere else: the
+ * object is a raw identifier, so a Bulgarian session read "Записвам food". The
+ * fix is not a second table of twenty nouns; the whole argument for keying on
+ * the verb was that a table of every tool name goes stale. The object was
+ * carrying almost nothing anyway — you know what you just typed — so the label
+ * is the verb, and the tool that is running stays legible without being half
+ * in English.
+ */
+function toolLabel(name: string, t: ReturnType<typeof useT>): string | null {
+  const [verb = ''] = name.split('_');
+  const key = TOOL_VERBS[verb];
+  return key ? t(key) : null;
 }
 
 /**
@@ -576,6 +591,8 @@ function StatusBar({
   loading: boolean;
   setupPending?: boolean;
 }) {
+  const t = useT();
+  const locale = useLocale();
   if (loading || !day) {
     return (
       <header className="material border-border shrink-0 border-b-2 px-4 py-3 xl:hidden">
@@ -588,7 +605,7 @@ function StatusBar({
     return (
       <header className="material border-border shrink-0 border-b-2 px-4 py-3 xl:hidden">
         <p className="text-footnote text-muted-foreground font-medium">
-          Setting up — your target is a placeholder until we finish.
+          {t('journal.settingUp')}
         </p>
       </header>
     );
@@ -603,17 +620,17 @@ function StatusBar({
     <header className="material border-border shrink-0 border-b-2 px-4 py-2.5 xl:hidden">
       <div className="flex items-baseline justify-between">
         <p className="text-figure text-body">
-          {Math.round(consumed.kcal).toLocaleString()}
+          {formatNumber(Math.round(consumed.kcal), locale)}
           <span className="text-muted-foreground text-footnote font-semibold">
             {' '}
-            / {targets.kcal.toLocaleString()} kcal
+            / {formatNumber(targets.kcal, locale)} kcal
           </span>
         </p>
         {/* Ink rather than red — see the note on --destructive in globals.css. */}
         <p className={cn('tnum text-footnote font-bold', over ? 'text-foreground' : 'text-muted-foreground')}>
           {over
-            ? `${Math.abs(remaining).toLocaleString()} over`
-            : `${remaining.toLocaleString()} left`}
+            ? t('journal.over')(formatNumber(Math.abs(remaining), locale))
+            : t('journal.left')(formatNumber(remaining, locale))}
         </p>
       </div>
       <div className="bg-muted border-border mt-2 h-2.5 overflow-hidden rounded-full border">
@@ -634,10 +651,9 @@ function StatusBar({
       {day.burned_kcal > 0 && (
         <p className="tnum text-footnote text-muted-foreground mt-1.5 font-semibold">
           <span className="font-bold text-[var(--exercise-text)]">
-            −{day.burned_kcal.toLocaleString()} burned
+            {t('journal.burned')(formatNumber(day.burned_kcal, locale))}
           </span>
-          {' · net '}
-          {day.net_kcal.toLocaleString()} kcal
+          {t('journal.net')(formatNumber(day.net_kcal, locale))}
         </p>
       )}
     </header>
@@ -662,6 +678,7 @@ const Bubble = memo(function Bubble({
   today?: string;
   onLogged: () => void;
 }) {
+  const t = useT();
   if (bubble.role === 'user') {
     return (
       <div className="flex justify-end">
@@ -670,7 +687,7 @@ const Bubble = memo(function Bubble({
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={bubble.photoUrl}
-              alt="Logged meal"
+              alt={t('journal.loggedMeal')}
               className="border-border chunk max-h-72 rounded-2xl border-2 object-cover"
             />
           )}
@@ -694,7 +711,7 @@ const Bubble = memo(function Bubble({
    * visibly growing already reads as live, and a pulse or a caret on top of
    * that is an animation competing with the thing it is animating.
    */
-  const label = bubble.tool ? toolLabel(bubble.tool) : null;
+  const label = bubble.tool ? toolLabel(bubble.tool, t) : null;
   const waiting = bubble.pending && !bubble.content;
   /*
    * The weekly review is the one turn whose card *replaces* the words rather
@@ -721,7 +738,7 @@ const Bubble = memo(function Bubble({
       )}
 
       {waiting ? (
-        <div className="flex items-center gap-2 py-2" aria-label={label ?? 'Thinking'}>
+        <div className="flex items-center gap-2 py-2" aria-label={label ?? t('journal.thinking')}>
           <div className="flex gap-2">
             {[
               'var(--protein)',

@@ -12,7 +12,7 @@ import type {
   Allowance,
   RecipeBrief,
 } from '@ct/shared';
-import { meterLocked, meterSpent } from '@ct/shared';
+import { formatNumber, meterLocked, meterSpent } from '@ct/shared';
 import { api } from '@/lib/api';
 import { Pantry, daysSince, STALE_DAYS } from '@/components/kitchen/Pantry';
 import { FridgeScan } from '@/components/kitchen/FridgeScan';
@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/button';
 import { foodEmoji } from '@ct/shared/food-emoji';
 import { cn } from '@/lib/utils';
 import { listWords, untilWords } from '@ct/shared/words';
+import { useLocale, useT } from '@/lib/i18n';
 
 /**
  * Cook — what you could make, from what you have, that fits what is left.
@@ -81,6 +82,8 @@ import { listWords, untilWords } from '@ct/shared/words';
  * /cook/recipe/[id] for an idea — is for the rest.
  */
 export default function CookPage() {
+  const t = useT();
+  const locale = useLocale();
   const [items, setItems] = useState<PantryItem[] | null>(null);
   const [day, setDay] = useState<DaySummary | null>(null);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -217,10 +220,12 @@ export default function CookPage() {
   const locked = allowance !== null && meterLocked(allowance);
 
   const plan = (() => {
-    if (locked) return `Writing recipes is part of Coach.`;
+    if (locked) return t('cook.planLocked');
     if (spent && allowance?.allowed != null) {
-      const back = allowance.resets_at ? ` You'll have another ${untilWords(allowance.resets_at)}.` : '';
-      return `That's your ${allowance.allowed === 1 ? 'one recipe run' : `${allowance.allowed} recipe runs`} for today.${back}`;
+      const back = allowance.resets_at
+        ? t('cook.planSpentBack')(untilWords(allowance.resets_at, locale))
+        : '';
+      return `${t('cook.planSpent')(t('cook.runs')(allowance.allowed))}${back}`;
     }
     /*
      * An empty kitchen is a different promise, not a smaller one. Saying "from
@@ -230,14 +235,16 @@ export default function CookPage() {
      * in the recipe task prompt.
      */
     if (items !== null && items.length === 0) {
-      return `Your kitchen is empty, so I'll suggest things one small shop would cover — and name what to buy.`;
+      return t('cook.planEmptyKitchen');
     }
-    const from = brief.wants?.trim()
-      ? `I'll work from what you asked for and what's in your kitchen`
-      : `I'll invent a recipe from what's in your kitchen`;
+    const from = brief.wants?.trim() ? t('cook.planFromWants') : t('cook.planFromKitchen');
     if (!remaining) return `${from}.`;
-    if (remaining.kcal === 0) return `${from} — and you're at your target today, so I'll keep it light.`;
-    return `${from}, aiming at the ${remaining.kcal} kcal and ${remaining.protein}g protein you have left.`;
+    if (remaining.kcal === 0) return t('cook.planAtTarget')(from);
+    return t('cook.planAiming')(
+      from,
+      formatNumber(remaining.kcal, locale),
+      formatNumber(remaining.protein, locale),
+    );
   })();
 
   /*
@@ -297,10 +304,10 @@ export default function CookPage() {
      */
     setThinkingNote(
       focus?.length
-        ? `Writing a recipe around the ${listWords(focus.slice(0, 4))} in your photo…`
+        ? t('cook.writingAround')(listWords(focus.slice(0, 4), locale))
         : asked
-          ? `Writing a recipe for “${asked}”, from what's in your kitchen…`
-          : "Writing a recipe from what's in your kitchen…",
+          ? t('cook.writingFor')(asked)
+          : t('cook.writingPlain'),
     );
     // Moved to the front: the skeletons are the answer to "what is it doing",
     // and they are no use on a tab you cannot see.
@@ -356,7 +363,7 @@ export default function CookPage() {
           thing you check for ten seconds a week.
         */}
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-large-title">Cook</h1>
+          <h1 className="text-large-title">{t('cook.title')}</h1>
           {items !== null && (
             <button
               type="button"
@@ -365,11 +372,9 @@ export default function CookPage() {
               className="bg-card border-border chunk-sm text-footnote hover:bg-muted/60 flex items-center gap-2 rounded-full border-2 px-3.5 py-2 font-semibold transition-colors"
             >
               <span aria-hidden>🧺</span>
-              {fresh.length === 0
-                ? 'Your kitchen is empty'
-                : `${fresh.length} ${fresh.length === 1 ? 'thing' : 'things'}`}
+              {fresh.length === 0 ? t('cook.kitchenEmpty') : t('cook.things')(fresh.length)}
               {staleCount > 0 && (
-                <span className="text-[var(--fat-text)]">· {staleCount} to check</span>
+                <span className="text-[var(--fat-text)]">{t('cook.toCheck')(staleCount)}</span>
               )}
               <ChevronDown
                 size={15}
@@ -390,8 +395,8 @@ export default function CookPage() {
         */}
         <Dialog open={kitchenOpen} onOpenChange={setKitchenOpen}>
           <DialogContent
-            title="Your kitchen"
-            description="What I'll cook from. It only has to be roughly right."
+            title={t('cook.yourKitchen')}
+            description={t('cook.yourKitchenDesc')}
           >
             {items && <Pantry items={items} onChanged={load} onCook={cookFromPhoto} />}
           </DialogContent>
@@ -426,7 +431,11 @@ export default function CookPage() {
               className="h-12 shrink-0 gap-2 rounded-full px-6 text-[15px]"
             >
               {thinking ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-              {thinking ? 'Thinking…' : spent ? 'Nothing left today' : 'Find me something'}
+              {thinking
+                ? t('cook.thinking')
+                : spent
+                  ? t('cook.nothingLeftToday')
+                  : t('cook.findMeSomething')}
             </Button>
 
             <BriefToggle value={brief} onClick={() => setBriefOpen(true)} />
@@ -452,7 +461,7 @@ export default function CookPage() {
             <ChipDot />
             <ImportRecipe
               disabled={spent || thinking}
-              disabledReason={thinking ? 'Already writing one…' : 'No recipe runs left today'}
+              disabledReason={thinking ? t('cook.alreadyWriting') : t('cook.noRunsLeft')}
               onImported={(recipe) => {
                 setRecipes((prev) => [recipe, ...prev]);
                 setMessage('');
@@ -463,7 +472,7 @@ export default function CookPage() {
             <ChipDot />
             <Link href="/plan" className={chipClass}>
               <CalendarDays size={13} />
-              plan the week
+              {t('cook.planTheWeek')}
             </Link>
           </div>
         </div>
@@ -475,8 +484,8 @@ export default function CookPage() {
         */}
         <Dialog open={briefOpen} onOpenChange={setBriefOpen}>
           <DialogContent
-            title="Anything specific?"
-            description="All optional. Without any of it I still work from your kitchen and your day."
+            title={t('cook.anythingSpecific')}
+            description={t('cook.anythingSpecificDesc')}
           >
             <Brief value={brief} onChange={setBrief} />
             <div className="border-border border-t-2 p-3">
@@ -490,7 +499,7 @@ export default function CookPage() {
                 className="h-11 w-full gap-2 rounded-full"
               >
                 <Sparkles size={15} />
-                {spent ? 'Nothing left today' : 'Find me something'}
+                {spent ? t('cook.nothingLeftToday') : t('cook.findMeSomething')}
               </Button>
             </div>
           </DialogContent>
@@ -514,13 +523,14 @@ export default function CookPage() {
               value="ideas"
               className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-8 rounded-full px-3.5 text-xs font-bold transition-colors"
             >
-              For you{recipes.length > 0 ? ` · ${recipes.length}` : ''}
+              {t('cook.forYou')}
+              {recipes.length > 0 ? ` · ${recipes.length}` : ''}
             </ToggleGroupItem>
             <ToggleGroupItem
               value="library"
               className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-8 rounded-full px-3.5 text-xs font-bold transition-colors"
             >
-              Library
+              {t('cook.library')}
             </ToggleGroupItem>
           </ToggleGroup>
 
@@ -530,7 +540,7 @@ export default function CookPage() {
             <Input
               value={librarySearch}
               onChange={(e) => setLibrarySearch(e.target.value)}
-              placeholder="Search the library"
+              placeholder={t('cook.searchLibrary')}
               className="bg-card border-border h-10 w-full rounded-full border-2 px-4 text-body sm:w-64"
             />
           )}
@@ -562,11 +572,9 @@ export default function CookPage() {
                   👩‍🍳
                 </span>
                 <p className="text-muted-foreground text-body font-medium">
-                  Nothing yet. Press <span className="text-foreground">Find me something</span>{' '}
-                  and I&rsquo;ll invent a recipe
-                  <br />
-                  from what&rsquo;s in your kitchen — or start from a photo, or a recipe you
-                  already have.
+                  {t('cook.emptyBefore')}{' '}
+                  <span className="text-foreground">{t('cook.findMeSomething')}</span>{' '}
+                  {t('cook.emptyAfter')}
                 </p>
               </div>
             ) : (
@@ -579,7 +587,7 @@ export default function CookPage() {
                     summary={recipe.summary}
                     kcal={recipe.kcal}
                     protein_g={recipe.protein_g}
-                    servingLabel="per portion"
+                    servingLabel={t('cook.perPortion')}
                     emoji={foodEmoji(recipe.title)}
                     needs={recipe.ingredients.filter((i) => i.missing).map((i) => i.name)}
                     minutes={recipe.minutes}
@@ -599,7 +607,7 @@ export default function CookPage() {
           </div>
         ) : library.length === 0 ? (
           <p className="text-muted-foreground px-1 py-8 text-center text-body font-medium">
-            Nothing matching &ldquo;{librarySearch}&rdquo;.
+            {t('cook.nothingMatching')(librarySearch)}
           </p>
         ) : (
           <>
@@ -612,7 +620,9 @@ export default function CookPage() {
                   summary={recipe.summary}
                   kcal={recipe.kcal}
                   protein_g={recipe.protein_g}
-                  servingLabel={`per ${recipe.serving_size ?? 'portion'}`}
+                  servingLabel={
+                    recipe.serving_size ? t('cook.per')(recipe.serving_size) : t('cook.perPortion')
+                  }
                   photo={recipe.image_path}
                   fitsToday={recipe.fits_today}
                   have={recipe.have}
@@ -623,8 +633,7 @@ export default function CookPage() {
               ))}
             </div>
             <p className="text-footnote text-muted-foreground px-1 font-medium">
-              Real recipes from the USDA&rsquo;s public-domain collection, sorted by how much of
-              one you already have.
+              {t('cook.libraryNote')}
             </p>
           </>
         )}

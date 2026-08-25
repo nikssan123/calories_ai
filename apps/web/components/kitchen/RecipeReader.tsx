@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { ArrowLeft, Bookmark, Check, Clock, Users } from 'lucide-react';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 /**
@@ -84,6 +85,7 @@ export function RecipeReader({
   /** The servings stepper and the buttons, pinned to the bottom of the page. */
   actions: React.ReactNode;
 }) {
+  const t = useT();
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-5xl px-4 pt-4 pb-8 lg:px-6">
@@ -100,7 +102,7 @@ export function RecipeReader({
             type="button"
             onClick={onToggleSave}
             aria-pressed={saved}
-            aria-label={saved ? 'Unsave this recipe' : 'Save this recipe'}
+            aria-label={saved ? t('recipe.unsaveThis') : t('recipe.saveThis')}
             className="bg-card border-border chunk-sm text-footnote inline-flex h-9 items-center gap-1.5 rounded-full border-2 px-3.5 font-semibold"
           >
             <Bookmark
@@ -108,7 +110,7 @@ export function RecipeReader({
               className={saved ? 'text-[var(--calories-text)]' : 'text-muted-foreground'}
               fill={saved ? 'currentColor' : 'none'}
             />
-            {saved ? 'Saved' : 'Save'}
+            {saved ? t('recipe.saved') : t('recipe.save')}
           </button>
         </div>
 
@@ -150,12 +152,12 @@ export function RecipeReader({
               {typeof minutes === 'number' && (
                 <span className="inline-flex items-center gap-1.5">
                   <Clock size={13} />
-                  {minutes} min
+                  {t('brief.minutes')(minutes)}
                 </span>
               )}
               <span className="inline-flex items-center gap-1.5">
                 <Check size={13} />
-                {steps.length} {steps.length === 1 ? 'step' : 'steps'}
+                {t('recipe.steps')(steps.length)}
               </span>
             </div>
 
@@ -166,9 +168,9 @@ export function RecipeReader({
                 <p className="text-footnote text-muted-foreground mt-1">kcal · {servingLabel}</p>
               </div>
               <div className="flex flex-wrap items-end gap-x-5 gap-y-2">
-                <Macro label="Protein" value={protein_g} color="var(--protein)" />
-                <Macro label="Carbs" value={carbs_g} color="var(--carbs)" />
-                <Macro label="Fat" value={fat_g} color="var(--fat)" />
+                <Macro label={t('macro.protein')} value={protein_g} color="var(--protein)" />
+                <Macro label={t('macro.carbs')} value={carbs_g} color="var(--carbs)" />
+                <Macro label={t('macro.fat')} value={fat_g} color="var(--fat)" />
               </div>
             </div>
           </div>
@@ -185,7 +187,7 @@ export function RecipeReader({
           {/* Pinned on a wide screen: the method is longer than the list, and
               the thing a cook looks back at mid-step is the list. */}
           <section className="lg:sticky lg:top-2 lg:col-span-2">
-            <h2 className="text-eyebrow text-muted-foreground px-1">Ingredients</h2>
+            <h2 className="text-eyebrow text-muted-foreground px-1">{t('recipe.ingredients')}</h2>
             <ul className="bg-card border-border divide-border chunk mt-2 divide-y-2 overflow-hidden rounded-[var(--radius)] border-2">
               {ingredients.map((item, index) => (
                 <li
@@ -196,7 +198,7 @@ export function RecipeReader({
                     {item.text}
                     {item.note && <span className="text-muted-foreground"> ({item.note})</span>}
                     {item.missing && (
-                      <span className="text-footnote text-[var(--fat-text)]"> · not in your kitchen</span>
+                      <span className="text-footnote text-[var(--fat-text)]"> {t('recipe.notInKitchen')}</span>
                     )}
                   </span>
                   {item.amount && (
@@ -215,7 +217,7 @@ export function RecipeReader({
           </section>
 
           <section className="lg:col-span-3">
-            <h2 className="text-eyebrow text-muted-foreground px-1">Method</h2>
+            <h2 className="text-eyebrow text-muted-foreground px-1">{t('recipe.method')}</h2>
             <ol className="mt-2 space-y-2.5">
               {steps.map((step, index) => (
                 <li

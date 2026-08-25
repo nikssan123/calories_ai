@@ -10,11 +10,13 @@ import {
   bodyWeightToKg,
   bodyWeightUnit,
   formatBodyWeight,
+  formatNumber,
   formatWeightDelta,
   toBodyWeight,
 } from '@ct/shared';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
+import { useLocale, useT, type StringKey } from '@/lib/i18n';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { Sparkline } from '@/components/Sparkline';
 import { WeeklyReview } from '@/components/WeeklyReview';
@@ -33,15 +35,17 @@ const WINDOWS = [14, 30, 90] as const;
  * direction picks the phrasing rather than a single line covering both.
  */
 const NUTRIENTS = [
-  { key: 'fiber_g', label: 'Fiber', unit: 'g' },
-  { key: 'sodium_mg', label: 'Sodium', unit: 'mg' },
-  { key: 'sat_fat_g', label: 'Sat fat', unit: 'g' },
-  { key: 'sugar_g', label: 'Sugar', unit: 'g' },
-] as const;
+  { key: 'fiber_g', label: 'macro.fiber', unit: 'g' },
+  { key: 'sodium_mg', label: 'nutrient.sodium', unit: 'mg' },
+  { key: 'sat_fat_g', label: 'nutrient.satFat', unit: 'g' },
+  { key: 'sugar_g', label: 'nutrient.sugar', unit: 'g' },
+] as const satisfies readonly { key: string; label: StringKey; unit: string }[];
 
 type NutrientKey = (typeof NUTRIENTS)[number]['key'];
 
 export default function ProgressPage() {
+  const t = useT();
+  const locale = useLocale();
   const [progress, setProgress] = useState<Progress | null>(null);
   const [days, setDays] = useState<number>(30);
   /**
@@ -90,7 +94,7 @@ export default function ProgressPage() {
     <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-5 pb-8 lg:px-6">
       <div className="mx-auto w-full max-w-5xl space-y-7">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-large-title">Progress</h1>
+        <h1 className="text-large-title">{t('progress.title')}</h1>
         <ToggleGroup
           value={[String(days)]}
           onValueChange={(values) => {
@@ -103,10 +107,10 @@ export default function ProgressPage() {
             <ToggleGroupItem
               key={w}
               value={String(w)}
-              aria-label={`${w} days`}
+              aria-label={t('progress.daysWindow')(w)}
               className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-8 rounded-full px-3.5 text-xs font-bold transition-colors"
             >
-              {w}d
+              {t('progress.daysShort')(w)}
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
@@ -120,11 +124,11 @@ export default function ProgressPage() {
       ) : (
         <div className="grid gap-7 lg:grid-cols-2 lg:items-start">
           {/* §12: lead with the trend, not any individual day. */}
-          <InsetGroup title="⚖️  Weight" className="lg:row-span-2">
+          <InsetGroup title={t('progress.weightTitle')} className="lg:row-span-2">
             <div className="px-4 pt-4 pb-2">
               {progress.weight.current_kg === null ? (
                 <p className="text-muted-foreground py-2 text-body font-medium">
-                  No weigh-ins yet. Log one below, or just tell the journal.
+                  {t('progress.noWeighIns')}
                 </p>
               ) : (
                 <>
@@ -147,7 +151,7 @@ export default function ProgressPage() {
                           <ArrowUp size={14} />
                         )}
                         {formatWeightDelta(Math.abs(progress.weight.change_7d_kg), units, false)}{' '}
-                        this week
+                        {t('progress.thisWeek')}
                       </span>
                     )}
                   </div>
@@ -158,7 +162,7 @@ export default function ProgressPage() {
 
             <div className="divide-border grid grid-cols-3 divide-x-2">
               <Stat
-                label="7-day avg"
+                label={t('progress.avg7d')}
                 value={
                   progress.weight.average_7d_kg === null
                     ? '—'
@@ -167,7 +171,7 @@ export default function ProgressPage() {
                 unit={bodyWeightUnit(units)}
               />
               <Stat
-                label="Since start"
+                label={t('progress.sinceStart')}
                 value={
                   progress.weight.change_since_start_kg === null
                     ? '—'
@@ -176,7 +180,7 @@ export default function ProgressPage() {
                 unit={bodyWeightUnit(units)}
               />
               <Stat
-                label="To target"
+                label={t('progress.toTarget')}
                 value={
                   progress.weight.to_target_kg === null
                     ? '—'
@@ -194,7 +198,7 @@ export default function ProgressPage() {
                 value={weightInput}
                 onChange={(e) => setWeightInput(e.target.value)}
                 onWheel={(e) => e.currentTarget.blur()}
-                placeholder={`Log today's weight (${bodyWeightUnit(units)})`}
+                placeholder={t('progress.logTodaysWeight')(bodyWeightUnit(units))}
                 className="bg-muted/60 border-border h-11 rounded-full border-2 px-4 text-body"
               />
               <Button
@@ -202,21 +206,21 @@ export default function ProgressPage() {
                 disabled={!weightInput || saving}
                 className="h-11 rounded-full px-6"
               >
-                Save
+                {t('common.save')}
               </Button>
             </form>
           </InsetGroup>
 
-          <InsetGroup title="🔥  Calories">
+          <InsetGroup title={t('progress.caloriesTitle')}>
             <div className="px-4 pt-4 pb-3">
               <div className="flex items-baseline gap-2">
                 <span className="text-figure text-large-title">
                   {progress.calories.average_kcal === null
                     ? '—'
-                    : progress.calories.average_kcal.toLocaleString()}
+                    : formatNumber(progress.calories.average_kcal, locale)}
                 </span>
                 <span className="text-muted-foreground text-sm font-medium">
-                  avg/day · target {progress.calories.target_kcal.toLocaleString()}
+                  {t('progress.avgDayTarget')(formatNumber(progress.calories.target_kcal, locale))}
                 </span>
               </div>
               <Sparkline
@@ -228,7 +232,7 @@ export default function ProgressPage() {
             </div>
           </InsetGroup>
 
-          <InsetGroup title="💪  Protein">
+          <InsetGroup title={t('progress.proteinTitle')}>
             <InsetRow className="py-4">
               <div className="flex-1">
                 <div className="flex items-baseline gap-2">
@@ -236,16 +240,19 @@ export default function ProgressPage() {
                     {progress.protein.average_g === null ? '—' : `${progress.protein.average_g}g`}
                   </span>
                   <span className="text-muted-foreground text-sm font-medium">
-                    avg/day · target {progress.protein.target_g}g
+                    {t('progress.avgDayTarget')(`${progress.protein.target_g}g`)}
                   </span>
                 </div>
                 {progress.protein.days_logged > 0 && (
                   <p className="text-muted-foreground text-footnote mt-1.5 font-medium">
-                    Hit the target on{' '}
+                    {t('progress.hitTargetBefore')}{' '}
                     <span className="text-foreground font-extrabold">
-                      {progress.protein.days_target_hit} of {progress.protein.days_logged}
+                      {t('progress.ofDays')(
+                        String(progress.protein.days_target_hit),
+                        String(progress.protein.days_logged),
+                      )}
                     </span>{' '}
-                    logged days.
+                    {t('progress.hitTargetAfter')}
                   </p>
                 )}
               </div>
@@ -254,10 +261,13 @@ export default function ProgressPage() {
 
           {progress.quality.days_measured > 0 && (
             <InsetGroup
-              title="🥦  Diet quality"
+              title={t('progress.qualityTitle')}
               footer={
                 progress.quality.coverage < QUALITY_COVERAGE_FLOOR
-                  ? `Averaged over ${progress.quality.days_measured} day${progress.quality.days_measured === 1 ? '' : 's'} — ${Math.round(progress.quality.coverage * 100)}% of what you logged carries these figures.`
+                  ? t('progress.qualityFooter')(
+                      t('progress.days')(progress.quality.days_measured),
+                      String(Math.round(progress.quality.coverage * 100)),
+                    )
                   : undefined
               }
             >
@@ -276,7 +286,7 @@ export default function ProgressPage() {
                     type="button"
                     onClick={() => setNutrient(n.key)}
                     aria-pressed={nutrient === n.key}
-                    aria-label={`Chart ${n.label.toLowerCase()}`}
+                    aria-label={t('progress.chartNutrient')(t(n.label).toLocaleLowerCase(locale))}
                     className={cn(
                       'text-footnote rounded-full px-3 py-1.5 transition-colors',
                       nutrient === n.key
@@ -284,7 +294,7 @@ export default function ProgressPage() {
                         : 'bg-muted/40 text-muted-foreground hover:text-foreground',
                     )}
                   >
-                    {n.label}
+                    {t(n.label)}
                   </button>
                 ))}
               </div>
@@ -297,8 +307,8 @@ export default function ProgressPage() {
                   return (
                     <Stat
                       key={n.key}
-                      label={n.label}
-                      value={value === null ? '—' : value.toLocaleString()}
+                      label={t(n.label)}
+                      value={value === null ? '—' : formatNumber(value, locale)}
                       unit={n.unit}
                     />
                   );
@@ -309,8 +319,8 @@ export default function ProgressPage() {
 
           {/* Exercise has its own tab now; this is the pointer, not the data. */}
           <InsetGroup
-            title="🏃  Exercise"
-            footer="Ask the journal anything about this data — “why haven’t I lost weight this week?”"
+            title={t('progress.exerciseTitle')}
+            footer={t('progress.exerciseFooter')}
           >
             <Link href="/exercise" className="block transition-colors active:bg-muted/60">
               <InsetRow className="py-4">
@@ -318,8 +328,10 @@ export default function ProgressPage() {
                   <div className="flex items-baseline gap-2">
                     <span className="text-figure text-large-title">{progress.exercise.sessions}</span>
                     <span className="text-muted-foreground text-sm font-medium">
-                      sessions · ~{progress.exercise.total_kcal.toLocaleString()} kcal over {days}{' '}
-                      days
+                      {t('progress.sessionsOver')(
+                        formatNumber(progress.exercise.total_kcal, locale),
+                        String(days),
+                      )}
                     </span>
                   </div>
                 </div>
@@ -354,6 +366,8 @@ function QualityChart({
   quality: Progress['quality'];
   nutrient: NutrientKey;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const { label, unit } = NUTRIENTS.find((n) => n.key === nutrient)!;
   const average = quality.average[nutrient];
   const target = quality.targets[nutrient];
@@ -363,12 +377,14 @@ function QualityChart({
     <div className="px-4 pt-2.5 pb-3">
       <div className="flex items-baseline gap-2">
         <span className="text-figure text-large-title">
-          {average === null ? '—' : `${average.toLocaleString()}${unit}`}
+          {average === null ? '—' : `${formatNumber(average, locale)}${unit}`}
         </span>
         <span className="text-muted-foreground text-sm font-medium">
-          {label.toLowerCase()} avg/day · {floor ? 'aim for' : 'keep under'}{' '}
-          {target.value.toLocaleString()}
-          {unit}
+          {t('progress.qualityLine')(
+            t(label).toLocaleLowerCase(locale),
+            floor ? t('progress.aimFor') : t('progress.keepUnder'),
+            `${formatNumber(target.value, locale)}${unit}`,
+          )}
         </span>
       </div>
       <Sparkline

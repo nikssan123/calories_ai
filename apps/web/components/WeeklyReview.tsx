@@ -1,6 +1,6 @@
 'use client';
 
-import { formatDay } from '@ct/shared';
+import { formatDay, formatNumber } from '@ct/shared';
 
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowRight, Sparkles } from 'lucide-react';
@@ -9,7 +9,7 @@ import type { AdaptiveProposal, Locale, WeeklyReview as Review } from '@ct/share
 import { api } from '@/lib/api';
 import { InsetGroup } from '@/components/InsetGroup';
 import { Button } from '@/components/ui/button';
-import { useLocale } from '@/lib/i18n';
+import { useLocale, useT } from '@/lib/i18n';
 
 /**
  * Last week, and what it did to the target.
@@ -21,6 +21,7 @@ import { useLocale } from '@/lib/i18n';
  */
 export function WeeklyReview() {
   const locale = useLocale();
+  const t = useT();
   const [review, setReview] = useState<Review | null>(null);
   const [adaptive, setAdaptive] = useState<AdaptiveProposal | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,7 +58,7 @@ export function WeeklyReview() {
   const change = review?.stats.adaptive ?? adaptive;
 
   return (
-    <InsetGroup title={review ? '📅  Last week' : '📅  Weekly review'}>
+    <InsetGroup title={review ? t('review.lastWeek') : t('review.title')}>
       {review ? (
         <div className="space-y-3 px-4 py-4">
           <p className="text-footnote text-muted-foreground font-bold">
@@ -68,11 +69,7 @@ export function WeeklyReview() {
         </div>
       ) : (
         <div className="space-y-3 px-4 py-4">
-          <p className="text-body font-medium">
-            Every Monday morning you'll get a short read on how the week went — what the
-            numbers actually showed, and whether your target needs to move. No lectures,
-            just the picture.
-          </p>
+          <p className="text-body font-medium">{t('review.pitch')}</p>
           <Button
             size="sm"
             variant="secondary"
@@ -81,7 +78,7 @@ export function WeeklyReview() {
             className="h-9 gap-1.5 rounded-full px-4"
           >
             <Sparkles size={15} />
-            {writing ? 'Writing…' : 'Write one now'}
+            {writing ? t('review.writing') : t('review.writeOne')}
           </Button>
         </div>
       )}
@@ -90,7 +87,7 @@ export function WeeklyReview() {
         <div className="border-border bg-muted/40 border-t-2 px-4 py-3">
           <p className="text-footnote text-muted-foreground font-medium">
             <span className="text-foreground font-extrabold">
-              Target {adaptive.current.kcal.toLocaleString()} kcal.
+              {t('review.currentTarget')(formatNumber(adaptive.current.kcal, locale))}
             </span>{' '}
             {adaptive.explanation}
           </p>
@@ -109,15 +106,19 @@ function TargetChange({
   proposal: AdaptiveProposal;
   tense: 'past' | 'future';
 }) {
+  const t = useT();
+  const locale = useLocale();
   return (
     <div className="bg-muted border-border rounded-2xl border-2 px-3.5 py-3">
       <div className="tnum flex items-center gap-2 text-body font-bold">
-        <span className="text-muted-foreground">{proposal.current.kcal.toLocaleString()}</span>
+        <span className="text-muted-foreground">{formatNumber(proposal.current.kcal, locale)}</span>
         <ArrowRight size={14} className="text-muted-foreground" />
-        <span className="text-[var(--calories-text)]">{proposal.proposed.kcal.toLocaleString()} kcal</span>
+        <span className="text-[var(--calories-text)]">
+          {t('review.kcalUnit')(formatNumber(proposal.proposed.kcal, locale))}
+        </span>
       </div>
       <p className="text-footnote text-muted-foreground mt-1.5 font-medium">
-        {tense === 'future' ? 'Next review will apply this. ' : ''}
+        {tense === 'future' ? t('review.willApply') : ''}
         {proposal.explanation}
       </p>
     </div>

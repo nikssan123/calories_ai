@@ -1,16 +1,17 @@
 'use client';
 
-import type { DaySummary } from '@ct/shared';
+import { formatNumber, type DaySummary } from '@ct/shared';
 import { CalorieRing } from '@/components/CalorieRing';
 import { MacroBars } from '@/components/MacroBars';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useLocale, useT, type StringKey } from '@/lib/i18n';
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 
-const MEAL_LABEL: Record<string, string> = {
-  breakfast: 'Breakfast',
-  lunch: 'Lunch',
-  dinner: 'Dinner',
-  snack: 'Snack',
+const MEAL_LABEL: Record<string, StringKey> = {
+  breakfast: 'meal.breakfast',
+  lunch: 'meal.lunch',
+  dinner: 'meal.dinner',
+  snack: 'meal.snackOne',
 };
 
 /**
@@ -19,6 +20,8 @@ const MEAL_LABEL: Record<string, string> = {
  * logging a meal visibly moves the ring.
  */
 export function DayRail({ day }: { day: DaySummary | null }) {
+  const t = useT();
+  const locale = useLocale();
   return (
     <aside className="border-border hidden w-80 shrink-0 flex-col overflow-y-auto border-l-2 px-5 py-6 xl:flex">
       {!day ? (
@@ -44,7 +47,7 @@ export function DayRail({ day }: { day: DaySummary | null }) {
             </p>
             {day.burned_kcal > 0 && (
               <p className="tnum text-footnote text-muted-foreground mt-1 font-semibold">
-                net {day.net_kcal.toLocaleString()} kcal after exercise
+                {t('rail.netAfterExercise')(formatNumber(day.net_kcal, locale))}
               </p>
             )}
           </div>
@@ -53,7 +56,7 @@ export function DayRail({ day }: { day: DaySummary | null }) {
 
           {day.food_entries.length > 0 && (
             <div className="mt-7">
-              <h2 className="text-eyebrow text-muted-foreground mb-2">Today</h2>
+              <h2 className="text-eyebrow text-muted-foreground mb-2">{t('common.today')}</h2>
               <ul className="space-y-1">
                 {day.food_entries.map((entry) => (
                   <li key={entry.id} className="flex items-center gap-2.5 py-1">
@@ -65,7 +68,7 @@ export function DayRail({ day }: { day: DaySummary | null }) {
                         {entry.description}
                       </span>
                       <span className="text-footnote text-muted-foreground font-medium">
-                        {MEAL_LABEL[entry.meal] ?? entry.meal}
+                        {MEAL_LABEL[entry.meal] ? t(MEAL_LABEL[entry.meal]!) : entry.meal}
                       </span>
                     </span>
                     <span className="text-figure shrink-0 text-sm">
@@ -80,7 +83,7 @@ export function DayRail({ day }: { day: DaySummary | null }) {
 
           {day.exercise_entries.length > 0 && (
             <div className="mt-6">
-              <h2 className="text-eyebrow text-muted-foreground mb-2">Exercise</h2>
+              <h2 className="text-eyebrow text-muted-foreground mb-2">{t('today.exercise')}</h2>
               <ul className="space-y-1">
                 {day.exercise_entries.map((entry) => (
                   <li key={entry.id} className="flex items-center gap-2.5 py-1">

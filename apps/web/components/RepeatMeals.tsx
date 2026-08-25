@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Plus, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
-import type { MealTemplate } from '@ct/shared';
+import { formatNumber, type MealTemplate } from '@ct/shared';
 import { api } from '@/lib/api';
 import { InsetGroup } from '@/components/InsetGroup';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useLocale, useT } from '@/lib/i18n';
 import { foodEmoji } from '@ct/shared/food-emoji';
 
 /**
@@ -18,6 +19,8 @@ import { foodEmoji } from '@ct/shared/food-emoji';
  * is more than the porridge deserves.
  */
 export function RepeatMeals({ onLogged }: { onLogged: () => void }) {
+  const t = useT();
+  const locale = useLocale();
   const [meals, setMeals] = useState<MealTemplate[] | null>(null);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
@@ -56,23 +59,23 @@ export function RepeatMeals({ onLogged }: { onLogged: () => void }) {
 
   return (
     <InsetGroup
-      title="Log again"
-      footer="Logs it at today's time. If the portion was different, just say so in the journal and I'll fix it."
+      title={t('today.logAgain')}
+      footer={t('repeat.footer')}
     >
       <div className="p-3">
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search your meals"
+          placeholder={t('repeat.search')}
           className="bg-muted/60 border-border h-10 rounded-full border-2 px-4 text-body"
         />
       </div>
 
       {meals === null ? (
-        <div className="text-muted-foreground px-4 py-4 text-body">Loading…</div>
+        <div className="text-muted-foreground px-4 py-4 text-body">{t('common.loading')}</div>
       ) : meals.length === 0 ? (
         <div className="text-muted-foreground px-4 py-4 text-body">
-          Nothing matching “{query}”.
+          {t('cook.nothingMatching')(query)}
         </div>
       ) : (
         meals.map((template) => (
@@ -83,7 +86,10 @@ export function RepeatMeals({ onLogged }: { onLogged: () => void }) {
             <div className="min-w-0 flex-1">
               <p className="truncate text-body font-semibold">{template.description}</p>
               <p className="tnum text-footnote text-muted-foreground font-medium">
-                {Math.round(template.kcal)} kcal · {Math.round(template.protein_g)}g protein
+                {t('repeat.kcalProtein')(
+                  formatNumber(Math.round(template.kcal), locale),
+                  formatNumber(Math.round(template.protein_g), locale),
+                )}
                 {template.times > 1 && (
                   <span className="inline-flex items-center gap-1">
                     {' · '}
@@ -99,10 +105,10 @@ export function RepeatMeals({ onLogged }: { onLogged: () => void }) {
               disabled={busy !== null}
               onClick={() => void repeat(template)}
               className="h-8 shrink-0 gap-1 rounded-full px-3"
-              aria-label={`Log ${template.description} again`}
+              aria-label={t('repeat.logAgainNamed')(template.description)}
             >
               <Plus size={15} />
-              {busy === template.entry_id ? 'Adding…' : 'Log'}
+              {busy === template.entry_id ? t('repeat.adding') : t('editor.log')}
             </Button>
           </div>
         ))

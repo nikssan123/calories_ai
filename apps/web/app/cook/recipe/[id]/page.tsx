@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import type { Recipe } from '@ct/shared';
-import { formatMass } from '@ct/shared';
+import { formatDay, formatMass, formatNumber } from '@ct/shared';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
+import { useLocale, useT, type StringKey } from '@/lib/i18n';
 import { RecipeReader } from '@/components/kitchen/RecipeReader';
 import { formatServings, scale, Servings } from '@/components/kitchen/Servings';
 import { Button } from '@/components/ui/button';
@@ -29,22 +30,24 @@ import { foodEmoji } from '@ct/shared/food-emoji';
  * 013 started recording it.
  */
 
-const ORIGIN_EYEBROW: Record<Recipe['origin'], string> = {
-  invented: 'Made for your kitchen',
-  adapted: 'Adapted for you',
-  imported: 'Your own recipe',
+const ORIGIN_EYEBROW: Record<Recipe['origin'], StringKey> = {
+  invented: 'recipe.madeForKitchen',
+  adapted: 'recipe.adaptedForYou',
+  imported: 'recipe.yourOwn',
 };
 
-const CONFIDENCE_NOTE: Record<Recipe['confidence'], string> = {
-  high: 'The numbers here are as good as this app gets without weighing anything.',
-  medium: 'The numbers are an estimate — close enough to log, worth a second look if it matters.',
-  low: 'These numbers are a rough guess. Weigh what you can if the day is tight.',
+const CONFIDENCE_NOTE: Record<Recipe['confidence'], StringKey> = {
+  high: 'recipe.confidenceHigh',
+  medium: 'recipe.confidenceMedium',
+  low: 'recipe.confidenceLow',
 };
 
 export default function GeneratedRecipePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
 
+  const t = useT();
+  const locale = useLocale();
   const units = useUnits();
 
   const [recipe, setRecipe] = useState<Recipe | null>(null);
@@ -73,7 +76,9 @@ export default function GeneratedRecipePage({ params }: { params: Promise<{ id: 
     setCooking(true);
     try {
       const entry = await api.cookRecipe(recipe.id, { portions: servings });
-      toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
+      toast.success(
+        t('recipe.logged')(entry.description, formatNumber(Math.round(entry.kcal), locale)),
+      );
       router.push('/cook');
     } catch (e) {
       toast.error((e as Error).message);
@@ -95,9 +100,9 @@ export default function GeneratedRecipePage({ params }: { params: Promise<{ id: 
   if (missing) {
     return (
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-16 text-center">
-        <p className="text-body font-medium">That recipe isn&rsquo;t here any more.</p>
+        <p className="text-body font-medium">{t('recipe.notHere')}</p>
         <Link href="/cook" className="text-footnote mt-2 inline-block underline underline-offset-2">
-          Back to Cook
+          {t('recipe.backToCook')}
         </Link>
       </div>
     );
@@ -118,8 +123,8 @@ export default function GeneratedRecipePage({ params }: { params: Promise<{ id: 
   return (
     <RecipeReader
       backHref="/cook"
-      backLabel="Cook"
-      eyebrow={ORIGIN_EYEBROW[recipe.origin]}
+      backLabel={t('cook.title')}
+      eyebrow={t(ORIGIN_EYEBROW[recipe.origin])}
       title={recipe.title}
       summary={recipe.summary}
       emoji={foodEmoji(recipe.title)}
@@ -128,7 +133,7 @@ export default function GeneratedRecipePage({ params }: { params: Promise<{ id: 
       carbs_g={scale(recipe.carbs_g, servings)}
       fat_g={scale(recipe.fat_g, servings)}
       servingLabel={
-        servings === 1 ? 'per portion' : `for ${formatServings(servings)} portions`
+        servings === 1 ? t('cook.perPortion') : t('recipe.forPortions')(formatServings(servings))
       }
       portions={recipe.portions}
       minutes={recipe.minutes}
@@ -143,7 +148,7 @@ export default function GeneratedRecipePage({ params }: { params: Promise<{ id: 
       onToggleSave={() => void toggleSaved()}
       footnote={
         <>
-          {CONFIDENCE_NOTE[recipe.confidence]}
+          {t(CONFIDENCE_NOTE[recipe.confidence])}
           {recipe.adapted_from && (
             <>
               {' '}
@@ -151,29 +156,39 @@ export default function GeneratedRecipePage({ params }: { params: Promise<{ id: 
                 href={`/cook/library/${recipe.adapted_from}`}
                 className="underline underline-offset-2"
               >
-                See the original
+                {t('recipe.seeOriginal')}
               </Link>
               .
             </>
           )}
           {recipe.generated_for && (
             <>
-              {' '}
-              Written against the {Math.round(recipe.generated_for.kcal_remaining)} kcal you had
-              left on {recipe.generated_for.local_date}.
+              {t('recipe.writtenAgainst')(
+                formatNumber(Math.round(recipe.generated_for.kcal_remaining), locale),
+                formatDay(recipe.generated_for.local_date, locale),
+              )}
             </>
           )}
         </>
       }
       actions={
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <Servings value={servings} onChange={setServings} unit="portion" className="sm:flex-1" />
+          <Servings
+            value={servings}
+            onChange={setServings}
+            unit={t('recipe.portion')}
+            className="sm:flex-1"
+          />
           <Button
             onClick={() => void cook()}
             disabled={cooking}
             className="h-11 rounded-full px-6 sm:shrink-0"
           >
-            {cooking ? 'Logging…' : `I ate this · ${Math.round(scale(recipe.kcal, servings))} kcal`}
+            {cooking
+              ? t('recipe.logging')
+              : t('recipe.iAteThis')(
+                  formatNumber(Math.round(scale(recipe.kcal, servings)), locale),
+                )}
           </Button>
         </div>
       }

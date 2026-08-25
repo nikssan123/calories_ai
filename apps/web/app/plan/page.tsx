@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Locale, MealPlan, MealPlanBrief, MealPlanSlot, ShoppingItem, ShoppingList } from '@ct/shared';
-import { formatMass, monthName } from '@ct/shared';
+import { formatMass, formatNumber, monthName, weekdayName } from '@ct/shared';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
@@ -25,7 +25,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { foodEmoji } from '@ct/shared/food-emoji';
 import { cn } from '@/lib/utils';
-import { useLocale } from '@/lib/i18n';
+import { useLocale, useT } from '@/lib/i18n';
+import { listWords } from '@ct/shared/words';
 
 /**
  * The week ahead — seven dinner slots and the shop they imply.
@@ -42,6 +43,7 @@ import { useLocale } from '@/lib/i18n';
  */
 export default function PlanPage() {
   const locale = useLocale();
+  const t = useT();
   const [plan, setPlan] = useState<MealPlan | null>(null);
   const [list, setList] = useState<ShoppingList | null>(null);
   const [loading, setLoading] = useState(true);
@@ -118,9 +120,9 @@ export default function PlanPage() {
     <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-5 pb-8 lg:px-6">
       <div className="mx-auto w-full max-w-5xl space-y-7">
         <div>
-          <h1 className="text-large-title">This week</h1>
+          <h1 className="text-large-title">{t('plan.title')}</h1>
           <p className="text-muted-foreground mt-1.5 text-body font-medium">
-            Dinners, priced against your targets. One tap logs the night you cooked.
+            {t('plan.subtitle')}
           </p>
         </div>
 
@@ -144,8 +146,8 @@ export default function PlanPage() {
             <div className="space-y-7">
               {plan && planned ? (
                 <InsetGroup
-                  title={`📅  ${rangeLabel(plan, locale)}`}
-                  footer="Open a night to read the method, or skip it if you are out."
+                  title={t('plan.weekTitle')(rangeLabel(plan, locale))}
+                  footer={t('plan.weekFooter')}
                 >
                   {plan.slots.map((slot) => (
                     <Night
@@ -162,14 +164,14 @@ export default function PlanPage() {
                     🗓️
                   </span>
                   <p className="text-muted-foreground text-body font-medium">
-                    Nothing planned for this week yet.
+                    {t('plan.nothingYet')}
                     <br />
-                    Fill the week in below, or ask for it in the{' '}
+                    {t('plan.askInBefore')}{' '}
                     <Link
                       href="/"
                       className="text-foreground font-semibold underline underline-offset-2"
                     >
-                      journal
+                      {t('plan.journal')}
                     </Link>
                     .
                   </p>
@@ -177,18 +179,17 @@ export default function PlanPage() {
               )}
 
               <InsetGroup
-                title="🍳  How to plan the week"
+                title={t('plan.howToTitle')}
                 footer={
                   <>
-                    This is the most expensive thing the kitchen does, so it runs once and you edit
-                    it after. Or say it in the{' '}
+                    {t('plan.howToBefore')}{' '}
                     <Link
                       href="/"
                       className="text-foreground font-semibold underline underline-offset-2"
                     >
-                      journal
+                      {t('plan.journal')}
                     </Link>{' '}
-                    — “plan my dinners this week, two of us, nothing over 30 minutes”.
+                    {t('plan.howToAfter')}
                   </>
                 }
               >
@@ -203,13 +204,13 @@ export default function PlanPage() {
                     htmlFor="plan-wants"
                     className="text-footnote text-muted-foreground mb-1.5 block font-medium"
                   >
-                    Anything happening this week?
+                    {t('plan.anythingHappening')}
                   </label>
                   <Input
                     id="plan-wants"
                     value={wants}
                     onChange={(e) => setWants(e.target.value)}
-                    placeholder="“out on Thursday”, “use up the squash”"
+                    placeholder={t('plan.wantsPlaceholder')}
                     className="bg-muted/60 border-border h-11 rounded-full border-2 px-4 text-body"
                   />
                 </div>
@@ -229,14 +230,14 @@ export default function PlanPage() {
                 */}
                 <InsetRow>
                   <div className="flex-1">
-                    <p className="text-body">How many it feeds</p>
+                    <p className="text-body">{t('plan.howManyItFeeds')}</p>
                     <p className="text-muted-foreground text-[13px] font-medium">
-                      Every dinner is cooked for this many.
+                      {t('plan.howManyItFeedsHint')}
                     </p>
                   </div>
                   <div
                     role="group"
-                    aria-label="How many it feeds"
+                    aria-label={t('plan.howManyItFeeds')}
                     className="flex shrink-0 items-center gap-1.5"
                   >
                     {[1, 2, 3, 4].map((n) => (
@@ -245,7 +246,7 @@ export default function PlanPage() {
                         type="button"
                         onClick={() => setServings(n)}
                         aria-pressed={servings === n}
-                        aria-label={n === 1 ? '1 person' : `${n} people`}
+                        aria-label={t('plan.people')(n)}
                         className={cn(
                           'size-9 rounded-full border-2 text-[13px] font-bold transition-colors',
                           servings === n
@@ -261,29 +262,28 @@ export default function PlanPage() {
 
                 <InsetRow>
                   <div className="flex-1">
-                    <p className="text-body">Cook once, eat twice</p>
+                    <p className="text-body">{t('plan.cookOnce')}</p>
                     <p className="text-muted-foreground text-[13px] font-medium">
-                      A bigger cook covers the night after it, so the week has fewer evenings at the
-                      stove.
+                      {t('plan.cookOnceHint')}
                     </p>
                   </div>
                   <Switch
                     checked={batch}
                     onCheckedChange={setBatch}
-                    aria-label="Cook once, eat twice"
+                    aria-label={t('plan.cookOnce')}
                   />
                 </InsetRow>
 
                 <InsetRow>
                   <div className="flex-1">
-                    <p className="text-body">Longest cook</p>
+                    <p className="text-body">{t('plan.longestCook')}</p>
                     <p className="text-muted-foreground text-[13px] font-medium">
-                      No dinner in the week takes longer than this.
+                      {t('plan.longestCookHint')}
                     </p>
                   </div>
                   <div
                     role="group"
-                    aria-label="Longest cook"
+                    aria-label={t('plan.longestCook')}
                     className="flex shrink-0 items-center gap-1.5"
                   >
                     {[20, 30, 45, null].map((m) => (
@@ -292,7 +292,7 @@ export default function PlanPage() {
                         type="button"
                         onClick={() => setMinutes(m)}
                         aria-pressed={minutes === m}
-                        aria-label={m === null ? 'Any length' : `${m} minutes`}
+                        aria-label={m === null ? t('plan.anyLength') : t('plan.minutesLabel')(String(m))}
                         className={cn(
                           'h-9 rounded-full border-2 px-3 text-[13px] font-bold transition-colors',
                           minutes === m
@@ -300,7 +300,7 @@ export default function PlanPage() {
                             : 'border-border text-muted-foreground',
                         )}
                       >
-                        {m === null ? 'Any' : `${m}m`}
+                        {m === null ? t('plan.any') : t('plan.minutesShort')(String(m))}
                       </button>
                     ))}
                   </div>
@@ -315,12 +315,12 @@ export default function PlanPage() {
                     {thinking ? (
                       <>
                         <Loader2 size={16} className="mr-2 animate-spin" />
-                        Writing the week…
+                        {t('plan.writing')}
                       </>
                     ) : (
                       <>
                         <CalendarDays size={16} className="mr-2" />
-                        {planned ? 'Plan it again' : 'Plan the week'}
+                        {planned ? t('plan.again') : t('plan.planTheWeek')}
                       </>
                     )}
                   </Button>
@@ -352,12 +352,16 @@ function Night({
   onCook: () => void;
   onSkip: () => void;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const cooked = slot.cooked_at !== null;
 
   return (
     <InsetRow className={cn('items-start gap-3 py-3.5', cooked && 'opacity-60')}>
       <div className="w-11 shrink-0 pt-0.5">
-        <p className="text-footnote text-muted-foreground font-bold">{slot.weekday.slice(0, 3)}</p>
+        <p className="text-footnote text-muted-foreground font-bold">
+          {weekdayName(new Date(`${slot.local_date}T00:00:00Z`).getUTCDay(), locale, 'short')}
+        </p>
         <p className="text-footnote text-muted-foreground tnum font-medium">
           {String(Number(slot.local_date.slice(8)))}
         </p>
@@ -373,39 +377,44 @@ function Night({
               {slot.recipe.title}
             </Link>
             <p className="text-muted-foreground text-footnote mt-0.5 font-medium">
-              <span className="tnum text-foreground font-bold">{Math.round(slot.recipe.kcal)}</span>{' '}
-              kcal · {Math.round(slot.recipe.protein_g)}g protein
+              <span className="tnum text-foreground font-bold">
+                {formatNumber(Math.round(slot.recipe.kcal), locale)}
+              </span>{' '}
+              {t('plan.kcalProtein')(formatNumber(Math.round(slot.recipe.protein_g), locale))}
               {slot.recipe.minutes !== null && (
                 <>
                   {' · '}
-                  <Clock size={11} className="inline align-[-1px]" /> {slot.recipe.minutes}m
+                  <Clock size={11} className="inline align-[-1px]" />{' '}
+                  {t('plan.minutesShort')(String(slot.recipe.minutes))}
                 </>
               )}
             </p>
             {slot.covers.length > 0 && (
               <p className="text-footnote mt-1 font-semibold text-[var(--calories-text)]">
                 {slot.covers.length === 1
-                  ? 'Cooks enough for the next night too'
-                  : `Cooks enough for ${slot.covers.length} more nights`}
+                  ? t('plan.coversNext')
+                  : t('plan.coversMore')(String(slot.covers.length))}
               </p>
             )}
           </div>
 
           {cooked ? (
             <span className="text-footnote flex shrink-0 items-center gap-1 pt-1 font-bold text-[var(--calories-text)]">
-              <Check size={14} /> Cooked
+              <Check size={14} /> {t('plan.cooked')}
             </span>
           ) : (
             <div className="flex shrink-0 items-center gap-1.5">
               <Button size="sm" onClick={onCook} className="h-9 rounded-full px-3.5 text-[13px]">
                 <ChefHat size={14} className="mr-1.5" />
-                Log
+                {t('editor.log')}
               </Button>
               <Button
                 size="sm"
                 variant="ghost"
                 onClick={onSkip}
-                aria-label={`Skip ${slot.weekday}`}
+                aria-label={t('plan.skipNamed')(
+                  weekdayName(new Date(`${slot.local_date}T00:00:00Z`).getUTCDay(), locale),
+                )}
                 className="text-muted-foreground size-9 rounded-full p-0"
               >
                 <X size={15} />
@@ -415,7 +424,7 @@ function Night({
         </>
       ) : (
         <p className="text-muted-foreground flex-1 pt-0.5 text-body font-medium italic">
-          Nothing planned
+          {t('plan.nothingPlanned')}
         </p>
       )}
     </InsetRow>
@@ -444,6 +453,8 @@ function Shopping({
   list: ShoppingList | null;
   onList: (next: ShoppingList) => void;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const units = useUnits();
@@ -495,11 +506,11 @@ function Shopping({
 
   return (
     <InsetGroup
-      title="🧺  Shopping list"
+      title={t('shopping.title')}
       trailing={<span className="text-footnote text-muted-foreground tnum font-bold">{left}</span>}
       footer={
         list.have_already.length > 0
-          ? `Left off because your kitchen has them: ${list.have_already.join(', ')}.`
+          ? t('shopping.haveAlready')(listWords(list.have_already, locale))
           : undefined
       }
       className="lg:sticky lg:top-4"
@@ -514,7 +525,7 @@ function Shopping({
           htmlFor="shopping-add"
           className="text-footnote text-muted-foreground mb-1.5 block font-medium"
         >
-          Add to the list
+          {t('shopping.addToList')}
         </label>
         <div className="flex items-center gap-2">
           <Input
@@ -524,7 +535,7 @@ function Shopping({
             onKeyDown={(e) => {
               if (e.key === 'Enter') void write();
             }}
-            placeholder="kitchen roll, bin bags"
+            placeholder={t('shopping.placeholder')}
             className="bg-muted/60 border-border h-11 rounded-xl border-2 px-3 text-body"
           />
           <Button
@@ -534,17 +545,17 @@ function Shopping({
             className="h-11 shrink-0 gap-1.5 rounded-xl px-4"
           >
             <Plus size={16} />
-            Add
+            {t('common.add')}
           </Button>
         </div>
         <p className="text-footnote text-muted-foreground mt-1.5 font-medium">
-          For anything no recipe would ask for. The ingredients below come from the week.
+          {t('shopping.addHint')}
         </p>
       </div>
 
       {list.items.length === 0 ? (
         <p className="text-muted-foreground px-4 py-4 text-body">
-          Nothing on the list yet. Plan the week, or write what you need.
+          {t('shopping.empty')}
         </p>
       ) : (
         list.items.map((item) => {
@@ -561,7 +572,9 @@ function Shopping({
                   onClick={() => void tick(item)}
                   aria-pressed={item.bought}
                   aria-label={
-                    item.bought ? `Put ${item.name} back on the list` : `Tick off ${item.name}`
+                    item.bought
+                      ? t('shopping.putBack')(item.name)
+                      : t('shopping.tickOff')(item.name)
                   }
                   className={cn(
                     'flex size-[22px] shrink-0 items-center justify-center rounded-full border-2 transition-colors',
@@ -589,7 +602,7 @@ function Shopping({
 
               {item.for_dates.length > 0 && (
                 <span className="text-footnote text-muted-foreground tnum shrink-0 font-semibold">
-                  {item.for_dates.length === 1 ? '1 night' : `${item.for_dates.length} nights`}
+                  {t('plan.nightsCount')(item.for_dates.length)}
                 </span>
               )}
               {written && (
@@ -598,7 +611,7 @@ function Shopping({
                   variant="ghost"
                   onClick={() => void remove(item)}
                   className="text-muted-foreground hover:text-foreground size-8 shrink-0"
-                  aria-label={`Take ${item.name} off the list`}
+                  aria-label={t('shopping.takeOff')(item.name)}
                 >
                   <Trash2 size={15} />
                 </Button>

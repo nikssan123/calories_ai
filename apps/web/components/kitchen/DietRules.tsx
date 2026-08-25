@@ -8,6 +8,7 @@ import { DIETS } from '@ct/shared';
 import { api } from '@/lib/api';
 import { InsetGroup } from '@/components/InsetGroup';
 import { Input } from '@/components/ui/input';
+import { useT, type StringKey } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 /**
@@ -23,11 +24,11 @@ import { cn } from '@/lib/utils';
  * trusting the answer, so the wording has to be honest about what it is worth.
  */
 
-const LABELS: Record<Diet, string> = {
-  none: 'No restriction',
-  vegetarian: 'Vegetarian',
-  vegan: 'Vegan',
-  pescatarian: 'Pescatarian',
+const LABEL_KEYS: Record<Diet, StringKey> = {
+  none: 'diet.none',
+  vegetarian: 'diet.vegetarian',
+  vegan: 'diet.vegan',
+  pescatarian: 'diet.pescatarian',
 };
 
 export function DietRules({
@@ -37,6 +38,7 @@ export function DietRules({
   profile: Profile;
   onChange: (next: Profile) => void;
 }) {
+  const t = useT();
   const [draft, setDraft] = useState('');
 
   async function save(patch: { diet?: Diet; avoids?: string[] }) {
@@ -64,8 +66,8 @@ export function DietRules({
 
   return (
     <InsetGroup
-      title="What you don't eat"
-      footer="Applied to every recipe suggestion as a hard limit, not a preference. It does not change how the journal logs what you actually eat — tell it what you had and it records it."
+      title={t('diet.title')}
+      footer={t('diet.footer')}
     >
       <div className="flex flex-wrap gap-1.5 p-3">
         {DIETS.map((diet) => (
@@ -81,7 +83,7 @@ export function DietRules({
                 : 'bg-muted/40 text-muted-foreground',
             )}
           >
-            {LABELS[diet]}
+            {t(LABEL_KEYS[diet])}
           </button>
         ))}
       </div>
@@ -94,14 +96,14 @@ export function DietRules({
             onKeyDown={(e) => {
               if (e.key === 'Enter') addAvoid();
             }}
-            placeholder="Anything else — an allergy, a dislike"
+            placeholder={t('diet.avoidPlaceholder')}
             className="bg-muted/60 border-border h-11 rounded-full border-2 px-4 text-body"
           />
           <button
             type="button"
             onClick={addAvoid}
             disabled={!draft.trim()}
-            aria-label="Add"
+            aria-label={t('common.add')}
             className="bg-muted border-border text-muted-foreground hover:text-foreground flex size-11 shrink-0 items-center justify-center rounded-full border-2 disabled:opacity-40"
           >
             <Plus size={18} />
@@ -115,7 +117,7 @@ export function DietRules({
                 key={item}
                 type="button"
                 onClick={() => void save({ avoids: profile.avoids.filter((a) => a !== item) })}
-                aria-label={`Stop avoiding ${item}`}
+                aria-label={t('diet.stopAvoiding')(item)}
                 className="bg-muted border-border hover:bg-secondary text-footnote flex items-center gap-1.5 rounded-full border-2 py-1 pr-2 pl-3 font-semibold"
               >
                 {item}

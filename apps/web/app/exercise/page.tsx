@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ExerciseEntry, ExerciseSummary, Locale } from '@ct/shared';
-import { distanceUnit, formatDay, formatDistance, toDistance } from '@ct/shared';
+import { distanceUnit, formatDay, formatDistance, formatNumber, toDistance } from '@ct/shared';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { exerciseEmoji } from '@ct/shared/food-emoji';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Workouts } from '@/components/exercise/Workouts';
-import { useLocale } from '@/lib/i18n';
+import { useLocale, useT } from '@/lib/i18n';
 
 /**
  * Exercise, split out of Progress so it gets a screen rather than a single row.
@@ -29,6 +29,7 @@ const WINDOWS = [14, 30, 90] as const;
 
 export default function ExercisePage() {
   const locale = useLocale();
+  const t = useT();
   const [summary, setSummary] = useState<ExerciseSummary | null>(null);
   const [days, setDays] = useState<number>(30);
   const units = useUnits();
@@ -75,7 +76,7 @@ export default function ExercisePage() {
     <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-5 pb-8 lg:px-6">
       <div className="mx-auto w-full max-w-5xl space-y-7">
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-large-title">Exercise</h1>
+          <h1 className="text-large-title">{t('exercise.title')}</h1>
           <ToggleGroup
             value={[String(days)]}
             onValueChange={(values) => {
@@ -88,10 +89,10 @@ export default function ExercisePage() {
               <ToggleGroupItem
                 key={w}
                 value={String(w)}
-                aria-label={`${w} days`}
+                aria-label={t('progress.daysWindow')(w)}
                 className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-8 rounded-full px-3.5 text-xs font-bold transition-colors"
               >
-                {w}d
+                {t('progress.daysShort')(w)}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
@@ -114,9 +115,9 @@ export default function ExercisePage() {
                 🏃
               </span>
               <p className="text-muted-foreground text-body font-medium">
-                Nothing logged in the last {days} days.
+                {t('exercise.nothingLogged')(String(days))}
                 <br />
-                Tell the journal — “went for a {units === 'imperial' ? '3 mile' : '5km'} run”.
+                {t('exercise.tellTheJournal')(units === 'imperial' ? '3 mile' : '5km')}
               </p>
             </div>
           </InsetGroup>
@@ -127,13 +128,15 @@ export default function ExercisePage() {
              untruncated line. That floor was pushing the phone layout wider
              than the screen and turning on sideways scrolling. */
           <div className="grid grid-cols-1 gap-7 lg:grid-cols-2 lg:items-start">
-            <InsetGroup title="🔁  Consistency">
+            <InsetGroup title={t('exercise.consistencyTitle')}>
               <div className="px-4 pt-4 pb-3">
                 <div className="flex items-baseline gap-2">
                   <span className="text-figure text-large-title">{summary.active_days}</span>
                   <span className="text-muted-foreground text-sm font-medium">
-                    active of {summary.days} days · {summary.sessions} session
-                    {summary.sessions === 1 ? '' : 's'}
+                    {t('exercise.activeOf')(
+                      String(summary.days),
+                      t('exercise.sessionsCount')(summary.sessions),
+                    )}
                   </span>
                 </div>
                 <Sparkline
@@ -142,7 +145,7 @@ export default function ExercisePage() {
                   stroke="var(--exercise)"
                   variant="bars"
                   className="mt-4"
-                  label="Calories burned per day"
+                  label={t('exercise.burnedPerDay')}
                   tooltip={(point) => (
                     <DayReadout
                       date={point.local_date}
@@ -154,9 +157,13 @@ export default function ExercisePage() {
               </div>
 
               <div className="divide-border grid grid-cols-3 divide-x-2">
-                <Stat label="Burned" value={summary.total_kcal.toLocaleString()} unit="kcal" />
                 <Stat
-                  label="Distance"
+                  label={t('exercise.burned')}
+                  value={formatNumber(summary.total_kcal, locale)}
+                  unit="kcal"
+                />
+                <Stat
+                  label={t('exercise.distance')}
                   value={
                     summary.total_distance_km === null
                       ? '—'
@@ -165,7 +172,7 @@ export default function ExercisePage() {
                   unit={distanceUnit(units)}
                 />
                 <Stat
-                  label="Time"
+                  label={t('exercise.time')}
                   value={
                     summary.total_duration_min === null
                       ? '—'
@@ -177,8 +184,8 @@ export default function ExercisePage() {
             </InsetGroup>
 
             <InsetGroup
-              title="🏃  Sessions"
-              footer={`Burn is an estimate and is never netted off your calorie target. Correct one in the journal — “that run was closer to ${units === 'imperial' ? '4.5 miles' : '7km'}”.`}
+              title={t('exercise.sessionsTitle')}
+              footer={t('exercise.burnNote')(units === 'imperial' ? '4.5 miles' : '7km')}
             >
               {summary.entries.map((entry) => (
                 <InsetRow key={entry.id}>
@@ -192,7 +199,7 @@ export default function ExercisePage() {
                         formatDate(entry.local_date, locale),
                         entry.distance_km !== null ? formatDistance(entry.distance_km, units) : null,
                         entry.duration_min !== null
-                          ? `${Math.round(entry.duration_min)} min`
+                          ? t('exercise.minutes')(String(Math.round(entry.duration_min)))
                           : null,
                       ]
                         .filter(Boolean)
@@ -239,6 +246,7 @@ function DayReadout({
   sessions: ExerciseEntry[];
 }) {
   const locale = useLocale();
+  const t = useT();
   const units = useUnits();
   const distance = sessions.reduce((sum, s) => sum + (s.distance_km ?? 0), 0);
   const minutes = sessions.reduce((sum, s) => sum + (s.duration_min ?? 0), 0);
@@ -256,10 +264,10 @@ function DayReadout({
       <div className="flex items-baseline gap-3">
         <p className="text-footnote text-muted-foreground font-bold">{formatDate(date, locale)}</p>
         {sessions.length === 0 ? (
-          <p className="text-footnote ml-auto font-semibold">Rest day</p>
+          <p className="text-footnote ml-auto font-semibold">{t('exercise.restDay')}</p>
         ) : (
           <p className="text-figure ml-auto text-body text-[var(--exercise-text)]">
-            {Math.round(kcal).toLocaleString()}
+            {formatNumber(Math.round(kcal), locale)}
             <span className="text-muted-foreground text-xs font-semibold">
               {' '}
               kcal{detail && ` · ${detail}`}
@@ -281,7 +289,7 @@ function DayReadout({
           ))}
           {sessions.length > 3 && (
             <li className="text-footnote text-muted-foreground font-medium">
-              +{sessions.length - 3} more
+              {t('exercise.moreSessions')(String(sessions.length - 3))}
             </li>
           )}
         </ul>

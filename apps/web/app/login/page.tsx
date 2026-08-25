@@ -9,7 +9,7 @@ import { useAuth } from '@/components/AuthGate';
 import { GoogleMark } from '@/components/GoogleMark';
 import { Logo } from '@/components/Logo';
 import { LanguagePicker } from '@/components/LanguagePicker';
-import { preferredLocale, setPreferredLocale, useLocale, useT } from '@/lib/i18n';
+import { preferredLocale, setPreferredLocale, useLocale, useT, type StringKey } from '@/lib/i18n';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,14 +24,13 @@ import { cn } from '@/lib/utils';
  * arrive by redirect, from a page nobody was looking at, so each one has to say
  * what happened *and* what to do next. "Try again" is doing real work.
  */
-const SIGN_IN_ERRORS: Record<string, string> = {
-  google: 'Google could not sign you in. Try again, or use your email and password.',
-  google_unverified:
-    'Google has not confirmed the address on that account, so it cannot be used to sign in here.',
-  expired: 'That sign-in took too long. Start it again from this page.',
-  state: 'That sign-in could not be verified. Start it again from this page.',
-  closed: 'Sign-ups are closed on this server.',
-  suspended: 'This account has been suspended.',
+const SIGN_IN_ERRORS: Record<string, StringKey> = {
+  google: 'auth.googleFailed',
+  google_unverified: 'auth.googleUnverified',
+  expired: 'auth.expired',
+  state: 'auth.badState',
+  closed: 'auth.signupsClosed',
+  suspended: 'auth.suspended',
 };
 
 export default function LoginPage() {
@@ -70,7 +69,8 @@ export default function LoginPage() {
     const failure = params.get('error');
     if (failure) {
       if (failure !== 'cancelled') {
-        toast.error(SIGN_IN_ERRORS[failure] ?? t('auth.genericFailure'));
+        const key = SIGN_IN_ERRORS[failure];
+        toast.error(key ? t(key) : t('auth.genericFailure'));
       }
       params.delete('error');
       const rest = params.toString();
@@ -147,7 +147,7 @@ export default function LoginPage() {
           </h1>
           <p className="text-muted-foreground mt-2 text-body">
             {mode === 'signup'
-              ? 'Then tell the journal a little about yourself and it will work out your targets.'
+              ? t('auth.createAccountSubtitle')
               : t('auth.signInSubtitle')}
           </p>
         </div>
@@ -174,7 +174,7 @@ export default function LoginPage() {
             {/* The line that says "or", which is the whole reason it is here. */}
             <div className="mt-6 flex items-center gap-3">
               <span className="bg-border h-0.5 flex-1 rounded-full" />
-              <span className="text-muted-foreground text-footnote">or</span>
+              <span className="text-muted-foreground text-footnote">{t('auth.or')}</span>
               <span className="bg-border h-0.5 flex-1 rounded-full" />
             </div>
           </div>

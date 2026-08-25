@@ -5,11 +5,13 @@ import Link from 'next/link';
 import { ArrowUpRight, Bookmark, ChevronDown, Clock, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Recipe } from '@ct/shared';
-import { formatMass } from '@ct/shared';
+import { formatMass, formatNumber } from '@ct/shared';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
+import { useLocale, useT } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { formatServings, scale, Servings } from '@/components/kitchen/Servings';
+import { listWords } from '@ct/shared/words';
 import { cn } from '@/lib/utils';
 
 /**
@@ -42,6 +44,8 @@ export function RecipeCard({
   // Defaults to the whole dish. A generated recipe is usually written for one,
   // and when it is not, the person who asked for four portions meant to cook
   // four — how much of it they then eat is what the stepper is for.
+  const t = useT();
+  const locale = useLocale();
   const [servings, setServings] = useState(1);
 
   const missing = recipe.ingredients.filter((i) => i.missing);
@@ -87,7 +91,7 @@ export function RecipeCard({
             variant="ghost"
             onClick={() => void toggleSaved()}
             aria-pressed={saved}
-            aria-label={saved ? 'Unsave this recipe' : 'Save this recipe'}
+            aria-label={saved ? t('recipe.unsaveThis') : t('recipe.saveThis')}
             className="text-muted-foreground -mt-1 size-8 shrink-0"
           >
             <Bookmark
@@ -107,17 +111,21 @@ export function RecipeCard({
           <Macro label="P" value={eaten.protein_g} color="var(--protein)" />
           <Macro label="C" value={eaten.carbs_g} color="var(--carbs)" />
           <Macro label="F" value={eaten.fat_g} color="var(--fat)" />
-          <span>{servings === 1 ? 'per portion' : `for ${formatServings(servings)} portions`}</span>
+          <span>
+            {servings === 1
+              ? t('cook.perPortion')
+              : t('recipe.forPortions')(formatServings(servings))}
+          </span>
           {recipe.minutes !== null && (
             <span className="inline-flex items-center gap-1">
               <Clock size={11} />
-              {recipe.minutes} min
+              {t('brief.minutes')(recipe.minutes)}
             </span>
           )}
           {recipe.portions > 1 && (
             <span className="inline-flex items-center gap-1">
               <Users size={11} />
-              {recipe.portions} portions
+              {t('recipe.portionsCount')(recipe.portions)}
             </span>
           )}
         </div>
@@ -128,7 +136,7 @@ export function RecipeCard({
             late. */}
         {missing.length > 0 && (
           <p className="text-footnote mt-2 text-[var(--fat-text)]">
-            You&rsquo;d need: {missing.map((i) => i.name).join(', ')}
+            {t('recipe.youdNeed')(listWords(missing.map((i) => i.name), locale))}
           </p>
         )}
       </div>
@@ -139,7 +147,7 @@ export function RecipeCard({
         className="border-border text-footnote text-muted-foreground hover:text-foreground flex w-full items-center justify-between border-t-2 px-4 py-2.5"
         aria-expanded={open}
       >
-        {open ? 'Hide the method' : `How to make it · ${recipe.steps.length} steps`}
+        {open ? t('recipe.hideMethod') : t('recipe.howToMakeIt')(t('recipe.steps')(recipe.steps.length))}
         <ChevronDown size={14} className={cn('transition-transform', open && 'rotate-180')} />
       </button>
 
@@ -147,7 +155,7 @@ export function RecipeCard({
         <div className="border-border space-y-3 border-t-2 px-4 py-3.5">
           <div>
             <p className="text-eyebrow text-muted-foreground">
-              Ingredients · makes {recipe.portions}
+              {t('recipe.ingredientsMakes')(formatNumber(recipe.portions, locale))}
             </p>
             <ul className="mt-1.5 space-y-1">
               {recipe.ingredients.map((item, index) => (
@@ -178,9 +186,11 @@ export function RecipeCard({
       )}
 
       <div className="border-border space-y-3 border-t-2 p-3">
-        <Servings value={servings} onChange={setServings} unit="portion" />
+        <Servings value={servings} onChange={setServings} unit={t('recipe.portion')} />
         <Button onClick={() => void cook()} disabled={cooking} className="h-11 w-full rounded-full">
-          {cooking ? 'Logging…' : `I ate this · ${Math.round(eaten.kcal)} kcal`}
+          {cooking
+            ? t('recipe.logging')
+            : t('recipe.iAteThis')(formatNumber(Math.round(eaten.kcal), locale))}
         </Button>
         {/* The way out of the thread and onto the page built for cooking from,
             for the times the answer is "yes, tonight" rather than "yes, now". */}
@@ -188,7 +198,7 @@ export function RecipeCard({
           href={`/cook/recipe/${recipe.id}`}
           className="text-footnote text-muted-foreground hover:text-foreground flex items-center justify-center gap-1 font-semibold"
         >
-          Open the full recipe
+          {t('recipe.openFull')}
           <ArrowUpRight size={13} />
         </Link>
       </div>

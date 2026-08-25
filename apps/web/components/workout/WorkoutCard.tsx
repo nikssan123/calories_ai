@@ -10,6 +10,7 @@ import type {
   ExerciseSet,
   ExerciseType,
   LastWorkout,
+  Locale,
   MuscleGroup,
   Routine,
   UnitSystem,
@@ -17,6 +18,7 @@ import type {
 } from '@ct/shared';
 import {
   ROUTINE_MATCH_LIKELY,
+  formatNumber,
   loadToKg,
   loadUnit,
   matchRoutine,
@@ -26,6 +28,7 @@ import {
 } from '@ct/shared';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
+import { useLocale, useT, type StringKey } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -51,12 +54,12 @@ import { Input } from '@/components/ui/input';
  * and not this one's.
  */
 
-const CATEGORIES: { key: ExerciseCategory; label: string; emoji: string }[] = [
-  { key: 'strength', label: 'Weights', emoji: '🏋️' },
-  { key: 'cardio', label: 'Cardio', emoji: '🏃' },
-  { key: 'class', label: 'Class', emoji: '🤸' },
-  { key: 'sport', label: 'Sport', emoji: '⚽' },
-  { key: 'flexibility', label: 'Mobility', emoji: '🧘' },
+const CATEGORIES: { key: ExerciseCategory; label: StringKey; emoji: string }[] = [
+  { key: 'strength', label: 'workout.strength', emoji: '🏋️' },
+  { key: 'cardio', label: 'workout.cardio', emoji: '🏃' },
+  { key: 'class', label: 'workout.class', emoji: '🤸' },
+  { key: 'sport', label: 'workout.sport', emoji: '⚽' },
+  { key: 'flexibility', label: 'workout.flexibility', emoji: '🧘' },
 ];
 
 /**
@@ -140,6 +143,8 @@ export function WorkoutCard({
   const [saveAs, setSaveAs] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [saving, setSaving] = useState(false);
+  const t = useT();
+  const locale = useLocale();
   const units = useUnits();
   // Latched the moment a post goes out, and only released if it fails. The
   // disabled button covers the second tap of a double-tap on a slow phone;
@@ -318,16 +323,17 @@ export function WorkoutCard({
           from_entry_id: entry.id,
           duration_min: minutes,
         });
-          toast.success(`Saved “${saveAs.trim()}” — one tap next time`);
+          toast.success(t('workout.savedRoutine')(saveAs.trim()));
         } catch {
-          toast.error('Logged, but the routine did not save');
+          toast.error(t('workout.routineNotSaved'));
         }
       }
 
+      const burned = formatNumber(Math.round(entry.kcal_burned), locale);
       toast.success(
         editing
-          ? `Updated ${entry.description} — now ~${Math.round(entry.kcal_burned)} kcal`
-          : `Logged ${entry.description} — ~${Math.round(entry.kcal_burned)} kcal`,
+          ? t('workout.updated')(entry.description, burned)
+          : t('workout.logged')(entry.description, burned),
       );
       // The parent swaps this card for the receipt; nothing here needs to
       // stand back up afterwards.
@@ -357,7 +363,7 @@ export function WorkoutCard({
               <span className="text-xl" aria-hidden>
                 {c.emoji}
               </span>
-              <span className="text-[11px] leading-tight">{c.label}</span>
+              <span className="text-[11px] leading-tight">{t(c.label)}</span>
             </button>
           ))}
         </div>
@@ -408,14 +414,20 @@ export function WorkoutCard({
         )
       : // Nothing to read muscles off. The kind is all this session is, so it is
         // also the most it can honestly be called.
-        (CATEGORIES.find((c) => c.key === category)?.label ?? 'Workout');
+        (() => {
+          const label = CATEGORIES.find((c) => c.key === category)?.label;
+          return label ? t(label) : t('workout.fallbackName');
+        })();
 
   return (
     <Shell heard={card?.heard ?? null} editing={editing !== undefined}>
       <div className="space-y-3 px-3 pb-3">
         <div className="flex items-center justify-between">
           <p className="text-footnote text-muted-foreground">
-            {CATEGORIES.find((c) => c.key === category)?.label}
+            {(() => {
+              const label = CATEGORIES.find((c) => c.key === category)?.label;
+              return label ? t(label) : null;
+            })()}
           </p>
           <button
             type="button"
@@ -429,7 +441,7 @@ export function WorkoutCard({
             }}
             className="text-footnote text-muted-foreground hover:text-foreground"
           >
-            Change
+            {t('workout.change')}
           </button>
         </div>
 
@@ -437,7 +449,9 @@ export function WorkoutCard({
             fills the entire grid, which is the point of having saved them. */}
         {ordered.length > 0 && (
           <div>
-            <p className="text-footnote text-muted-foreground mb-1.5">Your workouts</p>
+            <p className="text-footnote text-muted-foreground mb-1.5">
+              {t('workout.yourWorkouts')}
+            </p>
             <div className="flex flex-wrap gap-1.5">
               {ordered.map((routine) => {
                 const on = routineId === routine.id;
@@ -454,7 +468,7 @@ export function WorkoutCard({
                     <span aria-hidden>{routine.emoji}</span>
                     {routine.name}
                     {routine.usual_weekday === today && !on && (
-                      <span className="text-muted-foreground">· today</span>
+                      <span className="text-muted-foreground">{t('workout.today')}</span>
                     )}
                   </button>
                 );
@@ -465,7 +479,7 @@ export function WorkoutCard({
 
         {/* The whole required answer. Everything under it is optional. */}
         <div>
-          <p className="text-footnote text-muted-foreground mb-1.5">How long?</p>
+          <p className="text-footnote text-muted-foreground mb-1.5">{t('workout.howLong')}</p>
           <div className="flex gap-1.5">
             {DURATIONS.map((value) => (
               <button
@@ -500,7 +514,7 @@ export function WorkoutCard({
                 the names are already known, and typing them on a phone after a
                 session is exactly the friction that stops people logging at all. */}
             {types === null ? (
-              <p className="text-footnote text-muted-foreground">Loading…</p>
+              <p className="text-footnote text-muted-foreground">{t('common.loading')}</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 {types
@@ -514,7 +528,9 @@ export function WorkoutCard({
                     >
                       <span aria-hidden>{type.emoji}</span>
                       {type.name}
-                      {type.custom && <span className="text-muted-foreground">· yours</span>}
+                      {type.custom && (
+                        <span className="text-muted-foreground">{t('workout.yours')}</span>
+                      )}
                     </button>
                   ))}
               </div>
@@ -530,7 +546,7 @@ export function WorkoutCard({
               className="text-footnote text-muted-foreground hover:text-foreground flex items-center gap-1"
             >
               <Plus size={13} />
-              Add what you did
+              {t('workout.addWhatYouDid')}
             </button>
             {last && (
               <button
@@ -539,9 +555,9 @@ export function WorkoutCard({
                 className="text-footnote text-muted-foreground hover:text-foreground flex items-center gap-1"
               >
                 <RotateCcw size={12} />
-                Same as {when(last.local_date)}
+                {t('workout.sameAs')(when(last.local_date, locale, t))}
                 <span className="opacity-70">
-                  ({last.exercises.length} {last.exercises.length === 1 ? 'exercise' : 'exercises'})
+                  {t('workout.exerciseCount')(last.exercises.length)}
                 </span>
               </button>
             )}
@@ -556,7 +572,7 @@ export function WorkoutCard({
               className="text-footnote text-muted-foreground hover:text-foreground flex items-center gap-1"
             >
               <Bookmark size={12} />
-              Save this as “{suggestedName}”
+              {t('workout.saveThisAs')(suggestedName)}
             </button>
           ) : (
             <div className="bg-muted/40 flex items-center gap-2 rounded-xl p-2.5">
@@ -564,13 +580,13 @@ export function WorkoutCard({
               <Input
                 value={saveAs}
                 onChange={(e) => setSaveAs(e.target.value)}
-                aria-label="Name for this workout"
+                aria-label={t('workout.nameForThis')}
                 className="bg-card text-footnote h-9 rounded-lg border-0"
               />
               <button
                 type="button"
                 onClick={() => setSaveAs(null)}
-                aria-label="Don’t save this as a workout"
+                aria-label={t('workout.dontSave')}
                 className="text-muted-foreground hover:text-foreground shrink-0"
               >
                 <X size={14} />
@@ -586,11 +602,11 @@ export function WorkoutCard({
           {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
           {editing
             ? saving
-              ? 'Saving…'
-              : 'Save changes'
+              ? t('setup.saving')
+              : t('workout.saveChanges')
             : saving
-              ? 'Logging…'
-              : 'Log this session'}
+              ? t('recipe.logging')
+              : t('workout.logSession')}
         </Button>
       </div>
     </Shell>
@@ -606,13 +622,14 @@ function Shell({
   editing?: boolean;
   children: React.ReactNode;
 }) {
+  const t = useT();
   return (
     <div className="bg-card animate-land overflow-hidden rounded-[var(--radius)] shadow-[0_1px_2px_rgba(23,22,20,0.05)]">
       <div className="px-4 pt-3.5 pb-2.5">
         <p className="text-body font-medium">
-          {editing ? 'Fix what’s wrong' : (heard ?? 'What did you do?')}
+          {editing ? t('workout.fixWhatsWrong') : (heard ?? t('workout.whatDidYouDo'))}
         </p>
-        <p className="text-footnote text-muted-foreground">Roughly is fine.</p>
+        <p className="text-footnote text-muted-foreground">{t('workout.roughlyIsFine')}</p>
       </div>
       {children}
     </div>
@@ -628,6 +645,7 @@ function ExerciseRow({
   onChange: (next: Draft) => void;
   onRemove: () => void;
 }) {
+  const t = useT();
   const units = useUnits();
   const setSets = (sets: Draft['sets']) => onChange({ ...draft, sets });
   const patch = (i: number, key: keyof Draft['sets'][number], value: string) =>
@@ -641,7 +659,7 @@ function ExerciseRow({
         <button
           type="button"
           onClick={onRemove}
-          aria-label={`Remove ${draft.name}`}
+          aria-label={t('workout.removeNamed')(draft.name)}
           className="text-muted-foreground hover:text-foreground"
         >
           <X size={14} />
@@ -656,7 +674,11 @@ function ExerciseRow({
             </span>
             {draft.tracks === 'reps' ? (
               <>
-                <Field value={set.reps} onChange={(v) => patch(i, 'reps', v)} suffix="reps" />
+                <Field
+                  value={set.reps}
+                  onChange={(v) => patch(i, 'reps', v)}
+                  suffix={t('workout.reps')}
+                />
                 <Field
                   value={set.weight}
                   onChange={(v) => patch(i, 'weight', v)}
@@ -664,13 +686,17 @@ function ExerciseRow({
                 />
               </>
             ) : (
-              <Field value={set.minutes} onChange={(v) => patch(i, 'minutes', v)} suffix="min" />
+              <Field
+                value={set.minutes}
+                onChange={(v) => patch(i, 'minutes', v)}
+                suffix={t('workout.min')}
+              />
             )}
             {draft.sets.length > 1 && (
               <button
                 type="button"
                 onClick={() => setSets(draft.sets.filter((_, j) => j !== i))}
-                aria-label={`Remove set ${i + 1}`}
+                aria-label={t('workout.removeSet')(String(i + 1))}
                 className="text-muted-foreground hover:text-foreground shrink-0"
               >
                 <Minus size={14} />
@@ -689,7 +715,7 @@ function ExerciseRow({
         className="text-footnote text-muted-foreground hover:text-foreground mt-2 flex items-center gap-1"
       >
         <Plus size={13} />
-        Another set
+        {t('workout.anotherSet')}
       </button>
     </div>
   );
@@ -814,11 +840,14 @@ function nearestDuration(min: number): number {
  * "Tuesday" for anything inside the last week, a date beyond it. A session two
  * months old is worth offering back but not worth calling recent.
  */
-function when(localDate: string): string {
+function when(localDate: string, locale: Locale, t: ReturnType<typeof useT>): string {
   const then = new Date(`${localDate}T12:00:00`);
   const days = Math.round((Date.now() - then.getTime()) / 86_400_000);
-  if (days <= 0) return 'today';
-  if (days === 1) return 'yesterday';
-  if (days < 7) return then.toLocaleDateString(undefined, { weekday: 'long' });
-  return then.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  if (days <= 0) return t('common.today').toLocaleLowerCase(locale);
+  if (days === 1) return t('common.yesterday').toLocaleLowerCase(locale);
+  // `undefined` here used to mean "the runtime's locale", which on a server-
+  // rendered page is the container's and on a phone is whatever the OS says —
+  // neither of which is the language the rest of this sentence is in.
+  if (days < 7) return then.toLocaleDateString(locale, { weekday: 'long' });
+  return then.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
 }

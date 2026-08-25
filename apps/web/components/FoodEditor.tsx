@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { Check, Loader2, Plus, X } from 'lucide-react';
-import type { FoodEntry, Meal } from '@ct/shared';
+import { formatNumber, type FoodEntry, type Meal } from '@ct/shared';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useLocale, useT, type StringKey } from '@/lib/i18n';
 
 /**
  * A meal as the form that could have collected it — whether or not it exists.
@@ -30,11 +31,11 @@ import { Input } from '@/components/ui/input';
  * would put a full nutrition table in every turn to serve the rare correction.
  */
 
-const MEALS: { key: Meal; label: string }[] = [
-  { key: 'breakfast', label: 'Breakfast' },
-  { key: 'lunch', label: 'Lunch' },
-  { key: 'dinner', label: 'Dinner' },
-  { key: 'snack', label: 'Snack' },
+const MEALS: { key: Meal; label: StringKey }[] = [
+  { key: 'breakfast', label: 'meal.breakfast' },
+  { key: 'lunch', label: 'meal.lunch' },
+  { key: 'dinner', label: 'meal.dinner' },
+  { key: 'snack', label: 'meal.snackOne' },
 ];
 
 /** Held as strings so a half-typed number is not rounded out from under them. */
@@ -67,6 +68,8 @@ export function FoodEditor({
   const [meal, setMeal] = useState<Meal>(initialMeal ?? 'lunch');
   // One blank row to type into. An empty form with an "add item" link is a form
   // that asks to be started before it can be filled in.
+  const t = useT();
+  const locale = useLocale();
   const [items, setItems] = useState<DraftItem[]>(creating ? [blank()] : []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +101,7 @@ export function FoodEditor({
     // The API refuses an empty meal, and rightly — a meal with nothing in it is
     // a deletion, which is a different button with a different confirmation.
     if (payload.length === 0) {
-      setError('A meal needs at least one item. Delete it instead?');
+      setError(t('editor.needsAnItem'));
       return;
     }
 
@@ -106,7 +109,7 @@ export function FoodEditor({
     if (creating && label.length === 0) {
       // The API refuses this too, but the sentence it answers with is about a
       // field rather than about a meal, and this form knows what it is asking.
-      setError('What was it? A meal needs a name.');
+      setError(t('editor.needsAName'));
       return;
     }
 
@@ -141,7 +144,7 @@ export function FoodEditor({
   if (entry === null && !creating) {
     return (
       <Shell>
-        <p className="text-footnote text-muted-foreground">Loading…</p>
+        <p className="text-footnote text-muted-foreground">{t('common.loading')}</p>
       </Shell>
     );
   }
@@ -153,13 +156,15 @@ export function FoodEditor({
 
   return (
     <Shell>
-      <p className="text-body font-bold">{creating ? 'Log it yourself' : 'Fix what’s wrong'}</p>
+      <p className="text-body font-bold">
+        {creating ? t('editor.logItYourself') : t('editor.fixWhatsWrong')}
+      </p>
 
       <Input
         value={description}
         onChange={(e) => setDescription(e.target.value)}
-        aria-label="What this was"
-        placeholder="What was it?"
+        aria-label={t('editor.whatThisWas')}
+        placeholder={t('editor.whatWasIt')}
         className="font-medium"
       />
 
@@ -178,7 +183,7 @@ export function FoodEditor({
                   : 'bg-muted text-muted-foreground text-footnote hover:text-foreground rounded-full py-1.5 font-semibold'
               }
             >
-              {label}
+              {t(label)}
             </button>
           );
         })}
@@ -190,14 +195,16 @@ export function FoodEditor({
             <Input
               value={item.name}
               onChange={(e) => patch(i, { name: e.target.value })}
-              aria-label={`Item ${i + 1} name`}
-              placeholder="Item"
+              aria-label={t('editor.itemName')(String(i + 1))}
+              placeholder={t('editor.itemPlaceholder')}
               className="flex-1 font-medium"
             />
             <button
               type="button"
               onClick={() => setItems((prev) => prev.filter((_, j) => j !== i))}
-              aria-label={`Remove ${item.name || `item ${i + 1}`}`}
+              aria-label={t('editor.removeItem')(
+                item.name || t('editor.itemFallback')(String(i + 1)),
+              )}
               className="text-muted-foreground hover:text-foreground shrink-0"
             >
               <X size={15} />
@@ -209,15 +216,35 @@ export function FoodEditor({
           <Input
             value={item.quantity}
             onChange={(e) => patch(i, { quantity: e.target.value })}
-            aria-label={`Item ${i + 1} quantity`}
-            placeholder="how much"
+            aria-label={t('editor.itemQuantity')(String(i + 1))}
+            placeholder={t('editor.howMuch')}
           />
 
           <div className="grid grid-cols-4 gap-1.5">
-            <Cell value={item.kcal} onChange={(v) => patch(i, { kcal: v })} label={`Item ${i + 1} calories`} unit="kcal" />
-            <Cell value={item.protein} onChange={(v) => patch(i, { protein: v })} label={`Item ${i + 1} protein`} unit="P" />
-            <Cell value={item.carbs} onChange={(v) => patch(i, { carbs: v })} label={`Item ${i + 1} carbs`} unit="C" />
-            <Cell value={item.fat} onChange={(v) => patch(i, { fat: v })} label={`Item ${i + 1} fat`} unit="F" />
+            <Cell
+              value={item.kcal}
+              onChange={(v) => patch(i, { kcal: v })}
+              label={t('editor.itemCalories')(String(i + 1))}
+              unit="kcal"
+            />
+            <Cell
+              value={item.protein}
+              onChange={(v) => patch(i, { protein: v })}
+              label={t('editor.itemProtein')(String(i + 1))}
+              unit={t('macro.proteinInitial')}
+            />
+            <Cell
+              value={item.carbs}
+              onChange={(v) => patch(i, { carbs: v })}
+              label={t('editor.itemCarbs')(String(i + 1))}
+              unit={t('macro.carbsInitial')}
+            />
+            <Cell
+              value={item.fat}
+              onChange={(v) => patch(i, { fat: v })}
+              label={t('editor.itemFat')(String(i + 1))}
+              unit={t('macro.fatInitial')}
+            />
           </div>
         </div>
       ))}
@@ -228,7 +255,7 @@ export function FoodEditor({
         className="text-footnote text-muted-foreground hover:text-foreground flex items-center gap-1.5 font-semibold"
       >
         <Plus size={13} />
-        another item
+        {t('editor.anotherItem')}
       </button>
 
       {error !== null && <p className="text-footnote text-destructive font-semibold">{error}</p>}
@@ -239,13 +266,16 @@ export function FoodEditor({
           onClick={onCancel}
           className="text-footnote text-muted-foreground hover:text-foreground font-semibold"
         >
-          Cancel
+          {t('common.cancel')}
         </button>
         <Button onClick={() => void save()} disabled={saving} className="gap-1.5 rounded-full">
           {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
           {saving
-            ? 'Saving…'
-            : `${creating ? 'Log' : 'Save'} · ${Math.round(total).toLocaleString()} kcal`}
+            ? t('setup.saving')
+            : t('editor.saveTotal')(
+                creating ? t('editor.log') : t('common.save'),
+                formatNumber(Math.round(total), locale),
+              )}
         </Button>
       </div>
     </Shell>

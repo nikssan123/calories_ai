@@ -65,7 +65,8 @@ function SpendLink({ token }: { token: string }) {
     })();
   }, [token, authenticated, refresh]);
 
-  if (state === 'working') return <AuthScreen title="Confirming…" subtitle="One moment." />;
+  if (state === 'working')
+    return <AuthScreen title={t('verify.confirming')} subtitle={t('verify.oneMoment')} />;
 
   if (state === 'failed') {
     return (

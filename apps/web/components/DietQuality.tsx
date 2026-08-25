@@ -1,7 +1,8 @@
 'use client';
 
 import type { DayQuality } from '@ct/shared';
-import { QUALITY_COVERAGE_FLOOR } from '@ct/shared';
+import { QUALITY_COVERAGE_FLOOR, formatNumber } from '@ct/shared';
+import { useLocale, useT, type StringKey } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 /**
@@ -22,11 +23,11 @@ import { cn } from '@/lib/utils';
  */
 
 const ROWS = [
-  { key: 'fiber_g', label: 'Fiber', emoji: '🌱', unit: 'g' },
-  { key: 'sodium_mg', label: 'Sodium', emoji: '🧂', unit: 'mg' },
-  { key: 'sat_fat_g', label: 'Sat fat', emoji: '🧈', unit: 'g' },
-  { key: 'sugar_g', label: 'Sugar', emoji: '🍬', unit: 'g' },
-] as const;
+  { key: 'fiber_g', label: 'macro.fiber', emoji: '🌱', unit: 'g' },
+  { key: 'sodium_mg', label: 'nutrient.sodium', emoji: '🧂', unit: 'mg' },
+  { key: 'sat_fat_g', label: 'nutrient.satFat', emoji: '🧈', unit: 'g' },
+  { key: 'sugar_g', label: 'nutrient.sugar', emoji: '🍬', unit: 'g' },
+] as const satisfies readonly { key: string; label: StringKey; emoji: string; unit: string }[];
 
 export function DietQuality({
   quality,
@@ -42,6 +43,7 @@ export function DietQuality({
   flush?: boolean;
   className?: string;
 }) {
+  const t = useT();
   // Nothing estimated means nothing to say. An empty panel of dashes would
   // invite the reading that today had no fiber in it.
   if (ROWS.every((row) => quality[row.key] === null)) return null;
@@ -51,9 +53,11 @@ export function DietQuality({
   return (
     <section className={cn('space-y-2', className)}>
       <header className="flex items-baseline justify-between gap-3 px-1.5">
-        <h2 className="text-eyebrow text-muted-foreground">🥦&nbsp;&nbsp;Diet quality</h2>
+        <h2 className="text-eyebrow text-muted-foreground">{t('quality.title')}</h2>
         {partial && (
-          <span className="text-footnote text-muted-foreground font-semibold">partly measured</span>
+          <span className="text-footnote text-muted-foreground font-semibold">
+            {t('quality.partlyMeasured')}
+          </span>
         )}
       </header>
 
@@ -94,6 +98,8 @@ function QualityTrack({
   value: number | null;
   target: { value: number; direction: 'floor' | 'ceiling' };
 }) {
+  const t = useT();
+  const locale = useLocale();
   const floor = target.direction === 'floor';
   const pct = value === null ? 0 : Math.min(100, (value / target.value) * 100);
 
@@ -116,23 +122,25 @@ function QualityTrack({
           {row.emoji}
         </span>
         <span className="text-footnote text-muted-foreground truncate font-semibold">
-          {row.label}
+          {t(row.label)}
         </span>
       </div>
 
       <div className="flex items-baseline gap-1">
         {value === null ? (
-          <span className="text-footnote text-muted-foreground font-semibold">not estimated</span>
+          <span className="text-footnote text-muted-foreground font-semibold">
+            {t('quality.notEstimated')}
+          </span>
         ) : (
           <>
             <span
               className="text-figure text-footnote leading-none"
               style={marked && floor ? { color: 'var(--calories-text)' } : undefined}
             >
-              {Math.round(value).toLocaleString()}
+              {formatNumber(Math.round(value), locale)}
             </span>
             <span className="tnum text-footnote text-muted-foreground font-semibold">
-              /{target.value.toLocaleString()}
+              /{formatNumber(target.value, locale)}
               {row.unit}
             </span>
           </>

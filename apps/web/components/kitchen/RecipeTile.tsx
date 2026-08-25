@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Bookmark, Check, Clock, UtensilsCrossed } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { listWords } from '@ct/shared/words';
+import { useLocale, useT } from '@/lib/i18n';
 
 /**
  * One recipe, as something to choose between.
@@ -78,6 +79,8 @@ export function RecipeTile({
   saved: boolean;
   onToggleSave: () => void;
 }) {
+  const t = useT();
+  const locale = useLocale();
   return (
     <article
       className={cn(
@@ -128,19 +131,19 @@ export function RecipeTile({
           {fitsToday && (
             <p className="text-footnote inline-flex items-center gap-1 font-semibold text-[var(--calories-text)]">
               <Check size={13} strokeWidth={3} />
-              Fits what&rsquo;s left of today
+              {t('recipe.fitsToday')}
             </p>
           )}
 
           {have && have.length > 0 && (
             <p className="text-footnote line-clamp-1 text-[var(--calories-text)]">
-              Uses your {listWords(have)}
+              {t('recipe.usesYour')(listWords(have, locale))}
             </p>
           )}
 
           {needs && needs.length > 0 && (
             <p className="text-footnote line-clamp-1 text-[var(--fat-text)]">
-              You&rsquo;d need {listWords(needs)}
+              {t('recipe.youdNeed')(listWords(needs, locale))}
             </p>
           )}
 
@@ -148,12 +151,12 @@ export function RecipeTile({
             {typeof minutes === 'number' && (
               <span className="inline-flex items-center gap-1">
                 <Clock size={11} />
-                {minutes} min
+                {t('brief.minutes')(minutes)}
               </span>
             )}
             <span className="inline-flex items-center gap-1">
               <UtensilsCrossed size={11} />
-              {steps} {steps === 1 ? 'step' : 'steps'}
+              {t('recipe.steps')(steps)}
             </span>
           </div>
         </div>
@@ -172,7 +175,7 @@ export function RecipeTile({
         type="button"
         onClick={onToggleSave}
         aria-pressed={saved}
-        aria-label={saved ? `Unsave ${title}` : `Save ${title}`}
+        aria-label={saved ? t('recipe.unsaveNamed')(title) : t('recipe.saveNamed')(title)}
         className={cn(
           'absolute top-2.5 right-2.5 z-20 flex size-9 items-center justify-center rounded-full',
           photo ? 'material backdrop-blur' : 'bg-card border-border border-2',

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';
 import type { ChatAction, ChatCard as Card, ExerciseEntry, FoodEntry, Locale, UnitSystem } from '@ct/shared';
-import { bodyWeightToKg, bodyWeightUnit, formatBodyWeight, formatDay, formatDistance, formatWeightDelta, loadUnit, toBodyWeight, toLoad } from '@ct/shared';
+import { bodyWeightToKg, bodyWeightUnit, formatBodyWeight, formatDay, formatDistance, formatNumber, formatWeightDelta, loadUnit, toBodyWeight, toLoad, weekdayName } from '@ct/shared';
 import { useUnits } from '@/lib/units';
 import { RecipeCard } from '@/components/kitchen/RecipeCard';
 import { api } from '@/lib/api';
@@ -15,7 +15,7 @@ import { WorkoutCard } from '@/components/workout/WorkoutCard';
 import { Sparkline } from '@/components/Sparkline';
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 import { cn } from '@/lib/utils';
-import { useLocale } from '@/lib/i18n';
+import { useLocale, useT, type StringKey } from '@/lib/i18n';
 
 /**
  * The visual half of a turn — and the thing this app should be recognised by.
@@ -88,6 +88,7 @@ export function ChatActionCard({
  * not there.
  */
 function Removed({ children }: { children: React.ReactNode }) {
+  const t = useT();
   return (
     <div className="flex flex-col gap-1.5">
       <div className="pointer-events-none opacity-45">{children}</div>
@@ -97,7 +98,7 @@ function Removed({ children }: { children: React.ReactNode }) {
           className="size-2 shrink-0 rounded-full"
           style={{ background: 'var(--destructive)' }}
         />
-        <span className="text-footnote text-muted-foreground font-semibold">Removed</span>
+        <span className="text-footnote text-muted-foreground font-semibold">{t('chat.removed')}</span>
       </div>
     </div>
   );
@@ -243,6 +244,8 @@ function RecipesCard({ card }: { card: Extract<Card, { type: 'recipes' }> }) {
  * screen — which is where swapping and cooking actually live.
  */
 function PlanCard({ card }: { card: Extract<Card, { type: 'plan' }> }) {
+  const t = useT();
+  const locale = useLocale();
   const router = useRouter();
   const planned = card.nights.filter((night) => night.title !== null);
 
@@ -251,13 +254,13 @@ function PlanCard({ card }: { card: Extract<Card, { type: 'plan' }> }) {
       type="button"
       onClick={() => router.push('/plan')}
       className="w-full text-left"
-      aria-label="Open the week's plan"
+      aria-label={t('chat.openWeekPlan')}
     >
       <Shell className="transition-transform active:scale-[0.99]">
         <div className="flex items-baseline justify-between gap-3">
-          <p className="text-body font-bold">This week&rsquo;s dinners</p>
+          <p className="text-body font-bold">{t('chat.thisWeeksDinners')}</p>
           <span className="text-footnote text-muted-foreground shrink-0 font-semibold">
-            {planned.length} night{planned.length === 1 ? '' : 's'}
+            {t('chat.nights')(planned.length)}
           </span>
         </div>
 
@@ -265,7 +268,7 @@ function PlanCard({ card }: { card: Extract<Card, { type: 'plan' }> }) {
           {card.nights.map((night) => (
             <li key={night.slot_id} className="flex items-baseline gap-2.5">
               <span className="text-footnote text-muted-foreground w-9 shrink-0 font-bold uppercase">
-                {night.weekday.slice(0, 3)}
+                {weekdayName(WEEKDAY_INDEX[night.weekday] ?? 0, locale, 'short')}
               </span>
               <span
                 className={cn(
@@ -276,11 +279,11 @@ function PlanCard({ card }: { card: Extract<Card, { type: 'plan' }> }) {
                   night.cooked && 'text-muted-foreground line-through',
                 )}
               >
-                {night.title ?? 'Nothing planned'}
+                {night.title ?? t('chat.nothingPlanned')}
               </span>
               {night.kcal !== null && (
                 <span className="tnum text-footnote text-muted-foreground shrink-0 font-bold">
-                  {night.kcal.toLocaleString()}
+                  {formatNumber(night.kcal, locale)}
                 </span>
               )}
             </li>
@@ -291,11 +294,11 @@ function PlanCard({ card }: { card: Extract<Card, { type: 'plan' }> }) {
   );
 }
 
-const MEAL_LABEL: Record<string, string> = {
-  breakfast: 'Breakfast',
-  lunch: 'Lunch',
-  dinner: 'Dinner',
-  snack: 'Snack',
+const MEAL_LABEL: Record<string, StringKey> = {
+  breakfast: 'meal.breakfast',
+  lunch: 'meal.lunch',
+  dinner: 'meal.dinner',
+  snack: 'meal.snackOne',
 };
 
 function Shell({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -388,11 +391,28 @@ function FoodReceipt({
   today?: string;
   onEdit: () => void;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const approx = card.confidence !== 'high';
   const macros = [
-    { value: card.protein_g, label: 'P', color: 'var(--protein)', text: 'var(--protein-text)' },
-    { value: card.carbs_g, label: 'C', color: 'var(--carbs)', text: 'var(--carbs-text)' },
-    { value: card.fat_g, label: 'F', color: 'var(--fat)', text: 'var(--fat-text)' },
+    {
+      value: card.protein_g,
+      label: t('macro.proteinInitial'),
+      color: 'var(--protein)',
+      text: 'var(--protein-text)',
+    },
+    {
+      value: card.carbs_g,
+      label: t('macro.carbsInitial'),
+      color: 'var(--carbs)',
+      text: 'var(--carbs-text)',
+    },
+    {
+      value: card.fat_g,
+      label: t('macro.fatInitial'),
+      color: 'var(--fat)',
+      text: 'var(--fat-text)',
+    },
   ];
   // Macro split by energy, not by grams — 30g of fat is more than twice the
   // calories of 30g of carbohydrate, so a gram-weighted bar misreads the meal.
@@ -411,14 +431,14 @@ function FoodReceipt({
           <div className="min-w-0">
             <p className="truncate text-body font-bold">{card.description}</p>
             <p className="text-footnote text-muted-foreground font-semibold">
-              {MEAL_LABEL[card.meal] ?? card.meal}
-              {card.confidence === 'low' && ' · rough estimate'}
+              {MEAL_LABEL[card.meal] ? t(MEAL_LABEL[card.meal]!) : card.meal}
+              {card.confidence === 'low' && ` · ${t('today.roughEstimate')}`}
             </p>
           </div>
         </div>
         <span className="text-figure shrink-0 text-body">
           {approx && '~'}
-          {card.kcal.toLocaleString()}
+          {formatNumber(card.kcal, locale)}
           <span className="text-muted-foreground text-footnote font-semibold"> kcal</span>
         </span>
       </div>
@@ -493,6 +513,7 @@ function DayProgress({
   today?: string;
 }) {
   const locale = useLocale();
+  const t = useT();
   const target = Math.max(1, Math.round(day.target_kcal));
   const before = Math.max(0, Math.round(day.kcal_before));
   // Defensive: a card written before a deletion elsewhere could otherwise ask
@@ -581,8 +602,8 @@ function DayProgress({
         {' · '}
         <span className={cn('font-bold', over && 'text-foreground')}>
           {over
-            ? `${Math.abs(remaining).toLocaleString()} over`
-            : `${remaining.toLocaleString()} left`}
+            ? t('journal.over')(formatNumber(Math.abs(remaining), locale))
+            : t('journal.left')(formatNumber(remaining, locale))}
         </span>
         {dayWord(day.local_date, locale, today) && ` ${dayWord(day.local_date, locale, today)}`}
       </div>
@@ -645,6 +666,8 @@ function ExerciseCard({
   card: Extract<Card, { type: 'exercise' }>;
   onLogged?: () => void;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const units = useUnits();
   const [edited, setEdited] = useState<Extract<Card, { type: 'exercise' }> | null>(null);
   const [editing, setEditing] = useState(false);
@@ -695,14 +718,14 @@ function ExerciseCard({
           <p className="min-w-0 flex-1 truncate text-body font-bold">{shown.description}</p>
         </div>
         <span className="text-figure shrink-0 text-body text-[var(--exercise-text)]">
-          −{shown.kcal_burned.toLocaleString()}
+          −{formatNumber(shown.kcal_burned, locale)}
           <span className="text-muted-foreground text-footnote font-semibold"> kcal</span>
         </span>
       </div>
       <p className="text-footnote text-muted-foreground mt-1.5 font-medium">
-        {detail.length > 0 ? detail.join(' · ') : 'Burn is an estimate'}
+        {detail.length > 0 ? detail.join(' · ') : t('chat.burnEstimate')}
         {/* §9 restated where the burn is: it is not a credit to spend. */}
-        {' · not added to your budget'}
+        {t('chat.notAddedToBudget')}
       </p>
 
       {/*
@@ -714,7 +737,7 @@ function ExerciseCard({
       <button
         type="button"
         onClick={() => setEditing(true)}
-        aria-label={`Edit ${shown.description}`}
+        aria-label={t('chat.editNamed')(shown.description)}
         className="text-footnote text-muted-foreground hover:text-foreground mt-1.5 ml-auto block font-semibold"
       >
         Edit
@@ -730,7 +753,7 @@ function ExerciseCard({
       */}
       {shown.sets.length > 0 && (
         <div className="mt-2.5 space-y-1">
-          {groupSets(shown.sets, units).map((group) => (
+          {groupSets(shown.sets, units, t).map((group) => (
             <div key={group.name} className="flex items-baseline justify-between gap-3">
               <span className="text-footnote min-w-0 flex-1 truncate">{group.name}</span>
               <span className="text-footnote text-muted-foreground shrink-0 tabular-nums">
@@ -755,7 +778,15 @@ function ExerciseCard({
  * The load is converted per distinct value rather than after joining, so that
  * "80/85 kg" becomes "176/187 lb" and not a rounded pair that collides.
  */
-function groupSets(sets: Extract<Card, { type: 'exercise' }>['sets'], units: UnitSystem) {
+/**
+ * Not a component, so it takes `t` rather than calling the hook. Three of the
+ * four branches print a word.
+ */
+function groupSets(
+  sets: Extract<Card, { type: 'exercise' }>['sets'],
+  units: UnitSystem,
+  t: ReturnType<typeof useT>,
+) {
   const byName = new Map<string, typeof sets>();
   for (const set of sets) {
     byName.set(set.name, [...(byName.get(set.name) ?? []), set]);
@@ -770,14 +801,14 @@ function groupSets(sets: Extract<Card, { type: 'exercise' }>['sets'], units: Uni
       const same = new Set(reps).size === 1;
       const count = same ? `${reps.length} × ${reps[0]}` : reps.join(', ');
       const loads = weights.map((w) => toLoad(w, units));
-      const load = loads.length > 0 ? ` at ${loads.join('/')}${loadUnit(units)}` : '';
+      const load = loads.length > 0 ? t('chat.atLoad')(`${loads.join('/')}${loadUnit(units)}`) : '';
       return { name, detail: `${count}${load}` };
     }
     if (seconds.length > 0) {
       const total = seconds.reduce((a, b) => a + b, 0);
-      return { name, detail: `${Math.round(total / 60)} min` };
+      return { name, detail: t('exercise.minutes')(String(Math.round(total / 60))) };
     }
-    return { name, detail: `${group.length} sets` };
+    return { name, detail: t('chat.setsCount')(group.length) };
   });
 }
 
@@ -800,6 +831,7 @@ function WeightCard({
   card: Extract<Card, { type: 'weight' }>;
   onLogged?: () => void;
 }) {
+  const t = useT();
   const units = useUnits();
   const [weight, setWeight] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
@@ -812,7 +844,7 @@ function WeightCard({
   async function save() {
     const typed = Number(draft);
     if (!Number.isFinite(typed) || typed <= 0) {
-      setError('That is not a weight.');
+      setError(t('chat.notAWeight'));
       return;
     }
     setSaving(true);
@@ -841,7 +873,7 @@ function WeightCard({
           <Input
             value={draft}
             onChange={(e) => setDraft(e.target.value.replace(/[^0-9.]/g, ''))}
-            aria-label="Weight"
+            aria-label={t('today.weight')}
             inputMode="decimal"
             autoFocus
             className="text-figure flex-1"
@@ -862,10 +894,10 @@ function WeightCard({
             }}
             className="text-footnote text-muted-foreground hover:text-foreground font-semibold"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <Button onClick={() => void save()} disabled={saving} className="gap-1.5 rounded-full">
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? t('setup.saving') : t('common.save')}
           </Button>
         </div>
       </Shell>
@@ -885,7 +917,7 @@ function WeightCard({
             )}
           >
             {card.change_7d_kg > 0 ? '+' : '−'}
-            {formatWeightDelta(Math.abs(card.change_7d_kg), units, false)} this week
+            {formatWeightDelta(Math.abs(card.change_7d_kg), units, false)} {t('progress.thisWeek')}
           </span>
         )}
       </div>
@@ -905,7 +937,7 @@ function WeightCard({
             setDraft(String(toBodyWeight(shown, units)));
             setEditing(true);
           }}
-          aria-label="Edit this weigh-in"
+          aria-label={t('chat.editWeighIn')}
           className="text-footnote text-muted-foreground hover:text-foreground mt-1.5 ml-auto block font-semibold"
         >
           Edit
@@ -923,6 +955,7 @@ const METRIC_COLOR: Record<string, string> = {
 };
 
 function TrendCard({ card }: { card: Extract<Card, { type: 'trend' }> }) {
+  const t = useT();
   const hasPoints = card.series.some((point) => point.average !== null);
 
   return (
@@ -952,7 +985,7 @@ function TrendCard({ card }: { card: Extract<Card, { type: 'trend' }> }) {
         // Better an empty state than an axis with one point on it pretending
         // to be a trend.
         <p className="text-footnote text-muted-foreground mt-2 font-medium">
-          Not enough logged days yet to draw a trend.
+          {t('chat.notEnoughDays')}
         </p>
       )}
 
@@ -965,23 +998,24 @@ function TrendCard({ card }: { card: Extract<Card, { type: 'trend' }> }) {
 
 function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
   const locale = useLocale();
+  const t = useT();
   const remaining = card.targets.kcal - card.consumed.kcal;
   const over = remaining < 0;
   const pct = Math.min(100, (card.consumed.kcal / Math.max(1, card.targets.kcal)) * 100);
   const macros = [
-    { key: 'protein_g', label: 'Protein', color: 'var(--protein-text)' },
-    { key: 'carbs_g', label: 'Carbs', color: 'var(--carbs-text)' },
-    { key: 'fat_g', label: 'Fat', color: 'var(--fat-text)' },
+    { key: 'protein_g', label: t('macro.protein'), color: 'var(--protein-text)' },
+    { key: 'carbs_g', label: t('macro.carbs'), color: 'var(--carbs-text)' },
+    { key: 'fat_g', label: t('macro.fat'), color: 'var(--fat-text)' },
   ] as const;
 
   return (
     <Shell>
       <div className="flex items-baseline justify-between gap-3">
         <p className="text-figure text-body">
-          {card.consumed.kcal.toLocaleString()}
+          {formatNumber(card.consumed.kcal, locale)}
           <span className="text-muted-foreground text-footnote font-semibold">
             {' '}
-            / {card.targets.kcal.toLocaleString()} kcal
+            / {formatNumber(card.targets.kcal, locale)} kcal
           </span>
         </p>
         {/* Ink, not red: over target is information, not a telling-off. */}
@@ -992,8 +1026,8 @@ function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
           )}
         >
           {over
-            ? `${Math.abs(remaining).toLocaleString()} over`
-            : `${remaining.toLocaleString()} left`}
+            ? t('journal.over')(formatNumber(Math.abs(remaining), locale))
+            : t('journal.left')(formatNumber(remaining, locale))}
         </span>
       </div>
 
@@ -1057,6 +1091,7 @@ function ReviewCard({
   prose?: string;
 }) {
   const locale = useLocale();
+  const t = useT();
   const units = useUnits();
   const [open, setOpen] = useState(false);
 
@@ -1083,7 +1118,7 @@ function ReviewCard({
   return (
     <Shell>
       <div className="flex items-baseline justify-between gap-3">
-        <p className="text-body font-bold">Last week</p>
+        <p className="text-body font-bold">{t('chat.lastWeek')}</p>
         <span className="text-footnote text-muted-foreground shrink-0 font-semibold">
           {formatDate(card.week_start, locale)} – {formatDate(card.week_end, locale)}
         </span>
@@ -1093,7 +1128,11 @@ function ReviewCard({
         {week.map((day) => (
           <div
             key={day.date}
-            title={day.kcal === null ? 'Nothing logged' : `${day.kcal.toLocaleString()} kcal`}
+            title={
+              day.kcal === null
+                ? t('chat.nothingLogged')
+                : t('chat.kcalTitle')(formatNumber(day.kcal, locale))
+            }
             className={cn(
               'text-footnote flex h-[30px] flex-1 items-center justify-center rounded-[9px] border-2 font-bold',
               day.hit
@@ -1108,35 +1147,43 @@ function ReviewCard({
                 : undefined
             }
           >
-            {WEEKDAY_INITIALS[new Date(`${day.date}T00:00:00Z`).getUTCDay()]}
+            {weekdayName(new Date(`${day.date}T00:00:00Z`).getUTCDay(), locale, 'narrow')}
           </div>
         ))}
       </div>
       <p className="text-footnote text-muted-foreground mt-2">
         {card.days_logged === 0
-          ? 'Nothing logged this week.'
-          : `${card.days_logged} day${card.days_logged === 1 ? '' : 's'} logged, ${card.days_on_target} within 10% of target.`}
+          ? t('chat.nothingLoggedThisWeek')
+          : t('chat.weekSummary')(
+              t('progress.days')(card.days_logged),
+              String(card.days_on_target),
+            )}
       </p>
 
       <div className="mt-3.5 flex gap-3">
         <Figure
-          value={card.mean_kcal === null ? '—' : Math.round(card.mean_kcal).toLocaleString()}
+          value={card.mean_kcal === null ? '—' : formatNumber(Math.round(card.mean_kcal), locale)}
           unit=" kcal"
-          label={`a day, against ${card.target_kcal.toLocaleString()}`}
+          label={t('chat.aDayAgainst')(formatNumber(card.target_kcal, locale))}
         />
         {card.weight_change_kg !== null ? (
-          <Figure value={formatWeightDelta(card.weight_change_kg, units)} label="on the scale" />
+          <Figure
+            value={formatWeightDelta(card.weight_change_kg, units)}
+            label={t('chat.onTheScale')}
+          />
         ) : card.exercise_sessions > 0 ? (
           <Figure
-            value={card.exercise_kcal.toLocaleString()}
+            value={formatNumber(card.exercise_kcal, locale)}
             unit=" kcal"
-            label={`burned over ${card.exercise_sessions} session${card.exercise_sessions === 1 ? '' : 's'}`}
+            label={t('chat.burnedOver')(t('exercise.sessionsCount')(card.exercise_sessions))}
           />
         ) : (
           <Figure
             value={card.mean_protein_g === null ? '—' : `${Math.round(card.mean_protein_g)}`}
             unit=" g"
-            label={`protein a day, against ${Math.round(card.target_protein_g)}`}
+            label={t('chat.proteinADayAgainst')(
+              formatNumber(Math.round(card.target_protein_g), locale),
+            )}
           />
         )}
       </div>
@@ -1145,11 +1192,11 @@ function ReviewCard({
         <div className="bg-muted border-border mt-3.5 rounded-2xl border-2 px-3.5 py-3">
           <div className="tnum text-body flex items-center gap-2 font-bold">
             <span className="text-muted-foreground">
-              {card.target_change.from_kcal.toLocaleString()}
+              {formatNumber(card.target_change.from_kcal, locale)}
             </span>
             <ArrowRight size={14} className="text-muted-foreground" />
             <span className="text-[var(--calories-text)]">
-              {card.target_change.to_kcal.toLocaleString()} kcal
+              {t('chat.kcalTitle')(formatNumber(card.target_change.to_kcal, locale))}
             </span>
           </div>
           <p className="text-footnote text-muted-foreground mt-1.5">
@@ -1174,7 +1221,7 @@ function ReviewCard({
           onClick={() => setOpen((was) => !was)}
           className="text-footnote mt-2.5 font-bold text-[var(--calories-text)]"
         >
-          {open ? 'Show less' : `Read the rest (${rest} more)`}
+          {open ? t('chat.showLess') : t('chat.readTheRest')(String(rest))}
         </button>
       )}
     </Shell>
@@ -1194,7 +1241,20 @@ function Figure({ value, unit, label }: { value: string; unit?: string; label: s
   );
 }
 
-const WEEKDAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const;
+/**
+ * The plan's `weekday` is an English name off the wire, and the strip needs a
+ * number to hand `weekdayName`. Not a display table — every string in it is an
+ * API value, and none of it is drawn.
+ */
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sunday: 0,
+  Monday: 1,
+  Tuesday: 2,
+  Wednesday: 3,
+  Thursday: 4,
+  Friday: 5,
+  Saturday: 6,
+};
 
 /** Calendar arithmetic on an ISO date, without dragging a timezone into it. */
 function addDays(date: string, days: number): string {

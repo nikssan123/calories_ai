@@ -10,10 +10,12 @@ import {
   GRAMS_PER_OZ,
   SERVING_STEPS,
   formatMass,
+  formatNumber,
   formatServings,
   massUnit,
 } from '@ct/shared';
 import { useUnits } from '@/lib/units';
+import { useLocale, useT } from '@/lib/i18n';
 import { api } from '@/lib/api';
 import { canOpenCamera, decodeBarcode, decodeBarcodeFromFile } from '@/lib/barcode';
 import { PHOTO_ACCEPT, preparePhoto, type PreparedPhoto } from '@/lib/image';
@@ -67,6 +69,7 @@ export function BarcodeScanner({
    */
   onLabelPhoto: (photo: PreparedPhoto) => void;
 }) {
+  const t = useT();
   const [stage, setStage] = useState<Stage>({ at: 'scanning' });
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -192,7 +195,7 @@ export function BarcodeScanner({
       // those artifacts eat first.
       const code = await decodeBarcodeFromFile(file);
       if (!code) {
-        toast.error("I couldn't read a barcode in that — try filling more of the frame.");
+        toast.error(t('barcode.unreadable'));
         return;
       }
       await resolve(code);
@@ -209,7 +212,7 @@ export function BarcodeScanner({
 
     const prepared = await preparePhoto(file);
     if (!prepared) {
-      toast.error("I can't read that image format — a JPEG or PNG will work.");
+      toast.error(t('barcode.badFormat'));
       return;
     }
     onOpenChange(false);
@@ -238,11 +241,9 @@ export function BarcodeScanner({
       <Dialog open={open} onOpenChange={onOpenChange}>
         {open && (
           <DialogContent
-            title={stage.at === 'found' ? 'Is this it?' : 'Scan the packet'}
+            title={stage.at === 'found' ? t('barcode.isThisIt') : t('barcode.scanThePacket')}
             description={
-              stage.at === 'found'
-                ? 'Say how much of it you had.'
-                : 'Point at the barcode — the label comes back.'
+              stage.at === 'found' ? t('barcode.sayHowMuch') : t('barcode.pointAtIt')
             }
           >
             {stage.at === 'found' ? (
@@ -282,10 +283,7 @@ export function BarcodeScanner({
                       ) : (
                         <>
                           <ScanBarcode size={26} />
-                          <p className="text-footnote">
-                            No camera here — photograph the barcode instead and I&rsquo;ll read it
-                            off the picture.
-                          </p>
+                          <p className="text-footnote">{t('barcode.noCamera')}</p>
                         </>
                       )}
                     </div>
@@ -306,7 +304,7 @@ export function BarcodeScanner({
                   className="mt-3 h-11 w-full gap-2 rounded-full"
                 >
                   {reading ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
-                  {reading ? 'Reading it…' : 'Photograph it instead'}
+                  {reading ? t('barcode.reading') : t('barcode.photographInstead')}
                 </Button>
               </div>
             )}
@@ -396,6 +394,8 @@ function PortionCard({
   onLogged: (message: ChatMessage) => void;
   onRescan: () => void;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const units = useUnits();
   const basis = BASIS[units];
 
@@ -434,7 +434,7 @@ function PortionCard({
     servingDesc === null
       ? null
       : servingPill === servingDesc
-        ? `${servingGrams} a serving`
+        ? t('barcode.aServing')(servingGrams)
         : servingDesc;
 
   async function log() {
@@ -447,7 +447,9 @@ function PortionCard({
         product.barcode,
         mode === 'serving' ? { servings } : { grams: eatenGrams },
       );
-      toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
+      toast.success(
+        t('recipe.logged')(entry.description, formatNumber(Math.round(entry.kcal), locale)),
+      );
       onLogged(message);
     } catch (e) {
       toast.error((e as Error).message);
@@ -469,9 +471,17 @@ function PortionCard({
         <span className="text-figure text-foreground">
           {Math.round(product.kcal_100g * share)} kcal
         </span>
-        <Macro label="P" value={product.protein_100g * share} color="var(--protein)" />
-        <Macro label="C" value={product.carbs_100g * share} color="var(--carbs)" />
-        <Macro label="F" value={product.fat_100g * share} color="var(--fat)" />
+        <Macro
+          label={t('macro.proteinInitial')}
+          value={product.protein_100g * share}
+          color="var(--protein)"
+        />
+        <Macro
+          label={t('macro.carbsInitial')}
+          value={product.carbs_100g * share}
+          color="var(--carbs)"
+        />
+        <Macro label={t('macro.fatInitial')} value={product.fat_100g * share} color="var(--fat)" />
         <span className="tnum">{formatMass(eatenGrams, units)}</span>
       </div>
 
@@ -501,13 +511,13 @@ function PortionCard({
           value="custom"
           className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-9 min-w-0 flex-1 rounded-full px-2 text-footnote font-bold transition-colors"
         >
-          <span className="truncate">Weigh it</span>
+          <span className="truncate">{t('barcode.weighIt')}</span>
         </ToggleGroupItem>
       </ToggleGroup>
 
       {mode === 'serving' && (
         <Stepper
-          label="servings"
+          label={t('barcode.servings')}
           note={servingNote}
           value={servings}
           onChange={setServings}
@@ -517,7 +527,7 @@ function PortionCard({
       )}
       {mode === 'custom' && (
         <Stepper
-          label="weighed"
+          label={t('barcode.weighed')}
           suffix={massUnit(units)}
           value={weighed}
           onChange={setWeighed}
@@ -534,7 +544,9 @@ function PortionCard({
         className="h-11 w-full gap-2 rounded-full"
       >
         {logging && <Loader2 size={15} className="animate-spin" />}
-        {logging ? 'Logging…' : `I ate this · ${Math.round(product.kcal_100g * share)} kcal`}
+        {logging
+          ? t('recipe.logging')
+          : t('recipe.iAteThis')(formatNumber(Math.round(product.kcal_100g * share), locale))}
       </Button>
 
       <div className="text-footnote text-muted-foreground flex items-center justify-between gap-3">
@@ -551,17 +563,17 @@ function PortionCard({
             rel="noreferrer"
             className="hover:text-foreground underline underline-offset-2"
           >
-            {product.source === 'off' ? 'Data from Open Food Facts' : 'Data from USDA FoodData Central'}
+            {product.source === 'off' ? t('barcode.sourceOff') : t('barcode.sourceUsdaLong')}
           </a>
         ) : (
-          <span>{product.source === 'off' ? 'Data from Open Food Facts' : 'Data from USDA'}</span>
+          <span>{product.source === 'off' ? t('barcode.sourceOff') : t('barcode.sourceUsda')}</span>
         )}
         <button
           type="button"
           onClick={onRescan}
           className="hover:text-foreground shrink-0 font-semibold"
         >
-          Wrong packet?
+          {t('barcode.wrongPacket')}
         </button>
       </div>
     </div>
@@ -583,22 +595,22 @@ function Missed({
   onPhotograph: () => void;
   onRescan: () => void;
 }) {
+  const t = useT();
   return (
     <div className="space-y-3.5 p-4">
       <div className="text-center">
         <span aria-hidden className="mb-2 block text-[36px] leading-none">
           🔎
         </span>
-        <h3 className="text-body font-semibold">Couldn&rsquo;t find it</h3>
+        <h3 className="text-body font-semibold">{t('barcode.notFound')}</h3>
         <p className="text-muted-foreground mt-1 text-body leading-snug">
-          Nobody has catalogued that one yet — plenty of own-brands never are. Snap the nutrition
-          panel instead and I&rsquo;ll read it off the label.
+          {t('barcode.notFoundBody')}
         </p>
       </div>
 
       <Button onClick={onPhotograph} className="h-11 w-full gap-2 rounded-full">
         <ImageIcon size={16} />
-        Photograph the label
+        {t('barcode.photographLabel')}
       </Button>
       <Button
         variant="secondary"
@@ -606,7 +618,7 @@ function Missed({
         className="h-11 w-full gap-2 rounded-full"
       >
         <ScanBarcode size={16} />
-        Scan a different packet
+        {t('barcode.scanDifferent')}
       </Button>
     </div>
   );
@@ -662,6 +674,7 @@ function Stepper({
   ladder?: number[];
   format?: (value: number) => string;
 }) {
+  const t = useT();
   const rung = ladder ? nearestRung(ladder, value) : -1;
 
   /*
@@ -704,7 +717,7 @@ function Stepper({
   return (
     <div className="flex items-center justify-between gap-2">
       <div className="min-w-0">
-        <p className="text-body">How much did you have?</p>
+        <p className="text-body">{t('recipe.howMuch')}</p>
         {note && <p className="text-footnote text-muted-foreground mt-0.5">{note}</p>}
       </div>
       <div className="bg-muted border-border flex shrink-0 items-center rounded-full border-2">
@@ -712,7 +725,7 @@ function Stepper({
           type="button"
           onClick={() => move(-(step ?? 1))}
           disabled={atMin}
-          aria-label="Less"
+          aria-label={t('recipe.less')}
           className="text-muted-foreground hover:text-foreground flex size-9 items-center justify-center rounded-full text-lg font-bold disabled:opacity-40"
         >
           −
@@ -735,7 +748,7 @@ function Stepper({
               // the amount. `inputMode` gets the numeric keypad regardless.
               type="text"
               inputMode="decimal"
-              aria-label={suffix ? `How much did you have, in ${suffix}` : label}
+              aria-label={suffix ? t('barcode.howMuchIn')(suffix) : label}
               value={shown}
               onChange={(e) => {
                 const text = e.currentTarget.value;
@@ -765,7 +778,7 @@ function Stepper({
           type="button"
           onClick={() => move(step ?? 1)}
           disabled={atMax}
-          aria-label="More"
+          aria-label={t('recipe.more')}
           className="text-muted-foreground hover:text-foreground flex size-9 items-center justify-center rounded-full text-lg font-bold disabled:opacity-40"
         >
           +

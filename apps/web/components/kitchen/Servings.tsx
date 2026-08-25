@@ -1,6 +1,7 @@
 'use client';
 
 import { Minus, Plus } from 'lucide-react';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 /**
@@ -33,13 +34,14 @@ export function Servings({
   unit: string;
   className?: string;
 }) {
+  const t = useT();
   const step = (delta: number) =>
     onChange(clamp(Math.round((value + delta) / SERVING_STEP) * SERVING_STEP));
 
   return (
     <div className={cn('flex items-center justify-between gap-3', className)}>
       <div className="min-w-0">
-        <p className="text-body">How much did you have?</p>
+        <p className="text-body">{t('recipe.howMuch')}</p>
         <p className="text-footnote text-muted-foreground truncate">
           {formatServings(value)} × {unit}
         </p>
@@ -50,7 +52,7 @@ export function Servings({
           type="button"
           onClick={() => step(-SERVING_STEP)}
           disabled={value <= SERVING_STEP}
-          aria-label="Less"
+          aria-label={t('recipe.less')}
           className="text-muted-foreground hover:text-foreground flex size-9 items-center justify-center rounded-full disabled:opacity-40"
         >
           <Minus size={15} />
@@ -58,7 +60,7 @@ export function Servings({
         <span
           className="text-figure w-10 text-center text-body"
           aria-live="polite"
-          aria-label={`${formatServings(value)} servings`}
+          aria-label={t('recipe.servingsCount')(formatServings(value))}
         >
           {formatServings(value)}
         </span>
@@ -66,7 +68,7 @@ export function Servings({
           type="button"
           onClick={() => step(SERVING_STEP)}
           disabled={value >= MAX_SERVINGS}
-          aria-label="More"
+          aria-label={t('recipe.more')}
           className="text-muted-foreground hover:text-foreground flex size-9 items-center justify-center rounded-full disabled:opacity-40"
         >
           <Plus size={15} />

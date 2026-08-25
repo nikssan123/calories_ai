@@ -9,6 +9,7 @@ import { AUTH_BUTTON, AUTH_FIELD, AuthScreen } from '@/components/AuthScreen';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useT } from '@/lib/i18n';
 
 /**
  * Both halves of a password reset, on one route.
@@ -39,6 +40,7 @@ export default function ResetPage() {
 /** Step one: ask for the link. */
 function RequestLink() {
   const [email, setEmail] = useState('');
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
 
@@ -61,29 +63,28 @@ function RequestLink() {
   if (sent) {
     return (
       <AuthScreen
-        title="Check your inbox"
+        title={t('reset.checkInbox')}
         subtitle={
           <>
-            If <span className="text-foreground font-medium">{email}</span> has an account, a link
-            to choose a new password is on its way. It is good for the next hour.
+            {t('reset.sentBefore')} <span className="text-foreground font-medium">{email}</span>{' '}
+            {t('reset.sentAfter')}
           </>
         }
         footer={
           <>
-            Nothing arrived?{' '}
+            {t('reset.nothingArrived')}{' '}
             <button
               type="button"
               onClick={() => setSent(false)}
               className="text-foreground font-medium"
             >
-              Try another address
+              {t('reset.tryAnother')}
             </button>
           </>
         }
       >
         <p className="text-muted-foreground text-[13px] leading-relaxed">
-          Check the spam folder before asking again — a message that arrives twice is more likely
-          to end up there for good.
+          {t('reset.spamHint')}
         </p>
       </AuthScreen>
     );
@@ -91,13 +92,13 @@ function RequestLink() {
 
   return (
     <AuthScreen
-      title="Forgot your password?"
-      subtitle="Tell us the address on your account and we'll email you a link to set a new one."
+      title={t('reset.title')}
+      subtitle={t('reset.subtitle')}
       footer={
         <>
-          Remembered it?{' '}
+          {t('reset.remembered')}{' '}
           <Link href="/login" className="text-foreground font-medium">
-            Sign in
+            {t('auth.signIn')}
           </Link>
         </>
       }
@@ -105,7 +106,7 @@ function RequestLink() {
       <form onSubmit={submit} className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="email" className="text-footnote text-muted-foreground">
-            Email
+            {t('auth.email')}
           </Label>
           <Input
             id="email"
@@ -119,7 +120,7 @@ function RequestLink() {
           />
         </div>
         <Button type="submit" disabled={busy || !email} className={AUTH_BUTTON}>
-          {busy ? 'Sending…' : 'Email me a link'}
+          {busy ? t('verify.sending') : t('reset.emailMeALink')}
         </Button>
       </form>
     </AuthScreen>
@@ -129,6 +130,7 @@ function RequestLink() {
 /** Step two: spend the link. */
 function ChooseNewPassword({ token }: { token: string }) {
   const [password, setPassword] = useState('');
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const router = useRouter();
 
@@ -150,13 +152,13 @@ function ChooseNewPassword({ token }: { token: string }) {
 
   return (
     <AuthScreen
-      title="Choose a new password"
-      subtitle="Once you save it, every device signed into this account will be signed out."
+      title={t('reset.chooseNew')}
+      subtitle={t('reset.chooseNewSubtitle')}
       footer={
         <>
-          Link expired?{' '}
+          {t('reset.linkExpired')}{' '}
           <Link href="/reset" className="text-foreground font-medium">
-            Ask for another
+            {t('reset.askAnother')}
           </Link>
         </>
       }
@@ -164,7 +166,7 @@ function ChooseNewPassword({ token }: { token: string }) {
       <form onSubmit={submit} className="space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="password" className="text-footnote text-muted-foreground">
-            New password
+            {t('reset.newPassword')}
           </Label>
           <Input
             id="password"
@@ -177,10 +179,10 @@ function ChooseNewPassword({ token }: { token: string }) {
             autoComplete="new-password"
             className={AUTH_FIELD}
           />
-          <p className="text-footnote text-muted-foreground">At least 8 characters.</p>
+          <p className="text-footnote text-muted-foreground">{t('auth.passwordHint')}</p>
         </div>
         <Button type="submit" disabled={busy || password.length < 8} className={AUTH_BUTTON}>
-          {busy ? 'Saving…' : 'Save password'}
+          {busy ? t('setup.saving') : t('reset.savePassword')}
         </Button>
       </form>
     </AuthScreen>

@@ -5,13 +5,14 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { LibraryRecipe } from '@ct/shared';
+import { formatNumber, type LibraryRecipe } from '@ct/shared';
 import { api } from '@/lib/api';
 import { RecipeReader } from '@/components/kitchen/RecipeReader';
 import { formatServings, scale, Servings } from '@/components/kitchen/Servings';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { listWords } from '@ct/shared/words';
+import { useLocale, useT } from '@/lib/i18n';
 
 /**
  * One recipe from the starter library, on its own page.
@@ -24,6 +25,8 @@ import { listWords } from '@ct/shared/words';
 export default function LibraryRecipePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const router = useRouter();
+  const t = useT();
+  const locale = useLocale();
 
   const [recipe, setRecipe] = useState<LibraryRecipe | null>(null);
   const [missing, setMissing] = useState(false);
@@ -52,7 +55,9 @@ export default function LibraryRecipePage({ params }: { params: Promise<{ slug: 
     setCooking(true);
     try {
       const entry = await api.cookLibraryRecipe(recipe.slug, { portions: servings });
-      toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
+      toast.success(
+        t('recipe.logged')(entry.description, formatNumber(Math.round(entry.kcal), locale)),
+      );
       // Back to the shelf, which re-ranks itself against the day that just
       // moved. Staying here would leave the button that was just pressed
       // sitting under the thumb, inviting a double log.
@@ -69,7 +74,7 @@ export default function LibraryRecipePage({ params }: { params: Promise<{ slug: 
     try {
       const { recipes, message } = await api.adaptLibraryRecipe(recipe.slug);
       const [adapted] = recipes;
-      if (!adapted) throw new Error('Nothing came back from that.');
+      if (!adapted) throw new Error(t('recipe.nothingCameBack'));
       if (message) toast.success(message);
       // Straight to the rework. The old card dropped it into a tab behind you
       // and left you to find it.
@@ -94,9 +99,9 @@ export default function LibraryRecipePage({ params }: { params: Promise<{ slug: 
   if (missing) {
     return (
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-16 text-center">
-        <p className="text-body font-medium">That recipe isn&rsquo;t in the library.</p>
+        <p className="text-body font-medium">{t('recipe.notInLibrary')}</p>
         <Link href="/cook" className="text-footnote mt-2 inline-block underline underline-offset-2">
-          Back to Cook
+          {t('recipe.backToCook')}
         </Link>
       </div>
     );
@@ -114,13 +119,13 @@ export default function LibraryRecipePage({ params }: { params: Promise<{ slug: 
     );
   }
 
-  const unit = recipe.serving_size ?? 'portion';
+  const unit = recipe.serving_size ?? t('recipe.portion');
 
   return (
     <RecipeReader
       backHref="/cook"
-      backLabel="Cook"
-      eyebrow="From the library"
+      backLabel={t('cook.title')}
+      eyebrow={t('recipe.fromLibrary')}
       title={recipe.title}
       summary={recipe.summary}
       photo={recipe.image_path}
@@ -129,21 +134,25 @@ export default function LibraryRecipePage({ params }: { params: Promise<{ slug: 
       carbs_g={scale(recipe.carbs_g, servings)}
       fat_g={scale(recipe.fat_g, servings)}
       servingLabel={
-        servings === 1 ? `per ${unit}` : `for ${formatServings(servings)} × ${unit}`
+        servings === 1
+          ? t('cook.per')(unit)
+          : t('recipe.forServings')(formatServings(servings), unit)
       }
       portions={recipe.portions}
       ingredients={recipe.ingredients.map((i) => ({ text: i.text, note: i.note }))}
       /* Said out loud, because a reader who has just seen per-ingredient macros
          on a generated recipe will notice they are absent here and assume
          something is broken. */
-      ingredientsNote="Measured for the finished dish, as published — so there are no per-ingredient numbers to show."
+      ingredientsNote={t('recipe.ingredientsNote')}
       steps={recipe.steps}
       saved={saved}
       onToggleSave={() => void toggleSaved()}
       footnote={
         <>
-          {recipe.source} · public domain
-          {recipe.have.length > 0 && <> · uses your {listWords(recipe.have)}</>}
+          {recipe.source} · {t('recipe.publicDomain')}
+          {recipe.have.length > 0 && (
+            <> · {t('recipe.usesYour')(listWords(recipe.have, locale)).toLocaleLowerCase(locale)}</>
+          )}
         </>
       }
       actions={
@@ -162,14 +171,18 @@ export default function LibraryRecipePage({ params }: { params: Promise<{ slug: 
               className="h-11 flex-1 gap-1.5 rounded-full px-4 sm:flex-none"
             >
               {adapting ? <Loader2 size={15} className="animate-spin" /> : <Wand2 size={15} />}
-              {adapting ? 'Reworking…' : 'Make it fit me'}
+              {adapting ? t('recipe.reworking') : t('recipe.makeItFit')}
             </Button>
             <Button
               onClick={() => void cook()}
               disabled={cooking || adapting}
               className="h-11 flex-1 rounded-full px-5 sm:flex-none"
             >
-              {cooking ? 'Logging…' : `I ate this · ${Math.round(scale(recipe.kcal, servings))}`}
+              {cooking
+                ? t('recipe.logging')
+                : t('recipe.iAteThisPlain')(
+                    formatNumber(Math.round(scale(recipe.kcal, servings)), locale),
+                  )}
             </Button>
           </div>
         </div>

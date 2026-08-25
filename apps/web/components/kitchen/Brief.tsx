@@ -3,6 +3,7 @@
 import { SlidersHorizontal } from 'lucide-react';
 import type { Meal, RecipeBrief } from '@ct/shared';
 import { Input } from '@/components/ui/input';
+import { useT, type StringKey } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 /**
@@ -26,6 +27,18 @@ import { cn } from '@/lib/utils';
 
 const MINUTES = [15, 30, 60] as const;
 const MEALS: Meal[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+
+/**
+ * The chips are the meals, so they are the meal headings the rest of the app
+ * already says. Held as keys rather than resolved here because the row is drawn
+ * from `MEALS`, and a table of keys is the shape `StringKey` exists to check.
+ */
+const MEAL_KEYS: Record<Meal, StringKey> = {
+  breakfast: 'meal.breakfast',
+  lunch: 'meal.lunch',
+  dinner: 'meal.dinner',
+  snack: 'meal.snack',
+};
 
 /**
  * How many fields are actually constraining the answer.
@@ -60,6 +73,7 @@ export function BriefToggle({
   value: RecipeBrief;
   onClick: () => void;
 }) {
+  const t = useT();
   const active = briefCount(value);
   return (
     <button
@@ -68,7 +82,7 @@ export function BriefToggle({
       className="text-footnote text-muted-foreground hover:text-foreground hover:bg-muted/60 flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 font-medium transition-colors"
     >
       <SlidersHorizontal size={13} />
-      Anything specific?
+      {t('cook.anythingSpecific')}
       {active > 0 && (
         <span className="bg-secondary border-border rounded-full border px-1.5 text-[11px] font-bold">
           {active}
@@ -85,6 +99,7 @@ export function Brief({
   value: RecipeBrief;
   onChange: (next: RecipeBrief) => void;
 }) {
+  const t = useT();
   const set = (patch: Partial<RecipeBrief>) => onChange({ ...value, ...patch });
 
   return (
@@ -103,38 +118,38 @@ export function Brief({
               htmlFor="brief-wants"
               className="text-footnote text-muted-foreground mb-1.5 block"
             >
-              Anything else?
+              {t('brief.anythingElse')}
             </label>
             <Input
               id="brief-wants"
               value={value.wants ?? ''}
               onChange={(e) => set({ wants: e.target.value || undefined })}
-              placeholder={'"one-pan", "use up the spinach", "no coriander"'}
+              placeholder={t('brief.wantsPlaceholder')}
               maxLength={300}
               className="bg-muted/60 border-border h-11 rounded-xl border-2 px-3 text-body"
             />
           </div>
 
-          <Row label="Time">
+          <Row label={t('brief.time')}>
             {MINUTES.map((m) => (
               <Chip
                 key={m}
                 on={value.minutes === m}
                 onClick={() => set({ minutes: value.minutes === m ? null : m })}
               >
-                {m} min
+                {t('brief.minutes')(m)}
               </Chip>
             ))}
           </Row>
 
-          <Row label="Meal">
+          <Row label={t('brief.meal')}>
             {MEALS.map((m) => (
               <Chip
                 key={m}
                 on={value.meal === m}
                 onClick={() => set({ meal: value.meal === m ? null : m })}
               >
-                {m}
+                {t(MEAL_KEYS[m])}
               </Chip>
             ))}
           </Row>
@@ -142,27 +157,27 @@ export function Brief({
           {/* More than one portion is batch prep: the quantities scale and the
               macros stay per portion, so cooking four and eating one logs
               exactly what it logged before. */}
-          <Row label="Cook">
+          <Row label={t('brief.cook')}>
             {[1, 2, 4].map((p) => (
               <Chip
                 key={p}
                 on={(value.portions ?? 1) === p}
                 onClick={() => set({ portions: p === 1 ? null : p })}
               >
-                {p === 1 ? 'just tonight' : `${p} portions`}
+                {p === 1 ? t('brief.justTonight') : t('brief.portions')(p)}
               </Chip>
             ))}
           </Row>
 
           <div className="flex gap-2">
             <Number
-              label="Protein at least"
+              label={t('brief.proteinAtLeast')}
               suffix="g"
               value={value.protein_min ?? null}
               onChange={(n) => set({ protein_min: n })}
             />
             <Number
-              label="Calories at most"
+              label={t('brief.caloriesAtMost')}
               suffix="kcal"
               value={value.kcal_max ?? null}
               onChange={(n) => set({ kcal_max: n })}

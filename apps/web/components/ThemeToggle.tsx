@@ -2,12 +2,13 @@
 
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { type ThemePreference, useTheme } from '@/components/ThemeSync';
+import { useT, type StringKey } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
-const OPTIONS: Array<{ value: ThemePreference; label: string; Icon: typeof Sun }> = [
-  { value: 'system', label: 'System', Icon: Monitor },
-  { value: 'light', label: 'Light', Icon: Sun },
-  { value: 'dark', label: 'Dark', Icon: Moon },
+const OPTIONS: Array<{ value: ThemePreference; label: StringKey; Icon: typeof Sun }> = [
+  { value: 'system', label: 'theme.system', Icon: Monitor },
+  { value: 'light', label: 'theme.light', Icon: Sun },
+  { value: 'dark', label: 'theme.dark', Icon: Moon },
 ];
 
 /**
@@ -16,12 +17,13 @@ const OPTIONS: Array<{ value: ThemePreference; label: string; Icon: typeof Sun }
  * pins you to whichever you last tapped and stops tracking sunset.
  */
 export function ThemeToggle({ className }: { className?: string }) {
+  const t = useT();
   const { theme, setTheme } = useTheme();
 
   return (
     <div
       role="radiogroup"
-      aria-label="Theme"
+      aria-label={t('theme.label')}
       className={cn('bg-muted border-border grid grid-cols-3 gap-1 rounded-full border-2 p-1', className)}
     >
       {OPTIONS.map(({ value, label, Icon }) => {
@@ -43,7 +45,7 @@ export function ThemeToggle({ className }: { className?: string }) {
             )}
           >
             <Icon size={15} strokeWidth={active ? 2.6 : 2.1} />
-            {label}
+            {t(label)}
           </button>
         );
       })}

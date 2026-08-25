@@ -135,7 +135,7 @@ export default function HistoryPage() {
             </div>
 
             <div className="mt-6 space-y-6 lg:mt-0">
-              <InsetGroup title={selected ? formatFullDate(selected, locale) : 'Day'}>
+              <InsetGroup title={selected ? formatFullDate(selected, locale) : t('history.day')}>
                 {selectedDay && selectedDay.logged ? (
                   <div className="space-y-3 px-4 py-3.5">
                     <div className="flex items-baseline justify-between gap-3">
@@ -168,14 +168,14 @@ export default function HistoryPage() {
                   </div>
                 ) : (
                   <p className="text-muted-foreground px-4 py-6 text-center text-body font-medium">
-                    Nothing logged{selectedDay ? ' that day' : ' yet'}.
+                    {selectedDay ? t('history.nothingThatDay') : t('history.nothingYet')}
                   </p>
                 )}
               </InsetGroup>
 
-              <InsetGroup title={`📆  ${t('history.thisMonth')}`}>
+              <InsetGroup title={t('history.thisMonthTitle')(t('history.thisMonth'))}>
                 <div className="divide-border grid grid-cols-3 divide-x-2">
-                  <Stat label={t('history.logged')} value={`${logged.length}`} unit="days" />
+                  <Stat label={t('history.logged')} value={`${logged.length}`} unit={t('history.days')} />
                   <Stat
                     label={t('history.avgIntake')}
                     value={
@@ -192,7 +192,7 @@ export default function HistoryPage() {
                     value={`${
                       logged.filter((d) => d.target_kcal > 0 && d.kcal <= d.target_kcal).length
                     }`}
-                    unit="days"
+                    unit={t('history.days')}
                   />
                 </div>
               </InsetGroup>

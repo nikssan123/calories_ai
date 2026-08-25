@@ -310,7 +310,7 @@ function TodayView() {
                 </span>
               }
               // §9: exercise is reported beside food, never netted off the target.
-              footer="Shown separately from your target — exercise burn is a rough estimate."
+              footer={t('today.exerciseFooter')}
             >
               {day.exercise_entries.map((entry) => (
                 <InsetRow key={entry.id}>

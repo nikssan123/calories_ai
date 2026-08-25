@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Check, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ExerciseEntry, ExerciseType, Routine, WeekSchedule } from '@ct/shared';
-import { WEEKDAY_NAMES, WEEK_ORDER } from '@ct/shared';
+import { WEEK_ORDER, weekdayName } from '@ct/shared';
+import { useLocale, useT } from '@/lib/i18n';
 import { api } from '@/lib/api';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { Button } from '@/components/ui/button';
@@ -26,6 +27,8 @@ import { WorkoutCard } from '@/components/workout/WorkoutCard';
  * than a set of holes.
  */
 export function Workouts({ onLogged }: { onLogged: () => void }) {
+  const t = useT();
+  const locale = useLocale();
   const [routines, setRoutines] = useState<Routine[] | null>(null);
   const [week, setWeek] = useState<WeekSchedule | null>(null);
   const [logging, setLogging] = useState(false);
@@ -109,7 +112,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
 
   if (logging) {
     return (
-      <InsetGroup title="🏋️  Log a workout">
+      <InsetGroup title={t('workouts.logTitle')}>
         <div className="p-3">
           <WorkoutCard
             card={{
@@ -129,7 +132,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
             onClick={() => setLogging(false)}
             className="text-footnote text-muted-foreground hover:text-foreground mt-3 px-1"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
         </div>
       </InsetGroup>
@@ -140,43 +143,43 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
     <div className="space-y-7">
       <Button onClick={() => setLogging(true)} className="h-11 w-full gap-2 rounded-xl">
         <Plus size={16} />
-        Log a workout
+        {t('workouts.logAction')}
       </Button>
 
       <InsetGroup
-        title="🏋️  Saved workouts"
+        title={t('workouts.savedTitle')}
         trailing={
           <button
             type="button"
             onClick={() => setEditing('new')}
             className="text-footnote text-muted-foreground hover:text-foreground font-semibold"
           >
-            Build one
+            {t('workouts.buildOne')}
           </button>
         }
         footer={
           failed
             ? undefined
             : routines && routines.length > 0
-              ? 'One tap fills the whole card in, with the weights you used last time.'
+              ? t('workouts.reuseHint')
               : // Says where the session went. Empty here does not mean nothing
                 // was logged — the sessions are in the history further down the
                 // screen — and this panel sitting empty right after logging one
                 // is exactly the moment that reads as a lost workout.
-                'Sessions you log appear in the history below. This list is only for workouts you want to repeat.'
+                t('workouts.whereSessionsGo')
         }
       >
         {failed ? (
           <div className="px-4 py-10 text-center">
             <p className="text-muted-foreground text-body font-medium">
-              Couldn’t load your saved workouts.
+              {t('workouts.loadFailed')}
             </p>
             <button
               type="button"
               onClick={() => void load()}
               className="text-footnote text-foreground mt-2 font-semibold underline underline-offset-4"
             >
-              Try again
+              {t('common.retry')}
             </button>
           </div>
         ) : routines === null ? (
@@ -186,10 +189,9 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
         ) : routines.length === 0 ? (
           <div className="px-4 py-10 text-center">
             <p className="text-muted-foreground text-body font-medium">
-              No workouts saved yet.
+              {t('workouts.noneSavedTitle')}
               <br />
-              A saved workout is a list you reuse — log a session with its exercises and take the
-              offer to name it, or build one here.
+              {t('workouts.noneSavedHint')}
             </p>
           </div>
         ) : (
@@ -205,19 +207,19 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
                       count. "0 exercises" would describe it as empty when it is
                       simply measured the other way. */}
                   {routine.exercises.length > 0
-                    ? `${routine.exercises.length} exercise${routine.exercises.length === 1 ? '' : 's'}`
-                    : `${routine.duration_min} min`}
-                  {routine.times_done > 0 && ` · done ${routine.times_done}×`}
+                    ? t('workouts.exerciseCount')(routine.exercises.length)
+                    : t('exercise.minutes')(String(routine.duration_min))}
+                  {routine.times_done > 0 && t('workouts.doneTimes')(String(routine.times_done))}
                   {routine.scheduled_weekdays.length > 0 &&
                     ` · ${routine.scheduled_weekdays
-                      .map((d) => WEEKDAY_NAMES[d]!.slice(0, 3))
+                      .map((d) => weekdayName(d, locale, 'short'))
                       .join(', ')}`}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setEditing(routine)}
-                aria-label={`Edit ${routine.name}`}
+                aria-label={t('workouts.editNamed')(routine.name)}
                 className="text-muted-foreground hover:text-foreground"
               >
                 <Pencil size={15} />
@@ -225,7 +227,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
               <button
                 type="button"
                 onClick={() => void remove(routine)}
-                aria-label={`Delete ${routine.name}`}
+                aria-label={t('workouts.deleteNamed')(routine.name)}
                 className="text-muted-foreground hover:text-destructive"
               >
                 <Trash2 size={15} />
@@ -237,8 +239,8 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
 
       {!failed && routines !== null && routines.length > 0 && (
         <InsetGroup
-          title="🗓️  Your week"
-          footer="Days you set are fixed. Days you leave open follow whatever you actually keep doing."
+          title={t('workouts.weekTitle')}
+          footer={t('workouts.weekFooter')}
         >
           {WEEK_ORDER.map((weekday) => {
             const day = week?.find((d) => d.weekday === weekday);
@@ -246,16 +248,18 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
             return (
               <InsetRow key={weekday}>
                 <span className="text-body w-24 shrink-0 font-medium">
-                  {WEEKDAY_NAMES[weekday]}
+                  {weekdayName(weekday, locale)}
                 </span>
                 <select
                   value={day?.source === 'declared' ? (day.routine_id ?? '') : ''}
                   onChange={(e) => void setDay(weekday, e.target.value || null)}
-                  aria-label={`Workout for ${WEEKDAY_NAMES[weekday]}`}
+                  aria-label={t('workouts.workoutFor')(weekdayName(weekday, locale))}
                   className="bg-muted/60 text-footnote min-w-0 flex-1 rounded-lg px-2.5 py-2 font-medium"
                 >
                   <option value="">
-                    {learned ? `${day?.routine_emoji} ${day?.routine_name} — usually` : '—'}
+                    {learned
+                      ? t('workouts.usually')(`${day?.routine_emoji} ${day?.routine_name}`)
+                      : '—'}
                   </option>
                   {routines.map((routine) => (
                     <option key={routine.id} value={routine.id}>
@@ -267,7 +271,11 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
                     a decision they made and the other is a pattern the app
                     noticed and will quietly stop believing. */}
                 <span className="text-footnote text-muted-foreground w-20 shrink-0 text-right">
-                  {day?.source === 'declared' ? 'you set this' : learned ? 'learned' : ''}
+                  {day?.source === 'declared'
+                    ? t('workouts.youSetThis')
+                    : learned
+                      ? t('workouts.learned')
+                      : ''}
                 </span>
               </InsetRow>
             );
@@ -287,6 +295,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
  * the card opens rather than stored here.
  */
 function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: () => void }) {
+  const t = useT();
   const [name, setName] = useState(routine?.name ?? '');
   const [emoji, setEmoji] = useState(routine?.emoji ?? '🏋️');
   const [types, setTypes] = useState<ExerciseType[] | null>(null);
@@ -341,20 +350,20 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
   const picked = new Set(chosen.map((c) => c.typeId));
 
   return (
-    <InsetGroup title={routine ? '✏️  Edit workout' : '🏋️  Build a workout'}>
+    <InsetGroup title={routine ? t('workouts.editTitle') : t('workouts.buildTitle')}>
       <div className="space-y-3 p-3">
         <div className="flex gap-2">
           <Input
             value={emoji}
             onChange={(e) => setEmoji([...e.target.value].slice(0, 2).join(''))}
-            aria-label="Icon"
+            aria-label={t('workouts.icon')}
             className="w-14 text-center"
           />
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Push, Chest day, Legs A…"
-            aria-label="Workout name"
+            placeholder={t('workouts.namePlaceholder')}
+            aria-label={t('workouts.nameLabel')}
             className="flex-1"
           />
         </div>
@@ -372,13 +381,13 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
                     prev.map((c, j) => (j === i ? { ...c, sets: Math.max(1, c.sets - 1) } : c)),
                   )
                 }
-                aria-label={`One fewer set of ${exercise.name}`}
+                aria-label={t('workouts.oneFewerSet')(exercise.name)}
                 className="bg-card text-muted-foreground hover:text-foreground size-7 rounded-lg"
               >
                 −
               </button>
               <span className="text-footnote w-14 text-center tabular-nums">
-                {exercise.sets} set{exercise.sets === 1 ? '' : 's'}
+                {t('workouts.sets')(exercise.sets)}
               </span>
               <button
                 type="button"
@@ -387,7 +396,7 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
                     prev.map((c, j) => (j === i ? { ...c, sets: Math.min(30, c.sets + 1) } : c)),
                   )
                 }
-                aria-label={`One more set of ${exercise.name}`}
+                aria-label={t('workouts.oneMoreSet')(exercise.name)}
                 className="bg-card text-muted-foreground hover:text-foreground size-7 rounded-lg"
               >
                 +
@@ -396,7 +405,7 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
             <button
               type="button"
               onClick={() => setChosen((prev) => prev.filter((_, j) => j !== i))}
-              aria-label={`Remove ${exercise.name}`}
+              aria-label={t('workouts.removeExercise')(exercise.name)}
               className="text-muted-foreground hover:text-foreground"
             >
               <X size={14} />
@@ -405,7 +414,7 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
         ))}
 
         {types === null ? (
-          <p className="text-footnote text-muted-foreground">Loading…</p>
+          <p className="text-footnote text-muted-foreground">{t('common.loading')}</p>
         ) : (
           <div className="flex flex-wrap gap-1.5">
             {types
@@ -429,10 +438,10 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
         <div className="flex gap-2">
           <Button onClick={() => void save()} disabled={!ready} className="h-10 flex-1 gap-2 rounded-xl">
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
-            Save
+            {t('common.save')}
           </Button>
           <Button variant="ghost" onClick={onDone} className="h-10 rounded-xl">
-            Cancel
+            {t('common.cancel')}
           </Button>
         </div>
       </div>

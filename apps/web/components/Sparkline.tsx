@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { TrendPoint } from '@ct/shared';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 /**
@@ -42,6 +43,7 @@ export function Sparkline({
   label?: string;
   className?: string;
 }) {
+  const t = useT();
   const [hovered, setHovered] = useState<number | null>(null);
 
   const values = points.map((p) => p[accessor]);
@@ -149,7 +151,7 @@ export function Sparkline({
         )}
         role="group"
         tabIndex={0}
-        aria-label={`${label ?? 'Daily chart'}. Use the arrow keys to read a day.`}
+        aria-label={t('chart.arrowHint')(label ?? t('chart.daily'))}
         /* Pointer rather than mouse, so a finger held on the chart reads a day
            the same way a cursor over it does. Touch clears on lift: a tap that
            left the card parked over the chart for good would be worse than no

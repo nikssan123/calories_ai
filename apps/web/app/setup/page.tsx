@@ -10,6 +10,7 @@ import {
   bodyWeightUnit,
   cmToFeetInches,
   feetInchesToCm,
+  formatNumber,
   toBodyWeight,
   localeOf,
   unitsOf,
@@ -52,12 +53,12 @@ const FIELD =
 /** Inputs keep their own focus ring; wrappers get it via focus-within. */
 const FIELD_INPUT = `${FIELD} text-right focus-visible:ring-2 focus-visible:ring-ring`;
 
-const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
-  sedentary: 'Desk job, little exercise',
-  light: 'Light exercise 1–3 days/week',
-  moderate: 'Moderate exercise 3–5 days/week',
-  active: 'Hard exercise 6–7 days/week',
-  very_active: 'Physical job or twice-daily training',
+const ACTIVITY_LABELS: Record<ActivityLevel, StringKey> = {
+  sedentary: 'setup.activitySedentary',
+  light: 'setup.activityLight',
+  moderate: 'setup.activityModerate',
+  active: 'setup.activityActive',
+  very_active: 'setup.activityVeryActive',
 };
 
 const SEX_LABELS: Record<Sex, StringKey> = { male: 'sex.male', female: 'sex.female' };
@@ -182,15 +183,19 @@ export default function SetupPage() {
 
         {day && (
           <div className="bg-card border-border chunk rounded-[var(--radius)] border-2 p-5 text-center">
-            <p className="text-eyebrow text-muted-foreground">Your daily target</p>
+            <p className="text-eyebrow text-muted-foreground">{t('setup.dailyTarget')}</p>
             <p className="text-figure mt-1.5 text-[2.75rem] leading-none">
-              {day.targets.kcal.toLocaleString()}
+              {formatNumber(day.targets.kcal, locale)}
               <span className="text-muted-foreground ml-1.5 text-lg font-bold">kcal</span>
             </p>
             <div className="text-footnote mt-4 flex flex-wrap justify-center gap-2">
-              <MacroChip label="Protein" value={day.targets.protein_g} color="var(--protein)" />
-              <MacroChip label="Carbs" value={day.targets.carbs_g} color="var(--carbs)" />
-              <MacroChip label="Fat" value={day.targets.fat_g} color="var(--fat)" />
+              <MacroChip
+                label={t('macro.protein')}
+                value={day.targets.protein_g}
+                color="var(--protein)"
+              />
+              <MacroChip label={t('macro.carbs')} value={day.targets.carbs_g} color="var(--carbs)" />
+              <MacroChip label={t('macro.fat')} value={day.targets.fat_g} color="var(--fat)" />
             </div>
 
             {/*
@@ -203,10 +208,7 @@ export default function SetupPage() {
               * start treating it as an instruction.
               */}
             <p className="text-footnote text-muted-foreground mx-auto mt-5 max-w-md font-medium">
-              A population average for someone your size, not medical advice. It is corrected from
-              your own logged data after a fortnight. If you are pregnant or breastfeeding, or
-              managing a condition like diabetes or kidney disease, get your number from a
-              clinician and set it by hand here.
+              {t('setup.targetDisclaimer')}
             </p>
           </div>
         )}
@@ -218,7 +220,7 @@ export default function SetupPage() {
             <Input
               value={profile.display_name ?? ''}
               onChange={(e) => patch('display_name', e.target.value || null)}
-              placeholder="Optional"
+              placeholder={t('setup.optional')}
               className={cn(FIELD_INPUT, 'w-44')}
             />
           </InsetRow>
@@ -381,7 +383,7 @@ export default function SetupPage() {
               <SelectContent>
                 {(Object.keys(ACTIVITY_LABELS) as ActivityLevel[]).map((level) => (
                   <SelectItem key={level} value={level}>
-                    {ACTIVITY_LABELS[level]}
+                    {t(ACTIVITY_LABELS[level])}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -390,8 +392,8 @@ export default function SetupPage() {
         </InsetGroup>
 
         <InsetGroup
-          title="Day"
-          footer="Food eaten before the day starts counts toward the previous day — so a 1am snack lands on the evening it belongs to."
+          title={t('setup.dayTitle')}
+          footer={t('setup.dayFooter')}
         >
           <InsetRow>
             <span className="shrink-0 text-body">{t('setup.timezone')}</span>
@@ -425,7 +427,7 @@ export default function SetupPage() {
 
         <DietRules profile={profile} onChange={setProfile} />
 
-        <InsetGroup title={t('setup.appearance')} footer="System follows your device, including its light and dark schedule.">
+        <InsetGroup title={t('setup.appearance')} footer={t('setup.appearanceFooter')}>
           <div className="p-3">
             <ThemeToggle />
           </div>
@@ -435,7 +437,7 @@ export default function SetupPage() {
 
         <InsetGroup title={t('setup.account')}>
           <InsetRow>
-            <span className="flex-1 text-body">Signed in as</span>
+            <span className="flex-1 text-body">{t('setup.signedInAs')}</span>
             <span className="text-muted-foreground truncate text-body">
               {profile.email ?? '—'}
             </span>
@@ -455,20 +457,20 @@ export default function SetupPage() {
             onClick={() => void signOut()}
             className="text-destructive w-full px-4 py-3 text-left text-body"
           >
-            Sign out
+            {t('nav.signOut')}
           </button>
         </InsetGroup>
 
         {/* Reachable from inside the app as well as from the landing page: the
             store listings link to these, and so does the sign-up screen, but a
             person looking for "what do they keep about me" looks in Settings. */}
-        <InsetGroup title="About">
+        <InsetGroup title={t('setup.aboutTitle')}>
           <Link href="/privacy" className="flex items-center gap-2 px-4 py-3 text-body">
-            <span className="flex-1">Privacy policy</span>
+            <span className="flex-1">{t('setup.privacyPolicy')}</span>
             <ChevronRight size={16} className="text-muted-foreground" />
           </Link>
           <Link href="/terms" className="flex items-center gap-2 px-4 py-3 text-body">
-            <span className="flex-1">Terms of service</span>
+            <span className="flex-1">{t('setup.termsOfService')}</span>
             <ChevronRight size={16} className="text-muted-foreground" />
           </Link>
           <a href="mailto:support@daysofar.com" className="flex items-center gap-2 px-4 py-3 text-body">
@@ -520,6 +522,7 @@ function SaveBar({
   saved: boolean;
   onSave: () => void;
 }) {
+  const t = useT();
   if (!dirty && !saving && !saved) return null;
 
   return (
@@ -529,12 +532,12 @@ function SaveBar({
             only thing that happened when the field changed. */}
         <p aria-live="polite" className="text-footnote text-muted-foreground flex-1 font-semibold">
           {saving ? (
-            'Saving…'
+            t('setup.saving')
           ) : dirty ? (
-            'Unsaved changes'
+            t('setup.unsavedChanges')
           ) : (
             <span className="inline-flex items-center gap-1.5">
-              <Check size={15} /> Saved
+              <Check size={15} /> {t('setup.saved')}
             </span>
           )}
         </p>
@@ -613,8 +616,8 @@ function EmailSettings({
       title={t('setup.email')}
       footer={
         profile.notify_weekly_review
-          ? 'The weekly review arrives on Monday mornings. Emails about your account — a password change, a sign-in from a device we have not seen — are always sent.'
-          : 'Emails about your account — a password change, a sign-in from a device we have not seen — are always sent.'
+          ? t('setup.emailFooterWithReview')
+          : t('setup.emailFooter')
       }
     >
       {profile.email_verified ? (
@@ -629,8 +632,7 @@ function EmailSettings({
             <span className="flex-1 text-body">{t('setup.addressNotConfirmed')}</span>
           </div>
           <p className="text-muted-foreground text-[13px] leading-relaxed font-medium">
-            Until you confirm {profile.email}, a forgotten password cannot be reset — there would
-            be no way to know the mailbox is yours.
+            {t('setup.confirmFirst')(profile.email ?? '')}
           </p>
           <Button
             variant="outline"
@@ -638,22 +640,22 @@ function EmailSettings({
             disabled={sending}
             className="h-9 self-start rounded-full text-[13px]"
           >
-            {sending ? 'Sending…' : 'Send the link again'}
+            {sending ? t('verify.sending') : t('setup.sendLinkAgain')}
           </Button>
         </div>
       )}
 
       <InsetRow>
         <div className="flex-1">
-          <p className="text-body">Weekly review</p>
+          <p className="text-body">{t('setup.weeklyReview')}</p>
           <p className="text-muted-foreground text-[13px] font-medium">
-            Last week, summarised, on Monday.
+            {t('setup.weeklyReviewHint')}
           </p>
         </div>
         <Switch
           checked={profile.notify_weekly_review}
           onCheckedChange={(checked) => void setPreference('notify_weekly_review', checked)}
-          aria-label="Email me the weekly review"
+          aria-label={t('setup.emailMeReview')}
         />
       </InsetRow>
 
@@ -665,16 +667,13 @@ function EmailSettings({
         */}
       <InsetRow>
         <div className="flex-1">
-          <p className="text-body">Nudges</p>
-          <p className="text-muted-foreground text-[13px] font-medium">
-            At most one a week, when something in your log is worth a mention. They always
-            appear in the journal; this emails them too.
-          </p>
+          <p className="text-body">{t('setup.nudges')}</p>
+          <p className="text-muted-foreground text-[13px] font-medium">{t('setup.nudgesHint')}</p>
         </div>
         <Switch
           checked={profile.notify_nudges}
           onCheckedChange={(checked) => void setPreference('notify_nudges', checked)}
-          aria-label="Email me nudges"
+          aria-label={t('setup.emailMeNudges')}
         />
       </InsetRow>
     </InsetGroup>
@@ -723,20 +722,20 @@ function DeleteAccount({ email }: { email: string | null }) {
           onClick={() => setOpen(true)}
           className="text-destructive w-full px-4 py-3 text-left text-body"
         >
-          Delete account
+          {t('setup.deleteAccount')}
         </button>
       ) : (
         <div className="flex flex-col gap-3 px-4 py-3.5">
           <p className="text-muted-foreground text-[13px] leading-relaxed font-medium">
-            This erases every meal, photo, weight and conversation on{' '}
-            <span className="text-foreground font-extrabold">{email}</span>, on every device, and
-            cannot be undone. Enter your password to confirm.
+            {t('setup.deleteWarningBefore')}{' '}
+            <span className="text-foreground font-extrabold">{email}</span>
+            {t('setup.deleteWarningAfter')}
           </p>
           <Input
             type="password"
             value={password}
             autoFocus
-            placeholder="Password"
+            placeholder={t('auth.password')}
             autoComplete="current-password"
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => {
@@ -751,7 +750,7 @@ function DeleteAccount({ email }: { email: string | null }) {
               onClick={() => void confirm()}
               className="flex-1"
             >
-              {deleting ? 'Deleting…' : 'Delete everything'}
+              {deleting ? t('setup.deleting') : t('setup.deleteEverything')}
             </Button>
             <Button
               variant="ghost"

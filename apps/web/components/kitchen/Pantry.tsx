@@ -8,6 +8,7 @@ import { api } from '@/lib/api';
 import { FridgeScan } from '@/components/kitchen/FridgeScan';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 /**
@@ -76,6 +77,7 @@ export function Pantry({
       dinner rather than dead-ending at a list. */
   onCook: (names: string[]) => Promise<void>;
 }) {
+  const t = useT();
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [showStaples, setShowStaples] = useState(false);
@@ -119,7 +121,7 @@ export function Pantry({
   async function remove(item: PantryItem) {
     try {
       await api.deletePantryItem(item.id);
-      toast.success(`Removed ${item.name}`);
+      toast.success(t('pantry.removed')(item.name));
       onChanged();
     } catch (e) {
       toast.error((e as Error).message);
@@ -146,8 +148,8 @@ export function Pantry({
           onKeyDown={(e) => {
             if (e.key === 'Enter') void add();
           }}
-          placeholder="chicken, rice, peppers"
-          aria-label="Add to the list"
+          placeholder={t('pantry.addPlaceholder')}
+          aria-label={t('pantry.addToList')}
           className="bg-muted/60 border-border h-11 min-w-0 flex-1 rounded-full border-2 px-4 text-body"
         />
         <Button
@@ -155,8 +157,8 @@ export function Pantry({
           size="icon-lg"
           disabled={!draft.trim() || busy}
           onClick={() => void add()}
-          aria-label="Add to the list"
-          title="Add to the list"
+          aria-label={t('pantry.addToList')}
+          title={t('pantry.addToList')}
           className="rounded-full"
         >
           <Plus size={18} />
@@ -179,7 +181,7 @@ export function Pantry({
       {stale.length > 0 && (
         <section className="border-border bg-muted/40 rounded-2xl border-2 p-3">
           <h3 className="text-eyebrow mb-2 text-[var(--fat-text)]">
-            Still there? · {stale.length}
+            {t('pantry.stillThere')(stale.length)}
           </h3>
           <ul className="space-y-1.5">
             {stale.map((item) => (
@@ -199,14 +201,14 @@ export function Pantry({
                   onClick={() => void confirm(item)}
                   className="shrink-0 rounded-full px-3"
                 >
-                  Yes
+                  {t('pantry.yes')}
                 </Button>
                 <Button
                   size="icon-sm"
                   variant="ghost"
                   onClick={() => void remove(item)}
                   className="text-muted-foreground hover:text-foreground shrink-0 rounded-full"
-                  aria-label={`Remove ${item.name}`}
+                  aria-label={t('pantry.remove')(item.name)}
                 >
                   <Trash2 size={15} />
                 </Button>
@@ -218,14 +220,12 @@ export function Pantry({
 
       {/* Everything you have vouched for, as a quantity rather than a table. */}
       {fresh.length === 0 ? (
-        <p className="text-muted-foreground py-2 text-body">
-          Nothing here yet. Type a few things above, or photograph your shelf.
-        </p>
+        <p className="text-muted-foreground py-2 text-body">{t('pantry.emptyHint')}</p>
       ) : (
         current.length > 0 && (
           <section>
             <h3 className="text-eyebrow text-muted-foreground mb-2">
-              In the kitchen · {current.length}
+              {t('pantry.inTheKitchen')(current.length)}
             </h3>
             <div className="flex flex-wrap gap-1.5">
               {current.map((item) => (
@@ -250,7 +250,7 @@ export function Pantry({
             aria-expanded={showStaples}
             className="text-eyebrow text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
           >
-            Staples · {staples.length}
+            {t('pantry.staples')(staples.length)}
             <ChevronDown
               size={13}
               className={cn(
@@ -291,6 +291,7 @@ function Chip({
   onRemove: () => void;
   muted?: boolean;
 }) {
+  const t = useT();
   return (
     <span
       className={cn(
@@ -307,7 +308,7 @@ function Chip({
       <button
         type="button"
         onClick={onRemove}
-        aria-label={`Remove ${item.name}`}
+        aria-label={t('pantry.remove')(item.name)}
         className="text-muted-foreground hover:bg-card hover:text-foreground grid size-5 shrink-0 place-items-center rounded-full transition-colors"
       >
         <X size={12} strokeWidth={3} />

@@ -9,6 +9,7 @@ import { asBlob, PHOTO_ACCEPT, preparePhoto, useHasCameraApp } from '@/lib/image
 import { ActionChip } from '@/components/kitchen/ActionChip';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 /**
@@ -64,6 +65,7 @@ export function FridgeScan({
    */
   variant?: 'chip' | 'button' | 'icon';
 }) {
+  const t = useT();
   const [scanning, setScanning] = useState(false);
   const [proposal, setProposal] = useState<PantryScanProposal | null>(null);
   const [chosen, setChosen] = useState<Set<string>>(new Set());
@@ -80,7 +82,7 @@ export function FridgeScan({
 
     const prepared = await preparePhoto(file);
     if (!prepared) {
-      toast.error('That file is not an image I can read.');
+      toast.error(t('scan.notAnImage'));
       return;
     }
 
@@ -100,7 +102,7 @@ export function FridgeScan({
       // Only opens when there is something to confirm; an empty proposal is a
       // sentence, not a dialog.
       if (found.found.length === 0) {
-        toast.message(found.note ?? "I couldn't make out any food in that photo.");
+        toast.message(found.note ?? t('scan.noFood'));
       } else {
         setProposal(found);
       }
@@ -142,7 +144,7 @@ export function FridgeScan({
         // "added 6 things" popping over them says the wrong thing happened.
         await onCook(items.map((f) => f.name));
       } else {
-        toast.success(`Added ${items.length} ${items.length === 1 ? 'thing' : 'things'}`);
+        toast.success(t('scan.added')(items.length));
       }
     } catch (e) {
       toast.error((e as Error).message);
@@ -186,7 +188,7 @@ export function FridgeScan({
           disabled={scanning}
           onClick={() => (hasCameraApp ? cameraRef : fileRef).current?.click()}
         >
-          {scanning ? 'Reading the photo…' : 'from a photo'}
+          {scanning ? t('scan.reading') : t('scan.fromPhoto')}
         </ActionChip>
       ) : variant === 'icon' ? (
         /*
@@ -203,8 +205,8 @@ export function FridgeScan({
           size="icon-lg"
           disabled={scanning}
           onClick={() => (hasCameraApp ? cameraRef : fileRef).current?.click()}
-          aria-label={scanning ? 'Reading the photo…' : 'Scan my fridge'}
-          title="Scan my fridge"
+          aria-label={scanning ? t('scan.reading') : t('scan.scanMyFridge')}
+          title={t('scan.scanMyFridge')}
           className="rounded-full"
         >
           {scanning ? <Loader2 size={17} className="animate-spin" /> : <Camera size={17} />}
@@ -218,7 +220,7 @@ export function FridgeScan({
             className="h-11 w-full gap-2 rounded-full"
           >
             {scanning ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />}
-            {scanning ? 'Reading the photo…' : 'Scan my fridge'}
+            {scanning ? t('scan.reading') : t('scan.scanMyFridge')}
           </Button>
         </div>
       )}
@@ -226,8 +228,8 @@ export function FridgeScan({
       <Dialog open={proposal !== null} onOpenChange={(open) => !open && !busy && setProposal(null)}>
         {proposal && (
           <DialogContent
-            title="What I can see"
-            description={proposal.note ?? 'Tap anything I got wrong.'}
+            title={t('scan.whatICanSee')}
+            description={proposal.note ?? t('scan.tapWrong')}
           >
             <div className="flex flex-wrap gap-1.5 p-4">
               {proposal.found.map((find) => {
@@ -255,7 +257,7 @@ export function FridgeScan({
                     {find.quantity_desc && <span className="opacity-70">· {find.quantity_desc}</span>}
                     {/* Worth saying: it stops "why did it find things I already
                         had?" and turns a duplicate-looking list into a refresh. */}
-                    {known && <span className="opacity-70">· already listed</span>}
+                    {known && <span className="opacity-70">{t('scan.alreadyListed')}</span>}
                   </button>
                 );
               })}
@@ -284,7 +286,7 @@ export function FridgeScan({
                 ) : (
                   <Plus size={16} />
                 )}
-                {saving === 'stock' ? 'Adding…' : 'Add to my kitchen'}
+                {saving === 'stock' ? t('scan.adding') : t('scan.addToKitchen')}
               </Button>
               {canCook && (
                 <Button
@@ -297,7 +299,7 @@ export function FridgeScan({
                   ) : (
                     <UtensilsCrossed size={16} />
                   )}
-                  {saving === 'cook' ? 'Finding recipes…' : 'Cook with these'}
+                  {saving === 'cook' ? t('scan.findingRecipes') : t('scan.cookWithThese')}
                 </Button>
               )}
             </div>

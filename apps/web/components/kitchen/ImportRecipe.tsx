@@ -3,12 +3,13 @@
 import { useState } from 'react';
 import { ClipboardPaste, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Recipe } from '@ct/shared';
+import { formatNumber, type Recipe } from '@ct/shared';
 import { api } from '@/lib/api';
 import { ActionChip } from '@/components/kitchen/ActionChip';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { useLocale, useT } from '@/lib/i18n';
 
 /**
  * Bring a recipe you already cook.
@@ -31,7 +32,7 @@ import { Textarea } from '@/components/ui/textarea';
 export function ImportRecipe({
   onImported,
   disabled = false,
-  disabledReason = 'No recipe runs left today',
+  disabledReason,
 }: {
   onImported: (recipe: Recipe) => void;
   /**
@@ -42,6 +43,8 @@ export function ImportRecipe({
   /** Why it is shut. Two reasons now, and they are not interchangeable. */
   disabledReason?: string;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -51,8 +54,10 @@ export function ImportRecipe({
     try {
       const { recipes } = await api.importRecipe({ text: text.trim() });
       const [recipe] = recipes;
-      if (!recipe) throw new Error("I couldn't read that as a recipe.");
-      toast.success(`Saved ${recipe.title} — ${Math.round(recipe.kcal)} kcal a portion`);
+      if (!recipe) throw new Error(t('import.unreadable'));
+      toast.success(
+        t('import.saved')(recipe.title, formatNumber(Math.round(recipe.kcal), locale)),
+      );
       setText('');
       setOpen(false);
       onImported(recipe);
@@ -69,21 +74,21 @@ export function ImportRecipe({
         icon={<ClipboardPaste size={13} />}
         onClick={() => setOpen(true)}
         disabled={disabled}
-        title={disabled ? disabledReason : undefined}
+        title={disabled ? (disabledReason ?? t('cook.noRunsLeft')) : undefined}
       >
-        paste one
+        {t('import.chip')}
       </ActionChip>
 
       <Dialog open={open} onOpenChange={(next) => !busy && setOpen(next)}>
         <DialogContent
-          title="A recipe you already have"
-          description="I'll work out the calories and leave the cooking alone."
+          title={t('import.title')}
+          description={t('import.desc')}
         >
           <div className="space-y-2 p-3">
             <Textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Paste or type the recipe — ingredients and method, however you have it written."
+              placeholder={t('import.placeholder')}
               rows={9}
               autoFocus
               className="bg-muted/60 border-border resize-none rounded-2xl border-2 text-body"
@@ -94,7 +99,7 @@ export function ImportRecipe({
               className="h-11 w-full gap-2 rounded-full"
             >
               {busy && <Loader2 size={15} className="animate-spin" />}
-              {busy ? 'Working out the numbers…' : 'Work out the macros'}
+              {busy ? t('import.working') : t('import.workOutMacros')}
             </Button>
           </div>
         </DialogContent>
