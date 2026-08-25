@@ -12,6 +12,13 @@
  * so an `import 'expo-router/entry'` below would run *before* the registration
  * above it, which is the kind of bug that only shows up on a cold widget draw.
  */
+/*
+ * First, and before the router: Hermes is missing three `Intl`
+ * constructors the catalogues call, and a screen that formats on the way
+ * up would reach them before a later import had installed them.
+ */
+import './lib/intl-polyfill';
+
 import { registerWidgetTaskHandler } from 'react-native-android-widget';
 import { widgetTaskHandler } from './widget/handler';
 
