@@ -8,6 +8,7 @@
 #   bin/deploy.sh --build always   # force a rebuild of both images
 #   bin/deploy.sh --mobile         # ...and start an EAS Android build after it
 #   bin/deploy.sh --mobile-only    # just the EAS build; the host is not touched
+#   bin/deploy.sh --mobile-only --local   # ...built on this machine, not the queue
 #
 # Deployment model, for context on why this script is shaped the way it is:
 #
@@ -41,6 +42,7 @@ DRY=0
 MOBILE=0
 MOBILE_ONLY=0
 MOBILE_PROFILE="production"
+MOBILE_LOCAL=0
 
 usage() {
     sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//; $d'
@@ -48,6 +50,7 @@ usage() {
 Options:
   --mobile [PROFILE] after deploying, start an EAS Android build (default: production)
   --mobile-only      start the EAS build and skip the host deploy entirely
+  --local            build the mobile artifact here instead of on EAS's queue
   --host USER@HOST   target host           (default: $DEPLOY_SSH_HOST)
   --path DIR         repo path on host     (default: $DEPLOY_PATH or /srv/calorytracker)
   --ref REF          commit/branch to deploy (default: origin/main)
@@ -68,6 +71,7 @@ while [[ $# -gt 0 ]]; do
         --build) BUILD_MODE="$2"; shift 2 ;;
         --pull)  PULL_BASE=1; shift ;;
         --dry-run) DRY=1; shift ;;
+        --local) MOBILE_LOCAL=1; shift ;;
         # An optional value: `--mobile preview` takes it, `--mobile --push` does
         # not. Anything starting with a dash is the next flag, not a profile.
         --mobile)
@@ -113,6 +117,83 @@ die()  { printf '\033[1;31mFATAL\033[0m %s\n' "$*" >&2; exit 1; }
 # No `eas submit` here, on purpose. A build is an artifact and costs a queue
 # slot; a submission is a release to real installs and wants a human deciding
 # the day it happens.
+# Build the .aab on this machine rather than in EAS's queue.
+#
+# Two things about a local build are not obvious and both have cost a run:
+#
+# `google-services.json` is gitignored, and a local build is not exempt from
+# that. EAS assembles the project the same way either way — a `git archive` of
+# HEAD into a temp directory — so the file is absent there too and prebuild dies
+# in `withAndroidDangerousBaseMod` with an ENOENT several hundred lines into the
+# log. `app.config.js` already reads `GOOGLE_SERVICES_JSON` for exactly this;
+# pointing it at the real file by absolute path is what makes the copy work,
+# because the temp directory is not where the checkout lives.
+#
+# The versionCode is spent whether or not the build succeeds. `appVersionSource:
+# remote` increments it on EAS before Gradle is invoked, so a build that fails in
+# prebuild still burns the number and the next attempt is one higher. That is
+# why the name below is written after the build rather than guessed before it.
+mobile_build_local() {
+    local dir="$REPO/apps/mobile"
+    local services="$dir/google-services.json"
+
+    [[ -f "$services" ]] || die "no $services — a local build cannot prebuild without it"
+
+    local out_dir="$dir/android/artifacts"
+    local staged="$out_dir/.building.aab"
+
+    if (( DRY )); then
+        echo "       would run: (cd apps/mobile && GOOGLE_SERVICES_JSON=$services \\"
+        echo "                     npx eas-cli build --platform android --profile $MOBILE_PROFILE \\"
+        echo "                     --local --non-interactive --output $staged)"
+        echo "       would then rename it to $(mobile_artifact_name '<versionCode>')"
+        return 0
+    fi
+
+    mkdir -p "$out_dir"
+    rm -f "$staged"
+
+    local log; log="$(mktemp)"
+    ( cd "$dir" && GOOGLE_SERVICES_JSON="$services" npx eas-cli build --platform android \
+        --profile "$MOBILE_PROFILE" --local --non-interactive --output "$staged" ) 2>&1 | tee "$log"
+    local status=${PIPESTATUS[0]}
+
+    # Read the number EAS actually assigned. Both spellings appear depending on
+    # whether it had to increment, and a build that got far enough to produce an
+    # artifact has always printed one of them.
+    local code
+    code="$(grep -oE 'Incremented versionCode from [0-9]+ to [0-9]+' "$log" | tail -1 | grep -oE '[0-9]+$' || true)"
+    [[ -n "$code" ]] || code="$(grep -oE 'versionCode:? [0-9]+' "$log" | tail -1 | grep -oE '[0-9]+$' || true)"
+    rm -f "$log"
+
+    if (( status != 0 )); then
+        rm -f "$staged"
+        die "local build failed${code:+ (versionCode $code is spent either way)}"
+    fi
+    [[ -f "$staged" ]] || die "build reported success but $staged is not there"
+
+    local final="$out_dir/$(mobile_artifact_name "${code:-unknown}")"
+    mv "$staged" "$final"
+
+    echo
+    say "built $(basename "$final") ($(du -h "$final" | cut -f1))"
+    say "upload it to Play, or: cd apps/mobile && npx eas-cli submit --platform android --path $final"
+}
+
+# What a built artifact is called.
+#
+# `build-1787661506485.aab` was the default and it answers nothing: two of them
+# side by side cannot be told apart without unzipping the manifest. This says
+# the marketing version, the versionCode Play actually orders releases by, which
+# profile produced it and the commit it came from — enough to match a file on
+# disk against a row in the Play console or a line in `git log`.
+mobile_artifact_name() {
+    local code="$1"
+    local version; version="$(node -p "require('$REPO/apps/mobile/app.json').expo.version" 2>/dev/null || echo 0.0.0)"
+    local sha; sha="$(git rev-parse --short HEAD)"
+    echo "daysofar-v${version}-vc${code}-${MOBILE_PROFILE}-${sha}.aab"
+}
+
 mobile_build() {
     local dir="$REPO/apps/mobile"
     [[ -f "$dir/eas.json" ]] || die "no apps/mobile/eas.json — nothing to build"
@@ -129,6 +210,11 @@ mobile_build() {
     local unpushed; unpushed="$(git rev-list --count origin/main..HEAD 2>/dev/null || echo 0)"
     say "EAS build: android/$MOBILE_PROFILE from $head ($(git log -1 --format=%s))"
     (( unpushed > 0 )) && warn "$unpushed commit(s) on HEAD are not on origin and WILL be in this build"
+
+    if (( MOBILE_LOCAL )); then
+        mobile_build_local
+        return
+    fi
 
     if (( DRY )); then
         echo "       would run: (cd apps/mobile && npx eas-cli build --platform android \\"
