@@ -339,17 +339,21 @@ resets ranking signal for a conversion gain you cannot measure at this volume.
 ```json
 "submit": {
   "production": {
-    "android": { "track": "internal", "releaseStatus": "completed" }
+    "android": { "track": "alpha", "releaseStatus": "completed" }
   }
 }
 ```
 
-**`internal`, not `production`.** Internal testing is available to its testers within
-minutes and skips the review queue, which is what you want a command to do
-unattended. Promotion to production is a decision, and it stays a button somebody
-presses in Play Console — the same argument `bin/deploy.sh` makes for not running
-`eas submit` after a build: an artifact costs a queue slot, a release reaches real
-installs.
+**`alpha` is Play's API name for the closed testing track**, not a third kind of
+build. It was `internal` until 2026-08-25 and changed for one reason: a personal
+developer account cannot apply for production until it has run a closed test with
+12 testers opted in for 14 continuous days, so the closed track is the one every
+release has to pass through for now. Internal testing does not count toward that
+clock.
+
+Promotion to production stays a button somebody presses in Play Console — the same
+argument `bin/deploy.sh` makes for not running `eas submit` after a build: an
+artifact costs a queue slot, a release reaches real installs.
 
 **The key is named by path, and the file is gitignored.** Storing it on EAS instead
 would be tidier — that is the rule `.gitignore` states for the Firebase key — but the
@@ -389,6 +393,10 @@ Then the whole path is:
 eas build --platform android --profile production
 eas submit --platform android --profile production --latest
 ```
+
+That lands the build in closed testing. Switch `track` back to `internal` for a
+build meant only for the handful of people already on the internal list, and to
+`production` once production access is granted.
 
 **Propagation is not instant.** A newly granted service account is commonly refused by
 the Publishing API for a few minutes to a few hours after step 3. A first submit that
