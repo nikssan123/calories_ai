@@ -121,10 +121,16 @@ async function complete(
 }
 
 /** The whole handshake, ending in whatever the callback replied. */
-async function signIn(overrides: Record<string, unknown> = {}, startQuery = '') {
+async function signIn(
+  overrides: Record<string, unknown> = {},
+  startQuery = '',
+  // The callback's own request headers. Only the browser's language is read
+  // off them, and only when the handshake turns out to be a sign-up.
+  headers: InjectOptions['headers'] = {},
+) {
   const { handshake, cookie } = await begin(startQuery);
   googleAnswers({ id_token: idToken(claimsFor(handshake, overrides)) });
-  return complete(handshake, cookie);
+  return complete(handshake, cookie, { headers });
 }
 
 function redirectedTo(response: { statusCode: number; headers: Record<string, unknown> }): string {
@@ -206,6 +212,27 @@ describe('GET /auth/google/callback', () => {
     expect(user.password_hash).toBeNull();
     // Google has already done what the six-digit code exists to do.
     expect(user.email_verified_at).not.toBeNull();
+  });
+
+  /*
+   * There is no client here to send a preference the way the password sign-up
+   * does — this leg is a redirect made by the browser that ran the consent
+   * screen, which on a phone is the system browser and reports the device's
+   * language. Without it every Google account started in English however the
+   * phone was set.
+   */
+  it('takes the language from the browser that ran the consent screen', async () => {
+    await signIn({}, '', { 'accept-language': 'de-DE,de;q=0.9,en;q=0.7' });
+
+    const user = await queryOne<any>('SELECT * FROM users');
+    expect(user.locale).toBe('de');
+  });
+
+  it('leaves the language unset when it speaks none of them, so setup can ask', async () => {
+    await signIn({}, '', { 'accept-language': 'ja-JP,ja;q=0.9' });
+
+    const user = await queryOne<any>('SELECT * FROM users');
+    expect(user.locale).toBeNull();
   });
 
   it('records the identity against the provider’s id, not the address', async () => {

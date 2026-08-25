@@ -678,6 +678,22 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const result = await signInWithProvider(GOOGLE_PROVIDER, identity, {
         allowSignup: await signupAllowed(),
         timezone: handshake.timezone,
+        /*
+         * The header, where the password flow prefers a field the client sent.
+         *
+         * There is no client to send one here: this request is a redirect from
+         * Google, made by the browser that ran the consent screen — the system
+         * browser on a phone, which reports the device's own language. That is
+         * the same signal `preferredLocale()` reads on the native side, arriving
+         * by the only route this flow has.
+         *
+         * Without it every Google sign-up landed with a null locale and was
+         * shown English whatever the phone was set to, while the password
+         * sign-up beside it got this right. Null when this app speaks none of
+         * the languages named, which leaves the column null and the question to
+         * setup.
+         */
+        locale: localeFromAcceptLanguage(request.headers['accept-language'] ?? null),
       });
       if (!result.ok) return fail('closed');
 

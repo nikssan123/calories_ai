@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DaySummary, Profile, ReviewStats, WeeklyReview, WeightEntry } from '@ct/shared';
+import { LOCALES, LOCALE_NAMES } from '@ct/shared';
 import {
   dayContextPrompt,
   dayRolloverNotice,
@@ -425,6 +426,33 @@ describe('onboardingPrompt', () => {
   it('mentions the name only when there is one', () => {
     expect(onboardingPrompt(profile, ['sex'], null)).toContain('Their name is Nik');
     expect(onboardingPrompt({ ...profile, display_name: null }, ['sex'], null)).not.toContain('Their name is');
+  });
+
+  /*
+   * The app has spoken five languages since February and said so nowhere a new
+   * account would look: the picker is on the sign-in screen and in a settings
+   * tab, and the conversation that opens instead of both never mentioned it.
+   */
+  it('names every language the app is written in, in its own name', () => {
+    const prompt = onboardingPrompt(profile, ['sex'], null);
+    for (const locale of LOCALES) expect(prompt).toContain(LOCALE_NAMES[locale]);
+  });
+
+  it('offers rather than asks when the account already reads something', () => {
+    const prompt = onboardingPrompt({ ...profile, locale: 'de' }, ['sex'], null);
+    expect(prompt).toContain('They are reading in German');
+    expect(prompt).toMatch(/offer rather than a question/i);
+  });
+
+  /*
+   * Null is not English. It is an account signed up from a device speaking
+   * something this app does not, which has been shown English for want of an
+   * alternative — the one case where the question is real.
+   */
+  it('asks outright when nobody has ever been told', () => {
+    const prompt = onboardingPrompt({ ...profile, locale: null }, ['which language they read'], null);
+    expect(prompt).toContain('Still needed: which language they read, current weight.');
+    expect(prompt).toMatch(/real question/i);
   });
 });
 

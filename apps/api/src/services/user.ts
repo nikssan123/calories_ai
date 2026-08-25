@@ -73,15 +73,23 @@ export async function updateUser(userId: string, patch: ProfileUpdate): Promise<
 }
 
 /**
- * What onboarding still has to find out. All but the last are what a target
+ * What onboarding still has to find out. The first five are what a target
  * cannot honestly be calculated without.
  *
- * Units is the exception and belongs here anyway, because this list is also
- * what decides when setup is over. Left out of it, the preference would be
- * asked last or not at all — the conversation would end the moment the target
- * could be computed, and someone in Ohio would be handed a number in kilos.
- * Null is "not yet asked"; existing accounts were backfilled to metric, which
- * is what they have been reading all along.
+ * The last two are not — they are rendering preferences, and they belong here
+ * anyway, because this list is also what decides when setup is over. Left out
+ * of it, a preference would be asked last or not at all: the conversation would
+ * end the moment the target could be computed, and someone in Ohio would be
+ * handed a number in kilos, in a language their phone is not set to.
+ *
+ * Null is "nobody has ever been told", which is not the same as the default
+ * either one falls back to. Existing accounts were backfilled — metric, and
+ * English — because that is what they have been reading all along, so this
+ * reopens nothing for them. What reaches here with a null `locale` is an
+ * account signed up from a device whose language this app does not speak, and
+ * asking that person which of the five they would like is the whole point:
+ * English is where they land by default and is quite possibly not their fourth
+ * choice, let alone their first.
  */
 export function missingProfileFields(profile: Profile): string[] {
   const missing: string[] = [];
@@ -91,6 +99,7 @@ export function missingProfileFields(profile: Profile): string[] {
   if (!profile.goal) missing.push('goal');
   if (!profile.activity_level) missing.push('activity level');
   if (!profile.units) missing.push('whether they read metric or imperial units');
+  if (!profile.locale) missing.push('which language they read');
   return missing;
 }
 

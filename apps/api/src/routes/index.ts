@@ -1075,13 +1075,16 @@ export async function registerRoutes(app: FastifyInstance) {
       await setTargets(userId, today, targets, 'recalculated from profile');
     }
 
-    const complete =
-      profile.sex !== null &&
-      profile.birth_date !== null &&
-      profile.height_cm !== null &&
-      profile.goal !== null &&
-      profile.units !== null;
-    if (complete && !profile.is_setup_complete) await markOnboarded(userId);
+    /*
+     * The same list the conversation works from, rather than a second copy of
+     * it spelled out here. The copy had already drifted — it never checked
+     * activity level, so a profile saved from this screen could mark itself
+     * onboarded while the journal was still in setup mode asking for the one
+     * field the form had filled in.
+     */
+    if (missingProfileFields(profile).length === 0 && !profile.is_setup_complete) {
+      await markOnboarded(userId);
+    }
 
     return getUser(userId);
   });

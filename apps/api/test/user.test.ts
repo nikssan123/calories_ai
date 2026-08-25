@@ -125,9 +125,22 @@ describe('missingProfileFields', () => {
     ]);
   });
 
+  /*
+   * The same bargain as units, one step further out: nothing about a target
+   * depends on the language, and setup is not over until somebody has been
+   * asked. An account only reaches here with a null locale if it signed up
+   * from a device whose language this app does not speak — English is where it
+   * has landed by default, and that is a fallback rather than an answer.
+   */
+  it('asks which language when nobody has said', async () => {
+    const user = await createUser({ locale: null });
+    expect(missingProfileFields(await getUser(user.id))).toEqual(['which language they read']);
+  });
+
   it('names each gap in plain words', async () => {
     const user = await createUser({
-      sex: null, birth_date: null, height_cm: null, goal: null, activity_level: null, units: null,
+      sex: null, birth_date: null, height_cm: null, goal: null, activity_level: null,
+      units: null, locale: null,
     });
     expect(missingProfileFields(await getUser(user.id))).toEqual([
       'sex',
@@ -136,6 +149,7 @@ describe('missingProfileFields', () => {
       'goal',
       'activity level',
       'whether they read metric or imperial units',
+      'which language they read',
     ]);
   });
 });

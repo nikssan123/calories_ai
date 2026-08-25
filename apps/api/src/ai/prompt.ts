@@ -9,7 +9,9 @@ import type {
   WeightEntry,
 } from '@ct/shared';
 import {
+  LOCALES,
   LOCALE_ENGLISH_NAMES,
+  LOCALE_NAMES,
   formatBodyWeight,
   formatHeight,
   localeOf,
@@ -712,6 +714,31 @@ export function onboardingPrompt(
   const needed = [...missing];
   if (!currentWeight) needed.push('current weight');
 
+  /*
+   * In their own names, not in English. The list is there to be repeated to
+   * somebody, and "Български" is the word a Bulgarian speaker recognises in a
+   * sentence otherwise made of words they do not — which is the entire reason
+   * this clause exists. Same argument as `LOCALE_NAMES` itself.
+   */
+  const languages = LOCALES.map((locale) => LOCALE_NAMES[locale]).join(', ');
+
+  /*
+   * Two different jobs, depending on whether anyone has ever been told.
+   *
+   * A null locale is in `missing` as a real question, and the client is drawing
+   * this conversation in whatever the device said — which for this account is a
+   * language this app does not speak, since a device language it *does* speak
+   * would have been stored at signup. So: ask, and mean it.
+   *
+   * A locale that is set was a guess by a picker they may never have looked at.
+   * That is not worth a question, and it is worth a sentence: the offer costs
+   * one clause and is the only moment the app ever mentions that it has four
+   * other languages in it.
+   */
+  const languageState = profile.locale
+    ? `They are reading in ${LOCALE_ENGLISH_NAMES[localeOf(profile)]}, so this is an offer rather than a question — one clause, and drop it the moment they show no interest.`
+    : 'Nobody has ever asked this account, and the app has fallen back to English for want of anything better. This is a real question and it is on the list below; ask it plainly.';
+
   return `# Setup mode — this account is new
 
 You do not yet know enough about this person to give them a real calorie target. Until you do, the targets in the "Where things stand" block are generic defaults and you should say so if they ask.
@@ -724,6 +751,8 @@ Gather these by talking, not by sending them to a settings screen. How to run it
 - Ask for two or three at a time, in plain language. "How tall are you, and roughly what do you weigh at the moment?" is right. A numbered questionnaire is not.
 - Call set_profile the moment you learn a value, even mid-conversation. Never hold answers back to save a single call. Current weight goes through log_weight instead — it is a measurement that gets tracked over time.
 - Units are one clause, not a question of their own. "How tall are you, and roughly what do you weigh at the moment? Kilos and centimetres, or pounds and feet — whichever you think in" gets both facts and the preference in one breath. And if they simply answer “5'10", about 180 lb”, you have your answer: set units to imperial from what they said and do not ask. Set it to metric the same way when they answer in kilos.
+- Language goes in the opening message, in one clause, and it is the one thing here you raise before you are asked. This app is written in ${languages} — somebody whose phone is not in English has no way of discovering that from a conversation that has already started in it, and the settings screen where the picker lives is not somewhere a new account goes. Say it in whatever language you are writing: a clause on the end of your introduction, never a menu and never a message of its own. ${languageState}
+- Take the answer however it arrives. Somebody who replies in Bulgarian has answered; call set_profile with \`locale\` and write the rest of that same reply in Bulgarian rather than switching a message later. If they write in a language this app does not have, stay where you are and do not offer a translation you cannot deliver — but do not correct them either, and keep reading what they write.
 - Accept whatever units they use and convert: pounds, stones, feet and inches, an age instead of a birth date. What you store is always metric — height_cm, target_weight_kg, weight_kg — however they said it. The units field decides how you talk to them afterwards, not what goes into the tools.
 - If they give you something vague ("I'm pretty active"), map it to the closest option and say which one you picked rather than asking them to choose from a list.
 - If they want to log food before finishing setup, log it. Answer the food first, then pick up where you left off with one question at the end.

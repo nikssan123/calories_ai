@@ -1,3 +1,4 @@
+import type { Locale } from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import { destroyAllSessions } from './auth.ts';
 import { clearPassword, createAccount, findUserByEmail, markEmailVerified } from './user.ts';
@@ -32,7 +33,21 @@ export type IdentityResult =
 export async function signInWithProvider(
   provider: string,
   identity: ProviderIdentity,
-  options: { allowSignup: boolean; timezone: string },
+  options: {
+    allowSignup: boolean;
+    timezone: string;
+    /**
+     * The language of the browser that ran the consent screen, when this app
+     * speaks it. Carried for the same reason `timezone` is: if this turns out
+     * to be a sign-up, the account is written before anybody can be asked
+     * anything, and what is written is what its first email is composed in.
+     *
+     * Null means we could not tell, which stays null in the column — the
+     * journal asks about it during setup rather than guessing at English. See
+     * `missingProfileFields`.
+     */
+    locale: Locale | null;
+  },
 ): Promise<IdentityResult> {
   /*
    * The ordinary case, and the only one keyed on something stable. Everything
@@ -84,7 +99,13 @@ export async function signInWithProvider(
   // applies to it as to the one with a password form.
   if (!options.allowSignup) return { ok: false, reason: 'signups_closed' };
 
-  const userId = await createAccount(identity.email, null, identity.name, options.timezone);
+  const userId = await createAccount(
+    identity.email,
+    null,
+    identity.name,
+    options.timezone,
+    options.locale,
+  );
   // Confirmed at birth: the provider has already done the thing our own
   // six-digit code exists to do, and asking again would be asking someone to
   // prove twice, in the same minute, that they can read their own mail.
