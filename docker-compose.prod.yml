@@ -135,6 +135,11 @@ services:
     environment:
       TZ: ${TZ:-Europe/Sofia}
       PORT: 4000
+      # Read by `env.ts` for exactly two things: `isTest`, and whether a purchase
+      # the store marks SANDBOX is honoured. Unset — which it was until now — the
+      # second defaults to *accepting* them, so the BILLING_ACCEPT_SANDBOX comment
+      # below described a default this file never actually supplied.
+      NODE_ENV: production
       DATABASE_URL: postgres://${POSTGRES_USER:-ct}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-calorytracker}
       # Where the rate limiter keeps its counters. Required the moment `api` is
       # scaled past one replica: without it each replica enforces the full
