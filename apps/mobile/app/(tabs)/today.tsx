@@ -25,6 +25,8 @@ import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 import { CalorieRing } from '@/components/CalorieRing';
 import { DietQuality } from '@/components/DietQuality';
 import { FoodEditor } from '@/components/FoodEditor';
+import { groupSets } from '@/components/ChatCard';
+import { WorkoutCard } from '@/components/workout/WorkoutCard';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { MacroBars } from '@/components/MacroBars';
 import { RepeatMeals } from '@/components/RepeatMeals';
@@ -151,6 +153,13 @@ export default function TodayScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
+  /*
+   * The session opened, and the one being rewritten. Two ids rather than one
+   * flag because the row expands to show the sets — which is the whole answer
+   * to "what did I log?" — and only then offers to change them.
+   */
+  const [openSession, setOpenSession] = useState<string | null>(null);
+  const [editingSession, setEditingSession] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
 
   /*
@@ -501,9 +510,13 @@ export default function TodayScreen() {
   }
 
   /**
-   * Exercise has no expand-to-edit affordance the way food does — there are no
-   * items under it — so the burn is corrected in the journal and removed here.
    * Totals are adjusted optimistically because they head the section.
+   *
+   * This used to carry a note saying exercise had no expand-to-edit affordance
+   * and was corrected in the journal instead. It was true and it was a dead
+   * end: the journal had no tool that could change a logged session either, so
+   * the only correction available anywhere in the product was this delete. The
+   * row expands now, and a counted session reopens in the card that logged it.
    */
   function removeExercise(entry: ExerciseEntry) {
     const burn = Math.round(entry.kcal_burned);
@@ -777,50 +790,24 @@ export default function TodayScreen() {
               footer={tr('today.exerciseFooter')}
             >
               {day.exercise_entries.map((entry, i) => (
-                <SwipeRow
+                <ExerciseRow
                   key={entry.id}
+                  entry={entry}
+                  first={i === 0}
                   index={i}
-                  // The divider stays out here so it holds still while the row
-                  // slides out from under it.
-                  style={
-                    i === 0 ? null : { borderTopWidth: 2, borderTopColor: colors.border }
-                  }
-                  actions={[removeAction(colors, entry.description, () => removeExercise(entry))]}
-                >
-                  <InsetRow first>
-                    <Text style={styles.rowEmoji}>{exerciseEmoji(entry.description)}</Text>
-                    <View style={styles.rowBody}>
-                      <Text
-                        numberOfLines={1}
-                        style={[t.bodySemibold, { color: colors.foreground }]}
-                      >
-                        {entry.description}
-                      </Text>
-                      {(entry.distance_km !== null || entry.duration_min !== null) && (
-                        <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-                          {[
-                            entry.distance_km !== null
-                              ? formatDistance(entry.distance_km, units)
-                              : null,
-                            entry.duration_min !== null
-                              ? `${Math.round(entry.duration_min)} min`
-                              : null,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </Text>
-                      )}
-                    </View>
-                    <Text style={[t.bodyBold, t.tnum, { color: colors.exerciseText }]}>
-                      ~{Math.round(entry.kcal_burned)}
-                    </Text>
-                    <IconButton
-                      icon="trash"
-                      label={`Delete ${entry.description}`}
-                      onPress={() => removeExercise(entry)}
-                    />
-                  </InsetRow>
-                </SwipeRow>
+                  open={openSession === entry.id}
+                  editing={editingSession === entry.id}
+                  onToggle={() => setOpenSession((id) => (id === entry.id ? null : entry.id))}
+                  onEdit={() => setEditingSession(entry.id)}
+                  onEdited={() => {
+                    setEditingSession(null);
+                    setOpenSession(null);
+                    void load(date);
+                  }}
+                  onCancelEdit={() => setEditingSession(null)}
+                  onDelete={() => removeExercise(entry)}
+                  onError={setError}
+                />
               ))}
             </InsetGroup>
           )}
@@ -1054,6 +1041,159 @@ function EntryRow({
   );
 }
 
+/**
+ * A logged session, and the way back into it.
+ *
+ * The row used to be a burn figure and a bin. That made this screen a place a
+ * workout could be destroyed and not one where it could be corrected, and the
+ * comment above `removeExercise` sent anyone wanting the difference to the
+ * journal — which could not do it either. So the row opens.
+ *
+ * What it opens onto is the sets, because "what did I actually log?" is the
+ * question that comes before wanting to change it, and until now the only
+ * screen that answered it was the receipt in the chat. Edit reopens the card
+ * that logged the session, which already knows how to collect exactly this.
+ *
+ * Only for a session with sets under it. A run has none — its record is a
+ * sentence and a distance — and handing that to a form built for exercises and
+ * loads would quietly turn a 5km run into a strength session with nothing in
+ * it. Those stay delete-only, which is what they were.
+ */
+function ExerciseRow({
+  entry,
+  first,
+  index,
+  open,
+  editing,
+  onToggle,
+  onEdit,
+  onEdited,
+  onCancelEdit,
+  onDelete,
+  onError,
+}: {
+  entry: ExerciseEntry;
+  first: boolean;
+  index: number;
+  open: boolean;
+  editing: boolean;
+  onToggle: () => void;
+  onEdit: () => void;
+  onEdited: () => void;
+  onCancelEdit: () => void;
+  onDelete: () => void;
+  onError: (message: string) => void;
+}) {
+  const tr = useT();
+  const colors = useColors();
+  const units = useUnits();
+  const counted = entry.sets.length > 0;
+
+  if (editing) {
+    return (
+      <View style={styles.sessionEditor}>
+        <WorkoutCard
+          editing={{
+            id: entry.id,
+            category: entry.category,
+            duration_min: entry.duration_min,
+            sets: entry.sets,
+            performed_at: entry.performed_at,
+          }}
+          onLogged={onEdited}
+          onError={onError}
+        />
+        <Pressable
+          onPress={onCancelEdit}
+          accessibilityRole="button"
+          hitSlop={8}
+          style={({ pressed }) => [styles.editCancel, { opacity: pressed ? 0.6 : 1 }]}
+        >
+          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+            {tr('common.cancel')}
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return (
+    <SwipeRow
+      index={index}
+      // The divider stays out here so it holds still while the row slides out
+      // from under it.
+      style={first ? null : { borderTopWidth: 2, borderTopColor: colors.border }}
+      actions={[removeAction(colors, entry.description, onDelete)]}
+    >
+      <Pressable
+        onPress={counted ? onToggle : undefined}
+        disabled={!counted}
+        accessibilityRole={counted ? 'button' : undefined}
+        style={({ pressed }) => [
+          styles.entry,
+          pressed && counted ? { backgroundColor: colors.mutedWash } : null,
+        ]}
+      >
+        <Text style={styles.rowEmoji}>{exerciseEmoji(entry.description)}</Text>
+        <View style={styles.rowBody}>
+          <Text numberOfLines={1} style={[t.bodySemibold, { color: colors.foreground }]}>
+            {entry.description}
+          </Text>
+          {(entry.distance_km !== null || entry.duration_min !== null) && (
+            <Text style={[t.footnote, { color: colors.mutedForeground }]}>
+              {[
+                entry.distance_km !== null ? formatDistance(entry.distance_km, units) : null,
+                entry.duration_min !== null ? `${Math.round(entry.duration_min)} min` : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </Text>
+          )}
+        </View>
+        <Text style={[t.bodyBold, t.tnum, { color: colors.exerciseText }]}>
+          ~{Math.round(entry.kcal_burned)}
+        </Text>
+        <IconButton
+          icon="trash"
+          label={`Delete ${entry.description}`}
+          onPress={onDelete}
+        />
+      </Pressable>
+
+      {open && (
+        <View style={[styles.details, { backgroundColor: colors.mutedWash }]}>
+          <View style={styles.items}>
+            {groupSets(entry.sets, units).map((group) => (
+              <View key={group.name} style={styles.item}>
+                <Text
+                  numberOfLines={1}
+                  style={[t.footnote, styles.rowBody, { color: colors.foreground }]}
+                >
+                  {group.name}
+                </Text>
+                <Text style={[t.footnote, t.tnum, { color: colors.mutedForeground }]}>
+                  {group.detail}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.actions}>
+            <View style={styles.rowBody} />
+            <TextButton icon="pencil" label={tr('common.edit')} onPress={onEdit} />
+            <TextButton
+              icon="trash"
+              label={tr('common.delete')}
+              onPress={onDelete}
+              tone={colors.destructive}
+            />
+          </View>
+        </View>
+      )}
+    </SwipeRow>
+  );
+}
+
 /* ---------------------------------------------------------------------------
  * Chrome. Drawn by hand for the same reason the tab icons are: `lucide-react`
  * is a DOM library, and four glyphs is not worth a dependency that has to track
@@ -1114,7 +1254,7 @@ function StepButton({
   );
 }
 
-function IconButton({ icon, label, onPress }: { icon: 'trash' | 'repeat'; label: string; onPress: () => void }) {
+function IconButton({ icon, label, onPress }: { icon: 'trash' | 'repeat' | 'pencil'; label: string; onPress: () => void }) {
   const colors = useColors();
   return (
     <Pressable
@@ -1135,7 +1275,7 @@ function TextButton({
   onPress,
   tone,
 }: {
-  icon: 'trash' | 'repeat';
+  icon: 'trash' | 'repeat' | 'pencil';
   label: string;
   onPress: () => void;
   tone?: string;
@@ -1168,6 +1308,10 @@ function shiftDate(isoDate: string, days: number): string {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  /* The card is a card, not a row — it gets the group's inset rather than the
+     row padding, so the form does not sit flush against the divider. */
+  sessionEditor: { padding: 12, gap: 10 },
+  editCancel: { alignSelf: 'center', paddingVertical: 4 },
   setupBanner: { marginHorizontal: 16, marginBottom: 12 },
   header: {
     flexDirection: 'row',

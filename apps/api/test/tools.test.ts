@@ -521,6 +521,104 @@ describe('log_weight', () => {
   });
 });
 
+/**
+ * The tool that did not exist on 2026-08-26, when a tester asked the journal to
+ * take one exercise off a logged session. There was nothing to call, so the
+ * model deleted the session and logged a two-exercise replacement from what
+ * they had mentioned in passing — eight exercises and every recorded load gone,
+ * after being asked twice to recite a workout the database was holding.
+ */
+describe('update_workout', () => {
+  const set = (reps: number | null, weight: number | null) => ({
+    reps,
+    weight_kg: weight,
+    duration_sec: null,
+    distance_m: null,
+  });
+
+  async function logSession() {
+    await call('log_workout', {
+      category: 'strength',
+      when: null,
+      duration_min: 60,
+      exercises: [
+        { name: 'Bench press', sets: [set(8, 80), set(8, 80)] },
+        { name: 'Leg press', sets: [set(10, 120)] },
+      ],
+    });
+    const [entry] = await listExerciseEntries(user.id, { localDate: TODAY });
+    return entry!;
+  }
+
+  it('rewrites the session in place, keeping the entry id', async () => {
+    const before = await logSession();
+    const { json } = await call('update_workout', {
+      entry_id: before.id,
+      category: 'strength',
+      when: null,
+      duration_min: 60,
+      exercises: [{ name: 'Bench press', sets: [set(8, 80), set(8, 80)] }],
+    });
+
+    expect(json.entry_id).toBe(before.id);
+    const entries = await listExerciseEntries(user.id, { localDate: TODAY });
+    // One session, not two: the delete-and-relog path made a second row and
+    // orphaned every card that pointed at the first.
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.id).toBe(before.id);
+    expect(entries[0]!.sets.map((s) => s.name)).toEqual(['Bench press', 'Bench press']);
+  });
+
+  it('announces itself as a correction, with the redrawn card', async () => {
+    const entry = await logSession();
+    await call('update_workout', {
+      entry_id: entry.id,
+      category: 'strength',
+      when: null,
+      duration_min: 45,
+      exercises: [{ name: 'Bench press', sets: [set(8, 85)] }],
+    });
+
+    const action = actions.at(-1)!;
+    expect(action.kind).toBe('exercise_updated');
+    expect(action.entry_id).toBe(entry.id);
+    expect((action.card as Extract<ChatCard, { type: 'exercise' }>).sets).toHaveLength(1);
+  });
+
+  it('leaves the session on the day it was already on', async () => {
+    await call('log_workout', {
+      category: 'strength',
+      when: '2026-03-08T18:00:00Z',
+      duration_min: 60,
+      exercises: [{ name: 'Bench press', sets: [set(8, 80)] }],
+    });
+    const [entry] = await listExerciseEntries(user.id, { localDate: '2026-03-08' });
+
+    const { json } = await call('update_workout', {
+      entry_id: entry!.id,
+      category: 'strength',
+      when: null,
+      duration_min: 60,
+      exercises: [{ name: 'Bench press', sets: [set(10, 80)] }],
+    });
+    // A correction that says nothing about when must not sweep the session onto
+    // today, which is what a `when` defaulted to now would do.
+    expect(json.local_date).toBe('2026-03-08');
+  });
+
+  it('reports a bad id as an error the model can act on', async () => {
+    const result = await call('update_workout', {
+      entry_id: '00000000-0000-0000-0000-000000000000',
+      category: 'strength',
+      when: null,
+      duration_min: null,
+      exercises: [{ name: 'Bench press', sets: [set(8, 80)] }],
+    });
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain('get_day');
+  });
+});
+
 describe('delete_entry', () => {
   it('removes a food entry and names it in the action', async () => {
     const entry = await addMeal(user, { date: TODAY, kcal: 500, description: 'Mistake' });
@@ -531,13 +629,16 @@ describe('delete_entry', () => {
     expect(await getFoodEntry(user.id, entry.id)).toBeNull();
   });
 
-  it('removes an exercise entry', async () => {
+  it('removes an exercise entry and names it too', async () => {
     await call('log_exercise', {
       description: 'run', duration_min: 30, kcal_burned: 300, when: null, confidence: 'low',
     });
     const [entry] = await listExerciseEntries(user.id, { localDate: TODAY });
     const { json } = await call('delete_entry', { entry_id: entry!.id, kind: 'exercise' });
     expect(json.deleted).toBe(true);
+    // Both halves used to be wrong on this branch: the entry was never read, so
+    // the chip read "Removed entry", and it announced itself as a food deletion.
+    expect(actions.at(-1)).toMatchObject({ kind: 'exercise_deleted', summary: 'Removed run' });
   });
 
   it('reports a bad id as an error the model can act on', async () => {

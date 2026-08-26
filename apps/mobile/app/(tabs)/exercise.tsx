@@ -17,6 +17,7 @@ import { Glyph } from '@/components/Glyph';
 import { removeAction, SwipeRow } from '@/components/SwipeRow';
 import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
 import { Workouts } from '@/components/exercise/Workouts';
+import { WorkoutCard } from '@/components/workout/WorkoutCard';
 import { SetupBanner } from '@/components/SetupBanner';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
 import { useLocale, useT } from '@/lib/i18n';
@@ -45,6 +46,8 @@ export default function ExerciseScreen() {
   const undoably = useUndoableRemoval();
   const [days, setDays] = useState<number>(30);
   const [error, setError] = useState<string | null>(null);
+  /** The session open in the card that logged it, being corrected in place. */
+  const [editing, setEditing] = useState<string | null>(null);
 
   /* The series carries a date and a number per day; the sessions that made
      that number sit in a flat list beside it. Index them once, so pointing at
@@ -212,46 +215,92 @@ export default function ExerciseScreen() {
             title={tr('exercise.sessionsTitle')}
             footer={tr('exercise.burnNote')(units === 'imperial' ? '4.5 miles' : '7km')}
           >
-            {summary.entries.map((entry, i) => (
-              <SwipeRow
-                key={entry.id}
-                index={i}
-                style={i === 0 ? null : { borderTopWidth: 2, borderTopColor: colors.border }}
-                actions={[removeAction(colors, entry.description, () => remove(entry))]}
-              >
-                <InsetRow first>
-                  <Text style={styles.rowEmoji}>{exerciseEmoji(entry.description)}</Text>
-                  <View style={styles.flex}>
-                    <Text numberOfLines={1} style={[t.bodySemibold, { color: colors.foreground }]}>
-                      {entry.description}
-                    </Text>
-                    <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-                      {[
-                        formatDate(entry.local_date, locale),
-                        entry.distance_km !== null ? formatDistance(entry.distance_km, units) : null,
-                        entry.duration_min !== null
-                          ? tr('exercise.minutes')(String(Math.round(entry.duration_min)))
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </Text>
-                  </View>
-                  <Text style={[t.figure, styles.figure, { color: colors.exerciseText }]}>
-                    −{Math.round(entry.kcal_burned)}
-                  </Text>
+            {summary.entries.map((entry, i) =>
+              editing === entry.id ? (
+                <View key={entry.id} style={styles.sessionEditor}>
+                  <WorkoutCard
+                    editing={{
+                      id: entry.id,
+                      category: entry.category,
+                      duration_min: entry.duration_min,
+                      sets: entry.sets,
+                      performed_at: entry.performed_at,
+                    }}
+                    onLogged={() => {
+                      setEditing(null);
+                      void load(days);
+                    }}
+                    onError={setError}
+                  />
                   <Pressable
-                    onPress={() => remove(entry)}
+                    onPress={() => setEditing(null)}
                     accessibilityRole="button"
-                    accessibilityLabel={`Delete ${entry.description}`}
-                    hitSlop={10}
-                    style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+                    hitSlop={8}
+                    style={({ pressed }) => [styles.editCancel, { opacity: pressed ? 0.6 : 1 }]}
                   >
-                    <Glyph icon="trash" color={colors.mutedForeground} />
+                    <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+                      {tr('common.cancel')}
+                    </Text>
                   </Pressable>
-                </InsetRow>
-              </SwipeRow>
-            ))}
+                </View>
+              ) : (
+                <SwipeRow
+                  key={entry.id}
+                  index={i}
+                  style={i === 0 ? null : { borderTopWidth: 2, borderTopColor: colors.border }}
+                  actions={[removeAction(colors, entry.description, () => remove(entry))]}
+                >
+                  <InsetRow first>
+                    <Text style={styles.rowEmoji}>{exerciseEmoji(entry.description)}</Text>
+                    <View style={styles.flex}>
+                      <Text numberOfLines={1} style={[t.bodySemibold, { color: colors.foreground }]}>
+                        {entry.description}
+                      </Text>
+                      <Text style={[t.footnote, { color: colors.mutedForeground }]}>
+                        {[
+                          formatDate(entry.local_date, locale),
+                          entry.distance_km !== null ? formatDistance(entry.distance_km, units) : null,
+                          entry.duration_min !== null
+                            ? tr('exercise.minutes')(String(Math.round(entry.duration_min)))
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </Text>
+                    </View>
+                    <Text style={[t.figure, styles.figure, { color: colors.exerciseText }]}>
+                      −{Math.round(entry.kcal_burned)}
+                    </Text>
+                    {/*
+                      Only where there are sets to reopen. A run's record is a
+                      sentence and a distance; the workout form holds neither,
+                      and offering it here would turn one into an empty
+                      strength session. See the same test on Today.
+                    */}
+                    {entry.sets.length > 0 && (
+                      <Pressable
+                        onPress={() => setEditing(entry.id)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Edit ${entry.description}`}
+                        hitSlop={10}
+                        style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+                      >
+                        <Glyph icon="pencil" color={colors.mutedForeground} />
+                      </Pressable>
+                    )}
+                    <Pressable
+                      onPress={() => remove(entry)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Delete ${entry.description}`}
+                      hitSlop={10}
+                      style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
+                    >
+                      <Glyph icon="trash" color={colors.mutedForeground} />
+                    </Pressable>
+                  </InsetRow>
+                </SwipeRow>
+              ),
+            )}
           </InsetGroup>
         </>
       )}
@@ -348,6 +397,8 @@ const formatDate = (isoDate: string, locale: Locale) =>
   formatDay(isoDate, locale, { weekday: 'short', day: 'numeric', month: 'short' });
 
 const styles = StyleSheet.create({
+  sessionEditor: { padding: 12, gap: 10 },
+  editCancel: { alignSelf: 'center', paddingVertical: 4 },
   flex: { flex: 1 },
   page: { paddingHorizontal: 16, paddingBottom: 40, gap: 28 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },

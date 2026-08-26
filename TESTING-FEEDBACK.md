@@ -425,3 +425,192 @@ alongside the space it has to come out of.
 - The per-turn budget for the *rest* of setup is stated but unmeasured: the
   throwaway harness had no tools wired, so a second turn had nothing real to call
   and the sample was worthless. The opening is the measured claim.
+
+---
+
+## 6. The journal cannot edit an exercise · 2026-08-26
+
+**Reported:** "I wanted to use the journal to edit an exercise that was logged
+but it totally didn't understand — there is no way to edit an exercise even
+manually."
+
+**Status:** fixed — a tool for the model, an Edit affordance on both screens
+that list a session, and a deletion that says what it deleted. The model-switch
+finding at the end is diagnosed and left alone.
+
+### The transcript
+
+`nikssan123@gmail.com`, session `419c30ed`, all four turns inside ninety seconds:
+
+| Time (UTC) | Who | What |
+| --- | --- | --- |
+| 10:37:40 | user | "Adjust my full body workout logged for today - only 1 shoulder exercise, only 1 biceps and no legs" |
+| 10:37:40 | model | asks for the full exercise list, with sets and reps |
+| 10:37:58 | user | "It is already logged" |
+| 10:37:58 | model | asks for the full exercise list again |
+| 10:38:34 | user | "Just remove 1 of the exercises as I logged 2 - I did shoulder extensions and biceps curls only" |
+| 10:38:34 | model | asks for sets and reps |
+| 10:38:59 | user | "3 sets - 10 reps" |
+| 10:38:59 | model | "Done." — `delete_entry` on the session, then `log_workout` for a new one |
+
+Twice asked to retype a workout the app already had, and then the app deleted it.
+
+### What was actually true
+
+The model was not confused about what the user meant. It has no tool that can
+change a logged session, so the only thing it can do with "remove one exercise"
+is delete the session and log a replacement — and to log a replacement it has to
+be told the whole thing again. Every question it asked was the correct question
+for the only tool it had.
+
+**There is no `update_exercise_entry`.** `tools.ts` has `update_food_entry`
+(`apps/api/src/ai/tools.ts:444`), whose description says in as many words: "Use
+this instead of logging a compensating second entry." Exercise has `log_exercise`,
+`log_workout`, and `delete_entry`. Nothing else. `prompt.ts:136` tells the model
+to correct food with `update_food_entry`; there is no equivalent sentence for
+exercise, because there is no tool to name.
+
+**The endpoint it needed already exists.** `PATCH /entries/exercise/:id`
+(`routes/index.ts:620`) calls `updateWorkout` (`services/workouts.ts:181`), which
+replaces the exercise and set list on an existing entry and redraws the receipt
+in the conversation. It has its own test block (`test/workouts.test.ts:219`, eight
+cases). No AI tool wraps it.
+
+**The manual path is one screen deep and unreachable from the log.** The only
+Edit affordance for a logged session is on the exercise card *inside a chat
+message* (`apps/mobile/components/ChatCard.tsx:880`, web `ChatCard.tsx:739`),
+which opens `WorkoutCard` in editing mode and PATCHes. The two places a session
+is actually listed offer delete and nothing else — Today
+(`app/(tabs)/today.tsx:508`, swipe or trash) and the Exercise tab
+(`app/(tabs)/exercise.tsx:220`, swipe or trash). Neither lists the sets, so you
+cannot even see what is in the session you are being asked to delete.
+
+This session was logged from the Exercise tab against the "Full body" routine, so
+no chat card ever existed for it. There was no Edit link anywhere in the product
+for that entry. The tester's "no way to edit an exercise even manually" is exactly
+right.
+
+And the comment explaining why is `today.tsx:504`:
+
+> Exercise has no expand-to-edit affordance the way food does — there are no
+> items under it — so the burn is corrected in the journal and removed here.
+
+The journal is where it sends you, and the journal has no tool for it. Two
+half-built paths, each written assuming the other one covered it.
+
+### What it cost
+
+Entry `e216fa67` — "Full body", 8 exercises, 26 sets, every load recorded (Chest
+fly 3×10 @30kg, Leg press, Bench press, Bicep curl, Tricep extension 6×10 @35kg,
+Lat pulldown, Seated row, Lateral raise) — was deleted at 10:38:59 and replaced by
+`868bfb54`: two exercises, six sets, **no loads at all**, carrying the deleted
+session's 78 minutes and therefore its identical 574 kcal burn. The number on the
+card did not move; the training history underneath it was gone.
+
+The tester deleted that too and re-logged the whole session by hand from the
+Exercise tab at 10:40:51. Both ids are absent from `exercise_entries` now; the
+surviving entry is the one they retyped.
+
+### One more bug found on the way
+
+**An exercise deletion reported itself as a food deletion.** `delete_entry`
+pushed `kind: 'food_deleted'` whatever it deleted — there was no
+`exercise_deleted` in the `ChatAction` enum — and it read the entry's name only
+on the food branch. So the chip in this transcript reads **"Removed entry"**, in
+destructive red, with no name. The one thing a user needs from a deletion
+receipt is which thing went, and a workout was the only kind of entry that never
+said.
+
+What is *not* broken, checked because it looked like it would be: the card left
+in the journal at 10:38:59 does not offer Edit on the entry it lost.
+`deleteExerciseEntry` already calls `markEntryRemoved` (`services/log.ts:529`),
+the stored action carries `removed: true`, and both clients draw that card faded
+and `pointer-events: none`. The strike mechanism was built for exactly this and
+it works.
+
+### The model switched mid-conversation, on the turn that mattered
+
+From `ai_usage`, the same four turns:
+
+| Time | Model | cache read | cache write | Cost |
+| --- | --- | --- | --- | --- |
+| 10:37:40 | sonnet-5 | 54,458 | 922 | $0.0280 |
+| 10:37:58 | sonnet-5 | 27,848 | 877 | $0.0187 |
+| 10:38:34 | **haiku-4-5** | **0** | **22,996** | **$0.0487** |
+| 10:38:59 | haiku-4-5 | 46,970 | 1,640 | $0.0113 |
+
+The escalation in `language.ts` samples the last 600 characters of *user* turns
+(`SAMPLE_LIMIT`, `language.ts:98`). This account writes Bulgarian, so it starts on
+Sonnet; four English turns pushed the Bulgarian out of the window mid-thread and
+it dropped to Haiku. The switch threw away a warm prompt cache and paid a full
+cold 1-hour cache write, which made the cheapest model the **most expensive turn
+in the conversation** — more than either Sonnet turn — and it landed precisely on
+the turn that read "remove 1 of the exercises" and logged a new workout instead.
+
+The routing table is right about which model suits a text log. What nobody costed
+is the *switch*: ~$0.03 of cache write per flip, and a flip is one turn of English
+away for every bilingual account.
+
+### What changed
+
+- **`update_workout`**, wrapping the service that was already there. The model
+  reads the session with `get_day` and sends the corrected exercise list back;
+  the entry id survives, and with it the journal card, the routine link and the
+  training history. It shares its schema with `log_workout` — one form, filled
+  in twice — because a correction that could not express something the log could
+  would send the model straight back to deleting and re-logging.
+- **The prompt says so.** "Which exercise tool" is five now, not four, and the
+  Corrections section names `update_workout` beside `update_food_entry` with the
+  thing both of them need said: they replace what they are given, so read the
+  entry first and send back everything that stays.
+- **`exercise_updated` and `exercise_deleted` action kinds**, and `delete_entry`
+  now reads the entry on both branches, so the chip says *"Removed Full body"*.
+  `isDeletion()` in `@ct/shared` replaces the four separate `=== 'food_deleted'`
+  tests that were correct only while a deleted workout called itself that.
+- **The exercise row opens, on all four screens that list one.** Today and the
+  Exercise tab, web and mobile: a counted session expands onto its sets — which
+  is the answer to "what did I actually log?", and until now only the receipt in
+  the chat gave it — and offers Edit, which reopens the same `WorkoutCard` the
+  journal already reopens. A session with no sets is delete-only exactly as
+  before: a run's record is a sentence and a distance, and handing that to a form
+  built for exercises and loads would turn it into an empty strength session.
+
+Five tests: four on `update_workout` (rewrites in place rather than adding a
+second row, announces itself as a correction, leaves the session on the day it
+was already on, errors usefully on a bad id) and one on the deletion naming what
+it deleted.
+
+### What is still open
+
+**Pin the model for the life of a conversation**, or at minimum let the sample
+window keep what it has already decided about an account's language. Left alone
+deliberately: it changes the routing economics for every bilingual account and
+deserves its own measurement, not a fix smuggled in beside this one.
+
+### The lesson worth keeping
+
+Every piece of editing a workout was built and tested — service, route, editor,
+card. It was reachable from exactly one surface: the receipt the chat leaves
+behind. Anything logged outside the chat produced a record that no path in the
+product could change, and the code comment that explains the missing affordance
+points at the journal, which is the one place with no tool for it.
+
+The tester read this as "it totally didn't understand." The model understood
+perfectly and had nothing to reach for — which is what a missing tool looks like
+from the outside, and why "the AI got confused" is worth checking against the tool
+list before it is believed.
+
+### Not covered
+
+- **A described activity still cannot be edited at all.** "5km run" has a
+  description, a duration, a distance and a burn, and no endpoint takes those —
+  `PATCH /entries/exercise/:id` is workout-shaped, so the Edit affordance is
+  gated on a session having sets. Delete-and-relog remains the only correction
+  for a run, which is the same shape of hole this report is about, one size
+  smaller.
+- The burn arithmetic after an edit. `updateWorkout` recomputes from bodyweight
+  and time, so a session edited down to two exercises keeps whatever duration it
+  was given — which is how 574 kcal survived losing six exercises. Correct by the
+  formula, wrong-looking on the card.
+- Whether the same hole exists for weight entries. `log_weight` upserts on the
+  day, so a correction is a re-log; nobody has reported it.

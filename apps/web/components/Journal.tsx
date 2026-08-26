@@ -10,7 +10,7 @@ import type {
   OnboardingState,
   UnitSystem,
 } from '@ct/shared';
-import { formatNumber, unitsOf } from '@ct/shared';
+import { formatNumber, isDeletion, unitsOf } from '@ct/shared';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
 import { api } from '@/lib/api';
 import { asBlob } from '@/lib/image';
@@ -287,7 +287,7 @@ export function Journal() {
       // A turn can delete an entry too, and the card that logged it is
       // somewhere above in this same conversation.
       for (const action of result.actions) {
-        if (action.kind === 'food_deleted' && action.entry_id) {
+        if (isDeletion(action) && action.entry_id) {
           const gone = action.entry_id;
           setBubbles((prev) => strike(prev, gone));
         }

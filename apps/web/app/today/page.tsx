@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { CalendarDays, ChevronLeft, ChevronRight, RotateCcw, Trash2 } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { DaySummary, ExerciseEntry, FoodEntry, Meal } from '@ct/shared';
 import { formatBodyWeight, formatDay, formatDistance, formatMass } from '@ct/shared';
@@ -15,6 +15,8 @@ import { DietQuality } from '@/components/DietQuality';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { RepeatMeals } from '@/components/RepeatMeals';
 import { FoodEditor } from '@/components/FoodEditor';
+import { groupSets } from '@/components/ChatCard';
+import { WorkoutCard } from '@/components/workout/WorkoutCard';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
@@ -146,9 +148,13 @@ function TodayView() {
   }
 
   /**
-   * Exercise has no expand-to-edit affordance the way food does — there are no
-   * items under it — so the burn is corrected in the journal and removed here.
    * Totals are adjusted optimistically because they head the section.
+   *
+   * This used to carry a note saying exercise had no expand-to-edit affordance
+   * and was corrected in the journal instead. It was true and it was a dead
+   * end: the journal had no tool that could change a logged session either, so
+   * the only correction available anywhere in the product was this delete. The
+   * row expands now, and a counted session reopens in the card that logged it.
    */
   async function removeExercise(entry: ExerciseEntry) {
     const burn = Math.round(entry.kcal_burned);
@@ -313,36 +319,12 @@ function TodayView() {
               footer={t('today.exerciseFooter')}
             >
               {day.exercise_entries.map((entry) => (
-                <InsetRow key={entry.id}>
-                  <span aria-hidden className="shrink-0 text-[20px] leading-none">
-                    {exerciseEmoji(entry.description)}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-body font-semibold">{entry.description}</p>
-                    {(entry.distance_km !== null || entry.duration_min !== null) && (
-                      <p className="text-footnote text-muted-foreground font-medium">
-                        {[
-                          entry.distance_km !== null ? formatDistance(entry.distance_km, units) : null,
-                          entry.duration_min !== null ? `${Math.round(entry.duration_min)} min` : null,
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </p>
-                    )}
-                  </div>
-                  <span className="tnum text-body font-bold text-[var(--exercise-text)]">
-                    ~{Math.round(entry.kcal_burned)}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => void removeExercise(entry)}
-                    aria-label={`Delete ${entry.description}`}
-                    className="text-muted-foreground hover:text-destructive -mr-2 size-8 shrink-0 rounded-full"
-                  >
-                    <Trash2 size={15} />
-                  </Button>
-                </InsetRow>
+                <ExerciseRow
+                  key={entry.id}
+                  entry={entry}
+                  onEdited={() => void load(date)}
+                  onDelete={() => void removeExercise(entry)}
+                />
               ))}
             </InsetGroup>
           )}
@@ -470,6 +452,146 @@ function EntryRow({
             >
               <Trash2 size={15} />
               Delete
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A logged session, and the way back into it.
+ *
+ * The row used to be a burn figure and a bin. That made this screen a place a
+ * workout could be destroyed and not one where it could be corrected, and the
+ * note above `removeExercise` sent anyone wanting the difference to the journal
+ * — which could not do it either. So the row opens, onto the sets, because
+ * "what did I actually log?" is the question that comes before wanting to
+ * change it. Edit reopens the card that logged the session.
+ *
+ * Only where there are sets. A run's record is a sentence and a distance, which
+ * the workout form holds neither of; offering it there would quietly turn a 5km
+ * run into an empty strength session.
+ */
+function ExerciseRow({
+  entry,
+  onEdited,
+  onDelete,
+}: {
+  entry: ExerciseEntry;
+  onEdited: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const units = useUnits();
+  const t = useT();
+  const counted = entry.sets.length > 0;
+
+  if (editing) {
+    return (
+      <div className="space-y-2.5 p-3">
+        <WorkoutCard
+          editing={{
+            id: entry.id,
+            category: entry.category,
+            duration_min: entry.duration_min,
+            sets: entry.sets,
+            performed_at: entry.performed_at,
+          }}
+          onLogged={() => {
+            setEditing(false);
+            setOpen(false);
+            onEdited();
+          }}
+        />
+        <div className="flex justify-center">
+          <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
+            {t('common.cancel')}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const line = (
+    <>
+      <span aria-hidden className="shrink-0 text-[20px] leading-none">
+        {exerciseEmoji(entry.description)}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-body font-semibold">{entry.description}</p>
+        {(entry.distance_km !== null || entry.duration_min !== null) && (
+          <p className="text-footnote text-muted-foreground font-medium">
+            {[
+              entry.distance_km !== null ? formatDistance(entry.distance_km, units) : null,
+              entry.duration_min !== null ? `${Math.round(entry.duration_min)} min` : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        )}
+      </div>
+      <span className="tnum text-body font-bold text-[var(--exercise-text)]">
+        ~{Math.round(entry.kcal_burned)}
+      </span>
+    </>
+  );
+
+  return (
+    <div>
+      <div className="flex items-center gap-3 px-4 py-3">
+        {counted ? (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="active:bg-muted/60 -mx-4 -my-3 flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition-colors"
+          >
+            {line}
+          </button>
+        ) : (
+          line
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onDelete}
+          aria-label={`Delete ${entry.description}`}
+          className="text-muted-foreground hover:text-destructive -mr-2 size-8 shrink-0 rounded-full"
+        >
+          <Trash2 size={15} />
+        </Button>
+      </div>
+
+      {open && (
+        <div className="bg-muted/40 space-y-2 px-4 py-3">
+          <ul className="space-y-1.5">
+            {groupSets(entry.sets, units, t).map((group) => (
+              <li key={group.name} className="text-footnote flex justify-between gap-3 font-medium">
+                <span className="min-w-0 flex-1 truncate">{group.name}</span>
+                <span className="tnum text-muted-foreground shrink-0">{group.detail}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setEditing(true)}
+              className="h-8 gap-1.5 px-2"
+            >
+              <Pencil size={15} />
+              {t('common.edit')}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onDelete}
+              className="text-destructive h-8 gap-1.5 px-2"
+            >
+              <Trash2 size={15} />
+              {t('common.delete')}
             </Button>
           </div>
         </div>

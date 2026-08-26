@@ -17,7 +17,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import type { ChatAction, ChatCard as Card, ExerciseEntry, FoodEntry, Locale, Recipe, UnitSystem } from '@ct/shared';
-import { bodyWeightToKg, bodyWeightUnit, formatBodyWeight, formatDay, formatDistance, formatWeightDelta, loadUnit, toBodyWeight, toLoad } from '@ct/shared';
+import { bodyWeightToKg, bodyWeightUnit, formatBodyWeight, formatDay, formatDistance, formatWeightDelta, isDeletion, loadUnit, toBodyWeight, toLoad } from '@ct/shared';
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { FoodEditor } from '@/components/FoodEditor';
@@ -147,8 +147,7 @@ function Chip({ action }: { action: ChatAction }) {
           style={[
             styles.chipDot,
             {
-              backgroundColor:
-                action.kind === 'food_deleted' ? colors.destructive : colors.calories,
+              backgroundColor: isDeletion(action) ? colors.destructive : colors.calories,
             },
           ]}
         />
@@ -917,7 +916,7 @@ function ExerciseCard({
  * informative thing in the session, and averaging it away would hide exactly
  * the detail the sets were stored to keep.
  */
-function groupSets(sets: Extract<Card, { type: 'exercise' }>['sets'], units: UnitSystem) {
+export function groupSets(sets: Extract<Card, { type: 'exercise' }>['sets'], units: UnitSystem) {
   const byName = new Map<string, typeof sets>();
   for (const set of sets) {
     byName.set(set.name, [...(byName.get(set.name) ?? []), set]);

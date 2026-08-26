@@ -30,7 +30,7 @@ import type {
   Meal,
   UnitSystem,
 } from '@ct/shared';
-import { formatNumber, inferMeal, unitsOf } from '@ct/shared';
+import { formatNumber, inferMeal, isDeletion, unitsOf } from '@ct/shared';
 import { ChatActionCard } from '@/components/ChatCard';
 import { Composer, type ComposerPayload } from '@/components/Composer';
 import { FoodEditor } from '@/components/FoodEditor';
@@ -437,7 +437,7 @@ export default function JournalScreen() {
         // A turn can delete an entry too, and the card that logged it is
         // somewhere above in this same conversation.
         for (const action of result.actions) {
-          if (action.kind === 'food_deleted' && action.entry_id) {
+          if (isDeletion(action) && action.entry_id) {
             const gone = action.entry_id;
             setBubbles((prev) => strike(prev, gone));
           }
@@ -1014,10 +1014,13 @@ const Row = memo(function Row({
             <ChatActionCard
               key={`${action.entry_id ?? action.kind}-${i}`}
               action={action}
-              // The one action kind that is a correction rather than a new
-              // fact, and the only thing that tells the two apart on screen —
-              // both arrive as a card with a number on it.
-              touched={bubble.live === true && action.kind === 'food_updated'}
+              // The two action kinds that are a correction rather than a new
+              // fact, and the only thing that tells them apart on screen from a
+              // fresh log — both arrive as a card with a number on it.
+              touched={
+                bubble.live === true &&
+                (action.kind === 'food_updated' || action.kind === 'exercise_updated')
+              }
               // The workout card posts its own answer and the server rewrites
               // this message's card into a receipt — so it has to know which
               // message it is sitting on.

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowRight } from 'lucide-react';
 import type { ChatAction, ChatCard as Card, ExerciseEntry, FoodEntry, Locale, UnitSystem } from '@ct/shared';
-import { bodyWeightToKg, bodyWeightUnit, formatBodyWeight, formatDay, formatDistance, formatNumber, formatWeightDelta, loadUnit, toBodyWeight, toLoad, weekdayName } from '@ct/shared';
+import { bodyWeightToKg, bodyWeightUnit, formatBodyWeight, formatDay, formatDistance, formatNumber, formatWeightDelta, isDeletion, loadUnit, toBodyWeight, toLoad, weekdayName } from '@ct/shared';
 import { useUnits } from '@/lib/units';
 import { RecipeCard } from '@/components/kitchen/RecipeCard';
 import { api } from '@/lib/api';
@@ -111,7 +111,7 @@ function Chip({ action }: { action: ChatAction }) {
       <span
         className="size-2 shrink-0 rounded-full"
         style={{
-          background: action.kind === 'food_deleted' ? 'var(--destructive)' : 'var(--calories)',
+          background: isDeletion(action) ? 'var(--destructive)' : 'var(--calories)',
         }}
       />
       <span className="text-footnote font-semibold">{action.summary}</span>
@@ -782,7 +782,7 @@ function ExerciseCard({
  * Not a component, so it takes `t` rather than calling the hook. Three of the
  * four branches print a word.
  */
-function groupSets(
+export function groupSets(
   sets: Extract<Card, { type: 'exercise' }>['sets'],
   units: UnitSystem,
   t: ReturnType<typeof useT>,

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ExerciseEntry, ExerciseSummary, Locale } from '@ct/shared';
 import { distanceUnit, formatDay, formatDistance, formatNumber, toDistance } from '@ct/shared';
@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { exerciseEmoji } from '@ct/shared/food-emoji';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Workouts } from '@/components/exercise/Workouts';
+import { WorkoutCard } from '@/components/workout/WorkoutCard';
 import { useLocale, useT } from '@/lib/i18n';
 
 /**
@@ -32,6 +33,8 @@ export default function ExercisePage() {
   const t = useT();
   const [summary, setSummary] = useState<ExerciseSummary | null>(null);
   const [days, setDays] = useState<number>(30);
+  /** The session open in the card that logged it, being corrected in place. */
+  const [editing, setEditing] = useState<string | null>(null);
   const units = useUnits();
 
   /* The series carries a date and a number per day; the sessions that made
@@ -187,39 +190,78 @@ export default function ExercisePage() {
               title={t('exercise.sessionsTitle')}
               footer={t('exercise.burnNote')(units === 'imperial' ? '4.5 miles' : '7km')}
             >
-              {summary.entries.map((entry) => (
-                <InsetRow key={entry.id}>
-                  <span aria-hidden className="shrink-0 text-[20px] leading-none">
-                    {exerciseEmoji(entry.description)}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-body font-semibold">{entry.description}</p>
-                    <p className="text-footnote text-muted-foreground font-medium">
-                      {[
-                        formatDate(entry.local_date, locale),
-                        entry.distance_km !== null ? formatDistance(entry.distance_km, units) : null,
-                        entry.duration_min !== null
-                          ? t('exercise.minutes')(String(Math.round(entry.duration_min)))
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(' · ')}
-                    </p>
+              {summary.entries.map((entry) =>
+                editing === entry.id ? (
+                  <div key={entry.id} className="space-y-2.5 p-3">
+                    <WorkoutCard
+                      editing={{
+                        id: entry.id,
+                        category: entry.category,
+                        duration_min: entry.duration_min,
+                        sets: entry.sets,
+                        performed_at: entry.performed_at,
+                      }}
+                      onLogged={() => {
+                        setEditing(null);
+                        void load(days);
+                      }}
+                    />
+                    <div className="flex justify-center">
+                      <Button variant="ghost" size="sm" onClick={() => setEditing(null)}>
+                        {t('common.cancel')}
+                      </Button>
+                    </div>
                   </div>
-                  <span className="text-figure shrink-0 text-body text-[var(--exercise-text)]">
-                    −{Math.round(entry.kcal_burned)}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => void remove(entry)}
-                    aria-label={`Delete ${entry.description}`}
-                    className="text-muted-foreground hover:text-destructive -mr-2 size-8 shrink-0 rounded-full"
-                  >
-                    <Trash2 size={15} />
-                  </Button>
-                </InsetRow>
-              ))}
+                ) : (
+                  <InsetRow key={entry.id}>
+                    <span aria-hidden className="shrink-0 text-[20px] leading-none">
+                      {exerciseEmoji(entry.description)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-body font-semibold">{entry.description}</p>
+                      <p className="text-footnote text-muted-foreground font-medium">
+                        {[
+                          formatDate(entry.local_date, locale),
+                          entry.distance_km !== null ? formatDistance(entry.distance_km, units) : null,
+                          entry.duration_min !== null
+                            ? t('exercise.minutes')(String(Math.round(entry.duration_min)))
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </p>
+                    </div>
+                    <span className="text-figure shrink-0 text-body text-[var(--exercise-text)]">
+                      −{Math.round(entry.kcal_burned)}
+                    </span>
+                    {/*
+                      Only where there are sets to reopen — a run's record is a
+                      sentence and a distance, and the workout form holds
+                      neither. Same test as Today.
+                    */}
+                    {entry.sets.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setEditing(entry.id)}
+                        aria-label={`Edit ${entry.description}`}
+                        className="text-muted-foreground size-8 shrink-0 rounded-full"
+                      >
+                        <Pencil size={15} />
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => void remove(entry)}
+                      aria-label={`Delete ${entry.description}`}
+                      className="text-muted-foreground hover:text-destructive -mr-2 size-8 shrink-0 rounded-full"
+                    >
+                      <Trash2 size={15} />
+                    </Button>
+                  </InsetRow>
+                ),
+              )}
             </InsetGroup>
           </div>
         )}

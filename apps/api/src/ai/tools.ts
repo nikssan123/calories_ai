@@ -549,6 +549,45 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
       'strength = sets and reps against a load; cardio = running, cycling, swimming, machines; class = HIIT, spin, CrossFit, anything an instructor ran; sport = a game or a climb; flexibility = yoga, pilates, stretching.',
     );
 
+/**
+ * The session itself, in the shape both writing tools take.
+ *
+ * Shared rather than copied because `log_workout` and `update_workout` are the
+ * same form filled in twice — a correction that could not express something the
+ * log could would send the model back to deleting and re-logging, which is the
+ * behaviour the edit tool exists to end.
+ */
+const workoutExercisesField = z
+  .array(
+    z.object({
+      name: z.string().describe('The exercise, as they said it — "Bench press", "Bulgarian split squat".'),
+      sets: z
+        .array(
+          z.object({
+            reps: z
+              .number()
+              .nullable()
+              .default(null)
+              .describe('Null unless they said the count. Do not put a plausible number here.'),
+            weight_kg: z
+              .number()
+              .nullable()
+              .default(null)
+              .describe(
+                'Load per set, in kilograms always — convert from pounds yourself, 225 lb is 102. Null for bodyweight, and null whenever they did not tell you the load. Never estimate one: a weight you chose is indistinguishable from one they lifted once it is in their history, and their next session will be judged against it.',
+              ),
+            duration_sec: z.number().nullable().default(null).describe('For a held exercise like a plank.'),
+            distance_m: z.number().nullable().default(null),
+          }),
+        )
+        .min(1)
+        .describe(
+          'One entry per set actually performed. "3x8" is three entries of 8, not one saying 3. When they gave a count but no numbers — "three sets of bench" — send three entries with every field null: an unrecorded set is a true thing to store, and a guessed one is not.',
+        ),
+    }),
+  )
+  .min(1);
+
   /**
    * The counted path. `log_exercise` above estimates a burn from a sentence,
    * which is right for "5km run"; this one is for work measured in sets, where
@@ -565,36 +604,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         .nullable()
         .default(null)
         .describe('Total session time if they said. Null to estimate it from the sets.'),
-      exercises: z
-        .array(
-          z.object({
-            name: z.string().describe('The exercise, as they said it — "Bench press", "Bulgarian split squat".'),
-            sets: z
-              .array(
-                z.object({
-                  reps: z
-                    .number()
-                    .nullable()
-                    .default(null)
-                    .describe('Null unless they said the count. Do not put a plausible number here.'),
-                  weight_kg: z
-                    .number()
-                    .nullable()
-                    .default(null)
-                    .describe(
-                      'Load per set, in kilograms always — convert from pounds yourself, 225 lb is 102. Null for bodyweight, and null whenever they did not tell you the load. Never estimate one: a weight you chose is indistinguishable from one they lifted once it is in their history, and their next session will be judged against it.',
-                    ),
-                  duration_sec: z.number().nullable().default(null).describe('For a held exercise like a plank.'),
-                  distance_m: z.number().nullable().default(null),
-                }),
-              )
-              .min(1)
-              .describe(
-                'One entry per set actually performed. "3x8" is three entries of 8, not one saying 3. When they gave a count but no numbers — "three sets of bench" — send three entries with every field null: an unrecorded set is a true thing to store, and a guessed one is not.',
-              ),
-          }),
-        )
-        .min(1),
+      exercises: workoutExercisesField,
     },
     async (args) => {
       const { logWorkout: write } = await import('../services/workouts.ts');
@@ -641,6 +651,81 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         routine_hint: alreadySaved
           ? `This is their "${suggested}" workout — it is already saved, so do not offer to save it again.`
           : `If this looks like a workout they repeat, offer once to save it as "${suggested}" with save_routine. That name is in the vocabulary they already use.`,
+      });
+    },
+    { alwaysLoad: true },
+  );
+
+  /**
+   * The session they already logged, as they actually did it.
+   *
+   * Without this the only way to change a logged workout was to delete it and
+   * log a new one, which is what the model did on 2026-08-26 when a tester
+   * asked it to drop one exercise: eight exercises and twenty-six sets of
+   * recorded load went, and what replaced them was the two exercises they had
+   * mentioned in passing. It also had to ask twice for a list of everything
+   * they did — the correct question when re-logging from nothing is the whole
+   * session, and the app was holding it the entire time.
+   *
+   * Replaces rather than merges, for the same reason `update_food_entry` does:
+   * a set has no identity of its own, so "remove the leg press" cannot be
+   * expressed as a patch without the model and the server agreeing on which row
+   * that is. The tool description carries the cost of that decision — send the
+   * whole corrected list — and `get_day` supplies what to base it on.
+   */
+  const updateWorkoutTool = tool(
+    'update_workout',
+    'Correct a training session that is already logged — "I did not do legs", "that was four sets not three", "drop the last exercise". Send the COMPLETE corrected exercise list, not just the part that changed: it replaces the session. Call get_day first for the entry id and what is currently on it, and do not ask the user to list a session back to you — read it. Use this instead of delete_entry plus log_workout, which throws away the sets they are not correcting along with the entry id the journal card and the routine link hang off.',
+    {
+      entry_id: z.string().describe('The id of the session to correct, from get_day.'),
+      category: categoryField,
+      when: whenField,
+      duration_min: z
+        .number()
+        .nullable()
+        .default(null)
+        .describe('Total session time if they said. Null to estimate it from the sets.'),
+      exercises: workoutExercisesField,
+    },
+    async (args) => {
+      const { updateWorkout } = await import('../services/workouts.ts');
+      const entry = await updateWorkout({
+        entryId: args.entry_id,
+        userId: tc.userId,
+        category: args.category as never,
+        exercises: args.exercises as never,
+        durationMin: args.duration_min,
+        // Left undefined rather than defaulted to now: a correction that says
+        // nothing about when belongs to the day it was already on.
+        performedAt: args.when ? resolveWhen(args.when, tc.now, tc.ctx) : undefined,
+        ctx: tc.ctx,
+      });
+      if (!entry) return fail('No session with that id. Call get_day to list the ids for a date.');
+
+      const summary = `${entry.description} — ~${Math.round(entry.kcal_burned)} kcal`;
+      const card = exerciseCard(entry);
+      /*
+       * Redraw the receipt this session already left further up the
+       * conversation, exactly as the REST edit does. The card pushed below is
+       * this turn's; the one that logged the session is somebody else's turn
+       * and would otherwise go on showing the sets it was logged with.
+       */
+      const { refreshEntryCards } = await import('../services/chat.ts');
+      await refreshEntryCards(tc.userId, entry.id, card, summary);
+
+      tc.actions.push({ kind: 'exercise_updated', entry_id: entry.id, summary, card });
+      return ok({
+        entry_id: entry.id,
+        local_date: entry.local_date,
+        sets_recorded: entry.sets.length,
+        duration_min: entry.duration_min,
+        kcal_burned: entry.kcal_burned,
+        // Said back for the same reason `log_workout` says it: this figure came
+        // from bodyweight, time and a MET, and it moves when the session does.
+        burn_note: 'Recomputed from their bodyweight and the time, not estimated by you.',
+        // The name follows the work: a session edited down off a routine stops
+        // being that routine, and the model should report what it is now.
+        now_called: entry.description,
       });
     },
     { alwaysLoad: true },
@@ -950,7 +1035,19 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
       kind: z.enum(['food', 'exercise']),
     },
     async (args) => {
-      const existing = args.kind === 'food' ? await getFoodEntry(tc.userId, args.entry_id) : null;
+      /*
+       * Read before deleting, on both branches.
+       *
+       * This used to look the entry up only when it was food, so every exercise
+       * deletion produced the chip "Removed entry" — the one word a deletion
+       * receipt has to carry is which thing went, and a workout was the only
+       * kind of entry that never said.
+       */
+      const { getExerciseEntry } = await import('../services/workouts.ts');
+      const existing =
+        args.kind === 'food'
+          ? await getFoodEntry(tc.userId, args.entry_id)
+          : await getExerciseEntry(tc.userId, args.entry_id);
       const deleted =
         args.kind === 'food'
           ? await deleteFoodEntry(tc.userId, args.entry_id)
@@ -959,7 +1056,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
       if (!deleted) return fail('No entry with that id. Call get_day to list the ids for a date.');
 
       tc.actions.push({
-        kind: 'food_deleted',
+        kind: args.kind === 'food' ? 'food_deleted' : 'exercise_deleted',
         entry_id: args.entry_id,
         summary: `Removed ${existing?.description ?? 'entry'}`,
         // Nothing to draw: the entry it referred to no longer exists.
@@ -2460,6 +2557,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
     updateFood,
     logExercise,
     logWorkout,
+    updateWorkoutTool,
     askWorkout,
     defineExercise,
     saveRoutineTool,

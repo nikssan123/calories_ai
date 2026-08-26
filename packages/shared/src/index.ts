@@ -1795,6 +1795,16 @@ export const ChatAction = z.object({
     'food_updated',
     'food_deleted',
     'exercise_logged',
+    /*
+     * A session corrected in place, and one removed.
+     *
+     * Exercise used to borrow food's two: a workout deleted from the journal
+     * announced itself as `food_deleted`, which coloured the chip right and
+     * named the wrong thing, and there was no correction kind at all because
+     * there was no tool that could correct one.
+     */
+    'exercise_updated',
+    'exercise_deleted',
     'weight_logged',
     'card_shown',
     'recipes_suggested',
@@ -1822,6 +1832,18 @@ export const ChatAction = z.object({
   removed: z.boolean().optional(),
 });
 export type ChatAction = z.infer<typeof ChatAction>;
+
+/**
+ * Whether this action says an entry stopped existing.
+ *
+ * Two kinds rather than one, and asked here rather than at each of the four
+ * places that care: the chip colour on both clients and the strike-through both
+ * journals apply. Every one of those used to test `food_deleted` alone, which
+ * was correct only for as long as a deleted workout also called itself that.
+ */
+export function isDeletion(action: ChatAction): boolean {
+  return action.kind === 'food_deleted' || action.kind === 'exercise_deleted';
+}
 
 export const ChatMessage = z.object({
   id: z.string().uuid(),
