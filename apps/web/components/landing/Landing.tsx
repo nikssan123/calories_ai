@@ -207,13 +207,17 @@ function Header({ start }: { start: Cta }) {
           </a>
         </nav>
 
-        <div className="ml-auto flex items-center gap-1.5 md:ml-7">
-          <Link
-            href="/login"
-            className="text-muted-foreground hover:text-foreground hidden px-3 py-2 text-sm transition-colors sm:block"
-          >
-            Sign in
-          </Link>
+        {/*
+          * One button, where there used to be two.
+          *
+          * The "Sign in" beside it is gone on purpose, and not because it was
+          * redundant: `/login` no longer opens anything a visitor owns, so
+          * offering it here advertises a door that will refuse them. The page
+          * has one thing to ask for now, and this is it. The route is still
+          * live for whoever runs the server — it is simply not signposted from
+          * the page whose whole job is talking to strangers.
+          */}
+        <div className="ml-auto md:ml-7">
           <StartButton start={start} className={pill('primary', 'h-9 px-4 text-sm')} />
         </div>
       </div>
@@ -887,8 +891,8 @@ const DETAILS = [
     body: 'A weighed portion and a restaurant estimate are not the same evidence, and the maths weighs them differently.',
   },
   {
-    title: 'Phone and desktop are different layouts.',
-    body: 'Not one scaled to fit. The day rides beside the conversation on a wide screen, and gets its own tab on a phone.',
+    title: 'It answers in your language.',
+    body: 'English, Bulgarian, German, Spanish and French, taken from the phone’s own setting and changed whenever you like.',
   },
 ];
 
@@ -986,10 +990,10 @@ function Footer() {
           <Logo size={22} />
           <span className="text-sm font-bold">Day So Far</span>
         </div>
+        {/* Privacy and Terms, and nothing else. Both are here because somebody
+            has to be able to reach them without an account; "Sign in" was here
+            because there was once something behind it for a visitor. */}
         <nav className="text-muted-foreground flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
-          <Link href="/login" className="hover:text-foreground transition-colors">
-            Sign in
-          </Link>
           <Link href="/privacy" className="hover:text-foreground transition-colors">
             Privacy
           </Link>
