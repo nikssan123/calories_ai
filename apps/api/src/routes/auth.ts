@@ -87,14 +87,47 @@ const TOKEN_LIMIT = { max: 20, timeWindow: '1 hour' };
 const OAUTH_LIMIT = { max: 30, timeWindow: '15 minutes' };
 
 /**
- * Signup is open by default so the first account can be created, and can be
- * closed with ALLOW_SIGNUP=false once you've made yours.
+ * Whether this request comes from a client that carries its own session token.
+ *
+ * In practice that means the app and nothing else: the browser's session is an
+ * httpOnly cookie it never sees, and the web's proxy forwards only the cookie
+ * and the content type, so a page cannot claim otherwise even if it wanted to.
+ * It is the same signal `tokenForBody` has always read, given a name because
+ * two other decisions now turn on it: who may sign up, and who may sign in from
+ * a browser.
  */
-async function signupAllowed(): Promise<boolean> {
-  if (env.allowSignup) return true;
-  // Always permit the very first account, or the deployment is unusable.
-  return (await countAccounts()) === 0;
+function isAppClient(request: FastifyRequest): boolean {
+  return request.headers[SESSION_TRANSPORT_HEADER] === 'bearer';
 }
+
+/**
+ * Whether this caller may create an account.
+ *
+ * Two rules stacked on one another. Signup is open by default so the first
+ * account can be created, and closes with ALLOW_SIGNUP=false once you've made
+ * yours — that is the operator's switch, and it applies to everybody.
+ *
+ * On top of it: accounts are made in the app. The web is the landing page and
+ * the admin panel, and a sign-up form there would be offering a journal on the
+ * one surface that no longer keeps one. The very first account is the exception
+ * that makes a fresh deployment usable at all — somebody standing in front of a
+ * server with no accounts has no app to sign into and no admin to promote them,
+ * so the browser gets exactly one, and the admin fallback in `isAdmin` hands it
+ * the panel.
+ */
+async function signupAllowed(fromApp: boolean): Promise<boolean> {
+  if ((await countAccounts()) === 0) return true;
+  if (!fromApp) return false;
+  return env.allowSignup;
+}
+
+/**
+ * The sentence a person meets when they try to sign in to their journal on the
+ * web. It names where the account does work, because "no" on its own from a
+ * password that is perfectly correct reads as a broken server.
+ */
+const APP_ONLY =
+  'Your journal lives in the app — sign in there. The web sign-in is for administrators.';
 
 function setSessionCookie(reply: FastifyReply, token: string, expiresAt: Date) {
   reply.setCookie(SESSION_COOKIE, token, {
@@ -113,7 +146,7 @@ function setSessionCookie(reply: FastifyReply, token: string, expiresAt: Date) {
  * page's own scripts — and anything injected into them — can read.
  */
 function tokenForBody(request: FastifyRequest, token: string): string | undefined {
-  return request.headers[SESSION_TRANSPORT_HEADER] === 'bearer' ? token : undefined;
+  return isAppClient(request) ? token : undefined;
 }
 
 /** The session this request is authenticating with, whichever way it arrived. */
@@ -217,7 +250,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     return {
       authenticated: userId !== null,
       profile: userId ? await getUser(userId) : null,
-      signup_allowed: await signupAllowed(),
+      signup_allowed: await signupAllowed(isAppClient(request)),
       has_accounts: (await countAccounts()) > 0,
       // Carried on the session status so the app can decide whether to render
       // the admin link without a second round trip on every page.
@@ -233,8 +266,14 @@ export async function registerAuthRoutes(app: FastifyInstance) {
         .status(400)
         .send({ error: parsed.error.issues[0]?.message ?? 'Invalid details' });
     }
-    if (!(await signupAllowed())) {
-      return reply.status(403).send({ error: 'Sign-ups are closed on this server.' });
+    if (!(await signupAllowed(isAppClient(request)))) {
+      // Two different noes. The operator closed the door, or this is a browser
+      // on a server that already has accounts — where the door was never here.
+      return reply.status(403).send({
+        error: isAppClient(request)
+          ? 'Sign-ups are closed on this server.'
+          : 'Accounts are created in the app. Install it and sign up there.',
+      });
     }
     if (await emailInUse(parsed.data.email)) {
       return reply.status(409).send({ error: 'That email is already registered.' });
@@ -303,6 +342,19 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       return reply.status(403).send({ error: 'This account has been suspended.' });
     }
 
+    /*
+     * And the same ordering again, for the same reason: a browser sign-in is
+     * for admins only, and answering that before the password would turn this
+     * endpoint into a way of asking which addresses run the server.
+     *
+     * The session is not created. A refusal that mints one anyway leaves the
+     * caller holding a working cookie for every other route on this API, which
+     * is the opposite of what the sentence says.
+     */
+    if (!isAppClient(request) && !(await isAdmin(userId))) {
+      return reply.status(403).send({ error: APP_ONLY });
+    }
+
     const { token, expiresAt } = await createSession(userId);
     setSessionCookie(reply, token, expiresAt);
 
@@ -341,7 +393,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     return {
       authenticated: false,
       profile: null,
-      signup_allowed: await signupAllowed(),
+      signup_allowed: await signupAllowed(isAppClient(request)),
       has_accounts: (await countAccounts()) > 0,
       is_admin: false,
       google_enabled: env.google !== null,
@@ -676,7 +728,16 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       }
 
       const result = await signInWithProvider(GOOGLE_PROVIDER, identity, {
-        allowSignup: await signupAllowed(),
+        /*
+         * `native`, not `isAppClient` — the one place the two come apart.
+         *
+         * Every request that reaches here is a browser following a redirect,
+         * including the app's: the consent screen runs in the phone's system
+         * browser, which has never heard of this API's headers. Reading the
+         * transport here would tell a phone signing up with Google that
+         * accounts are made in the app, which is where it already is.
+         */
+        allowSignup: await signupAllowed(native !== null),
         timezone: handshake.timezone,
         /*
          * The header, where the password flow prefers a field the client sent.
@@ -701,6 +762,17 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       // password path checks it after the password: it is the same answer
       // either way, and this ordering tells an outsider nothing.
       if (await isDisabled(result.userId)) return fail('suspended');
+
+      /*
+       * And the web's own condition: a browser session belongs to an admin.
+       *
+       * Before `rememberDevice` below, so a sign-in that is about to be refused
+       * does not put a device on the account and mail its owner an alert about
+       * something that did not happen. A brand-new account cannot reach this at
+       * all — `allowSignup` above is already false for the browser flow — so
+       * there is nothing here to clean up either.
+       */
+      if (!native && !(await isAdmin(result.userId))) return fail('app_only');
 
       /*
        * Recorded here for both flows, before the paths split, because this is

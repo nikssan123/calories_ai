@@ -138,7 +138,6 @@ export const es: Messages = {
 
   // ---- Signing in ---------------------------------------------------------
   'auth.signIn': 'Iniciar sesión',
-  'auth.signInSubtitle': 'Inicia sesión y sigue donde lo dejaste.',
   'auth.createAccount': 'Crear cuenta',
   'auth.createAccountTitle': 'Crea tu cuenta',
   'auth.email': 'Correo',
@@ -147,8 +146,6 @@ export const es: Messages = {
   'auth.nameOptional': 'Nombre (opcional)',
   'auth.continueWithGoogle': 'Continuar con Google',
   'auth.forgotPassword': '¿Has olvidado la contraseña?',
-  'auth.haveAccount': '¿Ya tienes cuenta?',
-  'auth.newHere': '¿Eres nuevo?',
   'auth.signupsClosed': 'Este servidor no admite registros.',
   'auth.googleFailed': 'Google no ha podido iniciar tu sesión. Inténtalo otra vez o usa el correo y la contraseña.',
   'auth.genericFailure': 'Algo ha fallado al iniciar sesión. Inténtalo otra vez.',
@@ -711,6 +708,8 @@ export const es: Messages = {
   'auth.expired': 'Ese inicio de sesión tardó demasiado. Empieza otra vez desde esta página.',
   'auth.badState': 'No se ha podido verificar ese inicio de sesión. Empieza otra vez desde esta página.',
   'auth.suspended': 'Esta cuenta está suspendida.',
+  'auth.adminOnly': 'Iniciar sesión aquí es para administradores: tu diario está en la app.',
+  'auth.appOnly': 'Esa cuenta entra desde la app. El inicio de sesión web es para administradores.',
   'verify.oneMoment': 'Un momento.',
 
   // ---- Words the whole app uses -------------------------------------------

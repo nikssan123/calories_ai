@@ -26,6 +26,18 @@ const STORES: { name: string; href: string | null; Mark: typeof AppleMark }[] = 
 
 const STORES_LIVE = STORES.some((store) => store.href !== null);
 
+/**
+ * Where the page's primary button points, now that the only way to open an
+ * account is to install the app.
+ *
+ * The first store with a URL, or null while neither has one — in which case the
+ * button scrolls to the section that says "coming soon" rather than pretending
+ * there is somewhere to go. iOS first because that is the order the row reads
+ * in; when both are live the difference is one tap on the wrong platform's
+ * page, which every store redirects out of by itself.
+ */
+export const STORE_HREF: string | null = STORES.find((store) => store.href)?.href ?? null;
+
 export function StoreLinks({ className }: { className?: string }) {
   return (
     <div

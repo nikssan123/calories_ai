@@ -490,6 +490,46 @@ describe('who is let in', () => {
     expect(redirectedTo(response)).toBe(`${env.appUrl}/login?error=suspended`);
     expect(setCookie(response, 'ct_session')).toBeUndefined();
   });
+
+  /*
+   * And the web's own rule, which the password form answers with a 403 and this
+   * flow answers with a word in the URL: accounts are made in the app, and a
+   * browser session belongs to an admin.
+   */
+
+  it('opens no account from a browser, even with sign-ups wide open', async () => {
+    await createUser({ email: 'owner@example.com' });
+    expect(env.allowSignup).toBe(true);
+
+    const response = await signIn();
+
+    expect(redirectedTo(response)).toBe(`${env.appUrl}/login?error=closed`);
+    expect(await countUsers()).toBe(1);
+  });
+
+  it('turns a member away from a browser without a session, or an alert', async () => {
+    // Two accounts, so the oldest — and not this one — holds the panel.
+    await createUser({ email: 'owner@example.com' });
+    await createUser({ email: 'ada@example.com' });
+
+    const response = await signIn();
+
+    expect(redirectedTo(response)).toBe(`${env.appUrl}/login?error=app_only`);
+    expect(setCookie(response, 'ct_session')).toBeUndefined();
+    // Nothing happened, so nothing is reported: a "new sign-in" email about a
+    // sign-in that was refused is a false alarm with a support ticket behind it.
+    expect(mailbox()).toEqual([]);
+  });
+
+  it('lets an admin in the same way it always did', async () => {
+    await createUser({ email: 'ada@example.com' });
+    await createUser({ email: 'member@example.com' });
+
+    const response = await signIn();
+
+    expect(redirectedTo(response)).toBe(`${env.appUrl}/`);
+    expect(setCookie(response, 'ct_session')).toBeDefined();
+  });
 });
 
 // ---- The same handshake, ending in an app -----------------------------------
@@ -594,6 +634,22 @@ describe('the native flow', () => {
     // The browser that ran the handshake is not the client that will hold the
     // session, so it is given nothing.
     expect(setCookie(response, 'ct_session')).toBeUndefined();
+  });
+
+  it('opens an account on a server that already has some, unlike the browser', async () => {
+    /*
+     * The regression this guards. Every callback is a browser request, the
+     * app's included — the consent screen runs in the phone's system browser,
+     * which sends none of the app's headers. Deciding "is this the app" from
+     * the transport here rather than from `state` would tell a phone signing up
+     * with Google that accounts are made in the app.
+     */
+    await createUser({ email: 'owner@example.com' });
+
+    const code = await codeFromSignIn();
+
+    expect(code).toBeTruthy();
+    expect(await countUsers()).toBe(2);
   });
 
   it('tells the app when the handshake failed, in the app’s own vocabulary', async () => {

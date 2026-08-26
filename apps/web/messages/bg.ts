@@ -153,7 +153,6 @@ export const bg: Messages = {
 
   // ---- Signing in ---------------------------------------------------------
   'auth.signIn': 'Вход',
-  'auth.signInSubtitle': 'Влез и продължи оттам, докъдето стигна.',
   'auth.createAccount': 'Създай акаунт',
   'auth.createAccountTitle': 'Създай своя акаунт',
   'auth.email': 'Имейл',
@@ -162,8 +161,6 @@ export const bg: Messages = {
   'auth.nameOptional': 'Име (по желание)',
   'auth.continueWithGoogle': 'Продължи с Google',
   'auth.forgotPassword': 'Забравена парола?',
-  'auth.haveAccount': 'Вече имаш акаунт?',
-  'auth.newHere': 'Нов си тук?',
   'auth.signupsClosed': 'Регистрациите на този сървър са затворени.',
   'auth.googleFailed': 'Google не успя да те впише. Опитай пак или влез с имейл и парола.',
   'auth.genericFailure': 'Нещо се обърка при влизането. Опитай пак.',
@@ -727,6 +724,8 @@ export const bg: Messages = {
   'auth.expired': 'Този вход отне твърде дълго. Започни отново от тази страница.',
   'auth.badState': 'Този вход не можа да бъде потвърден. Започни отново от тази страница.',
   'auth.suspended': 'Този профил е спрян.',
+  'auth.adminOnly': 'Входът тук е за администратори — твоят дневник е в приложението.',
+  'auth.appOnly': 'Този профил влиза през приложението. Входът в уебсайта е за администратори.',
   'verify.oneMoment': 'Един момент.',
 
   // ---- Words the whole app uses -------------------------------------------

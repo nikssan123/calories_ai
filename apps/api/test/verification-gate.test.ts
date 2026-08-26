@@ -27,12 +27,20 @@ afterEach(async () => {
   await app.close();
 });
 
-/** Signs up through the API and returns the session cookie plus the code. */
+/**
+ * Signs up through the API and returns the session cookie plus the code.
+ *
+ * As the app, because that is where accounts are made — the browser gets one
+ * signup only, on a server with no accounts at all, and several cases below
+ * seed a stranger first. The session still arrives as a cookie either way,
+ * which is the only part these tests care about.
+ */
 async function signUp(): Promise<{ cookie: string; code: string; userId: string }> {
   const response = await app.inject({
     method: 'POST',
     url: '/auth/signup',
     payload: CREDENTIALS,
+    headers: { 'x-session-transport': 'bearer' },
   });
   expect(response.statusCode).toBe(200);
   const cookie = (response.headers['set-cookie'] as string[] | string).toString().split(';')[0]!;

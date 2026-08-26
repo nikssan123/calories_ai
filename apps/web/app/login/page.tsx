@@ -9,6 +9,7 @@ import { useAuth } from '@/components/AuthGate';
 import { GoogleMark } from '@/components/GoogleMark';
 import { Logo } from '@/components/Logo';
 import { LanguagePicker } from '@/components/LanguagePicker';
+import { StoreLinks } from '@/components/landing/StoreLinks';
 import { preferredLocale, setPreferredLocale, useLocale, useT, type StringKey } from '@/lib/i18n';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,15 +32,28 @@ const SIGN_IN_ERRORS: Record<string, StringKey> = {
   state: 'auth.badState',
   closed: 'auth.signupsClosed',
   suspended: 'auth.suspended',
+  // A member who reached Google's consent screen from this page and came back
+  // holding a perfectly good identity for an account that does not open here.
+  app_only: 'auth.appOnly',
 };
 
+/**
+ * The way in to the web, which since the journal moved to the phone means the
+ * way in to the admin panel.
+ *
+ * There is one exception, and it is the reason the sign-up half of this screen
+ * still exists: a deployment with no accounts at all. Somebody standing in
+ * front of a fresh server has no app to sign into and nobody to promote them,
+ * so the API opens signup for exactly one account — and this form draws itself
+ * for it. `signup_allowed` is the API's own answer to that question, so there
+ * is nothing to decide here beyond which of the two shapes to render.
+ */
 export default function LoginPage() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
-  const [signupAllowed, setSignupAllowed] = useState(true);
   const [googleEnabled, setGoogleEnabled] = useState(false);
   // Sent along to the API so a brand-new Google account starts its days in the
   // right place, exactly as the sign-up form's `timezone` field does. Empty
@@ -51,11 +65,9 @@ export default function LoginPage() {
   const locale = useLocale();
 
   useEffect(() => {
-    // The landing page's primary CTA asks for the sign-up form by name. Read
-    // straight off `location` rather than through `useSearchParams`, which
+    // Read straight off `location` rather than through `useSearchParams`, which
     // would need a Suspense boundary around the whole screen to say one word.
     const params = new URLSearchParams(window.location.search);
-    if (params.get('mode') === 'signup') setMode('signup');
     setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
 
     /*
@@ -80,11 +92,15 @@ export default function LoginPage() {
     void (async () => {
       try {
         const status = await api.me();
-        setSignupAllowed(status.signup_allowed);
         setGoogleEnabled(status.google_enabled);
-        // Only a server with no accounts at all opens on "create account";
-        // otherwise a returning user lands on the sign-in form.
-        if (!status.has_accounts) setMode('signup');
+        /*
+         * The API tells a browser `signup_allowed` only on a server with no
+         * accounts at all — everywhere else accounts are made in the app. So
+         * this is the whole of the decision, and there is no second form to
+         * offer or toggle to: on a server that has anybody, this screen signs
+         * an admin in and does nothing else.
+         */
+        if (status.signup_allowed) setMode('signup');
       } catch {
         /* the form still works; the submit will surface any real problem */
       }
@@ -146,9 +162,7 @@ export default function LoginPage() {
             {mode === 'signup' ? t('auth.createAccountTitle') : t('auth.signIn')}
           </h1>
           <p className="text-muted-foreground mt-2 text-body">
-            {mode === 'signup'
-              ? t('auth.createAccountSubtitle')
-              : t('auth.signInSubtitle')}
+            {mode === 'signup' ? t('auth.createAccountSubtitle') : t('auth.adminOnly')}
           </p>
         </div>
 
@@ -265,23 +279,15 @@ export default function LoginPage() {
           )}
         </form>
 
-        {(signupAllowed || mode === 'signup') && (
-          <button
-            type="button"
-            onClick={() => setMode((m) => (m === 'signup' ? 'signin' : 'signup'))}
-            className="text-muted-foreground mt-6 text-center text-sm"
-          >
-            {mode === 'signup' ? (
-              <>
-                {t('auth.haveAccount')} <span className="text-foreground font-medium">{t('auth.signIn')}</span>
-              </>
-            ) : (
-              <>
-                {t('auth.newHere')} <span className="text-foreground font-medium">{t('auth.createAccount')}</span>
-              </>
-            )}
-          </button>
-        )}
+        {/*
+          * Where the accounts went.
+          *
+          * Under the form rather than above it, because it is not what this
+          * screen is for — it is for the one person in ten thousand who came
+          * here looking for their journal, and for whom a sign-in that refuses
+          * a password they know is right would otherwise be a dead end.
+          */}
+        {mode === 'signin' && <StoreLinks className="mt-8" />}
       </div>
     </div>
   );

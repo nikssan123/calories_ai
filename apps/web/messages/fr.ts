@@ -144,7 +144,6 @@ export const fr: Messages = {
 
   // ---- Signing in ---------------------------------------------------------
   'auth.signIn': 'Se connecter',
-  'auth.signInSubtitle': 'Connecte-toi et reprends où tu t’es arrêté.',
   'auth.createAccount': 'Créer un compte',
   'auth.createAccountTitle': 'Crée ton compte',
   'auth.email': 'E-mail',
@@ -153,8 +152,6 @@ export const fr: Messages = {
   'auth.nameOptional': 'Nom (facultatif)',
   'auth.continueWithGoogle': 'Continuer avec Google',
   'auth.forgotPassword': 'Mot de passe oublié ?',
-  'auth.haveAccount': 'Tu as déjà un compte ?',
-  'auth.newHere': 'Nouveau ici ?',
   'auth.signupsClosed': 'Les inscriptions sont fermées sur ce serveur.',
   'auth.googleFailed': 'Google n’a pas pu te connecter. Réessaie, ou utilise ton e-mail et ton mot de passe.',
   'auth.genericFailure': 'Quelque chose s’est mal passé à la connexion. Réessaie.',
@@ -717,6 +714,8 @@ export const fr: Messages = {
   'auth.expired': 'Cette connexion a pris trop de temps. Recommence depuis cette page.',
   'auth.badState': 'Cette connexion n’a pas pu être vérifiée. Recommence depuis cette page.',
   'auth.suspended': 'Ce compte a été suspendu.',
+  'auth.adminOnly': 'La connexion ici est réservée aux administrateurs — ton journal est dans l’appli.',
+  'auth.appOnly': 'Ce compte se connecte depuis l’appli. La connexion web est réservée aux administrateurs.',
   'verify.oneMoment': 'Un instant.',
 
   // ---- Words the whole app uses -------------------------------------------

@@ -197,7 +197,6 @@ export const en = {
 
   // ---- Signing in ---------------------------------------------------------
   'auth.signIn': 'Sign in',
-  'auth.signInSubtitle': 'Sign in to pick up where you left off.',
   'auth.createAccount': 'Create account',
   'auth.createAccountTitle': 'Create your account',
   'auth.email': 'Email',
@@ -206,8 +205,6 @@ export const en = {
   'auth.nameOptional': 'Name (optional)',
   'auth.continueWithGoogle': 'Continue with Google',
   'auth.forgotPassword': 'Forgot your password?',
-  'auth.haveAccount': 'Already have an account?',
-  'auth.newHere': 'New here?',
   'auth.signupsClosed': 'Sign-ups are closed on this server.',
   'auth.googleFailed': 'Google could not sign you in. Try again, or use your email and password.',
   'auth.genericFailure': 'Something went wrong signing in. Try again.',
@@ -223,6 +220,14 @@ export const en = {
   'auth.expired': 'That sign-in took too long. Start it again from this page.',
   'auth.badState': 'That sign-in could not be verified. Start it again from this page.',
   'auth.suspended': 'This account has been suspended.',
+  /**
+   * The two sentences the web says about itself now that it is a landing page
+   * with an admin panel behind it. The first is the sign-in screen's subtitle,
+   * the second is what a member who tried anyway is told — a correct password
+   * that is refused reads as a broken server unless something names the reason.
+   */
+  'auth.adminOnly': 'Signing in here is for administrators — your journal lives in the app.',
+  'auth.appOnly': 'That account signs in on the app. The web sign-in is for administrators.',
 
   // ---- Confirming an address ----------------------------------------------
   'verify.title': 'Confirm your email',

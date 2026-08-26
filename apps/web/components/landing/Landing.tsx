@@ -4,12 +4,11 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Camera, MessageSquareText, RotateCcw, ScanBarcode } from 'lucide-react';
 import type { DayQuality } from '@ct/shared';
-import { useAuth } from '@/components/AuthGate';
 import { DietQuality } from '@/components/DietQuality';
 import { Logo } from '@/components/Logo';
 import { HeroDemo } from '@/components/landing/HeroDemo';
 import { Reveal } from '@/components/landing/Reveal';
-import { StoreLinks } from '@/components/landing/StoreLinks';
+import { StoreLinks, STORE_HREF } from '@/components/landing/StoreLinks';
 import { cn } from '@/lib/utils';
 
 /**
@@ -22,8 +21,6 @@ import { cn } from '@/lib/utils';
  * on the recessed grouped background rather than inside boxes with borders.
  */
 export function Landing() {
-  const { signupAllowed } = useAuth();
-
   // The app shell owns the viewport and never scrolls the document. A landing
   // page is a document, so it asks for the window back while it is mounted.
   useEffect(() => {
@@ -33,11 +30,19 @@ export function Landing() {
     };
   }, []);
 
-  // A server with registration closed has nothing to offer a stranger except
-  // the sign-in form. Better to say so than to send them to a wall.
-  const start = signupAllowed
-    ? { href: '/login?mode=signup', label: 'Get started' }
-    : { href: '/login', label: 'Sign in' };
+  /*
+   * Every primary button on the page, pointing at the one place an account can
+   * be opened: the app.
+   *
+   * It used to point at the sign-up form, and there is no longer one to point
+   * at — the web is this page and the admin panel behind it. Until a store
+   * listing is live there is nowhere to send anybody, so the button scrolls to
+   * the closing section, where the store row says so in as many words. A button
+   * that admits it is waiting is better than one that 404s.
+   */
+  const start: Cta = STORE_HREF
+    ? { href: STORE_HREF, label: 'Get the app', external: true }
+    : { href: '#get', label: 'Get the app' };
 
   return (
     <div className="bg-background text-foreground min-h-dvh">
@@ -65,6 +70,30 @@ export function Landing() {
 interface Cta {
   href: string;
   label: string;
+  /** A store, rather than a page of ours. Opens in its own tab. */
+  external?: boolean;
+}
+
+/**
+ * The page's primary button, drawn once so its three placements cannot drift.
+ *
+ * A plain `<a>` in both shapes, like every other anchor on this page and unlike
+ * the `<Link>`s in the header and the footer. Neither destination is a route:
+ * one is a store on somebody else's domain, and the other is a section of this
+ * page — and `<Link>` intercepts a bare hash into a router navigation whose
+ * scroll never happens here, because the landing page hands scrolling to the
+ * document while the rest of the app keeps it in a fixed shell.
+ */
+function StartButton({ start, className }: { start: Cta; className?: string }) {
+  return (
+    <a
+      href={start.href}
+      className={className}
+      {...(start.external ? { target: '_blank', rel: 'noreferrer' } : {})}
+    >
+      {start.label}
+    </a>
+  );
 }
 
 /* ---------------------------------------------------------------- primitives */
@@ -185,9 +214,7 @@ function Header({ start }: { start: Cta }) {
           >
             Sign in
           </Link>
-          <Link href={start.href} className={pill('primary', 'h-9 px-4 text-sm')}>
-            {start.label}
-          </Link>
+          <StartButton start={start} className={pill('primary', 'h-9 px-4 text-sm')} />
         </div>
       </div>
     </header>
@@ -225,9 +252,7 @@ function Hero({ start }: { start: Cta }) {
 
           <Reveal delay={170}>
             <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-              <Link href={start.href} className={pill('primary', 'h-12 px-6 text-body')}>
-                {start.label}
-              </Link>
+              <StartButton start={start} className={pill('primary', 'h-12 px-6 text-body')} />
               <a href="#how" className={pill('secondary', 'h-12 px-6 text-body')}>
                 See how it works
               </a>
@@ -819,12 +844,13 @@ function Pricing({ start }: { start: Cta }) {
                   margin lands the buttons at three different heights even after
                   the cards themselves match. */}
               <div className="mt-auto pt-6">
-                <Link
-                  href={start.href}
+                {/* The tier's own label over the shared destination: three
+                    buttons that all say "Get the app" would read as one button
+                    printed three times. */}
+                <StartButton
+                  start={{ ...start, label: cta }}
                   className={pill(featured ? 'primary' : 'secondary', 'h-11 w-full px-5 text-body')}
-                >
-                  {cta}
-                </Link>
+                />
               </div>
             </div>
           </Reveal>
@@ -928,18 +954,24 @@ function Privacy() {
 
 /* ------------------------------------------------------------------- closing */
 
+/**
+ * The bottom of the page, and — while the stores are still "coming soon" —
+ * where every button above it lands. So it carries the store row and no button
+ * of its own: a primary action whose destination is itself is a dead end with a
+ * gradient behind it.
+ */
 function Closing({ start }: { start: Cta }) {
   return (
-    <Section glow className="text-center">
+    <Section id="get" glow className="text-center">
       <Reveal>
         <h2 className="text-section-title text-balance">Start with breakfast.</h2>
         <p className="text-muted-foreground mx-auto mt-5 max-w-md text-[17px] leading-relaxed font-medium">
           About a minute to set up. It asks your height, your weight and what you are aiming
           at, and works the rest out from there.
         </p>
-        <Link href={start.href} className={pill('primary', 'mt-8 h-12 px-6 text-body')}>
-          {start.label}
-        </Link>
+        {start.external && (
+          <StartButton start={start} className={pill('primary', 'mt-8 h-12 px-6 text-body')} />
+        )}
         <StoreLinks className="mt-5" />
       </Reveal>
     </Section>

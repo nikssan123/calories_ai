@@ -142,7 +142,6 @@ export const de: Messages = {
 
   // ---- Signing in ---------------------------------------------------------
   'auth.signIn': 'Anmelden',
-  'auth.signInSubtitle': 'Melde dich an und mach da weiter, wo du aufgehört hast.',
   'auth.createAccount': 'Konto erstellen',
   'auth.createAccountTitle': 'Erstelle dein Konto',
   'auth.email': 'E-Mail',
@@ -151,8 +150,6 @@ export const de: Messages = {
   'auth.nameOptional': 'Name (optional)',
   'auth.continueWithGoogle': 'Weiter mit Google',
   'auth.forgotPassword': 'Passwort vergessen?',
-  'auth.haveAccount': 'Schon ein Konto?',
-  'auth.newHere': 'Neu hier?',
   'auth.signupsClosed': 'Auf diesem Server sind keine Registrierungen möglich.',
   'auth.googleFailed': 'Google konnte dich nicht anmelden. Versuch es nochmal oder nimm E-Mail und Passwort.',
   'auth.genericFailure': 'Bei der Anmeldung ist etwas schiefgelaufen. Versuch es nochmal.',
@@ -723,6 +720,8 @@ export const de: Messages = {
   'auth.expired': 'Die Anmeldung hat zu lange gedauert. Fang auf dieser Seite noch mal an.',
   'auth.badState': 'Die Anmeldung konnte nicht geprüft werden. Fang auf dieser Seite noch mal an.',
   'auth.suspended': 'Dieses Konto wurde gesperrt.',
+  'auth.adminOnly': 'Die Anmeldung hier ist für Administratoren — dein Journal liegt in der App.',
+  'auth.appOnly': 'Dieses Konto meldet sich in der App an. Die Anmeldung im Web ist für Administratoren.',
   'verify.oneMoment': 'Einen Moment.',
 
   // ---- Words the whole app uses -------------------------------------------

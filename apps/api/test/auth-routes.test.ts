@@ -17,6 +17,14 @@ afterEach(async () => {
 
 const CREDENTIALS = { email: 'nik@example.com', password: 'correct-horse' };
 
+/**
+ * What the app sends on every request, and the browser never can — the web's
+ * proxy forwards the cookie and the content type and nothing else. It is how
+ * the API tells a client that carries its own token from one that does not,
+ * and, since accounts moved to the app, how it tells them apart for signup.
+ */
+const AS_APP = { 'x-session-transport': 'bearer' };
+
 function sessionCookie(response: { headers: Record<string, unknown> }): string | undefined {
   const raw = response.headers['set-cookie'];
   const cookies = Array.isArray(raw) ? raw : [raw];
@@ -86,6 +94,7 @@ describe('POST /auth/signup', () => {
       method: 'POST',
       url: '/auth/signup',
       payload: { ...CREDENTIALS, email: 'NIK@EXAMPLE.COM' },
+      headers: AS_APP,
     });
     expect(second.statusCode).toBe(409);
   });
@@ -109,6 +118,7 @@ describe('POST /auth/signup', () => {
         method: 'POST',
         url: '/auth/signup',
         payload: { email: 'second@example.com', password: 'correct-horse' },
+        headers: AS_APP,
       });
       expect(second.statusCode).toBe(403);
       expect(second.json().error).toMatch(/closed/);
@@ -182,19 +192,130 @@ describe('POST /auth/logout', () => {
 });
 
 /**
+ * The web is the landing page and the admin panel; the journal is the app's.
+ *
+ * Enforced here rather than only in the pages, because the browser's real API
+ * surface is this server: a sign-in form the web merely stops drawing is a
+ * sign-in form anyone can still POST to through the proxy.
+ */
+describe('a browser session', () => {
+  /** The first account is the admin, by the fallback in `isAdmin`. */
+  async function seedAdmin() {
+    await app.inject({ method: 'POST', url: '/auth/signup', payload: CREDENTIALS });
+  }
+
+  const MEMBER = { email: 'member@example.com', password: 'correct-horse' };
+
+  async function seedMember() {
+    await app.inject({ method: 'POST', url: '/auth/signup', payload: MEMBER, headers: AS_APP });
+  }
+
+  afterEach(() => {
+    env.adminEmails.length = 0;
+  });
+
+  it('gets the very first account, so a fresh deployment is usable', async () => {
+    const response = await app.inject({ method: 'POST', url: '/auth/signup', payload: CREDENTIALS });
+    expect(response.statusCode).toBe(200);
+    expect(sessionCookie(response)).toBeDefined();
+  });
+
+  it('cannot make a second one, and is told where accounts are made', async () => {
+    await seedAdmin();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/signup',
+      payload: MEMBER,
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json().error).toMatch(/in the app/);
+    expect(await query('SELECT id FROM users WHERE email = $1', [MEMBER.email])).toEqual([]);
+  });
+
+  it('is told so by /auth/me, which is what hides the form', async () => {
+    await seedAdmin();
+    const web = await app.inject({ method: 'GET', url: '/auth/me' });
+    expect(web.json().signup_allowed).toBe(false);
+
+    const native = await app.inject({ method: 'GET', url: '/auth/me', headers: AS_APP });
+    expect(native.json().signup_allowed).toBe(true);
+  });
+
+  it('refuses a member their password is perfectly good for', async () => {
+    await seedAdmin();
+    await seedMember();
+
+    const response = await app.inject({ method: 'POST', url: '/auth/login', payload: MEMBER });
+    expect(response.statusCode).toBe(403);
+    expect(response.json().error).toMatch(/app/);
+    // No session, or the refusal would hand out a cookie good for every other
+    // route on this server.
+    expect(sessionCookie(response)).toBeUndefined();
+  });
+
+  it('says the same thing whether or not the password was right', async () => {
+    await seedAdmin();
+    await seedMember();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: { ...MEMBER, password: 'not-the-password' },
+    });
+    // 401, not the 403 above: the address is never confirmed to exist by a
+    // wrong password, which is the whole point of checking admin afterwards.
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('lets the same member in from the app', async () => {
+    await seedAdmin();
+    await seedMember();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: MEMBER,
+      headers: AS_APP,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(typeof response.json().token).toBe('string');
+  });
+
+  it('lets an admin in', async () => {
+    await seedAdmin();
+    await seedMember();
+
+    const response = await app.inject({ method: 'POST', url: '/auth/login', payload: CREDENTIALS });
+    expect(response.statusCode).toBe(200);
+    expect(sessionCookie(response)).toBeDefined();
+  });
+
+  it('follows ADMIN_EMAILS rather than account age', async () => {
+    await seedAdmin();
+    await seedMember();
+    env.adminEmails.push(MEMBER.email);
+
+    const promoted = await app.inject({ method: 'POST', url: '/auth/login', payload: MEMBER });
+    expect(promoted.statusCode).toBe(200);
+
+    // And the first account loses the panel, so it loses the web with it.
+    const demoted = await app.inject({ method: 'POST', url: '/auth/login', payload: CREDENTIALS });
+    expect(demoted.statusCode).toBe(403);
+  });
+});
+
+/**
  * The native app has no cookie jar, so it asks for the session token and sends
  * it back as a bearer. Both transports resolve to the same session row; what
  * differs is only who is trusted to hold the raw value.
  */
 describe('bearer sessions', () => {
-  const BEARER = { 'x-session-transport': 'bearer' };
-
   async function signUpAsApp(): Promise<string> {
     const response = await app.inject({
       method: 'POST',
       url: '/auth/signup',
       payload: CREDENTIALS,
-      headers: BEARER,
+      headers: AS_APP,
     });
     // A brand-new account is unconfirmed, and every route but /auth/ answers
     // 403 until it is. These tests are about how the session is carried, not
@@ -225,7 +346,7 @@ describe('bearer sessions', () => {
       method: 'POST',
       url: '/auth/login',
       payload: CREDENTIALS,
-      headers: BEARER,
+      headers: AS_APP,
     });
     expect(typeof response.json().token).toBe('string');
   });
@@ -287,6 +408,7 @@ describe('bearer sessions', () => {
       method: 'POST',
       url: '/auth/signup',
       payload: { email: 'other@example.com', password: 'correct-horse' },
+      headers: AS_APP,
     });
     const cookie = sessionCookie(second)!.split(';')[0]!;
 
