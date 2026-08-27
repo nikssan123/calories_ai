@@ -40,6 +40,15 @@ import { useT } from '@/lib/i18n';
  */
 
 /**
+ * How long a barcode counts as already read.
+ *
+ * Long enough to cover a packet still sitting in frame while the confirmation
+ * is on screen, short enough that pointing away and back is a rescan rather
+ * than a wait.
+ */
+const REPEAT_MS = 2500;
+
+/**
  * A packet on its way into a message, rather than into the log.
  *
  * The amount is optional and its absence is the normal case: somebody who has
@@ -141,9 +150,33 @@ export function BarcodeScanner({
    */
   const claimed = useRef(false);
 
+  /*
+   * The code that already landed, and when it was last seen.
+   *
+   * `claimed` only covers the lookup itself. Mid-sentence the camera never
+   * stops, so the instant a packet is attached the guard drops and the same
+   * barcode — still in frame, still decoding several times a second — is read
+   * again, and again. The composer refuses the duplicate chip, so nothing on
+   * screen moves and the loop is invisible; the lookups behind it are not, and
+   * thirty inside a minute is the burst limit spent and "too many requests"
+   * shown to somebody who scanned one thing.
+   *
+   * The window refreshes on every suppressed read, so it measures time out of
+   * frame rather than time since the read: a packet held up while its owner
+   * checks the tally cannot re-fire underneath them. Point away and back to
+   * scan the same product again on purpose.
+   */
+  const settled = useRef<{ code: string; at: number } | null>(null);
+
   const onScanned = useCallback(async (code: string) => {
     if (claimed.current) return;
+    const last = settled.current;
+    if (last && last.code === code && Date.now() - last.at < REPEAT_MS) {
+      last.at = Date.now();
+      return;
+    }
     claimed.current = true;
+    settled.current = { code, at: Date.now() };
     /*
      * Here rather than after the lookup: this is the instant the frame
      * resolved, and it is the instant the user is waiting on. They are holding
@@ -169,6 +202,9 @@ export function BarcodeScanner({
       if (attaching) {
         onAttach({ product });
         flash(product.brand ? `${product.brand} ${product.name}` : product.name);
+        // The lookup spent part of the window. Restart it from the hand-off,
+        // which is the moment the camera goes live again.
+        settled.current = { code, at: Date.now() };
         claimed.current = false;
         setStage({ at: 'scanning' });
         return;
@@ -187,12 +223,16 @@ export function BarcodeScanner({
 
   function rescan() {
     claimed.current = false;
+    // Asked for, so the packet in frame is fair game again even if it is the
+    // one that just failed.
+    settled.current = null;
     setError(null);
     setStage({ at: 'scanning' });
   }
 
   function close() {
     claimed.current = false;
+    settled.current = null;
     setStage({ at: 'scanning' });
     setError(null);
     setCaught(null);

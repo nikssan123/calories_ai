@@ -43,6 +43,15 @@ import { cn } from '@/lib/utils';
 /** How often to try a frame. Faster than this is heat with no extra hit rate. */
 const FRAME_MS = 220;
 
+/**
+ * How long a barcode counts as already read.
+ *
+ * Long enough to cover a packet still sitting in frame while the toast is on
+ * screen, short enough that pointing away and back is a rescan rather than a
+ * wait.
+ */
+const REPEAT_MS = 2500;
+
 type Stage =
   | { at: 'scanning' }
   | { at: 'looking'; code: string }
@@ -114,6 +123,33 @@ export function BarcodeScanner({
   const [cameraFailed, setCameraFailed] = useState(false);
   const [reading, setReading] = useState(false);
 
+  /*
+   * The code that already landed, and when it was last seen.
+   *
+   * Mid-sentence the camera never stops, so the moment a packet is attached the
+   * loop resumes on the same barcode — still in frame, still decoding four
+   * times a second — and looks it up again, and again. The composer refuses the
+   * duplicate chip, so nothing on screen moves and the loop is invisible; the
+   * lookups behind it are not, and thirty inside a minute is the burst limit
+   * spent and "too many requests" shown to somebody who scanned one thing.
+   */
+  const settled = useRef<{ code: string; at: number } | null>(null);
+
+  /**
+   * Whether this is the packet that just landed, still held in frame.
+   *
+   * Refreshes the window on every suppressed read, so it measures time out of
+   * frame rather than time since the read: a packet held up while its owner
+   * checks the tally cannot re-fire underneath them. Point away and back to
+   * scan the same product again on purpose.
+   */
+  const justRead = useCallback((code: string) => {
+    const last = settled.current;
+    if (!last || last.code !== code || Date.now() - last.at >= REPEAT_MS) return false;
+    last.at = Date.now();
+    return true;
+  }, []);
+
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
@@ -142,6 +178,9 @@ export function BarcodeScanner({
           toast.success(
             t('barcode.added')(product.brand ? `${product.brand} ${product.name}` : product.name),
           );
+          // Dated from the hand-off rather than the read: the lookup is what
+          // took the time, and the camera goes live again on the next line.
+          settled.current = { code, at: Date.now() };
           setStage({ at: 'scanning' });
           return;
         }
@@ -155,6 +194,9 @@ export function BarcodeScanner({
         if (status === 404) setStage({ at: 'missed' });
         else {
           toast.error((error as Error).message);
+          // A failure that does not back off is a failure four times a second:
+          // the code is still in frame, and the loop restarts on the next line.
+          settled.current = { code, at: Date.now() };
           setStage({ at: 'scanning' });
         }
       }
@@ -206,7 +248,9 @@ export function BarcodeScanner({
           if (!live) return;
           const code = await decodeBarcode(video);
           if (!live) return;
-          if (code) {
+          // A repeat keeps the camera running rather than tearing it down for a
+          // lookup that would be thrown away.
+          if (code && !justRead(code)) {
             stopCamera();
             void resolve(code);
             return;
@@ -228,7 +272,7 @@ export function BarcodeScanner({
       if (timer) clearTimeout(timer);
       stopCamera();
     };
-  }, [open, stage.at, stopCamera, resolve]);
+  }, [open, stage.at, stopCamera, resolve, justRead]);
 
   // Reopening starts a scan rather than resuming whatever was on screen when it
   // was last closed — a stale product card is a different packet.
@@ -236,6 +280,7 @@ export function BarcodeScanner({
     if (!open) {
       setStage({ at: 'scanning' });
       setCameraFailed(false);
+      settled.current = null;
     }
   }, [open]);
 
@@ -321,12 +366,20 @@ export function BarcodeScanner({
                   onAttach({ product: stage.product, ...portion });
                   onOpenChange(false);
                 }}
-                onRescan={() => setStage({ at: 'scanning' })}
+                onRescan={() => {
+                  // Asked for, so the packet in frame is fair game again.
+                  settled.current = null;
+                  setStage({ at: 'scanning' });
+                }}
               />
             ) : stage.at === 'missed' ? (
               <Missed
                 onPhotograph={() => labelRef.current?.click()}
-                onRescan={() => setStage({ at: 'scanning' })}
+                onRescan={() => {
+                  // Asked for, so the packet in frame is fair game again.
+                  settled.current = null;
+                  setStage({ at: 'scanning' });
+                }}
               />
             ) : (
               <div className="p-4">
