@@ -354,7 +354,7 @@ no business knowing what any screen is scrolling. On Today, Progress, Exercise
 and Cook. Not the Journal: a chat's home position is the bottom, and it already
 goes there on its own.
 
-## 4. What only a phone can do — the two that matter are done
+## 4. What only a phone can do — three of the four are done
 
 This is where the value is, as opposed to the polish.
 
@@ -446,11 +446,88 @@ The real build here is an intent that hands a string to the API and reports the
 kcal back, which is small — the cost is the native config and the App Intents
 plumbing, which needs a dev client rather than Expo Go.
 
-### A widget, and a home-screen quick action
+### A widget — done on Android, and iOS is one hard part and three easy ones
 
-The ring is the app's face and it is currently three taps away from the home
-screen. A widget showing today's ring, and a long-press quick action that opens
-straight into the composer with the keyboard already up.
+The ring is the app's face and it used to be three taps from the home screen.
+It is now on the home screen: two widgets, both resizable, both in five
+languages.
+
+**What shipped.** A square one that is the dial and a wide one that is the day
+as a line. Neither scales a single picture — they change shape for the room they
+are given. The square one defaults to two cells and comes down to one, where it
+is the size of an app icon; the wide one defaults to one row, which is the size
+its reading actually needs, and grows the ring back when dragged taller.
+
+**Four things the build taught, all of them written down in the code.**
+
+The config plugin emits no `minResizeWidth`, so `minWidth` doubles as the resize
+floor — which is why the first cut could not be dragged smaller than the size it
+launched at. The Day widget could not reach one row for the same reason, its
+48dp rounding up to two cells under Android's own `70n−30`. Both floor at 40dp
+now. The cost of that fix is that `targetCell*` is Android 12+, so on 11 and
+below the launcher falls back to `minWidth` and the square one lands at one cell
+instead of two. Closing that needs a companion config plugin to inject
+`minResizeWidth` into the generated XML; not done, and probably not worth it.
+
+The library sets type in sp, so a reader with the system font size turned up got
+numerals measured against a box that had not grown with them. A widget has
+nowhere to reflow to, so it draws in dp — the one place in the app where
+ignoring the accessibility setting is the accessible answer.
+
+Nothing inside is a fixed size. The figure is fitted to its own digits against
+the real advance widths out of the Baloo file, so `480` gets a bigger numeral
+than `1,480` in the same circle. That measurement turned out to be the thing
+worth keeping: it now lives in `@ct/shared` and it is what found the bug where
+the app's own ring was setting a four-figure total against the arc.
+
+And the first copy of the dial had quietly dropped the two things that make it
+an object rather than a stroke — the ledge and the ramp across the arc. A widget
+is the app's face on somebody's home screen; it either looks like the app or it
+is an advert for a different one.
+
+**Not verified on hardware.** The sizes are native config, so a phone has to be
+rebuilt to see them, and the emulator's dev client predates the change. Per the
+rule this document already learned twice: believe it when it is on a phone.
+
+**iOS is now possible, and it is not symmetrical.** `expo-widgets` is on SDK 57
+— our exact SDK — and it is iOS-only, so this is a second implementation rather
+than the one-plugin-covers-both bargain `expo-share-intent` gave us. Its config
+plugin generates the extension target and the App Group during prebuild, which
+is the same CNG flow we already run.
+
+Three quarters of it is already written and platform-agnostic. `layout.ts` and
+`measure.ts` are plain TypeScript in `@ct/shared` — the tier decisions, the
+fitted type sizes, the inscribed-square bound all port unchanged. The catalogues
+were split out of `lib/i18n` into `messages/index.ts` precisely so a headless
+draw could read them without dragging a session and a network client along, and
+that split is platform-agnostic too. Data is *easier* than on Android: instead of
+leaving a note on disk for a headless task to find, `updateSnapshot(props)`
+pushes props from the app, and it drops into the same place `writeDaySnapshot`
+already runs.
+
+**The ring is the wall.** Widget UI is limited to `@expo/ui` components — no raw
+SwiftUI, no `Path`, no `Canvas`, no `Circle().trim()`. The wide widget at one
+row is `HStack`/`Text`/`Spacer` and two capsule rectangles and maps over
+directly. The dial does not. Three ways out, none free:
+
+| | cost | what you get |
+|---|---|---|
+| `Gauge`, `circularCapacity` style | half a day | Apple's dial. No ledge, no ramp, no cap control. Loses the identity the widget exists to carry. |
+| Draw the ring in the app, hand over a PNG | ~2 days + ongoing | Pixel-exact — and regenerated per size and scheme on every meal logged. |
+| `@bacons/apple-targets` and ~150 lines of SwiftUI | ~2–3 days | Full fidelity, and the widget's UI is then Swift. A second implementation to keep in step, which is the complaint `theme.ts` already files about the palette. |
+
+**Do the wide one first.** It is the cheap half, it needs no arc, and it proves
+the whole pipeline — target, App Group, `updateSnapshot`, the shared layout code
+— before anything is spent on the ring. Then pick a ring approach knowing what
+the plumbing actually feels like. Call it a day for the wide one and three to
+four days for both at real fidelity, most of it the ring and the first-time
+Apple plumbing: App Group registration, extension entitlements, and getting
+Baloo into the extension's resources, which the docs do not cover.
+
+### A home-screen quick action
+
+Still open, and still small: a long-press on the icon that opens straight into
+the composer with the keyboard already up.
 
 ## 5. What a phone needs and a desktop does not
 
@@ -534,6 +611,8 @@ notifications after the laptop changed IP, and it never offered the app as a
 share target at all. Neither was a bug in the app, and both cost hours. **Test
 this class of feature on hardware first.**
 
-Left in §4: App Intents and a widget, both native code per platform, and App
-Intents needs an Apple Developer account before it can be run at all. iOS push
-and the iOS share extension need that same account.
+Left in §4: App Intents, the home-screen quick action, and the iOS half of the
+widget. The Apple Developer account that all of them waited on now exists, so
+none of them is blocked any more — what is left is the work itself, and for the
+widget that work is a second implementation rather than a port, because
+`expo-widgets` is iOS-only and cannot draw an arc.
