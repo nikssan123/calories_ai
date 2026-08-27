@@ -10,6 +10,7 @@ import { formatBodyWeight, formatDay, formatDistance, formatMass } from '@ct/sha
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { CalorieRing } from '@/components/CalorieRing';
+import { StreakChip } from '@/components/StreakChip';
 import { MacroBars } from '@/components/MacroBars';
 import { DietQuality } from '@/components/DietQuality';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
@@ -265,6 +266,8 @@ function TodayView() {
                 net {day.net_kcal.toLocaleString()} kcal after exercise
               </p>
             )}
+            {/* Null on every day but today — see `DaySummary.streak`. */}
+            {day.streak && <StreakChip streak={day.streak} className="mt-2" />}
           </div>
 
           <MacroBars consumed={day.consumed} targets={day.targets} />

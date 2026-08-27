@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ACHIEVEMENT_KEYS } from '@ct/shared';
+import { ACHIEVEMENT_KEYS, TRAINING_WEEK_DAYS } from '@ct/shared';
 import { query } from '../src/db.ts';
 import { evaluateAchievements, listAchievements } from '../src/services/achievements.ts';
+import { buildExerciseSummary } from '../src/services/calendar.ts';
 import { logHistory, streaksFor } from '../src/services/streaks.ts';
 import { buildDaySummary, buildProgress } from '../src/services/summary.ts';
 import { addDays, localDateFor } from '../src/time.ts';
@@ -191,6 +192,18 @@ describe('on the wire', () => {
     expect(progress.streaks.logging.current).toBeGreaterThan(0);
     expect(progress.streaks.training).toMatchObject({ current: 0, state: 'none' });
     expect(progress.achievements.map((a) => a.key)).toContain('first_workout');
+  });
+
+  it('carries the training run and this week on the exercise summary', async () => {
+    // The Exercise tab draws the week, and should not have to fetch a larger
+    // payload about food to do it.
+    const now = localDateFor(new Date(), user.ctx);
+    await addWorkout(user, now);
+    const summary = await buildExerciseSummary(user.id, user.ctx, 30);
+
+    expect(summary.week.days).toEqual([now]);
+    expect(summary.week.needed).toBe(TRAINING_WEEK_DAYS);
+    expect(summary.streak.state).toBe('none');
   });
 
   /**

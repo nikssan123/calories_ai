@@ -2,6 +2,7 @@
 
 import { formatNumber, type DaySummary } from '@ct/shared';
 import { CalorieRing } from '@/components/CalorieRing';
+import { StreakChip } from '@/components/StreakChip';
 import { MacroBars } from '@/components/MacroBars';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
@@ -50,6 +51,7 @@ export function DayRail({ day }: { day: DaySummary | null }) {
                 {t('rail.netAfterExercise')(formatNumber(day.net_kcal, locale))}
               </p>
             )}
+            {day.streak && <StreakChip streak={day.streak} className="mt-2" />}
           </div>
 
           <MacroBars consumed={day.consumed} targets={day.targets} className="mt-6" />

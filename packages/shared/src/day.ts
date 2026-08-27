@@ -10,6 +10,7 @@ import type {
   QualityTargets,
   Streak,
   Targets,
+  TrainingWeek,
   WeightEntry,
 } from './index.ts';
 
@@ -237,6 +238,30 @@ export function streakFrom(dates: Iterable<string>, today: string): Streak {
  * has three of those from one visit to the gym. What the streak is about is
  * turning up, and turning up is a day.
  */
+/**
+ * The week in progress, and how much of the bar it has cleared.
+ *
+ * Separate from the streak rather than folded into it, because they answer
+ * different questions: the streak is "how long have you kept this up", and this
+ * is "is this week on course" — the one somebody can still do something about.
+ * Without it a weekly streak is a number that only resolves on Sunday, which is
+ * too late to be a nudge and too vague to be a reward.
+ */
+export function trainingWeekOf(
+  dates: Iterable<string>,
+  today: string,
+  minDays: number = TRAINING_WEEK_DAYS,
+): TrainingWeek {
+  const weekStart = weekStartFor(today);
+  return {
+    week_start: weekStart,
+    // `countableDates` has already dropped anything past today, so this is the
+    // week so far and never the week as somebody hopes it will end up.
+    days: countableDates(dates, today).filter((date) => date >= weekStart),
+    needed: minDays,
+  };
+}
+
 export function weekStreakFrom(
   dates: Iterable<string>,
   today: string,

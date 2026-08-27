@@ -13,12 +13,14 @@ import {
   formatWeightDelta,
   toBodyWeight,
 } from '@ct/shared';
+import { Achievements } from '@/components/Achievements';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { QualityBlank } from '@/components/DietQuality';
 import { Skeleton } from '@/components/Skeleton';
 import { Sparkline } from '@/components/Sparkline';
 import { Stat, Stats } from '@/components/Stat';
+import { TrainingWeek } from '@/components/TrainingWeek';
 import { WeeklyReview } from '@/components/WeeklyReview';
 import { SetupBanner } from '@/components/SetupBanner';
 import { api } from '@/lib/api';
@@ -458,6 +460,22 @@ export default function ProgressScreen() {
             </Pressable>
           </InsetGroup>
 
+          {/* Both runs and the wall, under the charts rather than over them.
+              The charts answer "how am I doing"; these answer "how long have I
+              kept it up", which is the question you ask second. */}
+          <InsetGroup title={tr('streak.training')}>
+            <View style={styles.trainingWeek}>
+              <TrainingWeek
+                week={progress.streaks.training_week}
+                streak={progress.streaks.training}
+              />
+            </View>
+          </InsetGroup>
+
+          <View style={styles.achievements}>
+            <Achievements earned={progress.achievements} />
+          </View>
+
           <WeeklyReview onError={setError} />
         </>
       )}
@@ -535,6 +553,8 @@ function Arrow({ up, color }: { up: boolean; color: string }) {
 }
 
 const styles = StyleSheet.create({
+  trainingWeek: { paddingVertical: 12, paddingHorizontal: 12 },
+  achievements: { paddingHorizontal: 4 },
   flex: { flex: 1 },
   page: { paddingHorizontal: 16, paddingBottom: 40, gap: 28 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },

@@ -2,6 +2,7 @@ import type { Calendar, CalendarDay, ExerciseSummary, TrendPoint } from '@ct/sha
 import { query } from '../db.ts';
 import { addDays, dateRange, type DayContext, localDateFor } from '../time.ts';
 import { listExerciseEntries } from './log.ts';
+import { streaksFor } from './streaks.ts';
 
 /**
  * The two window-shaped reads that back the History and Exercise screens.
@@ -115,7 +116,13 @@ export async function buildExerciseSummary(
     return values.length === 0 ? null : Math.round(values.reduce((a, b) => a + b, 0) * 10) / 10;
   };
 
+  // Over the whole history rather than the window, and read here rather than
+  // threaded in, because the caller has no reason to know a tab draws a streak.
+  const streaks = await streaksFor(userId, today);
+
   return {
+    streak: streaks.training,
+    week: streaks.training_week,
     days,
     sessions: entries.length,
     total_kcal: Math.round(entries.reduce((total, e) => total + e.kcal_burned, 0)),

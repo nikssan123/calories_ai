@@ -8,6 +8,7 @@ import { Chunk } from '@/components/Chunk';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { Skeleton } from '@/components/Skeleton';
 import { Sparkline } from '@/components/Sparkline';
+import { TrainingWeek } from '@/components/TrainingWeek';
 import { Stat, Stats } from '@/components/Stat';
 import { api } from '@/lib/api';
 import { entryRemoved } from '@/lib/removals';
@@ -140,6 +141,18 @@ export default function ExerciseScreen() {
           the screen you come here to *act* on, and the history below is the
           half you come to read. */}
       <Workouts onLogged={() => void load(days)} />
+
+      {/* Above the log and outside the empty-state branch on purpose. A week
+          with nothing in it yet is exactly when somebody needs to see what the
+          bar is — three dots short of a streak is a goal, and an empty screen
+          that says "nothing logged" is not. */}
+      {summary && (
+        <InsetGroup title={tr('streak.training')}>
+          <View style={styles.trainingWeek}>
+            <TrainingWeek week={summary.week} streak={summary.streak} />
+          </View>
+        </InsetGroup>
+      )}
 
       {!summary ? (
         <>
@@ -397,6 +410,7 @@ const formatDate = (isoDate: string, locale: Locale) =>
   formatDay(isoDate, locale, { weekday: 'short', day: 'numeric', month: 'short' });
 
 const styles = StyleSheet.create({
+  trainingWeek: { paddingVertical: 12, paddingHorizontal: 12 },
   sessionEditor: { padding: 12, gap: 10 },
   editCancel: { alignSelf: 'center', paddingVertical: 4 },
   flex: { flex: 1 },

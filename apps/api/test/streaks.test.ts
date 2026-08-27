@@ -3,6 +3,7 @@ import {
   addDays,
   streakFrom,
   TRAINING_WEEK_DAYS,
+  trainingWeekOf,
   weekStartFor,
   weekStreakFrom,
 } from '@ct/shared';
@@ -173,5 +174,47 @@ describe('the training streak', () => {
 
   it('says nothing when nothing has been trained', () => {
     expect(weekStreakFrom([], TODAY)).toMatchObject({ current: 0, best: 0, state: 'none' });
+  });
+});
+
+/**
+ * A weekly streak has a visibility problem a daily one does not: "3 weeks" says
+ * nothing about whether *this* week is on course, and a number that resolves
+ * only on Sunday is one nobody can act on while there is still time to act.
+ */
+describe('the training week in progress', () => {
+  it('reports the days trained so far and the bar they are against', () => {
+    const so_far = [THIS_MONDAY, addDays(THIS_MONDAY, 2)];
+    expect(trainingWeekOf(so_far, TODAY)).toEqual({
+      week_start: THIS_MONDAY,
+      days: so_far,
+      needed: TRAINING_WEEK_DAYS,
+    });
+  });
+
+  it('leaves out days belonging to an earlier week', () => {
+    const lastWeekToo = [addDays(THIS_MONDAY, -3), THIS_MONDAY];
+    expect(trainingWeekOf(lastWeekToo, TODAY).days).toEqual([THIS_MONDAY]);
+  });
+
+  it('is the week so far, never the week somebody hopes to have', () => {
+    // Saturday is in this week and has not happened yet. Counting it would draw
+    // a bar as cleared on a Thursday on the strength of an intention.
+    const withSaturday = [THIS_MONDAY, addDays(THIS_MONDAY, 5)];
+    expect(trainingWeekOf(withSaturday, TODAY).days).toEqual([THIS_MONDAY]);
+  });
+
+  it('is empty on a Monday morning, and says which Monday', () => {
+    expect(trainingWeekOf([], THIS_MONDAY)).toEqual({
+      week_start: THIS_MONDAY,
+      days: [],
+      needed: TRAINING_WEEK_DAYS,
+    });
+  });
+
+  it('agrees with the streak about what clears the bar', () => {
+    const week = [0, 1, 2].map((offset) => addDays(THIS_MONDAY, offset));
+    expect(trainingWeekOf(week, TODAY).days).toHaveLength(TRAINING_WEEK_DAYS);
+    expect(weekStreakFrom(week, TODAY).state).toBe('alive');
   });
 });

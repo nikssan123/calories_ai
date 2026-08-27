@@ -181,8 +181,16 @@ Somebody training six days a week clears it easily, which is correct — the
 streak measures consistency, not volume, and there is no leaderboard for it to
 be unfair against (§1: nothing here compares one user to another).
 
-**The in-progress week is the same problem as the in-progress day.** At 09:00 on
-Monday nobody has trained yet this week, and a streak that reads 0 until
+**A weekly streak has to be watchable.** This is the part a daily streak gets
+for free and the reason `Streaks.training_week` exists. "3 weeks" is a number
+that only resolves on Sunday — too late to act on, too vague to feel like
+anything on a Wednesday. So the week in progress travels beside the run as the
+*days themselves*, not as a fraction: seven cells with three filled says how far
+along the week is **and** which days it was, and a week with Monday and Tuesday
+filled reads very differently on a Saturday than one with Thursday and Friday.
+
+**The in-progress week is otherwise the same problem as the in-progress day.** At
+09:00 on Monday nobody has trained yet this week, and a streak that reads 0 until
 Wednesday is a bug. Same three states, one granularity up:
 
 | State | Condition |
@@ -287,7 +295,10 @@ number answering a question nobody asked while logging lunch.
 `Progress.achievements` carries earned keys and dates; the grid draws the full
 set with the unearned ones dimmed, because a badge you cannot see is not a goal.
 
-**Exercise tab** — the training-weeks streak, where the sessions already are.
+**Exercise tab** — the training week and its run, above the log and *outside*
+the empty-state branch. A week with nothing in it yet is exactly when somebody
+needs to see what the bar is: three empty dots short of a streak is a goal, and
+a card that says "nothing logged" is not.
 
 **Nothing new on the lock screen.** The existing `streak` alert already covers
 milestones, and the interruption budget is one unprompted message a week
@@ -318,12 +329,17 @@ which language.
 - [x] `buildDaySummary` (today only) and `buildProgress`.
 - [x] `apps/api/test/achievements.test.ts` — 19 cases, including the one that
       fails if somebody adds a badge keyed on a calorie ceiling.
-- [ ] Mobile: chip on Today, grid on Progress, streak on Exercise, 28 strings × 5.
-- [ ] Web: the same.
+- [x] `Streaks.training_week` — the week as days, so the bar is watchable.
+- [x] `ExerciseSummary.streak` / `.week`, so the Exercise tab needs no second
+      fetch about food to draw a line about training.
+- [x] Mobile: `StreakChip` on Today, `TrainingWeek` on Progress and Exercise,
+      `Achievements` grid on Progress.
+- [x] Web: the same, plus the chip on the desktop `DayRail`.
+- [x] 43 keys × 5 languages × 2 catalogues. `pnpm messages` renders all 7,245.
 - [ ] Optional: §8, localise the milestone push.
 
-The server side is done and nothing draws it yet, which is the same state §2
-complains about — with the difference that the wire now carries it.
+Everything except the milestone-push wording is in. The tier list's promise of
+"your whole history, the ring, and the streak" is now true.
 
 **One thing changed in the building.** `buildProgress` was specified to *list*
 badges while `buildDaySummary` earned them. That is wrong for anybody whose first

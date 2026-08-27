@@ -1066,6 +1066,30 @@ export const Streak = z.object({
 });
 export type Streak = z.infer<typeof Streak>;
 
+/**
+ * The training week in progress, so the bar is something you can watch rather
+ * than something you find out about on Sunday.
+ *
+ * A weekly streak has a visibility problem a daily one does not. "12 days" tells
+ * you where you stand on its own; "3 weeks" says nothing about whether this
+ * week is on course, and a number that only resolves at the end of the week is
+ * a number nobody can act on while there is still time to act.
+ *
+ * `days` rather than a count, because the shape is the more useful half. Seven
+ * cells with three filled says *which* three — and a week with Monday and
+ * Tuesday filled on a Saturday is a different message from one with Thursday
+ * and Friday.
+ */
+export const TrainingWeek = z.object({
+  /** Monday of the week in progress. */
+  week_start: z.string(),
+  /** Days trained inside it so far, in order. Never past today. */
+  days: z.array(z.string()),
+  /** How many it takes for this week to count toward the streak. */
+  needed: z.number().int(),
+});
+export type TrainingWeek = z.infer<typeof TrainingWeek>;
+
 export const Streaks = z.object({
   /** Consecutive days with any food logged. */
   logging: Streak,
@@ -1077,6 +1101,8 @@ export const Streaks = z.object({
    * same mechanic §1 refuses for calories, with a physical-harm edge on top.
    */
   training: Streak,
+  /** Where the week in progress stands against the bar. */
+  training_week: TrainingWeek,
 });
 export type Streaks = z.infer<typeof Streaks>;
 
@@ -2300,6 +2326,17 @@ export const ExerciseSummary = z.object({
   /** Per-day burn, so the chart can show the shape of a training week. */
   series: z.array(TrendPoint),
   entries: z.array(ExerciseEntry),
+  /**
+   * The training run and the week in progress.
+   *
+   * Here rather than left to `Progress`, because the Exercise tab is where
+   * somebody goes to think about training and it should not have to fetch a
+   * second, larger payload about food to draw a line about workouts. Both are
+   * over the whole history and ignore the window above — a run capped at
+   * whichever of 14/30/90 is selected would be a number the tab bar invented.
+   */
+  streak: Streak,
+  week: TrainingWeek,
 });
 export type ExerciseSummary = z.infer<typeof ExerciseSummary>;
 

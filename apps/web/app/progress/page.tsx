@@ -19,6 +19,8 @@ import { useUnits } from '@/lib/units';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { Sparkline } from '@/components/Sparkline';
+import { Achievements } from '@/components/Achievements';
+import { TrainingWeek } from '@/components/TrainingWeek';
 import { WeeklyReview } from '@/components/WeeklyReview';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -339,6 +341,22 @@ export default function ProgressPage() {
               </InsetRow>
             </Link>
           </InsetGroup>
+
+          {/* Both runs and the wall, under the charts. The charts answer "how
+              am I doing"; these answer "how long have I kept it up", which is
+              the question you ask second. */}
+          <InsetGroup title={t('streak.training')}>
+            <div className="px-3 py-4">
+              <TrainingWeek
+                week={progress.streaks.training_week}
+                streak={progress.streaks.training}
+              />
+            </div>
+          </InsetGroup>
+
+          <div className="lg:col-span-2">
+            <Achievements earned={progress.achievements} />
+          </div>
 
           <div className="lg:col-span-2">
             <WeeklyReview />

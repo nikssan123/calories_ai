@@ -1,5 +1,5 @@
 import type { Streak, Streaks } from '@ct/shared';
-import { streakFrom, weekStreakFrom } from '@ct/shared';
+import { streakFrom, trainingWeekOf, weekStreakFrom } from '@ct/shared';
 import { query } from '../db.ts';
 
 /**
@@ -76,6 +76,7 @@ export function streaksOf(history: LogHistory, today: string): Streaks {
   return {
     logging: streakFrom(history.logged, today),
     training: weekStreakFrom(history.trained, today),
+    training_week: trainingWeekOf(history.trained, today),
   };
 }
 

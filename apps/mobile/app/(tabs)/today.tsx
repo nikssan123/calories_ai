@@ -23,6 +23,7 @@ import type { DaySummary, ExerciseEntry, FoodEntry, FoodItemInput, Locale, Meal 
 import { formatBodyWeight, formatDay, formatDistance, formatMass, inferMeal } from '@ct/shared';
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 import { CalorieRing } from '@/components/CalorieRing';
+import { StreakChip } from '@/components/StreakChip';
 import { DietQuality } from '@/components/DietQuality';
 import { FoodEditor } from '@/components/FoodEditor';
 import { groupSets } from '@/components/ChatCard';
@@ -699,6 +700,10 @@ export default function TodayScreen() {
                 net {day.net_kcal.toLocaleString()} kcal after exercise
               </Text>
             )}
+            {/* Null on every day but today — see `DaySummary.streak`. A run
+                counted against a Tuesday in March is not a thing anybody opened
+                the calendar to find out. */}
+            {day.streak && <StreakChip streak={day.streak} />}
           </View>
 
           <MacroBars consumed={day.consumed} targets={day.targets} />

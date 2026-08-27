@@ -8,6 +8,7 @@ import { distanceUnit, formatDay, formatDistance, formatNumber, toDistance } fro
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
+import { TrainingWeek } from '@/components/TrainingWeek';
 import { Sparkline } from '@/components/Sparkline';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -105,6 +106,18 @@ export default function ExercisePage() {
             the screen you come here to *act* on, and the history below is the
             half you come to read. */}
         <Workouts onLogged={() => void load(days)} />
+
+        {/* Above the log and outside the empty-state branch on purpose. A week
+            with nothing in it yet is exactly when somebody needs to see what the
+            bar is — three dots short of a streak is a goal, and a screen that
+            says "nothing logged" is not. */}
+        {summary && (
+          <InsetGroup title={t('streak.training')}>
+            <div className="px-3 py-4">
+              <TrainingWeek week={summary.week} streak={summary.streak} />
+            </div>
+          </InsetGroup>
+        )}
 
         {!summary ? (
           <div className="space-y-4">
