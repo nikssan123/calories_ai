@@ -6,7 +6,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import Svg, { Line, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import type { TrendPoint } from '@ct/shared';
 import { useColors } from '@/theme';
 
@@ -20,9 +20,9 @@ import { useColors } from '@/theme';
  * bars for one that only exists on the days it happened (burn). Drawing a rest
  * day as a point on a line implies a value it does not have.
  *
- * The web's touch readout is not here yet. It belongs to Progress, where a
- * chart is the subject rather than a footnote, and the cards never passed a
- * `tooltip` even on the web.
+ * Both shapes can be scrubbed. The cards never pass a `readout` — a chart that
+ * is a footnote to a sentence is not one you interrogate — but on Progress,
+ * where the chart is the subject, a day is something you reach for.
  */
 export function Sparkline({
   points,
@@ -44,8 +44,14 @@ export function Sparkline({
   /**
    * Opt in to inspecting a single day. The caller draws the contents, because
    * only it knows what the day *was* — this component has a date and a number
-   * and nothing else. Bars only: a bar is a day you can point at, where a
-   * line's value between two samples is an interpolation nobody logged.
+   * and nothing else.
+   *
+   * A line gets this as well as a bar chart, and needs it more. The line is
+   * usually a rolling mean, so the morning you log a figure half a kilo up from
+   * the last one, the trace can still be falling — the reading that aged out of
+   * the window was higher than either. Both numbers are right and the chart on
+   * its own can only show one of them, which is exactly the shape of "the chart
+   * is wrong".
    */
   readout?: (point: TrendPoint, index: number) => React.ReactNode;
 }) {
@@ -71,7 +77,7 @@ export function Sparkline({
    */
   const mounted = useRef(false);
   const pending = useRef(0);
-  /** The bar being read, while a finger is down on it. */
+  /** The day being read, while a finger is down on it. */
   const [held, setHeld] = useState<number | null>(null);
 
   useEffect(() => {
@@ -127,6 +133,23 @@ export function Sparkline({
       />
     ) : null;
 
+  const active = held !== null && held < points.length ? held : null;
+  // The point on the trace the readout is talking about. Null on a day the line
+  // does not reach — before the first sample there is nothing to mark, and the
+  // readout says so in words.
+  const marked = active === null || variant === 'bars' ? null : points[active]![accessor];
+  /*
+   * Which end of the chart the readout parks at.
+   *
+   * A bar grows from the floor, so a card pinned to the ceiling is always in
+   * free space and stays there — it never moves as you scrub, which is what you
+   * want of something you are reading. A trace has no such habit: it can be
+   * anywhere, and at the top of the chart the card would sit exactly on the
+   * point it is describing. So a line's card takes the half the point is not
+   * in, and the point stays visible under it.
+   */
+  const place = marked !== null && y(marked) < height / 2 ? 'bottom' : 'top';
+
   const body =
     variant === 'bars' ? (
       <Bars
@@ -136,18 +159,45 @@ export function Sparkline({
         y={y}
         height={height}
         view={VIEW}
-        held={held}
+        held={active}
         card={colors.foreground}
       />
     ) : (
-      <Path
-        d={trace(points, accessor, x, y)}
-        fill="none"
-        stroke={stroke}
-        strokeWidth={3.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <>
+        {/* Drawn before the trace, so pointing at a day never covers the shape
+            you are pointing at. */}
+        {active !== null && (
+          <Line
+            x1={x(active)}
+            x2={x(active)}
+            y1={0}
+            y2={height}
+            stroke={colors.border}
+            strokeWidth={2}
+            strokeLinecap="round"
+          />
+        )}
+        <Path
+          d={trace(points, accessor, x, y)}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={3.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {/* Ringed in the card's own colour so the dot reads as a dot against a
+            trace of the same ink, at any density of samples. */}
+        {marked !== null && (
+          <Circle
+            cx={x(active!)}
+            cy={y(marked)}
+            r={5}
+            fill={stroke}
+            stroke={colors.card}
+            strokeWidth={3}
+          />
+        )}
+      </>
     );
 
   /*
@@ -157,15 +207,31 @@ export function Sparkline({
    * and it covers the thing it is pointing at. So the readout is held only
    * while the finger is down and clears on lift — a card left parked over the
    * chart after a tap would be worse than no card at all — and it is drawn
-   * above the bars rather than beside them, where the hand is not.
+   * above the chart rather than beside it, where the hand is not.
+   *
+   * Which day the finger is on is the one thing the two shapes cannot share. A
+   * bar owns a slot and is read by the slot the finger is inside; a line's
+   * samples sit *on* the ends, the first at 0 and the last at 1, and are read
+   * by whichever is nearest. Anchoring a line's readout to slot centres would
+   * park it half a day off at both edges.
    */
-  const active = held !== null && held < points.length ? held : null;
-  const pick = (x: number) => {
-    const ratio = x / (width || 1);
-    setHeld(Math.min(points.length - 1, Math.max(0, Math.floor(ratio * points.length))));
+  const bars = variant === 'bars';
+  const anchor = (i: number) =>
+    bars ? (i + 0.5) / points.length : i / Math.max(1, points.length - 1);
+  const pick = (at: number) => {
+    const ratio = at / (width || 1);
+    setHeld(
+      Math.min(
+        points.length - 1,
+        Math.max(
+          0,
+          bars ? Math.floor(ratio * points.length) : Math.round(ratio * (points.length - 1)),
+        ),
+      ),
+    );
   };
 
-  const scrubbing = readout !== undefined && variant === 'bars';
+  const scrubbing = readout !== undefined;
   const drawn = (width * height) / VIEW;
 
   return (
@@ -188,7 +254,7 @@ export function Sparkline({
         </Svg>
       )}
       {active !== null && readout && (
-        <Readout position={(active + 0.5) / points.length} width={width}>
+        <Readout position={anchor(active)} width={width} place={place}>
           {readout(points[active]!, active)}
         </Readout>
       )}
@@ -200,8 +266,7 @@ export function Sparkline({
 const READOUT_MAX = 0.7;
 
 /**
- * The card, parked over the top of the chart and anchored to the day under the
- * finger.
+ * The card, parked over the chart and anchored to the day under the finger.
  *
  * It slides rather than flips at the ends: the shift runs from 0 at the left
  * edge through half in the middle to the full width at the right, which keeps
@@ -212,10 +277,12 @@ const READOUT_MAX = 0.7;
 function Readout({
   position,
   width,
+  place = 'top',
   children,
 }: {
   position: number;
   width: number;
+  place?: 'top' | 'bottom';
   children: React.ReactNode;
 }) {
   const colors = useColors();
@@ -228,6 +295,7 @@ function Readout({
       pointerEvents="none"
       style={[
         styles.readout,
+        place === 'top' ? styles.readoutTop : styles.readoutBottom,
         {
           left: left - shift,
           maxWidth: max,
@@ -306,12 +374,13 @@ function Bars({
 const styles = StyleSheet.create({
   readout: {
     position: 'absolute',
-    top: 0,
     borderWidth: 2,
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
+  readoutTop: { top: 0 },
+  readoutBottom: { bottom: 0 },
 });
 
 /** Skips gaps rather than drawing a line through days with no data. */

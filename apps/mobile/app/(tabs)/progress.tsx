@@ -3,12 +3,13 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Polyline } from 'react-native-svg';
-import type { Progress } from '@ct/shared';
+import type { Progress, TrendPoint } from '@ct/shared';
 import {
   QUALITY_COVERAGE_FLOOR,
   bodyWeightToKg,
   bodyWeightUnit,
   formatBodyWeight,
+  formatDay,
   formatNumber,
   formatWeightDelta,
   toBodyWeight,
@@ -210,10 +211,20 @@ export default function ProgressScreen() {
                         </View>
                       )}
                   </View>
+                  {/*
+                    * The trace is the 7-day mean, not the scale reading, and
+                    * the two disagree often enough to be worth reading off: a
+                    * weigh-in up on the last one lands on a line that is still
+                    * falling whenever the reading it displaced was higher than
+                    * both. The readout carries the day's own figure, so the
+                    * answer to "I logged more than that" is on the chart
+                    * rather than in the journal.
+                    */}
                   <Sparkline
                     points={progress.weight.series}
                     stroke={colors.foreground}
                     style={styles.chart}
+                    readout={(point) => <WeightReadout point={point} />}
                   />
                 </>
               )}
@@ -537,6 +548,53 @@ function QualityChart({
   );
 }
 
+/**
+ * One day of the weight chart, read off it.
+ *
+ * Two numbers rather than one, because the chart draws the second and the
+ * complaint is always about the first. The weigh-in is what the scale said that
+ * morning; the trend is where the line is, which is a mean over the week behind
+ * it and so moves on days nothing was logged and can move against the last
+ * reading. Naming both, on a day that has both, is what makes the line
+ * legible — and a day with no weigh-in says so instead of borrowing one.
+ */
+function WeightReadout({ point }: { point: TrendPoint }) {
+  const colors = useColors();
+  const locale = useLocale();
+  const tr = useT();
+  const units = useUnits();
+
+  return (
+    <>
+      {/* Date and figure share a line. The card is parked on top of the chart
+          it is explaining, so every line it costs is a day you cannot see. */}
+      <View style={styles.readoutHead}>
+        <Text style={[t.footnoteBold, { color: colors.mutedForeground }]}>
+          {formatDay(point.local_date, locale, {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+          })}
+        </Text>
+        {point.value === null ? (
+          <Text style={[t.footnoteSemibold, styles.readoutFigure, { color: colors.mutedForeground }]}>
+            {tr('progress.noWeighIn')}
+          </Text>
+        ) : (
+          <Text style={[t.footnote, t.tnum, styles.readoutFigure, { color: colors.foreground }]}>
+            {formatBodyWeight(point.value, units)}
+          </Text>
+        )}
+      </View>
+      {point.average !== null && (
+        <Text style={[t.footnote, styles.readoutTrend, { color: colors.mutedForeground }]}>
+          {tr('progress.trendReadout')(formatBodyWeight(point.average, units))}
+        </Text>
+      )}
+    </>
+  );
+}
+
 function Arrow({ up, color }: { up: boolean; color: string }) {
   return (
     <Svg width={14} height={14} viewBox="0 0 24 24">
@@ -579,6 +637,9 @@ const styles = StyleSheet.create({
   aside: { flexShrink: 1 },
   delta: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   chart: { marginTop: 16 },
+  readoutHead: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
+  readoutFigure: { marginLeft: 'auto' },
+  readoutTrend: { marginTop: 2 },
   note: { marginTop: 6, lineHeight: 20 },
   logRow: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12 },
   logInput: {

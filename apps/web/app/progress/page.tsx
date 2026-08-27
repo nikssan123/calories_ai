@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowDown, ArrowUp, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Progress } from '@ct/shared';
+import type { Progress, TrendPoint } from '@ct/shared';
 import {
   QUALITY_COVERAGE_FLOOR,
   bodyWeightToKg,
   bodyWeightUnit,
   formatBodyWeight,
+  formatDay,
   formatNumber,
   formatWeightDelta,
   toBodyWeight,
@@ -157,7 +158,22 @@ export default function ProgressPage() {
                       </span>
                     )}
                   </div>
-                  <Sparkline points={progress.weight.series} stroke="var(--foreground)" className="mt-4" />
+                  {/*
+                    * The trace is the 7-day mean, not the scale reading, and
+                    * the two disagree often enough to be worth reading off:
+                    * a weigh-in up on the last one lands on a line that is
+                    * still falling whenever the reading it displaced was
+                    * higher than both. The readout carries the day's own
+                    * figure, so the answer to "I logged more than that" is on
+                    * the chart rather than in the journal.
+                    */}
+                  <Sparkline
+                    points={progress.weight.series}
+                    stroke="var(--foreground)"
+                    className="mt-4"
+                    label={t('progress.weightChart')}
+                    tooltip={(point) => <WeightReadout point={point} />}
+                  />
                 </>
               )}
             </div>
@@ -412,6 +428,46 @@ function QualityChart({
         className="mt-4"
       />
     </div>
+  );
+}
+
+/**
+ * One day of the weight chart, read off it.
+ *
+ * Two numbers rather than one, because the chart draws the second and the
+ * complaint is always about the first. The weigh-in is what the scale said that
+ * morning; the trend is where the line is, which is a mean over the week behind
+ * it and so moves on days nothing was logged and can move against the last
+ * reading. Naming both, on a day that has both, is what makes the line
+ * legible — and a day with no weigh-in says so instead of borrowing one.
+ */
+function WeightReadout({ point }: { point: TrendPoint }) {
+  const t = useT();
+  const locale = useLocale();
+  const units = useUnits();
+
+  return (
+    <>
+      {/* Date and figure share a line. The card is parked on top of the chart
+          it is explaining, so every line it costs is a day you cannot see. */}
+      <div className="flex items-baseline gap-3">
+        <p className="text-footnote text-muted-foreground font-bold">
+          {formatDay(point.local_date, locale, { weekday: 'short', day: 'numeric', month: 'short' })}
+        </p>
+        {point.value === null ? (
+          <p className="text-footnote text-muted-foreground ml-auto font-semibold">
+            {t('progress.noWeighIn')}
+          </p>
+        ) : (
+          <p className="text-figure ml-auto text-body">{formatBodyWeight(point.value, units)}</p>
+        )}
+      </div>
+      {point.average !== null && (
+        <p className="text-footnote text-muted-foreground mt-0.5 font-medium">
+          {t('progress.trendReadout')(formatBodyWeight(point.average, units))}
+        </p>
+      )}
+    </>
   );
 }
 

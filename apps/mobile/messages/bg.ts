@@ -356,6 +356,8 @@ export const bg: Messages = {
   'progress.daysShort': (count) => `${count}д`,
   'progress.weightTitle': '⚖️  Тегло',
   'progress.noWeighIns': 'Още няма измервания. Запиши едно отдолу или просто кажи на дневника.',
+  'progress.noWeighIn': 'Без измерване',
+  'progress.trendReadout': (value) => `Средно за 7 дни ${value} — линията`,
   'progress.thisWeek': 'тази седмица',
   'progress.avg7d': 'Средно за 7 дни',
   'progress.sinceStart': 'От началото',

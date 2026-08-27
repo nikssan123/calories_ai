@@ -361,6 +361,8 @@ export const de: Messages = {
   'progress.daysShort': (count) => `${count}T`,
   'progress.weightTitle': '⚖️  Gewicht',
   'progress.noWeighIns': 'Noch nichts gewogen. Trag unten etwas ein, oder sag es einfach dem Journal.',
+  'progress.noWeighIn': 'Nicht gewogen',
+  'progress.trendReadout': (value) => `7-Tage-Schnitt ${value} — die Linie`,
   'progress.thisWeek': 'diese Woche',
   'progress.avg7d': '7-Tage-Schnitt',
   'progress.sinceStart': 'Seit Beginn',

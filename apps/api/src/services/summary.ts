@@ -245,10 +245,19 @@ export async function buildProgress(
     };
   });
 
+  /*
+   * The rolling mean reaches back over calendar days rather than over the
+   * chart, which is why `weights` was fetched wider than the window is drawn.
+   *
+   * Slicing the window instead would leave its first six points averaging one
+   * to six readings while every point after them averages a week — a left edge
+   * that jumps for no reason the reader can see, on the one series where the
+   * history to do better is already in hand. The other series slice the window
+   * because their queries stop at `from` and there is nothing earlier to use.
+   */
   const weightByDate = new Map(weights.map((w) => [w.local_date, w.weight_kg]));
-  const weightSeries: TrendPoint[] = window.map((date, index) => {
-    const priorWindow = window
-      .slice(Math.max(0, index - 6), index + 1)
+  const weightSeries: TrendPoint[] = window.map((date) => {
+    const priorWindow = dateRange(addDays(date, -6), date)
       .map((d) => weightByDate.get(d))
       .filter((v): v is number => v !== undefined);
     return { local_date: date, value: weightByDate.get(date) ?? null, average: mean(priorWindow) };

@@ -150,6 +150,54 @@ describe('buildProgress', () => {
     expect(progress.weight.to_target_kg).toBeCloseTo(5.7, 5);
   });
 
+  it('rolls the weight mean over calendar days, reaching behind the window', async () => {
+    const today = await currentLocalDate(user.ctx);
+    const dayBefore = (n: number) =>
+      new Date(Date.parse(`${today}T00:00:00Z`) - n * 86_400_000).toISOString().slice(0, 10);
+
+    // Two readings either side of a 7-day window's left edge. The first point
+    // drawn is day 6, and its mean has to include day 8 — which is off the
+    // chart but well inside the week behind it.
+    await addWeight(user, dayBefore(8), 90);
+    await addWeight(user, dayBefore(6), 88);
+
+    const progress = await buildProgress(user.id, user.ctx, 7);
+    const first = progress.weight.series[0]!;
+    expect(first.local_date).toBe(dayBefore(6));
+    expect(first.value).toBeCloseTo(88, 5);
+    expect(first.average).toBeCloseTo(89, 5);
+  });
+
+  it('lets the weight trend fall on a day the reading rose', async () => {
+    const today = await currentLocalDate(user.ctx);
+    const dayBefore = (n: number) =>
+      new Date(Date.parse(`${today}T00:00:00Z`) - n * 86_400_000).toISOString().slice(0, 10);
+
+    /*
+     * The shape that reads as a broken chart and is not one: 89 ages out of the
+     * seven-day window on the very morning 88.3 replaces 87.8 as the newest
+     * reading, so the mean drops while the scale went up. Both numbers are
+     * right, which is why the chart's readout carries the day's own value
+     * alongside the line's.
+     */
+    await addWeight(user, dayBefore(9), 89);
+    await addWeight(user, dayBefore(5), 87.8);
+    await addWeight(user, dayBefore(2), 88.3);
+
+    const progress = await buildProgress(user.id, user.ctx, 30);
+    const byDate = new Map(progress.weight.series.map((p) => [p.local_date, p]));
+    const before = byDate.get(dayBefore(3))!;
+    const rise = byDate.get(dayBefore(2))!;
+
+    expect(before.value).toBeNull();
+    expect(before.average).toBeCloseTo(88.4, 5);
+    expect(rise.value).toBeCloseTo(88.3, 5);
+    expect(rise.average).toBeCloseTo(88.05, 5);
+    expect(rise.average!).toBeLessThan(before.average!);
+    // The headline is the reading, not the trend, so the two disagree on screen.
+    expect(progress.weight.current_kg).toBeCloseTo(88.3, 5);
+  });
+
   it('sums exercise across the window', async () => {
     const today = await currentLocalDate(user.ctx);
     await createExerciseEntry({

@@ -360,6 +360,8 @@ export const es: Messages = {
   'progress.daysShort': (count) => `${count}d`,
   'progress.weightTitle': '⚖️  Peso',
   'progress.noWeighIns': 'Aún no te has pesado. Apunta uno abajo, o simplemente díselo al diario.',
+  'progress.noWeighIn': 'Sin pesaje',
+  'progress.trendReadout': (value) => `Media de 7 días ${value} — la línea`,
   'progress.thisWeek': 'esta semana',
   'progress.avg7d': 'Media de 7 días',
   'progress.sinceStart': 'Desde el principio',
