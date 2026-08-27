@@ -2957,11 +2957,21 @@ export const AdminOverview = z.object({
     chat_messages: z.number(),
     photos: z.number(),
     reviews: z.number(),
+    recipes: z.number(),
+    routines: z.number(),
+    push_tokens: z.number(),
   }),
   storage: z.object({
     database_bytes: z.number(),
     uploads_bytes: z.number(),
     photo_count: z.number(),
+  }),
+  /** What is actually running, as opposed to what the repo says should be. */
+  runtime: z.object({
+    node: z.string(),
+    postgres: z.string(),
+    uptime_s: z.number(),
+    env: z.string(),
   }),
   config: z.object({
     provider: z.string(),
@@ -3027,22 +3037,53 @@ export const SupportInbox = z.object({
 });
 export type SupportInbox = z.infer<typeof SupportInbox>;
 
+/** The shelves the table picker groups by, in the order it renders them. */
+export const TABLE_GROUPS = ['Accounts', 'Food', 'Exercise', 'Coach', 'Kitchen', 'Ops'] as const;
+export const TableGroup = z.enum(TABLE_GROUPS);
+export type TableGroup = z.infer<typeof TableGroup>;
+
 export const TableSummary = z.object({
   name: z.string(),
+  group: TableGroup,
   rows: z.number(),
   bytes: z.number(),
 });
 export type TableSummary = z.infer<typeof TableSummary>;
 
+/**
+ * One column, as the catalogue describes it rather than as a hand-written copy
+ * of the schema would. The type is what lets the panel right-align a number and
+ * pretty-print a jsonb; `references` is what turns a `user_id` into a link.
+ */
+export const TableField = z.object({
+  name: z.string(),
+  /** The Postgres type name — `uuid`, `timestamptz`, `jsonb`, `numeric`. */
+  type: z.string(),
+  nullable: z.boolean(),
+  primary_key: z.boolean(),
+  references: z.object({ table: z.string(), column: z.string() }).nullable(),
+});
+export type TableField = z.infer<typeof TableField>;
+
 export const TablePage = z.object({
   table: z.string(),
-  columns: z.array(z.string()),
+  group: TableGroup,
+  /** One sentence on what the table is for. */
+  note: z.string(),
+  fields: z.array(TableField),
   rows: z.array(z.record(z.string(), z.unknown())),
   total: z.number(),
   limit: z.number(),
   offset: z.number(),
   /** Columns deliberately withheld — password hashes, session tokens. */
   redacted: z.array(z.string()),
+  /** The column actually sorted on, or null for the table's own default order. */
+  sort: z.string().nullable(),
+  dir: z.enum(['asc', 'desc']),
+  /** The search this page was filtered by, echoed back. */
+  q: z.string().nullable(),
+  /** The account this page was filtered to, when the table has a user_id. */
+  user_id: z.string().nullable(),
 });
 export type TablePage = z.infer<typeof TablePage>;
 

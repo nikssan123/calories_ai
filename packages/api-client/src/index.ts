@@ -793,13 +793,31 @@ export function createApiClient({
 
       tables: () => request<{ tables: TableSummary[] }>('/admin/tables'),
 
-      table: (table: string, options: { limit?: number; offset?: number; userId?: string } = {}) => {
+      /**
+       * One page of one table. `q` searches every visible column at once —
+       * the server casts each to text — which is the search an admin actually
+       * has: they know the id or the address, not which column carries it.
+       */
+      table: (
+        table: string,
+        options: {
+          limit?: number;
+          offset?: number;
+          userId?: string;
+          q?: string;
+          sort?: string;
+          dir?: 'asc' | 'desc';
+        } = {},
+      ) => {
         const params = new URLSearchParams();
         if (options.limit) params.set('limit', String(options.limit));
         if (options.offset) params.set('offset', String(options.offset));
         if (options.userId) params.set('user_id', options.userId);
+        if (options.q) params.set('q', options.q);
+        if (options.sort) params.set('sort', options.sort);
+        if (options.dir) params.set('dir', options.dir);
         const qs = params.toString();
-        return request<TablePage>(`/admin/tables/${table}${qs ? `?${qs}` : ''}`);
+        return request<TablePage>(`/admin/tables/${encodeURIComponent(table)}${qs ? `?${qs}` : ''}`);
       },
 
       users: (limit = 100) => request<{ users: AdminUser[] }>(`/admin/users?limit=${limit}`),

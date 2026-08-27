@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import type { AdminOverview } from '@ct/shared';
+import type { AdminOverview, TableSummary } from '@ct/shared';
 import { api } from '@/lib/api';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -13,13 +13,19 @@ import { bytes, compactNumber, timestamp } from './format';
 export function OverviewPanel() {
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [migrations, setMigrations] = useState<Array<{ name: string; applied_at: string }>>([]);
+  const [tables, setTables] = useState<TableSummary[]>([]);
 
   useEffect(() => {
     void (async () => {
       try {
-        const [data, applied] = await Promise.all([api.admin.overview(), api.admin.migrations()]);
+        const [data, applied, browsable] = await Promise.all([
+          api.admin.overview(),
+          api.admin.migrations(),
+          api.admin.tables(),
+        ]);
         setOverview(data);
         setMigrations(applied.migrations);
+        setTables(browsable.tables);
       } catch (e) {
         toast.error((e as Error).message);
       }
@@ -35,7 +41,13 @@ export function OverviewPanel() {
     );
   }
 
-  const { config, data, storage, users } = overview;
+  const { config, data, runtime, storage, users } = overview;
+  // Biggest first, and only the ones with something in them — a list of forty
+  // tables where thirty are empty is a list nobody reads to the end.
+  const largest = [...tables]
+    .filter((table) => table.rows > 0)
+    .sort((a, b) => b.bytes - a.bytes)
+    .slice(0, 8);
 
   return (
     <div className="space-y-7">
@@ -74,7 +86,27 @@ export function OverviewPanel() {
           <Stat label="Chat messages" value={compactNumber(data.chat_messages)} />
           <Stat label="Photos" value={compactNumber(data.photos)} />
           <Stat label="Weekly reviews" value={compactNumber(data.reviews)} />
+          <Stat label="Recipes" value={compactNumber(data.recipes)} />
+          <Stat label="Routines" value={compactNumber(data.routines)} />
+          <Stat label="Push tokens" value={compactNumber(data.push_tokens)} hint="Per install" />
         </div>
+      </InsetGroup>
+
+      <InsetGroup
+        title="Largest tables"
+        footer="Rows and total size including indexes. The Database tab opens any of them."
+      >
+        {largest.map((table) => (
+          <InsetRow key={table.name}>
+            <span className="flex-1 truncate font-mono text-[13px]">{table.name}</span>
+            <span className="text-muted-foreground text-footnote tnum">
+              {compactNumber(table.rows)} rows
+            </span>
+            <span className="text-footnote tnum w-20 text-right font-semibold">
+              {bytes(table.bytes)}
+            </span>
+          </InsetRow>
+        ))}
       </InsetGroup>
 
       <InsetGroup
@@ -113,6 +145,16 @@ export function OverviewPanel() {
       </InsetGroup>
 
       <InsetGroup
+        title="Runtime"
+        footer="Read from the process and the server rather than from the repo — this is what the last restart actually picked up."
+      >
+        <ConfigRow label="Node" value={runtime.node} />
+        <ConfigRow label="Postgres" value={runtime.postgres} />
+        <ConfigRow label="NODE_ENV" value={runtime.env} />
+        <ConfigRow label="Uptime" value={uptime(runtime.uptime_s)} />
+      </InsetGroup>
+
+      <InsetGroup
         title="Migrations"
         footer="Schema and code ship together — migrations run when the API boots, so this is what the running image has actually applied."
       >
@@ -127,6 +169,14 @@ export function OverviewPanel() {
       </InsetGroup>
     </div>
   );
+}
+
+/** Coarse on purpose: what matters is "since when", not the seconds. */
+function uptime(seconds: number): string {
+  if (seconds < 90) return `${seconds}s`;
+  if (seconds < 5400) return `${Math.round(seconds / 60)} min`;
+  if (seconds < 172800) return `${(seconds / 3600).toFixed(1)} hours`;
+  return `${(seconds / 86400).toFixed(1)} days`;
 }
 
 function ConfigRow({ label, value }: { label: string; value: string }) {

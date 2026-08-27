@@ -114,6 +114,12 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       limit: clampInt(query.limit, 50, 1, 500),
       offset: clampInt(query.offset, 0, 0, Number.MAX_SAFE_INTEGER),
       userId: query.user_id ?? null,
+      // Both are checked against the table's own live column list downstream,
+      // so an unknown sort column falls back to the default order rather than
+      // reaching SQL or erroring.
+      q: query.q?.slice(0, 200) ?? null,
+      sort: query.sort ?? null,
+      dir: query.dir === 'asc' ? 'asc' : 'desc',
     });
     if (!page) return reply.status(404).send({ error: 'No such table, or it is not browsable.' });
     return page;

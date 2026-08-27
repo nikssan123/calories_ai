@@ -50,8 +50,20 @@ export async function isAdmin(userId: string): Promise<boolean> {
 
 export interface AdminOverview {
   users: { total: number; onboarded: number; disabled: number; active_7d: number };
-  data: { food_entries: number; exercise_entries: number; weight_entries: number; chat_messages: number; photos: number; reviews: number };
+  data: {
+    food_entries: number;
+    exercise_entries: number;
+    weight_entries: number;
+    chat_messages: number;
+    photos: number;
+    reviews: number;
+    recipes: number;
+    routines: number;
+    push_tokens: number;
+  };
   storage: { database_bytes: number; uploads_bytes: number; photo_count: number };
+  /** What is actually running, as opposed to what the repo says should be. */
+  runtime: { node: string; postgres: string; uptime_s: number; env: string };
   config: {
     provider: string;
     auth: string;
@@ -86,10 +98,14 @@ export async function buildOverview(): Promise<AdminOverview> {
             (SELECT count(*) FROM weight_entries)::int   AS weight_entries,
             (SELECT count(*) FROM chat_messages)::int    AS chat_messages,
             (SELECT count(*) FROM photos)::int           AS photos,
-            (SELECT count(*) FROM weekly_reviews)::int   AS reviews`,
+            (SELECT count(*) FROM weekly_reviews)::int   AS reviews,
+            (SELECT count(*) FROM recipes)::int           AS recipes,
+            (SELECT count(*) FROM routines)::int          AS routines,
+            (SELECT count(*) FROM push_tokens)::int       AS push_tokens`,
   ))!;
-  const size = (await queryOne<{ bytes: string }>(
-    'SELECT pg_database_size(current_database())::bigint AS bytes',
+  const size = (await queryOne<{ bytes: string; postgres: string }>(
+    `SELECT pg_database_size(current_database())::bigint AS bytes,
+            current_setting('server_version')             AS postgres`,
   ))!;
 
   return {
@@ -98,6 +114,14 @@ export async function buildOverview(): Promise<AdminOverview> {
     storage: {
       database_bytes: Number(size.bytes),
       ...(await uploadsSize()),
+    },
+    // Read from the process and the server rather than from package.json,
+    // because the question this answers is what a restart actually picked up.
+    runtime: {
+      node: process.version,
+      postgres: size.postgres,
+      uptime_s: Math.round(process.uptime()),
+      env: process.env.NODE_ENV ?? 'development',
     },
     config: {
       provider: providerId(),
@@ -135,121 +159,526 @@ async function uploadsSize(): Promise<{ uploads_bytes: number; photo_count: numb
 
 // ---- Reading: the schema browser --------------------------------------------
 
+/** The shelves the picker groups tables onto. Ordered as the product is. */
+export const TABLE_GROUPS = ['Accounts', 'Food', 'Exercise', 'Coach', 'Kitchen', 'Ops'] as const;
+export type TableGroup = (typeof TABLE_GROUPS)[number];
+
+export interface TableSpec {
+  group: TableGroup;
+  /** Columns never sent to the panel, at any depth. */
+  redact: string[];
+  /** Default ordering — newest-first wherever a table has a notion of "new". */
+  order: string;
+  /** One sentence on what the table is, shown above its rows. */
+  note: string;
+}
+
 /**
  * Tables the panel may read, and the columns it must never return.
  *
  * An allowlist rather than a denylist, because the failure modes are not
  * symmetric: forgetting to allow a table shows an admin less than they wanted,
- * while forgetting to deny one leaks password hashes. `schema_migrations` is
- * included because "which migrations has this deployment actually run" is the
- * first question when a deploy looks wrong.
+ * while forgetting to deny one leaks password hashes. It covers the whole
+ * schema rather than a chosen dozen — a browser that omits the table you are
+ * looking for sends you to psql, which is the thing this exists to avoid — and
+ * every genuine secret is named in a `redact` list beside its table instead.
+ *
+ * What is withheld is exactly the set of values that are credentials in
+ * themselves: anything that would let the holder be someone else. A hash still
+ * counts, because for `known_devices` the hash *is* the presented value.
+ *
+ * An entry whose table does not exist yet is skipped rather than fatal, so a
+ * deployment mid-migration shows one table fewer instead of a 500.
  */
-export const BROWSABLE_TABLES: Record<string, { redact: string[]; order: string }> = {
-  users: { redact: ['password_hash', 'agent_session_id'], order: 'created_at DESC' },
-  auth_sessions: { redact: ['token_hash'], order: 'last_seen_at DESC' },
-  food_entries: { redact: [], order: 'eaten_at DESC' },
-  food_items: { redact: [], order: 'created_at DESC' },
-  exercise_entries: { redact: [], order: 'performed_at DESC' },
-  weight_entries: { redact: [], order: 'measured_at DESC' },
-  chat_messages: { redact: [], order: 'created_at DESC' },
-  photos: { redact: [], order: 'created_at DESC' },
-  targets: { redact: [], order: 'effective_from DESC' },
-  weekly_reviews: { redact: [], order: 'week_start DESC' },
-  ai_usage: { redact: [], order: 'occurred_at DESC' },
-  schema_migrations: { redact: [], order: 'applied_at DESC' },
+export const BROWSABLE_TABLES: Record<string, TableSpec> = {
+  // ---- Accounts
+  users: {
+    group: 'Accounts',
+    redact: ['password_hash', 'agent_session_id'],
+    order: 'created_at DESC',
+    note: 'One row per person: profile, goal, plan, notification switches.',
+  },
+  auth_sessions: {
+    group: 'Accounts',
+    redact: ['token_hash'],
+    order: 'last_seen_at DESC',
+    note: 'Live sign-ins. One row per cookie; deleting one signs that device out.',
+  },
+  auth_tokens: {
+    group: 'Accounts',
+    redact: ['token_hash', 'code_hash'],
+    order: 'created_at DESC',
+    note: 'Single-use links and codes — verification, password resets. `used_at` set means spent.',
+  },
+  oauth_identities: {
+    group: 'Accounts',
+    redact: [],
+    order: 'last_login_at DESC',
+    note: 'Google and Apple logins bound to an account. `subject` is the provider’s own id.',
+  },
+  known_devices: {
+    group: 'Accounts',
+    redact: ['device_hash'],
+    order: 'last_seen_at DESC',
+    note: 'Devices a sign-in has been seen from, and what decides whether a new one is challenged.',
+  },
+  push_tokens: {
+    group: 'Accounts',
+    redact: ['token'],
+    order: 'last_seen_at DESC',
+    note: 'Where notifications are delivered. One row per app install, not per account.',
+  },
+  billing_events: {
+    group: 'Accounts',
+    redact: [],
+    order: 'received_at DESC',
+    note: 'Every store webhook as received. The audit trail behind `users.plan`.',
+  },
+  photo_credits: {
+    group: 'Accounts',
+    redact: [],
+    order: 'created_at DESC',
+    note: 'A ledger, not a balance: the balance is the sum of `delta` over these rows.',
+  },
+
+  // ---- Food
+  food_entries: {
+    group: 'Food',
+    redact: [],
+    order: 'eaten_at DESC',
+    note: 'A logged meal. The items that make up its numbers are in food_items.',
+  },
+  food_items: {
+    group: 'Food',
+    redact: [],
+    order: 'created_at DESC',
+    note: 'The lines inside a meal. Every calorie on the dashboard is a sum over these.',
+  },
+  food_entry_client_keys: {
+    group: 'Food',
+    redact: [],
+    order: 'created_at DESC',
+    note: 'What makes the offline outbox safe to replay: a client id already here is a duplicate.',
+  },
+  photos: {
+    group: 'Food',
+    redact: [],
+    order: 'created_at DESC',
+    note: 'Meal photos. `storage_key` means a bucket, `file_path` means the local volume.',
+  },
+  barcode_products: {
+    group: 'Food',
+    redact: [],
+    order: 'fetched_at DESC',
+    note: 'The scanner’s cache of Open Food Facts. `found = false` rows are remembered misses.',
+  },
+  targets: {
+    group: 'Food',
+    redact: [],
+    order: 'effective_from DESC',
+    note: 'Daily goals over time. Never updated in place — a change is a new row.',
+  },
+  weight_entries: {
+    group: 'Food',
+    redact: [],
+    order: 'measured_at DESC',
+    note: 'Weigh-ins, which are what the adaptive pass reads to move a target.',
+  },
+
+  // ---- Exercise
+  exercise_entries: {
+    group: 'Exercise',
+    redact: [],
+    order: 'performed_at DESC',
+    note: 'A workout as logged. Strength sets hang off it in exercise_sets.',
+  },
+  exercise_sets: {
+    group: 'Exercise',
+    redact: [],
+    order: 'created_at DESC',
+    note: 'Reps, weight, distance — one row per set within a workout.',
+  },
+  exercise_types: {
+    group: 'Exercise',
+    redact: [],
+    order: 'created_at DESC',
+    note: 'The movement catalogue. A null `user_id` is a built-in rather than one somebody added.',
+  },
+  routines: {
+    group: 'Exercise',
+    redact: [],
+    order: 'created_at DESC',
+    note: 'Saved workout templates.',
+  },
+  routine_exercises: {
+    group: 'Exercise',
+    redact: [],
+    order: 'position ASC',
+    note: 'The movements in a routine, in the order they are performed.',
+  },
+  routine_days: {
+    group: 'Exercise',
+    redact: [],
+    order: 'created_at DESC',
+    note: 'Which routine belongs to which weekday, per person.',
+  },
+
+  // ---- Coach
+  chat_messages: {
+    group: 'Coach',
+    redact: [],
+    order: 'created_at DESC',
+    note: 'The journal thread. `tool_trace` holds what the model actually called.',
+  },
+  weekly_reviews: {
+    group: 'Coach',
+    redact: [],
+    order: 'week_start DESC',
+    note: 'One generated review per week, with the stats it was written from.',
+  },
+  nudges: {
+    group: 'Coach',
+    redact: [],
+    order: 'created_at DESC',
+    note: 'Written-once prompts, one per kind per local day.',
+  },
+  alerts: {
+    group: 'Coach',
+    redact: [],
+    order: 'created_at DESC',
+    note: 'Rendered warnings. The sentence is stored, not its inputs, so it still reads right later.',
+  },
+  achievements: {
+    group: 'Coach',
+    redact: [],
+    order: 'earned_at DESC',
+    note: 'Badges. Write-once and never revoked — the number beside one stays derived.',
+  },
+  agent_notes: {
+    group: 'Coach',
+    redact: [],
+    order: 'created_at DESC',
+    note: 'What the coach chose to remember about someone between turns.',
+  },
+
+  // ---- Kitchen
+  recipes: {
+    group: 'Kitchen',
+    redact: [],
+    order: 'created_at DESC',
+    note: 'Generated and adapted recipes. `saved` is the difference between kept and passed over.',
+  },
+  library_recipes: {
+    group: 'Kitchen',
+    redact: [],
+    order: 'title ASC',
+    note: 'The shipped recipe library, shared by every account.',
+  },
+  saved_library_recipes: {
+    group: 'Kitchen',
+    redact: [],
+    order: 'saved_at DESC',
+    note: 'Who kept which library recipe.',
+  },
+  meal_plans: {
+    group: 'Kitchen',
+    redact: [],
+    order: 'week_start DESC',
+    note: 'One plan per week, with the brief it was generated from.',
+  },
+  meal_plan_slots: {
+    group: 'Kitchen',
+    redact: [],
+    order: 'local_date DESC',
+    note: 'A recipe placed on a day. `cooked_at` set means it was actually made.',
+  },
+  pantry_items: {
+    group: 'Kitchen',
+    redact: [],
+    order: 'last_seen_at DESC',
+    note: 'What somebody has in. Staples are assumed present and never fall off the list.',
+  },
+  shopping_extras: {
+    group: 'Kitchen',
+    redact: [],
+    order: 'created_at DESC',
+    note: 'Hand-added shopping lines, beside the ones a plan implies.',
+  },
+
+  // ---- Ops
+  ai_usage: {
+    group: 'Ops',
+    redact: [],
+    order: 'occurred_at DESC',
+    note: 'Every model turn, priced. Survives account deletion with a null user_id, deliberately.',
+  },
+  model_token_buckets: {
+    group: 'Ops',
+    redact: [],
+    order: 'refilled_at DESC',
+    note: 'The shared rate limiter. One row per model, drained by turns and refilled by time.',
+  },
+  email_deliveries: {
+    group: 'Ops',
+    redact: [],
+    order: 'created_at DESC',
+    note: 'Mail this deployment sent, and whether the provider took it.',
+  },
+  support_emails: {
+    group: 'Ops',
+    redact: [],
+    order: 'received_at DESC',
+    note: 'Mail this deployment received. The Inbox tab is a nicer view of the same rows.',
+  },
+  app_secrets: {
+    group: 'Ops',
+    redact: ['value'],
+    order: 'created_at DESC',
+    note: 'Generated keys — signing secrets and the like. The values themselves are withheld.',
+  },
+  schema_migrations: {
+    group: 'Ops',
+    redact: [],
+    order: 'applied_at DESC',
+    note: 'What this image has actually applied. The first thing to check when a deploy looks wrong.',
+  },
 };
 
 export interface TableSummary {
   name: string;
+  group: TableGroup;
   rows: number;
   bytes: number;
 }
 
+/**
+ * Every browsable table with an exact row count and its size on disk.
+ *
+ * Counted in one round trip rather than one per table: forty sequential
+ * `count(*)` queries is forty network waits for a screen that renders as a
+ * sidebar. The names interpolated into that union come from the allowlist keys,
+ * intersected with what `pg_class` actually holds — never from a request.
+ */
 export async function listTables(): Promise<TableSummary[]> {
   const names = Object.keys(BROWSABLE_TABLES);
-  const rows = await query<any>(
-    `SELECT c.relname AS name,
-            c.reltuples::bigint AS estimate,
-            pg_total_relation_size(c.oid)::bigint AS bytes
+  const present = await query<{ name: string; bytes: string }>(
+    `SELECT c.relname AS name, pg_total_relation_size(c.oid)::bigint AS bytes
        FROM pg_class c
        JOIN pg_namespace n ON n.oid = c.relnamespace
-      WHERE n.nspname = 'public' AND c.relname = ANY($1)`,
+      WHERE n.nspname = 'public' AND c.relkind = 'r' AND c.relname = ANY($1)`,
     [names],
   );
-  const byName = new Map(rows.map((r) => [r.name, r]));
+  if (present.length === 0) return [];
 
-  // reltuples is an estimate that reads -1 until the table is first analysed,
-  // and the tables here are small enough that an exact count is cheap.
-  const out: TableSummary[] = [];
-  for (const name of names) {
-    const exact = (await queryOne<{ n: string }>(`SELECT count(*)::bigint AS n FROM "${name}"`))!;
-    out.push({ name, rows: Number(exact.n), bytes: Number(byName.get(name)!.bytes) });
-  }
-  return out;
+  const sizes = new Map(present.map((row) => [row.name, Number(row.bytes)]));
+  // reltuples would save this scan, but it reads -1 until a table is first
+  // analysed and drifts afterwards — and a row count someone is about to page
+  // through has to be the real one.
+  const counts = await query<{ name: string; n: string }>(
+    present
+      .map((row) => `SELECT '${row.name}'::text AS name, count(*)::bigint AS n FROM "${row.name}"`)
+      .join(' UNION ALL '),
+  );
+  const rows = new Map(counts.map((row) => [row.name, Number(row.n)]));
+
+  // Allowlist order, not alphabetical: the allowlist is grouped by what the
+  // tables are for, and the picker renders it in that order.
+  return names
+    .filter((name) => sizes.has(name))
+    .map((name) => ({
+      name,
+      group: BROWSABLE_TABLES[name]!.group,
+      rows: rows.get(name) ?? 0,
+      bytes: sizes.get(name) ?? 0,
+    }));
+}
+
+export interface TableField {
+  name: string;
+  /** The Postgres type name — `uuid`, `timestamptz`, `jsonb`, `numeric`. */
+  type: string;
+  nullable: boolean;
+  primary_key: boolean;
+  /** The row this column points at, when the target is browsable too. */
+  references: { table: string; column: string } | null;
 }
 
 export interface TablePage {
   table: string;
-  columns: string[];
+  group: TableGroup;
+  note: string;
+  fields: TableField[];
   rows: Array<Record<string, unknown>>;
   total: number;
   limit: number;
   offset: number;
   redacted: string[];
+  /** The column actually sorted on, or null for the table's default order. */
+  sort: string | null;
+  dir: 'asc' | 'desc';
+  q: string | null;
+  user_id: string | null;
+}
+
+export interface ReadTableOptions {
+  limit: number;
+  offset: number;
+  userId?: string | null;
+  q?: string | null;
+  sort?: string | null;
+  dir?: 'asc' | 'desc' | null;
 }
 
 /**
- * One page of a table.
+ * One page of a table, with enough about its shape to render it well.
  *
  * The table name is never interpolated from the request — it is looked up in
  * `BROWSABLE_TABLES` and the *key* is what reaches the query, so an unknown
- * name is a 404 rather than a string that ends up in SQL. Everything else is
- * parameterised.
+ * name is a 404 rather than a string that ends up in SQL. The sort column gets
+ * the same treatment against the table's own live column list, and everything
+ * else is parameterised.
+ *
+ * Types, keys and foreign keys are read from the catalogue rather than declared
+ * beside the allowlist, because a hand-written copy of the schema is a copy
+ * that goes stale on the next migration. They are what lets the panel right-
+ * align a number, pretty-print a jsonb, and turn a `user_id` into a link.
  */
 export async function readTable(
   table: string,
-  options: { limit: number; offset: number; userId?: string | null },
+  options: ReadTableOptions,
 ): Promise<TablePage | null> {
   const spec = BROWSABLE_TABLES[table];
   if (!spec) return null;
 
-  const columns = (
-    await query<{ column_name: string }>(
-      `SELECT column_name FROM information_schema.columns
-        WHERE table_schema = 'public' AND table_name = $1
-     ORDER BY ordinal_position`,
-      [table],
-    )
-  ).map((c) => c.column_name);
+  const columns = await query<{ column_name: string; udt_name: string; is_nullable: string }>(
+    `SELECT column_name, udt_name, is_nullable FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = $1
+   ORDER BY ordinal_position`,
+    [table],
+  );
+  // An allowlisted table whose migration has not run on this deployment yet.
+  if (columns.length === 0) return null;
 
-  const visible = columns.filter((c) => !spec.redact.includes(c));
-  const selectList = visible.map((c) => `"${c}"`).join(', ');
+  const fields = await describeColumns(table, columns, spec.redact);
+  const selectList = fields.map((field) => `"${field.name}"`).join(', ');
+
+  const params: unknown[] = [];
+  const where: string[] = [];
 
   // Only tables that actually have a user_id can be filtered by one; asking for
   // a user filter on `schema_migrations` is a no-op rather than an error.
-  const canFilter = columns.includes('user_id') && options.userId;
-  const where = canFilter ? 'WHERE user_id = $3' : '';
-  const params: unknown[] = [options.limit, options.offset];
-  if (canFilter) params.push(options.userId);
+  const canFilter = Boolean(options.userId) && columns.some((c) => c.column_name === 'user_id');
+  if (canFilter) {
+    params.push(options.userId);
+    where.push(`user_id = $${params.length}`);
+  }
 
-  const rows = await query<any>(
-    `SELECT ${selectList} FROM "${table}" ${where} ORDER BY ${spec.order} LIMIT $1 OFFSET $2`,
-    params,
+  /*
+   * Search is one box over every visible column cast to text, rather than a
+   * field picker. It is a sequential scan and it is the right trade here: the
+   * question an admin brings to this screen is "where does this id / address /
+   * word appear", and they do not yet know which column answers it. The cast
+   * is what makes a uuid, a date and a jsonb all reachable from the same box.
+   */
+  const q = options.q?.trim() ?? '';
+  if (q && fields.length > 0) {
+    params.push(`%${q}%`);
+    const placeholder = `$${params.length}`;
+    where.push(`(${fields.map((f) => `"${f.name}"::text ILIKE ${placeholder}`).join(' OR ')})`);
+  }
+  const clause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+
+  const sort = options.sort && fields.some((f) => f.name === options.sort) ? options.sort : null;
+  const dir = options.dir === 'asc' ? 'asc' : 'desc';
+  const key = fields.find((f) => f.primary_key)?.name;
+  /*
+   * The key is appended as a tiebreaker because paging is by offset: without a
+   * total order, two rows equal on the sort column can swap between page one
+   * and page two, and the reader sees one of them twice and the other never.
+   */
+  const order = sort
+    ? `"${sort}" ${dir === 'asc' ? 'ASC' : 'DESC'} NULLS LAST${key && key !== sort ? `, "${key}" ASC` : ''}`
+    : spec.order;
+
+  const rows = await query<Record<string, unknown>>(
+    `SELECT ${selectList} FROM "${table}" ${clause}
+      ORDER BY ${order} LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    [...params, options.limit, options.offset],
   );
   const total = (await queryOne<{ n: string }>(
-    `SELECT count(*)::bigint AS n FROM "${table}" ${canFilter ? 'WHERE user_id = $1' : ''}`,
-    canFilter ? [options.userId] : [],
+    `SELECT count(*)::bigint AS n FROM "${table}" ${clause}`,
+    params,
   ))!;
 
   return {
     table,
-    columns: visible,
+    group: spec.group,
+    note: spec.note,
+    fields,
     rows: rows.map(serialiseRow),
     total: Number(total.n),
     limit: options.limit,
     offset: options.offset,
     redacted: spec.redact,
+    sort,
+    dir,
+    q: q || null,
+    user_id: canFilter ? (options.userId ?? null) : null,
   };
+}
+
+/**
+ * Column metadata from the catalogue: which are keys, and which point somewhere.
+ *
+ * Foreign keys are resolved through the allowlist as well, so a column pointing
+ * at a table the panel cannot open comes back with `references: null` rather
+ * than a link to a 404.
+ */
+async function describeColumns(
+  table: string,
+  columns: Array<{ column_name: string; udt_name: string; is_nullable: string }>,
+  redact: string[],
+): Promise<TableField[]> {
+  const constraints = await query<{
+    kind: string;
+    column_name: string;
+    ref_table: string | null;
+    ref_column: string | null;
+  }>(
+    `SELECT c.contype::text AS kind,
+            att.attname    AS column_name,
+            ft.relname     AS ref_table,
+            ref.attname    AS ref_column
+       FROM pg_constraint c
+       JOIN pg_class t ON t.oid = c.conrelid AND t.relnamespace = 'public'::regnamespace
+       LEFT JOIN pg_class ft ON ft.oid = c.confrelid
+       CROSS JOIN LATERAL unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord)
+       JOIN pg_attribute att ON att.attrelid = c.conrelid AND att.attnum = k.attnum
+       LEFT JOIN LATERAL (
+            SELECT a.attname FROM pg_attribute a
+             WHERE a.attrelid = c.confrelid AND a.attnum = c.confkey[k.ord]
+       ) ref ON true
+      WHERE t.relname = $1 AND c.contype IN ('p', 'f')`,
+    [table],
+  );
+
+  const keys = new Set(constraints.filter((c) => c.kind === 'p').map((c) => c.column_name));
+  const links = new Map(
+    constraints
+      .filter((c) => c.kind === 'f' && c.ref_table && c.ref_column)
+      .filter((c) => BROWSABLE_TABLES[c.ref_table!])
+      .map((c) => [c.column_name, { table: c.ref_table!, column: c.ref_column! }]),
+  );
+
+  return columns
+    .filter((column) => !redact.includes(column.column_name))
+    .map((column) => ({
+      name: column.column_name,
+      type: column.udt_name,
+      nullable: column.is_nullable === 'YES',
+      primary_key: keys.has(column.column_name),
+      references: links.get(column.column_name) ?? null,
+    }));
 }
 
 /** Dates and buffers do not survive JSON as themselves; make that explicit here. */

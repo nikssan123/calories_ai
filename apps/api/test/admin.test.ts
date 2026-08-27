@@ -177,6 +177,9 @@ describe('overview', () => {
   });
 });
 
+/** The visible column names of a page, which is what most assertions here want. */
+const names = (page: { fields: Array<{ name: string }> }) => page.fields.map((f) => f.name);
+
 describe('the database browser', () => {
   it('lists every browsable table with an exact row count', async () => {
     await addMeal(owner, { date: '2026-03-01', kcal: 500 });
@@ -189,12 +192,31 @@ describe('the database browser', () => {
   /** The reason the allowlist carries a redact list rather than trusting the UI. */
   it('never returns a password hash or a session token', async () => {
     const users = await readTable('users', { limit: 10, offset: 0 });
-    expect(users!.columns).not.toContain('password_hash');
+    expect(names(users!)).not.toContain('password_hash');
     expect(users!.redacted).toContain('password_hash');
     expect(JSON.stringify(users!.rows)).not.toContain('scrypt$');
 
     const sessions = await readTable('auth_sessions', { limit: 10, offset: 0 });
-    expect(sessions!.columns).not.toContain('token_hash');
+    expect(names(sessions!)).not.toContain('token_hash');
+  });
+
+  /**
+   * Every credential-shaped column in the whole allowlist, not just the two the
+   * test above happens to name. A table added later with a `token` column and
+   * no redact list fails here rather than in production.
+   */
+  it('withholds every credential column across the allowlist', async () => {
+    for (const [table, spec] of Object.entries(BROWSABLE_TABLES)) {
+      const page = await readTable(table, { limit: 1, offset: 0 });
+      if (!page) continue;
+      for (const column of names(page)) {
+        expect(
+          /password|token_hash|code_hash|^token$|device_hash/.test(column),
+          `${table}.${column} is readable`,
+        ).toBe(false);
+      }
+      expect(page.redacted).toEqual(spec.redact);
+    }
   });
 
   it('refuses a table that is not on the allowlist', async () => {
@@ -240,6 +262,70 @@ describe('the database browser', () => {
   it('serialises timestamps as strings', async () => {
     const page = await readTable('users', { limit: 1, offset: 0 });
     expect(typeof page!.rows[0]!.created_at).toBe('string');
+  });
+
+  /** The metadata the panel needs to render a column as anything but a string. */
+  it('describes each column with its type, key and foreign key', async () => {
+    const page = (await readTable('food_entries', { limit: 1, offset: 0 }))!;
+    const byName = new Map(page.fields.map((field) => [field.name, field]));
+
+    expect(byName.get('id')).toMatchObject({ type: 'uuid', primary_key: true });
+    expect(byName.get('eaten_at')).toMatchObject({ type: 'timestamptz', nullable: false });
+    expect(byName.get('user_id')?.references).toEqual({ table: 'users', column: 'id' });
+    expect(byName.get('local_date')?.references).toBeNull();
+  });
+
+  it('searches every column at once, whatever its type', async () => {
+    await addMeal(owner, { date: '2026-03-01', kcal: 500, description: 'Pumpkin soup' });
+    await addMeal(owner, { date: '2026-03-02', kcal: 600, description: 'Fish pie' });
+
+    const byWord = await readTable('food_entries', { limit: 10, offset: 0, q: 'pumpkin' });
+    expect(byWord!.total).toBe(1);
+    expect(byWord!.q).toBe('pumpkin');
+
+    // A date column reached through the same box, which is the point of the cast.
+    const byDate = await readTable('food_entries', { limit: 10, offset: 0, q: '2026-03-02' });
+    expect(byDate!.total).toBe(1);
+
+    // And an id, which is how following a foreign key gets back to its row.
+    const byId = await readTable('users', { limit: 10, offset: 0, q: owner.id });
+    expect(byId!.total).toBe(1);
+  });
+
+  it('sorts by a named column in either direction', async () => {
+    for (const kcal of [300, 100, 200]) {
+      await addMeal(owner, { date: '2026-03-01', kcal });
+    }
+    const up = await readTable('food_items', { limit: 10, offset: 0, sort: 'kcal', dir: 'asc' });
+    const values = up!.rows.map((row) => Number(row.kcal));
+    expect(values).toEqual([...values].sort((a, b) => a - b));
+    expect(up!.sort).toBe('kcal');
+    expect(up!.dir).toBe('asc');
+  });
+
+  /**
+   * A sort column is checked against the table's own columns, so an unknown one
+   * is the default order rather than an error — and never reaches SQL.
+   */
+  it('ignores a sort column that is not on the table', async () => {
+    const page = await readTable('users', {
+      limit: 10,
+      offset: 0,
+      sort: 'id; DROP TABLE users',
+      dir: 'asc',
+    });
+    expect(page!.sort).toBeNull();
+    expect((await listTables()).find((t) => t.name === 'users')?.rows).toBe(2);
+  });
+
+  it('covers the whole schema, not a chosen dozen', async () => {
+    const browsable = new Set(Object.keys(BROWSABLE_TABLES));
+    const live = await query<{ name: string }>(
+      `SELECT table_name AS name FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`,
+    );
+    const missing = live.map((row) => row.name).filter((name) => !browsable.has(name));
+    expect(missing, 'tables the panel cannot open').toEqual([]);
   });
 
   it('clamps an absurd page size', async () => {
