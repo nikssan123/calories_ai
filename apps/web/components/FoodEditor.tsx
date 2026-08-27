@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Check, Loader2, Plus, X } from 'lucide-react';
 import { formatNumber, type FoodEntry, type Meal } from '@ct/shared';
+import { foodEmoji } from '@ct/shared/food-emoji';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -153,20 +154,56 @@ export function FoodEditor({
   // usually the total — they adjust an item and watch this land on the number
   // they remember from the packet.
   const total = items.reduce((sum, item) => sum + (Number(item.kcal) || 0), 0);
+  // The receipt's own bar, redrawn off the drafts. The card this replaces shows
+  // the meal as a macro split, so the form that corrects it shows the same
+  // split, moving — which is also the only thing here that reports on four
+  // typed numbers at once. Split by energy, not by grams, for the reason
+  // written on the card: a gram of fat is not a gram of carbohydrate.
+  const energy = [
+    { key: 'p', kcal: grams(items, 'protein') * 4, fill: 'var(--protein)' },
+    { key: 'c', kcal: grams(items, 'carbs') * 4, fill: 'var(--carbs)' },
+    { key: 'f', kcal: grams(items, 'fat') * 9, fill: 'var(--fat)' },
+  ];
+  const split = energy.reduce((a, band) => a + band.kcal, 0);
 
   return (
     <Shell>
-      <p className="text-body font-bold">
-        {creating ? t('editor.logItYourself') : t('editor.fixWhatsWrong')}
-      </p>
+      {/* What this card is, kept to the weight of a caption — the meal's name is
+          the title here, and a bold heading above it said the same thing twice.
+          The total sits where the receipt puts it, and counts while you type. */}
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-footnote text-muted-foreground font-semibold">
+          {creating ? t('editor.logItYourself') : t('editor.fixWhatsWrong')}
+        </p>
+        <span className="text-figure shrink-0 text-body">
+          {formatNumber(Math.round(total), locale)}
+          <span className="text-muted-foreground text-footnote font-semibold"> kcal</span>
+        </span>
+      </div>
 
-      <Input
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        aria-label={t('editor.whatThisWas')}
-        placeholder={t('editor.whatWasIt')}
-        className="font-medium"
-      />
+      {/* The receipt's head, made editable: the same picture, the same line of
+          bold text. Ruled underneath rather than boxed, so the title reads as
+          the card's name and the boxes below it are the data being corrected. */}
+      <div className="border-border focus-within:border-ring flex items-center gap-2.5 border-b-2 pb-1.5 transition-colors">
+        <span aria-hidden className="shrink-0 text-[22px] leading-none">
+          {foodEmoji(description, meal)}
+        </span>
+        <input
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          aria-label={t('editor.whatThisWas')}
+          placeholder={t('editor.whatWasIt')}
+          className="placeholder:text-muted-foreground min-w-0 flex-1 bg-transparent text-body font-bold outline-none"
+        />
+      </div>
+
+      {split > 0 && (
+        <div className="bg-muted border-border flex h-2.5 gap-px overflow-hidden rounded-full border">
+          {energy.map((band) => (
+            <div key={band.key} style={{ width: `${(band.kcal / split) * 100}%`, background: band.fill }} />
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-4 gap-1.5">
         {MEALS.map(({ key, label }) => {
@@ -190,14 +227,26 @@ export function FoodEditor({
       </div>
 
       {items.map((item, i) => (
-        <div key={i} className="border-border space-y-2 border-t pt-2.5">
+        <div key={i} className="border-border space-y-1.5 border-t pt-2.5">
+          {/* Name and portion on one line, the way the receipt writes them:
+              "chicken 180g". They were two full-width boxes stacked, which made
+              a two-item meal eight boxes tall before a number was typed. */}
           <div className="flex items-center gap-2">
             <Input
               value={item.name}
               onChange={(e) => patch(i, { name: e.target.value })}
               aria-label={t('editor.itemName')(String(i + 1))}
               placeholder={t('editor.itemPlaceholder')}
-              className="flex-1 font-medium"
+              className="bg-muted h-9 flex-[1.6] font-semibold dark:bg-muted"
+            />
+            {/* The words, kept as words. "1 medium banana" is the assumption the
+                estimate was built on, and it is the thing a reader checks first. */}
+            <Input
+              value={item.quantity}
+              onChange={(e) => patch(i, { quantity: e.target.value })}
+              aria-label={t('editor.itemQuantity')(String(i + 1))}
+              placeholder={t('editor.howMuch')}
+              className="bg-muted h-9 flex-1 dark:bg-muted"
             />
             <button
               type="button"
@@ -211,15 +260,8 @@ export function FoodEditor({
             </button>
           </div>
 
-          {/* The words, kept as words. "1 medium banana" is the assumption the
-              estimate was built on, and it is the thing a reader checks first. */}
-          <Input
-            value={item.quantity}
-            onChange={(e) => patch(i, { quantity: e.target.value })}
-            aria-label={t('editor.itemQuantity')(String(i + 1))}
-            placeholder={t('editor.howMuch')}
-          />
-
+          {/* The macros wear the card's colours, so the row of cells reads as
+              the row of figures it will be saved back into. */}
           <div className="grid grid-cols-4 gap-1.5">
             <Cell
               value={item.kcal}
@@ -232,18 +274,21 @@ export function FoodEditor({
               onChange={(v) => patch(i, { protein: v })}
               label={t('editor.itemProtein')(String(i + 1))}
               unit={t('macro.proteinInitial')}
+              tint="var(--protein-text)"
             />
             <Cell
               value={item.carbs}
               onChange={(v) => patch(i, { carbs: v })}
               label={t('editor.itemCarbs')(String(i + 1))}
               unit={t('macro.carbsInitial')}
+              tint="var(--carbs-text)"
             />
             <Cell
               value={item.fat}
               onChange={(v) => patch(i, { fat: v })}
               label={t('editor.itemFat')(String(i + 1))}
               unit={t('macro.fatInitial')}
+              tint="var(--fat-text)"
             />
           </div>
         </div>
@@ -270,21 +315,21 @@ export function FoodEditor({
         </button>
         <Button onClick={() => void save()} disabled={saving} className="gap-1.5 rounded-full">
           {saving ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
-          {saving
-            ? t('setup.saving')
-            : t('editor.saveTotal')(
-                creating ? t('editor.log') : t('common.save'),
-                formatNumber(Math.round(total), locale),
-              )}
+          {saving ? t('setup.saving') : creating ? t('editor.log') : t('common.save')}
         </Button>
       </div>
     </Shell>
   );
 }
 
+/** One macro across the drafts, in grams. Half-typed cells count as nothing. */
+function grams(items: DraftItem[], key: 'protein' | 'carbs' | 'fat'): number {
+  return items.reduce((total, item) => total + (Number(item[key]) || 0), 0);
+}
+
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="bg-card animate-land space-y-2.5 rounded-[var(--radius)] p-3.5 shadow-[0_1px_2px_rgba(23,22,20,0.05)]">
+    <div className="bg-card border-border chunk animate-land space-y-2.5 rounded-[var(--radius)] border-2 px-4 py-3.5">
       {children}
     </div>
   );
@@ -295,14 +340,17 @@ function Cell({
   onChange,
   label,
   unit,
+  tint,
 }: {
   value: string;
   onChange: (value: string) => void;
   label: string;
   unit: string;
+  /** The macro's text cut, so P, C and F read as the card's own colours. */
+  tint?: string;
 }) {
   return (
-    <div className="bg-muted border-border flex items-center gap-1 rounded-lg border px-2 py-1.5">
+    <div className="bg-muted border-input focus-within:border-ring flex items-center gap-1 rounded-xl border-2 px-2 py-1.5 transition-colors">
       <input
         value={value}
         // A half-typed "12." has to survive until they finish.
@@ -312,7 +360,12 @@ function Cell({
         placeholder="—"
         className="text-footnote w-full min-w-0 bg-transparent outline-none"
       />
-      <span className="text-footnote text-muted-foreground shrink-0">{unit}</span>
+      <span
+        className="text-footnote text-muted-foreground shrink-0 font-bold"
+        style={tint ? { color: tint } : undefined}
+      >
+        {unit}
+      </span>
     </div>
   );
 }

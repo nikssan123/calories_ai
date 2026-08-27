@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { formatNumber, type FoodEntry, type FoodItemInput, type Meal } from '@ct/shared';
+import { foodEmoji } from '@ct/shared/food-emoji';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { api } from '@/lib/api';
 import { type as t, useColors } from '@/theme';
@@ -179,25 +180,58 @@ export function FoodEditor({
   // usually the total — they adjust an item and watch this land on the number
   // they remember from the packet.
   const total = items.reduce((sum, item) => sum + (Number(item.kcal) || 0), 0);
+  // The receipt's own bar, redrawn off the drafts. The card this replaces shows
+  // the meal as a macro split, so the form that corrects it shows the same
+  // split, moving — which is also the only thing here that reports on four
+  // typed numbers at once. Split by energy, not by grams, for the reason
+  // written on the card: a gram of fat is not a gram of carbohydrate.
+  const energy = [
+    { key: 'p', kcal: grams(items, 'protein') * 4, fill: colors.protein },
+    { key: 'c', kcal: grams(items, 'carbs') * 4, fill: colors.carbs },
+    { key: 'f', kcal: grams(items, 'fat') * 9, fill: colors.fat },
+  ];
+  const split = energy.reduce((a, band) => a + band.kcal, 0);
 
   return (
     <Chunk contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <Text style={[t.bodyBold, { color: colors.foreground }]}>
-        {creating ? tr('editor.logItYourself') : tr('editor.fixWhatsWrong')}
-      </Text>
+      {/* What this card is, kept to the weight of a caption — the meal's name is
+          the title here, and a bold heading above it said the same thing twice.
+          The total sits where the receipt puts it, and counts while you type. */}
+      <View style={styles.head}>
+        <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+          {creating ? tr('editor.logItYourself') : tr('editor.fixWhatsWrong')}
+        </Text>
+        <Text style={[t.figure, styles.figure, { color: colors.foreground }]}>
+          {formatNumber(Math.round(total), locale)}
+          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}> kcal</Text>
+        </Text>
+      </View>
 
-      <TextInput
-        value={description}
-        onChangeText={setDescription}
-        accessibilityLabel={tr('editor.whatThisWas')}
-        placeholder={tr('editor.whatWasIt')}
-        placeholderTextColor={colors.mutedForeground}
-        style={[
-          t.bodySemibold,
-          styles.field,
-          { backgroundColor: colors.mutedField, borderColor: colors.border, color: colors.foreground },
-        ]}
-      />
+      {/* The receipt's head, made editable: the same picture, the same line of
+          bold text. Ruled underneath rather than boxed, so the title reads as
+          the card's name and the boxes below it are the data being corrected. */}
+      <View style={[styles.title, { borderBottomColor: colors.border }]}>
+        <Text style={styles.emoji}>{foodEmoji(description, meal)}</Text>
+        <TextInput
+          value={description}
+          onChangeText={setDescription}
+          accessibilityLabel={tr('editor.whatThisWas')}
+          placeholder={tr('editor.whatWasIt')}
+          placeholderTextColor={colors.mutedForeground}
+          style={[t.bodyBold, styles.titleInput, { color: colors.foreground }]}
+        />
+      </View>
+
+      {split > 0 && (
+        <View style={[styles.split, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+          {energy.map((band) => (
+            <View
+              key={band.key}
+              style={{ width: `${(band.kcal / split) * 100}%`, backgroundColor: band.fill }}
+            />
+          ))}
+        </View>
+      )}
 
       <View style={styles.meals}>
         {MEALS.map(({ key, label }) => {
@@ -235,6 +269,9 @@ export function FoodEditor({
 
       {items.map((item, i) => (
         <View key={i} style={[styles.item, { borderTopColor: colors.border }]}>
+          {/* Name and portion on one line, the way the receipt writes them:
+              "chicken 180g". They were two full-width boxes stacked, which made
+              a two-item meal eight boxes tall before a number was typed. */}
           <View style={styles.itemHead}>
             <TextInput
               value={item.name}
@@ -244,7 +281,22 @@ export function FoodEditor({
               placeholderTextColor={colors.mutedForeground}
               style={[
                 t.bodySemibold,
-                styles.flex,
+                styles.name,
+                styles.field,
+                { backgroundColor: colors.mutedField, borderColor: colors.border, color: colors.foreground },
+              ]}
+            />
+            {/* The words, kept as words. "1 medium banana" is the assumption the
+                estimate was built on, and it is the thing a reader checks first. */}
+            <TextInput
+              value={item.quantity}
+              onChangeText={(quantity) => patch(i, { quantity })}
+              accessibilityLabel={`Item ${i + 1} quantity`}
+              placeholder={tr('editor.howMuch')}
+              placeholderTextColor={colors.mutedForeground}
+              style={[
+                t.body,
+                styles.quantity,
                 styles.field,
                 { backgroundColor: colors.mutedField, borderColor: colors.border, color: colors.foreground },
               ]}
@@ -267,22 +319,13 @@ export function FoodEditor({
             </Pressable>
           </View>
 
-          {/* The words, kept as words. "1 medium banana" is the assumption the
-              estimate was built on, and it is the thing a reader checks first. */}
-          <Cell
-            value={item.quantity}
-            onChange={(quantity) => patch(i, { quantity })}
-            label={`Item ${i + 1} quantity`}
-            unit=""
-            placeholder={tr('editor.howMuch')}
-            wide
-          />
-
+          {/* The macros wear the card's colours, so the row of cells reads as
+              the row of figures it will be saved back into. */}
           <View style={styles.numbers}>
             <Cell value={item.kcal} onChange={(kcal) => patch(i, { kcal })} label={`Item ${i + 1} calories`} unit="kcal" />
-            <Cell value={item.protein} onChange={(protein) => patch(i, { protein })} label={`Item ${i + 1} protein`} unit="P" />
-            <Cell value={item.carbs} onChange={(carbs) => patch(i, { carbs })} label={`Item ${i + 1} carbs`} unit="C" />
-            <Cell value={item.fat} onChange={(fat) => patch(i, { fat })} label={`Item ${i + 1} fat`} unit="F" />
+            <Cell value={item.protein} onChange={(protein) => patch(i, { protein })} label={`Item ${i + 1} protein`} unit={tr('macro.proteinInitial')} tint={colors.proteinText} />
+            <Cell value={item.carbs} onChange={(carbs) => patch(i, { carbs })} label={`Item ${i + 1} carbs`} unit={tr('macro.carbsInitial')} tint={colors.carbsText} />
+            <Cell value={item.fat} onChange={(fat) => patch(i, { fat })} label={`Item ${i + 1} fat`} unit={tr('macro.fatInitial')} tint={colors.fatText} />
           </View>
         </View>
       ))}
@@ -315,12 +358,7 @@ export function FoodEditor({
           contentStyle={[styles.save, { backgroundColor: colors.primary }]}
         >
           <Text style={[t.footnoteBold, { color: colors.primaryForeground }]}>
-            {saving
-              ? tr('setup.saving')
-              : tr('editor.saveTotal')(
-                  creating ? tr('editor.log') : tr('common.save'),
-                  formatNumber(Math.round(total), locale),
-                )}
+            {saving ? tr('setup.saving') : creating ? tr('editor.log') : tr('common.save')}
           </Text>
         </PressableChunk>
       </View>
@@ -328,10 +366,13 @@ export function FoodEditor({
   );
 }
 
+/** One macro across the drafts, in grams. Half-typed cells count as nothing. */
+function grams(items: DraftItem[], key: 'protein' | 'carbs' | 'fat'): number {
+  return items.reduce((total, item) => total + (Number(item[key]) || 0), 0);
+}
+
 function Quiet({ label, onPress, plus }: { label: string; onPress: () => void; plus?: boolean }) {
   const colors = useColors();
-  const tr = useT();
-  const locale = useLocale();
   return (
     <Pressable
       onPress={onPress}
@@ -360,43 +401,34 @@ function Cell({
   onChange,
   label,
   unit,
-  placeholder,
-  wide,
+  tint,
 }: {
   value: string;
   onChange: (value: string) => void;
   label: string;
   unit: string;
-  placeholder?: string;
-  wide?: boolean;
+  /** The macro's text cut, so P, C and F read as the card's own colours. */
+  tint?: string;
 }) {
   const colors = useColors();
-  const tr = useT();
-  const locale = useLocale();
   return (
     <View
       style={[
         styles.cell,
-        wide ? styles.cellWide : styles.flex,
         { backgroundColor: colors.mutedField, borderColor: colors.border },
       ]}
     >
       <TextInput
         value={value}
-        onChangeText={(next) =>
-          // The quantity is prose; everything else is a number being typed, and
-          // a half-typed "12." has to survive until they finish.
-          onChange(unit === '' ? next : next.replace(/[^0-9.]/g, ''))
-        }
+        // A half-typed "12." has to survive until they finish.
+        onChangeText={(next) => onChange(next.replace(/[^0-9.]/g, ''))}
         accessibilityLabel={label}
-        placeholder={placeholder ?? '—'}
+        placeholder="—"
         placeholderTextColor={colors.mutedForeground}
-        keyboardType={unit === '' ? 'default' : 'decimal-pad'}
-        style={[styles.cellInput, { color: colors.foreground }]}
+        keyboardType="decimal-pad"
+        style={[t.footnote, styles.cellInput, { color: colors.foreground }]}
       />
-      {unit !== '' && (
-        <Text style={[t.footnote, { color: colors.mutedForeground }]}>{unit}</Text>
-      )}
+      <Text style={[t.footnoteBold, { color: tint ?? colors.mutedForeground }]}>{unit}</Text>
     </View>
   );
 }
@@ -449,15 +481,27 @@ function fromDraft(draft: DraftItem) {
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 2, borderRadius: 18, padding: 14, gap: 10 },
-  flex: { flex: 1 },
+  // The shell of the card this replaces, to the pixel: tapping Edit should
+  // open a receipt, not swap it for a differently shaped box.
+  card: { borderWidth: 2, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 14, gap: 10 },
+  head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  figure: { fontSize: 16, lineHeight: 24 },
+  title: { flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: 2, paddingBottom: 6 },
+  titleInput: { flex: 1, padding: 0 },
+  emoji: { fontSize: 22, lineHeight: 28 },
+  split: { flexDirection: 'row', gap: 1, height: 10, borderRadius: 999, borderWidth: 1, overflow: 'hidden' },
   field: { borderWidth: 2, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8 },
   meals: { flexDirection: 'row', gap: 6 },
   meal: { flex: 1, borderWidth: 2, borderRadius: 999, paddingVertical: 7, alignItems: 'center' },
   item: { borderTopWidth: 2, paddingTop: 10, gap: 8 },
-  itemHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  itemHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  // The portion is short — "180g", "1 cup" — and the name is not, so the row
+  // is split rather than halved.
+  name: { flex: 1.6 },
+  quantity: { flex: 1 },
   numbers: { flexDirection: 'row', gap: 6 },
   cell: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -466,8 +510,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 6,
   },
-  cellWide: { alignSelf: 'stretch' },
-  cellInput: { flex: 1, padding: 0, minWidth: 24 },
+  cellInput: { flex: 1, padding: 0, minWidth: 20 },
   quiet: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   foot: {
     flexDirection: 'row',
