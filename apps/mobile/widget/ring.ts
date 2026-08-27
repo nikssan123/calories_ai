@@ -8,6 +8,13 @@
  * radius, same rotation, so the thing on the home screen is recognisably the
  * thing inside the app rather than a second drawing of the same idea.
  *
+ * That now includes the two things the first copy left out, both of which are
+ * the reason the app's dial looks like an object rather than a stroke: the
+ * ledge — the track again, pushed down by its own depth, in the shadow tone
+ * every card uses — and the ramp across the arc, so a full day is visibly a
+ * richer green at its end than at its start. They cost two more circles and a
+ * gradient, and androidsvg draws all of it.
+ *
  * No animation, and nothing to switch off for reduced motion. A widget is
  * repainted at whatever moment the launcher decides; there is no arrival to
  * animate and nobody watching when it happens.
@@ -20,11 +27,27 @@ export interface Ring {
   strokeWidth: number;
   track: string;
   fill: string;
+  /** The far end of the arc's ramp — `logoRamp` in the app's palette. */
+  ramp: string;
+  /** The ledge's tone, and how much of it to let through. */
+  ledge: string;
+  ledgeOpacity: number;
   /** Over target turns the arc to ink rather than to red — see `CalorieRing`. */
   over: string;
 }
 
-export function ringSvg({ consumed, target, size, strokeWidth, track, fill, over }: Ring): string {
+export function ringSvg({
+  consumed,
+  target,
+  size,
+  strokeWidth,
+  track,
+  fill,
+  ramp,
+  ledge,
+  ledgeOpacity,
+  over,
+}: Ring): string {
   // `CalorieRing`'s own arithmetic, verbatim.
   const depth = Math.max(3, Math.round(strokeWidth * 0.22));
   const radius = (size - strokeWidth - depth) / 2;
@@ -32,7 +55,10 @@ export function ringSvg({ consumed, target, size, strokeWidth, track, fill, over
   const circumference = 2 * Math.PI * radius;
   const ratio = target > 0 ? consumed / target : 0;
   const dash = circumference * Math.min(1, Math.max(0, ratio));
-  const colour = consumed > target ? over : fill;
+  const past = consumed > target;
+
+  const circle = (cy: number, stroke: string, extra = '') =>
+    `<circle cx="${centre}" cy="${cy}" r="${radius}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"${extra} />`;
 
   /*
    * Rotated so the arc starts at twelve o'clock. `stroke-linecap="round"` is
@@ -41,9 +67,17 @@ export function ringSvg({ consumed, target, size, strokeWidth, track, fill, over
    */
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`,
-    `<circle cx="${centre}" cy="${centre}" r="${radius}" fill="none" stroke="${track}" stroke-width="${strokeWidth}" />`,
+    `<defs><linearGradient id="arc" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${size}" y2="${size}">`,
+    `<stop offset="0" stop-color="${fill}" /><stop offset="1" stop-color="${ramp}" />`,
+    `</linearGradient></defs>`,
+    circle(centre + depth, ledge, ` stroke-opacity="${ledgeOpacity}"`),
+    circle(centre, track),
     dash > 0
-      ? `<circle cx="${centre}" cy="${centre}" r="${radius}" fill="none" stroke="${colour}" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-dasharray="${dash} ${circumference}" transform="rotate(-90 ${centre} ${centre})" />`
+      ? circle(
+          centre,
+          past ? over : 'url(#arc)',
+          ` stroke-linecap="round" stroke-dasharray="${dash} ${circumference}" transform="rotate(-90 ${centre} ${centre})"`,
+        )
       : '',
     `</svg>`,
   ].join('');

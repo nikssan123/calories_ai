@@ -97,9 +97,9 @@
             {
               "name": "Ring",
               "label": "Day So Far \u00b7 ring",
-              "description": "Today's ring. Tap to open the journal.",
-              "minWidth": "110dp",
-              "minHeight": "110dp",
+              "description": "Today's ring. Drag it down to the size of an icon, or up to fill the row.",
+              "minWidth": "40dp",
+              "minHeight": "40dp",
               "targetCellWidth": 2,
               "targetCellHeight": 2,
               "maxResizeWidth": "250dp",
@@ -110,13 +110,13 @@
             {
               "name": "Day",
               "label": "Day So Far \u00b7 day",
-              "description": "The ring with the numbers beside it, or a bar at one row high.",
-              "minWidth": "250dp",
-              "minHeight": "48dp",
+              "description": "The day on one line, with a bar. Drag it taller for the ring.",
+              "minWidth": "180dp",
+              "minHeight": "40dp",
               "targetCellWidth": 4,
-              "targetCellHeight": 2,
+              "targetCellHeight": 1,
               "maxResizeWidth": "400dp",
-              "maxResizeHeight": "160dp",
+              "maxResizeHeight": "180dp",
               "resizeMode": "horizontal|vertical",
               "updatePeriodMillis": 1800000
             }

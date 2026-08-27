@@ -843,6 +843,10 @@ export const de: Messages = {
   'badge.workouts_100': 'Hundert Einheiten',
   'badgeHow.workouts_100': 'Hundert Tage mit Training.',
 
+  'widget.today': (label: string) => `heute ${label}`,
+  'widget.of': (consumed: string, target: string) => `${consumed} von ${target} kcal`,
+  'widget.tapToStart': 'Tippen, um den Tag zu beginnen',
+
   'common.save': 'Speichern',
   'common.cancel': 'Abbrechen',
   'common.delete': 'Löschen',

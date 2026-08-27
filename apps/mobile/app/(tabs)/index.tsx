@@ -161,8 +161,9 @@ export default function JournalScreen() {
     setDay(next);
     // The home screen learns what the journal just learned. Safe here because
     // the journal is always today — see `today.tsx` for the case that is not.
-    void writeDaySnapshot(next);
-  }, []);
+    // The language goes with it: the launcher has no tree to ask.
+    void writeDaySnapshot(next, locale);
+  }, [locale]);
   /*
    * Setup, held for the whole app rather than for this screen.
    *
@@ -220,7 +221,7 @@ export default function JournalScreen() {
         setBubbles(history.messages.map(toBubble));
         consumed.current = today.consumed.kcal;
         setDay(today);
-        void writeDaySnapshot(today);
+        void writeDaySnapshot(today, locale);
       } catch {
         // Reported by the empty conversation rather than over it: there is no
         // toast here, and an error bar above a blank screen says less than the

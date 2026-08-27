@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { DaySummary } from '@ct/shared';
+import { matchLocale, type DaySummary, type Locale } from '@ct/shared';
+import { deviceLocale } from '@/messages';
 
 /**
  * Today's numbers, left somewhere the widget can find them.
@@ -20,6 +21,11 @@ import type { DaySummary } from '@ct/shared';
  * Deliberately not the whole `DaySummary`. A widget shows a ring and a figure,
  * and storing the entries as well would mean every meal logged rewrites a
  * payload the widget never reads.
+ *
+ * The language is part of the note for the same reason the numbers are. The
+ * launcher draws with no tree to ask, and the answer `useLocale()` gives is not
+ * one the widget could reconstruct — it can be the account's setting rather
+ * than the device's. So the screen that knows writes it down.
  */
 
 const KEY = 'day-snapshot.v1';
@@ -30,6 +36,8 @@ export interface DaySnapshot {
   consumed: number;
   target: number;
   burned: number;
+  /** The language the screen was being read in when the note was left. */
+  locale: Locale;
   /** When it was written, for deciding whether to trust it at all. */
   savedAt: string;
 }
@@ -39,12 +47,13 @@ export interface DaySnapshot {
  * is a convenience for a surface nobody is looking at, and a screen that
  * errored because it could not update a widget would be a worse app.
  */
-export async function writeDaySnapshot(day: DaySummary): Promise<void> {
+export async function writeDaySnapshot(day: DaySummary, locale: Locale): Promise<void> {
   const snapshot: DaySnapshot = {
     localDate: day.local_date,
     consumed: Math.round(day.consumed.kcal),
     target: Math.round(day.targets.kcal),
     burned: Math.round(day.burned_kcal),
+    locale,
     savedAt: new Date().toISOString(),
   };
   await AsyncStorage.setItem(KEY, JSON.stringify(snapshot)).catch(() => {});
@@ -107,9 +116,14 @@ export async function readDaySnapshot(): Promise<DaySnapshot | null> {
     const raw = await AsyncStorage.getItem(KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as DaySnapshot;
-    return typeof parsed?.consumed === 'number' && typeof parsed?.target === 'number'
-      ? parsed
-      : null;
+    if (typeof parsed?.consumed !== 'number' || typeof parsed?.target !== 'number') return null;
+    /*
+     * The language is read back defensively rather than trusted. A note written
+     * before this field existed has none, and the device's answer is the same
+     * one `lib/i18n` starts from — so an upgrade draws in the right language on
+     * the first repaint instead of waiting for the next meal.
+     */
+    return { ...parsed, locale: matchLocale(parsed.locale) ?? deviceLocale() };
   } catch {
     return null;
   }

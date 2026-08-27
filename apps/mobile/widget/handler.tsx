@@ -2,6 +2,8 @@ import type { WidgetInfo, WidgetTaskHandlerProps } from 'react-native-android-wi
 import { DayWidget } from './DayWidget';
 import { RingWidget } from './RingWidget';
 import { DARK, LIGHT } from './theme';
+import { widgetText } from './text';
+import { deviceLocale } from '@/messages';
 import { readDaySnapshot, type DaySnapshot } from '@/lib/snapshot';
 
 /**
@@ -36,7 +38,14 @@ export async function widgetTaskHandler({
  */
 export function paint(info: WidgetInfo, snapshot: DaySnapshot | null) {
   const { widgetName, width, height } = info;
-  const props = { snapshot, width, height };
+  /*
+   * The note carries the language it was written in. Without a note there is
+   * nothing to carry it — nobody has opened the app, or they have signed out —
+   * and the device's answer is both the best guess and the one `lib/i18n`
+   * itself starts from.
+   */
+  const text = widgetText(snapshot?.locale ?? deviceLocale());
+  const props = { snapshot, width, height, text };
 
   return widgetName === 'Ring'
     ? {

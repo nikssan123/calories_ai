@@ -1,4 +1,4 @@
-import type { ColorProp } from 'react-native-android-widget';
+import type { ColorProp, HexColor } from 'react-native-android-widget';
 
 /**
  * The palette, written out where a widget can reach it.
@@ -19,9 +19,18 @@ export interface WidgetPalette {
   foreground: ColorProp;
   mutedForeground: ColorProp;
   calories: ColorProp;
+  /** The far end of the arc's ramp, from the logo's own gradient. */
+  ramp: ColorProp;
   muted: ColorProp;
   border: ColorProp;
   burn: ColorProp;
+  /*
+   * The ledge under the ring's track. Split into a colour and an opacity
+   * because the app spells it `rgba()` and androidsvg is an SVG 1.1 renderer,
+   * where transparency is `stroke-opacity` and a colour is six hex digits.
+   */
+  ledge: HexColor;
+  ledgeOpacity: number;
 }
 
 export const LIGHT: WidgetPalette = {
@@ -30,9 +39,12 @@ export const LIGHT: WidgetPalette = {
   foreground: '#31261e',
   mutedForeground: '#77685b',
   calories: '#12b76a',
+  ramp: '#23d3b0',
   muted: '#f3e8d9',
   border: '#eadcc9',
   burn: '#c13a7a',
+  ledge: '#31261e',
+  ledgeOpacity: 0.14,
 };
 
 export const DARK: WidgetPalette = {
@@ -41,9 +53,12 @@ export const DARK: WidgetPalette = {
   foreground: '#f7efe6',
   mutedForeground: '#a79a8d',
   calories: '#3ddc97',
+  ramp: '#2ee6c4',
   muted: '#322822',
   border: '#4d3d33',
   burn: '#ff8fbe',
+  ledge: '#000000',
+  ledgeOpacity: 0.88,
 };
 
 /**

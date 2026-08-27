@@ -838,6 +838,10 @@ export const bg: Messages = {
   'badge.workouts_100': 'Сто тренировки',
   'badgeHow.workouts_100': 'Сто дни с тренировка.',
 
+  'widget.today': (label: string) => `${label} днес`,
+  'widget.of': (consumed: string, target: string) => `${consumed} от ${target} kcal`,
+  'widget.tapToStart': 'Докосни, за да започнеш деня',
+
   'common.save': 'Запази',
   'common.cancel': 'Откажи',
   'common.delete': 'Изтрий',

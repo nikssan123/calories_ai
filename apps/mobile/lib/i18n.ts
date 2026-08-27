@@ -2,11 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { localeOf, matchLocale, type Locale } from '@ct/shared';
 import { useAuth } from '@/lib/auth';
+import { CATALOGUES, deviceLocale, type MessageKey, type Messages } from '@/messages';
 import { en } from '@/messages/en';
-import { bg } from '@/messages/bg';
-import { de } from '@/messages/de';
-import { es } from '@/messages/es';
-import { fr } from '@/messages/fr';
 
 /**
  * Which language to draw in, and the strings to draw.
@@ -22,37 +19,15 @@ import { fr } from '@/messages/fr';
  *   this way since it was written — so the dependency would buy nothing.
  */
 
-export type Messages = {
-  [K in keyof typeof en]: (typeof en)[K] extends (...args: infer A) => string
-    ? (...args: A) => string
-    : string;
-};
-export type MessageKey = keyof Messages;
-
-/** See the web twin: the keys safe to store in a table and resolve later. */
-export type StringKey = {
-  [K in MessageKey]: Messages[K] extends string ? K : never;
-}[MessageKey];
-
-const CATALOGUES: Record<Locale, Messages> = { en, bg, de, es, fr };
+/*
+ * The catalogues, the lookup and the device's language now live in
+ * `@/messages`, which the widget can import without dragging a session and a
+ * network client into a headless draw. Re-exported here so every screen keeps
+ * asking `@/lib/i18n` for them.
+ */
+export type { Messages, MessageKey, StringKey } from '@/messages';
 
 const STORAGE_KEY = 'nutrition-locale';
-
-/**
- * The device's language, as one of ours.
- *
- * `Intl` can throw on a device with a malformed locale setting, which is rare
- * and is not a reason to fail to start. English is the answer when we cannot
- * tell — and null would be worse here, because this is the value the sign-in
- * screen renders with and something has to be drawn.
- */
-function deviceLocale(): Locale {
-  try {
-    return matchLocale(Intl.DateTimeFormat().resolvedOptions().locale) ?? 'en';
-  } catch {
-    return 'en';
-  }
-}
 
 /**
  * A preference is global to the app, so the screens that care share one value

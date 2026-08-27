@@ -1,180 +1,253 @@
 import { FlexWidget, OverlapWidget, SvgWidget, TextWidget } from 'react-native-android-widget';
 import { ringSvg } from './ring';
+import { LINE_HEIGHT, dayLayout, type DayCard, type DayLine } from './layout';
 import { DISPLAY, OPEN_JOURNAL, type WidgetPalette } from './theme';
 import { Empty } from './Empty';
+import type { WidgetText } from './text';
 import type { DaySnapshot } from '@/lib/snapshot';
 
 /**
  * The wide one, which changes shape rather than scaling.
  *
- * Two rows and it is the ring plus the sentence underneath it from Today — what
- * is left, what that is out of, and the burn if there was any. Dragged down to
- * one row the ring goes entirely and a bar takes its place, because a 40dp
- * circle is a dot, not a dial, and the number is the part worth keeping.
+ * It comes down one row high, which is the size the reading actually needs: a
+ * number, the word for what the number is, and a bar to say how far through the
+ * day the plate is. Dragged taller the bar gives way to the ring and the
+ * sentence gains its second and third lines — the burn included, which is the
+ * one figure there is no room for on a single row.
  *
- * That is the whole argument for a resizable widget: not the same picture at
- * two sizes, but the right picture for the room available.
+ * The two shapes are picked in `layout.ts` and spent here. Nothing in this file
+ * decides a size.
  */
 export function DayWidget({
   snapshot,
   colors,
   width,
   height,
+  text,
 }: {
   snapshot: DaySnapshot | null;
   colors: WidgetPalette;
   width: number;
   height: number;
+  text: WidgetText;
 }) {
-  if (!snapshot) return <Empty colors={colors} />;
+  if (!snapshot) return <Empty colors={colors} width={width} height={height} text={text} />;
 
+  const layout = dayLayout({ width, height, ...snapshot, text });
   const remaining = snapshot.target - snapshot.consumed;
-  const over = remaining < 0;
-  const ratio = snapshot.target > 0 ? snapshot.consumed / snapshot.target : 0;
+  const spoken = `${text.n(Math.abs(remaining))} kcal ${text.today(layout.label)}`;
 
-  const label = over ? 'over' : 'left';
-  const spoken = `${Math.abs(remaining).toLocaleString()} kcal ${label} today`;
-  const shell = {
-    ...OPEN_JOURNAL,
-    accessibilityLabel: spoken,
-    style: {
-      height: 'match_parent' as const,
-      width: 'match_parent' as const,
-      backgroundColor: colors.card,
-      borderColor: colors.border,
-      borderWidth: 2,
-      borderRadius: 28,
-    },
-  };
+  return layout.shape === 'line' ? (
+    <Line layout={layout} colors={colors} spoken={spoken} over={remaining < 0} />
+  ) : (
+    <Card layout={layout} colors={colors} spoken={spoken} snapshot={snapshot} text={text} />
+  );
+}
 
-  /*
-   * 108dp is roughly a two-row cell on a normal launcher. Below it there is not
-   * enough height for a ring that still reads as one, so the layout changes
-   * instead of shrinking.
-   */
-  if (height < 108) {
-    const track = Math.max(40, width - 36);
-    /*
-     * Measured against the height the launcher actually gave us, because a row
-     * is not a fixed number of points: the first cut used a comfortable padding
-     * and a 26pt figure, overflowed a one-row cell by about four points, and
-     * Android answered by clipping the bar off the bottom — silently, so the
-     * widget simply looked like it had no bar.
-     */
-    const pad = 10;
-    const barHeight = 6;
-    const gap = 6;
-    const figure = Math.max(15, Math.min(24, Math.round((height - pad * 2 - barHeight - gap) * 0.7)));
-    return (
+/** The card every shape is drawn on: the app's own, at the app's own radius. */
+const card = (colors: WidgetPalette) =>
+  ({
+    height: 'match_parent',
+    width: 'match_parent',
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderWidth: 2,
+    borderRadius: 28,
+  }) as const;
+
+/**
+ * One row: the figure, the word, the ratio, and a bar under all three.
+ *
+ * The ratio is the only part that can be dropped, and it is dropped by
+ * measurement rather than by a guess about how many cells wide the reader
+ * chose — see `dayLayout`.
+ */
+function Line({
+  layout,
+  colors,
+  spoken,
+  over,
+}: {
+  layout: DayLine;
+  colors: WidgetPalette;
+  spoken: string;
+  over: boolean;
+}) {
+  return (
+    <FlexWidget
+      {...OPEN_JOURNAL}
+      accessibilityLabel={spoken}
+      style={{
+        ...card(colors),
+        justifyContent: 'center',
+        paddingHorizontal: layout.paddingHorizontal,
+        paddingVertical: layout.padding,
+      }}
+    >
+      <FlexWidget style={{ width: 'match_parent', flexDirection: 'row', alignItems: 'center' }}>
+        <TextWidget
+          text={layout.figureText}
+          allowFontScaling={false}
+          maxLines={1}
+          style={{
+            fontSize: layout.figure,
+            lineHeight: Math.round(layout.figure * LINE_HEIGHT),
+            fontFamily: DISPLAY,
+            color: colors.foreground,
+          }}
+        />
+        <TextWidget
+          text={` ${layout.label}`}
+          allowFontScaling={false}
+          maxLines={1}
+          style={{
+            fontSize: layout.wording,
+            fontWeight: '600',
+            color: colors.mutedForeground,
+          }}
+        />
+        <FlexWidget style={{ flex: 1 }} />
+        {layout.ratio > 0 && (
+          <TextWidget
+            text={layout.ratioText}
+            allowFontScaling={false}
+            maxLines={1}
+            style={{ fontSize: layout.ratio, fontWeight: '600', color: colors.mutedForeground }}
+          />
+        )}
+      </FlexWidget>
+      {/*
+        * The bar is two nested boxes rather than a drawn shape: `RemoteViews`
+        * has no percentage widths, so the fill is measured in dp from the
+        * width the launcher reported.
+        */}
       <FlexWidget
-        {...shell}
         style={{
-          ...shell.style,
-          justifyContent: 'center',
-          paddingHorizontal: 16,
-          paddingVertical: pad,
+          height: layout.bar,
+          width: layout.track,
+          backgroundColor: colors.muted,
+          borderRadius: 999,
+          marginTop: layout.gap,
         }}
       >
-        <FlexWidget
-          style={{ width: 'match_parent', flexDirection: 'row', alignItems: 'center' }}
-        >
-          <TextWidget
-            text={Math.abs(remaining).toLocaleString()}
-            style={{ fontSize: figure, fontFamily: DISPLAY, color: colors.foreground }}
-          />
-          <TextWidget
-            text={` ${label}`}
-            style={{
-              fontSize: Math.max(10, Math.round(figure * 0.5)),
-              fontWeight: '600',
-              color: colors.mutedForeground,
-            }}
-          />
-          <FlexWidget style={{ flex: 1 }} />
-          <TextWidget
-            text={`${snapshot.consumed.toLocaleString()} / ${snapshot.target.toLocaleString()}`}
-            style={{
-              fontSize: Math.max(10, Math.round(figure * 0.48)),
-              fontWeight: '600',
-              color: colors.mutedForeground,
-            }}
-          />
-        </FlexWidget>
-        {/*
-          * The bar is two nested boxes rather than a drawn shape: `RemoteViews`
-          * has no percentage widths, so the fill is measured in dp from the
-          * width the launcher reported.
-          */}
-        <FlexWidget
-          style={{
-            height: barHeight,
-            width: track,
-            backgroundColor: colors.muted,
-            borderRadius: 999,
-            marginTop: gap,
-          }}
-        >
+        {layout.fill > 0 && (
           <FlexWidget
             style={{
-              height: barHeight,
-              width: Math.round(track * Math.min(1, Math.max(0, ratio))),
+              height: layout.bar,
+              width: layout.fill,
               backgroundColor: over ? colors.foreground : colors.calories,
               borderRadius: 999,
             }}
           />
-        </FlexWidget>
+        )}
       </FlexWidget>
-    );
-  }
+    </FlexWidget>
+  );
+}
 
-  const box = Math.max(0, Math.min(height - 26, Math.round(width * 0.42)));
-  const stroke = Math.max(8, Math.round(box * 0.13));
-
+/**
+ * Two rows and up: the dial on the left, and beside it the three things the
+ * dial cannot say — what the figure means, what it is out of, and the burn.
+ *
+ * The number is inside the ring and nowhere else. An earlier cut set it in the
+ * column as well, which meant the widest, boldest thing on the card was a
+ * number already being shown four points to its left.
+ */
+function Card({
+  layout,
+  colors,
+  spoken,
+  snapshot,
+  text,
+}: {
+  layout: DayCard;
+  colors: WidgetPalette;
+  spoken: string;
+  snapshot: DaySnapshot;
+  text: WidgetText;
+}) {
   return (
     <FlexWidget
-      {...shell}
-      style={{ ...shell.style, flexDirection: 'row', alignItems: 'center', padding: 12 }}
+      {...OPEN_JOURNAL}
+      accessibilityLabel={spoken}
+      style={{
+        ...card(colors),
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: layout.padding,
+      }}
     >
-      <OverlapWidget style={{ height: box, width: box }}>
+      <OverlapWidget style={{ height: layout.box, width: layout.box }}>
         <SvgWidget
           svg={ringSvg({
             consumed: snapshot.consumed,
             target: snapshot.target,
-            size: box,
-            strokeWidth: stroke,
+            size: layout.box,
+            strokeWidth: layout.stroke,
             track: colors.muted,
             fill: colors.calories,
+            ramp: colors.ramp,
+            ledge: colors.ledge,
+            ledgeOpacity: colors.ledgeOpacity,
             over: colors.foreground,
           })}
-          style={{ height: box, width: box }}
+          style={{ height: layout.box, width: layout.box }}
         />
         <FlexWidget
-          style={{ height: box, width: box, justifyContent: 'center', alignItems: 'center' }}
+          style={{
+            height: layout.box,
+            width: layout.box,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
         >
-          <TextWidget
-            text={Math.abs(remaining).toLocaleString()}
-            style={{
-              fontSize: Math.max(16, Math.round(box * 0.27)),
-              fontFamily: DISPLAY,
-              color: colors.foreground,
-            }}
-          />
+          {layout.figure > 0 && (
+            <TextWidget
+              text={layout.figureText}
+              allowFontScaling={false}
+              maxLines={1}
+              style={{
+                fontSize: layout.figure,
+                lineHeight: Math.round(layout.figure * LINE_HEIGHT),
+                fontFamily: DISPLAY,
+                color: colors.foreground,
+              }}
+            />
+          )}
         </FlexWidget>
       </OverlapWidget>
 
       <FlexWidget style={{ flex: 1, marginLeft: 14, justifyContent: 'center' }}>
         <TextWidget
-          text={`${Math.abs(remaining).toLocaleString()} ${label}`}
-          style={{ fontSize: 17, fontWeight: 'bold', color: colors.foreground }}
+          text={text.today(layout.label)}
+          allowFontScaling={false}
+          maxLines={1}
+          style={{ fontSize: layout.title, fontWeight: 'bold', color: colors.foreground }}
         />
         <TextWidget
-          text={`${snapshot.consumed.toLocaleString()} of ${snapshot.target.toLocaleString()} kcal`}
-          style={{ fontSize: 12, fontWeight: '600', color: colors.mutedForeground, marginTop: 2 }}
+          text={text.of(text.n(snapshot.consumed), text.n(snapshot.target))}
+          allowFontScaling={false}
+          maxLines={1}
+          truncate="END"
+          style={{
+            fontSize: layout.detail,
+            fontWeight: '600',
+            color: colors.mutedForeground,
+            marginTop: 2,
+          }}
         />
         {snapshot.burned > 0 && (
           <TextWidget
-            text={`−${snapshot.burned.toLocaleString()} burned`}
-            style={{ fontSize: 12, fontWeight: '600', color: colors.burn, marginTop: 2 }}
+            text={text.burned(text.n(snapshot.burned))}
+            allowFontScaling={false}
+            maxLines={1}
+            truncate="END"
+            style={{
+              fontSize: layout.detail,
+              fontWeight: '600',
+              color: colors.burn,
+              marginTop: 2,
+            }}
           />
         )}
       </FlexWidget>

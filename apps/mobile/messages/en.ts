@@ -1014,6 +1014,10 @@ export const en = {
   'badge.workouts_100': 'A hundred sessions',
   'badgeHow.workouts_100': 'A hundred days with training on them.',
 
+  'widget.today': (label: string) => `${label} today`,
+  'widget.of': (consumed: string, target: string) => `${consumed} of ${target} kcal`,
+  'widget.tapToStart': 'Tap to start today',
+
   'common.save': 'Save',
   'common.cancel': 'Cancel',
   'common.delete': 'Delete',
