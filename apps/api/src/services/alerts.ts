@@ -3,6 +3,7 @@ import { formatBodyWeight } from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import { addDays } from '../time.ts';
 import { withinInterruptionBudget } from './interruptions.ts';
+import { loggingStreak } from './streaks.ts';
 import { dailyTotals } from './summary.ts';
 import { targetsForDate } from './targets.ts';
 
@@ -60,9 +61,6 @@ export const RECAP_HOUR = 21;
  * between day 201 and day 202 does not.
  */
 export const STREAK_MILESTONES = [7, 14, 30, 60, 100, 200, 365] as const;
-
-/** Longest streak that can be recognised, and the horizon of the scan behind it. */
-const STREAK_SCAN_DAYS = 400;
 
 /**
  * How stale a weigh-in may be and still be news.
@@ -244,13 +242,17 @@ async function dueGoalReached(
  * somebody they are doing something they have stopped doing.
  */
 async function dueStreak(userId: string, today: string): Promise<DueAlert | null> {
-  const run = await currentStreak(userId, today);
-  if (!run) return null;
+  const run = await loggingStreak(userId, today);
+  // `alive` rather than "not none", and the distinction is the whole of the
+  // paragraph above. A run in the `at_risk` state is one that ended yesterday
+  // and has nothing in it today — intact enough for a screen to draw and
+  // encourage, and not something to congratulate at 20:00.
+  if (run.state !== 'alive' || !run.start) return null;
 
   // The largest milestone the run has passed, rather than an exact match on
   // today's count. An exact test would silently skip the whole thing if the
   // 20:00 tick were missed on the one evening it mattered.
-  const milestone = [...STREAK_MILESTONES].reverse().find((m) => run.days >= m);
+  const milestone = [...STREAK_MILESTONES].reverse().find((m) => run.current >= m);
   if (milestone === undefined) return null;
 
   return {
@@ -298,41 +300,6 @@ async function dueRecap(userId: string, today: string): Promise<DueAlert | null>
 }
 
 // ---- The arithmetic --------------------------------------------------------
-
-interface Streak {
-  /** First day of the unbroken run. */
-  start: string;
-  days: number;
-}
-
-/**
- * The unbroken run of logged days ending today, or null if today is not logged.
- *
- * Walked in memory rather than counted in SQL. The gaps are the whole question
- * and a `count(DISTINCT ...)` cannot see them; the window function that could
- * is a page of SQL to answer what a loop over four hundred dates answers in a
- * millisecond.
- */
-async function currentStreak(userId: string, today: string): Promise<Streak | null> {
-  const rows = await query<{ local_date: string }>(
-    `SELECT DISTINCT local_date FROM food_entries
-      WHERE user_id = $1 AND local_date <= $2 AND local_date > $3
-   ORDER BY local_date DESC`,
-    [userId, today, addDays(today, -STREAK_SCAN_DAYS)],
-  );
-
-  let expected = today;
-  let days = 0;
-  for (const row of rows) {
-    if (row.local_date !== expected) break;
-    days += 1;
-    expected = addDays(expected, -1);
-  }
-
-  // `expected` has already stepped one day past the run by the time the loop
-  // ends, so the first day of it is the day after.
-  return days === 0 ? null : { start: addDays(expected, 1), days };
-}
 
 function planLabel(plan: PlanName): string {
   return plan === 'coach' ? 'Coach' : plan === 'plus' ? 'Plus' : 'free';

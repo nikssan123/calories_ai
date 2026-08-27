@@ -447,8 +447,9 @@ export async function registerRoutes(app: FastifyInstance) {
   app.get('/day', async (request) => {
     const { userId, ...ctx } = await getUserContext(request.userId!);
     const date = (request.query as any)?.date as string | undefined;
-    const localDate = date ?? (await currentLocalDate(ctx));
-    return buildDaySummary(userId, localDate);
+    const today = await currentLocalDate(ctx);
+    const localDate = date ?? today;
+    return buildDaySummary(userId, localDate, today);
   });
 
   /**

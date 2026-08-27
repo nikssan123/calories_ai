@@ -1,10 +1,15 @@
 import type { FastifyInstance } from 'fastify';
 import { buildApp } from '../../src/app.ts';
 import { query, queryOne } from '../../src/db.ts';
-import { createFoodEntry, logWeight, type FoodItemInput } from '../../src/services/log.ts';
+import {
+  createExerciseEntry,
+  createFoodEntry,
+  logWeight,
+  type FoodItemInput,
+} from '../../src/services/log.ts';
 import { setTargets } from '../../src/services/targets.ts';
 import type { DayContext } from '../../src/time.ts';
-import type { Confidence, Meal, Targets } from '@ct/shared';
+import type { Confidence, EntrySource, Meal, Targets } from '@ct/shared';
 
 export const DEFAULT_CTX: DayContext = { timezone: 'Europe/Sofia', dayStartHour: 4 };
 
@@ -120,6 +125,8 @@ export interface MealSpec {
   fat_g?: number;
   confidence?: Confidence;
   hour?: number;
+  /** What logged it. The breadth badges are the only thing that reads this. */
+  source?: EntrySource;
   /**
    * The diet-quality panel. Left off by default, which is the interesting
    * default: an un-estimated meal is what most of the log looks like, and a
@@ -159,8 +166,25 @@ export async function addMeal(user: TestUser, spec: MealSpec) {
     eatenAt,
     description: spec.description ?? 'Test meal',
     confidence: spec.confidence ?? 'medium',
-    source: 'text',
+    source: spec.source ?? 'text',
     items,
+    ctx: user.ctx,
+  });
+}
+
+/**
+ * One session landing on an exact `local_date`, the same bargain `addMeal`
+ * makes with the day boundary.
+ */
+export async function addWorkout(user: TestUser, date: string, kcal = 300) {
+  return createExerciseEntry({
+    userId: user.id,
+    description: 'Test session',
+    performedAt: new Date(`${date}T18:00:00Z`),
+    durationMin: 45,
+    kcalBurned: kcal,
+    confidence: 'medium',
+    source: 'text',
     ctx: user.ctx,
   });
 }

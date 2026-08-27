@@ -8,6 +8,7 @@ import type {
   Meal,
   Nutrition,
   QualityTargets,
+  Streak,
   Targets,
   WeightEntry,
 } from './index.ts';
@@ -100,6 +101,26 @@ export function dateRange(start: string, end: string): string[] {
   return out;
 }
 
+/**
+ * The Monday on or before this date.
+ *
+ * Monday because the review already starts its week there (`REVIEW_WEEKDAY`),
+ * and because a training split is described in weekdays — a week that began on
+ * a Sunday would put a Saturday session in the wrong one.
+ *
+ * Takes a `local_date` rather than an instant, which is what makes the 04:00 day
+ * boundary carry through to the week boundary for nothing: the date has already
+ * had `day_start_hour` subtracted, so a Sunday-night session logged at 01:00 is
+ * already a Sunday, and lands in the week that is ending rather than the one
+ * beginning.
+ */
+export function weekStartFor(localDate: string): string {
+  const [y, m, d] = localDate.split('-').map(Number);
+  // `getUTCDay` is 0 for Sunday; rotate so Monday is 0 and Sunday is 6.
+  const sinceMonday = (new Date(Date.UTC(y!, m! - 1, d!)).getUTCDay() + 6) % 7;
+  return addDays(localDate, -sinceMonday);
+}
+
 /** §6: pick a sensible meal rather than asking which one it was. */
 export function inferMeal(instant: Date, timezone: string): Meal {
   const hour = Number(localPartsFor(instant, timezone).time.slice(0, 2));
@@ -107,6 +128,133 @@ export function inferMeal(instant: Date, timezone: string): Meal {
   if (hour >= 11 && hour < 15) return 'lunch';
   if (hour >= 17 && hour < 22) return 'dinner';
   return 'snack';
+}
+
+// ---- Streaks ---------------------------------------------------------------
+
+/**
+ * Active days a week has to have before it counts toward the training streak.
+ *
+ * Fixed rather than read off `routine_days`, and that is the whole design
+ * decision. Taking the bar from somebody's declared split reads as generous —
+ * "you did what you said you would" — right up until they add a sixth training
+ * day in March and retroactively break a twelve-week run, because every past
+ * week is now judged against a bar it never had. A bar that moves under the
+ * history is not a bar.
+ *
+ * Three is roughly the WHO 150-minutes-a-week floor and is one constant to
+ * change. Somebody training six days a week clears it without noticing, which is
+ * correct: this measures consistency, not volume, and there is no leaderboard
+ * for it to be unfair against.
+ */
+export const TRAINING_WEEK_DAYS = 3;
+
+interface Run {
+  start: string;
+  end: string;
+  length: number;
+}
+
+/**
+ * Consecutive spans in a sorted, de-duplicated list of dates.
+ *
+ * `step` is what makes this serve both streaks: 1 for a run of days, 7 for a run
+ * of Mondays. The gaps are the entire question, which is why this is a walk and
+ * not SQL — `count(DISTINCT ...)` cannot see a hole, and the window function
+ * that can is a page of it to answer what a loop answers in a millisecond.
+ */
+function runsOf(sorted: string[], step: number): Run[] {
+  const runs: Run[] = [];
+  for (const date of sorted) {
+    const last = runs.at(-1);
+    if (last && addDays(last.end, step) === date) {
+      last.end = date;
+      last.length += 1;
+    } else {
+      runs.push({ start: date, end: date, length: 1 });
+    }
+  }
+  return runs;
+}
+
+/**
+ * The run in progress, and the longest there has ever been.
+ *
+ * `head` is the current period and `previous` the one before it. A run ending at
+ * `head` is alive; one ending at `previous` is intact but unfed, which is the
+ * state that exists for the sixteen hours of every day before anybody has logged
+ * anything. Preferring `head` matters: on an evening that has been logged, both
+ * lookups would hit the same run, and reporting it as at-risk would tell
+ * somebody to do a thing they have already done.
+ */
+function streakOf(runs: Run[], head: string, previous: string): Streak {
+  const best = runs.reduce((longest, run) => Math.max(longest, run.length), 0);
+
+  const alive = runs.find((run) => run.end === head);
+  const atRisk = alive ? undefined : runs.find((run) => run.end === previous);
+  const current = alive ?? atRisk;
+
+  return {
+    current: current?.length ?? 0,
+    best,
+    start: current?.start ?? null,
+    state: alive ? 'alive' : atRisk ? 'at_risk' : 'none',
+  };
+}
+
+/**
+ * Dates worth counting: unique, in order, and never past `today`.
+ *
+ * The filter is not paranoia. A meal can be logged with a time hint — "yesterday
+ * 8pm", or an explicit timestamp from the model — and nothing stops that landing
+ * in the future. Without this, one mistyped date creates a phantom run and a
+ * `best` that never comes back down.
+ */
+function countableDates(dates: Iterable<string>, today: string): string[] {
+  return [...new Set(dates)].filter((date) => date <= today).sort();
+}
+
+/**
+ * Consecutive days with something logged, ending today or yesterday.
+ *
+ * Takes the dates rather than fetching them, which is what lets the server pass
+ * a `DISTINCT local_date` scan and an offline phone pass its cache plus whatever
+ * is still sitting in the outbox. One implementation, so the number does not
+ * jump when the network comes back — the same bargain the rest of this file was
+ * moved out of `apps/api` to get.
+ */
+export function streakFrom(dates: Iterable<string>, today: string): Streak {
+  const days = countableDates(dates, today);
+  return streakOf(runsOf(days, 1), today, addDays(today, -1));
+}
+
+/**
+ * Consecutive weeks with at least `minDays` active days, ending this week or
+ * last.
+ *
+ * Distinct dates rather than entry count, because `sessions` is
+ * `entries.length` and somebody who logs bench, squat and deadlift separately
+ * has three of those from one visit to the gym. What the streak is about is
+ * turning up, and turning up is a day.
+ */
+export function weekStreakFrom(
+  dates: Iterable<string>,
+  today: string,
+  minDays: number = TRAINING_WEEK_DAYS,
+): Streak {
+  const byWeek = new Map<string, number>();
+  for (const date of countableDates(dates, today)) {
+    const week = weekStartFor(date);
+    byWeek.set(week, (byWeek.get(week) ?? 0) + 1);
+  }
+
+  const qualifying = [...byWeek.entries()]
+    .filter(([, activeDays]) => activeDays >= minDays)
+    .map(([week]) => week)
+    .sort();
+
+  const thisWeek = weekStartFor(today);
+  return streakOf(runsOf(qualifying, 7), thisWeek, addDays(thisWeek, -7));
 }
 
 // ---- Adding a day up -------------------------------------------------------
@@ -195,6 +343,12 @@ export interface DayParts {
   exerciseEntries: ExerciseEntry[];
   targets: Targets;
   weight: WeightEntry | null;
+  /**
+   * Only ever set for the reader's today, and absent everywhere else — an
+   * offline phone rolling up a cached day has no streak to hand, and a History
+   * cell in March has no use for one.
+   */
+  streak?: Streak | null;
 }
 
 /**
@@ -209,6 +363,7 @@ export function rollUpDay({
   exerciseEntries,
   targets,
   weight,
+  streak = null,
 }: DayParts): DaySummary {
   const consumed = sumNutrition(foodEntries);
   const burned_kcal = exerciseEntries.reduce((sum, e) => sum + e.kcal_burned, 0);
@@ -231,5 +386,6 @@ export function rollUpDay({
     food_entries: foodEntries,
     exercise_entries: exerciseEntries,
     weight,
+    streak,
   };
 }

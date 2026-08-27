@@ -1025,6 +1025,112 @@ export type DayQuality = z.infer<typeof DayQuality>;
  * §9: food and exercise are reported separately. `net` is derived for callers that
  * want it, but the UI leads with food vs target.
  */
+// ---- Streaks and achievements ----------------------------------------------
+
+/**
+ * Whether a run is still going, about to be lost, or not running.
+ *
+ * The three exist because of the in-progress period, which is the whole
+ * difficulty of drawing a streak rather than notifying one. `alerts.ts` only
+ * ever asks at 20:00, by which point "the run ending today" is a fair question.
+ * A screen asks at 01:30, when today has nothing in it and a strict run ending
+ * today is zero — so a streak with sixteen hours left to live would render as no
+ * streak at all.
+ *
+ * `at_risk` is that run: intact, ending yesterday, and lost if the day closes
+ * empty. It is the state the copy has to be careful about, because the deadline
+ * is `day_start_hour` and not midnight. See STREAKS.md §3.
+ */
+export const STREAK_STATES = ['alive', 'at_risk', 'none'] as const;
+export const StreakState = z.enum(STREAK_STATES);
+export type StreakState = z.infer<typeof StreakState>;
+
+/**
+ * A run of periods, and the longest one there has ever been.
+ *
+ * `best` is what makes a strict streak survivable. Breaking a run at 47 does not
+ * erase 47; it moves it to the second number, and the badge earned along the way
+ * is never revoked at all. That is the whole of the grace policy — no rest days,
+ * no freezes to hold or spend, and "12 in a row" stays literally true.
+ *
+ * The unit is the period this streak counts, and it is not the same for both of
+ * them: `Streaks.logging` counts days, `Streaks.training` counts weeks. Which is
+ * why they are named rather than being an array of two identical shapes.
+ */
+export const Streak = z.object({
+  current: z.number().int(),
+  best: z.number().int(),
+  /** First period of the current run; null when nothing is running. */
+  start: z.string().nullable(),
+  state: StreakState,
+});
+export type Streak = z.infer<typeof Streak>;
+
+export const Streaks = z.object({
+  /** Consecutive days with any food logged. */
+  logging: Streak,
+  /**
+   * Consecutive weeks with at least `TRAINING_WEEK_DAYS` active days.
+   *
+   * Weeks rather than days on purpose, and STREAKS.md §5 is the argument: a
+   * daily training streak pays for training through a rest day, which is the
+   * same mechanic §1 refuses for calories, with a physical-harm edge on top.
+   */
+  training: Streak,
+});
+export type Streaks = z.infer<typeof Streaks>;
+
+/**
+ * The badge set. Fourteen, in four rows, and the list should grow slowly.
+ *
+ * Every one is keyed on *having logged* rather than on what was logged. There
+ * is deliberately nothing here for days under target, for weight lost, or for a
+ * "perfect week" — see STREAKS.md §1, which is `BETS.md` §5 restated for a prize
+ * that happens not to be money.
+ *
+ * Every one is also earnable on the free tier. A grid where half the cells need
+ * a subscription is an advertisement wearing a trophy.
+ */
+export const ACHIEVEMENT_KEYS = [
+  // Consecutive logged days.
+  'streak_7',
+  'streak_30',
+  'streak_100',
+  'streak_365',
+  // Consecutive qualifying training weeks: a month, a season, a year.
+  'exercise_weeks_4',
+  'exercise_weeks_12',
+  'exercise_weeks_52',
+  // One of each, ever. These teach the app's range rather than reward a habit.
+  'first_photo',
+  'first_barcode',
+  'first_workout',
+  'first_weigh_in',
+  // Totals rather than runs, for the person who misses days and keeps going.
+  'days_100',
+  'days_365',
+  'workouts_100',
+] as const;
+export const AchievementKey = z.enum(ACHIEVEMENT_KEYS);
+export type AchievementKey = z.infer<typeof AchievementKey>;
+
+/**
+ * One earned badge. The key travels, never the sentence.
+ *
+ * `alerts` stores rendered prose for a good reason of its own — its wording is a
+ * format string over numbers that keep moving, so a row holding only its inputs
+ * would render tomorrow's sentence when asked what yesterday's said. A badge's
+ * wording is fixed, so that argument does not reach here, and copying the
+ * pattern would buy a badge wall in English on a phone set to Bulgarian.
+ */
+export const Achievement = z.object({
+  key: AchievementKey,
+  /** The reader's own date, so "earned 3 March" is their 3 March. */
+  local_date: z.string(),
+  earned_at: z.string(),
+});
+export type Achievement = z.infer<typeof Achievement>;
+
 export const DaySummary = z.object({
   local_date: z.string(),
   consumed: Nutrition,
@@ -1035,6 +1141,20 @@ export const DaySummary = z.object({
   food_entries: z.array(FoodEntry),
   exercise_entries: z.array(ExerciseEntry),
   weight: WeightEntry.nullable(),
+  /**
+   * The logging run, for the chip beside the ring — and **only when this day is
+   * the reader's today**.
+   *
+   * Null on every other date, which is what keeps a month of History cells from
+   * each paying for a streak scan to answer a question that has no meaning on a
+   * day in March. "Your streak, as it stood on the 4th" is not a thing anybody
+   * opens a calendar to find out.
+   *
+   * Optional rather than required, because an older client must still parse a
+   * day, and because `rollUpDay` runs on a phone that is assembling a day from
+   * its own cache and has no streak to hand.
+   */
+  streak: Streak.nullable().default(null),
 });
 export type DaySummary = z.infer<typeof DaySummary>;
 
@@ -2129,6 +2249,15 @@ export const Progress = z.object({
       sugar_g: z.array(TrendPoint),
     }),
   }),
+  /**
+   * Both runs, and they deliberately ignore the window the rest of this object
+   * is about. A streak is not a fact about the last 30 days — asking "how long
+   * have you kept this up" and getting an answer capped at whichever tab was
+   * selected would be a number that means nothing.
+   */
+  streaks: Streaks,
+  /** Earned only. The client holds the full set and dims the rest. */
+  achievements: z.array(Achievement),
 });
 export type Progress = z.infer<typeof Progress>;
 

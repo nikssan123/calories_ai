@@ -129,7 +129,7 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
   const authError = provider.checkAuth();
   if (authError) throw new Error(authError);
 
-  const day = await buildDaySummary(input.userId, today);
+  const day = await buildDaySummary(input.userId, today, today);
   const { tools, toolNames } = buildNutritionServer(toolContext);
 
   /*
@@ -348,7 +348,7 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
   // `set_profile` runs from inside a turn, and `input.profile` is the copy from
   // before it did.
   const [updatedDay, updatedProfile] = await Promise.all([
-    buildDaySummary(input.userId, today),
+    buildDaySummary(input.userId, today, today),
     getUser(input.userId),
   ]);
 
@@ -545,7 +545,7 @@ async function openingTurn(input: RunTurnInput, today: string): Promise<ChatResp
   });
 
   const [day, profile] = await Promise.all([
-    buildDaySummary(input.userId, today),
+    buildDaySummary(input.userId, today, today),
     getUser(input.userId),
   ]);
   return { message, actions: [], day, profile };

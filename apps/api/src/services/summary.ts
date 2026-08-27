@@ -1,18 +1,38 @@
-import type { DaySummary, DietQuality, Progress, TrendPoint } from '@ct/shared';
+import type {
+  Achievement,
+  DaySummary,
+  DietQuality,
+  Progress,
+  Streak,
+  TrendPoint,
+} from '@ct/shared';
 import { qualityTargetsFor, rollUpDay } from '@ct/shared';
 export { dayQuality, QUALITY_COVERAGE_FLOOR } from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import { addDays, dateRange, type DayContext, localDateFor } from '../time.ts';
+import { evaluateAchievements, listAchievements } from './achievements.ts';
 import { listExerciseEntries, listFoodEntries, listWeights } from './log.ts';
+import { type LogHistory, logHistory, streaksOf } from './streaks.ts';
 import { targetsForDate } from './targets.ts';
 import { getUser } from './user.ts';
 
 /** The four columns the diet quality panel is made of. */
 type QualityField = keyof DietQuality;
 
+/**
+ * `today` is the reader's own current date, and passing it is what turns the
+ * streak on.
+ *
+ * Optional because most callers of this are building a card for one entry on
+ * whatever day that entry belongs to, and a run counted against a day in March
+ * is not a number anybody opened a calendar to find. Omitting it costs a
+ * `DISTINCT local_date` scan that a History grid would otherwise pay thirty-one
+ * times to answer a question it never asked.
+ */
 export async function buildDaySummary(
   userId: string,
   localDate: string,
+  today?: string,
 ): Promise<DaySummary> {
   const [foodEntries, exerciseEntries, targets, weightRow] = await Promise.all([
     listFoodEntries(userId, { localDate }),
@@ -26,6 +46,7 @@ export async function buildDaySummary(
 
   return rollUpDay({
     localDate,
+    streak: localDate === today ? await todayStreak(userId, today) : null,
     foodEntries,
     exerciseEntries,
     targets,
@@ -38,6 +59,41 @@ export async function buildDaySummary(
         }
       : null,
   });
+}
+
+/**
+ * The logging run for the chip beside the ring, and the badge pass riding along
+ * with it.
+ *
+ * They travel together because they want the same two scans, and this is the
+ * read every log already round-trips through — so a badge earned by logging
+ * lunch arrives in the same response as the lunch, rather than at 20:00 in a
+ * notification about something that happened five hours ago.
+ */
+async function todayStreak(userId: string, today: string): Promise<Streak> {
+  const history = await logHistory(userId);
+  await earnQuietly(userId, history, today);
+  return streaksOf(history, today).logging;
+}
+
+/**
+ * The badge pass, with its failures swallowed.
+ *
+ * The same bargain `recordUsage` makes, and for a sharper reason: this runs
+ * inside the read that draws somebody's food. An uncelebrated badge is a
+ * nuisance that the next read picks up; a day summary that 500s because a
+ * congratulation could not be written is the app refusing to show a meal.
+ */
+async function earnQuietly(
+  userId: string,
+  history: LogHistory,
+  today: string,
+): Promise<Achievement[]> {
+  try {
+    return await evaluateAchievements(userId, history, today);
+  } catch {
+    return [];
+  }
 }
 
 export async function currentLocalDate(ctx: DayContext): Promise<string> {
@@ -120,13 +176,27 @@ export async function buildProgress(
   const today = localDateFor(new Date(), ctx);
   const from = addDays(today, -(days - 1));
 
-  const [user, totals, weights, exercise, targets] = await Promise.all([
+  const [user, totals, weights, exercise, targets, history, achievements] = await Promise.all([
     getUser(userId),
     dailyTotals(userId, from, today),
     listWeights(userId, { from: addDays(today, -(days * 2)), to: today }),
     listExerciseEntries(userId, { from, to: today }),
     targetsForDate(userId, today),
+    logHistory(userId),
+    listAchievements(userId),
   ]);
+
+  /*
+   * Progress draws the grid, so Progress also earns.
+   *
+   * The day-summary read is the fast path and covers almost everybody, but it
+   * is not the only door: a badge deserved by a meal logged on another device,
+   * or by a workout added from the web, should be on the wall the first time
+   * somebody looks at the wall — not the next time they happen to open Today.
+   * The history is already in hand, so this costs the evaluation and nothing
+   * more.
+   */
+  const fresh = await earnQuietly(userId, history, today);
 
   const totalsByDate = new Map(totals.map((t) => [t.local_date, t]));
   const window = dateRange(from, today);
@@ -285,6 +355,12 @@ export async function buildProgress(
         sugar_g: qualitySeries('sugar_g'),
       },
     },
+    // Against the whole history rather than `window`, and deliberately so:
+    // "how long have you kept this up" answered with a number capped by
+    // whichever of 14/30/90 happened to be selected would be a lie the tab bar
+    // told.
+    streaks: streaksOf(history, today),
+    achievements: [...achievements, ...fresh],
   };
 }
 
