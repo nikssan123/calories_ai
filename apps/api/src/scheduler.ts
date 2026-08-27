@@ -337,6 +337,7 @@ async function alertPass(now: Date, logger?: FastifyBaseLogger): Promise<TickRes
         userId: user.id,
         prefs: {
           units: recipient.units,
+          locale: recipient.locale,
           notifyMilestones: recipient.notifyMilestones,
           notifyDailyRecap: recipient.notifyDailyRecap,
         },

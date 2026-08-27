@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { LOCALES, type Locale } from '@ct/shared';
+import { emailMessages } from '../src/email/messages.ts';
 import { query } from '../src/db.ts';
 import { runDueAlerts } from '../src/scheduler.ts';
 import {
@@ -31,7 +33,12 @@ const LATE = new Date('2026-03-19T19:30:00Z');
 const MORNING = new Date('2026-03-19T09:00:00Z');
 const TODAY = '2026-03-19';
 
-const PREFS = { units: 'metric' as const, notifyMilestones: true, notifyDailyRecap: true };
+const PREFS = {
+  units: 'metric' as const,
+  locale: 'en' as Locale,
+  notifyMilestones: true,
+  notifyDailyRecap: true,
+};
 
 let user: TestUser;
 
@@ -241,6 +248,7 @@ describe('a plan about to lapse', () => {
 
     const alert = await due(MORNING, {
       units: 'metric',
+      locale: 'en',
       notifyMilestones: false,
       notifyDailyRecap: false,
     });
@@ -357,6 +365,74 @@ describe('the pass', () => {
 
     expect(result.failed).toHaveLength(0);
     expect(result.considered).toBeGreaterThanOrEqual(2);
+  });
+});
+
+/**
+ * The gap `STREAKS.md` §8 opened up.
+ *
+ * A badge wall drawn from keys localises for free; an alert stores rendered
+ * prose and so has to pick a language at the moment it is worded. Before this,
+ * every title and body was an English literal — so a phone set to Bulgarian got
+ * a Bulgarian grid and an English notification about the same streak.
+ */
+describe('the language a phone is read in', () => {
+  const inLocale = (locale: 'en' | 'bg' | 'de') => due(EVENING, { ...PREFS, locale });
+
+  it('words a streak in the reader own language', async () => {
+    await logStreak(7);
+
+    expect(await inLocale('en')).toMatchObject({ title: 'A week, every day' });
+    expect((await inLocale('bg'))?.title).toBe('Седмица, всеки ден');
+    expect((await inLocale('de'))?.title).toBe('Eine Woche, jeden Tag');
+  });
+
+  it('words a goal and its weight in it too', async () => {
+    await createGoal('lose', 78);
+    await addWeight(user, TODAY, 77.4);
+
+    const bg = await inLocale('bg');
+    expect(bg?.title).toBe('Стигна дотам');
+    expect(bg?.body).toContain('Последното ти тегло');
+    /*
+     * The weight itself still reads "77.4 kg" rather than "77,4 kg", and that
+     * is deliberately not fixed here. `formatBodyWeight(kg, units)` takes no
+     * locale, so every screen in the app has the same dot — Today, History and
+     * the weigh-in card included. Correcting it only inside this one sentence
+     * would make the notification disagree with the app it is about.
+     *
+     * Left as its own job: widening `formatBodyWeight` is a change to fifteen
+     * call sites across both clients and the prompt.
+     */
+    expect(bg?.body).toContain('77.4 kg');
+  });
+
+  it('groups the recap numbers the way the reader does', async () => {
+    await addMeal(user, { date: TODAY, kcal: 1840, protein_g: 120 });
+    const prefs = { ...PREFS, notifyMilestones: false };
+
+    // `1,840` in English against `1.840` in German — the separator is the
+    // reader's, which `toLocaleString('en-US')` could never be.
+    //
+    // Bulgarian is deliberately not the example here: it groups from five
+    // digits up, so 1840 is "1840" in it, and a test asserting "1 840" would be
+    // asserting a bug.
+    expect((await due(LATE, prefs))?.title).toContain('1,840');
+    expect((await due(LATE, { ...prefs, locale: 'de' }))?.title).toContain('1.840');
+  });
+
+  /**
+   * `alert.streakTitles` is indexed by position in `STREAK_MILESTONES`, which is
+   * the cheapest way to hold seven bespoke titles through a catalogue whose type
+   * derivation understands strings, functions and string arrays — and nothing
+   * else. Parallel arrays need a guard, so here it is.
+   */
+  it('keeps a title for every milestone in every language', () => {
+    for (const locale of LOCALES) {
+      const titles = emailMessages(locale)['alert.streakTitles'];
+      expect(titles).toHaveLength(STREAK_MILESTONES.length);
+      expect(titles.every((title) => title.length > 0)).toBe(true);
+    }
   });
 });
 

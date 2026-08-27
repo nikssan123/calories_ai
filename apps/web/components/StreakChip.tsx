@@ -22,8 +22,10 @@ export function StreakChip({ streak, className = '' }: { streak: Streak; classNa
     <div className={`flex flex-col items-center gap-0.5 ${className}`}>
       <p className="flex items-center gap-1.5">
         <span aria-hidden>{atRisk ? '🕯️' : '🔥'}</span>
+        {/* `streak.days` goes through `plural()`, which already puts the
+            locale-formatted count in front of the noun. */}
         <span className="tnum text-foreground text-footnote font-extrabold">
-          {streak.current} {t('streak.days')(streak.current)}
+          {t('streak.days')(streak.current)}
         </span>
         {/* Only once the record is genuinely behind them — "best 7" beside a
             live run of 7 reads as a bug. */}

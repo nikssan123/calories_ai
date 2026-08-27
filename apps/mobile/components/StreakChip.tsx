@@ -36,8 +36,11 @@ export function StreakChip({ streak }: { streak: Streak }) {
     <View style={styles.wrap}>
       <View style={styles.row}>
         <Text style={styles.flame}>{atRisk ? '🕯️' : '🔥'}</Text>
+        {/* `streak.days` goes through `plural()`, which returns "21 days" —
+            the count already formatted for the locale. Putting the number in
+            front of it as well is how this first read "21 21 days". */}
         <Text style={[t.footnoteBold, t.tnum, { color: colors.foreground }]}>
-          {streak.current} {tr('streak.days')(streak.current)}
+          {tr('streak.days')(streak.current)}
         </Text>
         {/*
          * `best` only once it is genuinely behind them. Showing "best 7" beside

@@ -70,6 +70,38 @@ const en = {
   'review.summaryWeight': (delta: string) => `, weight ${delta}`,
   /** Sun–Sat, in the week strip. Three letters is the column width. */
   'review.weekdays': ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+
+  // ---- The alerts nobody writes. See NOTIFICATIONS.md. ----
+  //
+  // Here rather than composed in `alerts.ts` because an alert is written down
+  // as prose and sent as prose, so the language has to be chosen at the moment
+  // it is worded — and `alerts.ts` has no business knowing five of them.
+  'alert.planEnds': (plan: string, when: string) => `Your ${plan} plan ends ${when}`,
+  'alert.expiryToday': 'today',
+  'alert.expiryTomorrow': 'tomorrow',
+  'alert.expiryInDays': (days: number) => `in ${days} days`,
+  'alert.planBody':
+    'Nothing has renewed it yet. Everything you have logged stays exactly where it is — the reviews, the coaching and the kitchen are what go quiet.',
+  'alert.goalTitle': 'You are there',
+  'alert.goalBody': (weight: string) =>
+    `Your last weigh-in was ${weight}, which is the goal you set. Worth picking the next one — holding a weight is its own target, and the app can aim at it.`,
+  /** Parallel to `STREAK_MILESTONES`, which is what indexes it. */
+  'alert.streakTitles': [
+    'A week, every day',
+    'A fortnight, every day',
+    'A month, every day',
+    'Two months straight',
+    'A hundred days',
+    'Two hundred days',
+    'A year, every day',
+  ],
+  'alert.streakBody': (days: number) =>
+    `${days} days logged in a row. Nothing to do about it — the consistency is what makes every number on the progress screen mean anything.`,
+  'alert.recapTitle': (kcal: string, target: string) => `${kcal} of ${target} kcal`,
+  'alert.recapOnTarget': 'Right on target.',
+  'alert.recapUnder': (kcal: string) => `${kcal} kcal to spare.`,
+  'alert.recapOver': (kcal: string) => `${kcal} kcal over.`,
+  'alert.recapProtein': (got: string, target: string) => `Protein ${got}g of ${target}g.`,
 } as const;
 
 export type EmailMessages = {
@@ -111,6 +143,32 @@ const bg: EmailMessages = {
     `${p.bg(days, { one: 'записан ден', other: 'записани дни' })}, средно по ${kcal} kcal${weight}.`,
   'review.summaryWeight': (delta) => `, тегло ${delta}`,
   'review.weekdays': ['нед', 'пон', 'вто', 'сря', 'чет', 'пет', 'съб'],
+
+  'alert.planEnds': (plan, when) => `Планът ти ${plan} свършва ${when}`,
+  'alert.expiryToday': 'днес',
+  'alert.expiryTomorrow': 'утре',
+  'alert.expiryInDays': (days) => `след ${days} дни`,
+  'alert.planBody':
+    'Още нищо не го е подновило. Всичко записано си остава точно където е — прегледите, съветите и кухнята са това, което утихва.',
+  'alert.goalTitle': 'Стигна дотам',
+  'alert.goalBody': (weight) =>
+    `Последното ти тегло беше ${weight}, което е целта, която си постави. Струва си да избереш следващата — да задържиш тегло е цел сама по себе си и приложението може да се прицели в нея.`,
+  'alert.streakTitles': [
+    'Седмица, всеки ден',
+    'Две седмици, всеки ден',
+    'Месец, всеки ден',
+    'Два месеца подред',
+    'Сто дни',
+    'Двеста дни',
+    'Година, всеки ден',
+  ],
+  'alert.streakBody': (days) =>
+    `${days} записани дни подред. Няма какво да се направи по въпроса — постоянството е това, което придава смисъл на всяко число в прогреса.`,
+  'alert.recapTitle': (kcal, target) => `${kcal} от ${target} kcal`,
+  'alert.recapOnTarget': 'Точно в целта.',
+  'alert.recapUnder': (kcal) => `Остават ти ${kcal} kcal.`,
+  'alert.recapOver': (kcal) => `${kcal} kcal над целта.`,
+  'alert.recapProtein': (got, target) => `Протеин ${got}g от ${target}g.`,
 };
 
 const de: EmailMessages = {
@@ -143,6 +201,32 @@ const de: EmailMessages = {
     `${p.de(days, { one: 'Tag', other: 'Tage' })} erfasst, im Schnitt ${kcal} kcal${weight}.`,
   'review.summaryWeight': (delta) => `, Gewicht ${delta}`,
   'review.weekdays': ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'],
+
+  'alert.planEnds': (plan, when) => `Dein ${plan}-Abo endet ${when}`,
+  'alert.expiryToday': 'heute',
+  'alert.expiryTomorrow': 'morgen',
+  'alert.expiryInDays': (days) => `in ${days} Tagen`,
+  'alert.planBody':
+    'Bisher hat nichts verlängert. Alles Eingetragene bleibt genau, wo es ist — still werden die Wochenrückblicke, das Coaching und die Küche.',
+  'alert.goalTitle': 'Du bist da',
+  'alert.goalBody': (weight) =>
+    `Dein letztes Wiegen ergab ${weight} — genau das Ziel, das du dir gesetzt hast. Jetzt lohnt sich das nächste: ein Gewicht zu halten ist ein Ziel für sich, und die App kann darauf zielen.`,
+  'alert.streakTitles': [
+    'Eine Woche, jeden Tag',
+    'Zwei Wochen, jeden Tag',
+    'Ein Monat, jeden Tag',
+    'Zwei Monate am Stück',
+    'Hundert Tage',
+    'Zweihundert Tage',
+    'Ein Jahr, jeden Tag',
+  ],
+  'alert.streakBody': (days) =>
+    `${days} Tage in Folge eingetragen. Da ist nichts zu tun — genau diese Beständigkeit gibt jeder Zahl im Verlauf ihre Bedeutung.`,
+  'alert.recapTitle': (kcal, target) => `${kcal} von ${target} kcal`,
+  'alert.recapOnTarget': 'Genau im Ziel.',
+  'alert.recapUnder': (kcal) => `${kcal} kcal übrig.`,
+  'alert.recapOver': (kcal) => `${kcal} kcal darüber.`,
+  'alert.recapProtein': (got, target) => `Protein ${got}g von ${target}g.`,
 };
 
 const es: EmailMessages = {
@@ -176,6 +260,32 @@ const es: EmailMessages = {
     `${p.es(days, { one: 'día registrado', other: 'días registrados' })}, con una media de ${kcal} kcal${weight}.`,
   'review.summaryWeight': (delta) => `, peso ${delta}`,
   'review.weekdays': ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'],
+
+  'alert.planEnds': (plan, when) => `Tu plan ${plan} termina ${when}`,
+  'alert.expiryToday': 'hoy',
+  'alert.expiryTomorrow': 'mañana',
+  'alert.expiryInDays': (days) => `en ${days} días`,
+  'alert.planBody':
+    'Todavía no lo ha renovado nada. Todo lo que has registrado se queda exactamente donde está — lo que se apaga son los resúmenes, el coaching y la cocina.',
+  'alert.goalTitle': 'Ya estás',
+  'alert.goalBody': (weight) =>
+    `Tu último pesaje fue ${weight}, que es justo la meta que te pusiste. Vale la pena elegir la siguiente: mantener un peso es una meta en sí misma, y la app puede apuntar a ella.`,
+  'alert.streakTitles': [
+    'Una semana, todos los días',
+    'Dos semanas, todos los días',
+    'Un mes, todos los días',
+    'Dos meses seguidos',
+    'Cien días',
+    'Doscientos días',
+    'Un año, todos los días',
+  ],
+  'alert.streakBody': (days) =>
+    `${days} días registrados seguidos. No hay nada que hacer al respecto: esa constancia es lo que da sentido a cada número de la pantalla de progreso.`,
+  'alert.recapTitle': (kcal, target) => `${kcal} de ${target} kcal`,
+  'alert.recapOnTarget': 'Justo en el objetivo.',
+  'alert.recapUnder': (kcal) => `Te sobran ${kcal} kcal.`,
+  'alert.recapOver': (kcal) => `${kcal} kcal de más.`,
+  'alert.recapProtein': (got, target) => `Proteína ${got}g de ${target}g.`,
 };
 
 const fr: EmailMessages = {
@@ -209,6 +319,32 @@ const fr: EmailMessages = {
     `${p.fr(days, { one: 'jour enregistré', other: 'jours enregistrés' })}, en moyenne ${kcal} kcal${weight}.`,
   'review.summaryWeight': (delta) => `, poids ${delta}`,
   'review.weekdays': ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'],
+
+  'alert.planEnds': (plan, when) => `Ton abonnement ${plan} se termine ${when}`,
+  'alert.expiryToday': "aujourd’hui",
+  'alert.expiryTomorrow': 'demain',
+  'alert.expiryInDays': (days) => `dans ${days} jours`,
+  'alert.planBody':
+    "Rien ne l’a encore renouvelé. Tout ce que tu as noté reste exactement où il est — ce sont les bilans, le coaching et la cuisine qui s’arrêtent.",
+  'alert.goalTitle': 'Tu y es',
+  'alert.goalBody': (weight) =>
+    `Ta dernière pesée était de ${weight}, exactement l’objectif que tu t’étais fixé. Autant en choisir un nouveau : tenir un poids est un objectif à part entière, et l’app sait le viser.`,
+  'alert.streakTitles': [
+    'Une semaine, chaque jour',
+    'Deux semaines, chaque jour',
+    'Un mois, chaque jour',
+    'Deux mois d’affilée',
+    'Cent jours',
+    'Deux cents jours',
+    'Une année, chaque jour',
+  ],
+  'alert.streakBody': (days) =>
+    `${days} jours notés d’affilée. Il n’y a rien à en faire : c’est cette régularité qui donne du sens à chaque chiffre de l’écran de progression.`,
+  'alert.recapTitle': (kcal, target) => `${kcal} sur ${target} kcal`,
+  'alert.recapOnTarget': `Pile dans l’objectif.`,
+  'alert.recapUnder': (kcal) => `Il te reste ${kcal} kcal.`,
+  'alert.recapOver': (kcal) => `${kcal} kcal de trop.`,
+  'alert.recapProtein': (got, target) => `Protéines ${got}g sur ${target}g.`,
 };
 
 const CATALOGUES: Record<Locale, EmailMessages> = { en, bg, de, es, fr };

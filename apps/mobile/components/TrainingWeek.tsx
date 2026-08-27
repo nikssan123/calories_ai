@@ -64,7 +64,7 @@ export function TrainingWeek({ week, streak }: { week: Week; streak: Streak }) {
        */}
       {streak.current > 0 ? (
         <Text style={[t.footnoteBold, t.tnum, { color: colors.foreground }]}>
-          🏋️ {streak.current} {tr('streak.weeks')(streak.current)}
+          🏋️ {tr('streak.weeks')(streak.current)}
           {streak.best > streak.current ? `  ${tr('streak.best')(streak.best)}` : ''}
         </Text>
       ) : (

@@ -1,5 +1,6 @@
-import type { Alert, AlertKind, PlanName, UnitSystem } from '@ct/shared';
-import { formatBodyWeight } from '@ct/shared';
+import type { Alert, AlertKind, Locale, PlanName, UnitSystem } from '@ct/shared';
+import { formatBodyWeight, formatNumber } from '@ct/shared';
+import { emailMessages } from '../email/messages.ts';
 import { query, queryOne } from '../db.ts';
 import { addDays } from '../time.ts';
 import { withinInterruptionBudget } from './interruptions.ts';
@@ -80,6 +81,22 @@ const RECAP_ON_TARGET_KCAL = 50;
 
 export interface AlertPrefs {
   units: UnitSystem;
+  /**
+   * Which language the phone is read in.
+   *
+   * The `alerts` row stores rendered prose rather than its inputs, which is
+   * right for the reason 037 gives — the wording is a format string over
+   * numbers that keep moving, so a row holding only inputs would render
+   * tomorrow's sentence when asked what yesterday's said. What it got wrong was
+   * assuming one language: every title and body below was an English literal,
+   * so a phone set to Bulgarian got a Bulgarian badge wall and an English push
+   * about the same streak.
+   *
+   * Rendering at write time keeps the row honest and picks the language once.
+   * Somebody who switches language keeps the sentences they were actually sent,
+   * which is what a record of having spoken should say.
+   */
+  locale: Locale;
   notifyMilestones: boolean;
   notifyDailyRecap: boolean;
 }
@@ -122,7 +139,7 @@ export async function dueAlert({
    * thing on this list they could have had by opening the app.
    */
   if (hour >= ACCOUNT_HOUR) {
-    const expiring = await dueExpiry(userId, now);
+    const expiring = await dueExpiry(userId, now, prefs.locale);
     if (expiring) return expiring;
   }
 
@@ -134,16 +151,16 @@ export async function dueAlert({
    */
   if (prefs.notifyMilestones && hour >= MILESTONE_HOUR) {
     if (await withinInterruptionBudget(userId, today, 1)) {
-      const goal = await dueGoalReached(userId, prefs.units, today);
+      const goal = await dueGoalReached(userId, prefs, today);
       if (goal) return goal;
 
-      const streak = await dueStreak(userId, today);
+      const streak = await dueStreak(userId, today, prefs.locale);
       if (streak) return streak;
     }
   }
 
   if (prefs.notifyDailyRecap && hour >= RECAP_HOUR) {
-    const recap = await dueRecap(userId, today);
+    const recap = await dueRecap(userId, today, prefs.locale);
     if (recap) return recap;
   }
 
@@ -163,7 +180,8 @@ export async function dueAlert({
  * that moves the date earns a fresh warning next time and an unchanged one is
  * only ever mentioned once.
  */
-async function dueExpiry(userId: string, now: Date): Promise<DueAlert | null> {
+async function dueExpiry(userId: string, now: Date, locale: Locale): Promise<DueAlert | null> {
+  const m = emailMessages(locale);
   const row = await queryOne<{ plan: PlanName; plan_expires_at: string | null }>(
     `SELECT plan, plan_expires_at FROM users
       WHERE id = $1 AND plan <> 'free' AND plan_source <> 'manual' AND plan_expires_at IS NOT NULL`,
@@ -177,12 +195,19 @@ async function dueExpiry(userId: string, now: Date): Promise<DueAlert | null> {
   // the account is on free and there is nothing to renew in time.
   if (days < 0 || days > EXPIRY_WARNING_DAYS) return null;
 
-  const when = days <= 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`;
+  const when =
+    days <= 0
+      ? m['alert.expiryToday']
+      : days === 1
+        ? m['alert.expiryTomorrow']
+        : m['alert.expiryInDays'](days);
   return {
     kind: 'plan_expiring',
     subject: new Date(expiresAt).toISOString(),
-    title: `Your ${planLabel(row.plan)} plan ends ${when}`,
-    body: 'Nothing has renewed it yet. Everything you have logged stays exactly where it is — the reviews, the coaching and the kitchen are what go quiet.',
+    // The plan name itself does not translate: "Coach" is what the tier is
+    // called on the pricing page in every language.
+    title: m['alert.planEnds'](planLabel(row.plan), when),
+    body: m['alert.planBody'],
   };
 }
 
@@ -196,9 +221,10 @@ async function dueExpiry(userId: string, now: Date): Promise<DueAlert | null> {
  */
 async function dueGoalReached(
   userId: string,
-  units: UnitSystem,
+  prefs: AlertPrefs,
   today: string,
 ): Promise<DueAlert | null> {
+  const m = emailMessages(prefs.locale);
   const row = await queryOne<{
     goal: string;
     target_weight_kg: number | null;
@@ -229,8 +255,8 @@ async function dueGoalReached(
     // The target, not the reading. Somebody who reaches 78 kg, drifts up and
     // comes back has not achieved a second thing; somebody who then sets 75 has.
     subject: `${row.goal}:${target.toFixed(1)}`,
-    title: 'You are there',
-    body: `Your last weigh-in was ${formatBodyWeight(latest, units)}, which is the goal you set. Worth picking the next one — holding a weight is its own target, and the app can aim at it.`,
+    title: m['alert.goalTitle'],
+    body: m['alert.goalBody'](formatBodyWeight(latest, prefs.units)),
   };
 }
 
@@ -241,7 +267,7 @@ async function dueGoalReached(
  * streak, it is history, and congratulating it on Friday would be telling
  * somebody they are doing something they have stopped doing.
  */
-async function dueStreak(userId: string, today: string): Promise<DueAlert | null> {
+async function dueStreak(userId: string, today: string, locale: Locale): Promise<DueAlert | null> {
   const run = await loggingStreak(userId, today);
   // `alive` rather than "not none", and the distinction is the whole of the
   // paragraph above. A run in the `at_risk` state is one that ended yesterday
@@ -252,16 +278,20 @@ async function dueStreak(userId: string, today: string): Promise<DueAlert | null
   // The largest milestone the run has passed, rather than an exact match on
   // today's count. An exact test would silently skip the whole thing if the
   // 20:00 tick were missed on the one evening it mattered.
-  const milestone = [...STREAK_MILESTONES].reverse().find((m) => run.current >= m);
-  if (milestone === undefined) return null;
+  const reached = [...STREAK_MILESTONES].reverse().find((days) => run.current >= days);
+  if (reached === undefined) return null;
 
+  const m = emailMessages(locale);
   return {
     kind: 'streak',
     // The run's first day, so that a streak broken and rebuilt is a new subject
     // and can be celebrated again — while this one cannot be celebrated twice.
-    subject: `${run.start}:${milestone}`,
-    title: STREAK_TITLES[milestone],
-    body: `${milestone} days logged in a row. Nothing to do about it — the consistency is what makes every number on the progress screen mean anything.`,
+    subject: `${run.start}:${reached}`,
+    // Indexed rather than keyed, because the titles are bespoke per milestone
+    // and a record of seven numbers would not survive the catalogue's type
+    // derivation. Parallel arrays, and the test below pins their lengths.
+    title: m['alert.streakTitles'][STREAK_MILESTONES.indexOf(reached)] ?? '',
+    body: m['alert.streakBody'](reached),
   };
 }
 
@@ -272,7 +302,8 @@ async function dueStreak(userId: string, today: string): Promise<DueAlert | null
  * the app telling somebody off for not using it, which is not what they asked
  * for when they turned this on.
  */
-async function dueRecap(userId: string, today: string): Promise<DueAlert | null> {
+async function dueRecap(userId: string, today: string, locale: Locale): Promise<DueAlert | null> {
+  const m = emailMessages(locale);
   const [totals, targets] = await Promise.all([
     dailyTotals(userId, today, today),
     targetsForDate(userId, today),
@@ -284,18 +315,21 @@ async function dueRecap(userId: string, today: string): Promise<DueAlert | null>
   const kcal = Math.round(day.kcal);
   const protein = Math.round(day.protein_g);
   const delta = kcal - targets.kcal;
+  // Through `formatNumber` rather than `toLocaleString('en-US')`: the separator
+  // is the reader's, so 1,840 in English is 1 840 in Bulgarian.
+  const num = (value: number) => formatNumber(value, locale);
   const line =
     Math.abs(delta) <= RECAP_ON_TARGET_KCAL
-      ? 'Right on target.'
+      ? m['alert.recapOnTarget']
       : delta < 0
-        ? `${-delta} kcal to spare.`
-        : `${delta} kcal over.`;
+        ? m['alert.recapUnder'](num(-delta))
+        : m['alert.recapOver'](num(delta));
 
   return {
     kind: 'daily_recap',
     subject: today,
-    title: `${kcal.toLocaleString('en-US')} of ${targets.kcal.toLocaleString('en-US')} kcal`,
-    body: `${line} Protein ${protein}g of ${Math.round(targets.protein_g)}g.`,
+    title: m['alert.recapTitle'](num(kcal), num(targets.kcal)),
+    body: `${line} ${m['alert.recapProtein'](num(protein), num(Math.round(targets.protein_g)))}`,
   };
 }
 
@@ -304,16 +338,6 @@ async function dueRecap(userId: string, today: string): Promise<DueAlert | null>
 function planLabel(plan: PlanName): string {
   return plan === 'coach' ? 'Coach' : plan === 'plus' ? 'Plus' : 'free';
 }
-
-const STREAK_TITLES: Record<(typeof STREAK_MILESTONES)[number], string> = {
-  7: 'A week, every day',
-  14: 'A fortnight, every day',
-  30: 'A month, every day',
-  60: 'Two months straight',
-  100: 'A hundred days',
-  200: 'Two hundred days',
-  365: 'A year, every day',
-};
 
 // ---- Persistence -----------------------------------------------------------
 

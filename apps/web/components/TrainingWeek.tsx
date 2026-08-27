@@ -59,7 +59,7 @@ export function TrainingWeek({
       {streak.current > 0 ? (
         <p className="tnum text-foreground text-footnote font-extrabold">
           <span aria-hidden>🏋️ </span>
-          {streak.current} {t('streak.weeks')(streak.current)}
+          {t('streak.weeks')(streak.current)}
           {streak.best > streak.current && (
             <span className="text-muted-foreground ml-2 font-semibold">
               {t('streak.best')(streak.best)}

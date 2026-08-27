@@ -286,7 +286,9 @@ stopping at fourteen.
 ## 7. Where it surfaces
 
 **Today** — a chip beside the ring, because the ring is where the streak is
-earned. `DaySummary.streaks`, non-null only when the date is today, so History
+earned. Silent below four days: "1 day streak" is a sentence about having opened
+the app, and drawing it on day one teaches that this app keeps score of
+everything. `DaySummary.streaks`, non-null only when the date is today, so History
 cells do not pay for a query about a number that means nothing on a March day.
 The logging streak only: a training streak beside the calorie ring is a second
 number answering a question nobody asked while logging lunch.
@@ -305,17 +307,35 @@ milestones, and the interruption budget is one unprompted message a week
 (`interruptions.ts`). A buzz for scanning a first barcode would spend somebody's
 whole week's allowance on a fact they already know, having just scanned it.
 
-## 8. A gap this makes visible
+## 8. The gap this made visible — closed
 
-`alerts.title` and `alerts.body` are English format strings
-(`STREAK_TITLES` in `alerts.ts`). A phone set to Bulgarian gets a Bulgarian
-badge grid and an English push notification about the same streak.
+`alerts.title` and `alerts.body` were English format strings, so a phone set to
+Bulgarian got a Bulgarian badge grid and an English push about the same streak.
 
-Pre-existing and out of scope for the streak work, but the inconsistency is new
-and the fix is small: the scheduler already reads the user row, which has
-carried `locale` since 038, so the wording can be rendered in the reader's
-language at write time. The table keeps storing prose; it just stops assuming
-which language.
+The row still stores rendered prose, which 037 is right about: the wording is a
+format string over numbers that keep moving, and a row holding only its inputs
+would render tomorrow's sentence when asked what yesterday's said. What it got
+wrong was assuming *one* language. `AlertPrefs` now carries `locale` — the
+scheduler already had it on the recipient — and all four kinds are worded from
+`email/messages.ts` at the moment they are written. Somebody who later switches
+language keeps the sentences they were actually sent, which is what a record of
+having spoken should say.
+
+Two smaller things fell out of it:
+
+- The recap's figures go through `formatNumber` rather than
+  `toLocaleString('en-US')`, so the separator is the reader's.
+- `alert.streakTitles` is an **array indexed by position in
+  `STREAK_MILESTONES`**, because the seven titles are bespoke and the
+  catalogue's type derivation understands strings, functions and string arrays
+  and nothing else. Parallel arrays want a guard, and there is a test that fails
+  if either list changes length.
+
+**Still open, and deliberately not fixed here.** `formatBodyWeight(kg, units)`
+takes no locale, so the goal alert reads "77.4 kg" inside an otherwise Bulgarian
+sentence. Correcting it only there would make the notification disagree with the
+app: every screen has the same dot, because the helper is the same one. Widening
+it is fifteen call sites across both clients and the prompt — its own job.
 
 ## 9. Order of work
 
@@ -336,10 +356,10 @@ which language.
       `Achievements` grid on Progress.
 - [x] Web: the same, plus the chip on the desktop `DayRail`.
 - [x] 43 keys × 5 languages × 2 catalogues. `pnpm messages` renders all 7,245.
-- [ ] Optional: §8, localise the milestone push.
+- [x] §8: the milestone push, worded in the reader's language.
 
-Everything except the milestone-push wording is in. The tier list's promise of
-"your whole history, the ring, and the streak" is now true.
+All of it is in. The tier list's promise of "your whole history, the ring, and
+the streak" is now true.
 
 **One thing changed in the building.** `buildProgress` was specified to *list*
 badges while `buildDaySummary` earned them. That is wrong for anybody whose first
