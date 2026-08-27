@@ -9,7 +9,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { DISPLAY_LEADING, duration, ease, useColors, useType } from '@/theme';
-import { formatNumber } from '@ct/shared';
+import { INSCRIBED, figureFace, fitFontSize, formatNumber } from '@ct/shared';
 import { useLocale, useT } from '@/lib/i18n';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useCountUp } from '@/hooks/useCountUp';
@@ -67,13 +67,28 @@ export function CalorieRing({
   const over = consumed > target;
   const remaining = target - consumed;
   /*
-   * The figure is a fraction of the dial rather than a fixed size. A quarter of
-   * the diameter is exactly the 46px the default ring has always used, and it
-   * is the only version of that number which survives being asked for a small
-   * ring: at any size below the default a fixed 46px walks a four-digit total
-   * straight out through the track.
+   * The figure is a fraction of the dial, and then as much less as its own
+   * digits need. A quarter of the diameter is exactly the 46px the default ring
+   * has always used and is right for most days — but a quarter is a statement
+   * about the ring, not about the number, and `1,240` at 46px is 109pt of type
+   * in a circle whose clear middle is 135pt across. That fits only at the
+   * centre line, and the figure is never on the centre line: "to go" and the
+   * burn sit under it and push it up, into the part of the circle that is
+   * narrower. The last digit ends up drawn over the arc.
+   *
+   * So the size is measured against the largest square the circle can hold,
+   * which is the one bound that does not depend on how many lines end up under
+   * the figure or how far up they push it. Short totals still get the full 46.
    */
-  const figure = Math.round(size * 0.25);
+  const clear = size - 2 * strokeWidth - depth;
+  const figure = fitFontSize({
+    text: formatNumber(Math.round(Math.abs(remaining)), locale),
+    face: figureFace(locale),
+    width: clear * INSCRIBED,
+    /* Never zero: unlike the widget, the ring has nowhere else to put it. */
+    min: 1,
+    max: Math.round(size * 0.25),
+  });
 
   const shown = useCountUp(Math.round(Math.abs(remaining)), 900);
 

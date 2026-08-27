@@ -2,7 +2,8 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-import { useT } from '@/lib/i18n';
+import { useLocale, useT } from '@/lib/i18n';
+import { INSCRIBED, figureFace, fitFontSize } from '@ct/shared';
 
 /**
  * The day, as one fat shape.
@@ -88,6 +89,7 @@ export function CalorieRing({
   className?: string;
 }) {
   const t = useT();
+  const locale = useLocale();
   const gradient = `ring-${useId().replace(/:/g, '')}`;
   // The ledge, scaled with the stroke so a small ring in the day rail does not
   // wear a shadow half as thick as its own track.
@@ -99,12 +101,24 @@ export function CalorieRing({
   const dash = circumference * Math.min(1, Math.max(0, ratio));
   const over = consumed > target;
   const remaining = target - consumed;
-  // The figure is a fraction of the dial rather than a fixed size. A quarter of
-  // the diameter is exactly the 46px the default ring has always used, and it
-  // is the only version of that number which survives being asked for a small
-  // ring: at any size below the default a fixed 46px walks a four-digit total
-  // straight out through the track.
-  const figure = Math.round(size * 0.25);
+  // The figure is a fraction of the dial, and then as much less as its own
+  // digits need. A quarter of the diameter is the 46px the default ring has
+  // always used and is right for most days — but a quarter is a statement about
+  // the ring, not about the number, and `1,240` at 46px is 109px of type in a
+  // circle whose clear middle is 135px across. That fits only on the centre
+  // line, and the figure is never on the centre line: "to go" and the burn sit
+  // under it and push it up into the narrower part. The last digit lands on the
+  // arc. Measured against the largest square the circle holds instead, which is
+  // the one bound that does not care how many lines go underneath.
+  const clear = size - 2 * strokeWidth - depth;
+  const figure = fitFontSize({
+    text: Math.round(Math.abs(remaining)).toLocaleString(),
+    face: figureFace(locale),
+    width: clear * INSCRIBED,
+    // Never zero: unlike the widget, the ring has nowhere else to put it.
+    min: 1,
+    max: Math.round(size * 0.25),
+  });
 
   const shown = useCountUp(Math.round(Math.abs(remaining)), 900);
 

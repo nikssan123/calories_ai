@@ -28,6 +28,7 @@ export * from './day.ts';
  * them. Same reasoning as `day.ts`, and it builds on it.
  */
 export * from './pending.ts';
+export * from './measure.ts';
 
 export const MEALS = ['breakfast', 'lunch', 'dinner', 'snack'] as const;
 export const Meal = z.enum(MEALS);

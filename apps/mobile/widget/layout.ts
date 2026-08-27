@@ -1,4 +1,4 @@
-import { displayWidth, fitFontSize } from './measure';
+import { displayWidth, fitFontSize } from '@ct/shared';
 import type { WidgetText } from './text';
 
 /**
@@ -26,8 +26,14 @@ import type { WidgetText } from './text';
  * is generous for prose and absurd for a single number in a box measured in
  * points — the digits are 0.6em of ink and the rest is air the widget does not
  * have to give.
+ *
+ * It is `DISPLAY_LEADING` from `theme/typography.ts` rather than something
+ * tighter, and for the reason written down there: the face's descender is
+ * 0.524em against a 0.602em cap, so a line box under 1.126em crops the tops of
+ * its own digits. Copied rather than imported, like the palette — see
+ * `theme.ts`.
  */
-export const LINE_HEIGHT = 1.08;
+export const LINE_HEIGHT = 1.15;
 
 /** The card's outline, subtracted from every inner measurement. */
 const BORDER = 2;
@@ -99,6 +105,7 @@ export function ringLayout({
 
   const figure = fitFontSize({
     text: figureText,
+    face: 'baloo',
     width: inner * 0.9,
     min: 11,
     /* Capped, because proportional alone gives 60pt numerals at the largest
@@ -212,7 +219,7 @@ export function dayLayout({
      * repeats what the bar already says, and a narrow widget would otherwise
      * push it into the figure.
      */
-    const left = displayWidth(figureText, figure) + displayWidth(` ${label}`, wording);
+    const left = displayWidth(figureText, figure, 'baloo') + displayWidth(` ${label}`, wording);
     const asked = left + displayWidth(ratioText, ratio) + 20;
 
     return {
@@ -249,6 +256,7 @@ export function dayLayout({
     stroke,
     figure: fitFontSize({
       text: figureText,
+      face: 'baloo',
       width: inner * 0.9,
       min: 12,
       max: Math.min(30, Math.round(inner * 0.6)),
