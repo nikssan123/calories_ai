@@ -614,3 +614,170 @@ list before it is believed.
   formula, wrong-looking on the card.
 - Whether the same hole exists for weight entries. `log_weight` upserts on the
   day, so a correction is a re-log; nobody has reported it.
+
+---
+
+## 7. A turn that landed came back as a Java exception · 2026-08-27
+
+**Reported:** "When a user types something in the chat but they close the app,
+they see some random java network error — for instance I wanted to log something
+and it logged it but I closed the chat before the response and the card so when I
+opened it I just saw the error message."
+
+**Status:** open — diagnosed here, not fixed.
+
+### What was actually true
+
+Every individual piece of this was built, and correctly. The server was right,
+the client's recovery was right, and the reader still got a red Java sentence
+where a meal card should have been.
+
+**The server finished the turn.** `routes/index.ts:400` says so in as many
+words — *"A vanished reader does not cancel the turn"* — because the tools have
+already written to the log by the time the reply is streamed, and abandoning the
+turn because a phone changed network would leave the meal logged and the answer
+lost. The meal *was* logged. The message and its card *were* committed. They were
+sitting in `chat_messages` the whole time the phone was showing an error.
+
+**The client knows to go and ask.** `reconcile` (`app/(tabs)/index.tsx:785`) is
+the compensation the server comment points at: on a transport failure, re-read
+the conversation, and if anything is there that was not there before the send,
+that is clock-free evidence the turn landed — adopt the server's version instead
+of calling it a failure. The web has the same function
+(`apps/web/components/Journal.tsx:569`). It is the right design.
+
+**It gets exactly one attempt, at the worst possible moment.** `reconcile` is
+called from inside the `catch` of `send` (`index.tsx:508`), which is to say: the
+moment the socket died. It answers by making two more requests — `history` and
+`day` — over the connection that has just been torn down, from a process the OS
+is in the middle of backgrounding. They fail. Its own `catch` returns `null`, and
+`null` means *"the request never arrived"* — so the caller falls through to
+line 513 and prints the transport error into the bubble.
+
+Two different facts collapse onto one return value. "The turn never landed" and
+"I could not find out whether the turn landed" are opposite situations, and only
+one of them justifies telling the user their message failed. `reconcile` returns
+`null` for both.
+
+### Why the app remembered it
+
+A failed bubble is not persisted anywhere — `bubbles` is plain `useState`, and no
+AsyncStorage key holds a transcript. So on a genuine cold start the screen
+re-reads `api.history(40)` and the truth appears. The tester did not get a cold
+start.
+
+`JournalScreen` reads its history **once, on mount** (`index.tsx:214-235`,
+`useEffect(..., [])`), and there is nothing in the file that ever asks again: no
+`AppState` listener, no `RefreshControl` on the scroller, and no
+`useRefreshOnReturn`. The tab bar is a default `<Tabs>` with no `unmountOnBlur`,
+so the screen stays mounted for the life of the process. "Closing the app" on
+Android usually means the process keeps running and the JS context with it.
+
+The result is that the one screen in the app most likely to be looking at stale
+state is the only one that never refreshes. A red sentence written into a bubble
+by a five-second network blip stays on screen through every tab switch and every
+background/foreground cycle, until Android decides to reclaim the process.
+
+**The hook it needed already exists.** `hooks/useRefreshOnReturn.ts:39` loads
+again on refocus *and* on foreground, and its own doc comment describes this bug
+in the abstract: *"A phone app is mounted once and then lives for weeks. A tab
+screen fetches on mount and, unless something asks it to, never fetches again."*
+It was written for the weekly review. Two screens use it — `progress.tsx:91` and
+`WeeklyReview.tsx:72`. The journal is not one of them.
+
+### Where the Java comes from
+
+`chatStream` has a carefully written sentence for one of the two ways a stream
+can die, and no wrapper at all for the other.
+
+- **The stream ends without a terminal frame** → `packages/api-client/src/index.ts:362`,
+  *"The connection dropped before the reply arrived."* Deliberate, and the
+  comment beside it even says the caller's reconciliation is what should run next.
+- **The stream errors natively** → nothing. `expo/fetch` errors the body stream
+  with a bare `new Error(<native string>)` (`FetchResponse.ts:312`), which is
+  thrown out of the `for await` in `readEventStream`, passes through `chatStream`
+  unwrapped, and arrives at `index.tsx:513` as `(e as Error).message`.
+
+That native string is `Throwable.localizedMessage` joined with its cause chain
+(`NativeResponse.kt:82`, via `localizedMessageWithCauseLocalizedMessage()` in
+expo-modules-core) — an OkHttp sentence, in English, frequently carrying a
+`java.*` class name from a nested cause. Failures *before* the stream opens get a
+`fetch failed: ` prefix bolted on (`FetchErrors.ts:3`); mid-stream failures, which
+is what a twenty-second turn produces, do not even get that.
+
+Then `index.tsx:513` makes it the body of an assistant bubble and `index.tsx:1004`
+draws it in `colors.destructive`. Nothing between the socket and the screen asks
+whether this string was written for a person.
+
+Which is report #1 again, one layer down. The app speaks five languages and this
+bubble speaks OkHttp's. Even the sentence we *did* write —
+"The connection dropped before the reply arrived." — is an English string literal
+in a translated app; `apps/mobile/messages/en.ts` has no key for a network
+failure, because until now nothing asked for one.
+
+### What the user actually saw
+
+Their own message, a red Java sentence where the reply should be, and no card —
+while the server held that same turn's user message, assistant reply and food
+card, complete. Sending again would not have healed it either: `known` is built
+from the bubbles on screen, so the successful turn's real ids stay invisible, and
+the next reply appends *below* the error rather than replacing the conversation
+with the server's version of it.
+
+### What it would take
+
+Three changes, none of them large, in increasing order of how much they matter:
+
+1. **Reconcile on return, not only on failure.** `useRefreshOnReturn` on the
+   journal, guarded on `!busy`. This alone turns the reported bug into a blip:
+   the error is on screen for as long as the app is in the background and gone
+   the moment it is looked at again.
+2. **Make an unresolved turn a state, not a verdict.** `reconcile` should be able
+   to say "could not reach the server" separately from "the turn is not there",
+   and a bubble in the first state should be marked *unresolved* and re-asked on
+   the next foreground — rather than being told, on the strength of one attempt
+   made during a network outage, that its meal was not logged.
+3. **Stop rendering transport exceptions as chat copy.** A translated sentence
+   and a Retry affordance; the raw string goes to the log, where it is useful.
+   Worth doing as a shared `humanMessage(error)` beside `planLimitOf` in
+   `lib/api.ts` rather than a one-line patch, because roughly forty-five other
+   call sites in the mobile app put a bare `error.message` on screen the same way
+   — `login.tsx`, `plan.tsx`, `today.tsx`, `ChatCard.tsx` among them.
+
+The 402 branch immediately above the broken one (`index.tsx:479`) is the model:
+that failure was singled out, given its own state (`wall`), and rendered as
+something a person can act on, precisely because falling through to the red
+sentence *"reads as the app being broken at the exact moment it is asking to be
+paid for."* Every word of that comment applies to a dropped connection too.
+
+### The lesson worth keeping
+
+The recovery was designed against the web's failure model, where a lost
+connection is nearly always followed by a reload — close the laptop, come back,
+the tab re-runs its mount effect and the truth reappears. Under that assumption a
+one-shot `reconcile` is a reasonable belt to the browser's braces, and on the web
+it has never been observed to fail because the browser quietly covers for it.
+
+A phone never reloads. The process outlives the screen, the screen outlives the
+network, and a component that fetches on mount will show whatever it decided in
+its worst moment for as long as the user owns the phone. Porting the shared
+client to React Native carried the code across and left that assumption behind on
+the web, unwritten, where nobody would think to look for it.
+
+The tester read this as "some random java network error," which is a fair
+description of a string that had no business being in a chat bubble. The bug
+underneath it is that the app told them their meal was not logged, and had all
+the evidence it needed to know better.
+
+### Not covered
+
+- **An offline queue for turns**, which MOBILE-UX.md §5 already asks for. Fixing
+  the above makes a dropped connection heal itself; it still does not hold the
+  message and send it when signal comes back.
+- **The web has the same one-shot `reconcile`** (`Journal.tsx:315`) and the same
+  raw `(e as Error).message` (`Journal.tsx:320`). The failure is real there and
+  much rarer, because closing a tab is a real unmount — which is the whole point
+  above, and the reason it will get fixed second.
+- **No timeout and no `AbortController` anywhere on the chat path.** A turn that
+  hangs hangs until the OS gives up on the socket. Nothing has been reported;
+  noting it because the fix for (2) is the natural place to add one.
