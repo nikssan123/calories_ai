@@ -165,6 +165,11 @@ export default function ProgressScreen() {
         </>
       ) : (
         <>
+          {/* First, and one line tall. This is the only door to the badge wall
+              on the phone besides the streak under the ring, and at the bottom
+              of a screen of charts it was a door nobody found. */}
+          <AchievementsRow earned={progress.achievements} />
+
           {/* §12: lead with the trend, not any individual day. */}
           <InsetGroup title={tr('progress.weightTitle')}>
             <View style={styles.pad}>
@@ -471,9 +476,10 @@ export default function ProgressScreen() {
             </Pressable>
           </InsetGroup>
 
-          {/* Both runs and the wall, under the charts rather than over them.
-              The charts answer "how am I doing"; these answer "how long have I
-              kept it up", which is the question you ask second. */}
+          {/* The training run stays under the charts. The charts answer "how am
+              I doing"; this answers "how long have I kept it up", which is the
+              question you ask second — and unlike the badge strip it is not the
+              only way to reach anything. */}
           <InsetGroup title={tr('streak.training')}>
             <View style={styles.trainingWeek}>
               <TrainingWeek
@@ -482,8 +488,6 @@ export default function ProgressScreen() {
               />
             </View>
           </InsetGroup>
-
-          <AchievementsRow earned={progress.achievements} />
 
           <WeeklyReview onError={setError} />
         </>

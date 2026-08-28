@@ -214,6 +214,24 @@ export default function SetupPage() {
         )}
 
         <div className="grid gap-7 lg:grid-cols-2 lg:items-start">
+        {/*
+          * The way to the badge wall from the screen people look on when they
+          * are looking for their own things.
+          *
+          * Its other doors are both on data — a strip on Progress, the streak
+          * under the ring on Today — and neither exists for an account that has
+          * logged nothing yet, which is precisely who benefits from reading
+          * what the app rewards. No count here: that would mean fetching the
+          * progress payload onto a page of form fields to render "0/14".
+          */}
+        <InsetGroup className="lg:col-span-2">
+          <Link href="/achievements" className="flex items-center gap-2 px-4 py-3.5 text-body">
+            <span aria-hidden>🏅</span>
+            <span className="flex-1">{t('achievements.title')}</span>
+            <ChevronRight size={16} className="text-muted-foreground" />
+          </Link>
+        </InsetGroup>
+
         <InsetGroup title={t('setup.about')}>
           <InsetRow>
             <span className="flex-1 text-body">{t('setup.displayName')}</span>

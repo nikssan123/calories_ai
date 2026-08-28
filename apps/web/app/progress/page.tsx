@@ -126,6 +126,11 @@ export default function ProgressPage() {
         </div>
       ) : (
         <div className="grid gap-7 lg:grid-cols-2 lg:items-start">
+          {/* First, one line tall, and across both columns. At the bottom of a
+              page of charts this was a door nobody found, and the wall has no
+              other entrance here besides the streak on Today. */}
+          <AchievementsRow earned={progress.achievements} className="lg:col-span-2" />
+
           {/* §12: lead with the trend, not any individual day. */}
           <InsetGroup title={t('progress.weightTitle')} className="lg:row-span-2">
             <div className="px-4 pt-4 pb-2">
@@ -358,9 +363,10 @@ export default function ProgressPage() {
             </Link>
           </InsetGroup>
 
-          {/* Both runs and the wall, under the charts. The charts answer "how
-              am I doing"; these answer "how long have I kept it up", which is
-              the question you ask second. */}
+          {/* The training run stays under the charts. The charts answer "how am
+              I doing"; this answers "how long have I kept it up", which is the
+              question you ask second — and unlike the badge strip it is not the
+              only way to reach anything. */}
           <InsetGroup title={t('streak.training')}>
             <div className="px-3 py-4">
               <TrainingWeek
@@ -369,8 +375,6 @@ export default function ProgressPage() {
               />
             </div>
           </InsetGroup>
-
-          <AchievementsRow earned={progress.achievements} />
 
           <div className="lg:col-span-2">
             <WeeklyReview />

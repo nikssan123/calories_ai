@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { ReduceMotion, SlideInDown, SlideOutDown } from 'react-native-reanimated';
+import Svg, { Polyline } from 'react-native-svg';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as WebBrowser from 'expo-web-browser';
 import type { ActivityLevel, DaySummary, Goal, Locale, Profile, Sex, UnitSystem } from '@ct/shared';
@@ -202,6 +203,8 @@ export default function SetupScreen() {
         </View>
 
         {day && <TargetCard day={day} />}
+
+        <AchievementsLink />
 
         <InsetGroup title={tr('setup.about')}>
           <InsetRow first>
@@ -1356,12 +1359,61 @@ function DeleteAccount({
   );
 }
 
+/**
+ * The way to the badge wall from the screen people look on when they are
+ * looking for their own things.
+ *
+ * The wall's other doors are both on data: a row on Progress and the streak
+ * under the ring on Today, neither of which exists for an account that has
+ * logged nothing. This one is always here, which is what makes it worth a row
+ * of its own — somebody who has never earned a badge is exactly who benefits
+ * from reading what the app rewards.
+ *
+ * No count. That would mean fetching the whole progress payload onto a screen
+ * of form fields to render "0/14", and the number is on the other side of the
+ * tap anyway.
+ */
+function AchievementsLink() {
+  const colors = useColors();
+  const tr = useT();
+  const router = useRouter();
+
+  return (
+    <InsetGroup>
+      <Pressable
+        onPress={() => router.push('/achievements')}
+        accessibilityRole="button"
+        accessibilityLabel={tr('achievements.title')}
+        style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+      >
+        <InsetRow first>
+          <Text style={styles.linkGlyph}>🏅</Text>
+          <Text style={[t.body, styles.flex, { color: colors.foreground }]}>
+            {tr('achievements.title')}
+          </Text>
+          <Svg width={18} height={18} viewBox="0 0 24 24">
+            <Polyline
+              points="9 18 15 12 9 6"
+              stroke={colors.mutedForeground}
+              strokeWidth={2.4}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+          </Svg>
+        </InsetRow>
+      </Pressable>
+    </InsetGroup>
+  );
+}
+
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   loading: { flex: 1, paddingHorizontal: 16, gap: 16 },
   page: { paddingHorizontal: 16, paddingBottom: 40, gap: 28 },
   blurb: { marginTop: 6 },
   label: { flex: 1 },
+  linkGlyph: { fontSize: 17 },
   wide: { width: 176 },
   centred: { textAlign: 'center' },
   target: { alignItems: 'center', padding: 20 },

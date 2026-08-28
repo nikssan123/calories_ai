@@ -1,6 +1,8 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import type { Streak } from '@ct/shared';
 import { useT } from '@/lib/i18n';
+import { haptics } from '@/lib/haptics';
 import { font, type as t, useColors } from '@/theme';
 
 /**
@@ -15,12 +17,20 @@ import { font, type as t, useColors } from '@/theme';
  * achievement, it is a sentence about having opened the app, and putting it
  * under the ring on day one sets the expectation that this app keeps score of
  * everything. Let it appear once it means something.
+ *
+ * It is also the badge wall's door on the screen people actually open. The wall
+ * lives off Progress and four of its fourteen badges are this exact run at 7,
+ * 30, 100 and 365 days — so the flame is the honest place to ask "and what does
+ * this get me". Nothing marks it as tappable beyond the press feedback, which
+ * is deliberate: a chevron here would make a link out of something whose first
+ * job is to be read.
  */
 const WORTH_DRAWING = 4;
 
 export function StreakChip({ streak }: { streak: Streak }) {
   const colors = useColors();
   const tr = useT();
+  const router = useRouter();
 
   if (streak.state === 'none' || streak.current < WORTH_DRAWING) return null;
 
@@ -33,7 +43,17 @@ export function StreakChip({ streak }: { streak: Streak }) {
   const atRisk = streak.state === 'at_risk';
 
   return (
-    <View style={styles.wrap}>
+    <Pressable
+      onPress={() => {
+        haptics.selected();
+        router.push('/achievements');
+      }}
+      accessibilityRole="button"
+      accessibilityLabel={tr('streak.days')(streak.current)}
+      accessibilityHint={tr('achievements.title')}
+      hitSlop={8}
+      style={({ pressed }) => [styles.wrap, { opacity: pressed ? 0.6 : 1 }]}
+    >
       <View style={styles.row}>
         <Text style={styles.flame}>{atRisk ? '🕯️' : '🔥'}</Text>
         {/* `streak.days` goes through `plural()`, which returns "21 days" —
@@ -56,7 +76,7 @@ export function StreakChip({ streak }: { streak: Streak }) {
       {atRisk && (
         <Text style={[styles.nudge, { color: colors.mutedForeground }]}>{tr('streak.atRisk')}</Text>
       )}
-    </View>
+    </Pressable>
   );
 }
 

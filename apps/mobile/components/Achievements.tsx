@@ -20,9 +20,15 @@ import { type as t, useColors } from '@/theme';
  * "thirty in a row" and "a year unbroken" were the same grey square, and one of
  * them was eight days away.
  *
- * So Progress keeps `AchievementsRow` — a count and a chevron, which is all a
- * measurement screen owes a reward — and the wall gets a screen where a row can
- * be a full line wide. That width is what buys the bar.
+ * So Progress keeps `AchievementsRow` — one strip of glyphs and a count, which
+ * is all a measurement screen owes a reward — and the wall gets a screen where a
+ * row can be a full line wide. That width is what buys the bar.
+ *
+ * The row rides at the top of Progress rather than under the charts. Sending it
+ * to the bottom was the same mistake in a smaller font: the wall behind it has
+ * no other door, so a link nobody scrolls to is a screen nobody opens. A single
+ * line above the first chart costs the charts one line and makes the wall
+ * reachable from the first thing the screen draws.
  *
  * Every badge is still drawn, earned or not: one nobody can see is a surprise
  * rather than a goal, and a wall of surprises teaches nothing about what the app
@@ -49,20 +55,25 @@ const GLYPH: Record<AchievementKey, string> = {
 };
 
 /**
- * The line on Progress. Deliberately one row and deliberately not a grid.
+ * The line on Progress. Deliberately one strip and deliberately not a grid.
  *
- * The glyphs of whatever has actually been earned ride along, because a bare
- * count is a link nobody follows and three flames is a reason to. Nothing is
- * shown for the unearned ones here — that is what the screen behind it is for.
+ * It first shipped as the four newest glyphs and a count, and that was too
+ * quiet to find: a thin row of four emoji under four charts is scrolled past by
+ * the same people who scrolled past the grid it replaced. So the strip draws
+ * all fourteen — earned in full ink, the rest at the wall's own low opacity —
+ * which gives it a fixed width and a shape that changes as badges fill in.
+ *
+ * Fixed order, not newest-first. A slot that always holds the same badge is
+ * recognisable at a glance and a shuffling one is not, and the run of colour
+ * spreading left to right is the point: the strip says how much of the wall is
+ * yours without asking anybody to read the count beside it.
  */
 export function AchievementsRow({ earned }: { earned: Achievement[] }) {
   const colors = useColors();
   const tr = useT();
   const router = useRouter();
 
-  // Newest first, so the row changes on the day a badge is won rather than
-  // showing the same four firsts forever.
-  const recent = [...earned].reverse().slice(0, 4);
+  const got = new Set(earned.map((badge) => badge.key));
 
   return (
     <InsetGroup title={tr('achievements.title')}>
@@ -77,20 +88,16 @@ export function AchievementsRow({ earned }: { earned: Achievement[] }) {
         style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
       >
         <InsetRow first>
-          <View style={styles.recent}>
-            {recent.length > 0 ? (
-              recent.map((badge) => (
-                <Text key={badge.key} style={styles.rowGlyph}>
-                  {GLYPH[badge.key]}
-                </Text>
-              ))
-            ) : (
-              // Nothing earned yet, so the row leads with the first rung rather
-              // than an empty space where the prizes go.
-              <Text style={[t.body, { color: colors.mutedForeground }]}>
-                {tr(`badge.${ACHIEVEMENT_KEYS[0]}` as StringKey)}
+          {/* Wraps rather than shrinks. Fourteen glyphs, a count and a chevron
+              fit one line on most phones and not on the narrowest, and a second
+              line of badges is a better answer there than glyphs too small to
+              tell apart. */}
+          <View style={styles.strip}>
+            {ACHIEVEMENT_KEYS.map((key) => (
+              <Text key={key} style={[styles.rowGlyph, got.has(key) ? null : styles.locked]}>
+                {GLYPH[key]}
               </Text>
-            )}
+            ))}
           </View>
           <Text style={[t.footnoteSemibold, t.tnum, { color: colors.mutedForeground }]}>
             {tr('achievements.count')(earned.length, ACHIEVEMENT_KEYS.length)}
@@ -233,8 +240,8 @@ function Chevron({ color }: { color: string }) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   wall: { gap: 20 },
-  recent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  rowGlyph: { fontSize: 20 },
+  strip: { flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 },
+  rowGlyph: { fontSize: 15, lineHeight: 20 },
   badgeRow: { alignItems: 'flex-start', paddingVertical: 12 },
   glyph: { fontSize: 24, lineHeight: 30 },
   locked: { opacity: 0.3 },

@@ -36,32 +36,30 @@ const GLYPH: Record<AchievementKey, string> = {
   workouts_100: '🎽',
 };
 
-/** The line on Progress: what has been won, the count, and the way through. */
-export function AchievementsRow({ earned }: { earned: Achievement[] }) {
+/**
+ * The line on Progress: the whole wall in miniature, the count, and the way
+ * through. The phone's twin carries the reasoning.
+ *
+ * In short: four newest glyphs and a count was too quiet to find under four
+ * charts, so all fourteen are drawn — earned in full ink, the rest faint, in
+ * fixed order — and the strip rides above the charts rather than below them,
+ * because the wall behind it has no other door on this screen.
+ */
+export function AchievementsRow({ earned, className }: { earned: Achievement[]; className?: string }) {
   const t = useT();
 
-  // Newest first, so the row changes on the day a badge is won rather than
-  // showing the same four firsts forever.
-  const recent = [...earned].reverse().slice(0, 4);
+  const got = new Set(earned.map((badge) => badge.key));
 
   return (
-    <InsetGroup title={t('achievements.title')}>
+    <InsetGroup title={t('achievements.title')} className={className}>
       <Link href="/achievements" className="active:bg-muted/60 block transition-colors">
         <InsetRow className="py-4">
-          <div className="flex flex-1 items-center gap-1.5">
-            {recent.length > 0 ? (
-              recent.map((badge) => (
-                <span key={badge.key} aria-hidden className="text-xl">
-                  {GLYPH[badge.key]}
-                </span>
-              ))
-            ) : (
-              // Nothing earned yet, so the row leads with the first rung rather
-              // than an empty space where the prizes go.
-              <span className="text-muted-foreground text-body">
-                {t(`badge.${ACHIEVEMENT_KEYS[0]}` as StringKey)}
+          <div className="flex flex-1 flex-wrap items-center gap-1">
+            {ACHIEVEMENT_KEYS.map((key) => (
+              <span key={key} aria-hidden className={got.has(key) ? 'text-lg' : 'text-lg opacity-30'}>
+                {GLYPH[key]}
               </span>
-            )}
+            ))}
           </div>
           <span className="tnum text-muted-foreground text-footnote font-semibold">
             {t('achievements.count')(earned.length, ACHIEVEMENT_KEYS.length)}
