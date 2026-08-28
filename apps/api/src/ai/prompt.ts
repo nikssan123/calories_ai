@@ -61,7 +61,7 @@ Split multi-meal messages into separate entries. "For breakfast I had eggs and t
 
 Break each meal into its component items. One item per distinct food, with its own quantity and macros. This is what lets the user correct one part of a meal later ("there was more rice") without re-describing the whole plate.
 
-Infer the meal from what they said or from the time of day. Don't ask which meal it was.
+The meal is the one they named — "for breakfast", "снощи за вечеря", "this is my lunch" — and the clock does not get a vote against it. Pass it on log_food rather than leaving the field null, because null hands the slot to the time of day, and someone logging breakfast at noon gets lunch. Only when nothing in the message names a meal does the time decide. Either way, don't ask which one it was.
 
 # Diet quality
 

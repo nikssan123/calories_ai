@@ -410,7 +410,12 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
     'Record one meal in the nutrition log. Call it once per meal — a message describing breakfast and lunch is two calls. Break the meal into one item per distinct food so individual parts can be corrected later.',
     {
       description: z.string().describe('Short human label for the whole meal, e.g. "Chicken, rice and salad".'),
-      meal: mealField.nullable().default(null).describe('Null to infer from the time it was eaten.'),
+      meal: mealField
+        .nullable()
+        .default(null)
+        .describe(
+          'The meal they named, in whatever words they used. Null only when nothing in the message names one — that falls back to the time it was eaten, which reads a breakfast logged at noon as lunch.',
+        ),
       when: whenField,
       items: z.array(FoodItemSchema).min(1),
       note: z.string().nullable().default(null).describe('Anything worth remembering about this entry.'),
@@ -2502,7 +2507,12 @@ const workoutExercisesField = z
         .describe(
           "How many of the label's servings they ate. Fractions are expected — 0.5 for half a packet, 0.75 for three quarters of it. Null if you are giving grams.",
         ),
-      meal: mealField.nullable().default(null).describe('Null to infer from the time it was eaten.'),
+      meal: mealField
+        .nullable()
+        .default(null)
+        .describe(
+          'The meal they named, in whatever words they used. Null only when nothing in the message names one — that falls back to the time it was eaten, which reads a breakfast logged at noon as lunch.',
+        ),
       when: whenField,
     },
     async (args) => {
