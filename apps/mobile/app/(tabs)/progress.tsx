@@ -14,7 +14,7 @@ import {
   formatWeightDelta,
   toBodyWeight,
 } from '@ct/shared';
-import { Achievements } from '@/components/Achievements';
+import { AchievementsRow } from '@/components/Achievements';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { QualityBlank } from '@/components/DietQuality';
@@ -483,9 +483,7 @@ export default function ProgressScreen() {
             </View>
           </InsetGroup>
 
-          <View style={styles.achievements}>
-            <Achievements earned={progress.achievements} />
-          </View>
+          <AchievementsRow earned={progress.achievements} />
 
           <WeeklyReview onError={setError} />
         </>
@@ -612,7 +610,6 @@ function Arrow({ up, color }: { up: boolean; color: string }) {
 
 const styles = StyleSheet.create({
   trainingWeek: { paddingVertical: 12, paddingHorizontal: 12 },
-  achievements: { paddingHorizontal: 4 },
   flex: { flex: 1 },
   page: { paddingHorizontal: 16, paddingBottom: 40, gap: 28 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },

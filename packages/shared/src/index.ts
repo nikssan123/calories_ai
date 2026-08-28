@@ -1158,6 +1158,118 @@ export const Achievement = z.object({
 });
 export type Achievement = z.infer<typeof Achievement>;
 
+/**
+ * The four families the wall reads in, and which one each badge belongs to.
+ *
+ * A flat run of fourteen is a list nobody reads twice: "a year of training" and
+ * "took a photograph" sit in identical cells, and nothing in a single grid says
+ * which is which. Grouped, the heading is the promise and the rows under it are
+ * the ladder — and the ladder is the part worth looking at, because it says what
+ * comes after the rung you are on.
+ *
+ * `GROUP_OF` is a `Record<AchievementKey, …>` on purpose. A fifteenth badge added
+ * to `ACHIEVEMENT_KEYS` and to no group would drop off the wall in silence; this
+ * way it does not compile.
+ */
+export const ACHIEVEMENT_GROUP_KEYS = ['streaks', 'training', 'firsts', 'totals'] as const;
+export type AchievementGroupKey = (typeof ACHIEVEMENT_GROUP_KEYS)[number];
+
+const GROUP_OF = {
+  streak_7: 'streaks',
+  streak_30: 'streaks',
+  streak_100: 'streaks',
+  streak_365: 'streaks',
+  exercise_weeks_4: 'training',
+  exercise_weeks_12: 'training',
+  exercise_weeks_52: 'training',
+  first_photo: 'firsts',
+  first_barcode: 'firsts',
+  first_workout: 'firsts',
+  first_weigh_in: 'firsts',
+  days_100: 'totals',
+  days_365: 'totals',
+  workouts_100: 'totals',
+} as const satisfies Record<AchievementKey, AchievementGroupKey>;
+
+/** The wall in reading order; ladder order inside a group comes from the set. */
+export const ACHIEVEMENT_GROUPS: readonly {
+  key: AchievementGroupKey;
+  keys: readonly AchievementKey[];
+}[] = ACHIEVEMENT_GROUP_KEYS.map((key) => ({
+  key,
+  keys: ACHIEVEMENT_KEYS.filter((badge) => GROUP_OF[badge] === key),
+}));
+
+/**
+ * The counters every badge is judged against, as they stand right now.
+ *
+ * The API already computes these to decide what has been earned; sending them on
+ * lets the wall say *how close* rather than only *yes or no*. That distinction is
+ * the whole reason the wall is worth a screen: at day 22, "thirty in a row" and
+ * "a year unbroken" are the same grey cell, and one of them is eight days away.
+ *
+ * Deliberately raw counters rather than per-badge percentages. A badge is a
+ * threshold over a number somebody can already see elsewhere in the app, and
+ * shipping the number keeps the two agreeing.
+ */
+export const AchievementFacts = z.object({
+  /** Longest run of consecutive logged days, ever. */
+  logging_best: z.number().int(),
+  /** Longest run of consecutive qualifying training weeks, ever. */
+  training_best: z.number().int(),
+  /** Distinct days with food logged. */
+  logged_days: z.number().int(),
+  /** Distinct days trained. */
+  training_days: z.number().int(),
+  has_photo: z.boolean(),
+  has_barcode: z.boolean(),
+  has_workout: z.boolean(),
+  has_weigh_in: z.boolean(),
+});
+export type AchievementFacts = z.infer<typeof AchievementFacts>;
+
+/**
+ * Which counter a badge is racing, and how far it has to go.
+ *
+ * The four "firsts" are missing on purpose and `achievementProgress` returns
+ * null for them. A bar that runs from nothing to one thing is not a bar — it is
+ * a checkbox drawn wide, and the sentence under the name ("Scan a barcode")
+ * already says everything a bar could.
+ */
+const TOWARD: Partial<
+  Record<AchievementKey, { goal: number; of: (facts: AchievementFacts) => number }>
+> = {
+  streak_7: { goal: 7, of: (f) => f.logging_best },
+  streak_30: { goal: 30, of: (f) => f.logging_best },
+  streak_100: { goal: 100, of: (f) => f.logging_best },
+  streak_365: { goal: 365, of: (f) => f.logging_best },
+  exercise_weeks_4: { goal: 4, of: (f) => f.training_best },
+  exercise_weeks_12: { goal: 12, of: (f) => f.training_best },
+  exercise_weeks_52: { goal: 52, of: (f) => f.training_best },
+  days_100: { goal: 100, of: (f) => f.logged_days },
+  days_365: { goal: 365, of: (f) => f.logged_days },
+  workouts_100: { goal: 100, of: (f) => f.training_days },
+};
+
+/**
+ * How far along a badge is, or null when counting it would say nothing.
+ *
+ * Clamped to the goal so a run of 41 days does not draw "41 of 30" against the
+ * thirty — the badge is held, and the bar underneath it is finished.
+ */
+export function achievementProgress(
+  key: AchievementKey,
+  facts: AchievementFacts | undefined,
+): { current: number; goal: number } | null {
+  const toward = TOWARD[key];
+  // `facts` is typed as required and is missing in exactly one real case: a
+  // client newer than the API it is pointed at, which is every deploy window
+  // and every phone talking to a server mid-rollout. A wall with no bars is a
+  // fine degradation; a screen that throws on the first row is not.
+  if (!toward || !facts) return null;
+  return { current: Math.min(toward.of(facts), toward.goal), goal: toward.goal };
+}
+
 export const DaySummary = z.object({
   local_date: z.string(),
   consumed: Nutrition,
@@ -2285,6 +2397,11 @@ export const Progress = z.object({
   streaks: Streaks,
   /** Earned only. The client holds the full set and dims the rest. */
   achievements: z.array(Achievement),
+  /**
+   * The counters behind the unearned ones, so the wall can draw a bar rather
+   * than a grey cell. See `achievementProgress`.
+   */
+  achievement_facts: AchievementFacts,
 });
 export type Progress = z.infer<typeof Progress>;
 

@@ -270,6 +270,10 @@ function Gate() {
           * once a week.
           */}
         <Stack.Screen name="history" options={{ animation: 'slide_from_right' }} />
+        {/* The badge wall, reached from the one row Progress keeps for it. A
+            push rather than a block on Progress: badges are not measurements,
+            and the wall wants a full-width row for the bar under each one. */}
+        <Stack.Screen name="achievements" options={{ animation: 'slide_from_right' }} />
         {/* A recipe is a place you go from Cook and come back from, so it
             pushes rather than becoming a seventh tab. */}
         <Stack.Screen name="recipe/[id]" options={{ animation: 'slide_from_right' }} />

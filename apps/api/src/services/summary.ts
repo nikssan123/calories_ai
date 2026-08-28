@@ -10,7 +10,7 @@ import { qualityTargetsFor, rollUpDay } from '@ct/shared';
 export { dayQuality, QUALITY_COVERAGE_FLOOR } from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import { addDays, dateRange, type DayContext, localDateFor } from '../time.ts';
-import { evaluateAchievements, listAchievements } from './achievements.ts';
+import { achievementFacts, evaluateAchievements, listAchievements } from './achievements.ts';
 import { listExerciseEntries, listFoodEntries, listWeights } from './log.ts';
 import { type LogHistory, logHistory, streaksOf } from './streaks.ts';
 import { targetsForDate } from './targets.ts';
@@ -196,7 +196,13 @@ export async function buildProgress(
    * The history is already in hand, so this costs the evaluation and nothing
    * more.
    */
-  const fresh = await earnQuietly(userId, history, today);
+  const [fresh, facts] = await Promise.all([
+    earnQuietly(userId, history, today),
+    // The counters behind the bars on the wall. Same history, same scan the
+    // evaluation above runs on, so "8 days to go" and "earned" can never
+    // disagree about what day it is.
+    achievementFacts(userId, history, today),
+  ]);
 
   const totalsByDate = new Map(totals.map((t) => [t.local_date, t]));
   const window = dateRange(from, today);
@@ -370,6 +376,7 @@ export async function buildProgress(
     // told.
     streaks: streaksOf(history, today),
     achievements: [...achievements, ...fresh],
+    achievement_facts: facts,
   };
 }
 

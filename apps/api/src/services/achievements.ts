@@ -1,4 +1,4 @@
-import type { Achievement, AchievementKey } from '@ct/shared';
+import type { Achievement, AchievementFacts, AchievementKey } from '@ct/shared';
 import { ACHIEVEMENT_KEYS } from '@ct/shared';
 import { query } from '../db.ts';
 import { type LogHistory, streaksOf } from './streaks.ts';
@@ -39,42 +39,51 @@ import { type LogHistory, streaksOf } from './streaks.ts';
  * it is the same shape of prize as a pot of money, and the cheapest way to win
  * one keyed on a calorie ceiling is to stop logging the biscuit.
  */
-interface Facts {
-  /** Longest run of consecutive logged days, ever. */
-  loggingBest: number;
-  /** Longest run of consecutive qualifying training weeks, ever. */
-  trainingBest: number;
-  /** Distinct days with food logged. */
-  loggedDays: number;
-  /** Distinct days trained. One gym visit is one, however many entries it took. */
-  trainingDays: number;
-  hasPhoto: boolean;
-  hasBarcode: boolean;
-  hasWorkout: boolean;
-  hasWeighIn: boolean;
-}
+const EARNED_BY: Record<AchievementKey, (f: AchievementFacts) => boolean> = {
+  streak_7: (f) => f.logging_best >= 7,
+  streak_30: (f) => f.logging_best >= 30,
+  streak_100: (f) => f.logging_best >= 100,
+  streak_365: (f) => f.logging_best >= 365,
 
-const EARNED_BY: Record<AchievementKey, (f: Facts) => boolean> = {
-  streak_7: (f) => f.loggingBest >= 7,
-  streak_30: (f) => f.loggingBest >= 30,
-  streak_100: (f) => f.loggingBest >= 100,
-  streak_365: (f) => f.loggingBest >= 365,
+  exercise_weeks_4: (f) => f.training_best >= 4,
+  exercise_weeks_12: (f) => f.training_best >= 12,
+  exercise_weeks_52: (f) => f.training_best >= 52,
 
-  exercise_weeks_4: (f) => f.trainingBest >= 4,
-  exercise_weeks_12: (f) => f.trainingBest >= 12,
-  exercise_weeks_52: (f) => f.trainingBest >= 52,
+  first_photo: (f) => f.has_photo,
+  first_barcode: (f) => f.has_barcode,
+  first_workout: (f) => f.has_workout,
+  first_weigh_in: (f) => f.has_weigh_in,
 
-  first_photo: (f) => f.hasPhoto,
-  first_barcode: (f) => f.hasBarcode,
-  first_workout: (f) => f.hasWorkout,
-  first_weigh_in: (f) => f.hasWeighIn,
-
-  days_100: (f) => f.loggedDays >= 100,
-  days_365: (f) => f.loggedDays >= 365,
+  days_100: (f) => f.logged_days >= 100,
+  days_365: (f) => f.logged_days >= 365,
   // Days, not entries: somebody who logs bench, squat and deadlift separately
   // has one workout, and "a hundred workouts" should mean a hundred of them.
-  workouts_100: (f) => f.trainingDays >= 100,
+  workouts_100: (f) => f.training_days >= 100,
 };
+
+/**
+ * The counters, in the shape the wall reads them.
+ *
+ * Exported because the progress screen wants them for the bars under the
+ * unearned badges, and they are the same numbers this file already has to
+ * compute to decide what is earned — deriving "how close" from anything else
+ * would be a second answer to the same question.
+ */
+export async function achievementFacts(
+  userId: string,
+  history: LogHistory,
+  today: string,
+): Promise<AchievementFacts> {
+  const streaks = streaksOf(history, today);
+  return {
+    logging_best: streaks.logging.best,
+    training_best: streaks.training.best,
+    logged_days: history.logged.length,
+    // One gym visit is one day, however many entries it took.
+    training_days: history.trained.length,
+    ...(await breadthFacts(userId)),
+  };
+}
 
 /** The four "have you ever" flags, in one statement rather than four. */
 async function breadthFacts(userId: string) {
@@ -116,14 +125,7 @@ export async function evaluateAchievements(
   // this is cheap enough to run on an ordinary read.
   if (missing.length === 0) return [];
 
-  const streaks = streaksOf(history, today);
-  const facts: Facts = {
-    loggingBest: streaks.logging.best,
-    trainingBest: streaks.training.best,
-    loggedDays: history.logged.length,
-    trainingDays: history.trained.length,
-    ...toBreadth(await breadthFacts(userId)),
-  };
+  const facts = await achievementFacts(userId, history, today);
 
   const deserved = missing.filter((key) => EARNED_BY[key](facts));
   if (deserved.length === 0) return [];
@@ -157,20 +159,6 @@ interface AchievementRow {
   key: string;
   local_date: string;
   earned_at: string | Date;
-}
-
-function toBreadth(row: {
-  has_photo: boolean;
-  has_barcode: boolean;
-  has_workout: boolean;
-  has_weigh_in: boolean;
-}) {
-  return {
-    hasPhoto: row.has_photo,
-    hasBarcode: row.has_barcode,
-    hasWorkout: row.has_workout,
-    hasWeighIn: row.has_weigh_in,
-  };
 }
 
 function toAchievement(row: AchievementRow): Achievement {

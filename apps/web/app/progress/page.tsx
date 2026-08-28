@@ -20,7 +20,7 @@ import { useUnits } from '@/lib/units';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { Sparkline } from '@/components/Sparkline';
-import { Achievements } from '@/components/Achievements';
+import { AchievementsRow } from '@/components/Achievements';
 import { TrainingWeek } from '@/components/TrainingWeek';
 import { WeeklyReview } from '@/components/WeeklyReview';
 import { Button } from '@/components/ui/button';
@@ -370,9 +370,7 @@ export default function ProgressPage() {
             </div>
           </InsetGroup>
 
-          <div className="lg:col-span-2">
-            <Achievements earned={progress.achievements} />
-          </div>
+          <AchievementsRow earned={progress.achievements} />
 
           <div className="lg:col-span-2">
             <WeeklyReview />
