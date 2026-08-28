@@ -88,6 +88,11 @@ export interface AgentMessage {
 export type TurnKind =
   | 'text_log'
   | 'photo_log'
+  /**
+   * Historical. Nothing writes one any more — the profile questions are a form
+   * in the client rather than a conversation — but `ai_usage` holds rows under
+   * this kind and the meters still have to count them. See `METER_KINDS`.
+   */
   | 'setup'
   | 'review'
   | 'pantry_scan'
@@ -144,7 +149,8 @@ export interface AgentRequest {
    * `staticSystemPrompt` is byte-identical for every turn of every account, so
    * it is the only part a cross-session — and cross-user — cache prefix can
    * hold. `dynamicSystemPrompt` is per-account context that still holds still
-   * *within* a conversation: onboarding state, the last weekly review.
+   * *within* a conversation — today that is the last weekly review, and
+   * little else.
    * Providers that can express a cache breakpoint put it between these two;
    * providers that cannot just join them.
    *

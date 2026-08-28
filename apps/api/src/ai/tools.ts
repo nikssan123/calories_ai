@@ -1189,7 +1189,7 @@ const workoutExercisesField = z
 
   const setProfile = tool(
     'set_profile',
-    'Save what you have learned about the user during setup: sex, date of birth, height, activity level, goal, target weight, which units they read, which language they read. Call it as soon as you learn a value — do not wait until you have them all. Targets are recalculated automatically each time. To record their current weight use log_weight instead; that is a measurement, not a profile field. It also holds what they will not eat, which is the one thing here you may learn long after setup is over.',
+    'Change something the app knows about the user: sex, date of birth, height, activity level, goal, target weight, which units they read, which language they read, what they will not eat. These are collected by a form when the account is created, so you are almost always correcting one — "actually I am 178", "switch me to pounds", "call me Nik" — rather than learning it for the first time. Call it the moment they say so; targets are recalculated automatically each time. To record their current weight use log_weight instead; that is a measurement, not a profile field.',
     {
       sex: z.enum(['male', 'female']).nullable().default(null),
       birth_date: z.string().nullable().default(null).describe('YYYY-MM-DD. If they give only an age, convert it to an approximate birth date.'),
@@ -1225,7 +1225,7 @@ const workoutExercisesField = z
         .default(null)
         .describe('Hour their day rolls over, 0-12. Default 4 — only set it if they say something about late-night eating.'),
       /*
-       * The two fields here that are not about setup at all.
+       * The two fields the form never asks for.
        *
        * They belong on the profile rather than in a note because they are true
        * of every meal this person will ever eat, and because the recipe engine
@@ -1239,7 +1239,7 @@ const workoutExercisesField = z
         .enum(DIETS)
         .nullable()
         .default(null)
-        .describe('A dietary pattern they keep, when they mention one. "none" clears it. Set it the moment they say it, whether or not you are in setup.'),
+        .describe('A dietary pattern they keep, when they mention one. "none" clears it. Set it the moment they say it.'),
       avoids: z
         .array(z.string())
         .nullable()

@@ -59,7 +59,11 @@ export function readOpenAiConfig(source: NodeJS.ProcessEnv = process.env): OpenA
     models: {
       text_log: source.OPENAI_MODEL_TEXT ?? base,
       photo_log: source.OPENAI_MODEL_VISION ?? base,
-      setup: source.OPENAI_MODEL_SETUP ?? base,
+      // Historical, and unreachable: nothing routes a turn to this kind since
+      // the profile questions became a form. The slot stays because `TurnKind`
+      // does — `ai_usage` holds rows under it — and it has no env var of its
+      // own, because there is nothing left for a deployment to tune.
+      setup: base,
       review: source.OPENAI_MODEL_REVIEW ?? base,
       // A fridge photo needs the vision slot, not the base model: on a
       // deployment pointed at a vendor whose default cannot see, this is the

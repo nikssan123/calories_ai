@@ -14,7 +14,7 @@ import {
   toBodyWeight,
   unitsOf,
 } from '@ct/shared';
-import { onboardingPrompt, unitsBrief } from '../src/ai/prompt.ts';
+import { unitsBrief } from '../src/ai/prompt.ts';
 import type { Profile } from '@ct/shared';
 
 /**
@@ -126,10 +126,5 @@ describe('what the model is told', () => {
     expect(brief).toContain('pounds');
     // The half that stops a 180 lb weigh-in being stored as 180 kg.
     expect(brief).toContain('Tool arguments never change');
-  });
-
-  it('puts the preference on the list onboarding still has to collect', () => {
-    const prompt = onboardingPrompt(PROFILE, ['sex', 'whether they read metric or imperial units'], null);
-    expect(prompt).toContain('whether they read metric or imperial units');
   });
 });

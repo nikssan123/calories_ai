@@ -134,6 +134,29 @@ export default function SetupScreen() {
 
   async function save() {
     if (!profile) return;
+
+    /*
+     * The five the target is computed from cannot be *deleted* here, only
+     * changed.
+     *
+     * Setup is a gate now — `app/_layout.tsx` sends any account these are
+     * missing from back through the wizard — so a blanked height saved from
+     * this screen would eject somebody into onboarding on the frame after they
+     * pressed Save. Refusing the write is the kinder half of the same rule, and
+     * it is refused rather than silently reverted because a field they emptied
+     * on purpose should not fill itself back in behind them.
+     */
+    if (
+      !profile.sex ||
+      !profile.birth_date ||
+      !profile.height_cm ||
+      !profile.goal ||
+      !profile.activity_level
+    ) {
+      setSaveError(tr('setup.requiredMissing'));
+      return;
+    }
+
     setSaving(true);
     try {
       const updated = await api.updateProfile({
@@ -157,12 +180,9 @@ export default function SetupScreen() {
       // asked for pounds until the next launch.
       adoptProfile(updated);
       /*
-       * Saving this form can be what finishes setup — every field the
-       * conversation asks for is on this screen, and the server marks the
-       * account onboarded the moment the last one lands. Without this the tab
-       * bar would stay reduced and the placeholder banners would stay up until
-       * the next launch, for somebody who has just filled in the whole thing by
-       * hand rather than being asked.
+       * The gate reads this, so it is kept current even though nothing on this
+       * screen can now make it false — the guard above is what guarantees that,
+       * and this is the cheap second half of the same guarantee.
        */
       void refreshOnboarding();
       setDay(await api.day());

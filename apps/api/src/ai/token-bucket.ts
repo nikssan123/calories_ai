@@ -70,8 +70,8 @@ export const TURN_INPUT_TOKENS: Record<TurnKind, number> = {
   // breakpoint and is therefore uncached input on every model call in the turn,
   // not once.
   photo_log: 12_000,
-  // A text turn carrying the onboarding block, which is per-account and so
-  // rides on the uncached half of the system prompt.
+  // Historical: nothing runs one any more, and the figure is kept because the
+  // ledger still has rows under this kind. See `TurnKind`.
   setup: 8_000,
   // One call, no tools worth speaking of, and a week of the journal in front of
   // it.

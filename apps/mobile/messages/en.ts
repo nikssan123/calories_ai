@@ -159,15 +159,90 @@ export const en = {
   'setup.unsavedChanges': 'Unsaved changes',
   'setup.saveChanges': 'Save changes',
 
-  // ---- Setup still unfinished ---------------------------------------------
+  /**
+   * Said when somebody empties a field the target cannot be computed without.
+   * Refused rather than reverted — see `save()` in `app/(tabs)/setup.tsx`.
+   */
+  'setup.requiredMissing':
+    'Sex, date of birth, height, goal and activity are all needed to work out your target.',
+
+  // ---- The first run ------------------------------------------------------
   //
-  // Said on every screen that draws a target, because until the conversation
-  // has finished the target was calculated for nobody in particular. See
-  // `<SetupBanner>`.
-  'setup.placeholder': 'These numbers are placeholders.',
-  'setup.placeholderAction': 'Finish setting up in the journal.',
-  /** The journal's own status bar, which has the space for one line only. */
-  'setup.inProgress': 'Setting up — your target is a placeholder until we finish.',
+  // The setup wizard, which is the first thing a new account sees and the only
+  // screen in the app most people will read every word of. Two rules run
+  // through the whole of it, both inherited from the conversation it replaced:
+  // a question is asked in the words somebody would use out loud, and nothing
+  // explains why the app wants to know unless the answer is genuinely not
+  // obvious. "How tall are you" needs no preamble.
+  'ob.back': 'Back',
+  'ob.continue': 'Continue',
+
+  'ob.welcomeTitle': 'Let’s build your plan',
+  'ob.welcomeBody':
+    'Six quick questions — about half a minute — and you’ll have a calorie and protein target worked out for your body rather than for nobody in particular. You can change any of it later.',
+  'ob.welcomeStart': 'Get started',
+
+  'ob.goalTitle': 'What are you here to do?',
+  'ob.goalBody': 'This sets whether your day sits under, at, or over what you burn.',
+  'ob.goalLose': 'Lose weight',
+  'ob.goalLoseHint': 'A steady deficit you can actually keep to',
+  'ob.goalMaintain': 'Stay where I am',
+  'ob.goalMaintainHint': 'Eat what you burn, and keep an eye on it',
+  'ob.goalGain': 'Gain weight',
+  'ob.goalGainHint': 'A small surplus, with the protein to use it',
+
+  'ob.sexTitle': 'Which should we calculate for?',
+  'ob.sexBody':
+    'Resting burn differs enough that guessing would put your target out by a couple of hundred calories a day.',
+
+  'ob.birthTitle': 'When were you born?',
+  'ob.birthBody': 'Age is the last thing the burn calculation needs.',
+  'ob.birthAge': (count: number) => n(count, { one: 'year old', other: 'years old' }),
+  'ob.birthTooYoung': 'This app is for 13 and over.',
+  'ob.birthImplausible': 'Check the year — that date looks off.',
+
+  'ob.bodyTitle': 'Your height and weight',
+  'ob.bodyBody':
+    'Roughly is fine. The weight is logged as your first weigh-in, so the chart starts today.',
+  'ob.bodyHeight': 'Height',
+  'ob.bodyWeight': 'Weight',
+  'ob.bodyHeightOff': 'That height looks off — check the units.',
+  'ob.bodyWeightOff': 'That weight looks off — check the units.',
+
+  /**
+   * The two skips, and they read differently on purpose.
+   *
+   * The goal weight one stores nothing, so it promises nothing. The activity
+   * one names the answer it writes, because `predictTdee` reads
+   * `activity_level ?? 'moderate'` and a skip that quietly picked for you
+   * without saying so would be a form answering its own question.
+   */
+  'ob.skip': 'Skip for now',
+  'ob.activitySkip': 'Not sure — assume moderate',
+
+  'ob.targetTitle': 'What are you aiming for?',
+  'ob.targetBody': 'A goal weight, so the app can say how far along you are. Move it any time.',
+  /** `amount` arrives with its unit — "8.5 kg", "19 lb". */
+  'ob.targetToGo': (amount: string) => `${amount} to go`,
+  'ob.targetSame': 'The same as where you are now',
+  'ob.targetMustBeLower': 'Pick something below your current weight.',
+  'ob.targetMustBeHigher': 'Pick something above your current weight.',
+
+  'ob.activityTitle': 'How much do you move?',
+  'ob.activityBody': 'Your ordinary week — not counting workouts you log in the app.',
+
+  'ob.buildingTitle': 'Building your plan',
+  'ob.buildingStep1': 'Working out what you burn',
+  'ob.buildingStep2': 'Setting your daily calories',
+  'ob.buildingStep3': 'Splitting your protein, carbs and fat',
+  'ob.buildingFailed': 'Your plan couldn’t be saved.',
+  'ob.retry': 'Try again',
+
+  'ob.planEyebrow': 'Your daily target',
+  'ob.planCalories': 'calories a day',
+  'ob.planFootnote':
+    'A starting point, not a verdict. It adjusts each week from what you log and what the scale does.',
+  'ob.planStart': 'Start logging',
 
   'sex.male': 'Male',
   'sex.female': 'Female',
@@ -648,16 +723,9 @@ export const en = {
   /** `distance` carries the unit, because a distance without one is not a sentence. */
   'journal.promptRun': (distance: string) => `Went for a ${distance} run`,
   'journal.promptProtein': 'Am I eating enough protein?',
-  /**
-   * Sent *as the person*, not drawn on screen — which is why it is in here.
-   * The model replies in the language it was written to in, so an English
-   * opener would start a Bulgarian account's first conversation in English.
-   */
-  'journal.kickoff': 'Hi — I’m new here. Let’s get set up.',
   'journal.emptyTitle': 'What have you eaten today?',
   'journal.emptyBody':
     'Type it or take a photo — whatever’s easiest. No forms, nothing to search for. Say what happened and I’ll work out the rest.',
-  'journal.settingUp': 'Setting up — your target is a placeholder until we finish.',
   'journal.over': (kcal: string) => `${kcal} over`,
   'journal.left': (kcal: string) => `${kcal} left`,
   'journal.burned': (kcal: string) => `−${kcal} burned`,

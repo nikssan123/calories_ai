@@ -73,23 +73,24 @@ export async function updateUser(userId: string, patch: ProfileUpdate): Promise<
 }
 
 /**
- * What onboarding still has to find out. The first five are what a target
- * cannot honestly be calculated without.
+ * What setup still has to find out. The first five are what a target cannot
+ * honestly be calculated without.
  *
  * The last two are not — they are rendering preferences, and they belong here
  * anyway, because this list is also what decides when setup is over. Left out
- * of it, a preference would be asked last or not at all: the conversation would
- * end the moment the target could be computed, and someone in Ohio would be
- * handed a number in kilos, in a language their phone is not set to.
+ * of it, a preference would be asked last or not at all: the wizard would stop
+ * the moment the target could be computed, and someone in Ohio would be handed
+ * a number in kilos, in a language their phone is not set to.
+ *
+ * This is also the list the client is gated on — `GET /onboarding` answers
+ * `complete` from it, and the app will not draw its tabs until that is true —
+ * so a field added here is a question the wizard has to grow a screen for. It
+ * is not somewhere to park a nice-to-have.
  *
  * Null is "nobody has ever been told", which is not the same as the default
  * either one falls back to. Existing accounts were backfilled — metric, and
  * English — because that is what they have been reading all along, so this
- * reopens nothing for them. What reaches here with a null `locale` is an
- * account signed up from a device whose language this app does not speak, and
- * asking that person which of the five they would like is the whole point:
- * English is where they land by default and is quite possibly not their fourth
- * choice, let alone their first.
+ * reopens nothing for them.
  */
 export function missingProfileFields(profile: Profile): string[] {
   const missing: string[] = [];

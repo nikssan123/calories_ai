@@ -20,9 +20,10 @@ The product is one continuous conversation, so four constraints drove the archit
    time from your timezone and a configurable `day_start_hour` (default 04:00), so a 1am
    snack counts toward the evening it belongs to.
 4. **Storage is metric; units are a lens.** Kilograms, centimetres, grams and kilometres
-   on disk, whoever is reading. The journal asks during onboarding whether you think in
-   pounds and feet, and converts at the edges — screen and keyboard — so switching
-   re-renders your history instead of rewriting it. See [UNITS.md](UNITS.md).
+   on disk, whoever is reading. Setup asks on the same screen it asks your height and
+   weight whether you think in pounds and feet, and converts at the edges — screen and
+   keyboard — so switching re-renders your history instead of rewriting it. See
+   [UNITS.md](UNITS.md).
 
 ## Layout
 
@@ -165,7 +166,6 @@ kind of turn can take its own model, falling back to `OPENAI_MODEL`:
 OPENAI_MODEL=deepseek-chat            # the floor, and the high-volume logging path
 OPENAI_MODEL_VISION=qwen-vl-max       # photo turns
 OPENAI_MODEL_REVIEW=deepseek-reasoner # once a week, so worth the good model
-OPENAI_MODEL_SETUP=                   # the onboarding interview
 ```
 
 The trade-off against the Claude path is that OpenAI has no server-side
@@ -555,27 +555,27 @@ the list is *the eight things you eat* rather than the last eight things you ate
 `POST /entries/food/:id/repeat` clones one to now. The clone is a new entry with its own
 items, so correcting it later touches only today.
 
-The system prompt is assembled in four parts: a stable half, a volatile half with
-today's numbers and entry ids, — only while the profile is incomplete — an
-onboarding brief, and — for ten days after one is published — last week's review.
+The system prompt is assembled in three parts: a stable half, a volatile half with
+today's numbers and entry ids, and — for ten days after one is published — last week's
+review.
 
 ## First run
 
-A new account has no height, age, sex, goal or weight, so its targets are generic
-defaults. Rather than sending someone to a settings form, the journal opens in **setup
-mode**: the agent introduces itself, asks for two or three things at a time, and calls
-`set_profile` the moment it learns a value. It accepts whatever units you use
-(pounds, stones, feet and inches, an age instead of a birth date), maps vague answers
-like "pretty active" onto the closest option and says which it picked, and will happily
-log a meal mid-interview and then pick up where it left off.
+A calorie target needs sex, age, height, goal and activity, plus a weight to hang them
+on, and an account that has none of those can only be shown a number computed for
+nobody. So the app asks, before it draws anything else: `apps/mobile/app/onboarding.tsx`
+is a six-question wizard, one question per screen, every answer a button or a figure.
+It is a gate — `GET /onboarding` reports `complete`, and the root layout will not mount
+the tabs until it does — and it ends by writing the weigh-in and the profile in that
+order, then showing the calorie and macro targets that came out.
 
-When the last value lands, targets are recalculated, the account is marked onboarded,
-and the status bar stops flagging the target as a placeholder. The Setup screen remains
-for editing any of it later.
-
-Model lives in `apps/api/src/ai/client.ts` (`claude-opus-5`). Effort is pinned to `high`
-rather than left to the SDK default, so a Claude Code release cannot silently move the
-cost and latency of every meal log.
+This used to be a conversation. The agent was handed a 1,500-token brief and collected
+the same seven values by asking for them two at a time, which read well and lost people:
+a chat has no edge, so "one more thing" was indistinguishable from "this never ends",
+and half the accounts that received the opening message never answered it. Every answer
+was also a model turn, on the one screen where the app has told you nothing useful yet.
+The Setup tab remains for editing any of it later, and the agent keeps `set_profile` for
+"switch me to pounds" — it just no longer runs the interview.
 
 ## Targets adapt to you, not to a formula
 

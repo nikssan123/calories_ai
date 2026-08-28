@@ -90,10 +90,11 @@ export async function oldestTurnInLastDay(
 /**
  * The turn kinds each sold meter is counted over.
  *
- * `chat` covers `setup` as well as `text_log` because somebody halfway through
- * onboarding is not spending a different budget — and because the alternative
- * is a free tier whose welcome allowance is silently drained by the profile
- * questions before they have logged anything.
+ * `chat` covers `setup` as well as `text_log`. Nothing runs a setup turn any
+ * more — the profile questions are a form now — but the rows written while it
+ * was a conversation are still in `ai_usage`, and a lifetime allowance that
+ * stopped counting them would quietly hand somebody back turns they had
+ * already spent.
  *
  * `photo_log` is deliberately *not* in `chat`, despite being a journal turn
  * through the same route. It is metered on its own because it costs six times

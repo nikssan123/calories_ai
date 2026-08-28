@@ -10,17 +10,16 @@ import {
   listMessages,
   listReplayWindow,
 } from '../services/chat.ts';
+import { latestWeight } from '../services/log.ts';
 import { listNotes } from '../services/notes.ts';
 import { buildDaySummary } from '../services/summary.ts';
-import { latestWeight } from '../services/log.ts';
 import { latestReview } from '../services/reviews.ts';
-import { getUser, missingProfileFields } from '../services/user.ts';
+import { getUser } from '../services/user.ts';
 import { recordUsage } from '../services/usage.ts';
 import { hasKitchen } from '../services/plans.ts';
 import { withTurnLock } from '../services/turn-lock.ts';
 import { checkWellbeing } from '../services/wellbeing.ts';
 import { MAX_SESSION_MESSAGES, MAX_TURNS, TEXT_LOG_UNSUPPORTED_LANGUAGE } from './client.ts';
-import { isKickoff, openingMessage } from './greeting.ts';
 import { needsCapableModel, writingNeedsCapableModel } from './language.ts';
 import {
   createProvider,
@@ -36,7 +35,6 @@ import {
 import {
   dayContextPrompt,
   dayRolloverNotice,
-  onboardingPrompt,
   PHOTO_ESTIMATION_PROMPT,
   journalSystemPrompt,
   recentReviewPrompt,
@@ -101,20 +99,6 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
   const now = new Date();
   const today = localDateFor(now, input.ctx);
 
-  /*
-   * The opening message costs nothing and runs no model. See `greeting.ts` —
-   * it is a template the brief already specifies to the word, and paying Opus
-   * $0.17 to render it was the single most expensive thing a new account did.
-   *
-   * First, before the provider is built or the day is read: a turn that is
-   * going to be answered from a table should not do the work of one that is
-   * not.
-   */
-  if (!input.photo) {
-    const opening = await openingTurn(input, today);
-    if (opening) return opening;
-  }
-
   const actions: ChatAction[] = [];
   const toolContext: ToolContext = {
     userId: input.userId,
@@ -161,34 +145,37 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
    * worse than either language would on its own.
    *
    * Applied to the profile the *prompts* are built from and to nothing else.
-   * `missingProfileFields` below deliberately reads the stored profile: a guess
-   * off a device must not be able to end setup, or the one question that would
-   * have turned it into an answer never gets asked.
+   * Nothing stored moves with it: what the client is drawing in is a guess
+   * until the person says otherwise, and a guess must not be able to write
+   * itself into the column that records their answer.
    */
   const speaking: Profile = input.profile.locale
     ? input.profile
     : { ...input.profile, locale: input.spokenLocale ?? null };
 
-  // Setup mode is additive: the agent keeps every logging capability while it
-  // collects the missing profile values.
-  const missing = missingProfileFields(input.profile);
-  const currentWeight = await latestWeight(input.userId);
-  const needsOnboarding = missing.length > 0 || currentWeight === null;
-  const onboarding = needsOnboarding
-    ? onboardingPrompt(input.profile, missing, currentWeight)
-    : null;
-
+  /*
+   * There is no setup mode any more.
+   *
+   * The agent used to be handed a brief telling it to collect sex, age, height,
+   * goal, activity, units and language by asking for them two at a time — about
+   * 1,500 tokens of instruction on every turn of a new account's first
+   * conversation, plus a model turn for each answer. That job belongs to
+   * `apps/mobile/app/onboarding.tsx` now: seven values from small known sets,
+   * collected by a form the client will not let anybody past. By the time a
+   * turn reaches here the profile is complete, so the branch that existed for
+   * the incomplete case has nothing left to be true about.
+   */
   // The weekly review is published in its own agent session, so without this the
   // journal would have no idea what it said when the user asks about it.
-  const review = needsOnboarding ? null : await latestReview(input.userId);
+  const review = await latestReview(input.userId);
   const reviewContext = review ? recentReviewPrompt(review, today) : null;
 
   const notes = await listNotes(input.userId);
 
-  // Skipped during onboarding: a brand new account has nothing logged, and both
-  // checks read an empty week as no answer rather than a worrying one — but
-  // paying for two queries to be told nothing on every turn of setup is waste.
-  const wellbeing = needsOnboarding ? null : await checkWellbeing(input.userId, input.ctx, today);
+  const wellbeing = await checkWellbeing(input.userId, input.ctx, today);
+  // The scale's last word, for the "where things stand" block. Read here rather
+  // than inside `dayContextPrompt` so the prompt builder stays synchronous.
+  const currentWeight = await latestWeight(input.userId);
   const previousTurnAt = await lastMessageAt(input.userId);
   const previousDate = previousTurnAt ? localDateFor(previousTurnAt, input.ctx) : null;
   const rolledOver = previousDate !== null && previousDate !== today;
@@ -274,10 +261,13 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
    */
   const history = provider.needsHistory && !fresh ? await loadHistory(input.userId) : [];
 
-  // Photo first: a turn with an image needs a model that can see, whatever else
-  // is going on. Setup outranks a plain log because it happens once and is the
-  // first thing a new account experiences.
-  const kind = input.photo ? 'photo_log' : needsOnboarding ? 'setup' : 'text_log';
+  // A turn with an image needs a model that can see; everything else is a text
+  // log. There was a third kind here — `setup`, routed to the most capable
+  // model because the profile questions happened once and were the first thing
+  // a new account experienced — and it went with the conversation that asked
+  // them. See `TurnKind`, which keeps the name for the rows already written
+  // under it.
+  const kind = input.photo ? 'photo_log' : 'text_log';
 
   const request: AgentRequest = {
     kind,
@@ -298,15 +288,13 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
       ? TEXT_LOG_UNSUPPORTED_LANGUAGE
       : undefined,
     // What is left on the dynamic side is only what is stable *within* a
-    // session: onboarding ends once, the review recap changes weekly. Both are
-    // still barred from the cross-session prefix — a deployment-wide cache hit
-    // needs bytes that are the same for every user, and these are per-account —
-    // but neither moves between two turns of the same conversation, so neither
-    // costs the transcript its cache.
+    // session: the review recap changes weekly. It is still barred from the
+    // cross-session prefix — a deployment-wide cache hit needs bytes that are
+    // the same for every user, and this is per-account — but it does not move
+    // between two turns of the same conversation, so it costs the transcript
+    // nothing.
     staticSystemPrompt: journalSystemPrompt(kitchen),
-    dynamicSystemPrompt:
-      [onboarding, reviewContext].filter((part): part is string => part !== null).join('\n\n---\n\n') ||
-      undefined,
+    dynamicSystemPrompt: reviewContext ?? undefined,
     text: promptText,
     photo: input.photo ? photoSource(input.photo) : null,
     tools,
@@ -520,57 +508,6 @@ async function escalateForLanguage(
  * standing preferences live in `agent_notes`. What goes is the conversational
  * thread — and a day boundary is precisely where there is no thread to cut.
  */
-/**
- * The greeting, when this turn is a client asking for one and nothing else.
- *
- * Three conditions, and all of them matter:
- *
- * - **The text is the kickoff sentinel.** Anything else is a person talking,
- *   and a person who opens with "I had porridge" gets that logged rather than
- *   greeted — see §3 of `TESTING-FEEDBACK.md`, which is the whole argument for
- *   not gating a new account behind setup.
- * - **The transcript is empty.** A second kickoff — a reinstall, a client that
- *   re-fires the effect — is not an opening.
- * - **Setup is unfinished.** An account that has already been through it has no
- *   opening message to be given.
- *
- * Returns null when any of them fails, and the caller carries on into the model
- * path exactly as before.
- *
- * The user's own message is persisted alongside, as the normal path does, so
- * the conversation still reads as a conversation. Nothing is written to
- * `ai_usage`: no model ran, so there is no cost to record and no meter to
- * spend — a greeting must not eat one of the free tier's twenty lifetime turns.
- */
-async function openingTurn(input: RunTurnInput, today: string): Promise<ChatResponse | null> {
-  if (!isKickoff(input.text)) return null;
-  if (await lastMessageAt(input.userId)) return null;
-  if (missingProfileFields(input.profile).length === 0 && (await latestWeight(input.userId))) {
-    return null;
-  }
-
-  /*
-   * The same resolution `speaking` uses below and for the same reason: a null
-   * column is not English, it is nobody having been asked, and the client has
-   * been drawing the whole app in the device's language meanwhile. English is
-   * the last resort rather than the default.
-   */
-  const locale = input.profile.locale ?? input.spokenLocale ?? 'en';
-
-  await insertMessage(input.userId, 'user', input.text, null, null);
-  const message = await insertMessage(input.userId, 'assistant', openingMessage(locale), null, {
-    kind: 'setup',
-    model: null,
-    cost_usd: 0,
-  });
-
-  const [day, profile] = await Promise.all([
-    buildDaySummary(input.userId, today, today),
-    getUser(input.userId),
-  ]);
-  return { message, actions: [], day, profile };
-}
-
 async function shouldStartFreshSession(
   input: RunTurnInput,
   today: string,

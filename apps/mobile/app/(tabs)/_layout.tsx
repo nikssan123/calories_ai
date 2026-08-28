@@ -15,7 +15,6 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
 import { haptics } from '@/lib/haptics';
 import { useT, type StringKey } from '@/lib/i18n';
-import { useOnboarding } from '@/lib/onboarding';
 
 /**
  * Six, which is one past where a bottom bar is usually said to stop.
@@ -44,25 +43,6 @@ const TABS = [
   { name: 'cook', label: 'nav.cook', icon: 'chef' },
   { name: 'setup', label: 'nav.you', icon: 'user' },
 ] as const satisfies readonly { name: string; label: StringKey; icon: string }[];
-
-/**
- * What a brand-new account is offered, before it has answered anything or
- * logged anything.
- *
- * The other four are screens about data that does not exist yet, drawn against
- * a target that was not calculated for this person — which is the whole of the
- * problem this closes. Somebody could open the app, walk straight past the
- * conversation into Today, and start logging against a generic default number
- * that nothing on that screen admitted was generic.
- *
- * `setup` is in here and it is not a compromise. It is the settings screen: the
- * language picker, the sign-out, the delete-account button, and a form that can
- * finish setup by hand for somebody who would rather not be asked. Holding a
- * new account on a single screen with no way off it is not a gate, it is a
- * trap — and the one week this shipped into is the week people are trying the
- * app for the first time and deciding whether to keep it.
- */
-const DURING_SETUP: ReadonlySet<string> = new Set(['index', 'setup']);
 
 export default function TabsLayout() {
   const colors = useColors();
@@ -112,16 +92,18 @@ function TabBar({
   const t = useT();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
-  const { gated } = useOnboarding();
-
   /*
-   * Which of the six are on offer. Filtered here rather than by leaving screens
-   * undeclared, because the routes have to keep existing: a notification tapped
-   * during setup, or a share sheet handing the app a photo, navigates to one of
-   * them by name, and a route that is not in the navigator is a crash rather
-   * than a redirect. This hides the door; it does not remove the room.
+   * All six, always.
+   *
+   * Two of them used to be hidden while a new account was still being asked
+   * questions, because setup was a conversation on the journal that anybody
+   * could walk past — straight into Today, to log against a calorie target
+   * calculated for nobody in particular. The wizard closed that door upstream:
+   * `app/_layout.tsx` does not draw this navigator at all until the profile can
+   * support a real number, so by the time the tab bar exists there is nothing
+   * left to withhold.
    */
-  const shown = gated ? state.routes.filter((route) => DURING_SETUP.has(route.name)) : state.routes;
+  const shown = state.routes;
   /*
    * Where the lozenge is, in the row as drawn. -1 is a screen that is open but
    * not offered — the notification case above — and the pill is simply withheld

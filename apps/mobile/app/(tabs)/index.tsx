@@ -53,7 +53,6 @@ import { haptics } from '@/lib/haptics';
 import { onEntryRemoved } from '@/lib/removals';
 import { writeDaySnapshot } from '@/lib/snapshot';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
-import { useOnboarding } from '@/lib/onboarding';
 
 /** Optimistic rows carry a local id until the server assigns the real one. */
 interface Bubble {
@@ -148,7 +147,7 @@ const prompts = (tr: ReturnType<typeof useT>, units: UnitSystem): string[] => [
  */
 export default function JournalScreen() {
   const colors = useColors();
-  const { profile, refresh: refreshAuth, adoptProfile } = useAuth();
+  const { profile, adoptProfile } = useAuth();
   const units = unitsOf(profile);
   /*
    * The language this screen is drawn in, which is also the language the reply
@@ -189,14 +188,6 @@ export default function JournalScreen() {
     // The language goes with it: the launcher has no tree to ask.
     void writeDaySnapshot(next, locale);
   }, [locale]);
-  /*
-   * Setup, held for the whole app rather than for this screen.
-   *
-   * It used to live here, and that is exactly why setup was skippable: this
-   * screen knew the profile was half empty and the five screens drawing targets
-   * off it did not. See `lib/onboarding.tsx`.
-   */
-  const { state: onboarding, pending: setupPending, refresh: refreshOnboarding } = useOnboarding();
   const [busy, setBusy] = useState(false);
   /**
    * A turn is in flight. The same fact as `busy`, in the form the recovery
@@ -235,8 +226,6 @@ export default function JournalScreen() {
    * scrolled back through history.
    */
   const pinned = useRef(true);
-  /** Guards the one-time setup kickoff against re-renders and remounts. */
-  const kickedOff = useRef(false);
   /**
    * The day, for the callbacks that need only its date.
    *
@@ -533,17 +522,6 @@ export default function JournalScreen() {
         // it here is what makes "switch me to pounds" take effect now rather
         // than at the next launch.
         adoptProfile(result.profile);
-
-        /*
-         * set_profile may have completed setup during this turn — and the meal
-         * this turn logged may have opened the rest of the app without setup
-         * being finished at all. Both are answered by the same question, asked
-         * of the one place the tab bar can also read it from.
-         */
-        if (!onboarding?.complete) {
-          const state = await refreshOnboarding();
-          if (state?.complete) void refreshAuth();
-        }
       } catch (e) {
         /*
          * A price, not a fault, and told apart before anything else.
@@ -630,31 +608,12 @@ export default function JournalScreen() {
       locale,
       tr,
       recover,
-      onboarding?.complete,
-      refreshOnboarding,
-      refreshAuth,
       adoptProfile,
       commitDay,
       adopt,
       refreshPlan,
     ],
   );
-
-  // A new account opens straight into setup: the agent introduces itself and
-  // asks for what it needs, rather than pointing at a settings form.
-  useEffect(() => {
-    if (loading || kickedOff.current) return;
-    if (!onboarding || onboarding.complete) return;
-    if (bubbles.length > 0) return;
-    kickedOff.current = true;
-    /*
-     * In their language, not in English. This sentence is sent *as the user* —
-     * it is the first bubble in the transcript and the sentence the model
-     * answers — so an English one under a Bulgarian interface both reads wrong
-     * and quietly argues for an English reply.
-     */
-    void send({ text: tr('journal.kickoff') });
-  }, [loading, onboarding, bubbles.length, send, tr]);
 
   return (
     <KeyboardAvoidingView
@@ -672,7 +631,7 @@ export default function JournalScreen() {
        */
       behavior="padding"
     >
-      <StatusBar day={day} loading={loading} setupPending={setupPending} />
+      <StatusBar day={day} loading={loading} />
 
       <ScrollView
         ref={scroller}
@@ -686,7 +645,7 @@ export default function JournalScreen() {
       >
         {loading && <ChatSkeleton />}
 
-        {!loading && bubbles.length === 0 && onboarding?.complete && (
+        {!loading && bubbles.length === 0 && (
           <View style={styles.empty}>
             {/* The one screen in the app with room for a mascot, and the one
                 that otherwise offers a new account a wall of text. */}
@@ -896,15 +855,7 @@ async function reconcile(
 }
 
 /** Compact always-visible answer to "how am I doing today?" (§25). */
-function StatusBar({
-  day,
-  loading,
-  setupPending,
-}: {
-  day: DaySummary | null;
-  loading: boolean;
-  setupPending?: boolean;
-}) {
+function StatusBar({ day, loading }: { day: DaySummary | null; loading: boolean }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const tr = useT();
@@ -915,14 +866,6 @@ function StatusBar({
     return (
       <Material style={frame}>
         <Skeleton style={styles.statusSkeleton} />
-      </Material>
-    );
-  }
-
-  if (setupPending) {
-    return (
-      <Material style={frame}>
-        <Text style={[t.footnote, { color: colors.mutedForeground }]}>{tr('setup.inProgress')}</Text>
       </Material>
     );
   }

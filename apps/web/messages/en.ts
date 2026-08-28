@@ -711,16 +711,9 @@ export const en = {
   /** `distance` carries the unit, because a distance without one is not a sentence. */
   'journal.promptRun': (distance: string) => `Went for a ${distance} run`,
   'journal.promptProtein': 'Am I eating enough protein?',
-  /**
-   * Sent *as the person*, not drawn on screen — which is why it is in here.
-   * The model replies in the language it was written to in, so an English
-   * opener would start a Bulgarian account's first conversation in English.
-   */
-  'journal.kickoff': 'Hi — I’m new here. Let’s get set up.',
   'journal.emptyTitle': 'What have you eaten today?',
   'journal.emptyBody':
     'Type it or take a photo — whatever’s easiest. No forms, nothing to search for. Say what happened and I’ll work out the rest.',
-  'journal.settingUp': 'Setting up — your target is a placeholder until we finish.',
   'journal.over': (kcal: string) => `${kcal} over`,
   'journal.left': (kcal: string) => `${kcal} left`,
   'journal.burned': (kcal: string) => `−${kcal} burned`,

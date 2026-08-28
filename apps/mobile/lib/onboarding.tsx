@@ -4,35 +4,37 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 
 /**
- * How far into the app a new account has got, held once for the whole tree.
+ * Whether this account has been through setup, held once for the whole tree.
  *
- * It was local state on the journal, which was the only screen that asked —
- * and that is precisely what made setup skippable: the journal knew the profile
- * was half empty, and the five screens rendering targets off it did not. A tab
- * bar cannot read a hook that lives inside one of its tabs, so this had to come
- * out to where both can see it.
+ * It answers one question now, where it used to answer two. The old pair —
+ * "setup is unfinished" and "unfinished *and* nothing logged yet" — existed
+ * because setup was a conversation somebody could walk away from mid-sentence,
+ * which left the app in a state it had to keep apologising for: five screens
+ * drawing targets calculated for nobody, a banner on each of them saying so,
+ * and a tab bar hiding four of the six rooms.
  *
- * Two facts, and they answer different questions:
+ * Setup is a form now, and the form is a gate. `app/_layout.tsx` will not draw
+ * the tabs until this says `complete`, so the half-finished state has nowhere
+ * to be observed from and the whole apparatus that described it is gone. What
+ * is left is the flag and the fact that it has been asked for once.
  *
- * - `pending` — setup is unfinished, so every target on every screen is a
- *   generic default rather than a number calculated for this person. Screens
- *   that show one say so; see `<SetupBanner>`.
- * - `gated` — unfinished *and* nothing logged yet, which is a brand-new account
- *   that has not done anything at all. Only the journal is offered, because
- *   nothing else would be true yet.
- *
- * The moment they log a meal without finishing, `gated` goes false and the rest
- * of the app opens with its numbers labelled. That is deliberate: somebody who
- * photographs their lunch instead of answering questions has told you what they
- * came for, and the answer to it is to get out of the way rather than to keep
- * the door shut. The journal picks setup back up on the next turn — the brief
- * has told it to do that since it was written.
+ * `ready` is not a nicety. The gate has to distinguish "this account needs
+ * setup" from "nobody has answered yet", or the first frame after sign-in shows
+ * the tabs to somebody who is about to be sent to the wizard — and a frame of
+ * the wrong screen on the very first launch is the one place this app cannot
+ * afford to look uncertain about what it is.
  */
 interface OnboardingValue {
   /** Null until the server has answered once. */
   state: OnboardingState | null;
-  pending: boolean;
-  gated: boolean;
+  /**
+   * Whether the question has been *put*, however it went. False only in the
+   * window between signing in and the first answer — a failed request counts,
+   * for the reason on `refresh` below.
+   */
+  ready: boolean;
+  /** Resolved and unfinished. Never true while `ready` is false. */
+  needsSetup: boolean;
   /** Adopt an answer the caller already has, rather than asking again. */
   adopt: (state: OnboardingState) => void;
   refresh: () => Promise<OnboardingState | null>;
@@ -40,8 +42,8 @@ interface OnboardingValue {
 
 const OnboardingContext = createContext<OnboardingValue>({
   state: null,
-  pending: false,
-  gated: false,
+  ready: false,
+  needsSetup: false,
   adopt: () => {},
   refresh: async () => null,
 });
@@ -51,6 +53,7 @@ export const useOnboarding = (): OnboardingValue => useContext(OnboardingContext
 export function OnboardingProvider({ children }: { children: React.ReactNode }) {
   const { authenticated, emailVerified } = useAuth();
   const [state, setState] = useState<OnboardingState | null>(null);
+  const [ready, setReady] = useState(false);
 
   const refresh = useCallback(async (): Promise<OnboardingState | null> => {
     try {
@@ -58,11 +61,17 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       setState(next);
       return next;
     } catch {
-      // An unreachable server is not an unfinished account. Whatever was last
-      // known stays, and null stays null — which reads as "not gated", because
-      // penning somebody on one screen over a failed request is the one outcome
-      // worse than showing them a placeholder target.
+      /*
+       * An unreachable server is not an unfinished account. Whatever was last
+       * known stays, and null stays null — which now reads as "not gated",
+       * because holding somebody on a setup wizard they cannot submit is the
+       * one outcome worse than opening the app with a generic target in it.
+       */
       return null;
+    } finally {
+      // Marked ready either way, which is the whole point of the `finally`: a
+      // phone in a tunnel must not sit on the splash screen indefinitely.
+      setReady(true);
     }
   }, []);
 
@@ -75,6 +84,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     if (!authenticated || !emailVerified) {
       setState(null);
+      setReady(false);
       return;
     }
     void refresh();
@@ -83,12 +93,12 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const value = useMemo<OnboardingValue>(
     () => ({
       state,
-      pending: state !== null && !state.complete,
-      gated: state !== null && !state.complete && !state.logged,
+      ready,
+      needsSetup: ready && state !== null && !state.complete,
       adopt: setState,
       refresh,
     }),
-    [state, refresh],
+    [state, ready, refresh],
   );
 
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;

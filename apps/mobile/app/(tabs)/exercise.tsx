@@ -19,7 +19,6 @@ import { removeAction, SwipeRow } from '@/components/SwipeRow';
 import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
 import { Workouts } from '@/components/exercise/Workouts';
 import { WorkoutCard } from '@/components/workout/WorkoutCard';
-import { SetupBanner } from '@/components/SetupBanner';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
 import { useLocale, useT } from '@/lib/i18n';
 
@@ -101,7 +100,6 @@ export default function ExerciseScreen() {
       style={styles.flex}
       contentContainerStyle={[styles.page, { paddingTop: insets.top + 20 }]}
     >
-      <SetupBanner />
       <View style={styles.header}>
         <Text style={[t.largeTitle, { color: colors.foreground }]}>{tr('exercise.title')}</Text>
         <Chunk

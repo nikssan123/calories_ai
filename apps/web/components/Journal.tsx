@@ -7,7 +7,6 @@ import type {
   ChatMessage,
   ChatStreamEvent,
   DaySummary,
-  OnboardingState,
   UnitSystem,
 } from '@ct/shared';
 import { formatNumber, isDeletion, unitsOf } from '@ct/shared';
@@ -68,7 +67,7 @@ const prompts = (t: ReturnType<typeof useT>, units: UnitSystem): string[] => [
  * <Landing> at the same address.
  */
 export function Journal() {
-  const { profile, refresh: refreshAuth, adoptProfile } = useAuth();
+  const { profile, adoptProfile } = useAuth();
   const t = useT();
   const units = unitsOf(profile);
   /*
@@ -81,7 +80,6 @@ export function Journal() {
   const locale = useLocale();
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [day, setDay] = useState<DaySummary | null>(null);
-  const [onboarding, setOnboarding] = useState<OnboardingState | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const scrollerRef = useRef<HTMLElement>(null);
@@ -96,8 +94,6 @@ export function Journal() {
   // which time a photo may already have grown the column underneath it. Read
   // naively that looks exactly like someone scrolling away from the end.
   const settledAt = useRef(-1);
-  // Guards the one-time setup kickoff against re-renders and StrictMode.
-  const kickedOff = useRef(false);
   // Lets `send` see the messages it started from without depending on them.
   const bubblesRef = useRef<Bubble[]>([]);
   useEffect(() => {
@@ -108,13 +104,8 @@ export function Journal() {
     let cancelled = false;
     (async () => {
       try {
-        const [history, today, state] = await Promise.all([
-          api.history(40),
-          api.day(),
-          api.onboarding(),
-        ]);
+        const [history, today] = await Promise.all([api.history(40), api.day()]);
         if (cancelled) return;
-        setOnboarding(state);
         setBubbles(history.messages.map(toBubble));
         setDay(today);
       } catch (e) {
@@ -297,15 +288,6 @@ export function Journal() {
       // it here is what makes "switch me to pounds" take effect in the rail
       // beside the conversation rather than at the next page load.
       adoptProfile(result.profile);
-
-      // set_profile may have completed setup during this turn.
-      if (!onboarding?.complete) {
-        const state = await api.onboarding().catch(() => null);
-        if (state) {
-          setOnboarding(state);
-          if (state.complete) void refreshAuth();
-        }
-      }
     } catch (e) {
       // A lost response is not a lost turn. The server commits the message and
       // the reply together at the very end, so a connection that dies while
@@ -337,22 +319,12 @@ export function Journal() {
     } finally {
       setBusy(false);
     }
-  }, [locale, onboarding?.complete, refreshAuth, adoptProfile]);
-
-  // A new account opens straight into setup: the agent introduces itself and
-  // asks for what it needs, rather than pointing at a settings form.
-  useEffect(() => {
-    if (loading || kickedOff.current) return;
-    if (!onboarding || onboarding.complete) return;
-    if (bubbles.length > 0) return;
-    kickedOff.current = true;
-    void send({ text: t('journal.kickoff') });
-  }, [loading, onboarding, bubbles.length, send, t]);
+  }, [locale, adoptProfile]);
 
   return (
     <div className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
-        <StatusBar day={day} loading={loading} setupPending={onboarding?.complete === false} />
+        <StatusBar day={day} loading={loading} />
 
         <main
           ref={scrollerRef}
@@ -366,7 +338,7 @@ export function Journal() {
           <div ref={columnRef} className="mx-auto w-full max-w-2xl space-y-5">
         {loading && <ChatSkeleton />}
 
-        {!loading && bubbles.length === 0 && onboarding?.complete && (
+        {!loading && bubbles.length === 0 && (
           <div className="pt-10">
             {/* The one place in the app with room for a mascot, and the one
                 screen that otherwise offers a new account a wall of text. */}
@@ -583,31 +555,13 @@ async function reconcile(
 }
 
 /** Compact always-visible answer to "how am I doing today?" (§25). */
-function StatusBar({
-  day,
-  loading,
-  setupPending,
-}: {
-  day: DaySummary | null;
-  loading: boolean;
-  setupPending?: boolean;
-}) {
+function StatusBar({ day, loading }: { day: DaySummary | null; loading: boolean }) {
   const t = useT();
   const locale = useLocale();
   if (loading || !day) {
     return (
       <header className="material border-border shrink-0 border-b-2 px-4 py-3 xl:hidden">
         <Skeleton className="h-4 w-40" />
-      </header>
-    );
-  }
-
-  if (setupPending) {
-    return (
-      <header className="material border-border shrink-0 border-b-2 px-4 py-3 xl:hidden">
-        <p className="text-footnote text-muted-foreground font-medium">
-          {t('journal.settingUp')}
-        </p>
       </header>
     );
   }

@@ -44,7 +44,7 @@ import { ToastProvider } from '@/components/Toast';
 import { SharedPhotoRoot } from '@/lib/share';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { EntitlementsProvider } from '@/lib/entitlements';
-import { OnboardingProvider } from '@/lib/onboarding';
+import { OnboardingProvider, useOnboarding } from '@/lib/onboarding';
 import { ThemePreferenceProvider, useThemePreference } from '@/lib/theme-preference';
 import { paletteFor, ThemeContext, useColors } from '@/theme';
 import { registerForPush } from '@/lib/push';
@@ -174,14 +174,31 @@ function Themed() {
  */
 function Gate() {
   const { authenticated, emailVerified, loading } = useAuth();
+  const { ready: setupResolved, needsSetup } = useOnboarding();
   const colors = useColors();
   const router = useRouter();
 
+  /*
+   * Three boundaries now, not two.
+   *
+   * Setup is the third, and it is the one that changed: it used to be a
+   * conversation on the journal that anybody could walk past, leaving the app
+   * drawing five screens of targets calculated for nobody in particular. It is
+   * a form and a gate now — nothing behind it is drawn until the profile can
+   * support a real number. See `app/onboarding.tsx`.
+   */
+  const settled = !loading && (!authenticated || !emailVerified || setupResolved);
+
   useEffect(() => {
-    // Held until the session has resolved, so nobody sees a frame of the wrong
-    // screen on the way to the right one.
-    if (!loading) void SplashScreen.hideAsync();
-  }, [loading]);
+    /*
+     * Held until the session *and* the setup state have resolved, so nobody
+     * sees a frame of the wrong screen on the way to the right one. Waiting on
+     * the second one is what stops a brand-new account glimpsing the tab bar
+     * before being sent to the first question — `ready` is set even when the
+     * request fails, so this cannot become a splash screen with no exit.
+     */
+    if (settled) void SplashScreen.hideAsync();
+  }, [settled]);
 
   /*
    * Re-register this phone's address once there is a session to attach it to.
@@ -261,7 +278,21 @@ function Gate() {
         <Stack.Screen name="verify" />
       </Stack.Protected>
 
-      <Stack.Protected guard={authenticated && emailVerified}>
+      {/*
+        * Setup, before anything that shows a target.
+        *
+        * Its own guard rather than a redirect out of the tabs, for the reason
+        * every other boundary here is declarative: an imperative replace fires
+        * into a navigator that has not finished mounting, and the tab bar gets
+        * a frame before it lands. `gestureEnabled: false` because there is
+        * nothing behind this to swipe back to — the wizard's own rail carries
+        * the way back through the questions.
+        */}
+      <Stack.Protected guard={authenticated && emailVerified && needsSetup}>
+        <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
+      </Stack.Protected>
+
+      <Stack.Protected guard={authenticated && emailVerified && !needsSetup}>
         <Stack.Screen name="(tabs)" />
         {/*
           * History sits outside the tabs, as it does on the web: it is reached

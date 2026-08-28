@@ -373,17 +373,19 @@ describe('runTurn', () => {
     expect(systemPromptOf(agentCalls[1]!)).toBe(systemPromptOf(agentCalls[0]!));
   });
 
-  it('adds the setup brief only while the profile is incomplete', async () => {
-    scriptAgent({ text: 'Noted.' });
-    await turn();
-    expect(systemPromptOf(agentCalls[0]!)).not.toContain('Setup mode');
-
+  /*
+   * The brief this replaced was 1,500 tokens of instruction on how to collect
+   * seven profile values by asking for them two at a time, injected on every
+   * turn of a new account's first conversation. The form in the client collects
+   * them instead, and the assertion is the inverse of the one that used to be
+   * here: an incomplete profile must not put an interview back in the prompt.
+   */
+  it('never asks the model to run setup, however empty the profile is', async () => {
     const fresh = await createUser({ sex: null, is_setup_complete: false });
     user = fresh;
-    scriptAgent({ text: 'Hello.' });
-    await turn('hi');
-    expect(systemPromptOf(agentCalls.at(-1)!)).toContain('Setup mode');
-    expect(systemPromptOf(agentCalls.at(-1)!)).toContain('current weight');
+    scriptAgent({ text: 'Logged.' });
+    await turn('two eggs and toast');
+    expect(systemPromptOf(agentCalls.at(-1)!)).not.toContain('Setup mode');
   });
 
   /*
@@ -428,14 +430,19 @@ describe('runTurn', () => {
 
     /*
      * The trap in doing this at all. A guess off a device is not an answer, and
-     * if it were allowed to fill the gap in the profile, setup would finish
-     * without ever asking — leaving the account permanently on a language
-     * nobody chose, which is the bug this was meant to fix rather than move.
+     * nothing may let it become one — the column stays null until somebody
+     * says otherwise, which is what keeps the question askable. The turn is
+     * still written in the guessed language, which is the whole point of the
+     * guess.
      */
-    it('leaves the question on setup’s list, guess or no guess', async () => {
-      const call = await turnAs({ locale: null, sex: null, is_setup_complete: false }, 'bg');
-      expect(systemPromptOf(call)).toContain('which language they read');
-      expect(userTurnOf(call)).toContain('Bulgarian');
+    it('writes in the guess without adopting it', async () => {
+      const account = await createUser({ locale: null, sex: null, is_setup_complete: false });
+      const profile = await getUser(account.id);
+      scriptAgent({ text: 'Записано.' });
+      await runTurn({ userId: account.id, ctx: account.ctx, profile, text: 'две яйца', spokenLocale: 'bg' });
+
+      expect(userTurnOf(agentCalls.at(-1)!)).toContain('Bulgarian');
+      expect((await getUser(account.id)).locale).toBeNull();
     });
   });
 

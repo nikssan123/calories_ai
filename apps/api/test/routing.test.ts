@@ -67,28 +67,22 @@ describe('journal turns', () => {
     expect(effortOf()).toBe(MODELS.photo_log.effort);
   });
 
-  /** Setup happens once per account and is the first thing anyone sees. */
-  it('sends the onboarding interview to the better model', async () => {
+  /*
+   * There is no third kind any more. Setup used to route to the most capable
+   * model — it happened once and was the first thing anyone saw — and the
+   * questions it asked are a form in the client now. An incomplete profile is
+   * therefore an ordinary text log, which is what this holds: the routing must
+   * not grow a special case back for a state that can no longer be reached
+   * from a phone.
+   */
+  it('sends a turn from an incomplete profile down the ordinary text path', async () => {
     const fresh = await createUser({ sex: null, is_setup_complete: false });
     user = fresh;
 
-    scriptAgent({ text: 'Hello — how tall are you?' });
-    await turn('hi');
+    scriptAgent({ text: 'Logged.' });
+    await turn('two eggs and toast');
 
-    expect(modelOf()).toBe(MODELS.setup.model);
-  });
-
-  /** A photo during setup still needs vision, or the model cannot see the plate. */
-  it('prefers vision over the setup model when a turn has both', async () => {
-    const fresh = await createUser({ sex: null, is_setup_complete: false });
-    user = fresh;
-    const { savePhoto } = await import('../src/services/photos.ts');
-    const photo = await savePhoto(fresh.id, 'image/png', 'iVBORw0KGgo=');
-
-    scriptAgent({ text: 'That looks like lunch.' });
-    await turn('what is this?', { id: photo.id, mediaType: 'image/png', base64: 'AAAA' });
-
-    expect(modelOf()).toBe(MODELS.photo_log.model);
+    expect(modelOf()).toBe(MODELS.text_log.model);
   });
 
   it('records the model and kind on the message, so turns can be costed', async () => {

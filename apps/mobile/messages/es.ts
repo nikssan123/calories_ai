@@ -116,10 +116,71 @@ export const es: Messages = {
   'setup.saving': 'Guardando…',
   'setup.saved': 'Guardado',
 
-  // ---- Configuración sin terminar ------------------------------------------
-  'setup.placeholder': 'Estas cifras son provisionales.',
-  'setup.placeholderAction': 'Termina la configuración en el diario.',
-  'setup.inProgress': 'Configurando — tu objetivo es provisional hasta que terminemos.',
+  'setup.requiredMissing':
+    'Hacen falta sexo, fecha de nacimiento, altura, objetivo y actividad para calcular tu objetivo.',
+
+  // ---- El primer arranque --------------------------------------------------
+  'ob.back': 'Atrás',
+  'ob.continue': 'Continuar',
+
+  'ob.welcomeTitle': 'Vamos a crear tu plan',
+  'ob.welcomeBody':
+    'Seis preguntas rápidas — medio minuto — y tendrás un objetivo de calorías y proteína calculado para tu cuerpo y no para nadie en concreto. Podrás cambiarlo todo después.',
+  'ob.welcomeStart': 'Empezar',
+
+  'ob.goalTitle': '¿Qué quieres conseguir?',
+  'ob.goalBody': 'Esto decide si tu día queda por debajo, igual o por encima de lo que quemas.',
+  'ob.goalLose': 'Bajar de peso',
+  'ob.goalLoseHint': 'Un déficit tranquilo que puedas mantener',
+  'ob.goalMaintain': 'Quedarme como estoy',
+  'ob.goalMaintainHint': 'Comer lo que quemas y no perderlo de vista',
+  'ob.goalGain': 'Subir de peso',
+  'ob.goalGainHint': 'Un pequeño superávit, con la proteína para aprovecharlo',
+
+  'ob.sexTitle': '¿Para quién calculamos?',
+  'ob.sexBody':
+    'El gasto en reposo cambia lo suficiente como para que adivinarlo desviara tu objetivo un par de cientos de calorías al día.',
+
+  'ob.birthTitle': '¿Cuándo naciste?',
+  'ob.birthBody': 'La edad es lo último que necesita el cálculo.',
+  'ob.birthAge': (count) => n(count, { one: 'año', other: 'años' }),
+  'ob.birthTooYoung': 'Esta app es para mayores de 13.',
+  'ob.birthImplausible': 'Revisa el año — esa fecha no cuadra.',
+
+  'ob.bodyTitle': 'Tu altura y tu peso',
+  'ob.bodyBody':
+    'Con una cifra aproximada basta. El peso se guarda como tu primer pesaje, así la gráfica empieza hoy.',
+  'ob.bodyHeight': 'Altura',
+  'ob.bodyWeight': 'Peso',
+  'ob.bodyHeightOff': 'Esa altura no cuadra — revisa las unidades.',
+  'ob.bodyWeightOff': 'Ese peso no cuadra — revisa las unidades.',
+
+  'ob.skip': 'Saltar por ahora',
+  'ob.activitySkip': 'No lo sé — asume moderado',
+
+  'ob.targetTitle': '¿A qué aspiras?',
+  'ob.targetBody':
+    'Un peso objetivo, para que la app sepa cuánto llevas. Se mueve cuando quieras.',
+  'ob.targetToGo': (amount) => `faltan ${amount}`,
+  'ob.targetSame': 'Lo mismo que ahora',
+  'ob.targetMustBeLower': 'Elige algo por debajo de tu peso actual.',
+  'ob.targetMustBeHigher': 'Elige algo por encima de tu peso actual.',
+
+  'ob.activityTitle': '¿Cuánto te mueves?',
+  'ob.activityBody': 'Tu semana normal — sin contar los entrenamientos que registres en la app.',
+
+  'ob.buildingTitle': 'Creando tu plan',
+  'ob.buildingStep1': 'Calculando lo que quemas',
+  'ob.buildingStep2': 'Fijando tus calorías diarias',
+  'ob.buildingStep3': 'Repartiendo proteína, carbohidratos y grasa',
+  'ob.buildingFailed': 'No se ha podido guardar tu plan.',
+  'ob.retry': 'Reintentar',
+
+  'ob.planEyebrow': 'Tu objetivo diario',
+  'ob.planCalories': 'calorías al día',
+  'ob.planFootnote':
+    'Un punto de partida, no una sentencia. Se ajusta cada semana según lo que registres y lo que haga la báscula.',
+  'ob.planStart': 'Empezar a registrar',
 
   'sex.male': 'Hombre',
   'sex.female': 'Mujer',
@@ -542,10 +603,8 @@ export const es: Messages = {
   'journal.promptLunch': 'Pollo con arroz para comer',
   'journal.promptRun': (distance) => `He salido a correr ${distance}`,
   'journal.promptProtein': '¿Estoy comiendo suficiente proteína?',
-  'journal.kickoff': 'Hola — soy nuevo aquí. Vamos a configurarlo.',
   'journal.emptyTitle': '¿Qué has comido hoy?',
   'journal.emptyBody': 'Escríbelo o hazle una foto — lo que te resulte más fácil. Sin formularios, nada que buscar. Cuéntame qué pasó y yo saco el resto.',
-  'journal.settingUp': 'Configurando — tu objetivo es provisional hasta que terminemos.',
   'journal.over': (kcal) => `${kcal} de más`,
   'journal.left': (kcal) => `quedan ${kcal}`,
   'journal.burned': (kcal) => `−${kcal} quemadas`,

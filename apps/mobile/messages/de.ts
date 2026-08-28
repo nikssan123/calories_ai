@@ -117,10 +117,71 @@ export const de: Messages = {
   'setup.saving': 'Wird gespeichert…',
   'setup.saved': 'Gespeichert',
 
-  // ---- Einrichtung noch nicht abgeschlossen --------------------------------
-  'setup.placeholder': 'Diese Zahlen sind vorläufig.',
-  'setup.placeholderAction': 'Schließe die Einrichtung im Journal ab.',
-  'setup.inProgress': 'Einrichtung läuft — dein Ziel ist vorläufig, bis wir fertig sind.',
+  'setup.requiredMissing':
+    'Geschlecht, Geburtsdatum, Größe, Ziel und Aktivität werden alle gebraucht, um dein Ziel zu berechnen.',
+
+  // ---- Der erste Start ------------------------------------------------------
+  'ob.back': 'Zurück',
+  'ob.continue': 'Weiter',
+
+  'ob.welcomeTitle': 'Lass uns deinen Plan bauen',
+  'ob.welcomeBody':
+    'Sechs kurze Fragen — etwa eine halbe Minute — und du hast ein Kalorien- und Eiweißziel, das für deinen Körper gerechnet ist und nicht für irgendwen. Ändern kannst du alles später.',
+  'ob.welcomeStart': 'Los geht’s',
+
+  'ob.goalTitle': 'Was hast du vor?',
+  'ob.goalBody': 'Das legt fest, ob dein Tag unter, auf oder über deinem Verbrauch liegt.',
+  'ob.goalLose': 'Abnehmen',
+  'ob.goalLoseHint': 'Ein ruhiges Defizit, das du wirklich durchhältst',
+  'ob.goalMaintain': 'So bleiben, wie ich bin',
+  'ob.goalMaintainHint': 'Iss, was du verbrauchst, und behalte es im Blick',
+  'ob.goalGain': 'Zunehmen',
+  'ob.goalGainHint': 'Ein kleiner Überschuss, mit dem Eiweiß dazu',
+
+  'ob.sexTitle': 'Womit sollen wir rechnen?',
+  'ob.sexBody':
+    'Der Grundumsatz unterscheidet sich genug, dass Raten dein Ziel um ein paar hundert Kalorien am Tag verfehlen würde.',
+
+  'ob.birthTitle': 'Wann bist du geboren?',
+  'ob.birthBody': 'Das Alter ist das Letzte, was die Rechnung braucht.',
+  'ob.birthAge': (count) => n(count, { one: 'Jahr alt', other: 'Jahre alt' }),
+  'ob.birthTooYoung': 'Diese App ist ab 13.',
+  'ob.birthImplausible': 'Prüf das Jahr — das Datum sieht falsch aus.',
+
+  'ob.bodyTitle': 'Deine Größe und dein Gewicht',
+  'ob.bodyBody':
+    'Ungefähr reicht. Das Gewicht wird als dein erstes Wiegen eingetragen, damit die Kurve heute beginnt.',
+  'ob.bodyHeight': 'Größe',
+  'ob.bodyWeight': 'Gewicht',
+  'ob.bodyHeightOff': 'Diese Größe sieht falsch aus — prüf die Einheiten.',
+  'ob.bodyWeightOff': 'Dieses Gewicht sieht falsch aus — prüf die Einheiten.',
+
+  'ob.skip': 'Erstmal überspringen',
+  'ob.activitySkip': 'Weiß nicht — nimm moderat an',
+
+  'ob.targetTitle': 'Was ist dein Ziel?',
+  'ob.targetBody':
+    'Ein Zielgewicht, damit die App sagen kann, wie weit du bist. Jederzeit änderbar.',
+  'ob.targetToGo': (amount) => `noch ${amount}`,
+  'ob.targetSame': 'Genau da, wo du jetzt bist',
+  'ob.targetMustBeLower': 'Wähl etwas unter deinem jetzigen Gewicht.',
+  'ob.targetMustBeHigher': 'Wähl etwas über deinem jetzigen Gewicht.',
+
+  'ob.activityTitle': 'Wie viel bewegst du dich?',
+  'ob.activityBody': 'Deine normale Woche — ohne die Workouts, die du in der App einträgst.',
+
+  'ob.buildingTitle': 'Wir bauen deinen Plan',
+  'ob.buildingStep1': 'Wir rechnen deinen Verbrauch aus',
+  'ob.buildingStep2': 'Wir setzen deine Tageskalorien',
+  'ob.buildingStep3': 'Wir teilen Eiweiß, Kohlenhydrate und Fett auf',
+  'ob.buildingFailed': 'Dein Plan konnte nicht gespeichert werden.',
+  'ob.retry': 'Nochmal versuchen',
+
+  'ob.planEyebrow': 'Dein Tagesziel',
+  'ob.planCalories': 'Kalorien am Tag',
+  'ob.planFootnote':
+    'Ein Startpunkt, kein Urteil. Es passt sich jede Woche an — an das, was du einträgst, und an die Waage.',
+  'ob.planStart': 'Loslegen',
 
   'sex.male': 'Männlich',
   'sex.female': 'Weiblich',
@@ -543,10 +604,8 @@ export const de: Messages = {
   'journal.promptLunch': 'Hähnchen mit Reis zum Mittag',
   'journal.promptRun': (distance) => `Bin ${distance} gelaufen`,
   'journal.promptProtein': 'Esse ich genug Eiweiß?',
-  'journal.kickoff': 'Hi — ich bin neu hier. Lass uns einrichten.',
   'journal.emptyTitle': 'Was hast du heute gegessen?',
   'journal.emptyBody': 'Tipp es oder fotografier es — was leichter ist. Keine Formulare, nichts zu suchen. Sag, was war, und ich rechne den Rest aus.',
-  'journal.settingUp': 'Wir richten ein — dein Ziel ist ein Platzhalter, bis wir fertig sind.',
   'journal.over': (kcal) => `${kcal} drüber`,
   'journal.left': (kcal) => `${kcal} übrig`,
   'journal.burned': (kcal) => `−${kcal} verbrannt`,

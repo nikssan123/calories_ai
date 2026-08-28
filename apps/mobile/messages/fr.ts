@@ -123,10 +123,72 @@ export const fr: Messages = {
   'setup.saving': 'Enregistrement…',
   'setup.saved': 'Enregistré',
 
-  // ---- Configuration inachevée ---------------------------------------------
-  'setup.placeholder': 'Ces chiffres sont provisoires.',
-  'setup.placeholderAction': 'Terminez la configuration dans le journal.',
-  'setup.inProgress': 'Configuration en cours — votre objectif est provisoire en attendant.',
+  'setup.requiredMissing':
+    'Le sexe, la date de naissance, la taille, l’objectif et l’activité sont tous nécessaires pour calculer ton objectif.',
+
+  // ---- Le premier lancement ------------------------------------------------
+  'ob.back': 'Retour',
+  'ob.continue': 'Continuer',
+
+  'ob.welcomeTitle': 'On construit ton plan',
+  'ob.welcomeBody':
+    'Six questions rapides — une demi-minute — et tu auras un objectif de calories et de protéines calculé pour ton corps, pas pour personne en particulier. Tout est modifiable ensuite.',
+  'ob.welcomeStart': 'C’est parti',
+
+  'ob.goalTitle': 'Tu es là pour quoi ?',
+  'ob.goalBody': 'Cela décide si ta journée passe sous, à, ou au-dessus de ce que tu brûles.',
+  'ob.goalLose': 'Perdre du poids',
+  'ob.goalLoseHint': 'Un déficit tranquille que tu peux vraiment tenir',
+  'ob.goalMaintain': 'Rester comme je suis',
+  'ob.goalMaintainHint': 'Manger ce que tu brûles, et garder un œil dessus',
+  'ob.goalGain': 'Prendre du poids',
+  'ob.goalGainHint': 'Un petit surplus, avec les protéines pour en profiter',
+
+  'ob.sexTitle': 'On calcule pour qui ?',
+  'ob.sexBody':
+    'La dépense au repos varie assez pour qu’une supposition décale ton objectif de deux cents calories par jour.',
+
+  'ob.birthTitle': 'Tu es né quand ?',
+  'ob.birthBody': 'L’âge est la dernière chose dont le calcul a besoin.',
+  'ob.birthAge': (count) => n(count, { one: 'an', other: 'ans' }),
+  'ob.birthTooYoung': 'Cette app est réservée aux 13 ans et plus.',
+  'ob.birthImplausible': 'Vérifie l’année — cette date paraît fausse.',
+
+  'ob.bodyTitle': 'Ta taille et ton poids',
+  'ob.bodyBody':
+    'À peu près, c’est très bien. Le poids est enregistré comme ta première pesée, la courbe démarre donc aujourd’hui.',
+  'ob.bodyHeight': 'Taille',
+  'ob.bodyWeight': 'Poids',
+  'ob.bodyHeightOff': 'Cette taille paraît fausse — vérifie les unités.',
+  'ob.bodyWeightOff': 'Ce poids paraît faux — vérifie les unités.',
+
+  'ob.skip': 'Passer pour l’instant',
+  'ob.activitySkip': 'Je ne sais pas — pars sur modéré',
+
+  'ob.targetTitle': 'Tu vises quoi ?',
+  'ob.targetBody':
+    'Un poids cible, pour que l’app puisse dire où tu en es. Déplaçable à tout moment.',
+  'ob.targetToGo': (amount) => `${amount} à faire`,
+  'ob.targetSame': 'Exactement là où tu es',
+  'ob.targetMustBeLower': 'Choisis quelque chose sous ton poids actuel.',
+  'ob.targetMustBeHigher': 'Choisis quelque chose au-dessus de ton poids actuel.',
+
+  'ob.activityTitle': 'Tu bouges combien ?',
+  'ob.activityBody':
+    'Ta semaine ordinaire — sans compter les séances que tu enregistres dans l’app.',
+
+  'ob.buildingTitle': 'On construit ton plan',
+  'ob.buildingStep1': 'On calcule ce que tu brûles',
+  'ob.buildingStep2': 'On fixe tes calories du jour',
+  'ob.buildingStep3': 'On répartit protéines, glucides et lipides',
+  'ob.buildingFailed': 'Ton plan n’a pas pu être enregistré.',
+  'ob.retry': 'Réessayer',
+
+  'ob.planEyebrow': 'Ton objectif quotidien',
+  'ob.planCalories': 'calories par jour',
+  'ob.planFootnote':
+    'Un point de départ, pas un verdict. Il s’ajuste chaque semaine selon ce que tu enregistres et ce que fait la balance.',
+  'ob.planStart': 'Commencer à enregistrer',
 
   'sex.male': 'Homme',
   'sex.female': 'Femme',
@@ -549,10 +611,8 @@ export const fr: Messages = {
   'journal.promptLunch': 'Poulet riz à midi',
   'journal.promptRun': (distance) => `J’ai couru ${distance}`,
   'journal.promptProtein': 'Est-ce que je mange assez de protéines ?',
-  'journal.kickoff': 'Salut — je suis nouveau ici. On configure ça ?',
   'journal.emptyTitle': 'Tu as mangé quoi aujourd’hui ?',
   'journal.emptyBody': 'Écris-le ou prends une photo — au plus simple. Pas de formulaire, rien à chercher. Dis ce qui s’est passé et je m’occupe du reste.',
-  'journal.settingUp': 'On configure — ton objectif est provisoire jusqu’à ce qu’on ait fini.',
   'journal.over': (kcal) => `${kcal} au-dessus`,
   'journal.left': (kcal) => `${kcal} restantes`,
   'journal.burned': (kcal) => `−${kcal} brûlées`,
