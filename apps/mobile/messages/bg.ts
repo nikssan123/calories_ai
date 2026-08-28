@@ -548,6 +548,8 @@ export const bg: Messages = {
   'journal.net': (kcal) => ` · нето ${kcal} kcal`,
   'journal.loggedMeal': 'Записано хранене',
   'journal.thinking': 'Мисля',
+  'journal.lost':
+    'Връзката прекъсна, преди отговорът да пристигне. Каквото е записано, ще е тук, когато се върнеш.',
   'tool.log': 'Записвам',
   'tool.update': 'Обновявам',
   'tool.delete': 'Премахвам',

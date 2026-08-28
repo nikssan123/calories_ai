@@ -559,6 +559,8 @@ export const fr: Messages = {
   'journal.net': (kcal) => ` · net ${kcal} kcal`,
   'journal.loggedMeal': 'Repas noté',
   'journal.thinking': 'Je réfléchis',
+  'journal.lost':
+    'La connexion a été perdue avant l’arrivée de la réponse. Ce qui a été enregistré sera là à ton retour.',
   'tool.log': 'Je note',
   'tool.update': 'Je mets à jour',
   'tool.delete': 'Je retire',

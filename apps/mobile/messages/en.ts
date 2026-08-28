@@ -664,6 +664,18 @@ export const en = {
   'journal.net': (kcal: string) => ` · net ${kcal} kcal`,
   'journal.loggedMeal': 'Logged meal',
   'journal.thinking': 'Thinking',
+  /**
+   * A turn whose connection died with the answer still owed.
+   *
+   * Deliberately not the transport's own words. What the phone hands up here
+   * is a Java socket exception, and printing it turned a locked screen into
+   * what reads as a crash. The server finishes the turn regardless — see the
+   * note on `request.raw.on('close')` in `sse.ts` — so the second sentence is
+   * a promise the app actually keeps: it re-reads the conversation on the way
+   * back in.
+   */
+  'journal.lost':
+    'The connection dropped before the reply arrived. Whatever landed will be here when you come back.',
 
   // What to call the pause while a tool runs. Verbs only — see `toolLabel`.
   'tool.log': 'Logging',

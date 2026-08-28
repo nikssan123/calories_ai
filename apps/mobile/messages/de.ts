@@ -553,6 +553,8 @@ export const de: Messages = {
   'journal.net': (kcal) => ` · netto ${kcal} kcal`,
   'journal.loggedMeal': 'Eingetragene Mahlzeit',
   'journal.thinking': 'Denke nach',
+  'journal.lost':
+    'Die Verbindung brach ab, bevor die Antwort da war. Was gespeichert wurde, ist da, wenn du zurückkommst.',
   'tool.log': 'Trage ein',
   'tool.update': 'Aktualisiere',
   'tool.delete': 'Entferne',

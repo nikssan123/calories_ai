@@ -552,6 +552,8 @@ export const es: Messages = {
   'journal.net': (kcal) => ` · neto ${kcal} kcal`,
   'journal.loggedMeal': 'Comida apuntada',
   'journal.thinking': 'Pensando',
+  'journal.lost':
+    'Se cortó la conexión antes de que llegara la respuesta. Lo que se haya guardado estará aquí cuando vuelvas.',
   'tool.log': 'Apuntando',
   'tool.update': 'Actualizando',
   'tool.delete': 'Quitando',

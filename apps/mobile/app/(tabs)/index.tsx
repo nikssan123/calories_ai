@@ -46,6 +46,7 @@ import { useAuth } from '@/lib/auth';
 import { useEntitlements } from '@/lib/entitlements';
 import { enqueue, newId } from '@/lib/outbox';
 import { useOutbox } from '@/hooks/useOutbox';
+import { useRefreshOnReturn } from '@/hooks/useRefreshOnReturn';
 import { duration, ease, font, type as t, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { haptics } from '@/lib/haptics';
@@ -99,6 +100,30 @@ interface Bubble {
 
 /** Near enough to the end that a new message should still carry the view. */
 const NEAR_BOTTOM_PX = 64;
+
+/**
+ * How long to wait before asking a second time about a turn that died at the
+ * transport.
+ *
+ * Long enough to be on the other side of a resume — iOS freezes JS in the
+ * background, so the rejection for a socket the OS killed can surface a beat
+ * *after* the app is active again, which is to say after the foreground
+ * listener has already run and found nothing owed. Short enough that somebody
+ * watching the screen sees it repair itself rather than wondering.
+ */
+const RECOVERY_MS = 4_000;
+
+/**
+ * How many times to ask about an owed turn before letting the failure stand.
+ *
+ * A turn that never reached the server at all is indistinguishable from one
+ * still being written, and asking forever would put two requests on every
+ * foreground for the rest of the app's life on the strength of one send that
+ * never happened. Five is generous — the first ask is four seconds later and
+ * the rest are whole returns to the app apart, so a turn that landed has run
+ * out of ways to still be running by then.
+ */
+const RECOVERY_ATTEMPTS = 5;
 
 /**
  * The empty-state suggestions. Only the run carries a unit, and it carries one
@@ -173,6 +198,26 @@ export default function JournalScreen() {
    */
   const { state: onboarding, pending: setupPending, refresh: refreshOnboarding } = useOnboarding();
   const [busy, setBusy] = useState(false);
+  /**
+   * A turn is in flight. The same fact as `busy`, in the form the recovery
+   * below needs it: that runs from an event rather than from a render, and must
+   * not replace the conversation with the server's copy while an optimistic row
+   * is sitting in it.
+   */
+  const sending = useRef(false);
+  /**
+   * The last turn whose connection died with the answer still owed, and the
+   * message ids that were on screen before it started.
+   *
+   * A dropped connection is a question, not an answer: the server does not
+   * abandon a turn when the reader goes away — it finishes it and commits, and
+   * writes the reply to a socket nobody is holding any more (see the note on
+   * `request.raw.on('close')` in `sse.ts`). Keeping the turn here is what lets
+   * the question be asked again once there is a network to ask over.
+   */
+  const orphaned = useRef<Set<string> | null>(null);
+  /** Asks left about it. See `RECOVERY_ATTEMPTS`. */
+  const asks = useRef(0);
   const [loading, setLoading] = useState(true);
   /*
    * The count, hidden for this launch.
@@ -348,6 +393,42 @@ export default function JournalScreen() {
       contentSize.height - contentOffset.y - layoutMeasurement.height < NEAR_BOTTOM_PX;
   }, []);
 
+  /**
+   * Asks the server what became of a turn whose connection died.
+   *
+   * The other half of the reconciliation inside `send`, and the half that was
+   * missing. Locking the phone kills the socket mid-turn, so the ask that
+   * happens right there happens with no radio and learns nothing — and the row
+   * was then stuck on a failure that had already stopped being true, visibly
+   * so, since the turn was in the conversation the moment the app was launched
+   * again. Relaunching is not how anybody should find that out, so the same
+   * question is asked on the way back in.
+   */
+  const recover = useCallback(async () => {
+    const known = orphaned.current;
+    if (!known || sending.current) return;
+    if (asks.current <= 0) {
+      orphaned.current = null;
+      return;
+    }
+    asks.current -= 1;
+    const landed = await reconcile(known);
+    // Still nothing to see, or a new turn started while we were asking. Either
+    // way the answer stays owed and the next return asks again.
+    if (!landed || orphaned.current !== known || sending.current) return;
+    orphaned.current = null;
+    setBubbles(landed.bubbles);
+    commitDay(landed.day);
+  }, [commitDay]);
+
+  /*
+   * Both halves of "coming back" — another tab, and another app — because a
+   * dropped turn is exactly what happens while this screen is the one being
+   * left. See `useRefreshOnReturn`; `recover` is a no-op when nothing is owed,
+   * which is almost every return.
+   */
+  useRefreshOnReturn(recover);
+
   const send = useCallback(
     async (payload: ComposerPayload) => {
       const localKey = `local-${Date.now()}`;
@@ -368,6 +449,7 @@ export default function JournalScreen() {
         { key: replyKey, role: 'assistant', content: '', pending: true },
       ]);
       setBusy(true);
+      sending.current = true;
 
       try {
         /*
@@ -511,13 +593,25 @@ export default function JournalScreen() {
           setBubbles(landed.bubbles);
           commitDay(landed.day);
         } else {
-          const message = (e as Error).message;
+          /*
+           * What went wrong, not what threw.
+           *
+           * `expo/fetch` hands up whatever OkHttp raised, and a phone that
+           * locked mid-turn produces a Java socket exception — printed into the
+           * conversation, it reads as the app having crashed rather than as a
+           * connection having gone. What is actually true is that the answer is
+           * owed and may well already exist, so the row says that, and the turn
+           * is remembered for `recover` to ask about again.
+           */
+          orphaned.current = known;
+          asks.current = RECOVERY_ATTEMPTS;
+          setTimeout(() => void recover(), RECOVERY_MS);
           setBubbles((prev) =>
             prev.map((b) =>
               b.key === replyKey
                 ? {
                     ...b,
-                    content: message,
+                    content: tr('journal.lost'),
                     pending: false,
                     tool: undefined,
                     steps: undefined,
@@ -528,11 +622,14 @@ export default function JournalScreen() {
           );
         }
       } finally {
+        sending.current = false;
         setBusy(false);
       }
     },
     [
       locale,
+      tr,
+      recover,
       onboarding?.complete,
       refreshOnboarding,
       refreshAuth,
