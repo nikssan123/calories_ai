@@ -25,8 +25,8 @@ type T = ReturnType<typeof useT>;
  *
  * Three rules run through all of it:
  *
- * 1. **Name the number.** "You've run out" is an error; "that's your 20 free
- *    messages" is a plan somebody can reason about.
+ * 1. **Name the number.** "You've run out" is an error; "that's all 10 messages
+ *    this month" is a plan somebody can reason about.
  * 2. **Never end on the refusal.** Every sentence that closes a door names the
  *    one still open — and on the free tier there genuinely is one, because
  *    `OFFLINE.md` shipped: typing a meal in, repeating one, scanning a barcode
@@ -235,7 +235,7 @@ export const ALWAYS_FREE: StringKey[] = [
  * A meter that is gone, said in passing rather than announced.
  *
  * `wallTitle` is the headline version of this and cannot be borrowed for it:
- * "That's your 20 free messages" is a sentence about a thing that just
+ * "That's all 10 messages this month" is a sentence about a thing that just
  * happened, and it reads as a non-sequitur on a surface the reader arrived at
  * for some other reason — the empty diet-quality panel, days later. Same
  * number, same distinction between a lifetime grant and a monthly one, no
@@ -256,8 +256,9 @@ export function spentLine(allowance: Allowance, t: T): string {
  * The quiet line, shown while there is still something left.
  *
  * Only ever a count and a noun. No "upgrade now", no exclamation mark — the
- * whole design of this warning is that it appears three turns early, so it has
- * time to be a fact rather than an interruption.
+ * whole design of this warning is that it appears well before the wall does, so
+ * it has time to be a fact rather than an interruption. How early is
+ * `showFrom`'s question, not this one's.
  */
 export function remainingLine(allowance: Allowance, left: number, t: T): string {
   return t('wall.remaining')(left, meterNoun(allowance.meter, left, t));

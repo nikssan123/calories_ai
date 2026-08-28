@@ -41,16 +41,22 @@ const setPlan = (id: string, plan: string) =>
 
 describe('limitsFor', () => {
   /**
-   * The free tier's AI is a lifetime grant, not a monthly one.
+   * The free tier's two grants run on different clocks, and the split is the
+   * load-bearing decision in the whole table.
    *
-   * This is the load-bearing decision in the whole table and it is worth an
-   * assertion of its own: a monthly grant is a recurring bill for accounts that
-   * have already decided not to pay, and at a measured $0.066 a turn it is the
-   * difference between a one-off acquisition cost and an annuity paid to people
-   * who never convert.
+   * Chat is monthly, and that is knowingly a recurring bill: at a measured
+   * $0.041 a turn it is $0.41/month for as long as a free account exists,
+   * bought because a lifetime grant leaves nothing to convert *from* once it is
+   * spent. The photo stays lifetime because one scan, ever, is the conversion
+   * argument rather than a taste of one.
+   *
+   * Asserted together because the two are only defensible as a pair — a version
+   * of this file that quietly gave the photo back every month would be giving
+   * away the pitch, and one that put chat back on `ever` would be reinstating
+   * the cliff.
    */
-  it('grants free AI once rather than monthly', () => {
-    expect(meterFor('free', 'chat')).toEqual({ allowed: 20, period: 'ever' });
+  it('grants free chat monthly and the free photo once', () => {
+    expect(meterFor('free', 'chat')).toEqual({ allowed: 10, period: 'month' });
     expect(meterFor('free', 'photo')).toEqual({ allowed: 1, period: 'ever' });
   });
 
@@ -82,8 +88,11 @@ describe('limitsFor', () => {
       expect(plus[key], key).toBeGreaterThanOrEqual(free[key]);
     }
     // The meters are the ones that are actually sold, and a paid month has to
-    // beat a free lifetime outright — otherwise the tier is not a tier.
-    expect(meterFor('plus', 'chat').allowed!).toBeGreaterThan(0);
+    // beat free's outright — otherwise the tier is not a tier. Chat is now a
+    // month on both sides, so the comparison is finally like for like.
+    expect(meterFor('plus', 'chat').allowed!).toBeGreaterThan(
+      meterFor('free', 'chat').allowed!,
+    );
     expect(meterFor('plus', 'photo').allowed!).toBeGreaterThan(
       meterFor('free', 'photo').allowed!,
     );
@@ -417,9 +426,10 @@ describe('the journal meter', () => {
   });
 
   /**
-   * The free grant does not come back, so the sentence must not promise that it
-   * will — and it has to name the thing that still works, because after
-   * `OFFLINE.md` there genuinely is one.
+   * The wall has to name the thing that still works, because after `OFFLINE.md`
+   * there genuinely is one — and it has to keep naming it now that free chat is
+   * monthly. That sentence used to hang off `period === 'ever'`, which would
+   * have silently dropped it from the most-hit wall in the product.
    */
   it('refuses a spent free account with 402 and points at the free path', async () => {
     await spend('text_log', meterFor('free', 'chat').allowed!);
@@ -428,8 +438,22 @@ describe('the journal meter', () => {
     expect(response.statusCode).toBe(402);
     expect(response.json()).toMatchObject({
       error: expect.stringContaining('Typing a meal in is still unlimited'),
-      allowance: { meter: 'chat', period: 'ever', resets_at: null },
+      allowance: { meter: 'chat', period: 'month' },
     });
+    // Rolling, so it says when one comes back rather than naming a calendar date.
+    expect(response.json().allowance.resets_at).toEqual(expect.any(String));
+  });
+
+  /**
+   * The photo is the one grant with no clock behind it, and the wall must not
+   * promise a reset it will never perform.
+   */
+  it('tells a spent free photo that nothing comes back', async () => {
+    await spend('photo_log', meterFor('free', 'photo').allowed!);
+
+    const response = await chat({ text: 'What is this?', photo_base64: 'iVBORw0KGgo=' });
+    expect(response.statusCode).toBe(402);
+    expect(response.json().allowance).toMatchObject({ period: 'ever', resets_at: null });
   });
 
   /** Setup turns come out of the same grant, or onboarding drains it unseen. */
@@ -461,7 +485,7 @@ describe('the journal meter', () => {
     expect((await chat()).statusCode).toBe(200);
   });
 
-  it('gives a paid account a month rather than a lifetime', async () => {
+  it('gives a paid account a bigger month than free', async () => {
     await setPlan(user.id, 'plus');
     await spend('text_log', meterFor('plus', 'chat').allowed!);
 
@@ -484,15 +508,16 @@ describe('the journal meter', () => {
    * not happen.
    */
   it('answers a successful turn with what is left of the meter', async () => {
-    await spend('text_log', 18);
+    const allowed = meterFor('free', 'chat').allowed!;
+    await spend('text_log', allowed - 2);
 
     const response = await chat();
     expect(response.statusCode).toBe(200);
     expect(response.json().allowance).toMatchObject({
       meter: 'chat',
-      allowed: 20,
-      used: 19,
-      period: 'ever',
+      allowed,
+      used: allowed - 1,
+      period: 'month',
     });
   });
 
@@ -526,7 +551,7 @@ describe('GET /entitlements', () => {
       'recipe',
       'meal_plan',
     ]);
-    expect(body.allowances[0]).toMatchObject({ allowed: 20, used: 0, period: 'ever' });
+    expect(body.allowances[0]).toMatchObject({ allowed: 10, used: 0, period: 'month' });
     // A locked meter, which the wall has to tell from a spent one.
     expect(body.allowances.find((a: { meter: string }) => a.meter === 'recipe')).toMatchObject({
       allowed: null,

@@ -205,21 +205,51 @@ export function LockedPanel({
 }
 
 /**
+ * How early the count appears, as a number of remaining turns.
+ *
+ * A flat three was right while every ceiling it ran against was large — three
+ * out of Plus's sixty is the last 5% of the month, which is a warning. It stops
+ * being right on a small grant: three out of free's **ten** is 70% of the
+ * allowance spent before the app says a word, and the whole argument for this
+ * component is that a limit somebody can see is a plan while a limit they
+ * discover is a trap. A grant small enough to run out in a week has to start
+ * counting sooner, in proportion rather than in absolutes.
+ *
+ * So: half the grant, floored at the old three and capped at five.
+ *
+ *   free   chat    10  ->  5   the halfway point, which is the point
+ *   free   photo    1  ->  3   floor; only 1 and 0 exist, so it shows at 1
+ *   plus   photo    8  ->  4
+ *   plus   chat    60  ->  5   cap; 30 left is not news
+ *   coach  chat   150  ->  5
+ *
+ * The cap is what stops "half" turning the chip into a permanent fixture on the
+ * tiers people pay for, and the floor is what stops a two-turn grant from
+ * warning at one. Neither end is doing anything clever in between — the meters
+ * that land there are the small ones, which are exactly the ones worth naming
+ * early.
+ */
+const SHOW_FROM_MIN = 3;
+const SHOW_FROM_MAX = 5;
+
+export function showFrom(allowed: number): number {
+  return Math.min(Math.max(SHOW_FROM_MIN, Math.ceil(allowed / 2)), SHOW_FROM_MAX);
+}
+
+/**
  * The quiet one: a count, while there is still a count to give.
  *
  * This is the piece that decides whether the wall is experienced as a trap or
  * as a plan. A ceiling nobody can see is only ever discovered by hitting it —
  * which is the complaint `usage.ts` makes about the client having no way to
- * ask — and by then the app has already refused to do something. Three turns of
+ * ask — and by then the app has already refused to do something. A few turns of
  * warning costs a line of small text and turns the same limit into a decision
  * somebody gets to make while nothing is going wrong.
  *
  * Everything about it is calibrated to not be an advert. It appears only inside
- * `SHOW_FROM`, it says a number and a noun, it has no verb, and it is dismissed
+ * `showFrom`, it says a number and a noun, it has no verb, and it is dismissed
  * for the session by tapping it away. Tapping the count itself opens the wall.
  */
-const SHOW_FROM = 3;
-
 export function MeterChip({
   meter,
   onDismiss,
@@ -243,7 +273,10 @@ export function MeterChip({
   // there is no bill behind it, and counting down from infinity is not a thing.
   if (!allowance || meterLocked(allowance) || allowance.unlimited) return null;
   const left = meterRemaining(allowance);
-  if (left === 0 || left > SHOW_FROM) return null;
+  // `allowed` is non-null past `meterLocked`, and the credits a photo meter may
+  // carry are deliberately not in the threshold: they are stock rather than the
+  // grant, and the chip is counting down the thing that runs out.
+  if (left === 0 || left > showFrom(allowance.allowed ?? 0)) return null;
 
   return (
     <View style={[styles.chipRow, style]}>

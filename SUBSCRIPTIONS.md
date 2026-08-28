@@ -5,7 +5,8 @@ the meters are enforced off the cost ledger in `services/usage.ts`, and `users.p
 carries `free | plus | coach` after `034`. The phone now explains itself too — the
 count above the composer, the wall in the journal, the locked panels, and
 `app/upgrade.tsx` behind them, all off `GET /entitlements`. What is *not* built is
-Stripe, and the web says nothing about any of this.
+Stripe, and the web says nothing about any of this beyond the landing page's pricing
+cards.
 
 Previous versions of this document priced the tiers from a cost model. This one
 prices them from production. The difference between the two is the whole content of
@@ -79,13 +80,36 @@ Unlimited and unmetered: manual entry, repeat-a-meal, barcode, weight,
 Today/History/Progress, the outbox. That is a complete food diary, roughly what
 MyFitnessPal's free tier is, and it costs nothing to serve.
 
-Metered, and **lifetime rather than monthly**: 20 journal turns, 1 photo scan.
+Metered: **10 journal turns a month**, and 1 photo scan, ever.
 
-The lifetime grant is the load-bearing decision. A monthly grant is a recurring bill
-for accounts that have already decided not to pay — at $0.066 a turn, 20/month
-forever is $1.32/month per free account, which at 4% conversion is a CAC that climbs
-for as long as the account exists. Lifetime makes it a one-time **$1.74** and then
-stops. Free-tier steady state is **$0.00/month**.
+The two clocks are the load-bearing decision, and they are deliberately different.
+
+**Chat is monthly, and it is knowingly a recurring bill.** At $0.041 a turn a free
+account that spends its ten costs **$0.41/month** for as long as it exists, against
+a one-time $0.82 under the lifetime grant this replaced — so it pays for itself
+against the old scheme in two months and then keeps going. What that buys is the one
+thing a lifetime grant cannot: a free account that is still alive next month. Twenty
+turns that never return is a demo with a cliff — spend it in week one, and every
+month after that the app is a diary with a dead button in it, which is nobody's
+upgrade decision because there is no longer a moment at which one gets made. Ten a
+month puts a small, repeating taste of the paid product in front of somebody who is
+*currently* using the app, which is the only place a paywall converts.
+
+Ten rather than twenty because the ceiling now recurs. It holds the steady state at
+$0.41/month, and it is still half again what the old lifetime grant gave per month to
+anybody who lasted longer than eight weeks.
+
+**The photo stays lifetime.** It is the sharpest wall in the product and the whole
+conversion argument: one scan, ever, means every free user sees the best thing the
+app does exactly once and hits the wall while still impressed. Handing it back every
+month would be giving away the pitch.
+
+**The count is visible from the fifth message.** `MeterChip` shows the remainder once
+half a small grant is gone — half the grant, floored at three and capped at five — so
+free's ten start counting down at five left rather than at three. A ceiling somebody
+can watch approach is a plan; the same ceiling discovered by hitting it is a trap, and
+three out of ten would have meant 70% of the allowance spent before the app said a
+word.
 
 No model-written nudges. A nudge is $0.025 and a dormant free account can collect one
 every week indefinitely. Free accounts hear from the app over a templated push, which
@@ -148,8 +172,9 @@ opens. `SUBSCRIPTION_EMAILS` decides who that is, one address at a time, and
 `unmeteredFor` in `ai/lane.ts` is the predicate.
 
 Every number in this document is a cost control. The tiers are sized in dollars off
-`ai_usage`, the free grant is lifetime rather than monthly because a monthly one is
-a recurring bill, and the wall exists so that a $0.15 scan is paid for by somebody.
+`ai_usage`, the free photo is lifetime rather than monthly because a monthly one is
+a recurring bill nobody converts off, and the wall exists so that a $0.15 scan is
+paid for by somebody.
 None of that is true of a turn on the subscription: it is already paid for, flat, by
 whoever signed the box in. Metering it protects no margin — it just refuses work
 that has no marginal price.
@@ -228,7 +253,8 @@ refactor.
    tool and cannot express "not included" (a ceiling of zero comes out as 429, "come
    back later", for a feature that never comes back). Every entitlement refusal is
    **402**; throttles stay 429.
-2. ~~The lifetime photo counter.~~ **Done** — `period: 'ever'` on the free meters.
+2. ~~The lifetime photo counter.~~ **Done** — `period: 'ever'`, on the free photo.
+   Free chat moved to `period: 'month'` afterwards; see §"Free".
 3. **Stripe.** Checkout, the webhook, and the column write. Annual as the default
    selection. Sell on the web where the post-Epic link-out window allows it; keep IAP
    at 15% as the convenient path. The store half is done — RevenueCat's webhook in
@@ -283,10 +309,14 @@ covered — but that route is the door somebody knocks on, and `reviewPass` knoc
 its own every Monday for every active account. Free accounts were refused the button
 and then had the review published for them anyway, at roughly $0.15 a week each.
 
-Against the table above that is **$0.65/month per free account**, on a tier this
-document states has a steady state of $0.00 — enough to make the lifetime-grant
-argument in §"Free" wrong by a factor of five over a year. Fixed by selecting `plan`
-in `listActiveUsers` and skipping accounts whose `reviewsPerDay` is zero.
+Against the table above that is **$0.65/month per free account**, on a tier that at
+the time claimed a steady state of $0.00 — enough to make the free-tier argument in
+§"Free" wrong by a factor of five over a year. Fixed by selecting `plan` in
+`listActiveUsers` and skipping accounts whose `reviewsPerDay` is zero.
+
+The tier now has a deliberate recurring cost of $0.41/month, which does not soften
+this: $0.65 of unbilled review on top of it would still be the larger half, and it
+would still be arriving from a scheduler nobody had asked.
 
 The nudge pass needed no equivalent: `dueNudge` reads `nudgesPerWeek` off the plan
 as its first question. The general lesson is the one worth keeping — an entitlement

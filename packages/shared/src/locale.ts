@@ -247,9 +247,9 @@ export function plural(count: number, forms: PluralForms, locale: Locale): strin
 /**
  * The agreeing noun on its own, without the number in front of it.
  *
- * `plural()` returns "20 messages", which is the right answer wherever the
+ * `plural()` returns "10 messages", which is the right answer wherever the
  * count and the noun sit together. The paywall's sentences separate them —
- * "That's your 20 free messages" puts a word between — so it needs the category
+ * "That's your 1 free photo scan" puts a word between — so it needs the category
  * without the formatting. Same rules, same forms, one less thing rendered.
  */
 export function pluralWord(count: number, forms: PluralForms, locale: Locale): string {

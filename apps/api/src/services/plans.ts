@@ -40,12 +40,15 @@ import { METERS, PLANS, type MeterName, type PlanName, type PlanTier } from '@ct
  * applies and is gone. A counter cannot tell those apart and a sentence has to,
  * so the distinction is carried rather than collapsed.
  *
- * `period: 'ever'` is a lifetime allowance with no reset. It is what the free
- * tier is built out of, for the reason `SUBSCRIPTIONS.md` gives about the
- * single lifetime photo: one scan, ever, means every free user experiences the
- * best thing the app does exactly once and hits the wall while still impressed.
- * That argument was always right about photos. The cost data below extends it
- * to the whole free AI surface.
+ * `period: 'ever'` is a lifetime allowance with no reset. Exactly one meter on
+ * one tier carries it — the free photo — for the reason `SUBSCRIPTIONS.md`
+ * gives: one scan, ever, means every free user experiences the best thing the
+ * app does exactly once and hits the wall while still impressed.
+ *
+ * It used to carry free chat as well, on the argument that a monthly grant is a
+ * recurring bill. That is still true and it is now a bill this product chooses
+ * to pay: a lifetime chat grant spends itself in week one and leaves an account
+ * with nothing to convert *from* in week three. See `LIMITS.free`.
  */
 export interface Meter {
   allowed: number | null;
@@ -99,6 +102,11 @@ export interface PlanLimits {
    * safety net. A real burst of logging is a meal and its corrections, three or
    * four turns; ten an hour is well clear of that and still catches a loop
    * before it costs a month.
+   *
+   * Free's ten a month now sits at exactly the hourly figure, which is fine and
+   * is not a coincidence worth removing: the two ceilings are the same size but
+   * they are not the same window, so a loop still burns a month of allowance in
+   * an hour and then stops, rather than burning it in ninety seconds.
    */
   chatTurnsPerHour: number;
   /** Manually triggered reviews; the scheduled one does not pass through here. */
@@ -296,19 +304,46 @@ const LIMITS: Record<PlanName, PlanLimits> = {
    * roughly what MyFitnessPal's free tier is, which makes it a real product
    * rather than a demo.
    *
-   * Metered, and lifetime rather than monthly: 20 journal turns and one photo.
-   * A monthly grant would be a recurring bill for accounts that have already
-   * decided not to pay — at $0.066 a turn, 20/month forever is $1.32/month
-   * per free account, which at 4% conversion is a CAC of $33/month of burn and
-   * climbs for as long as the account exists. Lifetime makes it a one-time
-   * $1.74 acquisition cost that stops. The free tier's steady state is $0.00.
+   * Metered: **10 journal turns a month**, and one photo, ever.
    *
-   * 20 is enough to have several real conversations, correct a couple of
-   * portions, and understand what the thing does. The one photo is the whole
-   * conversion argument and is unchanged from `SUBSCRIPTIONS.md`.
+   * ---- The chat grant went monthly, and it is a recurring bill ---------------
+   *
+   * This used to be 20 turns for all time, and the argument for that is still
+   * the correct *accounting* argument: a monthly grant is money spent every
+   * month on accounts that have already decided not to pay. At the measured
+   * $0.041 a turn, a free account that spends its ten is $0.41/month for as
+   * long as it exists, against a one-time $0.82 under the lifetime grant. It
+   * pays for itself against the old scheme in two months and then keeps going.
+   *
+   * It is a deliberate trade rather than an oversight, and what is bought with
+   * it is the only thing the lifetime grant could not buy: **a free account
+   * that is still alive next month.** Twenty turns that never return is a demo
+   * with a cliff — spend it in week one, and every month after that the app is
+   * a diary with a dead button in it, which is nobody's upgrade decision
+   * because there is no longer a moment at which one gets made. Ten a month is
+   * a small, repeating taste of the thing being sold, and it puts the wall in
+   * front of somebody who is *currently* using the app, every month, which is
+   * the only place a paywall converts.
+   *
+   * Ten rather than twenty because the ceiling now recurs: it holds the steady
+   * state at $0.41/month, and 10/mo is still half again what the old grant gave
+   * per month to anybody who lasted longer than eight weeks.
+   *
+   * The number is only survivable at all because of `OFFLINE.md` — see the
+   * header of this file. The wall stopped being an exit, so a spent free
+   * account still has a working food diary and comes back tomorrow.
+   *
+   * The photo stays **lifetime**. It is the sharpest wall in the product and
+   * the whole conversion argument: one scan, ever, means every free user sees
+   * the best thing the app does exactly once and hits the wall while still
+   * impressed. Giving it back monthly would be giving away the pitch.
+   *
+   * A monthly window is a rolling thirty days here rather than a calendar
+   * month — see `allowanceFor` — so the allowance returns a turn at a time and
+   * the wall can name a date instead of shrugging.
    */
   free: {
-    chat: { allowed: 20, period: 'ever' },
+    chat: { allowed: 10, period: 'month' },
     photo: { allowed: 1, period: 'ever' },
     pantryScan: { allowed: null, period: 'month' },
     recipe: { allowed: null, period: 'month' },
@@ -467,7 +502,7 @@ const NO_CEILING: Meter = { allowed: null, period: 'month', unlimited: true };
  * The account nobody is billed for.
  *
  * Every ceiling in this file is a cost control — the tiers are sized in dollars
- * off `ai_usage`, the free grant is lifetime because a monthly one is a
+ * off `ai_usage`, the free photo is lifetime because a monthly one is a
  * recurring bill, and the wall exists so that a $0.15 scan is paid for by
  * somebody. A turn on the Claude Code subscription has already been paid for at
  * a flat rate by whoever signed the box in, so there is no margin for a meter

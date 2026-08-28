@@ -64,9 +64,9 @@ const chat = (payload: Record<string, unknown> = { text: 'Two eggs' }) => {
 
 describe('the meters', () => {
   /**
-   * The free tier's twenty messages are a lifetime grant and this account has
-   * spent all of them. On a metered lane the next turn is the 402 that
-   * `plans.test.ts` asserts; here there is no bill for it to be protecting.
+   * The free tier's ten messages a month, and this account has spent twice
+   * them. On a metered lane the next turn is the 402 that `plans.test.ts`
+   * asserts; here there is no bill for it to be protecting.
    */
   it('does not wall a spent journal', async () => {
     await spend('text_log', meterFor('free', 'chat').allowed! * 2);

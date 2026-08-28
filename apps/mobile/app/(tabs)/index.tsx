@@ -732,7 +732,9 @@ export default function JournalScreen() {
       </ScrollView>
 
       {/*
-        The count, three messages out, and only then.
+        The count, and only once it is close — half the grant on a small one,
+        the last few on a large one. `showFrom` in `MeterChip` sizes it, which
+        on free's ten a month means the fifth message is where it appears.
         
         Above the composer rather than in the conversation: it is about the app
         rather than about the food, and a line that reappears in the transcript

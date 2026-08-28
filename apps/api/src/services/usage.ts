@@ -264,9 +264,23 @@ function sentenceFor({ meter, allowed, period }: Allowance): string {
    */
   const more = meter === 'photo' ? ' You can add more without changing plan.' : '';
 
+  /*
+   * The journal's door, and it is said on both periods rather than only on the
+   * lifetime one.
+   *
+   * It used to hang off `period === 'ever'`, which read as a sentence about
+   * chat because chat was the only lifetime grant with a fallback. It was
+   * really a sentence about the *meter*: manual entry, repeat and barcode are
+   * what is left when the model is gone, and that does not stop being true
+   * because the grant now comes back in thirty days. Free chat moving to a
+   * month would otherwise have silently deleted rule 2 in `plan-copy.ts` —
+   * never end on the refusal — from the most-hit wall in the product.
+   */
+  const open = meter === 'chat' ? ' Typing a meal in is still unlimited.' : '';
+
   return period === 'ever'
-    ? `That is your ${allowed} free ${noun}. Typing a meal in is still unlimited.${more}`
-    : `That is all ${allowed} ${noun} for this month.${more}`;
+    ? `That is your ${allowed} free ${noun}.${open}${more}`
+    : `That is all ${allowed} ${noun} for this month.${open}${more}`;
 }
 
 /**

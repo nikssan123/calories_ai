@@ -62,7 +62,7 @@ export function laneFor(email: string | null | undefined): ProviderId {
  * them.
  *
  * Every ceiling in `plans.ts` is a cost control. The tiers are sized off
- * `ai_usage` in dollars, the free grant is lifetime because a monthly one is a
+ * `ai_usage` in dollars, the free photo is lifetime because a monthly one is a
  * recurring bill, and the wall exists so a turn that costs $0.15 is paid for by
  * somebody. None of that is true of a turn on the subscription: it is already
  * paid for, at a flat rate, by whoever signed the box in. Metering it does not

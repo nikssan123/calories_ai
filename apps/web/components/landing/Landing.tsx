@@ -676,11 +676,14 @@ function WeeklyRead() {
  * or a photograph is a model, and a model has a bill. Free gives away the first
  * and meters the second, which is why the numbers below look the way they do.
  *
- * **The lifetime grant is stated in the card rather than in a footnote.** Twenty
- * messages that never come back is a surprise if somebody finds it in week
- * three, and this is a page that elsewhere makes a point of marking a guess as a
- * guess. A limit you can read before signing up is a plan; the same limit
- * discovered later is a bait.
+ * **The grants are stated in the card rather than in a footnote.** Ten messages
+ * a month, and a photo scan that does not come back at all, are both a surprise
+ * if somebody finds them in week three, and this is a page that elsewhere makes
+ * a point of marking a guess as a guess. A limit you can read before signing up
+ * is a plan; the same limit discovered later is a bait. The two periods are
+ * spelled out separately for that reason — "a month" and "one, to try" are
+ * different promises and a line that joined them would be making the weaker one
+ * quietly.
  */
 /**
  * The month is the price on the card; the year is a toggle above it.
@@ -708,7 +711,7 @@ const PLANS = [
     points: [
       'Type a meal in, repeat yesterday’s, scan a barcode — unlimited, and offline',
       'Your day, your history, your weight and your trends',
-      '20 messages and 1 photo scan to try the rest',
+      '10 messages a month, plus one photo scan to try, are on the house',
     ],
     cta: 'Get started',
     featured: false,
