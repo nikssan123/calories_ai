@@ -16,6 +16,7 @@ import { latestWeight } from '../services/log.ts';
 import { latestReview } from '../services/reviews.ts';
 import { getUser, missingProfileFields } from '../services/user.ts';
 import { recordUsage } from '../services/usage.ts';
+import { hasKitchen } from '../services/plans.ts';
 import { withTurnLock } from '../services/turn-lock.ts';
 import { checkWellbeing } from '../services/wellbeing.ts';
 import { MAX_SESSION_MESSAGES, MAX_TURNS, TEXT_LOG_UNSUPPORTED_LANGUAGE } from './client.ts';
@@ -24,6 +25,7 @@ import { needsCapableModel, writingNeedsCapableModel } from './language.ts';
 import {
   createProvider,
   laneFor,
+  unmeteredFor,
   type AgentMessage,
   type AgentRequest,
   type AiProvider,
@@ -36,9 +38,9 @@ import {
   dayRolloverNotice,
   onboardingPrompt,
   PHOTO_ESTIMATION_PROMPT,
+  journalSystemPrompt,
   recentReviewPrompt,
   scannedProductsPrompt,
-  STABLE_SYSTEM_PROMPT,
 } from './prompt.ts';
 import type { ScannedProduct } from '../services/barcode.ts';
 import { buildNutritionServer, type ToolContext } from './tools.ts';
@@ -130,7 +132,24 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
   if (authError) throw new Error(authError);
 
   const day = await buildDaySummary(input.userId, today, today);
-  const { tools, toolNames } = buildNutritionServer(toolContext);
+  /*
+   * Whether this turn carries the cooking half at all.
+   *
+   * Off the plan rather than off the message, and that is the whole of the
+   * safety argument: nothing here reads what they typed, guesses an intent, or
+   * asks the model to request more tools — three things that would each be a
+   * chance to withhold a tool a turn actually needed. A tier either can cook or
+   * it cannot, it is the same answer for every turn of that account, and on the
+   * tier where the answer is no every one of these tools already fails with a
+   * 402 the moment it is called.
+   *
+   * The prompt follows the tools. `journalSystemPrompt` swaps the sections that
+   * name them for one that says the kitchen is Coach's — because prompt about a
+   * tool that is not in the request is not neutral, it is an instruction to
+   * call something that is not there.
+   */
+  const kitchen = hasKitchen(input.profile.plan, unmeteredFor(input.profile.email));
+  const { tools, toolNames } = buildNutritionServer(toolContext, { kitchen });
 
   /*
    * Which language to write this turn in, resolved once.
@@ -284,7 +303,7 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
     // needs bytes that are the same for every user, and these are per-account —
     // but neither moves between two turns of the same conversation, so neither
     // costs the transcript its cache.
-    staticSystemPrompt: STABLE_SYSTEM_PROMPT,
+    staticSystemPrompt: journalSystemPrompt(kitchen),
     dynamicSystemPrompt:
       [onboarding, reviewContext].filter((part): part is string => part !== null).join('\n\n---\n\n') ||
       undefined,
@@ -295,6 +314,7 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
     history,
     readOnly: false,
     toolset: 'journal',
+    kitchen,
     maxTurns: MAX_TURNS,
   };
 

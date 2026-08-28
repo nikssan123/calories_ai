@@ -181,6 +181,18 @@ export interface AgentRequest {
    * directly and needs only to be given the right ones.
    */
   toolset: ToolsetName;
+  /**
+   * Whether this account's plan holds a kitchen, for exactly the reason
+   * `toolset` travels here: the Anthropic provider builds its own tool server
+   * and would otherwise hand out ten tools the caller had decided to withhold —
+   * and, worse, hand them out beside a system prompt that says they are not
+   * there. See `ServerOptions.kitchen`.
+   *
+   * Optional, and absent means the whole set. Every caller that has no plan to
+   * consult — the review, the nudge, the kitchen's own agents — is then
+   * unchanged by construction.
+   */
+  kitchen?: boolean;
   maxTurns: number;
 }
 

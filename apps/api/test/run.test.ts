@@ -519,6 +519,54 @@ describe('runTurn', () => {
  * is only that `runTurn` acts on the answer — the detector could be perfect and
  * the turn still run on the wrong model.
  */
+/**
+ * The cooking half of the request, decided by the plan rather than by the
+ * message.
+ *
+ * Ten tools and the prompt that governs them are nearly a fifth of the cached
+ * prefix, written on every turn of every account — and on a tier where the
+ * kitchen is not granted, every one of those tools already answers 402. So the
+ * plan decides before the request is built, and the answer the person gets is
+ * supposed to be the one they got before: the kitchen is part of Coach.
+ *
+ * Both halves are asserted together on purpose. The provider that runs these
+ * turns builds its own tool server, so the first version of this shipped a
+ * prompt saying the kitchen was absent beside ten tools that were still there —
+ * which is a worse turn than either state on its own.
+ */
+describe('what a plan puts in the request', () => {
+  const toolsOf = (call: (typeof agentCalls)[number]): string[] =>
+    (call.options?.allowedTools ?? []).map((n: string) => n.split('__').at(-1));
+
+  it('withholds the cooking tools and their prompt from a plan without a kitchen', async () => {
+    scriptAgent({ text: 'Both in.' });
+    await turn();
+
+    expect(toolsOf(agentCalls[0]!)).not.toContain('suggest_recipes');
+    expect(toolsOf(agentCalls[0]!)).not.toContain('plan_week');
+    expect(systemPromptOf(agentCalls[0]!)).toMatch(/part of Coach/);
+  });
+
+  it('keeps the tools every tier is granted', async () => {
+    scriptAgent({ text: 'Both in.' });
+    await turn();
+
+    expect(toolsOf(agentCalls[0]!)).toContain('log_food');
+    expect(toolsOf(agentCalls[0]!)).toContain('update_pantry');
+    expect(toolsOf(agentCalls[0]!)).toContain('update_shopping_list');
+  });
+
+  it('gives the whole kitchen to an account whose plan holds one', async () => {
+    await query('UPDATE users SET plan = $1 WHERE id = $2', ['coach', user.id]);
+    scriptAgent({ text: 'Both in.' });
+    await turn();
+
+    expect(toolsOf(agentCalls[0]!)).toContain('suggest_recipes');
+    expect(toolsOf(agentCalls[0]!)).toContain('plan_week');
+    expect(systemPromptOf(agentCalls[0]!)).not.toMatch(/part of Coach/);
+  });
+});
+
 describe('routing a turn by its language', () => {
   it('keeps an English meal log on the cheap model', async () => {
     scriptAgent({ text: 'Logged.' });

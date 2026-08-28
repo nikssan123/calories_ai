@@ -529,6 +529,39 @@ export function meterFor(plan: PlanName, meter: MeterName, unmetered = false): M
   }
 }
 
+/**
+ * Whether this account can cook at all.
+ *
+ * `null` on a meter means the feature is not on the plan, as against zero,
+ * which means it is on the plan and spent — so this is the difference between
+ * "come back next month" and "this is Coach's". Read off `recipe` and
+ * `mealPlan` together because they are granted together and a tier holding one
+ * without the other would be a mistake rather than a product.
+ *
+ * It decides what goes in the request, not only what a tool answers: the
+ * journal's ten cooking tools and the prompt that governs them are nearly a
+ * fifth of the cached prefix, paid on every turn of every account, and on a
+ * tier where none of them can succeed that is a fifth of the prefix spent to
+ * be told no. See `ServerOptions.kitchen`.
+ */
+export function hasKitchen(plan: PlanName, unmetered = false): boolean {
+  const limits = limitsFor(plan, unmetered);
+  return granted(limits.recipe) || granted(limits.mealPlan);
+}
+
+/**
+ * Whether a meter applies to this plan at all — the first of `Meter`'s three
+ * states, and the only one this file's callers may read as "not yours".
+ *
+ * `allowed: null` alone is not enough to answer it, because `NO_CEILING` is
+ * also spelled that way: an unmetered account has `null` on every meter and is
+ * the *least* restricted thing in the file. Reading the null on its own takes
+ * the kitchen away from exactly the deployment that has no bill to protect.
+ */
+function granted(meter: Meter): boolean {
+  return meter.unlimited === true || meter.allowed !== null;
+}
+
 /*
  * ---- What would make these numbers sellable ---------------------------------
  *

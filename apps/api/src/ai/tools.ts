@@ -382,6 +382,26 @@ export interface ServerOptions {
    * would eventually log food, and a fridge photo is not a meal.
    */
   toolset?: ToolsetName;
+  /**
+   * Whether this account can cook — recipes, the week's plan, and the library.
+   *
+   * Ten tools and 9,781 characters of the cached prefix, on every turn of every
+   * account, and on `free` and `plus` not one of them can succeed: `recipe` and
+   * `meal_plan` are `null` on those tiers, which means the feature is not on
+   * the plan rather than spent. Today the model finds that out by calling
+   * `suggest_recipes` and reading a `PlanLimitError` back — a round trip, and a
+   * fifth of the tool payload, to be told no.
+   *
+   * So the plan decides it before the request is built. This is not a new
+   * ceiling: nothing becomes impossible that was possible before. What changes
+   * is where the refusal comes from, and `KITCHEN_LOCKED` in `prompt.ts` is
+   * what keeps the answer the same — the model still says the kitchen is part
+   * of Coach, it just no longer spends a call to find out.
+   *
+   * Defaults to true so every existing caller — the review, the nudge, the
+   * kitchen's own agents — is unchanged.
+   */
+  kitchen?: boolean;
 }
 
 export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {}) {
@@ -2544,10 +2564,39 @@ const workoutExercisesField = z
    * and one more: it is the only read in the file that leaves the building,
    * and a review agent has no business making an outbound request to anybody.
    */
+  /**
+   * The cooking half, given only to an account whose plan can cook.
+   *
+   * Spliced back into the position it has always held rather than appended,
+   * because a tier that *does* have the kitchen has to get a request identical
+   * to the one it got before — same tools, same order, same bytes. Reordering
+   * them would be a change to what every Coach turn sends for no reason beyond
+   * making this file read more tidily.
+   *
+   * The pantry and the shopping list are deliberately not in here. Both are
+   * granted on every tier — `pantryItems` is 60 on `free` — so withholding them
+   * would take away something the plan actually gives, which is the one thing
+   * this split must never do. "Add batteries to the list" has to keep working
+   * on an account that cannot cook, and there is no other tool that answers it.
+   */
+  const cooks = options.kitchen !== false;
+  const kitchenWrites = cooks
+    ? [
+        suggestRecipesTool,
+        importRecipeTool,
+        adaptRecipeTool,
+        planWeekTool,
+        // Logging tools that price nothing themselves — the numbers were settled
+        // when the recipe or the original entry was written.
+        cookRecipeTool,
+        saveRecipeTool,
+        cookPlannedNight,
+        updatePlanNight,
+      ]
+    : [];
   const kitchenReads = [
     getPantry,
-    findRecipes,
-    getMealPlanTool,
+    ...(cooks ? [findRecipes, getMealPlanTool] : []),
     getShoppingList,
     lookupBarcodeTool,
   ];
@@ -2571,16 +2620,7 @@ const workoutExercisesField = z
     forget,
     // Writes in the sense that matters here: they spend money and they store
     // recipes. The read-only review agent must not be able to reach either.
-    suggestRecipesTool,
-    importRecipeTool,
-    adaptRecipeTool,
-    planWeekTool,
-    // Logging tools that price nothing themselves — the numbers were settled
-    // when the recipe or the original entry was written.
-    cookRecipeTool,
-    saveRecipeTool,
-    cookPlannedNight,
-    updatePlanNight,
+    ...kitchenWrites,
     repeatMeal,
     logBarcodeTool,
     updatePantry,

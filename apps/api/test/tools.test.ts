@@ -80,6 +80,65 @@ describe('the tool set', () => {
     build({}, true);
     expect([...tools.keys()].sort()).toEqual(['get_day', 'get_progress', 'search_food_history']);
   });
+
+  /**
+   * The cooking half, withheld from a tier that cannot cook.
+   *
+   * Ten tools and ~9,300 characters of a prefix that is written to cache on
+   * every turn — and on `free` and `plus` not one of them can succeed, because
+   * `recipe` and `meal_plan` are `null` on those tiers. The saving is real and
+   * the behaviour is not supposed to move: what used to be a round trip into a
+   * `PlanLimitError` is now a sentence the prompt already knows to say.
+   */
+  it('withholds the cooking tools from a plan that cannot cook', () => {
+    const withKitchen = buildNutritionServer(
+      { userId: user.id, ctx: user.ctx, now: NOW, photoId: null, actions: [], units: 'metric' },
+      { kitchen: true },
+    );
+    const without = buildNutritionServer(
+      { userId: user.id, ctx: user.ctx, now: NOW, photoId: null, actions: [], units: 'metric' },
+      { kitchen: false },
+    );
+
+    const names = (built: { tools: { name: string }[] }) => built.tools.map((t) => t.name);
+    const dropped = names(withKitchen).filter((n) => !names(without).includes(n));
+
+    expect(dropped.sort()).toEqual([
+      'adapt_recipe',
+      'cook_planned_night',
+      'cook_recipe',
+      'find_recipes',
+      'get_meal_plan',
+      'import_recipe',
+      'plan_week',
+      'save_recipe',
+      'suggest_recipes',
+      'update_plan_night',
+    ]);
+  });
+
+  /**
+   * The pantry and the shopping list are granted on every tier — `pantryItems`
+   * is 60 on `free` — so they are not the kitchen for this purpose. "Add
+   * batteries to the shopping list" has to keep working on an account that
+   * cannot cook, and there is no other tool that answers it.
+   */
+  it('keeps the pantry and the shopping list, which every tier is granted', () => {
+    const built = buildNutritionServer(
+      { userId: user.id, ctx: user.ctx, now: NOW, photoId: null, actions: [], units: 'metric' },
+      { kitchen: false },
+    );
+    const names = built.tools.map((t) => t.name);
+
+    for (const kept of ['get_pantry', 'update_pantry', 'get_shopping_list', 'update_shopping_list']) {
+      expect(names).toContain(kept);
+    }
+  });
+
+  it('carries the whole set by default, so every other caller is unchanged', () => {
+    const { tools: all } = build();
+    expect(all.map((t) => t.name)).toContain('suggest_recipes');
+  });
 });
 
 describe('log_food', () => {

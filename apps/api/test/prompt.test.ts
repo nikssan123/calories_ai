@@ -10,6 +10,7 @@ import {
   reviewTaskPrompt,
   scannedProductsPrompt,
   STABLE_SYSTEM_PROMPT,
+  STABLE_SYSTEM_PROMPT_NO_KITCHEN,
 } from '../src/ai/prompt.ts';
 import type { ScannedProduct } from '../src/services/barcode.ts';
 
@@ -212,6 +213,66 @@ describe('STABLE_SYSTEM_PROMPT', () => {
   it('is a constant, so it stays in the prompt cache', () => {
     expect(STABLE_SYSTEM_PROMPT).toBe(STABLE_SYSTEM_PROMPT);
     expect(STABLE_SYSTEM_PROMPT).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+  });
+});
+
+/**
+ * The same prompt for an account whose plan holds no kitchen.
+ *
+ * It exists because prompt about a tool that is not in the request is not
+ * neutral — it is an instruction to call something that is not there. So the
+ * cooking sections travel with the cooking tools, and what replaces them has
+ * to carry the two things that do *not* travel with them: the pantry and the
+ * shopping list, which every tier is granted.
+ */
+describe('STABLE_SYSTEM_PROMPT_NO_KITCHEN', () => {
+  const KITCHEN_TOOLS = [
+    'suggest_recipes',
+    'find_recipes',
+    'adapt_recipe',
+    'cook_recipe',
+    'save_recipe',
+    'import_recipe',
+    'plan_week',
+    'update_plan_night',
+    'cook_planned_night',
+    'get_meal_plan',
+  ];
+
+  it('names no tool the request will not carry', () => {
+    for (const tool of KITCHEN_TOOLS) {
+      expect(STABLE_SYSTEM_PROMPT_NO_KITCHEN).not.toContain(tool);
+    }
+  });
+
+  it('keeps the rules for the two tools that stay', () => {
+    // Withholding the guidance while keeping the tool is the one way this
+    // change could quietly make the product worse.
+    expect(STABLE_SYSTEM_PROMPT_NO_KITCHEN).toContain('update_pantry');
+    expect(STABLE_SYSTEM_PROMPT_NO_KITCHEN).toContain('get_pantry');
+    expect(STABLE_SYSTEM_PROMPT_NO_KITCHEN).toContain('update_shopping_list');
+    expect(STABLE_SYSTEM_PROMPT_NO_KITCHEN).toMatch(/memory, not a stocktake/);
+    expect(STABLE_SYSTEM_PROMPT_NO_KITCHEN).toMatch(/add batteries to the shopping list/i);
+  });
+
+  it('answers the cooking question the way the paywall does', () => {
+    expect(STABLE_SYSTEM_PROMPT_NO_KITCHEN).toMatch(/part of Coach/);
+    // The failure this paragraph exists to prevent: improvising in prose the
+    // thing they would be paying for.
+    expect(STABLE_SYSTEM_PROMPT_NO_KITCHEN).toMatch(/Do not write the recipe out yourself/);
+  });
+
+  it('is the same prompt either side of the split', () => {
+    // Everything that is not about cooking is byte-identical, so the two
+    // variants cannot drift into two different products.
+    const cut = (p: string) => p.slice(0, p.indexOf('# Cooking'));
+    expect(cut(STABLE_SYSTEM_PROMPT_NO_KITCHEN)).toBe(cut(STABLE_SYSTEM_PROMPT));
+    const tail = (p: string) => p.slice(p.indexOf('# Showing rather than telling'));
+    expect(tail(STABLE_SYSTEM_PROMPT_NO_KITCHEN)).toBe(tail(STABLE_SYSTEM_PROMPT));
+  });
+
+  it('is shorter, which is the whole point', () => {
+    expect(STABLE_SYSTEM_PROMPT_NO_KITCHEN.length).toBeLessThan(STABLE_SYSTEM_PROMPT.length);
   });
 });
 

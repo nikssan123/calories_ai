@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { query } from '../src/db.ts';
 import { METERS, PLANS } from '@ct/shared';
-import { limitsFor, meterFor, tiers } from '../src/services/plans.ts';
+import { hasKitchen, limitsFor, meterFor, tiers } from '../src/services/plans.ts';
 import { accountGate, getUser } from '../src/services/user.ts';
 import { scriptAgent } from './helpers/agent-mock.ts';
 import { appFor, createUser, type TestUser } from './helpers/factories.ts';
@@ -559,5 +559,41 @@ describe('GET /entitlements', () => {
     const meal = await app.inject({ method: 'GET', url: '/plan', headers: { cookie } });
     expect(meal.statusCode).toBe(200);
     expect(meal.json()).toHaveProperty('week_start');
+  });
+});
+
+/**
+ * The predicate that decides what goes in the request, not only what a tool
+ * answers back.
+ *
+ * `null` on a meter means the feature is not on the plan; zero means it is on
+ * the plan and spent. Only the first is a reason to leave the tools out — a
+ * spent meter still needs the tool present so the refusal can say "next month"
+ * rather than "not yours".
+ */
+describe('hasKitchen', () => {
+  it('is false on the tiers where cooking is not granted at all', () => {
+    expect(hasKitchen('free')).toBe(false);
+    expect(hasKitchen('plus')).toBe(false);
+  });
+
+  it('is true on the tier that is sold on it', () => {
+    expect(hasKitchen('coach')).toBe(true);
+  });
+
+  it('is true for an unmetered turn, whatever the column says', () => {
+    // A deployment with no per-token bill has no ceiling to protect, so it also
+    // has no reason to withhold ten tools. See `unmeteredFor`.
+    expect(hasKitchen('free', true)).toBe(true);
+  });
+
+  it('agrees with the meters it is derived from', () => {
+    for (const plan of PLANS) {
+      const on = (meter: 'recipe' | 'meal_plan') => {
+        const m = meterFor(plan, meter);
+        return m.unlimited === true || m.allowed !== null;
+      };
+      expect(hasKitchen(plan)).toBe(on('recipe') || on('meal_plan'));
+    }
   });
 });

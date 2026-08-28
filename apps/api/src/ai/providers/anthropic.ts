@@ -68,6 +68,7 @@ async function execute(
   const { server, toolNames } = buildNutritionServer(toolContext, {
     readOnly: request.readOnly,
     toolset: request.toolset,
+    kitchen: request.kitchen,
   });
 
   const choice = request.model ?? MODELS[request.kind];

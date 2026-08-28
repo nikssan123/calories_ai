@@ -285,6 +285,55 @@ describe('tool definitions', () => {
     await createAnthropicApiProvider().run(request({ tools: [] }), null);
     expect(seen[0]!.body).not.toHaveProperty('tools');
   });
+
+  /**
+   * The same schema, spelled in a fifth of the bytes.
+   *
+   * Zod renders `.nullable()` as a two-branch `anyOf`, and the journal set is
+   * mostly nullable fields — 88 of them, at ~25 characters of prefix each, paid
+   * on every call of every turn. `type: [T, 'null']` says the same thing to any
+   * JSON Schema reader, so this is a saving with no argument on the other side.
+   */
+  it('writes a nullable field as a type pair rather than a union', async () => {
+    const seen = stubFetch(says('Logged.'));
+    await createAnthropicApiProvider().run(
+      request({
+        tools: [
+          {
+            ...logFood,
+            inputSchema: { grams: z.number().nullable().default(null).describe('How much') },
+          },
+        ],
+      }),
+      null,
+    );
+
+    const grams = seen[0]!.body.tools[0].input_schema.properties.grams;
+    expect(grams).toEqual({ type: ['number', 'null'], default: null, description: 'How much' });
+  });
+
+  /**
+   * The narrowing is deliberately conservative, because the two ways of getting
+   * it wrong are both silent: fold an `enum` into a type pair and the constraint
+   * is either lost or applied to `null`, and the model finds out by having its
+   * argument rejected.
+   */
+  it('leaves a branch carrying more than a type alone', async () => {
+    const seen = stubFetch(says('Logged.'));
+    await createAnthropicApiProvider().run(
+      request({
+        tools: [
+          {
+            ...logFood,
+            inputSchema: { meal: z.enum(['breakfast', 'lunch']).nullable().default(null) },
+          },
+        ],
+      }),
+      null,
+    );
+
+    expect(seen[0]!.body.tools[0].input_schema.properties.meal).toHaveProperty('anyOf');
+  });
 });
 
 /**

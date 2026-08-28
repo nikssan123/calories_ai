@@ -527,8 +527,45 @@ function toolSpec(tool: ToolDefinition): Anthropic.Tool {
   return {
     name: tool.name,
     description: tool.description,
-    input_schema: schema as Anthropic.Tool.InputSchema,
+    input_schema: narrowNullable(schema) as Anthropic.Tool.InputSchema,
   };
+}
+
+/**
+ * `anyOf: [{type: 'number'}, {type: 'null'}]` written the short way.
+ *
+ * Zod renders every `.nullable()` as a two-branch union, and this file's tools
+ * are mostly nullable fields — 88 of them across the journal set, at ~25 wasted
+ * characters each. `{"type": ["number", "null"]}` is the same schema by JSON
+ * Schema's own rules, so nothing about what the model may send changes; it is
+ * only spelled in a fifth of the bytes.
+ *
+ * Worth doing here rather than in `tools.ts` because it is a property of the
+ * wire format, not of any tool: written at the definition site it would be 88
+ * chances to get one wrong, and Zod is what produced the shape in the first
+ * place.
+ *
+ * Deliberately conservative. A branch carrying anything besides `type` — an
+ * `enum`, a `minimum`, a nested object — is left alone, because folding those
+ * into a type array would either lose the constraint or apply it to `null`.
+ */
+function narrowNullable(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(narrowNullable);
+  if (node === null || typeof node !== 'object') return node;
+
+  const record = node as Record<string, unknown>;
+  const branches = record.anyOf;
+  if (Array.isArray(branches) && branches.length === 2) {
+    const [first, second] = branches as Record<string, unknown>[];
+    const plain = (b: Record<string, unknown> | undefined): b is { type: string } =>
+      b !== undefined && Object.keys(b).length === 1 && typeof b.type === 'string';
+    if (plain(first) && plain(second) && second.type === 'null') {
+      const { anyOf: _anyOf, ...rest } = record;
+      return { ...rest, type: [first.type, 'null'] };
+    }
+  }
+
+  return Object.fromEntries(Object.entries(record).map(([key, value]) => [key, narrowNullable(value)]));
 }
 
 /**
