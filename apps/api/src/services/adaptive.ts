@@ -3,11 +3,11 @@ import { query } from '../db.ts';
 import { addDays, type DayContext, localDateFor } from '../time.ts';
 import { latestWeight, listWeights } from './log.ts';
 import {
-  GOAL_KCAL_DELTA,
   MIN_TARGET_KCAL,
   macrosFor,
   predictTdee,
   setTargets,
+  targetKcalFor,
   targetsForDate,
 } from './targets.ts';
 import { getUser } from './user.ts';
@@ -281,7 +281,7 @@ export async function proposeTargets(
   }
 
   const goal = user.goal ?? 'maintain';
-  const ideal = estimate.observed_tdee_kcal + GOAL_KCAL_DELTA[goal];
+  const ideal = targetKcalFor(estimate.observed_tdee_kcal, goal);
   const raw = clamp(ideal - current.kcal, -MAX_STEP_KCAL * estimate.quality, MAX_STEP_KCAL * estimate.quality);
 
   /*
@@ -326,7 +326,11 @@ export async function proposeTargets(
     current,
     proposed: {
       kcal,
-      ...macrosFor(kcal, weight?.weight_kg ?? null, user.goal),
+      ...macrosFor(kcal, {
+        weight_kg: weight?.weight_kg ?? null,
+        height_cm: user.height_cm,
+        goal: user.goal,
+      }),
       is_custom: false,
       source: 'adaptive',
     },

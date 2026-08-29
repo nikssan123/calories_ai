@@ -212,22 +212,22 @@ describe('proposeTargets', () => {
       startWeightKg: 85,
       kgPerWeek: -0.5,
     });
-    await setUserTargets(user, '2026-03-01', { kcal: 2200 });
+    await setUserTargets(user, '2026-03-01', { kcal: 2080 });
 
     const proposal = await proposeTargets(user.id, user.ctx, TODAY);
 
-    // Maintenance ~2,750 and a loss goal (-500) means the target should rise
-    // from 2,200 to about 2,250 — they had been eating under their own deficit.
+    // Maintenance ~2,750 and a loss goal (-20%) means the target should rise
+    // from 2,080 to 2,200 — they had been eating under their own deficit.
     expect(proposal.eligible).toBe(true);
-    expect(proposal.proposed.kcal).toBe(2250);
-    expect(proposal.delta_kcal).toBe(50);
+    expect(proposal.proposed.kcal).toBe(2200);
+    expect(proposal.delta_kcal).toBe(120);
     expect(proposal.proposed.source).toBe('adaptive');
-    expect(proposal.explanation).toMatch(/2250/);
+    expect(proposal.explanation).toMatch(/2200/);
   });
 
   it('recomputes macros so the new target still adds up', async () => {
     await seedAdaptiveWindow(user, { endDate: WINDOW_END, kcalPerDay: 2200, kgPerWeek: -0.5 });
-    await setUserTargets(user, '2026-03-01', { kcal: 2200 });
+    await setUserTargets(user, '2026-03-01', { kcal: 2080 });
 
     const { proposed } = await proposeTargets(user.id, user.ctx, TODAY);
     const energy = proposed.protein_g * 4 + proposed.carbs_g * 4 + proposed.fat_g * 9;
@@ -279,8 +279,8 @@ describe('proposeTargets', () => {
       startWeightKg: 85,
       kgPerWeek: -0.5,
     });
-    // 2,750 maintenance less a 500 deficit is 2,250 — already correct.
-    await setUserTargets(user, '2026-03-01', { kcal: 2250 });
+    // 2,750 maintenance less a 20% deficit is 2,200 — already correct.
+    await setUserTargets(user, '2026-03-01', { kcal: 2200 });
 
     const proposal = await proposeTargets(user.id, user.ctx, TODAY);
     expect(proposal).toMatchObject({ eligible: false, blocked_by: 'change_too_small' });
@@ -328,7 +328,7 @@ describe('defaults', () => {
       startWeightKg: 85,
       kgPerWeek: -0.5,
     });
-    await setUserTargets(user, '2020-01-01', { kcal: 2200 });
+    await setUserTargets(user, '2020-01-01', { kcal: 2080 });
 
     const { estimate } = await estimateTdee(user.id, user.ctx);
     expect(estimate!.days_logged).toBe(14);
@@ -434,7 +434,7 @@ describe('the floor guard', () => {
 describe('applyAdaptiveTargets', () => {
   it('writes the new target and dates it today', async () => {
     await seedAdaptiveWindow(user, { endDate: WINDOW_END, kcalPerDay: 2200, kgPerWeek: -0.5 });
-    await setUserTargets(user, '2026-03-01', { kcal: 2200 });
+    await setUserTargets(user, '2026-03-01', { kcal: 2080 });
 
     const { applied, proposal } = await applyAdaptiveTargets(user.id, user.ctx, TODAY);
     expect(applied).toBe(true);
@@ -443,7 +443,7 @@ describe('applyAdaptiveTargets', () => {
     expect(stored.kcal).toBe(proposal.proposed.kcal);
     expect(stored.source).toBe('adaptive');
     // Yesterday's target is untouched — history stays honest.
-    expect((await targetsForDate(user.id, '2026-03-14')).kcal).toBe(2200);
+    expect((await targetsForDate(user.id, '2026-03-14')).kcal).toBe(2080);
   });
 
   it('writes nothing when the proposal is not eligible', async () => {

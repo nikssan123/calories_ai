@@ -47,7 +47,7 @@ import {
 import { buildDaySummary, buildProgress } from '../services/summary.ts';
 import { getUser, markOnboarded, missingProfileFields, updateUser } from '../services/user.ts';
 import { addNote, forgetNote, MAX_NOTE_LENGTH } from '../services/notes.ts';
-import { calculateTargets, setTargets, targetsForDate } from '../services/targets.ts';
+import { retargetFromProfile, setTargets, targetsForDate } from '../services/targets.ts';
 import { latestWeight } from '../services/log.ts';
 import { repeatFoodEntry } from '../services/history.ts';
 import {
@@ -1253,28 +1253,13 @@ const workoutExercisesField = z
       const patch = Object.fromEntries(
         Object.entries(args).filter(([, value]) => value !== null),
       );
+      // Read before the write: `retargetFromProfile` needs to know which of the
+      // five actually moved, and afterwards there is nothing left to compare to.
+      const before = await getUser(tc.userId);
       const profile = await updateUser(tc.userId, patch);
 
-      // Recalculate targets from whatever is now known, unless the user has
-      // taken manual control of them.
       const today = localDateFor(tc.now, tc.ctx);
-      const existing = await targetsForDate(tc.userId, today);
-      if (!existing.is_custom) {
-        const weight = await latestWeight(tc.userId);
-        await setTargets(
-          tc.userId,
-          today,
-          calculateTargets({
-            sex: profile.sex,
-            birth_date: profile.birth_date,
-            height_cm: profile.height_cm,
-            weight_kg: weight?.weight_kg ?? null,
-            activity_level: profile.activity_level,
-            goal: profile.goal,
-          }),
-          'set during conversation',
-        );
-      }
+      await retargetFromProfile(tc.userId, before, profile, today, 'set during conversation');
 
       const missing = missingProfileFields(profile);
       const weight = await latestWeight(tc.userId);

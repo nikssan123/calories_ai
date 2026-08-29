@@ -72,7 +72,7 @@ import {
 import { buildFullReviewStats, latestReview, listReviews } from '../services/reviews.ts';
 import { buildCalendar, buildExerciseSummary } from '../services/calendar.ts';
 import { buildDaySummary, buildProgress, currentLocalDate } from '../services/summary.ts';
-import { calculateTargets, setTargets, targetsForDate } from '../services/targets.ts';
+import { retargetFromProfile, setTargets, targetsForDate } from '../services/targets.ts';
 import {
   authenticate,
   findUserByEmail,
@@ -1102,26 +1102,14 @@ export async function registerRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid profile' });
 
     const userId = request.userId!;
+    // Read before the write: `retargetFromProfile` needs to know which of the
+    // five actually moved, and afterwards there is nothing left to compare to.
+    const before = await getUser(userId);
     const profile = await updateUser(userId, parsed.data);
 
-    // Recalculate targets whenever an input to the calculation changes, unless
-    // the user has taken manual control of them.
     const ctx = { timezone: profile.timezone, dayStartHour: profile.day_start_hour };
     const today = localDateFor(new Date(), ctx);
-    const existing = await targetsForDate(userId, today);
-
-    if (!existing.is_custom) {
-      const weight = await latestWeight(userId);
-      const targets = calculateTargets({
-        sex: profile.sex,
-        birth_date: profile.birth_date,
-        height_cm: profile.height_cm,
-        weight_kg: weight?.weight_kg ?? null,
-        activity_level: profile.activity_level,
-        goal: profile.goal,
-      });
-      await setTargets(userId, today, targets, 'recalculated from profile');
-    }
+    await retargetFromProfile(userId, before, profile, today, 'recalculated from profile');
 
     /*
      * The same list the conversation works from, rather than a second copy of

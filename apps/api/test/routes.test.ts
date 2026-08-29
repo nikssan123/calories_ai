@@ -462,6 +462,44 @@ describe('profile routes', () => {
     expect((await targetsForDate(user.id, today)).kcal).toBe(1900);
   });
 
+  /**
+   * The adaptive pass spends weeks walking the target towards what this person
+   * actually burns, 200 kcal at a time. Recomputing Mifflin-St Jeor over the
+   * top of it threw all of that away — and it fired on every patch, so renaming
+   * the account or flipping a notification switch was enough to do it.
+   */
+  it('leaves a learned target alone when the patch changes nothing it reads', async () => {
+    await setUserTargets(user, today, { kcal: 2400, source: 'adaptive' });
+    await app.inject({
+      method: 'PATCH',
+      url: '/profile',
+      ...auth({ payload: { display_name: 'Renamed', notify_nudges: false } }),
+    });
+    expect(await targetsForDate(user.id, today)).toMatchObject({ kcal: 2400, source: 'adaptive' });
+  });
+
+  it('leaves a learned target alone when a field it did not measure moves', async () => {
+    await setUserTargets(user, today, { kcal: 2400, source: 'adaptive' });
+    await app.inject({
+      method: 'PATCH',
+      url: '/profile',
+      ...auth({ payload: { activity_level: 'very_active' } }),
+    });
+    // What they burn was measured with that activity already priced in.
+    expect(await targetsForDate(user.id, today)).toMatchObject({ kcal: 2400, source: 'adaptive' });
+  });
+
+  it('rebases a learned target onto a new goal instead of recomputing it', async () => {
+    // 2400 under a 'lose' goal means the pass learned a maintenance of 3000.
+    await setUserTargets(user, today, { kcal: 2400, source: 'adaptive' });
+    await app.inject({
+      method: 'PATCH',
+      url: '/profile',
+      ...auth({ payload: { goal: 'maintain' } }),
+    });
+    expect(await targetsForDate(user.id, today)).toMatchObject({ kcal: 3000, source: 'adaptive' });
+  });
+
   it('rejects an invalid patch', async () => {
     const response = await app.inject({ method: 'PATCH', url: '/profile', ...auth({ payload: { sex: 'yes' } }) });
     expect(response.statusCode).toBe(400);
@@ -568,9 +606,11 @@ describe('GET /targets/adaptive', () => {
   });
 
   it('previews a change without making it', async () => {
+    // 2,400 a day while losing 0.5 kg/week puts maintenance near 2,950, which
+    // wants a 'lose' target of 2,360 rather than the 2,200 on file.
     await seedAdaptiveWindow(user, {
       endDate: today,
-      kcalPerDay: 2200,
+      kcalPerDay: 2400,
       startWeightKg: 85,
       kgPerWeek: -0.5,
     });

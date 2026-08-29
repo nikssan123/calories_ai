@@ -116,13 +116,16 @@ describe('generateWeeklyReview', () => {
   });
 
   it('moves the target before writing, and says so', async () => {
+    // 2,200 a day while losing 0.5 kg/week puts maintenance near 2,750, so a
+    // loss goal wants 2,200 rather than the 2,080 this account is on.
+    await setUserTargets(user, '2026-01-01', { kcal: 2080, protein_g: 160 });
     await seedAdaptiveWindow(user, {
       endDate: '2026-03-15',
       kcalPerDay: 2200,
       startWeightKg: 85,
       kgPerWeek: -0.5,
     });
-    scriptAgent({ text: 'Your target moved up to 2,250.' });
+    scriptAgent({ text: 'Your target moved up to 2,200.' });
 
     const review = await generateWeeklyReview(user.id, { today: MONDAY });
 
