@@ -21,6 +21,7 @@ import { OptionCard } from '@/components/onboarding/OptionCard';
 import { Building, Plan } from '@/components/onboarding/Reveal';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { BIRTH_DATE_FLOOR } from '@/lib/birth-date';
 import { setPreferredLocale, useLocale, useT, type StringKey } from '@/lib/i18n';
 import { useOnboarding } from '@/lib/onboarding';
 import { column, type as t, useColors, useType } from '@/theme';
@@ -454,6 +455,7 @@ export default function OnboardingScreen() {
               value={birthDate ? new Date(`${birthDate}T12:00:00Z`) : new Date(1995, 0, 1)}
               mode="date"
               display="spinner"
+              minimumDate={BIRTH_DATE_FLOOR}
               maximumDate={new Date()}
               onChange={(event, date) => {
                 if (event.type === 'dismissed' || !date) return;

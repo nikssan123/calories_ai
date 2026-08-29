@@ -30,6 +30,7 @@ import { Switch } from '@/components/Switch';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { BIRTH_DATE_FLOOR } from '@/lib/birth-date';
 import { useOnboarding } from '@/lib/onboarding';
 import { useEntitlements } from '@/lib/entitlements';
 import { billingAvailable, manageSubscription, restore } from '@/lib/billing';
@@ -636,6 +637,7 @@ function BirthDate({
       value={parsed ?? new Date(1995, 0, 1)}
       mode="date"
       display="spinner"
+      minimumDate={BIRTH_DATE_FLOOR}
       maximumDate={new Date()}
       onChange={(event, date) => {
         if (event.type === 'dismissed' || !date) return;
