@@ -518,6 +518,57 @@ describe('runTurn', () => {
     expect(messages[0]!.photo_id).toBe(photo.id);
     expect(messages[1]!.photo_id).toBeNull();
   });
+
+  /**
+   * The client draws the sent photo from the picker's own file, which lives in a
+   * cache directory the OS empties whenever it likes. Handing the stored row
+   * back is what lets it swap that for a URL it can keep, the moment the turn
+   * lands rather than at the next cold start — so the row has to come back, and
+   * it has to come back signed.
+   */
+  it('returns the stored user message, with a signed URL for its photo', async () => {
+    const { savePhoto } = await import('../src/services/photos.ts');
+    const photo = await savePhoto(user.id, 'image/png', 'AAAA');
+
+    scriptAgent({ text: 'Looks like ~700 kcal.' });
+    const profile = await getUser(user.id);
+    const response = await runTurn({
+      userId: user.id,
+      ctx: user.ctx,
+      profile,
+      text: 'what is this?',
+      photo: { id: photo.id, mediaType: 'image/png', base64: 'AAAA' },
+    });
+
+    expect(response.user_message).toMatchObject({
+      role: 'user',
+      content: 'what is this?',
+      photo_id: photo.id,
+    });
+    expect(response.user_message!.photo_url).toMatch(
+      new RegExp(`^/photos/${photo.id}\\?exp=\\d+&sig=`),
+    );
+    // The turn's two rows, not one row twice.
+    expect(response.user_message!.id).not.toBe(response.message.id);
+  });
+
+  it('returns a user message without a photo URL when there was no photo', async () => {
+    scriptAgent({ text: 'Logged.' });
+    const profile = await getUser(user.id);
+    const response = await runTurn({
+      userId: user.id,
+      ctx: user.ctx,
+      profile,
+      text: 'two eggs and toast',
+    });
+
+    expect(response.user_message).toMatchObject({
+      role: 'user',
+      content: 'two eggs and toast',
+      photo_id: null,
+      photo_url: null,
+    });
+  });
 });
 
 /**

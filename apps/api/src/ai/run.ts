@@ -334,7 +334,13 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
 
   // The user's message is persisted only now, so a failed turn doesn't leave a
   // dangling prompt in the conversation.
-  await insertMessage(input.userId, 'user', input.text, input.photo?.id ?? null, null);
+  const userMessage = await insertMessage(
+    input.userId,
+    'user',
+    input.text,
+    input.photo?.id ?? null,
+    null,
+  );
   const assistantMessage = await insertMessage(
     input.userId,
     'assistant',
@@ -360,7 +366,15 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
     getUser(input.userId),
   ]);
 
-  return { message: assistantMessage, actions, day: updatedDay, profile: updatedProfile };
+  return {
+    message: assistantMessage,
+    // The reader's own row, so the client can retire the optimistic one it drew
+    // from a cache file rather than living on it. See `ChatResponse`.
+    user_message: userMessage,
+    actions,
+    day: updatedDay,
+    profile: updatedProfile,
+  };
 }
 
 /**

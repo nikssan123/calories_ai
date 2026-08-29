@@ -4,18 +4,27 @@ import { RingWidget } from './RingWidget';
 import { DARK, LIGHT } from './theme';
 import { widgetText } from './text';
 import { deviceLocale } from '@/messages';
-import { readDaySnapshot, type DaySnapshot } from '@/lib/snapshot';
+import { currentDaySnapshot, type DaySnapshot } from '@/lib/snapshot';
 
 /**
  * What the launcher calls when it wants a widget drawn.
  *
- * Headless: no navigation, no providers, no screen. Everything it needs comes
- * off disk, which is what the day snapshot is for.
+ * Headless: no navigation, no providers, no screen. What it draws comes from
+ * `currentDaySnapshot`, which spends the note the app left when that note is
+ * still good for today and goes to the server when it is not.
+ *
+ * That asymmetry is the point. This handler runs on the launcher's schedule,
+ * which is to say at times nobody chose — half past every hour, and after a
+ * reboot — and those are exactly the moments the app has not been open to leave
+ * a fresh note. A draw that could only read is a draw that reports last night
+ * every morning.
  *
  * Every action draws. `WIDGET_DELETED` is the exception and needs no branch —
  * there is nothing left to draw on — and a click is handled by the deep link
  * declared on the widget itself, so it too only has to repaint. Repainting on a
- * click is not waste: it is the one moment we know somebody is looking.
+ * click is not waste: it is the one moment we know somebody is looking, and
+ * with the fetch behind it the tap that opens the app now also corrects the
+ * rectangle it was launched from.
  */
 export async function widgetTaskHandler({
   widgetInfo,
@@ -24,7 +33,7 @@ export async function widgetTaskHandler({
 }: WidgetTaskHandlerProps): Promise<void> {
   if (widgetAction === 'WIDGET_DELETED') return;
 
-  const snapshot = await readDaySnapshot();
+  const snapshot = await currentDaySnapshot();
   renderWidget(paint(widgetInfo, snapshot));
 }
 

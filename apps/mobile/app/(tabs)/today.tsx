@@ -318,9 +318,9 @@ export default function TodayScreen() {
    */
   useEffect(() => {
     if (!day || !isToday) return;
-    void writeDaySnapshot(day, locale);
+    void writeDaySnapshot(day, locale, profile);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isToday, locale, day?.local_date, day?.consumed.kcal, day?.targets.kcal, day?.burned_kcal]);
+  }, [isToday, locale, profile, day?.local_date, day?.consumed.kcal, day?.targets.kcal, day?.burned_kcal]);
   const step = (days: number) =>
     setDate((current) => shiftDate(current ?? day?.local_date ?? today ?? '', days));
 

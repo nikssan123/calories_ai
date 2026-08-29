@@ -2130,6 +2130,24 @@ export type ChatMessage = z.infer<typeof ChatMessage>;
 
 export const ChatResponse = z.object({
   message: ChatMessage,
+  /**
+   * The turn's *other* row: what the reader themselves said, as it was stored.
+   *
+   * A client draws the sent message optimistically — it has to, or a photo of a
+   * plate sits behind a spinner for the length of a model call — and the row it
+   * draws is built from what it had to hand. For a photo that is the picker's
+   * own file, in a cache directory Android empties whenever it wants the space
+   * back, so the bubble is standing on ground that will be pulled out from under
+   * it. Handing back the stored row lets the client swap the local file for the
+   * signed URL the moment the turn lands, rather than being one cache sweep away
+   * from a blank square with no way to repair it.
+   *
+   * Free, exactly like `day` and `profile`: the row was written a line above
+   * and its photo URL signed on the way out either way.
+   *
+   * Optional, so a client built before this field still parses a reply.
+   */
+  user_message: ChatMessage.optional(),
   /** The same array as `message.actions`, kept for callers holding the response. */
   actions: z.array(ChatAction),
   /** Always echoed back so the dashboard updates without a second round trip. */

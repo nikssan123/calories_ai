@@ -186,8 +186,8 @@ export default function JournalScreen() {
     // The home screen learns what the journal just learned. Safe here because
     // the journal is always today — see `today.tsx` for the case that is not.
     // The language goes with it: the launcher has no tree to ask.
-    void writeDaySnapshot(next, locale);
-  }, [locale]);
+    void writeDaySnapshot(next, locale, profile);
+  }, [locale, profile]);
   const [busy, setBusy] = useState(false);
   /**
    * A turn is in flight. The same fact as `busy`, in the form the recovery
@@ -255,7 +255,7 @@ export default function JournalScreen() {
         setBubbles(history.messages.map(toBubble));
         consumed.current = today.consumed.kcal;
         setDay(today);
-        void writeDaySnapshot(today, locale);
+        void writeDaySnapshot(today, locale, profile);
       } catch {
         // Reported by the empty conversation rather than over it: there is no
         // toast here, and an error bar above a blank screen says less than the
@@ -410,13 +410,60 @@ export default function JournalScreen() {
     commitDay(landed.day);
   }, [commitDay]);
 
+  /**
+   * Read the conversation again, because time passed while we were away.
+   *
+   * This screen used to fetch exactly once, at mount, and a phone app is
+   * mounted for weeks — so everything that arrives without the reader sending
+   * it was invisible until the process next died. A nudge and a weekly review
+   * are both written into this conversation by the server; so is the reply to a
+   * turn whose socket the lock screen killed. All three were being announced by
+   * a notification that deep-linked to a screen already holding the version of
+   * the transcript from before they existed.
+   *
+   * The other half is repair. A photo bubble drawn optimistically points at the
+   * picker's cache file, and Android empties that directory whenever it wants
+   * the space; the row survives, the picture does not. `send` now swaps in the
+   * server's durable URL as each turn lands, but that only helps turns sent by
+   * *this* build — anything already sitting in a mounted screen is fixed by
+   * asking again, which is what this does.
+   *
+   * The server's copy wins for everything the server has heard of. What it has
+   * not heard of is exactly the local-only tail — a turn still in flight, one
+   * that failed, the wall a spent plan left behind — which is kept, in order,
+   * after it. Those carry a `local-` key precisely because nothing has given
+   * them a real one yet.
+   */
+  const refresh = useCallback(async () => {
+    // An owed turn has its own, more careful path: it needs to know whether the
+    // reply landed before it may touch the conversation. Let it run instead.
+    if (orphaned.current) return recover();
+    // Never over a turn in flight. `reconcile` guards the same way and for the
+    // same reason: the optimistic rows are not on the server yet, and replacing
+    // the list under them would erase the message being sent.
+    if (sending.current) return;
+
+    try {
+      const [history, today] = await Promise.all([api.history(40), api.day()]);
+      if (sending.current) return;
+      setBubbles((prev) => [
+        ...history.messages.map(toBubble),
+        ...prev.filter((bubble) => bubble.key.startsWith('local-')),
+      ]);
+      commitDay(today);
+    } catch {
+      // Offline, or the server is down. The screen keeps what it had, which is
+      // the same answer the mount fetch gives and better than an empty one.
+    }
+  }, [recover, commitDay]);
+
   /*
    * Both halves of "coming back" — another tab, and another app — because a
    * dropped turn is exactly what happens while this screen is the one being
-   * left. See `useRefreshOnReturn`; `recover` is a no-op when nothing is owed,
-   * which is almost every return.
+   * left, and because the launcher's widget deep-links straight in here.
+   * See `useRefreshOnReturn`.
    */
-  useRefreshOnReturn(recover);
+  useRefreshOnReturn(refresh);
 
   const send = useCallback(
     async (payload: ComposerPayload) => {
@@ -489,22 +536,51 @@ export default function JournalScreen() {
         );
 
         setBubbles((prev) =>
-          prev.map((b) =>
-            b.key === replyKey
-              ? {
-                  ...b,
-                  key: result.message.id,
-                  content: result.message.content,
-                  pending: false,
-                  tool: undefined,
-                  // The trace was scaffolding for the wait. The reply it was
-                  // standing in for is here now, and it says the same things.
-                  steps: undefined,
-                  actions: result.actions,
-                  live: true,
-                }
-              : b,
-          ),
+          prev.map((b) => {
+            if (b.key === replyKey) {
+              return {
+                ...b,
+                key: result.message.id,
+                content: result.message.content,
+                pending: false,
+                tool: undefined,
+                // The trace was scaffolding for the wait. The reply it was
+                // standing in for is here now, and it says the same things.
+                steps: undefined,
+                actions: result.actions,
+                live: true,
+              };
+            }
+            /*
+             * The row the reader wrote, exchanged for the row the server kept.
+             *
+             * It matters for exactly one field. The optimistic bubble's photo is
+             * the picker's own file, in a cache directory Android empties
+             * whenever it wants the space — so a journal left open across a
+             * sweep loses the picture out of every meal logged this session,
+             * and nothing on this screen ever asks again. `photo_url` is the
+             * durable answer, signed by the API and good for a week; taking it
+             * now is what keeps the square from going blank behind the reader's
+             * back. See `ChatResponse.user_message`.
+             *
+             * The whole row rather than the one field, so the key becomes the
+             * server's too and this bubble stops being local-only — which is
+             * what lets `refresh` below recognise it as already known.
+             *
+             * Guarded, because an API that has not learned to send it still has
+             * to work: without the field the bubble stays exactly as it was.
+             */
+            if (b.key === localKey && result.user_message) {
+              return {
+                ...b,
+                key: result.user_message.id,
+                photoUrl: result.user_message.photo_url
+                  ? api.photoUrl(result.user_message.photo_url)
+                  : b.photoUrl,
+              };
+            }
+            return b;
+          }),
         );
         // A turn can delete an entry too, and the card that logged it is
         // somewhere above in this same conversation.
