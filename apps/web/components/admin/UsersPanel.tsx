@@ -1,7 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Ban, CircleCheck, KeyRound, LogOut, RefreshCw, Trash2, Wand2 } from 'lucide-react';
+import {
+  Ban,
+  CircleCheck,
+  KeyRound,
+  LogOut,
+  RefreshCw,
+  Trash2,
+  Wand2,
+  type LucideIcon,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import type { AdminUser } from '@ct/shared';
 import { api } from '@/lib/api';
@@ -22,6 +31,14 @@ import { cn } from '@/lib/utils';
  * `confirm()`, partly because a modal dialog would block the browser tooling
  * this panel is otherwise inspectable with, and partly because retyping an
  * email address is a better speed bump than clicking OK.
+ *
+ * Two shapes, on the same line `AppFrame` draws: below `lg` this is a phone, so
+ * the rows stack into cards and every action carries its label. The table above
+ * it is fine on a desktop and was quietly useless on a handset — seven columns
+ * come to 966px inside a 380px box, which put the whole Actions column six
+ * hundred pixels off the right edge of a scroller with nothing to say it
+ * scrolled. The actions were never broken; they were off-screen, and the only
+ * thing a thumb could reach was a row that does nothing when you tap it.
  */
 export function UsersPanel() {
   const { profile } = useAuth();
@@ -58,6 +75,78 @@ export function UsersPanel() {
     }
   }
 
+  /**
+   * What one row can do, built once so the table and the cards cannot drift
+   * apart — the bug this file just had was one layout being usable and the
+   * other not, and two hand-maintained lists of six actions is how that
+   * happens twice.
+   */
+  function actionsFor(user: AdminUser): Action[] {
+    const suspended = user.disabled_at !== null;
+    const actions: Action[] = [
+      {
+        key: 'sign-out',
+        label: 'Sign out',
+        title: 'Sign out everywhere',
+        icon: LogOut,
+        onClick: () => void run(user, 'Sessions revoked', () => api.admin.signOutUser(user.id)),
+      },
+      {
+        key: 'password',
+        label: 'Password',
+        title: 'Set a new password',
+        icon: KeyRound,
+        onClick: () => {
+          setResetting(user);
+          setNewPassword('');
+        },
+      },
+      {
+        key: 'review',
+        label: 'Review',
+        title: "Generate this week's review",
+        icon: Wand2,
+        onClick: () => void run(user, 'Review generated', () => api.admin.runReview(user.id)),
+      },
+      {
+        key: 'adaptive',
+        label: 'Adaptive',
+        title: 'Re-run the adaptive target pass',
+        icon: RefreshCw,
+        onClick: () => void run(user, 'Adaptive pass run', () => api.admin.runAdaptive(user.id)),
+      },
+    ];
+
+    // Neither is offered on your own row: the API refuses both, and an action
+    // that exists only to be turned down is worse than one that is not there.
+    if (user.id !== profile?.id) {
+      actions.push(
+        {
+          key: 'disabled',
+          label: suspended ? 'Restore' : 'Suspend',
+          title: suspended ? 'Restore this account' : 'Suspend this account',
+          icon: suspended ? CircleCheck : Ban,
+          onClick: () =>
+            void run(user, suspended ? 'Restored' : 'Suspended', () =>
+              api.admin.setDisabled(user.id, !suspended),
+            ),
+        },
+        {
+          key: 'delete',
+          label: 'Delete',
+          title: 'Delete this account',
+          icon: Trash2,
+          destructive: true,
+          onClick: () => {
+            setConfirming(user);
+            setConfirmText('');
+          },
+        },
+      );
+    }
+    return actions;
+  }
+
   if (!users) return <Skeleton className="h-64 w-full rounded-2xl" />;
 
   return (
@@ -74,7 +163,20 @@ export function UsersPanel() {
         </Button>
       </div>
 
+      <div className="space-y-3 lg:hidden">
+        {users.map((user) => (
+          <AccountCard
+            key={user.id}
+            user={user}
+            isSelf={user.id === profile?.id}
+            busy={busy === user.id}
+            actions={actionsFor(user)}
+          />
+        ))}
+      </div>
+
       <DataTable
+        className="hidden lg:block"
         columns={['Account', 'Status', 'Entries', 'Messages', 'AI cost', 'Last entry', 'Actions']}
       >
         {users.map((user) => {
@@ -90,13 +192,7 @@ export function UsersPanel() {
                 </span>
               </Cell>
               <Cell>
-                {disabled ? (
-                  <span className="text-[var(--fat)]">Suspended</span>
-                ) : user.is_setup_complete ? (
-                  <span className="text-[var(--positive)]">Onboarded</span>
-                ) : (
-                  <span className="text-muted-foreground">In setup</span>
-                )}
+                <Status user={user} />
               </Cell>
               <Cell className="tnum">{user.food_entries}</Cell>
               <Cell className="tnum">{user.chat_messages}</Cell>
@@ -109,63 +205,11 @@ export function UsersPanel() {
               <Cell className="text-muted-foreground">{timestamp(user.last_entry_at)}</Cell>
               <Cell>
                 <div className="flex flex-wrap gap-1">
-                  <IconAction
-                    title="Sign out everywhere"
-                    onClick={() =>
-                      void run(user, 'Sessions revoked', () => api.admin.signOutUser(user.id))
-                    }
-                  >
-                    <LogOut size={15} />
-                  </IconAction>
-                  <IconAction
-                    title="Set a new password"
-                    onClick={() => {
-                      setResetting(user);
-                      setNewPassword('');
-                    }}
-                  >
-                    <KeyRound size={15} />
-                  </IconAction>
-                  <IconAction
-                    title="Generate this week's review"
-                    onClick={() =>
-                      void run(user, 'Review generated', () => api.admin.runReview(user.id))
-                    }
-                  >
-                    <Wand2 size={15} />
-                  </IconAction>
-                  <IconAction
-                    title="Re-run the adaptive target pass"
-                    onClick={() =>
-                      void run(user, 'Adaptive pass run', () => api.admin.runAdaptive(user.id))
-                    }
-                  >
-                    <RefreshCw size={15} />
-                  </IconAction>
-                  {!isSelf && (
-                    <>
-                      <IconAction
-                        title={disabled ? 'Restore this account' : 'Suspend this account'}
-                        onClick={() =>
-                          void run(user, disabled ? 'Restored' : 'Suspended', () =>
-                            api.admin.setDisabled(user.id, !disabled),
-                          )
-                        }
-                      >
-                        {disabled ? <CircleCheck size={15} /> : <Ban size={15} />}
-                      </IconAction>
-                      <IconAction
-                        title="Delete this account"
-                        destructive
-                        onClick={() => {
-                          setConfirming(user);
-                          setConfirmText('');
-                        }}
-                      >
-                        <Trash2 size={15} />
-                      </IconAction>
-                    </>
-                  )}
+                  {actionsFor(user).map(({ key, title, icon: Icon, destructive, onClick }) => (
+                    <IconAction key={key} title={title} destructive={destructive} onClick={onClick}>
+                      <Icon size={15} />
+                    </IconAction>
+                  ))}
                 </div>
               </Cell>
             </tr>
@@ -188,7 +232,14 @@ export function UsersPanel() {
               void run(user, 'Password reset', () => api.admin.resetPassword(user.id, password));
             }}
           >
+            {/*
+              * Focused on open, which on a phone is the half that matters: the
+              * form appears below a list that is taller than the screen, and
+              * without this, asking for it looks exactly like nothing
+              * happening. Taking the caret scrolls it into view.
+              */}
             <Input
+              autoFocus
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
               placeholder="At least 8 characters"
@@ -224,6 +275,7 @@ export function UsersPanel() {
             }}
           >
             <Input
+              autoFocus
               value={confirmText}
               onChange={(event) => setConfirmText(event.target.value)}
               placeholder={`Type ${confirming.email} to confirm`}
@@ -244,6 +296,103 @@ export function UsersPanel() {
           </form>
         </InsetGroup>
       )}
+    </div>
+  );
+}
+
+/**
+ * One thing a row can do. `label` is what the phone shows and `title` is what
+ * the desktop's icon says on hover — the same action worded for the space it
+ * has, rather than an icon column captioned in tooltips nobody can hover.
+ */
+interface Action {
+  key: string;
+  label: string;
+  title: string;
+  icon: LucideIcon;
+  destructive?: boolean;
+  onClick: () => void;
+}
+
+/**
+ * One account as a card, for the widths where a seven-column table is a lie.
+ *
+ * The actions are a two-up grid of labelled buttons at `size="lg"` — 44px, the
+ * floor for a thumb, against the 27px icon the table uses. Delete keeps the
+ * destructive variant and still goes through type-to-confirm, so the one
+ * irreversible action is neither the biggest target nor a single tap.
+ */
+function AccountCard({
+  user,
+  isSelf,
+  busy,
+  actions,
+}: {
+  user: AdminUser;
+  isSelf: boolean;
+  busy: boolean;
+  actions: Action[];
+}) {
+  const suspended = user.disabled_at !== null;
+  return (
+    <div
+      className={cn(
+        'bg-card border-border chunk space-y-3 rounded-[var(--radius)] border-2 p-4',
+        suspended && 'opacity-60',
+        busy && 'opacity-50',
+      )}
+    >
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="min-w-0 flex-1 truncate text-body font-medium">
+          {user.email}
+          {isSelf && <span className="text-muted-foreground ml-2 text-[12px]">(you)</span>}
+        </span>
+        <Status user={user} />
+      </div>
+
+      <p className="text-muted-foreground text-[12px]">
+        {user.display_name ?? '—'} · {user.timezone} · joined{' '}
+        {timestamp(user.created_at).slice(0, 10)}
+      </p>
+
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[13px]">
+        <Fact label="Entries">{user.food_entries}</Fact>
+        <Fact label="Messages">{user.chat_messages}</Fact>
+        <Fact label="AI cost">
+          {usd(user.ai_cost_usd)} <span className="text-muted-foreground">· {user.ai_turns} turns</span>
+        </Fact>
+        <Fact label="Last entry">{timestamp(user.last_entry_at)}</Fact>
+      </dl>
+
+      <div className="grid grid-cols-2 gap-2 pt-0.5">
+        {actions.map(({ key, label, icon: Icon, destructive, onClick }) => (
+          <Button
+            key={key}
+            size="lg"
+            variant={destructive ? 'destructive' : 'outline'}
+            className="justify-start"
+            onClick={onClick}
+          >
+            <Icon size={16} /> {label}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Onboarded, in setup, or suspended — worded the same in both layouts. */
+function Status({ user }: { user: AdminUser }) {
+  if (user.disabled_at !== null) return <span className="text-[var(--fat)]">Suspended</span>;
+  if (user.is_setup_complete) return <span className="text-[var(--positive)]">Onboarded</span>;
+  return <span className="text-muted-foreground">In setup</span>;
+}
+
+function Fact({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <dt className="text-muted-foreground text-[11px]">{label}</dt>
+      <dd className="tnum">{children}</dd>
     </div>
   );
 }
