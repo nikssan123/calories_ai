@@ -161,9 +161,11 @@ For "what should I eat" questions, work from what's left in today's budget and w
 
 # Language
 
-Reply in the language they wrote to you in, and keep to it for the whole conversation. Someone logging a meal in Bulgarian is not asking for an English answer, and switching back to English partway through reads as the app losing the thread.
+Reply in the language they wrote to you in, and keep to it for the whole conversation. Someone logging a meal in Bulgarian is not asking for an English answer, and switching back to English partway through reads as the app losing the thread. What language the app itself is drawn in has nothing to do with it — plenty of people read English menus and write to you in their own language, and it is the writing you answer.
 
-Two things stay in their own language regardless. Food names are one: if they wrote "кюфте" or "kalamarakia", that is what the entry is called, because it is what they will search for later and what they will recognise in a list. Numbers and units are the other — "~650 kcal" is the same everywhere, and translating the unit helps nobody.
+**Write in their language rather than translating into it.** Compose the sentence as somebody who thinks in that language would say it. An English sentence written first and carried across word by word arrives as something nobody says: "Barely a dent" reached a Bulgarian speaker as "барели дупка", which is not Bulgarian at all — it is the English word spelled in Cyrillic. This applies to every example in this prompt, and to the reply shapes below most of all. They are written in English because this prompt is. They are shapes, not sentences to translate: take the move each one is making and make that move in their language, and where an idiom has no counterpart, say the plain thing instead. A short reply is where this goes wrong most easily, because there is nothing around a four-word sentence to absorb a phrase that landed badly.
+
+Three things stay in their own language regardless. Food names are one: if they wrote "кюфте" or "kalamarakia", that is what the entry is called, because it is what they will search for later and what they will recognise in a list. Numbers and units are the second — "~650 kcal" is the same everywhere, and translating the unit helps nobody. Tool arguments are the third and they are not a style question: every field name and every enum value is English whatever the conversation is in, because they are an API. log_food does not take "закуска" where it expects "breakfast".
 
 If they switch languages mid-conversation, follow them. They have a reason and it is not your business what it is.
 
@@ -572,19 +574,27 @@ export function unitsBrief(profile: { units?: UnitSystem | null }): string | nul
  * a photo sent with no caption. Those are the four that have been quietly
  * English for every non-English user since they were written.
  *
- * English gets nothing, for the same reason metric gets nothing from
- * `unitsBrief`: it is what the model does unprompted, and a line confirming it
- * is tokens spent on every turn to buy a behaviour that was already there.
+ * The name comes from `replyLanguage`, which reads what the person actually
+ * writes and falls back to their stored locale only when there is nothing
+ * written to read. It used to be `localeOf(profile)` alone, and that is what
+ * made this brief harmful rather than merely absent: an account reading an
+ * English interface and logging meals in Bulgarian was told to write English,
+ * and produced an English draft translated word by word — "Barely a dent" came
+ * back as "барели дупка". A brief that names the wrong language is worse than
+ * no brief at all, because the standing rule it overrides was reading the same
+ * sentence the model was.
+ *
+ * Null gets nothing, for the same reason metric gets nothing from `unitsBrief`:
+ * for English it is what the model does unprompted, and a line confirming it is
+ * tokens spent on every turn to buy a behaviour that was already there.
  *
  * The tool-argument sentence is not boilerplate carried over from `unitsBrief`.
  * It is the same class of bug and it is worse here: a model writing Bulgarian
  * prose will reach for a Bulgarian enum value unless told the arguments are an
  * API, and `log_food` does not take "закуска" where it expects "breakfast".
  */
-export function languageBrief(profile: { locale?: string | null }): string | null {
-  const locale = localeOf(profile);
-  if (locale === 'en') return null;
-  const name = LOCALE_ENGLISH_NAMES[locale];
+export function languageBrief(name: string | null): string | null {
+  if (name === null) return null;
   return [
     `Language: write to this person in ${name}. Not a translation of an English draft \u2014 write`,
     `it in ${name}, the way somebody who thinks in it would.`,
@@ -603,6 +613,17 @@ export function dayContextPrompt(
   notes: AgentNote[] = [],
   wellbeing: Wellbeing | null = null,
   routines: Routine[] = [],
+  /**
+   * What `replyLanguage` made of the conversation, and only for the turns that
+   * carry no sentence of their own — a captionless photo, a bare scan. Null
+   * everywhere else, including for English, and including for every turn the
+   * model can read for itself: see the note at the call site in `run.ts`.
+   *
+   * Passed in rather than read off `profile`, because the profile carries the
+   * language the *app* is drawn in and this is the language the person is
+   * *writing* in.
+   */
+  language: string | null = null,
 ): string {
   const { date, time, weekday } = localPartsFor(new Date(), profile.timezone);
   const remaining = day.targets.kcal - day.consumed.kcal;
@@ -646,13 +667,12 @@ export function dayContextPrompt(
   if (brief) lines.push(brief);
 
   /*
-   * Belt and braces. The journal already gets this right from the sentence in
-   * front of it, and this makes it right on the turn that has no sentence: a
-   * bare photo with a caption of nothing, which today gives the language rule
-   * in the stable prompt nothing at all to work from.
+   * The turn that has no sentence: a bare photo with a caption of nothing,
+   * which gives the language rule in the stable prompt nothing at all to work
+   * from. Every other turn passes null here and is answered by that rule.
    */
-  const language = languageBrief(profile);
-  if (language) lines.push(language);
+  const languageLine = languageBrief(language);
+  if (languageLine) lines.push(languageLine);
 
   /*
    * What they will not eat, carried on every turn.
@@ -915,16 +935,23 @@ Do not moralise about food choices — the same rule as the journal, and it matt
 150 words at the very most, usually less. Plain sentences, no headings, no bullet lists, no sign-off. Write it the way you would say it to them in person if they asked how last week went.`;
 
 /** The per-review user turn: the numbers, and what to do with them. */
-export function reviewTaskPrompt(stats: ReviewStats, profile: Profile): string {
+export function reviewTaskPrompt(
+  stats: ReviewStats,
+  profile: Profile,
+  language: string | null = null,
+): string {
   const name = profile.display_name ? ` Their name is ${profile.display_name}.` : '';
   // The stats arrive in kilograms whoever is reading, so a review written
   // without this says "down 0.4 kg" to somebody who owns a pound scale.
   const units = unitsBrief(profile);
   // The one that matters most. A review is generated from `ReviewStats` with no
   // user prose anywhere near it, so nothing else in this call says what
-  // language the person who receives it reads.
-  const language = languageBrief(profile);
-  const briefs = [language, units].filter((part): part is string => part !== null);
+  // language the person who receives it reads. The caller resolves it from the
+  // journal instead: this lands in the same conversation the week was logged
+  // in, and a Bulgarian journal that produces an English review on a Monday is
+  // the seam showing.
+  const languageLine = languageBrief(language);
+  const briefs = [languageLine, units].filter((part): part is string => part !== null);
   return `Write the weekly review for ${stats.week_start} to ${stats.week_end}.${name}${briefs.length > 0 ? `\n\n${briefs.join('\n\n')}` : ''}
 
 Here are the week's numbers. They are already computed — use them as given.
@@ -991,20 +1018,24 @@ Do not moralise about food, do not congratulate them on nothing, and do not ask 
 Plain sentences. No greeting, no sign-off, no headings, no emoji. Write it the way a friend would text.`;
 
 /** The per-nudge user turn: which pattern fired, and the numbers behind it. */
-export function nudgeTaskPrompt(stats: NudgeStats, profile: Profile): string {
+export function nudgeTaskPrompt(
+  stats: NudgeStats,
+  profile: Profile,
+  language: string | null = null,
+): string {
   const name = profile.display_name ? `${profile.display_name}'s` : 'Their';
 
   const units = unitsBrief(profile);
   // Same problem as the review: a nudge is generated from a pattern, not from
   // anything they wrote, so without this it arrives in English however they log.
-  const language = languageBrief(profile);
+  const languageLine = languageBrief(language);
   const lines: string[] = [
     `Write the nudge. ${name} log, over the last week:`,
     `- Days logged: ${stats.days_logged} of 7`,
   ];
   // Macros and calories are unit-neutral, but a stalled-scale nudge quotes a
   // weight, and a nudge is one short message that gets exactly one reading.
-  if (language) lines.push('', language);
+  if (languageLine) lines.push('', languageLine);
   if (units) lines.push('', units);
   if (stats.mean_kcal !== null) {
     lines.push(`- Average intake: ${stats.mean_kcal} kcal against a ${stats.target_kcal} target`);

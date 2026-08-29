@@ -4,6 +4,7 @@ import { runTurn } from '../src/ai/run.ts';
 import { listMessages } from '../src/services/chat.ts';
 import { getUser } from '../src/services/user.ts';
 import { saveReview } from '../src/services/reviews.ts';
+import { savePhoto } from '../src/services/photos.ts';
 import { agentCalls, scriptAgent, systemPromptOf, userTurnOf } from './helpers/agent-mock.ts';
 import { MAX_SESSION_MESSAGES, MODELS } from '../src/ai/client.ts';
 import type { StreamEvent } from '../src/ai/providers/types.ts';
@@ -394,54 +395,99 @@ describe('runTurn', () => {
    * underneath it. The client says what it is drawing in; the stored preference
    * still outranks it.
    */
+  /*
+   * Which language a turn is answered in, and where that answer comes from.
+   *
+   * The rule the whole block turns on: **the language somebody writes in is not
+   * the language their app is set to.** `users.locale` says what the interface
+   * is drawn in, and plenty of people read English menus while logging every
+   * meal in their own language — `038_locale.sql` backfilled every account
+   * older than it to 'en' besides, so for those rows the column is the
+   * migration's default rather than anybody's answer.
+   *
+   * So the naming only happens where the model has nothing to read. With a
+   * sentence in front of it the model identifies the language better than the
+   * detector does, and the standing rule in `STABLE_SYSTEM_PROMPT` is what
+   * carries it; a brief naming a language over the top of that could only make
+   * it worse, and did.
+   */
   describe('the language a turn is answered in', () => {
     async function turnAs(
       overrides: Record<string, unknown>,
       spokenLocale: 'en' | 'bg' | 'de' | 'es' | 'fr' | null,
+      text = 'две яйца и филия хляб с масло',
     ) {
       const account = await createUser(overrides);
       const profile = await getUser(account.id);
+      scriptAgent({ text: 'Добре.' });
+      await runTurn({ userId: account.id, ctx: account.ctx, profile, text, spokenLocale });
+      return agentCalls.at(-1)!;
+    }
+
+    it('does not name a language over a sentence the model can read', async () => {
+      // German app, Bulgarian sentence. This used to say "write in German" and
+      // the reply came back in German, which is the bug: they wrote Bulgarian.
+      const call = await turnAs({ locale: 'de' }, 'bg');
+      expect(userTurnOf(call)).not.toContain('Language:');
+    });
+
+    it('names the language when the turn carries no sentence at all', async () => {
+      // A photo with no caption. Nothing for the standing rule to catch, so the
+      // name is not a second opinion here — it is the only one.
+      const account = await createUser({ locale: 'bg' });
+      const profile = await getUser(account.id);
+      const photo = await savePhoto(account.id, 'image/png', 'AAAA');
       scriptAgent({ text: 'Добре.' });
       await runTurn({
         userId: account.id,
         ctx: account.ctx,
         profile,
-        text: 'две яйца',
-        spokenLocale,
+        text: '',
+        photo: { id: photo.id, mediaType: 'image/png', base64: 'AAAA' },
       });
-      return agentCalls.at(-1)!;
-    }
 
-    it('follows the app when the account has never been asked', async () => {
-      const call = await turnAs({ locale: null }, 'bg');
-      expect(userTurnOf(call)).toContain('Bulgarian');
+      expect(userTurnOf(agentCalls.at(-1)!)).toContain('Bulgarian');
     });
 
-    it('follows the stored preference over what the client claims', async () => {
-      const call = await turnAs({ locale: 'de' }, 'bg');
-      expect(userTurnOf(call)).toContain('German');
-      expect(userTurnOf(call)).not.toContain('Bulgarian');
+    it('follows the app for a captionless turn on an account never asked', async () => {
+      const account = await createUser({ locale: null });
+      const profile = await getUser(account.id);
+      const photo = await savePhoto(account.id, 'image/png', 'AAAA');
+      scriptAgent({ text: 'Добре.' });
+      await runTurn({
+        userId: account.id,
+        ctx: account.ctx,
+        profile,
+        text: '',
+        photo: { id: photo.id, mediaType: 'image/png', base64: 'AAAA' },
+        spokenLocale: 'bg',
+      });
+
+      expect(userTurnOf(agentCalls.at(-1)!)).toContain('Bulgarian');
     });
 
-    it('says nothing at all when both are English', async () => {
-      const call = await turnAs({ locale: null }, 'en');
+    it('says nothing at all when the turn is English', async () => {
+      const call = await turnAs({ locale: null }, 'en', 'two eggs and a slice of toast');
       expect(userTurnOf(call)).not.toContain('Language:');
     });
 
     /*
      * The trap in doing this at all. A guess off a device is not an answer, and
-     * nothing may let it become one — the column stays null until somebody
-     * says otherwise, which is what keeps the question askable. The turn is
-     * still written in the guessed language, which is the whole point of the
-     * guess.
+     * nothing may let it become one — the column stays null until somebody says
+     * otherwise, which is what keeps the question askable.
      */
-    it('writes in the guess without adopting it', async () => {
+    it('never adopts the guess into the column', async () => {
       const account = await createUser({ locale: null, sex: null, is_setup_complete: false });
       const profile = await getUser(account.id);
       scriptAgent({ text: 'Записано.' });
-      await runTurn({ userId: account.id, ctx: account.ctx, profile, text: 'две яйца', spokenLocale: 'bg' });
+      await runTurn({
+        userId: account.id,
+        ctx: account.ctx,
+        profile,
+        text: 'две яйца',
+        spokenLocale: 'bg',
+      });
 
-      expect(userTurnOf(agentCalls.at(-1)!)).toContain('Bulgarian');
       expect((await getUser(account.id)).locale).toBeNull();
     });
   });

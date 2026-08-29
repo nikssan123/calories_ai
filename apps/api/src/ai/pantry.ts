@@ -1,10 +1,12 @@
 import type { PantryScanProposal } from '@ct/shared';
+import { recentUserTexts } from '../services/chat.ts';
 import { listPantry } from '../services/pantry.ts';
 import { savePhoto } from '../services/photos.ts';
 import { recordUsage } from '../services/usage.ts';
 import { getUser, getUserContext } from '../services/user.ts';
 import { MAX_TURNS } from './client.ts';
 import { emptyCollector } from './kitchen.ts';
+import { LANGUAGE_LOOKBACK, replyLanguage } from './language.ts';
 import { createProvider, laneFor, type AgentRequest } from './providers/index.ts';
 import { PANTRY_SCAN_PROMPT, languageBrief, unitsBrief } from './prompt.ts';
 import { buildNutritionServer, type ToolContext } from './tools.ts';
@@ -38,6 +40,8 @@ export async function scanFridgePhoto(
   photo: ScanInput,
 ): Promise<PantryScanProposal> {
   const { userId: id, units, locale, ...ctx } = await getUserContext(userId);
+
+  const language = replyLanguage(await recentUserTexts(id, LANGUAGE_LOOKBACK), locale).name;
 
   // Stored like a meal photo, so the same signed-URL read serves it and a scan
   // that read the fridge wrongly can be looked at afterwards. Already stored
@@ -76,10 +80,12 @@ export async function scanFridgePhoto(
     // on the kitchen list and are read there. The prompt above is byte-stable
     // for the cache, so the brief rides the turn instead.
     // The labels this run writes are read by a human before they are confirmed,
-    // so they belong in that human's language.
+    // so they belong in that human's language — the one they write in, which is
+    // not always the one the app is drawn in. A photo of a fridge has no
+    // sentence attached, so the journal is what says which that is.
     text: [
       'What food can you see in this photo?',
-      languageBrief({ locale }),
+      languageBrief(language),
       unitsBrief({ units }),
     ]
       .filter(Boolean)

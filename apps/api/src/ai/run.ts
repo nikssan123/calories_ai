@@ -20,7 +20,7 @@ import { hasKitchen } from '../services/plans.ts';
 import { withTurnLock } from '../services/turn-lock.ts';
 import { checkWellbeing } from '../services/wellbeing.ts';
 import { MAX_SESSION_MESSAGES, MAX_TURNS, TEXT_LOG_UNSUPPORTED_LANGUAGE } from './client.ts';
-import { needsCapableModel, writingNeedsCapableModel } from './language.ts';
+import { LANGUAGE_LOOKBACK, replyLanguage, type ReplyLanguage } from './language.ts';
 import {
   createProvider,
   laneFor,
@@ -195,18 +195,6 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
   const rollover = rolledOver ? `${dayRolloverNotice(previousDate, today, input.profile, now)}\n\n` : '';
 
   /*
-   * The turn as the model sees it: where the day stands, then what they said.
-   *
-   * The day context leads rather than trails so their sentence is the last
-   * thing in the turn, which is where a model's attention is sharpest and where
-   * it was before this block existed. What gets persisted as their message is
-   * still exactly what they typed — see `insertMessage` below.
-   *
-   * This is the cache fix. The block changes every turn, and in the system
-   * prompt that put it in front of the whole transcript, invalidating it; here
-   * it is just more conversation, and the prefix in front of it never moves.
-   */
-  /*
    * Names only — no exercises, no previous loads. The model needs to recognise
    * "my push day" and hand it to a tool; the tool reads the contents itself,
    * and putting eight exercises per routine on every single turn would be a
@@ -242,8 +230,6 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
   const scannedBlock = scannedProductsPrompt(input.scanned ?? [], input.scannedMisses ?? 0);
   const scanned = scannedBlock ? `${scannedBlock}\n\n---\n\n` : '';
 
-  const promptText = `${photoGuidance}${dayContextPrompt(speaking, day, currentWeight, notes, wellbeing, routines)}\n\n---\n\n${scanned}${rollover}${input.text}`;
-
   /*
    * Providers that keep no session of their own get the transcript replayed —
    * and get it cut at the same boundary a session is dropped at, rather than
@@ -260,6 +246,53 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
    * Hoisted out of the request because the language check below reads it too.
    */
   const history = provider.needsHistory && !fresh ? await loadHistory(input.userId) : [];
+
+  /*
+   * What language this reply is due in, and whether the cheap model may write
+   * it. Resolved before the prompt is built, because both halves of the answer
+   * are used: the name goes into the day context as a brief, and the other half
+   * decides the model.
+   *
+   * They are one question and are resolved as one on purpose. A turn escalates
+   * *because* the reply is due in a language Haiku writes badly, so the language
+   * being escalated for and the language being written have to be the same
+   * language — deciding them apart is how they came to disagree, and a reply
+   * written in Bulgarian by a model chosen for English is the shape that bug
+   * took.
+   */
+  const language = await resolveLanguage(input, history, speaking);
+
+  /*
+   * The language is *named* only when this turn carries no sentence of its own.
+   *
+   * With a sentence in front of it the model is the better detector, and by a
+   * distance — franc is reading meal logs through trigrams and calls Slovene
+   * Polish and Estonian Finnish on a short one, while the model is reading the
+   * actual words. A brief naming the wrong language would override a rule that
+   * had it right, so on those turns the standing instruction in
+   * `STABLE_SYSTEM_PROMPT` carries it alone — including the part that fixes the
+   * thing this was built for, which was never the language being wrong so much
+   * as it being translated into rather than written in.
+   *
+   * What is left is the turn with nothing to read: a photo sent with no
+   * caption, a barcode scanned into an empty box. There the name is not a
+   * second opinion, it is the only one there is.
+   */
+  const named = input.text.trim().length === 0 ? language.name : null;
+
+  /*
+   * The turn as the model sees it: where the day stands, then what they said.
+   *
+   * The day context leads rather than trails so their sentence is the last
+   * thing in the turn, which is where a model's attention is sharpest and where
+   * it was before this block existed. What gets persisted as their message is
+   * still exactly what they typed — see `insertMessage` below.
+   *
+   * This is the cache fix. The block changes every turn, and in the system
+   * prompt that put it in front of the whole transcript, invalidating it; here
+   * it is just more conversation, and the prefix in front of it never moves.
+   */
+  const promptText = `${photoGuidance}${dayContextPrompt(speaking, day, currentWeight, notes, wellbeing, routines, named)}\n\n---\n\n${scanned}${rollover}${input.text}`;
 
   // A turn with an image needs a model that can see; everything else is a text
   // log. There was a third kind here — `setup`, routed to the most capable
@@ -284,9 +317,7 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
      * on its own, and would otherwise reset the decision every few turns and
      * flip the model back and forth mid-conversation.
      */
-    model: kind === 'text_log' && (await escalateForLanguage(input, history, speaking))
-      ? TEXT_LOG_UNSUPPORTED_LANGUAGE
-      : undefined,
+    model: kind === 'text_log' && !language.haiku ? TEXT_LOG_UNSUPPORTED_LANGUAGE : undefined,
     // What is left on the dynamic side is only what is stable *within* a
     // session: the review recap changes weekly. It is still barred from the
     // cross-session prefix — a deployment-wide cache hit needs bytes that are
@@ -453,24 +484,26 @@ async function loadRecent(userId: string, limit: number): Promise<AgentMessage[]
 }
 
 /**
- * Turns of conversation the language check may look back over when the
- * transcript was not loaded for the model.
- *
- * Small on purpose. This is a second query on the hot path for the session-
- * based provider, and it buys only what a fragment cannot say on its own —
- * three or four sentences is already more than the detector needs, and a wider
- * window would mostly re-read a conversation the model is not being sent.
- */
-const LANGUAGE_LOOKBACK = 6;
-
-/**
- * Whether this turn should run on the capable model because of the language it
- * is written in.
+ * What language to write this turn in, from what this person actually writes.
  *
  * The current message leads, and prior *user* turns stand behind it. The
  * assistant's own replies are deliberately excluded: a turn that wrongly
  * answered a Bulgarian message in English would otherwise be evidence that this
  * is an English conversation, and the mistake would keep itself alive.
+ *
+ * The stored locale is the last word rather than the first. It used to be the
+ * first — the check opened by asking what language the app was drawn in and
+ * returned on it — and that is exactly the assumption this no longer makes:
+ * plenty of people read an English interface and log their meals in their own
+ * language, and `038_locale.sql` backfilled every account older than it to
+ * `'en'` regardless. So the column answers only for the turns with nothing
+ * written in front of them, which is what it is genuinely good for: a
+ * captionless photo, a barcode scanned into an empty box.
+ *
+ * `speaking` rather than `input.profile` for that fallback, so a client drawing
+ * the app in the device's language is answered in it while the column is still
+ * null — a guess about what they are reading, never written back to the row
+ * that records what they chose.
  *
  * Providers with `needsHistory` have already paid for the transcript, so the
  * common case reads no extra rows. The session-based provider has not, and a
@@ -479,30 +512,14 @@ const LANGUAGE_LOOKBACK = 6;
  * midnight, and the first message of a new day is exactly the one with no
  * conversation behind it.
  */
-async function escalateForLanguage(
+async function resolveLanguage(
   input: RunTurnInput,
   history: AgentMessage[],
   speaking: Profile,
-): Promise<boolean> {
-  /*
-   * The language being written settles it before anything is read, because the
-   * two questions come apart: an account whose app is in Bulgarian is owed a
-   * Bulgarian reply to "ok" and to a photo with no caption, neither of which
-   * the detector below has anything to work with. Cheap, too — no transcript is
-   * loaded for the account this decides.
-   *
-   * `speaking` rather than `input.profile`, though today the two can only
-   * differ on a turn that never reaches here: a null `locale` is a missing
-   * profile field, so such an account is in setup mode and `kind` is `setup`,
-   * which is on a capable model already. Written against the language actually
-   * being spoken anyway — the question this answers is "what am I about to
-   * write", and reading it off the stored column would be right by coincidence.
-   */
-  if (writingNeedsCapableModel(localeOf(speaking))) return true;
-
+): Promise<ReplyLanguage> {
   const prior = history.length > 0 ? history : await loadRecent(input.userId, LANGUAGE_LOOKBACK);
   const userTexts = prior.filter((m) => m.role === 'user').map((m) => m.content);
-  return needsCapableModel([input.text, ...userTexts.reverse()]);
+  return replyLanguage([input.text, ...userTexts.reverse()], localeOf(speaking));
 }
 
 /**

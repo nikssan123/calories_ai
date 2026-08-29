@@ -113,36 +113,44 @@ describe('localeFromAcceptLanguage', () => {
 });
 
 describe('languageBrief', () => {
-  it('says nothing for English — it is what the model does unprompted', () => {
-    expect(languageBrief(profile)).toBeNull();
-  });
-
-  it('says nothing for a null locale, which is not the same as a choice', () => {
-    expect(languageBrief({ locale: null })).toBeNull();
+  it('says nothing when there is no language to name', () => {
+    // Null covers two cases with the same right answer. English is one: it is
+    // what the model does unprompted, and a line confirming it is tokens spent
+    // on every turn. The other is a sample the detector could see but could not
+    // name, where the stable prompt's standing rule — reply in the language
+    // they wrote to you in — is the better instruction, because it is reading
+    // the same sentence the model is.
+    expect(languageBrief(null)).toBeNull();
   });
 
   it('names the language in English, because the prompt is in English', () => {
-    const brief = languageBrief(bulgarian);
+    const brief = languageBrief('Bulgarian');
     expect(brief).toContain('Bulgarian');
     expect(brief).not.toContain(LOCALE_NAMES.bg);
   });
 
-  it('has something to say for every non-English locale', () => {
+  it('has something to say for every language the interface ships in', () => {
     for (const locale of LOCALES) {
-      const brief = languageBrief({ locale });
-      if (locale === 'en') expect(brief).toBeNull();
-      else expect(brief).toContain(LOCALE_ENGLISH_NAMES[locale]);
+      if (locale === 'en') continue;
+      expect(languageBrief(LOCALE_ENGLISH_NAMES[locale])).toContain(LOCALE_ENGLISH_NAMES[locale]);
     }
+  });
+
+  it('speaks a language the interface does not ship in', () => {
+    // The point of resolving this from what somebody writes rather than from
+    // the locale column: Italian is not one of the five the app is drawn in,
+    // and somebody writing Italian is still owed Italian back.
+    expect(languageBrief('Italian')).toContain('Italian');
   });
 
   it('protects the tool arguments, which is the bug it exists to prevent', () => {
     // A model writing Bulgarian prose will reach for a Bulgarian enum value
     // unless told the arguments are an API. `log_food` does not take "закуска".
-    expect(languageBrief(bulgarian)).toContain('Tool arguments never change');
+    expect(languageBrief('Bulgarian')).toContain('Tool arguments never change');
   });
 
   it('leaves food names alone', () => {
-    expect(languageBrief(bulgarian)?.toLowerCase()).toContain('food names stay');
+    expect(languageBrief('Bulgarian')?.toLowerCase()).toContain('food names stay');
   });
 });
 
@@ -156,16 +164,25 @@ describe('the background generations', () => {
   it('tells the weekly review what language to write in', () => {
     // The one that matters most: a review is generated from a stats blob with
     // no user prose anywhere near it for the language rule to catch.
-    expect(reviewTaskPrompt(stats, bulgarian)).toContain('Bulgarian');
+    expect(reviewTaskPrompt(stats, bulgarian, 'Bulgarian')).toContain('Bulgarian');
   });
 
   it('leaves an English review unchanged', () => {
-    expect(reviewTaskPrompt(stats, profile)).not.toContain('Bulgarian');
+    expect(reviewTaskPrompt(stats, profile, null)).not.toContain('Bulgarian');
+  });
+
+  it('writes the review in the language logged in, not the one the app is set to', () => {
+    // The profile here reads English and the journal it summarises is
+    // Bulgarian. The review belongs to the journal: it is posted into that
+    // conversation and it is about that week's meals. Before the language was
+    // resolved from what people write, this arrived every Monday in a language
+    // the reader had not used all week.
+    expect(reviewTaskPrompt(stats, profile, 'Bulgarian')).toContain('Bulgarian');
   });
 
   it('tells the nudge too', () => {
     const nudge = { kind: 'dormant', days_logged: 1 } as unknown as NudgeStats;
-    expect(nudgeTaskPrompt(nudge, bulgarian)).toContain('Bulgarian');
+    expect(nudgeTaskPrompt(nudge, bulgarian, 'Bulgarian')).toContain('Bulgarian');
   });
 });
 

@@ -1,10 +1,12 @@
 import type { Nudge, NudgeStats } from '@ct/shared';
-import { insertMessage } from '../services/chat.ts';
+import { localeOf } from '@ct/shared';
+import { insertMessage, recentUserTexts } from '../services/chat.ts';
 import { dueNudge, saveNudge, type NudgeTrigger } from '../services/nudges.ts';
 import { getUser, getUserContext } from '../services/user.ts';
 import { recordUsage } from '../services/usage.ts';
 import { localDateFor } from '../time.ts';
 import { MAX_TURNS } from './client.ts';
+import { LANGUAGE_LOOKBACK, replyLanguage } from './language.ts';
 import { createProvider, laneFor, type AgentRequest } from './providers/index.ts';
 import { NUDGE_SYSTEM_PROMPT, nudgeTaskPrompt } from './prompt.ts';
 import { buildNutritionServer } from './tools.ts';
@@ -45,13 +47,21 @@ export async function generateNudge(
   const authError = provider.checkAuth();
   if (authError) throw new Error(authError);
 
+  // Same as the review: nothing in this request is prose, so the language comes
+  // off the journal, and the stored locale answers only for the account that
+  // has not written anything yet.
+  const language = replyLanguage(
+    await recentUserTexts(id, LANGUAGE_LOOKBACK),
+    localeOf(profile),
+  ).name;
+
   const request: AgentRequest = {
     kind: 'nudge',
     // Whole prompt stable; the numbers ride in the user turn, so there is
     // nothing volatile to keep out of the cache.
     staticSystemPrompt: NUDGE_SYSTEM_PROMPT,
     dynamicSystemPrompt: '',
-    text: nudgeTaskPrompt(trigger.stats, profile),
+    text: nudgeTaskPrompt(trigger.stats, profile, language),
     photo: null,
     tools,
     toolNames,

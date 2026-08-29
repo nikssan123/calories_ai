@@ -1,6 +1,7 @@
 import type { Meal, Recipe, RecipeContext, RecipeOrigin } from '@ct/shared';
-import { unitsOf } from '@ct/shared';
+import { localeOf, unitsOf } from '@ct/shared';
 import { queryOne } from '../db.ts';
+import { recentUserTexts } from '../services/chat.ts';
 import { mealTemplates } from '../services/history.ts';
 import { listNotes } from '../services/notes.ts';
 import { listPantry, ageInDays } from '../services/pantry.ts';
@@ -11,6 +12,7 @@ import { getUser, getUserContext } from '../services/user.ts';
 import { inferMeal, localDateFor } from '../time.ts';
 import { MAX_TURNS } from './client.ts';
 import { emptyCollector } from './kitchen.ts';
+import { LANGUAGE_LOOKBACK, replyLanguage } from './language.ts';
 import { createProvider, laneFor, unmeteredFor, type AgentRequest } from './providers/index.ts';
 import {
   RECIPES_PER_RUN,
@@ -89,13 +91,19 @@ export async function suggestRecipes(
 
   const job: RecipeJob = options.job ?? { kind: 'suggest' };
 
-  const [day, pantry, usual, notes, profile] = await Promise.all([
+  const [day, pantry, usual, notes, profile, written] = await Promise.all([
     buildDaySummary(id, today),
     listPantry(id),
     mealTemplates(id, ctx, { limit: 8 }, today),
     listNotes(id),
     getUser(id),
+    // In the fan-out rather than after it: the language is read from the same
+    // journal the meal history above comes from, and a second serial round trip
+    // to answer one question about it would be a round trip for nothing.
+    recentUserTexts(id, LANGUAGE_LOOKBACK),
   ]);
+
+  const language = replyLanguage(written, localeOf(profile)).name;
 
   /*
    * An adaptation needs the recipe it is adapting, and it has to exist before a
@@ -204,8 +212,10 @@ export async function suggestRecipes(
       units: unitsBrief(profile),
       // A recipe written in English for somebody who logs in Bulgarian is the
       // feature failing at the last step: they described the meal in their own
-      // words and got the method back in someone else's.
-      language: languageBrief(profile),
+      // words and got the method back in someone else's. Their own words are
+      // also where the language comes from — the interface may well be in a
+      // different one, and the method is prose, not chrome.
+      language: languageBrief(language),
       constraints: {
         minutes: options.minutes ?? null,
         portions: options.portions ?? null,

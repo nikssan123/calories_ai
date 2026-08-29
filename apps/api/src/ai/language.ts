@@ -2,13 +2,38 @@ import { franc } from 'franc';
 import type { Locale } from '@ct/shared';
 
 /**
- * Which model a journal turn needs, decided by the language it is written in.
+ * What language to answer somebody in, and which model can write it.
  *
- * `text_log` runs on Haiku 4.5 because it is ~70% of turns and the job —
- * turning "two eggs and toast" into items with macros — is structured
- * extraction rather than reasoning. That argument holds in every language.
- * What does not hold is the *writing*: the same reply that reads naturally in
- * English comes back in Bulgarian with invented words in it.
+ * The two questions are one question, which is why they are resolved together
+ * here. A turn is escalated because the reply is due in a language the cheap
+ * model writes badly — so the thing being escalated for and the thing being
+ * written are the same language, and deciding them apart is how they came to
+ * disagree.
+ *
+ * ---
+ *
+ * **The language somebody writes in is not the language their app is set to.**
+ * That is the whole of what this file resolves. `users.locale` is a rendering
+ * preference — the tab bar, the buttons, the labels around an email — and
+ * plenty of people read an English interface and write to the journal in their
+ * own language. `038_locale.sql` backfilled every account that predates it to
+ * `'en'`, so for those rows the column is not even a preference somebody
+ * expressed; it is the migration's default. Answering from it told a Bulgarian
+ * speaker's journal to reply in English, and what came back was an English
+ * draft translated word for word: "Barely a dent" arrived as "барели дупка",
+ * which is the English word spelled in Cyrillic.
+ *
+ * So the conversation decides, and the stored locale is the fallback for when
+ * there is no conversation to read — a captionless photo on a fresh session, a
+ * review generated from a stats blob, a nudge generated from a pattern.
+ *
+ * ---
+ *
+ * **Why the model changes at all.** `text_log` runs on Haiku 4.5 because it is
+ * ~70% of turns and the job — turning "two eggs and toast" into items with
+ * macros — is structured extraction rather than reasoning. That argument holds
+ * in every language. What does not hold is the *writing*: the same reply that
+ * reads naturally in English comes back in Bulgarian with invented words in it.
  *
  * Measured on 2026-08-22, one meal log and one four-sentence answer per
  * language, on the two models this file routes between:
@@ -29,34 +54,87 @@ import type { Locale } from '@ct/shared';
  * ranges, and it is a list of the ones actually checked — a language nobody has
  * looked at gets the capable model until somebody does.
  */
-const HAIKU_LANGUAGES: ReadonlySet<string> = new Set([
-  'eng', // English
-  'spa', // Spanish
-  'fra', // French
-  'deu', // German
-  'ita', // Italian
-  'por', // Portuguese
-  'nld', // Dutch
-  'pol', // Polish
-  'tur', // Turkish
-  'ron', // Romanian
-  'ces', // Czech
-  'swe', // Swedish
-  'dan', // Danish
-  'nob', // Norwegian Bokmål
-  'nno', // Norwegian Nynorsk
-  'rus', // Russian
-  'ell', // Greek
-  'jpn', // Japanese
-  'cmn', // Mandarin Chinese
-  'kor', // Korean
-  'arb', // Standard Arabic
-  'hin', // Hindi
-  'ind', // Indonesian
-  'zlm', // Malay — franc reports Indonesian as Malay about as often as not
-  'tha', // Thai
-  'vie', // Vietnamese
-]);
+
+/**
+ * Every language the detector may return, and the English name to call it by.
+ *
+ * The name is for a prompt, so it is in English however the reply will be
+ * written: "Български" in a system prompt is a worse instruction than
+ * "Bulgarian". Same reasoning as `LOCALE_ENGLISH_NAMES`, which this extends
+ * past the five languages the interface itself ships in — somebody writing
+ * Italian to an English app is owed Italian back, and the five-locale table
+ * has nothing to say about that.
+ *
+ * Both Norwegian standards are called "Norwegian". franc distinguishes Bokmål
+ * from Nynorsk, but not from 600 characters of meal log, and being told to
+ * write the wrong standard is worse than being told to write the language.
+ * Indonesian and Malay keep their own names despite confusing the detector as
+ * often as they do: the pair is symmetric, both are plausible, and a reader of
+ * either can read the other.
+ */
+const LANGUAGE_NAMES: Record<string, string> = {
+  // Measured clean on Haiku.
+  eng: 'English',
+  spa: 'Spanish',
+  fra: 'French',
+  deu: 'German',
+  ita: 'Italian',
+  por: 'Portuguese',
+  nld: 'Dutch',
+  pol: 'Polish',
+  tur: 'Turkish',
+  ron: 'Romanian',
+  ces: 'Czech',
+  swe: 'Swedish',
+  dan: 'Danish',
+  nob: 'Norwegian',
+  nno: 'Norwegian',
+  rus: 'Russian',
+  ell: 'Greek',
+  jpn: 'Japanese',
+  cmn: 'Mandarin Chinese',
+  kor: 'Korean',
+  arb: 'Arabic',
+  hin: 'Hindi',
+  ind: 'Indonesian',
+  zlm: 'Malay',
+  tha: 'Thai',
+  vie: 'Vietnamese',
+  // Measured as broken on Haiku.
+  bul: 'Bulgarian',
+  srp: 'Serbian',
+  hrv: 'Croatian',
+  bos: 'Bosnian',
+  slk: 'Slovak',
+  slv: 'Slovenian',
+  ukr: 'Ukrainian',
+  mkd: 'Macedonian',
+  lit: 'Lithuanian',
+  lav: 'Latvian',
+  est: 'Estonian',
+  fin: 'Finnish',
+  hun: 'Hungarian',
+  // Not measured, and escalated on that basis rather than on evidence.
+  heb: 'Hebrew',
+  cat: 'Catalan',
+  sqi: 'Albanian',
+  isl: 'Icelandic',
+  glg: 'Galician',
+  eus: 'Basque',
+  mlt: 'Maltese',
+  ltz: 'Luxembourgish',
+  afr: 'Afrikaans',
+  ceb: 'Cebuano',
+  tgl: 'Tagalog',
+  fas: 'Persian',
+  urd: 'Urdu',
+  ben: 'Bengali',
+  tam: 'Tamil',
+  tel: 'Telugu',
+  mar: 'Marathi',
+  swh: 'Swahili',
+  zul: 'Zulu',
+};
 
 /**
  * The languages the detector is allowed to answer with.
@@ -67,21 +145,24 @@ const HAIKU_LANGUAGES: ReadonlySet<string> = new Set([
  * neither is on the list above and English is most of the product. Restricting
  * the candidates to languages this app plausibly receives turns those into the
  * near-miss they should have been.
- *
- * So it is the union of the two sets that matter: everything Haiku handles, and
- * the ones known to need escalating. The tail is the plausible rest — they all
- * escalate, and naming them only stops a fifth language being mistaken for one
- * of the first two groups.
  */
-const CANDIDATES: string[] = [
-  ...HAIKU_LANGUAGES,
-  // Measured as broken on Haiku.
-  'bul', 'srp', 'hrv', 'bos', 'slk', 'slv', 'ukr', 'mkd',
-  'lit', 'lav', 'est', 'fin', 'hun',
-  // Not measured, and escalated on that basis rather than on evidence.
-  'heb', 'cat', 'sqi', 'isl', 'glg', 'eus', 'mlt', 'ltz', 'afr',
-  'ceb', 'tgl', 'fas', 'urd', 'ben', 'tam', 'tel', 'mar', 'swh', 'zul',
-];
+const CANDIDATES: string[] = Object.keys(LANGUAGE_NAMES);
+
+/** The subset Haiku 4.5 was measured writing cleanly. See the note above. */
+const HAIKU_LANGUAGES: ReadonlySet<string> = new Set([
+  'eng', 'spa', 'fra', 'deu', 'ita', 'por', 'nld', 'pol', 'tur', 'ron',
+  'ces', 'swe', 'dan', 'nob', 'nno', 'rus', 'ell', 'jpn', 'cmn', 'kor',
+  'arb', 'hin', 'ind', 'zlm', 'tha', 'vie',
+]);
+
+/** The five the interface ships in, mapped to the codes the tables above use. */
+const FRANC_CODES: Record<Locale, string> = {
+  en: 'eng',
+  bg: 'bul',
+  de: 'deu',
+  es: 'spa',
+  fr: 'fra',
+};
 
 /**
  * How many characters of conversation the decision is allowed to see.
@@ -98,12 +179,49 @@ const CANDIDATES: string[] = [
 const SAMPLE_LIMIT = 600;
 
 /**
- * Whether this conversation needs the capable model.
+ * Turns of conversation the language check may look back over.
  *
- * `samples` is newest-first: the current message, then recent user turns behind
- * it. Only user text belongs here — the assistant's own replies would make the
- * decision self-confirming, since a turn that wrongly answered a Bulgarian
- * message in English would then look like an English conversation forever.
+ * Small on purpose. For the journal this is a second query on the hot path
+ * whenever the transcript was not already loaded for the model, and it buys
+ * only what a fragment cannot say on its own — three or four sentences is
+ * already more than the detector needs, and a wider window would mostly re-read
+ * a conversation the model is not being sent.
+ *
+ * The same number everywhere it is asked, so that Monday's review and the turn
+ * before it cannot reach different conclusions about the same conversation.
+ */
+export const LANGUAGE_LOOKBACK = 6;
+
+export interface ReplyLanguage {
+  /**
+   * What to tell the model to write in, in English, or null to tell it nothing.
+   *
+   * Null covers two cases that want the same treatment. English is one: it is
+   * what the model does unprompted, and a line confirming it is tokens spent on
+   * every turn to buy a behaviour that was already there — the same reason
+   * `unitsBrief` says nothing about metric. The other is a language the
+   * detector could see but could not name, where the stable prompt's standing
+   * rule ("reply in the language they wrote to you in") is a better instruction
+   * than a guessed one, because it is reading the same words the model is.
+   */
+  name: string | null;
+  /** Whether the cheap model writes this language well enough to be let near it. */
+  haiku: boolean;
+}
+
+/**
+ * The language this reply is due in, and whether Haiku may write it.
+ *
+ * `samples` is newest-first: the newest message, then recent user turns behind
+ * it. The two are read against each other — see `detect`. Only user text
+ * belongs here: the assistant's own replies would make the decision
+ * self-confirming, since a turn that wrongly answered a Bulgarian message in
+ * English would then look like an English conversation forever.
+ *
+ * `locale` is the fallback and only the fallback. It is read when the samples
+ * say nothing at all, which is the common case for everything generated without
+ * a user sentence in front of it: the weekly review, a nudge, a captionless
+ * photo, a barcode scanned into an empty box.
  *
  * The two failure directions are not equally bad, so this leans one way on
  * purpose. Escalating a language Haiku could have handled costs about two and a
@@ -111,77 +229,140 @@ const SAMPLE_LIMIT = 600;
  * this exists to fix, and the user reads the result. So every unresolved case
  * ends up escalating.
  */
-export function needsCapableModel(samples: string[]): boolean {
-  const sample = buildSample(samples);
-  // Nothing to go on. An empty or whitespace-only turn is not a language
-  // problem, and a photo sent with no caption arrives here as one.
-  if (sample.length === 0) return false;
+export function replyLanguage(samples: string[], locale: Locale): ReplyLanguage {
+  const detected = detect(samples);
 
-  // Cyrillic is settled before franc rather than by it — see `readCyrillic`.
-  if (CYRILLIC.test(sample)) return !readCyrillic(sample);
+  if (detected.kind === 'named') {
+    return { name: nameFor(detected.code), haiku: HAIKU_LANGUAGES.has(detected.code) };
+  }
 
-  const detected = franc(sample, { only: CANDIDATES });
-  if (detected !== 'und') return !HAIKU_LANGUAGES.has(detected);
+  // Something is there and it is not a language we can name. Say nothing and
+  // spend the capable model, which is the pair of choices that degrades best:
+  // the model reads their sentence and answers it in kind, and it is a model
+  // that can.
+  if (detected.kind === 'unnamed') return { name: null, haiku: false };
 
-  // Undetermined: too short for trigrams to mean anything. Plain ASCII is
-  // English, or close enough to it that Haiku is safe. Anything else is a
-  // language we could not name, and naming it is the whole basis for the list.
-  return /[^\x00-\x7F]/.test(sample);
+  return { name: nameFor(FRANC_CODES[locale]), haiku: HAIKU_LANGUAGES.has(FRANC_CODES[locale]) };
 }
 
-/**
- * The same question asked of the language we are about to *write in*, rather
- * than the one in front of us.
- *
- * `needsCapableModel` reads what the person typed, which is the right signal
- * right up until the two come apart — and they come apart constantly. Somebody
- * whose app is in Bulgarian sends "ok", or a photo with no caption at all, and
- * the detector correctly reports nothing worth escalating for; the reply is
- * still due in Bulgarian, and Haiku still writes it with invented words in it.
- * The measurement at the top of this file is about the writing, so the language
- * being written is a first-class input to the decision.
- *
- * Only the five this app ships in, mapped to the codes the allowlist is keyed
- * by. Of them exactly one — Bulgarian — is off the list, so in practice this
- * says: an account reading Bulgarian is answered by the capable model whatever
- * it types. That costs about two and a half cents a turn and buys sentences
- * made of real words, which is the trade this whole file already makes.
- */
-const FRANC_CODES: Record<Locale, string> = {
-  en: 'eng',
-  bg: 'bul',
-  de: 'deu',
-  es: 'spa',
-  fr: 'fra',
-};
+function nameFor(code: string): string | null {
+  return code === 'eng' ? null : (LANGUAGE_NAMES[code] ?? null);
+}
 
-export function writingNeedsCapableModel(locale: Locale): boolean {
-  return !HAIKU_LANGUAGES.has(FRANC_CODES[locale]);
+type Detection =
+  /** A language, named. */
+  | { kind: 'named'; code: string }
+  /** Prose we could not put a name to — see `ReplyLanguage.name`. */
+  | { kind: 'unnamed' }
+  /** Nothing to go on, so nothing was decided. The caller's fallback applies. */
+  | { kind: 'none' };
+
+/**
+ * A language is named only when the newest message and the conversation behind
+ * it agree about what it is.
+ *
+ * Two different things go wrong without this, and one rule settles both.
+ *
+ * The window is what lets "ok" and "малко повече" inherit the language of the
+ * conversation they belong to, and it is also what would stop somebody leaving
+ * it — five Bulgarian turns outvote the English sentence in front of them, so a
+ * switch would keep being answered in the language it switched away from.
+ *
+ * The newest message on its own is the opposite trade: it follows a switch
+ * immediately and it is short, which is exactly where trigram detection frays.
+ * Measured on the sentences in `test/language.test.ts`, one meal log each:
+ * Slovene comes back as Polish, Croatian as Bosnian, Estonian as Finnish. The
+ * first of those is the dangerous one — Polish is on the Haiku list and Slovene
+ * is not, so believing it would put a language Haiku writes badly on Haiku.
+ *
+ * Requiring the two to agree keeps what is good about each. A fragment names
+ * nothing on its own, so the window decides it unopposed. A real switch
+ * disagrees with the window and lands here as unnamed — no brief naming the
+ * language they just left, and the capable model, while the standing rule in
+ * the stable prompt reads their actual sentence and follows them. And a
+ * near-miss like Slovene disagrees with itself and gets the same treatment,
+ * which is the safe answer rather than a lucky one.
+ */
+function detect(samples: string[]): Detection {
+  const window = identify(buildSample(samples));
+  if (window.kind !== 'named' || samples.length <= 1) return window;
+
+  /*
+   * How much of a newest message is enough for it to be worth listening to.
+   *
+   * It only ever votes against the window, so this is the length at which a
+   * disagreement is worth believing rather than the length at which detection
+   * is right. A one- or two-word log — "protein bar", "и още една" — is not a
+   * change of language and must not read as one, or the brief and the model
+   * under it would flip every few turns of a perfectly ordinary conversation.
+   * Anything sentence-shaped is past it.
+   */
+  const current = buildSample(samples.slice(0, 1));
+  if (current.length < VETO_LENGTH) return window;
+
+  const newest = identify(current);
+  if (newest.kind === 'named' && newest.code !== window.code) return { kind: 'unnamed' };
+
+  return window;
+}
+
+const VETO_LENGTH = 20;
+
+function identify(sample: string): Detection {
+  // An empty or whitespace-only turn is not a language problem, and a photo
+  // sent with no caption arrives here as one.
+  if (sample.length === 0) return { kind: 'none' };
+
+  // Cyrillic is settled before franc rather than by it — see `readCyrillic`.
+  if (CYRILLIC.test(sample)) {
+    const code = readCyrillic(sample);
+    return code === null ? { kind: 'unnamed' } : { kind: 'named', code };
+  }
+
+  const detected = franc(sample, { only: CANDIDATES });
+  if (detected !== 'und') return { kind: 'named', code: detected };
+
+  // Undetermined: too short for trigrams to mean anything. Plain ASCII is
+  // English, or close enough to it that the stored locale is a safe fallback —
+  // "ok" and "yes please" land here. Anything else is a language we could not
+  // name, and naming it is the whole basis for the tables above.
+  return /[^\x00-\x7F]/.test(sample) ? { kind: 'unnamed' } : { kind: 'none' };
 }
 
 const CYRILLIC = /\p{Script=Cyrillic}/u;
 
 /**
- * Whether a Cyrillic sample is the one Cyrillic language Haiku writes well.
+ * Which Cyrillic language a sample is written in.
  *
- * Cyrillic gets its own pass because it is the script the allowlist splits
+ * Cyrillic gets its own pass because it is the script the Haiku list splits
  * inside — Russian is on it, Bulgarian, Ukrainian, Serbian and Macedonian are
  * not — and it is exactly there that the trigram model is weakest: on a short
  * Russian meal log franc ranks Bosnian first and Russian fourth. Letters settle
  * it far more reliably than trigrams do, because these alphabets genuinely
  * differ.
  *
- * Ukrainian and Serbian have letters no other Cyrillic language here uses, so
- * they are decided outright. Russian and Bulgarian share an alphabet apart from
- * ы, э and ё, which Bulgarian does not have at all — so those three settle it
- * when they appear, and a handful of function words settle the shorter samples
- * where they happen not to. Anything still unresolved escalates.
+ * Ukrainian, Serbian and Macedonian each have letters no other Cyrillic
+ * language here uses, so they are decided outright. Russian and Bulgarian share
+ * an alphabet apart from ы, э and ё, which Bulgarian does not have at all — so
+ * those three settle it when they appear, and a handful of function words
+ * settle the shorter samples where they happen not to.
+ *
+ * Null when the words are silent both ways, which in practice means a sample of
+ * nouns and numbers. It escalates either way; the only thing lost is the name,
+ * and the standing rule in the stable prompt covers that better than a coin
+ * toss between two languages would.
  */
-function readCyrillic(sample: string): boolean {
-  if (UKRAINIAN_LETTERS.test(sample)) return false;
-  if (SERBIAN_LETTERS.test(sample)) return false;
-  if (RUSSIAN_LETTERS.test(sample)) return true;
-  return count(sample, RUSSIAN_WORDS) > count(sample, BULGARIAN_WORDS);
+function readCyrillic(sample: string): string | null {
+  if (UKRAINIAN_LETTERS.test(sample)) return 'ukr';
+  if (MACEDONIAN_LETTERS.test(sample)) return 'mkd';
+  if (SERBIAN_LETTERS.test(sample)) return 'srp';
+  if (RUSSIAN_LETTERS.test(sample)) return 'rus';
+
+  const russian = count(sample, RUSSIAN_WORDS);
+  const bulgarian = count(sample, BULGARIAN_WORDS);
+  if (russian > bulgarian) return 'rus';
+  if (bulgarian > russian) return 'bul';
+  return null;
 }
 
 /**
@@ -199,8 +380,10 @@ function count(sample: string, pattern: RegExp): number {
 
 /** і, ї, є and ґ are Ukrainian; none of them are Russian or Bulgarian. */
 const UKRAINIAN_LETTERS = /[іїєґ]/iu;
-/** Serbian and Macedonian each have letters the East Slavic alphabets lack. */
-const SERBIAN_LETTERS = /[ђћљњџјѓќѕ]/iu;
+/** ѓ, ќ and ѕ are Macedonian's alone among the Cyrillic languages here. */
+const MACEDONIAN_LETTERS = /[ѓќѕ]/iu;
+/** ђ, ћ, љ, њ, џ and ј are Serbian's — Macedonian shares them, and is decided above. */
+const SERBIAN_LETTERS = /[ђћљњџј]/iu;
 /** Russian has these three; Bulgarian has none of them. */
 const RUSSIAN_LETTERS = /[ыэё]/iu;
 

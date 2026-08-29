@@ -145,6 +145,28 @@ export async function messageActions(
   return row ? (row.actions ?? []) : null;
 }
 
+/**
+ * The last few things this person typed, newest first, for the language check.
+ *
+ * `listMessages` is the wrong shape for it twice over: it returns oldest-first
+ * and it signs a photo URL for every row that has one, which is a secret fetch
+ * and a signature per message to answer a question that only reads text. This
+ * is the same rows with neither cost.
+ *
+ * User turns only. The assistant's own replies would make the decision
+ * self-confirming — a turn that wrongly answered a Bulgarian message in English
+ * would then look like an English conversation forever.
+ */
+export async function recentUserTexts(userId: string, limit: number): Promise<string[]> {
+  const rows = await query<{ content: string }>(
+    `SELECT content FROM chat_messages
+      WHERE user_id = $1 AND role = 'user'
+   ORDER BY created_at DESC LIMIT $2`,
+    [userId, Math.min(Math.max(limit, 1), 50)],
+  );
+  return rows.map((row) => row.content);
+}
+
 export async function listMessages(userId: string, limit = 50): Promise<ChatMessage[]> {
   const rows = await query<any>(
     `SELECT id, role, content, photo_id, created_at, actions FROM (

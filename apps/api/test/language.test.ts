@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { needsCapableModel, writingNeedsCapableModel } from '../src/ai/language.ts';
+import { LOCALES, LOCALE_ENGLISH_NAMES } from '@ct/shared';
+import { replyLanguage } from '../src/ai/language.ts';
 import { MODELS, TEXT_LOG_UNSUPPORTED_LANGUAGE } from '../src/ai/client.ts';
 
 /**
- * Which languages route to which model.
+ * What language a reply is written in, and which model may write it.
  *
  * The samples are meal logs and the kind of short question that follows one,
  * rather than tidy paragraphs, because that is what the detector actually gets
@@ -13,6 +14,11 @@ import { MODELS, TEXT_LOG_UNSUPPORTED_LANGUAGE } from '../src/ai/client.ts';
  * say so: a language that escalates when it did not need to costs about two and
  * a half cents, and a language that fails to escalate is the bug — so the
  * "stays on Haiku" cases are the ones worth being strict about.
+ *
+ * Every case here passes `'en'` as the locale, which is the fallback and is
+ * deliberately not what these assertions turn on. The whole point of the
+ * resolver is that an English interface says nothing about the language of the
+ * conversation in front of it.
  */
 
 /** Written cleanly by Haiku 4.5 when it was measured. See `ai/language.ts`. */
@@ -53,11 +59,11 @@ const ESCALATES: Array<[string, string[]]> = [
 
 describe('language routing', () => {
   it.each(STAYS_ON_HAIKU)('keeps %s on the cheap model', (_name, samples) => {
-    expect(needsCapableModel(samples)).toBe(false);
+    expect(replyLanguage(samples, 'en').haiku).toBe(true);
   });
 
   it.each(ESCALATES)('escalates %s', (_name, samples) => {
-    expect(needsCapableModel(samples)).toBe(true);
+    expect(replyLanguage(samples, 'en').haiku).toBe(false);
   });
 
   /*
@@ -69,15 +75,16 @@ describe('language routing', () => {
    * change under a warm prompt cache for the sake of one word.
    */
   it('carries the decision across a fragment that says nothing on its own', () => {
-    expect(needsCapableModel(['малко повече'])).toBe(true);
+    expect(replyLanguage(['малко повече'], 'en').haiku).toBe(false);
     expect(
-      needsCapableModel(['ок', 'две яйца и филия хляб с масло', 'колко калории ми остават?']),
-    ).toBe(true);
+      replyLanguage(['ок', 'две яйца и филия хляб с масло', 'колко калории ми остават?'], 'en')
+        .haiku,
+    ).toBe(false);
   });
 
   it('reads a short English acknowledgement as English', () => {
-    expect(needsCapableModel(['ok'])).toBe(false);
-    expect(needsCapableModel(['yes please'])).toBe(false);
+    expect(replyLanguage(['ok'], 'en').haiku).toBe(true);
+    expect(replyLanguage(['yes please'], 'en').haiku).toBe(true);
   });
 
   /*
@@ -86,46 +93,136 @@ describe('language routing', () => {
    * in the stripping expression — a `\W` filter would take the Cyrillic too.
    */
   it('is not confused by the numbers a food log is full of', () => {
-    expect(needsCapableModel(['200 гр. пилешко и 150 гр. ориз, 06:30'])).toBe(true);
-    expect(needsCapableModel(['200g chicken and 150g rice at 06:30'])).toBe(false);
+    expect(replyLanguage(['200 гр. пилешко и 150 гр. ориз, 06:30'], 'en').haiku).toBe(false);
+    expect(replyLanguage(['200g chicken and 150g rice at 06:30'], 'en').haiku).toBe(true);
   });
 
   it('escalates nothing when there is nothing to read', () => {
-    expect(needsCapableModel([])).toBe(false);
-    expect(needsCapableModel(['', '   '])).toBe(false);
-    expect(needsCapableModel(['2 x 150g', '~650'])).toBe(false);
+    expect(replyLanguage([], 'en').haiku).toBe(true);
+    expect(replyLanguage(['', '   '], 'en').haiku).toBe(true);
+    expect(replyLanguage(['2 x 150g', '~650'], 'en').haiku).toBe(true);
   });
 });
 
 /*
- * The other direction: what the reply has to be *written* in, which is not
- * always what the turn in front of it is written in. "ok" and a captionless
- * photo say nothing to the detector and are still owed an answer in the
- * language the app is drawn in.
+ * The feature this file exists for: the language somebody writes in is not the
+ * language their app is set to, and the reply follows the writing.
+ *
+ * `038_locale.sql` backfilled every account older than it to `'en'`, so for a
+ * large share of rows the column is the migration's default rather than
+ * anybody's answer. Reading the reply language off it told a Bulgarian
+ * speaker's journal to write English, and what came back was an English draft
+ * translated word for word.
  */
-describe('the language being written', () => {
+describe('writing in a different language from the app', () => {
+  const bulgarian = ['две яйца и филия хляб с масло', 'колко калории ми остават днес?'];
+  const english = ['two eggs and a slice of toast', 'how much protein have I had?'];
+
+  it('answers an English-drawn app in the language of the conversation', () => {
+    expect(replyLanguage(bulgarian, 'en')).toEqual({ name: 'Bulgarian', haiku: false });
+  });
+
+  it('answers a Bulgarian-drawn app in English when that is what they write', () => {
+    // The other direction, and the one the old code got wrong the other way
+    // round: a `bg` locale used to force a Bulgarian brief over an English
+    // conversation, and pay for the capable model to write it.
+    expect(replyLanguage(english, 'bg')).toEqual({ name: null, haiku: true });
+  });
+
+  it('stops naming the old language when somebody switches mid-conversation', () => {
+    // Newest-first, so the switch is at the front. It disagrees with the five
+    // Bulgarian turns behind it, and a disagreement names nothing: the stable
+    // prompt promises to follow a switch, and a brief still saying "Bulgarian"
+    // over an English sentence would be the app arguing with itself. Nothing
+    // named and the capable model is the safe pair — the model reads what they
+    // actually wrote.
+    expect(replyLanguage([...english, ...bulgarian], 'bg')).toEqual({
+      name: null,
+      haiku: false,
+    });
+  });
+
+  it('keeps naming the language when the newest message agrees with the thread', () => {
+    expect(replyLanguage([...bulgarian, ...english], 'en').name).toBe('Bulgarian');
+  });
+
+  it('does not switch on a fragment that happens to be in the other language', () => {
+    // The other half of the same rule. A two-word log is not a change of
+    // language, and treating it as one would flip the brief — and the model
+    // under it — every few turns of a perfectly ordinary conversation.
+    expect(replyLanguage(['protein bar', ...bulgarian], 'en').name).toBe('Bulgarian');
+  });
+
+  it('speaks a language the interface does not ship in', () => {
+    // Italian is not one of the five the app is drawn in. Somebody writing it
+    // is owed it anyway, which is why the name table is wider than the locale
+    // table.
+    expect(replyLanguage(['due uova e una fetta di pane con burro'], 'en').name).toBe('Italian');
+  });
+});
+
+/*
+ * The fallback, and only the fallback: the stored locale answers for the turns
+ * with nothing written in front of them — a captionless photo, a barcode
+ * scanned into an empty box, Monday's review, a nudge.
+ */
+describe('the language being written, when nothing has been', () => {
+  it('falls back to the language the app is drawn in', () => {
+    for (const locale of LOCALES) {
+      const resolved = replyLanguage([], locale);
+      if (locale === 'en') expect(resolved.name).toBeNull();
+      else expect(resolved.name).toBe(LOCALE_ENGLISH_NAMES[locale]);
+    }
+  });
+
   it('escalates Bulgarian, the one shipped language Haiku writes badly', () => {
-    expect(writingNeedsCapableModel('bg')).toBe(true);
+    expect(replyLanguage([], 'bg').haiku).toBe(false);
   });
 
   it('leaves the other four on the cheap model', () => {
     for (const locale of ['en', 'de', 'es', 'fr'] as const) {
-      expect(writingNeedsCapableModel(locale)).toBe(false);
+      expect(replyLanguage([], locale).haiku).toBe(true);
     }
   });
 
   /*
-   * The two lists have to agree, or a language would escalate when somebody
+   * The two paths have to agree, or a language would escalate when somebody
    * writes it and not when we write it — the same reply, two models, decided by
    * who happened to type last.
    */
   it('agrees with what the detector says about the same language', () => {
-    expect(needsCapableModel(['две яйца и филия хляб с масло'])).toBe(
-      writingNeedsCapableModel('bg'),
+    expect(replyLanguage(['две яйца и филия хляб с масло'], 'en')).toEqual(
+      replyLanguage([], 'bg'),
     );
-    expect(needsCapableModel(['zwei Eier und eine Scheibe Brot mit Butter'])).toBe(
-      writingNeedsCapableModel('de'),
+    expect(replyLanguage(['zwei Eier und eine Scheibe Brot mit Butter'], 'en')).toEqual(
+      replyLanguage([], 'de'),
     );
+  });
+});
+
+/*
+ * Prose we can see but cannot name. Both halves of the answer are deliberate:
+ * say nothing, because the standing rule in the stable prompt is reading the
+ * same sentence the model is and is a better instruction than a guess, and
+ * spend the capable model, because a language nobody has measured gets the
+ * benefit of the doubt.
+ */
+describe('a language we could not name', () => {
+  // Cyrillic that the letter rules leave alone — no ы, э or ё, nothing
+  // Ukrainian, Serbian or Macedonian — and that carries none of the function
+  // words the shorter samples are settled by. A plate of nouns, which is what a
+  // food log often is.
+  const undecided = ['пилешко филе с ориз и зеленчуци'];
+
+  it('says nothing and escalates', () => {
+    expect(replyLanguage(undecided, 'en')).toEqual({ name: null, haiku: false });
+  });
+
+  it('does not let the stored locale answer over the top of it', () => {
+    // The fallback is for silence, not for uncertainty. Naming this English
+    // because the tab bar is English is the same mistake in a smaller font, and
+    // the reply is better served by the standing rule than by a guess.
+    expect(replyLanguage(undecided, 'en').name).toBeNull();
   });
 });
 

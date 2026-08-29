@@ -1,12 +1,14 @@
 import type { ReviewStats, WeeklyReview } from '@ct/shared';
+import { localeOf } from '@ct/shared';
 import { query } from '../db.ts';
-import { insertMessage } from '../services/chat.ts';
+import { insertMessage, recentUserTexts } from '../services/chat.ts';
 import { applyAdaptiveTargets } from '../services/adaptive.ts';
 import { buildReviewStats, reviewAction, reviewWeekFor, saveReview } from '../services/reviews.ts';
 import { getUser, getUserContext } from '../services/user.ts';
 import { recordUsage } from '../services/usage.ts';
 import { localDateFor } from '../time.ts';
 import { MAX_TURNS } from './client.ts';
+import { LANGUAGE_LOOKBACK, replyLanguage } from './language.ts';
 import { createProvider, laneFor, type AgentRequest } from './providers/index.ts';
 import { REVIEW_SYSTEM_PROMPT, reviewTaskPrompt } from './prompt.ts';
 import { buildNutritionServer } from './tools.ts';
@@ -44,13 +46,27 @@ export async function generateWeeklyReview(
   const authError = provider.checkAuth();
   if (authError) throw new Error(authError);
 
+  /*
+   * The review is written in the language the week was logged in.
+   *
+   * There is no prose in this request to read it off — `ReviewStats` is a blob
+   * of numbers — so it is read off the journal instead. The stored locale is
+   * the fallback and not the answer: it is what the *interface* is drawn in,
+   * and somebody reading English tabs while logging every meal in Bulgarian was
+   * getting a Monday review in a language they had not used all week.
+   */
+  const language = replyLanguage(
+    await recentUserTexts(id, LANGUAGE_LOOKBACK),
+    localeOf(profile),
+  ).name;
+
   const request: AgentRequest = {
     kind: 'review',
     // The review's whole prompt is stable; the week's numbers ride in the user
     // turn, so there is nothing volatile to keep out of the cache.
     staticSystemPrompt: REVIEW_SYSTEM_PROMPT,
     dynamicSystemPrompt: '',
-    text: reviewTaskPrompt(stats, profile),
+    text: reviewTaskPrompt(stats, profile, language),
     photo: null,
     tools,
     toolNames,

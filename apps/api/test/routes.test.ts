@@ -641,6 +641,11 @@ describe('chat', () => {
    * The wire half of the language fallback. `run.test.ts` proves the turn is
    * written in what it is handed; this proves the client's answer survives the
    * body schema and reaches it, which is where a field like this dies quietly.
+   *
+   * "ok" is the payload for a reason: it identifies as nothing, so the only
+   * thing that can decide this turn is the language the client says it is
+   * drawing. A Bulgarian message would escalate on its own and prove nothing
+   * about whether the field arrived.
    */
   it('answers in the language the client says it is drawing', async () => {
     const bulgarian = await createUser({ locale: null, units: 'metric' });
@@ -651,9 +656,9 @@ describe('chat', () => {
         method: 'POST',
         url: '/chat',
         headers: { cookie: freshCookie },
-        payload: { text: 'две яйца', locale: 'bg' },
+        payload: { text: 'ok', locale: 'bg' },
       });
-      expect(userTurnOf(agentCalls.at(-1)!)).toContain('Bulgarian');
+      expect(agentCalls.at(-1)!.options.model).toBe('claude-sonnet-5');
     } finally {
       await freshApp.close();
     }
