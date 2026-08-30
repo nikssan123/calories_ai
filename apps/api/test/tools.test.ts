@@ -161,6 +161,39 @@ describe('log_food', () => {
     expect(entry).toMatchObject({ meal: 'lunch', local_date: TODAY, source: 'text' });
   });
 
+  it('says so when the log did not store the number it was sent', async () => {
+    const { json } = await call('log_food', {
+      description: 'Creamy pasta',
+      meal: 'dinner',
+      when: null,
+      items: [
+        { name: 'Creamy pasta', quantity_g: 350, quantity_desc: null, kcal: 300,
+          protein_g: 12, carbs_g: 40, fat_g: 25, fiber_g: null, sodium_mg: null,
+          sat_fat_g: null, sugar_g: null },
+      ],
+      note: null,
+      confidence: 'medium',
+    });
+
+    expect(json.logged.kcal).toBe(433);
+    // The one fact the model cannot read off its own arguments, so it is said
+    // rather than left to be discovered on a card the user is looking at.
+    expect(json.reconciled).toContain('433');
+    expect(json.reconciled).toContain('300');
+  });
+
+  it('stays quiet when the figure it sent is the figure that was stored', async () => {
+    const { json } = await call('log_food', {
+      description: 'Chicken and rice',
+      meal: 'lunch',
+      when: null,
+      items: [ITEM],
+      note: null,
+      confidence: 'medium',
+    });
+    expect(json.reconciled).toBeUndefined();
+  });
+
   it('infers the meal from the time when not told', async () => {
     const { json } = await call('log_food', {
       description: 'Something',

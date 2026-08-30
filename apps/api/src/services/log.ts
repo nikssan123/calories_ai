@@ -9,6 +9,7 @@ import type {
 } from '@ct/shared';
 import { query, queryOne, transaction } from '../db.ts';
 import { markEntryRemoved } from './chat.ts';
+import { reconcileEnergy } from './energy.ts';
 import { type DayContext, localDateFor } from '../time.ts';
 
 /**
@@ -34,6 +35,32 @@ export interface FoodItemInput {
   sodium_mg?: number | null;
   sat_fat_g?: number | null;
   sugar_g?: number | null;
+}
+
+/**
+ * The one gate every stored item passes through.
+ *
+ * `reconcileEnergy` raises any item whose calories its own macros rule out, and
+ * it is applied here rather than in the callers because there are seven of them
+ * — the agent's two tools, the REST manual log and its correction, a recipe
+ * being cooked, one out of the library, a repeat, a scanned packet — and an
+ * invariant that only six of them honour is not an invariant. This module
+ * already says it owns them.
+ *
+ * It is not a validation step and nothing is ever rejected: an impossible
+ * figure is corrected upward and the entry is written. Refusing to log is the
+ * one thing this app does not do.
+ *
+ * Scanned packets go through it too, and that is deliberate rather than
+ * overlooked. `barcode.ts` checks that a row has all four figures on it and
+ * that none is absurd on its own, but nothing there reads them against each
+ * other, and a crowd-sourced panel whose energy contradicts its own macros is
+ * one of the ways those rows are wrong. "Label data, not estimates" is a claim
+ * about where a number came from, not a promise to store one that cannot be
+ * true.
+ */
+function priced<T extends FoodItemInput>(items: T[]): T[] {
+  return reconcileEnergy(items).items;
 }
 
 /** The column list and the values, kept together so the two INSERTs cannot drift. */
@@ -132,7 +159,7 @@ export async function createFoodEntry(input: CreateFoodInput): Promise<FoodEntry
     );
     const id = rows[0]!.id;
 
-    for (const [index, item] of input.items.entries()) {
+    for (const [index, item] of priced(input.items).entries()) {
       await client.query(
         `INSERT INTO food_items (entry_id, ${ITEM_COLUMNS})
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
@@ -378,7 +405,7 @@ export async function updateFoodEntry(
 
     if (input.items) {
       await client.query('DELETE FROM food_items WHERE entry_id = $1', [entryId]);
-      for (const [index, item] of input.items.entries()) {
+      for (const [index, item] of priced(input.items).entries()) {
         await client.query(
           `INSERT INTO food_items (entry_id, ${ITEM_COLUMNS})
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,

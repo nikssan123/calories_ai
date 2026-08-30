@@ -293,6 +293,23 @@ describe('dayContextPrompt', () => {
     expect(met).not.toContain('short');
   });
 
+  it('carries their usual portions, with the weight and the density they settled on', () => {
+    const prompt = dayContextPrompt(profile, day, weight, [], null, [], null, [
+      { name: 'Rice', grams: 190, kcal_100g: 130, times: 7 },
+      { name: 'Greek yoghurt', grams: 170, kcal_100g: 59, times: 4 },
+    ]);
+
+    expect(prompt).toContain('Their usual portions');
+    expect(prompt).toContain('- Rice: ~190 g at ~130 kcal/100g (7x)');
+    expect(prompt).toContain('- Greek yoghurt: ~170 g at ~59 kcal/100g (4x)');
+    // A prior, not an instruction: what they say in the message still wins.
+    expect(prompt).toContain('What they say in the message beats them');
+  });
+
+  it('says nothing about portions for an account with no history', () => {
+    expect(dayContextPrompt(profile, day, weight)).not.toContain('Their usual portions');
+  });
+
   it('lists the entry ids the agent needs to correct anything', () => {
     const prompt = dayContextPrompt(profile, day, weight);
     expect(prompt).toContain('[22222222-2222-2222-2222-222222222222] lunch: Chicken and rice');
