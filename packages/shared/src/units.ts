@@ -128,6 +128,16 @@ export const formatDistance = (km: number, units: UnitSystem) =>
 
 export const loadUnit = (units: UnitSystem) => (units === 'imperial' ? 'lb' : 'kg');
 
+/**
+ * How much a load moves when somebody taps "heavier".
+ *
+ * A plate, not an integer. Barbells go up in 2.5 kg because that is the pair of
+ * smallest plates most gyms own, and imperial gyms go up in 5 lb for the same
+ * reason — so a stepper that moved by one would need three taps to express the
+ * smallest change anybody actually makes.
+ */
+export const loadStep = (units: UnitSystem) => (units === 'imperial' ? 5 : 2.5);
+
 export const toLoad = (kg: number, units: UnitSystem) =>
   round(units === 'imperial' ? kgToLb(kg) : kg, 1);
 

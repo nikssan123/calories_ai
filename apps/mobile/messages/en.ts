@@ -889,6 +889,18 @@ export const en = {
   'workout.nameIt': 'Name it',
   'workout.logIt': 'Log it',
   'workout.sameAsShort': (when: string) => `↻ same as ${when}`,
+  'workout.lastTime': (figure: string) => `last time ${figure}`,
+  'workout.adjust': 'Adjust',
+  'workout.setsDiffered': 'Sets differed',
+  'workout.sameEverySet': 'Same every set',
+  'workout.setsLabel': 'sets',
+  'workout.searchExercises': 'Search — a name or a muscle',
+  'workout.doneThese': 'You’ve done these',
+  'workout.browseMuscle': 'Or browse by muscle',
+  'workout.addNamed': (name: string) => `＋ Add “${name}”`,
+  'workout.nothingMatches': 'Nothing matches that',
+  'workout.otherLength': 'Other',
+  'workout.minutesLabel': 'Minutes',
 
   'editor.anotherItemLabel': 'another item',
 
