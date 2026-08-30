@@ -2199,6 +2199,29 @@ export const ChatCard = z.discriminatedUnion('type', [
     performed_at: z.string(),
     /** What the agent understood, echoed so the question does not feel blind. */
     heard: z.string().nullable(),
+    /**
+     * The exercises they had already named, so the card opens holding them.
+     *
+     * The handover used to be lossy: say three exercises and the card arrived
+     * empty, which punished somebody for having used the chat and made any
+     * nudge toward the card feel like a demotion. With this the model can stop
+     * collecting in prose the moment a turn starts enumerating and hand over
+     * what it has — the card fills the blanks from history.
+     *
+     * Numbers are whatever was actually said and nothing more. A `null` load is
+     * "they did not tell me", which the card answers from the last session; a
+     * load invented here would be read back as something they lifted.
+     */
+    exercises: z
+      .array(
+        z.object({
+          name: z.string(),
+          sets: z.number().int().min(1).max(30).nullable().default(null),
+          reps: z.number().int().min(1).max(999).nullable().default(null),
+          weight_kg: z.number().min(0).max(999).nullable().default(null),
+        }),
+      )
+      .default([]),
   }),
   /** Requested by the model via `show_day`. A day at a glance, mid-conversation. */
   z.object({

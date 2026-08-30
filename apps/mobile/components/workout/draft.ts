@@ -195,3 +195,56 @@ export function round(value: number, places = 1): number {
   const factor = 10 ** places;
   return Math.round(value * factor) / factor;
 }
+
+/** What the agent heard, before the card fills in what it did not say. */
+export interface HeardExercise {
+  name: string;
+  sets: number | null;
+  reps: number | null;
+  weight_kg: number | null;
+}
+
+/**
+ * A part-dictated session, opened as a card.
+ *
+ * The rule is that **what they said wins, and history answers the rest**. Say
+ * "squats and RDLs" and both arrive at last week's numbers; say "squats, four
+ * by eight" and the sets and reps are theirs while the load still comes from
+ * history. Nothing is invented: an exercise with no history and no numbers said
+ * about it opens blank, which is the honest state.
+ *
+ * This is what makes the handover from the chat lossless, and lossless is the
+ * whole precondition for nudging anyone toward the card. Handing somebody an
+ * empty form after they have just named three exercises is punishing them for
+ * having used the conversation.
+ */
+export function draftsFromHeard(
+  heard: HeardExercise[],
+  types: ExerciseType[],
+  units: UnitSystem,
+  category: ExerciseCategory,
+): DraftExercise[] {
+  const byName = new Map(types.map((type) => [type.name.toLowerCase(), type]));
+  return heard.map((said) => {
+    const type = byName.get(said.name.trim().toLowerCase());
+    const base: DraftExercise = type
+      ? draftFromType(type, units)
+      : {
+          name: said.name.trim(),
+          typeId: null,
+          tracks: CATEGORY_TRACKS[category],
+          emoji: CATEGORY_EMOJI[category],
+          muscles: [],
+          sets: [blankSet()],
+          previous: [],
+        };
+
+    const stated: Partial<DraftSet> = {};
+    if (said.reps !== null) stated.reps = said.reps;
+    if (said.weight_kg !== null) stated.weight = round(toLoad(said.weight_kg, units));
+
+    let draft = Object.keys(stated).length > 0 ? setEvery(base, stated) : base;
+    if (said.sets !== null) draft = resize(draft, said.sets);
+    return draft;
+  });
+}

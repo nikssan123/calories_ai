@@ -826,7 +826,7 @@ const workoutExercisesField = z
    */
   const askWorkout = tool(
     'ask_workout',
-    'Draw the workout card when they say they trained but not what they did — "went to the gym", "did a workout", "leg day". It asks which kind and how long, which is all a session needs, and offers to take the exercises too. Do not call it when they already told you enough to log: a run with a distance goes to log_exercise, and named work goes to log_workout.',
+    'Draw the workout card when they say they trained but not what they did — "went to the gym", "did a workout", "leg day" — and equally when they have STARTED listing a session: pass the exercises you heard in `exercises` and let them finish on the card, which fills the numbers in from their history. Never ask a follow-up question to complete a list. Do not call it when one short sentence already says everything: a run with a distance goes to log_exercise, and "bench 3x8 at 80" goes to log_workout.',
     {
       category: categoryField
         .nullable()
@@ -838,6 +838,23 @@ const workoutExercisesField = z
         .nullable()
         .default(null)
         .describe('What you understood, in a few words — "gym session this morning". Shown on the card so the question does not feel blind.'),
+      exercises: z
+        .array(
+          z.object({
+            name: z
+              .string()
+              .describe('The exercise as they said it — "squats", "RDLs". Matched to the catalogue.'),
+            sets: z.number().int().nullable().default(null),
+            reps: z.number().int().nullable().default(null),
+            weight_kg: z
+              .number()
+              .nullable()
+              .default(null)
+              .describe('Kilograms, and only if they said one. Null is answered from their history; a number you invented is read back as something they lifted.'),
+          }),
+        )
+        .default([])
+        .describe('Whatever they named, in order. Empty when they only said they trained. Send everything you heard — this is what stops the handover losing what they already told you.'),
     },
     async (args) => {
       const performedAt = resolveWhen(args.when ?? undefined, tc.now, tc.ctx);
@@ -850,6 +867,21 @@ const workoutExercisesField = z
         planned = await routineForWeekday(tc.userId, weekdayFor(performedAt, tc.ctx));
       }
 
+      /*
+       * Names are matched to the catalogue here rather than on the client, so
+       * the card gets the real name, the right fields for it, and the history
+       * hanging off its id. An unmatched name still travels — somebody's gym
+       * does an exercise this app has never heard of, and dropping it would be
+       * losing the very thing this argument exists to carry.
+       */
+      const heardExercises = args.exercises ?? [];
+      const named: string[] = [];
+      for (const exercise of heardExercises) {
+        const { findExerciseType } = await import('../services/workouts.ts');
+        const type = await findExerciseType(tc.userId, exercise.name);
+        named.push(type?.name ?? exercise.name.trim());
+      }
+
       tc.actions.push({
         kind: 'workout_asked',
         entry_id: null,
@@ -859,6 +891,12 @@ const workoutExercisesField = z
           suggested_category: ((args.category ?? planned?.category) as never) ?? null,
           performed_at: performedAt.toISOString(),
           heard: args.heard,
+          exercises: heardExercises.map((exercise, i) => ({
+            name: named[i] ?? exercise.name,
+            sets: exercise.sets ?? null,
+            reps: exercise.reps ?? null,
+            weight_kg: exercise.weight_kg ?? null,
+          })),
         },
       });
       // Nothing is logged yet, and saying so keeps the model from congratulating
@@ -866,7 +904,11 @@ const workoutExercisesField = z
       return ok({
         asked: true,
         logged: false,
-        note: 'The card is on their screen and asks how long it took — one tap. Say one short line inviting them to answer it, and do not claim anything has been recorded.',
+        seeded: named,
+        note:
+          named.length > 0
+            ? 'The card is on their screen holding those exercises, with the weights filled in from the last time they did each one. Say one short line asking them to check it. Do not ask what they lifted, and do not claim anything has been recorded.'
+            : 'The card is on their screen and asks how long it took — one tap. Say one short line inviting them to answer it, and do not claim anything has been recorded.',
       });
     },
     { alwaysLoad: true },

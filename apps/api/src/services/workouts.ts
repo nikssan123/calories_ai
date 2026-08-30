@@ -56,17 +56,60 @@ export async function listExerciseTypes(
   return types;
 }
 
-export async function findExerciseType(
-  userId: string,
-  name: string,
-): Promise<ExerciseType | null> {
+/** The row with exactly this name, for deciding whether it is taken. */
+async function exactExerciseType(userId: string, name: string): Promise<ExerciseType | null> {
   const row = await queryOne<any>(
     `SELECT id, name, category, emoji, tracks, muscles, aliases, user_id
        FROM exercise_types
       WHERE lower(name) = lower($2) AND (user_id IS NULL OR user_id = $1)
    ORDER BY (user_id IS NOT NULL) DESC
       LIMIT 1`,
-    [userId, name],
+    [userId, name.trim()],
+  );
+  return row ? toType(row) : null;
+}
+
+/**
+ * The catalogue entry somebody meant, from what they called it.
+ *
+ * Three widenings past exact-name, in order of how much they cost:
+ *
+ * 1. **The aliases.** "RDL", "OHP", "pulldown" — the gap between the one name
+ *    the catalogue keeps so history stays comparable, and what a gym says.
+ * 2. **The plural.** People say "squats" and "lunges" and "dips", and the
+ *    catalogue is singular throughout. A trailing "s" is not worth losing an
+ *    exercise's whole identity over.
+ * 3. Both together, so "RDLs" lands too.
+ *
+ * This is more load-bearing than it looks. A name that fails to match is not a
+ * cosmetic miss: the set is written with a null `type_id`, which costs it its
+ * MET, its muscles, its place in `previousSetsFor`, and its vote in matching
+ * the session to a saved routine. "Squats" logged as free text is an exercise
+ * the app can never offer back.
+ *
+ * Exact name wins over an alias, and this account's own wins over a built-in —
+ * somebody who has defined their own "Squats" meant theirs.
+ */
+export async function findExerciseType(
+  userId: string,
+  name: string,
+): Promise<ExerciseType | null> {
+  const wanted = name.trim().toLowerCase();
+  if (wanted.length === 0) return null;
+  const singular = wanted.endsWith('s') ? wanted.slice(0, -1) : wanted;
+
+  const row = await queryOne<any>(
+    `SELECT id, name, category, emoji, tracks, muscles, aliases, user_id,
+            (lower(name) = $2) AS exact
+       FROM exercise_types
+      WHERE (user_id IS NULL OR user_id = $1)
+        AND (lower(name) = $2
+             OR lower(name) = $3
+             OR $2 = ANY(aliases)
+             OR $3 = ANY(aliases))
+   ORDER BY exact DESC, (user_id IS NOT NULL) DESC, length(name) ASC
+      LIMIT 1`,
+    [userId, wanted, singular],
   );
   return row ? toType(row) : null;
 }
@@ -99,7 +142,15 @@ export interface DefineExerciseInput {
  * conversation with.
  */
 export async function defineExerciseType(input: DefineExerciseInput): Promise<ExerciseType> {
-  const existing = await findExerciseType(input.userId, input.name);
+  /*
+   * Exact name, deliberately, and not the forgiving lookup above.
+   *
+   * "Is this name taken" and "what did they mean" are different questions.
+   * Asking the forgiving one here would have this quietly hand back "Squat" to
+   * somebody defining "Squats", and worse, hand back whatever an alias happened
+   * to catch to an agent defining something genuinely new.
+   */
+  const existing = await exactExerciseType(input.userId, input.name);
   if (existing) return existing;
 
   const row = await queryOne<any>(

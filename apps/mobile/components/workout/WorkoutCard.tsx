@@ -36,6 +36,7 @@ import {
   CATEGORY_TRACKS,
   blankSet,
   draftFromType,
+  draftsFromHeard,
   isExercise,
   toDraftSet,
   toExercise,
@@ -203,10 +204,24 @@ export function WorkoutCard({
    */
   const seeded = useRef(false);
   useEffect(() => {
-    if (!editing || seeded.current || types === null) return;
+    if (seeded.current || types === null) return;
+    if (editing) {
+      seeded.current = true;
+      setExercises(draftsFrom(editing, types, units));
+      return;
+    }
+    /*
+     * A card handed over from the conversation, holding what was already said.
+     *
+     * `?? []` rather than a bare read: cards are stored as JSON on the message
+     * and every one written before this field existed comes back without it.
+     */
+    const heard = card?.exercises ?? [];
+    if (heard.length === 0) return;
     seeded.current = true;
-    setExercises(draftsFrom(editing, types, units));
-  }, [editing, types, units]);
+    setExercises(draftsFromHeard(heard, types, units, category));
+    setDetail(true);
+  }, [editing, card, types, units, category]);
 
   const filled = exercises.filter((e) => toExercise(e, units) !== null);
   const counted = exercises.map((e) => toExercise(e, units)).filter(isExercise);

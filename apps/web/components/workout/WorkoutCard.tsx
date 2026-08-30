@@ -330,10 +330,24 @@ export function WorkoutCard({
    */
   const seeded = useRef(false);
   useEffect(() => {
-    if (!editing || seeded.current || types === null) return;
+    if (seeded.current || types === null) return;
+    if (editing) {
+      seeded.current = true;
+      setDrafts(draftsFrom(editing, types, units));
+      return;
+    }
+    /*
+     * A card handed over from the conversation, holding what was already said.
+     *
+     * `?? []` rather than a bare read: cards are stored as JSON on the message
+     * and every one written before this field existed comes back without it.
+     */
+    const heard = card?.exercises ?? [];
+    if (heard.length === 0 || !category) return;
     seeded.current = true;
-    setDrafts(draftsFrom(editing, types, units));
-  }, [editing, types, units]);
+    setDrafts(draftsFromHeard(heard, types, units, category));
+    setDetail(true);
+  }, [editing, card, types, units, category]);
 
   async function submit() {
     const exercises = drafts
@@ -1222,6 +1236,51 @@ function step(value: string, delta: number, min = 0): string {
   const current = value.trim() === '' ? (delta > 0 ? 0 : Math.abs(delta)) : Number(value);
   if (Number.isNaN(current)) return value;
   return String(round(Math.max(min, current + delta), 2));
+}
+
+/**
+ * A part-dictated session, opened as a card.
+ *
+ * The rule is that **what they said wins, and history answers the rest**. Say
+ * "squats and RDLs" and both arrive at last week's numbers; say "squats, four
+ * by eight" and the sets and reps are theirs while the load still comes from
+ * history. Nothing is invented: an exercise with no history and nothing said
+ * about it opens blank, which is the honest state.
+ *
+ * This is what makes the handover from the chat lossless, and lossless is the
+ * whole precondition for nudging anyone toward the card. Handing somebody an
+ * empty form after they have just named three exercises is punishing them for
+ * having used the conversation.
+ */
+function draftsFromHeard(
+  heard: { name: string; sets: number | null; reps: number | null; weight_kg: number | null }[],
+  types: ExerciseType[],
+  units: UnitSystem,
+  category: ExerciseCategory,
+): Draft[] {
+  const byName = new Map(types.map((type) => [type.name.toLowerCase(), type]));
+  return heard.map((said) => {
+    const type = byName.get(said.name.trim().toLowerCase());
+    const previous = type ? type.previous.map((set) => toDraftSet(set, units)) : [];
+    const base: Draft = {
+      name: type?.name ?? said.name.trim(),
+      typeId: type?.id ?? null,
+      tracks: type?.tracks ?? CATEGORY_TRACKS[category],
+      emoji: type?.emoji ?? CATEGORIES.find((c) => c.key === category)!.emoji,
+      muscles: type?.muscles ?? [],
+      sets: previous.length > 0 ? previous.map((set) => ({ ...set })) : [blankSet()],
+      previous,
+    };
+
+    let sets = base.sets;
+    if (said.reps !== null) sets = sets.map((set) => ({ ...set, reps: String(said.reps) }));
+    if (said.weight_kg !== null) {
+      const load = String(round(toLoad(said.weight_kg, units)));
+      sets = sets.map((set) => ({ ...set, weight: load }));
+    }
+    if (said.sets !== null) sets = resize(sets, said.sets);
+    return { ...base, sets };
+  });
 }
 
 /**

@@ -102,6 +102,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
             suggested_category: null,
             performed_at: new Date().toISOString(),
             heard: null,
+            exercises: [],
           }}
           onLogged={() => {
             setLogging(false);

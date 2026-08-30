@@ -15,6 +15,7 @@ import {
 } from '../src/services/workouts.ts';
 import { listExerciseEntries } from '../src/services/log.ts';
 import { addWeight, appFor, createUser, type TestUser } from './helpers/factories.ts';
+import { MUSCLE_GROUPS, byMuscleGroup, exerciseMatches } from '@ct/shared';
 
 /**
  * Counted sessions.
@@ -61,8 +62,207 @@ describe('the catalogue', () => {
     expect(strength.every((t) => t.category === 'strength')).toBe(true);
   });
 
+  /*
+   * The picker groups on the *primary* muscle and searches the muscle terms, so
+   * a strength exercise with an empty `muscles` is one that can be found only
+   * by knowing its name — which is the failure the whole search exists to fix.
+   */
+  it('tags every strength exercise with a muscle, primary first', async () => {
+    const strength = await listExerciseTypes(user.id, 'strength');
+    for (const type of strength) {
+      expect(type.muscles.length, type.name).toBeGreaterThan(0);
+      expect(MUSCLE_GROUPS, type.name).toContain(type.muscles[0]);
+    }
+  });
+
+  it('covers every muscle group with something', async () => {
+    const strength = await listExerciseTypes(user.id, 'strength');
+    const primaries = new Set(strength.map((t) => t.muscles[0]));
+    for (const muscle of MUSCLE_GROUPS) {
+      expect(primaries, muscle).toContain(muscle);
+    }
+  });
+
+  it('is big enough to be worth searching, and searchable', async () => {
+    const types = await listExerciseTypes(user.id);
+    expect(types.length).toBeGreaterThan(200);
+    // The aliases are the half of search the muscle terms cannot do.
+    expect(types.filter((t) => t.aliases.length > 0).length).toBeGreaterThan(100);
+  });
+
+  it('has the sports people actually play, including the two-hour ones', async () => {
+    const sport = (await listExerciseTypes(user.id, 'sport')).map((t) => t.name);
+    for (const name of ['Volleyball', 'Handball', 'Rugby', 'Ice hockey', 'Table tennis']) {
+      expect(sport).toContain(name);
+    }
+  });
+
+  describe('search', () => {
+    /* The complaint this is here for: nobody remembers "Romanian deadlift",
+       and everybody remembers it is the one for the back of their legs. */
+    it('finds an exercise by the muscle it is for', async () => {
+      const types = await listExerciseTypes(user.id, 'strength');
+      const legs = types.filter((t) => exerciseMatches(t, 'legs')).map((t) => t.name);
+      expect(legs).toContain('Romanian deadlift');
+      expect(legs).toContain('Squat');
+      expect(legs).not.toContain('Bench press');
+
+      const abs = types.filter((t) => exerciseMatches(t, 'abs')).map((t) => t.name);
+      expect(abs).toContain('Plank');
+    });
+
+    it('finds one by what a gym calls it', async () => {
+      const types = await listExerciseTypes(user.id, 'strength');
+      const named = (q: string) => types.filter((t) => exerciseMatches(t, q)).map((t) => t.name);
+      expect(named('RDL')).toContain('Romanian deadlift');
+      expect(named('OHP')).toContain('Overhead press');
+      expect(named('bench')).toContain('Bench press');
+      expect(named('pushdown')).toContain('Tricep pushdown');
+    });
+
+    it('matches however it is capitalised or accented', async () => {
+      const types = await listExerciseTypes(user.id, 'strength');
+      expect(types.filter((t) => exerciseMatches(t, 'SQUAT')).length).toBeGreaterThan(1);
+      /*
+       * "glúteos" folds to "gluteos", which the muscle terms reach by prefix in
+       * the other direction — the typed word starting with the stored one. That
+       * is deliberate and it is what makes a Spanish or German keyboard land
+       * somewhere sensible without a translated catalogue behind it.
+       */
+      const glutes = types.filter((t) => exerciseMatches(t, 'glúteos')).map((t) => t.name);
+      expect(glutes).toContain('Hip thrust');
+      expect(glutes).not.toContain('Bench press');
+    });
+
+    it('groups on the primary muscle only, in body order', async () => {
+      const types = await listExerciseTypes(user.id, 'strength');
+      const groups = byMuscleGroup(types);
+      // Chest before legs, always: the order is the order of MUSCLE_GROUPS.
+      const order = groups.map((g) => g.muscle);
+      expect(order.indexOf('chest')).toBeLessThan(order.indexOf('quads'));
+      // A bench press is chest and triceps and shoulders, and appears once.
+      const appearances = groups.flatMap((g) => g.types).filter((t) => t.name === 'Bench press');
+      expect(appearances).toHaveLength(1);
+    });
+
+    it('puts everything with no muscle in one nameless group at the end', async () => {
+      const sport = await listExerciseTypes(user.id, 'sport');
+      const groups = byMuscleGroup(sport);
+      expect(groups).toHaveLength(1);
+      expect(groups[0]!.muscle).toBeNull();
+    });
+  });
+
+  describe('what they did last time', () => {
+    it('is absent unless asked for', async () => {
+      await logWorkout({
+        userId: user.id,
+        category: 'strength',
+        exercises: [bench([10, 10, 10], 60)],
+        ctx: user.ctx,
+      });
+      const plain = await listExerciseTypes(user.id, 'strength');
+      expect(plain.find((t) => t.name === 'Bench press')!.previous).toEqual([]);
+    });
+
+    /* The whole point: tapping an exercise in the picker has to arrive on real
+       numbers, or every session starts as nine empty fields. */
+    it('carries the last session of that exercise when asked', async () => {
+      await logWorkout({
+        userId: user.id,
+        category: 'strength',
+        exercises: [bench([10, 10, 10], 60)],
+        ctx: user.ctx,
+      });
+      const types = await listExerciseTypes(user.id, 'strength', { withPrevious: true });
+      const previous = types.find((t) => t.name === 'Bench press')!.previous;
+      expect(previous).toHaveLength(3);
+      expect(previous[0]).toMatchObject({ reps: 10, weight_kg: 60 });
+      // Everything never done stays empty rather than borrowing somebody's.
+      expect(types.find((t) => t.name === 'Squat')!.previous).toEqual([]);
+    });
+
+    it('is the whole of the most recent session, not the last few sets', async () => {
+      await logWorkout({
+        userId: user.id,
+        category: 'strength',
+        exercises: [bench([10, 10, 10, 10, 10], 50)],
+        performedAt: new Date('2026-03-01T10:00:00Z'),
+        ctx: user.ctx,
+      });
+      await logWorkout({
+        userId: user.id,
+        category: 'strength',
+        exercises: [bench([8, 8], 70)],
+        performedAt: new Date('2026-03-08T10:00:00Z'),
+        ctx: user.ctx,
+      });
+      const types = await listExerciseTypes(user.id, 'strength', { withPrevious: true });
+      const previous = types.find((t) => t.name === 'Bench press')!.previous;
+      expect(previous).toHaveLength(2);
+      expect(previous.every((s) => s.weight_kg === 70)).toBe(true);
+    });
+  });
+
   it('finds a built-in however it is capitalised', async () => {
     expect((await findExerciseType(user.id, 'bench PRESS'))?.name).toBe('Bench press');
+  });
+
+  /*
+   * A name that fails to match is not a cosmetic miss. The set is written with
+   * a null type_id, which costs it its MET, its muscles, its place in the
+   * "what did you do last time" lookup, and its vote in matching the session to
+   * a saved routine. "Squats" logged as free text is an exercise the app can
+   * never offer back.
+   */
+  describe('the names people actually use', () => {
+    it('reads a plural as the exercise', async () => {
+      expect((await findExerciseType(user.id, 'squats'))?.name).toBe('Squat');
+      expect((await findExerciseType(user.id, 'lunges'))?.name).toBe('Lunge');
+      expect((await findExerciseType(user.id, 'dips'))?.name).toBe('Dip');
+    });
+
+    it('reads what a gym calls it', async () => {
+      expect((await findExerciseType(user.id, 'RDL'))?.name).toBe('Romanian deadlift');
+      expect((await findExerciseType(user.id, 'OHP'))?.name).toBe('Overhead press');
+      expect((await findExerciseType(user.id, 'bench'))?.name).toBe('Bench press');
+    });
+
+    it('reads an abbreviation and a plural together', async () => {
+      expect((await findExerciseType(user.id, 'RDLs'))?.name).toBe('Romanian deadlift');
+    });
+
+    it('still knows nothing it has never been told about', async () => {
+      expect(await findExerciseType(user.id, 'Zercher carry')).toBeNull();
+    });
+
+    /* Somebody who has defined their own "Squats" meant theirs. */
+    it('prefers this account over a built-in', async () => {
+      await defineExerciseType({
+        userId: user.id,
+        name: 'Squats',
+        category: 'strength',
+        emoji: '🦵',
+        tracks: 'reps',
+        met: 5,
+      });
+      const found = await findExerciseType(user.id, 'squats');
+      expect(found?.name).toBe('Squats');
+      expect(found?.custom).toBe(true);
+    });
+
+    /* The payoff: it goes in as a real catalogue exercise, not free text. */
+    it('gives a session logged in plurals its real exercises', async () => {
+      const entry = await logWorkout({
+        userId: user.id,
+        category: 'strength',
+        exercises: [{ name: 'squats', sets: [{ reps: 8, weight_kg: 100 }] }],
+        ctx: user.ctx,
+      });
+      expect(entry.sets[0]!.name).toBe('Squat');
+      const types = await listExerciseTypes(user.id, 'strength', { withPrevious: true });
+      expect(types.find((t) => t.name === 'Squat')!.previous).toHaveLength(1);
+    });
   });
 
   describe('custom exercises', () => {
@@ -440,6 +640,102 @@ describe('the routes', () => {
     }
   });
 
+  it('serves the catalogue with what they did last time, when asked', async () => {
+    const { app, cookie } = await appFor(user);
+    try {
+      await logWorkout({
+        userId: user.id,
+        category: 'strength',
+        exercises: [bench([10, 10], 60)],
+        ctx: user.ctx,
+      });
+
+      const plain = await app.inject({
+        method: 'GET',
+        url: '/exercise/types?category=strength',
+        headers: { cookie },
+      });
+      const before = plain.json().types.find((t: any) => t.name === 'Bench press');
+      expect(before.previous).toEqual([]);
+
+      const asked = await app.inject({
+        method: 'GET',
+        url: '/exercise/types?category=strength&with_previous=1',
+        headers: { cookie },
+      });
+      const after = asked.json().types.find((t: any) => t.name === 'Bench press');
+      expect(after.previous).toHaveLength(2);
+      expect(after.previous[0]).toMatchObject({ reps: 10, weight_kg: 60 });
+    } finally {
+      await app.close();
+    }
+  });
+
+  /*
+   * Until this existed the only way to add an exercise was to mention it in the
+   * chat, so somebody who could not find theirs among the chips had reached a
+   * dead end inside the card.
+   */
+  describe('teaching it an exercise from the picker', () => {
+    it('creates one from a name and a kind alone', async () => {
+      const { app, cookie } = await appFor(user);
+      try {
+        const response = await app.inject({
+          method: 'POST',
+          url: '/exercise/types',
+          headers: { cookie },
+          payload: { name: 'Zercher carry', category: 'strength' },
+        });
+        expect(response.statusCode).toBe(201);
+        const { type } = response.json();
+        expect(type).toMatchObject({ name: 'Zercher carry', category: 'strength', custom: true });
+        // Defaulted from the category rather than demanded of somebody who came
+        // here to log a set.
+        expect(type.tracks).toBe('reps');
+        expect(type.emoji).toBeTruthy();
+
+        // And it is in the picker from now on.
+        const types = await listExerciseTypes(user.id, 'strength');
+        expect(types.map((t) => t.name)).toContain('Zercher carry');
+      } finally {
+        await app.close();
+      }
+    });
+
+    /* "You already have that one" is the answer to this request, not an error:
+       the caller wants the id either way. */
+    it('answers with the existing one rather than a conflict', async () => {
+      const { app, cookie } = await appFor(user);
+      try {
+        const first = await app.inject({
+          method: 'POST',
+          url: '/exercise/types',
+          headers: { cookie },
+          payload: { name: 'Bench press', category: 'strength' },
+        });
+        expect(first.statusCode).toBe(201);
+        expect(first.json().type.custom).toBe(false);
+      } finally {
+        await app.close();
+      }
+    });
+
+    it('refuses a nameless one', async () => {
+      const { app, cookie } = await appFor(user);
+      try {
+        const response = await app.inject({
+          method: 'POST',
+          url: '/exercise/types',
+          headers: { cookie },
+          payload: { name: '   ', category: 'strength' },
+        });
+        expect(response.statusCode).toBe(400);
+      } finally {
+        await app.close();
+      }
+    });
+  });
+
   it('logs a session and answers with it', async () => {
     const { app, cookie } = await appFor(user);
     try {
@@ -535,6 +831,7 @@ describe('the routes', () => {
           suggested_category: 'strength',
           performed_at: new Date().toISOString(),
           heard: 'Gym session',
+          exercises: [],
         },
       },
     ]);
@@ -593,6 +890,7 @@ describe('the routes', () => {
           suggested_category: null,
           performed_at: new Date().toISOString(),
           heard: null,
+          exercises: [],
         },
       },
     ]);

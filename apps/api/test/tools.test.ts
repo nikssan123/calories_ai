@@ -633,6 +633,73 @@ describe('ask_workout', () => {
     expect((actions[0]!.card as { suggested_category: string | null }).suggested_category).toBeNull();
   });
 
+  /*
+   * The handover used to be lossy: name three exercises in the chat and the
+   * card arrived empty, so using the conversation cost you the list you had
+   * just recited. Nudging anyone toward the card is only honest once this
+   * carries what they already said.
+   */
+  describe('carrying what they already said', () => {
+    it('seeds the card with the exercises it heard', async () => {
+      await call('ask_workout', {
+        category: 'strength',
+        when: null,
+        heard: 'leg day',
+        exercises: [
+          { name: 'squats', sets: 4, reps: 8, weight_kg: 90 },
+          { name: 'RDLs' },
+          { name: 'Zercher carry' },
+        ],
+      });
+      expect(actions[0]!.card).toMatchObject({
+        type: 'workout_prompt',
+        exercises: [
+          // Plural, and an abbreviation-plus-plural: both land on the one name
+          // the catalogue keeps, so the card can hang history off them.
+          { name: 'Squat', sets: 4, reps: 8, weight_kg: 90 },
+          { name: 'Romanian deadlift', sets: null, reps: null, weight_kg: null },
+          // Nothing in the catalogue answers to this, and it is carried anyway:
+          // dropping it would lose the thing the argument exists to carry.
+          { name: 'Zercher carry', sets: null, reps: null, weight_kg: null },
+        ],
+      });
+    });
+
+    /* The card fills a null from history. A number invented here would arrive
+       pre-filled on their screen looking exactly like a fact. */
+    it('leaves a load they did not give as null', async () => {
+      await call('ask_workout', {
+        category: 'strength',
+        when: null,
+        heard: null,
+        exercises: [{ name: 'Bench press', sets: 3, reps: 10 }],
+      });
+      const card = actions[0]!.card as { exercises: { weight_kg: number | null }[] };
+      expect(card.exercises[0]!.weight_kg).toBeNull();
+    });
+
+    it('is an empty list when they only said they trained', async () => {
+      await call('ask_workout', { category: null, when: null, heard: 'went to the gym' });
+      expect((actions[0]!.card as { exercises: unknown[] }).exercises).toEqual([]);
+    });
+
+    /* Two different instructions back to the model, because "check these" and
+       "how long was it" are different sentences to say to somebody. */
+    it('tells the model it seeded rather than asked', async () => {
+      const seeded = await call('ask_workout', {
+        category: 'strength',
+        when: null,
+        heard: null,
+        exercises: [{ name: 'Squat' }],
+      });
+      expect(JSON.stringify(seeded)).toContain('check it');
+
+      actions.length = 0;
+      const asked = await call('ask_workout', { category: null, when: null, heard: null });
+      expect(JSON.stringify(asked)).toContain('how long');
+    });
+  });
+
   /** A plan is a default, and never an argument with what they just said. */
   it('does not overrule what the model actually heard', async () => {
     await planTuesday();
