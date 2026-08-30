@@ -228,6 +228,22 @@ for (const [name, layout] of captured) {
     continue;
   }
 
+  /*
+   * The propless render, first. `placeholder(in:)` hands the layout nothing —
+   * that is the widget gallery, and the moment before the first entry lands —
+   * so `{}` has to come out as a card rather than as a thrown layout, which a
+   * release build renders as a blank white square.
+   */
+  for (const colorScheme of ['light', 'dark'] as const) {
+    try {
+      const tree = render({}, { colorScheme, widgetFamily: 'systemSmall' });
+      if (!(tree as { type?: string })?.type) problems.push(`${name}/placeholder/${colorScheme}: rendered no node`);
+      inspect(tree, `${name}/placeholder/${colorScheme}`, []);
+    } catch (error) {
+      problems.push(`${name}/placeholder/${colorScheme}: ${(error as Error).message}`);
+    }
+  }
+
   for (const [label, snapshot] of cases) {
     const props = name === 'Ring' ? ringProps(snapshot) : dayProps(snapshot);
     for (const colorScheme of ['light', 'dark'] as const) {
@@ -259,4 +275,4 @@ if (problems.length) {
   for (const problem of problems) console.error(`  - ${problem}`);
   process.exit(1);
 }
-console.log(`ok — ${captured.size} layouts, ${cases.length} days, both schemes`);
+console.log(`ok — ${captured.size} layouts, ${cases.length} days plus the propless placeholder, both schemes`);

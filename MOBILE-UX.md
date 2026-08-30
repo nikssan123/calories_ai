@@ -613,19 +613,44 @@ in its own timezone rather than midnight, and carries the emptied day. The
 fitted type is visible in the stored props doing the thing it exists for — 44pt
 for `670` and 34pt for `2,090` inside the same 134pt ring.
 
-What has *not* happened is a widget on a home screen: adding one needs a
-long-press and a tap, and there is no way to tap on the iOS simulator. Per the
-rule this document has now learned three times: believe it when it is on a
-phone.
+**And then it was seen on a home screen**, which the previous paragraph said
+could not be done. `idb` — `brew install idb-companion` plus the `fb-idb` client
+— drives the simulator's HID directly and needs neither the Automation
+permission this machine refuses nor the Accessibility one. `idb ui tap`,
+`idb ui swipe --duration` (without the duration a swipe registers as a tap on
+whatever is under its start point) and `idb ui text` are enough to walk the
+widget gallery. Both widgets add, both draw, in both schemes, and the
+over-target state turns the ring to ink the way `CalorieRing` does. The figure
+is set in Baloo, so the config plugin reaches the extension.
 
-One known difference to look at when it is. Android sets the figure's line
-height explicitly, because Baloo asks for 1.6em of box to draw 0.6em of ink;
-SwiftUI uses the face's own metrics, and `lineHeight` — the modifier that would
-match it — is iOS 26+, so on anything older it is a no-op. The caption under the
-number should therefore sit roughly ten points lower than it does on Android.
-The fix is a negative stack spacing, and it is deliberately not in yet: guessing
-one against a layout nobody has seen risks the caption landing *on* the figure,
-which is worse than a gap.
+The caption's leading turned out to be the non-problem: SwiftUI's own metrics
+put "to go" where Android's explicit line height does, near enough that the
+negative spacing this paragraph used to propose would have made it worse.
+
+**Two things the home screen taught that nothing else could.**
+
+A widget renders *blank* — not red, blank — when its layout throws, because
+`WidgetsDynamicView` answers a failed layout with `RedBoxView` only under
+`#if DEBUG` and with `EmptyView` otherwise. Two separate faults land there. The
+first was ours: `placeholder(in:)` passes **no props at all**, so `props` is
+`{}` in the gallery and for a moment before the first entry, and reaching
+`props.light` threw. A widget that is blank in the gallery is a widget nobody
+adds. `Face` now carries its own two-tone fallback, and the smoke script renders
+the propless case.
+
+The second is a build flag, and it wastes an hour if you do not know it.
+`CODE_SIGNING_ALLOWED=NO` — the obvious way to build for a simulator without an
+Apple account — strips the entitlements, so the App Group is never provisioned.
+The app then writes its `group.…` defaults into its *own* container, the
+extension reads its own empty one, finds no layout, and draws nothing. Build
+with `CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=YES`
+instead: ad-hoc signing embeds the entitlements and the shared container appears.
+
+And one measurement. `systemSmall` on an iPhone 17 is **164pt**, not the 158
+in `FAMILY_SIZE`. The table stays at 158 deliberately — it is the smallest of
+the common sizes, so the dial under-fills by three points a side on a bigger
+phone rather than being clipped on a smaller one. The ring measures dead centre
+vertically.
 
 **Still open.** A background refresh task, so a phone that is not opened for a
 day gets real numbers rather than a correctly-empty ring; and the lock screen

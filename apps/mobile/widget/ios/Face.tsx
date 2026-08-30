@@ -46,13 +46,30 @@ import type { FaceProps } from './props';
 function Face(props: FaceProps, environment: WidgetEnvironment) {
   'widget';
 
+  const dark = environment.colorScheme === 'dark';
+  /*
+   * WidgetKit draws this with no props at all — `placeholder(in:)` passes none,
+   * which is what the widget gallery shows and what fills the rectangle for a
+   * moment before the first entry lands. `props` is `{}` there, so there is no
+   * palette to choose from, and reaching into one that is not there throws:
+   * the layout fails, and a release build answers a failed layout with
+   * `EmptyView`. That is a blank white square in the gallery, which is the one
+   * place a widget has to sell itself.
+   *
+   * So the two tones the propless state actually paints are written here,
+   * copied for the reason `theme.ts` gives for copying the rest: a widget is
+   * drawn outside the app, and nothing out there can ask the app.
+   */
+  const PLACEHOLDER = dark
+    ? { card: '#241d19', foreground: '#f7efe6', mutedForeground: '#a79a8d' }
+    : { card: '#ffffff', foreground: '#31261e', mutedForeground: '#77685b' };
   /*
    * The scheme is only knowable here, so both palettes were sent. Same reason
    * the Android handler renders a light and a dark rendition: a widget cannot
    * ask what the wallpaper looks like, and nobody can navigate away from a
    * rectangle that came out unreadable.
    */
-  const paint = environment.colorScheme === 'dark' ? props.dark : props.light;
+  const paint = (dark ? props.dark : props.light) || PLACEHOLDER;
   /* The PostScript name, not the file name — `Font.custom` matches on this, and
    * misses silently into the system face. Android matches on the file name
    * instead, which is why `theme.ts` spells the same font differently. */
@@ -245,12 +262,12 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
             lineLimit(1),
           ]}
         >
-          {props.title}
+          {props.title || 'Day So Far'}
         </Text>
         <Text
           modifiers={[font({ size: 12 }), foregroundStyle(paint.mutedForeground), lineLimit(1)]}
         >
-          {props.tapToStart}
+          {props.tapToStart || ''}
         </Text>
       </VStack>,
     );
