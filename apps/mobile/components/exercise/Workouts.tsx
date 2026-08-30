@@ -188,16 +188,33 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
                 <Text style={[t.footnote, { color: colors.mutedForeground }]} numberOfLines={1}>
                   {/* A routine saved off a duration-only session has no list to
                       count. "0 exercises" would describe it as empty when it is
-                      simply measured the other way. */}
-                  {routine.exercises.length > 0
-                    ? tr('workouts.exerciseCount')(routine.exercises.length)
-                    : tr('exercise.minutes')(String(routine.duration_min))}
-                  {routine.times_done > 0 ? tr('workouts.doneTimes')(String(routine.times_done)) : ''}
-                  {routine.scheduled_weekdays.length > 0
-                    ? ` · ${routine.scheduled_weekdays
-                        .map((d) => weekdayName(d, locale, 'short'))
-                        .join(', ')}`
-                    : ''}
+                      simply measured the other way — and one with neither is
+                      measured by nothing at all, which is a row that says its
+                      name and stops rather than one that says "null min". The
+                      save path will not make one; the type allows it, and it is
+                      the server that decides what this row is handed.
+                      
+                      The parts carry their own leading separator, which is
+                      right for every part except whichever one comes first, so
+                      the join drops it. Without that, dropping the measurement
+                      leaves the row starting on a bullet. */}
+                  {[
+                    routine.exercises.length > 0
+                      ? tr('workouts.exerciseCount')(routine.exercises.length)
+                      : routine.duration_min !== null
+                        ? tr('exercise.minutes')(String(routine.duration_min))
+                        : '',
+                    routine.times_done > 0
+                      ? tr('workouts.doneTimes')(String(routine.times_done))
+                      : '',
+                    routine.scheduled_weekdays.length > 0
+                      ? ` · ${routine.scheduled_weekdays
+                          .map((d) => weekdayName(d, locale, 'short'))
+                          .join(', ')}`
+                      : '',
+                  ]
+                    .join('')
+                    .replace(/^\s*·\s*/, '')}
                 </Text>
               </View>
               <Pressable
