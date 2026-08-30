@@ -1,7 +1,33 @@
 # Logging a session without typing it
 
-Nothing here is built. This is the plan for making a gym session something you
-tap rather than something you write, and for giving sports the same treatment.
+**This is built.** It was the plan for making a gym session something you tap
+rather than something you write, and for giving sports the same treatment; the
+five phases in §6 all shipped, and the two things §7 refuses are still refused.
+Read it as the argument for what is now in the code.
+
+Four things ended up different from the plan, and the reasons are worth keeping:
+
+1. **No confirming tick.** The proposal borrowed Hevy's ✓ into variant B. It had
+   to go: requiring a tap per exercise to confirm a number that was already
+   right would have cost one tap per exercise and broken the four-tap claim the
+   whole document is about. The row shows the figure, prints what it was last
+   time above it, and tapping it opens the steppers. Nothing needs confirming
+   because nothing was ever in doubt.
+2. **Fourteen muscles, not ten.** Search needs headings, headings need to be
+   somewhere a person would look, and a back extension filed under `back` beside
+   the lat pulldowns is not. `lower_back`, `traps`, `forearms` and `adductors`
+   earned rows; hip abduction did not, because the machine and the band walks
+   are glute medius and belong under `glutes`.
+3. **The catalogue went further than "more".** 55 built-ins became 220 — enough
+   that browsing needed a second axis, so the picker is *search or fourteen
+   muscle chips*, not one long list with a search box over it.
+4. **`findExerciseType` was widened, which was not in the plan at all.** Writing
+   the handover surfaced it: "squats" did not match "Squat", so a session
+   dictated in plurals was written as free text with a null `type_id` — losing
+   its MET, its muscles, its history and its vote in matching a saved routine.
+   It now reads plurals and aliases. See the note at the end of §5.
+
+---
 
 It rests on one observation about *when* people log, which turns out to decide
 almost every other choice below.
@@ -331,20 +357,39 @@ time, tap Log a workout on the Exercise tab; it opens on last week's numbers."*
 Once per account, then never again. The same posture as the habit-noticing rule
 already in the prompt: say it once, do not make a project of it.
 
+### The unplanned half: names
+
+Writing the handover surfaced something worse than a lossy card.
+`findExerciseType` matched on exact name only, so "squats" — which is how people
+say it, and how the model repeats it back — did not match "Squat". The set was
+then written with a null `type_id`, and that is not cosmetic: it loses the MET
+that prices the burn, the muscles that name the session, the row in
+`previousSetsFor` that this whole redesign reads from, and the vote in matching
+the session to a saved routine. A session dictated in plurals was one the app
+could never offer back.
+
+It now reads a trailing plural and the `aliases` column, so "squats", "RDLs",
+"OHP" and "bench" all land. `defineExerciseType` deliberately kept the strict
+exact-name check: "is this name taken" and "what did they mean" are different
+questions, and asking the forgiving one there would hand "Squat" back to
+somebody defining "Squats".
+
 ---
 
-## 6. Order
+## 6. Order — all shipped
 
-1. **§4.2 prefill + §4.1 the exercise line.** The thirty-interaction session
-   becomes four taps. Mobile and web cards, plus the `with_previous` query
-   parameter. Largest win, entirely additive, no migration.
-2. **§4.4 sports.** Smallest, and it fixes something that does not work at all.
-   One migration, one duration control, one distance cell.
-3. **§4.3 the picker.** Search, muscle grouping, recents, add-your-own. One
-   migration for `aliases`, one new route.
-4. **§4.5 routines surfaced** in the card.
-5. **§5 `ask_workout(exercises)` + the prompt rule.** Last on purpose: nudging
-   toward the card is only honest once the card is the better place to land.
+1. **§4.2 prefill + §4.1 the exercise line.** `GET /exercise/types?with_previous=1`,
+   and `SetEditor` with its three states. Mobile and web.
+2. **§4.4 sports.** Migration `040_catalogue.sql`, `SESSION_DURATIONS` reaching
+   120 with a keypad past it, and a distance cell that finally exists.
+3. **§4.3 the picker.** Search over name, alias and muscle; fourteen muscle
+   chips to browse; recents first; `＋ Add "…"` on a miss, via
+   `POST /exercise/types`.
+4. **§4.5 routines surfaced** — strength opens on the routine chips, everything
+   else opens on the picker.
+5. **§5 `ask_workout(exercises)` + the prompt rule.** Last on purpose, and the
+   ordering turned out to be the point: the rule is only honest because the four
+   phases before it made the card the better place to land.
 
 ---
 
