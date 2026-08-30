@@ -18,15 +18,22 @@ import type {
 } from '@ct/shared';
 import {
   ROUTINE_MATCH_LIKELY,
+  SESSION_DURATIONS,
+  distanceToKm,
+  distanceUnit,
   formatNumber,
+  loadStep,
   loadToKg,
   loadUnit,
   matchRoutine,
   nameFromMuscles,
   namingStyleOf,
   routineOnWeekday,
+  sessionDurationLabel,
+  toDistance,
   toLoad,
 } from '@ct/shared';
+import { ExercisePicker } from './ExercisePicker';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
@@ -63,12 +70,7 @@ const CATEGORIES: { key: ExerciseCategory; label: StringKey; emoji: string }[] =
   { key: 'flexibility', label: 'workout.flexibility', emoji: '🧘' },
 ];
 
-/**
- * The durations a session actually comes in. Five chips rather than a number
- * field, because nobody times a gym session to the minute and "about an hour"
- * is both the true answer and the one that takes one tap.
- */
-const DURATIONS = [30, 45, 60, 75, 90];
+type DraftSet = { reps: string; weight: string; minutes: string; distance: string };
 
 interface Draft {
   name: string;
@@ -76,7 +78,15 @@ interface Draft {
   tracks: ExerciseType['tracks'];
   emoji: string;
   muscles: MuscleGroup[];
-  sets: { reps: string; weight: string; minutes: string }[];
+  sets: DraftSet[];
+  /**
+   * What they did last time, for the line above the numbers.
+   *
+   * Kept beside the sets rather than compared against them, because it has to
+   * survive being edited: the whole point of printing it is that somebody who
+   * has just added a plate can still see what they are beating.
+   */
+  previous: DraftSet[];
 }
 
 /**
@@ -127,14 +137,26 @@ export function WorkoutCard({
   messageId?: string;
   onLogged: (entry: ExerciseEntry) => void;
 }) {
-  const [category, setCategory] = useState<ExerciseCategory | null>(
-    editing?.category ?? card?.suggested_category ?? null,
-  );
+  /* Held apart so the initial `detail` can read it without narrowing itself. */
+  const opensOn: ExerciseCategory | null = editing?.category ?? card?.suggested_category ?? null;
+  const [category, setCategory] = useState<ExerciseCategory | null>(opensOn);
   const [minutes, setMinutes] = useState<number | null>(editing?.duration_min ?? null);
-  // A correction opens on the grid. The numbers being fixed are in it, and
-  // making somebody click "add what you did" to reach their own sets would be
-  // hiding the entire reason the card reopened.
-  const [detail, setDetail] = useState(editing !== undefined);
+  /*
+   * Whether the exercises are on screen.
+   *
+   * True for a correction — the numbers being fixed are in there, and making
+   * somebody click "add what you did" to reach their own sets would be hiding
+   * the entire reason the card reopened.
+   *
+   * True for everything that is not strength, which is the change: a sport, a
+   * class and a run are all *named things of a length*, so the picker naming
+   * them has to be the first thing on screen. Strength keeps the offer behind a
+   * click, because a saved routine fills the whole card in one and the picker
+   * would be a second, longer way to do what the chips above already did.
+   */
+  const [detail, setDetail] = useState(
+    editing !== undefined || (opensOn !== null && opensOn !== 'strength'),
+  );
   const [types, setTypes] = useState<ExerciseType[] | null>(null);
   const [last, setLast] = useState<LastWorkout | null>(null);
   const [routines, setRoutines] = useState<Routine[]>([]);
@@ -164,8 +186,10 @@ export function WorkoutCard({
     setLast(null);
     setRoutines([]);
     setRoutineId(null);
+    /* `withPrevious` is what makes tapping an exercise land on real numbers:
+       one extra join on the server, no extra round trip here. */
     void api
-      .exerciseTypes(category)
+      .exerciseTypes(category, { withPrevious: true })
       .then(({ types }) => !cancelled && setTypes(types))
       .catch(() => !cancelled && setTypes([]));
     void api
@@ -185,7 +209,17 @@ export function WorkoutCard({
     };
   }, [category]);
 
+  /**
+   * Adding one from the picker, opened on the last time they did it.
+   *
+   * `type.previous` arrived with the catalogue, so this is where the change
+   * pays out: tapping "Bench press" puts 3 × 10 @ 60 on screen rather than
+   * three empty rows. An exercise never done before still gets one blank set —
+   * that is the honest state, and a made-up 3 × 10 would be the app inventing a
+   * training history.
+   */
   function addExercise(type: ExerciseType) {
+    const previous = type.previous.map((set) => toDraftSet(set, units));
     setDrafts((prev) => [
       ...prev,
       {
@@ -194,9 +228,30 @@ export function WorkoutCard({
         tracks: type.tracks,
         emoji: type.emoji,
         muscles: type.muscles,
-        sets: [blankSet()],
+        sets: previous.length > 0 ? previous.map((set) => ({ ...set })) : [blankSet()],
+        previous,
       },
     ]);
+    setDetail(true);
+  }
+
+  /**
+   * Teaching the app an exercise it has never heard of, and adding it.
+   *
+   * The name and the kind are all that is sent; the server fills the rest in
+   * from the category. Somebody who has just failed to find their exercise
+   * wants it to exist, and asking them for a metabolic equivalent to get there
+   * is how a two-second fix becomes an abandoned form.
+   */
+  async function defineExercise(name: string) {
+    if (!category) return;
+    try {
+      const { type } = await api.defineExercise({ name, category });
+      setTypes((prev) => (prev ? [type, ...prev.filter((t) => t.id !== type.id)] : [type]));
+      addExercise(type);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
   }
 
   /** Opens the grid on the last session of this kind rather than on nothing. */
@@ -209,16 +264,16 @@ export function WorkoutCard({
         tracks: exercise.tracks,
         emoji: exercise.emoji,
         muscles: [],
-        sets: exercise.sets.map((set) => ({
-          reps: set.reps === null ? '' : String(set.reps),
-          weight: set.weight_kg === null ? '' : String(toLoad(set.weight_kg, units)),
-          minutes: set.duration_sec === null ? '' : String(Math.round(set.duration_sec / 60)),
-        })),
+        sets: exercise.sets.map((set) => toDraftSet(set, units)),
+        // These *are* last time. Printing "last time" above numbers somebody is
+        // looking at as last time's would be saying it twice.
+        previous: [],
       })),
     );
-    if (minutes === null && last.duration_min !== null) {
-      setMinutes(nearestDuration(last.duration_min));
-    }
+    // Whatever it actually was, not the nearest chip to it. Rounding a
+    // remembered two hours down to ninety was how a long session quietly lost
+    // half an hour every time it was offered back.
+    if (minutes === null && last.duration_min !== null) setMinutes(last.duration_min);
     setDetail(true);
   }
 
@@ -235,15 +290,14 @@ export function WorkoutCard({
     setRoutineId(routine.id);
     setDrafts(
       routine.exercises.map((exercise) => {
-        const previous = exercise.previous.map((set) => ({
-          reps: set.reps === null ? '' : String(set.reps),
-          weight: set.weight_kg === null ? '' : String(toLoad(set.weight_kg, units)),
-          minutes: set.duration_sec === null ? '' : String(Math.round(set.duration_sec / 60)),
-        }));
+        const previous = exercise.previous.map((set) => toDraftSet(set, units));
         // Never fewer rows than the plan calls for: a routine that says three
         // sets shows three, even the first time, when there is no history.
         const wanted = Math.max(exercise.target_sets ?? 1, previous.length, 1);
-        const sets = Array.from({ length: wanted }, (_, i) => previous[i] ?? blankSet());
+        const sets = Array.from(
+          { length: wanted },
+          (_, i) => previous[i] ?? { ...(previous.at(-1) ?? blankSet()) },
+        );
         return {
           name: exercise.name,
           typeId: exercise.type_id,
@@ -251,13 +305,14 @@ export function WorkoutCard({
           emoji: exercise.emoji,
           muscles: exercise.muscles,
           sets,
+          previous,
         };
       }),
     );
     // A routine that is only a length carries it here: there is no grid to open
     // and the duration *is* the workout, so tapping the chip has to fill it in
     // or the chip does nothing at all.
-    if (routine.duration_min !== null) setMinutes(nearestDuration(routine.duration_min));
+    if (routine.duration_min !== null) setMinutes(routine.duration_min);
     // Saving one of these again would be saving what it already is.
     setSaveAs(null);
     setDetail(routine.exercises.length > 0);
@@ -358,7 +413,12 @@ export function WorkoutCard({
             <button
               key={c.key}
               type="button"
-              onClick={() => setCategory(c.key)}
+              onClick={() => {
+                setCategory(c.key);
+                // A sport picker has to be on screen the moment Sport is
+                // chosen, or naming the sport is a second click for no reason.
+                setDetail(c.key !== 'strength');
+              }}
               className="bg-muted/60 hover:bg-muted flex flex-col items-center gap-1 rounded-xl px-1 py-2.5"
             >
               <span className="text-xl" aria-hidden>
@@ -375,6 +435,25 @@ export function WorkoutCard({
   // ---- The session ----------------------------------------------------------
 
   const chosen = new Set(drafts.map((d) => d.typeId));
+
+  const detailBlock = detail ? (
+    <div className="space-y-3">
+      {drafts.map((draft, i) => (
+        <ExerciseRow
+          key={`${draft.typeId ?? draft.name}-${i}`}
+          draft={draft}
+          onChange={(next) => setDrafts((prev) => prev.map((d, j) => (j === i ? next : d)))}
+          onRemove={() => setDrafts((prev) => prev.filter((_, j) => j !== i))}
+        />
+      ))}
+      <ExercisePicker
+        types={types}
+        chosen={chosen}
+        onPick={addExercise}
+        onDefine={(name) => void defineExercise(name)}
+      />
+    </div>
+  ) : null;
   const filled = drafts.filter((d) => toExercise(d, units) !== null);
   const ready = minutes !== null || filled.length > 0;
   const today = new Date().getDay();
@@ -488,66 +567,23 @@ export function WorkoutCard({
           </div>
         )}
 
-        {/* The whole required answer. Everything under it is optional. */}
+        {/*
+          Which half of the card leads, decided by the kind of session.
+
+          A sport or a class *is* its length — "two hours of volleyball" is the
+          whole answer — so the question comes first and the picker sits above
+          it naming which sport, one click. A strength session is the opposite:
+          the exercises are the session and the duration is the throwaway that
+          prices the burn, so it stays where it was and the grid follows it.
+        */}
+        {category !== 'strength' && detailBlock}
+
         <div>
           <p className="text-footnote text-muted-foreground mb-1.5">{t('workout.howLong')}</p>
-          <div className="flex gap-1.5">
-            {DURATIONS.map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setMinutes(minutes === value ? null : value)}
-                aria-pressed={minutes === value}
-                className={`text-footnote flex-1 rounded-full py-2 tabular-nums transition-colors ${
-                  minutes === value
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted/60 hover:bg-muted'
-                }`}
-              >
-                {value}
-              </button>
-            ))}
-          </div>
+          <Duration minutes={minutes} onChange={setMinutes} />
         </div>
 
-        {detail && (
-          <div className="space-y-3">
-            {drafts.map((draft, i) => (
-              <ExerciseRow
-                key={`${draft.typeId ?? draft.name}-${i}`}
-                draft={draft}
-                onChange={(next) => setDrafts((prev) => prev.map((d, j) => (j === i ? next : d)))}
-                onRemove={() => setDrafts((prev) => prev.filter((_, j) => j !== i))}
-              />
-            ))}
-
-            {/* The catalogue, as chips. A picker rather than a text field because
-                the names are already known, and typing them on a phone after a
-                session is exactly the friction that stops people logging at all. */}
-            {types === null ? (
-              <p className="text-footnote text-muted-foreground">{t('common.loading')}</p>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {types
-                  .filter((t) => !chosen.has(t.id))
-                  .map((type) => (
-                    <button
-                      key={type.id}
-                      type="button"
-                      onClick={() => addExercise(type)}
-                      className="bg-muted/60 hover:bg-muted text-footnote flex items-center gap-1.5 rounded-full py-1.5 pr-3 pl-2.5"
-                    >
-                      <span aria-hidden>{type.emoji}</span>
-                      {type.name}
-                      {type.custom && (
-                        <span className="text-muted-foreground">{t('workout.yours')}</span>
-                      )}
-                    </button>
-                  ))}
-              </div>
-            )}
-          </div>
-        )}
+        {category === 'strength' && detailBlock}
 
         {!detail && (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
@@ -647,6 +683,25 @@ function Shell({
   );
 }
 
+/**
+ * One exercise in the card.
+ *
+ * The shape this replaced drew one row per set, each row two number fields:
+ * nine fields for "three sets of ten at sixty", holding two distinct numbers.
+ * That is the right form for a session where every set is different and the
+ * wrong one for the ninety percent where they are not — and it was being paid
+ * on every session because it was the only form there was.
+ *
+ * Three states, and which one you land in is decided for you: a **summary**
+ * line when the numbers are already right (usually because they came from the
+ * last time you did this), **steppers** when they are being changed, and the
+ * old per-set **grid** the moment two sets disagree — which is the one case a
+ * summary genuinely cannot describe.
+ *
+ * The model underneath never changes: one row per set, written out in full,
+ * because the fourth set is where the reps drop and a count would throw away
+ * the only record of that.
+ */
 function ExerciseRow({
   draft,
   onChange,
@@ -658,13 +713,25 @@ function ExerciseRow({
 }) {
   const t = useT();
   const units = useUnits();
-  const setSets = (sets: Draft['sets']) => onChange({ ...draft, sets });
-  const patch = (i: number, key: keyof Draft['sets'][number], value: string) =>
+
+  const uniform = uniformSet(draft.sets);
+  const [asked, setAsked] = useState<'summary' | 'steppers' | 'grid'>(() =>
+    uniform !== null && anyValue(uniform) ? 'summary' : 'steppers',
+  );
+  // Two sets that disagree cannot be summarised or stepped, whatever was asked
+  // for — so the grid wins outright rather than the line quietly lying.
+  const mode = uniform === null ? 'grid' : asked;
+
+  const previous = uniformSet(draft.previous);
+  const setSets = (sets: DraftSet[]) => onChange({ ...draft, sets });
+  const patch = (i: number, key: keyof DraftSet, value: string) =>
     setSets(draft.sets.map((s, j) => (j === i ? { ...s, [key]: value } : s)));
+  const patchEvery = (key: keyof DraftSet, value: string) =>
+    setSets(draft.sets.map((s) => ({ ...s, [key]: value })));
 
   return (
-    <div className="bg-muted/40 rounded-xl p-2.5">
-      <div className="mb-2 flex items-center gap-2">
+    <div className="bg-muted/40 space-y-2 rounded-xl p-2.5">
+      <div className="flex items-center gap-2">
         <span aria-hidden>{draft.emoji}</span>
         <span className="text-footnote flex-1 truncate font-medium">{draft.name}</span>
         <button
@@ -677,59 +744,343 @@ function ExerciseRow({
         </button>
       </div>
 
-      <div className="space-y-1.5">
-        {draft.sets.map((set, i) => (
-          <div key={i} className="flex items-center gap-1.5">
-            <span className="text-footnote text-muted-foreground w-6 shrink-0 tabular-nums">
-              {i + 1}
-            </span>
-            {draft.tracks === 'reps' ? (
-              <>
-                <Field
-                  value={set.reps}
-                  onChange={(v) => patch(i, 'reps', v)}
-                  suffix={t('workout.reps')}
-                />
-                <Field
-                  value={set.weight}
-                  onChange={(v) => patch(i, 'weight', v)}
-                  suffix={loadUnit(units)}
-                />
-              </>
-            ) : (
-              <Field
-                value={set.minutes}
-                onChange={(v) => patch(i, 'minutes', v)}
-                suffix={t('workout.min')}
+      {/*
+        What they did last time, printed rather than merely used.
+
+        Hevy autofills the fields and the number becomes indistinguishable from
+        one somebody entered. A prefilled figure is a claim you *accepted*, not
+        one you made, and this app says where its numbers come from everywhere
+        else. It is also the more useful of the two: the line you are trying to
+        beat is the line you want on screen while you decide.
+      */}
+      {previous !== null && anyValue(previous) && (
+        <p className="text-footnote text-muted-foreground">
+          {t('workout.lastTime')(summarise(draft.previous, previous, draft.tracks, units, t))}
+        </p>
+      )}
+
+      {mode === 'summary' && uniform !== null && (
+        <button
+          type="button"
+          onClick={() => setAsked('steppers')}
+          className="bg-card hover:bg-card/70 flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition-colors"
+        >
+          <span className="text-body font-display tabular-nums">
+            {summarise(draft.sets, uniform, draft.tracks, units, t)}
+          </span>
+          <span className="text-footnote text-muted-foreground">{t('workout.adjust')}</span>
+        </button>
+      )}
+
+      {mode === 'steppers' && uniform !== null && (
+        <>
+          <div className="flex gap-1.5">
+            {/* A run is one effort, not three, and a sets stepper on it is a
+                control nobody reaches for. Intervals go in the grid. */}
+            {draft.tracks !== 'distance' && (
+              <Stepper
+                value={String(draft.sets.length)}
+                caption={t('workout.setsLabel')}
+                onStep={(d) => setSets(resize(draft.sets, draft.sets.length + d))}
+                onType={(v) => setSets(resize(draft.sets, Number(v) || 1))}
+                stepBy={1}
               />
             )}
-            {draft.sets.length > 1 && (
-              <button
-                type="button"
-                onClick={() => setSets(draft.sets.filter((_, j) => j !== i))}
-                aria-label={t('workout.removeSet')(String(i + 1))}
-                className="text-muted-foreground hover:text-foreground shrink-0"
-              >
-                <Minus size={14} />
-              </button>
+            {draft.tracks === 'reps' && (
+              <>
+                <Stepper
+                  value={uniform.reps}
+                  caption={t('workout.reps')}
+                  onStep={(d) => patchEvery('reps', step(uniform.reps, d))}
+                  onType={(v) => patchEvery('reps', v)}
+                  stepBy={1}
+                />
+                <Stepper
+                  value={uniform.weight}
+                  caption={loadUnit(units)}
+                  onStep={(d) => patchEvery('weight', step(uniform.weight, d))}
+                  onType={(v) => patchEvery('weight', v)}
+                  stepBy={loadStep(units)}
+                />
+              </>
+            )}
+            {draft.tracks === 'duration' && (
+              <Stepper
+                value={uniform.minutes}
+                caption={t('workout.min')}
+                onStep={(d) => patchEvery('minutes', step(uniform.minutes, d))}
+                onType={(v) => patchEvery('minutes', v)}
+                stepBy={5}
+              />
+            )}
+            {draft.tracks === 'distance' && (
+              <>
+                <Stepper
+                  value={uniform.distance}
+                  caption={distanceUnit(units)}
+                  onStep={(d) => patchEvery('distance', step(uniform.distance, d))}
+                  onType={(v) => patchEvery('distance', v)}
+                  stepBy={0.5}
+                />
+                <Stepper
+                  value={uniform.minutes}
+                  caption={t('workout.min')}
+                  onStep={(d) => patchEvery('minutes', step(uniform.minutes, d))}
+                  onType={(v) => patchEvery('minutes', v)}
+                  stepBy={5}
+                />
+              </>
             )}
           </div>
-        ))}
-      </div>
+          <button
+            type="button"
+            onClick={() => setAsked('grid')}
+            className="text-footnote text-muted-foreground hover:text-foreground"
+          >
+            {t('workout.setsDiffered')}
+          </button>
+        </>
+      )}
 
-      <button
-        type="button"
-        // Carries the last set forward: the second set of anything is almost
-        // always the same as the first, and retyping it is the difference
-        // between logging four sets and logging one.
-        onClick={() => setSets([...draft.sets, { ...(draft.sets.at(-1) ?? blankSet()) }])}
-        className="text-footnote text-muted-foreground hover:text-foreground mt-2 flex items-center gap-1"
-      >
-        <Plus size={13} />
-        {t('workout.anotherSet')}
-      </button>
+      {mode === 'grid' && (
+        <>
+          <div className="space-y-1.5">
+            {draft.sets.map((set, i) => (
+              <div key={i} className="flex items-center gap-1.5">
+                <span className="text-footnote text-muted-foreground w-6 shrink-0 tabular-nums">
+                  {i + 1}
+                </span>
+                {draft.tracks === 'reps' ? (
+                  <>
+                    <Field
+                      value={set.reps}
+                      onChange={(v) => patch(i, 'reps', v)}
+                      suffix={t('workout.reps')}
+                    />
+                    <Field
+                      value={set.weight}
+                      onChange={(v) => patch(i, 'weight', v)}
+                      suffix={loadUnit(units)}
+                    />
+                  </>
+                ) : draft.tracks === 'distance' ? (
+                  <>
+                    <Field
+                      value={set.distance}
+                      onChange={(v) => patch(i, 'distance', v)}
+                      suffix={distanceUnit(units)}
+                    />
+                    <Field
+                      value={set.minutes}
+                      onChange={(v) => patch(i, 'minutes', v)}
+                      suffix={t('workout.min')}
+                    />
+                  </>
+                ) : (
+                  <Field
+                    value={set.minutes}
+                    onChange={(v) => patch(i, 'minutes', v)}
+                    suffix={t('workout.min')}
+                  />
+                )}
+                {draft.sets.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => setSets(draft.sets.filter((_, j) => j !== i))}
+                    aria-label={t('workout.removeSet')(String(i + 1))}
+                    className="text-muted-foreground hover:text-foreground shrink-0"
+                  >
+                    <Minus size={14} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => setSets(resize(draft.sets, draft.sets.length + 1))}
+              className="text-footnote text-muted-foreground hover:text-foreground flex items-center gap-1"
+            >
+              <Plus size={13} />
+              {t('workout.anotherSet')}
+            </button>
+            {/* The way back out. Without it, one mistyped set in the grid is a
+                one-way door into the form this redesign exists to avoid. */}
+            <button
+              type="button"
+              onClick={() => {
+                const first = draft.sets[0] ?? blankSet();
+                setSets(draft.sets.map(() => ({ ...first })));
+                setAsked('steppers');
+              }}
+              className="text-footnote text-muted-foreground hover:text-foreground"
+            >
+              {t('workout.sameEverySet')}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
+}
+
+/**
+ * A number with a minus and a plus, and the number itself typeable.
+ *
+ * Both affordances, because they answer different questions. The steppers are
+ * for the change that actually happens — one more rep, one more plate — and the
+ * field is for the first time you ever enter a lift, where stepping up from
+ * nothing would be absurd.
+ *
+ * `stepBy` is the unit the thing really moves in: a rep, five minutes, and for
+ * a load `loadStep` — 2.5 kg or 5 lb, a pair of the smallest plates most gyms
+ * own. A stepper that moved a barbell by one kilogram would need three clicks
+ * to express the smallest change anybody makes.
+ */
+function Stepper({
+  value,
+  caption,
+  onStep,
+  onType,
+  stepBy,
+}: {
+  value: string;
+  caption: string;
+  onStep: (delta: number) => void;
+  onType: (value: string) => void;
+  stepBy: number;
+}) {
+  return (
+    <div className="bg-card flex-1 rounded-lg px-1 py-1">
+      <div className="flex items-center justify-between gap-1">
+        <button
+          type="button"
+          onClick={() => onStep(-stepBy)}
+          aria-label={`Less ${caption}`}
+          className="text-muted-foreground hover:text-foreground hover:bg-muted/60 grid size-6 shrink-0 place-items-center rounded"
+        >
+          <Minus size={13} />
+        </button>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={value}
+          onChange={(e) => onType(e.target.value.replace(/[^0-9.]/g, ''))}
+          placeholder="—"
+          aria-label={caption}
+          className="text-body font-display w-full min-w-0 bg-transparent text-center tabular-nums outline-none"
+        />
+        <button
+          type="button"
+          onClick={() => onStep(stepBy)}
+          aria-label={`More ${caption}`}
+          className="text-muted-foreground hover:text-foreground hover:bg-muted/60 grid size-6 shrink-0 place-items-center rounded"
+        >
+          <Plus size={13} />
+        </button>
+      </div>
+      <p className="text-muted-foreground text-center text-[10.5px] leading-tight">{caption}</p>
+    </div>
+  );
+}
+
+/**
+ * How long it took.
+ *
+ * Chips, because nobody times a gym session to the minute. The scale used to
+ * stop at 90, which was not a rounding problem: two hours of football is an
+ * ordinary Sunday and there was no chip for it and no way to type one, so the
+ * card could not log it at all and the session had to go through the chat.
+ */
+function Duration({
+  minutes,
+  onChange,
+}: {
+  minutes: number | null;
+  onChange: (next: number | null) => void;
+}) {
+  const t = useT();
+  const offScale = minutes !== null && !SESSION_DURATIONS.some((d) => d === minutes);
+  const [typing, setTyping] = useState(offScale);
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        {SESSION_DURATIONS.map((value) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => {
+              setTyping(false);
+              onChange(minutes === value ? null : value);
+            }}
+            aria-pressed={minutes === value}
+            className={`text-footnote flex-1 rounded-full py-2 tabular-nums transition-colors ${
+              minutes === value
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-muted/60 hover:bg-muted'
+            }`}
+          >
+            {sessionDurationLabel(value)}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setTyping((was) => !was)}
+          aria-pressed={typing || offScale}
+          className={`text-footnote flex-1 rounded-full py-2 transition-colors ${
+            offScale ? 'bg-primary text-primary-foreground' : 'bg-muted/60 hover:bg-muted'
+          }`}
+        >
+          {t('workout.otherLength')}
+        </button>
+      </div>
+      {typing && (
+        <Input
+          type="text"
+          inputMode="numeric"
+          value={offScale && minutes !== null ? String(minutes) : ''}
+          onChange={(e) => {
+            const cleaned = e.target.value.replace(/[^0-9]/g, '');
+            onChange(cleaned === '' ? null : Math.min(1440, Number(cleaned)));
+          }}
+          placeholder={t('workout.minutesLabel')}
+          aria-label={t('workout.minutesLabel')}
+          className="bg-card text-footnote h-9 rounded-lg border-0 tabular-nums"
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * A session in the words people use for it: "3 × 10 @ 60 kg".
+ *
+ * Falls back to a count when the sets disagree, because there is no honest
+ * single line for a drop set and "3 sets" at least says how much work it was.
+ */
+function summarise(
+  sets: DraftSet[],
+  uniform: DraftSet | null,
+  tracks: ExerciseType['tracks'],
+  units: UnitSystem,
+  t: ReturnType<typeof useT>,
+): string {
+  if (uniform === null) return `${sets.length} × ${t('workout.setsLabel')}`;
+  const count = sets.length;
+  if (tracks === 'reps') {
+    const reps = `${count} × ${uniform.reps || '—'}`;
+    return uniform.weight === '' ? reps : `${reps} @ ${uniform.weight} ${loadUnit(units)}`;
+  }
+  if (tracks === 'distance') {
+    const far = uniform.distance === '' ? null : `${uniform.distance} ${distanceUnit(units)}`;
+    const time = uniform.minutes === '' ? null : `${uniform.minutes} ${t('workout.min')}`;
+    return [far, time].filter(Boolean).join(' · ') || '—';
+  }
+  const time = `${uniform.minutes || '—'} ${t('workout.min')}`;
+  return count > 1 ? `${count} × ${time}` : time;
 }
 
 function Field({
@@ -795,20 +1146,83 @@ function draftsFrom(entry: EditableSession, types: ExerciseType[], units: UnitSy
         emoji: type?.emoji ?? CATEGORIES.find((c) => c.key === category)!.emoji,
         muscles: type?.muscles ?? [],
         sets: [],
+        /* These *are* the numbers being corrected. Printing "last time" above a
+           set somebody is fixing would be showing them a session they are
+           already looking at. */
+        previous: [],
       };
       byPosition.set(set.position, draft);
     }
-    draft.sets.push({
-      reps: set.reps === null ? '' : String(set.reps),
-      weight: set.weight_kg === null ? '' : String(toLoad(set.weight_kg, units)),
-      minutes: set.duration_sec === null ? '' : String(Math.round(set.duration_sec / 60)),
-    });
+    draft.sets.push(toDraftSet(set, units));
   }
 
   return [...byPosition.entries()].sort((a, b) => a[0] - b[0]).map(([, draft]) => draft);
 }
 
-const blankSet = () => ({ reps: '', weight: '', minutes: '' });
+const blankSet = (): DraftSet => ({ reps: '', weight: '', minutes: '', distance: '' });
+
+/** A stored set, in the units the person reading it uses. */
+function toDraftSet(
+  set: { reps: number | null; weight_kg: number | null; duration_sec: number | null; distance_m?: number | null },
+  units: UnitSystem,
+): DraftSet {
+  return {
+    reps: set.reps === null ? '' : String(set.reps),
+    weight: set.weight_kg === null ? '' : String(round(toLoad(set.weight_kg, units))),
+    minutes: set.duration_sec === null ? '' : String(Math.round(set.duration_sec / 60)),
+    distance:
+      set.distance_m === null || set.distance_m === undefined
+        ? ''
+        : String(round(toDistance(set.distance_m / 1000, units), 2)),
+  };
+}
+
+/** Trailing noise on a number somebody is about to read at a glance. */
+function round(value: number, places = 1): number {
+  const factor = 10 ** places;
+  return Math.round(value * factor) / factor;
+}
+
+/**
+ * The one set every set in this exercise is, or null when they differ.
+ *
+ * Null is what puts the per-set grid on screen. A drop set, a pyramid and a set
+ * somebody failed early are all real, and all three are exactly the case the
+ * compact line cannot describe — so it stops claiming to.
+ */
+function uniformSet(sets: DraftSet[]): DraftSet | null {
+  const [first] = sets;
+  if (!first) return null;
+  const same = sets.every(
+    (set) =>
+      set.reps === first.reps &&
+      set.weight === first.weight &&
+      set.minutes === first.minutes &&
+      set.distance === first.distance,
+  );
+  return same ? first : null;
+}
+
+const anyValue = (set: DraftSet): boolean =>
+  [set.reps, set.weight, set.minutes, set.distance].some((v) => v.trim() !== '');
+
+/**
+ * Grow or shrink the set list. A new set copies the last one, because the
+ * second set of anything is almost always the same as the first.
+ */
+function resize(sets: DraftSet[], count: number): DraftSet[] {
+  const wanted = Math.min(30, Math.max(1, count));
+  const next = sets.slice(0, wanted);
+  while (next.length < wanted) next.push({ ...(next.at(-1) ?? blankSet()) });
+  return next;
+}
+
+/** Steps a numeric field held as a string, landing on the step from empty. */
+function step(value: string, delta: number, min = 0): string {
+  const current = value.trim() === '' ? (delta > 0 ? 0 : Math.abs(delta)) : Number(value);
+  if (Number.isNaN(current)) return value;
+  return String(round(Math.max(min, current + delta), 2));
+}
 
 /**
  * A draft becomes an exercise only once at least one set has a number in it.
@@ -823,10 +1237,20 @@ function toExercise(draft: Draft, units: UnitSystem): WorkoutExercise | null {
       const reps = num(set.reps);
       const weight = num(set.weight);
       const minutes = num(set.minutes);
+      const distance = num(set.distance);
       if (draft.tracks === 'reps') {
         return reps === null
           ? null
           : { reps, weight_kg: weight === null ? null : loadToKg(weight, units) };
+      }
+      if (draft.tracks === 'distance') {
+        // Distance-tracked work is a run or a swim, and both have a clock on
+        // them too. Either number alone is a complete answer.
+        if (distance === null && minutes === null) return null;
+        return {
+          distance_m: distance === null ? null : Math.round(distanceToKm(distance, units) * 1000),
+          duration_sec: minutes === null ? null : Math.round(minutes * 60),
+        };
       }
       return minutes === null ? null : { duration_sec: Math.round(minutes * 60) };
     })
@@ -840,11 +1264,6 @@ function num(value: string): number | null {
   if (value.trim() === '') return null;
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? n : null;
-}
-
-/** The chip nearest a remembered duration, so repeating fills that in too. */
-function nearestDuration(min: number): number {
-  return DURATIONS.reduce((best, d) => (Math.abs(d - min) < Math.abs(best - min) ? d : best));
 }
 
 /**

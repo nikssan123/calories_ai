@@ -780,6 +780,18 @@ export const en = {
   'workout.removeSet': (index: string) => `Remove set ${index}`,
   'workout.anotherSet': 'Another set',
   'workout.removeNamed': (name: string) => `Remove ${name}`,
+  'workout.lastTime': (figure: string) => `last time ${figure}`,
+  'workout.adjust': 'Adjust',
+  'workout.setsDiffered': 'Sets differed',
+  'workout.sameEverySet': 'Same every set',
+  'workout.setsLabel': 'sets',
+  'workout.searchExercises': 'Search — a name or a muscle',
+  'workout.doneThese': 'You’ve done these',
+  'workout.browseMuscle': 'Or browse by muscle',
+  'workout.addNamed': (name: string) => `＋ Add “${name}”`,
+  'workout.nothingMatches': 'Nothing matches that',
+  'workout.otherLength': 'Other',
+  'workout.minutesLabel': 'Minutes',
 
   // ---- The weekly review --------------------------------------------------
   'review.lastWeek': '📅  Last week',
