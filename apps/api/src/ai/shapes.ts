@@ -21,6 +21,27 @@ import { z } from 'zod';
  */
 export const itemShape = {
   name: z.string().describe('The food, as the user would say it. "Chicken breast", not "Poultry, broilers".'),
+  /*
+   * The same food, spelled the same way every time, so their own portions can
+   * accumulate against it.
+   *
+   * `name` is what they call it and belongs to them — it changes with their
+   * language, their mood and whether they typed a plural. This does not. Real
+   * logs fragment badly without it: one account has tomato under "домати",
+   * "домат" and "tomato", which is ten observations of one portion split into
+   * three buckets that each look too thin to trust.
+   *
+   * English and lowercase not because English is the app's language — it is
+   * not, and `name` stays in theirs — but because a key needs one spelling and
+   * this is the one the model is most consistent at producing.
+   */
+  canonical: z
+    .string()
+    .nullable()
+    .default(null)
+    .describe(
+      'A stable lowercase English key for what this food IS, ignoring language, plural, brand and preparation: "tomato", "chicken breast", "dark chocolate", "greek yoghurt". The same food must get the same key every time, whatever the user called it — "домати", "domati" and "cherry tomatoes" are all "tomato". Null only for something with no sensible key, like a mixed restaurant dish.',
+    ),
   quantity_g: z
     .number()
     .nullable()

@@ -94,6 +94,47 @@ describe('createFoodEntry', () => {
     expect(entry.kcal).toBeCloseTo(170, 5);
   });
 
+  it('scales macros that weigh more than the food holding them', async () => {
+    const entry = await createFoodEntry({
+      userId: user.id,
+      meal: 'snack',
+      eatenAt: new Date('2026-03-10T16:00:00Z'),
+      description: 'Beer sticks',
+      confidence: 'medium',
+      source: 'text',
+      // Straight out of the production log: 70g of food carrying 73g of macros,
+      // which the calorie floor waves through — it is only 16% under — while
+      // the item remains something that cannot exist.
+      items: [
+        { name: 'Beer sticks', quantity_g: 70, quantity_desc: null, kcal: 280, protein_g: 10, carbs_g: 55, fat_g: 8 },
+      ],
+      ctx: user.ctx,
+    });
+
+    const item = entry.items[0]!;
+    expect(item.protein_g + item.carbs_g + item.fat_g).toBeLessThanOrEqual(70.1);
+  });
+
+  it('caps calories at what that weight of food can carry', async () => {
+    const entry = await createFoodEntry({
+      userId: user.id,
+      meal: 'snack',
+      eatenAt: new Date('2026-03-10T16:00:00Z'),
+      description: 'Walnuts',
+      confidence: 'medium',
+      source: 'text',
+      // A decimal point in the wrong place. Nothing edible is denser than pure
+      // fat, so 40g cannot be 2,600 kcal however the number got there — and an
+      // over-count is the direction this app is measurably wrong in.
+      items: [
+        { name: 'Walnuts', quantity_g: 40, quantity_desc: null, kcal: 2600, protein_g: 6, carbs_g: 3, fat_g: 26 },
+      ],
+      ctx: user.ctx,
+    });
+
+    expect(entry.kcal).toBeCloseTo(364, 5);
+  });
+
   it('preserves item order', async () => {
     const entry = await createFoodEntry({
       userId: user.id,

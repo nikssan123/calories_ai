@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DaySummary, FoodEntry, FoodItemInput, PendingFood } from '@ct/shared';
-import { foldPending, pendingEntry, qualityTargetsFor, rollUpDay } from '@ct/shared';
+import { foldPending, parseGrams, pendingEntry, qualityTargetsFor, rollUpDay } from '@ct/shared';
 
 /**
  * The arithmetic an offline client shows people.
@@ -255,5 +255,46 @@ describe('foldPending — nothing to do', () => {
 
     expect(after.food_entries.map((e) => e.id)).toEqual(['b', 'c']);
     expect(after.consumed.kcal).toBe(650);
+  });
+});
+
+/**
+ * The quantity box in the manual editors takes prose, and mostly gets it. When
+ * it gets a weight instead, that weight is the most trustworthy number in the
+ * product — somebody opened a meal on purpose to say what the portion was — and
+ * it has to reach `quantity_g` rather than being filed as a phrase.
+ */
+describe('parseGrams', () => {
+  it.each([
+    ['200g', 200],
+    ['200 g', 200],
+    ['200', 200],
+    ['  180G ', 180],
+    ['62.5g', 62.5],
+    ['62,5 g', 62.5],
+    ['150 grams', 150],
+    ['150gr', 150],
+  ])('reads %s as a weight', (typed, grams) => {
+    expect(parseGrams(typed)).toBe(grams);
+  });
+
+  it.each([
+    ['1 medium banana'],
+    ['2 slices'],
+    ['a big handful'],
+    ['2 slices (about 60g)'],
+    ['200ml'],
+    ['half a plate'],
+    [''],
+    ['0g'],
+    ['-50g'],
+  ])('leaves %s as the prose it is', (typed) => {
+    // Half-parsing "2 slices (about 60g)" would put a confident 2 into a column
+    // that means grams, which is worse than not reading it at all.
+    expect(parseGrams(typed)).toBeNull();
+  });
+
+  it('refuses a figure nobody ate', () => {
+    expect(parseGrams('50000g')).toBeNull();
   });
 });

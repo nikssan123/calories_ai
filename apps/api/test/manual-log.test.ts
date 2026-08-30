@@ -65,6 +65,39 @@ describe('POST /entries/food', () => {
     expect(entry.items).toHaveLength(2);
   });
 
+  /*
+   * The one case where correcting somebody is defensible and doing it quietly
+   * is not.
+   *
+   * This route's docstring says the app has no grounds to second-guess a number
+   * a person typed on purpose. An arithmetic impossibility is the one ground it
+   * has — 150g of food cannot hold 2,000 kcal, whoever typed it — so the figure
+   * is fixed and the response says which item and why, for the form to repeat
+   * back. Storing a knowingly-wrong day total would be worse; storing a
+   * corrected one without saying so would be worse still.
+   */
+  it('says what it changed rather than overruling a typed figure in silence', async () => {
+    const response = await post({
+      ...MEAL,
+      items: [
+        { name: 'Olive oil', quantity_g: 150, kcal: 2000, protein_g: 0, carbs_g: 0, fat_g: 20 },
+      ],
+    });
+
+    expect(response.statusCode).toBe(201);
+    const entry = response.json();
+    expect(entry.kcal).toBe(1365);
+    expect(entry.adjusted).toEqual([
+      { name: 'Olive oil', kcal_from: 2000, kcal_to: 1365, reasons: ['ceiling'] },
+    ]);
+  });
+
+  it('says nothing when it stored exactly what it was given', async () => {
+    // Which is nearly every manual entry, and the field is absent rather than
+    // an empty array so that nothing rendering an entry has to know about it.
+    expect((await post(MEAL)).json().adjusted).toBeUndefined();
+  });
+
   it('leaves the quality panel null rather than claiming zero', async () => {
     const entry = (await post(MEAL)).json();
     expect(entry.fiber_g).toBeNull();

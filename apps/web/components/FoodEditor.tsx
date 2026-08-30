@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Check, Loader2, Plus, X } from 'lucide-react';
-import { formatNumber, type FoodEntry, type Meal } from '@ct/shared';
+import { type EnergyAdjustment, formatNumber, type FoodEntry, type Meal, parseGrams } from '@ct/shared';
 import { foodEmoji } from '@ct/shared/food-emoji';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -42,6 +42,29 @@ const MEALS: { key: Meal; label: StringKey }[] = [
 /** Held as strings so a half-typed number is not rounded out from under them. */
 interface DraftItem {
   name: string;
+  /**
+   * The grouping key the item came in with, carried through the form so a
+   * correction does not cost the food its identity — the portion somebody fixes
+   * here is exactly the observation `usualPortions` most wants to keep.
+   *
+   * Dropped the moment they rename the row: a key that says "rice" on something
+   * they have retyped as "quinoa" is worse than no key at all.
+   */
+  canonical: string | null;
+  /**
+   * The weight the item already had, kept so that opening a meal and saving it
+   * does not quietly throw the weight away.
+   *
+   * The quantity box holds prose, and most of what the model writes into it —
+   * "~200g", "1 medium banana" — is not something `parseGrams` will read back.
+   * Without this, every pass through this form would null `quantity_g`, and
+   * `usualPortions` skips items that have none: correcting a meal would delete
+   * the very observation the correction was worth making.
+   *
+   * Cleared when they edit the box, because at that point the old weight is a
+   * claim about a portion they have just told us was different.
+   */
+  quantity_g: number | null;
   quantity: string;
   kcal: string;
   protein: string;
@@ -93,8 +116,27 @@ export function FoodEditor({
     };
   }, [entryId]);
 
+  /*
+   * What the log would not store as typed, from the last save.
+   *
+   * Not an error — the meal is saved and the form has already closed over the
+   * corrected numbers — but it must be said. This route's contract is that a
+   * figure somebody typed on purpose is not second-guessed, and an arithmetic
+   * impossibility is the one thing that overrides it; overriding it in silence
+   * would be the indefensible part.
+   */
+  const [adjusted, setAdjusted] = useState<EnergyAdjustment[]>([]);
+
   function patch(index: number, next: Partial<DraftItem>) {
-    setItems((prev) => prev.map((item, i) => (i === index ? { ...item, ...next } : item)));
+    // Renaming a row makes it a different food, and the key it inherited was
+    // about the old one.
+    const renamed = next.name !== undefined ? { canonical: null } : {};
+    // Same for the weight: once they retype the quantity, the grams that came
+    // with the old text are about a portion they are in the middle of changing.
+    const reweighed = next.quantity !== undefined ? { quantity_g: null } : {};
+    setItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, ...next, ...renamed, ...reweighed } : item)),
+    );
   }
 
   async function save() {
@@ -119,6 +161,13 @@ export function FoodEditor({
       const saved = entryId
         ? await api.updateFoodEntry(entryId, { description: label || undefined, meal, items: payload })
         : await api.logFoodEntry({ description: label, meal, items: payload });
+      setAdjusted(saved.adjusted ?? []);
+      // Held open when something was changed, so the sentence saying so is not
+      // torn off the screen by the caller redrawing behind it.
+      if ((saved.adjusted ?? []).length > 0) {
+        setItems(saved.items.map(toDraft));
+        return;
+      }
       onSaved(saved);
     } catch (e) {
       setError((e as Error).message);
@@ -305,6 +354,15 @@ export function FoodEditor({
 
       {error !== null && <p className="text-footnote text-destructive font-semibold">{error}</p>}
 
+      {adjusted.length > 0 && (
+        <div className="text-footnote text-muted-foreground space-y-0.5">
+          <p className="font-semibold">{t('editor.adjustedHeading')}</p>
+          {adjusted.map((item, i) => (
+            <p key={`${item.name}-${i}`}>{adjustmentLine(item, t)}</p>
+          ))}
+        </div>
+      )}
+
       <div className="border-border flex items-center justify-between border-t pt-2.5">
         <button
           type="button"
@@ -370,8 +428,32 @@ function Cell({
   );
 }
 
+/**
+ * One line about a figure the log declined to store, in their language.
+ *
+ * The reasons are ordered as they were applied, and the first is the one worth
+ * saying: a mass correction that then dragged the calories to a new floor is
+ * one thing that happened to the item, not two.
+ */
+function adjustmentLine(
+  item: EnergyAdjustment,
+  t: (key: 'editor.adjustedMass' | 'editor.adjustedCeiling' | 'editor.adjustedFloor') => (name: string) => string,
+): string {
+  const reason = item.reasons[0] ?? 'floor';
+  const key =
+    reason === 'mass'
+      ? 'editor.adjustedMass'
+      : reason === 'ceiling'
+        ? 'editor.adjustedCeiling'
+        : 'editor.adjustedFloor';
+  return t(key)(item.name);
+}
+
 const blank = (): DraftItem => ({
   name: '',
+  // A row somebody is about to type into is not yet any food in particular.
+  canonical: null,
+  quantity_g: null,
   quantity: '',
   kcal: '',
   protein: '',
@@ -382,6 +464,8 @@ const blank = (): DraftItem => ({
 function toDraft(item: FoodEntry['items'][number]): DraftItem {
   return {
     name: item.name,
+    canonical: item.canonical,
+    quantity_g: item.quantity_g,
     // The words if there are any, the weight if not — the same fallback the
     // card draws, so reopening a meal shows what reading it showed.
     quantity: item.quantity_desc ?? (item.quantity_g === null ? '' : `${Math.round(item.quantity_g)}g`),
@@ -404,7 +488,10 @@ function fromDraft(draft: DraftItem) {
   const quantity = draft.quantity.trim();
   return {
     name: draft.name.trim(),
-    quantity_g: null,
+    canonical: draft.canonical,
+    // A weight when they typed one; otherwise the one the item already had,
+    // which `patch` has already cleared if they touched the box at all.
+    quantity_g: parseGrams(quantity) ?? draft.quantity_g,
     quantity_desc: quantity.length > 0 ? quantity : null,
     kcal: Number(draft.kcal) || 0,
     protein_g: Number(draft.protein) || 0,

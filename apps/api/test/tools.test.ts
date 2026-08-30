@@ -161,6 +161,49 @@ describe('log_food', () => {
     expect(entry).toMatchObject({ meal: 'lunch', local_date: TODAY, source: 'text' });
   });
 
+  it('says so when the log lowered the number it was sent', async () => {
+    const { json } = await call('log_food', {
+      description: 'Walnuts',
+      meal: 'snack',
+      when: null,
+      items: [
+        { name: 'Walnuts', quantity_g: 40, quantity_desc: null, kcal: 2600,
+          protein_g: 6, carbs_g: 3, fat_g: 26, fiber_g: null, sodium_mg: null,
+          sat_fat_g: null, sugar_g: null, canonical: 'walnuts' },
+      ],
+      note: null,
+      confidence: 'medium',
+    });
+
+    expect(json.logged.kcal).toBe(364);
+    expect(json.reconciled).toContain('above what that weight of food can carry');
+    // Named, so a meal of five items says which one moved.
+    expect(json.reconciled).toContain('Walnuts');
+  });
+
+  it('says so when the log changed the macros without changing a calorie', async () => {
+    const { json } = await call('log_food', {
+      description: 'Beer sticks',
+      meal: 'snack',
+      when: null,
+      items: [
+        { name: 'Beer sticks', quantity_g: 70, quantity_desc: null, kcal: 280,
+          protein_g: 10, carbs_g: 55, fat_g: 8, fiber_g: null, sodium_mg: null,
+          sat_fat_g: null, sugar_g: null, canonical: 'beer sticks' },
+      ],
+      note: null,
+      confidence: 'medium',
+    });
+
+    // The calories were never impossible, so a note that only watched them
+    // would have said nothing while the stored macros quietly disagreed with
+    // the ones the model is about to talk about.
+    expect(json.logged.kcal).toBe(280);
+    expect(json.reconciled).toContain('weighed more than the food holding them');
+    // A mass fix that leaves the calories alone used to diff out to nothing.
+    expect(json.reconciled).toContain('still at 280');
+  });
+
   it('says so when the log did not store the number it was sent', async () => {
     const { json } = await call('log_food', {
       description: 'Creamy pasta',

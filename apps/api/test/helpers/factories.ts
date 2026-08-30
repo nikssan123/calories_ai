@@ -148,7 +148,21 @@ export async function addMeal(user: TestUser, spec: MealSpec) {
   const items: FoodItemInput[] = [
     {
       name: spec.description ?? 'Test food',
-      quantity_g: 200,
+      /*
+       * Heavy enough to hold the calories asked for.
+       *
+       * This was a flat 200g against a `kcal` the caller chooses freely, which
+       * made every fixture meal over 1,820 kcal denser than pure fat and its
+       * macros — derived from the same `kcal` — heavier than the food carrying
+       * them. `services/energy.ts` now corrects both on the way in, so a day
+       * seeded at 2,200 kcal was being stored at 1,820 and the adaptive tests
+       * were solving a TDEE from a number no fixture had asked for.
+       *
+       * Four kcal per gram is dense for a real meal and comfortably possible,
+       * and the floor of 200 leaves every fixture under 800 kcal exactly as it
+       * was.
+       */
+      quantity_g: Math.max(200, Math.ceil(spec.kcal / 4)),
       quantity_desc: null,
       kcal: spec.kcal,
       protein_g: spec.protein_g ?? Math.round(spec.kcal * 0.075),

@@ -1,6 +1,7 @@
 import type {
   Confidence,
   DietQuality,
+  EnergyAdjustment,
   EntrySource,
   ExerciseEntry,
   FoodEntry,
@@ -19,6 +20,13 @@ import { type DayContext, localDateFor } from '../time.ts';
 
 export interface FoodItemInput {
   name: string;
+  /**
+   * The same food under one spelling, so `usualPortions` can accumulate against
+   * it — see migration 040. Null everywhere nobody supplied one, which is every
+   * item written before the column existed and every path that has no model in
+   * it to ask.
+   */
+  canonical?: string | null;
   quantity_g?: number | null;
   quantity_desc?: string | null;
   kcal: number;
@@ -48,8 +56,17 @@ export interface FoodItemInput {
  * already says it owns them.
  *
  * It is not a validation step and nothing is ever rejected: an impossible
- * figure is corrected upward and the entry is written. Refusing to log is the
- * one thing this app does not do.
+ * figure is corrected and the entry is written. Refusing to log is the one
+ * thing this app does not do.
+ *
+ * What it does not do either is correct in silence. Every write path hands back
+ * what it changed on the entry it returns, so the model can quote the stored
+ * figure rather than its own and the manual editors can tell somebody their
+ * typed number was not the one kept. That matters most exactly where this is
+ * least welcome: the REST manual log says in its own docstring that the app has
+ * no grounds to second-guess a number a person typed on purpose, and an
+ * arithmetic impossibility is the one ground it has. Taking it silently would
+ * be the part that was indefensible.
  *
  * Scanned packets go through it too, and that is deliberate rather than
  * overlooked. `barcode.ts` checks that a row has all four figures on it and
@@ -59,17 +76,30 @@ export interface FoodItemInput {
  * about where a number came from, not a promise to store one that cannot be
  * true.
  */
-function priced<T extends FoodItemInput>(items: T[]): T[] {
-  return reconcileEnergy(items).items;
+function priced<T extends FoodItemInput>(items: T[]): { items: T[]; adjusted: EnergyAdjustment[] } {
+  const { items: out, corrected } = reconcileEnergy(items);
+  return {
+    items: out,
+    adjusted: corrected.map((c) => ({
+      name: c.name,
+      kcal_from: c.from,
+      kcal_to: c.to,
+      reasons: c.reasons,
+    })),
+  };
 }
 
 /** The column list and the values, kept together so the two INSERTs cannot drift. */
 const ITEM_COLUMNS =
-  'name, quantity_g, quantity_desc, kcal, protein_g, carbs_g, fat_g, fiber_g, sodium_mg, sat_fat_g, sugar_g, position';
+  'name, canonical, quantity_g, quantity_desc, kcal, protein_g, carbs_g, fat_g, fiber_g, sodium_mg, sat_fat_g, sugar_g, position';
 
 function itemValues(item: FoodItemInput, position: number): unknown[] {
   return [
     item.name,
+    // Trimmed and lowered here rather than trusted as sent: this is a grouping
+    // key, and "Tomato " and "tomato" being two of them defeats the whole point
+    // of having one. Empty becomes null for the same reason.
+    item.canonical?.trim().toLowerCase() || null,
     item.quantity_g ?? null,
     item.quantity_desc ?? null,
     item.kcal,
@@ -109,6 +139,7 @@ export interface CreateFoodInput {
 
 export async function createFoodEntry(input: CreateFoodInput): Promise<FoodEntry> {
   const localDate = localDateFor(input.eatenAt, input.ctx);
+  const { items: pricedItems, adjusted } = priced(input.items);
 
   const outcome = await transaction<{ id: string } | { spent: string | null }>(async (client) => {
     /*
@@ -159,10 +190,10 @@ export async function createFoodEntry(input: CreateFoodInput): Promise<FoodEntry
     );
     const id = rows[0]!.id;
 
-    for (const [index, item] of priced(input.items).entries()) {
+    for (const [index, item] of pricedItems.entries()) {
       await client.query(
         `INSERT INTO food_items (entry_id, ${ITEM_COLUMNS})
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
         [id, ...itemValues(item, index)],
       );
     }
@@ -189,7 +220,9 @@ export async function createFoodEntry(input: CreateFoodInput): Promise<FoodEntry
 
   const entry = await getFoodEntry(input.userId, outcome.id);
   if (!entry) throw new Error('Food entry vanished immediately after insert');
-  return entry;
+  // Only when there is something to say. An `adjusted: []` on every write would
+  // put an empty array through four serialisers to mean "nothing happened".
+  return adjusted.length > 0 ? { ...entry, adjusted } : entry;
 }
 
 /**
@@ -277,6 +310,7 @@ export async function listFoodEntries(
               json_agg(
                 json_build_object(
                   'id', i.id, 'entry_id', i.entry_id, 'name', i.name,
+                  'canonical', i.canonical,
                   'quantity_g', i.quantity_g, 'quantity_desc', i.quantity_desc,
                   'kcal', i.kcal, 'protein_g', i.protein_g,
                   'carbs_g', i.carbs_g, 'fat_g', i.fat_g,
@@ -324,6 +358,7 @@ function toFoodEntry(row: any): FoodEntry {
       id: i.id,
       entry_id: i.entry_id,
       name: i.name,
+      canonical: i.canonical ?? null,
       quantity_g: i.quantity_g === null ? null : Number(i.quantity_g),
       quantity_desc: i.quantity_desc,
       kcal: Number(i.kcal),
@@ -379,6 +414,8 @@ export async function updateFoodEntry(
   const existing = await getFoodEntry(userId, entryId);
   if (!existing) return null;
 
+  const repriced = input.items ? priced(input.items) : null;
+
   await transaction(async (client) => {
     const sets: string[] = ['updated_at = now()'];
     const params: unknown[] = [];
@@ -403,19 +440,23 @@ export async function updateFoodEntry(
       params,
     );
 
-    if (input.items) {
+    if (repriced) {
       await client.query('DELETE FROM food_items WHERE entry_id = $1', [entryId]);
-      for (const [index, item] of priced(input.items).entries()) {
+      for (const [index, item] of repriced.items.entries()) {
         await client.query(
           `INSERT INTO food_items (entry_id, ${ITEM_COLUMNS})
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
           [entryId, ...itemValues(item, index)],
         );
       }
     }
   });
 
-  return getFoodEntry(userId, entryId);
+  const entry = await getFoodEntry(userId, entryId);
+  if (!entry) return null;
+  return repriced && repriced.adjusted.length > 0
+    ? { ...entry, adjusted: repriced.adjusted }
+    : entry;
 }
 
 /*

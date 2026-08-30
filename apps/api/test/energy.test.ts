@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { energyFloor, reconcileEnergy } from '../src/services/energy.ts';
+import { energyCeiling, energyFloor, macroMass, reconcileEnergy } from '../src/services/energy.ts';
 
 /**
  * The floor, and the things it must not trip over.
@@ -56,7 +56,7 @@ describe('reconcileEnergy', () => {
     ]);
 
     expect(items[0]!.kcal).toBe(433);
-    expect(corrected).toEqual([{ name: 'Creamy pasta', from: 300, to: 433 }]);
+    expect(corrected).toEqual([{ name: 'Creamy pasta', from: 300, to: 433, reasons: ['floor'] }]);
   });
 
   it('only ever raises, because macros are a floor on energy and not a target', () => {
@@ -115,5 +115,141 @@ describe('reconcileEnergy', () => {
 
     expect(twice.corrected).toEqual([]);
     expect(twice.items[0]!.kcal).toBe(once.items[0]!.kcal);
+  });
+});
+
+describe('energyCeiling', () => {
+  it('is 9.1 kcal for every gram of the food, because nothing is denser than fat', () => {
+    expect(energyCeiling(item({ quantity_g: 100 }))).toBeCloseTo(910, 5);
+  });
+
+  it('does not exist for an item nobody weighed', () => {
+    expect(energyCeiling(item())).toBe(Infinity);
+    expect(energyCeiling(item({ quantity_g: null }))).toBe(Infinity);
+    expect(energyCeiling(item({ quantity_g: 0 }))).toBe(Infinity);
+  });
+
+  it('sits above the floor for anything whose macros fit inside it', () => {
+    // The guarantee the ordering in `reconcileEnergy` rests on: once the macros
+    // weigh no more than the food, the floor cannot climb past the ceiling.
+    const pureFat = item({ quantity_g: 100, fat_g: 100 });
+    expect(energyFloor(pureFat)).toBeLessThanOrEqual(energyCeiling(pureFat));
+  });
+});
+
+describe('macroMass', () => {
+  it('is what the macros weigh, with fiber left inside the carbohydrate', () => {
+    expect(macroMass(item({ protein_g: 10, carbs_g: 20, fat_g: 5, fiber_g: 4 }))).toBe(35);
+  });
+});
+
+/**
+ * The mass check, which is the only one that touches a macro figure, and the
+ * ceiling, which is the only one that lowers a calorie figure.
+ *
+ * Both act on the direction the app is actually wrong in. The floor above can
+ * only ever raise a number, and the measured error is a 1.36x overestimate of
+ * weight, so a log with nothing but a floor in it is guarded on the side the
+ * mistakes are not on.
+ */
+describe('reconcileEnergy — the upper bounds', () => {
+  it('scales macros that outweigh their own food', () => {
+    // Beer sticks, from the production log: 70g of food carrying 73g of macros.
+    const { items, corrected } = reconcileEnergy([
+      item({ name: 'Beer sticks', quantity_g: 70, kcal: 280, protein_g: 10, carbs_g: 55, fat_g: 8 }),
+    ]);
+
+    const out = items[0]!;
+    expect(macroMass(out)).toBeCloseTo(70, 1);
+    // Scaled, not flattened: the ratios between them are the part the model is
+    // good at, and only their total was impossible.
+    expect(out.protein_g / out.carbs_g).toBeCloseTo(10 / 55, 2);
+    expect(corrected[0]!.reasons).toEqual(['mass']);
+  });
+
+  it('brings fiber down with the carbohydrate it sits inside', () => {
+    const { items } = reconcileEnergy([
+      item({ name: 'Bran', quantity_g: 50, kcal: 180, protein_g: 10, carbs_g: 60, fat_g: 10, fiber_g: 30 }),
+    ]);
+
+    const out = items[0]!;
+    // Left where it was, it would have exceeded the carbohydrate holding it and
+    // `energyFloor` would have discarded it — silently re-pricing 30g of fiber
+    // from 2 kcal back up to 4.
+    expect(out.fiber_g!).toBeLessThanOrEqual(out.carbs_g);
+  });
+
+  it('brings saturated fat and sugar down with the macro they sit inside', () => {
+    const { items } = reconcileEnergy([
+      item({
+        name: 'Muddle',
+        quantity_g: 60,
+        kcal: 400,
+        protein_g: 30,
+        carbs_g: 30,
+        fat_g: 30,
+        sat_fat_g: 20,
+        sugar_g: 25,
+      }),
+    ]);
+
+    const out = items[0]!;
+    // Nothing reads these for energy, but an item claiming more saturated fat
+    // than fat is not a thing to write down.
+    expect(out.sat_fat_g!).toBeLessThanOrEqual(out.fat_g);
+    expect(out.sugar_g!).toBeLessThanOrEqual(out.carbs_g);
+  });
+
+  it('caps calories at what that weight of food can carry', () => {
+    // A decimal point in the wrong place: 40g of nuts is not 2,600 kcal.
+    const { items, corrected } = reconcileEnergy([
+      item({ name: 'Walnuts', quantity_g: 40, kcal: 2600, protein_g: 6, carbs_g: 3, fat_g: 26 }),
+    ]);
+
+    expect(items[0]!.kcal).toBeCloseTo(364, 1);
+    expect(corrected[0]!.reasons).toEqual(['ceiling']);
+  });
+
+  it('leaves the densest real food alone', () => {
+    // Olive oil is 884 kcal per 100g against a ceiling of 910. Nothing edible
+    // gets closer, so nothing edible trips this.
+    const { corrected } = reconcileEnergy([
+      item({ name: 'Olive oil', quantity_g: 100, kcal: 884, protein_g: 0, carbs_g: 0, fat_g: 100 }),
+    ]);
+    expect(corrected).toEqual([]);
+  });
+
+  it('never caps an item nobody weighed', () => {
+    const { corrected } = reconcileEnergy([
+      item({ name: 'A slice of cake', quantity_g: null, kcal: 900, protein_g: 5, carbs_g: 60, fat_g: 40 }),
+    ]);
+    expect(corrected).toEqual([]);
+  });
+
+  it('fixes the macros first, so a floor never fires off numbers already known to be wrong', () => {
+    // Impossible twice over: 60g of food holding 90g of macros, priced at 100
+    // kcal against a floor those macros would have put at 510.
+    const { items, corrected } = reconcileEnergy([
+      item({ name: 'Muddle', quantity_g: 60, kcal: 100, protein_g: 30, carbs_g: 30, fat_g: 30 }),
+    ]);
+
+    const out = items[0]!;
+    expect(macroMass(out)).toBeCloseTo(60, 1);
+    expect(corrected[0]!.reasons).toEqual(['mass', 'floor']);
+    // Raised to the floor of the *corrected* macros — 20g of each, so 340 —
+    // and not to the 510 the macros that could not have been true would have
+    // demanded. Fixing the mass first is what keeps the floor honest.
+    expect(out.kcal).toBeCloseTo(340, 0);
+  });
+
+  it('is idempotent across all three bounds', () => {
+    const once = reconcileEnergy([
+      item({ name: 'Muddle', quantity_g: 60, kcal: 100, protein_g: 30, carbs_g: 30, fat_g: 30 }),
+      item({ name: 'Walnuts', quantity_g: 40, kcal: 2600, protein_g: 6, carbs_g: 3, fat_g: 26 }),
+    ]);
+    const twice = reconcileEnergy(once.items);
+
+    expect(twice.corrected).toEqual([]);
+    expect(twice.items.map((i) => i.kcal)).toEqual(once.items.map((i) => i.kcal));
   });
 });

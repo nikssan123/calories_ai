@@ -452,3 +452,30 @@ export function rollUpDay({
     streak,
   };
 }
+
+/**
+ * A weight, if what somebody typed in the quantity box was one.
+ *
+ * The manual editors take that field as prose — "1 medium banana", "2 slices",
+ * "a big handful" — and send it as `quantity_desc` with `quantity_g` left null.
+ * That is right for most of what goes in it and wrong for the case that matters
+ * most: somebody who opens a meal specifically to correct a portion usually
+ * corrects it by typing the grams.
+ *
+ * Those are the best observations this app has. `usualPortions` weights a
+ * hand-set weight at three times a model estimate, and then skips any item with
+ * no weight on it at all — so a correction typed as "200g" and stored as prose
+ * is the strongest signal in the product, discarded on the way in.
+ *
+ * Deliberately strict. A number, optionally a space, optionally g/gr/gram(s),
+ * and nothing else — because a half-parse of "2 slices (about 60g)" would put a
+ * confident 2 into a column that means grams. Anything it does not recognise
+ * stays prose, which is where it started.
+ */
+export function parseGrams(quantity: string): number | null {
+  const match = /^(\d+(?:[.,]\d+)?)\s*(?:g|gr|gram|grams)?$/i.exec(quantity.trim());
+  if (!match) return null;
+  const grams = Number(match[1]!.replace(',', '.'));
+  // A zero-gram item is not a portion, and nothing anybody eats weighs a tonne.
+  return Number.isFinite(grams) && grams > 0 && grams <= 10_000 ? grams : null;
+}

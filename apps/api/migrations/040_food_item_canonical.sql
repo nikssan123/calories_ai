@@ -1,0 +1,18 @@
+-- A stable key for "the same food", independent of how it was spelled.
+--
+-- `usualPortions` learns how much of a thing somebody actually serves
+-- themselves, and it can only do that if every log of that thing lands in one
+-- bucket. On real data it does not: one account logs tomato as "домати",
+-- "домат" and "tomato" — ten logs split three ways, none of them reaching the
+-- threshold, and two different priors in front of the model at once. Banana and
+-- egg fragment the same way.
+--
+-- No amount of string handling fixes that, because it is a question about food
+-- rather than about spelling. The model already knows the answer at the moment
+-- it writes the item, so it is asked for it there and stored here.
+--
+-- Nullable, and stays that way: every item logged before this column existed
+-- has none, and `usualPortions` reads those through a per-user lexicon built
+-- from the rows that do — so the history joins the right bucket the first time
+-- a turn spells the food out, rather than waiting ninety days to age out.
+ALTER TABLE food_items ADD COLUMN canonical text;

@@ -5,6 +5,7 @@ import type {
   ChatCard,
   Confidence,
   DaySummary,
+  EnergyAdjustment,
   EntrySource,
   ExerciseEntry,
   FoodEntry,
@@ -158,6 +159,7 @@ const fail = (message: string) => ({
 function toItems(items: FoodItemInput[]) {
   return items.map((i) => ({
     name: i.name,
+    canonical: i.canonical,
     quantity_g: i.quantity_g,
     quantity_desc: i.quantity_desc,
     kcal: i.kcal,
@@ -172,30 +174,45 @@ function toItems(items: FoodItemInput[]) {
 }
 
 /**
- * Said out loud when the log did not store the number that was sent.
+ * Said out loud when the log did not store the numbers that were sent.
  *
- * `services/energy.ts` raises any item whose calories its own macros rule out,
- * and it does that underneath every write rather than here, so the model can
- * send an impossible item and get a possible one back without anything
- * failing. That is the right behaviour and it is also the kind of silent
- * correction that ends with the model telling somebody "about 300 kcal" over a
- * card that says 430.
+ * `services/energy.ts` brings any item its own arithmetic rules out back inside
+ * the possible — macros scaled to fit the food's weight, calories capped at what
+ * a gram can carry, calories raised to what the macros carry — and it does that
+ * underneath every write rather than here, so the model can send an impossible
+ * item and get a possible one back without anything failing. That is the right
+ * behaviour and it is also the kind of silent correction that ends with the
+ * model telling somebody "about 300 kcal" over a card that says 430.
  *
  * So the difference is reported. Not as an error — nothing went wrong, the meal
  * is logged — but as the one fact the model cannot read off its own arguments.
  *
- * Computed by comparing the totals rather than by threading a list of
- * corrections up through four call sites: the entry that comes back from the
- * database is already the authority on what was stored, which is the same
- * reason the cards are built from it.
+ * Read off the entry the write handed back rather than diffed out of the
+ * totals. Diffing worked and said less: it could tell that a meal had moved by
+ * 130 kcal but not which of five items moved or why, and a mass correction that
+ * left the calories alone showed up as no change at all.
  */
-function reconciliationNote(sent: { kcal: number }[], stored: { kcal: number }): string | null {
-  const asked = sent.reduce((total, item) => total + item.kcal, 0);
-  // A tenth of a kcal is the column's precision, so anything at or under 1 is
-  // rounding rather than a correction.
-  if (stored.kcal - asked <= 1) return null;
-  return `Stored at ${Math.round(stored.kcal)} kcal, not the ${Math.round(asked)} you sent: an item's calories were below what its own protein, carbs and fat carry, so they were raised to that floor. Quote the stored figure, not yours. If the macros were the part that was wrong, correct them with update_food_entry.`;
+function reconciliationNote(entry: { adjusted?: EnergyAdjustment[] }): string | null {
+  const adjusted = entry.adjusted ?? [];
+  if (adjusted.length === 0) return null;
+
+  const said = adjusted.map((item) => {
+    const why = item.reasons.map((reason) => WHY[reason]).join(', and ');
+    const moved =
+      item.kcal_to === item.kcal_from
+        ? 'still at ' + Math.round(item.kcal_from)
+        : `${Math.round(item.kcal_from)} -> ${Math.round(item.kcal_to)}`;
+    return `${item.name} (${moved} kcal): ${why}`;
+  });
+
+  return `Not stored as you sent it. ${said.join('; ')}. Quote the stored figures, not yours. If an item's macros or its weight were the part that was wrong, correct them with update_food_entry.`;
 }
+
+const WHY: Record<EnergyAdjustment['reasons'][number], string> = {
+  mass: 'its protein, carbs and fat weighed more than the food holding them, so they were scaled to fit',
+  ceiling: 'its calories were above what that weight of food can carry at all, so they were brought down',
+  floor: 'its calories were below what its own macros carry, so they were raised to that floor',
+};
 
 function pickTotals(entry: { kcal: number; protein_g: number; carbs_g: number; fat_g: number }) {
   return {
@@ -474,7 +491,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         card: foodCard(entry, day, tc.units),
       });
 
-      const reconciled = reconciliationNote(args.items, entry);
+      const reconciled = reconciliationNote(entry);
       return ok({
         entry_id: entry.id,
         // Echoed back on every write. Without it the model cannot tell which day
@@ -533,7 +550,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
       });
 
       const movedFrom = before && before.local_date !== entry.local_date ? before.local_date : null;
-      const reconciled = args.items ? reconciliationNote(args.items, entry) : null;
+      const reconciled = reconciliationNote(entry);
       return ok({
         entry_id: entry.id,
         local_date: entry.local_date,

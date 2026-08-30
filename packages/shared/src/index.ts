@@ -285,10 +285,41 @@ export const DietQuality = z.object({
 });
 export type DietQuality = z.infer<typeof DietQuality>;
 
+/**
+ * A figure the log would not store as it was sent, and why.
+ *
+ * Present on the entry a *write* returns and never on one that is read back:
+ * it describes what happened on the way in, not a property of the meal. The
+ * whole point is that nothing is corrected in silence — the model quotes it
+ * back, and the manual editors, whose own contract is that the app has no
+ * grounds to second-guess a number a person typed on purpose, can say what
+ * they changed and leave the person to argue with it.
+ */
+export const EnergyAdjustment = z.object({
+  /** The item, so a meal of five says which one. */
+  name: z.string(),
+  kcal_from: z.number(),
+  /** Equal to `kcal_from` when only the macros moved. */
+  kcal_to: z.number(),
+  /**
+   * `mass` — the macros weighed more than the food and were scaled to fit.
+   * `ceiling` — the calories exceeded what that weight can carry at all.
+   * `floor` — the calories were below what the macros carry.
+   */
+  reasons: z.array(z.enum(['mass', 'ceiling', 'floor'])),
+});
+export type EnergyAdjustment = z.infer<typeof EnergyAdjustment>;
+
 export const FoodItem = z.object({
   id: z.string().uuid(),
   entry_id: z.string().uuid(),
   name: z.string(),
+  /**
+   * One spelling of what this food is, across languages and plurals, so their
+   * own portions accumulate against it. Null for everything logged before the
+   * column existed and for anything with no sensible key. Nobody displays it.
+   */
+  canonical: z.string().nullable().default(null),
   /** Resolved quantity. Null when the food isn't sensibly weighed (e.g. "a coffee"). */
   quantity_g: z.number().nullable(),
   /** What the AI actually assumed, in words — "1 medium banana", "2 slices". */
@@ -311,6 +342,12 @@ export const FoodEntry = z.object({
   source: EntrySource,
   photo_id: z.string().uuid().nullable(),
   items: z.array(FoodItem),
+  /**
+   * What the log declined to store as sent — see `EnergyAdjustment`. Absent on
+   * every read and on a write that changed nothing, which is nearly all of
+   * them, so nothing that renders an entry has to know about it.
+   */
+  adjusted: z.array(EnergyAdjustment).optional(),
   ...Nutrition.shape,
   /** Summed over the items that carry them; null when none of them did. */
   ...DietQuality.shape,
@@ -2963,6 +3000,15 @@ export type RepeatRequest = z.infer<typeof RepeatRequest>;
  */
 export const FoodItemInput = z.object({
   name: z.string().min(1),
+  /**
+   * Optional here and usually absent, on purpose. Somebody typing a meal in is
+   * not going to supply a grouping key, and asking them for one would be
+   * asking a person to do the model's filing. Optional rather than defaulted so
+   * that every literal in the app that builds an item by hand — fixtures,
+   * recipes, a scanned packet — stays valid without carrying a null it has
+   * nothing to say about.
+   */
+  canonical: z.string().nullish(),
   quantity_g: z.number().nullable().default(null),
   quantity_desc: z.string().nullable().default(null),
   kcal: z.number().min(0),

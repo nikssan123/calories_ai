@@ -295,15 +295,24 @@ describe('dayContextPrompt', () => {
 
   it('carries their usual portions, with the weight and the density they settled on', () => {
     const prompt = dayContextPrompt(profile, day, weight, [], null, [], null, [
-      { name: 'Rice', grams: 190, kcal_100g: 130, times: 7 },
-      { name: 'Greek yoghurt', grams: 170, kcal_100g: 59, times: 4 },
+      { name: 'Rice', grams: 190, kcal_100g: 130, times: 7, confirmed: true },
+      { name: 'Greek yoghurt', grams: 170, kcal_100g: 59, times: 4, confirmed: false },
     ]);
 
     expect(prompt).toContain('Their usual portions');
-    expect(prompt).toContain('- Rice: ~190 g at ~130 kcal/100g (7x)');
+    // A portion they settled says so; one assembled out of this model's own
+    // past estimates does not get to claim they chose it.
+    expect(prompt).toContain('- Rice: ~190 g at ~130 kcal/100g (7x, they set this)');
     expect(prompt).toContain('- Greek yoghurt: ~170 g at ~59 kcal/100g (4x)');
     // A prior, not an instruction: what they say in the message still wins.
     expect(prompt).toContain('What they say in the message beats them');
+  });
+
+  it('does not claim they chose a portion that is only an average of guesses', () => {
+    const prompt = dayContextPrompt(profile, day, weight, [], null, [], null, [
+      { name: 'Rice', grams: 190, kcal_100g: 130, times: 3, confirmed: false },
+    ]);
+    expect(prompt).not.toContain('they set this');
   });
 
   it('says nothing about portions for an account with no history', () => {

@@ -119,6 +119,9 @@ export async function repeatFoodEntry(
     photoId: null,
     items: source.items.map((i) => ({
       name: i.name,
+      // Carried, not re-derived: a repeat is the same food by definition, and
+      // dropping the key here would put the copy in its own portion bucket.
+      canonical: i.canonical,
       quantity_g: i.quantity_g,
       quantity_desc: i.quantity_desc,
       kcal: i.kcal,

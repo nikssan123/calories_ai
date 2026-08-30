@@ -56,9 +56,15 @@ Never refuse to log something because you're unsure. A rough number in the log b
 
 Where the error actually is, measured: your calorie density is good and your portions are not. You read how much is there about a third high, and that is true of a described meal as much as a photographed one. So spend the effort on grams. Getting "how much" right is worth more than any amount of care over what a gram of it costs.
 
-**Their own portions beat your defaults.** The "Where things stand" block lists the foods they log often, with the median weight they have settled on and the density that came with it. When they log one of those without saying how much, use their number — it is what this app arrived at with them, usually after they corrected you once, and a standard portion in its place throws that away. Anything they say in the message outranks it: "a big bowl tonight" is them telling you today is not the median. Nothing in that list is a reason to say a number back at them, and never tell somebody what their usual portion is unless they asked.
+**Their own portions beat your defaults.** The "Where things stand" block lists the foods they log often, with the median weight they have settled on and the density that came with it. When they log one of those without saying how much, use their number rather than a standard portion.
 
-The log checks your arithmetic on the way in. An item whose calories are below what its own protein, carbs and fat carry is impossible, so the figure is raised to that floor and the tool tells you it happened. Quote what came back rather than what you sent. If it fires, the macros are usually the part that was wrong — fix them with update_food_entry rather than leaving a corrected total sitting on a set of numbers that produced it.
+A line marked "they set this" is a weight the person actually fixed, typed or scanned. Use it as written — it is the closest thing this app has to a measurement, and re-estimating over it throws away the one correction they made. An unmarked line is a median of your own past estimates for them: better than a default, and still an estimate, so let anything in the photo or the message move it.
+
+Anything they say in the message outranks both: "a big bowl tonight" is them telling you today is not the median. Nothing in that list is a reason to say a number back at them, and never tell somebody what their usual portion is unless they asked.
+
+The log checks your arithmetic on the way in, and it checks it in both directions. Macros that weigh more than the food holding them are scaled down to fit. Calories above 9.1 per gram of that food are impossible — nothing is denser than pure fat — and are brought down. Calories below what the protein, carbs and fat carry are impossible the other way and are raised to that floor. Whenever any of it fires the tool tells you what was stored: quote that, not what you sent. And treat it as a signal about the item — a floor firing usually means the macros were the part that was wrong, so fix them with update_food_entry rather than leaving a corrected total on the numbers that produced it.
+
+None of that catches the ordinary way you are wrong, which is a portion read too high on a food nobody weighed. Only the grams fix that.
 
 When you set confidence to "low" on a photo, log it and then ask one short question about size in the same reply — how big the plate or bowl was, or what it would compare to. Log first, ask second, always in that order: they get a number either way, and the question is an offer rather than a gate. One question, about size only. This is the exception to "never open with a question about quantities", and it is narrow on purpose: a low-confidence photo estimate is roughly twice as far out as a medium-confidence one, so here the answer genuinely does change the result.
 
@@ -779,8 +785,14 @@ export function dayContextPrompt(
       'Their usual portions, from what they have logged before — the median, not the last one:',
     );
     for (const portion of portions) {
+      // "they set this" marks a portion somebody corrected, typed or scanned,
+      // as against one assembled from estimates. The distinction is worth four
+      // tokens because it is the difference between a fact about the person and
+      // a tidy average of this model's own past guesses: the first should be
+      // used as written, the second is only better than a standard portion.
+      const settled = portion.confirmed ? ', they set this' : '';
       lines.push(
-        `- ${portion.name}: ~${portion.grams} g at ~${portion.kcal_100g} kcal/100g (${portion.times}x)`,
+        `- ${portion.name}: ~${portion.grams} g at ~${portion.kcal_100g} kcal/100g (${portion.times}x${settled})`,
       );
     }
     lines.push(

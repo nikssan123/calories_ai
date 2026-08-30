@@ -173,6 +173,7 @@ function toItem(item: FoodItemInput, entryId: string, index: number): FoodItem {
     id: `${entryId}:${index}`,
     entry_id: entryId,
     name: item.name,
+    canonical: item.canonical ?? null,
     quantity_g: item.quantity_g ?? null,
     quantity_desc: item.quantity_desc ?? null,
     kcal: item.kcal,
