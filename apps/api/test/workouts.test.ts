@@ -111,6 +111,26 @@ describe('the catalogue', () => {
       expect(abs).toContain('Plank');
     });
 
+    /*
+     * Found on the simulator: matching every muscle rather than the primary one
+     * put "Rack pull" in the results for "leg" — under a heading reading "Back",
+     * because that is what it is grouped by. A result whose heading does not
+     * explain why it is there is worse than one result fewer.
+     */
+    it('matches the muscle it is grouped under, not every muscle it touches', async () => {
+      const types = await listExerciseTypes(user.id, 'strength');
+      const legs = types.filter((t) => exerciseMatches(t, 'leg')).map((t) => t.name);
+      expect(legs).not.toContain('Rack pull');
+      expect(legs).not.toContain('Deadlift');
+      expect(legs).toContain('Squat');
+
+      // The same rule the other way: "triceps" wants pushdowns, not every
+      // bench press that happens to involve them.
+      const triceps = types.filter((t) => exerciseMatches(t, 'triceps')).map((t) => t.name);
+      expect(triceps).toContain('Tricep pushdown');
+      expect(triceps).not.toContain('Bench press');
+    });
+
     it('finds one by what a gym calls it', async () => {
       const types = await listExerciseTypes(user.id, 'strength');
       const named = (q: string) => types.filter((t) => exerciseMatches(t, q)).map((t) => t.name);
@@ -977,6 +997,75 @@ describe('a session logged by duration alone', () => {
  * it, and retyping eleven exercises to say so is the friction that stops people
  * keeping a log at all.
  */
+/*
+ * Why the card bothers to attach the sport to a session that is only a length.
+ *
+ * Found on the simulator: picking Volleyball and answering "2h" still sent an
+ * empty exercise list, because neither tap is a *set*. These two cases are what
+ * that costs — the same session, described and priced two different ways.
+ */
+describe('two hours of volleyball', () => {
+  const twoHours = { durationMin: 120, category: 'sport' as const, ctx: undefined as never };
+
+  it('is called "Sport" and priced at the category rate with nothing on it', async () => {
+    const entry = await logWorkout({
+      userId: user.id,
+      category: 'sport',
+      exercises: [],
+      durationMin: 120,
+      ctx: user.ctx,
+    });
+    expect(entry.description).toBe('Sport');
+    // CATEGORY_MET.sport = 7.0 — the same figure for golf and for martial arts.
+    expect(entry.kcal_burned).toBeCloseTo(7.0 * 80 * 2, 0);
+  });
+
+  it('is called "Volleyball" and priced at its own rate with the sport on it', async () => {
+    const entry = await logWorkout({
+      userId: user.id,
+      category: 'sport',
+      exercises: [{ name: 'Volleyball', sets: [{ duration_sec: 7200 }] }],
+      durationMin: 120,
+      ctx: user.ctx,
+    });
+    expect(entry.description).toBe('Volleyball');
+    // Volleyball is 6.0, which is a fifth less than the category's guess.
+    expect(entry.kcal_burned).toBeCloseTo(6.0 * 80 * 2, 0);
+    expect(entry.sets[0]).toMatchObject({ name: 'Volleyball', duration_sec: 7200 });
+  });
+
+  it('can be saved and repeated like anything else', async () => {
+    const entry = await logWorkout({
+      userId: user.id,
+      category: 'sport',
+      exercises: [{ name: 'Volleyball', sets: [{ duration_sec: 7200 }] }],
+      durationMin: 120,
+      ctx: user.ctx,
+    });
+    const { saveRoutine } = await import('../src/services/routines.ts');
+    const routine = await saveRoutine({
+      userId: user.id,
+      name: 'Volleyball night',
+      fromEntryId: entry.id,
+      durationMin: 120,
+    });
+    expect(routine.exercises.map((e) => e.name)).toEqual(['Volleyball']);
+
+    /*
+     * `duration_min` on the routine is null by design — a routine with
+     * exercises on it is the *list*, and the numbers come from history. The two
+     * hours are not lost by that: they come back through `previous`, which is
+     * where every other number on this card comes from, and the burn is
+     * computed off the sets rather than off the chip.
+     */
+    const { getRoutine } = await import('../src/services/routines.ts');
+    const reopened = await getRoutine(user.id, routine.id);
+    expect(reopened!.exercises[0]!.previous).toEqual([
+      { reps: null, weight_kg: null, duration_sec: 7200, distance_m: null },
+    ]);
+  });
+});
+
 describe('lastWorkout', () => {
   it('offers the most recent counted session of that kind back', async () => {
     await logWorkout({

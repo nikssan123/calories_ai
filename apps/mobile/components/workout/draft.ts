@@ -248,3 +248,38 @@ export function draftsFromHeard(
     return draft;
   });
 }
+
+/**
+ * The session's exercises, with a length-only one given the session's length.
+ *
+ * "Two hours of volleyball" answers this card in two taps — the sport, and the
+ * duration chip — and neither of them is a *set*. Without this the payload goes
+ * up with an empty exercise list, and a session with no exercises is described
+ * by its category and priced at the category's own MET: the journal says
+ * "Sport" and the burn is the same figure for golf and for martial arts. That
+ * is precisely the hole this whole change existed to close, and picking the
+ * sport would have looked like it closed it.
+ *
+ * Deliberately narrow. One exercise, measured in time, with nothing entered
+ * against it, and a duration on the card: then the card's duration is plainly
+ * the exercise's duration, because there is nothing else it could be. Anything
+ * else — two exercises, a set with numbers already in it — is left alone.
+ */
+export function withSessionLength(
+  drafts: DraftExercise[],
+  units: UnitSystem,
+  minutes: number | null,
+): WorkoutExercise[] {
+  const counted = drafts.map((d) => toExercise(d, units)).filter(isExercise);
+  if (counted.length > 0 || minutes === null) return counted;
+
+  const [only] = drafts;
+  if (drafts.length !== 1 || !only || only.tracks !== 'duration') return counted;
+  return [
+    {
+      name: only.name,
+      type_id: only.typeId,
+      sets: [{ duration_sec: Math.round(minutes * 60) }],
+    },
+  ];
+}

@@ -719,7 +719,13 @@ export type DefineExerciseRequest = z.infer<typeof DefineExerciseRequest>;
 export const SESSION_DURATIONS = [30, 45, 60, 90, 120] as const;
 
 export function sessionDurationLabel(minutes: number): string {
-  if (minutes < 60 || minutes % 60 !== 0) return String(minutes);
+  /*
+   * Hours only from two upward. "30 · 45 · 1h · 90 · 2h" changes unit twice on
+   * the way along a scale people read as one row of numbers, and 60 is a number
+   * anybody reads instantly. Past two hours the minute count stops being
+   * legible at a glance, which is where the switch earns itself.
+   */
+  if (minutes < 120 || minutes % 60 !== 0) return String(minutes);
   return `${minutes / 60}h`;
 }
 
@@ -741,9 +747,20 @@ export function exerciseMatches(type: ExerciseType, query: string): boolean {
   if (q.length === 0) return true;
   if (fold(type.name).includes(q)) return true;
   if (type.aliases.some((alias) => fold(alias).includes(q))) return true;
-  return type.muscles.some((muscle) =>
-    muscleTerms(muscle).some((term) => term.startsWith(q) || q.startsWith(term)),
-  );
+
+  /*
+   * The **primary** muscle only, and this has to agree with `byMuscleGroup`.
+   *
+   * Matching every muscle read better on paper and was wrong on screen: a rack
+   * pull is `back` first and `glutes` third, so searching "legs" returned it —
+   * filed, correctly, under a heading reading "Back". A result whose heading
+   * does not explain why it is there is worse than one result fewer, and the
+   * same goes the other way: somebody searching "triceps" wants pushdowns, not
+   * every bench press that happens to involve them.
+   */
+  const primary = type.muscles[0];
+  if (primary === undefined) return false;
+  return muscleTerms(primary).some((term) => term.startsWith(q) || q.startsWith(term));
 }
 
 /** Lowercased and stripped of diacritics, for comparing what people type. */

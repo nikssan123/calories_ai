@@ -350,9 +350,7 @@ export function WorkoutCard({
   }, [editing, card, types, units, category]);
 
   async function submit() {
-    const exercises = drafts
-      .map((d) => toExercise(d, units))
-      .filter((e): e is WorkoutExercise => e !== null);
+    const exercises = withSessionLength(drafts, units, minutes);
     // Either half is a complete answer, but one of them has to be there: with
     // no duration and no sets there is nothing to compute a session from.
     if (!category || posted.current || (minutes === null && exercises.length === 0)) return;
@@ -511,7 +509,18 @@ export function WorkoutCard({
   // Named in the words they already use: somebody whose routines are "Push" and
   // "Pull" should not be offered "Chest & Triceps".
   const suggestedName =
-    filled.length > 0
+    /*
+     * A session that is one named thing is called that thing.
+     *
+     * `nameFromMuscles` cannot help here and does not pretend to: a sport, a
+     * class and a run all carry no muscles, so it falls through to the category
+     * and offers to save two hours of volleyball as "Sport" — which is both
+     * useless as a name and the exact word this change spent a migration
+     * getting out of the journal.
+     */
+    drafts.length === 1 && drafts[0]!.muscles.length === 0
+      ? drafts[0]!.name
+      : filled.length > 0
       ? nameFromMuscles(
           filled.map((d) => d.muscles[0]).filter((m): m is MuscleGroup => m !== undefined),
           namingStyleOf(routines.map((r) => r.name)),
@@ -1236,6 +1245,38 @@ function step(value: string, delta: number, min = 0): string {
   const current = value.trim() === '' ? (delta > 0 ? 0 : Math.abs(delta)) : Number(value);
   if (Number.isNaN(current)) return value;
   return String(round(Math.max(min, current + delta), 2));
+}
+
+/**
+ * The session's exercises, with a length-only one given the session's length.
+ *
+ * "Two hours of volleyball" answers this card in two clicks — the sport, and
+ * the duration — and neither of them is a *set*. Without this the payload goes
+ * up with an empty exercise list, and a session with no exercises is described
+ * by its category and priced at the category's own MET: the journal says
+ * "Sport" and the burn is the same figure for golf and for martial arts. That
+ * is exactly the hole this change existed to close, and picking the sport would
+ * have looked like it closed it.
+ *
+ * Deliberately narrow. One exercise, measured in time, nothing entered against
+ * it, and a duration on the card: then the card's duration is plainly the
+ * exercise's duration, because there is nothing else it could be.
+ */
+function withSessionLength(
+  drafts: Draft[],
+  units: UnitSystem,
+  minutes: number | null,
+): WorkoutExercise[] {
+  const counted = drafts
+    .map((d) => toExercise(d, units))
+    .filter((e): e is WorkoutExercise => e !== null);
+  if (counted.length > 0 || minutes === null) return counted;
+
+  const [only] = drafts;
+  if (drafts.length !== 1 || !only || only.tracks !== 'duration') return counted;
+  return [
+    { name: only.name, type_id: only.typeId, sets: [{ duration_sec: Math.round(minutes * 60) }] },
+  ];
 }
 
 /**

@@ -37,9 +37,9 @@ import {
   blankSet,
   draftFromType,
   draftsFromHeard,
-  isExercise,
   toDraftSet,
   toExercise,
+  withSessionLength,
   type DraftExercise,
 } from './draft';
 
@@ -224,7 +224,7 @@ export function WorkoutCard({
   }, [editing, card, types, units, category]);
 
   const filled = exercises.filter((e) => toExercise(e, units) !== null);
-  const counted = exercises.map((e) => toExercise(e, units)).filter(isExercise);
+  const counted = withSessionLength(exercises, units, minutes);
   const canSend = (minutes !== null || counted.length > 0) && !saving;
   const today = new Date().getDay();
   /*
@@ -267,14 +267,25 @@ export function WorkoutCard({
   // Named in the words they already use: somebody whose routines are "Push" and
   // "Pull" should not be offered "Chest & Triceps".
   const suggestedName =
-    filled.length > 0
-      ? nameFromMuscles(
-          filled.map((e) => e.muscles[0]).filter((m): m is MuscleGroup => m !== undefined),
-          namingStyleOf(routines.map((r) => r.name)),
-        )
-      : // Nothing to read muscles off. The kind is all this session is, so it is
-        // also the most it can honestly be called.
-        tr(CATEGORY_LABEL[category]);
+    /*
+     * A session that is one named thing is called that thing.
+     *
+     * `nameFromMuscles` cannot help here and does not pretend to: a sport, a
+     * class and a run all carry no muscles, so it falls through to the category
+     * and offers to save two hours of volleyball as "Sport" — which is both
+     * useless as a name and the exact word this change spent a migration
+     * getting out of the journal.
+     */
+    exercises.length === 1 && exercises[0]!.muscles.length === 0
+      ? exercises[0]!.name
+      : filled.length > 0
+        ? nameFromMuscles(
+            filled.map((e) => e.muscles[0]).filter((m): m is MuscleGroup => m !== undefined),
+            namingStyleOf(routines.map((r) => r.name)),
+          )
+        : // Nothing to read muscles off. The kind is all this session is, so it
+          // is also the most it can honestly be called.
+          tr(CATEGORY_LABEL[category]);
 
   /**
    * Adding one from the picker, opened on the last time they did it.
