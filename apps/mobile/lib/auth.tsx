@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import type { AuthStatus, Profile } from '@ct/shared';
 import { api } from '@/lib/api';
 import { clearToken, restoreToken, saveToken } from '@/lib/session';
@@ -115,6 +116,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     })();
   }, [refresh]);
+
+  /*
+   * Ask again when the app comes back, as long as the answer we are holding is
+   * "signed out".
+   *
+   * `SIGNED_OUT` is two different things wearing one shape: a real sign-out,
+   * and a launch that could not reach the server. `refresh` says of the second
+   * that the token is kept "so a signal that comes back finds the session still
+   * there" — and nothing was asking again, so it did not. Launching in a lift
+   * left somebody on *Create your account* for the rest of the session, still
+   * signed in as far as the keystore was concerned, with a force-quit as the
+   * only way back. A cold start recovered; resuming never did.
+   *
+   * Only while signed out, so an ordinary foreground costs nothing. And it is
+   * worth doing even when the sign-out is genuine: the guesses in `SIGNED_OUT`
+   * — whether registrations are open, whether Google is configured — are
+   * exactly the ones a reachable server can replace with facts.
+   */
+  useEffect(() => {
+    if (status?.authenticated) return;
+    const subscription = AppState.addEventListener('change', (next: AppStateStatus) => {
+      if (next === 'active') void refresh();
+    });
+    return () => subscription.remove();
+  }, [status?.authenticated, refresh]);
 
   /*
    * The outbox starts draining as soon as there is a session to drain it with,
