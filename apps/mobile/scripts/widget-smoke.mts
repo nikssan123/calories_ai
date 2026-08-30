@@ -244,10 +244,12 @@ for (const [name, layout] of captured) {
     }
   }
 
+  /* Every handset width the size table knows about, not just one. */
+  for (const screen of [320, 375, 393, 402, 414, 430]) {
   for (const [label, snapshot] of cases) {
-    const props = name === 'Ring' ? ringProps(snapshot) : dayProps(snapshot);
+    const props = name === 'Ring' ? ringProps(snapshot, undefined, screen) : dayProps(snapshot, undefined, screen);
     for (const colorScheme of ['light', 'dark'] as const) {
-      const where = `${name}/${label}/${colorScheme}`;
+      const where = `${name}/${label}/${colorScheme}/${screen}pt`;
       let tree: unknown;
       try {
         tree = render(props, { colorScheme, widgetFamily: name === 'Ring' ? 'systemSmall' : 'systemMedium' });
@@ -268,6 +270,7 @@ for (const [name, layout] of captured) {
       }
     }
   }
+  }
 }
 
 if (problems.length) {
@@ -275,4 +278,4 @@ if (problems.length) {
   for (const problem of problems) console.error(`  - ${problem}`);
   process.exit(1);
 }
-console.log(`ok — ${captured.size} layouts, ${cases.length} days plus the propless placeholder, both schemes`);
+console.log(`ok — ${captured.size} layouts, ${cases.length} days plus the propless placeholder, six screen widths, both schemes`);

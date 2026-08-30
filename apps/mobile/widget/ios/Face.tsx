@@ -182,6 +182,10 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
                 font({ family: DISPLAY, size: props.figure }),
                 foregroundStyle(paint.foreground),
                 lineLimit(1),
+                /* The line box, set rather than inherited — see `figureLine`.
+                 * A frame shorter than the face's own metrics does not clip
+                 * here, because the ink is a good deal shorter than both. */
+                frame({ height: props.figureLine }),
               ]}
             >
               {props.figureText}
@@ -193,6 +197,7 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
                 font({ size: props.caption, weight: 'semibold' }),
                 foregroundStyle(paint.mutedForeground),
                 lineLimit(1),
+                frame({ height: props.captionLine }),
               ]}
             >
               {props.captionText}
@@ -297,6 +302,7 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
               font({ family: DISPLAY, size: props.figure }),
               foregroundStyle(paint.foreground),
               lineLimit(1),
+              frame({ height: props.figureLine }),
             ]}
           >
             {props.figureText}
@@ -334,6 +340,12 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
    * The number stays inside the ring and nowhere else; an earlier cut of the
    * Android one set it in the column as well, which made the widest, boldest
    * thing on the card a number already being shown four points to its left.
+   *
+   * No trailing `Spacer`, unlike the Android card. A medium widget is wider
+   * than the four cells `dayLayout` sizes this for, and pinning the group left
+   * left seventy points of empty card on the right against twelve on the left —
+   * which reads as a layout that ran out rather than one that stopped. Letting
+   * the row size to its content puts the same slack on both sides.
    */
   return shell(
     <HStack spacing={14} modifiers={[padding({ all: props.padding })]}>
@@ -369,7 +381,6 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
           </Text>
         )}
       </VStack>
-      <Spacer />
     </HStack>,
   );
 }

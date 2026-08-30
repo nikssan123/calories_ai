@@ -243,10 +243,20 @@ export function dayLayout({
   }
 
   const padding = 12;
-  const box = clamp(Math.min(height - 2 * (padding + BORDER), width * 0.36), 0, 148);
+  /*
+   * 0.42 of the width rather than 0.36, and the type caps below are raised to
+   * match. Both were set against Android cells, where the *height* binds — four
+   * cells by two is 250×110dp, so the dial is 82dp either way and neither cap is
+   * reached. They bind only once the card is given a genuinely wide rectangle,
+   * which is what a `systemMedium` widget is: 351×165, where the old factor left
+   * the dial at 126 and the sentence at its 21pt ceiling with seventy points of
+   * empty card beside it. Dragged tall on Android the ring now grows too, which
+   * is the behaviour that shape is resizable for.
+   */
+  const box = clamp(Math.min(height - 2 * (padding + BORDER), width * 0.42), 0, 148);
   const stroke = clamp(box * 0.13, 6, 20);
   const inner = Math.max(0, box - 2 * stroke - 4);
-  const title = clamp(box * 0.17, 14, 21);
+  const title = clamp(box * 0.17, 14, 24);
 
   return {
     shape: 'card',
@@ -263,6 +273,6 @@ export function dayLayout({
     }),
     figureText,
     title,
-    detail: clamp(title * 0.7, 11, 14),
+    detail: clamp(title * 0.7, 11, 16),
   };
 }

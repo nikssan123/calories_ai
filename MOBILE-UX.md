@@ -623,9 +623,22 @@ widget gallery. Both widgets add, both draw, in both schemes, and the
 over-target state turns the ring to ink the way `CalorieRing` does. The figure
 is set in Baloo, so the config plugin reaches the extension.
 
-The caption's leading turned out to be the non-problem: SwiftUI's own metrics
-put "to go" where Android's explicit line height does, near enough that the
-negative spacing this paragraph used to propose would have made it worse.
+The caption's leading was a real problem after all, and eyeballing a screenshot
+said it was not. Measured, the gap between `670` and `to go` was **26.3pt** for
+a figure whose ink is 28pt tall, which dropped the caption onto the ring's inner
+edge: SwiftUI centres the *line boxes*, and Baloo's is 1.6em to draw 0.6em. The
+fix is not the negative spacing this paragraph used to propose but the number
+Android already spends — `LINE_HEIGHT`, sent as `figureLine`/`captionLine` and
+applied as an explicit `frame({ height })`, which is what `lineHeight` would do
+if it were available before iOS 26. That takes it to 16.3pt, and the app's own
+`CalorieRing` sits looser still relative to its figure, so this is now the
+tighter of the two.
+
+And the wide one was pinned to its left edge. `dayLayout` sizes the card for the
+four Android cells it was written for; a medium widget is wider, so the trailing
+`Spacer` that is right on Android left seventy points of empty card on the right
+against twelve on the left. Dropping it lets the row size to its content and the
+slack fall evenly.
 
 **Two things the home screen taught that nothing else could.**
 
@@ -646,11 +659,22 @@ extension reads its own empty one, finds no layout, and draws nothing. Build
 with `CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=YES`
 instead: ad-hoc signing embeds the entitlements and the shared container appears.
 
-And one measurement. `systemSmall` on an iPhone 17 is **164pt**, not the 158
-in `FAMILY_SIZE`. The table stays at 158 deliberately — it is the smallest of
-the common sizes, so the dial under-fills by three points a side on a bigger
-phone rather than being clipped on a smaller one. The ring measures dead centre
-vertically.
+And the widgets were leaving too much of their own card empty, which is the
+same mistake in three places. `FAMILY_SIZE` was one conservative guess for every
+phone — `systemSmall` on an iPhone 17 is 165pt, not 158 — so the dial gave up
+seven points a side before anything else happened. It is a lookup now:
+WidgetKit's sizes are a published function of the screen width, and the app is
+the only process that can see its own screen, so `update.ts` reads it and
+`familySize` turns it into a rectangle. The four points added on top are the
+`BORDER` `layout.ts` reserves for an outline Android draws and iOS does not.
+
+The rest was two caps in `dayLayout` that were set against Android cells, where
+four by two is 250×110dp and the *height* binds — so neither cap is ever
+reached there. On a 351×165 medium widget they bound hard: the dial stopped at
+0.36 of the width and the sentence at its 21pt ceiling. At 0.42, 24 and 16 the
+card fills, and Android is untouched at the sizes it actually uses. Together the
+dial goes from 134 to 145pt inside a 165pt card, and the wide one's slack falls
+from seventy points on one side to about sixteen on each.
 
 **Still open.** A background refresh task, so a phone that is not opened for a
 day gets real numbers rather than a correctly-empty ring; and the lock screen

@@ -1,4 +1,4 @@
-import { dayLayout, ringLayout } from '../layout';
+import { LINE_HEIGHT, dayLayout, ringLayout } from '../layout';
 import { DARK, LIGHT, type WidgetPalette } from '../theme';
 import { widgetText, type WidgetText } from '../text';
 import type { Locale } from '@ct/shared';
@@ -35,24 +35,51 @@ import { deviceLocale } from '@/messages';
  */
 
 /**
- * The size WidgetKit will hand each family, near enough to fit type against.
+ * The rectangle WidgetKit will actually hand each family.
  *
- * The widget environment carries `widgetFamily` and not a rectangle — there is
- * no `GeometryReader` to ask and no size in the environment dictionary — so
- * unlike Android, where the launcher reports the cell it gave us, this is a
- * table rather than a measurement. These are the iPhone figures; an iPad, or a
- * phone at a different display zoom, differs by a few points.
+ * The widget environment carries `widgetFamily` and not a size — there is no
+ * `GeometryReader` to ask and no rectangle in the environment dictionary — so
+ * unlike Android, where the launcher reports the cell it gave us, this has to be
+ * derived. It is derivable: WidgetKit's sizes are a published function of the
+ * screen width, and the app knows its own screen. The first cut used one
+ * conservative pair for every phone, which cost seven points a side on the dial
+ * and left the wide one visibly short of its own card.
  *
- * That is survivable because of how the tree spends them: the card fills the
- * widget and its contents are centred, so a real rectangle a few points off the
- * nominal one changes the margin around the dial and nothing else. What needs a
- * number is the type fitting, and `fitFontSize` is asked for a size that clears
- * the ring by a tenth of it either side.
+ * The four points added back are `layout.ts`'s `BORDER`, which it reserves on
+ * every edge for a 2dp outline. Android draws that outline; iOS does not, because
+ * the system already clips every widget to its own rounded rectangle. Handing the
+ * arithmetic four more points than the widget really has is how it gets those
+ * points back without the shared code needing to know which platform it is on.
  */
-export const FAMILY_SIZE = {
-  systemSmall: { width: 158, height: 158 },
-  systemMedium: { width: 338, height: 158 },
-} as const;
+const NO_BORDER = 4;
+
+/** Screen width → the small and medium widget sizes iOS uses at that width. */
+const WIDGET_SIZES: { screen: number; small: number; medium: number }[] = [
+  { screen: 430, small: 170, medium: 364 },
+  { screen: 420, small: 170, medium: 364 },
+  { screen: 414, small: 169, medium: 360 },
+  { screen: 402, small: 165, medium: 351 },
+  { screen: 393, small: 158, medium: 338 },
+  { screen: 375, small: 155, medium: 329 },
+  { screen: 320, small: 141, medium: 292 },
+];
+
+/**
+ * Pure, and takes the width rather than reading it, so the smoke script can
+ * render every phone without a `Dimensions` to stub. `update.ts` supplies the
+ * real one; the default is the narrowest common handset, which is the safe way
+ * to be wrong — a dial fitted for a smaller card under-fills a bigger one
+ * rather than being clipped by it.
+ */
+export function familySize(screenWidth = 393) {
+  const row = WIDGET_SIZES.find((entry) => screenWidth >= entry.screen) ?? WIDGET_SIZES[WIDGET_SIZES.length - 1]!;
+  const height = row.small + NO_BORDER;
+  return {
+    systemSmall: { width: row.small + NO_BORDER, height },
+    /* A medium widget is exactly as tall as a small one, and wider. */
+    systemMedium: { width: row.medium + NO_BORDER, height },
+  };
+}
 
 /**
  * The palette as the widget takes it: plain strings, both schemes.
@@ -129,10 +156,23 @@ export interface FaceProps {
 
   figure: number;
   figureText: string;
+  /**
+   * The box a line of the display face is given, which SwiftUI will not work
+   * out correctly on its own.
+   *
+   * Baloo asks for 1.6em of line box to draw 0.6em of ink, and a `VStack`
+   * centres the *boxes*. Left alone that puts a 26pt hole between the figure
+   * and its caption at the size the square widget sets them, and drops the
+   * caption onto the ring's inner edge. Android sets `lineHeight` for exactly
+   * this; iOS has the modifier only from 26, so the same number is spent as an
+   * explicit frame instead.
+   */
+  figureLine: number;
 
   /** `dial` only. */
   caption: number;
   captionText: string;
+  captionLine: number;
 
   /** `card` only. */
   headline: number;
@@ -161,8 +201,10 @@ const NOTHING = {
   over: false,
   figure: 0,
   figureText: '',
+  figureLine: 0,
   caption: 0,
   captionText: '',
+  captionLine: 0,
   headline: 0,
   headlineText: '',
   detail: 0,
@@ -213,9 +255,13 @@ const textFor = (snapshot: DaySnapshot | null, locale?: Locale) =>
   widgetText(snapshot?.locale ?? locale ?? deviceLocale());
 
 /** The square one: the dial, at the size a small widget is. */
-export function ringProps(snapshot: DaySnapshot | null, locale?: Locale): FaceProps {
+export function ringProps(
+  snapshot: DaySnapshot | null,
+  locale?: Locale,
+  screenWidth?: number,
+): FaceProps {
   const text = textFor(snapshot, locale);
-  const { width, height } = FAMILY_SIZE.systemSmall;
+  const { width, height } = familySize(screenWidth).systemSmall;
   const remaining = snapshot ? snapshot.target - snapshot.consumed : 0;
   const layout = ringLayout({ width, height, remaining, text });
 
@@ -229,8 +275,12 @@ export function ringProps(snapshot: DaySnapshot | null, locale?: Locale): FacePr
     stroke: layout.stroke,
     figure: layout.figure,
     figureText: layout.figureText,
+    figureLine: Math.round(layout.figure * LINE_HEIGHT),
     caption: layout.caption,
     captionText: layout.captionText,
+    /* 1.2 rather than `LINE_HEIGHT`: the caption is not set in the display
+     * face, and this is the figure the Android dial gives it. */
+    captionLine: Math.round(layout.caption * 1.2),
     ...(snapshot ? arcOf(snapshot) : {}),
   };
 }
@@ -243,9 +293,13 @@ export function ringProps(snapshot: DaySnapshot | null, locale?: Locale): FacePr
  * measurement on both platforms, and a builder that assumed the answer would be
  * a second place the rule was written down.
  */
-export function dayProps(snapshot: DaySnapshot | null, locale?: Locale): FaceProps {
+export function dayProps(
+  snapshot: DaySnapshot | null,
+  locale?: Locale,
+  screenWidth?: number,
+): FaceProps {
   const text = textFor(snapshot, locale);
-  const { width, height } = FAMILY_SIZE.systemMedium;
+  const { width, height } = familySize(screenWidth).systemMedium;
   /*
    * A layout is still needed with no reading to build one from: the empty state
    * sits on the same card at the same padding. The zeroes it computes reach
@@ -268,6 +322,7 @@ export function dayProps(snapshot: DaySnapshot | null, locale?: Locale): FacePro
       paddingHorizontal: layout.paddingHorizontal,
       figure: layout.figure,
       figureText: layout.figureText,
+      figureLine: Math.round(layout.figure * LINE_HEIGHT),
       wording: layout.wording,
       wordingText: ` ${layout.label}`,
       ratio: layout.ratio,
@@ -288,6 +343,7 @@ export function dayProps(snapshot: DaySnapshot | null, locale?: Locale): FacePro
     stroke: layout.stroke,
     figure: layout.figure,
     figureText: layout.figureText,
+    figureLine: Math.round(layout.figure * LINE_HEIGHT),
     headline: layout.title,
     headlineText: text.today(layout.label),
     detail: layout.detail,

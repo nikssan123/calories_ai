@@ -1,3 +1,4 @@
+import { Dimensions } from 'react-native';
 import { localDateFor, nextDayStart, type Locale } from '@ct/shared';
 import { DayWidget, RingWidget } from './Face';
 import { dayProps, ringProps } from './props';
@@ -58,13 +59,19 @@ function freshDay(snapshot: DaySnapshot, at: Date): DaySnapshot {
  * picks them up without the app being opened again.
  */
 export function pushIosWidgets(snapshot: DaySnapshot | null, locale?: Locale): void {
+  /*
+   * The one thing the widget cannot work out for itself. WidgetKit sizes follow
+   * from the screen width, and this is the only process that can see it — see
+   * `familySize`.
+   */
+  const screen = Dimensions.get('window').width;
   if (!snapshot) {
     /* Signed out, or never signed in: one entry, and nothing scheduled after
      * it — there is no day to roll over to. `locale` is what the note said
      * before it was dropped, so somebody who signs out of a Bulgarian account
      * is told to open the app in Bulgarian. */
-    RingWidget.updateTimeline([{ date: new Date(), props: ringProps(null, locale) }]);
-    DayWidget.updateTimeline([{ date: new Date(), props: dayProps(null, locale) }]);
+    RingWidget.updateTimeline([{ date: new Date(), props: ringProps(null, locale, screen) }]);
+    DayWidget.updateTimeline([{ date: new Date(), props: dayProps(null, locale, screen) }]);
     return;
   }
 
@@ -76,11 +83,11 @@ export function pushIosWidgets(snapshot: DaySnapshot | null, locale?: Locale): v
   const tomorrow = freshDay(snapshot, turnover);
 
   RingWidget.updateTimeline([
-    { date: now, props: ringProps(snapshot) },
-    { date: turnover, props: ringProps(tomorrow) },
+    { date: now, props: ringProps(snapshot, undefined, screen) },
+    { date: turnover, props: ringProps(tomorrow, undefined, screen) },
   ]);
   DayWidget.updateTimeline([
-    { date: now, props: dayProps(snapshot) },
-    { date: turnover, props: dayProps(tomorrow) },
+    { date: now, props: dayProps(snapshot, undefined, screen) },
+    { date: turnover, props: dayProps(tomorrow, undefined, screen) },
   ]);
 }
