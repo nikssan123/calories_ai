@@ -24,20 +24,36 @@ import { type DayContext, localDateFor } from '../time.ts';
 
 // ---- The catalogue ----------------------------------------------------------
 
-/** Built-ins plus anything this account has invented, its own first. */
+/**
+ * Built-ins plus anything this account has invented, its own first.
+ *
+ * `withPrevious` attaches the sets of the last session that recorded each
+ * exercise, which is what lets tapping one open on real numbers rather than on
+ * blanks. It is one extra query for the whole catalogue rather than one per
+ * exercise — `previousSetsFor` already reads every type in a single pass for
+ * the routine card — so the picker pays for history once and nothing else pays
+ * for it at all.
+ */
 export async function listExerciseTypes(
   userId: string,
   category?: ExerciseCategory | null,
+  options: { withPrevious?: boolean } = {},
 ): Promise<ExerciseType[]> {
   const rows = await query<any>(
-    `SELECT id, name, category, emoji, tracks, muscles, user_id
+    `SELECT id, name, category, emoji, tracks, muscles, aliases, user_id
        FROM exercise_types
       WHERE (user_id IS NULL OR user_id = $1)
         AND ($2::text IS NULL OR category = $2)
    ORDER BY (user_id IS NOT NULL) DESC, name ASC`,
     [userId, category ?? null],
   );
-  return rows.map(toType);
+  const types = rows.map(toType);
+  if (!options.withPrevious) return types;
+
+  const { previousSetsFor } = await import('./routines.ts');
+  const previous = await previousSetsFor(userId);
+  for (const type of types) type.previous = previous.get(type.id) ?? [];
+  return types;
 }
 
 export async function findExerciseType(
@@ -45,7 +61,7 @@ export async function findExerciseType(
   name: string,
 ): Promise<ExerciseType | null> {
   const row = await queryOne<any>(
-    `SELECT id, name, category, emoji, tracks, muscles, user_id
+    `SELECT id, name, category, emoji, tracks, muscles, aliases, user_id
        FROM exercise_types
       WHERE lower(name) = lower($2) AND (user_id IS NULL OR user_id = $1)
    ORDER BY (user_id IS NOT NULL) DESC
@@ -59,9 +75,17 @@ export interface DefineExerciseInput {
   userId: string;
   name: string;
   category: ExerciseCategory;
-  emoji: string;
-  tracks: ExerciseTracks;
-  met: number;
+  /**
+   * All three optional, and defaulted from the category when they are missing.
+   *
+   * The agent fills them in because it has read a sentence and has an opinion.
+   * The picker does not: somebody who has just failed to find their exercise
+   * wants it to exist, and asking them for a metabolic equivalent to get it is
+   * how a two-second fix becomes an abandoned form.
+   */
+  emoji?: string | null;
+  tracks?: ExerciseTracks | null;
+  met?: number | null;
   /** Primary first. Empty for anything that is not lifting. */
   muscles?: MuscleGroup[] | null;
 }
@@ -81,14 +105,14 @@ export async function defineExerciseType(input: DefineExerciseInput): Promise<Ex
   const row = await queryOne<any>(
     `INSERT INTO exercise_types (user_id, name, category, emoji, tracks, met, muscles)
      VALUES ($1,$2,$3,$4,$5,$6,$7)
-     RETURNING id, name, category, emoji, tracks, muscles, user_id`,
+     RETURNING id, name, category, emoji, tracks, muscles, aliases, user_id`,
     [
       input.userId,
       input.name.trim(),
       input.category,
-      input.emoji,
-      input.tracks,
-      input.met,
+      input.emoji ?? CATEGORY_EMOJI[input.category],
+      input.tracks ?? CATEGORY_TRACKS[input.category],
+      input.met ?? CATEGORY_MET[input.category],
       input.muscles ?? [],
     ],
   );
@@ -550,7 +574,7 @@ const LABEL: Record<ExerciseCategory, string> = {
 
 async function typeById(userId: string, id: string): Promise<ExerciseType | null> {
   const row = await queryOne<any>(
-    `SELECT id, name, category, emoji, tracks, muscles, user_id
+    `SELECT id, name, category, emoji, tracks, muscles, aliases, user_id
        FROM exercise_types WHERE id = $1 AND (user_id IS NULL OR user_id = $2)`,
     [id, userId],
   );
@@ -565,7 +589,11 @@ function toType(row: any): ExerciseType {
     emoji: row.emoji,
     tracks: row.tracks,
     muscles: row.muscles ?? [],
+    aliases: row.aliases ?? [],
     custom: row.user_id !== null,
+    // Filled in by `listExerciseTypes` when asked for, and left empty
+    // everywhere else — most callers want a catalogue, not a history.
+    previous: [],
   };
 }
 

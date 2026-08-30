@@ -379,16 +379,41 @@ export type ExerciseTracks = z.infer<typeof ExerciseTracks>;
  *
  * Ordered primary-first wherever it appears: a bench press is chest and triceps
  * and front delts, and the first one is what the exercise is chosen for.
+ *
+ * **The order of this list is the order the picker draws its sections in**, so
+ * it runs down the body the way a gym-goer scans one — chest, back, shoulders,
+ * arms, legs, core — rather than alphabetically. Nothing else depends on the
+ * order, and grouping the picker by anything else would mean a second list to
+ * keep in step with this one.
+ *
+ * Fourteen is a deliberate resting place between "ten" and an anatomy chart.
+ * The four added past the original ten each earn it by owning exercises that
+ * were previously filed somewhere misleading:
+ *
+ * - `lower_back` — a back extension is not a lat pulldown, and tagging both
+ *   `back` puts them under the same heading in a picker that now has a heading.
+ * - `traps` — shrugs and upright rows, which people do name a set after.
+ * - `forearms` — wrist curls, farmer's walks, grip work.
+ * - `adductors` — the inner-thigh machine and the Copenhagen plank, which were
+ *   previously either `quads` or nothing at all.
+ *
+ * Hip *abduction* deliberately did not get one: the abduction machine and band
+ * walks are glute medius, so they are `glutes`, which is both anatomically
+ * honest and where somebody training glutes would look for them.
  */
 export const MUSCLE_GROUPS = [
   'chest',
   'back',
+  'lower_back',
+  'traps',
   'shoulders',
   'biceps',
   'triceps',
+  'forearms',
   'quads',
   'hamstrings',
   'glutes',
+  'adductors',
   'calves',
   'core',
 ] as const;
@@ -396,7 +421,13 @@ export const MuscleGroup = z.enum(MUSCLE_GROUPS);
 export type MuscleGroup = z.infer<typeof MuscleGroup>;
 
 /** The four that people say "legs" about, for naming a day rather than storing one. */
-export const LEG_MUSCLES: MuscleGroup[] = ['quads', 'hamstrings', 'glutes', 'calves'];
+export const LEG_MUSCLES: MuscleGroup[] = [
+  'quads',
+  'hamstrings',
+  'glutes',
+  'adductors',
+  'calves',
+];
 
 /**
  * The movement pattern a muscle belongs to.
@@ -418,10 +449,17 @@ export const MUSCLE_PATTERN: Record<MuscleGroup, MovementPattern> = {
   shoulders: 'push',
   triceps: 'push',
   back: 'pull',
+  // A hinge is a pull in every split that uses the word: deadlifts and
+  // hyperextensions land on pull day or leg day, never on push day.
+  lower_back: 'pull',
+  traps: 'pull',
   biceps: 'pull',
+  // Grip work rides with pulling — it is done because the bar was slipping.
+  forearms: 'pull',
   quads: 'legs',
   hamstrings: 'legs',
   glutes: 'legs',
+  adductors: 'legs',
   calves: 'legs',
   core: 'core',
 };
@@ -429,15 +467,47 @@ export const MUSCLE_PATTERN: Record<MuscleGroup, MovementPattern> = {
 const MUSCLE_LABEL: Record<MuscleGroup, string> = {
   chest: 'Chest',
   back: 'Back',
+  lower_back: 'Lower back',
+  traps: 'Traps',
   shoulders: 'Shoulders',
   biceps: 'Biceps',
   triceps: 'Triceps',
+  forearms: 'Forearms',
   quads: 'Quads',
   hamstrings: 'Hamstrings',
   glutes: 'Glutes',
+  adductors: 'Adductors',
   calves: 'Calves',
   core: 'Core',
 };
+
+/**
+ * The words somebody might type at the picker to mean a muscle.
+ *
+ * Search has to answer "legs" and "abs" and "delts", none of which are stored
+ * anywhere — the column says `quads` and `core` and `shoulders`. Kept beside
+ * the labels rather than in the database because these are facts about English,
+ * not about anybody's account, and a migration is a poor place for a thesaurus.
+ */
+const MUSCLE_TERMS: Record<MuscleGroup, string[]> = {
+  chest: ['chest', 'pecs', 'pec', 'push'],
+  back: ['back', 'lats', 'lat', 'pull', 'row'],
+  lower_back: ['lower back', 'erectors', 'spinal', 'hinge', 'back'],
+  traps: ['traps', 'trap', 'shrug', 'upper back', 'back'],
+  shoulders: ['shoulders', 'shoulder', 'delts', 'delt', 'push'],
+  biceps: ['biceps', 'bicep', 'arms', 'arm', 'curl', 'pull'],
+  triceps: ['triceps', 'tricep', 'arms', 'arm', 'push'],
+  forearms: ['forearms', 'forearm', 'grip', 'wrist', 'arms', 'arm'],
+  quads: ['quads', 'quad', 'legs', 'leg', 'thigh'],
+  hamstrings: ['hamstrings', 'hamstring', 'hams', 'legs', 'leg'],
+  glutes: ['glutes', 'glute', 'bum', 'butt', 'legs', 'leg', 'hips', 'hip'],
+  adductors: ['adductors', 'adductor', 'inner thigh', 'groin', 'legs', 'leg'],
+  calves: ['calves', 'calf', 'legs', 'leg'],
+  core: ['core', 'abs', 'ab', 'abdominals', 'obliques', 'stomach'],
+};
+
+/** Every way of saying this muscle, for the picker's search. */
+export const muscleTerms = (muscle: MuscleGroup): string[] => MUSCLE_TERMS[muscle];
 
 export const muscleLabel = (muscle: MuscleGroup) => MUSCLE_LABEL[muscle];
 
@@ -464,7 +534,15 @@ export function namingStyleOf(existingNames: string[]): NamingStyle | null {
     // votes for neither rather than for whichever is tested first.
     const isLegs = name.includes('leg');
     const saysPattern = PATTERN_WORDS.some((word) => name.includes(word));
-    const saysMuscle = MUSCLE_GROUPS.some((m) => m !== 'core' && name.includes(m.slice(0, 5)));
+    /*
+     * `lower_back` is excluded alongside `core` and for a sharper reason: its
+     * first five letters are "lower", which is a *pattern* word — "Lower body"
+     * is a split, not a body part. Left in, every lower-body day would vote for
+     * both vocabularies at once.
+     */
+    const saysMuscle = MUSCLE_GROUPS.some(
+      (m) => m !== 'core' && m !== 'lower_back' && name.includes(m.slice(0, 5)),
+    );
     if (isLegs && !saysMuscle) continue;
     if (saysPattern) pattern += 1;
     else if (saysMuscle) muscle += 1;
@@ -568,6 +646,15 @@ export function nameFromMuscles(
   return 'Full body';
 }
 
+/** The numbers of one set, however it happens to be measured. */
+export const SetValues = z.object({
+  reps: z.number().int().nullable(),
+  weight_kg: z.number().nullable(),
+  duration_sec: z.number().int().nullable(),
+  distance_m: z.number().int().nullable(),
+});
+export type SetValues = z.infer<typeof SetValues>;
+
 export const ExerciseType = z.object({
   id: z.string().uuid(),
   name: z.string(),
@@ -576,10 +663,130 @@ export const ExerciseType = z.object({
   tracks: ExerciseTracks,
   /** Primary first. Empty for anything that is not lifting. */
   muscles: z.array(MuscleGroup).default([]),
+  /**
+   * What somebody might type instead of the name — "bench", "RDL", "OHP".
+   *
+   * Search-only, and never shown: the catalogue has one name per exercise and
+   * this is the list of things that should *find* it. Empty for a custom
+   * exercise, which is already named in the words its owner chose.
+   */
+  aliases: z.array(z.string()).default([]),
   /** True when this account invented it rather than it shipping with the app. */
   custom: z.boolean(),
+  /**
+   * The sets of the last session that recorded this exercise, in order.
+   *
+   * Empty both when it has never been done and when the caller did not ask for
+   * it — the picker asks, and everything else pays nothing. This is what lets
+   * tapping an exercise open on real numbers instead of on blanks.
+   */
+  previous: z.array(SetValues).default([]),
 });
 export type ExerciseType = z.infer<typeof ExerciseType>;
+
+/**
+ * Teaching the app an exercise from the picker rather than from the chat.
+ *
+ * Only the name and the kind are required, and that is the point. Somebody who
+ * has just failed to find "landmine press" wants it to exist, not to be asked
+ * for a metabolic equivalent — so everything else has a default derived from
+ * the category, and a wrong MET on a strength exercise costs a burn figure
+ * nobody came to this screen for. It can always be corrected later; an exercise
+ * that never got created cannot.
+ */
+export const DefineExerciseRequest = z.object({
+  name: z.string().trim().min(1, 'Name it').max(60),
+  category: ExerciseCategory,
+  emoji: z.string().max(8).nullish(),
+  tracks: ExerciseTracks.nullish(),
+  met: z.number().min(1).max(20).nullish(),
+  muscles: z.array(MuscleGroup).nullish(),
+});
+export type DefineExerciseRequest = z.infer<typeof DefineExerciseRequest>;
+
+/**
+ * The lengths a session actually comes in.
+ *
+ * Chips rather than a number pad, because nobody times a gym session to the
+ * minute and "about an hour" is both the true answer and the one that costs a
+ * single tap. Shared so the two clients cannot drift apart on it.
+ *
+ * 120 is on the list because two hours of football is an ordinary Sunday, and
+ * a scale that stopped at 90 made it unloggable rather than merely awkward.
+ * Anything off the scale is typed, which is why `sessionDurationLabel` exists:
+ * past an hour people say "2h", not "120".
+ */
+export const SESSION_DURATIONS = [30, 45, 60, 90, 120] as const;
+
+export function sessionDurationLabel(minutes: number): string {
+  if (minutes < 60 || minutes % 60 !== 0) return String(minutes);
+  return `${minutes / 60}h`;
+}
+
+/**
+ * Does this exercise answer what they typed?
+ *
+ * Three things are searched and they are not interchangeable. The **name** is
+ * the obvious one. The **aliases** cover the gap between what the catalogue
+ * calls something and what a gym calls it — "RDL", "OHP", "pulldown". The
+ * **muscle terms** are the reason this function exists at all: somebody who
+ * cannot remember "Romanian deadlift" can always remember it is the one for the
+ * back of their legs, and typing "legs" has to reach it.
+ *
+ * Case- and accent-insensitive, because "Pilates" is typed "pilates" and a
+ * Spanish keyboard will offer "glúteos".
+ */
+export function exerciseMatches(type: ExerciseType, query: string): boolean {
+  const q = fold(query);
+  if (q.length === 0) return true;
+  if (fold(type.name).includes(q)) return true;
+  if (type.aliases.some((alias) => fold(alias).includes(q))) return true;
+  return type.muscles.some((muscle) =>
+    muscleTerms(muscle).some((term) => term.startsWith(q) || q.startsWith(term)),
+  );
+}
+
+/** Lowercased and stripped of diacritics, for comparing what people type. */
+const fold = (value: string): string =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+/**
+ * The catalogue, cut into the sections a picker draws.
+ *
+ * Grouped on the **primary** muscle only. An exercise belongs under one heading
+ * or the reader meets the bench press three times on the way down the list, and
+ * the primary is the muscle it was chosen for — which is the heading somebody
+ * looking for it would think to look under.
+ *
+ * Sections come out in `MUSCLE_GROUPS` order, which runs down the body. The
+ * unmuscled tail — every sport, every run, every class — is one group with a
+ * null muscle, because "Football" does not belong under a body part and
+ * inventing a "Other" heading for two thirds of the cardio catalogue would say
+ * nothing.
+ */
+export function byMuscleGroup(
+  types: ExerciseType[],
+): { muscle: MuscleGroup | null; types: ExerciseType[] }[] {
+  const groups = new Map<MuscleGroup | null, ExerciseType[]>();
+  for (const type of types) {
+    const key = type.muscles[0] ?? null;
+    const list = groups.get(key);
+    if (list) list.push(type);
+    else groups.set(key, [type]);
+  }
+  const ordered: { muscle: MuscleGroup | null; types: ExerciseType[] }[] = [];
+  for (const muscle of MUSCLE_GROUPS) {
+    const list = groups.get(muscle);
+    if (list) ordered.push({ muscle, types: list });
+  }
+  const rest = groups.get(null);
+  if (rest) ordered.push({ muscle: null, types: rest });
+  return ordered;
+}
 
 /**
  * One set. "3×8 at 80kg" is three of these, not one saying three — the last set
@@ -716,15 +923,6 @@ export const LastWorkout = z.object({
 export type LastWorkout = z.infer<typeof LastWorkout>;
 
 // ---- Routines ---------------------------------------------------------------
-
-/** The numbers of one set, however it happens to be measured. */
-export const SetValues = z.object({
-  reps: z.number().int().nullable(),
-  weight_kg: z.number().nullable(),
-  duration_sec: z.number().int().nullable(),
-  distance_m: z.number().int().nullable(),
-});
-export type SetValues = z.infer<typeof SetValues>;
 
 /**
  * One exercise in a saved routine, with what happened last time it was done.

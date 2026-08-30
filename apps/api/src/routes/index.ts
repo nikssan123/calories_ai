@@ -5,6 +5,7 @@ import {
   BarcodeLogRequest,
   ChatRequest,
   DeleteAccountRequest,
+  DefineExerciseRequest,
   ExerciseCategory,
   LogFoodRequest,
   Meal,
@@ -93,7 +94,13 @@ import {
   requireAllowance,
   turnsInWindow,
 } from '../services/usage.ts';
-import { lastWorkout, listExerciseTypes, logWorkout, updateWorkout } from '../services/workouts.ts';
+import {
+  defineExerciseType,
+  lastWorkout,
+  listExerciseTypes,
+  logWorkout,
+  updateWorkout,
+} from '../services/workouts.ts';
 import {
   deleteRoutine,
   listRoutines,
@@ -854,8 +861,42 @@ export async function registerRoutes(app: FastifyInstance) {
    * needs a model.
    */
   app.get('/exercise/types', async (request) => {
-    const category = (request.query as any)?.category ?? null;
-    return { types: await listExerciseTypes(request.userId!, category) };
+    const query = request.query as any;
+    const category = query?.category ?? null;
+    /*
+     * `with_previous` attaches what they did last time to every exercise, which
+     * is what lets the picker open on real numbers. Opt-in because it is a
+     * second query and most callers — the routine editor, the agent — want a
+     * catalogue rather than a history.
+     */
+    const withPrevious = query?.with_previous === '1' || query?.with_previous === 'true';
+    return { types: await listExerciseTypes(request.userId!, category, { withPrevious }) };
+  });
+
+  /**
+   * Teaching the app an exercise from the picker.
+   *
+   * Until now the only way to add one was to mention it in the chat, so
+   * somebody who could not find their exercise in a list of chips had reached a
+   * dead end inside the card. Returns the existing row rather than a conflict
+   * when the name is taken — "you already have that one" is the answer to this
+   * request, not an error, and the caller wants the id either way.
+   */
+  app.post('/exercise/types', async (request, reply) => {
+    const parsed = DefineExerciseRequest.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid exercise' });
+    }
+    const type = await defineExerciseType({
+      userId: request.userId!,
+      name: parsed.data.name,
+      category: parsed.data.category,
+      emoji: parsed.data.emoji,
+      tracks: parsed.data.tracks,
+      met: parsed.data.met,
+      muscles: parsed.data.muscles,
+    });
+    return reply.status(201).send({ type });
   });
 
   /**

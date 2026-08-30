@@ -20,6 +20,7 @@ import type {
   Entitlements,
   ExerciseEntry,
   ExerciseSummary,
+  DefineExerciseRequest,
   ExerciseType,
   FoodEntry,
   FoodItem,
@@ -492,11 +493,33 @@ export function createApiClient({
 
     // ---- Workouts ----
 
-    /** Built-in exercises plus anything this account has invented. */
-    exerciseTypes: (category?: string) =>
-      request<{ types: ExerciseType[] }>(
-        `/exercise/types${category ? `?category=${encodeURIComponent(category)}` : ''}`,
-      ),
+    /**
+     * Built-in exercises plus anything this account has invented.
+     *
+     * `withPrevious` attaches the sets of the last session that recorded each
+     * one, so the picker can open an exercise on real numbers instead of on
+     * blanks. It is one extra query on the server and no extra round trip here.
+     */
+    exerciseTypes: (category?: string, options?: { withPrevious?: boolean }) => {
+      const params = new URLSearchParams();
+      if (category) params.set('category', category);
+      if (options?.withPrevious) params.set('with_previous', '1');
+      const query = params.toString();
+      return request<{ types: ExerciseType[] }>(`/exercise/types${query ? `?${query}` : ''}`);
+    },
+
+    /**
+     * Teaches the app an exercise it does not have, from the picker.
+     *
+     * Only the name and the kind are needed; the server fills the rest in from
+     * the category. Returns the existing one when the name is already taken,
+     * which is the answer rather than an error.
+     */
+    defineExercise: (payload: DefineExerciseRequest) =>
+      request<{ type: ExerciseType }>('/exercise/types', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
 
     /**
      * The last session of a kind, so the card can offer it back rather than ask
