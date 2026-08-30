@@ -1,4 +1,4 @@
-import { formatNumber, type Locale } from '@ct/shared';
+import { figureFace, formatNumber, type Face, type Locale } from '@ct/shared';
 import { messagesFor } from '@/messages';
 
 /**
@@ -17,6 +17,15 @@ import { messagesFor } from '@/messages';
 export interface WidgetText {
   /** A figure, grouped the way this language groups figures. */
   n: (value: number) => string;
+  /**
+   * The face a figure will actually be set in, for measuring it.
+   *
+   * Baloo 2 has no Cyrillic, so a Bulgarian numeral is drawn in whatever face
+   * does — and every advance changes with it. Measuring against Baloo's table
+   * and drawing in another face is how a figure fitted to a ring ends up
+   * wider than the ring; `figureFace` is the one place that rule is written.
+   */
+  face: Face;
   toGo: string;
   over: string;
   /** "to go today" — the word above, given its day. */
@@ -30,6 +39,7 @@ export function widgetText(locale: Locale): WidgetText {
   const t = messagesFor(locale);
   return {
     n: (value) => formatNumber(value, locale),
+    face: figureFace(locale),
     toGo: t['today.toGo'],
     over: t['today.over'],
     today: t['widget.today'],

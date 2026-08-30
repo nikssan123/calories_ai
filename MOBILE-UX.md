@@ -446,15 +446,15 @@ The real build here is an intent that hands a string to the API and reports the
 kcal back, which is small — the cost is the native config and the App Intents
 plumbing, which needs a dev client rather than Expo Go.
 
-### A widget — done on Android, and iOS is one hard part and three easy ones
+### A widget — done on both, and the hard part was not the ring
 
 The ring is the app's face and it used to be three taps from the home screen.
-It is now on the home screen: two widgets, both resizable, both in five
-languages.
+It is now on the home screen of both platforms: two widgets, in five languages,
+drawn from one set of numbers and two entirely different renderers.
 
-**What shipped.** A square one that is the dial and a wide one that is the day
-as a line. Neither scales a single picture — they change shape for the room they
-are given. The square one defaults to two cells and comes down to one, where it
+**What shipped on Android.** A square one that is the dial and a wide one that
+is the day as a line. Neither scales a single picture — they change shape for
+the room they are given. The square one defaults to two cells and comes down to one, where it
 is the size of an app icon; the wide one defaults to one row, which is the size
 its reading actually needs, and grows the ring back when dragged taller.
 
@@ -489,40 +489,149 @@ is an advert for a different one.
 rebuilt to see them, and the emulator's dev client predates the change. Per the
 rule this document already learned twice: believe it when it is on a phone.
 
-**iOS is now possible, and it is not symmetrical.** `expo-widgets` is on SDK 57
-— our exact SDK — and it is iOS-only, so this is a second implementation rather
-than the one-plugin-covers-both bargain `expo-share-intent` gave us. Its config
-plugin generates the extension target and the App Group during prebuild, which
-is the same CNG flow we already run.
+**iOS is done too, and almost none of it is the thing the last entry expected.**
+Two widgets, the same two: `Ring` at `systemSmall`, which is the dial at about
+the size of an app icon, and `Day` at `systemMedium`, which is the dial with the
+sentence beside it — the `card` shape the Android one takes at four cells by
+two. `expo-widgets` is on our exact SDK, and its config plugin generates the
+extension target, the App Group and the entitlements during prebuild, the same
+CNG flow the share extension already runs. It is also no longer iOS-only; there
+is a Glance path behind `enableAndroid`, left off, because the Android widget
+works and a rewrite would buy nothing.
 
-Three quarters of it is already written and platform-agnostic. `layout.ts` and
-`measure.ts` are plain TypeScript in `@ct/shared` — the tier decisions, the
-fitted type sizes, the inscribed-square bound all port unchanged. The catalogues
-were split out of `lib/i18n` into `messages/index.ts` precisely so a headless
-draw could read them without dragging a session and a network client along, and
-that split is platform-agnostic too. Data is *easier* than on Android: instead of
-leaving a note on disk for a headless task to find, `updateSnapshot(props)`
-pushes props from the app, and it drops into the same place `writeDaySnapshot`
-already runs.
+**The ring was not the wall.** The last entry costed three ways round the
+missing `Circle().trim()` — Apple's `Gauge`, a PNG regenerated per size and
+scheme, or 150 lines of SwiftUI — and all three were answers to a question that
+had a fourth. `@expo/ui` has `strokeBorder`, which takes a shape, a colour and a
+`StrokeStyle`, and that is the track and the ledge outright. The arc is a run of
+`Capsule`s, each spanning nine degrees, each rotated onto its own chord and
+offset to sit on the circle. Their round ends are what `stroke-linecap="round"`
+is on the other platform, and because the ends of neighbours coincide the joins
+fill themselves in; nine degrees puts the chord under two tenths of a point
+inside the true arc, well under the antialiasing either side of it. It buys
+something the SVG only approximates, too: every capsule is filled on its own, so
+the ramp is sampled per piece along the same diagonal the app's gradient runs,
+instead of one gradient stretched across a shape that is mostly hole. No Swift,
+no PNGs, no second palette to keep in step.
 
-**The ring is the wall.** Widget UI is limited to `@expo/ui` components — no raw
-SwiftUI, no `Path`, no `Canvas`, no `Circle().trim()`. The wide widget at one
-row is `HStack`/`Text`/`Spacer` and two capsule rectangles and maps over
-directly. The dial does not. Three ways out, none free:
+**The wall was somewhere nobody had looked: the layout is a string.** The
+function marked `'widget'` is not shipped as a function. A babel plugin replaces
+it with a template literal of its own source, `createWidget` stores that string
+in the App Group, and the extension runs `context.evaluateScript("(\(layout))")`
+in a bare JavaScriptCore context whose only globals are the `@expo/ui`
+components and modifiers. So the widget can reference nothing it imports.
+`layout.ts`, `measure.ts` and the catalogues do not port into it — not because
+they are heavy, but because in there their names do not exist. An import
+survives type-checking, survives the build, and is `undefined` on a home screen.
 
-| | cost | what you get |
-|---|---|---|
-| `Gauge`, `circularCapacity` style | half a day | Apple's dial. No ledge, no ramp, no cap control. Loses the identity the widget exists to carry. |
-| Draw the ring in the app, hand over a PNG | ~2 days + ongoing | Pixel-exact — and regenerated per size and scheme on every meal logged. |
-| `@bacons/apple-targets` and ~150 lines of SwiftUI | ~2–3 days | Full fidelity, and the widget's UI is then Swift. A second implementation to keep in step, which is the complaint `theme.ts` already files about the palette. |
+Which inverts the split, into the one the code already wanted. The arithmetic
+runs in the *app*, where those modules can be reached, and its results — the
+fitted type sizes, the tier decision, every translated string, both palettes —
+are pushed as props by `updateTimeline`. What is left in the extension is
+placement. `layout.ts` had already made that separation for its own reasons
+("the part worth being able to read, check and reproduce is the arithmetic, not
+the tree"); on Android the tree happens to be able to call the arithmetic, and
+here it cannot, and the layer was in the right place for that not to matter. The
+numbers that draw the Android widget draw this one, out of the same functions.
 
-**Do the wide one first.** It is the cheap half, it needs no arc, and it proves
-the whole pipeline — target, App Group, `updateSnapshot`, the shared layout code
-— before anything is spent on the ring. Then pick a ring approach knowing what
-the plumbing actually feels like. Call it a day for the wide one and three to
-four days for both at real fidelity, most of it the ring and the first-time
-Apple plumbing: App Group registration, extension entitlements, and getting
-Baloo into the extension's resources, which the docs do not cover.
+**Data is push-only, so the staleness fix had to be scheduled rather than
+run.** There is no headless draw to intercept: a WidgetKit layout is a pure
+function of props, with no session and no network. The bug `currentDaySnapshot`
+exists to fix — the morning after a day nobody opened the app, last night's
+total under the word "Today" — cannot be fixed here by fetching, because there
+is nobody to do the fetching. So the app sends two entries: the day as it
+stands, and, dated at the instant this account's day turns over (`nextDayStart`,
+which bisects over `localDateFor` rather than adding 24 hours, because one day a
+year is 23 hours long), the same day emptied out. WidgetKit turns the page on
+its own while the app is shut.
+
+Emptied, not blanked, and that is a deliberate departure from `Empty`'s
+reasoning. It refuses "0 of 2,000" for somebody who has never opened the app
+because both numbers are invented. At a day boundary neither is: the target is
+the one last seen and the zero is true, because today is four seconds old. What
+it still cannot see is a meal logged on another device before this phone is next
+opened — the same exposure the Android note has between refreshes.
+
+**Three smaller things the build taught.**
+
+The font needed a config plugin, and it had to be listed in the *wrong* order to
+run in the right one. A widget extension is its own bundle, `expo-font` loads
+Baloo into the app only, and `Font.custom` on an unregistered family returns the
+system face without a word — the same silent fallback `theme.ts` describes on
+Android. `plugins/with-widget-font.js` copies the file into the target, adds a
+`Resources` build phase and writes `UIAppFonts` into the extension's own
+`Info.plist`. It must run after `expo-widgets`, which deletes and rewrites that
+whole directory — and config plugin mods are last-in-first-out, since `withMod`
+runs its own action and *then* calls the mod registered before it. So it is
+listed **before** `expo-widgets` in `app.json`. Listed the intuitive way round
+it does not fail; it finds no target and does nothing.
+
+It also has to declare its own dependencies. A config plugin is not read only by
+`expo prebuild`: `expo-constants` re-evaluates the whole app config from an
+Xcode build phase, with the working directory inside `ios/Pods`, and under
+pnpm's strict layout a package the plugin does not itself depend on will not
+resolve from there. `@expo/plist` was borrowed off `expo-widgets` at first,
+which made prebuild green and the build red — and the message came out of a
+script phase two thousand lines into `xcodebuild` output, not out of the plugin.
+
+Two dependency traps, both of which fail a long way from their cause.
+`@expo/ui` needs `expo-modules-core` 57.0.14 for `ContentOriginRegistry`, which
+means `expo` 57.0.17 or later; on 57.0.15 the extension simply does not compile.
+And `@expo/ui` `require`s `react-native-worklets` as an *optional peer*, which
+under pnpm's strict layout resolved to a second copy alongside Reanimated's —
+two copies of one native module's JS, which is a red screen at launch reading
+`Cannot read property 'code' of undefined` from a module nothing in this app
+imports directly. Declaring `react-native-worklets` in `apps/mobile` collapses
+them to one. Neither error names `@expo/ui`.
+
+The environment carries the family, not a rectangle. There is no
+`GeometryReader` and no size in the dictionary, so unlike Android — where the
+launcher reports the cell it gave us — the sizes are a table, `FAMILY_SIZE`.
+It survives being a few points out on an iPad because the card fills the widget
+and its contents are centred: a wrong nominal size moves the margin around the
+dial and nothing else.
+
+And signing out now repaints. Dropping the note without pushing left the last
+reading sitting on the home screen of a phone that had been signed out of —
+indefinitely on iOS, where nothing re-reads anything, and until the next
+scheduled draw on Android. That was a bug on both platforms and is fixed on
+both.
+
+**Verified as far as it can be without a tap.** `pnpm --filter @ct/mobile
+widget` compiles `Face.tsx` through the real babel config, evaluates the
+resulting string in a context holding exactly the runtime's globals and nothing
+else — an unknown identifier is a `ReferenceError`, which is the whole point —
+and renders every shape against seven days and both schemes, failing on any
+`NaN` that would reach SwiftUI as a silently dropped frame. The arc was checked
+against `ringSvg` by rendering both and overlaying them. The extension compiles
+and the font is in its `Resources` phase.
+
+The data half is verified further than that, on the simulator against a fixture
+server. Both layouts reach the App Group; both timelines carry two entries; the
+second is dated 04:00:26 local, which is this fixture account's `day_start_hour`
+in its own timezone rather than midnight, and carries the emptied day. The
+fitted type is visible in the stored props doing the thing it exists for — 44pt
+for `670` and 34pt for `2,090` inside the same 134pt ring.
+
+What has *not* happened is a widget on a home screen: adding one needs a
+long-press and a tap, and there is no way to tap on the iOS simulator. Per the
+rule this document has now learned three times: believe it when it is on a
+phone.
+
+One known difference to look at when it is. Android sets the figure's line
+height explicitly, because Baloo asks for 1.6em of box to draw 0.6em of ink;
+SwiftUI uses the face's own metrics, and `lineHeight` — the modifier that would
+match it — is iOS 26+, so on anything older it is a no-op. The caption under the
+number should therefore sit roughly ten points lower than it does on Android.
+The fix is a negative stack spacing, and it is deliberately not in yet: guessing
+one against a layout nobody has seen risks the caption landing *on* the figure,
+which is worse than a gap.
+
+**Still open.** A background refresh task, so a phone that is not opened for a
+day gets real numbers rather than a correctly-empty ring; and the lock screen
+(`accessoryCircular`), which is the dial at icon size again but renders
+monochrome in `vibrant` mode and so needs its own treatment rather than this
+one scaled down.
 
 ### A home-screen quick action
 
@@ -611,8 +720,9 @@ notifications after the laptop changed IP, and it never offered the app as a
 share target at all. Neither was a bug in the app, and both cost hours. **Test
 this class of feature on hardware first.**
 
-Left in §4: App Intents, the home-screen quick action, and the iOS half of the
-widget. The Apple Developer account that all of them waited on now exists, so
-none of them is blocked any more — what is left is the work itself, and for the
-widget that work is a second implementation rather than a port, because
-`expo-widgets` is iOS-only and cannot draw an arc.
+Left in §4: App Intents and the home-screen quick action. The Apple Developer
+account both waited on now exists, so neither is blocked — what is left is the
+work itself. The iOS widget is done, and the estimate above it was wrong in both
+directions: the arc it called a wall took an afternoon, and the part it did not
+mention at all — that a widget layout ships as a *string* evaluated against
+nothing but `@expo/ui` globals — is the thing that decided the architecture.

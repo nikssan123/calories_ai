@@ -105,7 +105,7 @@ export function ringLayout({
 
   const figure = fitFontSize({
     text: figureText,
-    face: 'baloo',
+    face: text.face,
     width: inner * 0.9,
     min: 11,
     /* Capped, because proportional alone gives 60pt numerals at the largest
@@ -219,7 +219,7 @@ export function dayLayout({
      * repeats what the bar already says, and a narrow widget would otherwise
      * push it into the figure.
      */
-    const left = displayWidth(figureText, figure, 'baloo') + displayWidth(` ${label}`, wording);
+    const left = displayWidth(figureText, figure, text.face) + displayWidth(` ${label}`, wording);
     const asked = left + displayWidth(ratioText, ratio) + 20;
 
     return {
@@ -256,7 +256,7 @@ export function dayLayout({
     stroke,
     figure: fitFontSize({
       text: figureText,
-      face: 'baloo',
+      face: text.face,
       width: inner * 0.9,
       min: 12,
       max: Math.min(30, Math.round(inner * 0.6)),

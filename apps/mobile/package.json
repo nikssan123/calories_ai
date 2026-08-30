@@ -9,13 +9,16 @@
     "android": "expo run:android",
     "typecheck": "tsc --noEmit",
     "messages": "tsx scripts/catalogue-smoke.mts",
-    "intl": "tsx scripts/intl-hermes.mts"
+    "intl": "tsx scripts/intl-hermes.mts",
+    "widget": "tsx scripts/widget-smoke.mts"
   },
   "dependencies": {
     "@ct/api-client": "workspace:*",
     "@ct/shared": "workspace:*",
     "@expo-google-fonts/baloo-2": "^0.4.2",
     "@expo-google-fonts/nunito": "^0.4.2",
+    "@expo/plist": "^0.8.1",
+    "@expo/ui": "~57.0.14",
     "@formatjs/intl-getcanonicallocales": "^3.2.11",
     "@formatjs/intl-listformat": "^8.3.13",
     "@formatjs/intl-locale": "^5.3.10",
@@ -23,7 +26,7 @@
     "@formatjs/intl-relativetimeformat": "^12.3.13",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "9.1.0",
-    "expo": "~57.0.15",
+    "expo": "~57.0.18",
     "expo-blur": "~57.0.2",
     "expo-camera": "~57.0.4",
     "expo-constants": "~57.0.13",
@@ -44,6 +47,7 @@
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.2",
     "expo-web-browser": "~57.0.2",
+    "expo-widgets": "~57.0.15",
     "react": "19.2.3",
     "react-native": "0.86.2",
     "react-native-android-widget": "^0.22.1",
@@ -52,9 +56,11 @@
     "react-native-reanimated": "4.5.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.2",
-    "react-native-svg": "15.15.4"
+    "react-native-svg": "15.15.4",
+    "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
+    "@babel/core": "^7.29.7",
     "@types/react": "~19.2.2",
     "babel-preset-expo": "~57.0.7",
     "tsx": "^4.19.2"

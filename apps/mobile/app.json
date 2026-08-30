@@ -11,7 +11,9 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.daysofar.app",
-      "associatedDomains": ["applinks:daysofar.com"]
+      "associatedDomains": [
+        "applinks:daysofar.com"
+      ]
     },
     "android": {
       "package": "com.daysofar.app",
@@ -20,10 +22,21 @@
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            { "scheme": "https", "host": "daysofar.com", "pathPrefix": "/progress" },
-            { "scheme": "https", "host": "daysofar.com", "pathPrefix": "/today" }
+            {
+              "scheme": "https",
+              "host": "daysofar.com",
+              "pathPrefix": "/progress"
+            },
+            {
+              "scheme": "https",
+              "host": "daysofar.com",
+              "pathPrefix": "/today"
+            }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ],
       "googleServicesFile": "./google-services.json",
@@ -65,7 +78,9 @@
         {
           "microphonePermission": "Day So Far uses the microphone so you can say what you ate instead of typing it.",
           "speechRecognitionPermission": "Day So Far turns what you say into the sentence it logs. Your phone does the listening.",
-          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
         }
       ],
       [
@@ -92,11 +107,13 @@
       [
         "react-native-android-widget",
         {
-          "fonts": ["./assets/fonts/Baloo2_800ExtraBold.ttf"],
+          "fonts": [
+            "./assets/fonts/Baloo2_800ExtraBold.ttf"
+          ],
           "widgets": [
             {
               "name": "Ring",
-              "label": "Day So Far \u00b7 ring",
+              "label": "Day So Far · ring",
               "description": "Today's ring. Drag it down to the size of an icon, or up to fill the row.",
               "minWidth": "40dp",
               "minHeight": "40dp",
@@ -109,7 +126,7 @@
             },
             {
               "name": "Day",
-              "label": "Day So Far \u00b7 day",
+              "label": "Day So Far · day",
               "description": "The day on one line, with a bar. Drag it taller for the ring.",
               "minWidth": "180dp",
               "minHeight": "40dp",
@@ -119,6 +136,38 @@
               "maxResizeHeight": "180dp",
               "resizeMode": "horizontal|vertical",
               "updatePeriodMillis": 1800000
+            }
+          ]
+        }
+      ],
+      "./plugins/with-widget-font",
+      [
+        "expo-widgets",
+        {
+          "bundleIdentifier": "com.daysofar.app.widgets",
+          "groupIdentifier": "group.com.daysofar.app",
+          "widgets": [
+            {
+              "name": "Ring",
+              "displayName": "Ring",
+              "description": "Today's ring, at the size of an app icon.",
+              "ios": {
+                "supportedFamilies": [
+                  "systemSmall"
+                ],
+                "contentMarginsDisabled": true
+              }
+            },
+            {
+              "name": "Day",
+              "displayName": "Day",
+              "description": "The ring, what it is out of, and what you have burned.",
+              "ios": {
+                "supportedFamilies": [
+                  "systemMedium"
+                ],
+                "contentMarginsDisabled": true
+              }
             }
           ]
         }

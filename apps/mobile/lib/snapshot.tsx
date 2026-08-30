@@ -125,7 +125,21 @@ function deviceTimezone(): string {
  * the normal case, not an error, and the snapshot is still worth writing for
  * whenever they do.
  */
-async function repaintWidget(): Promise<void> {
+async function repaintWidget(locale?: Locale): Promise<void> {
+  /*
+   * iOS is push-only and takes the whole future at once. There is no headless
+   * draw to intercept, so the widget is handed today's numbers *and* the
+   * instant they stop being today's — see `widget/ios/update.ts`.
+   */
+  if (Platform.OS === 'ios') {
+    try {
+      const { pushIosWidgets } = await import('@/widget/ios/update');
+      pushIosWidgets(await readDaySnapshot(), locale);
+    } catch {
+      /* No widget extension in this build, or nothing on a home screen. */
+    }
+    return;
+  }
   if (Platform.OS !== 'android') return;
   try {
     /*
@@ -267,7 +281,18 @@ export async function readDaySnapshot(): Promise<DaySnapshot | null> {
   }
 }
 
-/** Signed out means the numbers are not ours to show any more. */
+/**
+ * Signed out means the numbers are not ours to show any more.
+ *
+ * And that has to reach the home screen, not just the disk. Dropping the note
+ * without repainting leaves somebody else's ring sitting on the home screen of
+ * a phone that has been signed out of — on iOS indefinitely, since nothing over
+ * there ever re-reads anything, and on Android until the next scheduled draw.
+ */
 export async function clearDaySnapshot(): Promise<void> {
+  /* Read before dropping: the empty widget still has two words on it, and the
+   * language they were last read in is a better guess than the handset's. */
+  const locale = (await readDaySnapshot())?.locale;
   await AsyncStorage.removeItem(KEY).catch(() => {});
+  await repaintWidget(locale);
 }

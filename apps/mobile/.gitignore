@@ -1,8 +1,11 @@
 node_modules/
 .expo/
 dist/
-ios/
-android/
+# Anchored. Unanchored these match a directory called `ios` or `android` at any
+# depth, which silently swallowed `widget/ios/` — the iOS widget's source, not
+# a prebuild artefact. Only the two at the package root are generated.
+/ios/
+/android/
 *.log
 
 # @generated expo-cli sync-2b81b286409207a5da26e14c78851eb30d8ccbdb

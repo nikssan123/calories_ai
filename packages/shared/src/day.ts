@@ -54,6 +54,44 @@ export function localDateFor(instant: Date, { timezone, dayStartHour }: DayConte
   return formatInTimeZone(shifted, timezone);
 }
 
+/**
+ * When the day this instant belongs to gives way to the next one.
+ *
+ * Needed because some surfaces have to be told in advance. A phone screen can
+ * ask what day it is every time it draws; an iOS widget cannot — it is handed a
+ * timeline of entries and their dates, and WidgetKit turns the page on its own
+ * while the app is not running. So the app has to say when the page turns, and
+ * the answer is not midnight: this app's day runs from `day_start_hour`, and
+ * the timezone may be one whose clocks move.
+ *
+ * Which is why this searches rather than calculates. Adding 24 hours is wrong
+ * across a DST boundary — one day a year is 23 hours long and another 25 — and
+ * constructing the local wall-clock time of the next boundary means reasoning
+ * about an offset that changes at the very moment being reasoned about. A
+ * bisection over `localDateFor` asks the only question that matters, which is
+ * the same question the rest of the app asks, and cannot disagree with it.
+ *
+ * The window is 48 hours because a day is never longer than that under any
+ * timezone rule, and the bisection settles to the minute in about eleven steps.
+ */
+export function nextDayStart(instant: Date, context: DayContext): Date {
+  const today = localDateFor(instant, context);
+  const MINUTE = 60 * 1000;
+  let low = instant.getTime();
+  let high = low + 48 * 60 * 60 * 1000;
+
+  /* A clock so far adrift that two days have already passed is not something to
+   * guess around; hand back the far edge and let the next draw correct it. */
+  if (localDateFor(new Date(high), context) === today) return new Date(high);
+
+  while (high - low > MINUTE) {
+    const middle = low + Math.floor((high - low) / 2);
+    if (localDateFor(new Date(middle), context) === today) low = middle;
+    else high = middle;
+  }
+  return new Date(high);
+}
+
 /** Wall-clock parts in the user's timezone, for prompting the model. */
 export function localPartsFor(instant: Date, timezone: string) {
   const formatter = new Intl.DateTimeFormat('en-GB', {
