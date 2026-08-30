@@ -204,6 +204,18 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
   const routines = await listRoutines(input.userId).catch(() => []);
 
   /*
+   * What their portions actually are, read once per turn.
+   *
+   * Weight is the whole of this app's calorie error — 1.36x against a density
+   * that measured 1.00x — and their own log is the only place the answer to it
+   * exists. One grouped query over ninety days of items, and it fails soft: a
+   * turn that cannot read them is a turn that estimates the way it always did,
+   * which is worse than this and no worse than yesterday.
+   */
+  const { usualPortions } = await import('../services/portions.ts');
+  const portions = await usualPortions(input.userId, input.ctx, {}, today).catch(() => []);
+
+  /*
    * Portion technique, and only when there is a photograph to apply it to.
    *
    * It goes in the turn rather than in `STABLE_SYSTEM_PROMPT` for the reason
@@ -292,7 +304,7 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
    * prompt that put it in front of the whole transcript, invalidating it; here
    * it is just more conversation, and the prefix in front of it never moves.
    */
-  const promptText = `${photoGuidance}${dayContextPrompt(speaking, day, currentWeight, notes, wellbeing, routines, named)}\n\n---\n\n${scanned}${rollover}${input.text}`;
+  const promptText = `${photoGuidance}${dayContextPrompt(speaking, day, currentWeight, notes, wellbeing, routines, named, portions)}\n\n---\n\n${scanned}${rollover}${input.text}`;
 
   // A turn with an image needs a model that can see; everything else is a text
   // log. There was a third kind here — `setup`, routed to the most capable

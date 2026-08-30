@@ -171,6 +171,32 @@ function toItems(items: FoodItemInput[]) {
   }));
 }
 
+/**
+ * Said out loud when the log did not store the number that was sent.
+ *
+ * `services/energy.ts` raises any item whose calories its own macros rule out,
+ * and it does that underneath every write rather than here, so the model can
+ * send an impossible item and get a possible one back without anything
+ * failing. That is the right behaviour and it is also the kind of silent
+ * correction that ends with the model telling somebody "about 300 kcal" over a
+ * card that says 430.
+ *
+ * So the difference is reported. Not as an error — nothing went wrong, the meal
+ * is logged — but as the one fact the model cannot read off its own arguments.
+ *
+ * Computed by comparing the totals rather than by threading a list of
+ * corrections up through four call sites: the entry that comes back from the
+ * database is already the authority on what was stored, which is the same
+ * reason the cards are built from it.
+ */
+function reconciliationNote(sent: { kcal: number }[], stored: { kcal: number }): string | null {
+  const asked = sent.reduce((total, item) => total + item.kcal, 0);
+  // A tenth of a kcal is the column's precision, so anything at or under 1 is
+  // rounding rather than a correction.
+  if (stored.kcal - asked <= 1) return null;
+  return `Stored at ${Math.round(stored.kcal)} kcal, not the ${Math.round(asked)} you sent: an item's calories were below what its own protein, carbs and fat carry, so they were raised to that floor. Quote the stored figure, not yours. If the macros were the part that was wrong, correct them with update_food_entry.`;
+}
+
 function pickTotals(entry: { kcal: number; protein_g: number; carbs_g: number; fat_g: number }) {
   return {
     kcal: Math.round(entry.kcal),
@@ -448,6 +474,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         card: foodCard(entry, day, tc.units),
       });
 
+      const reconciled = reconciliationNote(args.items, entry);
       return ok({
         entry_id: entry.id,
         // Echoed back on every write. Without it the model cannot tell which day
@@ -456,6 +483,7 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
         local_date: entry.local_date,
         meal: entry.meal,
         logged: pickTotals(entry),
+        ...(reconciled ? { reconciled } : {}),
         day_totals: day.consumed,
         targets: day.targets,
         kcal_remaining: day.targets.kcal - day.consumed.kcal,
@@ -505,9 +533,11 @@ export function buildNutritionServer(tc: ToolContext, options: ServerOptions = {
       });
 
       const movedFrom = before && before.local_date !== entry.local_date ? before.local_date : null;
+      const reconciled = args.items ? reconciliationNote(args.items, entry) : null;
       return ok({
         entry_id: entry.id,
         local_date: entry.local_date,
+        ...(reconciled ? { reconciled } : {}),
         ...(movedFrom
           ? {
               moved_from_date: movedFrom,

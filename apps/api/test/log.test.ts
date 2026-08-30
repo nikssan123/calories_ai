@@ -51,6 +51,49 @@ describe('createFoodEntry', () => {
     expect(entry.items).toHaveLength(2);
   });
 
+  /*
+   * The invariant `services/energy.ts` exists for, tested through the log
+   * rather than through the pure function, because the point of putting it in
+   * this module is that no caller can write around it.
+   */
+  it('raises an item whose calories its own macros rule out', async () => {
+    const entry = await createFoodEntry({
+      userId: user.id,
+      meal: 'dinner',
+      eatenAt: new Date('2026-03-10T18:00:00Z'),
+      description: 'Creamy pasta',
+      confidence: 'medium',
+      source: 'text',
+      // 25g of fat and 40g of carbohydrate is 433 kcal before anything else,
+      // so 300 is not a low estimate — it is an impossible one.
+      items: [
+        { name: 'Creamy pasta', quantity_g: 350, quantity_desc: null, kcal: 300, protein_g: 12, carbs_g: 40, fat_g: 25 },
+      ],
+      ctx: user.ctx,
+    });
+
+    expect(entry.items[0]!.kcal).toBeCloseTo(433, 5);
+    expect(entry.kcal).toBeCloseTo(433, 5);
+  });
+
+  it('leaves calories above the floor alone — macros bound energy from below only', async () => {
+    const entry = await createFoodEntry({
+      userId: user.id,
+      meal: 'dinner',
+      eatenAt: new Date('2026-03-10T18:00:00Z'),
+      description: 'Gin and tonic',
+      confidence: 'medium',
+      source: 'text',
+      // Alcohol is 7 kcal/g and lives in none of the four fields.
+      items: [
+        { name: 'Gin and tonic', quantity_g: 250, quantity_desc: null, kcal: 170, protein_g: 0, carbs_g: 16, fat_g: 0 },
+      ],
+      ctx: user.ctx,
+    });
+
+    expect(entry.kcal).toBeCloseTo(170, 5);
+  });
+
   it('preserves item order', async () => {
     const entry = await createFoodEntry({
       userId: user.id,
@@ -142,6 +185,28 @@ describe('getFoodEntry', () => {
 });
 
 describe('updateFoodEntry', () => {
+  it('holds the same floor a fresh entry is held to', async () => {
+    const entry = await createFoodEntry({
+      userId: user.id,
+      meal: 'lunch',
+      eatenAt: new Date('2026-03-10T11:00:00Z'),
+      description: 'Chicken and rice',
+      confidence: 'medium',
+      source: 'text',
+      items: ITEMS,
+      ctx: user.ctx,
+    });
+
+    const updated = await updateFoodEntry(user.id, entry.id, {
+      items: [
+        { name: 'Peanut butter', quantity_g: 40, quantity_desc: null, kcal: 90, protein_g: 8, carbs_g: 7, fat_g: 25 },
+      ],
+      ctx: user.ctx,
+    });
+
+    expect(updated!.kcal).toBeCloseTo(285, 5);
+  });
+
   it('replaces the item list wholesale rather than appending', async () => {
     const entry = await addMeal(user, { date: '2026-03-10', kcal: 500 });
     const updated = await updateFoodEntry(user.id, entry.id, {

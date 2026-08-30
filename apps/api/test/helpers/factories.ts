@@ -241,7 +241,19 @@ export async function seedAdaptiveWindow(
     await addMeal(user, {
       date,
       kcal,
-      protein_g: 160,
+      /*
+       * Proportionate to the day rather than pinned, because the log now checks
+       * that an item's calories can hold its own macros — see
+       * `services/energy.ts`. A flat 160g of protein is 640 kcal before the
+       * carbohydrate and fat `addMeal` derives from `kcal`, which made a
+       * 1,100 kcal fixture day arithmetically impossible and got its calories
+       * raised on the way in. The under-eating cases below then read as
+       * ordinary days and the floor guard they exist to test never fired.
+       *
+       * Capped at 160 so every fixture at 2,000 kcal and up is the day it
+       * always was, and nothing that was passing has moved.
+       */
+      protein_g: Math.min(160, Math.round(kcal * 0.073)),
       confidence: options.confidence ?? 'high',
       description: `Day ${index} meal`,
     });

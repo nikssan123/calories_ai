@@ -20,6 +20,7 @@ import {
 } from '@ct/shared';
 import type { ScannedProduct } from '../services/barcode.ts';
 import type { AgentNote } from '../services/notes.ts';
+import type { UsualPortion } from '../services/portions.ts';
 import { MIN_TARGET_KCAL } from '../services/targets.ts';
 import type { Wellbeing } from '../services/wellbeing.ts';
 import { localPartsFor } from '../time.ts';
@@ -52,6 +53,12 @@ Ask a question only when the answer would materially change the result — a who
 You are estimating, not measuring, and you should sound like it. Use approximations ("~650 kcal") rather than false precision ("647 kcal"). Round calories to the nearest 10 above 100. Set the confidence field honestly: "high" for packaged food with a known label or a weighed portion, "medium" for a normal described meal, "low" for a photo of an unfamiliar restaurant dish, a photo with nothing in it to judge size against, or a vague description.
 
 Never refuse to log something because you're unsure. A rough number in the log beats an accurate number that never got recorded.
+
+Where the error actually is, measured: your calorie density is good and your portions are not. You read how much is there about a third high, and that is true of a described meal as much as a photographed one. So spend the effort on grams. Getting "how much" right is worth more than any amount of care over what a gram of it costs.
+
+**Their own portions beat your defaults.** The "Where things stand" block lists the foods they log often, with the median weight they have settled on and the density that came with it. When they log one of those without saying how much, use their number — it is what this app arrived at with them, usually after they corrected you once, and a standard portion in its place throws that away. Anything they say in the message outranks it: "a big bowl tonight" is them telling you today is not the median. Nothing in that list is a reason to say a number back at them, and never tell somebody what their usual portion is unless they asked.
+
+The log checks your arithmetic on the way in. An item whose calories are below what its own protein, carbs and fat carry is impossible, so the figure is raised to that floor and the tool tells you it happened. Quote what came back rather than what you sent. If it fires, the macros are usually the part that was wrong — fix them with update_food_entry rather than leaving a corrected total sitting on a set of numbers that produced it.
 
 When you set confidence to "low" on a photo, log it and then ask one short question about size in the same reply — how big the plate or bowl was, or what it would compare to. Log first, ask second, always in that order: they get a number either way, and the question is an offer rather than a gate. One question, about size only. This is the exception to "never open with a question about quantities", and it is narrow on purpose: a low-confidence photo estimate is roughly twice as far out as a medium-confidence one, so here the answer genuinely does change the result.
 
@@ -624,6 +631,14 @@ export function dayContextPrompt(
    * *writing* in.
    */
   language: string | null = null,
+  /**
+   * What this person's portions actually are, from their own log.
+   *
+   * Empty for anybody who has not logged the same food twice, which is every
+   * new account and is exactly right: the block below is worth its tokens only
+   * once there is a history for it to be drawn from.
+   */
+  portions: UsualPortion[] = [],
 ): string {
   const { date, time, weekday } = localPartsFor(new Date(), profile.timezone);
   const remaining = day.targets.kcal - day.consumed.kcal;
@@ -733,6 +748,43 @@ export function dayContextPrompt(
     });
     lines.push(
       `- Their saved workouts: ${names.join(', ')}. When they say they did one, log_routine records it by name.`,
+    );
+  }
+
+  /*
+   * Their own portions, on every turn, for the same money as the workout names
+   * above and for a better reason.
+   *
+   * The photo harness decomposed this app's calorie error and found effectively
+   * all of it in weight rather than in density (1.36x against 1.00x, measured
+   * 2026-08-24 — see PHOTO_ESTIMATION_PROMPT). Density the model already knows.
+   * How much rice *this person* serves themselves it cannot know, and it reads
+   * high, so every meal they log gets re-guessed at a portion they have already
+   * corrected once.
+   *
+   * These lines are the correction, kept. A dozen foods is a couple of hundred
+   * tokens against a systematic overestimate on every logged meal, and unlike a
+   * tool call it cannot be forgotten on the turn it matters.
+   *
+   * The density rides along because the ambiguity it settles is theirs too —
+   * whose milk is skimmed, whose yoghurt is 0% — and it is four tokens.
+   *
+   * Written as what they have settled on rather than as what to log. It is a
+   * prior and the sentence in front of the model outranks it: somebody who says
+   * "a big bowl tonight" has told the model something this block cannot know.
+   */
+  if (portions.length > 0) {
+    lines.push(
+      '',
+      'Their usual portions, from what they have logged before — the median, not the last one:',
+    );
+    for (const portion of portions) {
+      lines.push(
+        `- ${portion.name}: ~${portion.grams} g at ~${portion.kcal_100g} kcal/100g (${portion.times}x)`,
+      );
+    }
+    lines.push(
+      'Use these in place of a standard portion when they log one of these foods without saying how much. What they say in the message beats them; your own default does not.',
     );
   }
 
