@@ -141,6 +141,7 @@
         }
       ],
       "./plugins/with-widget-font",
+      "./plugins/with-androidx-work",
       [
         "expo-widgets",
         {
