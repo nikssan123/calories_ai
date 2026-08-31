@@ -156,7 +156,26 @@ function TabBar({
   if (typing) return null;
 
   return (
-    <Material style={[styles.bar, { borderTopColor: colors.border, paddingBottom: insets.bottom }]}>
+    <Material
+      style={[
+        styles.bar,
+        {
+          borderTopColor: colors.border,
+          /*
+           * The inset *less* the row's own bottom padding, not on top of it.
+           *
+           * Every tab already ends in `styles.tab`'s `paddingBottom`, so adding
+           * the whole safe-area inset double-counts the gap. On Android the
+           * inset is ~0 and that padding is the breathing room, which is why
+           * this read correctly there; on iOS the inset is 34 and the two
+           * together left 42pt of dead space under the labels — visibly looser
+           * than any other tab bar on the phone. Subtracting leaves exactly the
+           * inset, which is what clears the home indicator and nothing more.
+           */
+          paddingBottom: Math.max(insets.bottom - TAB_PADDING_BOTTOM, 0),
+        },
+      ]}
+    >
       <View
         style={styles.row}
         onLayout={(e) => {
@@ -368,10 +387,13 @@ function TabIcon({ name, color, strokeWidth }: { name: (typeof TABS)[number]['ic
 /** `lozengeSlot`'s `maxWidth`: the pill never grows past this on a wide phone. */
 const LOZENGE_MAX_WIDTH = 56;
 
+/** Named because the bar subtracts it from the safe-area inset; see the bar's style. */
+const TAB_PADDING_BOTTOM = 8;
+
 const styles = StyleSheet.create({
   bar: { borderTopWidth: 2 },
   row: { flexDirection: 'row' },
-  tab: { flex: 1, alignItems: 'center', paddingTop: 6, paddingBottom: 8, gap: 2 },
+  tab: { flex: 1, alignItems: 'center', paddingTop: 6, paddingBottom: TAB_PADDING_BOTTOM, gap: 2 },
   lozengeSlot: {
     height: 32,
     width: '100%',
