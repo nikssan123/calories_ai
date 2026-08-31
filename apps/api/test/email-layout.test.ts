@@ -14,6 +14,7 @@ const BASE = {
   preheader: 'The line the inbox shows.',
   heading: 'A heading',
   blocks: [],
+  locale: 'en' as const,
 };
 
 describe('renderEmail', () => {
@@ -125,6 +126,7 @@ describe('renderEmail', () => {
 describe('escaping', () => {
   it('neutralises markup in anything interpolated', () => {
     const email = renderEmail({
+      locale: 'en',
       subject: 'Hi <script>alert(1)</script>',
       preheader: 'x',
       heading: '<b>Bold</b>',

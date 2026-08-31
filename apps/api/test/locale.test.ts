@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { NudgeStats, Profile, ReviewStats } from '@ct/shared';
+import type { Locale, NudgeStats, Profile, ReviewStats } from '@ct/shared';
 import {
   LOCALES,
   LOCALE_ENGLISH_NAMES,
@@ -13,6 +13,7 @@ import {
 } from '@ct/shared';
 import { languageBrief, nudgeTaskPrompt, reviewTaskPrompt } from '../src/ai/prompt.ts';
 import { emailMessages } from '../src/email/messages.ts';
+import * as templates from '../src/email/templates.ts';
 
 /**
  * The claims LANGUAGES.md phase 1 makes, one test each.
@@ -285,5 +286,157 @@ describe('the email catalogues', () => {
     for (const locale of LOCALES) {
       expect(emailMessages(locale)['review.weekdays']).toHaveLength(7);
     }
+  });
+});
+
+/** Enough of a week for the review template to render one. */
+const REVIEW_STATS: ReviewStats = {
+  week_start: '2026-08-10',
+  week_end: '2026-08-16',
+  days_logged: 6,
+  mean_kcal: 2143.4,
+  mean_protein_g: 152,
+  target_kcal: 2200,
+  target_protein_g: 160,
+  days_on_target: 4,
+  days_protein_hit: 3,
+  days: [
+    { local_date: '2026-08-10', kcal: 2180, protein_g: 155 },
+    { local_date: '2026-08-11', kcal: 2240, protein_g: 160 },
+  ],
+  previous_mean_kcal: 2300,
+  previous_days_logged: 5,
+  weight_start_kg: 84.2,
+  weight_end_kg: 83.6,
+  weight_change_kg: -0.6,
+  exercise_sessions: 2,
+  exercise_kcal: 610,
+  top_foods: [],
+  highest_day: null,
+  lowest_day: null,
+  adaptive: null,
+};
+
+describe('the transactional mail', () => {
+  /**
+   * One of each, rendered for one reader.
+   *
+   * Every message this server sends that no model wrote — the weekly review has
+   * its own tests above, and its prose arrives already in the right language.
+   * These are the ones that used to be English whatever the profile said.
+   */
+  const render = (locale: Locale) => [
+    templates.verifyEmail({
+      name: 'Nik',
+      url: 'https://example.test/verify?token=t',
+      code: '481920',
+      locale,
+    }),
+    templates.passwordReset({
+      name: 'Nik',
+      url: 'https://example.test/reset?token=t',
+      expiresInMinutes: 30,
+      locale,
+    }),
+    templates.passwordChanged({ name: 'Nik', when: 'Thursday 20 August at 14:32', locale }),
+    templates.newSignIn({
+      name: 'Nik',
+      when: 'Thursday 20 August at 14:32',
+      device: 'Safari on iPhone',
+      ip: '203.0.113.4',
+      locale,
+    }),
+    templates.accountDeleted({
+      name: 'Nik',
+      counts: { food_entries: 412, chat_messages: 1, photos: 0 },
+      locale,
+    }),
+    templates.accountSuspended({ name: 'Nik', locale }),
+    templates.accountRestored({ name: 'Nik', appUrl: 'https://example.test', locale }),
+    templates.nudge({
+      name: 'Nik',
+      content: 'Твоят дневник е празен от два дни.',
+      appUrl: 'https://example.test',
+      unsubscribeUrl: 'https://example.test/unsubscribe',
+      locale,
+    }),
+  ];
+
+  it('says something different in every language', () => {
+    const english = render('en');
+
+    for (const locale of LOCALES.filter((one) => one !== 'en')) {
+      render(locale).forEach((message, index) => {
+        const source = english[index]!;
+        // A nudge's subject is the model's own first sentence, so it is the one
+        // that is meant to match across locales. Everything else is catalogue.
+        if (message.template !== 'nudge') {
+          expect(`${locale} ${message.template}: ${message.subject}`).not.toBe(
+            `${locale} ${message.template}: ${source.subject}`,
+          );
+        }
+        expect(message.text).not.toBe(source.text);
+      });
+    }
+  });
+
+  it('translates the chrome the layout draws, not just the templates', () => {
+    for (const locale of LOCALES.filter((one) => one !== 'en')) {
+      for (const message of render(locale)) {
+        // The footer, and the line under every button. Both are written by
+        // `layout.ts`, which no template can see into — which is exactly why
+        // they were the last two English sentences left in a Bulgarian email.
+        expect(message.text).not.toContain('the calorie journal you talk to');
+        expect(message.html).not.toContain('Or paste this into your browser');
+        expect(message.html).not.toContain('Turn off weekly emails');
+      }
+    }
+  });
+
+  it('ends a security email with the sign-off in the right language', () => {
+    const sentinel = 'If this was not you, change your password';
+    expect(templates.passwordChanged({ name: null, when: 'x', locale: 'en' }).text).toContain(
+      sentinel,
+    );
+    for (const locale of LOCALES.filter((one) => one !== 'en')) {
+      expect(templates.passwordChanged({ name: null, when: 'x', locale }).text).not.toContain(
+        sentinel,
+      );
+    }
+  });
+
+  it('declares the language on the document, so a screen reader picks a voice', () => {
+    expect(templates.accountSuspended({ name: null, locale: 'bg' }).html).toContain(
+      '<html lang="bg">',
+    );
+    // `intlLocale` maps English to en-GB — the dialect the copy is written in.
+    expect(templates.accountSuspended({ name: null, locale: 'en' }).html).toContain(
+      '<html lang="en-GB">',
+    );
+  });
+
+  it('separates thousands the way the reader’s language does', () => {
+    const kcal = (locale: Locale) =>
+      templates.weeklyReview({
+        name: null,
+        content: 'x',
+        stats: { ...REVIEW_STATS, mean_kcal: 2320 },
+        range: '10–16 August',
+        appUrl: 'https://example.test',
+        unsubscribeUrl: 'https://example.test/u',
+        units: 'metric',
+        locale,
+      }).text;
+
+    expect(kcal('en')).toContain('2,320 kcal');
+    // A comma is a decimal point in German, so "2,320 kcal" reads as two and a
+    // bit — the one formatting mistake in this file that changes a number.
+    expect(kcal('de')).toContain('2.320 kcal');
+    // French's separator is U+202F, a narrow no-break space — not the space a
+    // regex written with the space bar would match.
+    expect(kcal('fr')).toContain('2\u202f320 kcal');
+    // Bulgarian and Spanish group four figures not at all, which is also an
+    // answer and not a fallback to something unformatted.
+    expect(kcal('bg')).toContain('2320 kcal');
   });
 });

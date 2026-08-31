@@ -8,6 +8,7 @@ import {
   DefineExerciseRequest,
   ExerciseCategory,
   LogFoodRequest,
+  localeOf,
   Meal,
   METERS,
   PhotoUploadRequest,
@@ -1219,8 +1220,13 @@ export async function registerRoutes(app: FastifyInstance) {
 
     // Read before the row is destroyed, because the confirmation goes to an
     // address that is about to stop existing as far as this database is
-    // concerned.
-    const recipient = { email: profile.email, name: profile.display_name };
+    // concerned — and has to be written in a language that stops existing with
+    // it.
+    const recipient = {
+      email: profile.email,
+      name: profile.display_name,
+      locale: localeOf(profile),
+    };
 
     const summary = await deleteAccount(userId);
     if (!summary) return reply.status(404).send({ error: 'Account not found' });
@@ -1240,6 +1246,7 @@ export async function registerRoutes(app: FastifyInstance) {
         // Counts, not paths — for the same reason the response below carries
         // counts: the server's own disk layout is nobody else's business.
         counts: { ...summary, photos: summary.photos.length },
+        locale: recipient.locale,
       },
       request.log,
     );

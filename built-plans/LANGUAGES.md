@@ -263,13 +263,10 @@ would move the package size meaningfully.
 
 ## What is not done
 
-*Updated 2026-08-25, after the string pass finished. What follows is what is
-still English; everything the earlier draft listed as "not yet" is done.*
+*Updated 2026-08-31, after the transactional mail went through. What follows is
+what is still English; everything the earlier drafts listed as "not yet" is
+done.*
 
-- **The transactional mail.** Confirm, reset, password-changed, new-sign-in and
-  deleted are ~800 words still in English in `email/templates.ts` and
-  `email/layout.ts`, and are what `pluralEn()` still serves. The weekly review
-  is translated; these are not.
 - **The landing page**, on purpose. It is ~1,000 words of the most carefully
   written copy in the repo, it is rewritten often, and localising it needs the
   `[locale]` routing this deliberately avoided plus `hreflang`, `sitemap.ts` and
@@ -282,6 +279,52 @@ still English; everything the earlier draft listed as "not yet" is done.*
   for, and a screen that renames the thing the receipt names is a support
   ticket. `TIER_PITCHES` beside them *is* translated, because that is a
   sentence about the tier rather than its name.
+
+## The mail, finished
+
+*2026-08-31.* The weekly review had been translated since the string pass and
+everything else the server sends had not, which is the worst of the three
+possible states: a Bulgarian account got Bulgarian prose on Monday and an
+English "Confirm your email" on the day it signed up.
+
+Six things had to move, and only the first was the copy:
+
+- **`email/messages.ts` gained the other forty-odd keys** — verify, reset,
+  password-changed, new-sign-in, deleted, suspended, restored, and the nudge's
+  two words of chrome. Same shape as before: English is the contract, every
+  other catalogue is typed `EmailMessages`, and a key added to one and forgotten
+  in another fails `pnpm -r typecheck`.
+- **`layout.ts` stopped writing sentences.** It had four left — the footer
+  tagline, "Don't want these?", "Turn off weekly emails", and "Or paste this
+  into your browser" under every button — plus `(on target)` in the week strip's
+  plain-text alternative. No template could see them, which is exactly why they
+  were the last English in an otherwise Bulgarian message. `EmailContent` now
+  carries a required `locale`, which is also what `<html lang>` gets.
+- **Every template takes a locale**, and `greeting()` no longer defaults its
+  catalogue to English. The default was how a translated template opened in the
+  wrong language.
+- **`formatWhen` and `formatRange` stopped being `en-GB`.** CLDR supplies the
+  join word for four of the five — "в", "um", "à" — so only English needs its
+  "at" inserted by hand. Spanish needs a "de" inside a date range that no other
+  language wants, so the range's day-and-month is a catalogue entry too.
+- **Numbers are grouped by the reader's language.** `round()` was
+  `toLocaleString('en-GB')`, which prints 2,320 — a number that reads as two and
+  a bit in German. This is the only formatting bug in the set that changes a
+  value rather than a register.
+- **`pluralEn()` is gone.** It was correct only for the templates that were
+  still English, and there are none.
+
+The one thing that needed a decision rather than a translation: **nothing
+addressed to the reader may be gendered.** The server knows a display name and
+nothing else, so "Welcome", "you have been signed out" and "if it was you" had
+to be written in Bulgarian, Spanish and French as sentences that do not inflect
+for the reader. That is why the Bulgarian confirmation says "Радваме се, че си
+тук" rather than "Добре дошъл", and it is a rule the next language inherits.
+
+The receipt for a deletion is the awkward one, and stays awkward: it is written
+after the row it would read a locale off is gone, so both callers read the
+locale beside the address, before the delete. `AdminUser` carries `locale` for
+exactly that.
 
 ## What the string pass actually took
 

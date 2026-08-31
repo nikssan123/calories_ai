@@ -697,6 +697,12 @@ export interface AdminUser {
   email: string | null;
   display_name: string | null;
   timezone: string;
+  /**
+   * Here for the deletion receipt, which is written after the row it would
+   * otherwise be read from is gone. Null is a real answer — an account that has
+   * never said which language it reads — and `localeOf` resolves it.
+   */
+  locale: string | null;
   is_setup_complete: boolean;
   disabled_at: string | null;
   created_at: string;
@@ -710,7 +716,7 @@ export interface AdminUser {
 
 export async function listUsers(limit = 100): Promise<AdminUser[]> {
   const rows = await query<any>(
-    `SELECT u.id, u.email, u.display_name, u.timezone, u.is_setup_complete,
+    `SELECT u.id, u.email, u.display_name, u.timezone, u.locale, u.is_setup_complete,
             u.disabled_at, u.created_at,
             (SELECT max(last_seen_at) FROM auth_sessions s WHERE s.user_id = u.id) AS last_seen_at,
             (SELECT count(*) FROM food_entries f WHERE f.user_id = u.id)::int      AS food_entries,
@@ -729,7 +735,7 @@ export async function listUsers(limit = 100): Promise<AdminUser[]> {
 
 export async function getAdminUser(userId: string): Promise<AdminUser | null> {
   const rows = await query<any>(
-    `SELECT u.id, u.email, u.display_name, u.timezone, u.is_setup_complete,
+    `SELECT u.id, u.email, u.display_name, u.timezone, u.locale, u.is_setup_complete,
             u.disabled_at, u.created_at,
             (SELECT max(last_seen_at) FROM auth_sessions s WHERE s.user_id = u.id) AS last_seen_at,
             (SELECT count(*) FROM food_entries f WHERE f.user_id = u.id)::int      AS food_entries,
@@ -750,6 +756,7 @@ function toAdminUser(row: any): AdminUser {
     email: row.email,
     display_name: row.display_name,
     timezone: row.timezone,
+    locale: row.locale ?? null,
     is_setup_complete: row.is_setup_complete,
     disabled_at: row.disabled_at ? new Date(row.disabled_at).toISOString() : null,
     created_at: new Date(row.created_at).toISOString(),

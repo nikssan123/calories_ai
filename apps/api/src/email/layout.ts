@@ -1,3 +1,6 @@
+import { intlLocale, type Locale } from '@ct/shared';
+import { emailMessages, type EmailMessages } from './messages.ts';
+
 /**
  * The house style for everything this server sends.
  *
@@ -21,6 +24,11 @@
  * - Nothing is loaded from the network. No images, no fonts, no tracking pixel:
  *   the mark is drawn with a border-radius and a letter, so the message looks
  *   the same with remote content blocked, which is how most people read it.
+ * - Every word this module draws by itself — the footer, the line under a
+ *   button — comes out of `messages.ts` rather than out of a template literal
+ *   here. There are exactly four of them and they are the only ones a template
+ *   above cannot see, so they are also the easiest to leave in English by
+ *   accident, which is what happened until 2026-08-31.
  */
 
 /** Warm paper and ink, matching the app's own light theme. */
@@ -107,6 +115,16 @@ export interface EmailContent {
   blocks: Block[];
   /** Present only on mail someone is allowed to stop receiving. */
   unsubscribeUrl?: string;
+  /**
+   * The reader's language, for the chrome this module draws and for `lang`.
+   *
+   * Required rather than defaulted to English, because a default is what a
+   * caller forgets: every template already knows the locale it was handed, and
+   * the compiler asking for it is what stops the next one being written without
+   * it. `lang` is not decoration either — it is what a screen reader picks a
+   * voice from and what a client's translate prompt reads.
+   */
+  locale: Locale;
 }
 
 export interface RenderedEmail {
@@ -126,10 +144,11 @@ export function renderEmail(content: EmailContent): RenderedEmail {
 // ---- HTML ------------------------------------------------------------------
 
 function renderHtml(content: EmailContent): string {
-  const blocks = content.blocks.map(htmlBlock).join('\n');
+  const m = emailMessages(content.locale);
+  const blocks = content.blocks.map((block) => htmlBlock(block, m)).join('\n');
 
   return `<!doctype html>
-<html lang="en">
+<html lang="${escapeHtml(intlLocale(content.locale))}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -210,7 +229,7 @@ ${blocks}
         </tr>
         <tr>
           <td class="ct-pad" style="padding:24px 8px 0;">
-            ${footerHtml(content.unsubscribeUrl)}
+            ${footerHtml(m, content.unsubscribeUrl)}
           </td>
         </tr>
       </table>
@@ -236,7 +255,7 @@ function wordmark(): string {
 </tr></table>`;
 }
 
-function htmlBlock(block: Block): string {
+function htmlBlock(block: Block, m: EmailMessages): string {
   switch (block.kind) {
     case 'text':
       return para(escapeHtml(block.text));
@@ -253,7 +272,7 @@ function htmlBlock(block: Block): string {
     <a href="${escapeAttr(block.url)}" style="display:inline-block;padding:13px 26px;font-family:${FONT};font-size:15px;font-weight:600;color:${PALETTE.accentInk};text-decoration:none;">${escapeHtml(block.label)}</a>
   </td></tr>
 </table>
-<p class="ct-muted" style="margin:0 0 20px;font-family:${FONT};font-size:12px;line-height:1.6;color:${PALETTE.muted};word-break:break-all;">Or paste this into your browser:<br><span class="ct-muted" style="color:${PALETTE.muted};">${escapeHtml(block.url)}</span></p>`;
+<p class="ct-muted" style="margin:0 0 20px;font-family:${FONT};font-size:12px;line-height:1.6;color:${PALETTE.muted};word-break:break-all;">${escapeHtml(m['layout.pasteLink'])}<br><span class="ct-muted" style="color:${PALETTE.muted};">${escapeHtml(block.url)}</span></p>`;
 
     case 'facts':
       return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 20px;">
@@ -375,19 +394,20 @@ function para(inner: string, margin = 'margin:0 0 16px;'): string {
   return `<p class="ct-ink" style="${margin}font-family:${FONT};font-size:15px;line-height:1.65;color:${PALETTE.ink};">${inner}</p>`;
 }
 
-function footerHtml(unsubscribeUrl?: string): string {
+function footerHtml(m: EmailMessages, unsubscribeUrl?: string): string {
   const unsubscribe = unsubscribeUrl
-    ? `<br>Don't want these? <a href="${escapeAttr(unsubscribeUrl)}" class="ct-muted" style="color:${PALETTE.muted};text-decoration:underline;">Turn off weekly emails</a>.`
+    ? `<br>${escapeHtml(m['layout.unsubscribePrompt'])} <a href="${escapeAttr(unsubscribeUrl)}" class="ct-muted" style="color:${PALETTE.muted};text-decoration:underline;">${escapeHtml(m['layout.unsubscribeAction'])}</a>.`
     : '';
 
   return `<p class="ct-muted" style="margin:0;font-family:${FONT};font-size:12px;line-height:1.7;color:${PALETTE.muted};">
-Day So Far — the calorie journal you talk to.${unsubscribe}
+${escapeHtml(m['layout.tagline'])}${unsubscribe}
 </p>`;
 }
 
 // ---- Plain text ------------------------------------------------------------
 
 function renderText(content: EmailContent): string {
+  const m = emailMessages(content.locale);
   const parts = [content.heading, ...(content.subheading ? [content.subheading] : []), ''];
 
   for (const block of content.blocks) {
@@ -421,7 +441,7 @@ function renderText(content: EmailContent): string {
         parts.push(
           ...block.days.map(
             (day) =>
-              `  ${day.label.padEnd(4)}${day.value ?? '—'}${day.tone === 'hit' ? '  (on target)' : ''}`,
+              `  ${day.label.padEnd(4)}${day.value ?? '—'}${day.tone === 'hit' ? `  (${m['layout.onTarget']})` : ''}`,
           ),
         );
         if (block.caption) parts.push(block.caption);
@@ -454,9 +474,9 @@ function renderText(content: EmailContent): string {
     }
   }
 
-  parts.push('—', 'Day So Far — the calorie journal you talk to.');
+  parts.push('—', m['layout.tagline']);
   if (content.unsubscribeUrl) {
-    parts.push(`Turn off weekly emails: ${content.unsubscribeUrl}`);
+    parts.push(`${m['layout.unsubscribeAction']}: ${content.unsubscribeUrl}`);
   }
 
   return `${parts.join('\n').replace(/\n{3,}/g, '\n\n').trim()}\n`;

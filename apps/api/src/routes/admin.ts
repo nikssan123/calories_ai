@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { localeOf } from '@ct/shared';
 import { generateWeeklyReview } from '../ai/review.ts';
 import {
   sendAccountDeletedEmail,
@@ -252,6 +253,9 @@ export async function registerAdminRoutes(app: FastifyInstance) {
           email: user.email!,
           name: user.display_name,
           counts: { ...summary, photos: summary.photos.length },
+          // The owner's language, not the operator's. Read off `user`, which
+          // was fetched before the deletion.
+          locale: localeOf(user),
         },
         request.log,
       );

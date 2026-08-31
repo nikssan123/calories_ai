@@ -194,6 +194,7 @@ describe('account notices', () => {
       email: 'gone@example.test',
       name: 'Nik',
       counts: { food_entries: 412, chat_messages: 1, photos: 0 },
+      locale: 'en',
     });
 
     const message = lastEmail()!;
@@ -411,22 +412,42 @@ describe('formatWhen', () => {
   it('renders the reader’s own wall clock, with the zone named', () => {
     const at = new Date('2026-08-20T11:32:00Z');
 
-    expect(formatWhen(at, 'Europe/Sofia')).toContain('14:32');
-    expect(formatWhen(at, 'UTC')).toContain('11:32');
-    expect(formatWhen(at, 'America/New_York')).toContain('07:32');
+    expect(formatWhen(at, 'Europe/Sofia', 'en')).toContain('14:32');
+    expect(formatWhen(at, 'UTC', 'en')).toContain('11:32');
+    expect(formatWhen(at, 'America/New_York', 'en')).toContain('07:32');
     // The weekday and the zone are what make the time judgeable.
-    expect(formatWhen(at, 'UTC')).toContain('Thursday');
-    expect(formatWhen(at, 'UTC')).toMatch(/UTC|GMT/);
-    expect(formatWhen(at, 'UTC')).toContain(' at ');
+    expect(formatWhen(at, 'UTC', 'en')).toContain('Thursday');
+    expect(formatWhen(at, 'UTC', 'en')).toMatch(/UTC|GMT/);
+    expect(formatWhen(at, 'UTC', 'en')).toContain(' at ');
+  });
+
+  it('names the weekday in the reader’s language, and keeps its own join', () => {
+    const at = new Date('2026-08-20T11:32:00Z');
+
+    expect(formatWhen(at, 'UTC', 'bg')).toContain('четвъртък');
+    expect(formatWhen(at, 'UTC', 'de')).toContain('Donnerstag');
+    // English's "at" is inserted here; every other language keeps whatever
+    // separator its own formatter chose, rather than a word invented for it.
+    expect(formatWhen(at, 'UTC', 'de')).not.toContain(' at ');
+    // Still the same instant, whatever language is naming it.
+    expect(formatWhen(at, 'Europe/Sofia', 'fr')).toContain('14:32');
   });
 });
 
 describe('formatRange', () => {
   it('names the month once when the week does not cross one', () => {
-    expect(formatRange('2026-08-10', '2026-08-16')).toBe('10–16 August');
+    expect(formatRange('2026-08-10', '2026-08-16', 'en')).toBe('10–16 August');
   });
 
   it('names both when it does', () => {
-    expect(formatRange('2026-07-28', '2026-08-03')).toBe('28 July – 3 August');
+    expect(formatRange('2026-07-28', '2026-08-03', 'en')).toBe('28 July – 3 August');
+  });
+
+  it('names the month in the reader’s language', () => {
+    expect(formatRange('2026-08-10', '2026-08-16', 'bg')).toBe('10–16 август');
+    expect(formatRange('2026-07-28', '2026-08-03', 'de')).toBe('28 Juli – 3 August');
+    // Spanish is the one that needs a word between the two, on both halves.
+    expect(formatRange('2026-08-10', '2026-08-16', 'es')).toBe('10–16 de agosto');
+    expect(formatRange('2026-07-28', '2026-08-03', 'es')).toBe('28 de julio – 3 de agosto');
   });
 });

@@ -1,8 +1,9 @@
 import type { FastifyBaseLogger } from 'fastify';
-import type { Nudge, WeeklyReview } from '@ct/shared';
+import { intlLocale, type Locale, type Nudge, type WeeklyReview } from '@ct/shared';
 import { env } from '../env.ts';
 import { issueToken, issueVerification, TOKEN_TTL_MINUTES } from '../services/tokens.ts';
 import { findRecipientByEmail, getEmailRecipient } from '../services/user.ts';
+import { emailMessages } from './messages.ts';
 import { sendEmail, type SendResult } from './send.ts';
 import * as templates from './templates.ts';
 import { unsubscribeHeaders, unsubscribeLink } from './unsubscribe.ts';
@@ -23,6 +24,11 @@ import { unsubscribeHeaders, unsubscribeLink } from './unsubscribe.ts';
  * Every function here answers rather than throws, and every caller is free to
  * ignore the answer. A notification is the least important thing happening in
  * any request that triggers one.
+ *
+ * It is also the layer that knows which language to write in. `getEmailRecipient`
+ * has carried `locale` since the weekly review was translated; every template
+ * now takes it, so every call here passes it, and the two functions at the
+ * bottom format their dates in it as well.
  */
 
 const SKIPPED = (reason: string): SendResult => ({ status: 'skipped', reason });
@@ -53,6 +59,7 @@ export async function sendVerificationEmail(
       name: recipient.displayName,
       url: `${env.appUrl}/verify?token=${encodeURIComponent(token)}`,
       code,
+      locale: recipient.locale,
     }),
   });
 }
@@ -85,6 +92,7 @@ export async function sendPasswordResetEmail(
       name: recipient.displayName,
       url: `${env.appUrl}/reset?token=${encodeURIComponent(token)}`,
       expiresInMinutes: TOKEN_TTL_MINUTES.password_reset,
+      locale: recipient.locale,
     }),
   });
 }
@@ -103,7 +111,8 @@ export async function sendPasswordChangedEmail(
     logger,
     message: templates.passwordChanged({
       name: recipient.displayName,
-      when: formatWhen(at, recipient.timezone),
+      when: formatWhen(at, recipient.timezone, recipient.locale),
+      locale: recipient.locale,
     }),
   });
 }
@@ -124,9 +133,10 @@ export async function sendNewSignInEmail(
     logger,
     message: templates.newSignIn({
       name: recipient.displayName,
-      when: formatWhen(sighting.at, recipient.timezone),
+      when: formatWhen(sighting.at, recipient.timezone, recipient.locale),
       device: sighting.device,
       ip: sighting.ip,
+      locale: recipient.locale,
     }),
   });
 }
@@ -150,6 +160,12 @@ export async function sendAccountDeletedEmail(
     email: string;
     name: string | null;
     counts: { food_entries: number; chat_messages: number; photos: number };
+    /**
+     * Passed in for the same reason everything else is: there is no row left to
+     * read it off by the time this runs. Both callers read it before the
+     * deletion, beside the address.
+     */
+    locale: Locale;
   },
   logger?: FastifyBaseLogger,
 ): Promise<SendResult> {
@@ -158,7 +174,11 @@ export async function sendAccountDeletedEmail(
     userId: null,
     redactRecipient: true,
     logger,
-    message: templates.accountDeleted({ name: input.name, counts: input.counts }),
+    message: templates.accountDeleted({
+      name: input.name,
+      counts: input.counts,
+      locale: input.locale,
+    }),
   });
 }
 
@@ -176,8 +196,12 @@ export async function sendAccountStatusEmail(
     userId,
     logger,
     message: disabled
-      ? templates.accountSuspended({ name: recipient.displayName })
-      : templates.accountRestored({ name: recipient.displayName, appUrl: env.appUrl }),
+      ? templates.accountSuspended({ name: recipient.displayName, locale: recipient.locale })
+      : templates.accountRestored({
+          name: recipient.displayName,
+          appUrl: env.appUrl,
+          locale: recipient.locale,
+        }),
   });
 }
 
@@ -212,7 +236,7 @@ export async function sendWeeklyReviewEmail(
       name: recipient.displayName,
       content: review.content,
       stats: review.stats,
-      range: formatRange(review.week_start, review.week_end),
+      range: formatRange(review.week_start, review.week_end, recipient.locale),
       appUrl: env.appUrl,
       unsubscribeUrl: link.url,
       units: recipient.units,
@@ -258,6 +282,7 @@ export async function sendNudgeEmail(
       content: nudge.content,
       appUrl: env.appUrl,
       unsubscribeUrl: link.url,
+      locale: recipient.locale,
     }),
   });
 }
@@ -265,14 +290,22 @@ export async function sendNudgeEmail(
 // ---- Formatting ------------------------------------------------------------
 
 /**
- * An instant, in the reader's own timezone and with the zone named.
+ * An instant, in the reader's own timezone, in their own language, with the
+ * zone named.
  *
  * The zone is not decoration. The single most useful thing a security email can
  * say is *when*, and "14:32" means nothing to someone deciding whether that was
  * them — they need to know whether it is their afternoon or somebody else's.
+ *
+ * The English join word is the one thing here that is not `Intl`'s to give: a
+ * date-time skeleton renders "Thursday 20 August, 14:32", and the comma reads
+ * as a list rather than a clause. So English gets its "at" and every other
+ * language keeps the separator its own formatter chose, which is the right
+ * answer in all five — inventing a join word for a language is exactly the
+ * kind of thing that produces a sentence no native speaker would write.
  */
-export function formatWhen(at: Date, timezone: string): string {
-  const formatter = new Intl.DateTimeFormat('en-GB', {
+export function formatWhen(at: Date, timezone: string, locale: Locale): string {
+  const formatter = new Intl.DateTimeFormat(intlLocale(locale), {
     timeZone: timezone,
     weekday: 'long',
     day: 'numeric',
@@ -282,20 +315,29 @@ export function formatWhen(at: Date, timezone: string): string {
     timeZoneName: 'short',
     hour12: false,
   });
-  // en-GB renders this as "Thursday 20 August at 14:32 GMT+3"; the comma before
-  // the time reads as a list rather than a clause.
-  return formatter.format(at).replace(/,\s*(\d{2}:\d{2})/, ' at $1');
+  const formatted = formatter.format(at);
+  return locale === 'en' ? formatted.replace(/,\s*(\d{2}:\d{2})/, ' at $1') : formatted;
 }
 
-/** "11–17 August" where the month is shared, "28 July – 3 August" where it is not. */
-export function formatRange(startDate: string, endDate: string): string {
+/**
+ * "11–17 August" where the month is shared, "28 July – 3 August" where it is
+ * not — and the month named in the reader's language.
+ *
+ * Assembled here rather than by `formatRange` in `shared/locale.ts` because
+ * this is the review's subject line and its subheading, where the year is
+ * noise and the shared month is said once. `Intl.DateTimeFormat.formatRange`
+ * would do the eliding itself, but it also brings the year back and puts the
+ * separator wherever CLDR wants it, which is not the same shape.
+ */
+export function formatRange(startDate: string, endDate: string, locale: Locale): string {
+  const m = emailMessages(locale);
   const start = new Date(`${startDate}T12:00:00Z`);
   const end = new Date(`${endDate}T12:00:00Z`);
   const day = (date: Date) => String(date.getUTCDate());
   const month = (date: Date) =>
-    new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: 'UTC' }).format(date);
+    new Intl.DateTimeFormat(intlLocale(locale), { month: 'long', timeZone: 'UTC' }).format(date);
 
   return start.getUTCMonth() === end.getUTCMonth()
-    ? `${day(start)}–${day(end)} ${month(end)}`
-    : `${day(start)} ${month(start)} – ${day(end)} ${month(end)}`;
+    ? m['review.dayMonth'](`${day(start)}–${day(end)}`, month(end))
+    : `${m['review.dayMonth'](day(start), month(start))} – ${m['review.dayMonth'](day(end), month(end))}`;
 }
