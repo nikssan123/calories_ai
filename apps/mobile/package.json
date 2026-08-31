@@ -8,6 +8,8 @@
     "ios": "expo run:ios",
     "android": "expo run:android",
     "typecheck": "tsc --noEmit",
+    "build:ios": "bash scripts/build-ios.sh",
+    "build:ios:sim": "bash scripts/build-ios.sh --sim",
     "messages": "tsx scripts/catalogue-smoke.mts",
     "intl": "tsx scripts/intl-hermes.mts",
     "widget": "tsx scripts/widget-smoke.mts"
