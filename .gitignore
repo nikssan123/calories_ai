@@ -37,3 +37,13 @@ apps/mobile/play-service-account.json
 *-firebase-adminsdk-*.json
 GoogleService-Info.plist
 apps/mobile/GoogleService-Info.plist
+
+# The APNs signing key, in every place a browser or a hurried `mv` can drop it.
+#
+# Downloadable exactly once: Apple removes its own copy as the download starts,
+# so a `.p8` that reaches a commit cannot be rotated by fetching a fresh one —
+# the key has to be revoked and every consumer repointed at a new key id. Apple
+# fixes the name as `AuthKey_<KEYID>.p8`, which is what makes the broad glob
+# safe to write: nothing else in this repo is a `.p8`.
+AuthKey_*.p8
+*.p8

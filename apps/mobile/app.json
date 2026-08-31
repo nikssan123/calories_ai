@@ -9,6 +9,9 @@
     "backgroundColor": "#fff6ec",
     "ios": {
       "supportsTablet": true,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      },
       "bundleIdentifier": "com.daysofar.app",
       "associatedDomains": [
         "applinks:daysofar.com"
