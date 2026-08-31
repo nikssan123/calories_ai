@@ -18,6 +18,12 @@ import { EmailDeliveryError, type OutboundEmail, transport } from './transport.t
  * the first question asked when someone cannot get in. `email_deliveries`
  * answers it, and its unique key on `idempotency_key` is what stops the hourly
  * review tick sending Monday's email seven times.
+ *
+ * That key used to stop rather more than that. A row is claimed *before* the
+ * request, so a failed send left a claimed key behind and every later attempt
+ * was answered "already sent" — which is the right answer for a duplicate and
+ * exactly the wrong one for a message that never went. See
+ * `MAX_DELIVERY_ATTEMPTS` and `claimDelivery`.
  */
 
 export type SendStatus = 'sent' | 'logged' | 'failed' | 'skipped';
@@ -52,8 +58,59 @@ export interface SendOptions {
    */
   redactRecipient?: boolean;
   headers?: Record<string, string>;
+  /**
+   * Marks this as one of many rather than one somebody is waiting for.
+   *
+   * The only thing it changes is queueing at the provider: a bulk send takes a
+   * slot from the transport's rate limiter, an ordinary one goes straight out.
+   * Set it on scheduled mail — the Monday review, the nudge — and never on
+   * anything a person triggered, because the whole point is that a password
+   * reset must not queue behind three thousand weekly reviews.
+   */
+  bulk?: boolean;
   logger?: FastifyBaseLogger;
 }
+
+/**
+ * How many times one keyed message may be attempted, ever.
+ *
+ * A bound rather than a retry policy: the transport already retries a transient
+ * failure inline, within the same send, so reaching a second attempt here means
+ * the first one exhausted that. What this stops is the other failure — an
+ * address that will never accept mail — becoming an hourly ritual for as long
+ * as the sending pass keeps running.
+ *
+ * Five spans four hours of a Monday at the scheduler's hourly cadence, which is
+ * a provider outage long enough to be somebody's problem rather than a blip.
+ */
+export const MAX_DELIVERY_ATTEMPTS = 5;
+
+/**
+ * How long a 'pending' row is believed before it is treated as abandoned.
+ *
+ * 'pending' means a claim was taken and nothing came back to settle it, which
+ * in practice means the process died between the claim and the update. The
+ * transport gives up on one request after fifteen seconds and retries at most
+ * twice, so nothing honest is still in flight after a couple of minutes;
+ * fifteen is far past that and nowhere near the hour before the next tick.
+ */
+const PENDING_ABANDONED_AFTER = '15 minutes';
+
+/**
+ * The rows a claim may be taken over, as one predicate in one place.
+ *
+ * Written once and used twice — by the claim itself and by `deliveryOutstanding`,
+ * which exists to answer the same question cheaply without taking the claim. Two
+ * spellings of "is this delivery still owed?" would be two things to keep in
+ * step, and the day they drift is the day the scheduler either stops retrying
+ * or never stops.
+ */
+const RECLAIMABLE = `
+  d.attempts < ${MAX_DELIVERY_ATTEMPTS}
+  AND (
+        d.status = 'failed'
+     OR (d.status = 'pending' AND d.last_attempt_at < now() - interval '${PENDING_ABANDONED_AFTER}')
+  )`;
 
 /**
  * What stands in for an address that must not be kept.
@@ -107,6 +164,7 @@ export async function sendEmail(options: SendOptions): Promise<SendResult> {
     text: message.text,
     headers: options.headers,
     idempotencyKey: options.idempotencyKey,
+    bulk: options.bulk,
   };
 
   try {
@@ -143,6 +201,18 @@ export async function sendEmail(options: SendOptions): Promise<SendResult> {
  * unclaimed and let a retry send a duplicate. Recording an intent that never
  * completed is a stale 'pending' row; the other way round is a second email in
  * someone's inbox.
+ *
+ * The conflict is where the interesting half is. `DO NOTHING` treated every
+ * existing row as proof the message had gone out, which is true of a 'sent' row
+ * and false of the two states that mean the opposite — a send the provider
+ * refused, and a claim whose process died before it could settle. Both are
+ * re-granted here, bounded by `attempts`, and re-granting is *all* it is: the
+ * update refuses to touch a row that is already 'sent', so the guard against
+ * duplicates is exactly as strong as it was.
+ *
+ * One statement rather than a read followed by a write, for the reason the
+ * whole table exists: two scheduler passes — or two replicas — asking at the
+ * same instant must not both come away holding the same claim.
  */
 async function claimDelivery(input: {
   userId: string | null;
@@ -152,13 +222,55 @@ async function claimDelivery(input: {
   idempotencyKey?: string;
 }): Promise<string | null> {
   const row = await queryOne<{ id: string }>(
-    `INSERT INTO email_deliveries (user_id, to_email, template, subject, idempotency_key, status)
+    `INSERT INTO email_deliveries AS d
+            (user_id, to_email, template, subject, idempotency_key, status)
      VALUES ($1,$2,$3,$4,$5,'pending')
-     ON CONFLICT (idempotency_key) DO NOTHING
-     RETURNING id`,
+     ON CONFLICT (idempotency_key) DO UPDATE
+            SET status = 'pending',
+                attempts = d.attempts + 1,
+                last_attempt_at = now(),
+                -- Cleared rather than kept: the row now describes an attempt in
+                -- flight, and last time's error read as this time's.
+                error = NULL,
+                provider_id = NULL
+          WHERE ${RECLAIMABLE}
+     RETURNING d.id`,
     [input.userId, input.to, input.template, input.subject, input.idempotencyKey ?? null],
   );
   return row?.id ?? null;
+}
+
+/**
+ * Whether this keyed message was attempted, did not go, and has tries left —
+ * without taking the claim.
+ *
+ * For the caller that has to decide whether re-deriving a message is worth it
+ * at all. The scheduler is the one that does: on every tick of a Monday it
+ * holds a review that is already written, and the only remaining question is
+ * whether the mail announcing it ever left. Asking `sendEmail` would answer
+ * that too, but only after re-reading the recipient, re-signing an unsubscribe
+ * link and re-rendering the template — for what, at three in the afternoon, is
+ * almost always "nothing to do". This is one indexed lookup instead.
+ *
+ * **A key nothing has ever claimed is false, not true**, and the distinction is
+ * the whole reason this is not simply "is it unsent?". A missing row means no
+ * attempt was ever made, which for the scheduler is not a failure to recover
+ * from — it is a review that was generated by somebody pressing the button in
+ * the app, where `POST /reviews/run` deliberately sends no mail because they
+ * are already looking at it. Answering true here would post it to them on the
+ * following Monday as though it were news.
+ *
+ * So this is narrowly "retry what broke", never "send what was never sent". The
+ * gap that leaves is a send that threw *before* claiming its row, which is a
+ * local failure — reading the recipient, rendering the template — in a pass
+ * that is having much larger problems than one email.
+ */
+export async function deliveryNeedsRetry(idempotencyKey: string): Promise<boolean> {
+  const row = await queryOne<{ owed: boolean }>(
+    `SELECT ${RECLAIMABLE} AS owed FROM email_deliveries d WHERE d.idempotency_key = $1`,
+    [idempotencyKey],
+  );
+  return row?.owed ?? false;
 }
 
 async function finishDelivery(
@@ -178,10 +290,17 @@ export async function recentDeliveries(
   userId: string,
   limit = 20,
 ): Promise<
-  Array<{ template: string; subject: string; status: string; error: string | null; created_at: string }>
+  Array<{
+    template: string;
+    subject: string;
+    status: string;
+    error: string | null;
+    attempts: number;
+    created_at: string;
+  }>
 > {
   const rows = await query<any>(
-    `SELECT template, subject, status, error, created_at
+    `SELECT template, subject, status, error, attempts, created_at
        FROM email_deliveries WHERE user_id = $1
    ORDER BY created_at DESC LIMIT $2`,
     [userId, limit],
@@ -191,6 +310,9 @@ export async function recentDeliveries(
     subject: row.subject,
     status: row.status,
     error: row.error,
+    // Worth surfacing next to the status: 'sent' after four tries and 'sent'
+    // first time are the same outcome and very different news.
+    attempts: row.attempts,
     created_at: new Date(row.created_at).toISOString(),
   }));
 }

@@ -263,9 +263,15 @@ describe('runDueNudges', () => {
     expect(await listNudges(user.id)).toHaveLength(1);
   });
 
-  it('does nothing before the local evening', async () => {
+  /**
+   * `considered: 0`, not 1: the pass narrows to the timezones whose evening it
+   * is before it reads a single account, so at half past eleven in Sofia there
+   * is nobody to consider rather than one person to skip. The counter still
+   * means what it did — the accounts this pass had to look at.
+   */
+  it('does nothing before the local evening, and reads nobody to decide it', async () => {
     const result = await runDueNudges(new Date('2026-03-19T09:30:00Z'));
-    expect(result).toMatchObject({ considered: 1, generated: [], skipped: 1 });
+    expect(result).toMatchObject({ considered: 0, generated: [], skipped: 0 });
   });
 
   it('records what the run cost', async () => {

@@ -1,9 +1,12 @@
 import type { FastifyBaseLogger } from 'fastify';
-import { query } from './db.ts';
+import type { WeeklyReview } from '@ct/shared';
+import { poolMax, query } from './db.ts';
 import { authErrorFor } from './ai/providers/index.ts';
 import { generateNudge } from './ai/nudge.ts';
 import { generateWeeklyReview } from './ai/review.ts';
-import { sendNudgeEmail, sendWeeklyReviewEmail } from './email/notify.ts';
+import { forEachConcurrent } from './concurrency.ts';
+import { sendNudgeEmail, sendWeeklyReviewEmail, weeklyReviewKey } from './email/notify.ts';
+import { deliveryNeedsRetry } from './email/send.ts';
 import {
   nudgeReachedAPhone,
   sendAlertPush,
@@ -16,7 +19,13 @@ import { ALERT_JOB, NUDGE_JOB, REVIEW_JOB, withJobLock } from './services/job-lo
 import { expirePlans } from './services/billing.ts';
 import { dueNudge, NUDGE_HOUR } from './services/nudges.ts';
 import { reviewForWeek, reviewWeekFor } from './services/reviews.ts';
-import { getEmailRecipient, listActiveUsers } from './services/user.ts';
+import {
+  activeTimezones,
+  getEmailRecipient,
+  listActiveUsers,
+  listActiveUsersIn,
+  type ActiveUser,
+} from './services/user.ts';
 import { unmeteredFor } from './ai/lane.ts';
 import { limitsFor } from './services/plans.ts';
 import { localDateFor, localPartsFor } from './time.ts';
@@ -40,6 +49,28 @@ import { localDateFor, localPartsFor } from './time.ts';
  * credentials. Alerts are arithmetic. Nothing below them costs a token, so
  * nothing below them reads a plan, and the pass deliberately runs on a
  * deployment with no API key at all.
+ *
+ * ## What each pass costs, and why it is shaped this way
+ *
+ * All three used to be a `for` loop over every account that exists, and both
+ * halves of that were wrong once there were more than a few hundred:
+ *
+ * - **Every account, every hour.** A pass is a question about a *clock*, and
+ *   the clock is the same for everyone in a timezone. Both timed passes now ask
+ *   which zones are due and read only the accounts in them, so six days a week
+ *   the review pass reads no user rows at all rather than all of them. See
+ *   `activeTimezones` — and note the exact per-user check is still made in
+ *   TypeScript afterwards, so the narrowing can only ever be an optimisation.
+ * - **One at a time.** A review is roughly forty seconds of model time. Serially
+ *   that is eleven hours for a thousand of them, which is not a Monday-morning
+ *   email; it is a Monday-*evening* email for whoever sorts last, and a Tuesday
+ *   one at three thousand. The passes now run over a bounded worker pool, which
+ *   turns those eleven hours into about ninety minutes at the default width.
+ *
+ * Nothing about correctness rests on the width. Every pass still decides what is
+ * due by looking for the row it would have written, so two workers cannot
+ * publish the same review, and a pass that is stopped halfway resumes on the
+ * next tick with the same answers.
  */
 
 /** Local weekday and hour a review is published at. Monday morning. */
@@ -47,6 +78,24 @@ export const REVIEW_WEEKDAY = 'Monday';
 export const REVIEW_HOUR = 8;
 
 const TICK_MS = 60 * 60 * 1000;
+
+/**
+ * How many accounts a pass works on at once.
+ *
+ * Derived from the connection pool rather than picked, because the pool is what
+ * actually bounds it: every worker's queries come out of the same `max`, and
+ * the job lock is already holding one connection of it for the pass's whole
+ * duration. Two spare is the margin for that lock plus whatever else the
+ * process is serving — and on the default pool of ten it gives a width of
+ * eight, which is where the arithmetic in the header comes from.
+ *
+ * Raising it is a matter of raising `DATABASE_POOL_MAX` with it, and the
+ * ceiling above both of them is the model's own: the token bucket in
+ * `ai/token-bucket.ts` already makes a review pass wait its turn rather than
+ * collect 429s, so a width larger than the per-minute budget buys queueing
+ * inside `reserve` and nothing else.
+ */
+const PASS_WIDTH = Math.max(1, poolMax - 2);
 
 const emptyTick = (): TickResult => ({ considered: 0, generated: [], skipped: 0, failed: [] });
 
@@ -90,14 +139,24 @@ export async function runDueReviews(
 async function reviewPass(now: Date, logger?: FastifyBaseLogger): Promise<TickResult> {
   const result: TickResult = emptyTick();
 
-  for (const user of await listActiveUsers()) {
-    result.considered += 1;
+  /*
+   * Only the accounts whose Monday morning it is, rather than all of them.
+   *
+   * The narrowing is by timezone and the exact check is still `isReviewTime`
+   * below, which is what makes this safe to reason about: if the two ever
+   * disagreed, the pass would consider somebody it then skips — never publish
+   * for somebody it should not have.
+   */
+  const due = await listActiveUsersIn(await dueZones(now, isReviewTime, logger));
+  result.considered = due.length;
+
+  await forEachConcurrent(due, PASS_WIDTH, async (user) => {
     const ctx = { timezone: user.timezone, dayStartHour: user.day_start_hour };
 
     try {
       if (!isReviewTime(now, ctx.timezone)) {
         result.skipped += 1;
-        continue;
+        return;
       }
 
       /*
@@ -119,24 +178,33 @@ async function reviewPass(now: Date, logger?: FastifyBaseLogger): Promise<TickRe
        */
       if (limitsFor(user.plan, unmeteredFor(user.email)).reviewsPerDay === 0) {
         result.skipped += 1;
-        continue;
+        return;
       }
 
       const today = localDateFor(now, ctx);
       const week = reviewWeekFor(today);
 
-      if (await reviewForWeek(user.id, week.start)) {
+      /*
+       * Already written — by an earlier tick today, or by somebody pressing the
+       * button in the app. Nothing left to generate, but there may well be
+       * something left to *send*, so this returns through the mail below rather
+       * than out of the pass.
+       */
+      const existing = await reviewForWeek(user.id, week.start);
+      if (existing) {
         result.skipped += 1;
-        continue;
+        await resendReviewEmailIfOwed(user.id, existing, logger);
+        return;
       }
+
       // A review of a week with nothing in it is noise, and it would arrive
       // every Monday forever for a dormant account.
       if (!(await hasEntriesBetween(user.id, week.start, week.end))) {
         result.skipped += 1;
-        continue;
+        return;
       }
 
-      await generateWeeklyReview(user.id, { today });
+      const published = await generateWeeklyReview(user.id, { today });
       result.generated.push(user.id);
       logger?.info({ userId: user.id, week: week.start }, 'weekly review published');
 
@@ -153,26 +221,97 @@ async function reviewPass(now: Date, logger?: FastifyBaseLogger): Promise<TickRe
        * failure is reported against the user it belongs to — but the review
        * itself is already committed by this point and stays published either
        * way. Sending is keyed on the week, so a later tick will not send twice.
+       *
+       * Both channels, and this is the one notification where that is right.
+       * The mail carries the review — the writing, the stats, the layout — and
+       * the push carries the news that it exists. They are two different
+       * messages, so nobody hears the same sentence twice.
        */
-      const published = await reviewForWeek(user.id, week.start);
-      if (published) {
-        /*
-         * Both channels, and this is the one notification where that is right.
-         * The mail carries the review — the writing, the stats, the layout —
-         * and the push carries the news that it exists. They are two different
-         * messages, so nobody hears the same sentence twice.
-         */
-        await sendWeeklyReviewPush(user.id, published, logger);
-        await sendWeeklyReviewEmail(user.id, published, logger);
-      }
+      await sendWeeklyReviewPush(user.id, published, logger);
+      await sendWeeklyReviewEmail(user.id, published, logger);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       result.failed.push({ userId: user.id, error: message });
       logger?.error({ err: error, userId: user.id }, 'weekly review failed');
     }
-  }
+  });
 
   return result;
+}
+
+/**
+ * The other half of publishing: making sure the mail actually went.
+ *
+ * A review is written once and then found by every later tick, and until now
+ * that finding was the end of the story — the pass saw the row, called the week
+ * done and moved on. Which was true of the review and false of the email, the
+ * one part of Monday that talks to somebody else's server. A 429 from the
+ * provider, a bad thirty seconds, a container restarted mid-send, and that
+ * account's review was written, visible in the app nobody had been told to
+ * open, and never mentioned again. At a handful of users that is invisible; at
+ * a thousand it is arithmetic, and every instance of it is a paying customer
+ * who did not get the thing they pay for.
+ *
+ * So the hourly tick becomes the retry, which is the cheapest possible one: it
+ * already runs, it is already spread across the whole of Monday, and hourly is
+ * exactly the backoff a rate-limited provider wants. `deliveryNeedsRetry` is
+ * what keeps it cheap — one indexed lookup on the key, so the overwhelming
+ * majority of ticks, where the mail went out at eight, stop right here instead
+ * of re-reading a recipient and re-rendering a template to discover it.
+ *
+ * It is also what keeps this to *retrying* rather than originating. A review
+ * with no delivery row at all is not a failure — it is one somebody generated
+ * themselves with the button in the app, which deliberately sends no mail
+ * because they are already reading it. Emailing that to them on Monday as
+ * though it were news is not a fix.
+ *
+ * **The push is deliberately not retried.** It has no idempotency key and no
+ * row to key one on, so a second attempt is not a retry, it is a second
+ * notification — and re-sending it every hour of a Monday is a far worse bug
+ * than the one being fixed. A push that failed is one lock screen that stayed
+ * quiet; the mail is where the review actually is.
+ */
+async function resendReviewEmailIfOwed(
+  userId: string,
+  review: WeeklyReview,
+  logger?: FastifyBaseLogger,
+): Promise<void> {
+  if (!(await deliveryNeedsRetry(weeklyReviewKey(userId, review.week_start)))) return;
+
+  logger?.info({ userId, week: review.week_start }, 'weekly review email still owed; retrying');
+  await sendWeeklyReviewEmail(userId, review, logger);
+}
+
+/**
+ * The timezones a pass has anything to do in, at this instant.
+ *
+ * A pass is a question about a clock, and the clock is the same for everyone in
+ * a zone — so the zones are what get asked, and only the accounts in the ones
+ * that answer yes are read. There are a few dozen zones at any size of user
+ * base and often just one.
+ *
+ * A zone the runtime cannot read is dropped rather than thrown on. That is a
+ * value from a client whose `Intl` knows a name ours does not, and one such
+ * account must not be the reason nobody's review is published: `Intl` throws a
+ * `RangeError` on it, and here that would take the whole pass down before a
+ * single account had been looked at.
+ */
+async function dueZones(
+  now: Date,
+  due: (now: Date, timezone: string) => boolean,
+  logger?: FastifyBaseLogger,
+): Promise<string[]> {
+  const zones: string[] = [];
+
+  for (const timezone of await activeTimezones()) {
+    try {
+      if (due(now, timezone)) zones.push(timezone);
+    } catch (error) {
+      logger?.error({ err: error, timezone }, 'unreadable timezone on an active account');
+    }
+  }
+
+  return zones;
 }
 
 /**
@@ -220,21 +359,27 @@ export async function runDueNudges(
 async function nudgePass(now: Date, logger?: FastifyBaseLogger): Promise<TickResult> {
   const result: TickResult = emptyTick();
 
-  for (const user of await listActiveUsers()) {
-    result.considered += 1;
+  // Narrowed by zone and run in parallel for the reasons the review pass is —
+  // and it needs both at least as much. A nudge is a model call too, and
+  // `dueNudge` is several queries in front of it for every account whose
+  // evening has come round, which is most of them for most of the day.
+  const due = await listActiveUsersIn(await dueZones(now, isNudgeTime, logger));
+  result.considered = due.length;
+
+  await forEachConcurrent(due, PASS_WIDTH, async (user) => {
     const ctx = { timezone: user.timezone, dayStartHour: user.day_start_hour };
 
     try {
       if (!isNudgeTime(now, ctx.timezone)) {
         result.skipped += 1;
-        continue;
+        return;
       }
 
       const today = localDateFor(now, ctx);
       const trigger = await dueNudge(user.id, ctx, today);
       if (!trigger) {
         result.skipped += 1;
-        continue;
+        return;
       }
 
       // Passed through rather than recomputed: `dueNudge` is several queries and
@@ -243,7 +388,7 @@ async function nudgePass(now: Date, logger?: FastifyBaseLogger): Promise<TickRes
       if (!nudge) {
         // Another pass got there first — the unique index did its job.
         result.skipped += 1;
-        continue;
+        return;
       }
 
       result.generated.push(user.id);
@@ -267,7 +412,7 @@ async function nudgePass(now: Date, logger?: FastifyBaseLogger): Promise<TickRes
       result.failed.push({ userId: user.id, error: message });
       logger?.error({ err: error, userId: user.id }, 'nudge failed');
     }
-  }
+  });
 
   return result;
 }
@@ -314,8 +459,23 @@ export async function runDueAlerts(
 async function alertPass(now: Date, logger?: FastifyBaseLogger): Promise<TickResult> {
   const result: TickResult = emptyTick();
 
-  for (const user of await listActiveUsers()) {
-    result.considered += 1;
+  /*
+   * Every account, and no zone filter — the one pass where that is right.
+   *
+   * A review and a nudge are due at a named local hour, so their zone answers
+   * for everyone in it. An alert is not on a clock at all: `dueAlert` is handed
+   * the hour and decides for itself, differently per kind, and a streak that
+   * has just come of age is due whatever time it is. There is no question to
+   * ask a timezone here, so there is nothing to narrow by.
+   *
+   * The worker pool still applies. Nothing in this pass calls a model, but it
+   * is several queries per account per hour, and those are exactly what a pool
+   * overlaps well.
+   */
+  const users: ActiveUser[] = await listActiveUsers();
+  result.considered = users.length;
+
+  await forEachConcurrent(users, PASS_WIDTH, async (user) => {
     const ctx = { timezone: user.timezone, dayStartHour: user.day_start_hour };
 
     try {
@@ -329,7 +489,7 @@ async function alertPass(now: Date, logger?: FastifyBaseLogger): Promise<TickRes
       const recipient = await getEmailRecipient(user.id);
       if (!recipient) {
         result.skipped += 1;
-        continue;
+        return;
       }
 
       const today = localDateFor(now, ctx);
@@ -347,7 +507,7 @@ async function alertPass(now: Date, logger?: FastifyBaseLogger): Promise<TickRes
       });
       if (!due) {
         result.skipped += 1;
-        continue;
+        return;
       }
 
       /*
@@ -365,7 +525,7 @@ async function alertPass(now: Date, logger?: FastifyBaseLogger): Promise<TickRes
       if (!alert) {
         // Another pass got there first — the unique index did its job.
         result.skipped += 1;
-        continue;
+        return;
       }
 
       result.generated.push(user.id);
@@ -385,7 +545,7 @@ async function alertPass(now: Date, logger?: FastifyBaseLogger): Promise<TickRes
       result.failed.push({ userId: user.id, error: message });
       logger?.error({ err: error, userId: user.id }, 'alert failed');
     }
-  }
+  });
 
   return result;
 }

@@ -208,11 +208,25 @@ export async function sendAccountStatusEmail(
 // ---- The weekly review -----------------------------------------------------
 
 /**
+ * The key one week's review is sent under.
+ *
+ * Exported because the scheduler asks about it without sending: on every tick
+ * of a Monday it is holding a review that is already written, and "has the mail
+ * for this one gone out?" is a question worth answering before re-rendering the
+ * message to find out. See `deliveryOutstanding`.
+ */
+export function weeklyReviewKey(userId: string, weekStart: string): string {
+  return `weekly_review:${userId}:${weekStart}`;
+}
+
+/**
  * Monday's review.
  *
  * The idempotency key is the week, so the hourly tick can call this as often as
  * it likes: the second attempt to email the same week for the same account is
- * refused by a unique index rather than by hoping the schedule was right.
+ * refused by a unique index rather than by hoping the schedule was right — and
+ * a *failed* attempt is claimed again rather than refused, which is the whole
+ * reason the tick is allowed to keep asking.
  */
 export async function sendWeeklyReviewEmail(
   userId: string,
@@ -230,8 +244,12 @@ export async function sendWeeklyReviewEmail(
     to: recipient.email,
     userId,
     logger,
-    idempotencyKey: `weekly_review:${userId}:${review.week_start}`,
+    idempotencyKey: weeklyReviewKey(userId, review.week_start),
     headers: unsubscribeHeaders(link),
+    // Scheduled, not requested. Takes a slot from the provider rate limiter so
+    // three thousand of these cannot be posted in the same second — and so that
+    // somebody's password reset does not queue behind them.
+    bulk: true,
     message: templates.weeklyReview({
       name: recipient.displayName,
       content: review.content,
@@ -277,6 +295,8 @@ export async function sendNudgeEmail(
     logger,
     idempotencyKey: `nudge:${nudge.id}`,
     headers: unsubscribeHeaders(link),
+    // Scheduled, like the review above, and paced with it.
+    bulk: true,
     message: templates.nudge({
       name: recipient.displayName,
       content: nudge.content,

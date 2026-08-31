@@ -22,11 +22,20 @@ pg.types.setTypeParser(pg.types.builtins.DATE, (v) => v);
  * right number is a function of the deployment, and the deployment is the thing
  * that changes.
  */
-const POOL_MAX = Number(process.env.DATABASE_POOL_MAX ?? 10);
+const CONFIGURED_POOL_MAX = Number(process.env.DATABASE_POOL_MAX ?? 10);
+
+/**
+ * The resolved ceiling, exported because one caller has to size itself against
+ * it. The scheduler runs its passes over a pool of workers, and a pool wider
+ * than this one is not more parallel — it is the same work queued somewhere
+ * less useful, behind a lock that is already holding a connection of its own.
+ */
+export const poolMax =
+  Number.isFinite(CONFIGURED_POOL_MAX) && CONFIGURED_POOL_MAX > 0 ? CONFIGURED_POOL_MAX : 10;
 
 export const pool = new pg.Pool({
   connectionString: env.databaseUrl,
-  max: Number.isFinite(POOL_MAX) && POOL_MAX > 0 ? POOL_MAX : 10,
+  max: poolMax,
 });
 
 export async function query<T extends pg.QueryResultRow = pg.QueryResultRow>(

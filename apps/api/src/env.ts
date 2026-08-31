@@ -31,6 +31,19 @@ export function applyFileEnv(target: NodeJS.ProcessEnv, fromFiles: Record<string
   }
 }
 
+/**
+ * A positive number, or the default.
+ *
+ * Falls back rather than throwing, which is the right shape for a tuning knob:
+ * a typo in a rate limit must not be the reason a deployment refuses to boot,
+ * and the fallback is a working configuration by construction — it is what
+ * every deployment that never sets the variable runs.
+ */
+function positive(raw: string | undefined, fallback: number): number {
+  const value = Number(raw);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
 export function required(source: NodeJS.ProcessEnv, name: string): string {
   const value = source[name];
   if (!value) {
@@ -222,6 +235,15 @@ export interface EmailEnv {
    * default for a public endpoint whose whole authentication *is* the signature.
    */
   webhookSecret: string | null;
+  /**
+   * Requests per second the scheduled mail will make. Interactive mail — a
+   * reset link, a confirmation code — is not governed by it and never queues
+   * behind a Monday's worth of weekly reviews.
+   *
+   * Configuration because the right number is the one on your Resend plan, and
+   * the default is the one a new account has before anybody asks for more.
+   */
+  bulkRatePerSecond: number;
 }
 
 export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
@@ -384,6 +406,7 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
       // Forced off under test for the same reason the API key is: a real secret
       // in the developer's .env must not let the suite accept a live webhook.
       webhookSecret: isTest ? null : (source.RESEND_WEBHOOK_SECRET ?? null),
+      bulkRatePerSecond: positive(source.EMAIL_MAX_RPS, 2),
     },
     billing: {
       // Forced off under test for the same reason the email secret is: a real

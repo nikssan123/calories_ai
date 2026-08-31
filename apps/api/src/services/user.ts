@@ -400,19 +400,30 @@ function toProfile(row: any): Profile {
 }
 
 /**
+ * An account as a scheduled pass sees it.
+ *
+ * Named rather than repeated inline now that three functions return it, which
+ * is worth doing for one reason beyond tidiness: this shape is a list of the
+ * columns a pass is allowed to decide anything from, and a type is where that
+ * stays visible.
+ */
+export interface ActiveUser {
+  id: string;
+  timezone: string;
+  day_start_hour: number;
+  plan: PlanName;
+  email: string | null;
+}
+
+const ACTIVE_USER_COLUMNS = 'id, timezone, day_start_hour, plan, email';
+const ACTIVE_USER_WHERE = 'email IS NOT NULL AND is_setup_complete = TRUE';
+
+/**
  * Accounts the weekly scheduler should consider: real (email-bearing) users who
  * have finished setup. The pre-account placeholder row is excluded — it has no
  * owner to write a review for.
  */
-export async function listActiveUsers(): Promise<
-  Array<{
-    id: string;
-    timezone: string;
-    day_start_hour: number;
-    plan: PlanName;
-    email: string | null;
-  }>
-> {
+export async function listActiveUsers(): Promise<ActiveUser[]> {
   /*
    * `plan` is selected because both scheduled passes are entitlements, not
    * chores. The weekly review and the model-written nudge are sold — they are
@@ -428,16 +439,56 @@ export async function listActiveUsers(): Promise<
    * are billed at all before they read a ceiling written in dollars — see
    * `unmeteredFor`.
    */
-  return query<{
-    id: string;
-    timezone: string;
-    day_start_hour: number;
-    plan: PlanName;
-    email: string | null;
-  }>(
-    `SELECT id, timezone, day_start_hour, plan, email
+  return query<ActiveUser>(
+    `SELECT ${ACTIVE_USER_COLUMNS}
        FROM users
-      WHERE email IS NOT NULL AND is_setup_complete = TRUE
+      WHERE ${ACTIVE_USER_WHERE}
    ORDER BY created_at ASC`,
+  );
+}
+
+/**
+ * The distinct timezones active accounts live in.
+ *
+ * The first half of not reading every account, every hour, to find the few
+ * whose clock has come round. A scheduled pass is a question about a *clock* —
+ * is it Monday morning where you are — and the answer is the same for everyone
+ * in a zone, so the zones are what should be walked. There are a few dozen of
+ * them at any size of user base, and at a thousand accounts in Sofia there is
+ * precisely one.
+ *
+ * The clock itself deliberately stays in TypeScript. Postgres could answer
+ * `EXTRACT(ISODOW FROM now() AT TIME ZONE timezone)` directly and save this
+ * round trip, and it would be the wrong trade twice over: the publishing rule
+ * would then exist in two languages that have to agree, and `AT TIME ZONE` over
+ * a column throws on a name Postgres does not carry — which turns one account
+ * with a zone from a browser Postgres has never heard of into a pass that
+ * fails for everybody.
+ */
+export async function activeTimezones(): Promise<string[]> {
+  const rows = await query<{ timezone: string }>(
+    `SELECT DISTINCT timezone FROM users WHERE ${ACTIVE_USER_WHERE}`,
+  );
+  return rows.map((row) => row.timezone);
+}
+
+/**
+ * Active accounts in the given timezones, and none at all for an empty list.
+ *
+ * The second half. On the twenty-three hours a day and six days a week when
+ * nobody's review is due this reads no rows rather than all of them, which is
+ * the difference between a scheduler whose cost tracks the accounts it has work
+ * for and one whose cost tracks the accounts that exist.
+ */
+export async function listActiveUsersIn(timezones: readonly string[]): Promise<ActiveUser[]> {
+  if (timezones.length === 0) return [];
+
+  return query<ActiveUser>(
+    `SELECT ${ACTIVE_USER_COLUMNS}
+       FROM users
+      WHERE ${ACTIVE_USER_WHERE}
+        AND timezone = ANY($1::text[])
+   ORDER BY created_at ASC`,
+    [timezones],
   );
 }

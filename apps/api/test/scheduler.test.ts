@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { query } from '../src/db.ts';
+import { MAX_DELIVERY_ATTEMPTS } from '../src/email/send.ts';
+import { EmailDeliveryError } from '../src/email/transport.ts';
 import { isReviewTime, REVIEW_HOUR, runDueReviews, startScheduler, tick } from '../src/scheduler.ts';
 import { listReviews, reviewWeekFor, saveReview } from '../src/services/reviews.ts';
 import { localDateFor } from '../src/time.ts';
 import { scriptAgent } from './helpers/agent-mock.ts';
-import { mailbox } from './helpers/email.ts';
+import { mailbox, resetMailbox } from './helpers/email.ts';
 import { addMeal, createUser, type TestUser } from './helpers/factories.ts';
 
 /**
@@ -76,9 +79,18 @@ describe('runDueReviews', () => {
     expect((await listReviews(user.id))[0]!.content).toBe('A steady week.');
   });
 
-  it('does nothing at any other time', async () => {
+  /**
+   * And does not even read the account to find that out.
+   *
+   * `considered: 0` rather than the 1 this asserted while the pass walked every
+   * user every hour and asked each one's clock. The question is answered per
+   * *timezone* now — there is one query for the zones in play, nobody's Monday
+   * is among them on a Tuesday, and no user rows are read at all. What the
+   * counter means is unchanged: the accounts this pass had to look at.
+   */
+  it('does nothing at any other time, and reads nobody to decide it', async () => {
     const result = await runDueReviews(new Date('2026-03-17T06:30:00Z'));
-    expect(result).toMatchObject({ considered: 1, generated: [], skipped: 1 });
+    expect(result).toMatchObject({ considered: 0, generated: [], skipped: 0 });
   });
 
   /**
@@ -182,6 +194,33 @@ describe('runDueReviews', () => {
     }
   });
 
+  /**
+   * The pass narrows to due timezones before it reads any accounts, and reads
+   * a zone by handing it to `Intl` — which throws a `RangeError` on a name it
+   * does not carry. `timezone` is stored as the client sent it and validated
+   * against nothing, so one account whose browser knows a zone this runtime
+   * does not must not be the reason nobody's review is published.
+   */
+  it('publishes for everyone else when one account has an unreadable timezone', async () => {
+    const broken = await createUser({ plan: 'plus' });
+    await addMeal(broken, { date: '2026-03-11', kcal: 2000 });
+    // Set afterwards, because a fixture cannot log a meal in a zone `Intl`
+    // refuses to read either — which is itself the point: this row can only
+    // come from a client, and nothing between there and here checks it.
+    await query('UPDATE users SET timezone = $1 WHERE id = $2', ['Mars/Olympus_Mons', broken.id]);
+    scriptAgent({ text: 'A steady week.' });
+
+    const logger = { info: vi.fn(), error: vi.fn() } as any;
+    const result = await runDueReviews(MONDAY_MORNING, logger);
+
+    expect(result.generated).toEqual([user.id]);
+    expect(await listReviews(broken.id)).toEqual([]);
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ timezone: 'Mars/Olympus_Mons' }),
+      expect.any(String),
+    );
+  });
+
   it('serves each timezone at its own Monday morning', async () => {
     const la = await createUser({ timezone: 'America/Los_Angeles', plan: 'plus' });
     await addMeal(la, { date: '2026-03-11', kcal: 2000 });
@@ -253,6 +292,172 @@ describe('the weekly review email', () => {
     expect(result.generated).toEqual([user.id]);
     expect(result.failed).toEqual([]);
     expect(await listReviews(user.id)).toHaveLength(1);
+  });
+
+  /**
+   * The bug this pass had for as long as it has been sending mail.
+   *
+   * A review is written once and found by every later tick, and finding it used
+   * to end the story — which was true of the review and false of the email, the
+   * one part of Monday that talks to somebody else's server. A 429, a restart
+   * mid-send, and that account's review existed, in an app nobody had been told
+   * to open, and was never mentioned again. Invisible at five users; at a
+   * thousand it is arithmetic, and every instance is somebody who paid for it.
+   */
+  it('sends the review email on a later tick when the first attempt failed', async () => {
+    const { setTransport } = await import('../src/email/transport.ts');
+    setTransport({
+      name: 'broken',
+      send: async () => {
+        throw new EmailDeliveryError('rate limited', 429);
+      },
+    });
+    scriptAgent({ text: 'A steady week.' });
+
+    await runDueReviews(MONDAY_MORNING);
+    expect(await listReviews(user.id)).toHaveLength(1);
+    expect(mailbox()).toHaveLength(0);
+
+    // Nine o'clock, the provider is itself again, and the review that was
+    // already written is not regenerated — it is simply posted.
+    resetMailbox();
+    const result = await runDueReviews(new Date('2026-03-16T07:30:00Z'));
+
+    expect(result.generated).toEqual([]);
+    expect(mailbox()).toHaveLength(1);
+    expect(mailbox()[0]).toMatchObject({ to: user.email });
+    expect(await listReviews(user.id)).toHaveLength(1);
+  });
+
+  /**
+   * The other side of that, and the reason the retry is email-only.
+   *
+   * A push has no idempotency key and no row to key one on, so a second attempt
+   * is not a retry — it is a second notification. Re-sending it on every tick of
+   * a Monday would be a considerably worse bug than the one above.
+   */
+  it('does not push again while retrying the email', async () => {
+    const { setTransport } = await import('../src/email/transport.ts');
+    const pushes = vi.spyOn(await import('../src/push/notify.ts'), 'sendWeeklyReviewPush');
+    setTransport({
+      name: 'broken',
+      send: async () => {
+        throw new EmailDeliveryError('rate limited', 429);
+      },
+    });
+    scriptAgent({ text: 'A steady week.' });
+
+    try {
+      await runDueReviews(MONDAY_MORNING);
+      expect(pushes).toHaveBeenCalledTimes(1);
+
+      for (const hour of ['07:30', '08:30', '09:30']) {
+        await runDueReviews(new Date(`2026-03-16T${hour}:00Z`));
+      }
+      expect(pushes).toHaveBeenCalledTimes(1);
+    } finally {
+      pushes.mockRestore();
+    }
+  });
+
+  it('stops retrying the email once it is out of attempts', async () => {
+    const { setTransport } = await import('../src/email/transport.ts');
+    let attempts = 0;
+    setTransport({
+      name: 'broken',
+      send: async () => {
+        attempts += 1;
+        throw new EmailDeliveryError('rate limited', 429);
+      },
+    });
+    scriptAgent({ text: 'A steady week.' });
+
+    // Publishing, then every remaining tick of a very long Monday.
+    await runDueReviews(MONDAY_MORNING);
+    for (let hour = 7; hour < 22; hour += 1) {
+      await runDueReviews(new Date(`2026-03-16T${String(hour).padStart(2, '0')}:30:00Z`));
+    }
+
+    // Five, not sixteen. A hard bounce must not become an hourly ritual for as
+    // long as the pass keeps running.
+    expect(attempts).toBe(MAX_DELIVERY_ATTEMPTS);
+  });
+
+  it('does not re-send a review email that already went', async () => {
+    scriptAgent({ text: 'A steady week.' });
+    await runDueReviews(MONDAY_MORNING);
+    expect(mailbox()).toHaveLength(1);
+
+    for (const hour of ['07:30', '11:30', '19:30']) {
+      await runDueReviews(new Date(`2026-03-16T${hour}:00Z`));
+    }
+    expect(mailbox()).toHaveLength(1);
+  });
+
+  /**
+   * The retry retries; it does not originate.
+   *
+   * `POST /reviews/run` writes a review and deliberately sends no mail — the
+   * person is looking at it. So a week with a review and no delivery row is not
+   * a failure to recover from, and posting it to them on Monday as though it
+   * were news would be a new bug wearing the fix's clothes.
+   */
+  it('does not email a review the user generated themselves in the app', async () => {
+    const week = reviewWeekFor(localDateFor(MONDAY_MORNING, user.ctx));
+    await saveReview(
+      user.id,
+      { week_start: week.start, week_end: week.end, days_logged: 3 } as never,
+      'I pressed the button on Sunday.',
+      null,
+    );
+
+    for (const hour of ['06:30', '09:30', '15:30']) {
+      await runDueReviews(new Date(`2026-03-16T${hour}:00Z`));
+    }
+
+    expect(mailbox()).toHaveLength(0);
+    expect(await listReviews(user.id)).toHaveLength(1);
+  });
+});
+
+/**
+ * The pass runs its accounts in parallel, which is the difference between a
+ * Monday-morning email and a Monday-evening one. At forty seconds a review, a
+ * thousand accounts serially is eleven hours.
+ */
+describe('the pass runs accounts in parallel', () => {
+  it('has several reviews in flight at once', async () => {
+    const others = [];
+    for (let i = 0; i < 6; i += 1) {
+      const extra = await createUser({ plan: 'plus' });
+      await addMeal(extra, { date: '2026-03-11', kcal: 2000 });
+      others.push(extra);
+    }
+
+    let live = 0;
+    let peak = 0;
+    scriptAgent(
+      ...Array.from({ length: 7 }, () => ({
+        text: 'A steady week.',
+        act: async () => {
+          live += 1;
+          peak = Math.max(peak, live);
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          live -= 1;
+        },
+      })),
+    );
+
+    const result = await runDueReviews(MONDAY_MORNING);
+
+    expect(result.generated).toHaveLength(7);
+    expect(peak).toBeGreaterThan(1);
+    expect(live).toBe(0);
+    // Every account still got exactly one, which is the property the width must
+    // never cost: two workers cannot publish the same week.
+    for (const account of [user, ...others]) {
+      expect(await listReviews(account.id)).toHaveLength(1);
+    }
   });
 });
 

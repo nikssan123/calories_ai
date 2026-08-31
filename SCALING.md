@@ -40,9 +40,19 @@ Three consequences the rest of this document now depends on:
 **Built:** Stage 0 in full, all of Stage 1 — shared rate-limit counters and photos in a
 bucket, both optional and both off by default — all of Stage 2, and the pieces of Stage 3
 that are code rather than infrastructure: the pool ceiling, the scheduler's re-entrancy
-guard. Streaming landed on 2026-08-22 and is the only item so far that a user can see.
-The token bucket, Stage 2's last piece, landed the same day: migration `025`, the bucket
-in `ai/token-bucket.ts` and its admission call in the `anthropic-api` provider.
+guard, and — 2026-08-31 — the serial walk itself. Streaming landed on 2026-08-22 and is
+the only item so far that a user can see. The token bucket, Stage 2's last piece, landed
+the same day: migration `025`, the bucket in `ai/token-bucket.ts` and its admission call
+in the `anthropic-api` provider.
+
+**The Monday cliff is code now, 2026-08-31.** Three separate things, none of them the one
+this document had been expecting to need — see Stage 3, which is rewritten around what
+was actually there. The short version: the pass runs its accounts over a worker pool
+rather than one at a time, it reads only the accounts in a timezone that is actually due,
+and a review email that failed to send is now retried instead of being lost forever. The
+third was a real bug rather than a scaling item, and it is the one that would have hurt
+most: at a thousand accounts a handful of provider failures every Monday is arithmetic,
+and each one was a paying customer whose review was written and never mentioned to them.
 
 **Deployed and verified**, 2026-08-22, at `7bfd1e6`. Redis was already carrying the
 limiter's counters; this deploy added the bucket. Migration `023` applied, the API
@@ -136,17 +146,22 @@ meant `--scale` would not even start; it is gone, and the service takes its coun
 subscription lane is pinned to one container by the `claude` subprocess and the single
 credential store it shares, which no amount of Stage 1 work changes.
 
-**The weekly review.** `runDueReviews` in `scheduler.ts` walks every active user
-serially, generating each review on Opus. At a few hundred users in one timezone this
-already runs longer than the hour between ticks.
+**The weekly review — no longer a ceiling, as of 2026-08-31.** `runDueReviews` in
+`scheduler.ts` used to walk every active user serially, generating each review on Opus. At
+a few hundred users in one timezone that already ran longer than the hour between ticks.
 
-The re-entrancy half of this is now fixed — see Stage 3 — but it is worth recording what
-it was, because the shape recurs. `tick()` had no guard, so two overlapping runs could
-both call the model for the same user before either committed, which is two reviews and
-two emails. The pass looks idempotent: it asks whether this week has been written before
-writing it. But that question is answered forty seconds before the write that settles it,
-which is plenty of room for the other run to ask it too and get the same answer. The
-serial walk is still there, and is what Stage 3 is otherwise about.
+Both halves are now fixed and both are worth recording, because the shapes recur.
+
+*Re-entrancy.* `tick()` had no guard, so two overlapping runs could both call the model for
+the same user before either committed, which is two reviews and two emails. The pass looks
+idempotent: it asks whether this week has been written before writing it. But that question
+is answered forty seconds before the write that settles it, which is plenty of room for the
+other run to ask it too and get the same answer. Fixed by the job lock — Stage 3, item 1.
+
+*The serial walk.* Fixed by Stage 3 items 2 and 3: a bounded worker pool, and reading only
+the accounts in a timezone that is actually due. The second is the one that generalises —
+the pass was loading every account in the database twenty-four times a day to ask each one
+a question whose answer only depends on its timezone.
 
 ## What a turn costs, in tokens
 
@@ -517,8 +532,9 @@ right answer for an interactive path.
 ## Stage 3 — The Monday cliff
 
 This is the only genuine spike the product has. At 10,000 users the largest timezone
-bucket is perhaps 3,000 reviews all falling due at 08:00 local, against a serial loop at
-roughly forty seconds each.
+bucket is perhaps 3,000 reviews all falling due at 08:00 local, against what was a serial
+loop at roughly forty seconds each — eleven hours for a thousand of them, thirty-three for
+three thousand.
 
 1. **A Postgres advisory lock around the tick — built**, in `services/job-lock.ts`, so
    overlapping runs and multiple replicas cannot double-fire. Here the advisory lock
@@ -528,9 +544,63 @@ roughly forty seconds each.
    process releases it rather than blocking the next hour. The two passes take
    separate locks — they share a tick and nothing else, and a review pass grinding
    through a timezone must not be why nobody gets a nudge.
-2. **Move it out of the API process — not built** — into a worker — same image, different command. A
-   weekly review must never compete for the token budget with someone logging lunch.
-3. **The Batch API — not built.** Reviews are the textbook case: non-interactive, bulk, and
+2. **A bounded worker pool over the accounts — built, 2026-08-31**, in `concurrency.ts`,
+   applied to all three passes. Eleven hours becomes about ninety minutes. The width is
+   derived from `DATABASE_POOL_MAX` rather than picked (`poolMax - 2`, so eight by
+   default), because the pool is what actually bounds it: every worker's queries come out
+   of the same `max`, and the job lock is already holding one connection of it for the
+   pass's whole duration.
+
+   Nothing about correctness rests on the width, which is the property worth stating.
+   Every pass still decides what is due by looking for the row it would have written, so
+   two workers cannot publish the same review — and the model side needs no new limiter,
+   because `reserve()` in `ai/token-bucket.ts` already makes `review` and `nudge` *wait*
+   for capacity rather than collect 429s. A width larger than the per-minute budget buys
+   queueing inside `reserve` and nothing else.
+3. **Only the accounts that are due — built, 2026-08-31.** A pass is a question about a
+   *clock*, and the clock is the same for everyone in a timezone. Both timed passes now
+   ask `activeTimezones()` which zones are due and read only the accounts in those, so on
+   the six days a week when nobody's review is due the pass reads no user rows at all
+   rather than all of them.
+
+   The clock stays in TypeScript deliberately. Postgres could answer
+   `EXTRACT(ISODOW FROM now() AT TIME ZONE timezone)` and save the round trip, and it
+   would be wrong twice: the publishing rule would exist in two languages that have to
+   agree, and `AT TIME ZONE` over a column *throws* on a name Postgres does not carry —
+   turning one account with an exotic zone into a pass that fails for everybody.
+   `timezone` is stored as the client sent it and validated against nothing, so that is a
+   live possibility rather than a hypothetical; `dueZones` drops an unreadable zone and
+   logs it instead.
+4. **A review email that failed is retried — built, 2026-08-31**, and this was a bug, not
+   a scaling item. `claimDelivery` writes its row *before* the request, which is right —
+   a crash in between would otherwise let a retry send a second copy. What it missed is
+   that the row stays behind after a *failure* too, and `ON CONFLICT DO NOTHING` cannot
+   tell "already sent" from "tried once, the provider was having an afternoon". Every
+   later attempt at that key was answered "already sent" and the message was never sent
+   at all.
+
+   Three layers now, migration `041`: the transport retries a 429/5xx/timeout inline
+   (three attempts, honouring `Retry-After`); `claimDelivery` re-grants a claim over a
+   failed row, bounded by `attempts < 5`; and the review pass, on finding a review that
+   is already written, asks `deliveryOutstanding` whether the mail actually went and
+   re-sends if it did not. The hourly tick is therefore the retry — it already runs, it
+   is already spread across the whole of Monday, and hourly is exactly the backoff a
+   rate-limited provider wants.
+
+   **The push is deliberately not retried.** It has no idempotency key and no row to key
+   one on, so a second attempt is not a retry — it is a second notification, and hourly
+   for a Monday is a far worse bug than the one being fixed.
+5. **A rate limiter in front of scheduled mail — built, 2026-08-31.** Resend allows two
+   requests a second on a new account, and the review pass is the one thing here that
+   would post three thousand at once. `EMAIL_MAX_RPS` paces the *bulk* lane only;
+   interactive mail is not governed by it, because a password reset must never queue
+   behind a morning's worth of weekly reviews.
+6. **Move the pass out of the API process — not built** — into a worker, same image,
+   different command. Still the right shape eventually: a weekly review should not
+   compete for the token budget with someone logging lunch. Less urgent than it was, since
+   the token bucket already governs that competition per model and the pass waits its turn
+   inside it rather than crowding the live path out.
+7. **The Batch API — not built.** Reviews are the textbook case: non-interactive, bulk, and
    deadline-insensitive. Half price, results within 24 hours, and — the part that matters
    here — batch traffic does not consume the standard per-minute limits, so the entire
    Monday spike leaves the budget that serves live turns. Submit at the top of the hour,
@@ -538,7 +608,17 @@ roughly forty seconds each.
    `custom_id`; they return in arbitrary order.
 
 `isReviewTime` is already a window rather than an instant, deliberately, so a review
-landing at 09:30 instead of 08:00 needs no other change anywhere.
+landing at 09:30 instead of 08:00 needs no other change anywhere — and items 4 and 5 both
+lean on that: the retry and the pacing both spend Monday, and the window is what makes
+that free.
+
+**Resend's batch endpoint was considered and not used.** It would collapse a thousand
+POSTs into ten, which sounds like the obvious answer and is not the one this needed: the
+send rate was never the binding constraint — at 2/s a thousand emails is eight minutes
+against ninety of model time — and it takes one idempotency key per *request* rather than
+per message, which would cost exactly the per-message guarantee item 4 is built on. Worth
+revisiting only if `EMAIL_MAX_RPS` is ever raised as far as it goes and sending is still
+the thing that is slow.
 
 ## Stage 4 — Caching improves with scale
 

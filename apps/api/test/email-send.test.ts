@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { query, queryOne } from '../src/db.ts';
 import { env } from '../src/env.ts';
-import { recentDeliveries, sendEmail } from '../src/email/send.ts';
+import {
+  deliveryNeedsRetry,
+  MAX_DELIVERY_ATTEMPTS,
+  recentDeliveries,
+  sendEmail,
+} from '../src/email/send.ts';
 import { EmailDeliveryError, setTransport, type EmailTransport } from '../src/email/transport.ts';
 import type { EmailMessage } from '../src/email/templates.ts';
 import { createUser } from './helpers/factories.ts';
@@ -206,6 +211,150 @@ describe('idempotency', () => {
       message: MESSAGE,
       idempotencyKey: 'claimed-first',
     });
+  });
+});
+
+/**
+ * The other half of the key, and the half that was missing.
+ *
+ * A claim is taken before the request, so a send that failed left the key held
+ * by a message that never went — and every later attempt was answered "already
+ * sent". Silent, permanent, and at its worst on the Monday review, which goes
+ * out to everybody at once over a rate-limited provider: a handful of failures
+ * is not a possibility at that volume, it is arithmetic.
+ */
+describe('retrying a delivery that failed', () => {
+  /** A transport that fails the first `n` sends and then works. */
+  function flaky(failures: number): EmailTransport {
+    let seen = 0;
+    return {
+      name: 'flaky',
+      async send() {
+        seen += 1;
+        if (seen <= failures) throw new EmailDeliveryError('rate limited', 429);
+        return { id: `re_${seen}`, status: 'sent' as const };
+      },
+    };
+  }
+
+  it('claims the key again after a failure, and sends on the retry', async () => {
+    const user = await createUser();
+    setTransport(flaky(1));
+    const send = () =>
+      sendEmail({ to: user.email, userId: user.id, message: MESSAGE, idempotencyKey: 'owed' });
+
+    expect(await send()).toMatchObject({ status: 'failed', reason: 'rate limited' });
+    expect(await send()).toMatchObject({ status: 'sent', id: 're_2' });
+
+    // One row throughout — the claim was re-taken, not duplicated — and it
+    // counts both attempts.
+    const rows = await deliveries();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ status: 'sent', attempts: 2, error: null });
+  });
+
+  it('still refuses to send a second copy of one that succeeded', async () => {
+    const user = await createUser();
+    const send = () =>
+      sendEmail({ to: user.email, userId: user.id, message: MESSAGE, idempotencyKey: 'done' });
+
+    expect((await send()).status).toBe('sent');
+    expect(await send()).toMatchObject({ status: 'skipped', reason: 'already sent' });
+    expect(mailbox()).toHaveLength(1);
+  });
+
+  it('gives up rather than retrying an address that will never take mail', async () => {
+    const user = await createUser();
+    setTransport(flaky(Infinity));
+    const send = () =>
+      sendEmail({ to: user.email, userId: user.id, message: MESSAGE, idempotencyKey: 'hopeless' });
+
+    const statuses: string[] = [];
+    for (let i = 0; i < MAX_DELIVERY_ATTEMPTS + 3; i += 1) statuses.push((await send()).status);
+
+    // Five real attempts, then the claim stops being re-granted. Without the
+    // bound a hard bounce becomes an hourly ritual for as long as the pass runs.
+    expect(statuses.filter((s) => s === 'failed')).toHaveLength(MAX_DELIVERY_ATTEMPTS);
+    expect(statuses.filter((s) => s === 'skipped')).toHaveLength(3);
+    expect((await deliveries())[0]).toMatchObject({
+      status: 'failed',
+      attempts: MAX_DELIVERY_ATTEMPTS,
+    });
+  });
+
+  /**
+   * The row nobody came back to settle: a process killed between the claim and
+   * the update. It looks exactly like a send in flight, so the only thing that
+   * tells them apart is how long it has looked that way.
+   */
+  it('recovers a claim abandoned by a process that died mid-send', async () => {
+    const user = await createUser();
+    setTransport({
+      name: 'vanishes',
+      send: async () => {
+        throw new Error('process died');
+      },
+    });
+    await sendEmail({ to: user.email, userId: user.id, message: MESSAGE, idempotencyKey: 'stuck' });
+    await query(
+      `UPDATE email_deliveries SET status = 'pending', error = NULL WHERE idempotency_key = $1`,
+      ['stuck'],
+    );
+
+    // Still in flight as far as anyone can tell, so it is left alone.
+    expect(await deliveryNeedsRetry('stuck')).toBe(false);
+
+    await query(
+      `UPDATE email_deliveries SET last_attempt_at = now() - interval '1 hour'
+        WHERE idempotency_key = $1`,
+      ['stuck'],
+    );
+
+    expect(await deliveryNeedsRetry('stuck')).toBe(true);
+    resetMailbox();
+    expect(
+      (await sendEmail({ to: user.email, userId: user.id, message: MESSAGE, idempotencyKey: 'stuck' }))
+        .status,
+    ).toBe('sent');
+    expect(mailbox()).toHaveLength(1);
+  });
+});
+
+describe('deliveryNeedsRetry', () => {
+  /**
+   * False, not true, and the distinction is the whole reason this is not simply
+   * "is it unsent?". No row means no attempt was ever made — which for the
+   * scheduler is a review somebody generated with the button in the app, where
+   * `POST /reviews/run` deliberately sends no mail because they are already
+   * reading it. True here would post it to them the following Monday as news.
+   */
+  it('is false for a key nothing has ever claimed, so it retries rather than originates', async () => {
+    expect(await deliveryNeedsRetry('never-heard-of-it')).toBe(false);
+  });
+
+  it('is false once the message has gone', async () => {
+    const user = await createUser();
+    await sendEmail({ to: user.email, userId: user.id, message: MESSAGE, idempotencyKey: 'gone' });
+    expect(await deliveryNeedsRetry('gone')).toBe(false);
+  });
+
+  it('is true after a failure, and false again once it is out of attempts', async () => {
+    const user = await createUser();
+    setTransport({
+      name: 'broken',
+      send: async () => {
+        throw new EmailDeliveryError('nope', 500);
+      },
+    });
+
+    await sendEmail({ to: user.email, userId: user.id, message: MESSAGE, idempotencyKey: 'owed2' });
+    expect(await deliveryNeedsRetry('owed2')).toBe(true);
+
+    await query('UPDATE email_deliveries SET attempts = $1 WHERE idempotency_key = $2', [
+      MAX_DELIVERY_ATTEMPTS,
+      'owed2',
+    ]);
+    expect(await deliveryNeedsRetry('owed2')).toBe(false);
   });
 });
 
