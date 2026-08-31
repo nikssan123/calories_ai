@@ -58,6 +58,11 @@ export default function PrivacyPage() {
           <li>Sex, date of birth, height, activity level, goal, target weight.</li>
           <li>Your timezone and the hour your day starts, which is how a 1am snack lands on the right day.</li>
           <li>Any dietary rules you set, and your unit preference.</li>
+          <li>
+            If you turn notifications on, a push token for that phone &mdash; the address a
+            reminder is delivered to, and nothing that describes you. It is deleted when you
+            turn them off, sign out, or delete the account.
+          </li>
         </List>
 
         <Sub>Because logging is the product</Sub>
@@ -158,7 +163,15 @@ export default function PrivacyPage() {
             audio leaves it; where it does not, Android hands the recording to Google to
             transcribe. Either way the recording is between your phone and Google — it is never
             sent to this app, which receives only the finished sentence, in the box, for you to
-            send or delete.
+            send or delete. <b>Notifications on Android:</b> Firebase Cloud Messaging carries
+            them, so Google is handed the push token and the text of the notification, and
+            learns that a delivery happened. It is not given your meals; a reminder says only
+            what you would read on the lock screen.
+          </Row>
+          <Row label="Apple">
+            Notifications on iPhone go the same way through the Apple Push Notification
+            service: Apple is handed the token and the text, and learns a delivery happened.
+            Turn notifications off and no token is ever registered with either company.
           </Row>
           <Row label="Open Food Facts">
             Consulted when you scan a barcode. It receives the number on the packet and nothing
