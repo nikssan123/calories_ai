@@ -208,7 +208,7 @@ export function LockedPanel({
  * How early the count appears, as a number of remaining turns.
  *
  * A flat three was right while every ceiling it ran against was large — three
- * out of Plus's sixty is the last 5% of the month, which is a warning. It stops
+ * out of Plus's ninety is the last 3% of the month, which is a warning. It stops
  * being right on a small grant: three out of free's **ten** is 70% of the
  * allowance spent before the app says a word, and the whole argument for this
  * component is that a limit somebody can see is a plan while a limit they
@@ -220,8 +220,8 @@ export function LockedPanel({
  *   free   chat    10  ->  5   the halfway point, which is the point
  *   free   photo    1  ->  3   floor; only 1 and 0 exist, so it shows at 1
  *   plus   photo    8  ->  4
- *   plus   chat    60  ->  5   cap; 30 left is not news
- *   coach  chat   150  ->  5
+ *   plus   chat    90  ->  5   cap; 45 left is not news
+ *   coach  chat   180  ->  5
  *
  * The cap is what stops "half" turning the chip into a permanent fixture on the
  * tiers people pay for, and the floor is what stops a two-turn grant from

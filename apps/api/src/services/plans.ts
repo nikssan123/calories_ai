@@ -377,29 +377,40 @@ const LIMITS: Record<PlanName, PlanLimits> = {
    *
    * COGS at the ceiling, at the 5m cache TTL:
    *
-   *   60 chat   x $0.041   $2.46
+   *   90 chat   x $0.041   $3.69
    *    8 photo  x $0.151   $1.21
    *      review 4.3 x $0.024  $0.10
    *      nudge  4.3 x $0.025  $0.11
    *                         ------
-   *                         $3.88   against $7.08 annual store net -> 45%
-   *                                 against $8.49 monthly store    -> 54%
+   *                         $5.11   against $7.08 annual store net -> 28%
+   *                                 against $8.49 monthly store    -> 40%
    *
-   * **60 is a normal user, not a heavy one, and that distinction is the whole
-   * correction here.** A previous revision granted 100 — three AI messages a
-   * day — because it had been sized off the busiest account on the deployment.
-   * That is Coach's job. Two a day is what somebody logging three meals
-   * actually spends, because the other meals go in through manual entry,
-   * repeat-a-meal or a barcode, none of which touch a model or this file.
+   * **Sixty was sized off a guess about a normal user, and the first real one
+   * spends twice it.** The previous revision of this block argued that "two a
+   * day is what somebody logging three meals actually spends, because the other
+   * meals go in through manual entry, repeat-a-meal or a barcode". The one
+   * account on the deployment that is neither the operator nor a store reviewer
+   * runs **4.17 chat turns per active day, active on 12 of 13 days — about 115
+   * a month** — and it is flat from the first day rather than an onboarding
+   * burst that decays. Sixty walled that person on day 16 and left them looking
+   * at a dead composer for the back half of a month they had paid for.
    *
-   * The fat margin is deliberate and it is not really margin. Nobody sits at
-   * the ceiling every month, so the realistic figure is well under $3.89 — and
-   * more to the point this is the tier that has to survive a cost estimate
-   * being wrong again, which has now happened three times in this file's
-   * history. Headroom here is what stops the next surprise being a reprice.
+   * Ninety does not cover 115 either, and that is deliberate: it is the point
+   * at which this tier stops being cheaper to serve than Coach's own ceiling
+   * (28% against 19%), which is the last place the ladder still means anything.
+   * Covering a 115-turn month wants the per-turn cost down rather than the
+   * ceiling up — the prefix is 19,714 tokens of system prompt and tool schema
+   * on every turn, and a journal turn calls about thirteen of the twenty-seven
+   * tools it is handed. That is worth more than any further number here.
+   *
+   * The margin that used to sit in this block was called headroom against a
+   * cost estimate being wrong again, which had by then happened three times in
+   * this file's history. Half of it has now been spent on the ceiling. What
+   * survives of the argument is the honest half: nobody sits at the ceiling
+   * every month, so the realistic figure is well under $5.11.
    */
   plus: {
-    chat: { allowed: 60, period: 'month' },
+    chat: { allowed: 90, period: 'month' },
     photo: { allowed: 8, period: 'month' },
     pantryScan: { allowed: null, period: 'month' },
     recipe: { allowed: null, period: 'month' },
@@ -413,7 +424,7 @@ const LIMITS: Record<PlanName, PlanLimits> = {
   /*
    * Coach — $24.99/mo or $249.99/yr. Plus, the kitchen, and the headroom.
    *
-   *   150 chat        x $0.041   $6.15
+   *   180 chat        x $0.041   $7.38
    *    25 photo       x $0.151   $3.78
    *    10 fridge scan x $0.041   $0.41
    *     8 recipe      x $0.170   $1.36
@@ -421,11 +432,11 @@ const LIMITS: Record<PlanName, PlanLimits> = {
    *       review      4.3 x $0.024  $0.10
    *       nudge       4.3 x $0.025  $0.11
    *                              ------
-   *                              $13.17  against $17.71 annual store  -> 26%
-   *                                      against $21.24 monthly store -> 38%
-   *                                      against $23.97 monthly web   -> 45%
+   *                              $14.40  against $17.71 annual store  -> 19%
+   *                                      against $21.24 monthly store -> 32%
+   *                                      against $23.97 monthly web   -> 40%
    *
-   * ---- Where 150 and 25 come from ---------------------------------------------
+   * ---- Where 180 and 25 come from ---------------------------------------------
    *
    * The heaviest real account on the deployment, read off `ai_usage` rather than
    * imagined: 6.25 chat turns and 2.0 photos a day across four active days,
@@ -433,26 +444,33 @@ const LIMITS: Record<PlanName, PlanLimits> = {
    * onboarding burst that is not what a steady month looks like — leaves 3.3
    * chat and 1.67 photos a day, so **100 chat and 50 photos a month**.
    *
-   * 150 covers that with room above it, which is the point of a top tier: the
-   * person who reaches for it should not then be counting. It is also 2.5x Plus
-   * rather than equal to it — an earlier revision granted 100 on both, which
-   * left Coach selling nothing but the kitchen to anybody who talks to the app
-   * a lot.
+   * 180 covers that with room above it, which is the point of a top tier: the
+   * person who reaches for it should not then be counting. It also covers, half
+   * again over, the 115-turn month measured on the account that moved Plus to
+   * ninety. And it stays 2x Plus rather than drifting level with it — an earlier
+   * revision granted 100 on both, which left Coach selling nothing but the
+   * kitchen to anybody who talks to the app a lot.
+   *
+   * 19% is thin, and thinner than the 26% this tier held at 150. It is also the
+   * tier where that cannot be trimmed back: $3.03 of the $14.40 is fridge scans,
+   * recipes and plans, and a meal plan is ~10k tokens of *output*, which no
+   * amount of caching touches. So the next cost surprise lands here rather than
+   * on Plus, and it lands as a reprice rather than as a smaller ceiling.
    *
    * Photos are granted at half the measured rate and the other half is a bundle,
-   * because the two lines cost very different amounts: 150 chat turns is $6.15
+   * because the two lines cost very different amounts: 180 chat turns is $7.38
    * and 50 photos would be $7.55. Sizing the tier to the full photo rate prices
    * every Coach subscriber for the habits of the heaviest one, and most of them
    * do not photograph two meals a day.
    *
-   * That account on this tier plus one 25-bundle: $16.94 of cost against $28.03
-   * of revenue, 40%. Which is the point of selling stock separately — the
+   * That account on this tier plus one 25-bundle: $18.18 of cost against $28.03
+   * of revenue, 35%. Which is the point of selling stock separately — the
    * heaviest user is the *best* customer rather than the one who breaks the
    * model, and nobody else subsidises them.
    *
    * ---- The kitchen, after the one measurement that was left ------------------
    *
-   * $3.03 of this $13.17 is fridge scans, recipes and plans. It was $3.94 until
+   * $3.03 of this $14.40 is fridge scans, recipes and plans. It was $3.94 until
    * `recipe` moved to Sonnet on 2026-08-24 — 12 pantry scenarios, 3 runs each,
    * scored on the rules `RECIPE_SYSTEM_PROMPT` states rather than on taste.
    * Sonnet matched Opus on ingredient arithmetic and overshot the day's
@@ -471,7 +489,7 @@ const LIMITS: Record<PlanName, PlanLimits> = {
    *
    */
   coach: {
-    chat: { allowed: 150, period: 'month' },
+    chat: { allowed: 180, period: 'month' },
     photo: { allowed: 25, period: 'month' },
     pantryScan: { allowed: 10, period: 'month' },
     recipe: { allowed: 8, period: 'month' },

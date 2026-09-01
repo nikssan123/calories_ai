@@ -698,7 +698,22 @@ function WeeklyRead() {
  * step with it. That is a real seam and the wrong one to leave open — the API
  * already ships `PlanTier` to the clients for exactly this reason — but the
  * landing page is served to signed-out visitors who have no session to fetch an
- * entitlement with, so it is copy for now.
+ * entitlement with, so it is copy for now. `allowance` is where the seam now
+ * lives, in one shape per tier, rather than scattered through three sentences.
+ *
+ * ---- Why the two ceilings are a field rather than a point -------------------
+ *
+ * They used to be prose inside `points`, and the three cards said them three
+ * different ways in three different positions: free's were the third point and
+ * shared one sentence, Plus's were the first two points as separate ones, and
+ * Coach's were a single point starting "Everything in Plus, with…". Every one
+ * of those sentences was accurate.
+ *
+ * Comparing tiers means reading *across* a row, and there was no row to read —
+ * so the one question the table exists to answer, how much more do I get, was
+ * the one thing on it you had to hunt for. Now the same two figures sit in the
+ * same band at the same height on all three cards, and `points` is left saying
+ * only what differs in kind rather than in number.
  */
 const PLANS = [
   {
@@ -708,10 +723,23 @@ const PLANS = [
     monthlyCadence: 'for as long as you want it',
     annualCadence: 'for as long as you want it',
     pitch: 'The whole diary. It works on a plane.',
+    /* `period` carries the clock rather than assuming one, because free's photo
+       is the single lifetime grant in the product — "a month" under it would be
+       the sort of wrong a person only finds out about in week two. */
+    allowance: [
+      { figure: '10', unit: 'messages', period: 'a month' },
+      { figure: '1', unit: 'photo scan', period: 'to try' },
+    ],
+    /* Three rather than two, and the third is doing structural work as much as
+       it is saying something: the cards stretch to a common height and the
+       button is pinned to the bottom of each, so a card carrying two points
+       against Plus's four is mostly a hole above its button. Streaks and
+       achievements appear in no meter in `plans.ts`, which makes "on every
+       plan" the accurate claim rather than a generous one. */
     points: [
       'Type a meal in, repeat yesterday’s, scan a barcode — unlimited, and offline',
       'Your day, your history, your weight and your trends',
-      '10 messages a month, plus one photo scan to try, are on the house',
+      'Streaks and achievements, on every plan including this one',
     ],
     cta: 'Get started',
     featured: false,
@@ -723,9 +751,13 @@ const PLANS = [
     monthlyCadence: 'a month, cancel whenever',
     annualCadence: 'a year — $8.33 a month, two months free',
     pitch: 'Talk to it instead of typing.',
+    allowance: [
+      { figure: '90', unit: 'messages', period: 'a month' },
+      { figure: '8', unit: 'photo scans', period: 'a month' },
+    ],
     points: [
-      '60 messages a month — typing a meal in stays free and unlimited',
-      '8 photo scans a month, and more by the bundle when you want them',
+      'Typing a meal in stays free and unlimited',
+      'More photo scans by the bundle, whenever you want them',
       'A weekly read of how the fortnight actually went',
       'A target that moves with the evidence',
     ],
@@ -739,8 +771,12 @@ const PLANS = [
     monthlyCadence: 'a month, cancel whenever',
     annualCadence: 'a year — $20.83 a month, two months free',
     pitch: 'And it decides what you are cooking.',
+    allowance: [
+      { figure: '180', unit: 'messages', period: 'a month' },
+      { figure: '25', unit: 'photo scans', period: 'a month' },
+    ],
     points: [
-      'Everything in Plus, with 150 messages and 25 photo scans a month',
+      'Everything in Plus',
       '8 recipes a month, written against what is in your kitchen',
       '2 weeks of dinners planned, with the shopping list',
       '10 fridge scans to fill the kitchen in without typing',
@@ -811,7 +847,7 @@ function Pricing({ start }: { start: Cta }) {
           wrapper that has already shrunk to fit it. Three cards of three
           different heights read as three different kinds of thing. */}
       <div className="mt-8 grid items-stretch gap-6 lg:grid-cols-3">
-        {PLANS.map(({ name, monthly, annual, monthlyCadence, annualCadence, pitch, points, cta, featured }, i) => (
+        {PLANS.map(({ name, monthly, annual, monthlyCadence, annualCadence, pitch, allowance, points, cta, featured }, i) => (
           <Reveal key={name} delay={i * 80} className="h-full">
             <div
               className={cn(
@@ -842,9 +878,42 @@ function Pricing({ start }: { start: Cta }) {
                 {yearly ? annualCadence : monthlyCadence}
               </p>
 
-              <p className="mt-5 text-body leading-relaxed font-semibold">{pitch}</p>
+              {/* Two fixed lines, for the same reason the cadence above has
+                  them and now for a second one. Three pitches of two different
+                  lengths wrap at different widths — at the narrowest three-column
+                  layout Plus's fits on one line and the other two do not — and
+                  everything below inherits the offset, which lands the allowance
+                  band at three different heights on the one row the table exists
+                  to be read across. */}
+              <p className="mt-5 min-h-[3.25em] text-body leading-relaxed font-semibold">{pitch}</p>
 
-              <Points items={[...points]} className="mt-3" />
+              {/* The band the whole table is read across. `border-y-2` rather
+                  than a panel so it carries the same rule weight as the points
+                  below it — one rhythm down the card, with the numbers simply
+                  the loudest thing in it.
+
+                  `flex-col-reverse` puts the figure above its label while
+                  leaving <dt> ahead of <dd> in the DOM, which is the order a
+                  description list has to be read in. The label is two fixed
+                  lines for the same reason the cadence above is: "photo scan /
+                  to try" wraps where "messages / a month" does not, and a band
+                  that changes height between cards is the exact thing this is
+                  here to stop. */}
+              <dl className="border-border mt-5 grid grid-cols-2 gap-4 border-y-2 py-5">
+                {allowance.map(({ figure, unit, period }) => (
+                  <div key={unit} className="flex flex-col-reverse">
+                    <dt className="text-footnote text-muted-foreground mt-1.5 leading-snug">
+                      <span className="block">{unit}</span>
+                      <span className="block">{period}</span>
+                    </dt>
+                    <dd className="tnum text-[26px] leading-none font-extrabold tracking-[-0.02em]">
+                      {figure}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+
+              <Points items={[...points]} />
 
               {/* `mt-auto` on the wrapper rather than a fixed gap on the button:
                   the three cards carry different numbers of points, so a fixed
