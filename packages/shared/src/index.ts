@@ -116,6 +116,30 @@ export const MeterName = z.enum(METERS);
 export type MeterName = z.infer<typeof MeterName>;
 
 /**
+ * The photo bundles, named here for the same reason `METERS` is.
+ *
+ * The client needs these ids to ask a store for the products, and the server
+ * needs them to recognise what came back on a webhook — `services/billing.ts`
+ * matches `product_id` against them exactly, which is why an iOS product id has
+ * to be `photo_25` and not `com.daysofar.app.photo.25` the way the
+ * subscriptions are. Two copies of that list is how the two halves drift into
+ * a purchase that takes money and grants nothing.
+ *
+ * `scans` is here because it is what the bundle *is* — the copy on the button
+ * says it, and the server credits it. The **price is deliberately not**: the
+ * store is the only honest source of that, in the buyer's own currency, and a
+ * client hardcoding "$3.99" is wrong in most of the world. See the note on
+ * `PRICES` in `services/plans.ts`.
+ */
+export const PHOTO_BUNDLES = [
+  { id: 'photo_10', scans: 10 },
+  { id: 'photo_25', scans: 25 },
+  { id: 'photo_50', scans: 50 },
+] as const;
+
+export type PhotoBundleId = (typeof PHOTO_BUNDLES)[number]['id'];
+
+/**
  * What is left of one meter, for a screen that has to say so *before* the
  * button is pressed.
  *

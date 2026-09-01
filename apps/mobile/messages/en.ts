@@ -938,6 +938,13 @@ export const en = {
   'plans.yearly': 'Yearly',
   'plans.monthly': 'Monthly',
   'plans.oneMoment': 'One moment…',
+  'plans.scansHeading': 'MORE PHOTO SCANS',
+  'plans.scansBody': 'Bought once, not a subscription. They keep until you use them.',
+  'plans.scansCount': (count: number) => `${count} photo scans`,
+  'plans.scansAdded': (count: number) => `${count} scans added.`,
+  'plans.scansOnTheWay': 'Paid. Your scans will appear in a moment.',
+  'plans.scansBuyHint': (count: number, price: string) =>
+    `Buy ${count} photo scans for ${price}`,
   'plans.checkingStore': 'Checking the store…',
   'plans.alreadyPaid': 'Already paid? Restore it',
   'plans.restorePrompt': 'I would like to restore a transaction',

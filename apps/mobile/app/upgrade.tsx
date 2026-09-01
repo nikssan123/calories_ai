@@ -7,14 +7,18 @@ import type { PlanName } from '@ct/shared';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { useToast } from '@/components/Toast';
 import { useEntitlements } from '@/lib/entitlements';
+import { api } from '@/lib/api';
 import {
   billingAvailable,
+  bundles,
   buyables,
   manageSubscription,
   purchase,
+  purchaseBundle,
   PurchaseCancelled,
   restore,
   type Buyable,
+  type Bundle,
 } from '@/lib/billing';
 import {
   ALWAYS_FREE,
@@ -85,11 +89,14 @@ export default function UpgradeScreen() {
    * is what the toggle's own saving badge is for.
    */
   const [period, setPeriod] = useState<'month' | 'year'>('month');
+  const [packs, setPacks] = useState<Bundle[] | null>(null);
+  const [buying, setBuying] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let live = true;
     void buyables().then((found) => live && setOffers(found));
+    void bundles().then((found) => live && setPacks(found));
     return () => {
       live = false;
     };
@@ -191,6 +198,34 @@ export default function UpgradeScreen() {
    * holds is worth reading even when the price is not there yet, and a screen
    * that is blank until a network call lands looks broken.
    */
+  /**
+   * Buy a bundle of scans.
+   *
+   * Deliberately not routed through `buy`: that one swaps the plan and leaves
+   * for `/purchased`, and neither is true here. A bundle tops up stock on the
+   * plan somebody already has, so the screen stays where it is and the only
+   * thing that changes is the count — which is also why the wait polls credits
+   * rather than the plan. See `purchaseBundle`.
+   */
+  async function buyPack(pack: Bundle) {
+    if (buying) return;
+    setBuying(pack.id);
+    try {
+      const landed = await purchaseBundle(pack, async () => {
+        const entitlements = await api.entitlements();
+        return entitlements.allowances.find((a) => a.meter === 'photo')?.credits ?? 0;
+      });
+      await refresh();
+      if (landed) toast.success(tr('plans.scansAdded')(pack.scans));
+      else toast.message(tr('plans.scansOnTheWay'));
+    } catch (error) {
+      // Closing the store sheet is an answer, not a failure.
+      if (!(error instanceof PurchaseCancelled)) toast.error((error as Error).message);
+    } finally {
+      setBuying(null);
+    }
+  }
+
   const sellable = billingAvailable && offers !== null && offers.length > 0;
 
   return (
@@ -329,6 +364,52 @@ export default function UpgradeScreen() {
               : tr('plans.noStore')}
           </Text>
         </Chunk>
+      )}
+
+      {/*
+        Scans, sold by the bundle.
+
+        Below the tiers and not among them, because a bundle is not a tier: it
+        is stock on whatever plan you are already on, and it does not expire.
+        Somebody on Coach can still run out of scans in a heavy month, so this
+        shows on every plan — which is also why it is not inside the
+        `chosen !== plan` guard the Get button uses.
+
+        Hidden entirely on an empty list. A store that has not approved the
+        products yet, or a build with no key, should show nothing here rather
+        than three buttons that cannot charge anyone.
+      */}
+      {packs !== null && packs.length > 0 && (
+        <View style={styles.packs}>
+          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+            {tr('plans.scansHeading')}
+          </Text>
+          <Text style={[t.footnote, { color: colors.mutedForeground }]}>
+            {tr('plans.scansBody')}
+          </Text>
+          {packs.map((pack) => (
+            <PressableChunk
+              key={pack.id}
+              radius={16}
+              disabled={buying !== null}
+              onPress={() => void buyPack(pack)}
+              accessibilityRole="button"
+              accessibilityLabel={tr('plans.scansBuyHint')(pack.scans, pack.price)}
+              style={{ opacity: buying !== null && buying !== pack.id ? 0.5 : 1 }}
+              contentStyle={[
+                styles.pack,
+                { backgroundColor: colors.card, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[t.bodyBold, { color: colors.foreground }]}>
+                {tr('plans.scansCount')(pack.scans)}
+              </Text>
+              <Text style={[t.bodyBold, { color: colors.foreground }]}>
+                {buying === pack.id ? tr('plans.oneMoment') : pack.price}
+              </Text>
+            </PressableChunk>
+          ))}
+        </View>
       )}
 
       {/*
@@ -582,6 +663,15 @@ function Check({ color }: { color: string }) {
 }
 
 const styles = StyleSheet.create({
+  packs: { gap: 8, marginTop: 28 },
+  pack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
   flex: { flex: 1 },
   page: { paddingHorizontal: 20, gap: 14 },
   topRow: { flexDirection: 'row', justifyContent: 'flex-end' },

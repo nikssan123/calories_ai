@@ -6,8 +6,9 @@ import type {
   LOG_LEVEL as LogLevel,
   PurchasesOffering,
   PurchasesPackage,
+  PurchasesStoreProduct,
 } from 'react-native-purchases';
-import { PLANS, type PlanName } from '@ct/shared';
+import { PHOTO_BUNDLES, PLANS, type PhotoBundleId, type PlanName } from '@ct/shared';
 
 /**
  * The store, from the phone's side.
@@ -369,6 +370,106 @@ async function awaitPlan(confirm: () => Promise<PlanName>, want?: PlanName): Pro
     try {
       const plan = await confirm();
       if (want ? plan === want : plan !== 'free') return true;
+    } catch {
+      // A failed read is a reason to try again, not to conclude anything.
+    }
+  }
+  return false;
+}
+
+
+/**
+ * A photo bundle, priced by the store.
+ *
+ * Separate from `Buyable` because a bundle is not a tier: it grants stock, not
+ * access, so nothing about it belongs in the plan comparison and `planOf`
+ * correctly refuses to classify one.
+ */
+export interface Bundle {
+  id: PhotoBundleId;
+  /** How many scans it adds. From `@ct/shared`, not from the store. */
+  scans: number;
+  /** Localised and tax-inclusive where the store says so. */
+  price: string;
+  /** What to hand back to `purchaseBundle()`. */
+  product: PurchasesStoreProduct;
+}
+
+/**
+ * The photo bundles the store will actually sell right now.
+ *
+ * Fetched with `getProducts` rather than read off an offering, because a
+ * bundle is not part of the paywall's tier comparison and putting it in the
+ * offering would make it a package the wall then has to filter back out. The
+ * ids are the same three on both stores — see `PHOTO_BUNDLES`.
+ *
+ * Empty on every failure path, exactly like `buyables`: a keyless build, a
+ * store that has not approved the products yet, a simulator with no account.
+ * The section that draws them is hidden on an empty list rather than showing
+ * three dead buttons.
+ */
+export async function bundles(): Promise<Bundle[]> {
+  const Purchases = purchases();
+  if (!API_KEY || !Purchases || configuredFor === null) return [];
+  let products: PurchasesStoreProduct[] = [];
+  try {
+    products = await Purchases.getProducts(PHOTO_BUNDLES.map((bundle) => bundle.id));
+  } catch {
+    return [];
+  }
+
+  const found: Bundle[] = [];
+  // Iterate the declared list rather than the store's answer, so the order is
+  // ours (smallest first) and an unrecognised product cannot appear.
+  for (const bundle of PHOTO_BUNDLES) {
+    const product = products.find((candidate) => candidate.identifier === bundle.id);
+    if (!product) continue;
+    found.push({ id: bundle.id, scans: bundle.scans, price: product.priceString, product });
+  }
+  return found;
+}
+
+/**
+ * Buy a bundle, and wait for the scans to actually arrive.
+ *
+ * The same shape as `purchase()` and for the same reason — the store returns
+ * when the sheet closes, and the credit travels store → RevenueCat → webhook →
+ * `photo_credits` — but it waits on a different thing. A bundle never changes
+ * the plan, so polling the plan would poll something that is correct before the
+ * purchase and still correct after it, and report success instantly every time.
+ *
+ * `confirm` re-reads the photo allowance and returns its credit balance; this
+ * polls until that number goes up. A timeout resolves `false`: the receipt is
+ * real and the webhook will land, so "it will appear in a moment" is the true
+ * thing to say, not "that failed".
+ */
+export async function purchaseBundle(
+  bundle: Bundle,
+  confirm: () => Promise<number>,
+): Promise<boolean> {
+  const Purchases = purchases();
+  if (!Purchases) throw new Error('The store is not available in this build.');
+
+  let before = 0;
+  try {
+    before = await confirm();
+  } catch {
+    // Unknown is fine: any increase off zero still reads as an increase.
+  }
+
+  try {
+    await Purchases.purchaseStoreProduct(bundle.product);
+  } catch (error) {
+    if ((error as { userCancelled?: boolean }).userCancelled) throw new PurchaseCancelled();
+    throw new Error(
+      (error as { message?: string }).message ?? 'The store could not complete that purchase.',
+    );
+  }
+
+  for (let attempt = 0; attempt < 10; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 400 : 1000));
+    try {
+      if ((await confirm()) > before) return true;
     } catch {
       // A failed read is a reason to try again, not to conclude anything.
     }

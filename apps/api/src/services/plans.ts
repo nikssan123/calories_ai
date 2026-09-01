@@ -1,4 +1,12 @@
-import { METERS, PLANS, type MeterName, type PlanName, type PlanTier } from '@ct/shared';
+import {
+  METERS,
+  PHOTO_BUNDLES as BUNDLE_SIZES,
+  PLANS,
+  type MeterName,
+  type PhotoBundleId,
+  type PlanName,
+  type PlanTier,
+} from '@ct/shared';
 
 /**
  * What each plan is allowed to spend.
@@ -287,13 +295,23 @@ export const PRICING: Record<Exclude<PlanName, 'free'>, { monthlyUsd: number; an
  * topping up a plan you already pay for, not like being charged a premium for
  * having run out.
  */
-export const PHOTO_BUNDLES = [
-  { id: 'photo_10', scans: 10, priceUsd: 3.99 },
-  { id: 'photo_25', scans: 25, priceUsd: 7.99 },
-  { id: 'photo_50', scans: 50, priceUsd: 13.99 },
-] as const;
+const BUNDLE_PRICES_USD: Record<PhotoBundleId, number> = {
+  photo_10: 3.99,
+  photo_25: 7.99,
+  photo_50: 13.99,
+};
 
-export type PhotoBundleId = (typeof PHOTO_BUNDLES)[number]['id'];
+/**
+ * The ids and sizes come from `@ct/shared` so the phone asks the store for the
+ * same three products this recognises on the way back; only the price is added
+ * here, for the reason given on `PRICES`.
+ */
+export const PHOTO_BUNDLES = BUNDLE_SIZES.map((bundle) => ({
+  ...bundle,
+  priceUsd: BUNDLE_PRICES_USD[bundle.id],
+}));
+
+export type { PhotoBundleId };
 
 const LIMITS: Record<PlanName, PlanLimits> = {
   /*
