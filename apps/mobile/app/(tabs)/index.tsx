@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Pressable,
   ScrollView,
@@ -226,6 +227,19 @@ export default function JournalScreen() {
    * scrolled back through history.
    */
   const pinned = useRef(true);
+  /*
+   * Whether the finger is what is moving the column.
+   *
+   * `onScroll` cannot tell the reader's scroll from the app's own, and this
+   * screen issues one on every growth — so a photo that finishes decoding
+   * between `scrollToEnd` and the delivery of the event it caused reports the
+   * app's own scroll to the end as a scroll three hundred pixels away from it,
+   * and unpins a conversation nobody touched. After that the journal simply
+   * stops following, which is how it comes to open half a screen up.
+   *
+   * So only a gesture may unpin: a drag, and the momentum it throws.
+   */
+  const touching = useRef(false);
   /**
    * The day, for the callbacks that need only its date.
    *
@@ -284,16 +298,48 @@ export default function JournalScreen() {
   );
 
   /*
-   * Reaching the end is not one scroll but a series: a photo has no height
-   * until it decodes, so the column keeps growing under a scroll that has
-   * already finished. `onContentSizeChange` is the RN spelling of the web's
-   * ResizeObserver on the column — it fires on every one of those growths, and
-   * following it is what stops a freshly opened journal parking just above the
-   * message it was opened to read.
+   * Reaching the end is two scrolls a frame apart, and the second one is the
+   * one that works.
+   *
+   * `onContentSizeChange` is the RN spelling of the web's ResizeObserver on the
+   * column, and it fires on every growth — a streamed reply arriving a word at
+   * a time, a card unfolding under it. But the scroll it asks for cannot land
+   * yet: the event reaches JS before the native view has been laid out at its
+   * new height, so `scrollToEnd` clamps to the height the column still is and
+   * goes nowhere. On a cold start, where forty messages appear in a single
+   * commit and there is no second growth to save it, that was the whole bug —
+   * the journal opened on the *oldest* message in the history it had just
+   * fetched, having never emitted a scroll event at all.
+   *
+   * Both calls rather than only the deferred one: when the size was already
+   * committed the first lands immediately and the second is a no-op, which is
+   * the difference between arriving at the end and arriving a frame late.
    */
   const stickToBottom = useCallback(() => {
-    if (pinned.current) scroller.current?.scrollToEnd({ animated: false });
+    if (!pinned.current) return;
+    scroller.current?.scrollToEnd({ animated: false });
+    requestAnimationFrame(() => {
+      if (pinned.current) scroller.current?.scrollToEnd({ animated: false });
+    });
   }, []);
+
+  /*
+   * The keyboard, which moves the end of the conversation without changing the
+   * length of it.
+   *
+   * Everything above follows the *content* growing, and none of it fires here:
+   * opening the keyboard leaves the column exactly as long as it was and takes
+   * away the bottom third of the window it is being read through, so the last
+   * message ends up behind the keys with nothing to say it moved. The column's
+   * own `onLayout` catches the same thing — and catches the composer growing a
+   * line as it is typed into, which is the other way this happens — but it
+   * lands mid-animation on iOS, where the padding arrives over a quarter of a
+   * second. `keyboardDidShow` is the frame after that settles.
+   */
+  useEffect(() => {
+    const shown = Keyboard.addListener('keyboardDidShow', stickToBottom);
+    return () => shown.remove();
+  }, [stickToBottom]);
 
   /**
    * Re-read the day. Stable, because it is a prop on every memoised row — an
@@ -376,11 +422,36 @@ export default function JournalScreen() {
     [refreshDay],
   );
 
-  const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+  const measure = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     pinned.current =
       contentSize.height - contentOffset.y - layoutMeasurement.height < NEAR_BOTTOM_PX;
   }, []);
+
+  const onScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (touching.current) measure(event);
+    },
+    [measure],
+  );
+
+  /*
+   * The two halves of a flick — the drag, and the coasting after it — are
+   * separate gestures to the native view, and the gap between them is where a
+   * scroll that is still the reader's would otherwise stop counting as one.
+   * Both ends measure, so a flick that lands at the bottom re-pins.
+   */
+  const onTouchBegin = useCallback(() => {
+    touching.current = true;
+  }, []);
+
+  const onTouchEnd = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      measure(event);
+      touching.current = false;
+    },
+    [measure],
+  );
 
   /**
    * Asks the server what became of a turn whose connection died.
@@ -715,7 +786,14 @@ export default function JournalScreen() {
         contentContainerStyle={styles.column}
         onScroll={onScroll}
         scrollEventThrottle={16}
+        onScrollBeginDrag={onTouchBegin}
+        onScrollEndDrag={onTouchEnd}
+        onMomentumScrollBegin={onTouchBegin}
+        onMomentumScrollEnd={onTouchEnd}
         onContentSizeChange={stickToBottom}
+        // Growing content is only half of it: the window it is read through
+        // shrinks too, for the keyboard and for a composer being typed into.
+        onLayout={stickToBottom}
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
       >
