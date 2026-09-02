@@ -37,6 +37,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { loadDay, localToday, pendingIds, withPending } from '@/lib/day';
 import { drop, enqueue, newId, onRejected } from '@/lib/outbox';
+import { maybeAskForReview } from '@/lib/review-prompt';
 import { useOutbox } from '@/hooks/useOutbox';
 import { useUnits } from '@/lib/units';
 import { duration, ease, font, type as t, useColors, type Palette } from '@/theme';
@@ -321,6 +322,27 @@ export default function TodayScreen() {
     void writeDaySnapshot(day, locale, profile);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isToday, locale, profile, day?.local_date, day?.consumed.kcal, day?.targets.kcal, day?.burned_kcal]);
+
+  /*
+   * The ask for a store rating. Why this moment and not another is in
+   * `lib/review-prompt.ts`; what belongs here is only when it is safe to ask.
+   *
+   * `isToday`, because a run is a claim about now. `day.streak` is null on
+   * every other day already, so this is belt and braces — but stepping back
+   * through the calendar should not be able to trigger anything at all.
+   *
+   * An empty queue, because an ask that arrives while meals are still waiting
+   * to send is an ask made over the top of the app visibly not working. The
+   * milestone is not spent by skipping it; the next launch on a live
+   * connection gets it.
+   */
+  useEffect(() => {
+    if (!isToday || waiting > 0) return;
+    const run = day?.streak?.current;
+    if (typeof run !== 'number') return;
+    void maybeAskForReview(run);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isToday, waiting, day?.streak?.current]);
   const step = (days: number) =>
     setDate((current) => shiftDate(current ?? day?.local_date ?? today ?? '', days));
 
