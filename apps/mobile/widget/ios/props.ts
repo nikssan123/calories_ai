@@ -91,7 +91,7 @@ export function familySize(screenWidth = 393) {
  * that has come out unreadable.
  */
 export interface Paint {
-  card: string;
+  background: string;
   foreground: string;
   mutedForeground: string;
   calories: string;
@@ -103,7 +103,7 @@ export interface Paint {
 }
 
 const paintOf = (palette: WidgetPalette): Paint => ({
-  card: palette.card as string,
+  background: palette.background as string,
   foreground: palette.foreground as string,
   mutedForeground: palette.mutedForeground as string,
   calories: palette.calories as string,

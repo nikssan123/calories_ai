@@ -61,8 +61,8 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
    * drawn outside the app, and nothing out there can ask the app.
    */
   const PLACEHOLDER = dark
-    ? { card: '#241d19', foreground: '#f7efe6', mutedForeground: '#a79a8d' }
-    : { card: '#ffffff', foreground: '#31261e', mutedForeground: '#77685b' };
+    ? { background: '#1a1512', foreground: '#f7efe6', mutedForeground: '#a79a8d' }
+    : { background: '#fff6ec', foreground: '#31261e', mutedForeground: '#77685b' };
   /*
    * The scheme is only knowable here, so both palettes were sent. Same reason
    * the Android handler renders a light and a dark rendition: a widget cannot
@@ -229,7 +229,7 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
   );
 
   /**
-   * The card every shape sits on.
+   * The ground every shape sits on.
    *
    * `containerBackground` rather than a drawn rectangle, because that is the
    * one iOS insists on: from iOS 17 a widget's background has to be declared
@@ -237,11 +237,16 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
    * the same view be legible when the reader has tinted their home screen. No
    * border, unlike Android — the system clips every widget to its own rounded
    * rectangle, and a stroke inside that reads as a second, wrong edge.
+   *
+   * Which is also why this is the app's ground and not the app's card. A card
+   * is white because it is lifted off the cream underneath it; out here there
+   * is nothing to lift off and no border to hold it, so white came out as a
+   * bare slab that belonged to no particular app. See `theme.ts`.
    */
   const shell = (children: React.ReactNode) => (
     <ZStack
       modifiers={[
-        containerBackground(paint.card, 'widget'),
+        containerBackground(paint.background, 'widget'),
         widgetURL('daysofar:///'),
         accessibilityLabel(props.spoken),
       ]}

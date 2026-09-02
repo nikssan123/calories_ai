@@ -44,12 +44,17 @@ export function DayWidget({
   );
 }
 
-/** The card every shape is drawn on: the app's own, at the app's own radius. */
-const card = (colors: WidgetPalette) =>
+/**
+ * The tile every shape is drawn on, at the app's own radius.
+ *
+ * Tinted with the app's ground rather than its card: a card is white because
+ * it sits on cream, and out here there is no cream under it. See `theme.ts`.
+ */
+const shell = (colors: WidgetPalette) =>
   ({
     height: 'match_parent',
     width: 'match_parent',
-    backgroundColor: colors.card,
+    backgroundColor: colors.background,
     borderColor: colors.border,
     borderWidth: 2,
     borderRadius: 28,
@@ -78,7 +83,7 @@ function Line({
       {...OPEN_JOURNAL}
       accessibilityLabel={spoken}
       style={{
-        ...card(colors),
+        ...shell(colors),
         justifyContent: 'center',
         paddingHorizontal: layout.paddingHorizontal,
         paddingVertical: layout.padding,
@@ -171,7 +176,7 @@ function Card({
       {...OPEN_JOURNAL}
       accessibilityLabel={spoken}
       style={{
-        ...card(colors),
+        ...shell(colors),
         flexDirection: 'row',
         alignItems: 'center',
         padding: layout.padding,

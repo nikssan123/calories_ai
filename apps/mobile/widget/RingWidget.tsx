@@ -55,7 +55,7 @@ export function RingWidget({
         width: 'match_parent',
         justifyContent: 'center',
         alignItems: 'center',
-        backgroundColor: colors.card,
+        backgroundColor: colors.background,
         borderColor: colors.border,
         borderWidth: 2,
         borderRadius: radius,

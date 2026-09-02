@@ -14,8 +14,17 @@ import type { ColorProp, HexColor } from 'react-native-android-widget';
  * one — and unlike a screen inside the app, nobody can navigate away from it.
  */
 export interface WidgetPalette {
+  /**
+   * The ground a widget is drawn on — the app's own, not the app's card.
+   *
+   * Inside the app a card is white because it is lifted off the cream; on a
+   * home screen there is no cream to lift off, and a white rectangle beside the
+   * app's cream icon reads as somebody else's widget. Android at least draws a
+   * border around it, but iOS deliberately does not — the system already clips
+   * every widget to its own rounded rectangle — so there it was a bare white
+   * slab. The ground the app opens on is what makes the tile look like the app.
+   */
   background: ColorProp;
-  card: ColorProp;
   foreground: ColorProp;
   mutedForeground: ColorProp;
   calories: ColorProp;
@@ -35,7 +44,6 @@ export interface WidgetPalette {
 
 export const LIGHT: WidgetPalette = {
   background: '#fff6ec',
-  card: '#ffffff',
   foreground: '#31261e',
   mutedForeground: '#77685b',
   calories: '#12b76a',
@@ -49,7 +57,6 @@ export const LIGHT: WidgetPalette = {
 
 export const DARK: WidgetPalette = {
   background: '#1a1512',
-  card: '#241d19',
   foreground: '#f7efe6',
   mutedForeground: '#a79a8d',
   calories: '#3ddc97',

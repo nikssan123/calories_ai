@@ -36,7 +36,7 @@ export function Empty({
       width: 'match_parent' as const,
       justifyContent: 'center' as const,
       alignItems: 'center' as const,
-      backgroundColor: colors.card,
+      backgroundColor: colors.background,
       borderColor: colors.border,
       borderWidth: 2,
     },
