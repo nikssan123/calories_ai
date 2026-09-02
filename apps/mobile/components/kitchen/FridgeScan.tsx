@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import type { PantryFind, PantryScanProposal } from '@ct/shared';
@@ -68,8 +68,25 @@ export function FridgeScan({
   const [chosen, setChosen] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState<null | 'stock' | 'cook'>(null);
 
-  async function scan(source: 'camera' | 'library') {
+  /*
+   * The same wait the composer's sheet needs, for the same reason: on iOS the
+   * picker cannot be presented until this sheet has finished dismissing, and
+   * the one refused never resolves. See the note on `Sheet`'s `onClosed`.
+   */
+  const afterSheet = useRef<'camera' | 'library' | null>(null);
+
+  function choose(next: 'camera' | 'library') {
+    afterSheet.current = next;
     setChoosing(false);
+  }
+
+  function runAfterSheet() {
+    const next = afterSheet.current;
+    afterSheet.current = null;
+    if (next) void scan(next);
+  }
+
+  async function scan(source: 'camera' | 'library') {
     const prepared = source === 'camera' ? await takePhoto() : await pickPhoto();
     if (!prepared) return;
 
@@ -195,9 +212,14 @@ export function FridgeScan({
         )}
       </Pressable>
 
-      <Sheet open={choosing} title={tr('scan.photographShelf')} onClose={() => setChoosing(false)}>
-        <Choice label={tr('composer.takePhoto')} onPress={() => void scan('camera')} />
-        <Choice label={tr('composer.choosePhoto')} onPress={() => void scan('library')} />
+      <Sheet
+        open={choosing}
+        title={tr('scan.photographShelf')}
+        onClose={() => setChoosing(false)}
+        onClosed={runAfterSheet}
+      >
+        <Choice label={tr('composer.takePhoto')} onPress={() => choose('camera')} />
+        <Choice label={tr('composer.choosePhoto')} onPress={() => choose('library')} />
       </Sheet>
 
       <Sheet

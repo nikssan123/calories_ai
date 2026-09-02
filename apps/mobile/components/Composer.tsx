@@ -170,8 +170,36 @@ export function Composer({
   const [choosing, setChoosing] = useState(false);
   const [scanning, setScanning] = useState(false);
 
-  async function attach(source: 'camera' | 'library') {
+  /*
+   * What the sheet was closed *in order to* do.
+   *
+   * Every row here dismisses the sheet and opens something else, and on iOS the
+   * second half cannot start until the first has finished: UIKit will not
+   * present over a controller that is still dismissing, and the picker it
+   * refuses never settles its promise — which left `busy` true forever and the
+   * attach button dead until the app was restarted. Android launches its picker
+   * as its own activity and never cared, which is why this was an iPhone-only
+   * report against code that looked symmetrical.
+   *
+   * A ref rather than state: nothing renders from it, and the sheet's
+   * completion callback fires from an animation that outlives the render which
+   * set it.
+   */
+  const afterSheet = useRef<'camera' | 'library' | 'barcode' | null>(null);
+
+  function choose(next: 'camera' | 'library' | 'barcode') {
+    afterSheet.current = next;
     setChoosing(false);
+  }
+
+  function runAfterSheet() {
+    const next = afterSheet.current;
+    afterSheet.current = null;
+    if (next === 'barcode') setScanning(true);
+    else if (next) void attach(next);
+  }
+
+  async function attach(source: 'camera' | 'library') {
     setBusy(true);
     try {
       const prepared = source === 'camera' ? await takePhoto() : await pickPhoto();
@@ -353,7 +381,12 @@ export function Composer({
         because a barcode is another way of saying what you ate — the same
         sentence, told to the phone in a different grammar.
       */}
-      <Sheet open={choosing} title={tr('composer.addPhotoShort')} onClose={() => setChoosing(false)}>
+      <Sheet
+        open={choosing}
+        title={tr('composer.addPhotoShort')}
+        onClose={() => setChoosing(false)}
+        onClosed={runAfterSheet}
+      >
         {/*
           The one thing that most improves a photo estimate, said once, where it
           can still be acted on.
@@ -374,15 +407,12 @@ export function Composer({
           Tip: leave a fork, spoon or your hand in the shot — it tells us how big
           the plate is, which is the hardest part to guess.
         </Text>
-        <Choice label={tr('composer.takePhoto')} icon="camera" onPress={() => void attach('camera')} />
-        <Choice label={tr('composer.choosePhoto')} icon="image" onPress={() => void attach('library')} />
+        <Choice label={tr('composer.takePhoto')} icon="camera" onPress={() => choose('camera')} />
+        <Choice label={tr('composer.choosePhoto')} icon="image" onPress={() => choose('library')} />
         <Choice
           label={tr('composer.scanBarcode')}
           icon="barcode"
-          onPress={() => {
-            setChoosing(false);
-            setScanning(true);
-          }}
+          onPress={() => choose('barcode')}
         />
       </Sheet>
 

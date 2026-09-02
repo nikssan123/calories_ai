@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -222,11 +222,24 @@ export function Sheet({
   open,
   title,
   onClose,
+  onClosed,
   children,
 }: {
   open: boolean;
   title: string;
   onClose: () => void;
+  /**
+   * Fired once the sheet is actually gone, rather than merely asked to go.
+   *
+   * The gap between the two is 200ms of exit animation during which this is
+   * still a mounted `Modal`, and on iOS that is long enough to break anything
+   * presented from `onClose`: UIKit refuses a presentation while another
+   * controller is dismissing, and the system picker it refuses never resolves
+   * its promise — so the caller waits forever on a sheet the user already
+   * closed. Android launches its picker as a separate activity and never
+   * noticed, which is exactly why this only ever reproduced on one platform.
+   */
+  onClosed?: () => void;
   children: React.ReactNode;
 }) {
   const colors = useColors();
@@ -256,6 +269,18 @@ export function Sheet({
   const height = useSharedValue(420);
   const progress = useSharedValue(0);
 
+  /*
+   * Read through a ref so the worklet's completion callback below cannot fire a
+   * stale one: the animation outlives the render that started it.
+   */
+  const closed = useRef(onClosed);
+  closed.current = onClosed;
+
+  const unmount = useCallback(() => {
+    setMounted(false);
+    closed.current?.();
+  }, []);
+
   useEffect(() => {
     if (open) {
       setMounted(true);
@@ -264,13 +289,13 @@ export function Sheet({
     }
     if (reduced) {
       progress.value = 0;
-      setMounted(false);
+      unmount();
       return;
     }
     progress.value = withTiming(0, { duration: 200, easing: ease.out }, (done) => {
-      if (done) runOnJS(setMounted)(false);
+      if (done) runOnJS(unmount)();
     });
-  }, [open, reduced, progress]);
+  }, [open, reduced, progress, unmount]);
 
   /*
    * How far a finger has pulled the sheet down, in points. Separate from
