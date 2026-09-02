@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Linking,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { ReduceMotion, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import Svg, { Polyline } from 'react-native-svg';
@@ -210,11 +218,24 @@ export default function SetupScreen() {
   }
 
   return (
-    <View style={styles.flex}>
+    /*
+     * The keyboard has to move this screen, not sit on top of it.
+     *
+     * Every other screen with a field in it already does this — sign-in,
+     * verify, onboarding — and this one did not, which nobody noticed while the
+     * only fields near the bottom were a name and a height that the tab bar
+     * left visible anyway. The delete confirmation is neither: it is the last
+     * control on a long page, so the keyboard opened straight over the field it
+     * was opened by, on both platforms.
+     */
+    <KeyboardAvoidingView style={styles.flex} behavior="padding">
       <ScrollView
         style={styles.flex}
         contentContainerStyle={[styles.page, { paddingTop: insets.top + 20 }]}
         keyboardShouldPersistTaps="handled"
+        // Keeps the focused field clear of the keyboard on iOS even when the
+        // padding above lands a frame late.
+        automaticallyAdjustKeyboardInsets
       >
         <View>
           <Text style={[t.largeTitle, { color: colors.foreground }]}>{tr('setup.title')}</Text>
@@ -451,7 +472,12 @@ export default function SetupScreen() {
           <ExternalRow label={tr('setup.contactSupport')} url={`mailto:${SUPPORT_EMAIL}`} mail />
         </InsetGroup>
 
-        <DeleteAccount email={profile.email} onDeleted={() => void signOut()} onError={setError} />
+        <DeleteAccount
+          email={profile.email}
+          hasPassword={profile.has_password}
+          onDeleted={() => void signOut()}
+          onError={setError}
+        />
 
         {error && (
           <Text style={[t.footnoteSemibold, styles.centred, { color: colors.destructive }]}>
@@ -467,7 +493,7 @@ export default function SetupScreen() {
         error={saveError}
         onSave={() => void save()}
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -1288,10 +1314,13 @@ function ExternalRow({
  */
 function DeleteAccount({
   email,
+  hasPassword,
   onDeleted,
   onError,
 }: {
   email: string | null;
+  /** False for a Google account that never had one — see the confirm field. */
+  hasPassword: boolean;
   onDeleted: () => void;
   onError: (message: string) => void;
 }) {
@@ -1299,7 +1328,8 @@ function DeleteAccount({
   const tr = useT();
   const locale = useLocale();
   const [open, setOpen] = useState(false);
-  const [password, setPassword] = useState('');
+  /* Whichever proof this account can give: a password, or its own address. */
+  const [proof, setProof] = useState('');
   const [deleting, setDeleting] = useState(false);
 
   if (!email) return null;
@@ -1307,7 +1337,7 @@ function DeleteAccount({
   async function confirm() {
     setDeleting(true);
     try {
-      await api.deleteAccount(password);
+      await api.deleteAccount(hasPassword ? { password: proof } : { confirm_email: proof });
       // Everything this session could read is gone, so dropping the token is
       // both the simplest correct next state and the only one that cannot show
       // stale data: the guard re-runs and lands on the sign-in screen.
@@ -1337,18 +1367,23 @@ function DeleteAccount({
           </Text>
 
           <TextField
-            value={password}
-            onChangeText={setPassword}
-            placeholder={tr('auth.password')}
+            value={proof}
+            onChangeText={setProof}
+            placeholder={hasPassword ? tr('auth.password') : email}
             align="left"
           />
+          {!hasPassword && (
+            <Text style={[t.footnote, styles.hint, { color: colors.mutedForeground }]}>
+              {tr('setup.deleteTypeEmail')}
+            </Text>
+          )}
 
           <View style={styles.dangerButtons}>
             <PressableChunk
               depth={0}
               radius={16}
               onPress={() => void confirm()}
-              disabled={!password || deleting}
+              disabled={!proof || deleting}
               accessibilityRole="button"
               style={styles.flex}
               contentStyle={[
@@ -1366,7 +1401,7 @@ function DeleteAccount({
             <Pressable
               onPress={() => {
                 setOpen(false);
-                setPassword('');
+                setProof('');
               }}
               disabled={deleting}
               accessibilityRole="button"

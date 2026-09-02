@@ -111,6 +111,7 @@ export const bg: Messages = {
   'setup.email': 'Имейл',
   'setup.addressConfirmed': 'Адресът е потвърден',
   'setup.addressNotConfirmed': 'Адресът не е потвърден',
+  'setup.deleteTypeEmail': 'Въведи адреса по-горе, за да потвърдиш. Този акаунт влиза с Google, така че няма парола за проверка.',
   'setup.deleteAccount': 'Изтрий акаунта',
   'setup.deleteFailed': 'Акаунтът не можа да бъде изтрит.',
   'setup.contactSupport': 'Свържи се с поддръжката',

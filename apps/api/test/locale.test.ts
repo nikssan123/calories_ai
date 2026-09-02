@@ -29,6 +29,7 @@ const profile: Profile = {
   id: '11111111-1111-1111-1111-111111111111',
   email: 'nik@example.com',
   email_verified: true,
+  has_password: true,
   units: 'metric',
   locale: 'en',
   display_name: 'Nik',

@@ -1582,6 +1582,15 @@ export const Profile = z.object({
    * actually open, so the setup screen offers to send the link again.
    */
   email_verified: z.boolean(),
+  /**
+   * Whether there is a password on this account at all.
+   *
+   * False for one created with Google and never given one. The client needs it
+   * before it can ask the right question when deleting: an account with no
+   * password cannot be asked for one, and finding that out from a rejected
+   * request means showing somebody a field they can never fill.
+   */
+  has_password: z.boolean(),
   display_name: z.string().nullable(),
   sex: Sex.nullable(),
   birth_date: z.string().nullable(),
@@ -1743,9 +1752,20 @@ export type AuthStatus = z.infer<typeof AuthStatus>;
  * lifted token already has, and this is the one request in the product where
  * that should not be enough.
  */
-export const DeleteAccountRequest = z.object({
-  password: z.string().min(1).max(200),
-});
+/**
+ * Two ways to mean it, because not every account has a password to type.
+ *
+ * A password is the better proof and stays the default: a live session is
+ * precisely what a stolen phone already holds. But an account created with
+ * Google has no password at all, and "set one first, then come back" is a
+ * detour out of the app in the middle of the one flow both stores require to
+ * be *in* it. For those, typing the account's own address is the deliberate
+ * act — the session proves who, and the typing proves meant-to.
+ */
+export const DeleteAccountRequest = z.union([
+  z.object({ password: z.string().min(1).max(200) }),
+  z.object({ confirm_email: z.string().min(1).max(254) }),
+]);
 export type DeleteAccountRequest = z.infer<typeof DeleteAccountRequest>;
 
 /**

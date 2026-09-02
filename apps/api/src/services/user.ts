@@ -377,6 +377,8 @@ function toProfile(row: any): Profile {
     id: row.id,
     email: row.email ?? null,
     email_verified: row.email_verified_at !== null,
+    // The fact, never the hash: this is the shape that leaves the server.
+    has_password: row.password_hash !== null && row.password_hash !== undefined,
     display_name: row.display_name,
     sex: row.sex,
     birth_date: row.birth_date ? String(row.birth_date).slice(0, 10) : null,

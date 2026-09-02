@@ -141,6 +141,7 @@ export const en = {
   'setup.email': 'Email',
   'setup.addressConfirmed': 'Address confirmed',
   'setup.addressNotConfirmed': 'Address not confirmed',
+  'setup.deleteTypeEmail': 'Type the address above to confirm. This account signs in with Google, so there is no password to check.',
   'setup.deleteAccount': 'Delete account',
   'setup.deleteFailed': 'Could not delete the account.',
   'setup.contactSupport': 'Contact support',

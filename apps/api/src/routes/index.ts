@@ -1206,16 +1206,31 @@ export async function registerRoutes(app: FastifyInstance) {
      * step away.
      */
     const account = await findUserByEmail(profile.email);
-    if (!account?.password_hash) {
-      return reply.status(400).send({
-        error:
-          'This account signs in with Google and has no password to confirm with. ' +
-          'Set one first from “Forgot your password?”, then come back.',
-      });
-    }
 
-    if ((await authenticate(profile.email, parsed.data.password)) !== userId) {
-      return reply.status(403).send({ error: 'That password is not correct.' });
+    if (!account?.password_hash) {
+      /*
+       * No password to re-check, so the deliberate act is typing the address.
+       *
+       * This used to answer "set a password first, from Forgot your password".
+       * The reasoning was sound — a mailbox is a stronger claim than a session
+       * — and it was still the wrong answer: it sends somebody out of the app,
+       * into their email, through a reset they did not want, in the middle of
+       * the one flow both stores require to be completable *inside* the
+       * product. A Google account that cannot be deleted without first growing
+       * a password is a Google account that cannot be deleted.
+       *
+       * The session already says who is asking; what it cannot say is that
+       * they meant it, and that is all the typing is for.
+       */
+      const confirmation = 'confirm_email' in parsed.data ? parsed.data.confirm_email : null;
+      if (confirmation?.trim().toLowerCase() !== profile.email.trim().toLowerCase()) {
+        return reply.status(403).send({ error: 'That is not the email on this account.' });
+      }
+    } else {
+      const password = 'password' in parsed.data ? parsed.data.password : null;
+      if (!password || (await authenticate(profile.email, password)) !== userId) {
+        return reply.status(403).send({ error: 'That password is not correct.' });
+      }
     }
 
     // Read before the row is destroyed, because the confirmation goes to an

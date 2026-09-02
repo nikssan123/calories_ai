@@ -115,6 +115,7 @@ export const es: Messages = {
   'setup.email': 'Correo',
   'setup.addressConfirmed': 'Dirección confirmada',
   'setup.addressNotConfirmed': 'Dirección sin confirmar',
+  'setup.deleteTypeEmail': 'Escribe la dirección de arriba para confirmar. Esta cuenta inicia sesión con Google, así que no hay contraseña que comprobar.',
   'setup.deleteAccount': 'Eliminar la cuenta',
   'setup.deleteFailed': 'No se ha podido eliminar la cuenta.',
   'setup.contactSupport': 'Contactar con soporte',

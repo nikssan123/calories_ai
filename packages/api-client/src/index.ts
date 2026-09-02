@@ -65,6 +65,7 @@ import type {
   ShoppingExtra,
   ShoppingExtraInput,
   ShoppingExtraUpdate,
+  DeleteAccountRequest,
 } from '@ct/shared';
 import { SESSION_TRANSPORT_HEADER } from '@ct/shared';
 
@@ -240,11 +241,16 @@ export function createApiClient({
         { method: 'POST' },
       ),
 
-    /** Irreversible, and takes every other signed-in device with it. */
-    deleteAccount: (password: string) =>
+    /**
+     * Irreversible, and takes every other signed-in device with it.
+     *
+     * Takes whichever proof the account can actually give: a password, or the
+     * typed address for one created with Google that never had one.
+     */
+    deleteAccount: (confirmation: DeleteAccountRequest) =>
       request<AccountDeletion>('/account', {
         method: 'DELETE',
-        body: JSON.stringify({ password }),
+        body: JSON.stringify(confirmation),
       }),
 
     onboarding: () => request<OnboardingState>('/onboarding'),

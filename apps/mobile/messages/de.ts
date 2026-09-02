@@ -116,6 +116,7 @@ export const de: Messages = {
   'setup.email': 'E-Mail',
   'setup.addressConfirmed': 'Adresse bestätigt',
   'setup.addressNotConfirmed': 'Adresse nicht bestätigt',
+  'setup.deleteTypeEmail': 'Tippe die Adresse oben ein, um zu bestätigen. Dieses Konto meldet sich mit Google an, es gibt also kein Passwort zu prüfen.',
   'setup.deleteAccount': 'Konto löschen',
   'setup.deleteFailed': 'Das Konto konnte nicht gelöscht werden.',
   'setup.contactSupport': 'Support kontaktieren',
