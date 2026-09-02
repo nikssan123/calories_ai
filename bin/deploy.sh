@@ -8,9 +8,17 @@
 #   bin/deploy.sh --build always   # force a rebuild of both images
 #   bin/deploy.sh --mobile         # ...and start an EAS Android build after it
 #   bin/deploy.sh --mobile-only    # just the EAS build; the host is not touched
-#   bin/deploy.sh --mobile-only --local   # ...built on this machine, not the queue
-#   bin/deploy.sh --mobile-only --ios --local  # the iOS .ipa instead of the .aab
-#   bin/deploy.sh --submit --ios          # send the newest .ipa to App Store Connect
+#   bin/deploy.sh --mobile-only --local        # ...built here, not on the queue
+#   bin/deploy.sh --mobile-only --local --ios  # ...and the .ipa, not the .aab
+#   bin/deploy.sh --submit         # upload the newest .aab to Play
+#   bin/deploy.sh --submit --ios   # upload the newest .ipa to App Store Connect
+#
+# Only the first flag on each line is a command. **`--local` and `--ios` are
+# modifiers**, so the list above is examples rather than a matrix: `--local`
+# chooses where the build runs and `--ios` chooses the platform, and both
+# attach to `--mobile` exactly as well as to `--mobile-only`. `--mobile --local`
+# deploys the host and then builds the .aab here, which is a perfectly ordinary
+# thing to want and is missing from the list only because the list is short.
 #
 # Deployment model, for context on why this script is shaped the way it is:
 #
