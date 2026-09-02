@@ -13,6 +13,10 @@
 #   bin/deploy.sh --submit         # upload the newest .aab to Play
 #   bin/deploy.sh --submit --ios   # upload the newest .ipa to App Store Connect
 #
+# The iOS pair runs entirely on this machine: `--local` compiles here, and
+# `--submit --ios` uploads with Xcode's own `altool` rather than handing the
+# .ipa to EAS to forward. See `mobile_submit`.
+#
 # Only the first flag on each line is a command. **`--local` and `--ios` are
 # modifiers**, so the list above is examples rather than a matrix: `--local`
 # chooses where the build runs and `--ios` chooses the platform, and both
@@ -270,6 +274,27 @@ mobile_wwdr_ok() {
     return 1
 }
 
+# Point DEVELOPER_DIR at a real Xcode, for anything that shells out to `xcrun`.
+#
+# `xcode-select -p` on this machine answers `/Library/Developer/CommandLineTools`
+# and moving it properly needs sudo, so don't: everything that matters reads
+# DEVELOPER_DIR first. The CommandLineTools instance is the only one
+# disqualified — it ships neither `xcodebuild` nor `altool`, and the failure
+# without this is `xcrun: unable to find utility "altool"`, which reads like a
+# missing Xcode rather than a mis-selected one.
+mobile_xcode_dir() {
+    [[ -n "${DEVELOPER_DIR:-}" ]] && return 0
+    local active; active="$(xcode-select -p 2>/dev/null || true)"
+    if [[ $active == */Xcode*.app/* ]]; then
+        DEVELOPER_DIR="$active"
+    elif [[ -d /Applications/Xcode.app/Contents/Developer ]]; then
+        DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+    else
+        die "no Xcode found — install it, or set DEVELOPER_DIR"
+    fi
+    export DEVELOPER_DIR
+}
+
 # Build the .ipa on this machine — the iOS half of `mobile_build_local`.
 #
 # `apps/mobile/scripts/build-ios.sh` is the standalone equivalent and carries
@@ -293,17 +318,7 @@ mobile_wwdr_ok() {
 mobile_build_local_ios() {
     local dir="$REPO/apps/mobile"
 
-    if [[ -z "${DEVELOPER_DIR:-}" ]]; then
-        local active; active="$(xcode-select -p 2>/dev/null || true)"
-        if [[ $active == */Xcode*.app/* ]]; then
-            DEVELOPER_DIR="$active"
-        elif [[ -d /Applications/Xcode.app/Contents/Developer ]]; then
-            DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-        else
-            die "no Xcode found — install it, or set DEVELOPER_DIR"
-        fi
-        export DEVELOPER_DIR
-    fi
+    mobile_xcode_dir
     command -v fastlane >/dev/null 2>&1 || die "fastlane is not on PATH — \`eas build --local\` needs it. brew install fastlane"
 
     if ! mobile_wwdr_ok; then
@@ -364,6 +379,28 @@ mobile_build_local_ios() {
 # command line, because the thing anybody actually wants to submit is the one
 # they just built. `--dry-run` prints the choice without acting on it, which is
 # also the cheapest way to check the naming convention picked the file you meant.
+#
+# **iOS does not go through `eas submit`.** `eas build --local` compiles here —
+# nothing about an .ipa on this disk needs Expo to reach App Store Connect, and
+# `eas submit` reaches it the long way round: the 30MB artifact is uploaded to
+# EAS first, and a worker there does the ASC upload on your behalf. `altool`
+# ships inside Xcode, takes the same App Store Connect API key eas.json already
+# names, and uploads straight to Apple. Two things it wants that are easy to get
+# wrong:
+#
+#   - **`--p8-file-path`.** Without it altool hunts for `AuthKey_<id>.p8` in four
+#     fixed directories (`./private_keys`, `~/private_keys`, `~/.private_keys`,
+#     `~/.appstoreconnect/private_keys`) and the key here is neither in one of
+#     them nor named that way. The flag takes the path directly; nothing has to
+#     be copied into a well-known location, so the key stays gitignored where it
+#     is and no copy of it is left behind.
+#   - **`--api-key`, not `--apiKey`.** Both spellings are accepted and they are
+#     not the same code path: the camelCase alias mints a JWT with no `aud`
+#     claim, which is the older format. Prefer the hyphenated pair.
+#
+# Android still goes through `eas submit`, which is the only Expo dependency
+# left in this function. Play's own upload API wants a resumable-upload dance
+# that is worth more than the dependency costs.
 mobile_submit() {
     local dir="$REPO/apps/mobile"
     local ext key
@@ -380,10 +417,11 @@ mobile_submit() {
     [[ $MOBILE_PLATFORM == ios ]] && how="$how --ios"
     [[ -n "$artifact" ]] || die "no .$ext in $out_dir — build one first with $how"
 
-    # Both are gitignored secrets that eas.json names by relative path, so a
-    # missing one fails inside eas with a path resolved against a directory the
-    # reader is not thinking about. Checked here, where the path is the one on
-    # screen.
+    # Both are gitignored secrets. eas.json names them by relative path, so on
+    # the Android side a missing one fails inside eas against a directory the
+    # reader is not thinking about; on the iOS side altool would report it as an
+    # authentication failure rather than a missing file. Checked here, where the
+    # path is the one on screen.
     [[ -f "$key" ]] || die "missing $key — eas.json's submit profile points at it"
 
     local dest
@@ -396,9 +434,28 @@ mobile_submit() {
     say "submit: $(basename "$artifact")"
     say "    to: $dest"
 
+    # eas.json stays the one place the key's identity is written down, even
+    # though nothing on this path runs eas any more — a second copy of an ID and
+    # an issuer UUID is a second thing to keep in step.
+    local key_id issuer
+    if [[ $MOBILE_PLATFORM == ios ]]; then
+        key_id="$(node -p "require('$dir/eas.json').submit.production.ios.ascApiKeyId" 2>/dev/null || true)"
+        issuer="$(node -p "require('$dir/eas.json').submit.production.ios.ascApiKeyIssuerId" 2>/dev/null || true)"
+        [[ -n "$key_id" && -n "$issuer" ]] ||
+            die "eas.json has no submit.production.ios.ascApiKeyId / ascApiKeyIssuerId"
+        mobile_xcode_dir
+    fi
+
     if (( DRY )); then
-        echo "       would run: (cd apps/mobile && npx eas-cli submit --platform $MOBILE_PLATFORM \\"
-        echo "                     --profile $MOBILE_PROFILE --path $artifact --non-interactive)"
+        if [[ $MOBILE_PLATFORM == ios ]]; then
+            echo "       would run: DEVELOPER_DIR=$DEVELOPER_DIR xcrun altool --upload-app -t ios \\"
+            echo "                     -f $artifact \\"
+            echo "                     --api-key $key_id --api-issuer $issuer \\"
+            echo "                     --p8-file-path $key"
+        else
+            echo "       would run: (cd apps/mobile && npx eas-cli submit --platform $MOBILE_PLATFORM \\"
+            echo "                     --profile $MOBILE_PROFILE --path $artifact --non-interactive)"
+        fi
         return 0
     fi
 
@@ -408,8 +465,19 @@ mobile_submit() {
         [[ $reply == submit ]] || die "cancelled"
     fi
 
-    ( cd "$dir" && npx eas-cli submit --platform "$MOBILE_PLATFORM" \
-        --profile "$MOBILE_PROFILE" --path "$artifact" --non-interactive )
+    if [[ $MOBILE_PLATFORM == ios ]]; then
+        # No `--wait`: it holds the terminal for however long Apple's processing
+        # takes, and the thing worth knowing — that Apple accepted the upload —
+        # is already decided by the time this returns. TestFlight mails the rest.
+        xcrun altool --upload-app -t ios -f "$artifact" \
+            --api-key "$key_id" --api-issuer "$issuer" --p8-file-path "$key"
+        echo
+        say "uploaded — App Store Connect will mail when processing finishes"
+        say "    https://appstoreconnect.apple.com/apps/$(node -p "require('$dir/eas.json').submit.production.ios.ascAppId" 2>/dev/null || echo '')/testflight/ios"
+    else
+        ( cd "$dir" && npx eas-cli submit --platform "$MOBILE_PLATFORM" \
+            --profile "$MOBILE_PROFILE" --path "$artifact" --non-interactive )
+    fi
 }
 
 mobile_build() {
