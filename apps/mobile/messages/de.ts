@@ -87,6 +87,12 @@ export const de: Messages = {
   'composer.removePhoto': 'Foto entfernen',
   'composer.setAmountFor': (name: string) => `Menge für ${name} festlegen`,
   'composer.removeScan': (name: string) => `${name} entfernen`,
+  'composer.cameraBlockedTitle': 'Day So Far kann die Kamera nicht öffnen',
+  'composer.cameraBlockedBody':
+    'Der Kamerazugriff ist für diese App deaktiviert, deshalb öffnet iOS sie nicht. Aktiviere ihn in den Einstellungen oder wähle stattdessen ein Foto aus deiner Mediathek.',
+  'composer.openSettings': 'Einstellungen öffnen',
+  'composer.notNow': 'Jetzt nicht',
+  'composer.photoUnreadable': 'Dieses Foto konnte nicht gelesen werden. Versuche ein anderes.',
   'composer.selectedMeal': 'Ausgewählte Mahlzeit',
   'composer.labelHint': 'Das ist das Etikett — erfasse danach, was ich gegessen habe.',
 

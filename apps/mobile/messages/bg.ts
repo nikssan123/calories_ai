@@ -82,6 +82,12 @@ export const bg: Messages = {
   'composer.removePhoto': 'Премахни снимката',
   'composer.setAmountFor': (name: string) => `Задай количеството за ${name}`,
   'composer.removeScan': (name: string) => `Премахни ${name}`,
+  'composer.cameraBlockedTitle': 'Day So Far не може да отвори камерата',
+  'composer.cameraBlockedBody':
+    'Достъпът до камерата е изключен за това приложение, затова iOS няма да я отвори. Включи го от Настройки или избери снимка от галерията.',
+  'composer.openSettings': 'Отвори Настройки',
+  'composer.notNow': 'Не сега',
+  'composer.photoUnreadable': 'Тази снимка не можа да бъде прочетена. Пробвай друга.',
   'composer.selectedMeal': 'Избрано хранене',
   'composer.labelHint': 'Това е етикетът — запиши каквото изядох по него.',
 

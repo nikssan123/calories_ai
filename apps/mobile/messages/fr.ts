@@ -93,6 +93,12 @@ export const fr: Messages = {
   'composer.removePhoto': 'Retirer la photo',
   'composer.setAmountFor': (name: string) => `Indiquer la quantité de ${name}`,
   'composer.removeScan': (name: string) => `Retirer ${name}`,
+  'composer.cameraBlockedTitle': 'Day So Far ne peut pas ouvrir l’appareil photo',
+  'composer.cameraBlockedBody':
+    'L’accès à l’appareil photo est désactivé pour cette app, donc iOS ne l’ouvrira pas. Active-le dans Réglages, ou choisis plutôt une photo dans ta photothèque.',
+  'composer.openSettings': 'Ouvrir Réglages',
+  'composer.notNow': 'Pas maintenant',
+  'composer.photoUnreadable': 'Cette photo n’a pas pu être lue. Essaie-en une autre.',
   'composer.selectedMeal': 'Repas sélectionné',
   'composer.labelHint': 'Voici l’étiquette — enregistre ce que j’ai mangé à partir d’elle.',
 

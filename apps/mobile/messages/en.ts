@@ -111,6 +111,12 @@ export const en = {
   'composer.removePhoto': 'Remove photo',
   'composer.setAmountFor': (name: string) => `Set the amount for ${name}`,
   'composer.removeScan': (name: string) => `Remove ${name}`,
+  'composer.cameraBlockedTitle': 'Day So Far cannot open the camera',
+  'composer.cameraBlockedBody':
+    'Camera access is turned off for this app, so iOS will not open it. Turn it on in Settings, or choose a photo from your library instead.',
+  'composer.openSettings': 'Open Settings',
+  'composer.notNow': 'Not now',
+  'composer.photoUnreadable': 'That photo could not be read. Try another one.',
   'composer.selectedMeal': 'Selected meal',
   'composer.labelHint': 'This is the label — log what I ate off it.',
 

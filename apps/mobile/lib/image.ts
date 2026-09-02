@@ -2,7 +2,9 @@ import { File } from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import type { PhotoMediaType } from '@ct/shared';
-import { Image } from 'react-native';
+import { Alert, Image, Linking } from 'react-native';
+import { messagesFor } from '@/messages';
+import { preferredLocale } from '@/lib/i18n';
 
 /**
  * Getting a photo off the phone and onto the API.
@@ -42,7 +44,7 @@ type Asset = ImagePicker.ImagePickerAsset;
  * cannot: an unreadable image here means nothing logged, and sending too many
  * bytes is far better than sending none.
  */
-async function prepare(asset: Asset): Promise<PreparedPhoto> {
+async function prepare(asset: Asset): Promise<PreparedPhoto | null> {
   const longest = Math.max(asset.width, asset.height);
 
   try {
@@ -71,11 +73,19 @@ async function prepare(asset: Asset): Promise<PreparedPhoto> {
     // Fall through and send what the picker gave us.
   }
 
+  // The picker is asked for base64 up front precisely so this path has
+  // something to send: re-reading the file here would be a second failure
+  // point in the branch that already exists because the first one failed.
+  //
+  // Null rather than an empty `base64,` when even that is missing. A photo with
+  // no bytes used to attach exactly like a real one — thumbnail and all — and
+  // then fail at the far end with nothing on screen to explain it, which reads
+  // as the app quietly losing the meal. Refusing here is what lets the caller
+  // say so.
+  if (!asset.base64) return null;
+
   return {
-    // The picker is asked for base64 up front precisely so this path has
-    // something to send: re-reading the file here would be a second failure
-    // point in the branch that already exists because the first one failed.
-    dataUrl: `data:${mediaTypeOf(asset)};base64,${asset.base64 ?? ''}`,
+    dataUrl: `data:${mediaTypeOf(asset)};base64,${asset.base64}`,
     mediaType: mediaTypeOf(asset),
     uri: asset.uri,
   };
@@ -101,10 +111,46 @@ function mediaTypeOf(asset: Asset): PhotoMediaType {
   }
 }
 
+/**
+ * Says why the camera is not opening, on the one refusal that never resolves
+ * itself.
+ *
+ * A cancelled prompt needs nothing said: the person just decided not to. But
+ * iOS asks for the camera exactly once, and after a "Don't Allow" every later
+ * request returns denied *without showing anything at all* — so a button that
+ * silently does nothing is not a button anyone will press again, and there is
+ * no way back to it from inside the app. `canAskAgain` is what separates the
+ * two, and the settings link is the only thing that actually fixes it.
+ */
+function explainCameraBlocked(): void {
+  const tr = messagesFor(preferredLocale());
+  Alert.alert(tr['composer.cameraBlockedTitle'], tr['composer.cameraBlockedBody'], [
+    { text: tr['composer.notNow'], style: 'cancel' },
+    { text: tr['composer.openSettings'], onPress: () => void Linking.openSettings().catch(() => {}) },
+  ]);
+}
+
+/**
+ * `prepare`, for the two paths where a person is standing there watching.
+ *
+ * Choosing a photo and getting nothing back is the same silence as the blocked
+ * camera above and wants the same treatment. Deliberately not used by
+ * `preparePhotoFromUri`: a share arrives without anyone looking at this app,
+ * and an alert over whatever they were doing instead is worse than the miss.
+ */
+async function prepareOrExplain(asset: Asset): Promise<PreparedPhoto | null> {
+  const prepared = await prepare(asset);
+  if (!prepared) Alert.alert(messagesFor(preferredLocale())['composer.photoUnreadable']);
+  return prepared;
+}
+
 /** The rear camera — the one pointed at the plate. Null if declined or cancelled. */
 export async function takePhoto(): Promise<PreparedPhoto | null> {
   const permission = await ImagePicker.requestCameraPermissionsAsync();
-  if (!permission.granted) return null;
+  if (!permission.granted) {
+    if (!permission.canAskAgain) explainCameraBlocked();
+    return null;
+  }
 
   const result = await ImagePicker.launchCameraAsync({
     mediaTypes: ['images'],
@@ -113,7 +159,7 @@ export async function takePhoto(): Promise<PreparedPhoto | null> {
     cameraType: ImagePicker.CameraType.back,
   });
   const asset = result.canceled ? null : result.assets[0];
-  return asset ? prepare(asset) : null;
+  return asset ? prepareOrExplain(asset) : null;
 }
 
 /**
@@ -131,7 +177,7 @@ export async function pickPhoto(): Promise<PreparedPhoto | null> {
     quality: JPEG_QUALITY,
   });
   const asset = result.canceled ? null : result.assets[0];
-  return asset ? prepare(asset) : null;
+  return asset ? prepareOrExplain(asset) : null;
 }
 
 /**
