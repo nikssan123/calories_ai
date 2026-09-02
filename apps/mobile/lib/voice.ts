@@ -105,6 +105,58 @@ function deviceLanguage(): string {
 }
 
 /**
+ * The same language, spelled a way the recogniser will accept.
+ *
+ * A phone set to English in Bulgaria resolves to `en-BG`, and iOS has no such
+ * speech locale — it has `en-US`, `en-GB`, `en-AU` and a dozen more, none of
+ * them that. So the request was refused with `language-not-supported` and the
+ * person was told their phone had no pack for their language, which was both
+ * wrong and unfixable from where they were standing: they *were* speaking
+ * English, and there was nothing to download.
+ *
+ * Region and language travel separately on a phone, and only the language half
+ * is a claim about what someone speaks. So: take the exact locale if the
+ * recogniser has it, otherwise any locale in the same language, and only then
+ * give up. `en-BG` becomes `en-US` and the sentence gets heard.
+ *
+ * Resolved once and kept. The list is a native call and does not change while
+ * the app is open.
+ */
+let resolvedLanguage: string | null = null;
+
+async function speechLanguage(): Promise<string> {
+  if (resolvedLanguage) return resolvedLanguage;
+
+  const wanted = deviceLanguage();
+  const canonical = (value: string) => value.replace(/_/g, '-').toLowerCase();
+  const base = canonical(wanted).split('-')[0];
+
+  try {
+    const { locales } = await ExpoSpeechRecognitionModule.getSupportedLocales({});
+    if (locales.length > 0) {
+      const sameLanguage = locales.filter(
+        (l) => canonical(l) === base || canonical(l).startsWith(`${base}-`),
+      );
+      resolvedLanguage =
+        locales.find((l) => canonical(l) === canonical(wanted)) ??
+        // A region nobody set beats a language nobody speaks: English defaults
+        // to en-US, and everything else to its own country's spelling, both of
+        // which exist wherever the language does.
+        sameLanguage.find((l) => canonical(l) === (base === 'en' ? 'en-us' : `${base}-${base}`)) ??
+        sameLanguage[0] ??
+        wanted;
+      return resolvedLanguage;
+    }
+  } catch {
+    // Older Android returns nothing here, and a phone that cannot say what it
+    // supports is not evidence against what was asked for.
+  }
+
+  resolvedLanguage = wanted;
+  return resolvedLanguage;
+}
+
+/**
  * What to say when it does not work, in the composer rather than in a toast —
  * the message is about the field it is under, which is the rule `Toast.tsx`
  * states and then declines to break for itself.
@@ -184,10 +236,13 @@ export function useDictation(onTranscript: (transcript: string) => void): Dictat
     report.current = onTranscript;
   }, [onTranscript]);
 
+  /** Resolved once per session in `start`, and reused by the retry below. */
+  const lang = useRef(deviceLanguage());
+
   const launch = useCallback((allowOnDevice: boolean) => {
     local.current = allowOnDevice && !onDeviceRefused && onDeviceAvailable();
     ExpoSpeechRecognitionModule.start({
-      lang: deviceLanguage(),
+      lang: lang.current,
       interimResults: true,
       continuous: true,
       requiresOnDeviceRecognition: local.current,
@@ -265,6 +320,7 @@ export function useDictation(onTranscript: (transcript: string) => void): Dictat
           setProblem(permission.canAskAgain ? DENIED : DENIED_FOR_GOOD);
           return;
         }
+        lang.current = await speechLanguage();
         launch(true);
       } catch {
         setProblem(GENERIC);
