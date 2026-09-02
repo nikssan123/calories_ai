@@ -155,25 +155,51 @@ rejection will be about.
   | iPhone 6.5"/6.7" | 1284 x 2778 | 6 |
   | iPad 13" | 2064 x 2752 | 6 |
 
-- **The support page exists.** `apps/web/app/support/page.tsx`, live at
-  `https://daysofar.com/support` (200). `Support URL` should point there rather
-  than at the bare domain, which is what it was set to when there was nothing
-  better to give it.
+- **The support page exists and is wired up.** `apps/web/app/support/page.tsx`,
+  live at `https://daysofar.com/support` (200), and `Support URL` in the console
+  already points at it rather than at the bare domain it carried when there was
+  nothing better to give it.
 
-### Still to confirm
+### Read off App Store Connect, 2026-09-03
 
-- **EU trader status.** Recorded as unprovided on 2026-08-31 and **not verifiable
-  from this repository** — it is an App Store Connect field. The Digital Services
-  Act requires it before the app can be distributed in the EU at all, so it is
-  worth reading off the console rather than assuming the rejections so far would
-  have mentioned it. They would not: 2.1 and 3.1.2 are review findings, and this
-  is a distribution setting.
+Both of the previous open items are settled, and one of them is a live problem.
 
-- **The product count.** `APP_REVIEW_REPLY.md` says *eight* purchase and
-  subscription items were accepted; the catalogue above is seven. One of the two
-  is wrong and it is cheap to check — a stray eighth product left over from an
-  earlier catalogue is the sort of thing that sells somebody something the server
-  does not recognise.
+- **The product count is seven and the code is right.** The console shows one
+  subscription group, *Day So Far membership*, with **4** subscriptions, and
+  **3** consumables — `photo_10`, `photo_25`, `photo_50`, all *Ready for Review*.
+  There is no stray eighth product. `APP_REVIEW_REPLY.md`'s "all eight in-app
+  purchase and subscription items" is a miscount in that document, and the
+  catalogue in this one is the accurate list.
+
+- **EU trader status is provided, and it says the wrong thing.** App Information
+  → App Store Regulations & Permits reads:
+
+  > This developer has identified itself as a **non-trader** for this app.
+
+  **That declaration does not survive contact with the paywall.** The app sells
+  four auto-renewable subscriptions and three consumables; under the Digital
+  Services Act that is trading, and Apple removes apps whose trader status is
+  absent or contradicted from EU storefronts. So this is not the "unprovided"
+  blocker the earlier revision guessed at — it is a declaration that is filled in
+  and wrong, which is worse, because nothing about it looks unfinished.
+
+  Switching it is not a free edit and should be a deliberate one: a trader
+  declaration publishes name, address, phone and email on the product page.
+
+- **The listing itself is in better shape than §7 assumed.** Everything §4 and §5
+  specify is actually entered — the keyword field carries the exact 100-character
+  string, promotional text is the 157-character line, description is the full
+  3,070. `Support URL` already points at `https://daysofar.com/support`. Build 15
+  is attached to version 1.0, and the version is set to release automatically
+  once approved.
+
+- **The 3.1.2 cause is confirmed by inspection.** A regex over the live
+  description field for `terms|eula|privacy` returns **false**: the copy runs from
+  "WHO IT IS FOR" straight to the closing line with no legal block at all. And
+  App Information → License Agreement is **Apple's Standard License Agreement**,
+  which is precisely the branch Apple's rejection describes — *"if you are using
+  the standard Apple Terms of Use (EULA), include a link to the Terms of Use in
+  the App Description."* §8 is the fix, unchanged.
 
 ## 8. Guideline 3.1.2 — the subscription block the description must carry
 
