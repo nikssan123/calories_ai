@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -28,6 +29,7 @@ import {
   tierLines,
 } from '@/lib/plan-copy';
 import { haptics } from '@/lib/haptics';
+import { PRIVACY_URL, TERMS_URL } from '@/lib/links';
 import { useLocale, useT } from '@/lib/i18n';
 import { type as t, useColors, withAlpha } from '@/theme';
 
@@ -489,6 +491,35 @@ export default function UpgradeScreen() {
             : tr('plans.billedMonthly'),
         )}
       </Text>
+
+      {/*
+        Both documents, on the screen that sells the subscription rather than
+        only under Settings.
+
+        This is a rule rather than a courtesy: 3.1.2 wants the title, the
+        length, the price and links to these two reachable from the purchase
+        flow itself, and App Review names them explicitly when it asks a new
+        developer to demonstrate a subscription. The links already existed on
+        the You tab and at sign-up — a reviewer opening the paywall directly
+        from a locked feature never passes either.
+      */}
+      <View style={styles.legal}>
+        <Text
+          accessibilityRole="link"
+          onPress={() => void WebBrowser.openBrowserAsync(TERMS_URL).catch(() => {})}
+          style={[t.footnoteSemibold, { color: colors.mutedForeground }]}
+        >
+          {tr('setup.termsOfService')}
+        </Text>
+        <Text style={[t.footnote, { color: colors.mutedForeground }]}>·</Text>
+        <Text
+          accessibilityRole="link"
+          onPress={() => void WebBrowser.openBrowserAsync(PRIVACY_URL).catch(() => {})}
+          style={[t.footnoteSemibold, { color: colors.mutedForeground }]}
+        >
+          {tr('setup.privacyPolicy')}
+        </Text>
+      </View>
     </ScrollView>
   );
 }
@@ -731,4 +762,5 @@ const styles = StyleSheet.create({
   lineText: { flexShrink: 1 },
   freeText: { flexShrink: 1 },
   smallPrint: { marginTop: 6 },
+  legal: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 12 },
 });

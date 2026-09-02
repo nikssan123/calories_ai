@@ -3,7 +3,7 @@
     "name": "Day So Far",
     "slug": "day-so-far",
     "scheme": "daysofar",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#fff6ec",
