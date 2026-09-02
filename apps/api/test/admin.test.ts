@@ -693,7 +693,7 @@ describe('the cost routes', () => {
     expect(body.days).toBe(30);
     expect(body.totals.turns).toBe(1);
     expect(body.by_kind).toHaveLength(1);
-    expect(body.by_day).toHaveLength(1);
+    expect(body.by_day.filter((d: { turns: number }) => d.turns > 0)).toHaveLength(1);
     expect(body.economics.projection).toHaveLength(3);
   });
 

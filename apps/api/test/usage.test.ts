@@ -269,10 +269,38 @@ describe('reporting', () => {
     expect(byKind.find((r) => r.kind === 'text_log')?.turns).toBe(2);
   });
 
-  it('groups by day', async () => {
+  it('groups by day, and keeps the days nothing ran on', async () => {
     const byDay = await costByDay(30);
-    expect(byDay).toHaveLength(1);
-    expect(byDay[0]!.turns).toBe(3);
+    // One row per calendar day in the window plus the partial day it opened
+    // on, so a chart drawn from this cannot pass five scattered days off as a
+    // month of steady use.
+    expect(byDay).toHaveLength(31);
+    expect(byDay.filter((d) => d.turns > 0)).toHaveLength(1);
+
+    const active = byDay.find((d) => d.turns > 0)!;
+    expect(active.turns).toBe(3);
+    expect(active.failed_turns).toBe(1);
+    expect(active.cache_read_tokens).toBe(12_000);
+    expect(byDay.every((d) => d.turns > 0 || d.cost_usd === 0)).toBe(true);
+  });
+
+  /**
+   * Deleting an account nulls `user_id` and leaves the turns. Counting those
+   * as nobody was the bug: the spend stayed in every total while the headcount
+   * it is divided by silently shrank, which inflates cost-per-user by exactly
+   * the amount a deleted account used to absorb.
+   */
+  it('counts turns from deleted accounts as one anonymous user', async () => {
+    await query('UPDATE ai_usage SET user_id = NULL WHERE kind = $1', ['photo_log']);
+
+    expect((await costTotals(30)).active_users).toBe(2);
+    expect((await economics(30)).active_users).toBe(2);
+    expect((await costByDay(30)).find((d) => d.turns > 0)!.active_users).toBe(2);
+  });
+
+  it('counts a window of nothing but deleted accounts as one user', async () => {
+    await query('UPDATE ai_usage SET user_id = NULL');
+    expect((await costTotals(30)).active_users).toBe(1);
   });
 
   it('groups by account, resolving the email', async () => {

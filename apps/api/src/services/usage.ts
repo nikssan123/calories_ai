@@ -418,7 +418,7 @@ export interface CostTotals {
   /** Median-ish: the mean is dragged around by one photo turn in a small window. */
   avg_cost_usd: number;
   p95_duration_ms: number | null;
-  /** Distinct accounts that spent anything in the window. */
+  /** Accounts that spent anything, with all deleted ones counted as one. */
   active_users: number;
 }
 
@@ -441,6 +441,20 @@ interface TotalsRow {
   active_users: number;
 }
 
+/**
+ * Distinct accounts, with the deleted ones folded into a single anonymous user.
+ *
+ * `user_id` goes null when an account is deleted and its turns are not, so a
+ * plain `count(DISTINCT user_id)` drops them: the day still shows the spend
+ * and reports nobody spending it, and every per-user figure divides a total
+ * that includes those turns by a headcount that excludes them. One bucket for
+ * all of them is the conservative reading — it cannot overstate the headcount,
+ * which is the direction that would flatter the economics.
+ */
+const ACTIVE_USERS = `(
+  count(DISTINCT user_id) + (count(*) FILTER (WHERE user_id IS NULL) > 0)::int
+)::int`;
+
 const TOTALS_SELECT = `
   count(*)::int                                      AS turns,
   count(*) FILTER (WHERE NOT ok)::int                AS failed_turns,
@@ -451,7 +465,7 @@ const TOTALS_SELECT = `
   COALESCE(sum(cache_write_tokens), 0)::bigint       AS cache_write_tokens,
   COALESCE(avg(cost_usd), 0)::float8                 AS avg_cost_usd,
   percentile_disc(0.95) WITHIN GROUP (ORDER BY duration_ms) AS p95_duration_ms,
-  count(DISTINCT user_id)::int                       AS active_users
+  ${ACTIVE_USERS}                                     AS active_users
 `;
 
 export async function costTotals(days: number): Promise<CostTotals> {
@@ -487,27 +501,71 @@ export async function costByKind(days: number): Promise<CostByKind[]> {
 export interface CostDay {
   date: string;
   turns: number;
+  failed_turns: number;
   cost_usd: number;
   active_users: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
 }
 
+/**
+ * Spend per calendar day, including the days nothing ran.
+ *
+ * The empty days are the point of the `generate_series`. Grouping the table
+ * alone yields only the days that had a turn, and a chart drawn from that
+ * spaces five scattered days evenly across a month — which reads as steady
+ * daily usage of a product that was in fact touched five times. The zero rows
+ * cost nothing and make the shape honest.
+ *
+ * The series starts at the window's own lower bound rather than a whole number
+ * of days back, so the partial first day still has a bucket to land in and its
+ * turns are not silently dropped from a total the header counts.
+ */
 export async function costByDay(days: number): Promise<CostDay[]> {
   const rows = await query<any>(
-    `SELECT occurred_at::date::text          AS date,
-            count(*)::int                    AS turns,
-            COALESCE(sum(cost_usd), 0)::float8 AS cost_usd,
-            count(DISTINCT user_id)::int     AS active_users
-       FROM ai_usage
-      WHERE occurred_at >= now() - ($1 || ' days')::interval
-   GROUP BY 1
+    `SELECT d.day::date::text                         AS date,
+            COALESCE(u.turns, 0)                      AS turns,
+            COALESCE(u.failed_turns, 0)               AS failed_turns,
+            COALESCE(u.cost_usd, 0)::float8           AS cost_usd,
+            COALESCE(u.active_users, 0)               AS active_users,
+            COALESCE(u.input_tokens, 0)               AS input_tokens,
+            COALESCE(u.output_tokens, 0)              AS output_tokens,
+            COALESCE(u.cache_read_tokens, 0)          AS cache_read_tokens,
+            COALESCE(u.cache_write_tokens, 0)         AS cache_write_tokens
+       FROM generate_series(
+              (now() - ($1 || ' days')::interval)::date,
+              current_date,
+              interval '1 day'
+            ) AS d(day)
+  LEFT JOIN (
+         SELECT occurred_at::date                            AS day,
+                count(*)::int                                AS turns,
+                count(*) FILTER (WHERE NOT ok)::int          AS failed_turns,
+                COALESCE(sum(cost_usd), 0)::float8           AS cost_usd,
+                ${ACTIVE_USERS}                              AS active_users,
+                COALESCE(sum(input_tokens), 0)::bigint       AS input_tokens,
+                COALESCE(sum(output_tokens), 0)::bigint      AS output_tokens,
+                COALESCE(sum(cache_read_tokens), 0)::bigint  AS cache_read_tokens,
+                COALESCE(sum(cache_write_tokens), 0)::bigint AS cache_write_tokens
+           FROM ai_usage
+          WHERE occurred_at >= now() - ($1 || ' days')::interval
+       GROUP BY 1
+       ) u ON u.day = d.day::date
    ORDER BY 1`,
     [days],
   );
   return rows.map((row) => ({
     date: row.date,
     turns: row.turns,
+    failed_turns: row.failed_turns,
     cost_usd: round6(row.cost_usd),
     active_users: row.active_users,
+    input_tokens: Number(row.input_tokens),
+    output_tokens: Number(row.output_tokens),
+    cache_read_tokens: Number(row.cache_read_tokens),
+    cache_write_tokens: Number(row.cache_write_tokens),
   }));
 }
 
@@ -556,7 +614,7 @@ export async function costByUser(days: number, limit = 50): Promise<CostByUser[]
  */
 export interface Economics {
   window_days: number;
-  /** Accounts that ran at least one turn in the window. */
+  /** Ran at least one turn. Deleted accounts count as one between them. */
   active_users: number;
   cost_usd: number;
   turns: number;
@@ -584,7 +642,7 @@ export async function economics(days: number): Promise<Economics> {
   }>(
     `SELECT count(*)::int                              AS turns,
             COALESCE(sum(cost_usd), 0)::float8         AS cost_usd,
-            count(DISTINCT user_id)::int               AS active_users,
+            ${ACTIVE_USERS}                            AS active_users,
             COALESCE(
               (SELECT max(per_user) FROM (
                  SELECT sum(cost_usd)::float8 AS per_user

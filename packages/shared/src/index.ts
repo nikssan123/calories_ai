@@ -3576,11 +3576,17 @@ export const CostByKind = CostTotals.extend({
 });
 export type CostByKind = z.infer<typeof CostByKind>;
 
+/** One calendar day in the window — including the days nothing ran. */
 export const CostDay = z.object({
   date: z.string(),
   turns: z.number(),
+  failed_turns: z.number(),
   cost_usd: z.number(),
   active_users: z.number(),
+  input_tokens: z.number(),
+  output_tokens: z.number(),
+  cache_read_tokens: z.number(),
+  cache_write_tokens: z.number(),
 });
 export type CostDay = z.infer<typeof CostDay>;
 

@@ -185,8 +185,13 @@ export function CostPanel() {
             </div>
           </InsetGroup>
 
-          <InsetGroup title="Daily">
+          <InsetGroup
+            title="Daily"
+            footer="The bars cover every day in the window, including the ones nothing ran on; the table lists only the days that did. Today is still open, so its row is a part-day and always reads cheap. Turns from deleted accounts have no id left and count as one anonymous user."
+          >
             <DailyChart days={report.by_day} />
+            <DailySummary days={report.by_day} />
+            <DailyTable days={report.by_day} />
           </InsetGroup>
 
           <InsetGroup title="By account">
@@ -290,12 +295,17 @@ function Caveats({ report }: { report: CostReport }) {
 /**
  * Daily spend as bars. Deliberately not a charting library: it is one series
  * against one axis, and the honest version of that is a div per day.
+ *
+ * Empty days are drawn as a flat stub rather than skipped, because the series
+ * now includes them — a gap in the row is a day nobody logged anything, which
+ * is exactly the thing a chart of only-active days hides.
  */
 function DailyChart({ days }: { days: CostReport['by_day'] }) {
   if (days.length === 0) {
     return <p className="text-muted-foreground px-4 py-6 text-center text-body">No turns yet.</p>;
   }
   const peak = Math.max(...days.map((d) => d.cost_usd), 0.000001);
+  const today = localDate();
 
   return (
     <div className="px-4 py-4">
@@ -303,9 +313,17 @@ function DailyChart({ days }: { days: CostReport['by_day'] }) {
         {days.map((day) => (
           <div
             key={day.date}
-            className="group relative flex-1 rounded-t-sm bg-[var(--calories)] transition-opacity hover:opacity-70"
+            className={cn(
+              'group relative flex-1 rounded-t-sm transition-opacity hover:opacity-70',
+              day.turns === 0
+                ? 'bg-border'
+                : day.failed_turns > 0
+                  ? 'bg-[var(--fat)]'
+                  : 'bg-[var(--calories)]',
+              day.date === today && 'opacity-60',
+            )}
             style={{ height: `${Math.max(2, (day.cost_usd / peak) * 100)}%` }}
-            title={`${day.date} — ${usd(day.cost_usd)} over ${day.turns} turn${day.turns === 1 ? '' : 's'}`}
+            title={dayTooltip(day)}
           />
         ))}
       </div>
@@ -316,4 +334,117 @@ function DailyChart({ days }: { days: CostReport['by_day'] }) {
       </div>
     </div>
   );
+}
+
+/** What the bars add up to, for the questions the bars themselves cannot answer. */
+function DailySummary({ days }: { days: CostReport['by_day'] }) {
+  if (days.length === 0) return null;
+
+  const spent = days.reduce((sum, d) => sum + d.cost_usd, 0);
+  const activeDays = days.filter((d) => d.turns > 0).length;
+  const busiest = days.reduce((max, d) => (d.cost_usd > max.cost_usd ? d : max), days[0]!);
+  // Divided by the days that actually saw a turn, not by the window: a window
+  // chosen wider than the deployment is old would otherwise halve the figure
+  // for no reason other than the button that was pressed.
+  const perActiveDay = activeDays ? spent / activeDays : 0;
+
+  return (
+    <div className="divide-border grid grid-cols-3 divide-x-2">
+      <Stat
+        label="Per active day"
+        value={usd(perActiveDay)}
+        hint={`${activeDays} of ${days.length} days had a turn`}
+      />
+      <Stat
+        label="Busiest day"
+        value={usd(busiest.cost_usd)}
+        hint={`${busiest.date} · ${busiest.turns} turn${busiest.turns === 1 ? '' : 's'}`}
+      />
+      <Stat
+        label="At this rate"
+        value={`${usd(perActiveDay * 30)}/mo`}
+        hint="An active day every day, for thirty days."
+      />
+    </div>
+  );
+}
+
+/**
+ * The same days as numbers, newest first.
+ *
+ * The chart carries the shape and the table carries the amounts, because the
+ * amounts were previously only in a `title` attribute — which is to say
+ * invisible on a phone and invisible to anyone who did not think to hover.
+ * Empty days are dropped here: a run of zero rows is noise in a table and
+ * signal in the chart above.
+ */
+function DailyTable({ days }: { days: CostReport['by_day'] }) {
+  const rows = days.filter((d) => d.turns > 0).reverse();
+  const today = localDate();
+
+  return (
+    <div className="max-h-[26rem] overflow-y-auto">
+      <DataTable
+        columns={['Date', 'Turns', 'Users', 'Spent', 'Per turn', 'Per user', 'Cached', 'Failed']}
+        className="rounded-none"
+        empty="No turns in this window."
+      >
+        {rows.map((day) => (
+          <tr key={day.date}>
+            <Cell className="font-medium">
+              {day.date}
+              <span className="text-muted-foreground ml-1.5 font-normal">
+                {weekday(day.date)}
+                {day.date === today && ' · so far'}
+              </span>
+            </Cell>
+            <Cell className="tnum">{compactNumber(day.turns)}</Cell>
+            <Cell
+              className="tnum text-muted-foreground"
+              title="Deleted accounts have no id left and count as one anonymous user between them."
+            >
+              {day.active_users}
+            </Cell>
+            <Cell className="tnum font-medium">{usd(day.cost_usd)}</Cell>
+            <Cell className="tnum text-muted-foreground">{usd(day.cost_usd / day.turns)}</Cell>
+            <Cell className="tnum text-muted-foreground">
+              {day.active_users ? usd(day.cost_usd / day.active_users) : '—'}
+            </Cell>
+            <Cell className="tnum text-muted-foreground">{percent(cacheShare(day))}</Cell>
+            <Cell className={cn('tnum', day.failed_turns > 0 && 'text-[var(--fat)]')}>
+              {day.failed_turns || '—'}
+            </Cell>
+          </tr>
+        ))}
+      </DataTable>
+    </div>
+  );
+}
+
+/**
+ * Share of the input side served from cache.
+ *
+ * Worth a column of its own rather than a token count: cache reads bill at a
+ * tenth of the input rate, so this number falling is a price rise that shows
+ * up nowhere else until the monthly total has already moved.
+ */
+function cacheShare(day: CostReport['by_day'][number]): number {
+  const readable = day.input_tokens + day.cache_read_tokens;
+  return readable ? day.cache_read_tokens / readable : 0;
+}
+
+function dayTooltip(day: CostReport['by_day'][number]): string {
+  if (day.turns === 0) return `${day.date} — nothing logged`;
+  const failed = day.failed_turns > 0 ? `, ${day.failed_turns} failed` : '';
+  return `${day.date} — ${usd(day.cost_usd)} over ${day.turns} turn${day.turns === 1 ? '' : 's'}${failed}`;
+}
+
+function weekday(date: string): string {
+  return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short' });
+}
+
+/** Today in the browser's own zone, to match how the server buckets a day. */
+function localDate(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
