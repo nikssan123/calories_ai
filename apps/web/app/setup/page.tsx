@@ -497,7 +497,7 @@ export default function SetupPage() {
           </a>
         </InsetGroup>
 
-        <DeleteAccount email={profile.email} hasPassword={profile.has_password} />
+        <DeleteAccount email={profile.email} hasPassword={profile.has_password ?? true} />
 
         </div>
 

@@ -474,7 +474,12 @@ export default function SetupScreen() {
 
         <DeleteAccount
           email={profile.email}
-          hasPassword={profile.has_password}
+          // `?? true` for the rollout window only: the field ships with the API
+          // change, and a phone that updates before the server would otherwise
+          // read `undefined` as "no password" and ask every account to type its
+          // address at a server that still wants a password. Defaulting to the
+          // old behaviour makes the new app correct against the old API.
+          hasPassword={profile.has_password ?? true}
           onDeleted={() => void signOut()}
           onError={setError}
         />
