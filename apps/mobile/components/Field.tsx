@@ -270,16 +270,11 @@ export function Sheet({
   const progress = useSharedValue(0);
 
   /*
-   * Read through a ref so the worklet's completion callback below cannot fire a
-   * stale one: the animation outlives the render that started it.
+   * Read through a ref so a callback fired after the exit cannot be a stale
+   * one: the animation outlives the render that started it.
    */
   const closed = useRef(onClosed);
   closed.current = onClosed;
-
-  const unmount = useCallback(() => {
-    setMounted(false);
-    closed.current?.();
-  }, []);
 
   useEffect(() => {
     if (open) {
@@ -289,13 +284,38 @@ export function Sheet({
     }
     if (reduced) {
       progress.value = 0;
-      unmount();
+      setMounted(false);
       return;
     }
     progress.value = withTiming(0, { duration: 200, easing: ease.out }, (done) => {
-      if (done) runOnJS(unmount)();
+      if (done) runOnJS(setMounted)(false);
     });
-  }, [open, reduced, progress, unmount]);
+  }, [open, reduced, progress]);
+
+  /*
+   * `onClosed` fires from here rather than from the animation's own callback,
+   * and the distinction is not stylistic. `runOnJS` has to make its target
+   * serializable, and a closure reaching a ref that holds another closure is
+   * more than that can carry: it segfaulted in `makeSerializableObject` the
+   * first time this was wired that way, taking the app down on the very tap it
+   * was added to fix. Only `setMounted` — a plain React setter, and what was
+   * always there — crosses the worklet boundary now, and the effect that
+   * observes it does the rest on the JS thread where closures are just
+   * closures.
+   *
+   * The flag is what keeps it to real closes: `mounted` is already false on the
+   * first render, and a sheet that has never been open has not just shut.
+   */
+  const wasMounted = useRef(false);
+  useEffect(() => {
+    if (mounted) {
+      wasMounted.current = true;
+      return;
+    }
+    if (!wasMounted.current) return;
+    wasMounted.current = false;
+    closed.current?.();
+  }, [mounted]);
 
   /*
    * How far a finger has pulled the sheet down, in points. Separate from
