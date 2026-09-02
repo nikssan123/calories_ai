@@ -40,75 +40,55 @@ const JPEG_QUALITY = 0.82;
 type Asset = ImagePicker.ImagePickerAsset;
 
 /**
- * Downscales and re-encodes, and falls back to the untouched asset whenever it
- * cannot: an unreadable image here means nothing logged, and sending too many
- * bytes is far better than sending none.
+ * Downscales where it helps, and re-encodes always.
+ *
+ * The bytes come from here rather than from the picker, and that is the whole
+ * point of the arrangement. `base64: true` on the picker made iOS encode the
+ * *original* — a 12MP HEIC, several megabytes of string — before this function
+ * ever ran, and then threw all of it away for any photo above `MAX_EDGE`, which
+ * is every photo a phone camera takes. On one tester's device that encode never
+ * came back at all: the promise never settled, so the flag the composer sets
+ * around it never cleared and both the attach and the microphone buttons stayed
+ * dead until the app was restarted.
+ *
+ * So the picker is now asked only for a file, which is the cheap thing it is
+ * good at, and the encode happens here on an image already cut down to the size
+ * the vision model reads at.
  */
 async function prepare(asset: Asset): Promise<PreparedPhoto | null> {
-  const longest = Math.max(asset.width, asset.height);
+  const longest = Math.max(asset.width ?? 0, asset.height ?? 0);
 
   try {
+    let context = ImageManipulator.ImageManipulator.manipulate(asset.uri);
     if (longest > MAX_EDGE) {
       const scale = MAX_EDGE / longest;
-      const context = ImageManipulator.ImageManipulator.manipulate(asset.uri).resize({
+      context = context.resize({
         width: Math.round(asset.width * scale),
         height: Math.round(asset.height * scale),
       });
-      const image = await context.renderAsync();
-      const saved = await image.saveAsync({
-        format: ImageManipulator.SaveFormat.JPEG,
-        compress: JPEG_QUALITY,
-        base64: true,
-      });
-      if (saved.base64) {
-        return {
-          dataUrl: `data:image/jpeg;base64,${saved.base64}`,
-          mediaType: 'image/jpeg',
-          uri: saved.uri,
-        };
-      }
+    }
+    const image = await context.renderAsync();
+    const saved = await image.saveAsync({
+      format: ImageManipulator.SaveFormat.JPEG,
+      compress: JPEG_QUALITY,
+      base64: true,
+    });
+    if (saved.base64) {
+      return {
+        dataUrl: `data:image/jpeg;base64,${saved.base64}`,
+        mediaType: 'image/jpeg',
+        uri: saved.uri,
+      };
     }
   } catch {
     // A codec the native side cannot read, or an out-of-memory on a huge file.
-    // Fall through and send what the picker gave us.
   }
 
-  // The picker is asked for base64 up front precisely so this path has
-  // something to send: re-reading the file here would be a second failure
-  // point in the branch that already exists because the first one failed.
-  //
-  // Null rather than an empty `base64,` when even that is missing. A photo with
-  // no bytes used to attach exactly like a real one — thumbnail and all — and
-  // then fail at the far end with nothing on screen to explain it, which reads
-  // as the app quietly losing the meal. Refusing here is what lets the caller
-  // say so.
-  if (!asset.base64) return null;
-
-  return {
-    dataUrl: `data:${mediaTypeOf(asset)};base64,${asset.base64}`,
-    mediaType: mediaTypeOf(asset),
-    uri: asset.uri,
-  };
-}
-
-/**
- * The API takes JPEG, PNG, WebP and GIF. A phone produces the first two and,
- * on iOS, HEIC — which `expo-image-picker` already transcodes to JPEG on the
- * way out, so it never reaches here. Anything unrecognised is called a JPEG
- * rather than rejected: the byte stream is whatever it is, and a wrong label on
- * a photo the model can still read beats refusing to send it.
- */
-function mediaTypeOf(asset: Asset): PhotoMediaType {
-  switch (asset.mimeType) {
-    case 'image/png':
-      return 'image/png';
-    case 'image/webp':
-      return 'image/webp';
-    case 'image/gif':
-      return 'image/gif';
-    default:
-      return 'image/jpeg';
-  }
+  // Null rather than an empty `base64,`. A photo with no bytes used to attach
+  // exactly like a real one — thumbnail and all — and then fail at the far end
+  // with nothing on screen to explain it, which reads as the app quietly losing
+  // the meal. Refusing here is what lets the caller say so.
+  return null;
 }
 
 /**
@@ -154,7 +134,6 @@ export async function takePhoto(): Promise<PreparedPhoto | null> {
 
   const result = await ImagePicker.launchCameraAsync({
     mediaTypes: ['images'],
-    base64: true,
     quality: JPEG_QUALITY,
     cameraType: ImagePicker.CameraType.back,
   });
@@ -173,7 +152,6 @@ export async function takePhoto(): Promise<PreparedPhoto | null> {
 export async function pickPhoto(): Promise<PreparedPhoto | null> {
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
-    base64: true,
     quality: JPEG_QUALITY,
   });
   const asset = result.canceled ? null : result.assets[0];

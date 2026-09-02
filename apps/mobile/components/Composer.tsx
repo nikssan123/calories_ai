@@ -306,11 +306,17 @@ export function Composer({
             // palette has no `destructiveDeep` because nothing has needed one.
             color={dictation.listening ? undefined : colors.input}
             onPress={talk}
-            disabled={disabled || busy}
+            /* Not gated on `busy`. Preparing a photo has nothing to do with
+               saying a sentence, and tying them together meant one stuck
+               picker took the microphone down with it — two dead buttons for
+               one fault, and no way to tell from the outside which had gone
+               wrong. `disabled` is the turn in flight, which genuinely does
+               rule both out. */
+            disabled={disabled}
             accessibilityRole="button"
             accessibilityLabel={dictation.listening ? tr('composer.stopListening') : tr('composer.sayWhatYouAte')}
             accessibilityState={{ busy: dictation.listening }}
-            style={{ opacity: disabled || busy ? 0.3 : 1 }}
+            style={{ opacity: disabled ? 0.3 : 1 }}
             contentStyle={[
               styles.send,
               { backgroundColor: dictation.listening ? colors.destructive : colors.card },
