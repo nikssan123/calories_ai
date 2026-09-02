@@ -99,9 +99,9 @@ opening the **Cook** tab on the free plan.
 
 | Product | Length | What it opens |
 | --- | --- | --- |
-| Plus Monthly | 1 month | 60 AI messages and 8 photo scans a month, weekly reviews |
+| Plus Monthly | 1 month | 90 AI messages and 8 photo scans a month, weekly reviews |
 | Plus Annual | 1 year | The same, billed yearly |
-| Coach Monthly | 1 month | 150 messages, 25 photo scans, plus the Cook tab — pantry scanning, recipes and meal plans |
+| Coach Monthly | 1 month | 180 messages, 25 photo scans, plus the Cook tab — pantry scanning, recipes and meal plans |
 | Coach Annual | 1 year | The same, billed yearly |
 
 **Consumables** (bought outright, never expire, spent only after the plan's own scans are used):
