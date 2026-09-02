@@ -148,6 +148,11 @@ rejection will be about.
   prefix for exactly that reason, and a tier that fails to match is not a loud
   failure — it is simply absent from the paywall.
 
+- **Both agreements are Active.** Free Apps and **Paid Apps**, 31 Aug 2026 –
+  31 Aug 2027, with a Bulgarian EUR bank account and both US tax forms active.
+  The "Paid Apps Agreement is unsigned" blocker this section opened with in
+  August is long gone, which is why the catalogue above could be created at all.
+
 - **Screenshots exist**, in `store/`:
 
   | Slot | Size | Count |
@@ -171,20 +176,30 @@ Both of the previous open items are settled, and one of them is a live problem.
   purchase and subscription items" is a miscount in that document, and the
   catalogue in this one is the accurate list.
 
-- **EU trader status is provided, and it says the wrong thing.** App Information
-  → App Store Regulations & Permits reads:
+- **EU trader status lives in two places, and only one of them is done.**
 
-  > This developer has identified itself as a **non-trader** for this app.
+  | Where | State |
+  |---|---|
+  | Business → Compliance → Digital Services Act | Submitted **1 Sep 2026**, 27 EU countries, status **In Review** |
+  | App Information → Digital Services Act | *"This developer has identified itself as a **non-trader** for this app."* |
 
-  **That declaration does not survive contact with the paywall.** The app sells
-  four auto-renewable subscriptions and three consumables; under the Digital
-  Services Act that is trading, and Apple removes apps whose trader status is
-  absent or contradicted from EU storefronts. So this is not the "unprovided"
-  blocker the earlier revision guessed at — it is a declaration that is filled in
-  and wrong, which is worse, because nothing about it looks unfinished.
+  The account-level submission is the trader *identity* — legal name, address,
+  phone — lodged with Apple and being verified. The per-app line is a separate
+  declaration about whether this particular app is distributed by a trader, and
+  it still says no. Doing the first does not do the second, which is exactly the
+  trap: the console shows a green-looking DSA row on the Business page while the
+  app itself is still declared non-trader.
 
-  Switching it is not a free edit and should be a deliberate one: a trader
-  declaration publishes name, address, phone and email on the product page.
+  **Non-trader does not survive contact with the paywall.** The app sells four
+  auto-renewable subscriptions and three consumables; that is trading, and Apple
+  removes apps whose trader status is absent or contradicted from EU storefronts.
+
+  Two things to settle before flipping it, neither of them technical. It cannot
+  be flipped until the account-level record leaves *In Review*. And the details
+  on file are published on the App Store product page — the address Apple holds
+  is `ul. Akad. Metodi Popov 14, et.3, ap. 10, Varna 9000`, which reads as
+  residential. A registered business or virtual-office address is the usual
+  answer, and it is much easier to set before publication than after.
 
 - **The listing itself is in better shape than §7 assumed.** Everything §4 and §5
   specify is actually entered — the keyword field carries the exact 100-character
