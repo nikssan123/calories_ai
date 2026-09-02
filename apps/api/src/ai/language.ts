@@ -249,6 +249,39 @@ function nameFor(code: string): string | null {
   return code === 'eng' ? null : (LANGUAGE_NAMES[code] ?? null);
 }
 
+/**
+ * Which of the five interface languages a finished piece of prose is written in,
+ * or null if it is none of them.
+ *
+ * The mirror of `replyLanguage`, and it exists because that function's answer
+ * outlives the request that asked it. A nudge and a weekly review are written
+ * in the language the journal was written in, which is deliberately not the
+ * stored locale — and then the email carrying them was drawn from the stored
+ * locale anyway, so a Bulgarian nudge arrived under an English heading with an
+ * English greeting over it and an English button under it. One message, two
+ * languages, which is worse than either of them alone.
+ *
+ * Read off the prose rather than plumbed through from generation because the
+ * prose is the thing being wrapped: whatever wrote it and whenever, the chrome
+ * should be in the language of the words next to it. It also answers for rows
+ * written before this existed, which a stored column would not.
+ *
+ * A single sample, so `detect` returns what the text says with nothing to
+ * check it against — safe here in a way it is not on a meal log, because this
+ * is paragraphs of finished writing rather than "две яйца". Null for anything
+ * outside the five: an Italian nudge has no catalogue to be wrapped in, and
+ * the caller's stored locale is the best chrome left.
+ */
+export function proseLocale(text: string): Locale | null {
+  const detected = detect([text]);
+  return detected.kind === 'named' ? (LOCALE_CODES[detected.code] ?? null) : null;
+}
+
+/** `FRANC_CODES` read the other way, for `proseLocale`. */
+const LOCALE_CODES: Record<string, Locale> = Object.fromEntries(
+  Object.entries(FRANC_CODES).map(([locale, code]) => [code, locale as Locale]),
+);
+
 type Detection =
   /** A language, named. */
   | { kind: 'named'; code: string }
@@ -351,6 +384,14 @@ const CYRILLIC = /\p{Script=Cyrillic}/u;
  * nouns and numbers. It escalates either way; the only thing lost is the name,
  * and the standing rule in the stable prompt covers that better than a coin
  * toss between two languages would.
+ *
+ * Both lists are longer than the meal logs they were first written for, because
+ * `proseLocale` asks the same question about finished sentences and cannot
+ * shrug: a null there draws a Bulgarian nudge in English chrome. Every word
+ * added is one the other language does not have at all — "са", "малко" and
+ * "така" are not Russian, "было", "тоже" and "хотя" are not Bulgarian — so a
+ * longer list cannot make the two agree, only make the silence rarer. Anything
+ * the pair shares ("много", "само", "при") is deliberately in neither.
  */
 function readCyrillic(sample: string): string | null {
   if (UKRAINIAN_LETTERS.test(sample)) return 'ukr';
@@ -390,12 +431,15 @@ const RUSSIAN_LETTERS = /[ыэё]/iu;
 const RUSSIAN_WORDS = word(
   'что|это|как|меня|тебя|или|сколько|который|которая|была|были|есть|очень|' +
     'если|чтобы|потому|уже|все|всё|его|ему|них|нас|вам|вас|сегодня|завтра|' +
-    'вчера|осталось|хлеба|молоком',
+    'вчера|осталось|хлеба|молоком|был|было|ещё|еще|тоже|только|можно|нужно|' +
+    'надо|хотя|значит|сейчас|неделю|неделе',
 );
 
 const BULGARIAN_WORDS = word(
   'ще|съм|няма|дали|защото|също|още|нали|където|който|която|което|колко|' +
-    'днес|утре|яйца|мляко|хляб|калории|храна|закуска',
+    'днес|утре|яйца|мляко|хляб|калории|храна|закуска|са|си|това|тази|този|' +
+    'тези|като|може|трябва|беше|бяха|малко|повече|нещо|така|седмица|' +
+    'седмицата|целта|дните',
 );
 
 /**

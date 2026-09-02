@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ReviewStats, WeeklyReview } from '@ct/shared';
+import type { Nudge, ReviewStats, WeeklyReview } from '@ct/shared';
 import { query } from '../src/db.ts';
 import { env } from '../src/env.ts';
 import {
@@ -8,11 +8,13 @@ import {
   sendAccountDeletedEmail,
   sendAccountStatusEmail,
   sendNewSignInEmail,
+  sendNudgeEmail,
   sendPasswordChangedEmail,
   sendPasswordResetEmail,
   sendVerificationEmail,
   sendWeeklyReviewEmail,
 } from '../src/email/notify.ts';
+import { emailMessages } from '../src/email/messages.ts';
 import * as templates from '../src/email/templates.ts';
 import { createUser } from './helpers/factories.ts';
 import { lastEmail, mailbox } from './helpers/email.ts';
@@ -74,6 +76,18 @@ function review(overrides: Partial<WeeklyReview> = {}): WeeklyReview {
     stats: STATS,
     message_id: null,
     created_at: '2026-08-17T05:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function nudge(overrides: Partial<Nudge> = {}): Nudge {
+  return {
+    id: '00000000-0000-4000-8000-000000000001',
+    kind: 'protein_short',
+    local_date: '2026-08-17',
+    content: 'Protein came in under target every day this week — 111 g against a 160 g goal.',
+    message_id: null,
+    created_at: '2026-08-17T15:00:00.000Z',
     ...overrides,
   };
 }
@@ -316,6 +330,79 @@ describe('sendWeeklyReviewEmail', () => {
     await sendWeeklyReviewEmail(user.id, review({ week_start: '2026-08-17', week_end: '2026-08-23' }));
 
     expect(mailbox()).toHaveLength(2);
+  });
+});
+
+describe('the language the chrome is drawn in', () => {
+  /*
+   * The bug this is here for: `users.locale` is what the *interface* is drawn
+   * in, and a nudge is written in whatever language the journal was written in.
+   * `038_locale.sql` backfilled every account that predates it to 'en', so a
+   * Bulgarian speaker who never opened the picker has both — and used to get an
+   * English "A quick note" over two Bulgarian sentences, with an English button
+   * under them. One email, two languages.
+   */
+  const BULGARIAN =
+    'Калориите ти са точно на прицел цялата седмица, но протеинът е под целта всеки от 7-те дни – средно 111 г при цел 160 г.';
+
+  it('draws a nudge in the language the nudge is written in', async () => {
+    const user = await createUser({ display_name: 'Nik', locale: 'en', notify_nudges: true });
+    expect(await sendNudgeEmail(user.id, nudge({ content: BULGARIAN }))).toMatchObject({
+      status: 'sent',
+    });
+
+    const message = lastEmail()!;
+    // The heading, the greeting and the button — everything the model did not
+    // write — in the same language as the sentence between them.
+    expect(message.text).toContain('Кратка бележка');
+    expect(message.text).toContain('Здравей, Nik');
+    expect(message.text).not.toContain('A quick note');
+    expect(message.text).not.toContain('Hi Nik');
+  });
+
+  it('draws a review in the language the review is written in', async () => {
+    const user = await createUser({ locale: 'en' });
+    await sendWeeklyReviewEmail(user.id, review({ content: BULGARIAN }));
+
+    const message = lastEmail()!;
+    expect(message.subject).toBe('Седмицата ти: 10–16 август');
+    expect(message.text).toContain('Записани дни');
+    expect(message.text).not.toContain('Days logged');
+  });
+
+  it('keeps the stored locale when the prose is in a language we do not ship', async () => {
+    const user = await createUser({ locale: 'en', notify_nudges: true });
+    // Italian is a perfectly good reply — `replyLanguage` will name it — and it
+    // has no email catalogue. English chrome is the best that is left.
+    await sendNudgeEmail(
+      user.id,
+      nudge({
+        content:
+          'Le tue proteine sono rimaste sotto obiettivo tutti e sette i giorni, in media 111 g contro 160 g.',
+      }),
+    );
+
+    expect(lastEmail()!.text).toContain('A quick note');
+  });
+
+  it('follows the prose even when the picker says otherwise', async () => {
+    // Somebody who set the app to Bulgarian and logs in English. Consistent is
+    // the only thing on offer here, and consistent with the words in the email
+    // beats consistent with the tab bar they are not looking at.
+    const user = await createUser({ locale: 'bg', notify_nudges: true });
+    await sendNudgeEmail(user.id, nudge());
+
+    expect(lastEmail()!.text).toContain('A quick note');
+    expect(lastEmail()!.text).not.toContain('Кратка бележка');
+  });
+
+  it('still translates a message with no prose in it at all', async () => {
+    // The counter-case: everything else this server sends is written by us, so
+    // the stored locale is both the question and the answer.
+    const user = await createUser({ locale: 'bg' });
+    await sendPasswordChangedEmail(user.id, new Date());
+
+    expect(lastEmail()!.subject).toBe(emailMessages('bg')['changed.subject']);
   });
 });
 

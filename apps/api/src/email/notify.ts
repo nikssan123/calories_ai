@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { intlLocale, type Locale, type Nudge, type WeeklyReview } from '@ct/shared';
+import { proseLocale } from '../ai/language.ts';
 import { env } from '../env.ts';
 import { issueToken, issueVerification, TOKEN_TTL_MINUTES } from '../services/tokens.ts';
 import { findRecipientByEmail, getEmailRecipient } from '../services/user.ts';
@@ -28,7 +29,9 @@ import { unsubscribeHeaders, unsubscribeLink } from './unsubscribe.ts';
  * It is also the layer that knows which language to write in. `getEmailRecipient`
  * has carried `locale` since the weekly review was translated; every template
  * now takes it, so every call here passes it, and the two functions at the
- * bottom format their dates in it as well.
+ * bottom format their dates in it as well. The two messages that wrap prose the
+ * model wrote are the exception, and `chromeLocale` is where they read it off
+ * the prose instead.
  */
 
 const SKIPPED = (reason: string): SendResult => ({ status: 'skipped', reason });
@@ -239,6 +242,7 @@ export async function sendWeeklyReviewEmail(
   if (!recipient.verified) return SKIPPED('address not verified');
 
   const link = await unsubscribeLink(userId);
+  const locale = chromeLocale(review.content, recipient.locale);
 
   return sendEmail({
     to: recipient.email,
@@ -254,11 +258,11 @@ export async function sendWeeklyReviewEmail(
       name: recipient.displayName,
       content: review.content,
       stats: review.stats,
-      range: formatRange(review.week_start, review.week_end, recipient.locale),
+      range: formatRange(review.week_start, review.week_end, locale),
       appUrl: env.appUrl,
       unsubscribeUrl: link.url,
       units: recipient.units,
-      locale: recipient.locale,
+      locale,
     }),
   });
 }
@@ -288,6 +292,7 @@ export async function sendNudgeEmail(
   if (!recipient.verified) return SKIPPED('address not verified');
 
   const link = await unsubscribeLink(userId);
+  const locale = chromeLocale(nudge.content, recipient.locale);
 
   return sendEmail({
     to: recipient.email,
@@ -302,12 +307,38 @@ export async function sendNudgeEmail(
       content: nudge.content,
       appUrl: env.appUrl,
       unsubscribeUrl: link.url,
-      locale: recipient.locale,
+      locale,
     }),
   });
 }
 
 // ---- Formatting ------------------------------------------------------------
+
+/**
+ * Which language to draw an email in when the email is a wrapper around prose
+ * somebody else wrote.
+ *
+ * Only the two AI-written messages call this. Everything else here is written
+ * by us in all five languages, so the stored locale is both the question and
+ * the answer — a verification code has no prose to disagree with.
+ *
+ * A nudge and a review do. They are written in the language the journal was
+ * written in, on purpose (see `replyLanguage`), and that is regularly not the
+ * language the interface is set to: `038_locale.sql` backfilled every account
+ * that predates it to `'en'`, so a Bulgarian speaker who never opened the
+ * language picker has `locale = 'en'` and a journal full of Bulgarian. Drawing
+ * the chrome from the column produced exactly that email — an English "Here is
+ * your week" over two Bulgarian sentences, with an English button beneath it.
+ *
+ * So the prose decides, and the column is the fallback for when it cannot: a
+ * language the app does not ship in has no catalogue, and English chrome around
+ * Italian prose is the best that is left. It is still the fallback rather than
+ * the answer for the ordinary case too — somebody who *did* set the picker to
+ * German and writes German gets German either way.
+ */
+function chromeLocale(content: string, stored: Locale): Locale {
+  return proseLocale(content) ?? stored;
+}
 
 /**
  * An instant, in the reader's own timezone, in their own language, with the

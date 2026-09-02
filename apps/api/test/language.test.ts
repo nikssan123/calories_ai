@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LOCALES, LOCALE_ENGLISH_NAMES } from '@ct/shared';
-import { replyLanguage } from '../src/ai/language.ts';
+import { proseLocale, replyLanguage } from '../src/ai/language.ts';
 import { MODELS, TEXT_LOG_UNSUPPORTED_LANGUAGE } from '../src/ai/client.ts';
 
 /**
@@ -240,5 +240,70 @@ describe('the escalated model choice', () => {
    */
   it('does not pay for reasoning it does not need', () => {
     expect(TEXT_LOG_UNSUPPORTED_LANGUAGE.effort).toBe('low');
+  });
+});
+
+/**
+ * The other direction: not what to write, but what was written.
+ *
+ * The samples here are whole sentences rather than meal logs, because that is
+ * what this is asked about — a finished nudge or review, on its way into an
+ * email that has to be drawn in the same language as the words inside it.
+ */
+describe('proseLocale', () => {
+  const NUDGES: Array<[string, string]> = [
+    [
+      'en',
+      'Your calories were right on target all week, but protein came in under goal every one of the seven days.',
+    ],
+    [
+      'bg',
+      'Калориите ти са точно на прицел цялата седмица, но протеинът е под целта всеки от 7-те дни – средно 111 г при цел 160 г.',
+    ],
+    [
+      'de',
+      'Deine Kalorien lagen die ganze Woche genau im Ziel, aber das Eiweiß lag an allen sieben Tagen darunter.',
+    ],
+    [
+      'es',
+      'Tus calorías estuvieron justo en el objetivo toda la semana, pero la proteína quedó por debajo los siete días.',
+    ],
+    [
+      'fr',
+      'Tes calories étaient pile dans la cible toute la semaine, mais les protéines sont restées sous l’objectif les sept jours.',
+    ],
+  ];
+
+  it.each(NUDGES)('reads a nudge written in %s', (locale, content) => {
+    expect(proseLocale(content)).toBe(locale);
+  });
+
+  it('answers null for a language the interface does not ship in', () => {
+    // Italian and Russian are both perfectly good replies — `replyLanguage`
+    // will name either — and neither has an email catalogue to be wrapped in.
+    // Null is what sends the caller back to the stored locale.
+    expect(
+      proseLocale(
+        'Le tue calorie sono state in linea tutta la settimana, ma le proteine sono rimaste sotto obiettivo tutti e sette i giorni.',
+      ),
+    ).toBeNull();
+    expect(
+      proseLocale('Твои калории всю неделю были точно в цели, но белок был ниже нормы все семь дней.'),
+    ).toBeNull();
+  });
+
+  it('answers null rather than guessing at nothing', () => {
+    expect(proseLocale('')).toBeNull();
+    expect(proseLocale('   ')).toBeNull();
+  });
+
+  /*
+   * Bulgarian and Russian share an alphabet, and franc ranks Bosnian above
+   * Russian on a short Cyrillic sample. Getting this pair wrong is the whole
+   * reason `readCyrillic` exists, and it would show up here as a Russian review
+   * arriving in Bulgarian chrome.
+   */
+  it('does not mistake Russian prose for Bulgarian', () => {
+    expect(proseLocale('Сегодня ты съел два яйца и кусок хлеба с маслом, это примерно 320 ккал.')).toBeNull();
   });
 });
