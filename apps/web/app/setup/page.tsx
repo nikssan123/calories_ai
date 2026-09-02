@@ -497,7 +497,7 @@ export default function SetupPage() {
           </a>
         </InsetGroup>
 
-        <DeleteAccount email={profile.email} />
+        <DeleteAccount email={profile.email} hasPassword={profile.has_password} />
 
         </div>
 
@@ -710,7 +710,7 @@ function EmailSettings({
  * The password field is the real gate; the disclosure is only there so the
  * control cannot be hit by accident.
  */
-function DeleteAccount({ email }: { email: string | null }) {
+function DeleteAccount({ email, hasPassword }: { email: string | null; hasPassword: boolean }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState('');
@@ -719,7 +719,7 @@ function DeleteAccount({ email }: { email: string | null }) {
   async function confirm() {
     setDeleting(true);
     try {
-      await api.deleteAccount(password);
+      await api.deleteAccount(hasPassword ? { password } : { confirm_email: password });
       // Everything this session could read is gone, so a reload is both the
       // simplest correct next state and the only one that cannot show stale
       // data: AuthGate re-runs, finds no session, and lands on /login.
@@ -750,10 +750,10 @@ function DeleteAccount({ email }: { email: string | null }) {
             {t('setup.deleteWarningAfter')}
           </p>
           <Input
-            type="password"
+            type={hasPassword ? 'password' : 'email'}
             value={password}
             autoFocus
-            placeholder={t('auth.password')}
+            placeholder={hasPassword ? t('auth.password') : (email ?? '')}
             autoComplete="current-password"
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => {
