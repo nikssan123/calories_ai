@@ -169,12 +169,21 @@ rejection will be about.
 
 Both of the previous open items are settled, and one of them is a live problem.
 
-- **The product count is seven and the code is right.** The console shows one
-  subscription group, *Day So Far membership*, with **4** subscriptions, and
-  **3** consumables — `photo_10`, `photo_25`, `photo_50`, all *Ready for Review*.
-  There is no stray eighth product. `APP_REVIEW_REPLY.md`'s "all eight in-app
-  purchase and subscription items" is a miscount in that document, and the
-  catalogue in this one is the accurate list.
+- **The catalogue is seven products, and `APP_REVIEW_REPLY.md`'s "eight" was
+  right all along.** An earlier revision of this line called that document a
+  miscount. It was not — the two numbers count different things, and the
+  submission page settles it:
+
+  | Counted as | Items |
+  |---|---|
+  | Products you can buy | 4 subscriptions + 3 consumables = **7** |
+  | Items in a review submission | those 7 + the **subscription group** = **8** |
+
+  *Day So Far membership* appears in `Items Submitted` as its own row of type
+  *Subscription Group*, alongside the app version, for **9** items total. So the
+  catalogue table below is the right list of products and eight is the right
+  count of reviewable items. Neither document was wrong; they were answering
+  different questions.
 
 - **EU trader status lives in two places, and only one of them is done.**
 
@@ -321,3 +330,24 @@ Two things that are not blockers but are new:
   set and App Review is a separate process, so this does not hold up a
   submission — but EU distribution depends on the verification landing, and it
   was only filed on 1 September.
+
+## 10. Second submission, 2026-09-03
+
+The §8 block was appended to the description — 3,070 to **3,718** characters, 282
+short of the limit — and verified through a reload before submitting rather than
+trusted to the editor's own confirmation. The submission moved from *Unresolved
+Issues* to **Waiting for Review** with all nine items on it.
+
+Two notes for the next time this happens.
+
+**The editor's save is not the save.** Setting the field and seeing the character
+counter update means React took the value; the page still held it as unsaved, and
+only the toolbar `Save` turning into a checkmark — and `Update Review` turning
+blue beside it — meant the server had it. A navigation attempted in between was
+blocked by an unsaved-changes prompt, which is the honest signal and worth not
+forcing past.
+
+**`Update Review` is not the submit button.** It opens the submission page. The
+button that actually resubmits is `Resubmit to App Review` on that page, and the
+submission is only sent when every item's status flips from *Ready for Review* to
+*Waiting for Review*.
