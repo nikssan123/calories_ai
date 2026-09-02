@@ -133,3 +133,64 @@ thing App Review rejects.
 - **No support page.** `Support URL` currently points at `https://daysofar.com`
   because `apps/web` has `/privacy` and `/terms` but no `/support`. Apple expects a
   page a user can actually get help from.
+
+## 8. Guideline 3.1.2 — the subscription block the description must carry
+
+**Added after the second rejection, 2026-09-03.** The submission came back on
+3.1.2 with a single complaint: the app *"offers auto-renewable subscriptions but
+does not include a functional link to the Terms of Use (EULA) in the app metadata
+that appears on the app's App Store product page."*
+
+Worth being precise about what was and was not wrong, because the obvious reading
+sends you into the app to fix something that is already right:
+
+- **The paywall is compliant.** `apps/mobile/app/upgrade.tsx:509` links both
+  Terms and Privacy, from `lib/links.ts`, and both URLs return 200.
+- **The product page is not.** The App Description is a separate surface, Apple
+  reads it on its own, and it carried neither link.
+
+So this is a metadata edit, in App Store Connect, and it ships without a build.
+
+### What goes at the end of the description
+
+3.1.2 asks for more than the one link the rejection named — title, length, price,
+Terms *and* Privacy. Supplying only the link that was complained about invites a
+third round on the same guideline, so the whole block goes in:
+
+```
+SUBSCRIPTIONS
+
+Day So Far is free to use. Plus and Coach are optional auto-renewable subscriptions.
+
+- Plus - $9.99 per month, or $99.99 per year
+- Coach - $24.99 per month, or $249.99 per year
+
+Payment is charged to your Apple Account at confirmation of purchase. A subscription
+renews automatically unless it is turned off at least 24 hours before the end of the
+current period, and your Apple Account is charged for renewal within 24 hours of the
+end of that period. You can manage or cancel a subscription in your Apple Account
+settings after purchase.
+
+Terms of Use (EULA): https://daysofar.com/terms
+Privacy Policy: https://daysofar.com/privacy
+```
+
+The prices are `PRICING` in `apps/api/src/services/plans.ts` and have to be
+re-read from it rather than remembered — the tiers were repriced once already,
+and a description quoting a superseded number is its own 3.1.2 problem.
+
+### Where it goes
+
+| | |
+|---|---|
+| Description | App Store Connect → the version → **Description**, appended at the end |
+| License Agreement | **App Information → License Agreement**. Apple's standard EULA is fine given the description now links `/terms`; a custom EULA pasted here also satisfies it |
+
+Both, rather than either. The description link is what the rejection asked for;
+the License Agreement field is where a reviewer looks next.
+
+### What this does not need
+
+No build, no version bump, no resubmission of the binary — a description edit on
+a version already in review can be replied to in App Review with the change made.
+That is the whole reason this is worth getting exactly right in one pass.
