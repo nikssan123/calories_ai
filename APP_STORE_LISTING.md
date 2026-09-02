@@ -1,8 +1,8 @@
 # App Store listing
 
-Written 2026-08-31. The Apple counterpart to `PLAY_LISTING.md`, which stays the
-source of truth for positioning, for the truthfulness rule, and for what the app
-can and cannot claim.
+Written 2026-08-31, revised 2026-09-03 (§6 §7 §8). The Apple counterpart to
+`PLAY_LISTING.md`, which stays the source of truth for positioning, for the
+truthfulness rule, and for what the app can and cannot claim.
 
 **The same one rule governs every line: nothing is claimed that the app cannot do
 today, and nothing the app can do is left out.** Still genuinely absent, and so
@@ -113,26 +113,67 @@ for the store listing experiments `PLAY_LISTING.md §1` credits Play with.
 - **No keyword density target.** The audit table in `PLAY_LISTING.md §4` does not
   apply. Terms appear where they read naturally and nowhere else.
 
-The pricing paragraph is **dropped entirely** rather than carried over. On Play it
-was already flagged as a placeholder pending the monetization decision; here it
-would also describe purchases that do not exist yet (§7), which is the kind of
-thing App Review rejects.
+The pricing paragraph was **dropped** when this was written, because the products
+did not exist and describing purchases you cannot make is the kind of thing App
+Review rejects. That reasoning expired when the catalogue was created, and the
+opposite is now true: **§8 puts a pricing block back at the end of the
+description, because 3.1.2 requires one.**
 
-## 7. What is not done
+## 7. State of the submission
 
-- **In-app purchases do not exist.** The **Paid Apps Agreement is unsigned**
-  (status `New`) and needs legal-entity plus banking and tax details first.
-  Until it is signed no product can be created, so the seven products the Play
-  catalogue carries have no iOS counterpart. Apple product ids cannot contain a
-  colon, so `plus:monthly` becomes `com.daysofar.app.plus.monthly` — the reason is
-  in `apps/mobile/lib/billing.ts:180`.
-- **EU trader status is unprovided**, and the Digital Services Act requires it
-  before the app can be distributed in the EU at all.
-- **No screenshots.** 6.5" iPhone is mandatory; the first three are what the
-  install sheet shows.
-- **No support page.** `Support URL` currently points at `https://daysofar.com`
-  because `apps/web` has `/privacy` and `/terms` but no `/support`. Apple expects a
-  page a user can actually get help from.
+**Revised 2026-09-03.** Everything this section listed as missing on 2026-08-31
+now exists. Kept as a section rather than deleted, because what it tracks — the
+things that block a submission and are not code — is exactly what the next
+rejection will be about.
+
+### Done
+
+- **The in-app purchase catalogue exists** and was accepted by App Review; the
+  items sit at *Ready for Review*. Seven products, all priced in
+  `apps/api/src/services/plans.ts`:
+
+  | Product | id suffix | Price |
+  |---|---|---|
+  | Plus, monthly | `plus.monthly` | $9.99 |
+  | Plus, annual | `plus.annual` | $99.99 |
+  | Coach, monthly | `coach.monthly` | $24.99 |
+  | Coach, annual | `coach.annual` | $249.99 |
+  | 10 photo scans | `photo_10` | $3.99 |
+  | 25 photo scans | `photo_25` | $7.99 |
+  | 50 photo scans | `photo_50` | $13.99 |
+
+  Apple product ids cannot contain a colon, so Play's `plus:monthly` is
+  `com.daysofar.app.plus.monthly` here. `planOf` in
+  `apps/mobile/lib/billing.ts` matches a tier as a whole *token* rather than as a
+  prefix for exactly that reason, and a tier that fails to match is not a loud
+  failure — it is simply absent from the paywall.
+
+- **Screenshots exist**, in `store/`:
+
+  | Slot | Size | Count |
+  |---|---|---|
+  | iPhone 6.5"/6.7" | 1284 x 2778 | 6 |
+  | iPad 13" | 2064 x 2752 | 6 |
+
+- **The support page exists.** `apps/web/app/support/page.tsx`, live at
+  `https://daysofar.com/support` (200). `Support URL` should point there rather
+  than at the bare domain, which is what it was set to when there was nothing
+  better to give it.
+
+### Still to confirm
+
+- **EU trader status.** Recorded as unprovided on 2026-08-31 and **not verifiable
+  from this repository** — it is an App Store Connect field. The Digital Services
+  Act requires it before the app can be distributed in the EU at all, so it is
+  worth reading off the console rather than assuming the rejections so far would
+  have mentioned it. They would not: 2.1 and 3.1.2 are review findings, and this
+  is a distribution setting.
+
+- **The product count.** `APP_REVIEW_REPLY.md` says *eight* purchase and
+  subscription items were accepted; the catalogue above is seven. One of the two
+  is wrong and it is cheap to check — a stray eighth product left over from an
+  earlier catalogue is the sort of thing that sells somebody something the server
+  does not recognise.
 
 ## 8. Guideline 3.1.2 — the subscription block the description must carry
 
@@ -178,6 +219,12 @@ Privacy Policy: https://daysofar.com/privacy
 The prices are `PRICING` in `apps/api/src/services/plans.ts` and have to be
 re-read from it rather than remembered — the tiers were repriced once already,
 and a description quoting a superseded number is its own 3.1.2 problem.
+
+**The three photo bundles (§7) are deliberately absent from that block.** 3.1.2's
+disclosure rules are about *auto-renewable* subscriptions; `photo_10`, `photo_25`
+and `photo_50` are consumables, they do not renew, and there is nothing about
+them a reader has to be warned of before buying. Listing them under a heading
+that promises automatic renewal would be worse than leaving them out.
 
 ### Where it goes
 
