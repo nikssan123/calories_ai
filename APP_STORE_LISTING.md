@@ -282,3 +282,42 @@ the License Agreement field is where a reviewer looks next.
 No build, no version bump, no resubmission of the binary — a description edit on
 a version already in review can be replied to in App Review with the change made.
 That is the whole reason this is worth getting exactly right in one pass.
+
+## 9. Pre-submission sweep, 2026-09-03
+
+Read off the console rather than remembered. Everything below was checked on the
+rejected 1.0 before a second submission.
+
+| | State |
+|---|---|
+| **Description carries the §8 block** | **NO — unchanged at 3,070 chars, no `terms`/`eula`/`privacy` anywhere** |
+| Trader status, app level | Trader |
+| Trader record, account level | Submitted 1 Sep, 27 countries, **In Review** |
+| License Agreement | Apple's Standard |
+| Age rating | 9+ across 172 regions; 12+ Vietnam and Brazil |
+| App Privacy | Published, 7 data types, policy URL set |
+| Support / Marketing URL | `/support` and the bare domain |
+| Keywords / promotional text | 100 and 157 characters, both as §4 and §5 specify |
+| Screenshots | iPhone 6.5" 6 of 10, iPad 13" 6 of 10 |
+| Build | 15, attached to version 1.0 |
+| Demo account | `appreview@daysofar.com`, sign-in required ticked |
+| Review contact | Name, phone and email all present |
+| Pricing and availability | 175 regions, US base, tax category set |
+| Catalogue | 4 subscriptions + 3 consumables, all Ready for Review |
+| Release | **Manual** |
+
+**One blocker, and it is the one the rejection was about.** Everything else on
+the version is in order, which is worth stating plainly because a page this
+complete invites a resubmission that fails for the single reason it already
+failed for. §8 is not applied yet.
+
+Two things that are not blockers but are new:
+
+- **`Add Labels and Markings` appeared under Digital Services Act** the moment
+  the app was declared trader-distributed. It is the EU product-safety (GPSR)
+  surface. Software is not normally what it is for, but it is unset and now
+  visible, so it is worth a look rather than an assumption.
+- **The account-level DSA record is still `In Review`.** The app-level flag is
+  set and App Review is a separate process, so this does not hold up a
+  submission — but EU distribution depends on the verification landing, and it
+  was only filed on 1 September.
