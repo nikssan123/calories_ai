@@ -230,19 +230,60 @@ mobile_artifact_dir() {
     fi
 }
 
+# Is there an Apple WWDR intermediate here that has not expired?
+#
+# The third guard, and the one that is worth the words. EAS imports the
+# distribution certificate into a throwaway keychain and then asks
+# `security find-identity -v` whether it arrived. `-v` means *valid*, and an
+# identity is only valid if the chain above it validates all the way to the
+# Apple root. The middle link of that chain is the WWDR intermediate, which
+# lives in the keychain rather than in the .p12 — so a Mac that has never signed
+# anything itself imports the certificate perfectly and is still told
+#
+#     Distribution certificate with fingerprint ... hasn't been imported successfully
+#
+# which is the one clause in that sentence that is false. The certificate is
+# fine; nothing can vouch for it. And macOS ships the *expired* G1 intermediate
+# in the System keychain — issued 2013, dead since February 2023 — so a check
+# for "is there a WWDR certificate" says yes while `find-identity` keeps
+# answering "0 valid identities found". Hence the expiry test rather than a
+# presence test. Today's certificates are issued under G3; take every published
+# generation, because which one signs the next certificate is Apple's business:
+#
+#     for g in G2 G3 G4 G5 G6; do
+#       curl -fsSLO "https://www.apple.com/certificateauthority/AppleWWDRCA$g.cer"
+#       security import "AppleWWDRCA$g.cer" -k ~/Library/Keychains/login.keychain-db
+#     done
+#
+# Xcode installs these the first time it signs something, which is why this only
+# bites a machine whose iOS builds have all been on the EAS queue until now.
+mobile_wwdr_ok() {
+    local pem cert="" line
+    pem="$(security find-certificate -a -c 'Worldwide Developer' -p 2>/dev/null)" || return 1
+    [[ -n "$pem" ]] || return 1
+    while IFS= read -r line; do
+        cert+="$line"$'\n'
+        [[ "$line" == "-----END CERTIFICATE-----" ]] || continue
+        openssl x509 -checkend 0 -noout <<<"$cert" >/dev/null 2>&1 && return 0
+        cert=""
+    done <<<"$pem"
+    return 1
+}
+
 # Build the .ipa on this machine — the iOS half of `mobile_build_local`.
 #
 # `apps/mobile/scripts/build-ios.sh` is the standalone equivalent and carries
-# the long version of why these two guards exist. Repeated rather than sourced
+# the long version of why these three guards exist. Repeated rather than sourced
 # because that script `exec`s straight into eas with no `--output`, so the file
 # lands under a generated name and the naming convention above never gets a
 # chance to apply.
 #
-# The two guards, briefly: Xcode is not the active developer directory on this
+# The three guards, briefly: Xcode is not the active developer directory on this
 # machine (`xcode-select -p` points at CommandLineTools and moving it needs
-# sudo), and `--local` shells out to fastlane for the Xcode invocation and finds
-# it on PATH or not at all. Both failures otherwise arrive minutes in, after the
-# project has been archived and fingerprinted.
+# sudo), `--local` shells out to fastlane for the Xcode invocation and finds it
+# on PATH or not at all, and the certificate chain needs a middle link this Mac
+# does not ship (see `mobile_wwdr_ok`). All three otherwise arrive minutes in,
+# after the project has been archived and fingerprinted.
 #
 # Unlike Android there is no `google-services.json` to smuggle past .gitignore.
 # What iOS needs instead is credentials: a distribution certificate and a
@@ -264,6 +305,12 @@ mobile_build_local_ios() {
         export DEVELOPER_DIR
     fi
     command -v fastlane >/dev/null 2>&1 || die "fastlane is not on PATH — \`eas build --local\` needs it. brew install fastlane"
+
+    if ! mobile_wwdr_ok; then
+        warn "no unexpired Apple WWDR intermediate in this keychain."
+        warn "eas will import the distribution certificate and then report it missing."
+        die  "fix: for g in G2 G3 G4 G5 G6; do curl -fsSLO https://www.apple.com/certificateauthority/AppleWWDRCA\$g.cer && security import AppleWWDRCA\$g.cer -k ~/Library/Keychains/login.keychain-db; done"
+    fi
 
     local out_dir; out_dir="$(mobile_artifact_dir)"
     local staged="$out_dir/.building.ipa"

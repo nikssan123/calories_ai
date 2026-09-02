@@ -3,7 +3,7 @@
 # Build the iOS app on this machine rather than on an EAS builder — the
 # counterpart of the Android line documented at the top of `app.config.js`.
 #
-# Two things a bare `eas build --platform ios --local` gets wrong here:
+# Four things a bare `eas build --platform ios --local` gets wrong here:
 #
 #   - **Xcode is not the active developer directory.** `xcode-select -p` points
 #     at `/Library/Developer/CommandLineTools`, and moving it properly needs
@@ -22,6 +22,23 @@
 #     file sitting beside this script. Same shape as the `google-services.json`
 #     trap, and it fails the same quiet way: the app builds, and the paywall
 #     reports that the store has nothing on sale.
+#   - **Nothing here can vouch for the distribution certificate.** EAS imports
+#     it into a throwaway keychain and then asks `security find-identity -v`
+#     whether it arrived; `-v` means *valid*, and validity needs the Apple WWDR
+#     intermediate, which lives in the keychain and not in the .p12. macOS ships
+#     only the G1 generation, expired since February 2023, so the answer is `0
+#     valid identities found` and EAS reports the certificate as never imported
+#     — the one clause of that message that is false. Today's certificates are
+#     issued under G3. Install every published generation:
+#
+#         for g in G2 G3 G4 G5 G6; do
+#           curl -fsSLO "https://www.apple.com/certificateauthority/AppleWWDRCA$g.cer"
+#           security import "AppleWWDRCA$g.cer" -k ~/Library/Keychains/login.keychain-db
+#         done
+#
+#     Xcode does this the first time it signs something itself, so it only bites
+#     a machine whose iOS builds have all been on the EAS queue. The check below
+#     tests expiry rather than presence, because the dead G1 is present.
 #
 # Usage:
 #
@@ -71,6 +88,31 @@ fi
 if ! command -v fastlane >/dev/null 2>&1; then
   echo "build-ios: fastlane is not on PATH — \`eas build --local\` needs it." >&2
   echo "           brew install fastlane" >&2
+  exit 1
+fi
+
+# Any WWDR intermediate that is still in date will do; the point is that at
+# least one is. See the fourth bullet above for why presence is not the test.
+wwdr_ok() {
+  local pem cert="" line
+  pem="$(security find-certificate -a -c 'Worldwide Developer' -p 2>/dev/null)" || return 1
+  [[ -n $pem ]] || return 1
+  while IFS= read -r line; do
+    cert+="$line"$'\n'
+    [[ $line == "-----END CERTIFICATE-----" ]] || continue
+    openssl x509 -checkend 0 -noout <<<"$cert" >/dev/null 2>&1 && return 0
+    cert=""
+  done <<<"$pem"
+  return 1
+}
+
+if [[ $profile != simulator ]] && ! wwdr_ok; then
+  echo "build-ios: no unexpired Apple WWDR intermediate in this keychain." >&2
+  echo "           eas will import the distribution certificate, then report it missing." >&2
+  echo "           for g in G2 G3 G4 G5 G6; do" >&2
+  echo "             curl -fsSLO \"https://www.apple.com/certificateauthority/AppleWWDRCA\$g.cer\"" >&2
+  echo "             security import \"AppleWWDRCA\$g.cer\" -k ~/Library/Keychains/login.keychain-db" >&2
+  echo "           done" >&2
   exit 1
 fi
 
