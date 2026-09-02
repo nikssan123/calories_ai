@@ -9,6 +9,8 @@
 #   bin/deploy.sh --mobile         # ...and start an EAS Android build after it
 #   bin/deploy.sh --mobile-only    # just the EAS build; the host is not touched
 #   bin/deploy.sh --mobile-only --local   # ...built on this machine, not the queue
+#   bin/deploy.sh --mobile-only --ios --local  # the iOS .ipa instead of the .aab
+#   bin/deploy.sh --submit --ios          # send the newest .ipa to App Store Connect
 #
 # Deployment model, for context on why this script is shaped the way it is:
 #
@@ -43,6 +45,9 @@ MOBILE=0
 MOBILE_ONLY=0
 MOBILE_PROFILE="production"
 MOBILE_LOCAL=0
+MOBILE_PLATFORM="android"
+SUBMIT=0
+ASSUME_YES=0
 
 usage() {
     sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//; $d'
@@ -51,6 +56,9 @@ Options:
   --mobile [PROFILE] after deploying, start an EAS Android build (default: production)
   --mobile-only      start the EAS build and skip the host deploy entirely
   --local            build the mobile artifact here instead of on EAS's queue
+  --ios              act on iOS rather than Android (build and/or submit)
+  --submit           upload the newest built artifact to the store, then stop
+  --yes              skip the confirmation --submit asks for
   --host USER@HOST   target host           (default: $DEPLOY_SSH_HOST)
   --path DIR         repo path on host     (default: $DEPLOY_PATH or /srv/calorytracker)
   --ref REF          commit/branch to deploy (default: origin/main)
@@ -72,6 +80,9 @@ while [[ $# -gt 0 ]]; do
         --pull)  PULL_BASE=1; shift ;;
         --dry-run) DRY=1; shift ;;
         --local) MOBILE_LOCAL=1; shift ;;
+        --ios) MOBILE_PLATFORM="ios"; shift ;;
+        --submit) SUBMIT=1; shift ;;
+        --yes|-y) ASSUME_YES=1; shift ;;
         # An optional value: `--mobile preview` takes it, `--mobile --push` does
         # not. Anything starting with a dash is the next flag, not a profile.
         --mobile)
@@ -191,7 +202,159 @@ mobile_artifact_name() {
     local code="$1"
     local version; version="$(node -p "require('$REPO/apps/mobile/app.json').expo.version" 2>/dev/null || echo 0.0.0)"
     local sha; sha="$(git rev-parse --short HEAD)"
-    echo "daysofar-v${version}-vc${code}-${MOBILE_PROFILE}-${sha}.aab"
+    # `vc` and `b` because they are different numbers from different registries:
+    # Play orders releases by versionCode, App Store Connect by buildNumber, and
+    # a name that called both "vc" would put two unrelated counters in the same
+    # namespace on the same disk.
+    if [[ $MOBILE_PLATFORM == ios ]]; then
+        echo "daysofar-v${version}-b${code}-${MOBILE_PROFILE}-${sha}.ipa"
+    else
+        echo "daysofar-v${version}-vc${code}-${MOBILE_PROFILE}-${sha}.aab"
+    fi
+}
+
+# Where built artifacts live, per platform.
+mobile_artifact_dir() {
+    if [[ $MOBILE_PLATFORM == ios ]]; then
+        echo "$REPO/apps/mobile/ios/artifacts"
+    else
+        echo "$REPO/apps/mobile/android/artifacts"
+    fi
+}
+
+# Build the .ipa on this machine — the iOS half of `mobile_build_local`.
+#
+# `apps/mobile/scripts/build-ios.sh` is the standalone equivalent and carries
+# the long version of why these two guards exist. Repeated rather than sourced
+# because that script `exec`s straight into eas with no `--output`, so the file
+# lands under a generated name and the naming convention above never gets a
+# chance to apply.
+#
+# The two guards, briefly: Xcode is not the active developer directory on this
+# machine (`xcode-select -p` points at CommandLineTools and moving it needs
+# sudo), and `--local` shells out to fastlane for the Xcode invocation and finds
+# it on PATH or not at all. Both failures otherwise arrive minutes in, after the
+# project has been archived and fingerprinted.
+#
+# Unlike Android there is no `google-services.json` to smuggle past .gitignore.
+# What iOS needs instead is credentials: a distribution certificate and a
+# provisioning profile, which EAS will fetch or issue against the Apple account.
+# The `simulator` profile needs none of that and produces a .app rather than a
+# .ipa — useful for a smoke test, useless for a submission.
+mobile_build_local_ios() {
+    local dir="$REPO/apps/mobile"
+
+    if [[ -z "${DEVELOPER_DIR:-}" ]]; then
+        local active; active="$(xcode-select -p 2>/dev/null || true)"
+        if [[ $active == */Xcode*.app/* ]]; then
+            DEVELOPER_DIR="$active"
+        elif [[ -d /Applications/Xcode.app/Contents/Developer ]]; then
+            DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+        else
+            die "no Xcode found — install it, or set DEVELOPER_DIR"
+        fi
+        export DEVELOPER_DIR
+    fi
+    command -v fastlane >/dev/null 2>&1 || die "fastlane is not on PATH — \`eas build --local\` needs it. brew install fastlane"
+
+    local out_dir; out_dir="$(mobile_artifact_dir)"
+    local staged="$out_dir/.building.ipa"
+
+    if (( DRY )); then
+        echo "       would run: (cd apps/mobile && DEVELOPER_DIR=$DEVELOPER_DIR \\"
+        echo "                     npx eas-cli build --platform ios --profile $MOBILE_PROFILE \\"
+        echo "                     --local --non-interactive --output $staged)"
+        echo "       would then rename it to $(mobile_artifact_name '<buildNumber>')"
+        return 0
+    fi
+
+    mkdir -p "$out_dir"
+    rm -f "$staged"
+
+    local log; log="$(mktemp)"
+    ( cd "$dir" && npx eas-cli build --platform ios \
+        --profile "$MOBILE_PROFILE" --local --non-interactive --output "$staged" ) 2>&1 | tee "$log"
+    local status=${PIPESTATUS[0]}
+
+    # The same trick as the Android path, against the number App Store Connect
+    # actually orders builds by. Spent whether or not the build succeeds.
+    local code
+    code="$(grep -oE 'Incremented buildNumber from [0-9]+ to [0-9]+' "$log" | tail -1 | grep -oE '[0-9]+$' || true)"
+    [[ -n "$code" ]] || code="$(grep -oE 'buildNumber:? [0-9]+' "$log" | tail -1 | grep -oE '[0-9]+$' || true)"
+    rm -f "$log"
+
+    if (( status != 0 )); then
+        rm -f "$staged"
+        die "local iOS build failed${code:+ (buildNumber $code is spent either way)}"
+    fi
+    [[ -f "$staged" ]] || die "build reported success but $staged is not there"
+
+    local final="$out_dir/$(mobile_artifact_name "${code:-unknown}")"
+    mv "$staged" "$final"
+
+    echo
+    say "built $(basename "$final") ($(du -h "$final" | cut -f1))"
+    say "submit it with: bin/deploy.sh --submit --ios"
+}
+
+# Send a built artifact to the store.
+#
+# This used to be deliberately absent, and the reason it was absent is still
+# true and is now the shape of the command rather than its absence: **a build is
+# an artifact, a submission is a release to real installs.** So this is its own
+# flag, it never runs as a side effect of building, it says exactly what it is
+# about to do, and it asks. `--yes` is for the second time you run it.
+#
+# The artifact is the newest matching file on disk rather than one named on the
+# command line, because the thing anybody actually wants to submit is the one
+# they just built. `--dry-run` prints the choice without acting on it, which is
+# also the cheapest way to check the naming convention picked the file you meant.
+mobile_submit() {
+    local dir="$REPO/apps/mobile"
+    local ext key
+    if [[ $MOBILE_PLATFORM == ios ]]; then
+        ext="ipa"; key="$dir/asc-api-key.p8"
+    else
+        ext="aab"; key="$dir/play-service-account.json"
+    fi
+
+    local out_dir; out_dir="$(mobile_artifact_dir)"
+    local artifact
+    artifact="$(ls -t "$out_dir"/*."$ext" 2>/dev/null | head -1 || true)"
+    local how="--mobile-only --local"
+    [[ $MOBILE_PLATFORM == ios ]] && how="$how --ios"
+    [[ -n "$artifact" ]] || die "no .$ext in $out_dir — build one first with $how"
+
+    # Both are gitignored secrets that eas.json names by relative path, so a
+    # missing one fails inside eas with a path resolved against a directory the
+    # reader is not thinking about. Checked here, where the path is the one on
+    # screen.
+    [[ -f "$key" ]] || die "missing $key — eas.json's submit profile points at it"
+
+    local dest
+    if [[ $MOBILE_PLATFORM == ios ]]; then
+        dest="App Store Connect (TestFlight)"
+    else
+        dest="Play, track $(node -p "require('$dir/eas.json').submit.production.android.track" 2>/dev/null || echo '?')"
+    fi
+
+    say "submit: $(basename "$artifact")"
+    say "    to: $dest"
+
+    if (( DRY )); then
+        echo "       would run: (cd apps/mobile && npx eas-cli submit --platform $MOBILE_PLATFORM \\"
+        echo "                     --profile $MOBILE_PROFILE --path $artifact --non-interactive)"
+        return 0
+    fi
+
+    if (( ! ASSUME_YES )); then
+        warn "this uploads a build to a real store listing."
+        read -r -p "     type 'submit' to continue: " reply
+        [[ $reply == submit ]] || die "cancelled"
+    fi
+
+    ( cd "$dir" && npx eas-cli submit --platform "$MOBILE_PLATFORM" \
+        --profile "$MOBILE_PROFILE" --path "$artifact" --non-interactive )
 }
 
 mobile_build() {
@@ -208,12 +371,20 @@ mobile_build() {
 
     local head; head="$(git rev-parse --short HEAD)"
     local unpushed; unpushed="$(git rev-list --count origin/main..HEAD 2>/dev/null || echo 0)"
-    say "EAS build: android/$MOBILE_PROFILE from $head ($(git log -1 --format=%s))"
+    say "EAS build: $MOBILE_PLATFORM/$MOBILE_PROFILE from $head ($(git log -1 --format=%s))"
     (( unpushed > 0 )) && warn "$unpushed commit(s) on HEAD are not on origin and WILL be in this build"
 
     if (( MOBILE_LOCAL )); then
-        mobile_build_local
+        if [[ $MOBILE_PLATFORM == ios ]]; then mobile_build_local_ios; else mobile_build_local; fi
         return
+    fi
+
+    # The queued path is Android-only for now. An iOS build on EAS's builders is
+    # the same command with the platform swapped, but it is the submission that
+    # this script has ever been asked for on iOS, so pointing at --local is a
+    # more honest answer than starting a build nobody wanted to pay for.
+    if [[ $MOBILE_PLATFORM == ios ]]; then
+        die "iOS on the EAS queue is not wired up — use --ios --local, or run eas-cli directly"
     fi
 
     if (( DRY )); then
@@ -251,6 +422,16 @@ mobile_build() {
         say "build queued — watch it at https://expo.dev/accounts/$(npx eas-cli whoami 2>/dev/null | head -1)/builds"
     fi
 }
+
+# Submission is terminal on purpose: it acts on an artifact that already exists,
+# so there is nothing sensible to do afterwards and plenty to do wrong. It is
+# checked before MOBILE_ONLY so that `--submit --mobile-only` cannot be read as
+# "build, then release it", which is the one combination the split exists to
+# prevent.
+if (( SUBMIT )); then
+    mobile_submit
+    exit 0
+fi
 
 if (( MOBILE_ONLY )); then
     mobile_build
