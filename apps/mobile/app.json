@@ -13,12 +13,14 @@
         "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.daysofar.app",
+      "appStoreUrl": "https://apps.apple.com/app/id6807134161",
       "associatedDomains": [
         "applinks:daysofar.com"
       ]
     },
     "android": {
       "package": "com.daysofar.app",
+      "playStoreUrl": "https://play.google.com/store/apps/details?id=com.daysofar.app",
       "intentFilters": [
         {
           "action": "VIEW",

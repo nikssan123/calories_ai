@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import * as StoreReview from 'expo-store-review';
 
 /**
@@ -25,6 +26,14 @@ import * as StoreReview from 'expo-store-review';
  *    for happy users first — "enjoying the app? → then rate it" — is against the
  *    guidelines. So the trigger has to be something the app already believes
  *    about the user, which is exactly what a streak is.
+ *
+ * Android runs the same two rules through Play's In-App Review API, with one
+ * difference that matters here: **it reports failure and iOS does not.** Play
+ * rejects when the flow genuinely could not run — the build did not come from
+ * Play, Play Services is missing — and *resolves* when it ran and chose to show
+ * nothing, which is what hitting the quota looks like. So a rejection on
+ * Android is real information, and `maybeAskForReview` gives the milestone back
+ * when it sees one. iOS has no equivalent signal and never gets one back.
  */
 
 /**
@@ -75,10 +84,11 @@ export async function maybeAskForReview(run: number): Promise<void> {
     const now = Date.now();
     if (tooSoon(asked, now)) return;
 
-    // `hasAction` is false where there is nothing to review against — a
-    // simulator without a store, a dev client, a platform that does not carry
-    // one. Checking it keeps the milestone unspent for a build that can
-    // actually ask, rather than burning it on a machine that cannot.
+    // False where there is nothing to review against. On iOS that means a
+    // TestFlight build; on Android it only checks that the Play *app* is
+    // installed, not that this app arrived through it — so a sideloaded build
+    // passes here and fails inside the flow instead. That gap is what the
+    // rollback below covers.
     if (!(await StoreReview.hasAction())) return;
 
     // Recorded *before* the request rather than after it, and this is the whole
@@ -90,7 +100,16 @@ export async function maybeAskForReview(run: number): Promise<void> {
     // every single day until the yearly limit swallows it.
     await write({ ...asked, [String(milestone)]: new Date(now).toISOString() });
 
-    await StoreReview.requestReview();
+    try {
+      await StoreReview.requestReview();
+    } catch (error) {
+      // Only Android rejects, and only for a flow that never ran — see the
+      // header. Giving the milestone back costs nothing there, because a
+      // spent quota resolves rather than throws, so this cannot turn into
+      // asking the same person twice. On iOS there is nothing to catch.
+      if (Platform.OS === 'android') await write(asked);
+      throw error;
+    }
   } catch {
     // Storage unavailable, the module missing on this platform, the sheet
     // refusing — none of it is worth a word to the user. See the header.
