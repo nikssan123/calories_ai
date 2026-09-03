@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import type { CreditMeter, PlanName } from '@ct/shared';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { useToast } from '@/components/Toast';
@@ -70,6 +70,44 @@ const PACK_COPY = {
 const PACK_SECTIONS = [{ meter: 'chat' }, { meter: 'photo' }] as const satisfies readonly {
   meter: CreditMeter;
 }[];
+
+/**
+ * What each pack is a pack *of*, drawn rather than said.
+ *
+ * A row that reads "30 messages … $3.99" and nothing else is three columns of
+ * text, and a column of those rows is a price list. The mark is what makes the
+ * two sections scannable as different things at a glance — which is the whole
+ * job here, since somebody who ran out of messages should not have to read the
+ * photo rows to find out they are the wrong ones.
+ *
+ * Stroked at 2 and sized to the badge rather than to the text, so both marks
+ * carry the same weight as each other whatever their shape.
+ */
+const PACK_ICONS = {
+  chat: ({ color }: { color: string }) => (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7A8.4 8.4 0 0 1 4 11.5 8.5 8.5 0 0 1 12.5 3 8.5 8.5 0 0 1 21 11.5z"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  ),
+  photo: ({ color }: { color: string }) => (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M22 18a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3l1.6-2.4A1 1 0 0 1 9.4 4h5.2a1 1 0 0 1 .8.6L17 7h3a2 2 0 0 1 2 2z"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Circle cx={12} cy={13} r={3.4} stroke={color} strokeWidth={2} />
+    </Svg>
+  ),
+} as const satisfies Record<CreditMeter, (props: { color: string }) => React.ReactElement>;
 
 /**
  * The wall itself — the screen `SUBSCRIPTIONS.md` has had on its build list as
@@ -451,34 +489,78 @@ export default function UpgradeScreen() {
         const forSale = sellablePacks.filter((pack) => pack.meter === section.meter);
         if (forSale.length === 0) return null;
         const copy = PACK_COPY[section.meter];
+        const Icon = PACK_ICONS[section.meter];
+        /*
+         * The rung that costs least per unit, which the ladder is built to make
+         * the largest one — 40c, 32c, 28c a scan.
+         *
+         * Ranked on the store's own two numbers in one currency, which is the
+         * same licence `saving` takes above and is safe for the same reason:
+         * comparing a price against another price is arithmetic, *deriving a
+         * displayed one* is what gets the rounding and the currency wrong. No
+         * per-unit figure is ever shown — only the tag.
+         */
+        const best = forSale.reduce((cheapest, pack) =>
+          pack.product.price / pack.units < cheapest.product.price / cheapest.units
+            ? pack
+            : cheapest,
+        );
         return (
           <View key={section.meter} style={styles.packs}>
-            <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-              {tr(copy.heading)}
-            </Text>
-            <Text style={[t.footnote, { color: colors.mutedForeground }]}>{tr(copy.body)}</Text>
-            {forSale.map((pack) => (
-              <PressableChunk
-                key={pack.id}
-                radius={16}
-                disabled={buying !== null}
-                onPress={() => void buyPack(pack)}
-                accessibilityRole="button"
-                accessibilityLabel={tr(copy.buyHint)(pack.units, pack.price)}
-                style={{ opacity: buying !== null && buying !== pack.id ? 0.5 : 1 }}
-                contentStyle={[
-                  styles.pack,
-                  { backgroundColor: colors.card, borderColor: colors.border },
-                ]}
-              >
-                <Text style={[t.bodyBold, { color: colors.foreground }]}>
-                  {tr(copy.count)(pack.units)}
-                </Text>
-                <Text style={[t.bodyBold, { color: colors.foreground }]}>
-                  {buying === pack.id ? tr('plans.oneMoment') : pack.price}
-                </Text>
-              </PressableChunk>
-            ))}
+            <View style={styles.packHead}>
+              <Text style={[t.title2, { color: colors.foreground }]}>{tr(copy.heading)}</Text>
+              <Text style={[t.footnote, { color: colors.mutedForeground }]}>{tr(copy.body)}</Text>
+            </View>
+            {forSale.map((pack) => {
+              const isBest = forSale.length > 1 && pack.id === best.id;
+              return (
+                <PressableChunk
+                  key={pack.id}
+                  radius={20}
+                  disabled={buying !== null}
+                  onPress={() => void buyPack(pack)}
+                  accessibilityRole="button"
+                  accessibilityLabel={tr(copy.buyHint)(pack.units, pack.price)}
+                  style={{ opacity: buying !== null && buying !== pack.id ? 0.5 : 1 }}
+                  contentStyle={[
+                    styles.pack,
+                    {
+                      backgroundColor: colors.card,
+                      // The best rung carries the accent border the selected
+                      // tier does, so the eye finds the same signal twice on
+                      // one page rather than learning a second one.
+                      borderColor: isBest ? colors.primary : colors.border,
+                    },
+                  ]}
+                >
+                  <View style={styles.packLeft}>
+                    <View style={[styles.packBadge, { backgroundColor: colors.accent }]}>
+                      <Icon color={colors.caloriesText} />
+                    </View>
+                    <View style={styles.packText}>
+                      <Text style={[t.bodyBold, { color: colors.foreground }]}>
+                        {tr(copy.count)(pack.units)}
+                      </Text>
+                      {isBest && (
+                        <Text style={[t.footnoteSemibold, { color: colors.caloriesText }]}>
+                          {tr('plans.bestValue')}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  <View
+                    style={[
+                      styles.packPrice,
+                      { backgroundColor: withAlpha(colors.primary, isBest ? 0.18 : 0.1) },
+                    ]}
+                  >
+                    <Text style={[t.bodyBold, { color: colors.caloriesText }]}>
+                      {buying === pack.id ? tr('plans.oneMoment') : pack.price}
+                    </Text>
+                  </View>
+                </PressableChunk>
+              );
+            })}
           </View>
         );
       })}
@@ -763,15 +845,32 @@ function Check({ color }: { color: string }) {
 }
 
 const styles = StyleSheet.create({
-  packs: { gap: 8, marginTop: 28 },
+  packs: { gap: 10, marginTop: 30 },
+  // The heading and its line sit tighter to each other than to the rows they
+  // introduce, so the pair reads as one block rather than as three.
+  packHead: { gap: 3, marginBottom: 2 },
   pack: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderWidth: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    gap: 12,
+    borderWidth: 2,
+    paddingVertical: 12,
+    paddingLeft: 12,
+    paddingRight: 12,
   },
+  packLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flexShrink: 1 },
+  packBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  packText: { gap: 1, flexShrink: 1 },
+  // A pill rather than bare text, because pressing the row is a purchase and
+  // the price is the only thing on it that says so.
+  packPrice: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
   flex: { flex: 1 },
   page: { paddingHorizontal: 20, gap: 14 },
   topRow: { flexDirection: 'row', justifyContent: 'flex-end' },
