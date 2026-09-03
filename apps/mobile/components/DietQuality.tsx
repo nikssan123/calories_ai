@@ -141,8 +141,11 @@ export function QualityBlank({ style }: { style?: StyleProp<ViewStyle> }) {
   const photo = allowances?.photo ?? null;
   /*
    * Spent on both ways in — text and photo — because either one would fill
-   * these, and bought scans count: a bundle sitting unused is a photo this
-   * account can still take, whatever the month's grant says.
+   * these, and bought stock counts on *both*: a bundle sitting unused is a
+   * message or a photo this account can still spend, whatever the month's
+   * grant says. Checking only the photo balance was right while photos were
+   * the only thing sold by the bundle, and it would now offer an upgrade to
+   * somebody holding a hundred messages they have already paid for.
    *
    * Null while the first fetch is out, which reads as *not* spent. A paying
    * account must never see a frame of this offering to sell it something it
@@ -154,6 +157,7 @@ export function QualityBlank({ style }: { style?: StyleProp<ViewStyle> }) {
     photo !== null &&
     meterSpent(chat) &&
     meterSpent(photo) &&
+    chat.credits === 0 &&
     photo.credits === 0;
   const next = stuck ? tierFor('chat', tiers, plan) : null;
   const carried = next

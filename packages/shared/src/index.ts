@@ -116,7 +116,8 @@ export const MeterName = z.enum(METERS);
 export type MeterName = z.infer<typeof MeterName>;
 
 /**
- * The photo bundles, named here for the same reason `METERS` is.
+ * The bundles — stock on a meter, bought outright — named here for the same
+ * reason `METERS` is.
  *
  * The client needs these ids to ask a store for the products, and the server
  * needs them to recognise what came back on a webhook — `services/billing.ts`
@@ -125,19 +126,70 @@ export type MeterName = z.infer<typeof MeterName>;
  * subscriptions are. Two copies of that list is how the two halves drift into
  * a purchase that takes money and grants nothing.
  *
- * `scans` is here because it is what the bundle *is* — the copy on the button
+ * `units` is here because it is what the bundle *is* — the copy on the button
  * says it, and the server credits it. The **price is deliberately not**: the
  * store is the only honest source of that, in the buyer's own currency, and a
  * client hardcoding "$3.99" is wrong in most of the world. See the note on
- * `PRICES` in `services/plans.ts`.
+ * `PRICING` in `services/plans.ts`.
+ *
+ * ---- Why `meter` rather than two lists ---------------------------------------
+ *
+ * Photos were the only thing sold this way until messages joined them, and the
+ * shape that suggested itself was a second list beside the first. It is the
+ * wrong one: every consumer of this — the store fetch, `bundleFor`, the credit
+ * ledger, the button — differs only in *which meter* it is talking about, and
+ * two lists means each of those grows a branch that has to be kept in step with
+ * the other. One list with a meter on it means the meter travels with the id
+ * all the way to the `credits` row, and a third bundle is a line here.
+ *
+ * ---- `subscriberOnly` ---------------------------------------------------------
+ *
+ * True on the message packs and false on the photo ones, and it governs who is
+ * *offered* a pack rather than who may spend one.
+ *
+ * Free gets ten messages a month. A free account that can buy thirty more for
+ * the price of a coffee has no reason to ever subscribe, and the pack would
+ * quietly become the cheapest tier in the product — so the wall on Free sells
+ * the plan, and the message packs are drawn only for somebody already paying.
+ * Photos have no such problem: Free gets one scan *ever*, so a pack there is a
+ * genuine purchase rather than a subscription substitute.
+ *
+ * It is deliberately not enforced at spend time. Credits do not expire, so a
+ * subscriber who buys a hundred messages and later lapses still owns them, and
+ * refusing to spend them then would be keeping money for nothing. See
+ * `requireAllowance`.
  */
-export const PHOTO_BUNDLES = [
-  { id: 'photo_10', scans: 10 },
-  { id: 'photo_25', scans: 25 },
-  { id: 'photo_50', scans: 50 },
-] as const;
+export const BUNDLES = [
+  { id: 'photo_10', meter: 'photo', units: 10, subscriberOnly: false },
+  { id: 'photo_25', meter: 'photo', units: 25, subscriberOnly: false },
+  { id: 'photo_50', meter: 'photo', units: 50, subscriberOnly: false },
+  { id: 'chat_30', meter: 'chat', units: 30, subscriberOnly: true },
+  { id: 'chat_100', meter: 'chat', units: 100, subscriberOnly: true },
+] as const satisfies readonly {
+  id: string;
+  meter: MeterName;
+  units: number;
+  subscriberOnly: boolean;
+}[];
 
-export type PhotoBundleId = (typeof PHOTO_BUNDLES)[number]['id'];
+export type BundleId = (typeof BUNDLES)[number]['id'];
+
+/**
+ * The meters a bundle can top up, as a type — narrower than `MeterName`, which
+ * also carries the three that are only ever granted by a plan.
+ *
+ * Worth having because the copy for a pack is written per meter, and a lookup
+ * keyed on all five would need a fallback for `meal_plan` that can never be
+ * reached and would therefore never be right.
+ */
+export type CreditMeter = (typeof BUNDLES)[number]['meter'];
+
+/**
+ * The meters that can be topped up at all, so a caller can skip the balance
+ * query on the three that never can be. Derived rather than written out, which
+ * is what keeps it true the day a third meter is sold.
+ */
+export const CREDIT_METERS: readonly MeterName[] = [...new Set(BUNDLES.map((b) => b.meter))];
 
 /**
  * What is left of one meter, for a screen that has to say so *before* the
@@ -177,7 +229,8 @@ export const Allowance = z.object({
    */
   unlimited: z.boolean().default(false),
   /**
-   * Scans bought outright, still unspent. Photos only; zero everywhere else.
+   * Units bought outright, still unspent. Photos and messages; zero on the
+   * three meters no bundle sells — see `CREDIT_METERS`.
    *
    * Deliberately a separate number rather than being folded into `allowed`.
    * They behave differently and a screen has to be able to say so: the grant

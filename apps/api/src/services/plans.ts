@@ -1,9 +1,9 @@
 import {
   METERS,
-  PHOTO_BUNDLES as BUNDLE_SIZES,
+  BUNDLES as BUNDLE_SIZES,
   PLANS,
+  type BundleId,
   type MeterName,
-  type PhotoBundleId,
   type PlanName,
   type PlanTier,
 } from '@ct/shared';
@@ -268,50 +268,85 @@ export const PRICING: Record<Exclude<PlanName, 'free'>, { monthlyUsd: number; an
   };
 
 /**
- * Photo scans bought outright, on top of whatever the plan already grants.
- *
- * Photos are the one meter worth selling this way, and the reason is in the
- * cost table above: a scan is $0.151 against a chat turn's $0.041, so it is the
- * line that decides whether a heavy month fits inside a tier. Metering chat by
- * the bundle would be metering the daily habit — the thing the product needs
- * people to do without thinking about it — but nobody photographs a plate
- * absent-mindedly. A photo is already a deliberate act, so putting a price on
- * more of them does not discourage anything the app depends on.
+ * Stock bought outright, on top of whatever the plan already grants.
  *
  * Consumable and **not expiring**. A bundle is stock, not a second
- * subscription: it is drawn down only once the month's included scans are gone,
+ * subscription: it is drawn down only once the month's included units are gone,
  * and what is left is still there next month. An expiring top-up is a refund
  * the seller quietly keeps, and it would also make the wall have to explain two
  * different clocks.
  *
- * The unit price falls with size (40c, 32c, 28c) and so does the margin (55%,
- * 44%, 37%). That is the usual shape and it is the right way round here: the
- * big bundle is bought by the people whose scans cost the most to serve, so
- * they should be the ones paying closest to cost.
+ * ---- Photos: $3.99 / $7.99 / $13.99 -----------------------------------------
+ *
+ * A scan is $0.151 against a chat turn's $0.041, so it is the line that decides
+ * whether a heavy month fits inside a tier. The unit price falls with size
+ * (40c, 32c, 28c) and so does the margin (55%, 44%, 37%). That is the usual
+ * shape and it is the right way round here: the big bundle is bought by the
+ * people whose scans cost the most to serve, so they should be the ones paying
+ * closest to cost.
  *
  * These came down with the plans when the 5m cache TTL landed. Leaving them at
  * the old $4.99/$9.99/$17.99 would have been a 64% margin on the small one
  * against Plus's 54%, which is the wrong way round: a bundle should feel like
  * topping up a plan you already pay for, not like being charged a premium for
  * having run out.
+ *
+ * ---- Messages: $3.99 / $10.99 ------------------------------------------------
+ *
+ * An earlier revision of this block said photos were "the one meter worth
+ * selling this way", on the argument that metering chat by the bundle would be
+ * metering the daily habit the product depends on. That argument was about the
+ * *plan's* meter and it survives — chat is still granted monthly and still
+ * generous relative to cost. What it got wrong is what happens **after** the
+ * grant is gone. Plus grants 90 and the one real account on the deployment runs
+ * about 115 (see the `plus` block below), so the person this tier was sized for
+ * hits the wall around the 22nd. Until now the only thing on the other side of
+ * that wall was Coach or the end of the month.
+ *
+ * Two sizes rather than the photos' three, because the third rung has nowhere
+ * to sit: anything big enough to be worth a discount is close enough to Coach's
+ * $24.99 that the tier is the better buy, and shipping a pack whose honest
+ * advice is "buy the other thing" is a worse page, not a fuller one.
+ *
+ *   30 messages   $3.99   $0.133 each   net $3.39   COGS $1.23   64%
+ *  100 messages  $10.99   $0.110 each   net $9.34   COGS $4.10   56%
+ *
+ * **Both rungs are above the in-plan rate on purpose**, which is the constraint
+ * the whole ladder hangs on. Splitting a tier's price across its meters by COGS
+ * share puts Plus at $0.080 a message and Coach at $0.071; the packs are 1.7x
+ * and 1.4x that. So a pack is never the cheap way to buy messages — it is the
+ * convenient way to buy a few more of them — and the subscription stays the
+ * thing the arithmetic recommends.
+ *
+ * The middle of the ladder does the upsell without a word of copy. Plus plus
+ * the 100-pack is $20.98 for 190 messages; Coach is $24.99 for 180 messages,
+ * 25 photo scans and the whole kitchen. Anybody topping up every month does
+ * that sum once and upgrades, which is the correct outcome — a top-up that
+ * beat the tier above it would be a leak dressed as a feature.
+ *
+ * `subscriberOnly` in `@ct/shared` is the other half of holding that line, and
+ * it is why there is no message pack on Free: ten a month plus a $3.99 refill
+ * is a cheaper product than Plus, and it would be the one everybody bought.
  */
-const BUNDLE_PRICES_USD: Record<PhotoBundleId, number> = {
+const BUNDLE_PRICES_USD: Record<BundleId, number> = {
   photo_10: 3.99,
   photo_25: 7.99,
   photo_50: 13.99,
+  chat_30: 3.99,
+  chat_100: 10.99,
 };
 
 /**
- * The ids and sizes come from `@ct/shared` so the phone asks the store for the
- * same three products this recognises on the way back; only the price is added
- * here, for the reason given on `PRICES`.
+ * The ids, meters and sizes come from `@ct/shared` so the phone asks the store
+ * for the same products this recognises on the way back; only the price is
+ * added here, for the reason given on `PRICING`.
  */
-export const PHOTO_BUNDLES = BUNDLE_SIZES.map((bundle) => ({
+export const BUNDLES = BUNDLE_SIZES.map((bundle) => ({
   ...bundle,
   priceUsd: BUNDLE_PRICES_USD[bundle.id],
 }));
 
-export type { PhotoBundleId };
+export type { BundleId };
 
 const LIMITS: Record<PlanName, PlanLimits> = {
   /*

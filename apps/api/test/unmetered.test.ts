@@ -141,8 +141,8 @@ describe('what the client is told', () => {
    * purchase.
    */
   it('still reports scans that were bought', async () => {
-    const { grantPhotoCredits } = await import('../src/services/credits.ts');
-    await grantPhotoCredits(user.id, 'photo_10', 'evt-unmetered-1');
+    const { grantCredits } = await import('../src/services/credits.ts');
+    await grantCredits(user.id, 'photo_10', 'evt-unmetered-1');
 
     const photo = (await entitlements())
       .json()
@@ -151,8 +151,8 @@ describe('what the client is told', () => {
 
     // And spending a turn does not draw one down.
     await chat({ text: 'What is this?', photo_base64: 'iVBORw0KGgo=' });
-    const { photoCreditBalance } = await import('../src/services/credits.ts');
-    expect(await photoCreditBalance(user.id)).toBe(10);
+    const { creditBalance } = await import('../src/services/credits.ts');
+    expect(await creditBalance(user.id, 'photo')).toBe(10);
   });
 
   /**

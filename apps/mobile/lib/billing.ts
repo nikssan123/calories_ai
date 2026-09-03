@@ -8,7 +8,7 @@ import type {
   PurchasesPackage,
   PurchasesStoreProduct,
 } from 'react-native-purchases';
-import { PHOTO_BUNDLES, PLANS, type PhotoBundleId, type PlanName } from '@ct/shared';
+import { BUNDLES, PLANS, type BundleId, type CreditMeter, type PlanName } from '@ct/shared';
 import { AppError } from '@/lib/errors';
 
 /**
@@ -380,16 +380,24 @@ async function awaitPlan(confirm: () => Promise<PlanName>, want?: PlanName): Pro
 
 
 /**
- * A photo bundle, priced by the store.
+ * A bundle — photo scans or messages — priced by the store.
  *
  * Separate from `Buyable` because a bundle is not a tier: it grants stock, not
  * access, so nothing about it belongs in the plan comparison and `planOf`
  * correctly refuses to classify one.
  */
 export interface Bundle {
-  id: PhotoBundleId;
-  /** How many scans it adds. From `@ct/shared`, not from the store. */
-  scans: number;
+  id: BundleId;
+  /** Which meter it tops up. Decides where on the wall it is drawn. */
+  meter: CreditMeter;
+  /** How many units it adds. From `@ct/shared`, not from the store. */
+  units: number;
+  /**
+   * Whether this pack is only offered to somebody already paying. True on the
+   * message packs: Free gets ten messages a month, and a $3.99 refill on top of
+   * that is a cheaper product than Plus. See the note in `@ct/shared`.
+   */
+  subscriberOnly: boolean;
   /** Localised and tax-inclusive where the store says so. */
   price: string;
   /** What to hand back to `purchaseBundle()`. */
@@ -397,41 +405,48 @@ export interface Bundle {
 }
 
 /**
- * The photo bundles the store will actually sell right now.
+ * The bundles the store will actually sell right now, across every meter.
  *
  * Fetched with `getProducts` rather than read off an offering, because a
  * bundle is not part of the paywall's tier comparison and putting it in the
  * offering would make it a package the wall then has to filter back out. The
- * ids are the same three on both stores — see `PHOTO_BUNDLES`.
+ * ids are the same on both stores — see `BUNDLES`.
+ *
+ * One call for both meters rather than one per meter. The store round trip is
+ * the expensive part and it takes a list; splitting it would double the wait on
+ * a screen whose whole job is to not feel slow, and the caller sorts them by
+ * `meter` anyway.
  *
  * Empty on every failure path, exactly like `buyables`: a keyless build, a
  * store that has not approved the products yet, a simulator with no account.
- * The section that draws them is hidden on an empty list rather than showing
- * three dead buttons.
+ * Each section that draws them is hidden on an empty list rather than showing
+ * dead buttons — and that is per section, so message packs approved a week
+ * after the photo ones do not hold the photo ones back.
  */
 export async function bundles(): Promise<Bundle[]> {
   const Purchases = purchases();
   if (!API_KEY || !Purchases || configuredFor === null) return [];
   let products: PurchasesStoreProduct[] = [];
   try {
-    products = await Purchases.getProducts(PHOTO_BUNDLES.map((bundle) => bundle.id));
+    products = await Purchases.getProducts(BUNDLES.map((bundle) => bundle.id));
   } catch {
     return [];
   }
 
   const found: Bundle[] = [];
   // Iterate the declared list rather than the store's answer, so the order is
-  // ours (smallest first) and an unrecognised product cannot appear.
-  for (const bundle of PHOTO_BUNDLES) {
+  // ours (smallest first, within a meter) and an unrecognised product cannot
+  // appear.
+  for (const bundle of BUNDLES) {
     const product = products.find((candidate) => candidate.identifier === bundle.id);
     if (!product) continue;
-    found.push({ id: bundle.id, scans: bundle.scans, price: product.priceString, product });
+    found.push({ ...bundle, price: product.priceString, product });
   }
   return found;
 }
 
 /**
- * Buy a bundle, and wait for the scans to actually arrive.
+ * Buy a bundle, and wait for the stock to actually arrive.
  *
  * The same shape as `purchase()` and for the same reason — the store returns
  * when the sheet closes, and the credit travels store → RevenueCat → webhook →
@@ -439,8 +454,10 @@ export async function bundles(): Promise<Bundle[]> {
  * the plan, so polling the plan would poll something that is correct before the
  * purchase and still correct after it, and report success instantly every time.
  *
- * `confirm` re-reads the photo allowance and returns its credit balance; this
- * polls until that number goes up. A timeout resolves `false`: the receipt is
+ * `confirm` re-reads the bundle's own meter and returns its credit balance;
+ * this polls until that number goes up. The caller passes the meter in, because
+ * polling the wrong one waits out the full ten seconds on a purchase that
+ * landed correctly. A timeout resolves `false`: the receipt is
  * real and the webhook will land, so "it will appear in a moment" is the true
  * thing to say, not "that failed".
  */

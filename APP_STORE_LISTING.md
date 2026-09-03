@@ -129,18 +129,28 @@ rejection will be about.
 ### Done
 
 - **The in-app purchase catalogue exists** and was accepted by App Review; the
-  items sit at *Ready for Review*. Seven products, all priced in
-  `apps/api/src/services/plans.ts`:
+  five items created in August sit at *Ready for Review*. Nine products, all
+  priced in `apps/api/src/services/plans.ts`:
 
-  | Product | id suffix | Price |
-  |---|---|---|
-  | Plus, monthly | `plus.monthly` | $9.99 |
-  | Plus, annual | `plus.annual` | $99.99 |
-  | Coach, monthly | `coach.monthly` | $24.99 |
-  | Coach, annual | `coach.annual` | $249.99 |
-  | 10 photo scans | `photo_10` | $3.99 |
-  | 25 photo scans | `photo_25` | $7.99 |
-  | 50 photo scans | `photo_50` | $13.99 |
+  | Product | id suffix | Price | Created |
+  |---|---|---|---|
+  | Plus, monthly | `plus.monthly` | $9.99 | Aug |
+  | Plus, annual | `plus.annual` | $99.99 | Aug |
+  | Coach, monthly | `coach.monthly` | $24.99 | Aug |
+  | Coach, annual | `coach.annual` | $249.99 | Aug |
+  | 10 photo scans | `photo_10` | $3.99 | Aug |
+  | 25 photo scans | `photo_25` | $7.99 | Aug |
+  | 50 photo scans | `photo_50` | $13.99 | Aug |
+  | 30 messages | `chat_30` | $3.99 | 3 Sep |
+  | 100 messages | `chat_100` | $10.99 | 3 Sep |
+
+  **The two message packs are at `MISSING_METADATA` and the thing missing is the
+  App Review screenshot**, which is the one piece of IAP metadata that cannot be
+  posted through the API from a repo — it has to be taken of the purchase point
+  inside a build that has one. `store/review/photo-packs.png` is the equivalent
+  for the photo bundles and was captured on a simulator; the replacement needs to
+  show both sections of `app/upgrade.tsx`, and can then be attached to all five
+  consumables rather than only the new two.
 
   Apple product ids cannot contain a colon, so Play's `plus:monthly` is
   `com.daysofar.app.plus.monthly` here. `planOf` in
@@ -270,11 +280,11 @@ The prices are `PRICING` in `apps/api/src/services/plans.ts` and have to be
 re-read from it rather than remembered — the tiers were repriced once already,
 and a description quoting a superseded number is its own 3.1.2 problem.
 
-**The three photo bundles (§7) are deliberately absent from that block.** 3.1.2's
-disclosure rules are about *auto-renewable* subscriptions; `photo_10`, `photo_25`
-and `photo_50` are consumables, they do not renew, and there is nothing about
-them a reader has to be warned of before buying. Listing them under a heading
-that promises automatic renewal would be worse than leaving them out.
+**The five consumables (§7) are deliberately absent from that block.** 3.1.2's
+disclosure rules are about *auto-renewable* subscriptions; the three photo
+bundles and the two message packs do not renew, and there is nothing about them
+a reader has to be warned of before buying. Listing them under a heading that
+promises automatic renewal would be worse than leaving them out.
 
 ### Where it goes
 

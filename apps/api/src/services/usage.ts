@@ -4,8 +4,8 @@ import { MODELS } from '../ai/client.ts';
 import type { ProviderId } from '../ai/providers/index.ts';
 import type { CostSource, Outcome, TurnKind } from '../ai/providers/types.ts';
 import { limitsFor, meterFor } from './plans.ts';
-import { photoCreditBalance, spendPhotoCredit } from './credits.ts';
-import type { Allowance, MeterName, PlanName } from '@ct/shared';
+import { creditBalance, spendCredit } from './credits.ts';
+import { CREDIT_METERS, type Allowance, type MeterName, type PlanName } from '@ct/shared';
 
 /**
  * Recording and reading what the AI layer costs.
@@ -160,15 +160,15 @@ export async function allowanceFor(
   const kinds = METER_KINDS[meter];
 
   /*
-   * Bought scans, which sit outside the plan entirely.
+   * Bought stock, which sits outside the plan entirely.
    *
-   * Only photos are sold this way — see `PHOTO_BUNDLES` — so every other meter
-   * skips the query rather than paying for a sum that is always zero. It is
-   * read even when the monthly grant still has room, because a screen that has
-   * to say "10 left this month, plus 12 you bought" needs both halves before
-   * the button is pressed, not after.
+   * Photos and messages are sold this way — see `BUNDLES` — so the other three
+   * meters skip the query rather than paying for a sum that is always zero. It
+   * is read even when the monthly grant still has room, because a screen that
+   * has to say "10 left this month, plus 12 you bought" needs both halves
+   * before the button is pressed, not after.
    */
-  const credits = meter === 'photo' ? await photoCreditBalance(userId) : 0;
+  const credits = CREDIT_METERS.includes(meter) ? await creditBalance(userId, meter) : 0;
 
   /*
    * Nobody is billed for this account's turns, so there is nothing to count and
@@ -310,15 +310,23 @@ export async function requireAllowance(
    * counts against the monthly meter, because `recordUsage` writes a row for
    * every turn including the ones that failed and `turnsInWindow` counts rows
    * rather than successes. Spending a credit only on success would make the
-   * two halves of the same allowance behave differently — bought scans
-   * quietly more forgiving than granted ones — which is the sort of difference
+   * two halves of the same allowance behave differently — bought stock
+   * quietly more forgiving than granted units — which is the sort of difference
    * nobody can predict from the outside and everybody notices once.
    *
-   * `spendPhotoCredit` re-checks the balance inside its own statement, so two
-   * photo turns racing for the last credit cannot both win. A false return is
-   * the wall, not an error.
+   * `spendCredit` re-checks the balance inside its own statement, so two turns
+   * racing for the last credit cannot both win. A false return is the wall, not
+   * an error.
+   *
+   * No plan is consulted, deliberately, and it matters most for the message
+   * packs `subscriberOnly` keeps off the wall on Free. Credits do not expire,
+   * so a subscriber who buys a hundred messages and later lapses still owns
+   * them — refusing to spend them at that point would be keeping the money and
+   * withholding the thing it bought, which is the one behaviour a top-up must
+   * never have. Free accounts do not accumulate these because they are never
+   * sold one, not because a check here stops them.
    */
-  if (allowance.credits > 0 && (await spendPhotoCredit(userId))) {
+  if (allowance.credits > 0 && (await spendCredit(userId, meter))) {
     return { ...allowance, credits: allowance.credits - 1 };
   }
 

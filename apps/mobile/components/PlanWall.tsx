@@ -273,8 +273,8 @@ export function MeterChip({
   // there is no bill behind it, and counting down from infinity is not a thing.
   if (!allowance || meterLocked(allowance) || allowance.unlimited) return null;
   const left = meterRemaining(allowance);
-  // `allowed` is non-null past `meterLocked`, and the credits a photo meter may
-  // carry are deliberately not in the threshold: they are stock rather than the
+  // `allowed` is non-null past `meterLocked`, and the credits a meter may carry
+  // are deliberately not in the threshold: they are stock rather than the
   // grant, and the chip is counting down the thing that runs out.
   if (left === 0 || left > showFrom(allowance.allowed ?? 0)) return null;
 

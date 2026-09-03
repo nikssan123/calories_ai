@@ -163,6 +163,102 @@ tracker. That is the same bet that document recommends: pantry → recipe → pl
 shopping list is a meal-planning product, a different market with a higher anchor and
 the one thing in the comparison table nobody else has.
 
+## Stock, sold by the bundle
+
+> **The tier tables above this line are stale.** They were written against
+> $79.99/yr Plus and a 30-turn ceiling. Production has been on `PRICING` and
+> `LIMITS` in `apps/api/src/services/plans.ts` since the 5m cache TTL landed —
+> Plus $9.99/mo or $99.99/yr for 90 chat and 8 photo, Coach $24.99/mo or
+> $249.99/yr for 180 chat and 25 photo — and that file is the source of truth
+> for every number in this section. The rest of this document is kept for the
+> cost analysis, which is still correct, and for §"What would make this
+> sellable", which is still the plan.
+
+Two things are now sold outright, on top of whatever the plan grants. Both are
+consumables, neither expires, and both are drawn down only once the month's
+grant is gone.
+
+| pack | id | price | $/unit | COGS | margin (store) |
+|---|---|---:|---:|---:|---:|
+| 10 photo scans | `photo_10` | $3.99 | $0.399 | $1.51 | 55% |
+| 25 photo scans | `photo_25` | $7.99 | $0.320 | $3.78 | 44% |
+| 50 photo scans | `photo_50` | $13.99 | $0.280 | $7.55 | 37% |
+| 30 messages | `chat_30` | $3.99 | $0.133 | $1.23 | 64% |
+| 100 messages | `chat_100` | $10.99 | $0.110 | $4.10 | 56% |
+
+### Why messages joined the photos
+
+The previous argument for selling photos and nothing else was that metering
+chat by the bundle would be putting a price on the daily habit the product
+depends on. That argument was about the *plan's* meter and it still holds. What
+it did not cover is what happens **after** the grant is gone.
+
+Plus grants 90 messages a month. The one real account on the deployment runs
+about 115 — flat from the first day rather than an onboarding burst — so the
+person this tier was sized for walls somewhere around the 22nd, and until now
+the only thing on the other side of that wall was Coach or the end of the
+month. `plans.ts` has said so in a comment since the ceiling moved to ninety;
+selling a top-up is the part that was missing.
+
+### Where the two prices come from
+
+**Both rungs are above the in-plan rate.** Splitting a tier's price across its
+meters by COGS share puts Plus at $0.080 a message and Coach at $0.071; the
+packs are 1.7x and 1.4x that. A pack is therefore never the cheap way to buy
+messages — it is the convenient way to buy a few more of them — and the
+subscription stays the thing the arithmetic recommends. That constraint is the
+whole design, and it is what keeps a top-up from quietly becoming the cheapest
+tier in the product.
+
+Two sizes rather than the photos' three, because the third rung has nowhere to
+sit. Anything big enough to be worth a discount lands close enough to Coach's
+$24.99 that the tier is the better buy, and a pack whose honest advice is "buy
+the other thing" is a worse page rather than a fuller one.
+
+The middle of the ladder does the upsell with no copy at all. Plus plus the
+100-pack is $20.98 for 190 messages; Coach is $24.99 for 180 messages, 25 photo
+scans and the whole kitchen. Anybody topping up every month does that sum once
+and upgrades.
+
+### Subscribers only, and only on the way in
+
+`subscriberOnly` in `@ct/shared` is true on the message packs and false on the
+photo ones. Free gets ten messages a month, and a free account that can refill
+for $3.99 has no reason to ever subscribe — so the wall on Free sells the plan
+and draws no message packs at all. Photos have no such problem: Free gets one
+scan *ever*, so a pack there is a genuine purchase rather than a subscription
+substitute.
+
+It gates the **offer** and not the spend, and the difference matters for one
+person: the subscriber who buys a hundred messages, lets the subscription
+lapse, and still owns them. Credits do not expire, so `requireAllowance` spends
+them on whatever plan the account is on by then. Refusing there would be
+keeping the money and withholding the thing it bought, which is the one
+behaviour a top-up must never have.
+
+### The ledger
+
+`042` folded `photo_credits` into `credits` with a `meter` column. The
+alternative was a second table with the same five columns, the same unique
+index and the same three functions — and nothing above the SQL differs by meter
+except a `WHERE`. A third bundle is now a row in `BUNDLES` and a price in
+`plans.ts`.
+
+Everything `036` argued for survives: the balance is `sum(delta)` over a ledger
+rather than a counter, because a retried webhook against a counter is free
+stock forever, a refund against one is a special case that clamps at zero, and
+neither has anywhere to put the store's event id.
+
+### This is not the fix
+
+Selling a top-up is not the same as making the ceiling right, and it should not
+be mistaken for it. 90 messages is 3 a day, and the reason it is not higher is
+in §"What would make this sellable": the prefix is ~19,700 tokens of system
+prompt and tool schema on every turn, and a journal turn calls about thirteen
+of the twenty-seven tools it is handed. Bringing the per-turn cost down raises
+every ceiling in the product at the same margin. The packs are what somebody
+who runs out on the 22nd can do about it *this month*.
+
 ## Who the meters do not apply to
 
 **An account whose turns run on the Claude Code subscription is unmetered.** Not a

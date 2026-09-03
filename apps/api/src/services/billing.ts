@@ -1,7 +1,7 @@
 import { query, queryOne } from '../db.ts';
 import { PLANS, type PlanName } from '@ct/shared';
-import { PHOTO_BUNDLES, type PhotoBundleId } from './plans.ts';
-import { grantPhotoCredits } from './credits.ts';
+import { BUNDLES, type BundleId } from './plans.ts';
+import { grantCredits } from './credits.ts';
 
 /**
  * Turning a store's word for what happened into a plan on an account.
@@ -69,7 +69,7 @@ export function planFor(event: RevenueCatEvent): PlanName | null {
 }
 
 /**
- * Which photo bundle a purchase is, if it is one at all.
+ * Which bundle a purchase is, if it is one at all.
  *
  * Same two sources as `planFor` and the same order, for the same reasons — the
  * entitlement list is what RevenueCat is for but depends on a dashboard this
@@ -77,14 +77,19 @@ export function planFor(event: RevenueCatEvent): PlanName | null {
  * `product:base_plan` shape is split on the colon here too, so `photo_25` and
  * `photo_25:oneoff` are the same bundle.
  *
- * Returns null for anything not in `PHOTO_BUNDLES`, which is what makes this
- * safe to run in front of `planFor`: a tier purchase is not a bundle and falls
- * straight through.
+ * Returns null for anything not in `BUNDLES`, which is what makes this safe to
+ * run in front of `planFor`: a tier purchase is not a bundle and falls straight
+ * through.
+ *
+ * Only the id comes back, never a meter alongside it. `grantCredits` reads the
+ * meter off the bundle itself, so there is no pair here that could be assembled
+ * wrongly — a hundred messages credited as photo scans is silent on both ends,
+ * and the way to not have that bug is to never have the two values apart.
  */
-export function bundleFor(event: RevenueCatEvent): PhotoBundleId | null {
+export function bundleFor(event: RevenueCatEvent): BundleId | null {
   const ids = [...(event.entitlement_ids ?? []), (event.product_id ?? '').split(':')[0] ?? ''];
   for (const id of ids) {
-    const bundle = PHOTO_BUNDLES.find((b) => b.id === id);
+    const bundle = BUNDLES.find((b) => b.id === id);
     if (bundle) return bundle.id;
   }
   return null;
@@ -213,7 +218,7 @@ export async function applyEvent(
   }
 
   /*
-   * A photo bundle, which is stock rather than a tier.
+   * A bundle — photo scans or messages — which is stock rather than a tier.
    *
    * Checked before `planFor` because it is the same `NON_RENEWING_PURCHASE`
    * shape a tier would arrive in, and without this it falls through to
@@ -221,15 +226,21 @@ export async function applyEvent(
    * and nothing is granted. That is the worst of the failure modes available
    * here, because it is silent on both ends.
    *
-   * `grantPhotoCredits` is idempotent on the event id in its own right. It is
-   * belt and braces over the `billing_events` insert above — that one already
+   * Nothing here asks what plan the buyer is on, and the message packs being
+   * subscriber-only does not change that. `subscriberOnly` governs who is
+   * *offered* a pack, on the wall; by the time a webhook arrives the money is
+   * taken, and refusing to credit it would be the one outcome worse than
+   * selling to the wrong person. See the note in `@ct/shared`.
+   *
+   * `grantCredits` is idempotent on the event id in its own right. It is belt
+   * and braces over the `billing_events` insert above — that one already
    * refuses a redelivery — but the two protect different things: this one also
    * covers the same purchase arriving under a second event id, which is what a
    * store migration or a replayed backfill looks like.
    */
   const bundle = bundleFor(event);
   if (bundle) {
-    const granted = await grantPhotoCredits(user.id, bundle, event.id);
+    const granted = await grantCredits(user.id, bundle, event.id);
     return granted ? { applied: true, reason: 'ok' } : { applied: false, reason: 'duplicate' };
   }
 

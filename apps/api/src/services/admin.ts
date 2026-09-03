@@ -234,11 +234,11 @@ export const BROWSABLE_TABLES: Record<string, TableSpec> = {
     order: 'received_at DESC',
     note: 'Every store webhook as received. The audit trail behind `users.plan`.',
   },
-  photo_credits: {
+  credits: {
     group: 'Accounts',
     redact: [],
     order: 'created_at DESC',
-    note: 'A ledger, not a balance: the balance is the sum of `delta` over these rows.',
+    note: 'Scans and messages bought outright. A ledger, not a balance: the balance is the sum of `delta` over these rows, per `meter`.',
   },
 
   // ---- Food

@@ -955,6 +955,13 @@ export const en = {
   'plans.yearly': 'Yearly',
   'plans.monthly': 'Monthly',
   'plans.oneMoment': 'One moment…',
+  'plans.messagesHeading': 'MORE MESSAGES',
+  'plans.messagesBody':
+    'On top of what your plan gives you each month. Bought once, not a subscription — they keep until you use them.',
+  'plans.messagesCount': (count: number) => `${count} messages`,
+  'plans.messagesAdded': (count: number) => `${count} messages added.`,
+  'plans.messagesOnTheWay': 'Paid. Your messages will appear in a moment.',
+  'plans.messagesBuyHint': (count: number, price: string) => `Buy ${count} messages for ${price}`,
   'plans.scansHeading': 'MORE PHOTO SCANS',
   'plans.scansBody': 'Bought once, not a subscription. They keep until you use them.',
   'plans.scansCount': (count: number) => `${count} photo scans`,
@@ -1002,6 +1009,7 @@ export const en = {
   'plans.restorePurchase': 'Restore a purchase',
   'plans.planTitle': 'Plan',
   'plans.leftThisMonth': (left: string) => `${left} left this month`,
+  'plans.plusBought': (bought: string) => ` · ${bought} bought`,
   'plans.leftEver': (left: string) => `${left} left`,
   'setup.tellingYouThings': 'Telling you things',
   'setup.emailFooterWithReview':

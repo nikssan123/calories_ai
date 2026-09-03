@@ -4,7 +4,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import type { PlanName } from '@ct/shared';
+import type { CreditMeter, PlanName } from '@ct/shared';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { useToast } from '@/components/Toast';
 import { useEntitlements } from '@/lib/entitlements';
@@ -30,9 +30,46 @@ import {
 } from '@/lib/plan-copy';
 import { haptics } from '@/lib/haptics';
 import { PRIVACY_URL, TERMS_URL } from '@/lib/links';
-import { useLocale, useT } from '@/lib/i18n';
+import { useLocale, useT, type MessageKey } from '@/lib/i18n';
 import { type as t, useColors, withAlpha } from '@/theme';
 import { messageOf } from '@/lib/errors';
+
+/**
+ * Which strings each kind of pack is drawn with.
+ *
+ * A lookup rather than a branch because there are now two of these and the
+ * copy is the *only* thing that differs — the button, the wait, the toast and
+ * the accessibility label are one code path over a meter. A third pack should
+ * be six strings here and nothing else on this screen.
+ *
+ * Keyed on `CreditMeter` rather than `MeterName`, so the three meters no bundle
+ * sells cannot be looked up at all. A five-key map would need entries for
+ * `meal_plan` and `recipe` that are unreachable, and unreachable copy is copy
+ * nobody ever notices is wrong.
+ */
+const PACK_COPY = {
+  chat: {
+    heading: 'plans.messagesHeading',
+    body: 'plans.messagesBody',
+    count: 'plans.messagesCount',
+    added: 'plans.messagesAdded',
+    onTheWay: 'plans.messagesOnTheWay',
+    buyHint: 'plans.messagesBuyHint',
+  },
+  photo: {
+    heading: 'plans.scansHeading',
+    body: 'plans.scansBody',
+    count: 'plans.scansCount',
+    added: 'plans.scansAdded',
+    onTheWay: 'plans.scansOnTheWay',
+    buyHint: 'plans.scansBuyHint',
+  },
+} as const satisfies Record<CreditMeter, Record<string, MessageKey>>;
+
+/** The order the sections are drawn in. See the comment where they render. */
+const PACK_SECTIONS = [{ meter: 'chat' }, { meter: 'photo' }] as const satisfies readonly {
+  meter: CreditMeter;
+}[];
 
 /**
  * The wall itself — the screen `SUBSCRIPTIONS.md` has had on its build list as
@@ -202,13 +239,18 @@ export default function UpgradeScreen() {
    * that is blank until a network call lands looks broken.
    */
   /**
-   * Buy a bundle of scans.
+   * Buy a bundle, of scans or of messages.
    *
    * Deliberately not routed through `buy`: that one swaps the plan and leaves
    * for `/purchased`, and neither is true here. A bundle tops up stock on the
    * plan somebody already has, so the screen stays where it is and the only
    * thing that changes is the count — which is also why the wait polls credits
    * rather than the plan. See `purchaseBundle`.
+   *
+   * The meter comes off the pack rather than being fixed at `photo`, and it has
+   * to: polling the photo balance after a message purchase waits out the full
+   * ten seconds and then reports "it will appear in a moment" for something
+   * that already arrived.
    */
   async function buyPack(pack: Bundle) {
     if (buying) return;
@@ -216,11 +258,12 @@ export default function UpgradeScreen() {
     try {
       const landed = await purchaseBundle(pack, async () => {
         const entitlements = await api.entitlements();
-        return entitlements.allowances.find((a) => a.meter === 'photo')?.credits ?? 0;
+        return entitlements.allowances.find((a) => a.meter === pack.meter)?.credits ?? 0;
       });
       await refresh();
-      if (landed) toast.success(tr('plans.scansAdded')(pack.scans));
-      else toast.message(tr('plans.scansOnTheWay'));
+      const copy = PACK_COPY[pack.meter];
+      if (landed) toast.success(tr(copy.added)(pack.units));
+      else toast.message(tr(copy.onTheWay));
     } catch (error) {
       // Closing the store sheet is an answer, not a failure.
       if (!(error instanceof PurchaseCancelled)) toast.error(messageOf(error, tr));
@@ -230,6 +273,23 @@ export default function UpgradeScreen() {
   }
 
   const sellable = billingAvailable && offers !== null && offers.length > 0;
+
+  /*
+   * The packs this account may actually be offered.
+   *
+   * `subscriberOnly` is on the message packs, and this is the only place it is
+   * enforced: the wall on Free sells the plan, because ten messages a month
+   * plus a $3.99 refill is a cheaper product than Plus and would be the one
+   * everybody bought. See the note on `BUNDLES` in `@ct/shared`.
+   *
+   * It is a filter on *offering*, not on spending. A subscriber who buys a
+   * hundred messages and later lapses keeps them — credits do not expire — and
+   * `requireAllowance` will still spend them. What this hides is the shop, not
+   * the shelf.
+   */
+  const sellablePacks = (packs ?? []).filter(
+    (pack) => !(pack.subscriberOnly && plan === 'free'),
+  );
 
   return (
     <ScrollView
@@ -370,50 +430,58 @@ export default function UpgradeScreen() {
       )}
 
       {/*
-        Scans, sold by the bundle.
+        Stock, sold by the bundle — messages first, then scans.
 
         Below the tiers and not among them, because a bundle is not a tier: it
         is stock on whatever plan you are already on, and it does not expire.
-        Somebody on Coach can still run out of scans in a heavy month, so this
-        shows on every plan — which is also why it is not inside the
-        `chosen !== plan` guard the Get button uses.
+        Somebody on Coach can still run out in a heavy month, so this is not
+        inside the `chosen !== plan` guard the Get button uses.
 
-        Hidden entirely on an empty list. A store that has not approved the
-        products yet, or a build with no key, should show nothing here rather
-        than three buttons that cannot charge anyone.
+        Messages lead because they are the meter people actually reach the end
+        of — Plus grants 90 and the account that sized it runs about 115 — and
+        because they are only drawn at all for somebody who is already paying,
+        which makes them the more specific answer of the two. Scans follow, and
+        they show on every plan including Free.
+
+        Each section is hidden on its own empty list rather than the two sharing
+        one guard: a store that has approved the photo products and not yet the
+        message ones should sell what it can, not nothing.
       */}
-      {packs !== null && packs.length > 0 && (
-        <View style={styles.packs}>
-          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-            {tr('plans.scansHeading')}
-          </Text>
-          <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-            {tr('plans.scansBody')}
-          </Text>
-          {packs.map((pack) => (
-            <PressableChunk
-              key={pack.id}
-              radius={16}
-              disabled={buying !== null}
-              onPress={() => void buyPack(pack)}
-              accessibilityRole="button"
-              accessibilityLabel={tr('plans.scansBuyHint')(pack.scans, pack.price)}
-              style={{ opacity: buying !== null && buying !== pack.id ? 0.5 : 1 }}
-              contentStyle={[
-                styles.pack,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-            >
-              <Text style={[t.bodyBold, { color: colors.foreground }]}>
-                {tr('plans.scansCount')(pack.scans)}
-              </Text>
-              <Text style={[t.bodyBold, { color: colors.foreground }]}>
-                {buying === pack.id ? tr('plans.oneMoment') : pack.price}
-              </Text>
-            </PressableChunk>
-          ))}
-        </View>
-      )}
+      {PACK_SECTIONS.map((section) => {
+        const forSale = sellablePacks.filter((pack) => pack.meter === section.meter);
+        if (forSale.length === 0) return null;
+        const copy = PACK_COPY[section.meter];
+        return (
+          <View key={section.meter} style={styles.packs}>
+            <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+              {tr(copy.heading)}
+            </Text>
+            <Text style={[t.footnote, { color: colors.mutedForeground }]}>{tr(copy.body)}</Text>
+            {forSale.map((pack) => (
+              <PressableChunk
+                key={pack.id}
+                radius={16}
+                disabled={buying !== null}
+                onPress={() => void buyPack(pack)}
+                accessibilityRole="button"
+                accessibilityLabel={tr(copy.buyHint)(pack.units, pack.price)}
+                style={{ opacity: buying !== null && buying !== pack.id ? 0.5 : 1 }}
+                contentStyle={[
+                  styles.pack,
+                  { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+              >
+                <Text style={[t.bodyBold, { color: colors.foreground }]}>
+                  {tr(copy.count)(pack.units)}
+                </Text>
+                <Text style={[t.bodyBold, { color: colors.foreground }]}>
+                  {buying === pack.id ? tr('plans.oneMoment') : pack.price}
+                </Text>
+              </PressableChunk>
+            ))}
+          </View>
+        );
+      })}
 
       {/*
         Restore, and — for somebody who already pays — the way out.

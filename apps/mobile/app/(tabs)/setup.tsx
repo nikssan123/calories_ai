@@ -900,9 +900,16 @@ function PlanSettings() {
             <Text style={[t.bodySemibold, t.tnum, { color: colors.foreground }]}>
               {allowance.unlimited
                 ? tr('plans.unlimited')
-                : allowance.period === 'ever'
-                  ? tr('plans.leftEver')(String(left))
-                  : tr('plans.leftThisMonth')(String(left))}
+                : (allowance.period === 'ever'
+                    ? tr('plans.leftEver')(String(left))
+                    : tr('plans.leftThisMonth')(String(left))) +
+                  /* Stock bought outright, named separately from the grant.
+                     Folding it into `left` would be true this month and a lie
+                     the next — the grant comes back and this does not — which
+                     is the same reason `Allowance` carries the two apart. Not
+                     shown at zero, which is every account that has never
+                     bought a pack. */
+                  (allowance.credits > 0 ? tr('plans.plusBought')(String(allowance.credits)) : '')}
             </Text>
           </InsetRow>
         );
