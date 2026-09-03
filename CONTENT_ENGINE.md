@@ -241,7 +241,7 @@ against one source clip and writes N files into `content/out/`.
 
 | Channel | API reality | Plan |
 |---|---|---|
-| **TikTok** | Content Posting API exists, but *Direct Post* needs an app audit most solo devs don't clear. Unaudited apps can only push to the user's **drafts/inbox** — you still tap publish in the app. | Not worth the integration. AirDrop → post from phone. |
+| **TikTok** | Content Posting API exists, but *Direct Post* needs an app audit most solo devs don't clear. Unaudited apps can only push to the user's **drafts/inbox** — you still tap publish in the app. | Built — `scripts/tiktok/`. Uploads to drafts; you write the caption and tap post. The win is the file transfer, not automation. |
 | **Instagram** | Reels publishing works via the Graph API, but needs a Meta app + review for `instagram_content_publish`. | Post manually for now. See note below. |
 | **Metricool** | API is on the paid tiers only. | Skip, or keep using the UI. |
 | **Postiz** | Open source, self-hostable — could run on the PC. Supports TikTok/IG scheduling. | The option worth exploring if manual posting becomes the bottleneck. |

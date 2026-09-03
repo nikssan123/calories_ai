@@ -47,3 +47,12 @@ apps/mobile/GoogleService-Info.plist
 # safe to write: nothing else in this repo is a `.p8`.
 AuthKey_*.p8
 *.p8
+
+# The TikTok refresh token.
+#
+# Not a config file with a secret in it — the whole file IS the credential. It
+# authorises posting video as @daysofarapp for a year, and unlike an API key
+# there is no dashboard listing it to revoke a leaked copy from: recovery is
+# revoking the app's access from the TikTok account's own settings, which kills
+# every machine's token at once. Written 0600 by scripts/tiktok/lib.mjs.
+scripts/tiktok/.tokens.json

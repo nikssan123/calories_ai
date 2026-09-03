@@ -1,0 +1,117 @@
+# Posting to TikTok from the command line
+
+Two scripts over TikTok's Content Posting API. `auth.mjs` runs once to get a
+token; `post.mjs` uploads a video. No dependencies — Node 24 and `fetch`.
+
+```bash
+node scripts/tiktok/auth.mjs                              # once
+node scripts/tiktok/post.mjs content/out/haul-01.mp4      # per video
+```
+
+## 0. What this does and does not get you
+
+**It uploads to your drafts.** You open TikTok, tap the draft, write the
+caption, and post. That is the ceiling until TikTok audits the app.
+
+Posting straight to the profile needs the `video.publish` scope, and TikTok only
+grants it to clients that have passed their review. Solo developers frequently
+do not clear it. `auth.mjs` asks for the scope anyway — TikTok grants whatever
+subset it will give you, so the day an audit lands, `post.mjs --publish` starts
+working with no re-authorisation.
+
+So the honest value here is **the file transfer**, not the posting: no AirDrop,
+no cable, no re-encoding on the phone. At three to five videos a day that is
+worth having and is not worth building a queue around. See `CONTENT_ENGINE.md`
+§7 for why manual posting is the right default regardless.
+
+## 1. Register the app
+
+1. Sign in at <https://developers.tiktok.com> **with the @daysofarapp account**,
+   not a personal one. Whoever authorises is who the videos post as.
+2. Create an app. Add the **Content Posting API** product, and **Login Kit**
+   (Login Kit is what issues the token — Content Posting alone cannot authorise).
+3. Under Content Posting API, turn on **Direct Post** if the toggle is offered.
+   It is what `video.publish` hangs off; without the audit it stays inert, and
+   requesting it costs nothing.
+4. Copy the **Client key** and **Client secret** into `.env` (§2).
+5. Add `https://daysofar.com` under the app's verified domains if you ever want
+   `PULL_FROM_URL` uploads. Not needed for the file upload these scripts do.
+
+**While unaudited, the app only works for accounts you have added as target
+users.** Developer portal → your app → Manage → add @daysofarapp there, or every
+call comes back with an authorisation error that does not say why.
+
+## 2. Environment
+
+Three values in the repo-root `.env`:
+
+```
+TIKTOK_CLIENT_KEY=aw...
+TIKTOK_CLIENT_SECRET=...
+TIKTOK_REDIRECT_URI=https://daysofar.com/tiktok/callback
+```
+
+### The redirect URI is the fiddly part
+
+TikTok matches `redirect_uri` byte for byte against what is registered, and it
+generally refuses to register an `http://localhost` one. Two ways through:
+
+- **Register an https URL on a domain you own** — `https://daysofar.com/tiktok/callback`
+  is fine, **and nothing has to be serving it**. The browser lands there with
+  `?code=…` in the query string; a 404 page carries the code just as well as a
+  real one. `auth.mjs` notices a non-loopback URI and asks you to paste the URL
+  out of the address bar.
+- **Register a loopback URL if your app type allows it** — `http://127.0.0.1:8721/callback`.
+  `auth.mjs` then serves that port itself and catches the code with no copying.
+
+The script supports both and picks based on the hostname. Start with the first;
+it always works.
+
+## 3. Usage
+
+```bash
+# Upload to drafts, then finish in the app.
+node scripts/tiktok/post.mjs content/out/haul-01.mp4
+
+# Post directly. Silently falls back to drafts if video.publish was not granted.
+node scripts/tiktok/post.mjs clip.mp4 --title "I scanned my whole grocery haul" --publish
+
+# Direct post with an explicit privacy level.
+node scripts/tiktok/post.mjs clip.mp4 --publish --privacy PUBLIC_TO_EVERYONE
+```
+
+`post.mjs` queries `creator_info` first — that call is mandatory before every
+post, and it is also the only authoritative source for which privacy levels the
+account may use and how long a video it accepts. A clip over the duration limit
+is refused before the upload rather than after it, and `ffprobe` is used for that
+check when it is on PATH.
+
+## 4. Things that will bite you
+
+**`.tokens.json` is a credential.** It holds a refresh token that can post as
+@daysofarapp for a year. It is gitignored and written `0600`. Do not move it
+somewhere backed up in the clear.
+
+**Every refresh invalidates the previous refresh token.** `lib.mjs` writes the
+new pair back to disk on each refresh. If you copy the token file between
+machines and use both, whichever refreshed last wins and the other is dead.
+
+**TikTok returns HTTP 200 for business failures.** The real outcome is in
+`error.code`, which is the literal string `"ok"` on success. `api()` in
+`lib.mjs` checks it; anything you add must too, or "unaudited client may not do
+that" reads as a successful post.
+
+**Chunking is not free-form.** Chunks are 5–64 MB, at most 1000, the last one
+absorbs the remainder, and `total_chunk_count` is therefore a `floor()` — a
+26 MB file at a 10 MB chunk is *two* chunks (10 + 16), not three. `planChunks`
+handles it; the edge that bites is a 5–10 MB file, where a naive floor gives
+zero chunks and the upload sends nothing.
+
+**A 2xx on the upload only means TikTok has the bytes.** It can still reject the
+video while processing, and the reason appears only in the status poll — which
+is why `post.mjs` waits rather than exiting after the last chunk.
+
+**PKCE, TikTok's way.** The spec says base64url of the SHA-256 digest; TikTok's
+documentation gives hex and rejects the other. `CHALLENGE_ENCODING` at the top
+of `auth.mjs` is the one line to flip if authorisation fails complaining about
+the code challenge.
