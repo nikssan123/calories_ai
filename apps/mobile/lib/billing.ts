@@ -428,7 +428,27 @@ export async function bundles(): Promise<Bundle[]> {
   if (!API_KEY || !Purchases || configuredFor === null) return [];
   let products: PurchasesStoreProduct[] = [];
   try {
-    products = await Purchases.getProducts(BUNDLES.map((bundle) => bundle.id));
+    /*
+     * `NON_SUBSCRIPTION`, explicitly, and this is not a detail.
+     *
+     * `getProducts` takes an optional category and **defaults to
+     * SUBSCRIPTION**. On Play that default is a different query — Billing asks
+     * for subscription products named `photo_10`, `chat_30` and so on, finds
+     * none because they are one-time products, and answers with an empty list
+     * and no error. Both pack sections then hide themselves, exactly as they
+     * would on a store that had not approved them yet, so the failure is
+     * indistinguishable from the state the hiding exists for.
+     *
+     * It cannot be caught on iOS. StoreKit has no such split: it resolves the
+     * identifiers whatever category is asked for, so the same call returned all
+     * five on a simulator while the phone showed nothing. That is why the photo
+     * bundles have never once appeared on Android — not since the UI landed in
+     * `4fd7f06`, and not since the products went live in August.
+     */
+    products = await Purchases.getProducts(
+      BUNDLES.map((bundle) => bundle.id),
+      Purchases.PRODUCT_CATEGORY.NON_SUBSCRIPTION,
+    );
   } catch {
     return [];
   }
