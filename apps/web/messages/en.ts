@@ -97,6 +97,9 @@ export const en = {
   // ---- The composer -------------------------------------------------------
   'composer.placeholder': 'Two eggs and toast…',
   'composer.send': 'Send',
+  'composer.logPackets': 'Log these packets',
+  'composer.packetsStraightIn': 'Straight to your journal, nothing metered',
+  'composer.packetsWithMessage': 'These go with your message',
   'composer.addPhoto': 'Add a photo or scan a packet',
   'composer.takePhoto': 'Take a photo',
   'composer.choosePhoto': 'Choose a photo',

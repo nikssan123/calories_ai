@@ -94,6 +94,9 @@ export const bg: Messages = {
   // ---- The composer -------------------------------------------------------
   'composer.placeholder': 'Две яйца и филия…',
   'composer.send': 'Изпрати',
+  'composer.logPackets': 'Запиши тези продукти',
+  'composer.packetsStraightIn': 'Направо в дневника, без таксуване',
+  'composer.packetsWithMessage': 'Отиват със съобщението ти',
   'composer.addPhoto': 'Добави снимка или сканирай опаковка',
   'composer.takePhoto': 'Направи снимка',
   'composer.choosePhoto': 'Избери снимка',

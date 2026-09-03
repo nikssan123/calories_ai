@@ -98,14 +98,14 @@ export function BarcodeScanner({
    */
   onLabelPhoto: (photo: PreparedPhoto) => void;
   /**
-   * Whether there are words in the composer waiting for these packets.
+   * Whether there are words, or earlier packets, waiting for this one.
    *
-   * The one piece of state that decides what a scan *is*. Mid-sentence, a
-   * packet is a component of something being described, so it goes straight
-   * into the message and the camera stays up. With an empty composer there is
-   * no sentence for it to be part of, so it is the meal itself and gets the
-   * picker it has always had — which is also the free path, since a scan
-   * logged on its own never troubles a model.
+   * Every scan gets the portion card either way; this decides which of its two
+   * buttons leads. Mid-sentence a packet is a component of something being
+   * described, so "Add to message" is the answer and logging it as a meal of
+   * its own is the exception. With an empty composer it is the other way round,
+   * and logging is also the free path — a scan that goes straight to the
+   * journal never troubles a model.
    *
    * Not hidden state: they typed it, a moment ago, on the page underneath.
    */
@@ -158,32 +158,32 @@ export function BarcodeScanner({
   /** Ask the API what the code is, and move to whichever card that implies. */
   const resolve = useCallback(
     async (code: string) => {
+      /*
+       * Claimed here, before the lookup, rather than on the way back out.
+       *
+       * `justRead` is what stops a packet sitting in frame from being read four
+       * times a second, and it has nothing to suppress until this is set. It
+       * used to be set on each of the two ways back to the camera, which was
+       * only correct while one of those ways skipped the portion card entirely;
+       * now every scan goes through the card and comes back, so the guard has
+       * to be armed by the read itself.
+       */
+      settled.current = { code, at: Date.now() };
       setStage({ at: 'looking', code });
       try {
         const product = await api.barcode(code);
         /*
-         * Mid-sentence: into the message, and the camera never stops. Somebody
-         * assembling a burrito out of three packets is holding all three, and a
-         * card between each pair of scans is three dismissals for a meal they
-         * have already described in words.
+         * Every scan stops at the portion card, mid-sentence or not.
          *
-         * No portion goes with it. The sentence carries the amount, and the
-         * chip can be clicked later by anyone who weighed it. The toast is the
-         * only confirmation there is, which is why it names the product: the
-         * viewfinder looks identical afterwards, so without it there would be
-         * no telling one read from two.
+         * It did not, once: a packet read while a message was being assembled
+         * went straight onto it with no amount, on the reasoning that somebody
+         * holding three packets should not have to dismiss three cards. What
+         * that actually produced was a second scan behaving unlike the first
+         * for no reason the person could see — the first packet had asked how
+         * much, and the second quietly decided not to. The amount is the one
+         * thing only they know, so skipping the question is skipping the
+         * feature.
          */
-        if (attaching) {
-          onAttach({ product });
-          toast.success(
-            t('barcode.added')(product.brand ? `${product.brand} ${product.name}` : product.name),
-          );
-          // Dated from the hand-off rather than the read: the lookup is what
-          // took the time, and the camera goes live again on the next line.
-          settled.current = { code, at: Date.now() };
-          setStage({ at: 'scanning' });
-          return;
-        }
         setStage({ at: 'found', product });
       } catch (error) {
         const status = (error as { status?: number }).status;
@@ -196,12 +196,16 @@ export function BarcodeScanner({
           toast.error((error as Error).message);
           // A failure that does not back off is a failure four times a second:
           // the code is still in frame, and the loop restarts on the next line.
-          settled.current = { code, at: Date.now() };
+          // Dated from here rather than from the read, because the lookup is
+          // what took the time.
+          if (settled.current) settled.current.at = Date.now();
           setStage({ at: 'scanning' });
         }
       }
     },
-    [attaching, onAttach, t],
+    // Nothing from the closure now: the packet goes to the portion card rather
+    // than anywhere `attaching`, `onAttach` or `t` could send it from here.
+    [],
   );
 
   /*
@@ -356,15 +360,32 @@ export function BarcodeScanner({
                   onLogged(message);
                 }}
                 /*
-                 * Offered even here, where the composer was empty when the
-                 * camera opened. Somebody who scans first and types after has
-                 * not done anything wrong, and a card whose only exit logs the
-                 * packet as a meal of its own would make them undo it to say
-                 * what it went into.
+                 * Both exits, always. Which one leads is `attaching`'s to say;
+                 * neither is ever hidden, because somebody who scans first and
+                 * types after has not done anything wrong and a card whose only
+                 * exit is the wrong one makes them undo it.
+                 */
+                attaching={attaching}
+                /*
+                 * Back to the camera rather than out of it: this is the button
+                 * pressed by somebody assembling a meal out of several packets,
+                 * and it should leave them where the next one can be read. The
+                 * tally under the viewfinder counts what has landed and holds
+                 * the way out.
                  */
                 onAttach={(portion) => {
                   onAttach({ product: stage.product, ...portion });
-                  onOpenChange(false);
+                  toast.success(
+                    t('barcode.added')(
+                      stage.product.brand
+                        ? `${stage.product.brand} ${stage.product.name}`
+                        : stage.product.name,
+                    ),
+                  );
+                  // Dated from the hand-off rather than the read: the card is
+                  // what took the time, and the camera goes live again below.
+                  if (settled.current) settled.current.at = Date.now();
+                  setStage({ at: 'scanning' });
                 }}
                 onRescan={() => {
                   // Asked for, so the packet in frame is fair game again.
@@ -431,12 +452,13 @@ export function BarcodeScanner({
                 {/*
                   The running total, and the way out.
 
-                  Only mid-sentence: a scan that ends in the portion card has
-                  its own buttons, and a tally under them would be a second
-                  answer to "what happens now". Here there is no card to end the
-                  flow, so something has to say how many landed and where the
-                  door is — and the count is the only correction available for a
-                  packet read twice, since it is what makes the second visible.
+                  Only once something is being assembled: the portion card has
+                  its own two buttons, and a tally beneath them would be a third
+                  answer to "what happens now". Back at the viewfinder there is
+                  nothing to end the flow, so something has to say how many
+                  landed and where the door is — and the count is the only
+                  correction available for a packet read twice, since it is what
+                  makes the second visible.
                 */}
                 {attaching && (
                   <div className="border-border mt-3 flex items-center justify-between gap-3 border-t-2 pt-3">
@@ -581,6 +603,7 @@ function PortionCard({
   onAttach,
   onRescan,
   initial,
+  attaching = false,
 }: {
   product: BarcodeProduct;
   /** Straight to the journal, without a model. Absent when this card is only picking. */
@@ -588,6 +611,11 @@ function PortionCard({
   /** Onto the message being written, for the sentence to give the amount to. */
   onAttach?: (portion: Portioned) => void;
   onRescan?: () => void;
+  /**
+   * Whether a message is already being assembled, which decides only which of
+   * the two buttons leads. Both are here regardless.
+   */
+  attaching?: boolean;
   /** An amount already settled, for a chip being amended rather than a new scan. */
   initial?: Portioned;
 }) {
@@ -749,29 +777,43 @@ function PortionCard({
         />
       )}
 
-      {onLogged && (
-        <Button
-          onClick={() => void log()}
-          disabled={logging}
-          className="h-11 w-full gap-2 rounded-full"
-        >
-          {logging && <Loader2 size={15} className="animate-spin" />}
-          {logging
-            ? t('recipe.logging')
-            : t('recipe.iAteThis')(formatNumber(Math.round(product.kcal_100g * share), locale))}
-        </Button>
-      )}
+      {/*
+        A flex column of its own so `order` has something to reorder — the card
+        around it is `space-y`, which is margins and cannot be permuted.
 
-      {onAttach && (
-        <Button
-          variant={onLogged ? 'secondary' : 'default'}
-          onClick={() => onAttach(portion)}
-          disabled={logging}
-          className="h-11 w-full rounded-full"
-        >
-          {onLogged ? t('barcode.addToMessage') : t('barcode.setTheAmount')}
-        </Button>
-      )}
+        Mid-sentence the packet belongs to the message being written, and
+        logging it separately would split one meal across two entries; on an
+        empty composer there is no sentence for it to join and the journal is
+        one click away. So the likelier answer is the filled button and the
+        other is the quiet one — `order` rather than two branches, because the
+        two buttons are the same two buttons either way.
+      */}
+      <div className="flex flex-col gap-3.5">
+        {onLogged && (
+          <Button
+            onClick={() => void log()}
+            disabled={logging}
+            variant={attaching && onAttach ? 'secondary' : 'default'}
+            className={`h-11 w-full gap-2 rounded-full ${attaching ? 'order-2' : 'order-1'}`}
+          >
+            {logging && <Loader2 size={15} className="animate-spin" />}
+            {logging
+              ? t('recipe.logging')
+              : t('recipe.iAteThis')(formatNumber(Math.round(product.kcal_100g * share), locale))}
+          </Button>
+        )}
+
+        {onAttach && (
+          <Button
+            variant={onLogged && !attaching ? 'secondary' : 'default'}
+            onClick={() => onAttach(portion)}
+            disabled={logging}
+            className={`h-11 w-full rounded-full ${attaching ? 'order-1' : 'order-2'}`}
+          >
+            {onLogged ? t('barcode.addToMessage') : t('barcode.setTheAmount')}
+          </Button>
+        )}
+      </div>
 
       <div className="text-footnote text-muted-foreground flex items-center justify-between gap-3">
         {/*

@@ -1,0 +1,13 @@
+-- The packets scanned into a message, kept with the message.
+--
+-- They already travelled: the codes reach the turn, the panels reach the
+-- prompt, and the model logs them. What never happened is the message itself
+-- remembering them, so a bubble read back the typed half of what was said —
+-- "with a coffee" over an entry naming two packets the sentence never mentions.
+--
+-- Words rather than barcodes, so redrawing a conversation is not a catalogue
+-- lookup per bubble; and no nutrition figures, because the entry the turn wrote
+-- is where a total is allowed to be corrected and a second copy here could not
+-- be. Nullable, like `actions` before it: every row written before today has no
+-- answer to this and an empty array would claim it does.
+ALTER TABLE chat_messages ADD COLUMN scanned JSONB;

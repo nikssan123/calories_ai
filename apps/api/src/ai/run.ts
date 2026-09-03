@@ -383,6 +383,23 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
     input.text,
     input.photo?.id ?? null,
     null,
+    [],
+    /*
+     * The packets, in words, so the bubble can say what was scanned into it.
+     *
+     * A name and an amount and nothing else — the figures are the entry's, and
+     * the entry is what a person corrects when a total looks wrong. Misses are
+     * deliberately not here: a code the catalogue could not answer is not a
+     * packet anybody can be shown, and the reply already says one did not come
+     * back.
+     */
+    (input.scanned ?? []).map(({ product, grams, servings }) => ({
+      barcode: product.barcode,
+      brand: product.brand,
+      name: product.name,
+      grams,
+      servings,
+    })),
   );
   const assistantMessage = await insertMessage(
     input.userId,

@@ -80,6 +80,9 @@ export const de: Messages = {
   // ---- The composer -------------------------------------------------------
   'composer.placeholder': 'Zwei Eier und Toast…',
   'composer.send': 'Senden',
+  'composer.logPackets': 'Diese Packungen eintragen',
+  'composer.packetsStraightIn': 'Direkt ins Tagebuch, nichts wird berechnet',
+  'composer.packetsWithMessage': 'Gehen mit deiner Nachricht mit',
   'composer.addPhoto': 'Foto hinzufügen oder Packung scannen',
   'composer.takePhoto': 'Foto aufnehmen',
   'composer.choosePhoto': 'Foto auswählen',

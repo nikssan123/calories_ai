@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { query } from '../src/db.ts';
 import { appFor, createUser, type TestUser } from './helpers/factories.ts';
+import { agentCalls } from './helpers/agent-mock.ts';
 
 /**
  * The two routes a scan goes through, and the seam between them.
@@ -54,6 +55,36 @@ const SPREAD = {
     },
     serving_size: '15 g',
     serving_quantity: 15,
+  },
+};
+
+/** A catalogue that answers per code, for a basket of more than one packet. */
+function stubCatalogue(byCode: Record<string, unknown>) {
+  vi.stubGlobal('fetch', async (url: string) => {
+    const code = Object.keys(byCode).find((one) => String(url).includes(one));
+    return {
+      ok: code !== undefined,
+      status: code === undefined ? 404 : 200,
+      json: async () => (code === undefined ? {} : byCode[code]),
+    };
+  });
+}
+
+const FLAKES_CODE = '5000112637922';
+const FLAKES = {
+  status: 1,
+  product: {
+    code: FLAKES_CODE,
+    product_name: 'Corn Flakes',
+    brands: 'Kellogg',
+    nutriments: {
+      'energy-kcal_100g': 378,
+      proteins_100g: 7,
+      carbohydrates_100g: 84,
+      fat_100g: 0.9,
+    },
+    serving_size: '40 g',
+    serving_quantity: 40,
   },
 };
 
@@ -285,5 +316,98 @@ describe('POST /barcode/:code/log', () => {
 
     // 13:30 in Sofia, which is lunch.
     expect(response.json().entry).toMatchObject({ meal: 'lunch', local_date: '2026-03-16' });
+  });
+});
+
+/**
+ * A basket, which exists because the second packet used to cost a model call.
+ *
+ * The single-packet route above has always reached the journal without a turn.
+ * With nowhere to log two of them together they went out through the composer
+ * as a message, and a message is a turn — so the price of scanning changed at
+ * the second packet for no reason anybody could see from the shelf.
+ */
+describe('POST /barcode/log', () => {
+  it('logs several packets as one meal, and never calls a model', async () => {
+    stubCatalogue({ [CODE]: SPREAD, [FLAKES_CODE]: FLAKES });
+    const response = await post('/barcode/log', {
+      items: [
+        { barcode: CODE, grams: 30 },
+        { barcode: FLAKES_CODE, servings: 2 },
+      ],
+      meal: 'breakfast',
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json().entry).toMatchObject({
+      meal: 'breakfast',
+      source: 'barcode',
+      // Earned rather than assumed: every figure in this entry came off a
+      // printed panel and every amount was chosen by a person.
+      confidence: 'high',
+      description: 'Ferrero Hazelnut spread, Kellogg Corn Flakes',
+    });
+
+    // One entry with an item each, not two entries: a yoghurt and a granola bar
+    // scanned together are one snack.
+    expect(await entries()).toMatchObject([
+      { quantity_g: 30, quantity_desc: '30 g' },
+      { quantity_g: 80, quantity_desc: '2 servings (80 g) — 40 g' },
+    ]);
+
+    // The whole point. Nothing here is an estimate, so nothing here is a turn.
+    expect(agentCalls).toHaveLength(0);
+  });
+
+  it('writes the journal message itself, with the card that lists both', async () => {
+    stubCatalogue({ [CODE]: SPREAD, [FLAKES_CODE]: FLAKES });
+    await post('/barcode/log', {
+      items: [
+        { barcode: CODE, grams: 30 },
+        { barcode: FLAKES_CODE, grams: 40 },
+      ],
+    });
+
+    const [message] = await journal();
+    expect(message.content).toBe('Scanned — Ferrero Hazelnut spread, Kellogg Corn Flakes.');
+    // No portion in the sentence for a basket: the card lists the items with
+    // their amounts, and repeating them would be saying it twice.
+    expect(message.content).not.toContain('30 g');
+  });
+
+  it('reads like the single route when the basket holds one packet', async () => {
+    stubCatalogue({ [CODE]: SPREAD });
+    await post('/barcode/log', { items: [{ barcode: CODE, grams: 30 }] });
+
+    // Here the card *cannot* say it — it lists items only when there is more
+    // than one — so the sentence has to, on the feature whose point is amount.
+    const [message] = await journal();
+    expect(message.content).toBe('Scanned — Ferrero Hazelnut spread, 30 g.');
+  });
+
+  it('refuses the whole basket when one packet cannot be looked up', async () => {
+    stubCatalogue({ [CODE]: SPREAD });
+    const response = await post('/barcode/log', {
+      items: [
+        { barcode: CODE, grams: 30 },
+        { barcode: FLAKES_CODE, grams: 40 },
+      ],
+    });
+
+    expect(response.statusCode).toBe(404);
+    // Logging the rest quietly would put a meal in the journal that is short an
+    // item, and its totals would look like a real answer.
+    expect(await entries()).toHaveLength(0);
+    expect(await journal()).toHaveLength(0);
+  });
+
+  it.each([
+    { items: [] },
+    { items: [{ barcode: CODE }] },
+    { items: [{ barcode: CODE, grams: 30, servings: 2 }] },
+    { items: Array.from({ length: 9 }, () => ({ barcode: CODE, grams: 30 })) },
+  ])('rejects a bad basket %#', async (payload) => {
+    stubCatalogue({ [CODE]: SPREAD });
+    expect((await post('/barcode/log', payload)).statusCode).toBe(400);
   });
 });

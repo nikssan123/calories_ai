@@ -79,6 +79,9 @@ export const es: Messages = {
   // ---- The composer -------------------------------------------------------
   'composer.placeholder': 'Dos huevos y una tostada…',
   'composer.send': 'Enviar',
+  'composer.logPackets': 'Registrar estos productos',
+  'composer.packetsStraightIn': 'Directo a tu diario, sin consumo',
+  'composer.packetsWithMessage': 'Van con tu mensaje',
   'composer.addPhoto': 'Añadir una foto o escanear un envase',
   'composer.takePhoto': 'Hacer una foto',
   'composer.choosePhoto': 'Elegir una foto',

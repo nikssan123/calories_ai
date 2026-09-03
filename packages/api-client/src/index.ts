@@ -3,6 +3,7 @@ import type {
   Acknowledged,
   AdaptiveProposal,
   Allowance,
+  BarcodeBasketRequest,
   BarcodeLogRequest,
   BarcodeLogResponse,
   BarcodeProduct,
@@ -695,6 +696,21 @@ export function createApiClient({
       request<BarcodeLogResponse>(`/barcode/${encodeURIComponent(code)}/log`, {
         method: 'POST',
         body: JSON.stringify(portion),
+      }),
+
+    /**
+     * Several packets as one meal, and still without a model.
+     *
+     * The composer's route when the only thing on the message is packets. A
+     * basket of printed panels times amounts a person chose is the same
+     * arithmetic as one of them, so it has no more business going through a
+     * turn than a single scan ever did. Words on the message change that and
+     * send it to `chat` instead.
+     */
+    logBarcodes: (basket: BarcodeBasketRequest) =>
+      request<BarcodeLogResponse>('/barcode/log', {
+        method: 'POST',
+        body: JSON.stringify(basket),
       }),
 
     /**

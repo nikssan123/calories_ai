@@ -816,6 +816,37 @@ describe('packets scanned into the message', () => {
     expect(mine?.content).not.toContain('312');
   });
 
+  it('remembers the packets on the message, in words', async () => {
+    scriptAgent({ text: 'Logged.' });
+    await scannedTurn('burrito I made — two tortillas', [
+      { product: tortillas, servings: 2 },
+    ]);
+
+    const messages = await listMessages(user.id);
+    const mine = messages.find((m) => m.role === 'user');
+    // The bubble has to be able to say what was scanned into it. Without this
+    // the reply names a tortilla the message above it never mentions.
+    expect(mine?.scanned).toEqual([
+      {
+        barcode: '5000112637922',
+        brand: 'Old El Paso',
+        name: 'Soft Tortillas Original',
+        servings: 2,
+      },
+    ]);
+    // The panel is not copied here. The figures belong to the entry the turn
+    // wrote, which is the one a person can correct.
+    expect(JSON.stringify(mine?.scanned)).not.toContain('312');
+  });
+
+  it('remembers nothing about a packet the catalogue could not answer', async () => {
+    scriptAgent({ text: 'Logged.' });
+    await scannedTurn('burrito', [], 2);
+
+    const messages = await listMessages(user.id);
+    expect(messages.find((m) => m.role === 'user')?.scanned).toEqual([]);
+  });
+
   it('adds nothing to a turn that scanned nothing', async () => {
     scriptAgent({ text: 'Logged.' });
     await turn('two eggs and toast');

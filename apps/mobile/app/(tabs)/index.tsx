@@ -29,11 +29,19 @@ import type {
   DaySummary,
   FoodItemInput,
   Meal,
+  MessageScan,
   UnitSystem,
 } from '@ct/shared';
-import { formatNumber, inferMeal, isDeletion, unitsOf } from '@ct/shared';
+import {
+  formatMass,
+  formatNumber,
+  formatServings,
+  inferMeal,
+  isDeletion,
+  unitsOf,
+} from '@ct/shared';
 import { ChatActionCard } from '@/components/ChatCard';
-import { Composer, type ComposerPayload } from '@/components/Composer';
+import { BarcodeGlyph, Composer, type ComposerPayload } from '@/components/Composer';
 import { FoodEditor } from '@/components/FoodEditor';
 import { Markdown } from '@/components/Markdown';
 import { Material } from '@/components/Material';
@@ -54,6 +62,7 @@ import { haptics } from '@/lib/haptics';
 import { onEntryRemoved } from '@/lib/removals';
 import { writeDaySnapshot } from '@/lib/snapshot';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
+import { useUnits } from '@/lib/units';
 
 /** Optimistic rows carry a local id until the server assigns the real one. */
 interface Bubble {
@@ -64,6 +73,14 @@ interface Bubble {
   pending?: boolean;
   failed?: boolean;
   actions?: ChatAction[];
+  /**
+   * Packets scanned into this message, as words rather than as codes.
+   *
+   * Drawn under the sentence they were assembled with, because without them
+   * the bubble is only the typed half of what was said and the reply below it
+   * names foods that appear nowhere above.
+   */
+  scanned?: MessageScan[];
   /**
    * This turn just happened, rather than having been read back from the
    * server. The only thing it changes is whether a correction wears its ring:
@@ -552,7 +569,13 @@ export default function JournalScreen() {
       // anything appears would break the "continuous conversation" feel.
       setBubbles((prev) => [
         ...prev,
-        { key: localKey, role: 'user', content: payload.text, photoUrl: payload.photoPreview },
+        {
+          key: localKey,
+          role: 'user',
+          content: payload.text,
+          photoUrl: payload.photoPreview,
+          scanned: payload.scannedPreview,
+        },
         { key: replyKey, role: 'assistant', content: '', pending: true },
       ]);
       setBusy(true);
@@ -648,6 +671,12 @@ export default function JournalScreen() {
                 photoUrl: result.user_message.photo_url
                   ? api.photoUrl(result.user_message.photo_url)
                   : b.photoUrl,
+                // Same guard: an API that has not learned to store these still
+                // leaves the optimistic chips exactly where they were.
+                scanned:
+                  result.user_message.scanned.length > 0
+                    ? result.user_message.scanned
+                    : b.scanned,
               };
             }
             return b;
@@ -987,6 +1016,7 @@ function toBubble(message: ChatMessage): Bubble {
     content: message.content,
     photoUrl: message.photo_url ? api.photoUrl(message.photo_url) : undefined,
     actions: message.actions,
+    scanned: message.scanned,
   };
 }
 
@@ -1110,6 +1140,42 @@ function Bar({ pct, color }: { pct: number; color: string }) {
  * `onLogged` held stable by the caller this narrows each delta to the one row
  * it actually touches.
  */
+/**
+ * One packet, as it reads back on a message already sent.
+ *
+ * The composer's chip without its controls: nothing here can be tapped, and
+ * there is nothing to remove — the turn happened, and the entry it wrote is
+ * where a wrong amount gets corrected now. The barcode glyph stays, because it
+ * is the only thing that says this line came off a packet rather than out of
+ * the sentence above it.
+ */
+function SentScan({ scan }: { scan: MessageScan }) {
+  const colors = useColors();
+  const units = useUnits();
+  const name = scan.brand ? `${scan.brand} ${scan.name}` : scan.name;
+  const amount =
+    scan.grams !== undefined
+      ? formatMass(scan.grams, units)
+      : scan.servings !== undefined
+        ? formatServings(scan.servings)
+        : null;
+
+  return (
+    <View style={[styles.sentScan, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <BarcodeGlyph color={colors.mutedForeground} size={13} />
+      <Text
+        numberOfLines={1}
+        style={[t.footnoteSemibold, styles.sentScanName, { color: colors.foreground }]}
+      >
+        {name}
+        {amount !== null && (
+          <Text style={[t.footnote, { color: colors.mutedForeground }]}>{` · ${amount}`}</Text>
+        )}
+      </Text>
+    </View>
+  );
+}
+
 const Row = memo(function Row({
   bubble,
   today,
@@ -1149,6 +1215,22 @@ const Row = memo(function Row({
                   {bubble.content}
                 </Text>
               </View>
+            </View>
+          )}
+          {/*
+            The packets, under the sentence they were scanned into.
+
+            Outside the bubble rather than inside it: what is in the bubble is
+            what this person wrote, and a scan is something they did. Same
+            reasoning as the photo above, which has always sat outside for the
+            same reason — and it keeps the chips readable, since a barcode name
+            is often longer than the line it would have to share.
+          */}
+          {bubble.scanned && bubble.scanned.length > 0 && (
+            <View style={styles.sentScans}>
+              {bubble.scanned.map((scan) => (
+                <SentScan key={scan.barcode} scan={scan} />
+              ))}
             </View>
           )}
         </View>
@@ -1436,6 +1518,18 @@ const styles = StyleSheet.create({
   prompt: { borderWidth: 2, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
   promptLabel: { fontFamily: font.bold, fontSize: 14, lineHeight: 20 },
   userRow: { alignItems: 'flex-end' },
+  sentScans: { alignSelf: 'flex-end', alignItems: 'flex-end', gap: 6, maxWidth: '100%' },
+  sentScan: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    maxWidth: '100%',
+    borderWidth: 2,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  sentScanName: { flexShrink: 1 },
   userStack: { maxWidth: '85%', alignItems: 'flex-end', gap: 8 },
   /*
    * Square, where the web keeps the photo's own proportions under a `max-h-72`.

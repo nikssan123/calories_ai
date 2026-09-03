@@ -1,15 +1,17 @@
 'use client';
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { ScanBarcode } from 'lucide-react';
 import { toast } from 'sonner';
 import type {
   ChatAction,
   ChatMessage,
   ChatStreamEvent,
   DaySummary,
+  MessageScan,
   UnitSystem,
 } from '@ct/shared';
-import { formatNumber, isDeletion, unitsOf } from '@ct/shared';
+import { formatMass, formatNumber, formatServings, isDeletion, unitsOf } from '@ct/shared';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
 import { api } from '@/lib/api';
 import { asBlob } from '@/lib/image';
@@ -20,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/components/AuthGate';
 import { DayRail } from '@/components/DayRail';
 import { cn } from '@/lib/utils';
+import { useUnits } from '@/lib/units';
 
 /** Optimistic rows carry a local id until the server assigns the real one. */
 interface Bubble {
@@ -30,6 +33,14 @@ interface Bubble {
   pending?: boolean;
   failed?: boolean;
   actions?: ChatAction[];
+  /**
+   * Packets scanned into this message, as words rather than as codes.
+   *
+   * Drawn under the sentence they were assembled with, because without them
+   * the bubble is only the typed half of what was said and the reply below it
+   * names foods that appear nowhere above.
+   */
+  scanned?: MessageScan[];
   /**
    * The tool the model is running right now, while this row is still pending.
    * Set from the stream and cleared when text starts arriving again, so the
@@ -205,7 +216,13 @@ export function Journal() {
     // anything appears would break the "continuous conversation" feel.
     setBubbles((prev) => [
       ...prev,
-      { key: localKey, role: 'user', content: payload.text, photoUrl: payload.photoPreview },
+      {
+        key: localKey,
+        role: 'user',
+        content: payload.text,
+        photoUrl: payload.photoPreview,
+        scanned: payload.scannedPreview,
+      },
       { key: `${localKey}-reply`, role: 'assistant', content: '', pending: true },
     ]);
     setBusy(true);
@@ -519,6 +536,36 @@ function strike(bubbles: Bubble[], entryId: string): Bubble[] {
 }
 
 /**
+ * One packet, as it reads back on a message already sent.
+ *
+ * The composer's chip without its controls: nothing here can be clicked, and
+ * there is nothing to remove — the turn happened, and the entry it wrote is
+ * where a wrong amount gets corrected now. The barcode glyph stays, because it
+ * is the only thing that says this line came off a packet rather than out of
+ * the sentence above it.
+ */
+function SentScan({ scan }: { scan: MessageScan }) {
+  const units = useUnits();
+  const name = scan.brand ? `${scan.brand} ${scan.name}` : scan.name;
+  const amount =
+    scan.grams !== undefined
+      ? formatMass(scan.grams, units)
+      : scan.servings !== undefined
+        ? formatServings(scan.servings)
+        : null;
+
+  return (
+    <span className="border-border bg-card text-footnote flex max-w-full items-center gap-2 rounded-full border-2 px-3 py-1">
+      <ScanBarcode size={13} className="text-muted-foreground shrink-0" />
+      <span className="truncate font-semibold">
+        {name}
+        {amount !== null && <span className="text-muted-foreground font-normal"> · {amount}</span>}
+      </span>
+    </span>
+  );
+}
+
+/**
  * A stored message as a bubble. `actions` comes back from the server with the
  * turn, so a reopened conversation still shows the cards it was answered with
  * rather than degrading to plain text.
@@ -530,6 +577,7 @@ function toBubble(message: ChatMessage): Bubble {
     content: message.content,
     photoUrl: message.photo_url ? api.photoUrl(message.photo_url) : undefined,
     actions: message.actions,
+    scanned: message.scanned,
   };
 }
 
@@ -650,6 +698,22 @@ const Bubble = memo(function Bubble({
             <p className="bg-primary text-primary-foreground chunk [--chunk-color:var(--calories-deep)] [--chunk-depth:3px] rounded-[1.375rem] rounded-br-lg px-4 py-2.5 text-body leading-relaxed font-semibold">
               {bubble.content}
             </p>
+          )}
+          {/*
+            The packets, under the sentence they were scanned into.
+
+            Outside the bubble rather than inside it: what is in the bubble is
+            what this person wrote, and a scan is something they did. Same
+            reasoning as the photo above, which has always sat outside for the
+            same reason — and it keeps the chips readable, since a barcode name
+            is often longer than the line it would have to share.
+          */}
+          {bubble.scanned && bubble.scanned.length > 0 && (
+            <div className="flex max-w-full flex-col items-end gap-1.5">
+              {bubble.scanned.map((scan) => (
+                <SentScan key={scan.barcode} scan={scan} />
+              ))}
+            </div>
           )}
         </div>
       </div>

@@ -52,10 +52,12 @@ const REPEAT_MS = 2500;
 /**
  * A packet on its way into a message, rather than into the log.
  *
- * The amount is optional and its absence is the normal case: somebody who has
- * already written "half a tin of beans" has said how much, and a picker that
- * insists on hearing it again is asking twice. It is here when they set it
- * deliberately, and then it outranks the sentence.
+ * The amount is optional in the type and present in practice — every scan now
+ * passes the picker, so one of the two is always set. What the optionality is
+ * still for is a chip written by an older build of the app, where a packet
+ * could join a sentence without one, and for the sentence itself: somebody who
+ * wrote "half a tin of beans" has already said how much, and a chip with no
+ * amount reads as a deferral to those words rather than as a gap.
  */
 export interface Scan {
   product: BarcodeProduct;
@@ -95,14 +97,14 @@ export function BarcodeScanner({
    */
   onLabelPhoto: (photo: PreparedPhoto) => void;
   /**
-   * Whether there are words in the composer waiting for these packets.
+   * Whether there are words, or earlier packets, waiting for this one.
    *
-   * The one piece of state that decides what a scan *is*. Mid-sentence, a
-   * packet is a component of something being described, so it goes straight
-   * into the message and the camera stays up. With an empty composer there is
-   * no sentence for it to be part of, so it is the meal itself and gets the
-   * picker it has always had — which is also the free path, since a scan
-   * logged on its own never troubles a model.
+   * Every scan gets the picker either way; this decides which of its two
+   * buttons leads. Mid-sentence a packet is a component of something being
+   * described, so "Add to message" is the answer and logging it as a meal of
+   * its own is the exception. With an empty composer it is the other way round,
+   * and logging is also the free path — a scan that goes straight to the
+   * journal never troubles a model.
    *
    * Not hidden state: they typed it, a moment ago, on the screen underneath.
    */
@@ -192,24 +194,16 @@ export function BarcodeScanner({
     try {
       const product = await api.barcode(code);
       /*
-       * Mid-sentence: into the message, and the camera never leaves. Somebody
-       * assembling a burrito out of three packets is holding all three, and a
-       * sheet between each pair of scans is three dismissals for a meal they
-       * have already described in words.
+       * Every scan stops at the picker, mid-sentence or not.
        *
-       * No portion goes with it. The sentence carries the amount, and the chip
-       * can be tapped later by anyone who weighed it.
+       * It did not, once: a packet read while a message was being assembled
+       * went straight onto it with no amount, on the reasoning that somebody
+       * holding three packets should not have to dismiss three sheets. What
+       * that actually produced was a second scan behaving unlike the first for
+       * no reason the person could see — the first packet had asked how much,
+       * and the second quietly decided not to. The amount is the one thing only
+       * they know, so skipping the question is skipping the feature.
        */
-      if (attaching) {
-        onAttach({ product });
-        flash(product.brand ? `${product.brand} ${product.name}` : product.name);
-        // The lookup spent part of the window. Restart it from the hand-off,
-        // which is the moment the camera goes live again.
-        settled.current = { code, at: Date.now() };
-        claimed.current = false;
-        setStage({ at: 'scanning' });
-        return;
-      }
       setStage({ at: 'found', product });
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) {
@@ -220,7 +214,10 @@ export function BarcodeScanner({
         claimed.current = false;
       }
     }
-  }, [attaching, onAttach, flash]);
+    // `tr` alone now: the packet no longer goes anywhere from here, it goes to
+    // the picker, so neither `attaching` nor `onAttach` is read in this
+    // callback any more.
+  }, [tr]);
 
   function rescan() {
     claimed.current = false;
@@ -240,11 +237,25 @@ export function BarcodeScanner({
     onClose();
   }
 
-  /** A packet the picker settled an amount for. Deliberate, so the sheet ends. */
+  /**
+   * A packet the picker settled an amount for, onto the message.
+   *
+   * Back to the camera rather than out of it: this is the button somebody
+   * assembling a meal out of several packets presses, and it should leave them
+   * where the next one can be read. The tally along the bottom counts what has
+   * landed and holds the way out, so nothing here has to guess whether they
+   * are finished.
+   */
   function attach(product: BarcodeProduct, portion: Portioned) {
     onAttach({ product, ...portion });
     haptics.logged();
-    close();
+    flash(product.brand ? `${product.brand} ${product.name}` : product.name);
+    // The picker spent the repeat window. Restart it from here, which is the
+    // moment the same packet — very possibly still in frame — could fire again.
+    if (settled.current) settled.current.at = Date.now();
+    claimed.current = false;
+    setError(null);
+    setStage({ at: 'scanning' });
   }
 
   /**
@@ -380,20 +391,38 @@ export function BarcodeScanner({
         ) : stage.at === 'found' ? (
           <Portion
             product={stage.product}
-            primary={{
-              label: tr('barcode.iAteThis'),
-              onPress: (portion) => void logIt(stage.product, portion),
-            }}
             /*
-             * Offered even here, where the composer was empty when the camera
-             * opened. Somebody who scans first and types after has not done
-             * anything wrong, and a sheet whose only exit logs the packet as a
-             * meal of its own would make them undo it to say what it went into.
+             * Both exits, always, with the likelier one on top.
+             *
+             * Mid-sentence the packet belongs to the message being written and
+             * logging it separately would split one meal across two entries; on
+             * an empty composer there is no sentence for it to join, and the
+             * journal is one tap away. Neither is ever hidden, though — someone
+             * who scans first and types after has not done anything wrong, and
+             * a card whose only exit is the wrong one makes them undo it.
              */
-            secondary={{
-              label: tr('barcode.addToMessage'),
-              onPress: (portion) => attach(stage.product, portion),
-            }}
+            primary={
+              attaching
+                ? {
+                    label: tr('barcode.addToMessage'),
+                    onPress: (portion) => attach(stage.product, portion),
+                  }
+                : {
+                    label: tr('barcode.iAteThis'),
+                    onPress: (portion) => void logIt(stage.product, portion),
+                  }
+            }
+            secondary={
+              attaching
+                ? {
+                    label: tr('barcode.iAteThis'),
+                    onPress: (portion) => void logIt(stage.product, portion),
+                  }
+                : {
+                    label: tr('barcode.addToMessage'),
+                    onPress: (portion) => attach(stage.product, portion),
+                  }
+            }
             onRescan={rescan}
             busy={logging}
             busyLabel={tr('recipe.logging')}
@@ -405,12 +434,13 @@ export function BarcodeScanner({
         {/*
           The running total, and the way out.
 
-          Only while the camera is up, and only mid-sentence: a scan that ends
-          in the picker has its own buttons, and a tally under them would be a
-          second answer to "what happens now". Here there is no sheet to end
-          the flow, so something has to say how many landed and where the door
-          is — the count is also the only correction available for a packet
-          scanned twice, since it is what makes the second one visible.
+          Only while the camera is up, and only once something is being
+          assembled: the picker has its own two buttons, and a tally beneath
+          them would be a third answer to "what happens now". Back at the
+          viewfinder there is nothing to end the flow, so something has to say
+          how many landed and where the door is — and the count is the only
+          correction available for a packet scanned twice, since it is what
+          makes the second one visible.
         */}
         {attaching && (stage.at === 'scanning' || stage.at === 'looking') && (
           <View

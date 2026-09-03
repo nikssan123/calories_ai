@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Circle, Path, Polyline, Rect } from 'react-native-svg';
-import type { ChatMessage, PhotoMediaType, ScannedAttachment, UnitSystem } from '@ct/shared';
+import type {
+  ChatMessage,
+  MessageScan,
+  PhotoMediaType,
+  ScannedAttachment,
+  UnitSystem,
+} from '@ct/shared';
 import { formatMass, formatServings } from '@ct/shared';
 import { Material } from '@/components/Material';
 import { Sheet } from '@/components/Field';
@@ -13,6 +19,9 @@ import { useSharedPhoto } from '@/lib/share';
 import { useUnits } from '@/lib/units';
 import { useDictation } from '@/lib/voice';
 import { useT, type StringKey } from '@/lib/i18n';
+import { useToast } from '@/components/Toast';
+import { api } from '@/lib/api';
+import { messageOf } from '@/lib/errors';
 
 export interface ComposerPayload {
   text: string;
@@ -29,6 +38,16 @@ export interface ComposerPayload {
    * which packets, and how much of each, where they said.
    */
   scanned?: ScannedAttachment[];
+  /**
+   * The same packets in words, so the sent bubble can name them immediately.
+   *
+   * The twin of `photoPreview`, and for the same reason: the server's own row
+   * is the truth and arrives with the turn, which is several seconds of a
+   * message that says "with a coffee" and shows no sign of the two packets it
+   * was assembled from. These are the chips that were sitting above the field a
+   * moment ago, carried across so the bubble looks like what was sent.
+   */
+  scannedPreview?: MessageScan[];
 }
 
 /**
@@ -61,6 +80,7 @@ export function Composer({
 }) {
   const colors = useColors();
   const tr = useT();
+  const toast = useToast();
   const [text, setText] = useState('');
   const [photo, setPhoto] = useState<PreparedPhoto | null>(null);
   const [scanned, setScanned] = useState<Scan[]>([]);
@@ -112,12 +132,15 @@ export function Composer({
   const canSend = (text.trim().length > 0 || photo !== null || scanned.length > 0) && !disabled;
 
   /*
-   * Whether a scan should join the message or become one.
+   * Whether a scan is likelier to join the message than to become one.
    *
    * Words already written, or packets already attached, mean a message is being
    * assembled and the next scan is a component of it. An empty composer means
-   * there is no sentence for a packet to be part of, so it gets the picker and
-   * the free path to the journal that has always been behind it.
+   * there is no sentence for a packet to be part of, and the free path straight
+   * to the journal is right there behind it.
+   *
+   * Which of the two leads, only — every scan gets the picker, and both exits
+   * are on it either way.
    */
   const attaching = text.trim().length > 0 || scanned.length > 0;
 
@@ -133,9 +156,49 @@ export function Composer({
    */
   const talking = dictation.supported && (dictation.listening || !canSend);
 
+  /*
+   * Packets and nothing else: straight to the journal, with no model in it.
+   *
+   * This is the same claim the scanner's own "I ate this" button makes, and it
+   * has to be made here too or the feature quietly changes price at two
+   * packets — a basket with no sentence around it would go out as a message,
+   * and a message is a turn. A printed panel times an amount somebody chose is
+   * arithmetic whether there is one of them or four.
+   *
+   * A photo or a sentence is what genuinely needs reading, and either one sends
+   * this the ordinary way.
+   */
+  const packetsOnly = scanned.length > 0 && photo === null && text.trim().length === 0;
+
+  async function logPackets() {
+    setBusy(true);
+    try {
+      const { message } = await api.logBarcodes({
+        items: scanned.map((scan) => ({
+          barcode: scan.product.barcode,
+          grams: scan.grams,
+          servings: scan.servings,
+        })),
+      });
+      setScanned([]);
+      onLogged(message);
+    } catch (e) {
+      // Left on the message rather than dropped: the chips are the only record
+      // of what was scanned, and clearing them would make retrying mean
+      // rescanning the shelf.
+      toast.error(messageOf(e, tr));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function submit() {
-    if (!canSend) return;
+    if (!canSend || busy) return;
     if (dictation.listening) dictation.stop();
+    if (packetsOnly) {
+      void logPackets();
+      return;
+    }
     onSend({
       // A photo on its own is a valid log — give the model a default instruction.
       text: text.trim() || "Here's what I'm eating — log it.",
@@ -146,6 +209,16 @@ export function Composer({
         scanned.length > 0
           ? scanned.map((scan) => ({
               barcode: scan.product.barcode,
+              grams: scan.grams,
+              servings: scan.servings,
+            }))
+          : undefined,
+      scannedPreview:
+        scanned.length > 0
+          ? scanned.map((scan) => ({
+              barcode: scan.product.barcode,
+              brand: scan.product.brand,
+              name: scan.product.name,
               grams: scan.grams,
               servings: scan.servings,
             }))
@@ -256,6 +329,29 @@ export function Composer({
               onRemove={() => setScanned((held) => held.filter((_, i) => i !== index))}
             />
           ))}
+          {/*
+            What the button is about to do, said before it is pressed.
+
+            Packets on their own go straight to the journal and cost nothing —
+            a printed panel times an amount somebody chose is arithmetic, and
+            there is nothing here for a model to read. Typing a word changes
+            that, because a sentence does have to be read.
+
+            So the line is written to change under them as they type. Nobody
+            reads a paragraph about metering, but a line that moves when you
+            touch the keyboard teaches the rule in one keystroke — and it is
+            the only place in the app where the same button has two prices.
+          */}
+          <View style={styles.route}>
+            <Text
+              style={[
+                t.footnoteSemibold,
+                { color: packetsOnly ? colors.primary : colors.mutedForeground },
+              ]}
+            >
+              {packetsOnly ? tr('composer.packetsStraightIn') : tr('composer.packetsWithMessage')}
+            </Text>
+          </View>
         </View>
       )}
 
@@ -352,9 +448,9 @@ export function Composer({
             // for it. A light impact on the way out only crowds that, and it
             // fires on every sentence — the thing this composer is for.
             haptic={false}
-            disabled={!canSend}
+            disabled={!canSend || busy}
             accessibilityRole="button"
-            accessibilityLabel={tr('composer.send')}
+            accessibilityLabel={packetsOnly ? tr('composer.logPackets') : tr('composer.send')}
             // `disabled:opacity-30`, rather than the 0.5 a disabled chunk
             // carries by default. On a phone with no recogniser this is still
             // the resting state of an empty composer, and at 0.5 it reads as a
@@ -362,9 +458,17 @@ export function Composer({
             style={{ opacity: canSend ? 1 : 0.3 }}
             contentStyle={[styles.send, { backgroundColor: colors.primary }]}
           >
+            {/*
+              A tick rather than an arrow when there is nothing to send.
+
+              The arrow means "this goes off to be answered", which is exactly
+              what does not happen to a basket of packets — they are already
+              understood, and pressing this files them. Same button, same place,
+              honest about which of the two it is this time.
+            */}
             <Svg width={21} height={21} viewBox="0 0 24 24">
               <Path
-                d="M12 19V5M5 12l7-7 7 7"
+                d={packetsOnly ? 'M4 12.5 9.5 18 20 6.5' : 'M12 19V5M5 12l7-7 7 7'}
                 stroke={colors.primaryForeground}
                 strokeWidth={3}
                 strokeLinecap="round"
@@ -508,15 +612,7 @@ function Chip({
         hitSlop={{ top: 8, bottom: 8, left: 8 }}
         style={({ pressed }) => [styles.chipBody, { opacity: pressed ? 0.6 : 1 }]}
       >
-        <Svg width={14} height={14} viewBox="0 0 24 24">
-          <Path
-            d="M3 5v14M6 5v14M10 5v14M14 5v11M18 5v14M21 5v14"
-            stroke={colors.mutedForeground}
-            strokeWidth={2}
-            strokeLinecap="round"
-            fill="none"
-          />
-        </Svg>
+        <BarcodeGlyph color={colors.mutedForeground} />
         <Text
           numberOfLines={1}
           style={[t.footnoteSemibold, styles.chipName, { color: colors.foreground }]}
@@ -585,15 +681,7 @@ function Choice({
       {icon === 'camera' ? (
         <CameraGlyph color={colors.foreground} size={18} />
       ) : icon === 'barcode' ? (
-        <Svg width={18} height={18} viewBox="0 0 24 24">
-          <Path
-            d="M3 5v14M6 5v14M10 5v14M14 5v11M18 5v14M21 5v14"
-            stroke={colors.foreground}
-            strokeWidth={2}
-            strokeLinecap="round"
-            fill="none"
-          />
-        </Svg>
+        <BarcodeGlyph color={colors.foreground} size={18} />
       ) : (
         <Svg width={18} height={18} viewBox="0 0 24 24">
           <Rect
@@ -651,6 +739,27 @@ function MicGlyph({ color, size = 21 }: { color: string; size?: number }) {
   );
 }
 
+/**
+ * The stripes, at whatever size is asking.
+ *
+ * Exported because the same mark has to appear on a chip above the field, in
+ * the attach sheet, and again on the message once it is sent — and a fourth
+ * hand-copied path is how three of them quietly stop matching.
+ */
+export function BarcodeGlyph({ color, size = 14 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        d="M3 5v14M6 5v14M10 5v14M14 5v11M18 5v14M21 5v14"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        fill="none"
+      />
+    </Svg>
+  );
+}
+
 function CameraGlyph({ color, size = 22 }: { color: string; size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
@@ -690,6 +799,9 @@ const styles = StyleSheet.create({
   },
   send: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 999 },
   chips: { alignItems: 'flex-start', gap: 8, marginLeft: 44, marginBottom: 8 },
+  // Tucked under the last chip rather than spaced like one: it is a caption on
+  // the stack above it, not another item in it.
+  route: { marginTop: -2 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',

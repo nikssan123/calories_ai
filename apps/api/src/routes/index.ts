@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
+  BarcodeBasketRequest,
   BarcodeLogRequest,
   ChatRequest,
   DeleteAccountRequest,
@@ -40,6 +41,7 @@ import {
   InvalidBarcodeError,
   InvalidPortionError,
   logScannedProduct,
+  logScannedProducts,
   lookupBarcode,
   portionPhrase,
 } from '../services/barcode.ts';
@@ -853,6 +855,91 @@ export async function registerRoutes(app: FastifyInstance) {
       }
     },
   );
+
+  /**
+   * The same thing for a basket, and the reason it exists is a bill.
+   *
+   * One packet scanned into an empty composer has always reached the journal
+   * without a model: a printed panel times an amount somebody chose is
+   * arithmetic, and charging a turn for it would be charging for addition. Two
+   * packets were a different story only by accident — with no route to log
+   * them together they went out through the composer, and the composer sends
+   * messages, and a message is a model call. Nothing about a second barcode
+   * makes the sum harder.
+   *
+   * A sentence beside them is what genuinely changes it, and that still goes
+   * to `/chat`: words have to be read by something that can read.
+   */
+  app.post('/barcode/log', { config: { rateLimit: BARCODE_BURST } }, async (request, reply) => {
+    const parsed = BarcodeBasketRequest.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid basket' });
+    }
+
+    const { userId, units, ...ctx } = await getUserContext(request.userId!);
+    try {
+      /*
+       * All of them, or none.
+       *
+       * Every code here was looked up minutes ago to become a chip, and a hit
+       * is cached for a season, so a miss at this point means the catalogue
+       * genuinely lost the product or genuinely could not be reached. Logging
+       * the rest and saying nothing would put a meal in the journal that is
+       * quietly short an item — and the totals would look like a real answer.
+       */
+      const scans = [];
+      for (const item of parsed.data.items) {
+        const product = await lookupBarcode(item.barcode);
+        if (!product) {
+          return reply
+            .status(404)
+            .send({ error: `Nobody has catalogued ${item.barcode} yet — take it off the message` });
+        }
+        scans.push({ product, grams: item.grams, servings: item.servings });
+      }
+
+      const entry = await logScannedProducts(userId, scans, {
+        meal: parsed.data.meal,
+        eatenAt: parsed.data.eaten_at ? new Date(parsed.data.eaten_at) : undefined,
+        ctx,
+        units,
+      });
+
+      /*
+       * And into the conversation, exactly as the single-packet route does —
+       * see the note there for why the server writes this message itself.
+       *
+       * The sentence names the portion only when there is one packet, because
+       * that is the case where the card cannot: it lists items only when there
+       * is more than one, so a lone "30 g" would otherwise appear nowhere on a
+       * feature whose entire point is the amount.
+       */
+      const day = await buildDaySummary(userId, entry.local_date);
+      const only = scans.length === 1 ? scans[0]! : null;
+      const portion = only
+        ? `, ${portionPhrase(entry.items[0]?.quantity_g ?? 0, only.servings, units)}`
+        : '';
+      const message = await insertMessage(
+        userId,
+        'assistant',
+        `Scanned — ${entry.description}${portion}.`,
+        null,
+        { kind: 'scan', barcodes: scans.map((scan) => scan.product.barcode) },
+        [
+          {
+            kind: 'food_logged',
+            entry_id: entry.id,
+            summary: `${entry.meal}: ${entry.description} — ${Math.round(entry.kcal)} kcal`,
+            card: foodCard(entry, day, units),
+          },
+        ],
+      );
+
+      return reply.status(201).send({ entry, message });
+    } catch (error) {
+      return barcodeFailure(error, reply);
+    }
+  });
 
   // ---- Workouts ------------------------------------------------------------
 

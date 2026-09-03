@@ -1,10 +1,17 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Camera, ImageIcon, ScanBarcode, X } from 'lucide-react';
+import { ArrowUp, Camera, Check, ImageIcon, ScanBarcode, X } from 'lucide-react';
 import { toast } from 'sonner';
-import type { ChatMessage, PhotoMediaType, ScannedAttachment, UnitSystem } from '@ct/shared';
+import type {
+  ChatMessage,
+  MessageScan,
+  PhotoMediaType,
+  ScannedAttachment,
+  UnitSystem,
+} from '@ct/shared';
 import { formatMass, formatServings } from '@ct/shared';
+import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -32,6 +39,16 @@ export interface ComposerPayload {
    * which packets, and how much of each, where they said.
    */
   scanned?: ScannedAttachment[];
+  /**
+   * The same packets in words, so the sent bubble can name them immediately.
+   *
+   * The twin of `photoPreview`, and for the same reason: the server's own row
+   * is the truth and arrives with the turn, which is several seconds of a
+   * message that says "with a coffee" and shows no sign of the two packets it
+   * was assembled from. These are the chips that were sitting above the field a
+   * moment ago, carried across so the bubble looks like what was sent.
+   */
+  scannedPreview?: MessageScan[];
 }
 
 export function Composer({
@@ -66,17 +83,61 @@ export function Composer({
   const canSend = (text.trim().length > 0 || photo !== null || scanned.length > 0) && !disabled;
 
   /*
-   * Whether a scan should join the message or become one.
+   * Whether a scan is likelier to join the message than to become one.
    *
    * Words already written, or packets already attached, mean a message is being
    * assembled and the next scan is a component of it. An empty composer means
-   * there is no sentence for a packet to be part of, so it gets the picker and
-   * the free path to the journal that has always been behind it.
+   * there is no sentence for a packet to be part of, and the free path straight
+   * to the journal is right there behind it.
+   *
+   * Which of the two leads, only — every scan gets the picker, and both exits
+   * are on it either way.
    */
   const attaching = text.trim().length > 0 || scanned.length > 0;
 
+  /*
+   * Packets and nothing else: straight to the journal, with no model in it.
+   *
+   * This is the same claim the scanner's own "I ate this" button makes, and it
+   * has to be made here too or the feature quietly changes price at two
+   * packets — a basket with no sentence around it would go out as a message,
+   * and a message is a turn. A printed panel times an amount somebody chose is
+   * arithmetic whether there is one of them or four.
+   *
+   * A photo or a sentence is what genuinely needs reading, and either one sends
+   * this the ordinary way.
+   */
+  const packetsOnly = scanned.length > 0 && photo === null && text.trim().length === 0;
+  const [logging, setLogging] = useState(false);
+
+  async function logPackets() {
+    setLogging(true);
+    try {
+      const { message } = await api.logBarcodes({
+        items: scanned.map((scan) => ({
+          barcode: scan.product.barcode,
+          grams: scan.grams,
+          servings: scan.servings,
+        })),
+      });
+      setScanned([]);
+      onLogged(message);
+    } catch (error) {
+      // Left on the message rather than dropped: the chips are the only record
+      // of what was scanned, and clearing them would make retrying mean
+      // rescanning the shelf.
+      toast.error((error as Error).message);
+    } finally {
+      setLogging(false);
+    }
+  }
+
   function submit() {
-    if (!canSend) return;
+    if (!canSend || logging) return;
+    if (packetsOnly) {
+      void logPackets();
+      return;
+    }
     onSend({
       // A photo on its own is a valid log — give the model a default instruction.
       text: text.trim() || "Here's what I'm eating — log it.",
@@ -87,6 +148,16 @@ export function Composer({
         scanned.length > 0
           ? scanned.map((scan) => ({
               barcode: scan.product.barcode,
+              grams: scan.grams,
+              servings: scan.servings,
+            }))
+          : undefined,
+      scannedPreview:
+        scanned.length > 0
+          ? scanned.map((scan) => ({
+              barcode: scan.product.barcode,
+              brand: scan.product.brand,
+              name: scan.product.name,
               grams: scan.grams,
               servings: scan.servings,
             }))
@@ -182,6 +253,27 @@ export function Composer({
               onRemove={() => setScanned((held) => held.filter((_, i) => i !== index))}
             />
           ))}
+          {/*
+            What the button is about to do, said before it is pressed.
+
+            Packets on their own go straight to the journal and cost nothing —
+            a printed panel times an amount somebody chose is arithmetic, and
+            there is nothing here for a model to read. Typing a word changes
+            that, because a sentence does have to be read.
+
+            So the line is written to change under them as they type. Nobody
+            reads a paragraph about metering, but a line that moves when you
+            touch the keyboard teaches the rule in one keystroke — and it is
+            the only place in the app where the same button has two prices.
+          */}
+          <p
+            className={cn(
+              'text-footnote -mt-0.5 font-semibold',
+              packetsOnly ? 'text-primary' : 'text-muted-foreground',
+            )}
+          >
+            {packetsOnly ? t('composer.packetsStraightIn') : t('composer.packetsWithMessage')}
+          </p>
         </div>
       )}
 
@@ -299,13 +391,19 @@ export function Composer({
           type="button"
           size="icon"
           onClick={submit}
-          disabled={!canSend}
-          aria-label={t('composer.send')}
+          disabled={!canSend || logging}
+          aria-label={packetsOnly ? t('composer.logPackets') : t('composer.send')}
           // The default variant already brings the ledge and the press; all
           // this adds is the shape and a deeper travel to suit the size.
           className="size-10 shrink-0 rounded-full disabled:opacity-30"
         >
-          <ArrowUp size={21} strokeWidth={3} />
+          {/*
+            A tick rather than an arrow when there is nothing to send. The arrow
+            means "this goes off to be answered", which is exactly what does not
+            happen to a basket of packets — they are already understood, and
+            pressing this files them.
+          */}
+          {packetsOnly ? <Check size={21} strokeWidth={3} /> : <ArrowUp size={21} strokeWidth={3} />}
         </Button>
       </div>
 

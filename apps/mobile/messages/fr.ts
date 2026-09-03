@@ -86,6 +86,9 @@ export const fr: Messages = {
   // ---- The composer -------------------------------------------------------
   'composer.placeholder': 'Deux œufs et une tartine…',
   'composer.send': 'Envoyer',
+  'composer.logPackets': 'Enregistrer ces produits',
+  'composer.packetsStraightIn': 'Direct dans ton journal, sans décompte',
+  'composer.packetsWithMessage': 'Partent avec ton message',
   'composer.addPhoto': 'Ajouter une photo ou scanner un emballage',
   'composer.takePhoto': 'Prendre une photo',
   'composer.choosePhoto': 'Choisir une photo',

@@ -1,4 +1,4 @@
-import { ChatAction, type ChatCard, type ChatMessage } from '@ct/shared';
+import { ChatAction, type ChatCard, type ChatMessage, MessageScan } from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import { signPhotoUrl } from './photos.ts';
 import { getSecret, PHOTO_URL_SECRET } from './secrets.ts';
@@ -16,11 +16,12 @@ export async function insertMessage(
   photoId: string | null = null,
   toolTrace: unknown = null,
   actions: ChatAction[] = [],
+  scanned: MessageScan[] = [],
 ): Promise<ChatMessage> {
   const row = await queryOne<any>(
-    `INSERT INTO chat_messages (user_id, role, content, photo_id, tool_trace, actions)
-     VALUES ($1,$2,$3,$4,$5,$6)
-     RETURNING id, role, content, photo_id, created_at, actions`,
+    `INSERT INTO chat_messages (user_id, role, content, photo_id, tool_trace, actions, scanned)
+     VALUES ($1,$2,$3,$4,$5,$6,$7)
+     RETURNING id, role, content, photo_id, created_at, actions, scanned`,
     [
       userId,
       role,
@@ -28,6 +29,7 @@ export async function insertMessage(
       photoId,
       toolTrace ? JSON.stringify(toolTrace) : null,
       actions.length > 0 ? JSON.stringify(actions) : null,
+      scanned.length > 0 ? JSON.stringify(scanned) : null,
     ],
   );
   return toMessage(row, await photoSecret(row));
@@ -169,8 +171,8 @@ export async function recentUserTexts(userId: string, limit: number): Promise<st
 
 export async function listMessages(userId: string, limit = 50): Promise<ChatMessage[]> {
   const rows = await query<any>(
-    `SELECT id, role, content, photo_id, created_at, actions FROM (
-       SELECT id, role, content, photo_id, created_at, actions
+    `SELECT id, role, content, photo_id, created_at, actions, scanned FROM (
+       SELECT id, role, content, photo_id, created_at, actions, scanned
          FROM chat_messages WHERE user_id = $1
      ORDER BY created_at DESC LIMIT $2
      ) recent ORDER BY created_at ASC`,
@@ -279,7 +281,21 @@ function toMessage(row: any, photoSecret: string | null): ChatMessage {
     photo_url: row.photo_id && photoSecret ? signPhotoUrl(row.photo_id, photoSecret) : null,
     created_at: new Date(row.created_at).toISOString(),
     actions: parseActions(row.actions),
+    scanned: parseScans(row.scanned),
   };
+}
+
+/**
+ * The same read-back caution as `parseActions`, for the same reason: these rows
+ * outlive the shape that wrote them, and a chip that no longer parses costs its
+ * own chip rather than the bubble it sits under.
+ */
+function parseScans(value: unknown): MessageScan[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const parsed = MessageScan.safeParse(entry);
+    return parsed.success ? [parsed.data] : [];
+  });
 }
 
 /**

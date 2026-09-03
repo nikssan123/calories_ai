@@ -673,39 +673,77 @@ export async function logScannedProduct(
   product: BarcodeProduct,
   options: ScanLogOptions,
 ): Promise<FoodEntry> {
-  const grams = portionGrams(product, options);
+  return logScannedProducts(userId, [{ product, grams: options.grams, servings: options.servings }], options);
+}
+
+/**
+ * A basket of packets, as one meal.
+ *
+ * The plural is the general case and the singular above is one of them, which
+ * is the whole point of writing it this way: three packets scanned into an
+ * empty composer are the same kind of event as one, and the moment they stop
+ * sharing a code path is the moment the second packet quietly starts costing a
+ * model call. Nothing here reaches the network or a model either — every
+ * number was printed on a packet and every amount was picked by a person, so
+ * from here down it is arithmetic and a database write.
+ *
+ * One entry rather than one per packet, because a person who scanned a yoghurt
+ * and a granola bar ate one snack. Splitting it would put two rows in the
+ * journal for something they would correct, delete or think about as a single
+ * thing — and `foodCard` already lists the items whenever there is more than
+ * one, so nothing about the amounts is lost by keeping them together.
+ */
+export async function logScannedProducts(
+  userId: string,
+  scans: ScannedProduct[],
+  options: Omit<ScanLogOptions, 'grams' | 'servings'>,
+): Promise<FoodEntry> {
+  if (scans.length === 0) throw new InvalidPortionError('Nothing was scanned');
   const eatenAt = options.eatenAt ?? new Date();
-  const share = grams / 100;
+
+  const items = scans.map((scan) => {
+    const grams = portionGrams(scan.product, scan);
+    const share = grams / 100;
+    return {
+      name: describe(scan.product),
+      quantity_g: grams,
+      quantity_desc: portionDescription(scan.product, grams, scan.servings, options.units),
+      kcal: round(scan.product.kcal_100g * share),
+      protein_g: round(scan.product.protein_100g * share),
+      carbs_g: round(scan.product.carbs_100g * share),
+      fat_g: round(scan.product.fat_100g * share),
+      // The diet-quality panel is deliberately left null rather than zeroed.
+      // The cache carries energy and three macros and nothing else, so
+      // nobody has estimated the fiber in this — which is exactly what null
+      // means and exactly what a zero would deny.
+    };
+  });
 
   return createFoodEntry({
     userId,
     meal: options.meal ?? inferMeal(eatenAt, options.ctx.timezone),
     eatenAt,
-    description: describe(product),
+    description: items.map((item) => item.name).join(', '),
     // Where the numbers came from, in the entry itself. ODbL asks for
     // attribution wherever the data is shown, and an entry read back in six
-    // months is still showing it.
-    note: product.source === 'off' ? 'Data from Open Food Facts' : 'Data from USDA FoodData Central',
+    // months is still showing it. Both catalogues get named when a basket drew
+    // on both, in the order they are listed here rather than the order scanned,
+    // so the same pair of sources reads the same way every time.
+    note: scanCredit(scans.map((scan) => scan.product.source)),
     confidence: 'high',
     source: 'barcode',
     photoId: null,
-    items: [
-      {
-        name: describe(product),
-        quantity_g: grams,
-        quantity_desc: portionDescription(product, grams, options.servings, options.units),
-        kcal: round(product.kcal_100g * share),
-        protein_g: round(product.protein_100g * share),
-        carbs_g: round(product.carbs_100g * share),
-        fat_g: round(product.fat_100g * share),
-        // The diet-quality panel is deliberately left null rather than zeroed.
-        // The cache carries energy and three macros and nothing else, so
-        // nobody has estimated the fiber in this — which is exactly what null
-        // means and exactly what a zero would deny.
-      },
-    ],
+    items,
     ctx: options.ctx,
   });
+}
+
+/** "Data from Open Food Facts", or both catalogues when a basket used both. */
+function scanCredit(sources: BarcodeSource[]): string {
+  const named = (['off', 'fdc'] as const)
+    .filter((source) => sources.includes(source))
+    .map((source) => (source === 'off' ? 'Open Food Facts' : 'USDA FoodData Central'));
+  return `Data from ${named.join(' and ')}`;
 }
 
 /** "Ferrero Hazelnut spread", without saying Ferrero twice. */

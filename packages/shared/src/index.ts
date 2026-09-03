@@ -2187,6 +2187,16 @@ export const BarcodeProduct = z.object({
 export type BarcodeProduct = z.infer<typeof BarcodeProduct>;
 
 /**
+ * How many packets one message may carry.
+ *
+ * Each one is a catalogue lookup that has to finish before the turn can start,
+ * and a meal assembled from more than a few packets is a shopping trip. The
+ * ceiling lives here rather than in the composer so that it is the API's own
+ * and every client inherits it.
+ */
+export const MAX_SCANNED_ATTACHMENTS = 8;
+
+/**
  * Logging a scanned product. Grams or servings, one or the other.
  *
  * Servings is not sugar for grams. It is what the user picked, and the card
@@ -2205,6 +2215,41 @@ export const BarcodeLogRequest = z
     message: 'Say either grams or servings',
   });
 export type BarcodeLogRequest = z.infer<typeof BarcodeLogRequest>;
+
+/**
+ * Several packets, logged as one meal, with no model in the way.
+ *
+ * The single-packet route above has always been the free path — a scan that
+ * goes straight to the journal because a printed panel times an amount somebody
+ * typed leaves nothing to estimate. This is that same claim about two packets,
+ * and it exists because for a while the second one was a paid turn: a basket
+ * with no sentence around it went through the composer, and the composer sends
+ * messages, and a message is a model call. Nothing about a second barcode makes
+ * the arithmetic harder.
+ *
+ * A sentence is the thing that changes it. Words next to the packets have to be
+ * read by something that can read, so a composer with text in it still sends a
+ * turn — and should.
+ */
+export const BarcodeBasketRequest = z.object({
+  items: z
+    .array(
+      z
+        .object({
+          barcode: z.string().min(8).max(14),
+          grams: z.number().positive().max(5000).optional(),
+          servings: z.number().positive().max(50).optional(),
+        })
+        .refine((item) => (item.grams === undefined) !== (item.servings === undefined), {
+          message: 'Say either grams or servings',
+        }),
+    )
+    .min(1)
+    .max(MAX_SCANNED_ATTACHMENTS),
+  meal: Meal.optional(),
+  eaten_at: z.string().optional(),
+});
+export type BarcodeBasketRequest = z.infer<typeof BarcodeBasketRequest>;
 
 /** Declared here rather than with Progress: the chat cards below build on it. */
 export const TrendPoint = z.object({
@@ -2499,6 +2544,30 @@ export function isDeletion(action: ChatAction): boolean {
   return action.kind === 'food_deleted' || action.kind === 'exercise_deleted';
 }
 
+/**
+ * A packet as it is remembered *on* the message, once the turn has happened.
+ *
+ * `ScannedAttachment` is the request shape and carries a barcode alone, because
+ * a client's own kcal figures are not to be trusted. This is the other
+ * direction and has the opposite problem: the chip above the composer says
+ * "Solevita juice · 250 g", and the moment the message is sent that sentence
+ * loses the only part a reader needs to make sense of it. Storing the barcode
+ * again would mean a catalogue lookup per bubble to redraw a conversation.
+ *
+ * So the words are stored, and only the words — a name, a brand and the amount
+ * somebody picked. Not the panel: the figures belong to the entry the turn
+ * wrote, which is where a total is allowed to be argued with, and a second copy
+ * of them here would be a number nobody could correct.
+ */
+export const MessageScan = z.object({
+  barcode: z.string().min(8).max(14),
+  brand: z.string().nullable().default(null),
+  name: z.string(),
+  grams: z.number().positive().max(5000).optional(),
+  servings: z.number().positive().max(50).optional(),
+});
+export type MessageScan = z.infer<typeof MessageScan>;
+
 export const ChatMessage = z.object({
   id: z.string().uuid(),
   role: ChatRole,
@@ -2520,6 +2589,14 @@ export const ChatMessage = z.object({
    * does not silently downgrade a conversation full of cards into plain text.
    */
   actions: z.array(ChatAction).default([]),
+  /**
+   * The packets that were scanned into this message, for the same reason.
+   *
+   * Without them the bubble is the typed half of what was said: somebody who
+   * scanned two packets and wrote "with a coffee" sees "with a coffee" and has
+   * to work out from the reply what the app thought they ate.
+   */
+  scanned: z.array(MessageScan).default([]),
 });
 export type ChatMessage = z.infer<typeof ChatMessage>;
 
@@ -2659,16 +2736,6 @@ export const ScannedAttachment = z.object({
   servings: z.number().positive().max(50).optional(),
 });
 export type ScannedAttachment = z.infer<typeof ScannedAttachment>;
-
-/**
- * How many packets one message may carry.
- *
- * Each one is a catalogue lookup that has to finish before the turn can start,
- * and a meal assembled from more than a few packets is a shopping trip. The
- * ceiling lives here rather than in the composer so that it is the API's own
- * and every client inherits it.
- */
-export const MAX_SCANNED_ATTACHMENTS = 8;
 
 export const ChatRequest = z.object({
   text: z.string().min(1).max(4000),
