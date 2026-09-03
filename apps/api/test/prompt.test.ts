@@ -193,6 +193,70 @@ describe('STABLE_SYSTEM_PROMPT', () => {
     expect(STABLE_SYSTEM_PROMPT).toMatch(/not a licence to pad/);
   });
 
+  /**
+   * Measured against the 159 replies production had written in Bulgarian on
+   * 2026-09-03. Every assertion here is a rule that was already in the prompt
+   * and was being obeyed only in English — see the note on `PROMPT_TAIL`.
+   */
+  it('states the voice rules as moves, not as English examples', () => {
+    // 33% opened with a status word, none of them from the banned list, because
+    // the list is seven English words and Bulgarian says it with a first-person
+    // verb: "Записах", "Готово", "Поправено". A ban given as a word list is
+    // read as a word list, so the move has to be named too.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/about the move, not about those seven words/);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/equally true of any other message/);
+    // The passive is the shape a clipped English acknowledgement lands in.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/Watch the passive hardest/);
+
+    // 43% appended what was left of the day, which the card already draws.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/closing remainder/);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/empty track on the bar \*is\* the remainder/);
+
+    // And the four-word shapes read as curt outside English, so warmth wins
+    // where the two rules disagree.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/warm beats two words fewer and cold/);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/brevity is the second rule, not the first/);
+  });
+
+  /**
+   * The second half of the same bug, and the one the user actually felt: a
+   * reply that grades the food reads as a verdict however kind the adjective
+   * is. 17% of the Bulgarian replies carried one and 13% opened with it —
+   * "Хубава вечеря", "Солиден протеин", "Класическа закуска — вкусно и
+   * просто" — and not one of them is on the banned list of approval phrases,
+   * which is seven English idioms about permission rather than a rule about
+   * praise. So the rule is now the grammar: what is the compliment's subject?
+   */
+  it('bans praise aimed at the plate, not only the permission idioms', () => {
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/## Never grade the plate/);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/compliment paid to the meal is a mark awarded to it/);
+    // The check has to be mechanical, or it reads as a matter of degree.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/what is the compliment's subject\?/);
+    // The sceptical adjective, which is judgement with no adjective of grade.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/raised eyebrow with a straight face/);
+    // "Доста мазнина в тази комбинация" — the grade wearing a nutrient's name.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/Nutrients are not virtues/);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/a target is not a line/);
+  });
+
+  it('keeps noticing from turning into nagging', () => {
+    // "The walnuts again" is fond in English. "Пак" is what a parent says about
+    // the biscuits, and "Болонезето за закуска пак" shipped as exactly that.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/"Again" is a reproach in a great many languages/);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/leave the counting out/);
+    // And a repetition the approval register would mark down cannot be
+    // remarked on neutrally at all, so it is not remarked on.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/never remark on a repetition the approval register would have marked down/i);
+  });
+
+  it('translates its own vocabulary along with everything else', () => {
+    // "запази го като routine", "ще я логна", "still имаш 1300 kcal" — all
+    // shipped. The language section listed what stays English and never said
+    // what does not, so the app's own words stayed English by default.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/Everything else translates/);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/no English in a sentence that is not in English/);
+  });
+
   it('states the rules the product depends on', () => {
     expect(STABLE_SYSTEM_PROMPT).toContain('assume, don’t interrogate'.replace('’', "'"));
     expect(STABLE_SYSTEM_PROMPT).toMatch(/update_food_entry/);

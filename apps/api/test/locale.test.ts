@@ -154,6 +154,15 @@ describe('languageBrief', () => {
   it('leaves food names alone', () => {
     expect(languageBrief('Bulgarian')?.toLowerCase()).toContain('food names stay');
   });
+
+  it('asks for warm rather than clipped, which is where translation lands', () => {
+    // These four turns have no user sentence in front of them, so this brief is
+    // the only thing saying how the prose should sound. A clipped English
+    // sentence carried across word for word reads as an official notice in
+    // plenty of languages — the same failure the journal had in Bulgarian.
+    expect(languageBrief('Bulgarian')).toMatch(/official notice/);
+    expect(languageBrief('Bulgarian')).toMatch(/sound like a person/);
+  });
 });
 
 describe('the background generations', () => {
