@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { requireOptionalNativeModule } from 'expo';
 import type * as StoreReviewSdk from 'expo-store-review';
 
@@ -196,4 +197,36 @@ async function read(): Promise<Asked> {
 
 async function write(next: Asked): Promise<void> {
   await AsyncStorage.setItem(KEY, JSON.stringify(next));
+}
+
+
+/**
+ * Where a "Rate this app" *control* has to send somebody.
+ *
+ * Not `requestReview`, and this is rule 2 in the header read the other way
+ * round: the native sheet may only appear because the app decided the moment
+ * was right, never because a finger landed on a button. A button wired to it
+ * would also lie about half the time — iOS drops the request once the yearly
+ * quota is spent and resolves anyway, so the tap would do nothing, silently,
+ * with no way for the settings screen to know or say so. A URL always does
+ * something.
+ *
+ * `?action=write-review` opens the App Store with the star control already up.
+ * Play has no equivalent parameter — the deep link that used to jump to the
+ * review sheet is gone — so Android gets the listing, where the stars are the
+ * first thing under the install button. The https form rather than `market://`
+ * on purpose: Play claims the intent on any device that has it, and a device
+ * that does not falls through to a browser instead of failing outright.
+ *
+ * Both come out of `app.json` rather than being retyped here. The App Store id
+ * is a ten-digit number that appears in exactly one other place — `ascAppId` in
+ * `eas.json` — and a second hand-copy of it is a second thing to get wrong on
+ * the day it is read out loud from the console.
+ */
+export function storeListingUrl(): string | null {
+  if (Platform.OS === 'ios') {
+    const listing = Constants.expoConfig?.ios?.appStoreUrl;
+    return listing ? `${listing}?action=write-review` : null;
+  }
+  return Constants.expoConfig?.android?.playStoreUrl ?? null;
 }

@@ -56,6 +56,7 @@ import { useEntitlements } from '@/lib/entitlements';
 import { billingAvailable, manageSubscription, restore } from '@/lib/billing';
 import { meterNoun, TIER_NAMES, TIER_PITCHES } from '@/lib/plan-copy';
 import { PRIVACY_URL, SUPPORT_EMAIL, TERMS_URL } from '@/lib/links';
+import { storeListingUrl } from '@/lib/review-prompt';
 import { duration, font, type as t, useColors, useType, withAlpha } from '@/theme';
 import { LanguagePicker } from '@/components/LanguagePicker';
 import { setPreferredLocale, useLocale, useT, type StringKey } from '@/lib/i18n';
@@ -97,6 +98,12 @@ const UNIT_EXAMPLES: Record<UnitSystem, string> = {
   metric: 'kg · cm · km · g',
   imperial: 'lb · ft · mi · oz',
 };
+
+/**
+ * Read once, because it is a fact about the build and not about the session.
+ * A rebuild is the only thing that can change it, and a rebuild restarts this.
+ */
+const STORE_URL = storeListingUrl();
 
 export default function SetupScreen() {
   const colors = useColors();
@@ -560,13 +567,29 @@ export default function SetupScreen() {
           </Pressable>
         </InsetGroup>
 
-        {/* The store listings link to both of these, and the review that checks
+        {/* The store listings link to both documents, and the review that checks
             them expects to find them in the app too. Opened in the system browser
             rather than re-rendered here: one copy of each document, on the web. */}
         <InsetGroup title={tr('setup.aboutTitle')}>
           <ExternalRow first label={tr('setup.privacyPolicy')} url={PRIVACY_URL} />
           <ExternalRow label={tr('setup.termsOfService')} url={TERMS_URL} />
-          <ExternalRow label={tr('setup.contactSupport')} url={`mailto:${SUPPORT_EMAIL}`} mail />
+          {/*
+            The way to rate the app on purpose, for the person who came looking.
+
+            `lib/review-prompt.ts` already asks the people it can — at a 7- or
+            30-day streak, through the native sheet — and that ask is the one
+            that converts. It is also rationed to two milestones and a yearly
+            quota neither store will tell us about, so somebody who wants to
+            leave a review today may simply never be offered one. This row is
+            for them, and it goes to the store rather than the sheet for the
+            reasons written over `storeListingUrl`.
+
+            Absent rather than dead where there is no listing to open — a
+            simulator build, or a config without the id — because a settings row
+            that does nothing is worse than one that was never there.
+          */}
+          {STORE_URL && <ExternalRow label={tr('setup.rateApp')} url={STORE_URL} handOff />}
+          <ExternalRow label={tr('setup.contactSupport')} url={`mailto:${SUPPORT_EMAIL}`} handOff />
         </InsetGroup>
 
         <DeleteAccount
@@ -1394,18 +1417,24 @@ function TimeField({
  * The two documents open in the system browser sheet rather than a `Linking`
  * hand-off, which keeps the reader inside the app and one swipe from where they
  * were — App Review dislikes a policy link that ejects you into Safari, and so
- * does anybody reading one. `mailto:` cannot go through the sheet, so that one
- * still goes to `Linking`.
+ * does anybody reading one.
+ *
+ * `handOff` is for the rows where that is the wrong answer, because the
+ * destination is an app and not a page. `mailto:` cannot go through the sheet
+ * at all; a store link technically can, and must not — a listing rendered in a
+ * web view has no working install or review control on it, so the one row whose
+ * whole purpose is to reach the stars would arrive somewhere they do not
+ * function.
  */
 function ExternalRow({
   label,
   url,
-  mail,
+  handOff,
   first,
 }: {
   label: string;
   url: string;
-  mail?: boolean;
+  handOff?: boolean;
   first?: boolean;
 }) {
   const colors = useColors();
@@ -1418,7 +1447,7 @@ function ExternalRow({
         // Nothing to report if it fails: there is no error surface on a row
         // like this, and a device with no browser or no mail client is not a
         // state the settings screen can do anything about.
-        void (mail ? Linking.openURL(url) : WebBrowser.openBrowserAsync(url)).catch(() => {});
+        void (handOff ? Linking.openURL(url) : WebBrowser.openBrowserAsync(url)).catch(() => {});
       }}
       style={({ pressed }) => [
         styles.rowButton,
