@@ -13,6 +13,7 @@ import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors, useTheme, type Scheme } from '@/theme';
 import { useLocale, useT } from '@/lib/i18n';
+import { messageOf } from '@/lib/errors';
 
 /**
  * A month at a time, as a grid.
@@ -56,7 +57,7 @@ export default function HistoryScreen() {
         setMonth(`${today.local_date.slice(0, 7)}-01`);
         setSelected(today.local_date);
       } catch (e) {
-        setError((e as Error).message);
+        setError(messageOf(e, tr));
       }
     })();
   }, []);
@@ -66,7 +67,7 @@ export default function HistoryScreen() {
       setCalendar(await api.calendar(firstOfMonth, endOfMonth(firstOfMonth)));
       setError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     }
   }, []);
 

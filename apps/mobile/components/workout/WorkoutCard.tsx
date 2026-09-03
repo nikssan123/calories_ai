@@ -29,6 +29,7 @@ import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
+import { messageOf } from '@/lib/errors';
 import { ExercisePicker } from './ExercisePicker';
 import { SetEditor } from './SetEditor';
 import {
@@ -314,7 +315,7 @@ export function WorkoutCard({
       setTypes((prev) => (prev ? [type, ...prev.filter((t) => t.id !== type.id)] : [type]));
       addExercise(type);
     } catch (e) {
-      onError((e as Error).message);
+      onError(messageOf(e, tr));
     }
   }
 
@@ -421,7 +422,7 @@ export function WorkoutCard({
       haptics.logged();
       onLogged(entry);
     } catch (e) {
-      onError((e as Error).message);
+      onError(messageOf(e, tr));
     } finally {
       setSaving(false);
     }

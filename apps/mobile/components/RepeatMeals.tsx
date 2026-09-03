@@ -13,6 +13,7 @@ import { cachedTemplates, cacheTemplates } from '@/lib/store';
 import { font, type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
 import { useT, type StringKey } from '@/lib/i18n';
+import { messageOf } from '@/lib/errors';
 
 /**
  * The eight things you actually eat.
@@ -79,7 +80,7 @@ export function RepeatMeals({
           setError(null);
           return;
         }
-        setError((e as Error).message);
+        setError(messageOf(e, tr));
         setMeals([]);
       }
     },

@@ -29,6 +29,7 @@ import { removeAction, SwipeRow } from '@/components/SwipeRow';
 import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
 import { useEntitlements } from '@/lib/entitlements';
 import { useLocale, useT } from '@/lib/i18n';
+import { messageOf } from '@/lib/errors';
 
 /**
  * The week's dinners, and the shop that follows from them.
@@ -86,7 +87,7 @@ export default function PlanScreen() {
       setList(await api.shoppingList(week_start));
       setError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     } finally {
       setLoading(false);
     }
@@ -109,7 +110,7 @@ export default function PlanScreen() {
       setList(await api.shoppingList(next.week_start));
       setError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     } finally {
       setThinking(false);
     }
@@ -124,7 +125,7 @@ export default function PlanScreen() {
       toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
       await load();
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     }
   }
 
@@ -133,7 +134,7 @@ export default function PlanScreen() {
       setPlan(await api.updateSlot(slot.id, { recipe_id: null }));
       if (plan) setList(await api.shoppingList(plan.week_start));
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     }
   }
 
@@ -144,7 +145,7 @@ export default function PlanScreen() {
     try {
       setList(await api.addShoppingItems([{ name }], list.week_start));
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     }
   }
 
@@ -159,7 +160,7 @@ export default function PlanScreen() {
     try {
       await api.updateShoppingItem(extraId, { bought });
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
       await load();
     }
   }
@@ -173,7 +174,7 @@ export default function PlanScreen() {
     undoably(`Removed ${name}`, {
       commit: () => {
         void api.deleteShoppingItem(extraId).catch((e: Error) => {
-          setError(e.message);
+          setError(messageOf(e, tr));
           void load();
         });
       },

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { DaySummary, MealTemplate, Profile } from '@ct/shared';
+import type { AuthStatus, DaySummary, MealTemplate, Profile } from '@ct/shared';
 
 /**
  * What the phone keeps when the network is gone.
@@ -118,6 +118,62 @@ export async function cachedProfile(userId: string): Promise<Profile | null> {
 
 export async function cacheProfile(userId: string, profile: Profile): Promise<void> {
   await write(userId, 'profile', profile);
+}
+
+// ---- The session -----------------------------------------------------------
+
+/**
+ * Who was signed in last, so a launch with no signal is not a launch signed
+ * out.
+ *
+ * Everything else in this file is keyed by user id, and this one cannot be: it
+ * is the answer to *which* user, needed before there is an id to key by. Only
+ * `me()` knows, and in a tunnel `me()` is the single question with no answer at
+ * all — so the last answer it gave is kept.
+ *
+ * The token is deliberately not part of it. That lives in the keystore, and
+ * this is restored only when one is still there: a cached status with no token
+ * behind it is not a session, it is a picture of one.
+ */
+const SESSION_KEY = `ct:${VERSION}:session`;
+
+export async function cacheSession(status: AuthStatus): Promise<void> {
+  try {
+    // Stripped for the same reason `AuthProvider` strips it on the way into
+    // React state: the keystore is the only copy of a token that should exist.
+    const { token: _token, ...rest } = status;
+    await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(rest));
+  } catch {
+    // Fails soft like the rest of this file. The cost is one launch that has to
+    // reach the network, which is the behaviour this replaced.
+  }
+}
+
+/**
+ * The last signed-in status, or null.
+ *
+ * A signed-*out* status is never worth keeping: that is a fact the phone can
+ * establish on its own, and restoring one would be indistinguishable from
+ * having no cache.
+ */
+export async function cachedSession(): Promise<AuthStatus | null> {
+  try {
+    const raw = await AsyncStorage.getItem(SESSION_KEY);
+    if (raw === null) return null;
+    const status = JSON.parse(raw) as AuthStatus;
+    return status.authenticated && status.profile ? status : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function forgetSession(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(SESSION_KEY);
+  } catch {
+    // Nothing depends on it having worked: a sign-in overwrites it, and it is
+    // never restored without a token that sign-out has already destroyed.
+  }
 }
 
 // ---- Clearing --------------------------------------------------------------

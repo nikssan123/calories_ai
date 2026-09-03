@@ -13,6 +13,7 @@ import { useT } from '@/lib/i18n';
 import { font, type as t, useColors } from '@/theme';
 import { useRefreshOnReturn } from '@/hooks/useRefreshOnReturn';
 import { useLocale } from '@/lib/i18n';
+import { messageOf } from '@/lib/errors';
 
 /**
  * Last week, and what it did to the target.
@@ -81,7 +82,7 @@ export function WeeklyReview({ onError }: { onError: (message: string) => void }
       // Sending them to the wall is a better answer than a red sentence about
       // a feature that is simply not bought — see `planLimitOf`.
       if (planLimitOf(e)) router.push({ pathname: '/upgrade', params: { plan: upsell?.plan } });
-      else onError((e as Error).message);
+      else onError(messageOf(e, tr));
     } finally {
       setWriting(false);
     }

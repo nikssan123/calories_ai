@@ -14,6 +14,7 @@ import { recipeImageUrl } from '@/lib/links';
 import { font, type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
 import { useLocale, useT } from '@/lib/i18n';
+import { AppError, messageOf } from '@/lib/errors';
 
 /**
  * A recipe off the shelf.
@@ -72,7 +73,7 @@ export default function LibraryRecipeScreen() {
       );
       router.back();
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
       setCooking(false);
     }
   }
@@ -83,12 +84,12 @@ export default function LibraryRecipeScreen() {
     try {
       const { recipes } = await api.adaptLibraryRecipe(recipe.slug);
       const [adapted] = recipes;
-      if (!adapted) throw new Error(tr('recipe.nothingCameBack'));
+      if (!adapted) throw new AppError(tr('recipe.nothingCameBack'));
       // Straight to the rework, replacing this screen: going "back" from the
       // adaptation should reach Cook, not the original it was made from.
       router.replace(`/recipe/${adapted.id}`);
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
       setAdapting(false);
     }
   }
@@ -100,7 +101,7 @@ export default function LibraryRecipeScreen() {
       await api.saveLibraryRecipe(slug, next);
     } catch (e) {
       setSaved(!next);
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     }
   }
 

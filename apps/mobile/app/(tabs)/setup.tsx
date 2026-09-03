@@ -60,6 +60,7 @@ import { LanguagePicker } from '@/components/LanguagePicker';
 import { setPreferredLocale, useLocale, useT, type StringKey } from '@/lib/i18n';
 import { registerForPush } from '@/lib/push';
 import { applyReminders, loadReminders, type ReminderSettings } from '@/lib/reminders';
+import { messageOf } from '@/lib/errors';
 
 /** §10: short setup. Enough to establish a starting target, nothing more. */
 
@@ -147,7 +148,7 @@ export default function SetupScreen() {
         basis.current = p;
         setDay(d);
       } catch (e) {
-        setError((e as Error).message);
+        setError(messageOf(e, tr));
       }
     })();
   }, []);
@@ -254,7 +255,7 @@ export default function SetupScreen() {
       setSaved(true);
       setSaveError(null);
     } catch (e) {
-      setSaveError((e as Error).message);
+      setSaveError(messageOf(e, tr));
     } finally {
       setSaving(false);
     }
@@ -872,7 +873,7 @@ function PlanSettings() {
         (await restore(refresh)) ? tr('plans.restoredShort') : tr('plans.noneFound'),
       );
     } catch (e) {
-      setNote((e as Error).message);
+      setNote(messageOf(e, tr));
     } finally {
       setRestoring(false);
     }
@@ -989,7 +990,7 @@ function EmailSettings({
       const result = await api.resendVerification();
       setSent(result.message);
     } catch (e) {
-      onError((e as Error).message);
+      onError(messageOf(e, tr));
     } finally {
       setSending(false);
     }
@@ -1030,7 +1031,7 @@ function EmailSettings({
       if (enabled) await registerForPush({ requestPermissions: true });
     } catch (e) {
       onChange({ ...profile, [field]: previous });
-      onError((e as Error).message);
+      onError(messageOf(e, tr));
     }
   }
 
@@ -1421,7 +1422,7 @@ function DeleteAccount({
       // stale data: the guard re-runs and lands on the sign-in screen.
       onDeleted();
     } catch (e) {
-      onError((e as Error).message);
+      onError(messageOf(e, tr));
       setDeleting(false);
     }
   }

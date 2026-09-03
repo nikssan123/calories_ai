@@ -22,6 +22,7 @@ import { useEntitlements } from '@/lib/entitlements';
 import { font, type as t, useColors } from '@/theme';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
 import { useLocale, useT } from '@/lib/i18n';
+import { AppError, messageOf } from '@/lib/errors';
 
 /**
  * Cook — what you could make, from what you have, that fits what is left.
@@ -128,7 +129,7 @@ export default function CookScreen() {
       const { recipes } = await api.library({ q: search || undefined, limit: 12 });
       setLibrary(recipes);
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
       setLibrary([]);
     }
   }, []);
@@ -222,7 +223,7 @@ export default function CookScreen() {
       adopt(limit.allowance);
       return;
     }
-    setError((e as Error).message);
+    setError(messageOf(e, tr));
   }
 
   /*
@@ -239,7 +240,7 @@ export default function CookScreen() {
       await api.saveRecipe(id, next);
     } catch (e) {
       flip(!next);
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     }
   }
 
@@ -251,7 +252,7 @@ export default function CookScreen() {
       await api.saveLibraryRecipe(slug, next);
     } catch (e) {
       flip(!next);
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     }
   }
 
@@ -270,7 +271,7 @@ export default function CookScreen() {
     try {
       const { recipes } = await api.importRecipe({ text: importText.trim() });
       const [recipe] = recipes;
-      if (!recipe) throw new Error("I couldn't read that as a recipe.");
+      if (!recipe) throw new AppError("I couldn't read that as a recipe.");
       setRecipes((prev) => [recipe, ...prev]);
       setMessage('');
       setTab('ideas');

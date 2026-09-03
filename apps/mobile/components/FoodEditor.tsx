@@ -15,6 +15,7 @@ import { api } from '@/lib/api';
 import { type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
+import { messageOf } from '@/lib/errors';
 
 /**
  * A meal as the form that could have collected it — whether or not it exists.
@@ -140,7 +141,7 @@ export function FoodEditor({
         setMeal(found.meal);
         setItems(found.items.map(toDraft));
       })
-      .catch((e: Error) => !cancelled && setError(e.message));
+      .catch((e: Error) => !cancelled && setError(messageOf(e, tr)));
     return () => {
       cancelled = true;
     };
@@ -208,7 +209,7 @@ export function FoodEditor({
       }
       onSaved?.(updated);
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     } finally {
       setSaving(false);
     }

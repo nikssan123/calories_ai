@@ -32,6 +32,7 @@ import { haptics } from '@/lib/haptics';
 import { PRIVACY_URL, TERMS_URL } from '@/lib/links';
 import { useLocale, useT } from '@/lib/i18n';
 import { type as t, useColors, withAlpha } from '@/theme';
+import { messageOf } from '@/lib/errors';
 
 /**
  * The wall itself — the screen `SUBSCRIPTIONS.md` has had on its build list as
@@ -168,7 +169,7 @@ export default function UpgradeScreen() {
     } catch (error) {
       // Closing the store sheet is an answer, not a failure. Saying anything
       // at all here would be the app arguing with a decision.
-      if (!(error instanceof PurchaseCancelled)) toast.error((error as Error).message);
+      if (!(error instanceof PurchaseCancelled)) toast.error(messageOf(error, tr));
     } finally {
       setBusy(false);
     }
@@ -186,7 +187,7 @@ export default function UpgradeScreen() {
         toast.message(tr('plans.noneFound'));
       }
     } catch (error) {
-      toast.error((error as Error).message);
+      toast.error(messageOf(error, tr));
     } finally {
       setBusy(false);
     }
@@ -222,7 +223,7 @@ export default function UpgradeScreen() {
       else toast.message(tr('plans.scansOnTheWay'));
     } catch (error) {
       // Closing the store sheet is an answer, not a failure.
-      if (!(error instanceof PurchaseCancelled)) toast.error((error as Error).message);
+      if (!(error instanceof PurchaseCancelled)) toast.error(messageOf(error, tr));
     } finally {
       setBuying(null);
     }

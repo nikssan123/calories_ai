@@ -9,6 +9,7 @@ import type {
   PurchasesStoreProduct,
 } from 'react-native-purchases';
 import { PHOTO_BUNDLES, PLANS, type PhotoBundleId, type PlanName } from '@ct/shared';
+import { AppError } from '@/lib/errors';
 
 /**
  * The store, from the phone's side.
@@ -287,12 +288,12 @@ export async function purchase(
   confirm: () => Promise<PlanName>,
 ): Promise<boolean> {
   const Purchases = purchases();
-  if (!Purchases) throw new Error('The store is not available in this build.');
+  if (!Purchases) throw new AppError('The store is not available in this build.');
   try {
     await Purchases.purchasePackage(buyable.pkg);
   } catch (error) {
     if ((error as { userCancelled?: boolean }).userCancelled) throw new PurchaseCancelled();
-    throw new Error(
+    throw new AppError(
       (error as { message?: string }).message ?? 'The store could not complete that purchase.',
     );
   }
@@ -448,7 +449,7 @@ export async function purchaseBundle(
   confirm: () => Promise<number>,
 ): Promise<boolean> {
   const Purchases = purchases();
-  if (!Purchases) throw new Error('The store is not available in this build.');
+  if (!Purchases) throw new AppError('The store is not available in this build.');
 
   let before = 0;
   try {
@@ -461,7 +462,7 @@ export async function purchaseBundle(
     await Purchases.purchaseStoreProduct(bundle.product);
   } catch (error) {
     if ((error as { userCancelled?: boolean }).userCancelled) throw new PurchaseCancelled();
-    throw new Error(
+    throw new AppError(
       (error as { message?: string }).message ?? 'The store could not complete that purchase.',
     );
   }

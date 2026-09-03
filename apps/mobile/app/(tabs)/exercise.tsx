@@ -21,6 +21,7 @@ import { Workouts } from '@/components/exercise/Workouts';
 import { WorkoutCard } from '@/components/workout/WorkoutCard';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
 import { useLocale, useT } from '@/lib/i18n';
+import { messageOf } from '@/lib/errors';
 
 /**
  * Exercise, split out of Progress so it gets a screen rather than a single row.
@@ -67,7 +68,7 @@ export default function ExerciseScreen() {
       setSummary(await api.exercise(window));
       setError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     }
   }, []);
 
@@ -87,7 +88,7 @@ export default function ExerciseScreen() {
           .deleteExerciseEntry(entry.id)
           // The journal is still holding the card this session was logged with.
           .then(() => entryRemoved(entry.id))
-          .catch((e: Error) => setError(e.message))
+          .catch((e: Error) => setError(messageOf(e, tr)))
           .finally(() => void load(days));
       },
       restore: () => setSummary(before),

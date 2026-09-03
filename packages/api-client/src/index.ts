@@ -85,6 +85,33 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The request never left, or never came back. No status, because there was no
+ * server on the other end to supply one.
+ *
+ * It exists because the alternative was putting the platform's own words on
+ * somebody's screen. `fetch` rejects with whatever the runtime felt like
+ * saying, and on React Native for Android that is
+ * `fetch failed: java.net.ConnectException: Failed to connect to
+ * /192.168.1.103:4100` — which is what the sign-in screen showed, in red,
+ * to anyone who opened this app with no signal. A person on a train reads that
+ * as the app being broken, because it is indistinguishable from the app being
+ * broken.
+ *
+ * Every caller already had to tell "the server refused" from "there was no
+ * server", and the way they did it was to check whether the thing they caught
+ * was an `ApiError` — see `worthRetrying` in `apps/mobile/lib/outbox.ts`, which
+ * is right and stays right. This gives the other half of that test a name, a
+ * sentence written for a person, and the original underneath in `cause` for
+ * anyone debugging.
+ */
+export class NetworkError extends Error {
+  constructor(readonly cause: unknown) {
+    super('The request could not be sent.');
+    this.name = 'NetworkError';
+  }
+}
+
 export interface ApiClientOptions {
   baseUrl: string;
   /**
@@ -109,7 +136,23 @@ export function createApiClient({
   sessionTransport = 'cookie',
   fetchImpl,
 }: ApiClientOptions) {
-  const doFetch = fetchImpl ?? globalThis.fetch;
+  const rawFetch = fetchImpl ?? globalThis.fetch;
+
+  /**
+   * Every request in this file goes through here, including the two that do not
+   * go through `request` — the bucket upload and the chat stream. A transport
+   * failure on any of them is the same event and deserves the same name.
+   */
+  const doFetch: typeof fetch = async (input, init) => {
+    try {
+      return await rawFetch(input, init);
+    } catch (error) {
+      // Rethrown rather than wrapped a second time: a `NetworkError` can only
+      // come from this function, and nesting them would hide the real cause.
+      if (error instanceof NetworkError) throw error;
+      throw new NetworkError(error);
+    }
+  };
   const root = baseUrl.replace(/\/$/, '');
   const currentToken = () => (typeof token === 'function' ? token() : token);
 

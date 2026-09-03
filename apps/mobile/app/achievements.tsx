@@ -11,6 +11,7 @@ import { api } from '@/lib/api';
 import { useT } from '@/lib/i18n';
 import { type as t, useColors } from '@/theme';
 import { useRefreshOnReturn } from '@/hooks/useRefreshOnReturn';
+import { messageOf } from '@/lib/errors';
 
 /**
  * The wall, on its own.
@@ -45,7 +46,7 @@ export default function AchievementsScreen() {
       setProgress(await api.progress(14));
       setError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     }
   }, []);
 

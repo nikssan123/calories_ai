@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import * as StoreReview from 'expo-store-review';
+import { requireOptionalNativeModule } from 'expo';
+import type * as StoreReviewSdk from 'expo-store-review';
 
 /**
  * Asking for a store rating, at the only moment the app has earned one.
@@ -66,6 +67,58 @@ const KEY = 'ct:review-prompt:v1';
 type Asked = Record<string, string>;
 
 /**
+ * The SDK, required on first use rather than imported at the top of this file.
+ *
+ * `expo-store-review` resolves its native module at module scope —
+ * `requireNativeModule('ExpoStoreReview')` runs on the import, not on the first
+ * call — so a static import throws while the module is being *evaluated*, in
+ * any runtime that does not carry the native side. That is not a missing
+ * feature, it is a missing app: Today imports this file, expo-router reports
+ * `(tabs)/today.tsx` as "missing the required default export", and the screen
+ * does not render at all. `Cannot find native module 'ExpoStoreReview'` is what
+ * is on the phone instead of the food diary.
+ *
+ * The runtimes that hit it are ordinary ones — Expo Go, and any dev client
+ * built before this dependency was added, which is every one of them that was
+ * installed before the rating ask landed. `maybeAskForReview` already catches
+ * "the module missing on this platform"; the catch was simply one level too
+ * late to run.
+ *
+ * `lib/billing.ts` carries the same guard for the same reason, and its comment
+ * is the longer version of this one — a store binding took down the food diary
+ * once already.
+ */
+type Sdk = typeof StoreReviewSdk;
+let sdk: Sdk | null | undefined;
+
+function storeReview(): Sdk | null {
+  if (sdk !== undefined) return sdk;
+  /*
+   * Asked before it is required, rather than requiring it and catching.
+   *
+   * Catching works — the app runs, and Today draws — but `requireNativeModule`
+   * throwing is still a thrown error, and in development LogBox puts it on the
+   * screen as an *uncaught* one over the top of the app. That is the same red
+   * rectangle this was supposed to remove, so the question has to be asked in a
+   * way that has an answer rather than an exception.
+   *
+   * The `try` stays behind it for the require itself, which is a different
+   * failure with a different cause and no reason to be fatal either.
+   */
+  if (!requireOptionalNativeModule('ExpoStoreReview')) {
+    sdk = null;
+    return sdk;
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    sdk = require('expo-store-review') as Sdk;
+  } catch {
+    sdk = null;
+  }
+  return sdk;
+}
+
+/**
  * Ask for a rating if this run has just cleared a milestone that has not been
  * asked on before.
  *
@@ -75,6 +128,9 @@ type Asked = Record<string, string>;
  */
 export async function maybeAskForReview(run: number): Promise<void> {
   try {
+    const StoreReview = storeReview();
+    if (!StoreReview) return;
+
     const milestone = MILESTONES.find((days) => run >= days);
     if (milestone === undefined) return;
 
@@ -111,8 +167,10 @@ export async function maybeAskForReview(run: number): Promise<void> {
       throw error;
     }
   } catch {
-    // Storage unavailable, the module missing on this platform, the sheet
-    // refusing — none of it is worth a word to the user. See the header.
+    // Storage unavailable, the sheet refusing, Play declining to run the flow —
+    // none of it is worth a word to the user. See the header. A runtime with no
+    // native module at all does not reach here; it never gets past
+    // `storeReview()`, which is the point of that function.
   }
 }
 

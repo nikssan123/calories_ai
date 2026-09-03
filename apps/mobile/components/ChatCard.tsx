@@ -33,6 +33,7 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { haptics } from '@/lib/haptics';
 import { useLocale } from '@/lib/i18n';
 import { useT, type StringKey } from '@/lib/i18n';
+import { messageOf } from '@/lib/errors';
 
 /**
  * The visual half of a turn — and the thing this app should be recognised by.
@@ -245,7 +246,7 @@ function SuggestedRecipe({ recipe, onLogged }: { recipe: Recipe; onLogged?: () =
       haptics.logged();
       onLogged?.();
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     } finally {
       setCooking(false);
     }
@@ -993,7 +994,7 @@ function WeightCard({
       haptics.logged();
       onLogged?.();
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     } finally {
       setSaving(false);
     }

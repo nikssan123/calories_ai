@@ -52,6 +52,7 @@ import { useScrollToTop } from '@/hooks/useScrollToTop';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { writeDaySnapshot } from '@/lib/snapshot';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
+import { messageOf } from '@/lib/errors';
 
 /** The `date` the calendar links here with. Anything else is ignored. */
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -196,7 +197,7 @@ export default function TodayScreen() {
         if (target === null) setToday(summary.local_date);
       } catch (e) {
         if (seq !== latest.current) return;
-        setError((e as Error).message);
+        setError(messageOf(e, tr));
       } finally {
         if (seq === latest.current) setLoading(false);
       }
@@ -559,7 +560,7 @@ export default function TodayScreen() {
         void api
           .deleteExerciseEntry(entry.id)
           .then(() => entryRemoved(entry.id))
-          .catch((e: Error) => toast.error(e.message))
+          .catch((e: Error) => toast.error(messageOf(e, tr)))
           .finally(() => void load(date));
       },
       restore: () => setFetched(before),
@@ -864,7 +865,7 @@ export default function TodayScreen() {
 
           {waiting === 0 && !live && (
             <Text style={[t.footnote, styles.centred, { color: colors.mutedForeground }]}>
-              Offline — showing your last saved day.
+              {tr('today.offlineDay')}
             </Text>
           )}
 

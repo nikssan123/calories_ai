@@ -61,6 +61,7 @@ export const en = {
   'today.waitingToSync': (count: number) =>
     n(count, { one: 'change waiting to sync', other: 'changes waiting to sync' }),
   'today.lastSavedDay': ' · showing your last saved day',
+  'today.offlineDay': 'Offline — showing your last saved day.',
   'today.unsent': ' · waiting to sync',
   'today.macroLine': (protein: string, carbs: string, fat: string) =>
     `${protein}P · ${carbs}C · ${fat}F`,
@@ -1149,6 +1150,8 @@ export const en = {
   'common.edit': 'Edit',
   'common.close': 'Close',
   'common.retry': 'Try again',
+  'common.offline': 'You’re offline. This will work again when you have signal.',
+  'common.unexpected': 'Something went wrong. Try again.',
   'common.loading': 'Loading…',
   'common.today': 'Today',
   'common.yesterday': 'Yesterday',

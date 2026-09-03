@@ -30,6 +30,7 @@ import { haptics } from '@/lib/haptics';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
 import { useRefreshOnReturn } from '@/hooks/useRefreshOnReturn';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
+import { messageOf } from '@/lib/errors';
 
 const WINDOWS = [14, 30, 90] as const;
 
@@ -75,7 +76,7 @@ export default function ProgressScreen() {
       setProgress(await api.progress(days));
       setError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     }
   }, [days]);
 
@@ -105,7 +106,7 @@ export default function ProgressScreen() {
       setProgress(await api.progress(days));
       setError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     } finally {
       setSaving(false);
     }

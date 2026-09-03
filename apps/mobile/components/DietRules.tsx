@@ -7,6 +7,7 @@ import { InsetGroup } from '@/components/InsetGroup';
 import { api } from '@/lib/api';
 import { font, type as t, useColors } from '@/theme';
 import { useT, type StringKey } from '@/lib/i18n';
+import { messageOf } from '@/lib/errors';
 
 /**
  * What the kitchen must never suggest.
@@ -53,7 +54,7 @@ export function DietRules({
       onChange(await api.updateProfile(patch));
     } catch (e) {
       onChange(previous);
-      onError((e as Error).message);
+      onError(messageOf(e, tr));
     }
   }
 

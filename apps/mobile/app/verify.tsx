@@ -16,6 +16,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { font, useColors, useType } from '@/theme';
 import { useT } from '@/lib/i18n';
+import { messageOf } from '@/lib/errors';
 
 /**
  * The six digits that open the rest of the app.
@@ -52,7 +53,7 @@ export default function VerifyScreen() {
       // session's own view of itself. Re-read it rather than assuming.
       await refresh();
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     } finally {
       setBusy(false);
     }
@@ -65,7 +66,7 @@ export default function VerifyScreen() {
       const result = await api.resendVerification();
       setSent(result.message);
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     } finally {
       setBusy(false);
     }

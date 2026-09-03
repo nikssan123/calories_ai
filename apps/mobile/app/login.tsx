@@ -20,6 +20,7 @@ import { PRIVACY_URL, TERMS_URL } from '@/lib/links';
 import { font, type as t, useColors, useType } from '@/theme';
 import { LanguagePicker } from '@/components/LanguagePicker';
 import { preferredLocale, setPreferredLocale, useLocale, useT } from '@/lib/i18n';
+import { messageOf } from '@/lib/errors';
 
 /**
  * Sign in, or create an account.
@@ -99,7 +100,7 @@ export default function LoginScreen() {
       // the rest of the app renders from exists.
       await refresh();
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     } finally {
       setBusy(false);
     }
@@ -116,7 +117,7 @@ export default function LoginScreen() {
       await adoptSession(status);
       await refresh();
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     } finally {
       setGoogle(false);
     }
@@ -140,7 +141,7 @@ export default function LoginScreen() {
       const result = await api.forgotPassword(address);
       setSent(result.message);
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     } finally {
       setForgetting(false);
     }

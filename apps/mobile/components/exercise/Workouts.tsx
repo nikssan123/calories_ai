@@ -10,6 +10,7 @@ import { api } from '@/lib/api';
 import { haptics } from '@/lib/haptics';
 import { font, type as t, useColors } from '@/theme';
 import { useLocale, useT } from '@/lib/i18n';
+import { messageOf } from '@/lib/errors';
 
 /**
  * Saved workouts and the week they sit in, on the Exercise screen.
@@ -51,7 +52,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
       setFailed(false);
       setError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
       setFailed(true);
     }
   }, []);
@@ -67,7 +68,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
       setWeek(week);
       setRoutines((await api.routines()).routines);
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     }
   }
 
@@ -76,7 +77,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
     try {
       await api.deleteRoutine(routine.id);
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     }
     void load();
   }
@@ -363,7 +364,7 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
       haptics.logged();
       onDone();
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
       setSaving(false);
     }
   }

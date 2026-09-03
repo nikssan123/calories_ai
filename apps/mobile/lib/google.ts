@@ -3,6 +3,7 @@ import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import type { AuthStatus } from '@ct/shared';
 import { api } from '@/lib/api';
+import { AppError } from '@/lib/errors';
 
 /**
  * "Continue with Google", on a phone.
@@ -113,11 +114,11 @@ export async function signInWithGoogle(): Promise<AuthStatus | null> {
     // screen, which is the same decision as closing the browser and gets the
     // same silence.
     if (failure === 'cancelled') return null;
-    throw new Error(SIGN_IN_ERRORS[failure] ?? SIGN_IN_ERRORS.google);
+    throw new AppError(SIGN_IN_ERRORS[failure] ?? SIGN_IN_ERRORS.google!);
   }
 
   const code = typeof queryParams?.code === 'string' ? queryParams.code : null;
-  if (!code) throw new Error(SIGN_IN_ERRORS.google);
+  if (!code) throw new AppError(SIGN_IN_ERRORS.google!);
 
   return api.exchangeGoogle({ code, verifier });
 }

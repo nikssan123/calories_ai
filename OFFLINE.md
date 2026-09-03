@@ -27,6 +27,12 @@ noted where they happened: the idempotency key needed a table rather than a
 column (§1), and the merge arithmetic ended up in `@ct/shared` rather than on
 the phone, so it could be tested at all (§4).
 
+**And none of it could be reached**, which §8 is about and which none of the
+sections below saw coming: a launch with no network showed the sign-in screen,
+so the cache, the outbox and the catalogue were all behind a door that needs a
+server to open. Written last because it was found last — by opening the app in
+a tunnel rather than by losing signal inside it.
+
 **Not in scope, deliberately.** Photos, chat turns, barcode lookup, recipe
 generation and the weekly review stay online. Every one of them needs a server
 that is thinking or a catalogue that is remote, and pretending otherwise would
@@ -219,3 +225,115 @@ endpoint is there and typing numbers is useful with a network too. It does not
 get an outbox or a service worker. A desktop browser that loses connectivity is
 a different problem with a different answer, and shipping half of it here would
 mean two cache implementations to keep honest.
+
+---
+
+## 8. The cold start that had none of it — fixed
+
+Everything above is reachable only once the app is past its own front door, and
+until this it was not.
+
+`AuthProvider.refresh` has always treated an unreachable server as signed out —
+deliberately, because that is the screen with a way forward — and kept the token
+so that "a signal that comes back finds the session still there". The token was
+the only thing it kept. Nothing read it.
+
+So a launch with no network resolved to `SIGNED_OUT`, `app/_layout.tsx` drew the
+sign-in screen, and every one of §3–§6 sat behind a login that cannot be
+completed without a network. The cache had the day in it. The outbox had the
+meals in it. Neither was reachable, and neither was the tab that draws them. An
+app whose listing promises *logging with no signal at all* spent its first cold
+start in a basement asking for an account.
+
+Resuming had been fixed and launching had not, which is why it survived: the
+foreground listener re-asks while signed out, so anyone who lost signal *inside*
+the app kept their session and got it back. It is only the launch — phone
+restarted, app swiped away, the tunnel entered before the tap rather than after
+it — that had nothing to fall back on.
+
+### The fourth cached thing
+
+`lib/store.ts` keeps a day, the templates and the profile, and all three are
+keyed by user id. What was missing is the thing that answers *which user*, which
+by definition cannot be keyed by the answer: the last `AuthStatus` the server
+gave us, under one key that is not namespaced.
+
+Three rules keep it from being a way to fake a session:
+
+- **Restored only beside a token.** The keystore still holds the real one, and a
+  cached status with nothing behind it is a picture of a session rather than a
+  session. Sign-out destroys both, and destroys this one first.
+- **Never a signed-out status.** Being signed out is a fact the phone can reach
+  on its own, and restoring one would be indistinguishable from an empty cache.
+  `refresh` erases the copy the moment the server says `authenticated: false`.
+- **Marked stale, and re-asked on the next foreground.** The restored status is
+  a copy; the server has the original. The listener that used to run only while
+  signed out now runs here too, so the first moment of signal replaces the guess
+  with an answer — including the case where the session really was revoked.
+
+Nothing is granted by any of it. Every request still carries the token and the
+API still decides; what the restored status buys is the *screen*, and the
+screen is where the cache and the outbox live.
+
+### And the sentence in the wrong language entirely
+
+The other half of the report, and the half that was on screen the whole time:
+*a bunch of java errors are shown*.
+
+Every screen in the app rendered `(e as Error).message` — fifty call sites —
+on the assumption that the thing it caught had been written by a person. Two of
+the three kinds are. The third is the platform, and on Android with no route to
+the API the platform says:
+
+    fetch failed: java.net.ConnectException: Failed to connect to /10.0.2.2:4000
+
+In red, under the password field. And on Today, Progress, Cook, Exercise,
+History, the plan screen and the barcode scanner, each in its own words, all of
+them a Java exception class. An app that sells logging with no signal cannot
+answer a tunnel by naming a Java class, because that is indistinguishable from
+being broken — which is exactly how it was reported.
+
+The fix is one distinction made once. `@ct/api-client` now throws a
+`NetworkError` when `fetch` itself rejects, so the transport failure has a name
+rather than being whatever the runtime felt like saying, and
+`apps/mobile/lib/errors.ts` turns the three kinds into the three answers:
+
+- **`NetworkError`** — "You're offline. This will work again when you have
+  signal." Translated, in all five languages, like everything else on screen.
+- **`ApiError`** — the server's own sentence, untouched. It was written for a
+  reader and nothing here improves on it.
+- **anything else** — one generic sentence. A bug, a native module, a parse:
+  nothing a reader can act on, and the raw text is a leak. `AppError` is the
+  opt-out for the app's own deliberate refusals, which read like an `ApiError`
+  and are passed through like one.
+
+Every call site was changed, not just the sign-in screen. The offline case is
+the one that is *supposed* to happen here, so it is the one the app should be
+best at explaining, and there is no screen where it does not arise.
+
+### And the import that took the screen down anyway
+
+Found in the same session and worth recording beside it, because the symptom is
+identical from the outside — the app opens and there is no app.
+
+`lib/review-prompt.ts` imported `expo-store-review` at the top of the file.
+That package resolves its native module at module scope, so on any runtime that
+does not carry the native side the import throws while the module is being
+*evaluated*. Today imports it; expo-router then reports `(tabs)/today.tsx` as
+"missing the required default export" and draws nothing at all. On screen it is
+`Cannot find native module 'ExpoStoreReview'` where the food diary should be.
+
+`maybeAskForReview` already caught "the module missing on this platform". The
+catch was one level too late to ever run.
+
+It is required on first use now, exactly as `lib/billing.ts` has done since a
+store binding took the app down the first time — and asked for before it is
+required, with `requireOptionalNativeModule('ExpoStoreReview')`, which answers
+`null` instead of throwing. Catching the throw was enough to make the app work;
+it was not enough to keep it off the screen, because a caught
+`requireNativeModule` failure still reaches LogBox in development and paints
+the same red rectangle over the top of a running app. A question with an answer
+beats a question with an exception.
+
+A runtime without the module gets no rating prompt, which is the correct amount
+of degradation for a rating prompt.

@@ -15,6 +15,7 @@ import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
+import { messageOf } from '@/lib/errors';
 
 /**
  * A recipe written for this person, on its own screen.
@@ -91,7 +92,7 @@ export default function GeneratedRecipeScreen() {
       );
       router.back();
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
       setCooking(false);
     }
   }
@@ -103,7 +104,7 @@ export default function GeneratedRecipeScreen() {
       await api.saveRecipe(id, next);
     } catch (e) {
       setSaved(!next);
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     }
   }
 

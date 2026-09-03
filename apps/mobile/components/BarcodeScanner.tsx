@@ -23,6 +23,7 @@ import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
 import { useT } from '@/lib/i18n';
+import { messageOf } from '@/lib/errors';
 
 /**
  * A packet, read off its barcode.
@@ -214,7 +215,7 @@ export function BarcodeScanner({
       if (e instanceof ApiError && e.status === 404) {
         setStage({ at: 'missed' });
       } else {
-        setError((e as Error).message);
+        setError(messageOf(e, tr));
         setStage({ at: 'scanning' });
         claimed.current = false;
       }
@@ -259,7 +260,7 @@ export function BarcodeScanner({
       haptics.logged();
       onLogged(message);
     } catch (e) {
-      setError((e as Error).message);
+      setError(messageOf(e, tr));
     } finally {
       setLogging(false);
     }
