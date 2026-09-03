@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import * as WebBrowser from 'expo-web-browser';
 import { Chunk, PressableChunk } from '@/components/Chunk';
+import { Glyph } from '@/components/Glyph';
 import { Lockup } from '@/components/Lockup';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -50,6 +52,16 @@ export default function LoginScreen() {
   const [google, setGoogle] = useState(false);
   const [forgetting, setForgetting] = useState(false);
   const [sent, setSent] = useState<string | null>(null);
+  /*
+   * Off on every mount, and never remembered.
+   *
+   * A revealed password is a decision about the room somebody is standing in,
+   * not a preference — the person who showed it once on their own sofa is the
+   * same person signing in on a train the next morning. Persisting it would
+   * quietly turn a deliberate act into the default, which is the one thing a
+   * password field must not do.
+   */
+  const [revealed, setRevealed] = useState(false);
 
   /*
    * Only a server with no accounts at all opens on "create account"; otherwise a
@@ -248,16 +260,43 @@ export default function LoginScreen() {
         </Field>
 
         <Field label={tr('auth.password')}>
-          <TextInput
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoComplete={signup ? 'new-password' : 'current-password'}
-            onSubmitEditing={() => void submit()}
-            returnKeyType="go"
-            style={[styles.input, t.body, { color: colors.foreground }]}
-            placeholderTextColor={colors.mutedForeground}
-          />
+          {/*
+            The field and the control that reveals it, on one line.
+
+            `autoComplete` is deliberately *not* varied with `revealed`: Android
+            keys its autofill off that hint, and a value that changes under the
+            password manager mid-form is how a saved credential stops being
+            offered. The eye changes what is drawn, and nothing else about what
+            this input is.
+          */}
+          <View style={styles.passwordRow}>
+            <TextInput
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!revealed}
+              autoComplete={signup ? 'new-password' : 'current-password'}
+              onSubmitEditing={() => void submit()}
+              returnKeyType="go"
+              style={[styles.input, styles.passwordInput, t.body, { color: colors.foreground }]}
+              placeholderTextColor={colors.mutedForeground}
+            />
+            <Pressable
+              onPress={() => setRevealed((on) => !on)}
+              accessibilityRole="button"
+              /*
+               * Labelled with what the tap will do, not with what the field is
+               * currently doing. A screen reader announcing "password hidden"
+               * describes the state its user cannot see anyway; "show password"
+               * is the sentence that tells them what happens if they act.
+               */
+              accessibilityLabel={revealed ? tr('auth.hidePassword') : tr('auth.showPassword')}
+              accessibilityState={{ selected: revealed }}
+              hitSlop={10}
+              style={({ pressed }) => [styles.reveal, { opacity: pressed ? 0.5 : 1 }]}
+            >
+              <Glyph icon={revealed ? 'eye-off' : 'eye'} color={colors.mutedForeground} size={20} />
+            </Pressable>
+          </View>
         </Field>
 
         {/*
@@ -434,6 +473,11 @@ const styles = StyleSheet.create({
   title: { marginTop: 10 },
   field: { gap: 6, marginBottom: 16 },
   input: { height: 44, paddingHorizontal: 14 },
+  passwordRow: { flexDirection: 'row', alignItems: 'center' },
+  // The row's right-hand padding belongs to the button, so that the tap target
+  // reaches the edge of the field instead of stopping 14pt short of it.
+  passwordInput: { flex: 1, paddingRight: 0 },
+  reveal: { height: 44, justifyContent: 'center', paddingHorizontal: 14 },
   error: { marginBottom: 12 },
   submit: { marginTop: 8 },
   submitFace: { height: 48, alignItems: 'center', justifyContent: 'center' },

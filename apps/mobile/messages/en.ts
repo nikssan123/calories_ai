@@ -176,6 +176,7 @@ export const en = {
   'setup.aboutTitle': 'About',
   'setup.privacyPolicy': 'Privacy policy',
   'setup.termsOfService': 'Terms of service',
+  'setup.rateApp': 'Rate this app',
   'setup.unsavedChanges': 'Unsaved changes',
   'setup.saveChanges': 'Save changes',
 
@@ -293,6 +294,8 @@ export const en = {
   'auth.email': 'Email',
   'auth.password': 'Password',
   'auth.passwordHint': 'At least 8 characters.',
+  'auth.showPassword': 'Show password',
+  'auth.hidePassword': 'Hide password',
   'auth.nameOptional': 'Name (optional)',
   'auth.continueWithGoogle': 'Continue with Google',
   'auth.forgotPassword': 'Forgot your password?',
