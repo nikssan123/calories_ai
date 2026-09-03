@@ -282,3 +282,37 @@ is just making more of those.
 
 Do not build the AI video generator until steps 1–5 have run once and you
 know which hooks land.
+
+---
+
+## 9. Accounts
+
+Created 2026-09-04. Handle is `daysofarapp` everywhere it was available.
+
+| Platform | Handle | State |
+|---|---|---|
+| Facebook Page | [facebook.com/daysofarapp](https://facebook.com/daysofarapp) | Live. Name, bio, website, support email, icon all set. Page ID `61594106339199`. |
+| TikTok | [@daysofarapp](https://www.tiktok.com/@daysofarapp) | Live. Icon + bio set. **Display name still reads `daysofarapp`.** |
+| Instagram | `daysofarapp` | Not created yet. Handle verified free. |
+
+Shared profile copy:
+
+- **Display name:** `Day So Far`
+- **Bio:** `Just say what you ate. AI food diary, macro tracker and calorie counting.` (73 chars — fits TikTok's 80 and IG's 150)
+- **Website:** `https://daysofar.com`
+- **Support email:** `support@daysofar.com`
+- **Avatar:** `apps/mobile/assets/icon.png`
+
+### Open items
+
+- **TikTok display name** — locked by cooldown until **2026-09-11**. Set it to `Day So Far` then; it is the only name a viewer actually reads on TikTok.
+- **TikTok username** — locked until **2026-10-04**, irrelevant unless you want to change it.
+- **Facebook cover photo** — none. Wants a 1640x856; a job for W1 once the PC is up.
+
+### Do not switch TikTok to a Business account
+
+It unlocks a website link field, and costs you the commercial music library —
+Business accounts can only use royalty-free "Commercial Sounds". Trending audio
+is a major distribution input on TikTok, so that trade is heavily negative at
+your stage. Stay on a personal/Creator account and put the link in the bio text
+if you need one.
