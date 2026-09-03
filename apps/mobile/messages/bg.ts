@@ -118,6 +118,8 @@ export const bg: Messages = {
   'setup.save': 'Запази',
   'setup.saving': 'Запазва се…',
   'setup.saved': 'Запазено',
+  'setup.savedTargetMoved': (from: string, to: string) => `Запазено — дневна цел ${from} → ${to} kcal`,
+  'setup.savedTargetSame': (kcal: string) => `Запазено — дневната цел остава ${kcal} kcal`,
 
   'setup.requiredMissing':
     'Пол, дата на раждане, ръст, цел и активност са нужни, за да сметнем целта ти.',

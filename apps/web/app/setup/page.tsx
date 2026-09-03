@@ -1,16 +1,26 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { BadgeCheck, Check, ChevronRight, Mail, Shield } from 'lucide-react';
 import { toast } from 'sonner';
-import type { ActivityLevel, DaySummary, Goal, Profile, Sex, UnitSystem } from '@ct/shared';
+import type {
+  ActivityLevel,
+  DaySummary,
+  Goal,
+  Locale,
+  Profile,
+  Sex,
+  TargetBasis,
+  UnitSystem,
+} from '@ct/shared';
 import {
   bodyWeightToKg,
   bodyWeightUnit,
   cmToFeetInches,
   feetInchesToCm,
   formatNumber,
+  targetInputsChanged,
   toBodyWeight,
   localeOf,
   unitsOf,
@@ -96,12 +106,36 @@ export default function SetupPage() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
+  /*
+   * What the last save did to the daily target, for the bar to say out loud.
+   *
+   * The number on this page is the whole point of the five fields under it, and
+   * until this existed a save reported only that it had happened. That is fine
+   * for a renamed account and wrong for the edit this page is mostly used for:
+   * somebody switching from maintain to lose reads "Saved", scrolls back to a
+   * figure they never memorised, and has no way to tell a target that moved
+   * from one that did not. It happens in both directions — an edit that moves
+   * the target a long way looks the same as one the server declined to act on,
+   * because a custom target is not ours to move.
+   *
+   * So the bar reports the arithmetic instead of the write, and reports it even
+   * when the answer is "unchanged", which is the case that needed saying.
+   */
+  const [receipt, setReceipt] = useState<TargetReceipt | null>(null);
+  /*
+   * The five as the server last had them. Held in a ref rather than state
+   * because nothing renders from it: `profile` is the edited copy from the
+   * first keystroke onwards, so by the time a save lands there is nothing left
+   * on screen to compare against.
+   */
+  const basis = useRef<TargetBasis | null>(null);
 
   useEffect(() => {
     void (async () => {
       try {
         const [p, d] = await Promise.all([api.profile(), api.day()]);
         setProfile(p);
+        basis.current = p;
         setDay(d);
       } catch (e) {
         toast.error((e as Error).message);
@@ -117,9 +151,11 @@ export default function SetupPage() {
    */
   useEffect(() => {
     if (!saved) return;
-    const timer = setTimeout(() => setSaved(false), SAVED_LINGER_MS);
+    // A sentence with two numbers in it takes longer to read than "Saved", and
+    // is the one thing on this page somebody might actually want to reread.
+    const timer = setTimeout(() => setSaved(false), receipt ? RECEIPT_LINGER_MS : SAVED_LINGER_MS);
     return () => clearTimeout(timer);
-  }, [saved]);
+  }, [saved, receipt]);
 
   const units = unitsOf(profile);
   const locale = localeOf(profile);
@@ -129,11 +165,19 @@ export default function SetupPage() {
     setProfile((prev) => (prev ? { ...prev, [key]: value } : prev));
     setDirty(true);
     setSaved(false);
+    // The last save's arithmetic describes a profile that is no longer the one
+    // on screen. Cleared on the keystroke rather than on the next save, so a
+    // stale pair of numbers cannot reappear under a later one.
+    setReceipt(null);
   }
 
   async function save() {
     if (!profile) return;
     setSaving(true);
+    // Read before the write, both halves: what the target was, and which of the
+    // five it was computed from. Afterwards there is nothing left to compare to.
+    const before = basis.current;
+    const wasKcal = day?.targets.kcal ?? null;
     try {
       const updated = await api.updateProfile({
         display_name: profile.display_name,
@@ -151,7 +195,17 @@ export default function SetupPage() {
         day_start_hour: profile.day_start_hour,
       });
       setProfile(updated);
-      setDay(await api.day());
+      const fresh = await api.day();
+      setDay(fresh);
+      /*
+       * Only for an edit that could have moved it. A saved name or a flipped
+       * switch reporting "target unchanged" would be the app answering a
+       * question nobody asked, every time, until the sentence stopped being
+       * read at all — and this one has to still be read on the day it matters.
+       */
+      const touched = before ? targetInputsChanged(before, updated) : false;
+      basis.current = updated;
+      setReceipt(touched && wasKcal !== null ? { from: wasKcal, to: fresh.targets.kcal } : null);
       setDirty(false);
       setSaved(true);
     } catch (e) {
@@ -504,13 +558,26 @@ export default function SetupPage() {
         </div>
       </div>
 
-      <SaveBar dirty={dirty} saving={saving} saved={saved} onSave={() => void save()} />
+      <SaveBar
+        dirty={dirty}
+        saving={saving}
+        saved={saved}
+        receipt={receipt}
+        locale={locale}
+        onSave={() => void save()}
+      />
     </div>
   );
 }
 
 /** How long "Saved" stays up before the bar leaves. Long enough to read. */
 const SAVED_LINGER_MS = 2200;
+
+/** Long enough to read twice, which a pair of numbers usually is. */
+const RECEIPT_LINGER_MS = 5000;
+
+/** What a save did to the daily target. Equal ends mean it did nothing. */
+type TargetReceipt = { from: number; to: number };
 
 /**
  * The save control, pinned to the foot of the screen rather than parked at the
@@ -533,15 +600,28 @@ function SaveBar({
   dirty,
   saving,
   saved,
+  receipt,
+  locale,
   onSave,
 }: {
   dirty: boolean;
   saving: boolean;
   saved: boolean;
+  receipt: TargetReceipt | null;
+  locale: Locale;
   onSave: () => void;
 }) {
   const t = useT();
   if (!dirty && !saving && !saved) return null;
+
+  const done = receipt
+    ? receipt.from === receipt.to
+      ? t('setup.savedTargetSame')(formatNumber(receipt.to, locale))
+      : t('setup.savedTargetMoved')(
+          formatNumber(receipt.from, locale),
+          formatNumber(receipt.to, locale),
+        )
+    : t('setup.saved');
 
   return (
     <div className="material border-border animate-in fade-in slide-in-from-bottom-4 z-20 border-t-2">
@@ -555,7 +635,7 @@ function SaveBar({
             t('setup.unsavedChanges')
           ) : (
             <span className="inline-flex items-center gap-1.5">
-              <Check size={15} /> {t('setup.saved')}
+              <Check size={15} className="shrink-0" /> {done}
             </span>
           )}
         </p>

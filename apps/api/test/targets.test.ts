@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { TARGET_INPUTS } from '@ct/shared';
 import {
   ageFrom,
   calculateTargets,
@@ -151,12 +152,12 @@ describe('targetInputsChanged', () => {
     goal: 'maintain' as const,
   };
 
-  it.each(['sex', 'birth_date', 'height_cm', 'activity_level', 'goal'] as const)(
-    'sees %s move',
-    (field) => {
-      expect(targetInputsChanged(profile, { ...profile, [field]: null })).toBe(true);
-    },
-  );
+  // Driven from the list itself rather than a copy of it: a sixth input added
+  // to the formula has to arrive already covered, because the thing it would
+  // otherwise break is a screen telling somebody nothing moved.
+  it.each(TARGET_INPUTS)('sees %s move', (field) => {
+    expect(targetInputsChanged(profile, { ...profile, [field]: null })).toBe(true);
+  });
 
   it('ignores a patch the formula cannot read', () => {
     expect(targetInputsChanged(profile, { ...profile })).toBe(false);

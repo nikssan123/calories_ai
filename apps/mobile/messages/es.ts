@@ -122,6 +122,8 @@ export const es: Messages = {
   'setup.save': 'Guardar',
   'setup.saving': 'Guardando…',
   'setup.saved': 'Guardado',
+  'setup.savedTargetMoved': (from: string, to: string) => `Guardado — objetivo diario ${from} → ${to} kcal`,
+  'setup.savedTargetSame': (kcal: string) => `Guardado — objetivo diario sin cambios: ${kcal} kcal`,
 
   'setup.requiredMissing':
     'Hacen falta sexo, fecha de nacimiento, altura, objetivo y actividad para calcular tu objetivo.',

@@ -130,6 +130,8 @@ export const bg: Messages = {
   'setup.save': 'Запази',
   'setup.saving': 'Запазва се…',
   'setup.saved': 'Запазено',
+  'setup.savedTargetMoved': (from: string, to: string) => `Запазено — дневна цел ${from} → ${to} kcal`,
+  'setup.savedTargetSame': (kcal: string) => `Запазено — дневната цел остава ${kcal} kcal`,
 
   'sex.male': 'Мъж',
   'sex.female': 'Жена',

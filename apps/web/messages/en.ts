@@ -134,6 +134,15 @@ export const en = {
   'setup.save': 'Save',
   'setup.saving': 'Saving…',
   'setup.saved': 'Saved',
+  /**
+   * The receipt for a save that could have moved the daily target.
+   *
+   * Two numbers rather than a word, because "Saved" cannot tell the difference
+   * between a target that moved a long way and one the server declined to
+   * touch — and the second case is the one somebody is owed an answer about.
+   */
+  'setup.savedTargetMoved': (from: string, to: string) => `Saved — daily target ${from} → ${to} kcal`,
+  'setup.savedTargetSame': (kcal: string) => `Saved — daily target unchanged at ${kcal} kcal`,
   'setup.activitySedentary': 'Desk job, little exercise',
   'setup.activityLight': 'Light exercise 1–3 days/week',
   'setup.activityModerate': 'Moderate exercise 3–5 days/week',

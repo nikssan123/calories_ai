@@ -121,6 +121,8 @@ export const fr: Messages = {
   'setup.save': 'Enregistrer',
   'setup.saving': 'Enregistrement…',
   'setup.saved': 'Enregistré',
+  'setup.savedTargetMoved': (from: string, to: string) => `Enregistré — objectif du jour ${from} → ${to} kcal`,
+  'setup.savedTargetSame': (kcal: string) => `Enregistré — objectif du jour inchangé : ${kcal} kcal`,
 
   'sex.male': 'Homme',
   'sex.female': 'Femme',

@@ -1,7 +1,10 @@
-import type { ActivityLevel, Goal, Profile, Sex, Targets, TargetSource } from '@ct/shared';
-// Derived from the calorie target rather than stored, and now shared with the
-// phone, which has to draw the quality panel for a day it cannot fetch.
-export { qualityTargetsFor } from '@ct/shared';
+import type { ActivityLevel, Goal, Sex, TargetBasis, Targets, TargetSource } from '@ct/shared';
+import { targetInputsChanged } from '@ct/shared';
+// Both derived rather than stored, and both now shared with the clients: the
+// phone has to draw the quality panel for a day it cannot fetch, and both
+// clients have to know whether the save they just made could have moved a
+// target before they report a number for it.
+export { qualityTargetsFor, targetInputsChanged } from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import { latestWeight } from './log.ts';
 
@@ -67,13 +70,6 @@ export interface MacroBasis {
   height_cm: number | null;
   goal: Goal | null;
 }
-
-/** The five profile fields the calculation reads. Weight is not one — it comes
- * from the scale, not from the profile screen. */
-export type TargetProfileFields = Pick<
-  Profile,
-  'sex' | 'birth_date' | 'height_cm' | 'activity_level' | 'goal'
->;
 
 /** Sensible defaults when setup hasn't happened yet — the app still works on day one. */
 export const FALLBACK_TARGETS: Targets = {
@@ -195,20 +191,6 @@ export async function targetsForDate(userId: string, localDate: string): Promise
   return (await storedTargetsForDate(userId, localDate)) ?? FALLBACK_TARGETS;
 }
 
-/** Whether a profile edit touched anything the calculation reads. */
-export function targetInputsChanged(
-  before: TargetProfileFields,
-  after: TargetProfileFields,
-): boolean {
-  return (
-    before.sex !== after.sex ||
-    before.birth_date !== after.birth_date ||
-    before.height_cm !== after.height_cm ||
-    before.activity_level !== after.activity_level ||
-    before.goal !== after.goal
-  );
-}
-
 /**
  * The same learned maintenance, aimed at a different goal.
  *
@@ -242,8 +224,8 @@ function regoal(
  */
 export async function retargetFromProfile(
   userId: string,
-  before: TargetProfileFields,
-  after: TargetProfileFields,
+  before: TargetBasis,
+  after: TargetBasis,
   localDate: string,
   reason: string,
 ): Promise<void> {

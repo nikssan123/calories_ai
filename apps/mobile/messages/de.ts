@@ -123,6 +123,8 @@ export const de: Messages = {
   'setup.save': 'Speichern',
   'setup.saving': 'Wird gespeichert…',
   'setup.saved': 'Gespeichert',
+  'setup.savedTargetMoved': (from: string, to: string) => `Gespeichert — Tagesziel ${from} → ${to} kcal`,
+  'setup.savedTargetSame': (kcal: string) => `Gespeichert — Tagesziel unverändert bei ${kcal} kcal`,
 
   'setup.requiredMissing':
     'Geschlecht, Geburtsdatum, Größe, Ziel und Aktivität werden alle gebraucht, um dein Ziel zu berechnen.',

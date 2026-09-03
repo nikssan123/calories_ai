@@ -1668,6 +1668,29 @@ export const ProfileUpdate = Profile.omit({
 }).partial();
 export type ProfileUpdate = z.infer<typeof ProfileUpdate>;
 
+/**
+ * The five fields the calorie target is computed from.
+ *
+ * Here rather than in `services/targets` because three places now need to know
+ * which edits can move a target: the API, to decide whether to recompute one,
+ * and both clients, to decide whether the save they just made is one worth
+ * reporting a number for. Written out once, so a sixth input added to the
+ * formula cannot leave a screen quietly claiming that nothing moved.
+ *
+ * Weight is not among them — it comes from the scale, not from a profile
+ * screen.
+ */
+export const TARGET_INPUTS = ['sex', 'birth_date', 'height_cm', 'activity_level', 'goal'] as const;
+export type TargetInput = (typeof TARGET_INPUTS)[number];
+
+/** A profile narrowed to the fields the target calculation reads. */
+export type TargetBasis = Pick<Profile, TargetInput>;
+
+/** Whether a profile edit touched anything the calculation reads. */
+export function targetInputsChanged(before: TargetBasis, after: TargetBasis): boolean {
+  return TARGET_INPUTS.some((field) => before[field] !== after[field]);
+}
+
 // ---- Accounts --------------------------------------------------------------
 
 export const Credentials = z.object({
