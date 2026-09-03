@@ -51,8 +51,19 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
       setWeek(week);
       setFailed(false);
       setError(null);
-    } catch (e) {
-      setError(messageOf(e, tr));
+    } catch {
+      /*
+       * Reported by the panel below and not up here as well.
+       *
+       * Both used to fire, so one failed load put the same sentence on the
+       * screen twice — once as a red banner above the card and once inside it.
+       * Offline that was three notices about one condition, counting the one
+       * Exercise itself draws for its own list.
+       *
+       * `failed` is the better of the two: it is in the panel it is about, in
+       * the muted colour, and it carries the retry. The banner stays for what
+       * has nowhere else to be said — a delete, a save, the logger's own errors.
+       */
       setFailed(true);
     }
   }, []);

@@ -49,6 +49,7 @@ import { Switch } from '@/components/Switch';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { loadDay, localToday } from '@/lib/day';
 import { BIRTH_DATE_FLOOR } from '@/lib/birth-date';
 import { useOnboarding } from '@/lib/onboarding';
 import { useEntitlements } from '@/lib/entitlements';
@@ -100,7 +101,7 @@ const UNIT_EXAMPLES: Record<UnitSystem, string> = {
 export default function SetupScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { signOut, adoptProfile } = useAuth();
+  const { signOut, adoptProfile, profile: signedIn } = useAuth();
   const { refresh: refreshOnboarding } = useOnboarding();
 
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -140,17 +141,57 @@ export default function SetupScreen() {
    */
   const basis = useRef<TargetBasis | null>(null);
 
+  /*
+   * Loaded in two steps rather than one `Promise.all`, so that a phone with no
+   * signal gets a settings screen instead of a skeleton.
+   *
+   * Almost nothing here needs a server. The five fields are the profile's own,
+   * the theme and the reminders are local, and the only remote thing on the
+   * page is the target card — which the day cache has anyway. But both requests
+   * used to be awaited together and one rejection left `profile` null, so the
+   * screen returned its loading state *permanently*: two grey rectangles and a
+   * line of red, on the tab that also holds sign-out.
+   *
+   * So the profile is resolved on its own, and falls back to the copy the
+   * session is already holding — `me()` answers with this exact shape, and
+   * `lib/store.ts` keeps it across a launch, which is what makes this work on a
+   * cold start rather than only on a warm one. The day then goes through
+   * `loadDay`, the same cache-behind-the-network path Today uses; it needs the
+   * profile first because which local date to ask the cache for depends on
+   * `day_start_hour`.
+   *
+   * An error is reported only when neither source can answer, because a screen
+   * drawn from cache is not a screen that failed.
+   */
   useEffect(() => {
     void (async () => {
+      let resolved: Profile | null = null;
       try {
-        const [p, d] = await Promise.all([api.profile(), api.day()]);
-        setProfile(p);
-        basis.current = p;
-        setDay(d);
+        resolved = await api.profile();
       } catch (e) {
+        resolved = signedIn;
+        if (!resolved) {
+          setError(messageOf(e, tr));
+          return;
+        }
+      }
+      setProfile(resolved);
+      basis.current = resolved;
+
+      try {
+        const { day: summary } = await loadDay(resolved.id, localToday(resolved));
+        setDay(summary);
+      } catch (e) {
+        // The target card is the only thing this loses, and it is guarded on
+        // `day` already. Said out loud because the number is why people open
+        // this screen, and its absence should not look like a layout bug.
         setError(messageOf(e, tr));
       }
     })();
+    // Deliberately once, on mount, as before. `signedIn` is read for its value
+    // at that moment; a profile arriving later does not need to re-run a screen
+    // the reader may already be typing into.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /*
