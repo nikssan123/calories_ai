@@ -103,14 +103,56 @@ export function normaliseBarcode(raw: string): string {
 
   let code = digits;
   if (code.length === 14 && code.startsWith('0')) code = code.slice(1);
+  // Eight digits is two different numbers wearing the same length: a GTIN-8,
+  // which is whole, and a UPC-E, which is a UPC-A with a run of zeros squeezed
+  // out of its middle. Both leave the scanner as eight digits and nothing in
+  // them says which one it is — but the check digit does, because a GTIN-8's
+  // covers the eight and a UPC-E's covers the twelve it expands to. So read it
+  // plainly first and expand only when that fails, which leaves every in-store
+  // EAN-8 exactly where it was.
+  if (code.length === 8 && !checks(code)) code = expandUpcE(code) ?? code;
   if (code.length === 12) code = `0${code}`;
   if (code.length !== 8 && code.length !== 13 && code.length !== 14) throw new InvalidBarcodeError();
 
-  const body = code.slice(0, -1);
-  if (checkDigit(body) !== Number(code.at(-1))) {
+  if (!checks(code)) {
     throw new InvalidBarcodeError('That barcode did not scan cleanly — try again');
   }
   return code;
+}
+
+/** Whether the last digit is the one the rest of the number implies. */
+function checks(code: string): boolean {
+  return checkDigit(code.slice(0, -1)) === Number(code.at(-1));
+}
+
+/**
+ * A UPC-E back into the UPC-A it was compressed from, or null if it was never
+ * a UPC-E.
+ *
+ * Undoing it is the only way to ask a catalogue about the packet. Nobody lists
+ * an American product under the compressed form, so the eight digits printed
+ * on a tin of soup are a key to a product that exists nowhere — and the failure
+ * is the confusing kind, because the same shopper's next scan is an EAN-13 that
+ * works perfectly.
+ *
+ * The zeros went somewhere, and the last data digit says where.
+ */
+function expandUpcE(code: string): string | null {
+  // Only number systems 0 and 1 are compressible, which is also the cheapest
+  // way to tell a UPC-E apart from an EAN-8 that simply came off the glass
+  // wrong — and a mis-scan has to stay a mis-scan.
+  const system = code[0];
+  if (system !== '0' && system !== '1') return null;
+
+  const [d1, d2, d3, d4, d5, d6] = code.slice(1, 7);
+  let middle: string;
+  if (d6 === '0' || d6 === '1' || d6 === '2') middle = `${d1}${d2}${d6}0000${d3}${d4}${d5}`;
+  else if (d6 === '3') middle = `${d1}${d2}${d3}00000${d4}${d5}`;
+  else if (d6 === '4') middle = `${d1}${d2}${d3}${d4}00000${d5}`;
+  else middle = `${d1}${d2}${d3}${d4}${d5}0000${d6}`;
+
+  const upcA = `${system}${middle}${code[7]}`;
+  return checks(upcA) ? upcA : null;
 }
 
 // ---- The lookup --------------------------------------------------------------
@@ -253,8 +295,8 @@ export async function sweepBarcodeCache(): Promise<number> {
 // ---- Open Food Facts ---------------------------------------------------------
 
 /**
- * Asks for the fields we use and no others. The full document is tens of
- * kilobytes of ingredient analysis and image URLs for four numbers.
+ * Asks for the fields we use and no others. The full document is a hundred and
+ * fifty kilobytes of ingredient analysis and image URLs for four numbers.
  */
 const OFF_FIELDS = [
   'code',
@@ -266,8 +308,58 @@ const OFF_FIELDS = [
   'serving_quantity',
 ].join(',');
 
+/**
+ * The languages a name is looked for in, in order.
+ *
+ * OFF keeps every name under `product_name_<lang>` and fills the bare
+ * `product_name` only for the language you asked for. Asking for nothing is
+ * asking for English — so a carton of apple juice on a Bulgarian shelf, named
+ * by whoever catalogued it under `product_name_sk` and nowhere else, comes back
+ * with a full nutrition panel and no name at all. This file reads a nameless
+ * row as an uncatalogued product, which is how a packet that is *in* Open Food
+ * Facts is reported to the person holding it as one that is not.
+ *
+ * That is the shape of the inconsistency: two own-brands off the same shelf,
+ * one recognised and one not, with nothing visible to separate them.
+ *
+ * `lc` takes a fallback chain, so one request covers all of them and the reply
+ * stays a couple of hundred bytes. English leads because a cache row is shared
+ * by every user and no one language owns it; the app's own locales come next,
+ * and then enough of Europe that a shelf anywhere in it resolves to a name
+ * rather than to a miss.
+ */
+const OFF_LANGUAGES = [
+  'en',
+  'bg',
+  'de',
+  'es',
+  'fr',
+  'it',
+  'nl',
+  'pl',
+  'ro',
+  'pt',
+  'el',
+  'cs',
+  'sk',
+  'hu',
+  'hr',
+  'sl',
+  'sr',
+  'sv',
+  'da',
+  'fi',
+  'nb',
+  'tr',
+  'ru',
+  'uk',
+  'et',
+  'lv',
+  'lt',
+].join(',');
+
 async function fromOpenFoodFacts(code: string): Promise<BarcodeProduct | null> {
-  const url = `${OFF_URL}/${code}.json?fields=${OFF_FIELDS}`;
+  const url = `${OFF_URL}/${code}.json?fields=${OFF_FIELDS}&lc=${OFF_LANGUAGES}`;
   const body = await fetchJson(url, { 'User-Agent': env.barcode.userAgent });
   // v2 answers a missing product with a 404 and an envelope, both of which
   // `fetchJson` reduces to null. Either way there is nothing here.
@@ -283,15 +375,22 @@ async function fromOpenFoodFacts(code: string): Promise<BarcodeProduct | null> {
     carbs_100g: number(n.carbohydrates_100g),
     fat_100g: number(n.fat_100g),
   };
-  const name = text(product.product_name) ?? text(product.product_name_en);
+  // `brands` is a comma-separated list on OFF and the first entry is the one on
+  // the front of the packet.
+  const brand = text(text(product.brands)?.split(',')[0]);
+  // A name in no language at all, with the panel filled in. It happens on
+  // own-brands entered from a photograph of the back of the packet, and the
+  // brand is then the only word anybody wrote down. "Lidl" is a thin thing to
+  // read back in a journal — but the alternative is telling someone their
+  // cereal is uncatalogued while holding its calories, and sending them off to
+  // photograph a label Open Food Facts has already transcribed.
+  const name = text(product.product_name) ?? text(product.product_name_en) ?? brand;
   if (!name) return null;
   if (!usable(kcal, macros)) return null;
 
   return {
     barcode: code,
-    // `brands` is a comma-separated list on OFF and the first entry is the one
-    // on the front of the packet.
-    brand: text(product.brands)?.split(',')[0]?.trim() ?? null,
+    brand,
     name,
     kcal_100g: round(kcal!),
     protein_100g: round(macros.protein_100g!),

@@ -96,8 +96,23 @@ describe('normaliseBarcode', () => {
     expect(normaliseBarcode(' 3017620 422003 ')).toBe(CODE);
   });
 
+  it('expands a UPC-E into the UPC-A nobody would find it under', () => {
+    // 04963406 is the compressed form of 049000006346. Read as an EAN-8 it
+    // fails its check digit and the scan is called a mis-scan; read as itself
+    // it is a can of Coca-Cola.
+    expect(normaliseBarcode('04963406')).toBe('0049000006346');
+  });
+
+  it('leaves a valid EAN-8 alone rather than reading it as a UPC-E', () => {
+    // 01234565 checks out as an EAN-8, so it is one. The in-store codes a
+    // supermarket prints live in this space and must not be expanded.
+    expect(normaliseBarcode('01234565')).toBe('01234565');
+  });
+
   it('rejects a wrong check digit', () => {
     expect(() => normaliseBarcode('3017620422004')).toThrow(InvalidBarcodeError);
+    // Eight digits that are neither a GTIN-8 nor a UPC-E are still a mis-scan.
+    expect(() => normaliseBarcode('04963407')).toThrow(InvalidBarcodeError);
   });
 
   it('rejects anything that is not digits, and any length nobody prints', () => {
@@ -168,6 +183,36 @@ describe('lookupBarcode', () => {
 
     // Dividing this one again would report a chocolate spread as celery.
     expect((await lookupBarcode(CODE))!.kcal_100g).toBe(539);
+  });
+
+  it('asks for a name in every language a European shelf uses', async () => {
+    const calls = stubFetch({ body: offProduct({ 'energy-kcal_100g': 539 }) });
+
+    await lookupBarcode(CODE);
+
+    // Without this, OFF resolves `product_name` against English alone and a
+    // packet catalogued in one language comes back nameless — which this file
+    // reads as uncatalogued, and the phone reports as "nobody has catalogued
+    // that one yet" while holding the product's own nutrition panel.
+    expect(calls[0]!.url).toContain('lc=en,bg,de,es,fr');
+  });
+
+  it('falls back to the brand when nobody wrote a name down', async () => {
+    stubFetch({
+      body: offProduct({ 'energy-kcal_100g': 373 }, { product_name: '', brands: 'Lidl' }),
+    });
+
+    // A thin name, and better than telling someone their cereal is
+    // uncatalogued while quoting its calories back at them.
+    expect(await lookupBarcode(CODE)).toMatchObject({ name: 'Lidl', brand: 'Lidl', kcal_100g: 373 });
+  });
+
+  it('treats a row with neither a name nor a brand as a miss', async () => {
+    stubFetch({
+      body: offProduct({ 'energy-kcal_100g': 373 }, { product_name: '', brands: '' }),
+    });
+
+    expect(await lookupBarcode(CODE)).toBeNull();
   });
 
   it('treats a row with a name and no macros as a miss', async () => {
