@@ -67,6 +67,29 @@
 #
 # corpus.md §5 is explicit that none of its numbers may appear in a post.
 # Nothing below quotes one. The data set the voice, not the claims.
+#
+# The last six lines came out of the vocabulary table, translated. The corpus
+# is one writer -- the owner account, pre-release -- so it is a register
+# reference and nothing else; it says how a sentence gets typed, not what a
+# market wants. Each maps to a word that is actually in it and a feature that
+# is actually shipped:
+#
+#   вчера (11), "forgot to log Sunday"  log_food's `when` takes plain language
+#                                       ("yesterday 8pm") -- tools.ts:148, and
+#                                       prompt.ts:157 calls a past day ordinary
+#   "same as yesterday"                 repeat_meal copies rather than
+#                                       re-estimates -- prompt.ts:151. The
+#                                       subline is that comment's own reasoning
+#   добави (10) още (6) малко (13)      "add a bit more", the correction flow
+#   около (12) грама (24)               a hedge and a number in one breath;
+#                                       47.4% of typed messages carry a number
+#   чаена лъжица (7/8)                  a teaspoon, i.e. precision without scales
+#   шоколад (17) десерт (13)            the sweet-tooth thread, already the
+#   сладолед (7) сладък (8)             most-typed food in the corpus
+#
+# One word was left out on purpose: `бирени` (5). Every reading of it I have is
+# a guess, and a card built on a mistranslation is a card a native speaker will
+# spot instantly.
 
 Actually there was more rice than that | Correcting a meal is one sentence. Nothing gets re-logged.
 Most of a bar of dark chocolate, standing up | Valid entry. Logged without judgement.
@@ -79,7 +102,13 @@ Same calories. Completely different day. | Fibre, sodium, sat fat and sugar, all
 Logged lunch in a basement gym with no signal | No wifi, no bars. The entry still landed.
 Photograph the fridge, get something you can cook | The sad pepper counts as an ingredient.
 Went for a 5km run and had a banana after | Same box, same sentence. It works both out.
-Am I eating enough protein? | You can just ask. Same box as the food goes in.
+How many calories were in that? | Ask in the box you log in. It reads your own data back.
 Toast, eggs, black coffee and half a banana | One sentence in, four items out, each one correctable.
 Some days the honest entry is a bit of everything | That parses fine.
 Scan the packet when you cannot be bothered to type
+Same as yesterday | Copied, not re-estimated. A month of re-guesses is a trend that never happened.
+I forgot to log Sunday's dinner | Say so on Wednesday. It lands on Sunday.
+Add a bit more to that | The correction is just the next sentence.
+About 100 grams. I did not weigh it. | “About” is a quantity. It parses.
+A teaspoon of honey in the coffee | Small enough to skip. It counts it anyway.
+Dessert was not planned | Neither was the second one. Both logged.
