@@ -17,7 +17,7 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync, rmSync, readdirSync
 import { join, basename, extname } from 'node:path'
 
 const FLAGS = new Set([
-  'hooks', 'out', 'music', 'fps', 'limit', 'hook-seconds', 'fontsize', 'maxchars', 'font', 'line-spacing',
+  'hooks', 'out', 'music', 'fps', 'limit', 'hook-seconds', 'fontsize', 'maxchars', 'font', 'line-spacing', 'scrim', 'crop-bias',
 ])
 
 // Walk the argv once rather than guessing: anything after a known --flag is
@@ -52,6 +52,10 @@ const FONTSIZE = Number(opts.fontsize ?? 78)
 const MAXCHARS = Number(opts.maxchars ?? 18)
 const FONT = opts.font ?? 'C:/Windows/Fonts/ariblk.ttf'
 const LINE_SPACING = Number(opts['line-spacing'] ?? 12)
+// Opacity of the band behind the hook; 0 turns it off.
+const SCRIM = Number(opts.scrim ?? 0.45)
+// Where the 9:16 window sits on a taller source: 0 = top, 0.5 = centre, 1 = bottom.
+const CROP_BIAS = Number(opts['crop-bias'] ?? 0.5)
 
 if (!source || !existsSync(source)) {
   console.error('Usage: node scripts/content/batch.mjs <source.mp4> [--hooks f] [--out d]')
@@ -148,10 +152,25 @@ hooks.forEach((hook, i) => {
     )
   })
 
+  // A scrim under the hook. Screen recordings put UI exactly where the hook
+  // goes, and white-on-light-UI is unreadable no matter how heavy the stroke.
+  const bandTop = Math.round(1920 * 0.13) - Math.round(FONTSIZE * 0.45)
+  // Padding has to clear the descenders on the last line, which sit below the
+  // y drawtext reports — a three-line hook otherwise touches the band edge.
+  const bandHeight = lines.length * step + Math.round(FONTSIZE * 0.75)
+  const scrim =
+    SCRIM > 0
+      ? [`drawbox=x=0:y=${bandTop}:w=iw:h=${bandHeight}:color=black@${SCRIM}:t=fill${enable}`]
+      : []
+
   const vf = [
     'scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos',
-    'crop=1080:1920',
+    // Centre-cropping a phone recording taller than 9:16 slices the app's own
+    // header off the top. CROP_BIAS moves the window: 0 keeps the top, 1 the
+    // bottom. The status bar is the thing worth losing, not the header.
+    `crop=w=1080:h=1920:x=0:y=(ih-oh)*${CROP_BIAS}`,
     `fps=${FPS}`,
+    ...scrim,
     ...drawtexts,
   ].join(',')
 
