@@ -293,7 +293,7 @@ Created 2026-09-04. Handle is `daysofarapp` everywhere it was available.
 |---|---|---|
 | Facebook Page | [facebook.com/daysofarapp](https://facebook.com/daysofarapp) | Live. Name, bio, website, support email, icon all set. Page ID `61594106339199`. |
 | TikTok | [@daysofarapp](https://www.tiktok.com/@daysofarapp) | Live. Icon + bio set. **Display name still reads `daysofarapp`.** |
-| Instagram | `daysofarapp` | Not created yet. Handle verified free. |
+| Instagram | [@daysofarapp](https://instagram.com/daysofarapp) | Live. Icon + bio + name set. **Still a personal account, not linked to the Page.** |
 
 Shared profile copy:
 
@@ -308,6 +308,17 @@ Shared profile copy:
 - **TikTok display name** — locked by cooldown until **2026-09-11**. Set it to `Day So Far` then; it is the only name a viewer actually reads on TikTok.
 - **TikTok username** — locked until **2026-10-04**, irrelevant unless you want to change it.
 - **Facebook cover photo** — none. Wants a 1640x856; a job for W1 once the PC is up.
+- **Instagram website field** — empty. Instagram says outright that links are
+  editable only in the mobile app; the web field is inert.
+- **Instagram is still a personal account.** Switching it to **Creator** and
+  linking it to the Day So Far Page are both phone-only flows — searching
+  Instagram's web settings for "professional" returns no results at all. Until
+  that link exists, Reels publishing through the Graph API is impossible however
+  the Meta app is configured, so this is the gate on §7's Instagram row.
+
+  Choose **Creator**, not Business: Instagram Business accounts lose the general
+  music library the same way TikTok Business accounts do, and trending audio is
+  worth more than anything Business adds here.
 
 ### Do not switch TikTok to a Business account
 
