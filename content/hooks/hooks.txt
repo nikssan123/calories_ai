@@ -1,11 +1,45 @@
 # One hook per line. Blank lines and # comments are ignored.
-# CONTENT_ENGINE.md §6: one capture x many hooks. These are for the barcode
-# basket scan capture (§5 format 1) — rewrite them for a different source.
-MyFitnessPal wanted $20/month
-so I built this instead
-I scanned my whole grocery haul
-Logging a week of food in 40 seconds
-This took 6 months to get right
-No typing. No searching. Just scan.
-Every barcode, one basket
-POV: you stopped guessing calories
+#
+# These are written for content/raw/app-tour.mp4 — the 25s simulator capture of
+# Journal -> Today -> Progress -> History. Every line below is defensible
+# against what is actually on screen in that clip:
+#
+#   Journal   "What have you eaten today?", the composer, camera and mic icons,
+#             and the app's own line "No forms, nothing to search for."
+#   Today     the ring at 1,656 of 2,050, protein/carbs/fat, and the Diet
+#             Quality card — fibre, sodium, sat fat, sugar.
+#   Progress  achievements, the weight trend, calories per day.
+#   History   the month calendar with the day's totals.
+#
+# The rule from PLAY_LISTING.md applies here too: nothing is claimed that the
+# app cannot do, and nothing on screen is described as something it is not.
+#
+# Two things deliberately absent:
+#
+#  - No barcode lines. The scan is not in this footage and cannot be — the
+#    simulator has no camera. Those hooks are parked at the bottom.
+#  - No weight-loss or results claims. The clip shows 82.4 kg and -1.8 kg since
+#    start, but that is seeded data on a test account. Putting it in a hook
+#    would be claiming a result nobody achieved.
+
+MyFitnessPal wanted $20 a month, so I built this
+Six months of evenings to build a calorie tracker
+Just say what you ate. That's the whole thing.
+No forms. Nothing to search for.
+Type it, say it, or photograph it
+Most calorie apps stop at calories
+It tracks fibre, sodium and sugar too
+POV: you stopped guessing your macros
+The calorie app I wanted and could not find
+I got tired of tapping through food databases
+What a properly tracked day actually looks like
+Every meal, every macro, one screen
+
+# --- Parked until a real phone records the barcode basket scan -------------
+# These are the §5 format-1 hooks. They need the camera, so they cannot run
+# over the simulator tour without describing something the viewer cannot see.
+#
+# I scanned my whole grocery haul
+# Every barcode, one basket
+# No typing. No searching. Just scan.
+# Logging a week of food in 40 seconds
