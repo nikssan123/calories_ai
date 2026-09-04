@@ -408,8 +408,23 @@ fi
 Prod Postgres is on the compose-internal network with no published ports, so
 there is no route to it that does not go through the box."
 
-ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" true 2>/dev/null \
-    || die "cannot ssh to $HOST (needs key-based auth)"
+# BatchMode=yes forbids every prompt, so this fails on things a manual `ssh`
+# sails through: a passphrase on the key, an unknown host key, or simply being
+# run from a shell whose HOME is not the one holding ~/.ssh (Git Bash and WSL
+# have different ones on Windows). Keep ssh's own stderr — "cannot ssh, needs
+# key-based auth" is a guess, and it was the wrong guess often enough to be
+# worth the extra four lines.
+if ! ssh_err="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" true 2>&1)"; then
+    die "cannot ssh to $HOST non-interactively.
+
+   ssh said: ${ssh_err:-(nothing)}
+
+   This check runs with BatchMode=yes, so it fails wherever a manual ssh would
+   have asked you something. If \`ssh $HOST\` works by hand, the usual causes are:
+     - the key has a passphrase   -> eval \$(ssh-agent) && ssh-add <key>
+     - the host key is not known  -> ssh $HOST true   (accept it once)
+     - wrong HOME for this shell  -> ssh -v $HOST true, check which key it offers"
+fi
 
 # Ask the container what its own credentials are rather than assuming the
 # compose defaults. A host whose .env sets POSTGRES_USER to anything else would
