@@ -1,0 +1,157 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "wan2.2_ti2v_5B_fp16.safetensors",
+      "weight_dtype": "default"
+    },
+    "_meta": {
+      "title": "WAN 2.2 TI2V 5B"
+    }
+  },
+  "2": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "wan"
+    },
+    "_meta": {
+      "title": "UMT5-XXL"
+    }
+  },
+  "3": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "wan2.2_vae.safetensors"
+    },
+    "_meta": {
+      "title": "WAN 2.2 VAE"
+    }
+  },
+  "4": {
+    "class_type": "ModelSamplingSD3",
+    "inputs": {
+      "model": [
+        "1",
+        0
+      ],
+      "shift": 5
+    },
+    "_meta": {
+      "title": "Flow-match shift"
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "2",
+        0
+      ],
+      "text": "Vivid teal and warm amber ink billowing through clear water, dense turbulent plumes unfurling and churning, tendrils spreading fast across the frame, violent fluid convection, macro shot, camera pushing in through the swirling ink, high contrast, sharp detail, cinematic."
+    },
+    "_meta": {
+      "title": "Positive"
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": [
+        "2",
+        0
+      ],
+      "text": "static, still, motionless image, frozen, no movement, flat gradient, empty background, food, meal, plate, text, letters, numbers, watermark, subtitles, people, faces, hands, overexposed, low quality, worst quality, JPEG compression artifacts, blurry"
+    },
+    "_meta": {
+      "title": "Negative"
+    }
+  },
+  "8": {
+    "class_type": "Wan22ImageToVideoLatent",
+    "inputs": {
+      "vae": [
+        "3",
+        0
+      ],
+      "width": 720,
+      "height": 1280,
+      "length": 121,
+      "batch_size": 1
+    },
+    "_meta": {
+      "title": "Empty 9:16 latent, 121f"
+    }
+  },
+  "10": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "8",
+        0
+      ],
+      "seed": 20260904,
+      "steps": 30,
+      "cfg": 5,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1
+    },
+    "_meta": {
+      "title": "Sampler"
+    }
+  },
+  "11": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "10",
+        0
+      ],
+      "vae": [
+        "3",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Decode"
+    }
+  },
+  "12": {
+    "class_type": "SaveWEBM",
+    "inputs": {
+      "images": [
+        "11",
+        0
+      ],
+      "filename_prefix": "daysofar_brand",
+      "codec": "vp9",
+      "fps": 24,
+      "crf": 20
+    },
+    "_meta": {
+      "title": "Save (ffmpeg transcodes to MP4 for TikTok)"
+    }
+  },
+  "_comment": [
+    "W2-adjacent: WAN 2.2 TI2V 5B text-to-video, API format, for content/ brand motion.",
+    "TI2V 5B is a SINGLE model - not the 14B hi/lo MoE pair the wan-t2v skill describes.",
+    "It pairs with wan2.2_vae.safetensors (NOT wan_2.1_vae) and umt5_xxl_fp8_e4m3fn_scaled.",
+    "Parameterised per CONTENT_ENGINE.md 4: prompt (node 6), seed (node 10), size/length (node 8).",
+    "CONTENT_ENGINE.md 0: brand/abstract motion only. No food, no calorie numbers.",
+    null,
+    "Tuned after v1 came out a near-static amber gradient: shift 8->5 for motion, concrete moving subject, hedging adverbs removed."
+  ]
+}

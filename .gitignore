@@ -56,3 +56,7 @@ AuthKey_*.p8
 # revoking the app's access from the TikTok account's own settings, which kills
 # every machine's token at once. Written 0600 by scripts/tiktok/lib.mjs.
 scripts/tiktok/.tokens.json
+
+# Rendered video. The workflows that produce it are in git; the output is not —
+# a 5s 1080x1920 clip is ~7 MB and there will be one per variant per day.
+content/out/
