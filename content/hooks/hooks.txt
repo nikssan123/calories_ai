@@ -18,11 +18,15 @@
 #
 #  - No barcode lines. The scan is not in this footage and cannot be — the
 #    simulator has no camera. Those hooks are parked at the bottom.
+#  - No competitor-pricing line. "MyFitnessPal wanted $20 a month, so I built
+#    this" was the strongest hook here and is cut on purpose: it reads as a
+#    claim that this one is free, and it is not — there are Coach and the
+#    packs. A hook that invites "is it free?" under every video is a hook that
+#    argues with its own paywall.
 #  - No weight-loss or results claims. The clip shows 82.4 kg and -1.8 kg since
 #    start, but that is seeded data on a test account. Putting it in a hook
 #    would be claiming a result nobody achieved.
 
-MyFitnessPal wanted $20 a month, so I built this
 Six months of evenings to build a calorie tracker
 Just say what you ate. That's the whole thing.
 No forms. Nothing to search for.
