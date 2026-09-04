@@ -98,6 +98,42 @@ generally refuses to register an `http://localhost` one. Two ways through:
 The script supports both and picks based on the hostname. Start with the first;
 it always works.
 
+## 2b. Moving this to another machine
+
+Three things are needed and only the first is in git.
+
+1. **The repo** — `git clone https://github.com/nikssan123/calories_ai.git`
+2. **`.env`** — gitignored. Retype the three `TIKTOK_*` values by hand.
+3. **`scripts/tiktok/.tokens.json`** — gitignored. **Do not copy it.** Run
+   `node scripts/tiktok/auth.mjs` on the new machine instead.
+
+Nothing else is required: these scripts have zero dependencies, so no `pnpm
+install`, no build. Node 22+ and git is the whole toolchain. `ffprobe` is used
+for the duration pre-check when present and skipped when not.
+
+The redirect URI needs no change. It is an https URL nothing serves, and the
+paste-back flow works from any machine — there is no local callback server to
+re-point.
+
+### Run it from ONE machine
+
+Not a style preference — a correctness rule. Every token refresh returns a new
+refresh token and **invalidates the previous one**. Two machines holding copies
+of `.tokens.json` will fight: whichever refreshes second finds its token already
+retired, and you get an opaque auth failure days later with nothing in the logs
+explaining it.
+
+So pick the machine that generates the content and post from there. If you need
+to move, delete `.tokens.json` on the old machine and re-run `auth.mjs` on the
+new one.
+
+### On Windows
+
+`lib.mjs` writes `.tokens.json` with mode `0600`. On NTFS that call succeeds but
+buys you almost nothing — it does not produce the "owner only" ACL it does on a
+Mac. The file still authorises posting as @daysofarapp for a year, so keep it
+off shared drives and out of anything that syncs to a cloud folder.
+
 ## 3. Usage
 
 ```bash
