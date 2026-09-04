@@ -4,6 +4,12 @@ Measured 2026-09-05 against production, read-only. Regenerate with
 `scripts/content/mine-corpus.sh`. Aggregates only — no sentence from anybody's
 food diary is in this file, and none should ever be added to it.
 
+Everything below was derived from counts and word frequencies. No verbatim
+message was read to write it. `mine-corpus.sh --raw` is the only mode that
+prints sentences and it is pinned to the owner account
+(`nikssan123@gmail.com`); naming any other account is a hard error, not a
+choice.
+
 Everything below is a **register reference for writing copy**. None of it is a
 market claim, and §5 says why.
 

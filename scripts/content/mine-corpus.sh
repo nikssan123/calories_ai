@@ -4,7 +4,7 @@
 #
 #   scripts/content/mine-corpus.sh                    # aggregate report
 #   scripts/content/mine-corpus.sh --out              # ...and save it
-#   scripts/content/mine-corpus.sh --user Nikolay     # one account, verbatim
+#   scripts/content/mine-corpus.sh --raw              # your own rows, verbatim
 #   scripts/content/mine-corpus.sh --print-sql        # print SQL, connect to nothing
 #
 # Every line in content/copy/cards.txt was once written in an invented voice.
@@ -45,9 +45,16 @@
 #   aggregate mode   counts, distributions, word frequencies. Shapes, never
 #                    sentences. Safe to read, safe to quote, safe to paste
 #                    into a deck.
-#   --user mode      verbatim rows for exactly ONE named account. Use it on
-#                    your own. It is the founder-POV format in
-#                    CONTENT_ENGINE.md §5, and you are the data subject.
+#   --raw mode       verbatim rows, and ONLY ever for the owner account in
+#                    OWNER_EMAIL below. It is the founder-POV format in
+#                    CONTENT_ENGINE.md §5, and it is allowed for exactly one
+#                    reason: you are the data subject of your own diary.
+#
+# --raw used to take any display_name. It does not any more. Naming somebody
+# else is now a hard error rather than a judgement call made at 1am, because
+# the judgement is always the same and there is no reason to keep asking it.
+# Override the owner with CORPUS_OWNER_EMAIL only to run this on a machine
+# whose owner is a different person, never to read a second account.
 #
 # Output defaults under content/out/, which .gitignore already covers, so a
 # --user dump cannot be committed by an absent-minded `git add -A`.
@@ -79,6 +86,9 @@ CONTAINER="${DB_CONTAINER:-calorytracker-db}"
 PGUSER_IN=""
 PGDB_IN=""
 WHO=""
+RAW=0
+# The only account whose sentences this script will ever print.
+OWNER_EMAIL="${CORPUS_OWNER_EMAIL:-nikssan123@gmail.com}"
 LIMIT=200
 SAVE=0
 OUTFILE=""
@@ -88,8 +98,12 @@ usage() {
     sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//; $d'
     cat <<'USAGE'
 Options:
-  --user WHO       verbatim rows for one account: a users.id or a display_name
-  --limit N        rows in --user mode                    (default: 200)
+  --raw [WHO]      verbatim rows for the owner account ($OWNER_EMAIL).
+                   WHO is optional and is only checked: pass an id, email or
+                   display_name and it must resolve to the owner, or the run
+                   is refused. There is no way to name a second account.
+  --user WHO       deprecated spelling of --raw
+  --limit N        rows in --raw mode                     (default: 200)
   --out [FILE]     also write the report to a file
                    (default: content/out/corpus/<mode>-<date>.txt)
   --host USER@HOST ssh target                             (default: $DEPLOY_SSH_HOST)
@@ -103,7 +117,10 @@ USAGE
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --user)      WHO="$2"; shift 2 ;;
+        --raw|--user)
+            RAW=1; shift
+            [[ $# -gt 0 && "$1" != -* ]] && { WHO="$1"; shift; }
+            ;;
         --limit)     LIMIT="$2"; shift 2 ;;
         --host)      HOST="$2"; shift 2 ;;
         --container) CONTAINER="$2"; shift 2 ;;
@@ -330,17 +347,36 @@ cat <<SQL
 SET TRANSACTION READ ONLY;
 \\pset pager off
 \\pset null '·'
+\\set owner '$(printf '%s' "$OWNER_EMAIL" | sed "s/'/''/g")'
 \\set who '$(printf '%s' "$WHO" | sed "s/'/''/g")'
 
+-- The owner is resolved from OWNER_EMAIL and nothing else. Every query below
+-- re-resolves it inline, so there is no argument to this script that widens it
+-- to a second account. If WHO was passed it has already been checked in the
+-- shell; this is the second lock on the same door.
 \\echo ''
-\\echo '== resolving the account'
-SELECT id, display_name, created_at::date AS joined,
-       (SELECT count(*) FROM food_entries e WHERE e.user_id = u.id) AS entries
-FROM users u
-WHERE u.id::text = :'who' OR lower(u.display_name) = lower(:'who');
+\\echo '== the account whose sentences this will print'
+SELECT id, display_name, email, created_at::date AS joined,
+       (SELECT count(*) FROM chat_messages c
+         WHERE c.user_id = u.id AND c.role = 'user')       AS typed_msgs,
+       (SELECT count(*) FROM food_entries e
+         WHERE e.user_id = u.id)                            AS entries
+FROM users u WHERE lower(u.email) = lower(:'owner');
+
 
 \\echo ''
-\\echo '== entries, newest first ─ this is personal data. Keep it off the repo.'
+\\echo '== typed messages, newest first ─ THE corpus. Personal data. Keep it off the repo.'
+SELECT c.created_at AT TIME ZONE 'Europe/Sofia' AS typed_at,
+       array_length(regexp_split_to_array(btrim(c.content), '\s+'), 1) AS words,
+       c.content
+FROM chat_messages c
+WHERE c.user_id = (SELECT id FROM users WHERE lower(email) = lower(:'owner'))
+  AND c.role = 'user'
+ORDER BY c.created_at DESC
+LIMIT $LIMIT;
+
+\\echo ''
+\\echo '== entries, newest first ─ what the parser made of those sentences'
 SELECT e.local_date, e.meal, e.source, e.confidence,
        e.description,
        round(sum(i.kcal))      AS kcal,
@@ -349,9 +385,7 @@ SELECT e.local_date, e.meal, e.source, e.confidence,
        (e.updated_at > e.created_at + interval '2 seconds') AS was_corrected
 FROM food_entries e
 LEFT JOIN food_items i ON i.entry_id = e.id
-WHERE e.user_id = (SELECT id FROM users
-                   WHERE id::text = :'who' OR lower(display_name) = lower(:'who')
-                   LIMIT 1)
+WHERE e.user_id = (SELECT id FROM users WHERE lower(email) = lower(:'owner'))
 GROUP BY e.id
 ORDER BY e.eaten_at DESC
 LIMIT $LIMIT;
@@ -360,8 +394,8 @@ SQL
 }
 
 MODE="aggregate"
-[[ -n "$WHO" ]] && MODE="user"
-SQL_TEXT="$([[ "$MODE" = user ]] && user_sql || aggregate_sql)"
+(( RAW )) && MODE="raw"
+SQL_TEXT="$([[ "$MODE" = raw ]] && user_sql || aggregate_sql)"
 
 if (( PRINT_ONLY )); then
     printf '%s\n' "$SQL_TEXT"
@@ -387,6 +421,43 @@ if [[ -z "$PGUSER_IN" || -z "$PGDB_IN" ]]; then
    check: ssh $HOST 'docker ps --filter name=$CONTAINER'"
     PGUSER_IN="${PGUSER_IN:-$(sed -n 1p <<<"$detected")}"
     PGDB_IN="${PGDB_IN:-$(sed -n 2p <<<"$detected")}"
+fi
+
+# ---------------------------------------------------------------- owner check
+#
+# --raw prints somebody's food diary, and the only person that is defensible
+# for is the person whose diary it is. WHO is optional and purely a
+# confirmation: whatever is passed must resolve to OWNER_EMAIL. It cannot
+# widen the query — user_sql() filters on the email regardless — so this check
+# exists to fail loudly on `--raw someone-else` rather than silently handing
+# back the owner's rows under someone else's name.
+
+if [[ "$MODE" = raw ]]; then
+    owner_row="$(printf '%s' \
+        "SELECT display_name || ' <' || email || '>' FROM users
+          WHERE lower(email) = lower('${OWNER_EMAIL//\'/\'\'}');" \
+        | ssh -o BatchMode=yes "$HOST" \
+            "docker exec -i '$CONTAINER' psql -U '$PGUSER_IN' -d '$PGDB_IN' -tAq -f -" 2>/dev/null)"
+
+    [[ -n "$owner_row" ]] || die "no account with email $OWNER_EMAIL on this database.
+   --raw only ever reads the owner account. Set CORPUS_OWNER_EMAIL if this
+   machine belongs to somebody else."
+
+    if [[ -n "$WHO" ]]; then
+        match="$(printf '%s' \
+            "SELECT 1 FROM users
+              WHERE lower(email) = lower('${OWNER_EMAIL//\'/\'\'}')
+                AND (id::text = '${WHO//\'/\'\'}'
+                     OR lower(email) = lower('${WHO//\'/\'\'}')
+                     OR lower(display_name) = lower('${WHO//\'/\'\'}'));" \
+            | ssh -o BatchMode=yes "$HOST" \
+                "docker exec -i '$CONTAINER' psql -U '$PGUSER_IN' -d '$PGDB_IN' -tAq -f -" 2>/dev/null)"
+        [[ "$match" = 1 ]] || die "'$WHO' is not the owner account ($owner_row).
+   --raw prints a person's food diary and will only ever do that for the owner.
+   Drop the argument to read your own rows; there is no flag that reads theirs."
+    fi
+
+    warn "raw mode — printing $owner_row verbatim"
 fi
 
 say "$MODE report — $HOST → $CONTAINER ($PGUSER_IN@$PGDB_IN)"
