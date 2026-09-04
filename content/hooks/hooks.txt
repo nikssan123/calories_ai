@@ -1,0 +1,11 @@
+# One hook per line. Blank lines and # comments are ignored.
+# CONTENT_ENGINE.md §6: one capture x many hooks. These are for the barcode
+# basket scan capture (§5 format 1) — rewrite them for a different source.
+MyFitnessPal wanted $20/month
+so I built this instead
+I scanned my whole grocery haul
+Logging a week of food in 40 seconds
+This took 6 months to get right
+No typing. No searching. Just scan.
+Every barcode, one basket
+POV: you stopped guessing calories

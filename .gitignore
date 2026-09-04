@@ -60,3 +60,12 @@ scripts/tiktok/.tokens.json
 # Rendered video. The workflows that produce it are in git; the output is not —
 # a 5s 1080x1920 clip is ~7 MB and there will be one per variant per day.
 content/out/
+
+# Source captures, generated stills and licensed media: large binaries whose
+# provenance lives in licenses.csv, not in git. The directory structure from
+# CONTENT_ENGINE.md §6 is kept, the payloads are not.
+content/raw/*
+content/gen/*
+content/stock/*
+content/music/*
+!content/*/.gitkeep
