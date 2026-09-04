@@ -87,9 +87,23 @@
 #   шоколад (17) десерт (13)            the sweet-tooth thread, already the
 #   сладолед (7) сладък (8)             most-typed food in the corpus
 #
-# One word was left out on purpose: `бирени` (5). Every reading of it I have is
-# a guess, and a card built on a mistranslation is a card a native speaker will
-# spot instantly.
+# `бирени` (5) turned out to be beer sausage -- бирени наденички, a cured
+# Bulgarian sausage, not the beer nuts I had guessed. It earns a card on
+# sodium rather than on calories, which is the Diet Quality card's whole point.
+#
+# It also opened the language lines, which are the best claim in here and were
+# nowhere in the copy. apps/api/src/ai/language.ts resolves the reply language
+# from the *conversation*, not from `users.locale` -- that column is a
+# rendering preference for the buttons, and answering from it once told a
+# Bulgarian journal to reply in English translated word for word ("Barely a
+# dent" came back as "барели дупка", the English word spelled in Cyrillic).
+# The same file escalates the model for the ten measured languages the cheap
+# one writes badly. Bulgarian is one of them.
+#
+# No Cyrillic on a card until a Cyrillic face is vendored: Baloo 2 has zero
+# codepoints in U+0400-04FF (layout.tsx says so, and the ttf confirms it), so
+# `бирени` on a card is four tofu boxes. Nunito is the app's Cyrillic display
+# face and is not in assets/fonts yet.
 
 Actually there was more rice than that | Correcting a meal is one sentence. Nothing gets re-logged.
 Most of a bar of dark chocolate, standing up | Valid entry. Logged without judgement.
@@ -112,3 +126,7 @@ Add a bit more to that | The correction is just the next sentence.
 About 100 grams. I did not weigh it. | “About” is a quantity. It parses.
 A teaspoon of honey in the coffee | Small enough to skip. It counts it anyway.
 Dessert was not planned | Neither was the second one. Both logged.
+Two beer sausages and a lager | Calories were the least of it. The sodium is the story.
+Dinner was Bulgarian. The app is in English. | It answered in Bulgarian. Those are different settings.
+Log in the language you think in | Not the one the buttons are in.
+Some food does not survive translation | So do not translate it. Type it and it lands.
