@@ -91,19 +91,18 @@
 # Bulgarian sausage, not the beer nuts I had guessed. It earns a card on
 # sodium rather than on calories, which is the Diet Quality card's whole point.
 #
-# It also opened the language lines, which are the best claim in here and were
-# nowhere in the copy. apps/api/src/ai/language.ts resolves the reply language
-# from the *conversation*, not from `users.locale` -- that column is a
-# rendering preference for the buttons, and answering from it once told a
-# Bulgarian journal to reply in English translated word for word ("Barely a
-# dent" came back as "барели дупка", the English word spelled in Cyrillic).
-# The same file escalates the model for the ten measured languages the cheap
-# one writes badly. Bulgarian is one of them.
+# The language lines that briefly lived here are gone, and the reasoning is
+# worth keeping so they do not come back by accident. What language the app
+# replies in is real, uncopyable and well built (apps/api/src/ai/language.ts),
+# but it only means anything to somebody who has already decided to track
+# their food -- and nobody reading a card has. Lead with what the app does,
+# which is turn a sentence into a day. Parked in posts.md.
 #
-# No Cyrillic on a card until a Cyrillic face is vendored: Baloo 2 has zero
-# codepoints in U+0400-04FF (layout.tsx says so, and the ttf confirms it), so
-# `бирени` on a card is four tofu boxes. Nunito is the app's Cyrillic display
-# face and is not in assets/fonts yet.
+# A related constraint, for whenever that unparks: no Cyrillic can go on a card
+# at all. Baloo 2 has zero codepoints in U+0400-04FF -- layout.tsx says so and
+# the vendored ttf's cmap confirms it -- so `бирени` in the card face is four
+# tofu boxes. Nunito is the app's Cyrillic display face and is not in
+# assets/fonts yet.
 
 Actually there was more rice than that | Correcting a meal is one sentence. Nothing gets re-logged.
 Most of a bar of dark chocolate, standing up | Valid entry. Logged without judgement.
@@ -127,6 +126,3 @@ About 100 grams. I did not weigh it. | “About” is a quantity. It parses.
 A teaspoon of honey in the coffee | Small enough to skip. It counts it anyway.
 Dessert was not planned | Neither was the second one. Both logged.
 Two beer sausages and a lager | Calories were the least of it. The sodium is the story.
-Dinner was Bulgarian. The app is in English. | It answered in Bulgarian. Those are different settings.
-Log in the language you think in | Not the one the buttons are in.
-Some food does not survive translation | So do not translate it. Type it and it lands.

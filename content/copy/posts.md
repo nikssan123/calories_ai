@@ -11,6 +11,13 @@ an adjective.
 
 ---
 
+> **Parked.** Do not lead with this. It is real, well built and uncopyable,
+> but it only lands for somebody who has already decided to track their food,
+> and none of the people this content has to reach has decided that yet. The
+> core loop comes first -- see `scripts.md`, scripts 1 and 2. Unpark this when
+> those are landing and the question has moved from "does it work" to "does it
+> work for me".
+
 ## 1. "My app is in English. I write to it in Bulgarian."
 
 **Source:** `apps/api/src/ai/language.ts`, `apps/api/src/ai/prompt.ts:365`.
