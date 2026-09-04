@@ -2,7 +2,8 @@
 // and the one request helper that knows how TikTok reports failure.
 //
 // No dependencies. Node 24 has fetch, and `process.loadEnvFile` reads the same
-// `.env` everything else in this repo reads.
+// `.env` everything else in this repo reads — with a hand-rolled fallback for
+// Node < 20.12, where that function does not exist. See parseEnv below.
 
 import { readFileSync, writeFileSync, existsSync, chmodSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -62,12 +63,87 @@ export function chunkRange(i, chunkSize, totalChunkCount, videoSize) {
   return { start, end }
 }
 
-export function loadConfig() {
-  try {
-    process.loadEnvFile(join(ROOT, '.env'))
-  } catch {
-    // No .env is fine — the values may already be in the environment.
+const ENV_PATH = join(ROOT, '.env')
+
+/**
+ * `process.loadEnvFile` only landed in Node 20.12. On anything older it is
+ * `undefined`, so the call threw a TypeError into a bare `catch` that assumed
+ * the only possible failure was a missing file — the `.env` was never read and
+ * every script died insisting the variables were absent while the file sat
+ * right there. Hence this parser, and a `catch` that forgives only ENOENT.
+ *
+ * It matches Node's own parser on what a `.env` actually holds: `export`
+ * prefixes, whole-line and trailing `#` comments, single/double/backtick
+ * quotes (multiline included), and a real environment variable beating the
+ * file.
+ */
+export function parseEnv(src) {
+  const pairs = []
+  let i = 0
+  while (i < src.length) {
+    const c = src[i]
+    if (c === ' ' || c === '\t' || c === '\r' || c === '\n') {
+      i++
+      continue
+    }
+    if (c === '#') {
+      while (i < src.length && src[i] !== '\n') i++
+      continue
+    }
+    const keyStart = i
+    while (i < src.length && src[i] !== '=' && src[i] !== '\n') i++
+    if (i >= src.length || src[i] === '\n') continue // a line with no `=` is not a variable
+    let key = src.slice(keyStart, i).trim()
+    i++ // past the `=`
+    if (key.startsWith('export ')) key = key.slice('export '.length).trim()
+    while (i < src.length && (src[i] === ' ' || src[i] === '\t')) i++
+
+    // A quote scans forward for its partner even across newlines, which is how
+    // a multiline value works. A quote that never closes is not a quote at
+    // all — it is an ordinary value that happens to start with one.
+    const quote = src[i]
+    const close =
+      quote === '"' || quote === "'" || quote === '`' ? src.indexOf(quote, i + 1) : -1
+    let value
+    if (close !== -1) {
+      value = src.slice(i + 1, close)
+      i = close + 1
+    } else {
+      const valueStart = i
+      while (i < src.length && src[i] !== '\n' && src[i] !== '#') i++
+      value = src.slice(valueStart, i).trim()
+    }
+    while (i < src.length && src[i] !== '\n') i++ // trailing noise on the line
+    if (key) pairs.push([key, value])
   }
+  return pairs
+}
+
+function loadEnv() {
+  if (typeof process.loadEnvFile === 'function') {
+    try {
+      process.loadEnvFile(ENV_PATH)
+    } catch (err) {
+      // No .env is fine — the values may already be in the environment.
+      if (err.code !== 'ENOENT') throw err
+    }
+    return
+  }
+  let src
+  try {
+    src = readFileSync(ENV_PATH, 'utf8')
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err
+    return
+  }
+  for (const [key, value] of parseEnv(src)) {
+    // The environment wins over the file, exactly as loadEnvFile has it.
+    if (!(key in process.env)) process.env[key] = value
+  }
+}
+
+export function loadConfig() {
+  loadEnv()
   const clientKey = process.env.TIKTOK_CLIENT_KEY
   const clientSecret = process.env.TIKTOK_CLIENT_SECRET
   const redirectUri = process.env.TIKTOK_REDIRECT_URI
