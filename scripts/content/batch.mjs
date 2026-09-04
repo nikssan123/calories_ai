@@ -17,7 +17,7 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync, rmSync, readdirSync
 import { join, basename, extname } from 'node:path'
 
 const FLAGS = new Set([
-  'hooks', 'out', 'music', 'fps', 'limit', 'hook-seconds', 'fontsize', 'maxchars', 'font', 'line-spacing', 'scrim', 'crop-bias',
+  'hooks', 'out', 'music', 'fps', 'limit', 'hook-seconds', 'fontsize', 'maxchars', 'font', 'line-spacing', 'scrim', 'crop-bias', 'max-lines', 'min-fontsize',
 ])
 
 // Walk the argv once rather than guessing: anything after a known --flag is
@@ -56,6 +56,9 @@ const LINE_SPACING = Number(opts['line-spacing'] ?? 12)
 const SCRIM = Number(opts.scrim ?? 0.45)
 // Where the 9:16 window sits on a taller source: 0 = top, 0.5 = centre, 1 = bottom.
 const CROP_BIAS = Number(opts['crop-bias'] ?? 0.5)
+// A hook past three lines stops being a hook. Type shrinks to fit instead.
+const MAX_LINES = Number(opts['max-lines'] ?? 3)
+const MIN_FONTSIZE = Number(opts['min-fontsize'] ?? 52)
 
 if (!source || !existsSync(source)) {
   console.error('Usage: node scripts/content/batch.mjs <source.mp4> [--hooks f] [--out d]')
@@ -135,9 +138,21 @@ hooks.forEach((hook, i) => {
   // its own drawtext at a computed y instead — no newline ever reaches the
   // filter. Writing each line to a file also keeps apostrophes and colons out
   // of the graph, where they are syntax rather than punctuation.
-  const lines = wrap(hook, MAXCHARS)
+  // A long hook wrapped at a fixed width runs to four lines, and the fourth
+  // lands level with the app's own headline — the scrim dims that text but
+  // does not remove it, so the two read as one jumble. Widen the measure and
+  // shrink the type until the hook fits in MAX_LINES instead.
+  let fontsize = FONTSIZE
+  let maxchars = MAXCHARS
+  let lines = wrap(hook, maxchars)
+  while (lines.length > MAX_LINES && fontsize > MIN_FONTSIZE) {
+    maxchars += 3
+    fontsize = Math.max(MIN_FONTSIZE, Math.round(FONTSIZE * (MAXCHARS / maxchars)))
+    lines = wrap(hook, maxchars)
+  }
+
   const enable = HOOK_SECONDS > 0 ? `:enable='lte(t,${HOOK_SECONDS})'` : ''
-  const step = FONTSIZE + LINE_SPACING
+  const step = fontsize + LINE_SPACING
   const drawtexts = lines.map((line, li) => {
     const lineFile = `${tmp}.${li}`
     tmpFiles.push(lineFile)
@@ -145,7 +160,7 @@ hooks.forEach((hook, i) => {
     return (
       `drawtext=fontfile='${escapeFilterPath(FONT)}'` +
       `:textfile='${escapeFilterPath(lineFile)}'` +
-      `:fontcolor=white:fontsize=${FONTSIZE}` +
+      `:fontcolor=white:fontsize=${fontsize}` +
       `:borderw=10:bordercolor=black@0.92` +
       `:shadowcolor=black@0.55:shadowx=0:shadowy=6` +
       `:x=(w-text_w)/2:y=h*0.13+${li * step}${enable}`
@@ -154,10 +169,10 @@ hooks.forEach((hook, i) => {
 
   // A scrim under the hook. Screen recordings put UI exactly where the hook
   // goes, and white-on-light-UI is unreadable no matter how heavy the stroke.
-  const bandTop = Math.round(1920 * 0.13) - Math.round(FONTSIZE * 0.45)
+  const bandTop = Math.round(1920 * 0.13) - Math.round(fontsize * 0.45)
   // Padding has to clear the descenders on the last line, which sit below the
   // y drawtext reports — a three-line hook otherwise touches the band edge.
-  const bandHeight = lines.length * step + Math.round(FONTSIZE * 0.75)
+  const bandHeight = lines.length * step + Math.round(fontsize * 0.75)
   const scrim =
     SCRIM > 0
       ? [`drawbox=x=0:y=${bandTop}:w=iw:h=${bandHeight}:color=black@${SCRIM}:t=fill${enable}`]
