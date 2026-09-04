@@ -182,3 +182,27 @@ is why `post.mjs` waits rather than exiting after the last chunk.
 documentation gives hex and rejects the other. `CHALLENGE_ENCODING` at the top
 of `auth.mjs` is the one line to flip if authorisation fails complaining about
 the code challenge.
+
+**A granted `video.publish` does not mean you can direct post.** Everything
+that would tell you otherwise comes back clean: `auth.mjs` reports
+`video.publish` in the granted scopes, and `creator_info` lists `SELF_ONLY`
+among `privacy_level_options`, so `post.mjs` takes the direct-post branch. The
+init call then fails with:
+
+```
+unaudited_client_can_only_post_to_private_accounts
+```
+
+The gate is neither the scope nor the privacy level — it is the **account's own
+privacy setting**. An unaudited client may only direct post into an account
+that is set to private, and @daysofarapp is public, so no value of `--privacy`
+gets past it. Drop `--publish` and finish the post in the app, or make the
+account private first. This is separate from the audit gate in §0: passing the
+audit is what removes the restriction, but until then a public account cannot
+be direct-posted to at all.
+
+**`process.loadEnvFile` needs Node 20.12+.** Older runtimes do not have the
+function, and the missing `.env` looks exactly like a missing credential —
+`Missing TIKTOK_CLIENT_KEY, ... in .env` while the file sits there fully
+populated. `lib.mjs` now falls back to its own parser, so this only bites on a
+checkout older than that fix. `package.json` asks for Node 22+ regardless.
