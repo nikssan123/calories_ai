@@ -41,6 +41,37 @@ worth having and is not worth building a queue around. See `CONTENT_ENGINE.md`
 users.** Developer portal → your app → Manage → add @daysofarapp there, or every
 call comes back with an authorisation error that does not say why.
 
+## 1b. Sandbox is the environment you will actually use
+
+TikTok will not save a Production app config until you attach a **demo video of
+the integration working**, and its own instructions say an app that has never
+been approved must record that demo *from a sandbox*. So Production is
+chicken-and-egg by design, and the sandbox is not a lesser path — it is the
+first one.
+
+A sandbox has **its own client key and secret**, separate from Production. Those
+are the two values that go in `.env` today. Everything in these scripts works
+against them unchanged.
+
+Set one up at Developer Portal -> your app -> **Sandbox** -> Create Sandbox
+(clone from Draft), then configure it exactly like Production: icon, category,
+description, terms and privacy URLs, platform Web with the site URL, Login Kit
+with the redirect URI, and Content Posting API.
+
+**A sandbox only works for accounts added under Sandbox settings -> Target
+Users.** Add @daysofarapp there and authorise it; the connect button sends you
+through a normal TikTok login. Without that, every call fails with an
+authorisation error that does not explain itself.
+
+What the sandbox does NOT change: drafts are still drafts. Direct Post inside a
+sandbox is restricted to `SELF_ONLY`, so a direct post lands on the profile
+visible to nobody but you — fine as a smoke test of that code path, useless as
+distribution.
+
+Moving to Production later means recording the demo video, filling the usage
+description, and submitting for review. Nothing in these scripts changes; you
+swap the two credentials in `.env`.
+
 ## 2. Environment
 
 Three values in the repo-root `.env`:
