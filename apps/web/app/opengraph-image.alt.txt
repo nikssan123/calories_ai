@@ -1,0 +1,1 @@
+Day So Far — just say what you ate. No database. No searching. A sentence.

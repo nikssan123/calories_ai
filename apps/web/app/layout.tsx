@@ -64,6 +64,13 @@ const DESCRIPTION =
   'A calorie journal you talk to. No forms, no database to search, no forty results for "chicken breast" — describe the meal in your own words and the day adds itself up.';
 
 export const metadata: Metadata = {
+  /**
+   * Without this, Next resolves `opengraph-image.png` against localhost — there
+   * is no VERCEL_URL to fall back on when self-hosting, so the card would point
+   * at an address no crawler can reach and the preview would stay blank.
+   * APP_URL is already the canonical origin everywhere else in the stack.
+   */
+  metadataBase: new URL(process.env.APP_URL ?? 'https://daysofar.com'),
   title: 'Day So Far',
   description: DESCRIPTION,
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Day So Far' },
