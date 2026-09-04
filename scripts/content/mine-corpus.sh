@@ -7,11 +7,30 @@
 #   scripts/content/mine-corpus.sh --user Nikolay     # one account, verbatim
 #   scripts/content/mine-corpus.sh --print-sql        # print SQL, connect to nothing
 #
-# Every line in content/copy/cards.txt is currently written in an invented
-# voice. `food_entries.description` holds the real one — the exact sentence a
-# person typed, with `source` recording whether they typed it, spoke it,
-# photographed it or entered it by hand. That is the best copy reference this
-# project has, and nobody has ever read it.
+# Every line in content/copy/cards.txt was once written in an invented voice.
+# This script exists to find the real one. content/copy/corpus.md holds the
+# findings from the 2026-09-05 run; read that before re-deriving anything.
+#
+# ## Which column is the corpus (this was wrong once, do not get it wrong again)
+#
+# `food_entries.description` is NOT the sentence a person typed. For every
+# source but `manual` it is written by the model — see the tool schema in
+# apps/api/src/ai/tools.ts, which asks for a "Short human label for the whole
+# meal, e.g. \"Chicken, rice and salad\"". Measuring register on that column
+# measures the parser, and what it reports back is its own prompt example:
+# 4-word labels, zero hedging, a comma and an "and".
+#
+# The typed corpus is `chat_messages WHERE role = 'user'`. Measured there, the
+# same users write a median of 8 words and put a number in 47% of messages.
+# The two are so different that reading the wrong one inverts the answer.
+#
+# So the aggregate report below has two halves, and they are labelled:
+#   PEOPLE  chat_messages  — register, length, hedging, vocabulary
+#   PARSER  food_entries   — input mix, compounding, confidence, corrections
+#
+# Exclude the onboarding template ("Hi — I'm new here...") from any word
+# frequency. It ships in two apostrophe variants and 12 accounts have sent it,
+# which is enough to outrank real food words.
 #
 # ## What this deliberately cannot do
 #
@@ -120,7 +139,110 @@ SET TRANSACTION READ ONLY;
 \pset null '·'
 
 \echo ''
-\echo '== scale ─ is this a corpus yet, or is it still you and the seed data?'
+\echo '#############################################################'
+\echo '#  PEOPLE ─ chat_messages. What a person actually typed.     #'
+\echo '#############################################################'
+\echo ''
+\echo '== scale ─ is this a corpus yet, or is it still you and the testers?'
+SELECT count(*) FILTER (WHERE role = 'user')      AS typed_msgs,
+       count(*) FILTER (WHERE role = 'assistant') AS replies,
+       count(DISTINCT user_id) FILTER (WHERE role = 'user') AS accounts,
+       min(created_at)::date AS first_day,
+       max(created_at)::date AS last_day
+FROM chat_messages;
+
+\echo ''
+\echo '== templates ─ anything 3+ accounts sent verbatim is onboarding, not a person'
+\echo '   (every query below excludes these)'
+SELECT count(DISTINCT user_id) AS accounts, count(*) AS msgs, left(content, 60) AS content
+FROM chat_messages WHERE role = 'user'
+GROUP BY content HAVING count(DISTINCT user_id) >= 3
+ORDER BY accounts DESC;
+
+\echo ''
+\echo '== length ─ how long a typed message is. Write the cards at median_words.'
+WITH real_msgs AS (
+  SELECT * FROM chat_messages WHERE role = 'user' AND btrim(content) <> ''
+    AND content NOT IN (SELECT content FROM chat_messages WHERE role = 'user'
+                        GROUP BY content HAVING count(DISTINCT user_id) >= 3))
+SELECT count(*) AS n, count(DISTINCT user_id) AS accounts,
+       round(avg(length(content)))                                   AS avg_chars,
+       percentile_disc(0.5) WITHIN GROUP (ORDER BY length(content))   AS median_chars,
+       percentile_disc(0.9) WITHIN GROUP (ORDER BY length(content))   AS p90_chars,
+       percentile_disc(0.5) WITHIN GROUP (
+         ORDER BY array_length(regexp_split_to_array(btrim(content), '\s+'), 1)) AS median_words,
+       percentile_disc(0.9) WITHIN GROUP (
+         ORDER BY array_length(regexp_split_to_array(btrim(content), '\s+'), 1)) AS p90_words
+FROM real_msgs;
+
+\echo ''
+\echo '== shape ─ do people capitalise, punctuate, or ask it anything?'
+WITH real_msgs AS (
+  SELECT * FROM chat_messages WHERE role = 'user' AND btrim(content) <> ''
+    AND content NOT IN (SELECT content FROM chat_messages WHERE role = 'user'
+                        GROUP BY content HAVING count(DISTINCT user_id) >= 3))
+SELECT count(*) AS msgs,
+       count(*) FILTER (WHERE content ~ '^[a-zа-я]')  AS starts_lowercase,
+       count(*) FILTER (WHERE content ~ '[.!?]$')     AS ends_punctuated,
+       count(*) FILTER (WHERE content ~ ',')          AS has_comma,
+       count(*) FILTER (WHERE content ~ '\?')         AS is_a_question,
+       count(*) FILTER (WHERE content ~ '[а-яА-Я]')   AS cyrillic
+FROM real_msgs;
+
+\echo ''
+\echo '== register ─ do people hedge, or do they weigh? This is the copy answer.'
+\echo '   Read the Bulgarian markers: the English ones being 0 is about who'
+\echo '   is using the app, not about whether anybody hedges.'
+WITH real_msgs AS (
+  SELECT * FROM chat_messages WHERE role = 'user'
+    AND content NOT IN (SELECT content FROM chat_messages WHERE role = 'user'
+                        GROUP BY content HAVING count(DISTINCT user_id) >= 3))
+SELECT m.marker,
+       count(*) FILTER (WHERE c.content ~* m.pattern)                     AS msgs,
+       round(100.0 * count(*) FILTER (WHERE c.content ~* m.pattern)
+             / nullif(count(*), 0), 1)                                    AS pct
+FROM real_msgs c
+CROSS JOIN (VALUES
+    ('any number',    '\d'),
+    ('bare number',   '\m\d+\M'),
+    ('грама (bg)',    '\mграм'),
+    ('около (bg)',    '\mоколо\M'),
+    ('малко (bg)',    '\mмалко\M'),
+    ('лъжица (bg)',   '\mлъжиц'),
+    ('парче (bg)',    '\mпарче'),
+    ('a weight',      '\m\d+\s*(g|gr|grams?|kg|ml|oz)\M'),
+    ('about',         '\mabout\M'),
+    ('roughly',       '\mroughly\M'),
+    ('some',          '\msome\M'),
+    ('a bit',         '\ma bit\M'),
+    ('half',          '\mhalf\M'),
+    ('couple',        '\mcouple\M'),
+    ('maybe',         '\mmaybe\M'),
+    ('-ish',          '\m\w+ish\M'),
+    ('big / large',   '\m(big|large)\M'),
+    ('small',         '\msmall\M')
+  ) AS m(marker, pattern)
+GROUP BY m.marker, m.pattern
+ORDER BY msgs DESC;
+
+\echo ''
+\echo '== vocabulary ─ top typed words. Frequencies only; no sentence leaves the host.'
+WITH real_msgs AS (
+  SELECT * FROM chat_messages WHERE role = 'user'
+    AND content NOT IN (SELECT content FROM chat_messages WHERE role = 'user'
+                        GROUP BY content HAVING count(DISTINCT user_id) >= 3))
+SELECT word, count(*) AS n, count(DISTINCT user_id) AS accounts
+FROM (SELECT user_id, lower(btrim(w, '.,;:!?()"''')) AS word
+      FROM real_msgs, regexp_split_to_table(content, '\s+') AS w) t
+WHERE length(word) >= 3
+GROUP BY word ORDER BY n DESC LIMIT 60;
+
+\echo ''
+\echo '#############################################################'
+\echo '#  PARSER ─ food_entries. What the model made of it.         #'
+\echo '#############################################################'
+\echo ''
+\echo '== scale'
 SELECT (SELECT count(*) FROM users)                        AS accounts,
        (SELECT count(*) FROM users WHERE is_setup_complete) AS onboarded,
        (SELECT count(DISTINCT user_id) FROM food_entries)   AS have_logged,
@@ -131,10 +253,11 @@ SELECT (SELECT count(*) FROM users)                        AS accounts,
 
 \echo ''
 \echo '== concentration ─ how much of the corpus is a single account (no names)'
-SELECT rank, entries,
-       round(100.0 * entries / sum(entries) OVER (), 1) AS pct_of_corpus
+SELECT rank, entries, days_logged,
+       round(entries::numeric / nullif(days_logged, 0), 1) AS per_day,
+       round(100.0 * entries / sum(entries) OVER (), 1)    AS pct_of_corpus
 FROM (SELECT row_number() OVER (ORDER BY count(*) DESC) AS rank,
-             count(*) AS entries
+             count(*) AS entries, count(DISTINCT local_date) AS days_logged
       FROM food_entries GROUP BY user_id) t
 ORDER BY rank LIMIT 10;
 
@@ -145,7 +268,8 @@ SELECT source, count(*) AS entries,
 FROM food_entries GROUP BY source ORDER BY entries DESC;
 
 \echo ''
-\echo '== length ─ how long a real entry is. Write the cards at median_words.'
+\echo '== label length ─ NOT a register measurement. This is the model tidying up.'
+\echo '   Compare against the PEOPLE length above: the gap is what it strips.'
 SELECT source, count(*) AS n,
        round(avg(length(description)))                                  AS avg_chars,
        percentile_disc(0.5) WITHIN GROUP (ORDER BY length(description))  AS median_chars,
@@ -166,40 +290,13 @@ FROM (SELECT e.id, count(i.id) AS n_items
 GROUP BY n_items ORDER BY n_items;
 
 \echo ''
-\echo '== register ─ do people hedge, or do they weigh? This is the copy answer.'
-SELECT m.marker,
-       count(*) FILTER (WHERE e.description ~* m.pattern)                  AS entries,
-       round(100.0 * count(*) FILTER (WHERE e.description ~* m.pattern)
-             / nullif(count(*), 0), 1)                                     AS pct
-FROM food_entries e
-CROSS JOIN (VALUES
-    ('about',       '\mabout\M'),
-    ('roughly',     '\mroughly\M'),
-    ('some',        '\msome\M'),
-    ('a bit of',    '\ma bit\M'),
-    ('half',        '\mhalf\M'),
-    ('a couple',    '\mcouple\M'),
-    ('maybe',       '\mmaybe\M'),
-    ('-ish',        '\m\w+ish\M'),
-    ('big / large', '\m(big|large)\M'),
-    ('small',       '\msmall\M'),
-    ('a weight',    '\m\d+\s*(g|kg|ml|oz)\M'),
-    ('any number',  '\d')
-  ) AS m(marker, pattern)
-GROUP BY m.marker, m.pattern
-ORDER BY entries DESC;
-
-\echo ''
-\echo '== vocabulary ─ top words. Frequencies only; no sentence leaves the host.'
-SELECT word, count(*) AS n, count(DISTINCT user_id) AS accounts
-FROM (SELECT e.user_id,
-             lower(btrim(w, '.,;:!?()"''')) AS word
-      FROM food_entries e,
-           regexp_split_to_table(e.description, '\s+') AS w) t
-WHERE length(word) >= 3
-GROUP BY word
-ORDER BY n DESC
-LIMIT 60;
+\echo '== size ─ the kcal of a real logged meal'
+SELECT percentile_disc(0.1) WITHIN GROUP (ORDER BY kcal) AS p10,
+       percentile_disc(0.5) WITHIN GROUP (ORDER BY kcal) AS median,
+       percentile_disc(0.9) WITHIN GROUP (ORDER BY kcal) AS p90
+FROM (SELECT e.id, round(sum(i.kcal)) AS kcal
+      FROM food_entries e JOIN food_items i ON i.entry_id = e.id
+      GROUP BY e.id) t;
 
 \echo ''
 \echo '== confidence ─ what the parser thought of its own answer'

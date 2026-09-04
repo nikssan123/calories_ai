@@ -12,6 +12,34 @@
 #   asking it questions             "Am I eating enough protein?" in the composer
 #   barcode scanner                 §5 frame 6
 #
+# ---------------------------------------------------------------------------
+# The register, and where it came from
+#
+# These lines used to be written in an invented voice. content/copy/corpus.md
+# measures the real one off production, and the headlines below are now
+# written to it. Four things that report changed:
+#
+#  - Length. A typed entry is a median of 8 words, not the 4-word label the
+#    parser keeps. The old cards were written at the parser's length.
+#  - Numbers. 47.4% of typed messages carry a quantity. Half of these
+#    headlines do too, because that is how often people actually say one.
+#  - Shape. People capitalise and do not end-punctuate. So no full stops on
+#    the headlines that are meant to read as somebody's entry.
+#  - The line that was simply wrong. "No, I am not weighing my food" claimed
+#    a behaviour the corpus contradicts — `грама` is the second most common
+#    typed word. It is replaced by a card that says amounts are optional,
+#    which is true either way and does not argue with the users.
+#
+# Structure: where a card has two lines, the headline is in the user's
+# register and the subline answers in the product's. Food names are drawn
+# from the corpus vocabulary (chocolate, eggs, feta, tomato, banana, toast,
+# black coffee, rice) rather than invented.
+#
+# One card kept despite the data: "Am I eating enough protein?" Only 2 of 213
+# messages are questions, so nobody is doing this yet. It is a feature claim,
+# not a behaviour claim, and the feature ships — but do not expect it to be
+# the card that lands.
+#
 # Three things deliberately absent:
 #
 #  - No competitor is named. CONTENT_ENGINE.md §5 lists naming them under
@@ -36,18 +64,22 @@
 # rather than making you log the meal again. The researcher's own complaint
 # -- "I had to correct it because it misinterpreted what's there" -- is a
 # description of our correction flow, from someone who is not selling it.
+#
+# corpus.md §5 is explicit that none of its numbers may appear in a post.
+# Nothing below quotes one. The data set the voice, not the claims.
 
-there was more rice | Correcting a meal is just saying so. No re-logging.
-a concerning amount of cheese | Valid entry. Logged without judgement.
-No, I am not weighing my food | Yes, I am still tracking it.
+Actually there was more rice than that | Correcting a meal is one sentence. Nothing gets re-logged.
+Most of a bar of dark chocolate, standing up | Valid entry. Logged without judgement.
+Two eggs, 100 grams of feta and a tomato | Say the amount or leave it out. Both parse.
 Nobody's food AI is exact. Ours included. | Which is why correcting it is one sentence.
 Every number in every tracker is an estimate | Use the one you can argue with.
 That is not what I had | So say what you did have. That is the whole repair.
 It counts fibre, sodium and sugar too | Calories were never the whole story.
 Same calories. Completely different day. | Fibre, sodium, sat fat and sugar, all on Today.
-Logged lunch with no signal at all | The basement gym does not have wifi. It still worked.
+Logged lunch in a basement gym with no signal | No wifi, no bars. The entry still landed.
 Photograph the fridge, get something you can cook | The sad pepper counts as an ingredient.
-Went for a 5km run | Same box. Same sentence. It works that out too.
-You can just ask it things | Am I eating enough protein?
+Went for a 5km run and had a banana after | Same box, same sentence. It works both out.
+Am I eating enough protein? | You can just ask. Same box as the food goes in.
+Toast, eggs, black coffee and half a banana | One sentence in, four items out, each one correctable.
 Some days the honest entry is a bit of everything | That parses fine.
 Scan the packet when you cannot be bothered to type
