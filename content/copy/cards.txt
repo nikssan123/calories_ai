@@ -1,0 +1,33 @@
+# One card per line:  headline | optional smaller second line
+# Blank lines and # comments ignored.  Render with scripts/content/cards.mjs.
+#
+# Same discipline as content/hooks/hooks.txt. Every line below is true of the
+# app as shipped, and each one names the feature it leans on:
+#
+#   corrections in plain language   store/screenshots/02-correct.png
+#   fibre / sodium / sat fat / sugar  the Diet Quality card on Today
+#   offline logging                 PLAY_LISTING.md §5 frame 5
+#   fridge photo -> recipes         PLAY_LISTING.md §5 frame 7
+#   exercise in the same box        "Went for a 5km run" in the composer
+#   asking it questions             "Am I eating enough protein?" in the composer
+#   barcode scanner                 §5 frame 6
+#
+# Two things deliberately absent, carried over from hooks.txt:
+#
+#  - No competitor is named. CONTENT_ENGINE.md §5 lists naming them under
+#    formats to avoid, so the comparison lines say "most apps" and stop there.
+#  - Nothing implies the app is free. Coach and the packs exist, and a joke
+#    that invites "wait, is it free?" in the replies is a joke that costs money.
+
+there was more rice | Correcting a meal is just saying so. No re-logging.
+a concerning amount of cheese | Valid entry. Logged without judgement.
+No, I am not weighing my food | Yes, I am still tracking it.
+Most apps give you 40 results for chicken breast | You already typed what you ate.
+Your food diary should not need a search bar
+It counts fibre, sodium and sugar too | Calories were never the whole story.
+Logged lunch with no signal at all | The basement gym does not have wifi. It still worked.
+Photograph the fridge, get something you can cook | The sad pepper counts as an ingredient.
+Went for a 5km run | Same box. Same sentence. It works that out too.
+You can just ask it things | Am I eating enough protein?
+Some days the honest entry is a bit of everything | That parses fine.
+Scan the packet when you cannot be bothered to type
