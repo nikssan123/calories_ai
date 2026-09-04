@@ -50,7 +50,10 @@ const LIMIT = Number(opts.limit ?? 0)
 const HOOK_SECONDS = Number(opts['hook-seconds'] ?? 0)
 const FONTSIZE = Number(opts.fontsize ?? 78)
 const MAXCHARS = Number(opts.maxchars ?? 18)
-const FONT = opts.font ?? 'C:/Windows/Fonts/ariblk.ttf'
+// The vendored Baloo2, same as cards.mjs — so a hook overlay and a card are
+// visibly the same product. The old default was C:/Windows/Fonts/ariblk.ttf,
+// which exists on the render PC and on no Mac, and §1 runs assembly here.
+const FONT = opts.font ?? 'apps/mobile/assets/fonts/Baloo2_800ExtraBold.ttf'
 const LINE_SPACING = Number(opts['line-spacing'] ?? 12)
 // Opacity of the band behind the hook; 0 turns it off.
 const SCRIM = Number(opts.scrim ?? 0.45)
