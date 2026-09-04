@@ -12,19 +12,39 @@
 #   asking it questions             "Am I eating enough protein?" in the composer
 #   barcode scanner                 §5 frame 6
 #
-# Two things deliberately absent, carried over from hooks.txt:
+# Three things deliberately absent:
 #
 #  - No competitor is named. CONTENT_ENGINE.md §5 lists naming them under
 #    formats to avoid, so the comparison lines say "most apps" and stop there.
 #  - Nothing implies the app is free. Coach and the packs exist, and a joke
 #    that invites "wait, is it free?" in the replies is a joke that costs money.
+#  - No claim that this one estimates *more accurately*. See below.
+#
+# The accuracy lines, and why they are phrased against ourselves too.
+#
+# The 2026 research (NUTRITION 2026, Hengist & Charles) put photo-based
+# trackers 250-345 kcal and ~30g fat light per meal, and that finding is now
+# the loudest thing in the category. It is tempting to attack it. We cannot:
+# this app estimates from photos as well (`food_entries.source = 'photo'`),
+# and there is no measurement showing ours is closer. A superiority claim we
+# cannot produce a number for is the one credibility hit §0 says not to take.
+#
+# So the angle is not "theirs is wrong, ours is right". It is that every
+# number in this category is an estimate, ours included, and the thing worth
+# comparing is what it costs to fix one. That we can demonstrate on screen:
+# item-level rows exist precisely so "there was more rice" updates a row
+# rather than making you log the meal again. The researcher's own complaint
+# -- "I had to correct it because it misinterpreted what's there" -- is a
+# description of our correction flow, from someone who is not selling it.
 
 there was more rice | Correcting a meal is just saying so. No re-logging.
 a concerning amount of cheese | Valid entry. Logged without judgement.
 No, I am not weighing my food | Yes, I am still tracking it.
-Most apps give you 40 results for chicken breast | You already typed what you ate.
-Your food diary should not need a search bar
+Nobody's food AI is exact. Ours included. | Which is why correcting it is one sentence.
+Every number in every tracker is an estimate | Use the one you can argue with.
+That is not what I had | So say what you did have. That is the whole repair.
 It counts fibre, sodium and sugar too | Calories were never the whole story.
+Same calories. Completely different day. | Fibre, sodium, sat fat and sugar, all on Today.
 Logged lunch with no signal at all | The basement gym does not have wifi. It still worked.
 Photograph the fridge, get something you can cook | The sad pepper counts as an ingredient.
 Went for a 5km run | Same box. Same sentence. It works that out too.
