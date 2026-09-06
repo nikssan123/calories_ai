@@ -92,6 +92,54 @@ export function nextDayStart(instant: Date, context: DayContext): Date {
   return new Date(high);
 }
 
+/**
+ * When the day this instant belongs to began.
+ *
+ * `nextDayStart`'s mirror, and it exists for the one caller that has to slice a
+ * sensor's history into this app's days: a pedometer is queried between two
+ * instants, and the instants that bound "Tuesday" for somebody with a 4am
+ * rollover in Sofia are not something a phone can construct by rounding.
+ *
+ * Bisected rather than calculated, for exactly the reason written above. The
+ * tempting version — take the local wall clock, set it to `day_start_hour`,
+ * convert back — has to reason about a UTC offset at the very moment the offset
+ * is changing, and is wrong twice a year in the direction that silently moves a
+ * day's worth of somebody's data onto the wrong date. Asking `localDateFor`
+ * the same question the rest of the app asks cannot disagree with the rest of
+ * the app.
+ */
+export function dayStartFor(instant: Date, context: DayContext): Date {
+  const today = localDateFor(instant, context);
+  let low = instant.getTime() - 48 * 60 * 60 * 1000;
+  let high = instant.getTime();
+
+  /* Two days inside one window means a clock we have no business guessing
+   * around — hand back the far edge, as `nextDayStart` does. */
+  if (localDateFor(new Date(low), context) === today) return new Date(low);
+
+  /*
+   * To the millisecond, where `nextDayStart` stops at the minute — and the
+   * difference is load-bearing rather than fussy.
+   *
+   * `nextDayStart` feeds a WidgetKit timeline, where landing within a minute of
+   * the rollover is indistinguishable from landing on it. This one is walked
+   * *backwards*: `readStepWindow` finds a day's start and then steps one
+   * millisecond before it to land in the previous day. A boundary reported even
+   * a second late is still inside the day it was meant to leave, so that step
+   * goes nowhere and the walk reads the same day seven times over.
+   *
+   * The invariant through the loop is that `low` is outside the day and `high`
+   * is inside it, so `high` converges onto the first instant that belongs to
+   * it. Thirty-seven iterations for a 48-hour window, once per day per sync.
+   */
+  while (high - low > 1) {
+    const middle = low + Math.floor((high - low) / 2);
+    if (localDateFor(new Date(middle), context) === today) high = middle;
+    else low = middle;
+  }
+  return new Date(high);
+}
+
 /** Wall-clock parts in the user's timezone, for prompting the model. */
 export function localPartsFor(instant: Date, timezone: string) {
   const formatter = new Intl.DateTimeFormat('en-GB', {
@@ -412,6 +460,18 @@ export interface DayParts {
    * cell in March has no use for one.
    */
   streak?: Streak | null;
+  /**
+   * The phone's step count for this day, when there is one.
+   *
+   * Optional for the same reason `streak` is, and null-not-zero for the reason
+   * written on `DaySummary.steps`: a day with no reading is a day the sensor
+   * did not speak for, which is not the same thing as a day nobody moved.
+   *
+   * Note what it does *not* touch below. Steps reach `local_date` and nothing
+   * else — not `burned_kcal`, not `net_kcal`, not `quality`. That is deliberate
+   * and load-bearing; see the comment on the schema.
+   */
+  steps?: number | null;
 }
 
 /**
@@ -427,6 +487,7 @@ export function rollUpDay({
   targets,
   weight,
   streak = null,
+  steps = null,
 }: DayParts): DaySummary {
   const consumed = sumNutrition(foodEntries);
   const burned_kcal = exerciseEntries.reduce((sum, e) => sum + e.kcal_burned, 0);
@@ -450,6 +511,7 @@ export function rollUpDay({
     exercise_entries: exerciseEntries,
     weight,
     streak,
+    steps,
   };
 }
 

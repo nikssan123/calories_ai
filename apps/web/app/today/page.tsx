@@ -332,6 +332,23 @@ function TodayView() {
             </InsetGroup>
           )}
 
+          {/*
+            * Read-only here, and that is the whole of the web's relationship
+            * with steps: the count is gathered by the phone's pedometer and
+            * there is no browser equivalent worth having. What a desktop can do
+            * is show what the phone recorded, so somebody logging lunch at
+            * their laptop sees the same day the widget on their home screen is
+            * showing. Null on a day nothing reported — never a zero, for the
+            * reason on `DaySummary.steps`.
+            */}
+          {day.steps !== null && day.steps > 0 && (
+            <InsetGroup title={t('today.stepsTitle')} footer={t('today.stepsFooter')}>
+              <InsetRow>
+                <span className="text-figure text-title-2">{t('today.steps')(day.steps)}</span>
+              </InsetRow>
+            </InsetGroup>
+          )}
+
           {day.weight && (
             <InsetGroup title={`⚖️  ${t('today.weight')}`}>
               <InsetRow>

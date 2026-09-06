@@ -51,6 +51,10 @@ const day: DaySummary = {
   // The prompt says nothing about streaks, so this is the shape a fixture takes
   // for a day that is not the reader's today.
   streak: null,
+  // Null rather than a number: the day context below is asserted against
+  // verbatim, and a fixture that reported steps would be asserting the step
+  // line's wording from a test about something else.
+  steps: null,
   local_date: '2026-03-10',
   consumed: { kcal: 1840, protein_g: 120, carbs_g: 180, fat_g: 60 },
   quality: {
@@ -346,6 +350,20 @@ describe('dayContextPrompt', () => {
     expect(prompt).toContain('120 / 160 g (40 short)');
     expect(prompt).toContain('Europe/Sofia');
     expect(prompt).toContain('04:00');
+  });
+
+  it('reports the step count with the rule attached to it', () => {
+    const walked = dayContextPrompt(profile, { ...day, steps: 9120 }, weight);
+    expect(walked).toContain('- Steps: 9120');
+    // The number never travels without the rule. A bare count in a list of kcal
+    // figures is an invitation to add it to them.
+    expect(walked).toContain('context, never calories');
+  });
+
+  it('says nothing at all about steps when the phone did not report', () => {
+    // Not "Steps: 0". A model handed a zero says the person did not move; the
+    // truth is that nothing was measured. See `DaySummary.steps`.
+    expect(dayContextPrompt(profile, day, weight)).not.toContain('Steps');
   });
 
   it('says "over" once the target is passed', () => {

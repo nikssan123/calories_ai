@@ -688,6 +688,10 @@ export const es: Messages = {
 
   // ---- Strings that belong to sections above, added in the same pass ------
   'today.exerciseFooter': 'Se muestra aparte de tu objetivo — lo quemado con ejercicio es una estimación gruesa.',
+  'today.stepsTitle': '👟  Pasos',
+  'today.steps': (count: number) => n(count, { one: 'paso', other: 'pasos' }),
+  'today.stepsFooter':
+    'Los cuenta tu teléfono. Los pasos afinan tu objetivo — nunca se le suman.',
   'history.day': 'Día',
   'history.nothingThatDay': 'Nada apuntado ese día.',
   'history.nothingYet': 'Nada apuntado todavía.',

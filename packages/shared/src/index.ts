@@ -1269,6 +1269,72 @@ export const WeightEntry = z.object({
 });
 export type WeightEntry = z.infer<typeof WeightEntry>;
 
+/**
+ * A day's ambient movement, as the phone counted it.
+ *
+ * Steps are the first signal in this app that is *measured* rather than
+ * reported, and the first that deliberately does not touch a calorie. Both of
+ * those want stating where the type is, because the obvious thing to do with a
+ * step count is exactly the thing that breaks the product — see
+ * INTEGRATIONS.md, "The constraint that shapes everything".
+ *
+ * The short version: `adaptive.ts` derives what somebody burns from what they
+ * ate and what the scale did about it, so a day's walking is *already* inside
+ * the observed TDEE. `predictTdee` prices it in a second time through
+ * `ACTIVITY_MULTIPLIER`. Subtract a step-derived figure from intake as well and
+ * the adaptive pass reads the resulting gap as over-eating and pulls the target
+ * down — so the target shrinks the more somebody walks, silently, for everyone.
+ *
+ * Hence no `kcal` field here, and no route that would let one be invented. What
+ * steps are for is the two things the table below cannot do: telling the
+ * activity level from behaviour instead of a dropdown, and giving the agent a
+ * reason for a plateau other than "eat less".
+ */
+export const DailySteps = z.object({
+  local_date: z.string(),
+  steps: z.number().int().min(0),
+  /**
+   * Which sensor said so. `device` is the phone's own pedometer — the only
+   * source today — and the column exists because a watch and a phone reporting
+   * the same day is a real situation in which neither one is wrong.
+   */
+  source: z.string().default('device'),
+});
+export type DailySteps = z.infer<typeof DailySteps>;
+
+/**
+ * How far back a client may re-state days it has already sent.
+ *
+ * The phone re-reads its own pedometer history on every foreground and sends
+ * the window whole, because a step count is not an event: today's figure is
+ * still climbing at 3pm, and yesterday's is only final once the day has turned
+ * over. Re-sending is therefore the *normal* path, not a repair, and the write
+ * is an upsert keyed on the day for exactly that reason.
+ *
+ * Seven, because iOS keeps roughly a week of `CMPedometer` history and Android
+ * keeps considerably less. Asking for more would be asking for null.
+ */
+export const STEP_SYNC_WINDOW_DAYS = 7;
+
+export const SyncStepsRequest = z.object({
+  days: z.array(DailySteps).max(STEP_SYNC_WINDOW_DAYS * 2),
+});
+export type SyncStepsRequest = z.infer<typeof SyncStepsRequest>;
+
+/**
+ * A window of days for the Progress chart, newest last.
+ *
+ * `average` skips days with no reading rather than counting them as zero. A
+ * phone that was left on a desk did not walk nought steps; it did not report,
+ * and averaging a non-report as a zero is how a week off the grid turns into
+ * advice about being sedentary.
+ */
+export const StepsSummary = z.object({
+  days: z.array(DailySteps),
+  average: z.number().nullable(),
+});
+export type StepsSummary = z.infer<typeof StepsSummary>;
+
 /** Which pass produced a target row: the profile formula, the weekly adaptive
  * pass, or the user typing a number. */
 export const TARGET_SOURCES = ['calculated', 'adaptive', 'manual'] as const;
@@ -1623,6 +1689,20 @@ export const DaySummary = z.object({
    * its own cache and has no streak to hand.
    */
   streak: Streak.nullable().default(null),
+  /**
+   * What the phone counted on this day, or null if it never said.
+   *
+   * Null and zero are different readings and the difference is the whole point:
+   * nobody has ever walked exactly nought steps, so a zero on the screen means
+   * "your phone was elsewhere" while pretending to mean "you did not move". The
+   * surfaces that draw this drop the row entirely on null rather than render a
+   * confident nought — the same argument `Empty.tsx` makes for the widget.
+   *
+   * Optional and defaulted like `streak` above, because a client older than
+   * this field must still parse a day, and because `rollUpDay` runs on a phone
+   * assembling a day out of its own cache with no metrics table to consult.
+   */
+  steps: z.number().int().nullable().default(null),
 });
 export type DaySummary = z.infer<typeof DaySummary>;
 

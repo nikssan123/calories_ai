@@ -385,6 +385,21 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
             {props.burnText}
           </Text>
         )}
+        {/* Muted, not pink. The burn above moves the day's arithmetic and the
+            steps do not, and on a card with no room for a caption the colour is
+            the only thing left to say so. `layout.ts` decides which lines
+            survive a short card; this only paints them. */}
+        {props.stepsText !== '' && (
+          <Text
+            modifiers={[
+              font({ size: props.detail, weight: 'semibold' }),
+              foregroundStyle(paint.mutedForeground),
+              lineLimit(1),
+            ]}
+          >
+            {props.stepsText}
+          </Text>
+        )}
       </VStack>
     </HStack>,
   );

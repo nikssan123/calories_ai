@@ -31,6 +31,7 @@ import { WorkoutCard } from '@/components/workout/WorkoutCard';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { MacroBars } from '@/components/MacroBars';
 import { RepeatMeals } from '@/components/RepeatMeals';
+import { StepsCard } from '@/components/StepsCard';
 import { Skeleton } from '@/components/Skeleton';
 import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
@@ -49,6 +50,7 @@ import { Material } from '@/components/Material';
 import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
 import { useCountUp } from '@/hooks/useCountUp';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
+import { useSteps } from '@/hooks/useSteps';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { writeDaySnapshot } from '@/lib/snapshot';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
@@ -306,6 +308,18 @@ export default function TodayScreen() {
   const isToday = day !== null && today !== null && day.local_date === today;
 
   /*
+   * The phone's own count, read on this screen because this is the screen that
+   * knows which day is being looked at. It never touches the ring above it:
+   * steps inform the target over weeks, and are not an ingredient of it today.
+   * See `lib/steps.ts`.
+   */
+  const { steps, permission: stepPermission, enable: enableSteps } = useSteps(
+    profile,
+    isToday,
+    day?.steps ?? null,
+  );
+
+  /*
    * Keep the home screen in step, but only while this screen is actually
    * showing today — stepping back to Tuesday must not leave Tuesday's ring on
    * the launcher.
@@ -320,9 +334,16 @@ export default function TodayScreen() {
    */
   useEffect(() => {
     if (!day || !isToday) return;
-    void writeDaySnapshot(day, locale, profile);
+    /*
+     * `steps` rather than `day.steps`, so the home screen gets the count this
+     * session just read off the sensor instead of the one the server held when
+     * the day was fetched. It is the same preference `useSteps` makes for the
+     * screen, and without it the widget would sit a sync behind the row three
+     * inches above it.
+     */
+    void writeDaySnapshot({ ...day, steps }, locale, profile);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isToday, locale, profile, day?.local_date, day?.consumed.kcal, day?.targets.kcal, day?.burned_kcal]);
+  }, [isToday, locale, profile, steps, day?.local_date, day?.consumed.kcal, day?.targets.kcal, day?.burned_kcal]);
 
   /*
    * The ask for a store rating. Why this moment and not another is in
@@ -725,6 +746,12 @@ export default function TodayScreen() {
           {/* `logged` so a day with nothing in it keeps its own empty state
               rather than gaining a second one — see `DietQuality`. */}
           <DietQuality quality={day.quality} logged={byMeal.length > 0} />
+
+          {/* Below the ring and the macros on purpose. A step count is context
+              for the target, not an ingredient of it, and sitting it in the
+              summary block would say otherwise. Draws nothing at all when there
+              is no sensor, no permission or no reading — see `StepsCard`. */}
+          <StepsCard steps={steps} permission={stepPermission} onEnable={enableSteps} />
 
           {byMeal.length === 0 && day.exercise_entries.length === 0 && (
             <View style={styles.empty}>

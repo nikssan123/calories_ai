@@ -704,6 +704,10 @@ export const bg: Messages = {
 
   // ---- Strings that belong to sections above, added in the same pass ------
   'today.exerciseFooter': 'Показано отделно от целта ти — изгореното от движение е груба оценка.',
+  'today.stepsTitle': '👟  Стъпки',
+  'today.steps': (count: number) => n(count, { one: 'стъпка', other: 'стъпки' }),
+  'today.stepsFooter':
+    'Отчетени от телефона ти. Стъпките уточняват целта ти — никога не се добавят към нея.',
   'history.day': 'Ден',
   'history.nothingThatDay': 'Нищо записано този ден.',
   'history.nothingYet': 'Още нищо записано.',

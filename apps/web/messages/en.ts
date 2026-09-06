@@ -63,6 +63,9 @@ export const en = {
   'today.exercise': 'Exercise',
   'today.roughEstimate': 'rough estimate',
   'today.exerciseFooter': 'Shown separately from your target — exercise burn is a rough estimate.',
+  'today.stepsTitle': '👟  Steps',
+  'today.steps': (count: number) => n(count, { one: 'step', other: 'steps' }),
+  'today.stepsFooter': 'Counted by your phone. Steps sharpen your target — they are never added to it.',
   'today.changeHint': 'To change this, say so in the journal — “there was more rice”.',
 
   'meal.breakfast': 'Breakfast',

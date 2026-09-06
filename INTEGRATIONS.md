@@ -1,13 +1,43 @@
 # Connecting fitness trackers
 
-Nothing here is built. This is the plan for pulling workouts, weight and activity in
-from the devices people already wear, so the journal stops being the only way data
-gets into the app.
+This is the plan for pulling workouts, weight and activity in from the devices people
+already wear, so the journal stops being the only way data gets into the app.
 
-It was written after checking what the providers' terms actually say in August 2026,
-because that turned out to decide the design more than any technical question did.
-Two of the obvious candidates are unusable, and the one that replaces them did not
-exist when the app was built.
+The provider half was written after checking what their terms actually say in August
+2026, because that turned out to decide the design more than any technical question did.
+Two of the obvious candidates are unusable, and the one that replaces them did not exist
+when the app was built.
+
+## What is built
+
+**Steps, from the phone's own pedometer, on iOS.** Migration `044_daily_metrics.sql`
+created the `daily_metrics` table this document specifies; `services/metrics.ts` writes
+and reads it; `PUT /metrics/steps` takes a week's window from the phone and
+`GET /metrics/steps` hands it back for a chart. `apps/mobile/lib/steps.ts` reads
+`CMPedometer` through `expo-sensors` and re-sends the whole window on every foreground,
+so nothing is an event that can be missed. The count reaches the day summary, the Today
+screen, both home-screen widgets, the web's Today page, and the agent's day context.
+
+No provider is wired and no OAuth exists yet — the `provider_connections` table below is
+still unbuilt. What the steps work did establish is the rule, in code and in a test:
+`daily_metrics` is not `exercise_entries`, and `buildDaySummary` has a test asserting a
+20,000-step day still reports `burned_kcal: 0`.
+
+**Android reports steps as unavailable rather than as a wrong number.** `expo-sensors`
+throws `NotSupportedException` from `getStepCountAsync` there, and its only other door,
+`watchStepCount`, is `TYPE_STEP_COUNTER` with the baseline zeroed at subscribe — steps
+since the app came to the foreground. Somebody who opens the app twice a day would be
+told they walked four hundred steps, which is a confident lie that looks plausible. The
+real answer on Android is Health Connect, and it is a stage of its own: a native module
+and a Play data-safety declaration. Everything above `readStepWindow` is platform-blind,
+so that stage is a new implementation of one function.
+
+**What is still missing is the payoff.** Steps are recorded, shown and given to the
+agent, but nothing yet reads them back into a target: `predictTdee` still multiplies BMR
+by the activity level somebody picked at onboarding, and `adaptive.ts` still checks
+`SANITY_BAND` against that guess. `recentStepAverage` exists and has no callers. That
+join is the reason the feature is worth having — see "The TDEE anchor" below — and it is
+the next thing to build.
 
 ## The short version
 
@@ -17,8 +47,9 @@ Fitbit, Pixel Watch and anything an Android phone writes to Health Connect behin
 single OAuth flow. One integration, several device families, no native app required.
 
 **Do not start with Strava**, which was the obvious first pick and is the wrong one —
-see below. **Apple Health remains blocked** on the React Native migration, and there
-is a shortcut worth taking in the meantime.
+see below. **Apple Health is no longer blocked** — `apps/mobile` shipped, and Stage 4
+is now buildable rather than pending; note that the steps work above reads Core Motion
+and not HealthKit, so none of HealthKit's consent obligations have been met yet.
 
 The engineering work is small. The two things that are not small are a Google
 restricted-scope review with no published turnaround, and one modelling decision that
@@ -37,7 +68,7 @@ prohibit *training* a model or prohibit *operating* one.
 | Oura | Possible later | Prohibits using data to "train, fine-tune, develop, improve, or enhance any AI model". Training only. Ten users by default, then app review. |
 | Whoop | Possible later | Terms are silent on AI. Free, but requires a Whoop membership, and §3.1.m forbids competing with Whoop "in any manner" — a nutrition app with coaching is not obviously outside that. |
 | Garmin | Blocked | Manual partner review taking weeks, and new developer sign-ups are reported closed with no re-open date. |
-| Apple Health | Blocked on `apps/mobile` | HealthKit is on-device only. There is no server API at any price. |
+| Apple Health | Buildable — see Stage 4 | HealthKit is on-device only. There is no server API at any price. `apps/mobile` now exists, so the blocker is gone. |
 | Google Fit | Dead | Deprecated; the REST API turndown landed in 2026. Health Connect replaced it and is on-device Android only. |
 | Fitbit Web API | Dying | Sunsets September 2026 — **next month**. Tokens do not carry over; every user re-consents through Google. Anything built against it now is built against a corpse. |
 | MyFitnessPal | Ruled out | Partner-only since ~2018. |
@@ -90,7 +121,7 @@ intake unless a human would have logged it as a session.**
 |---|---|---|
 | Discrete workouts (a run, a gym session) | `exercise_entries` | Yes — same as a typed session today |
 | Weight from a connected scale | `weight_entries` | n/a — already `UNIQUE (user_id, local_date)` |
-| Steps, resting HR, HRV, sleep | `daily_metrics` (new) | **No** — context for the agent only |
+| Steps, resting HR, HRV, sleep | `daily_metrics` (**built**) | **No** — context for the agent only |
 | All-day active energy | `daily_metrics` | **No** — this is the double-count trap |
 | Total daily energy expenditure | `daily_metrics` | **No** — but see below, this one is valuable |
 
@@ -111,8 +142,11 @@ needs no agent involvement at all.
 
 ## Schema
 
-One migration, `014_connections.sql`. Note the existing numbering has collisions at 011
-and 012; 013 is the highest, so 014 is free.
+Two migrations. `daily_metrics` **shipped as `044_daily_metrics.sql`** — with `source`
+in place of `provider` in the key, since the phone's own pedometer is a source and not a
+provider, and with the unread columns carried anyway so the provider work adds no
+migration of its own. `provider_connections` and the `exercise_entries` columns below
+are still unbuilt; take the next free number when they land.
 
 ```sql
 CREATE TABLE provider_connections (
@@ -215,7 +249,8 @@ move a target. They change what `net_kcal` shows on days already past, which is 
 
 ## Stage 2 — Ambient metrics and the TDEE anchor
 
-Populate `daily_metrics`, and use the device's total expenditure as the reference in
+`daily_metrics` is populated for steps already; what follows is the half that pays.
+Use the device's total expenditure as the reference in
 `adaptive.ts` in place of `predictTdee` when a connection exists.
 
 Use the API's `:reconcile` read method rather than `:list` here. A user carrying a phone
@@ -243,8 +278,9 @@ personalized … user-facing feature", which is exactly this and nothing broader
 
 ## Stage 4 — Apple Health
 
-Needs `apps/mobile` (README §"Migrating to React Native"). When it exists, HealthKit
-reads on-device and posts to the same ingest endpoints Stage 1 built.
+Needed `apps/mobile`, which now exists. HealthKit reads on-device and posts to the same
+ingest endpoints Stage 1 builds — or, for steps, to `PUT /metrics/steps`, which already
+takes exactly this shape from the pedometer.
 
 Two things that will be true by then:
 

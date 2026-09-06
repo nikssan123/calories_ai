@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 import { clearToken, currentToken, restoreToken, saveToken } from '@/lib/session';
 import { forgetPush } from '@/lib/push';
 import { clearDaySnapshot } from '@/lib/snapshot';
+import { clearStepSync } from '@/lib/steps';
 import { watch } from '@/lib/outbox';
 import { cacheProfile, cacheSession, cachedSession, forgetSession, forgetUser } from '@/lib/store';
 
@@ -230,6 +231,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
      */
     await forgetPush();
     await clearDaySnapshot();
+    /*
+     * The sync clock, not the counts — those live on the server under the
+     * account that owns them, and the sensor's own history is the phone's. What
+     * has to go is the "already synced recently" mark, or the next person to
+     * sign in on this handset waits a quarter of an hour before their first
+     * step count appears, for a sync somebody else made.
+     */
+    await clearStepSync();
     /*
      * The status logout answers with, kept rather than dropped.
      *

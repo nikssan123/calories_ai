@@ -298,6 +298,12 @@ export const BROWSABLE_TABLES: Record<string, TableSpec> = {
     order: 'created_at DESC',
     note: 'Reps, weight, distance — one row per set within a workout.',
   },
+  daily_metrics: {
+    group: 'Exercise',
+    redact: [],
+    order: 'local_date DESC',
+    note: 'What a device counted, not what a person logged. Deliberately never reaches burned_kcal — see INTEGRATIONS.md.',
+  },
   exercise_types: {
     group: 'Exercise',
     redact: [],

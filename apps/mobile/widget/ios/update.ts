@@ -45,6 +45,16 @@ function freshDay(snapshot: DaySnapshot, at: Date): DaySnapshot {
     ...snapshot,
     consumed: 0,
     burned: 0,
+    /*
+     * Null, where the two figures above go to zero — and the difference is the
+     * same one `DaySnapshot.steps` is about. A new day genuinely has nought
+     * calories in it, and a ring at zero is what that looks like. It does not
+     * have nought steps; it has no reading yet, because the only process that
+     * can ask the pedometer is asleep. Carrying today's count through would put
+     * last night's walk under tomorrow's date, which is precisely the bug this
+     * whole file exists to close, one field further down.
+     */
+    steps: null,
     localDate: localDateFor(at, {
       timezone: snapshot.timezone,
       dayStartHour: snapshot.dayStartHour,

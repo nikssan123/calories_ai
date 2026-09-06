@@ -156,9 +156,80 @@ export interface DayCard extends DayCommon {
   figureText: string;
   title: number;
   detail: number;
+  /**
+   * How many muted lines fit under the headline.
+   *
+   * The column has three things it could say — what the figure is out of, what
+   * was burned, and how far somebody walked — and at the shortest height this
+   * shape is allowed to be there is room for one. Measured rather than assumed,
+   * because the alternative is a launcher silently clipping the last line off
+   * the bottom, which is how the bar went missing from the line shape.
+   *
+   * The components spend this by taking rows in order of what a calorie app
+   * owes the reader first: the ratio, then the burn, then the steps.
+   */
+  detailRows: number;
 }
 
 export type DayLayout = DayLine | DayCard;
+
+/**
+ * A muted line under the card's headline: what it says, and which of the two
+ * tones it is said in.
+ *
+ * A tone rather than a colour, because this is worked out in the one place that
+ * cannot name a colour. `theme.ts`'s palette is Android's `ColorProp`, the iOS
+ * face takes plain strings out of a plist, and neither is reachable from a pure
+ * function that both platforms have to call. Each tree resolves the tone
+ * against the palette it actually has.
+ */
+export interface DetailLine {
+  key: 'of' | 'burned' | 'steps';
+  text: string;
+  tone: 'muted' | 'burn';
+}
+
+/**
+ * The lines the card has room for, in priority order.
+ *
+ * Three things could be said and a one-row card holds one, so the order is the
+ * argument: what the figure is out of comes first, because it is the reason
+ * this shape exists at all; the burn second, because it is still calories; the
+ * steps last.
+ *
+ * Steps are also `muted` rather than `burn`, and that is not a styling
+ * preference. The burn line is pink because it names a figure that moves the
+ * arithmetic. The step line is grey because it deliberately does not — it is
+ * context, and painting the two alike would claim, on the one surface with no
+ * room for a caption, that a walk and a workout do the same thing to somebody's
+ * day. Keeping steps out of `exercise_entries` is the whole point; drawing them
+ * as if they were in it would give that away. See `services/metrics.ts`.
+ *
+ * A null step count drops its row rather than drawing a nought, for the reason
+ * on `DaySnapshot.steps`: nobody walks exactly none, so "0 steps" on a home
+ * screen is a wrong fact rather than a missing one.
+ */
+export function detailLines(
+  {
+    consumed,
+    target,
+    burned,
+    steps,
+  }: { consumed: number; target: number; burned: number; steps: number | null },
+  rows: number,
+  text: WidgetText,
+): DetailLine[] {
+  const lines: DetailLine[] = [
+    { key: 'of', text: text.of(text.n(consumed), text.n(target)), tone: 'muted' },
+  ];
+  if (burned > 0) {
+    lines.push({ key: 'burned', text: text.burned(text.n(burned)), tone: 'burn' });
+  }
+  if (steps !== null && steps > 0) {
+    lines.push({ key: 'steps', text: text.steps(steps), tone: 'muted' });
+  }
+  return lines.slice(0, rows);
+}
 
 /**
  * The wide one, which changes shape rather than scaling.
@@ -257,6 +328,20 @@ export function dayLayout({
   const stroke = clamp(box * 0.13, 6, 20);
   const inner = Math.max(0, box - 2 * stroke - 4);
   const title = clamp(box * 0.17, 14, 24);
+  const detail = clamp(title * 0.7, 11, 16);
+
+  /*
+   * What the column has left once the headline has taken its line, in rows of
+   * muted text. 1.35 is the line box those rows actually occupy — tighter than
+   * the display face's `LINE_HEIGHT` because they are not set in it — and the
+   * 2dp gap between rows is the `spacing` both trees use.
+   *
+   * Floored at one and capped at three: one because the ratio is the reason
+   * this shape exists and dropping it would leave a dial with a word beside it,
+   * three because there is nothing else to say.
+   */
+  const column = height - 2 * (padding + BORDER) - title * LINE_HEIGHT;
+  const detailRows = Math.max(1, Math.min(3, Math.floor(column / (detail * 1.35 + 2))));
 
   return {
     shape: 'card',
@@ -273,6 +358,7 @@ export function dayLayout({
     }),
     figureText,
     title,
-    detail: clamp(title * 0.7, 11, 16),
+    detail,
+    detailRows,
   };
 }

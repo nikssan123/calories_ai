@@ -256,6 +256,13 @@ export const bg: Messages = {
   // ---- Everything the string pass added, in en.ts order -------------------
   'today.exerciseFooter': 'Показано отделно от целта ти — изгореното от движение е груба оценка.',
   'today.exerciseTitle': '🏃  Движение',
+  'today.stepsTitle': '👟  Стъпки',
+  'today.steps': (count: number) => n(count, { one: 'стъпка', other: 'стъпки' }),
+  'today.stepsFooter':
+    'Отчетени от телефона ти. Стъпките уточняват целта ти — никога не се добавят към нея.',
+  'today.stepsEnable': 'Брой стъпките ми',
+  'today.stepsEnableHint':
+    'Чете стъпките от телефона, за да е целта ти според това, което наистина правиш.',
   'today.thatChange': 'Тази промяна',
   'today.couldNotSave': (what, reason) => `${what} не можа да се запази. ${reason}`,
   'today.waitingToSync': (count) => n(count, { one: 'промяна чака синхронизация', other: 'промени чакат синхронизация' }),
@@ -953,6 +960,7 @@ export const bg: Messages = {
   'widget.today': (label: string) => `${label} днес`,
   'widget.of': (consumed: string, target: string) => `${consumed} от ${target} kcal`,
   'widget.tapToStart': 'Докосни, за да започнеш деня',
+  'widget.steps': (count: number) => n(count, { one: 'стъпка', other: 'стъпки' }),
 
   'common.save': 'Запази',
   'common.cancel': 'Откажи',

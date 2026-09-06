@@ -195,11 +195,12 @@ function inspect(node: unknown, where: string, seenText: string[]): void {
 
 const { ringProps, dayProps } = await import('../widget/ios/props.ts');
 
-const day = (consumed: number, target: number, burned = 0) => ({
+const day = (consumed: number, target: number, burned = 0, steps: number | null = null) => ({
   localDate: '2026-08-30',
   consumed,
   target,
   burned,
+  steps,
   locale: 'en' as const,
   timezone: 'Europe/Sofia',
   dayStartHour: 4,
@@ -207,7 +208,10 @@ const day = (consumed: number, target: number, burned = 0) => ({
 });
 
 /* Nothing eaten, a normal day, exactly on target, well past it, and a
- * four-figure total in a language that spaces its thousands. */
+ * four-figure total in a language that spaces its thousands — then the two
+ * shapes the step line adds. A card can hold three muted rows and the third is
+ * the first to be dropped on a short one, so the case that matters is the one
+ * where a burn and a step count both want the same space. */
 const cases = [
   ['empty', null],
   ['fresh', day(0, 2090)],
@@ -216,6 +220,9 @@ const cases = [
   ['over', day(2410, 2090, 120)],
   ['no target', day(400, 0)],
   ['bulgarian', { ...day(1480, 2090), locale: 'bg' as const }],
+  ['walked', day(850, 2090, 0, 9120)],
+  ['walked and trained', day(850, 2090, 320, 9120)],
+  ['walked, in bulgarian', { ...day(1480, 2090, 320, 12480), locale: 'bg' as const }],
 ] as const;
 
 for (const [name, layout] of captured) {

@@ -261,6 +261,13 @@ export const de: Messages = {
   // ---- Everything the string pass added, in en.ts order -------------------
   'today.exerciseFooter': 'Getrennt von deinem Ziel gezeigt — der Sportverbrauch ist eine grobe Schätzung.',
   'today.exerciseTitle': '🏃  Sport',
+  'today.stepsTitle': '👟  Schritte',
+  'today.steps': (count: number) => n(count, { one: 'Schritt', other: 'Schritte' }),
+  'today.stepsFooter':
+    'Von deinem Handy gezählt. Schritte schärfen dein Ziel — sie werden nie dazugerechnet.',
+  'today.stepsEnable': 'Meine Schritte zählen',
+  'today.stepsEnableHint':
+    'Liest die Schritte vom Handy, damit dein Ziel zu dem passt, was du wirklich tust.',
   'today.thatChange': 'Diese Änderung',
   'today.couldNotSave': (what, reason) => `${what} konnte nicht gespeichert werden. ${reason}`,
   'today.waitingToSync': (count) => n(count, { one: 'Änderung wartet auf Sync', other: 'Änderungen warten auf Sync' }),
@@ -958,6 +965,7 @@ export const de: Messages = {
   'widget.today': (label: string) => `heute ${label}`,
   'widget.of': (consumed: string, target: string) => `${consumed} von ${target} kcal`,
   'widget.tapToStart': 'Tippen, um den Tag zu beginnen',
+  'widget.steps': (count: number) => n(count, { one: 'Schritt', other: 'Schritte' }),
 
   'common.save': 'Speichern',
   'common.cancel': 'Abbrechen',

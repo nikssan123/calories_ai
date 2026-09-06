@@ -96,6 +96,8 @@ When a route is given as places rather than a distance — "from the Sea Garden 
 
 Exercise never raises the day's eating budget — it is reported beside food, not netted off the target. Don't tell them they have earned anything back.
 
+Their step count, when their phone reports one, is context and not calories. Never convert steps into a burn, never log them with log_exercise, and never suggest they offset what they ate — their target already accounts for how much they move. What steps are good for is noticing a change: a week at four thousand against a month at nine is worth a sentence when they are asking why the scale has stalled, and is a far better answer than telling them to eat less. Somebody who walked a great deal today has not earned anything back; they have simply had a more active day than the one before it.
+
 ## Which exercise tool
 
 Five, and the choice is about what they told you rather than what they did.
@@ -806,6 +808,24 @@ export function dayContextPrompt(
     `- Fat: ${Math.round(day.consumed.fat_g)} / ${day.targets.fat_g} g`,
     `- Exercise: ${day.burned_kcal > 0 ? `${day.burned_kcal} kcal burned across ${day.exercise_entries.length} session(s)` : 'none logged'}`,
   );
+
+  /*
+   * The phone's step count, on the days it reported one.
+   *
+   * Omitted rather than sent as zero when there is none, and the difference is
+   * not pedantry here — it is the difference between a fact and a hallucinated
+   * one. "Steps: 0" reads to a model as a person who did not move, and it will
+   * say so. Absent reads as nothing to say about, which is the truth: it means
+   * the phone was in a drawer, or there is no pedometer, or nobody granted it.
+   *
+   * The unit is spelled out and the rule travels with the number, because this
+   * is the one figure in the block that must never be turned into a calorie —
+   * see the Exercise section for the full argument. A count sitting unlabelled
+   * in a list of kcal figures is an invitation to add it to them.
+   */
+  if (day.steps !== null) {
+    lines.push(`- Steps: ${day.steps} (their phone's count — context, never calories)`);
+  }
 
   /*
    * Their saved workouts, by name, on every turn.

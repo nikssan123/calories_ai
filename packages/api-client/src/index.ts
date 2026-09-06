@@ -17,6 +17,7 @@ import type {
   ChatResponse,
   ChatStreamEvent,
   Credentials,
+  DailySteps,
   DaySummary,
   Entitlements,
   ExerciseEntry,
@@ -56,6 +57,7 @@ import type {
   WeekSchedule,
   ReviewStats,
   SignupRequest,
+  StepsSummary,
   SupportInbox,
   TablePage,
   TableSummary,
@@ -421,6 +423,26 @@ export function createApiClient({
     progress: (days = 30) => request<Progress>(`/progress?days=${days}`),
 
     exercise: (days = 30) => request<ExerciseSummary>(`/progress/exercise?days=${days}`),
+
+    /**
+     * The step history behind the chart on Progress.
+     *
+     * Note there is no kcal on the other end of this and never will be — see
+     * `DailySteps`. What comes back is a count and a date.
+     */
+    steps: (days = 30) => request<StepsSummary>(`/metrics/steps?days=${days}`),
+
+    /**
+     * The phone handing over what its pedometer counted.
+     *
+     * Idempotent by construction: the window is re-read and re-sent on every
+     * foreground, because today's count is still rising and yesterday's is only
+     * final once the day has rolled over. Returns nothing — a 204 — since the
+     * caller already knows what it sent and the only interesting outcome is
+     * whether it landed.
+     */
+    syncSteps: (days: DailySteps[]) =>
+      request<void>('/metrics/steps', { method: 'PUT', body: JSON.stringify({ days }) }),
 
     calendar: (from: string, to: string) =>
       request<Calendar>(`/calendar?from=${from}&to=${to}`),

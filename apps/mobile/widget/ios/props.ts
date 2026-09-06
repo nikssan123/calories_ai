@@ -1,4 +1,4 @@
-import { LINE_HEIGHT, dayLayout, ringLayout } from '../layout';
+import { LINE_HEIGHT, dayLayout, detailLines, ringLayout } from '../layout';
 import { DARK, LIGHT, type WidgetPalette } from '../theme';
 import { widgetText, type WidgetText } from '../text';
 import type { Locale } from '@ct/shared';
@@ -181,6 +181,18 @@ export interface FaceProps {
   detailText: string;
   /** Empty on a day nothing was burned, which is most of them. */
   burnText: string;
+  /**
+   * Empty when the phone counted nothing, or when the card is too short to hold
+   * a third muted line — `detailLines` decides which lines survive and this is
+   * simply where the third one lands.
+   *
+   * Flat like everything else here rather than an array of rows, even though
+   * the three fields below travel together. A plist round-trip is friendliest
+   * to scalars, the widget's tree cannot map over anything it was not handed as
+   * a global, and `NOTHING` already establishes empty-means-absent for every
+   * other field on this shape.
+   */
+  stepsText: string;
 
   /** `line` only. */
   wording: number;
@@ -210,6 +222,7 @@ const NOTHING = {
   detail: 0,
   detailText: '',
   burnText: '',
+  stepsText: '',
   wording: 0,
   wordingText: '',
   ratio: 0,
@@ -334,6 +347,17 @@ export function dayProps(
     };
   }
 
+  /*
+   * The same three-line decision the Android card makes, out of the same
+   * function, flattened into the fields this shape can carry. Sharing it is the
+   * point: the rule about which line goes when the card is short — and about
+   * steps never being painted like a burn — is written once, in `layout.ts`,
+   * and neither platform gets to hold a second opinion about it.
+   */
+  const lines = snapshot ? detailLines(snapshot, layout.detailRows, text) : [];
+  const lineFor = (key: 'of' | 'burned' | 'steps') =>
+    lines.find((line) => line.key === key)?.text ?? '';
+
   return {
     ...common,
     shape: 'card',
@@ -347,7 +371,8 @@ export function dayProps(
     headline: layout.title,
     headlineText: text.today(layout.label),
     detail: layout.detail,
-    detailText: snapshot ? text.of(text.n(snapshot.consumed), text.n(snapshot.target)) : '',
-    burnText: snapshot && snapshot.burned > 0 ? text.burned(text.n(snapshot.burned)) : '',
+    detailText: lineFor('of'),
+    burnText: lineFor('burned'),
+    stepsText: lineFor('steps'),
   };
 }

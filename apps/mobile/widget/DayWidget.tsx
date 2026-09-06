@@ -1,6 +1,6 @@
 import { FlexWidget, OverlapWidget, SvgWidget, TextWidget } from 'react-native-android-widget';
 import { ringSvg } from './ring';
-import { LINE_HEIGHT, dayLayout, type DayCard, type DayLine } from './layout';
+import { LINE_HEIGHT, dayLayout, detailLines, type DayCard, type DayLine } from './layout';
 import { DISPLAY, OPEN_JOURNAL, type WidgetPalette } from './theme';
 import { Empty } from './Empty';
 import type { WidgetText } from './text';
@@ -229,32 +229,21 @@ function Card({
           maxLines={1}
           style={{ fontSize: layout.title, fontWeight: 'bold', color: colors.foreground }}
         />
-        <TextWidget
-          text={text.of(text.n(snapshot.consumed), text.n(snapshot.target))}
-          allowFontScaling={false}
-          maxLines={1}
-          truncate="END"
-          style={{
-            fontSize: layout.detail,
-            fontWeight: '600',
-            color: colors.mutedForeground,
-            marginTop: 2,
-          }}
-        />
-        {snapshot.burned > 0 && (
+        {detailLines(snapshot, layout.detailRows, text).map((line) => (
           <TextWidget
-            text={text.burned(text.n(snapshot.burned))}
+            key={line.key}
+            text={line.text}
             allowFontScaling={false}
             maxLines={1}
             truncate="END"
             style={{
               fontSize: layout.detail,
               fontWeight: '600',
-              color: colors.burn,
+              color: line.tone === 'burn' ? colors.burn : colors.mutedForeground,
               marginTop: 2,
             }}
           />
-        )}
+        ))}
       </FlexWidget>
     </FlexWidget>
   );

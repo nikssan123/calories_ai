@@ -49,6 +49,16 @@ export interface DaySnapshot {
   consumed: number;
   target: number;
   burned: number;
+  /**
+   * What the phone counted today, or null when it has not said.
+   *
+   * Null rather than zero all the way out to the rectangle, because the widget
+   * is the surface where the difference is starkest: a home screen showing
+   * "0 steps" under somebody's calorie ring is the app volunteering a wrong
+   * fact about them, every time they unlock their phone. Absent is honest;
+   * nought is not. Same argument as `Empty.tsx`, one field down.
+   */
+  steps: number | null;
   /** The language the screen was being read in when the note was left. */
   locale: Locale;
   /**
@@ -86,6 +96,7 @@ function snapshotOf(day: DaySummary, locale: Locale, profile: Profile | null): D
     consumed: Math.round(day.consumed.kcal),
     target: Math.round(day.targets.kcal),
     burned: Math.round(day.burned_kcal),
+    steps: day.steps,
     locale,
     /*
      * The device's clock when there is no profile to ask, which is the same
@@ -275,6 +286,11 @@ export async function readDaySnapshot(): Promise<DaySnapshot | null> {
       locale: matchLocale(parsed.locale) ?? deviceLocale(),
       timezone: parsed.timezone ?? deviceTimezone(),
       dayStartHour: typeof parsed.dayStartHour === 'number' ? parsed.dayStartHour : 0,
+      /* A note written before this field existed has no answer, and `undefined`
+       * is not one — it survives neither the plist nor a strict check on the
+       * other side. Normalised to null, which is the reading "we do not know"
+       * everything downstream already handles. */
+      steps: typeof parsed.steps === 'number' ? parsed.steps : null,
     };
   } catch {
     return null;

@@ -694,6 +694,10 @@ export const fr: Messages = {
 
   // ---- Strings that belong to sections above, added in the same pass ------
   'today.exerciseFooter': 'Affiché à part de ton objectif — le brûlé à l’effort est une estimation grossière.',
+  'today.stepsTitle': '👟  Pas',
+  'today.steps': (count: number) => n(count, { one: 'pas', other: 'pas' }),
+  'today.stepsFooter':
+    'Comptés par ton téléphone. Les pas affinent ton objectif — ils ne s’y ajoutent jamais.',
   'history.day': 'Jour',
   'history.nothingThatDay': 'Rien noté ce jour-là.',
   'history.nothingYet': 'Rien noté pour l’instant.',

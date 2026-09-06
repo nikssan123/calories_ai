@@ -32,6 +32,16 @@ export interface WidgetText {
   today: (label: string) => string;
   of: (consumed: string, target: string) => string;
   burned: (kcal: string) => string;
+  /**
+   * "8,432 steps", agreeing and grouped in one call.
+   *
+   * Takes the count rather than a formatted string, unlike `burned` above,
+   * because the noun has to agree with it: German wants "1 Schritt" against
+   * "2 Schritte" and there is no way to pick between them from "1". The number
+   * comes out formatted for the locale all the same — `plural()` runs it
+   * through `formatNumber` — so the layout still measures what will be drawn.
+   */
+  steps: (count: number) => string;
   tapToStart: string;
 }
 
@@ -45,6 +55,7 @@ export function widgetText(locale: Locale): WidgetText {
     today: t['widget.today'],
     of: t['widget.of'],
     burned: t['today.burned'],
+    steps: t['widget.steps'],
     tapToStart: t['widget.tapToStart'],
   };
 }

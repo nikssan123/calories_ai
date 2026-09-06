@@ -56,6 +56,14 @@ export const en = {
   'today.roughEstimate': 'rough estimate',
   'today.exerciseFooter': 'Shown separately from your target — exercise burn is a rough estimate.',
   'today.exerciseTitle': '🏃  Exercise',
+  'today.stepsTitle': '👟  Steps',
+  'today.steps': (count: number) => n(count, { one: 'step', other: 'steps' }),
+  /* The rule from INTEGRATIONS.md, in the one place a reader will meet it.
+     Everybody arrives expecting steps to buy them calories; saying so here is
+     cheaper than answering it in support forever. */
+  'today.stepsFooter': 'Counted by your phone. Steps sharpen your target — they are never added to it.',
+  'today.stepsEnable': 'Count my steps',
+  'today.stepsEnableHint': 'Read your step count from the phone, so your target is set by what you actually do.',
   'today.thatChange': 'That change',
   'today.couldNotSave': (what: string, reason: string) => `${what} could not be saved. ${reason}`,
   'today.waitingToSync': (count: number) =>
@@ -1156,6 +1164,7 @@ export const en = {
   'widget.today': (label: string) => `${label} today`,
   'widget.of': (consumed: string, target: string) => `${consumed} of ${target} kcal`,
   'widget.tapToStart': 'Tap to start today',
+  'widget.steps': (count: number) => n(count, { one: 'step', other: 'steps' }),
 
   'common.save': 'Save',
   'common.cancel': 'Cancel',

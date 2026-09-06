@@ -17,6 +17,7 @@ import {
   SaveScheduleRequest,
   ProfileUpdate,
   RepeatRequest,
+  SyncStepsRequest,
   WorkoutRequest,
   type Allowance,
   type Entitlements,
@@ -112,6 +113,7 @@ import {
   weekSchedule,
 } from '../services/routines.ts';
 import { messageActions, refreshEntryCards, replaceActions } from '../services/chat.ts';
+import { recordSteps, stepsSummary } from '../services/metrics.ts';
 import { TurnInProgressError } from '../services/turn-lock.ts';
 import { ModelBusyError } from '../ai/token-bucket.ts';
 import { addDays, dateRange, inferMeal, localDateFor } from '../time.ts';
@@ -531,6 +533,45 @@ export async function registerRoutes(app: FastifyInstance) {
     const { userId, ...ctx } = await getUserContext(request.userId!);
     const days = Math.min(Math.max(Number((request.query as any)?.days ?? 30), 7), 365);
     return buildExerciseSummary(userId, ctx, days);
+  });
+
+  /**
+   * What the phone counted, handed over.
+   *
+   * A `PUT` rather than a `POST`, because this states what a set of days *are*
+   * rather than adding an event to them. The client re-reads its pedometer
+   * window on every foreground and sends the whole week — today's count is
+   * still climbing, and yesterday's only settles once the day has turned over —
+   * so the same day arrives many times and must land in the same row every
+   * time. `recordSteps` upserts on `(user, day, source)` for that reason.
+   *
+   * The days arrive already resolved to local dates. That is the one thing the
+   * phone is better placed to decide: it knows which of its own sensor's hourly
+   * buckets fall either side of a rollover, and the server would have to be
+   * handed the raw buckets to work it out again. What the server does not
+   * accept is a calorie figure, and there is deliberately no field for one —
+   * see `services/metrics.ts` for why a step must never become a burn.
+   */
+  app.put('/metrics/steps', async (request, reply) => {
+    const parsed = SyncStepsRequest.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid steps' });
+    }
+
+    await recordSteps(request.userId!, parsed.data.days);
+    return reply.status(204).send();
+  });
+
+  /**
+   * The step history, for the chart on Progress.
+   *
+   * Bounded like `/progress` beside it, and for the same reason: the window is
+   * drawn a month at a time and an unbounded range is a scan per pixel.
+   */
+  app.get('/metrics/steps', async (request) => {
+    const { userId, ...ctx } = await getUserContext(request.userId!);
+    const days = Math.min(Math.max(Number((request.query as any)?.days ?? 30), 7), 365);
+    return stepsSummary(userId, await currentLocalDate(ctx), days);
   });
 
   /**

@@ -268,6 +268,13 @@ export const fr: Messages = {
   // ---- Everything the string pass added, in en.ts order -------------------
   'today.exerciseFooter': 'Affiché à part de ton objectif — le brûlé à l’effort est une estimation grossière.',
   'today.exerciseTitle': '🏃  Activité',
+  'today.stepsTitle': '👟  Pas',
+  'today.steps': (count: number) => n(count, { one: 'pas', other: 'pas' }),
+  'today.stepsFooter':
+    'Comptés par ton téléphone. Les pas affinent ton objectif — ils ne s’y ajoutent jamais.',
+  'today.stepsEnable': 'Compter mes pas',
+  'today.stepsEnableHint':
+    'Lit tes pas sur le téléphone, pour que ton objectif vienne de ce que tu fais vraiment.',
   'today.thatChange': 'Ce changement',
   'today.couldNotSave': (what, reason) => `${what} n’a pas pu être enregistré. ${reason}`,
   'today.waitingToSync': (count) => n(count, { one: 'changement en attente de synchro', other: 'changements en attente de synchro' }),
@@ -965,6 +972,7 @@ export const fr: Messages = {
   'widget.today': (label: string) => `${label} aujourd’hui`,
   'widget.of': (consumed: string, target: string) => `${consumed} sur ${target} kcal`,
   'widget.tapToStart': 'Touche pour commencer la journée',
+  'widget.steps': (count: number) => n(count, { one: 'pas', other: 'pas' }),
 
   'common.save': 'Enregistrer',
   'common.cancel': 'Annuler',

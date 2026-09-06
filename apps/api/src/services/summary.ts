@@ -12,6 +12,7 @@ import { query, queryOne } from '../db.ts';
 import { addDays, dateRange, type DayContext, localDateFor } from '../time.ts';
 import { achievementFacts, evaluateAchievements, listAchievements } from './achievements.ts';
 import { listExerciseEntries, listFoodEntries, listWeights } from './log.ts';
+import { stepsForDay } from './metrics.ts';
 import { type LogHistory, logHistory, streaksOf } from './streaks.ts';
 import { targetsForDate } from './targets.ts';
 import { getUser } from './user.ts';
@@ -34,7 +35,7 @@ export async function buildDaySummary(
   localDate: string,
   today?: string,
 ): Promise<DaySummary> {
-  const [foodEntries, exerciseEntries, targets, weightRow] = await Promise.all([
+  const [foodEntries, exerciseEntries, targets, weightRow, steps] = await Promise.all([
     listFoodEntries(userId, { localDate }),
     listExerciseEntries(userId, { localDate }),
     targetsForDate(userId, localDate),
@@ -42,11 +43,21 @@ export async function buildDaySummary(
       userId,
       localDate,
     ]),
+    /*
+     * Read for every day rather than only for today, unlike the streak above.
+     * The two look alike and are not: a streak on a Tuesday in March is a
+     * question nobody opened a calendar to ask, whereas "how much did I move on
+     * the day I gained a kilo" is most of the reason to keep this at all — and
+     * it is one indexed lookup against a table with a row per day, not the
+     * `DISTINCT local_date` scan that made the streak worth withholding.
+     */
+    stepsForDay(userId, localDate),
   ]);
 
   return rollUpDay({
     localDate,
     streak: localDate === today ? await todayStreak(userId, today) : null,
+    steps,
     foodEntries,
     exerciseEntries,
     targets,

@@ -134,6 +134,14 @@ export function foldPending(day: DaySummary, edits: DayEdits): DaySummary {
     exerciseEntries: day.exercise_entries,
     targets: day.targets,
     weight: day.weight,
+    /*
+     * Carried through rather than recomputed, because there is nothing to
+     * recompute it from: a step count is a fact the sensor reported about the
+     * day, and no amount of editing a meal changes it. Without this line the
+     * count would blink out the moment anything was queued — which is precisely
+     * when the phone is offline and least able to fetch it back.
+     */
+    steps: day.steps,
   });
 }
 

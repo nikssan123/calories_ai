@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { dayStartFor } from '@ct/shared';
 import {
   addDays,
   dateRange,
@@ -56,6 +57,69 @@ describe('localDateFor', () => {
     const ctx = { timezone: 'Europe/Sofia', dayStartHour: 4 };
     expect(localDateFor(new Date('2026-10-25T00:30:00Z'), ctx)).toBe('2026-10-24');
     expect(localDateFor(new Date('2026-10-25T03:30:00Z'), ctx)).toBe('2026-10-25');
+  });
+});
+
+/**
+ * Where a day begins, which the step sync slices a sensor's history on.
+ *
+ * A pedometer is asked about an interval, so getting this wrong does not throw
+ * — it silently files a morning's walking against yesterday. It is a bisection
+ * over `localDateFor` precisely so it cannot disagree with the function every
+ * other total in the app is built on.
+ */
+describe('dayStartFor', () => {
+  it('puts the start at the rollover hour rather than at midnight', () => {
+    // 04:00 Sofia on the 10th is 02:00 UTC — the instant the 10th begins.
+    expect(dayStartFor(new Date('2026-03-10T14:00:00Z'), SOFIA).toISOString()).toBe(
+      '2026-03-10T02:00:00.000Z',
+    );
+  });
+
+  it('brackets a 1am snack with the evening it belongs to', () => {
+    // 01:30 Sofia on the 11th is still the 10th's night out, so its day began
+    // at the 10th's 4am and not four hours ago.
+    expect(dayStartFor(new Date('2026-03-10T23:30:00Z'), SOFIA).toISOString()).toBe(
+      '2026-03-10T02:00:00.000Z',
+    );
+  });
+
+  it('agrees from either end of the same day', () => {
+    const morning = dayStartFor(new Date('2026-03-10T06:00:00Z'), SOFIA);
+    const night = dayStartFor(new Date('2026-03-10T23:30:00Z'), SOFIA);
+    expect(morning.getTime()).toBe(night.getTime());
+  });
+
+  it('lands exactly, so stepping one millisecond back leaves the day', () => {
+    // The whole reason this bisects to the millisecond where `nextDayStart`
+    // stops at the minute: `readStepWindow` walks backwards by exactly this.
+    const start = dayStartFor(new Date('2026-03-10T14:00:00Z'), SOFIA);
+    expect(localDateFor(start, SOFIA)).toBe('2026-03-10');
+    expect(localDateFor(new Date(start.getTime() - 1), SOFIA)).toBe('2026-03-09');
+  });
+
+  it('measures a 23-hour day across the spring clock change', () => {
+    // Sofia springs forward on 2026-03-29. Adding 24 hours would step past that
+    // day; two bisections cannot.
+    const start = dayStartFor(new Date('2026-03-29T12:00:00Z'), SOFIA);
+    const next = dayStartFor(new Date('2026-03-30T12:00:00Z'), SOFIA);
+    expect(localDateFor(start, SOFIA)).toBe('2026-03-29');
+    expect(next.getTime() - start.getTime()).toBe(23 * 60 * 60 * 1000);
+  });
+
+  it('walks backwards a day at a time without skipping or repeating one', () => {
+    // How `readStepWindow` steps through the week: one millisecond before a
+    // day's start is inside the previous day, whatever length either one is —
+    // and this walk crosses the clock change to prove it.
+    let start = dayStartFor(new Date('2026-03-31T09:00:00Z'), SOFIA);
+    const walked = [localDateFor(start, SOFIA)];
+
+    for (let i = 0; i < 4; i += 1) {
+      start = dayStartFor(new Date(start.getTime() - 1), SOFIA);
+      walked.push(localDateFor(start, SOFIA));
+    }
+
+    expect(walked).toEqual(['2026-03-31', '2026-03-30', '2026-03-29', '2026-03-28', '2026-03-27']);
   });
 });
 

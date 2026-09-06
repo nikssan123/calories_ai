@@ -87,6 +87,12 @@
         }
       ],
       [
+        "expo-sensors",
+        {
+          "motionPermission": "Day So Far reads your step count so it can tell how active you actually are, instead of guessing from the activity level you picked at setup. Steps are never turned into calories or subtracted from your target."
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "Day So Far opens your photos so you can log a meal you already photographed.",
@@ -143,6 +149,7 @@
           ]
         }
       ],
+      "./plugins/with-no-activity-recognition",
       "./plugins/with-widget-font",
       "./plugins/with-androidx-work",
       [

@@ -700,6 +700,10 @@ export const de: Messages = {
 
   // ---- Strings that belong to sections above, added in the same pass ------
   'today.exerciseFooter': 'Getrennt von deinem Ziel gezeigt — der Sportverbrauch ist eine grobe Schätzung.',
+  'today.stepsTitle': '👟  Schritte',
+  'today.steps': (count: number) => n(count, { one: 'Schritt', other: 'Schritte' }),
+  'today.stepsFooter':
+    'Von deinem Handy gezählt. Schritte schärfen dein Ziel — sie werden nie dazugerechnet.',
   'history.day': 'Tag',
   'history.nothingThatDay': 'An dem Tag nichts eingetragen.',
   'history.nothingYet': 'Noch nichts eingetragen.',
