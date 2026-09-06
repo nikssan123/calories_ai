@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { query } from '../src/db.ts';
 import { env } from '../src/env.ts';
 import {
+  MODEL_READ_SECONDS,
+  presignPhotoRead,
   readPhoto,
   readPhotoById,
   readPhotoBytes,
@@ -284,5 +286,40 @@ describe('with object storage configured', () => {
     (env as any).storage = null;
 
     await expect(readPhoto(user.id, saved.id)).rejects.toThrow(/not configured/);
+  });
+
+  /**
+   * The pin that would have caught this in August.
+   *
+   * A URL handed to a model is not spent when its turn ends. The Claude Code
+   * lane resumes one session per user per day and replays the whole transcript,
+   * so the image block — and the presigned URL inside it — is re-fetched on
+   * every later turn of that day. At fifteen minutes the URL was dead long
+   * before the session was, and one photo failed every turn after it with
+   * `400 Unable to download the file` until the day rolled over.
+   *
+   * So the TTL's floor is not a turn, it is the longest a session can live, and
+   * that is decided in `ai/run.ts` by the day-rollover rule. Nothing makes the
+   * two files read each other, which is why the number drifted out from under
+   * the rule unnoticed — this is the thing that notices.
+   *
+   * The bound: a local day, plus the 04:00 rollover offset, plus the widest
+   * timezone either side. Twenty-six hours is generous and still true.
+   */
+  it('signs a model read for longer than a session can possibly live', () => {
+    const LONGEST_SESSION_HOURS = 26;
+    expect(MODEL_READ_SECONDS).toBeGreaterThan(LONGEST_SESSION_HOURS * 60 * 60);
+  });
+
+  /**
+   * And that the number is the one actually signed into the URL, rather than a
+   * constant the signer quietly ignores in favour of its own default.
+   */
+  it('carries that lifetime into the signature it hands the model', async () => {
+    const saved = await savePhoto(user.id, 'image/png', PIXEL);
+    const url = new URL((await presignPhotoRead(saved.storageKey!))!);
+
+    expect(url.searchParams.get('X-Amz-Expires')).toBe(String(MODEL_READ_SECONDS));
+    expect(url.searchParams.get('X-Amz-Signature')).toBeTruthy();
   });
 });

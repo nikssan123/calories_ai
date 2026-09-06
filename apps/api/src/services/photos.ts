@@ -115,13 +115,36 @@ export async function reservePhotoUpload(
 /**
  * How long a read handed to a *model* stays good for.
  *
- * Longer than the one handed to a browser, and for the opposite reason. An
- * `<img>` spends its URL immediately; a model's is spent by somebody else's
- * fetch at the far end of a turn that may have run a tool loop first, and a
- * link that expired mid-turn fails the whole thing rather than showing a broken
- * image somebody can reload past.
+ * Long enough to outlive the *session*, not the turn — and the difference
+ * between those two is a bug that reached users.
+ *
+ * The Claude Code lane keeps its own conversation and is resumed by id on every
+ * turn of the day, so an image block does not leave the transcript when its
+ * turn ends: the URL is replayed, and re-fetched, on every subsequent turn
+ * until the session is dropped. Fifteen minutes was sized for the one fetch
+ * this file could see. What actually happened is that the *next* turn twenty
+ * minutes later re-read the same block, got `403 ExpiredRequest` off the
+ * bucket, and failed the whole turn with `400 Unable to download the file` —
+ * and went on failing until the day rolled over. A photo poisoned the rest of
+ * the conversation.
+ *
+ * So the ceiling is `shouldStartFreshSession` in `ai/run.ts`: a session is cut
+ * at the local-day rollover, which with the 04:00 rule and any timezone puts
+ * the longest a live transcript can hold this URL at a little over a day.
+ * Forty-eight hours clears that with room, and is well inside the seven-day
+ * maximum a SigV4 query signature can carry.
+ *
+ * The replayed-transcript lanes need nothing from this: `loadHistory` sends
+ * prior turns as text, so a metered deployment never re-fetches a photo at all.
+ * The number is nonetheless one number for every lane, because a TTL that was
+ * correct only for the provider it was tested against is the same bug wearing a
+ * different hat.
+ *
+ * `photos.test.ts` pins this against the rollover rule. The two live in
+ * different files and neither reads the other, which is exactly how they came
+ * to disagree.
  */
-const MODEL_READ_SECONDS = 900;
+export const MODEL_READ_SECONDS = 48 * 60 * 60;
 
 /**
  * Somewhere the model can fetch the photo from, instead of being handed it.
