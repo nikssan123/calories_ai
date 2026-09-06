@@ -8,8 +8,17 @@ import {
   stepsSummary,
 } from '../src/services/metrics.ts';
 import { buildDaySummary } from '../src/services/summary.ts';
+import { estimateTdee } from '../src/services/adaptive.ts';
+import { activityFromSteps, measuredActivityLevel, predictTdee } from '../src/services/targets.ts';
 import { query } from '../src/db.ts';
-import { addMeal, anonymousApp, appFor, createUser, type TestUser } from './helpers/factories.ts';
+import {
+  addMeal,
+  anonymousApp,
+  appFor,
+  createUser,
+  seedAdaptiveWindow,
+  type TestUser,
+} from './helpers/factories.ts';
 
 let user: TestUser;
 
@@ -242,5 +251,129 @@ describe('the routes', () => {
     );
     const response = await app.inject(auth({ method: 'GET', url: '/metrics/steps?days=365' }));
     expect(response.json().days).toMatchObject([{ local_date: '2026-03-10', steps: 8432 }]);
+  });
+});
+
+describe('steps in the target arithmetic', () => {
+  /**
+   * The payoff, and the reason the feed exists. `predictTdee` is BMR times a
+   * multiplier spanning 1.2 to 1.9 — over a thousand kcal of spread for a
+   * typical body — chosen by a dropdown answered once and never revisited.
+   */
+  describe('activityFromSteps', () => {
+    it('reads the Tudor-Locke bands', () => {
+      expect(activityFromSteps(0)).toBe('sedentary');
+      expect(activityFromSteps(4_999)).toBe('sedentary');
+      expect(activityFromSteps(5_000)).toBe('light');
+      expect(activityFromSteps(7_500)).toBe('moderate');
+      expect(activityFromSteps(10_000)).toBe('active');
+      expect(activityFromSteps(12_500)).toBe('very_active');
+      expect(activityFromSteps(30_000)).toBe('very_active');
+    });
+  });
+
+  describe('measuredActivityLevel', () => {
+    it('leaves the declared level alone when nothing was counted', () => {
+      expect(measuredActivityLevel('moderate', null)).toBe('moderate');
+      // Null declared and null steps is still the formula's own default.
+      expect(measuredActivityLevel(null, null)).toBe('moderate');
+    });
+
+    it('raises the level as far as the walking proves', () => {
+      // There is no way to walk 14,000 steps and not have spent the energy, so
+      // the measurement simply wins over the dropdown.
+      expect(measuredActivityLevel('sedentary', 14_000)).toBe('very_active');
+      expect(measuredActivityLevel('light', 10_400)).toBe('active');
+    });
+
+    it('lowers it by one notch and no further', () => {
+      // A declared "very active" at 2,000 steps might be somebody who
+      // over-claimed, and might be a cyclist. Those are not distinguishable
+      // from a pedometer, and the cost of guessing wrong is a target hundreds
+      // of calories under what they burn.
+      expect(measuredActivityLevel('very_active', 2_000)).toBe('active');
+      expect(measuredActivityLevel('moderate', 1_000)).toBe('light');
+    });
+
+    it('cannot fall off the bottom of the scale', () => {
+      expect(measuredActivityLevel('sedentary', 200)).toBe('sedentary');
+    });
+
+    it('agrees with a declaration the steps confirm', () => {
+      expect(measuredActivityLevel('moderate', 8_200)).toBe('moderate');
+    });
+  });
+
+  describe('predictTdee', () => {
+    const body = {
+      sex: 'male' as const,
+      birth_date: '1996-01-01',
+      height_cm: 180,
+      weight_kg: 85,
+      goal: 'lose' as const,
+    };
+
+    it('is unchanged for everybody whose phone is not counting', () => {
+      // The property that makes this safe to ship without a flag: absent a step
+      // average, the arithmetic is exactly what it was.
+      expect(predictTdee({ ...body, activity_level: 'moderate' })).toBe(
+        predictTdee({ ...body, activity_level: 'moderate', measured_steps: null }),
+      );
+    });
+
+    it('moves maintenance by hundreds of kcal when the walking disagrees', () => {
+      const declared = predictTdee({ ...body, activity_level: 'moderate' })!;
+      const walked = predictTdee({ ...body, activity_level: 'moderate', measured_steps: 13_000 })!;
+      // 1.55 → 1.9 on a BMR near 1,830.
+      expect(Math.round(walked - declared)).toBeGreaterThan(500);
+    });
+
+    it('never lets a step count become a calorie of its own', () => {
+      // The multiplier is the only thing steps touch. Two people at the same
+      // measured level predict identically however far apart their counts are.
+      const active = predictTdee({ ...body, activity_level: 'moderate', measured_steps: 13_000 });
+      const veryActive = predictTdee({ ...body, activity_level: 'moderate', measured_steps: 40_000 });
+      expect(active).toBe(veryActive);
+    });
+  });
+
+  describe('the adaptive estimate', () => {
+    it('carries the level it predicted at, and the count behind it', async () => {
+      await seedAdaptiveWindow(user, { endDate: '2026-03-14' });
+      await recordSteps(
+        user.id,
+        ['09', '10', '11', '12', '13'].map((d) => day(`2026-03-${d}`, 13_000)),
+      );
+
+      const { estimate } = await estimateTdee(user.id, user.ctx, 14, '2026-03-15');
+      expect(estimate?.activity_level).toBe('very_active');
+      expect(estimate?.measured_steps).toBe(13000);
+    });
+
+    it('predicts against the declaration when there are no steps', async () => {
+      await seedAdaptiveWindow(user, { endDate: '2026-03-14' });
+      const { estimate } = await estimateTdee(user.id, user.ctx, 14, '2026-03-15');
+      // The factory declares 'moderate'.
+      expect(estimate?.activity_level).toBe('moderate');
+      expect(estimate?.measured_steps).toBeNull();
+    });
+
+    it('leaves the observed side of the balance untouched', async () => {
+      // The observation is intake against what the scale did about it, and it
+      // already contains every step taken. Steps may move the *prediction* and
+      // nothing else — otherwise the same walking is counted twice.
+      await seedAdaptiveWindow(user, { endDate: '2026-03-14' });
+      const before = await estimateTdee(user.id, user.ctx, 14, '2026-03-15');
+
+      await recordSteps(
+        user.id,
+        ['09', '10', '11', '12', '13'].map((d) => day(`2026-03-${d}`, 18_000)),
+      );
+      const after = await estimateTdee(user.id, user.ctx, 14, '2026-03-15');
+
+      expect(after.estimate?.observed_tdee_kcal).toBe(before.estimate?.observed_tdee_kcal);
+      expect(after.estimate?.mean_intake_kcal).toBe(before.estimate?.mean_intake_kcal);
+      expect(after.estimate?.predicted_tdee_kcal).not.toBe(before.estimate?.predicted_tdee_kcal);
+    });
   });
 });

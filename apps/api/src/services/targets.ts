@@ -7,6 +7,7 @@ import { targetInputsChanged } from '@ct/shared';
 export { qualityTargetsFor, targetInputsChanged } from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import { latestWeight } from './log.ts';
+import { recentStepAverage } from './metrics.ts';
 
 const ACTIVITY_MULTIPLIER: Record<ActivityLevel, number> = {
   sedentary: 1.2,
@@ -15,6 +16,78 @@ const ACTIVITY_MULTIPLIER: Record<ActivityLevel, number> = {
   active: 1.725,
   very_active: 1.9,
 };
+
+/** Least to most, so a measured level can be compared against a declared one. */
+const ACTIVITY_ORDER: ActivityLevel[] = [
+  'sedentary',
+  'light',
+  'moderate',
+  'active',
+  'very_active',
+];
+
+/**
+ * Daily step counts, and the activity level each one is evidence for.
+ *
+ * Tudor-Locke and Bassett's bands, which are the ones every step-based
+ * classification in the field descends from: under 5,000 is sedentary, 5,000 to
+ * 7,499 low active, 7,500 to 9,999 somewhat active, 10,000 to 12,499 active,
+ * and above that highly active. They map onto this app's five levels one for
+ * one, which is not a coincidence — both scales are five bands over the same
+ * range of human behaviour.
+ *
+ * Read as a floor and never as a total. See `measuredActivityLevel`.
+ */
+const ACTIVITY_STEPS: { steps: number; level: ActivityLevel }[] = [
+  { steps: 12_500, level: 'very_active' },
+  { steps: 10_000, level: 'active' },
+  { steps: 7_500, level: 'moderate' },
+  { steps: 5_000, level: 'light' },
+  { steps: 0, level: 'sedentary' },
+];
+
+/** The band a step average falls in, with no opinion about what was declared. */
+export function activityFromSteps(steps: number): ActivityLevel {
+  return ACTIVITY_STEPS.find((band) => steps >= band.steps)!.level;
+}
+
+/**
+ * The activity level to compute with, given what they said and what they walked.
+ *
+ * The asymmetry below is the whole of this function, and it comes from what a
+ * pedometer can and cannot see. Steps are ambulatory movement only: a cyclist,
+ * a swimmer and somebody who lifts four times a week can all be genuinely
+ * active at three thousand steps a day. So a step count is **evidence of a
+ * floor on activity, never a measure of it**, and it is allowed to act like one:
+ *
+ * - **Upward, freely.** Thirteen thousand steps a day *is* an active person,
+ *   whatever they picked off a dropdown at onboarding. There is no way to walk
+ *   that far and not have spent the energy, so the measurement simply wins.
+ * - **Downward, one notch at most.** A declared "very active" at three thousand
+ *   steps might be somebody who over-claimed, and might be a cyclist. Those are
+ *   not distinguishable from here, and the cost of guessing wrong is a target
+ *   several hundred calories under what somebody actually burns. One notch is
+ *   the hedge; `adaptive.ts` closes the rest of the gap from the scale, which
+ *   is the only instrument that sees all of it.
+ *
+ * The declared level is therefore not overwritten anywhere — not here, and not
+ * on the profile. It is a claim about their whole life, including training this
+ * cannot see, and the arithmetic borrows from it rather than replacing it.
+ */
+export function measuredActivityLevel(
+  declared: ActivityLevel | null,
+  steps: number | null,
+): ActivityLevel {
+  const stated = declared ?? 'moderate';
+  if (steps === null) return stated;
+
+  const walked = activityFromSteps(steps);
+  const statedAt = ACTIVITY_ORDER.indexOf(stated);
+  const walkedAt = ACTIVITY_ORDER.indexOf(walked);
+
+  /* Up as far as the walking proves; down by one, and no further. */
+  return ACTIVITY_ORDER[Math.max(walkedAt, statedAt - 1)]!;
+}
 
 /**
  * §10: a starting point, deliberately not presented as the final word.
@@ -62,6 +135,20 @@ export interface TargetInputs {
   weight_kg: number | null;
   activity_level: ActivityLevel | null;
   goal: Goal | null;
+  /**
+   * Their recent daily step average, when their phone has been reporting one.
+   *
+   * Optional, and null for everybody whose phone is not counting — which is
+   * most people and every Android user today. Absent, the arithmetic is exactly
+   * what it was before this field existed, which is the property that makes it
+   * safe to add here rather than behind a flag.
+   *
+   * It reaches only `ACTIVITY_MULTIPLIER`, through `measuredActivityLevel`, and
+   * never becomes a calorie of its own. A step is not a burn; it is evidence
+   * about which multiplier this person's body has been living at. See
+   * `services/metrics.ts`.
+   */
+  measured_steps?: number | null;
 }
 
 /** What `macrosFor` needs to split an energy target. `TargetInputs` satisfies it. */
@@ -81,14 +168,22 @@ export const FALLBACK_TARGETS: Targets = {
   source: 'calculated',
 };
 
-/** Mifflin-St Jeor × activity. Population maintenance, before any goal adjustment. */
+/**
+ * Mifflin-St Jeor × activity. Population maintenance, before any goal adjustment.
+ *
+ * The multiplier was the one pure guess left in this formula: five levels
+ * spanning 1.2 to 1.9 — well over a thousand kcal of spread for a typical BMR —
+ * decided by a dropdown answered once at onboarding and never revisited. Where
+ * a phone has been counting, `measuredActivityLevel` corrects it against what
+ * the person actually did, which is the whole reason the step feed exists.
+ */
 export function predictTdee(inputs: TargetInputs): number | null {
   const { sex, height_cm, weight_kg, activity_level } = inputs;
   const age = ageFrom(inputs.birth_date);
   if (!sex || !height_cm || !weight_kg || age === null) return null;
 
   const bmr = 10 * weight_kg + 6.25 * height_cm - 5 * age + (sex === 'male' ? 5 : -161);
-  return bmr * ACTIVITY_MULTIPLIER[activity_level ?? 'moderate'];
+  return bmr * ACTIVITY_MULTIPLIER[measuredActivityLevel(activity_level, inputs.measured_steps ?? null)];
 }
 
 /** Maintenance, aimed at a goal, floored and rounded the way a target is. */
@@ -277,6 +372,14 @@ export async function retargetFromProfile(
     weight_kg: weight?.weight_kg ?? null,
     activity_level: after.activity_level,
     goal: after.goal,
+    /*
+     * Only reached on the formula path, which is the only place it can do any
+     * good. The `adaptive` branch above returns before this: a measured target
+     * already has the walking priced into it — the scale saw it — and handing
+     * that branch a step average would be offering a better prior to something
+     * that has stopped needing one.
+     */
+    measured_steps: await recentStepAverage(userId, localDate),
   });
   await setTargets(userId, localDate, targets, reason);
 }

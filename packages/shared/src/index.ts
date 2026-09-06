@@ -3129,6 +3129,19 @@ export const TdeeEstimate = z.object({
   weigh_ins: z.number(),
   /** 0-1. Drives how far the target is allowed to move this week. */
   quality: z.number(),
+  /**
+   * The activity level `predicted_tdee_kcal` was actually computed at, which is
+   * not always the one on the profile.
+   *
+   * Worth carrying because the prediction is the number the sanity band judges
+   * everything else against, and "too far from expectation" is a very different
+   * sentence depending on whose expectation it was. Where a phone has been
+   * counting steps, this is what `measuredActivityLevel` settled on; elsewhere
+   * it is simply what they declared.
+   */
+  activity_level: ActivityLevel.nullable().default(null),
+  /** Their daily step average over the last week, when their phone reported one. */
+  measured_steps: z.number().nullable().default(null),
 });
 export type TdeeEstimate = z.infer<typeof TdeeEstimate>;
 

@@ -5,11 +5,13 @@ import { latestWeight, listWeights } from './log.ts';
 import {
   MIN_TARGET_KCAL,
   macrosFor,
+  measuredActivityLevel,
   predictTdee,
   setTargets,
   targetKcalFor,
   targetsForDate,
 } from './targets.ts';
+import { recentStepAverage } from './metrics.ts';
 import { getUser } from './user.ts';
 import { checkWellbeing } from './wellbeing.ts';
 
@@ -163,10 +165,19 @@ export async function estimateTdee(
   const to = addDays(today, -1);
   const from = addDays(to, -(windowDays - 1));
 
-  const [intake, weights, user] = await Promise.all([
+  const [intake, weights, user, steps] = await Promise.all([
     dailyIntake(userId, from, to),
     listWeights(userId, { from, to }),
     getUser(userId),
+    /*
+     * The step average is read for the *prediction*, and only for it. Nothing
+     * below touches `observed`, which stays what it has always been: intake
+     * against what the scale did about it. That measurement already contains
+     * every step this person took — the scale saw them — and adding a
+     * step-derived figure to either side of the balance would be counting the
+     * same walking twice. See `services/metrics.ts`.
+     */
+    recentStepAverage(userId, today),
   ]);
 
   if (intake.length < MIN_LOGGED_DAYS) {
@@ -188,6 +199,22 @@ export async function estimateTdee(
     ) ?? 0;
 
   const observed = meanIntake - slopePerDay * KCAL_PER_KG;
+  /*
+   * What the formula expects of somebody like them — and this is the number
+   * `SANITY_BAND` below decides whether to believe the observation against.
+   *
+   * Which is exactly why the steps belong here. The band rejects an observed
+   * TDEE more than 35% from the predicted one, and the predicted one has always
+   * rested on a dropdown answered once at onboarding. Somebody genuinely
+   * sedentary who picked "moderate" gets a prediction a few hundred kcal too
+   * high, so their own honest measurement lands outside the band and is thrown
+   * away — week after week, silently, with the pass reporting a complaint about
+   * data quality to the one person whose data was fine.
+   *
+   * A prediction anchored on what they actually walked narrows the band around
+   * a real behaviour instead of a demographic average, which is the argument
+   * INTEGRATIONS.md makes for the whole feature.
+   */
   const predicted =
     predictTdee({
       sex: user.sex,
@@ -196,6 +223,7 @@ export async function estimateTdee(
       weight_kg: weights.at(-1)!.weight_kg,
       activity_level: user.activity_level,
       goal: user.goal,
+      measured_steps: steps,
     }) ?? observed;
 
   // Three things make an estimate trustworthy: how much of the window was
@@ -216,6 +244,8 @@ export async function estimateTdee(
       days_logged: intake.length,
       weigh_ins: weights.length,
       quality,
+      activity_level: measuredActivityLevel(user.activity_level, steps),
+      measured_steps: steps,
     },
     blocked_by: null,
   };
@@ -276,7 +306,20 @@ export async function proposeTargets(
       : unchanged(
           'estimate_out_of_range',
           estimate,
-          `The last ${estimate.window_days} days imply ${estimate.observed_tdee_kcal} kcal maintenance, too far from the expected ${estimate.predicted_tdee_kcal} to trust yet.`,
+          /*
+           * Whose expectation, when the phone had a say in it.
+           *
+           * "Too far from expectation" reads as a complaint about the reader's
+           * logging, and half the time the expectation was the questionable
+           * half — a multiplier off a dropdown nobody has revisited. Where
+           * steps set it instead, saying so turns an accusation into something
+           * checkable: if the step count is wrong, that is a fact they can go
+           * and look at.
+           */
+          `The last ${estimate.window_days} days imply ${estimate.observed_tdee_kcal} kcal maintenance, too far from the expected ${estimate.predicted_tdee_kcal} to trust yet.` +
+            (estimate.measured_steps === null
+              ? ''
+              : ` That expectation is based on your phone's ${estimate.measured_steps} steps a day.`),
         );
   }
 

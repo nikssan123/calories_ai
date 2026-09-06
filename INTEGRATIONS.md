@@ -32,12 +32,30 @@ real answer on Android is Health Connect, and it is a stage of its own: a native
 and a Play data-safety declaration. Everything above `readStepWindow` is platform-blind,
 so that stage is a new implementation of one function.
 
-**What is still missing is the payoff.** Steps are recorded, shown and given to the
-agent, but nothing yet reads them back into a target: `predictTdee` still multiplies BMR
-by the activity level somebody picked at onboarding, and `adaptive.ts` still checks
-`SANITY_BAND` against that guess. `recentStepAverage` exists and has no callers. That
-join is the reason the feature is worth having — see "The TDEE anchor" below — and it is
-the next thing to build.
+**Steps set the activity multiplier.** `predictTdee` was BMR times a dropdown answered
+once at onboarding — 1.2 to 1.9, well over a thousand kcal of spread on one untested
+answer. `measuredActivityLevel` corrects it against `recentStepAverage`, on the
+Tudor-Locke bands, and asymmetrically: steps may raise the level as far as they prove,
+and lower it by at most one notch. A pedometer sees ambulatory movement only, so a
+cyclist at three thousand steps is not sedentary — a step count is evidence of a floor
+on activity, never a measure of it. The declared level is never overwritten, on the
+profile or anywhere else.
+
+That reaches two places and no others. `adaptive.ts` gets a better `SANITY_BAND`
+reference, which is the point: the band throws out an observed TDEE more than 35% from
+the predicted one, so somebody genuinely sedentary who picked "moderate" had their own
+honest measurement discarded week after week. And `calculateTargets` gets a better first
+target for anybody who has not converged yet. The `adaptive` branch of
+`retargetFromProfile` deliberately does *not* — a measured target already has the
+walking priced in, because the scale saw it.
+
+Nothing touches `observed_tdee_kcal`. A test asserts that: eighteen thousand steps a day
+moves `predicted_tdee_kcal` and leaves the observation and the mean intake exactly where
+they were.
+
+**What is still missing** is a tracker's own total expenditure — the anchor "The TDEE
+anchor" below is really about — which needs a provider, and a Progress chart for
+`GET /metrics/steps`, which has no caller yet.
 
 ## The short version
 
