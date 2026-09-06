@@ -261,6 +261,7 @@ export const bg: Messages = {
   'today.stepsFooter':
     'Отчетени от телефона ти. Стъпките уточняват целта ти — никога не се добавят към нея.',
   'today.stepsEnable': 'Брой стъпките ми',
+  'today.stepsUsual': (average: string) => `обикновено ${average}`,
   'today.stepsEnableHint':
     'Чете стъпките от телефона, за да е целта ти според това, което наистина правиш.',
   'today.thatChange': 'Тази промяна',
@@ -961,6 +962,8 @@ export const bg: Messages = {
   'widget.of': (consumed: string, target: string) => `${consumed} от ${target} kcal`,
   'widget.tapToStart': 'Докосни, за да започнеш деня',
   'widget.steps': (count: number) => n(count, { one: 'стъпка', other: 'стъпки' }),
+  'widget.stepsWord': 'стъпки',
+  'widget.usual': (average: string) => `от обичайните ${average}`,
 
   'common.save': 'Запази',
   'common.cancel': 'Откажи',

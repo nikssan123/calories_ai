@@ -55,6 +55,7 @@ const day: DaySummary = {
   // verbatim, and a fixture that reported steps would be asserting the step
   // line's wording from a test about something else.
   steps: null,
+  steps_average: null,
   local_date: '2026-03-10',
   consumed: { kcal: 1840, protein_g: 120, carbs_g: 180, fat_g: 60 },
   quality: {

@@ -1703,6 +1703,19 @@ export const DaySummary = z.object({
    * assembling a day out of its own cache with no metrics table to consult.
    */
   steps: z.number().int().nullable().default(null),
+  /**
+   * Their ordinary day over the week behind this one, or null when there is not
+   * enough of a week to say.
+   *
+   * The reference the step figure is read against, and the only honest one this
+   * app has: it has never had a step *goal*, and putting a ring around an
+   * invented ten thousand would be grading somebody against a number nobody set.
+   * "More than usual" is a fact about them; "78% of your goal" would not be.
+   *
+   * Excludes the day itself, which is incomplete for most of its length — see
+   * `stepsContextFor`.
+   */
+  steps_average: z.number().int().nullable().default(null),
 });
 export type DaySummary = z.infer<typeof DaySummary>;
 

@@ -22,11 +22,23 @@ export function Empty({
   width,
   height,
   text,
+  /**
+   * Whether the small shape may fall back to an empty dial.
+   *
+   * True for the two calorie widgets, whose whole subject is that ring — an
+   * empty one is the same statement without the words. False for the steps
+   * widget, where it would be worse than no picture at all: a calorie dial on a
+   * widget about walking says the app is telling you something about your
+   * eating, and the one thing it has to say is that it does not know your step
+   * count. That gets the word instead.
+   */
+  dial = true,
 }: {
   colors: WidgetPalette;
   width: number;
   height: number;
   text: WidgetText;
+  dial?: boolean;
 }) {
   const shell = {
     ...OPEN_JOURNAL,
@@ -43,7 +55,37 @@ export function Empty({
   };
 
   const wide = width >= height * 2.2;
-  if (!wide && Math.min(width, height) < 118) {
+
+  /*
+   * A widget with no dial to fall back on, at a size no sentence fits in: the
+   * noun it counts, and a dash where the figure will be. "steps —" is short
+   * enough to be legible at one cell and says exactly what is true — this
+   * counts steps, and it has none yet.
+   */
+  if (!dial && !wide && Math.min(width, height) < 118) {
+    const side = Math.min(width, height);
+    return (
+      <FlexWidget {...shell} style={{ ...shell.style, borderRadius: Math.round(side * 0.28), padding: 8 }}>
+        <TextWidget
+          text="—"
+          allowFontScaling={false}
+          style={{
+            fontSize: Math.round(side * 0.3),
+            fontFamily: DISPLAY,
+            color: colors.mutedForeground,
+          }}
+        />
+        <TextWidget
+          text={text.stepsWord}
+          allowFontScaling={false}
+          maxLines={1}
+          style={{ fontSize: Math.max(10, Math.round(side * 0.11)), fontWeight: '600', color: colors.mutedForeground }}
+        />
+      </FlexWidget>
+    );
+  }
+
+  if (dial && !wide && Math.min(width, height) < 118) {
     const { padding, radius, box, stroke } = ringLayout({ width, height, remaining: 0, text });
     return (
       <FlexWidget {...shell} style={{ ...shell.style, borderRadius: radius, padding }}>

@@ -1,4 +1,4 @@
-import { LINE_HEIGHT, dayLayout, detailLines, ringLayout } from '../layout';
+import { LINE_HEIGHT, dayLayout, detailLines, ringLayout, stepsLayout } from '../layout';
 import { DARK, LIGHT, type WidgetPalette } from '../theme';
 import { widgetText, type WidgetText } from '../text';
 import type { Locale } from '@ct/shared';
@@ -124,8 +124,12 @@ const paintOf = (palette: WidgetPalette): Paint => ({
  * this" everywhere else.
  */
 export interface FaceProps {
-  /** `dial` is the square one; `card` and `line` are the wide one's two shapes. */
-  shape: 'dial' | 'card' | 'line';
+  /**
+   * `dial` is the calorie square; `card` and `line` are the calorie wide one's
+   * two shapes; `steps` is the steps widget at either size — it changes what it
+   * says with the room rather than changing shape, so one tag covers both.
+   */
+  shape: 'dial' | 'card' | 'line' | 'steps';
   /**
    * False when there is no reading to draw at all — nobody has opened the app,
    * or they have signed out. Then the widget says so rather than drawing a ring
@@ -194,6 +198,14 @@ export interface FaceProps {
    */
   stepsText: string;
 
+  /** `steps` only — the caption under the figure, and the week behind it. */
+  stepsCaption: number;
+  stepsCaptionText: string;
+  usual: number;
+  usualText: string;
+  kcal: number;
+  kcalText: string;
+
   /** `line` only. */
   wording: number;
   wordingText: string;
@@ -223,6 +235,12 @@ const NOTHING = {
   detailText: '',
   burnText: '',
   stepsText: '',
+  stepsCaption: 0,
+  stepsCaptionText: '',
+  usual: 0,
+  usualText: '',
+  kcal: 0,
+  kcalText: '',
   wording: 0,
   wordingText: '',
   ratio: 0,
@@ -374,5 +392,63 @@ export function dayProps(
     detailText: lineFor('of'),
     burnText: lineFor('burned'),
     stepsText: lineFor('steps'),
+  };
+}
+
+/**
+ * The steps widget, at whichever family it was placed in.
+ *
+ * Two families off one builder, because unlike the calorie pair this shape does
+ * not change with the room — it says more or less of the same thing. The square
+ * is the figure, its caption and the bar; the wide one gains the sentence and
+ * the day's calories beside them. `stepsLayout` decides which of those survive
+ * by measurement, so nothing here has to know which family it is drawing for
+ * beyond handing over the rectangle.
+ *
+ * `known` goes false when there is no step count rather than when there is no
+ * snapshot, which is a stricter test than the calorie widgets use and the right
+ * one here: a widget whose entire subject is a number it does not have should
+ * say so, not draw a nought. Somebody who has never granted the pedometer gets
+ * "tap to start" instead of a confident zero.
+ */
+export function stepsProps(
+  snapshot: DaySnapshot | null,
+  locale?: Locale,
+  screenWidth?: number,
+  family: 'systemSmall' | 'systemMedium' = 'systemSmall',
+): FaceProps {
+  const text = textFor(snapshot, locale);
+  const { width, height } = familySize(screenWidth)[family];
+  const layout = stepsLayout({
+    width,
+    height,
+    steps: snapshot?.steps ?? null,
+    average: snapshot?.stepsAverage ?? null,
+    consumed: snapshot?.consumed ?? 0,
+    target: snapshot?.target ?? 0,
+    text,
+  });
+
+  return {
+    ...NOTHING,
+    ...commonOf(snapshot, text),
+    known: snapshot !== null && snapshot.steps !== null,
+    spoken: snapshot?.steps == null ? 'Day So Far' : text.steps(snapshot.steps),
+    shape: 'steps',
+    padding: layout.padding,
+    paddingHorizontal: layout.padding,
+    figure: layout.figure,
+    figureText: layout.figureText,
+    figureLine: Math.round(layout.figure * LINE_HEIGHT),
+    stepsCaption: layout.caption,
+    stepsCaptionText: layout.captionText,
+    usual: layout.detail,
+    usualText: layout.detailText,
+    kcal: layout.kcal,
+    kcalText: layout.kcalText,
+    bar: layout.bar,
+    gap: layout.gap,
+    track: layout.track,
+    fill: layout.fill,
   };
 }

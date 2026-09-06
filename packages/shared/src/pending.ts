@@ -142,6 +142,7 @@ export function foldPending(day: DaySummary, edits: DayEdits): DaySummary {
      * when the phone is offline and least able to fetch it back.
      */
     steps: day.steps,
+    stepsAverage: day.steps_average,
   });
 }
 

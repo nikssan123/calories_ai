@@ -12,7 +12,7 @@ import { query, queryOne } from '../db.ts';
 import { addDays, dateRange, type DayContext, localDateFor } from '../time.ts';
 import { achievementFacts, evaluateAchievements, listAchievements } from './achievements.ts';
 import { listExerciseEntries, listFoodEntries, listWeights } from './log.ts';
-import { stepsForDay } from './metrics.ts';
+import { stepsContextFor } from './metrics.ts';
 import { type LogHistory, logHistory, streaksOf } from './streaks.ts';
 import { targetsForDate } from './targets.ts';
 import { getUser } from './user.ts';
@@ -51,13 +51,14 @@ export async function buildDaySummary(
      * it is one indexed lookup against a table with a row per day, not the
      * `DISTINCT local_date` scan that made the streak worth withholding.
      */
-    stepsForDay(userId, localDate),
+    stepsContextFor(userId, localDate),
   ]);
 
   return rollUpDay({
     localDate,
     streak: localDate === today ? await todayStreak(userId, today) : null,
-    steps,
+    steps: steps.steps,
+    stepsAverage: steps.average,
     foodEntries,
     exerciseEntries,
     targets,

@@ -42,6 +42,17 @@ export interface WidgetText {
    * through `formatNumber` — so the layout still measures what will be drawn.
    */
   steps: (count: number) => string;
+  /**
+   * The bare noun, for the caption under a figure that is already on screen.
+   *
+   * Separate from `steps` above because that one agrees with its number and
+   * this one has no number to agree with — the figure is drawn above it, four
+   * times the size. German would say "Schritte" here whatever the count, and
+   * asking `plural()` for it would mean inventing a count to ask about.
+   */
+  stepsWord: string;
+  /** "of your usual 9,400" — the only reference this app honestly has. */
+  usual: (average: string) => string;
   tapToStart: string;
 }
 
@@ -56,6 +67,8 @@ export function widgetText(locale: Locale): WidgetText {
     of: t['widget.of'],
     burned: t['today.burned'],
     steps: t['widget.steps'],
+    stepsWord: t['widget.stepsWord'],
+    usual: t['widget.usual'],
     tapToStart: t['widget.tapToStart'],
   };
 }

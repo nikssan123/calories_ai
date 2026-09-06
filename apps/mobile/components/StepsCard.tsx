@@ -23,10 +23,21 @@ import type { StepPermission } from '@/lib/steps';
  */
 export function StepsCard({
   steps,
+  average,
   permission,
   onEnable,
 }: {
   steps: number | null;
+  /**
+   * Their settled week behind this day, or null when there is not enough of one.
+   *
+   * The same reference the Steps widget draws its bar to, and for the same
+   * reason: eight thousand is a lot for one person and a quiet day for another,
+   * and the app has never had a step goal to grade anybody against. Shown as a
+   * plain "usually 9,400" rather than a percentage — a ratio invites a verdict,
+   * and two numbers side by side let the reader draw their own.
+   */
+  average: number | null;
   permission: StepPermission | null;
   onEnable: () => void;
 }) {
@@ -34,16 +45,49 @@ export function StepsCard({
   const tr = useT();
 
   /*
-   * Nothing at all on a platform or a handset that cannot answer, and nothing
-   * once somebody has said no. A card that says "steps unavailable" is a row of
-   * apology occupying the same space as a fact, and a card that keeps offering
-   * after a refusal is the app asking twice. The system dialog cannot be shown
-   * again anyway — iOS answers a second `requestPermissions` with the first
-   * answer — so an offer here would be a button that does nothing.
+   * A count, wherever it came from, before any question about this handset.
+   *
+   * The two are genuinely separable and it took getting this the wrong way
+   * round to see it: the first cut asked about the sensor first and drew
+   * nothing without one, which meant an iPad — or an iPhone signed into an
+   * account whose steps another device recorded — hid a number the server was
+   * holding. Reading a step count and gathering one are different jobs, and
+   * only the second needs hardware. The web draws this exact row with no sensor
+   * anywhere near it.
    */
-  if (permission === null || permission === 'unsupported' || permission === 'denied') return null;
+  if (steps !== null && steps > 0) {
+    return (
+      <InsetGroup
+        title={tr('today.stepsTitle')}
+        trailing={
+          average === null ? null : (
+            <Text style={[t.footnoteBold, t.tnum, { color: colors.mutedForeground }]}>
+              {tr('today.stepsUsual')(average.toLocaleString())}
+            </Text>
+          )
+        }
+        footer={tr('today.stepsFooter')}
+      >
+        <InsetRow first>
+          <Text style={[t.title2, t.tnum, { color: colors.foreground }]}>
+            {tr('today.steps')(steps)}
+          </Text>
+        </InsetRow>
+      </InsetGroup>
+    );
+  }
 
-  if (permission !== 'granted') {
+  /*
+   * No count, so the only thing left to offer is the sensor — and only when
+   * there is one and nobody has answered for it yet. Nothing at all on a
+   * handset that cannot count, and nothing once somebody has said no: a card
+   * reading "steps unavailable" is a row of apology in the space a fact would
+   * take, and one that keeps offering after a refusal is the app asking twice.
+   * The system dialog cannot be shown again anyway — iOS answers a second
+   * `requestPermissions` with the first answer — so the offer would be a button
+   * that does nothing.
+   */
+  if (permission === 'undetermined') {
     return (
       <InsetGroup title={tr('today.stepsTitle')}>
         <Pressable
@@ -71,23 +115,13 @@ export function StepsCard({
   }
 
   /*
-   * Granted but nothing counted yet. Silent rather than "0 steps", for the
-   * reason written on `DaySummary.steps`: nobody has ever walked exactly none,
-   * so a nought is a wrong fact about the reader rather than a missing one.
-   * This is the ordinary state at four in the morning and after a fresh grant,
-   * and both resolve themselves within a walk.
+   * Granted, but nothing counted yet — silent rather than "0 steps", for the
+   * reason on `DaySummary.steps`: nobody has ever walked exactly none, so a
+   * nought is a wrong fact about the reader rather than a missing one. This is
+   * the ordinary state at four in the morning and for the first minutes after a
+   * fresh grant, and both resolve themselves within a walk.
    */
-  if (steps === null || steps === 0) return null;
-
-  return (
-    <InsetGroup title={tr('today.stepsTitle')} footer={tr('today.stepsFooter')}>
-      <InsetRow first>
-        <Text style={[t.title2, t.tnum, { color: colors.foreground }]}>
-          {tr('today.steps')(steps)}
-        </Text>
-      </InsetRow>
-    </InsetGroup>
-  );
+  return null;
 }
 
 const styles = StyleSheet.create({

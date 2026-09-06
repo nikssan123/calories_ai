@@ -265,6 +265,7 @@ export const es: Messages = {
   'today.stepsFooter':
     'Los cuenta tu teléfono. Los pasos afinan tu objetivo — nunca se le suman.',
   'today.stepsEnable': 'Contar mis pasos',
+  'today.stepsUsual': (average: string) => `normalmente ${average}`,
   'today.stepsEnableHint':
     'Lee tus pasos del teléfono, para que tu objetivo salga de lo que haces de verdad.',
   'today.thatChange': 'Ese cambio',
@@ -965,6 +966,8 @@ export const es: Messages = {
   'widget.of': (consumed: string, target: string) => `${consumed} de ${target} kcal`,
   'widget.tapToStart': 'Toca para empezar el día',
   'widget.steps': (count: number) => n(count, { one: 'paso', other: 'pasos' }),
+  'widget.stepsWord': 'pasos',
+  'widget.usual': (average: string) => `de tus ${average} habituales`,
 
   'common.save': 'Guardar',
   'common.cancel': 'Cancelar',

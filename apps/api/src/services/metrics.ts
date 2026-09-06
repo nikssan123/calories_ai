@@ -1,6 +1,6 @@
 import type { DailySteps, StepsSummary } from '@ct/shared';
 import { STEP_SYNC_WINDOW_DAYS } from '@ct/shared';
-import { query, queryOne } from '../db.ts';
+import { query } from '../db.ts';
 import { addDays } from '../time.ts';
 
 /**
@@ -30,6 +30,15 @@ import { addDays } from '../time.ts';
 
 /** Rows are stored per source; this is the one the phone's pedometer writes. */
 export const DEVICE_SOURCE = 'device';
+
+/**
+ * How many settled days an average needs before it means anything.
+ *
+ * Four, because a working week and a weekend are different behaviours and a
+ * figure built from two days is a figure built from whichever two. Below this
+ * every caller reports null rather than a number nobody should act on.
+ */
+export const MIN_DAYS_FOR_AVERAGE = 4;
 
 /**
  * A day's count, recorded or corrected.
@@ -121,13 +130,53 @@ function dedupe(days: DailySteps[]): { local_date: string; source: string; steps
  * visible rather than to hide.
  */
 export async function stepsForDay(userId: string, localDate: string): Promise<number | null> {
-  const row = await queryOne<{ steps: string | null }>(
-    `SELECT MAX(steps) AS steps
+  return (await stepsContextFor(userId, localDate)).steps;
+}
+
+/**
+ * A day's count and the ordinary week behind it, in one round trip.
+ *
+ * The average is here rather than left to the caller because a step count on
+ * its own does not say very much. Eight thousand is a lot for one person and a
+ * quiet day for another, and the only reference this app can honestly offer is
+ * the reader's own recent behaviour — it has never had a step *goal*, and
+ * inventing one to put a ring around would be inventing a number and then
+ * grading somebody against it.
+ *
+ * Both come out of one scan of the same eight rows, which is why they travel
+ * together: the widget and the day summary each want both, and asking twice
+ * would be two queries over an index that has already found the range.
+ */
+export async function stepsContextFor(
+  userId: string,
+  localDate: string,
+): Promise<{ steps: number | null; average: number | null }> {
+  const rows = await query<{ local_date: string; steps: string }>(
+    `SELECT local_date::text AS local_date, MAX(steps) AS steps
        FROM daily_metrics
-      WHERE user_id = $1 AND local_date = $2`,
-    [userId, localDate],
+      WHERE user_id = $1
+        AND local_date BETWEEN $2 AND $3
+        AND steps IS NOT NULL
+   GROUP BY local_date`,
+    [userId, addDays(localDate, -STEP_SYNC_WINDOW_DAYS), localDate],
   );
-  return row?.steps == null ? null : Number(row.steps);
+
+  const today = rows.find((r) => r.local_date === localDate);
+  /*
+   * The day itself is excluded from its own reference. It is incomplete for
+   * most of its length — a reading at nine in the morning is a third of a day —
+   * and averaging it in would make "your usual" depend on what time somebody
+   * happened to look at their home screen.
+   */
+  const settled = rows.filter((r) => r.local_date !== localDate);
+
+  return {
+    steps: today ? Number(today.steps) : null,
+    average:
+      settled.length >= MIN_DAYS_FOR_AVERAGE
+        ? Math.round(settled.reduce((sum, r) => sum + Number(r.steps), 0) / settled.length)
+        : null,
+  };
 }
 
 /**
@@ -176,20 +225,6 @@ export async function stepsSummary(
 
   return { days: series, average };
 }
-
-/**
- * The recent daily average, for anything that wants one number.
- *
- * A week rather than the chart's month, and the reason is that this is meant to
- * answer "what is this person doing *now*" — the input to an activity level and
- * to the agent's read on a plateau. A month smooths over exactly the change
- * that is worth noticing.
- *
- * Null when the window is too thin to mean anything. Four days is the floor
- * because a working week and a weekend are different behaviours and a figure
- * built from two days is a figure built from whichever two.
- */
-export const MIN_DAYS_FOR_AVERAGE = 4;
 
 export async function recentStepAverage(
   userId: string,

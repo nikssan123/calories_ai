@@ -127,6 +127,161 @@ export function ringLayout({
   };
 }
 
+/**
+ * The steps widget: what it draws and how big.
+ *
+ * A separate shape from the two calorie widgets rather than a variant of them,
+ * because it answers a different question and the hierarchy has to say so. On
+ * the Day card a step count is the third muted line under the ring; here it is
+ * the reason the rectangle exists, and the calories are the quiet line at the
+ * bottom.
+ *
+ * The reference is the reader's own recent average, and never a goal. This app
+ * has no notion of a step target and inventing one — ten thousand, because it
+ * is the number people have heard — would mean drawing a ring that grades
+ * somebody against a figure nobody set, on their home screen, every day.
+ * "More than usual" is a fact about them. A percentage of an invented goal is a
+ * verdict, and one the app has no standing to deliver.
+ *
+ * So the bar runs to `average` rather than to a target, and past it simply
+ * fills: going over your usual is not going over anything.
+ */
+export interface StepsLayout {
+  padding: number;
+  /** The card's corner, tightened on the smallest square. */
+  radius: number;
+  figure: number;
+  figureText: string;
+  /** The word under the figure — 0 when there is no room for it. */
+  caption: number;
+  captionText: string;
+  /** "more than usual" / "of your usual 9,400" — 0 when it will not fit. */
+  detail: number;
+  detailText: string;
+  /** The bar. 0 across when there is no average to measure against. */
+  bar: number;
+  gap: number;
+  track: number;
+  fill: number;
+  /** The day's calories, on the wide shape only. Empty when there is no room. */
+  kcalText: string;
+  kcal: number;
+}
+
+/**
+ * Big enough to caption. Below this the figure is the whole widget, which is
+ * the right answer at icon size — a number and a shoe say "steps" without a
+ * word under them.
+ */
+const STEPS_CAPTIONED = 96;
+
+export function stepsLayout({
+  width,
+  height,
+  steps,
+  average,
+  consumed,
+  target,
+  text,
+}: {
+  width: number;
+  height: number;
+  steps: number | null;
+  average: number | null;
+  consumed: number;
+  target: number;
+  text: WidgetText;
+}): StepsLayout {
+  const wide = width >= height * 1.6;
+  const padding = Math.min(width, height) < STEPS_CAPTIONED ? 8 : 14;
+  const inner = Math.max(0, width - 2 * (padding + BORDER));
+  const room = Math.max(0, height - 2 * (padding + BORDER));
+
+  const figureText = text.n(steps ?? 0);
+  /*
+   * Measured to the width it actually has, like every other figure in here. A
+   * five-figure count is a real thing — twelve thousand steps is a good day out
+   * — and picking a size rather than fitting one is how "12,480" ends up wider
+   * than the card it is drawn on.
+   */
+  const figure = fitFontSize({
+    text: figureText,
+    face: text.face,
+    /* Half the card on the wide shape, where the calorie line sits beside it. */
+    width: (wide ? inner * 0.56 : inner) * 0.94,
+    min: 13,
+    max: Math.min(wide ? 40 : 46, Math.round(room * (wide ? 0.46 : 0.4))),
+  });
+
+  const captioned = room >= STEPS_CAPTIONED * 0.5 && figure > 0;
+  const caption = captioned ? clamp(figure * 0.34, 10, 15) : 0;
+
+  /*
+   * The comparison, in the reader's own terms. Absent when the week behind them
+   * is too thin to average — `stepsContextFor` returns null rather than a
+   * figure built from two days.
+   */
+  const hasBar = captioned && average !== null;
+  const portion = average && average > 0 ? Math.min(1, (steps ?? 0) / average) : 0;
+  const detailText = average === null ? '' : text.usual(text.n(average));
+  /*
+   * The calories, quietly, on the wide shape only — and quietly is the point.
+   * This is still a calorie app's widget: somebody who put it on their home
+   * screen for the steps should not have to open the app to find out where
+   * their day stands. On a square there is no room for a second reading and the
+   * steps win, which is what this widget is for.
+   */
+  const kcalText = wide && target > 0 ? text.of(text.n(consumed), text.n(target)) : '';
+
+  /*
+   * What actually fits, measured, and dropped from the bottom up.
+   *
+   * Not a guess about height, because the launcher hands out cells this code
+   * does not choose: a one-row-tall 250×110 cell has room for the figure, its
+   * word and the bar, and nothing else — and the version of this that assumed
+   * instead of measured put four rows into it and let Android clip the last one
+   * off in silence. That is exactly how the Day widget lost its bar once
+   * already, which is why `dayLayout` measures too.
+   *
+   * The order is the priority: the figure is the widget, the caption tells you
+   * what it counts, the bar is the comparison, the sentence spells the bar out,
+   * and the calories are the bonus. Whatever the room runs out on goes first.
+   */
+  const stack = figure * LINE_HEIGHT + (caption > 0 ? caption * 1.2 : 0);
+  let left = room - stack;
+
+  const barHeight = hasBar ? 5 + 7 : 0;
+  const bar = hasBar && left >= barHeight ? 5 : 0;
+  const gap = bar > 0 ? 7 : 0;
+  left -= bar > 0 ? barHeight : 0;
+
+  const detailSize = clamp(figure * 0.3, 10, 13);
+  const detail = detailText !== '' && caption > 0 && left >= detailSize * 1.35 + 4 ? detailSize : 0;
+  left -= detail > 0 ? detail * 1.35 + 4 : 0;
+
+  const kcalSize = clamp(figure * 0.32, 10, 14);
+  const kcal = kcalText !== '' && left >= kcalSize * 1.35 + 4 ? kcalSize : 0;
+
+  const track = bar > 0 ? inner : 0;
+
+  return {
+    padding,
+    radius: Math.min(width, height) < STEPS_CAPTIONED ? clamp(Math.min(width, height) * 0.28, 14, 28) : 28,
+    figure,
+    figureText,
+    caption,
+    captionText: text.stepsWord,
+    detail,
+    detailText,
+    bar,
+    gap,
+    track,
+    fill: portion > 0 ? clamp(Math.max(5, track * portion), 5, track) : 0,
+    kcalText,
+    kcal,
+  };
+}
+
 interface DayCommon {
   padding: number;
   label: string;

@@ -59,6 +59,15 @@ export interface DaySnapshot {
    * nought is not. Same argument as `Empty.tsx`, one field down.
    */
   steps: number | null;
+  /**
+   * Their ordinary day over the week behind this one, or null when the week is
+   * too thin to average.
+   *
+   * What the steps widget's bar runs to. Carried on the note rather than
+   * derived, because the launcher draws with no history to look at — and never
+   * replaced by a goal, for the reason written on `StepsWidget`.
+   */
+  stepsAverage: number | null;
   /** The language the screen was being read in when the note was left. */
   locale: Locale;
   /**
@@ -97,6 +106,7 @@ function snapshotOf(day: DaySummary, locale: Locale, profile: Profile | null): D
     target: Math.round(day.targets.kcal),
     burned: Math.round(day.burned_kcal),
     steps: day.steps,
+    stepsAverage: day.steps_average,
     locale,
     /*
      * The device's clock when there is no profile to ask, which is the same
@@ -168,7 +178,7 @@ async function repaintWidget(locale?: Locale): Promise<void> {
      * no-op and saves knowing which the reader chose.
      */
     await Promise.all(
-      (['Ring', 'Day'] as const).map((widgetName) =>
+      (['Ring', 'Day', 'Steps'] as const).map((widgetName) =>
         requestWidgetUpdate({
           widgetName,
           renderWidget: (info) => paint(info, snapshot),
@@ -291,6 +301,7 @@ export async function readDaySnapshot(): Promise<DaySnapshot | null> {
        * other side. Normalised to null, which is the reading "we do not know"
        * everything downstream already handles. */
       steps: typeof parsed.steps === 'number' ? parsed.steps : null,
+      stepsAverage: typeof parsed.stepsAverage === 'number' ? parsed.stepsAverage : null,
     };
   } catch {
     return null;

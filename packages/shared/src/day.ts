@@ -472,6 +472,8 @@ export interface DayParts {
    * and load-bearing; see the comment on the schema.
    */
   steps?: number | null;
+  /** Their ordinary day behind this one. See `DaySummary.steps_average`. */
+  stepsAverage?: number | null;
 }
 
 /**
@@ -488,6 +490,7 @@ export function rollUpDay({
   weight,
   streak = null,
   steps = null,
+  stepsAverage = null,
 }: DayParts): DaySummary {
   const consumed = sumNutrition(foodEntries);
   const burned_kcal = exerciseEntries.reduce((sum, e) => sum + e.kcal_burned, 0);
@@ -512,6 +515,7 @@ export function rollUpDay({
     weight,
     streak,
     steps,
+    steps_average: stepsAverage,
   };
 }
 

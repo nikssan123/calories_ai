@@ -1,6 +1,7 @@
 import type { WidgetInfo, WidgetTaskHandlerProps } from 'react-native-android-widget';
 import { DayWidget } from './DayWidget';
 import { RingWidget } from './RingWidget';
+import { StepsWidget } from './StepsWidget';
 import { DARK, LIGHT } from './theme';
 import { widgetText } from './text';
 import { deviceLocale } from '@/messages';
@@ -56,13 +57,20 @@ export function paint(info: WidgetInfo, snapshot: DaySnapshot | null) {
   const text = widgetText(snapshot?.locale ?? deviceLocale());
   const props = { snapshot, width, height, text };
 
-  return widgetName === 'Ring'
-    ? {
-        light: <RingWidget {...props} colors={LIGHT} />,
-        dark: <RingWidget {...props} colors={DARK} />,
-      }
-    : {
-        light: <DayWidget {...props} colors={LIGHT} />,
-        dark: <DayWidget {...props} colors={DARK} />,
-      };
+  if (widgetName === 'Ring') {
+    return {
+      light: <RingWidget {...props} colors={LIGHT} />,
+      dark: <RingWidget {...props} colors={DARK} />,
+    };
+  }
+  if (widgetName === 'Steps') {
+    return {
+      light: <StepsWidget {...props} colors={LIGHT} />,
+      dark: <StepsWidget {...props} colors={DARK} />,
+    };
+  }
+  return {
+    light: <DayWidget {...props} colors={LIGHT} />,
+    dark: <DayWidget {...props} colors={DARK} />,
+  };
 }

@@ -340,6 +340,91 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
   }
 
   /*
+   * The steps widget: the figure, its word, a bar to the reader's own usual
+   * week, and — where the rectangle is wide enough — the day's calories under
+   * it all.
+   *
+   * No ring, and that absence is deliberate. A ring needs a goal; this app has
+   * never had a step goal, and the ten thousand everyone half-remembers comes
+   * from a 1960s pedometer advertisement rather than from anything the app
+   * knows about the person reading it. The bar runs to *their* average instead,
+   * and simply fills past it — walking more than usual is not going over
+   * anything, so there is nothing for it to turn red about.
+   */
+  if (props.shape === 'steps') {
+    return shell(
+      <VStack alignment="leading" spacing={0} modifiers={[padding({ all: props.padding })]}>
+        <Text
+          modifiers={[
+            font({ family: DISPLAY, size: props.figure }),
+            foregroundStyle(paint.foreground),
+            lineLimit(1),
+            frame({ height: props.figureLine }),
+          ]}
+        >
+          {props.figureText}
+        </Text>
+        {props.stepsCaption > 0 && (
+          <Text
+            modifiers={[
+              font({ size: props.stepsCaption, weight: 'semibold' }),
+              foregroundStyle(paint.mutedForeground),
+              lineLimit(1),
+            ]}
+          >
+            {props.stepsCaptionText}
+          </Text>
+        )}
+        {props.bar > 0 && (
+          <ZStack
+            alignment="leading"
+            modifiers={[frame({ width: props.track, height: props.bar }), padding({ top: props.gap })]}
+          >
+            <Capsule
+              modifiers={[
+                frame({ width: props.track, height: props.bar }),
+                foregroundStyle(paint.muted),
+              ]}
+            />
+            {props.fill > 0 && (
+              <Capsule
+                modifiers={[
+                  frame({ width: props.fill, height: props.bar }),
+                  foregroundStyle(paint.calories),
+                ]}
+              />
+            )}
+          </ZStack>
+        )}
+        {props.usual > 0 && (
+          <Text
+            modifiers={[
+              font({ size: props.usual, weight: 'semibold' }),
+              foregroundStyle(paint.mutedForeground),
+              lineLimit(1),
+              padding({ top: 4 }),
+            ]}
+          >
+            {props.usualText}
+          </Text>
+        )}
+        {props.kcal > 0 && (
+          <Text
+            modifiers={[
+              font({ size: props.kcal, weight: 'semibold' }),
+              foregroundStyle(paint.mutedForeground),
+              lineLimit(1),
+              padding({ top: 4 }),
+            ]}
+          >
+            {props.kcalText}
+          </Text>
+        )}
+      </VStack>,
+    );
+  }
+
+  /*
    * Two rows and up: the dial on the left, and beside it the three things the
    * dial cannot say — what the figure means, what it is out of, and the burn.
    * The number stays inside the ring and nowhere else; an earlier cut of the
@@ -413,3 +498,4 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
  */
 export const RingWidget = createWidget<FaceProps>('Ring', Face);
 export const DayWidget = createWidget<FaceProps>('Day', Face);
+export const StepsWidget = createWidget<FaceProps>('Steps', Face);

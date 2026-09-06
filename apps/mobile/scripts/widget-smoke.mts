@@ -134,7 +134,11 @@ const require_ = (specifier: string) => {
 
 new Function('require', 'exports', 'module', source!.code!)(require_, {}, { exports: {} });
 
-if (captured.size !== 2) problems.push(`expected two registered widgets, captured ${captured.size}`);
+/* Ring, Day and Steps — three registrations off the one `Face`, which is the
+ * arrangement `Face.tsx` explains. A count rather than a set membership check
+ * because the failure this guards against is a registration silently going
+ * missing, and the names are asserted by the render loop below anyway. */
+if (captured.size !== 3) problems.push(`expected three registered widgets, captured ${captured.size}`);
 
 // ---- 3. Evaluate each layout with only the runtime's globals ---------------
 
@@ -193,14 +197,21 @@ function inspect(node: unknown, where: string, seenText: string[]): void {
 
 // ---- 4. Render every shape, both schemes, and the empty state -------------
 
-const { ringProps, dayProps } = await import('../widget/ios/props.ts');
+const { ringProps, dayProps, stepsProps } = await import('../widget/ios/props.ts');
 
-const day = (consumed: number, target: number, burned = 0, steps: number | null = null) => ({
+const day = (
+  consumed: number,
+  target: number,
+  burned = 0,
+  steps: number | null = null,
+  stepsAverage: number | null = null,
+) => ({
   localDate: '2026-08-30',
   consumed,
   target,
   burned,
   steps,
+  stepsAverage,
   locale: 'en' as const,
   timezone: 'Europe/Sofia',
   dayStartHour: 4,
@@ -223,6 +234,11 @@ const cases = [
   ['walked', day(850, 2090, 0, 9120)],
   ['walked and trained', day(850, 2090, 320, 9120)],
   ['walked, in bulgarian', { ...day(1480, 2090, 320, 12480), locale: 'bg' as const }],
+  /* The steps widget's own cases: under the usual week, over it, a five-figure
+   * count, and a day the phone never reported — which is its empty state. */
+  ['under usual', day(850, 2090, 0, 4210, 9400)],
+  ['over usual', day(850, 2090, 0, 12480, 9400)],
+  ['no usual yet', day(850, 2090, 0, 9120, null)],
 ] as const;
 
 for (const [name, layout] of captured) {
@@ -254,12 +270,24 @@ for (const [name, layout] of captured) {
   /* Every handset width the size table knows about, not just one. */
   for (const screen of [320, 375, 393, 402, 414, 430]) {
   for (const [label, snapshot] of cases) {
-    const props = name === 'Ring' ? ringProps(snapshot, undefined, screen) : dayProps(snapshot, undefined, screen);
+    /* The steps widget is placed at either family, so both are rendered — the
+     * square is where its layout has the least room and the most to drop. */
+    const families =
+      name === 'Steps'
+        ? (['systemSmall', 'systemMedium'] as const)
+        : ([name === 'Ring' ? 'systemSmall' : 'systemMedium'] as const);
+    for (const family of families) {
+    const props =
+      name === 'Ring'
+        ? ringProps(snapshot, undefined, screen)
+        : name === 'Steps'
+          ? stepsProps(snapshot, undefined, screen, family)
+          : dayProps(snapshot, undefined, screen);
     for (const colorScheme of ['light', 'dark'] as const) {
-      const where = `${name}/${label}/${colorScheme}/${screen}pt`;
+      const where = `${name}/${label}/${family}/${colorScheme}/${screen}pt`;
       let tree: unknown;
       try {
-        tree = render(props, { colorScheme, widgetFamily: name === 'Ring' ? 'systemSmall' : 'systemMedium' });
+        tree = render(props, { colorScheme, widgetFamily: family });
       } catch (error) {
         problems.push(`${where}: ${(error as Error).message}`);
         continue;
@@ -271,10 +299,13 @@ for (const [name, layout] of captured) {
         problems.push(`${where}: drew a string containing undefined or NaN`);
       }
       /* A reading that is known has to put its figure on screen; the arc alone
-       * does not say what the number is. */
-      if (snapshot && !text.some((value) => /\d/.test(value))) {
+       * does not say what the number is. The steps widget is excused only when
+       * it genuinely has no count, which is its empty state and says words. */
+      const known = snapshot && (name !== 'Steps' || snapshot.steps !== null);
+      if (known && !text.some((value) => /\d/.test(value))) {
         problems.push(`${where}: drew no figure`);
       }
+    }
     }
   }
   }

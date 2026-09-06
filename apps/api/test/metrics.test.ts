@@ -4,6 +4,7 @@ import {
   DEVICE_SOURCE,
   recentStepAverage,
   recordSteps,
+  stepsContextFor,
   stepsForDay,
   stepsSummary,
 } from '../src/services/metrics.ts';
@@ -375,5 +376,49 @@ describe('steps in the target arithmetic', () => {
       expect(after.estimate?.mean_intake_kcal).toBe(before.estimate?.mean_intake_kcal);
       expect(after.estimate?.predicted_tdee_kcal).not.toBe(before.estimate?.predicted_tdee_kcal);
     });
+  });
+});
+
+describe('stepsContextFor', () => {
+  it('gives the day and the week behind it in one read', async () => {
+    await recordSteps(user.id, [
+      day('2026-03-06', 9000),
+      day('2026-03-07', 9000),
+      day('2026-03-08', 10000),
+      day('2026-03-09', 10000),
+      day('2026-03-10', 3200),
+    ]);
+    expect(await stepsContextFor(user.id, '2026-03-10')).toEqual({ steps: 3200, average: 9500 });
+  });
+
+  it('leaves the day itself out of its own reference', async () => {
+    // A reading at nine in the morning is a third of a day. Folding it into the
+    // average would make "your usual" depend on when somebody looked.
+    await recordSteps(user.id, [
+      day('2026-03-06', 9000),
+      day('2026-03-07', 9000),
+      day('2026-03-08', 9000),
+      day('2026-03-09', 9000),
+      day('2026-03-10', 100),
+    ]);
+    expect((await stepsContextFor(user.id, '2026-03-10')).average).toBe(9000);
+  });
+
+  it('has no average until the week is thick enough to mean something', async () => {
+    await recordSteps(user.id, [day('2026-03-08', 9000), day('2026-03-09', 9000)]);
+    expect(await stepsContextFor(user.id, '2026-03-10')).toEqual({ steps: null, average: null });
+  });
+
+  it('reaches the day summary, so a widget can draw a comparison', async () => {
+    await recordSteps(user.id, [
+      day('2026-03-06', 8000),
+      day('2026-03-07', 8000),
+      day('2026-03-08', 10000),
+      day('2026-03-09', 10000),
+      day('2026-03-10', 12480),
+    ]);
+    const summary = await buildDaySummary(user.id, '2026-03-10');
+    expect(summary.steps).toBe(12480);
+    expect(summary.steps_average).toBe(9000);
   });
 });

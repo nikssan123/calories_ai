@@ -63,6 +63,7 @@ export const en = {
      cheaper than answering it in support forever. */
   'today.stepsFooter': 'Counted by your phone. Steps sharpen your target — they are never added to it.',
   'today.stepsEnable': 'Count my steps',
+  'today.stepsUsual': (average: string) => `usually ${average}`,
   'today.stepsEnableHint': 'Read your step count from the phone, so your target is set by what you actually do.',
   'today.thatChange': 'That change',
   'today.couldNotSave': (what: string, reason: string) => `${what} could not be saved. ${reason}`,
@@ -1165,6 +1166,8 @@ export const en = {
   'widget.of': (consumed: string, target: string) => `${consumed} of ${target} kcal`,
   'widget.tapToStart': 'Tap to start today',
   'widget.steps': (count: number) => n(count, { one: 'step', other: 'steps' }),
+  'widget.stepsWord': 'steps',
+  'widget.usual': (average: string) => `of your usual ${average}`,
 
   'common.save': 'Save',
   'common.cancel': 'Cancel',

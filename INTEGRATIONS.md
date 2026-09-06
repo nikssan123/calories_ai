@@ -16,7 +16,15 @@ and reads it; `PUT /metrics/steps` takes a week's window from the phone and
 `GET /metrics/steps` hands it back for a chart. `apps/mobile/lib/steps.ts` reads
 `CMPedometer` through `expo-sensors` and re-sends the whole window on every foreground,
 so nothing is an event that can be missed. The count reaches the day summary, the Today
-screen, both home-screen widgets, the web's Today page, and the agent's day context.
+screen, the web's Today page, the agent's day context, and three home-screen widgets —
+the calorie pair carry it as a muted third line, and **Steps** is a widget of its own
+where it leads.
+
+That third widget compares against `steps_average`, the reader's own settled week, and
+never against a goal. This app has no step target; the ten thousand everybody
+half-remembers is from a 1960s pedometer advertisement, and putting a ring around it
+would mean grading somebody daily against a number nobody set. "More than usual" is a
+fact about them. A percentage of an invented goal is a verdict.
 
 No provider is wired and no OAuth exists yet — the `provider_connections` table below is
 still unbuilt. What the steps work did establish is the rule, in code and in a test:

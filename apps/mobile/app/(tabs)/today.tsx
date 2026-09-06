@@ -751,7 +751,12 @@ export default function TodayScreen() {
               for the target, not an ingredient of it, and sitting it in the
               summary block would say otherwise. Draws nothing at all when there
               is no sensor, no permission or no reading — see `StepsCard`. */}
-          <StepsCard steps={steps} permission={stepPermission} onEnable={enableSteps} />
+          <StepsCard
+            steps={steps}
+            average={day.steps_average}
+            permission={stepPermission}
+            onEnable={enableSteps}
+          />
 
           {byMeal.length === 0 && day.exercise_entries.length === 0 && (
             <View style={styles.empty}>

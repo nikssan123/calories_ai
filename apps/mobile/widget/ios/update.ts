@@ -1,7 +1,7 @@
 import { Dimensions } from 'react-native';
 import { localDateFor, nextDayStart, type Locale } from '@ct/shared';
-import { DayWidget, RingWidget } from './Face';
-import { dayProps, ringProps } from './props';
+import { DayWidget, RingWidget, StepsWidget } from './Face';
+import { dayProps, ringProps, stepsProps } from './props';
 import type { DaySnapshot } from '@/lib/snapshot';
 
 /**
@@ -82,6 +82,7 @@ export function pushIosWidgets(snapshot: DaySnapshot | null, locale?: Locale): v
      * is told to open the app in Bulgarian. */
     RingWidget.updateTimeline([{ date: new Date(), props: ringProps(null, locale, screen) }]);
     DayWidget.updateTimeline([{ date: new Date(), props: dayProps(null, locale, screen) }]);
+    StepsWidget.updateTimeline([{ date: new Date(), props: stepsProps(null, locale, screen) }]);
     return;
   }
 
@@ -99,5 +100,18 @@ export function pushIosWidgets(snapshot: DaySnapshot | null, locale?: Locale): v
   DayWidget.updateTimeline([
     { date: now, props: dayProps(snapshot, undefined, screen) },
     { date: turnover, props: dayProps(tomorrow, undefined, screen) },
+  ]);
+  /*
+   * The steps widget's second entry is the honest one and looks odd until you
+   * see why: `freshDay` nulls the step count at the rollover, so tomorrow's
+   * entry has no number and this widget draws its empty state. That is right.
+   * A step count at four in the morning is not zero, it is unknown — the only
+   * process that can ask the pedometer is asleep — and drawing a confident
+   * nought under somebody's step total would be the exact lie `Empty` exists to
+   * refuse. The first foreground of the day replaces it with a real reading.
+   */
+  StepsWidget.updateTimeline([
+    { date: now, props: stepsProps(snapshot, undefined, screen) },
+    { date: turnover, props: stepsProps(tomorrow, undefined, screen) },
   ]);
 }
