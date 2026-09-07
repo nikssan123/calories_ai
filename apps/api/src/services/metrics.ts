@@ -41,6 +41,44 @@ export const DEVICE_SOURCE = 'device';
 export const MIN_DAYS_FOR_AVERAGE = 4;
 
 /**
+ * Whether a day may be averaged against.
+ *
+ * Two days are excluded, and for the same reason rather than two: neither one
+ * covers the hours it appears to.
+ *
+ * **Today**, because it is still happening. A reading at nine in the morning is
+ * a third of a day, and averaging it in would make "your usual" depend on what
+ * time somebody opened the app.
+ *
+ * **The first day there was ever a reading**, because on Android it almost
+ * never is one. Health Connect is a store, and the apps that fill it write
+ * *forward* from the moment they are permitted — Samsung Health does not
+ * backfill. So the day somebody switches steps on holds the walking they did
+ * after tapping Allow and none of what came before it: on a real S25 on
+ * 2026-09-07, Samsung Health's own tally read 8,570 while Health Connect held
+ * 56. Left in, that day sits in the window for a week (`STEP_SYNC_WINDOW_DAYS`)
+ * dragging the average under a band boundary — [56, 8500, 8500, 8500] averages
+ * 6,389, which `activityFromSteps` reads as `light` where the truth is
+ * `moderate`. `measuredActivityLevel` caps the fall at one notch and
+ * `adaptive.ts` closes the rest from the scale, so the cost is bounded; it is
+ * still a wrong number offered on the one day a new reader is deciding whether
+ * to believe any of this.
+ *
+ * The day is still *drawn* — it is real walking, and the chart is a record of
+ * what happened rather than a reference to be compared against. Only the
+ * average leaves it out.
+ *
+ * Known gap: somebody who revokes the permission for a month and grants it
+ * again has a second partial day, and it is not the first one, so this does not
+ * catch it. Handling that needs the grant recorded rather than inferred, which
+ * is a schema change for a case that happens once in a rare while against one
+ * that happens to every Android reader exactly once.
+ */
+function isSettled(day: string, today: string, firstEver: string | null): boolean {
+  return day !== today && day !== firstEver;
+}
+
+/**
  * A day's count, recorded or corrected.
  *
  * An upsert because re-sending is the normal path and not a repair. A step
@@ -151,8 +189,12 @@ export async function stepsContextFor(
   userId: string,
   localDate: string,
 ): Promise<{ steps: number | null; average: number | null }> {
-  const rows = await query<{ local_date: string; steps: string }>(
-    `SELECT local_date::text AS local_date, MAX(steps) AS steps
+  const rows = await query<{ local_date: string; steps: string; first_date: string | null }>(
+    `SELECT local_date::text AS local_date, MAX(steps) AS steps,
+            (SELECT MIN(local_date)
+               FROM daily_metrics
+              WHERE user_id = $1
+                AND steps IS NOT NULL)::text AS first_date
        FROM daily_metrics
       WHERE user_id = $1
         AND local_date BETWEEN $2 AND $3
@@ -168,7 +210,7 @@ export async function stepsContextFor(
    * and averaging it in would make "your usual" depend on what time somebody
    * happened to look at their home screen.
    */
-  const settled = rows.filter((r) => r.local_date !== localDate);
+  const settled = rows.filter((r) => isSettled(r.local_date, localDate, rows[0]?.first_date ?? null));
 
   return {
     steps: today ? Number(today.steps) : null,
@@ -187,14 +229,18 @@ export async function stepsContextFor(
  * sparse array and cannot tell a quiet day from a missing one without knowing
  * how the query was written.
  */
-export async function stepsSummary(
+async function stepsWindow(
   userId: string,
   today: string,
-  days = 30,
-): Promise<StepsSummary> {
+  days: number,
+): Promise<{ series: DailySteps[]; firstEver: string | null }> {
   const from = addDays(today, -(days - 1));
-  const rows = await query<{ local_date: string; steps: string }>(
-    `SELECT local_date::text AS local_date, MAX(steps) AS steps
+  const rows = await query<{ local_date: string; steps: string; first_date: string | null }>(
+    `SELECT local_date::text AS local_date, MAX(steps) AS steps,
+            (SELECT MIN(local_date)
+               FROM daily_metrics
+              WHERE user_id = $1
+                AND steps IS NOT NULL)::text AS first_date
        FROM daily_metrics
       WHERE user_id = $1
         AND local_date BETWEEN $2 AND $3
@@ -204,20 +250,32 @@ export async function stepsSummary(
     [userId, from, today],
   );
 
-  const series: DailySteps[] = rows.map((r) => ({
-    local_date: r.local_date,
-    steps: Number(r.steps),
-    source: DEVICE_SOURCE,
-  }));
+  return {
+    series: rows.map((r) => ({
+      local_date: r.local_date,
+      steps: Number(r.steps),
+      source: DEVICE_SOURCE,
+    })),
+    /*
+     * Carried out rather than applied here, because the window may not contain
+     * it: a reader of two years has a first day far behind `from`, and the
+     * exclusion must still know the date to be sure this window holds none of
+     * it. `null` only when the reader has never reported a step at all.
+     */
+    firstEver: rows[0]?.first_date ?? null,
+  };
+}
 
-  /*
-   * Today is excluded from the average. It is the one day in the window that is
-   * guaranteed to be incomplete — a reading taken at nine in the morning is a
-   * third of a day — and including it drags every average down by an amount
-   * that depends on what time somebody happened to open the app. The chart
-   * still draws it; only the number that gets compared against leaves it out.
-   */
-  const settled = series.filter((d) => d.local_date !== today);
+export async function stepsSummary(
+  userId: string,
+  today: string,
+  days = 30,
+): Promise<StepsSummary> {
+  const { series, firstEver } = await stepsWindow(userId, today, days);
+
+  /* Both exclusions, and why, are on `isSettled`. The chart still draws every
+     day in `series`; only the number they get compared against leaves any out. */
+  const settled = series.filter((d) => isSettled(d.local_date, today, firstEver));
   const average =
     settled.length > 0
       ? Math.round(settled.reduce((sum, d) => sum + d.steps, 0) / settled.length)
@@ -230,8 +288,8 @@ export async function recentStepAverage(
   userId: string,
   today: string,
 ): Promise<number | null> {
-  const { days } = await stepsSummary(userId, today, STEP_SYNC_WINDOW_DAYS + 1);
-  const settled = days.filter((d) => d.local_date !== today);
+  const { series, firstEver } = await stepsWindow(userId, today, STEP_SYNC_WINDOW_DAYS + 1);
+  const settled = series.filter((d) => isSettled(d.local_date, today, firstEver));
   if (settled.length < MIN_DAYS_FOR_AVERAGE) return null;
   return Math.round(settled.reduce((sum, d) => sum + d.steps, 0) / settled.length);
 }

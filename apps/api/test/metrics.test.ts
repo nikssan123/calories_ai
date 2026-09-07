@@ -102,6 +102,9 @@ describe('recordSteps', () => {
 describe('stepsSummary', () => {
   beforeEach(async () => {
     await recordSteps(user.id, [
+      // The day steps were switched on, and therefore a partial one — see
+      // `isSettled`. Seeded here so the days under test are ordinary ones.
+      day('2026-03-07', 40),
       day('2026-03-08', 4000),
       day('2026-03-09', 6000),
       day('2026-03-10', 800),
@@ -110,7 +113,12 @@ describe('stepsSummary', () => {
 
   it('returns the window oldest first', async () => {
     const { days } = await stepsSummary(user.id, '2026-03-10', 7);
-    expect(days.map((d) => d.local_date)).toEqual(['2026-03-08', '2026-03-09', '2026-03-10']);
+    expect(days.map((d) => d.local_date)).toEqual([
+      '2026-03-07',
+      '2026-03-08',
+      '2026-03-09',
+      '2026-03-10',
+    ]);
   });
 
   it('leaves today out of the average, because today is half a day', async () => {
@@ -120,10 +128,18 @@ describe('stepsSummary', () => {
     expect(average).toBe(5000);
   });
 
+  it('draws the switch-on day but does not average against it', async () => {
+    // It is real walking and belongs on the chart; it is a fraction of a day
+    // and does not belong in a figure other days get compared against.
+    const { days, average } = await stepsSummary(user.id, '2026-03-10', 7);
+    expect(days.map((d) => d.steps)).toContain(40);
+    expect(average).toBe(5000);
+  });
+
   it('skips days with no reading rather than counting them as zero', async () => {
     // A phone left on a desk did not walk nought steps; it did not report.
     const { days, average } = await stepsSummary(user.id, '2026-03-10', 30);
-    expect(days).toHaveLength(3);
+    expect(days).toHaveLength(4);
     expect(average).toBe(5000);
   });
 
@@ -142,6 +158,7 @@ describe('recentStepAverage', () => {
 
   it('averages the settled days once there are four', async () => {
     await recordSteps(user.id, [
+      day('2026-03-05', 4000),
       day('2026-03-06', 4000),
       day('2026-03-07', 4000),
       day('2026-03-08', 6000),
@@ -149,6 +166,22 @@ describe('recentStepAverage', () => {
       day('2026-03-10', 100),
     ]);
     expect(await recentStepAverage(user.id, '2026-03-10')).toBe(5000);
+  });
+
+  it('is not dragged under a band by the day steps were switched on', async () => {
+    // The case from a real Samsung S25 on 2026-09-07: Health Connect is written
+    // forward from the grant, so the first day held 56 where the phone's own
+    // tally read 8,570. Averaged in, [56, 8500, 8500, 8500] is 6,389 — `light`
+    // where the truth is `moderate`, and a target several hundred kcal short.
+    const fresh = await createUser();
+    await recordSteps(fresh.id, [
+      day('2026-03-07', 56),
+      day('2026-03-08', 8500),
+      day('2026-03-09', 8500),
+      day('2026-03-10', 8500),
+      day('2026-03-11', 8500),
+    ]);
+    expect(await recentStepAverage(fresh.id, '2026-03-12')).toBe(8500);
   });
 });
 
@@ -382,6 +415,7 @@ describe('steps in the target arithmetic', () => {
 describe('stepsContextFor', () => {
   it('gives the day and the week behind it in one read', async () => {
     await recordSteps(user.id, [
+      day('2026-03-05', 50), // switched on midway through; not averaged against
       day('2026-03-06', 9000),
       day('2026-03-07', 9000),
       day('2026-03-08', 10000),
@@ -395,6 +429,7 @@ describe('stepsContextFor', () => {
     // A reading at nine in the morning is a third of a day. Folding it into the
     // average would make "your usual" depend on when somebody looked.
     await recordSteps(user.id, [
+      day('2026-03-05', 50), // switched on midway through; not averaged against
       day('2026-03-06', 9000),
       day('2026-03-07', 9000),
       day('2026-03-08', 9000),
@@ -411,6 +446,7 @@ describe('stepsContextFor', () => {
 
   it('reaches the day summary, so a widget can draw a comparison', async () => {
     await recordSteps(user.id, [
+      day('2026-03-05', 50), // switched on midway through; not averaged against
       day('2026-03-06', 8000),
       day('2026-03-07', 8000),
       day('2026-03-08', 10000),
