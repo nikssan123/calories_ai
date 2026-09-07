@@ -11,6 +11,8 @@ import type {
   CoachClientWeek,
   CoachComment,
   CoachCommentRequest,
+  CoachDigest,
+  CoachDigestStats,
   CoachInvite,
   CoachInvitePreview,
   CoachInviteRequest,
@@ -938,6 +940,12 @@ export function createApiClient({
 
       /** Every client, sorted by who needs attention. The Monday screen. */
       roster: () => request<CoachRoster>('/coach/roster'),
+
+      /** This Monday's email, as it would go. Computed, not stored. */
+      digestPreview: () => request<CoachDigestStats>('/coach/digest/preview'),
+
+      /** The Mondays already sent, newest first. */
+      digests: () => request<{ digests: CoachDigest[] }>('/coach/digests'),
 
       invites: () => request<{ invites: CoachInvite[] }>('/coach/invites'),
 

@@ -7,6 +7,8 @@ import type {
   CoachClientWeek,
   CoachComment,
   CoachCommentRequest,
+  CoachDigest,
+  CoachDigestStats,
   CoachFlag,
   CoachInvite,
   CoachInvitePreview,
@@ -98,7 +100,7 @@ export async function ensureCoachAccount(userId: string, now = new Date()): Prom
 
 export async function updateCoachAccount(
   userId: string,
-  patch: { business_name?: string | null },
+  patch: { business_name?: string | null; notify_digest?: boolean },
 ): Promise<CoachAccount | null> {
   if (patch.business_name !== undefined) {
     await query(
@@ -106,7 +108,118 @@ export async function updateCoachAccount(
       [patch.business_name, userId],
     );
   }
+  if (patch.notify_digest !== undefined) {
+    await query(
+      'UPDATE coach_accounts SET notify_digest = $1, updated_at = now() WHERE user_id = $2',
+      [patch.notify_digest, userId],
+    );
+  }
   return getCoachAccount(userId);
+}
+
+// ---- The Monday digest -------------------------------------------------------
+
+/**
+ * A coach as the digest pass sees them: the clock they live by, the address,
+ * and whether they asked for the mail. Only coaches with somebody on the
+ * roster — a digest of nobody is a Monday email about nothing.
+ */
+export interface DigestCoach {
+  user_id: string;
+  timezone: string;
+  day_start_hour: number;
+  email: string | null;
+  notify_digest: boolean;
+}
+
+export async function coachTimezones(): Promise<string[]> {
+  const rows = await query<{ timezone: string }>(
+    `SELECT DISTINCT u.timezone
+       FROM coach_accounts a JOIN users u ON u.id = a.user_id
+      WHERE EXISTS (SELECT 1 FROM coach_clients c
+                     WHERE c.coach_user_id = a.user_id AND c.status = 'active')`,
+  );
+  return rows.map((row) => row.timezone);
+}
+
+export async function listDigestCoachesIn(timezones: readonly string[]): Promise<DigestCoach[]> {
+  if (timezones.length === 0) return [];
+  return query<DigestCoach>(
+    `SELECT a.user_id, u.timezone, u.day_start_hour, u.email, a.notify_digest
+       FROM coach_accounts a JOIN users u ON u.id = a.user_id
+      WHERE u.timezone = ANY($1::text[])
+        AND EXISTS (SELECT 1 FROM coach_clients c
+                     WHERE c.coach_user_id = a.user_id AND c.status = 'active')
+   ORDER BY a.created_at ASC`,
+    [timezones],
+  );
+}
+
+/**
+ * The digest, computed. The roster as it stands, with the week named: on a
+ * Monday morning every client's "seven days ending yesterday" is the same
+ * Monday-to-Sunday, which is what makes a snapshot of it worth keeping.
+ */
+export async function buildDigest(coachId: string, now = new Date()): Promise<CoachDigestStats> {
+  const current = await roster(coachId, now);
+  return {
+    week: { start: addDays(current.today, -7), end: addDays(current.today, -1) },
+    clients: current.clients,
+    seats: current.seats,
+  };
+}
+
+/**
+ * Writes the week's digest, once. Null means another tick got there first —
+ * the same bargain `saveNudge` makes — and the caller treats that as done.
+ */
+export async function saveDigest(
+  coachId: string,
+  weekStart: string,
+  stats: CoachDigestStats,
+): Promise<CoachDigest | null> {
+  const row = await queryOne<any>(
+    `INSERT INTO coach_digests (coach_user_id, week_start, stats)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (coach_user_id, week_start) DO NOTHING
+     RETURNING *`,
+    [coachId, weekStart, JSON.stringify(stats)],
+  );
+  return row ? toDigest(row) : null;
+}
+
+export async function digestForWeek(coachId: string, weekStart: string): Promise<CoachDigest | null> {
+  const row = await queryOne<any>(
+    'SELECT * FROM coach_digests WHERE coach_user_id = $1 AND week_start = $2',
+    [coachId, weekStart],
+  );
+  return row ? toDigest(row) : null;
+}
+
+export async function markDigestSent(coachId: string, weekStart: string): Promise<void> {
+  await query(
+    `UPDATE coach_digests SET sent_at = COALESCE(sent_at, now())
+      WHERE coach_user_id = $1 AND week_start = $2`,
+    [coachId, weekStart],
+  );
+}
+
+export async function listDigests(coachId: string, limit = 12): Promise<CoachDigest[]> {
+  const rows = await query<any>(
+    `SELECT * FROM coach_digests WHERE coach_user_id = $1
+   ORDER BY week_start DESC LIMIT $2`,
+    [coachId, Math.min(Math.max(limit, 1), 52)],
+  );
+  return rows.map(toDigest);
+}
+
+function toDigest(row: any): CoachDigest {
+  return {
+    week_start: String(row.week_start).slice(0, 10),
+    stats: (typeof row.stats === 'string' ? JSON.parse(row.stats) : row.stats) as CoachDigestStats,
+    sent_at: row.sent_at ? new Date(row.sent_at).toISOString() : null,
+    created_at: new Date(row.created_at).toISOString(),
+  };
 }
 
 /**
@@ -996,6 +1109,7 @@ function toAccount(row: any): CoachAccount {
     seats_carry_plus: seatsCarryPlus(row.plan),
     trial_ends_at: row.trial_ends_at ? new Date(row.trial_ends_at).toISOString() : null,
     billing_configured: env.stripe !== null,
+    notify_digest: row.notify_digest ?? true,
     created_at: new Date(row.created_at).toISOString(),
   };
 }

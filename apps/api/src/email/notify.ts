@@ -1,5 +1,11 @@
 import type { FastifyBaseLogger } from 'fastify';
-import { intlLocale, type Locale, type Nudge, type WeeklyReview } from '@ct/shared';
+import {
+  intlLocale,
+  type CoachDigestStats,
+  type Locale,
+  type Nudge,
+  type WeeklyReview,
+} from '@ct/shared';
 import { proseLocale } from '../ai/language.ts';
 import { env } from '../env.ts';
 import { issueToken, issueVerification, TOKEN_TTL_MINUTES } from '../services/tokens.ts';
@@ -263,6 +269,48 @@ export async function sendWeeklyReviewEmail(
       unsubscribeUrl: link.url,
       units: recipient.units,
       locale,
+    }),
+  });
+}
+
+// ---- The coach's Monday digest ---------------------------------------------
+
+export function coachDigestKey(coachId: string, weekStart: string): string {
+  return `coach_digest:${coachId}:${weekStart}`;
+}
+
+/**
+ * Monday, for a coach. Keyed on the week like the review is, and for the same
+ * reason: the hourly tick may ask as often as it likes.
+ *
+ * Gated on `notify_digest` rather than on the coach's own journal preference,
+ * which is a different switch about a different email. The footer link goes
+ * to the dashboard's settings page, where that switch lives.
+ */
+export async function sendCoachDigestEmail(
+  coachId: string,
+  digest: { week_start: string; stats: CoachDigestStats },
+  options: { notifyDigest: boolean },
+  logger?: FastifyBaseLogger,
+): Promise<SendResult> {
+  const recipient = await getEmailRecipient(coachId);
+  if (!recipient) return SKIPPED('no address');
+  if (!options.notifyDigest) return SKIPPED('opted out');
+  if (!recipient.verified) return SKIPPED('address not verified');
+
+  return sendEmail({
+    to: recipient.email,
+    userId: coachId,
+    logger,
+    idempotencyKey: coachDigestKey(coachId, digest.week_start),
+    bulk: true,
+    message: templates.coachDigest({
+      name: recipient.displayName,
+      stats: digest.stats,
+      range: formatRange(digest.stats.week.start, digest.stats.week.end, recipient.locale),
+      appUrl: env.appUrl,
+      settingsUrl: `${env.appUrl}/coach/settings`,
+      locale: recipient.locale,
     }),
   });
 }

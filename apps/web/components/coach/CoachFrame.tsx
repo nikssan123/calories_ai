@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
-import { LogOut, Settings, Ticket, Users, type LucideIcon } from 'lucide-react';
+import { LogOut, Mail, Settings, Ticket, Users, type LucideIcon } from 'lucide-react';
 import { useAuth } from '@/components/AuthGate';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/utils';
@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 const LINKS: readonly { href: string; label: string; Icon: LucideIcon; exact?: boolean }[] = [
   { href: '/coach', label: 'Roster', Icon: Users },
   { href: '/coach/invites', label: 'Invites', Icon: Ticket },
+  { href: '/coach/digest', label: 'Monday digest', Icon: Mail },
   { href: '/coach/settings', label: 'Settings', Icon: Settings },
 ];
 

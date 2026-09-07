@@ -5,8 +5,23 @@ import { authErrorFor } from './ai/providers/index.ts';
 import { generateNudge } from './ai/nudge.ts';
 import { generateWeeklyReview } from './ai/review.ts';
 import { forEachConcurrent } from './concurrency.ts';
-import { sendNudgeEmail, sendWeeklyReviewEmail, weeklyReviewKey } from './email/notify.ts';
+import {
+  coachDigestKey,
+  sendCoachDigestEmail,
+  sendNudgeEmail,
+  sendWeeklyReviewEmail,
+  weeklyReviewKey,
+} from './email/notify.ts';
 import { deliveryNeedsRetry } from './email/send.ts';
+import {
+  buildDigest,
+  coachTimezones,
+  digestForWeek,
+  expireTrials,
+  listDigestCoachesIn,
+  markDigestSent,
+  saveDigest,
+} from './services/coach.ts';
 import {
   nudgeReachedAPhone,
   sendAlertPush,
@@ -15,7 +30,7 @@ import {
 } from './push/notify.ts';
 import { dueAlert, saveAlert } from './services/alerts.ts';
 import { sweepBarcodeCache } from './services/barcode.ts';
-import { ALERT_JOB, NUDGE_JOB, REVIEW_JOB, withJobLock } from './services/job-lock.ts';
+import { ALERT_JOB, DIGEST_JOB, NUDGE_JOB, REVIEW_JOB, withJobLock } from './services/job-lock.ts';
 import { expirePlans } from './services/billing.ts';
 import { dueNudge, NUDGE_HOUR } from './services/nudges.ts';
 import { reviewForWeek, reviewWeekFor } from './services/reviews.ts';
@@ -28,7 +43,7 @@ import {
 } from './services/user.ts';
 import { unmeteredFor } from './ai/lane.ts';
 import { limitsFor } from './services/plans.ts';
-import { localDateFor, localPartsFor } from './time.ts';
+import { addDays, localDateFor, localPartsFor } from './time.ts';
 
 /**
  * The scheduled jobs: the weekly review, the nudges, and the alerts.
@@ -550,6 +565,95 @@ async function alertPass(now: Date, logger?: FastifyBaseLogger): Promise<TickRes
   return result;
 }
 
+/**
+ * The coach's Monday digest. See COACH.md §8.
+ *
+ * The fourth sibling, and the second that is arithmetic rather than inference:
+ * nothing here calls a model or reads a plan, so like the alert pass it runs
+ * on a deployment with no credentials at all. What it shares with the review
+ * pass is the clock — Monday morning, in the coach's own zone — and the shape
+ * of its idempotency: the digest is written once per coach per week, and every
+ * later tick finds the row and only asks whether the mail went.
+ */
+export const DIGEST_HOUR = 7;
+
+export async function runDueDigests(
+  now: Date = new Date(),
+  logger?: FastifyBaseLogger,
+): Promise<TickResult> {
+  const result = await withJobLock(DIGEST_JOB, () => digestPass(now, logger));
+  if (result === null) {
+    logger?.info('digest pass already running; skipped this tick');
+    return emptyTick();
+  }
+  return result;
+}
+
+async function digestPass(now: Date, logger?: FastifyBaseLogger): Promise<TickResult> {
+  const result: TickResult = emptyTick();
+
+  const zones: string[] = [];
+  for (const timezone of await coachTimezones()) {
+    try {
+      if (isDigestTime(now, timezone)) zones.push(timezone);
+    } catch (error) {
+      logger?.error({ err: error, timezone }, 'unreadable timezone on a coach account');
+    }
+  }
+  const due = await listDigestCoachesIn(zones);
+  result.considered = due.length;
+
+  await forEachConcurrent(due, PASS_WIDTH, async (coach) => {
+    const ctx = { timezone: coach.timezone, dayStartHour: coach.day_start_hour };
+    try {
+      if (!isDigestTime(now, ctx.timezone)) {
+        result.skipped += 1;
+        return;
+      }
+      const today = localDateFor(now, ctx);
+      const weekStart = addDays(today, -7);
+
+      // Already written this week — by an earlier tick — so the only question
+      // left is whether the mail went. Same shape as the review's retry.
+      const existing = await digestForWeek(coach.user_id, weekStart);
+      if (existing) {
+        result.skipped += 1;
+        if (await deliveryNeedsRetry(coachDigestKey(coach.user_id, weekStart))) {
+          logger?.info({ coachId: coach.user_id, week: weekStart }, 'coach digest still owed; retrying');
+          const sent = await sendCoachDigestEmail(coach.user_id, existing, { notifyDigest: coach.notify_digest }, logger);
+          if (sent.status === 'sent') await markDigestSent(coach.user_id, weekStart);
+        }
+        return;
+      }
+
+      const stats = await buildDigest(coach.user_id, now);
+      const saved = await saveDigest(coach.user_id, weekStart, stats);
+      if (!saved) {
+        // Another pass got there first — the primary key did its job.
+        result.skipped += 1;
+        return;
+      }
+      result.generated.push(coach.user_id);
+      logger?.info({ coachId: coach.user_id, week: weekStart }, 'coach digest written');
+
+      const sent = await sendCoachDigestEmail(coach.user_id, saved, { notifyDigest: coach.notify_digest }, logger);
+      if (sent.status === 'sent') await markDigestSent(coach.user_id, weekStart);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      result.failed.push({ userId: coach.user_id, error: message });
+      logger?.error({ err: error, coachId: coach.user_id }, 'coach digest failed');
+    }
+  });
+
+  return result;
+}
+
+/** Monday from seven, in the coach's own timezone. A window, like the review's. */
+export function isDigestTime(now: Date, timezone: string): boolean {
+  const { weekday, time } = localPartsFor(now, timezone);
+  return weekday === REVIEW_WEEKDAY && Number(time.slice(0, 2)) >= DIGEST_HOUR;
+}
+
 /** The hour it is where the reader is, 0-23. */
 function localHourFor(now: Date, timezone: string): number {
   return Number(localPartsFor(now, timezone).time.slice(0, 2));
@@ -584,6 +688,18 @@ export function tick(logger?: FastifyBaseLogger): void {
   runDueAlerts(now, logger).catch((error) => {
     logger?.error({ err: error }, 'alert scheduler tick failed');
   });
+  // Fourth and independent: a coach's Monday must not wait on anybody's review.
+  runDueDigests(now, logger).catch((error) => {
+    logger?.error({ err: error }, 'coach digest tick failed');
+  });
+  // A trial is a date, and the sweep is the same instrument `expirePlans` is.
+  expireTrials(now)
+    .then((n) => {
+      if (n > 0) logger?.info({ expired: n }, 'coach trials moved to solo');
+    })
+    .catch((error) => {
+      logger?.error({ err: error }, 'coach trial sweep failed');
+    });
   // Not a user's clock at all — one DELETE over a small shared table, riding a
   // tick that already exists rather than earning a scheduler of its own. Every
   // read checks its own row's age, so this is only about disk: it is safe to

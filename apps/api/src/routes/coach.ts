@@ -11,6 +11,7 @@ import {
 import {
   acceptInvite,
   addComment,
+  buildDigest,
   clientLinkFor,
   clientStatus,
   clientWeek,
@@ -22,6 +23,7 @@ import {
   getNotes,
   isCoach,
   listComments,
+  listDigests,
   listInvites,
   previewInvite,
   revokeLink,
@@ -80,6 +82,14 @@ export async function registerCoachRoutes(app: FastifyInstance) {
   // ---- The roster ----------------------------------------------------------
 
   app.get('/coach/roster', async (request) => roster(request.userId!));
+
+  // ---- The Monday digest ---------------------------------------------------
+
+  /** This week's digest as it would be sent, computed now and written nowhere. */
+  app.get('/coach/digest/preview', async (request) => buildDigest(request.userId!));
+
+  /** The Mondays that were sent, newest first. */
+  app.get('/coach/digests', async (request) => ({ digests: await listDigests(request.userId!) }));
 
   // ---- Invites -------------------------------------------------------------
 

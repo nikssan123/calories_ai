@@ -9,6 +9,7 @@ import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { daysUntil, shortDate } from './bits';
 
 /**
@@ -113,6 +114,26 @@ export function Settings() {
           ) : (
             <span className="text-footnote text-muted-foreground">Not taking cards on this server yet.</span>
           )}
+        </InsetRow>
+      </InsetGroup>
+
+      <InsetGroup title="Email" footer="The one email this dashboard sends on its own: who logged, who did not, whose protein slipped. Numbers only.">
+        <InsetRow className="justify-between">
+          <span>
+            <span className="text-body block font-bold">Monday digest</span>
+            <span className="text-footnote text-muted-foreground block">07:00 every Monday, in your timezone.</span>
+          </span>
+          <Switch
+            checked={account.notify_digest}
+            onCheckedChange={async (checked) => {
+              try {
+                setAccount(await api.coach.update({ notify_digest: checked }));
+              } catch (e) {
+                toast.error((e as Error).message);
+              }
+            }}
+            aria-label="Monday digest email"
+          />
         </InsetRow>
       </InsetGroup>
 

@@ -3765,6 +3765,8 @@ export const CoachAccount = z.object({
   trial_ends_at: z.string().nullable(),
   /** Whether this deployment can take a card at all. False hides the checkout. */
   billing_configured: z.boolean(),
+  /** The Monday email. On by default; the one thing the product sends a coach unasked. */
+  notify_digest: z.boolean().default(true),
   created_at: z.string(),
 });
 export type CoachAccount = z.infer<typeof CoachAccount>;
@@ -3905,8 +3907,29 @@ export type CoachCommentRequest = z.infer<typeof CoachCommentRequest>;
 
 export const CoachAccountUpdate = z.object({
   business_name: z.string().trim().max(120).nullable().optional(),
+  notify_digest: z.boolean().optional(),
 });
 export type CoachAccountUpdate = z.infer<typeof CoachAccountUpdate>;
+
+/**
+ * The Monday digest: the roster as it stood when the week turned, kept so the
+ * history page and the email agree forever. Numbers only — see COACH.md §8.
+ */
+export const CoachDigestStats = z.object({
+  week: z.object({ start: z.string(), end: z.string() }),
+  /** Sorted by attention, exactly as the roster was. */
+  clients: z.array(CoachRosterRow),
+  seats: z.object({ used: z.number().int(), limit: z.number().int() }),
+});
+export type CoachDigestStats = z.infer<typeof CoachDigestStats>;
+
+export const CoachDigest = z.object({
+  week_start: z.string(),
+  stats: CoachDigestStats,
+  sent_at: z.string().nullable(),
+  created_at: z.string(),
+});
+export type CoachDigest = z.infer<typeof CoachDigest>;
 
 export const CoachInviteRequest = z.object({
   email: z.string().email().max(254).nullable().optional(),

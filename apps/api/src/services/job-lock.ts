@@ -36,6 +36,8 @@ export const NUDGE_JOB = 'nudges';
  * is what stops both of them doing the work to find out.
  */
 export const ALERT_JOB = 'alerts';
+/** The coach's Monday digest. Arithmetic like the alerts, so the lock is for the second replica. */
+export const DIGEST_JOB = 'coach-digests';
 
 /**
  * Runs `fn` holding the named lock, or returns null without running it because

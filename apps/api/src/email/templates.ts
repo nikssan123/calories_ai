@@ -1,4 +1,4 @@
-import type { ReviewStats, UnitSystem } from '@ct/shared';
+import type { CoachDigestStats, CoachRosterRow, ReviewStats, UnitSystem } from '@ct/shared';
 import { formatNumber, formatWeightDelta, type Locale } from '@ct/shared';
 import { emailMessages, type EmailMessages } from './messages.ts';
 import { type Block, type RenderedEmail, renderEmail } from './layout.ts';
@@ -515,6 +515,98 @@ export function nudge(input: {
         { kind: 'button', label: m['nudge.button'], url: input.appUrl },
       ],
       unsubscribeUrl: input.unsubscribeUrl,
+    }),
+  };
+}
+
+/**
+ * The coach's Monday. See COACH.md §8.
+ *
+ * Numbers only, no prose from a model: the roster as it stood when the week
+ * turned, with the people who need a word at the top. English chrome for now
+ * — the coach product is sold in English, and the strings here are the
+ * dashboard's own rather than the catalogue's; `locale` still sets `lang` and
+ * the number formatting.
+ */
+export function coachDigest(input: {
+  name: string | null;
+  stats: CoachDigestStats;
+  range: string;
+  appUrl: string;
+  settingsUrl: string;
+  locale: Locale;
+}): EmailMessage {
+  const { stats, locale } = input;
+  const attention = stats.clients.filter((row) => row.flags.some((flag) => flag.severity !== 'info'));
+  const rest = stats.clients.filter((row) => !attention.includes(row));
+  const first = input.name?.trim().split(/\s+/)[0];
+
+  const line = (row: CoachRosterRow): string => {
+    const protein =
+      row.protein.average_g === null
+        ? 'no protein average'
+        : `${round(row.protein.average_g, locale)} of ${round(row.protein.target_g, locale)} g protein`;
+    const weight =
+      row.weight.weigh_ins === 0
+        ? 'no weigh-ins'
+        : row.weight.change_4w_kg === null
+          ? 'first weigh-ins'
+          : `${formatWeightDelta(row.weight.change_4w_kg, 'metric')} over 4 weeks`;
+    return `${row.days_logged}/7 logged · ${protein} · ${weight}`;
+  };
+  const reason = (row: CoachRosterRow): string => row.flags.map((flag) => flag.label).join(', ');
+  const nameOf = (row: CoachRosterRow): string => row.client.display_name ?? 'Unnamed';
+
+  const subject =
+    attention.length === 0
+      ? `Monday: everyone on track · ${stats.clients.length} on the roster`
+      : `Monday: ${attention.length} client${attention.length === 1 ? '' : 's'} need${attention.length === 1 ? 's' : ''} you · ${stats.clients.length} on the roster`;
+
+  const blocks: Block[] = [
+    { kind: 'text', text: first ? `Good morning, ${first}.` : 'Good morning.' },
+    ...(attention.length > 0
+      ? ([
+          { kind: 'subhead', text: 'Needs you today' },
+          {
+            kind: 'facts',
+            items: attention.map((row) => ({ label: nameOf(row), value: `${reason(row)} — ${line(row)}` })),
+          },
+        ] as Block[])
+      : ([{ kind: 'callout', title: 'Nobody needs chasing', text: 'Every client logged and stayed near target last week.' }] as Block[])),
+    ...(rest.length > 0
+      ? ([
+          { kind: 'subhead', text: 'Everyone else' },
+          {
+            kind: 'facts',
+            items: rest.map((row) => ({
+              label: nameOf(row),
+              value: row.flags.length > 0 ? `${reason(row)} — ${line(row)}` : line(row),
+            })),
+          },
+        ] as Block[])
+      : []),
+    { kind: 'button', label: 'Open the roster', url: `${input.appUrl}/coach` },
+    {
+      kind: 'note',
+      text: `${stats.seats.used} of ${stats.seats.limit} seats in use. Flags are the app's own signals: no log, protein short, weight stalled. Sorted by days logged, never by deficit.`,
+    },
+  ];
+
+  return {
+    template: 'coach_digest',
+    category: 'product',
+    unsubscribeUrl: input.settingsUrl,
+    ...renderEmail({
+      locale,
+      subject,
+      preheader:
+        attention.length === 0
+          ? 'Every client logged and stayed near target last week.'
+          : `${attention.map(nameOf).join(', ')} need a word this week.`,
+      heading: 'Your roster, this Monday',
+      subheading: input.range,
+      blocks,
+      unsubscribeUrl: input.settingsUrl,
     }),
   };
 }
