@@ -1501,6 +1501,21 @@ const workoutExercisesField = z
     };
   }
 
+  /*
+   * The photo-only lane: one tool, the same one the journal logs with, so an
+   * entry read off a plate here is indistinguishable from one the journal
+   * made. Everything else — corrections, history, the kitchen — is left out
+   * on purpose; see `ai/photo.ts` for what that buys and costs.
+   */
+  if (options.toolset === 'photo') {
+    const tools = [logFood];
+    return {
+      server: createSdkMcpServer({ name: SERVER_NAME, version: '1.0.0', tools }),
+      toolNames: tools.map((t) => `mcp__${SERVER_NAME}__${t.name}`),
+      tools,
+    };
+  }
+
   /**
    * "What can I make tonight?" — answered in the conversation.
    *

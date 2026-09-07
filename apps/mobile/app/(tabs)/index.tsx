@@ -574,11 +574,15 @@ export default function JournalScreen() {
         {
           key: localKey,
           role: 'user',
-          content: payload.text,
+          // A photo on its own carries no words: the default sentence the
+          // composer supplies is for the model, not for the reader's bubble.
+          content: payload.photoOnly ? '' : payload.text,
           photoUrl: payload.photoPreview,
           scanned: payload.scannedPreview,
         },
-        { key: replyKey, role: 'assistant', content: '', pending: true },
+        // The lane runs one tool and returns, so the wait says what it is
+        // doing from the start rather than after a stream event arrives.
+        { key: replyKey, role: 'assistant', content: '', pending: true, tool: payload.photoOnly ? 'log_food' : undefined },
       ]);
       setBusy(true);
       sending.current = true;
@@ -613,23 +617,36 @@ export default function JournalScreen() {
           }
         }
 
-        const result = await api.chatStream(
-          {
-            text: payload.text,
-            photo_key: photoKey,
-            photo_base64: photoKey ? undefined : payload.photoBase64,
-            photo_media_type: payload.photoMediaType,
-            photo_upload_failed: uploadFailed || undefined,
-            scanned: payload.scanned,
-            locale,
-          },
-          // The stream is a preview of the reply, never the record of it:
-          // `result` below is what actually lands in the conversation. So this
-          // only ever touches the one pending row, and nothing here has to be
-          // undone.
-          (event) =>
-            setBubbles((prev) => prev.map((b) => (b.key === replyKey ? applyEvent(b, event) : b))),
-        );
+        /*
+         * Two roads to the same answer. A photograph with nothing under it
+         * takes the photo-only lane: one tool, no transcript, no stream, and a
+         * `ChatResponse` at the end that this screen handles exactly as it
+         * handles the journal's. Anything with words goes through the turn.
+         */
+        const result =
+          payload.photoOnly && (photoKey || payload.photoBase64)
+            ? await api.logPhoto({
+                photo_key: photoKey,
+                photo_base64: photoKey ? undefined : payload.photoBase64,
+                photo_media_type: payload.photoMediaType ?? 'image/jpeg',
+              })
+            : await api.chatStream(
+                {
+                  text: payload.text,
+                  photo_key: photoKey,
+                  photo_base64: photoKey ? undefined : payload.photoBase64,
+                  photo_media_type: payload.photoMediaType,
+                  photo_upload_failed: uploadFailed || undefined,
+                  scanned: payload.scanned,
+                  locale,
+                },
+                // The stream is a preview of the reply, never the record of it:
+                // `result` below is what actually lands in the conversation. So this
+                // only ever touches the one pending row, and nothing here has to be
+                // undone.
+                (event) =>
+                  setBubbles((prev) => prev.map((b) => (b.key === replyKey ? applyEvent(b, event) : b))),
+              );
 
         setBubbles((prev) =>
           prev.map((b) => {

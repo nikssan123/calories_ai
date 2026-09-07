@@ -9,6 +9,7 @@ import {
   DefineExerciseRequest,
   ExerciseCategory,
   LogFoodRequest,
+  PhotoLogRequest,
   localeOf,
   Meal,
   METERS,
@@ -120,7 +121,8 @@ import { ModelBusyError } from '../ai/token-bucket.ts';
 import { addDays, dateRange, inferMeal, localDateFor } from '../time.ts';
 import { stripDataUrl } from './body.ts';
 import { openEventStream } from './sse.ts';
-import { BARCODE_BURST, CHAT_LIMIT, DELETE_ACCOUNT_LIMIT, REVIEW_BURST } from './limits.ts';
+import { BARCODE_BURST, CHAT_LIMIT, DELETE_ACCOUNT_LIMIT, PHOTO_BURST, REVIEW_BURST } from './limits.ts';
+import { logPhotoOnly } from '../ai/photo.ts';
 
 /**
  * The three ways a scan can fail, told apart.
@@ -492,6 +494,66 @@ export async function registerRoutes(app: FastifyInstance) {
    * conversation asked a question this answers, and inventing a message so the
    * journal has something to show would put words in the model's mouth.
    */
+  /**
+   * A photograph and nothing else, logged without the journal's turn.
+   *
+   * The same meter as a photo turn through `/chat` — it is the same vision
+   * call — at a fraction of the cost, because nothing but the plate-reading
+   * prompt and one tool goes with the picture. The response is a
+   * `ChatResponse`, so the phone draws the photo and the card exactly as it
+   * would have. See `ai/photo.ts` and COACH.md §10.
+   *
+   * The same three refusals as the fridge scanner, in the same order: no model
+   * on this deployment (503), the meter spent (402), the photo missing (400).
+   */
+  app.post('/entries/photo', { config: { rateLimit: PHOTO_BURST } }, async (request, reply) => {
+    const parsed = PhotoLogRequest.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: 'A photo is required' });
+    const userId = request.userId!;
+
+    const authError = authErrorFor(laneFor((await getUser(userId)).email));
+    if (authError) return reply.status(503).send({ error: authError });
+
+    let allowance;
+    try {
+      allowance = await requireAllowance(userId, request.plan, 'photo', request.unmetered);
+    } catch (error) {
+      if (error instanceof PlanLimitError) {
+        return reply.status(402).send({ error: error.message, allowance: error.allowance });
+      }
+      throw error;
+    }
+
+    const mediaType = parsed.data.photo_media_type;
+    let photo: Parameters<typeof logPhotoOnly>[1];
+    if (parsed.data.photo_key) {
+      const claimed = await claimPhoto(userId, parsed.data.photo_key, mediaType);
+      const url = claimed?.storageKey ? await presignPhotoRead(claimed.storageKey) : null;
+      if (!claimed || !url) {
+        return reply.status(400).send({ error: 'That photo upload could not be found.' });
+      }
+      photo = { mediaType, url, photoId: claimed.id };
+    } else {
+      const base64 = stripDataUrl(parsed.data.photo_base64!);
+      const saved = await savePhoto(userId, mediaType, base64);
+      photo = { mediaType, base64, photoId: saved.id };
+    }
+
+    try {
+      const turn = await logPhotoOnly(userId, photo);
+      return {
+        ...turn,
+        allowance: allowance.unlimited ? allowance : { ...allowance, used: allowance.used + 1 },
+      };
+    } catch (error) {
+      if (error instanceof ModelBusyError) {
+        return reply.status(429).send({ error: error.message });
+      }
+      request.log.error({ err: error }, 'photo lane failed');
+      return reply.status(502).send({ error: (error as Error).message });
+    }
+  });
+
   app.post('/entries/food', async (request, reply) => {
     const { userId, ...ctx } = await getUserContext(request.userId!);
     const parsed = LogFoodRequest.safeParse(request.body);

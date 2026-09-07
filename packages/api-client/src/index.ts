@@ -56,6 +56,7 @@ import type {
   PantryItemInput,
   PantryScanProposal,
   PantryUpdate,
+  PhotoLogRequest,
   PhotoMediaType,
   PhotoUploadTicket,
   Profile,
@@ -450,6 +451,20 @@ export function createApiClient({
       if (!response) throw new ApiError('The connection dropped before the reply arrived.', 502);
       return response;
     },
+
+    /**
+     * A photograph and nothing else, logged without the journal's turn.
+     *
+     * Answers exactly as `chat` does, so the caller draws the photo and the
+     * card the same way — but at a fraction of the cost, because only the
+     * plate-reading prompt goes with the picture. Send it for a photo with no
+     * words under it; a caption means a question, which is the journal's job.
+     */
+    logPhoto: (payload: PhotoLogRequest) =>
+      request<ChatResponse & { allowance: Allowance }>('/entries/photo', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
 
     history: (limit = 50) => request<{ messages: ChatMessage[] }>(`/chat/history?limit=${limit}`),
 

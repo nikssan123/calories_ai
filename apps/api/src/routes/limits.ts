@@ -59,6 +59,14 @@ export const CHAT_LIMIT = planLimit((l) => l.chatTurnsPerHour, '1 hour');
 export const REVIEW_BURST = { max: 3, timeWindow: '1 minute' };
 
 /**
+ * A burst guard on the photo-only lane, and not its allowance either: the
+ * allowance is the `photo` meter, counted off the cost ledger like the
+ * journal's photo turns are. What is left here is the loop guard — a phone
+ * re-sending the same plate because a spinner looked stuck.
+ */
+export const PHOTO_BURST = { max: 4, timeWindow: '1 minute' };
+
+/**
  * A burst guard on the fridge scanner, not the scan allowance.
  *
  * The allowance itself is a monthly meter counted off the cost ledger — see

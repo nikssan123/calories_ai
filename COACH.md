@@ -389,7 +389,38 @@ certification-directory outreach, coach-refers-coach credit.
 (`credits` gains `purchased_by`), more than one coach per client, a coach mode
 inside the phone app as an `expo-router` group, check-in forms.
 
-## 12. Open questions
+## 12. What is built (2026-09-07)
+
+The ladder in §11 was written for a solo evening schedule. It was built in
+one sitting instead, in six commits, each tested:
+
+| Stage | Commit | What |
+|---|---|---|
+| 1 | `feat(coach): the seat, the link…` | migration 045, `services/coach.ts`, `/coach/*` and `/me/coach` routes, the web door, 34 tests |
+| 2 | `feat(web): the coach's dashboard` | roster, client week, invites, settings, `/c/<code>`, coach sign-in in five languages |
+| 3 | `feat(mobile): the client's side…` | accept screen at `/c/[code]`, Today banner, Coach section under Settings, the coach bubble, push channel |
+| 4 | `feat(coach): the Monday digest` | scheduler pass, email, `/coach/digest`, the `notify_digest` switch; email redesigned on a `person` block |
+| 5 | `feat(coach): seats on a card` | Stripe Checkout, Portal, signed webhook, 14-day grace, migration 047 |
+| 6 | `feat(coach): the photo-only lane` | `POST /entries/photo`, the `photo` toolset, the phone routes a captionless photo through it |
+
+Verified by hand: the roster, client week, invites, settings and digest pages
+in Chrome against the seeded coach (`maria@example.com`, dev only); the
+deep link, accept screen, banner, scope toggles, coach bubble and stop-sharing
+on the iOS simulator.
+
+**Still to do before a coach sees it in production:**
+
+- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SEAT_PRICE_ID` on the
+  API, one graduated price in Stripe, and the webhook endpoint pointed at
+  `/billing/stripe`. Stripe Tax is not enabled in the checkout call yet.
+- A new store build for the `/c/*` app link (Android intent filter, iOS
+  associated domain via the existing AASA route).
+- Coach terms and a DPA at checkout (§13). The dashboard and the digest are
+  English only; the phone side is in all five languages.
+- The lapsed-grace copy on the roster and settings pages; the seat-full email
+  to the coach when a client's accept is refused.
+
+## 13. Open questions
 
 - **Legal.** A coach reading health data makes the coach a controller and
   daysofar a processor for that slice. Needs coach terms and a DPA at Stripe

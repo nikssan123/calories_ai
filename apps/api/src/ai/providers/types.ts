@@ -100,7 +100,11 @@ export type TurnKind =
   | 'nudge'
   | 'meal_plan';
 
-export type ToolsetName = 'journal' | 'kitchen';
+/**
+ * `photo` is the journal's `log_food` and nothing else: the photo-only lane
+ * in `ai/photo.ts`, which reads one plate with one tool and no transcript.
+ */
+export type ToolsetName = 'journal' | 'kitchen' | 'photo';
 
 /**
  * A model and how hard it should think. Lives here rather than in `client.ts`

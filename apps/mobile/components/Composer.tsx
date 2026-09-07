@@ -30,6 +30,13 @@ export interface ComposerPayload {
   /** The local file URI, so the sent bubble can show the photo immediately. */
   photoPreview?: string;
   /**
+   * A photograph with nothing typed under it. The journal sends these down
+   * the photo-only lane — one tool, no transcript, a fraction of the cost —
+   * and the default sentence in `text` is never shown or sent. See
+   * `api.logPhoto`.
+   */
+  photoOnly?: boolean;
+  /**
    * Packets scanned into this message, as codes rather than as panels.
    *
    * The figures are deliberately left behind: the API looks each code up in the
@@ -205,6 +212,7 @@ export function Composer({
       photoBase64: photo?.dataUrl,
       photoMediaType: photo?.mediaType,
       photoPreview: photo?.uri,
+      photoOnly: photo !== null && text.trim().length === 0 && scanned.length === 0,
       scanned:
         scanned.length > 0
           ? scanned.map((scan) => ({

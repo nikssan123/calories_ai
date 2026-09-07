@@ -2924,6 +2924,20 @@ export const ChatRequest = z.object({
 export type ChatRequest = z.infer<typeof ChatRequest>;
 
 /** What `POST /photos/upload-url` answers with. */
+/**
+ * A photograph with nothing typed under it, for `POST /entries/photo` — the
+ * photo-only lane. Same two ways to carry the picture as `ChatRequest`, and
+ * no `text`: a photo with words goes through the journal's full turn.
+ */
+export const PhotoLogRequest = z
+  .object({
+    photo_base64: z.string().min(1).optional(),
+    photo_key: z.string().max(200).optional(),
+    photo_media_type: PhotoMediaType.default('image/jpeg'),
+  })
+  .refine((body) => body.photo_base64 || body.photo_key, { message: 'A photo is required' });
+export type PhotoLogRequest = z.infer<typeof PhotoLogRequest>;
+
 export const PhotoUploadTicket = z.object({
   /** Null when the deployment stores photos on local disk: send bytes instead. */
   key: z.string().nullable(),
