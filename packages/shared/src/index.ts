@@ -3918,6 +3918,17 @@ export const AcceptInviteRequest = z.object({
 });
 export type AcceptInviteRequest = z.infer<typeof AcceptInviteRequest>;
 
+/** Who is behind a code, shown on the accept screen before anything is agreed. */
+export const CoachInvitePreview = z.object({
+  valid: z.boolean(),
+  reason: z.enum(['invalid', 'expired', 'used']).nullable(),
+  coach: z
+    .object({ display_name: z.string().nullable(), business_name: z.string().nullable() })
+    .nullable(),
+  expires_at: z.string().nullable(),
+});
+export type CoachInvitePreview = z.infer<typeof CoachInvitePreview>;
+
 /** What the phone shows under Settings, and null when nobody is coaching them. */
 export const ClientCoachStatus = z.object({
   link: z

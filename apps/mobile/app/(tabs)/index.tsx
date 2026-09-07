@@ -25,6 +25,7 @@ import type {
   Allowance,
   ChatAction,
   ChatMessage,
+  ChatRole,
   ChatStreamEvent,
   DaySummary,
   FoodItemInput,
@@ -63,11 +64,12 @@ import { onEntryRemoved } from '@/lib/removals';
 import { writeDaySnapshot } from '@/lib/snapshot';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
 import { useUnits } from '@/lib/units';
+import { CoachBubble } from '@/components/CoachBubble';
 
 /** Optimistic rows carry a local id until the server assigns the real one. */
 interface Bubble {
   key: string;
-  role: 'user' | 'assistant';
+  role: ChatRole;
   content: string;
   photoUrl?: string;
   pending?: boolean;
@@ -1012,7 +1014,7 @@ function strike(bubbles: Bubble[], entryId: string): Bubble[] {
 function toBubble(message: ChatMessage): Bubble {
   return {
     key: message.id,
-    role: message.role === 'coach' ? 'assistant' : message.role,
+    role: message.role,
     content: message.content,
     photoUrl: message.photo_url ? api.photoUrl(message.photo_url) : undefined,
     actions: message.actions,
@@ -1234,6 +1236,18 @@ const Row = memo(function Row({
             </View>
           )}
         </View>
+      </View>
+    );
+  }
+
+  /*
+   * A person, not the model. Drawn as its own shape — see `CoachBubble` — and
+   * before the wall, because a comment is never a refusal.
+   */
+  if (bubble.role === 'coach') {
+    return (
+      <View style={styles.assistantRow}>
+        <CoachBubble content={bubble.content} />
       </View>
     );
   }

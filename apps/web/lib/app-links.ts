@@ -27,4 +27,12 @@ export const ANDROID_PACKAGE = 'com.daysofar.app';
  * - `/` — the landing page. Claiming it means sharing the product with someone
  *   opens *your* app instead of showing them the pitch.
  */
-export const APP_LINK_PATHS = ['/progress', '/progress/*', '/today', '/today/*'] as const;
+export const APP_LINK_PATHS = [
+  '/progress',
+  '/progress/*',
+  '/today',
+  '/today/*',
+  // A coach's invite. The app opens on the accept screen; the web page under
+  // the same address shows the code and the store links to everyone else.
+  '/c/*',
+] as const;

@@ -35,6 +35,11 @@
               "scheme": "https",
               "host": "daysofar.com",
               "pathPrefix": "/today"
+            },
+            {
+              "scheme": "https",
+              "host": "daysofar.com",
+              "pathPrefix": "/c/"
             }
           ],
           "category": [

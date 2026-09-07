@@ -319,6 +319,10 @@ function Gate() {
           * as "this is a decision you can back out of".
           */}
         <Stack.Screen name="upgrade" options={{ animation: 'slide_from_bottom' }} />
+        {/* A coach's invite, from the link or from the code typed under
+            Settings. The same vertical entrance as the paywall, for the same
+            reason: it is asking for a decision, and one you can back out of. */}
+        <Stack.Screen name="c/[code]" options={{ animation: 'slide_from_bottom' }} />
         {/* No animation: it replaces the wall rather than covering it, and a
             second slide-from-bottom on a screen that is already at the bottom
             reads as a bounce. */}

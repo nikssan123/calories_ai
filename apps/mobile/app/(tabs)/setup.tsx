@@ -47,6 +47,7 @@ import { Material } from '@/components/Material';
 import { Skeleton } from '@/components/Skeleton';
 import { Switch } from '@/components/Switch';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { CoachSettings } from '@/components/CoachSettings';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { loadDay, localToday } from '@/lib/day';
@@ -551,6 +552,8 @@ export default function SetupScreen() {
 
         <PlanSettings />
 
+        <CoachSettings />
+
         <InsetGroup title={tr('setup.account')}>
           <InsetRow first>
             <Text style={[t.body, styles.label, { color: colors.foreground }]}>{tr('setup.signedInAs')}</Text>
@@ -739,6 +742,12 @@ function TargetCard({ day }: { day: DaySummary }) {
           <MacroChip label={tr('macro.carbs')} value={day.targets.carbs_g} color={colors.carbs} />
           <MacroChip label={tr('macro.fat')} value={day.targets.fat_g} color={colors.fat} />
         </View>
+
+        {/* Who set the number, when it was not the formula and not this person.
+            A coach's target is deliberately not silent — see COACH.md §7. */}
+        {day.targets.source === 'coach' && (
+          <Text style={[t.footnoteSemibold, { color: colors.caloriesText }]}>{tr('coach.setByCoach')}</Text>
+        )}
 
         {/*
           Under the number, not tucked into a footer nobody reaches.

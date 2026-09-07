@@ -32,6 +32,7 @@ import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { MacroBars } from '@/components/MacroBars';
 import { RepeatMeals } from '@/components/RepeatMeals';
 import { StepsCard } from '@/components/StepsCard';
+import { CoachBanner } from '@/components/CoachBanner';
 import { Skeleton } from '@/components/Skeleton';
 import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
@@ -723,6 +724,7 @@ export default function TodayScreen() {
         </View>
       ) : (
         <View style={styles.page}>
+          <CoachBanner />
           <View style={styles.summary}>
             <CalorieRing
               consumed={day.consumed.kcal}

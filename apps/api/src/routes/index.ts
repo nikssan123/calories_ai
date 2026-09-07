@@ -50,6 +50,7 @@ import { attachBody, recordBodyFailure, recordSupportEmail } from '../services/s
 import { deleteAccount } from '../services/admin.ts';
 import { proposeTargets } from '../services/adaptive.ts';
 import { insertMessage, listMessages } from '../services/chat.ts';
+import { markCommentsRead } from '../services/coach.ts';
 import { mealTemplates, repeatFoodEntry } from '../services/history.ts';
 import {
   claimPhoto,
@@ -451,7 +452,17 @@ export async function registerRoutes(app: FastifyInstance) {
 
   app.get('/chat/history', async (request) => {
     const limit = Number((request.query as any)?.limit ?? 50);
-    return { messages: await listMessages(request.userId!, Number.isFinite(limit) ? limit : 50) };
+    const messages = await listMessages(request.userId!, Number.isFinite(limit) ? limit : 50);
+    /*
+     * Opening the journal is reading it, and the coach's comments are drawn
+     * here — so this is where they become read. After the page is built rather
+     * than before, and not awaited: a receipt the coach sees on their dashboard
+     * must never be the reason the journal is slow to open.
+     */
+    if (messages.some((message) => message.role === 'coach')) {
+      void markCommentsRead(request.userId!).catch(() => {});
+    }
+    return { messages };
   });
 
   // ---- Today / Progress ----------------------------------------------------

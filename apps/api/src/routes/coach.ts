@@ -23,6 +23,7 @@ import {
   isCoach,
   listComments,
   listInvites,
+  previewInvite,
   revokeLink,
   roster,
   setClientTargets,
@@ -175,6 +176,11 @@ export async function registerCoachRoutes(app: FastifyInstance) {
   // ---- The client's side ---------------------------------------------------
 
   app.get('/me/coach', async (request) => clientStatus(request.userId!));
+
+  /** Who is behind a code, for the accept screen. Reveals a name, never a link. */
+  app.get('/me/coach/invite/:code', async (request) =>
+    previewInvite(String((request.params as any).code ?? '')),
+  );
 
   /**
    * Accepting a code. Every refusal is a 4xx with a `reason` the phone turns

@@ -246,6 +246,20 @@ describe('invites', () => {
     expect(response.json().reason).toBe('seats_full');
   });
 
+  it('names the coach behind a code before anything is agreed', async () => {
+    const invite = await createInvite(coach.id);
+    const fresh = await asClient('GET', `/me/coach/invite/${invite.code.toLowerCase()}`);
+    expect(fresh.statusCode).toBe(200);
+    expect(fresh.json()).toMatchObject({ valid: true, reason: null, coach: { display_name: 'Maria' } });
+
+    await acceptInvite(client.id, invite.code);
+    expect((await asClient('GET', `/me/coach/invite/${invite.code}`)).json()).toMatchObject({ valid: false, reason: 'used' });
+    expect((await asClient('GET', '/me/coach/invite/ZZZZ-ZZZZ')).json()).toMatchObject({ valid: false, reason: 'invalid', coach: null });
+
+    const stale = await createInvite(coach.id, null, new Date(Date.now() - 30 * 86_400_000));
+    expect((await asClient('GET', `/me/coach/invite/${stale.code}`)).json()).toMatchObject({ valid: false, reason: 'expired' });
+  });
+
   it('allows one coach at a time', async () => {
     await acceptInvite(client.id, (await createInvite(coach.id)).code);
     const rival = await createUser({ email: 'rival@example.com' });
@@ -443,6 +457,16 @@ describe('one client', () => {
 
     const empty = await asCoach('POST', `/coach/clients/${client.id}/comments`, { local_date: day, body: '  ' });
     expect(empty.statusCode).toBe(400);
+  });
+
+  it('marks a comment read when the client opens the journal', async () => {
+    await asCoach('POST', `/coach/clients/${client.id}/comments`, { local_date: addDays(today(), -1), body: 'Read me.' });
+    expect((await asCoach('GET', `/coach/clients/${client.id}/comments`)).json().comments[0].read_at).toBeNull();
+
+    await asClient('GET', '/chat/history');
+    // The receipt is written after the page is served, not before it.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect((await asCoach('GET', `/coach/clients/${client.id}/comments`)).json().comments[0].read_at).not.toBeNull();
   });
 
   it('keeps private notes private', async () => {

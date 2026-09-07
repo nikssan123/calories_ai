@@ -152,6 +152,12 @@ async function ensureChannels(): Promise<void> {
     name: 'Your subscription',
     importance,
   });
+  await Notifications.setNotificationChannelAsync('coach', {
+    // A person the reader chose, so it gets its own switch — somebody who
+    // silences the app's own nudges should still hear their coach.
+    name: 'Your coach',
+    importance,
+  });
 }
 
 /**

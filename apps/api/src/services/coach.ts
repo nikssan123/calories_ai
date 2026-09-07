@@ -9,6 +9,7 @@ import type {
   CoachCommentRequest,
   CoachFlag,
   CoachInvite,
+  CoachInvitePreview,
   CoachPlan,
   CoachRoster,
   CoachRosterRow,
@@ -215,6 +216,33 @@ export async function deleteInvite(coachId: string, inviteId: string): Promise<b
     [inviteId, coachId],
   );
   return row !== null;
+}
+
+/**
+ * What the accept screen shows before the button: who is asking. Nothing
+ * else about the coach — a code is not a session, and the name and the
+ * business are what the coach put on the invite by handing it out.
+ */
+export async function previewInvite(
+  rawCode: string,
+  now = new Date(),
+): Promise<CoachInvitePreview> {
+  const code = normaliseCode(rawCode);
+  if (code.length !== 8) return { valid: false, reason: 'invalid', coach: null, expires_at: null };
+  const row = await queryOne<any>(
+    `SELECT i.expires_at, i.accepted_at, u.display_name, a.business_name
+       FROM coach_invites i
+       JOIN users u ON u.id = i.coach_user_id
+       JOIN coach_accounts a ON a.user_id = i.coach_user_id
+      WHERE i.code = $1`,
+    [code],
+  );
+  if (!row) return { valid: false, reason: 'invalid', coach: null, expires_at: null };
+  const coach = { display_name: row.display_name ?? null, business_name: row.business_name ?? null };
+  const expires_at = new Date(row.expires_at).toISOString();
+  if (row.accepted_at) return { valid: false, reason: 'used', coach, expires_at };
+  if (new Date(row.expires_at) < now) return { valid: false, reason: 'expired', coach, expires_at };
+  return { valid: true, reason: null, coach, expires_at };
 }
 
 export type AcceptOutcome =

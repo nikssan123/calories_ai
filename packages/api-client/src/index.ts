@@ -12,6 +12,7 @@ import type {
   CoachComment,
   CoachCommentRequest,
   CoachInvite,
+  CoachInvitePreview,
   CoachInviteRequest,
   CoachRoster,
   CoachScope,
@@ -983,6 +984,10 @@ export function createApiClient({
     /** The client's side of the same link, under the ordinary session. */
     myCoach: {
       status: () => request<ClientCoachStatus>('/me/coach'),
+
+      /** Who a code belongs to, before accepting it. */
+      preview: (code: string) =>
+        request<CoachInvitePreview>(`/me/coach/invite/${encodeURIComponent(code)}`),
 
       accept: (code: string) =>
         request<ClientCoachStatus>('/me/coach/accept', {
