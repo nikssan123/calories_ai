@@ -266,6 +266,9 @@ export const de: Messages = {
   'today.stepsFooter':
     'Von deinem Handy gezählt. Schritte schärfen dein Ziel — sie werden nie dazugerechnet.',
   'today.stepsEnable': 'Meine Schritte zählen',
+  'today.stepsStarting': 'Die Zählung hat begonnen',
+  'today.stepsStartingHint':
+    'Dein Telefon zählt ab dem Moment, in dem du es erlaubt hast — deshalb ist hier noch nichts. Geh ein Stück, dann füllt es sich.',
   'today.stepsNoSource': 'Auf diesem Handy zählt noch nichts Schritte',
   'today.stepsNoSourceHint':
     'Health Connect speichert Schritte, die andere Apps aufzeichnen. Tippen, um die App-Liste zu öffnen, und dort Samsung Health oder Fitbit das Schreiben erlauben.',

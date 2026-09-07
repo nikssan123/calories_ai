@@ -265,6 +265,9 @@ export const es: Messages = {
   'today.stepsFooter':
     'Los cuenta tu teléfono. Los pasos afinan tu objetivo — nunca se le suman.',
   'today.stepsEnable': 'Contar mis pasos',
+  'today.stepsStarting': 'El conteo ha empezado',
+  'today.stepsStartingHint':
+    'Tu teléfono cuenta desde el momento en que le diste permiso, así que aún no hay nada. Da un paseo y se irá llenando.',
   'today.stepsNoSource': 'Nada cuenta pasos en este teléfono todavía',
   'today.stepsNoSourceHint':
     'Health Connect guarda los pasos que registran otras apps. Toca para abrir su lista de apps y permite que Samsung Health o Fitbit los escriban.',

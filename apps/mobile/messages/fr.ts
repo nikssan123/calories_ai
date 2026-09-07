@@ -273,6 +273,9 @@ export const fr: Messages = {
   'today.stepsFooter':
     'Comptés par ton téléphone. Les pas affinent ton objectif — ils ne s’y ajoutent jamais.',
   'today.stepsEnable': 'Compter mes pas',
+  'today.stepsStarting': 'Le comptage a commencé',
+  'today.stepsStartingHint':
+    'Ton téléphone compte à partir du moment où tu l’as autorisé, donc il n’y a encore rien. Marche un peu et ça se remplira.',
   'today.stepsNoSource': 'Rien ne compte encore tes pas sur ce téléphone',
   'today.stepsNoSourceHint':
     'Health Connect conserve les pas que d’autres applis enregistrent. Touche pour ouvrir sa liste d’applis, puis autorise Samsung Health ou Fitbit à les écrire.',

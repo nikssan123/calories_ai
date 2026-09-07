@@ -81,6 +81,80 @@ const SYNCED_KEY = 'steps-synced-at.v1';
  */
 const SYNC_EVERY_MS = 15 * 60 * 1000;
 
+/**
+ * When steps were switched on, so an empty store can be read correctly.
+ *
+ * A granted read that comes back with nothing means one of two things, and they
+ * want opposite screens. Telling them apart needs the one fact the store cannot
+ * supply: how long we have been allowed to look.
+ *
+ * On Android 14 and up the platform is itself the counter. Health Connect
+ * registers `StepSensorEventListener` on the hardware step counter the moment
+ * *any* app holds a Steps read permission and drops it when none does —
+ * observed on a Galaxy S25 on Android 16, 2026-09-07, where the listener
+ * appeared within a second of this app being granted, went away on revoke, and
+ * came back on re-grant, with no other health app permitted at any point. Which
+ * means the ordinary first minutes after somebody taps Allow are *empty by
+ * construction*: counting starts at the grant, from zero, and 60s sampling
+ * means the first record is a minute out at best.
+ *
+ * The old behaviour called that "nothing is counting steps on this phone yet"
+ * and sent the reader to Health Connect to install a writer — advice for a
+ * problem they did not have, at the one moment they were most likely to believe
+ * the feature was broken.
+ *
+ * Older phones, where Health Connect is an installable app rather than a
+ * platform module, really can grant the permission and hold nothing forever.
+ * That is what the warm-up window separates: empty *soon* after the grant is
+ * ordinary and resolves itself within a walk; empty long after it is a phone
+ * with no source.
+ */
+const GRANTED_KEY = 'steps-granted-at.v1';
+
+/**
+ * How long an empty store stays ordinary.
+ *
+ * Fifteen minutes, which is longer than any of the mechanisms need and is meant
+ * to be: the cost of waiting too long is a reassuring sentence shown to
+ * somebody whose steps are about to appear, and the cost of too short is
+ * telling somebody their phone cannot count when it is counting. Those are not
+ * the same mistake.
+ */
+const WARMUP_MS = 15 * 60 * 1000;
+
+/** Why a granted read came back with nothing. See `GRANTED_KEY`. */
+export type StepsEmpty = 'starting' | 'no-source';
+
+/**
+ * Remember the grant, once.
+ *
+ * Only ever written on the tap that grants, never on the look that finds an
+ * existing grant: somebody who allowed this months ago must not have today
+ * recorded as their start, or a writer that genuinely went away would read as
+ * a warm-up. A missing key therefore means "granted before this shipped, or
+ * granted in Settings rather than here", and is treated as long ago — the
+ * conservative way round, and the one that needs no migration.
+ */
+async function markStepsGranted(): Promise<void> {
+  try {
+    if ((await AsyncStorage.getItem(GRANTED_KEY)) === null) {
+      await AsyncStorage.setItem(GRANTED_KEY, String(Date.now()));
+    }
+  } catch {
+    /* A device that cannot remember this reads as `no-source`, as above. */
+  }
+}
+
+/** Which of the two empty states this is. */
+export async function stepsEmptyReason(): Promise<StepsEmpty> {
+  try {
+    const at = Number(await AsyncStorage.getItem(GRANTED_KEY));
+    return Number.isFinite(at) && at > 0 && Date.now() - at < WARMUP_MS ? 'starting' : 'no-source';
+  } catch {
+    return 'no-source';
+  }
+}
+
 export type StepPermission = 'granted' | 'denied' | 'undetermined' | 'unsupported';
 
 /**
@@ -178,11 +252,17 @@ export async function requestStepPermission(): Promise<StepPermission> {
   if (!hc) return 'unsupported';
   try {
     const granted = await hc.requestPermission([STEPS_PERMISSION]);
-    return granted.some(
-      (p) => 'recordType' in p && p.recordType === 'Steps' && p.accessType === 'read',
-    )
-      ? 'granted'
-      : 'denied';
+    if (
+      !granted.some(
+        (p) => 'recordType' in p && p.recordType === 'Steps' && p.accessType === 'read',
+      )
+    ) {
+      return 'denied';
+    }
+    /* Before returning, so the first read after this cannot beat it to the
+       store and mistake a warm-up for a phone with nothing counting. */
+    await markStepsGranted();
+    return 'granted';
   } catch {
     return 'unsupported';
   }

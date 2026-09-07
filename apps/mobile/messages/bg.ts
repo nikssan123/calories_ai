@@ -261,6 +261,9 @@ export const bg: Messages = {
   'today.stepsFooter':
     'Отчетени от телефона ти. Стъпките уточняват целта ти — никога не се добавят към нея.',
   'today.stepsEnable': 'Брой стъпките ми',
+  'today.stepsStarting': 'Броенето започна',
+  'today.stepsStartingHint':
+    'Телефонът брои от момента, в който разреши, така че още няма нищо. Разходи се и ще се попълни.',
   'today.stepsNoSource': 'Още нищо не брои стъпки на този телефон',
   'today.stepsNoSourceHint':
     'Health Connect пази стъпките, които други приложения записват. Докосни, за да отвориш списъка с приложения, и разреши на Samsung Health или Fitbit да ги записва.',

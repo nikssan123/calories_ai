@@ -63,6 +63,9 @@ export const en = {
      cheaper than answering it in support forever. */
   'today.stepsFooter': 'Counted by your phone. Steps sharpen your target — they are never added to it.',
   'today.stepsEnable': 'Count my steps',
+  'today.stepsStarting': 'Counting has started',
+  'today.stepsStartingHint':
+    'Your phone counts from the moment you allowed it, so there is nothing here yet. Take a walk and it will fill in.',
   'today.stepsNoSource': 'Nothing is counting steps on this phone yet',
   'today.stepsNoSourceHint':
     'Health Connect holds steps other apps record. Tap to open its app list, then allow Samsung Health or Fitbit to write them.',

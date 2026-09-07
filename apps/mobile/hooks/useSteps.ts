@@ -3,23 +3,28 @@ import type { Profile } from '@ct/shared';
 import {
   requestStepPermission,
   stepPermission,
+  stepsEmptyReason,
   syncSteps,
   type StepPermission,
+  type StepsEmpty,
 } from '@/lib/steps';
 
 export interface Steps {
   steps: number | null;
   permission: StepPermission | null;
   /**
-   * True once a granted read has come back with nothing at all.
+   * Why a granted read came back with nothing at all, when one did.
    *
-   * Android only in practice. Health Connect is a store rather than a counter,
-   * so a phone where nothing writes steps grants the permission and then has
-   * nothing to hand over — see `lib/steps.ts`. Null until a read has actually
-   * happened, because "we have not looked yet" and "we looked and it is empty"
-   * are different things to put on a screen.
+   * Android only in practice, and two states rather than one because they want
+   * opposite screens: `starting` is the ordinary minute after somebody taps
+   * Allow, when the platform has begun counting from zero and has nothing to
+   * show yet, and `no-source` is a phone where nothing will ever write. The
+   * distinction and how it is drawn are on `GRANTED_KEY` in `lib/steps.ts`.
+   *
+   * Null until a read has actually happened, because "we have not looked yet"
+   * and "we looked and it is empty" are different things to put on a screen.
    */
-  empty: boolean | null;
+  empty: StepsEmpty | null;
   enable: () => void;
 }
 
@@ -50,7 +55,7 @@ export function useSteps(
 ): Steps {
   const [permission, setPermission] = useState<StepPermission | null>(null);
   const [local, setLocal] = useState<number | null>(null);
-  const [empty, setEmpty] = useState<boolean | null>(null);
+  const [empty, setEmpty] = useState<StepsEmpty | null>(null);
 
   /*
    * Asked once per mount rather than once per focus. The answer only changes
@@ -74,11 +79,13 @@ export function useSteps(
     /* `syncSteps` decides for itself whether enough time has passed — see
      * `SYNC_EVERY_MS`. Calling it on every focus is the intent; sending on
      * every focus is not. */
-    void syncSteps(profile).then((result) => {
+    void (async () => {
+      const result = await syncSteps(profile);
       if (!live || result === null) return;
       if (result.today !== null) setLocal(result.today);
-      setEmpty(!result.hasWriter);
-    });
+      const reason = result.hasWriter ? null : await stepsEmptyReason();
+      if (live) setEmpty(reason);
+    })();
     return () => {
       live = false;
     };
@@ -96,7 +103,7 @@ export function useSteps(
       const result = await syncSteps(profile, { force: true });
       if (result === null) return;
       setLocal(result.today);
-      setEmpty(!result.hasWriter);
+      setEmpty(result.hasWriter ? null : await stepsEmptyReason());
     });
   }, [profile]);
 

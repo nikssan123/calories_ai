@@ -3,7 +3,7 @@ import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { haptics } from '@/lib/haptics';
 import { useT } from '@/lib/i18n';
 import { type as t, useColors } from '@/theme';
-import type { StepPermission } from '@/lib/steps';
+import type { StepPermission, StepsEmpty } from '@/lib/steps';
 
 /**
  * What the phone counted, said once and qualified once.
@@ -42,14 +42,14 @@ export function StepsCard({
   average: number | null;
   permission: StepPermission | null;
   /**
-   * True when we are allowed to read and there was nothing to read.
+   * Why we were allowed to read and there was nothing to read.
    *
-   * Android's own state, with no iOS equivalent — Health Connect is a store
-   * rather than a counter, so permission can be granted and the store still be
-   * empty because nothing on the phone writes steps into it. Null until a read
-   * has happened at all.
+   * Android's own state, with no iOS equivalent. `starting` is the ordinary
+   * first minutes after the grant — on Android 14 and up the platform begins
+   * counting *at* the grant, from zero — and `no-source` is a phone where
+   * nothing writes steps at all. Null until a read has happened.
    */
-  empty: boolean | null;
+  empty: StepsEmpty | null;
   onEnable: () => void;
   onOpenSettings: () => void;
 }) {
@@ -140,7 +140,32 @@ export function StepsCard({
    * yet, which is the ordinary state for the first seconds after a grant and
    * must not flash this row.
    */
-  if (empty === true) {
+  /*
+   * Counting has begun and has nothing to show yet.
+   *
+   * Not a problem, and above all not one to send anybody to Settings over: on
+   * Android 14 and up Health Connect starts recording at the grant, from zero,
+   * so the first minutes are empty for every reader who ever turns this on.
+   * Says so and offers nothing to tap, because there is nothing to do but walk.
+   */
+  if (empty === 'starting') {
+    return (
+      <InsetGroup title={tr('today.stepsTitle')}>
+        <InsetRow first>
+          <View style={styles.copy}>
+            <Text style={[t.bodySemibold, { color: colors.foreground }]}>
+              {tr('today.stepsStarting')}
+            </Text>
+            <Text style={[t.footnote, { color: colors.mutedForeground }]}>
+              {tr('today.stepsStartingHint')}
+            </Text>
+          </View>
+        </InsetRow>
+      </InsetGroup>
+    );
+  }
+
+  if (empty === 'no-source') {
     return (
       <InsetGroup title={tr('today.stepsTitle')}>
         <Pressable
