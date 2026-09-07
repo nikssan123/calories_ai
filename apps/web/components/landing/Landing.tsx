@@ -205,6 +205,11 @@ function Header({ start }: { start: Cta }) {
           <a href="#privacy" className="hover:text-foreground transition-colors">
             Your data
           </a>
+          {/* The one link on this page that leads to a sign-in: the coach's
+              door, which is the only one a visitor can actually open. */}
+          <a href="/login?coach=1" className="hover:text-foreground transition-colors">
+            For coaches
+          </a>
         </nav>
 
         {/*

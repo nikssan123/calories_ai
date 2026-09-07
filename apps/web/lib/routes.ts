@@ -36,3 +36,25 @@ export const LEGAL_ROUTES = ['/privacy', '/terms'] as const;
 export function isLegalRoute(pathname: string): boolean {
   return (LEGAL_ROUTES as readonly string[]).includes(pathname);
 }
+
+/**
+ * The coach's dashboard. See COACH.md §6.
+ *
+ * Its own shell rather than the journal's: a coach works on a laptop, reads a
+ * roster rather than a ring, and has no journal on the web to put a tab bar
+ * under. `AppFrame` hands these routes to `CoachFrame`.
+ */
+export function isCoachRoute(pathname: string): boolean {
+  return pathname === '/coach' || pathname.startsWith('/coach/');
+}
+
+/**
+ * An invite link, `/c/<code>`, opened from a message a coach sent.
+ *
+ * Public, and chrome-less for the same reason the emailed routes are: whoever
+ * opens it is a client with the app on their phone and no session in this
+ * browser, and the page's whole job is to hand them the code and the app.
+ */
+export function isInviteRoute(pathname: string): boolean {
+  return pathname.startsWith('/c/');
+}

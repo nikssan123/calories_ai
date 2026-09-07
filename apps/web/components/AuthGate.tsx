@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { usePathname, useRouter } from 'next/navigation';
 import type { AuthStatus, Profile } from '@ct/shared';
 import { api } from '@/lib/api';
-import { isEmailedRoute, isLegalRoute } from '@/lib/routes';
+import { isCoachRoute, isEmailedRoute, isInviteRoute, isLegalRoute } from '@/lib/routes';
 
 interface AuthValue {
   /** Whether there is a session at all. `profile` is null for other reasons too. */
@@ -12,9 +12,16 @@ interface AuthValue {
   profile: Profile | null;
   /**
    * Whether this account may open /admin — and, since the journal moved to the
-   * phone, whether it may open the web at all. Decided by the API, never here.
+   * phone, whether it may open the journal on the web at all. Decided by the
+   * API, never here.
    */
   isAdmin: boolean;
+  /**
+   * Whether this account may open /coach. The second door the web has, and
+   * for most of the people who come through it the only one: a coach who is
+   * not also an admin sees the roster and nothing else. See COACH.md §5.
+   */
+  isCoach: boolean;
   loading: boolean;
   refresh: () => Promise<void>;
   /**
@@ -31,6 +38,7 @@ const AuthContext = createContext<AuthValue>({
   authenticated: false,
   profile: null,
   isAdmin: false,
+  isCoach: false,
   loading: true,
   refresh: async () => {},
   adoptProfile: () => {},
@@ -45,10 +53,10 @@ export const useAuth = () => useContext(AuthContext);
  * which serves the landing page to a visitor and the journal to an account, and
  * so is the one place that reads `authenticated` for itself.
  *
- * "A signed-in user" here means an admin. The journal moved to the phone, and
- * the API will not open a browser session for anybody else — so the only way to
- * arrive holding one is to have had it before the change, or to have been an
- * admin until a moment ago. Both are handled in one place, below.
+ * "A signed-in user" here means an admin or a coach. The journal moved to the
+ * phone, and the API will not open a browser session for anybody else — so the
+ * only way to arrive holding one is to have had it before the change, or to
+ * have been an admin until a moment ago. Both are handled in one place, below.
  */
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus | null>(null);
@@ -63,10 +71,15 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
    * The three routes after it are reached from a link in an email, by someone
    * who by definition cannot sign in (or does not want to). Bouncing them to
    * `/login` would strip the token out of the URL on the way, which turns
-   * "reset my password" into a loop with no exit.
+   * "reset my password" into a loop with no exit. An invite link is the same
+   * shape: the person holding it has the app, not a browser session.
    */
   const isPublic =
-    onLogin || pathname === '/' || isEmailedRoute(pathname) || isLegalRoute(pathname);
+    onLogin ||
+    pathname === '/' ||
+    isEmailedRoute(pathname) ||
+    isLegalRoute(pathname) ||
+    isInviteRoute(pathname);
 
   const refresh = useCallback(async () => {
     try {
@@ -123,15 +136,21 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     router.replace('/');
   }, [router]);
 
+  const isAdmin = status?.is_admin ?? false;
+  const isCoach = status?.is_coach ?? false;
+  /** A coach with no admin panel to fall back to: the roster is their whole web. */
+  const coachOnly = isCoach && !isAdmin;
+
   /*
-   * A session in a browser that is not an admin's, ended rather than ignored.
+   * A session in a browser that is neither an admin's nor a coach's, ended
+   * rather than ignored.
    *
-   * There is nothing here for it to open: the web is the landing page and the
-   * panel, and every screen between them belongs to an account whose journal is
-   * now on a phone. Leaving the session alive and merely refusing to draw the
-   * app would strand it — signed in, with a "Sign in" link that bounces off
-   * `onLogin` below and comes straight back. So it is closed, which puts them on
-   * the landing page as the visitor they now are.
+   * There is nothing here for it to open: the web is the landing page, the
+   * panel and the roster, and every screen between them belongs to an account
+   * whose journal is now on a phone. Leaving the session alive and merely
+   * refusing to draw the app would strand it — signed in, with a "Sign in" link
+   * that bounces off `onLogin` below and comes straight back. So it is closed,
+   * which puts them on the landing page as the visitor they now are.
    *
    * Not on the emailed routes. Confirming an address or spending a reset link is
    * the one thing a member still does in a browser, and signing them out from
@@ -139,9 +158,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
    */
   const strandedSession =
     (status?.authenticated ?? false) &&
-    !(status?.is_admin ?? false) &&
+    !isAdmin &&
+    !isCoach &&
     !isEmailedRoute(pathname) &&
-    !isLegalRoute(pathname);
+    !isLegalRoute(pathname) &&
+    !isInviteRoute(pathname);
 
   useEffect(() => {
     if (loading || !status) return;
@@ -150,7 +171,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       return;
     }
     if (!status.authenticated && !isPublic) router.replace('/login');
-    if (status.authenticated && onLogin) router.replace('/');
+    if (status.authenticated && onLogin) router.replace(coachOnly ? '/coach' : '/');
     /*
      * Signed in, but the address is unproved.
      *
@@ -171,12 +192,31 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       !isLegalRoute(pathname)
     ) {
       router.replace('/verify');
+      return;
+    }
+    /*
+     * A coach who is not an admin has one place on the web, and every other
+     * signed-in screen — the journal at `/`, the admin panel — is either not
+     * theirs or would 404 underneath them. Sent to the roster rather than shown
+     * a page of failed requests. The public documents and the emailed routes
+     * stay reachable, as they are for everyone.
+     */
+    if (
+      status.authenticated &&
+      coachOnly &&
+      !isCoachRoute(pathname) &&
+      !isLegalRoute(pathname) &&
+      !isEmailedRoute(pathname) &&
+      !isInviteRoute(pathname) &&
+      !onLogin
+    ) {
+      router.replace('/coach');
     }
     // Deliberately no redirect away from the emailed routes for a signed-in
     // visitor: confirming an address or unsubscribing is just as valid with a
     // session as without one, and a reset link should still work on the laptop
     // where you are already logged in.
-  }, [loading, status, strandedSession, signOut, onLogin, isPublic, pathname, router]);
+  }, [loading, status, strandedSession, signOut, onLogin, isPublic, pathname, router, coachOnly]);
 
   const adoptProfile = useCallback((profile: Profile) => {
     setStatus((prev) => (prev ? { ...prev, profile } : prev));
@@ -193,7 +233,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       value={{
         authenticated: status?.authenticated ?? false,
         profile: status?.profile ?? null,
-        isAdmin: status?.is_admin ?? false,
+        isAdmin,
+        isCoach,
         loading,
         refresh,
         adoptProfile,

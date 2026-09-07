@@ -39,17 +39,18 @@ const SIGN_IN_ERRORS: Record<string, StringKey> = {
 
 /**
  * The way in to the web, which since the journal moved to the phone means the
- * way in to the admin panel.
+ * way in to the admin panel — and, with `?coach=1`, to the coach's roster.
  *
- * There is one exception, and it is the reason the sign-up half of this screen
- * still exists: a deployment with no accounts at all. Somebody standing in
- * front of a fresh server has no app to sign into and nobody to promote them,
- * so the API opens signup for exactly one account — and this form draws itself
- * for it. `signup_allowed` is the API's own answer to that question, so there
- * is nothing to decide here beyond which of the two shapes to render.
+ * Two doors on one screen. The admin's is the one this page has always been:
+ * sign in, and on a server with no accounts at all, create the first. The
+ * coach's is the newer one — see COACH.md §5 — and it is the only browser
+ * sign-up an ordinary server allows, because the account being made is for
+ * the dashboard rather than for a journal the web no longer keeps. Both doors
+ * send the same form; the coach's carries `intent: 'coach'`.
  */
 export default function LoginPage() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [coach, setCoach] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -69,6 +70,7 @@ export default function LoginPage() {
     // would need a Suspense boundary around the whole screen to say one word.
     const params = new URLSearchParams(window.location.search);
     setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    if (params.get('coach')) setCoach(true);
 
     /*
      * A failed Google sign-in comes back as a redirect carrying a reason, and
@@ -105,6 +107,7 @@ export default function LoginPage() {
         /* the form still works; the submit will surface any real problem */
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function submit(event: React.FormEvent) {
@@ -126,18 +129,39 @@ export default function LoginPage() {
            * receives from the app is in English.
            */
           locale: preferredLocale(),
+          ...(coach ? { intent: 'coach' as const } : {}),
         });
       } else {
-        await api.login({ email, password });
+        await api.login({ email, password, ...(coach ? { intent: 'coach' as const } : {}) });
       }
       await refresh();
-      router.replace('/');
+      router.replace(coach ? '/coach' : '/');
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
       setBusy(false);
     }
   }
+
+  const googleParams = new URLSearchParams();
+  if (timezone) googleParams.set('tz', timezone);
+  if (coach) googleParams.set('intent', 'coach');
+  const googleHref = `/api/auth/google/start${googleParams.size ? `?${googleParams.toString()}` : ''}`;
+
+  const title = coach
+    ? mode === 'signup'
+      ? t('auth.coachCreateTitle')
+      : t('auth.coachSignInTitle')
+    : mode === 'signup'
+      ? t('auth.createAccountTitle')
+      : t('auth.signIn');
+  const subtitle = coach
+    ? mode === 'signup'
+      ? t('auth.coachCreateSubtitle')
+      : t('auth.coachSignInSubtitle')
+    : mode === 'signup'
+      ? t('auth.createAccountSubtitle')
+      : t('auth.adminOnly');
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
@@ -157,13 +181,16 @@ export default function LoginPage() {
         </div>
 
         <div className="mb-8">
-          <Logo size={52} className="mb-5" />
-          <h1 className="text-large-title">
-            {mode === 'signup' ? t('auth.createAccountTitle') : t('auth.signIn')}
-          </h1>
-          <p className="text-muted-foreground mt-2 text-body">
-            {mode === 'signup' ? t('auth.createAccountSubtitle') : t('auth.adminOnly')}
-          </p>
+          <div className="mb-5 flex items-center gap-3">
+            <Logo size={52} />
+            {coach && (
+              <span className="text-eyebrow rounded-full bg-[color-mix(in_oklch,var(--calories),transparent_82%)] px-2.5 py-1 text-[var(--calories-text)]">
+                Coach
+              </span>
+            )}
+          </div>
+          <h1 className="text-large-title">{title}</h1>
+          <p className="text-muted-foreground mt-2 text-body">{subtitle}</p>
         </div>
 
         {googleEnabled && (
@@ -175,7 +202,7 @@ export default function LoginPage() {
               * Google's consent screen inside an XHR — which it will not do.
               */}
             <a
-              href={`/api/auth/google/start${timezone ? `?tz=${encodeURIComponent(timezone)}` : ''}`}
+              href={googleHref}
               className={cn(
                 buttonVariants({ variant: 'outline' }),
                 'h-12 w-full gap-2.5 rounded-2xl text-base font-extrabold',
@@ -198,7 +225,7 @@ export default function LoginPage() {
           {mode === 'signup' && (
             <div className="space-y-1.5">
               <Label htmlFor="name" className="text-footnote text-muted-foreground">
-                {t('auth.nameOptional')}
+                {coach ? t('auth.coachName') : t('auth.nameOptional')}
               </Label>
               <Input
                 id="name"
@@ -280,14 +307,56 @@ export default function LoginPage() {
         </form>
 
         {/*
-          * Where the accounts went.
-          *
-          * Under the form rather than above it, because it is not what this
-          * screen is for — it is for the one person in ten thousand who came
-          * here looking for their journal, and for whom a sign-in that refuses
-          * a password they know is right would otherwise be a dead end.
+          * The coach's door has two leaves — sign in, create — because a coach
+          * account is made here and nowhere else. The admin's has one, and the
+          * link between the two doors sits under the form on both.
           */}
-        {mode === 'signin' && <StoreLinks className="mt-8" />}
+        {coach ? (
+          <div className="text-footnote text-muted-foreground mt-8 space-y-2 text-center">
+            <p>
+              {mode === 'signup' ? t('auth.coachHaveAccount') : t('auth.coachNoAccount')}{' '}
+              <button
+                type="button"
+                onClick={() => setMode(mode === 'signup' ? 'signin' : 'signup')}
+                className="text-foreground font-semibold underline underline-offset-2"
+              >
+                {mode === 'signup' ? t('auth.signIn') : t('auth.coachCreate')}
+              </button>
+            </p>
+            <p>
+              <button
+                type="button"
+                onClick={() => {
+                  setCoach(false);
+                  setMode('signin');
+                  window.history.replaceState(null, '', '/login');
+                }}
+                className="underline underline-offset-2"
+              >
+                {t('auth.coachSwitchBack')}
+              </button>
+            </p>
+          </div>
+        ) : (
+          mode === 'signin' && (
+            <div className="mt-8 space-y-3">
+              <StoreLinks />
+              <p className="text-footnote text-muted-foreground text-center">
+                {t('auth.coachPrompt')}{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCoach(true);
+                    window.history.replaceState(null, '', '/login?coach=1');
+                  }}
+                  className="text-foreground font-semibold underline underline-offset-2"
+                >
+                  {t('auth.coachSwitch')}
+                </button>
+              </p>
+            </div>
+          )
+        )}
       </div>
     </div>
   );

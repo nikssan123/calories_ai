@@ -2,9 +2,10 @@
 
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/components/AuthGate';
+import { CoachFrame } from '@/components/coach/CoachFrame';
 import { Nav } from '@/components/Nav';
 import { Sidebar } from '@/components/Sidebar';
-import { isEmailedRoute, isLegalRoute } from '@/lib/routes';
+import { isCoachRoute, isEmailedRoute, isInviteRoute, isLegalRoute } from '@/lib/routes';
 
 /**
  * The app shell — or, for the landing page, nothing at all.
@@ -16,6 +17,9 @@ import { isEmailedRoute, isLegalRoute } from '@/lib/routes';
  *
  * The landing page wants none of that. It is a document rather than an app: full
  * bleed, scrolled by the window, with no chrome it did not draw itself.
+ *
+ * The coach's dashboard is a third shape, and its own component: a roster is
+ * read on a laptop, wants the whole width, and has no journal tabs to offer.
  */
 export function AppFrame({ children }: { children: React.ReactNode }) {
   const { authenticated } = useAuth();
@@ -24,9 +28,12 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   /*
    * The policy and the terms draw their own chrome for everybody, signed in or
    * not: they are documents, and this shell is a fixed-height box that does not
-   * scroll. Nothing else would be readable inside it.
+   * scroll. Nothing else would be readable inside it. An invite link is a
+   * document too — one card, one code, one button to the app.
    */
-  if (isLegalRoute(pathname)) return <>{children}</>;
+  if (isLegalRoute(pathname) || isInviteRoute(pathname)) return <>{children}</>;
+
+  if (isCoachRoute(pathname)) return <CoachFrame>{children}</CoachFrame>;
 
   /*
    * No chrome for a visitor with no session.

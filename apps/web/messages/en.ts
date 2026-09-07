@@ -241,6 +241,17 @@ export const en = {
    * the second is what a member who tried anyway is told — a correct password
    * that is refused reads as a broken server unless something names the reason.
    */
+  'auth.coachSignInTitle': 'Coach sign-in',
+  'auth.coachSignInSubtitle': 'Your roster, your invites, and what a seat carries. Clients keep using the app.',
+  'auth.coachCreateTitle': 'Create a coach account',
+  'auth.coachCreateSubtitle': 'A 14-day trial with five seats, no card. Your clients accept a code in the app they already have.',
+  'auth.coachName': 'Your name, as clients will see it',
+  'auth.coachCreate': 'Create a coach account',
+  'auth.coachHaveAccount': 'Already coaching here?',
+  'auth.coachNoAccount': 'New here?',
+  'auth.coachPrompt': 'Coaching someone?',
+  'auth.coachSwitch': 'Sign in as a coach',
+  'auth.coachSwitchBack': 'Not a coach? Administrator sign-in',
   'auth.adminOnly': 'Signing in here is for administrators — your journal lives in the app.',
   'auth.appOnly': 'That account signs in on the app. The web sign-in is for administrators.',
 
