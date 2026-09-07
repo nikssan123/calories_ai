@@ -418,8 +418,12 @@ on the iOS simulator.
   at `https://api.daysofar.com/billing/stripe` on the four checkout and
   subscription events (API version 2026-08-26.dahlia), and the default portal
   configuration allowing quantity changes (3–200) and cancel at period end.
-  Live mode needs the same three things again. Stripe Tax is not enabled in
-  the checkout call yet.
+  Live mode has the same three as of the same day: product
+  `prod_VDVJq5AVlxLrLI`, price `price_1UD4J02Hp2Pcfz1RN4BcyfAn`, webhook
+  `we_1UD4Ky2Hp2Pcfz1RXbQk11hk`, portal configuration
+  `bpc_1UD4OU2Hp2Pcfz1RslF0CFjE`. The prod compose file forwards the three
+  variables (pass-through, so absent stays absent). Stripe Tax is not
+  enabled in the checkout call yet.
 - A new store build for the `/c/*` app link (Android intent filter, iOS
   associated domain via the existing AASA route).
 - Coach terms and a DPA at checkout (§13). The dashboard and the digest are
