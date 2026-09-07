@@ -1,4 +1,5 @@
 import type {
+  Equipment,
   ExerciseCategory,
   ExerciseEntry,
   ExerciseTracks,
@@ -40,7 +41,7 @@ export async function listExerciseTypes(
   options: { withPrevious?: boolean } = {},
 ): Promise<ExerciseType[]> {
   const rows = await query<any>(
-    `SELECT id, name, category, emoji, tracks, muscles, aliases, user_id
+    `SELECT id, name, category, emoji, tracks, muscles, aliases, equipment, user_id
        FROM exercise_types
       WHERE (user_id IS NULL OR user_id = $1)
         AND ($2::text IS NULL OR category = $2)
@@ -59,7 +60,7 @@ export async function listExerciseTypes(
 /** The row with exactly this name, for deciding whether it is taken. */
 async function exactExerciseType(userId: string, name: string): Promise<ExerciseType | null> {
   const row = await queryOne<any>(
-    `SELECT id, name, category, emoji, tracks, muscles, aliases, user_id
+    `SELECT id, name, category, emoji, tracks, muscles, aliases, equipment, user_id
        FROM exercise_types
       WHERE lower(name) = lower($2) AND (user_id IS NULL OR user_id = $1)
    ORDER BY (user_id IS NOT NULL) DESC
@@ -99,7 +100,7 @@ export async function findExerciseType(
   const singular = wanted.endsWith('s') ? wanted.slice(0, -1) : wanted;
 
   const row = await queryOne<any>(
-    `SELECT id, name, category, emoji, tracks, muscles, aliases, user_id,
+    `SELECT id, name, category, emoji, tracks, muscles, aliases, equipment, user_id,
             (lower(name) = $2) AS exact
        FROM exercise_types
       WHERE (user_id IS NULL OR user_id = $1)
@@ -131,6 +132,8 @@ export interface DefineExerciseInput {
   met?: number | null;
   /** Primary first. Empty for anything that is not lifting. */
   muscles?: MuscleGroup[] | null;
+  /** What you pick up. Null when unknown, which is the ordinary case here. */
+  equipment?: Equipment | null;
 }
 
 /**
@@ -154,9 +157,9 @@ export async function defineExerciseType(input: DefineExerciseInput): Promise<Ex
   if (existing) return existing;
 
   const row = await queryOne<any>(
-    `INSERT INTO exercise_types (user_id, name, category, emoji, tracks, met, muscles)
-     VALUES ($1,$2,$3,$4,$5,$6,$7)
-     RETURNING id, name, category, emoji, tracks, muscles, aliases, user_id`,
+    `INSERT INTO exercise_types (user_id, name, category, emoji, tracks, met, muscles, equipment)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+     RETURNING id, name, category, emoji, tracks, muscles, aliases, equipment, user_id`,
     [
       input.userId,
       input.name.trim(),
@@ -165,6 +168,11 @@ export async function defineExerciseType(input: DefineExerciseInput): Promise<Ex
       input.tracks ?? CATEGORY_TRACKS[input.category],
       input.met ?? CATEGORY_MET[input.category],
       input.muscles ?? [],
+      // No fallback. Every other field here has a sensible default derived from
+      // the category; equipment does not — "strength" says nothing about
+      // whether you held a barbell — and a guessed glyph is indistinguishable
+      // from a correct one, so it would never be reported and never fixed.
+      input.equipment ?? null,
     ],
   );
   return toType(row);
@@ -465,7 +473,8 @@ export async function lastWorkout(
 
   const rows = await query<any>(
     `SELECT s.name, s.position, s.set_number, s.reps, s.weight_kg,
-            s.duration_sec, s.distance_m, s.type_id, t.emoji, t.tracks
+            s.duration_sec, s.distance_m, s.type_id, t.emoji, t.tracks,
+            t.muscles, t.equipment
        FROM exercise_sets s
        LEFT JOIN exercise_types t ON t.id = s.type_id
       WHERE s.entry_id = $1
@@ -483,6 +492,10 @@ export async function lastWorkout(
         type_id: row.type_id ?? null,
         tracks: (row.tracks as ExerciseTracks) ?? CATEGORY_TRACKS[category],
         emoji: row.emoji ?? CATEGORY_EMOJI[category],
+        // Both null for a set logged as free text, whose catalogue row was
+        // never found. The card draws the emoji in that case, as it always did.
+        muscles: (row.muscles as MuscleGroup[]) ?? [],
+        equipment: (row.equipment as Equipment | null) ?? null,
         sets: [],
       };
       byPosition.set(position, exercise);
@@ -625,7 +638,7 @@ const LABEL: Record<ExerciseCategory, string> = {
 
 async function typeById(userId: string, id: string): Promise<ExerciseType | null> {
   const row = await queryOne<any>(
-    `SELECT id, name, category, emoji, tracks, muscles, aliases, user_id
+    `SELECT id, name, category, emoji, tracks, muscles, aliases, equipment, user_id
        FROM exercise_types WHERE id = $1 AND (user_id IS NULL OR user_id = $2)`,
     [id, userId],
   );
@@ -641,6 +654,9 @@ function toType(row: any): ExerciseType {
     tracks: row.tracks,
     muscles: row.muscles ?? [],
     aliases: row.aliases ?? [],
+    // Null for every sport and class, and for anything a user invented — see
+    // GYM-CARD.md §2. The clients draw no glyph rather than guessing one.
+    equipment: row.equipment ?? null,
     custom: row.user_id !== null,
     // Filled in by `listExerciseTypes` when asked for, and left empty
     // everywhere else — most callers want a catalogue, not a history.

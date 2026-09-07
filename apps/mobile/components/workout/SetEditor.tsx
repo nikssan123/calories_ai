@@ -6,6 +6,8 @@ import { distanceUnit, loadStep, loadUnit } from '@ct/shared';
 import { haptics } from '@/lib/haptics';
 import { useT } from '@/lib/i18n';
 import { font, type as t, useColors } from '@/theme';
+import { BodyFigure } from './BodyFigure';
+import { EquipmentTag } from './EquipmentGlyph';
 import {
   blankSet,
   resize,
@@ -81,9 +83,24 @@ export function SetEditor({
   return (
     <View style={[styles.exercise, { borderTopColor: colors.border }]}>
       <View style={styles.head}>
-        <Text style={[t.bodySemibold, styles.name, { color: colors.foreground }]} numberOfLines={1}>
-          {exercise.emoji} {exercise.name}
-        </Text>
+        {/* The muscles it works, drawn rather than an emoji — see
+            GYM-CARD.md §1. Nothing to draw for a sport or a run, whose
+            `muscles` is empty, so those keep the glyph they always had. */}
+        {exercise.muscles.length > 0 ? (
+          <BodyFigure muscles={exercise.muscles} size={22} />
+        ) : (
+          <Text style={t.bodySemibold}>{exercise.emoji}</Text>
+        )}
+        <View style={styles.name}>
+          <Text style={[t.bodySemibold, { color: colors.foreground }]} numberOfLines={1}>
+            {exercise.name}
+          </Text>
+          {exercise.equipment !== null && (
+            <View style={styles.kit}>
+              <EquipmentTag kit={exercise.equipment} />
+            </View>
+          )}
+        </View>
         <Pressable
           onPress={onRemove}
           accessibilityRole="button"
@@ -470,8 +487,9 @@ function Plus({ color }: { color: string }) {
 
 const styles = StyleSheet.create({
   exercise: { borderTopWidth: 2, marginTop: 12, paddingTop: 12, gap: 8 },
-  head: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  name: { flex: 1, minWidth: 0 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  name: { flex: 1, minWidth: 0, gap: 3 },
+  kit: { flexDirection: 'row' },
   summary: {
     flexDirection: 'row',
     alignItems: 'center',

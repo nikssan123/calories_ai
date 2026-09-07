@@ -1097,6 +1097,7 @@ export async function registerRoutes(app: FastifyInstance) {
       tracks: parsed.data.tracks,
       met: parsed.data.met,
       muscles: parsed.data.muscles,
+      equipment: parsed.data.equipment,
     });
     return reply.status(201).send({ type });
   });

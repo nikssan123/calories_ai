@@ -6,6 +6,7 @@ import type { ExerciseType, MuscleGroup } from '@ct/shared';
 import { byMuscleGroup, exerciseMatches, muscleLabel } from '@ct/shared';
 import { useT } from '@/lib/i18n';
 import { Input } from '@/components/ui/input';
+import { BodyFigure } from './BodyFigure';
 
 /**
  * Finding the exercise you did. The web twin of the mobile picker, and the same
@@ -198,7 +199,13 @@ function Chip({
         known ? 'ring-primary ring-1' : ''
       }`}
     >
-      <span aria-hidden>{type.emoji}</span>
+      {/* The muscles it works, drawn — see GYM-CARD.md §1. A sport or a run
+          has no muscles to draw, so those keep the glyph they always had. */}
+      {type.muscles.length > 0 ? (
+        <BodyFigure muscles={type.muscles} size={16} />
+      ) : (
+        <span aria-hidden>{type.emoji}</span>
+      )}
       {type.name}
     </button>
   );

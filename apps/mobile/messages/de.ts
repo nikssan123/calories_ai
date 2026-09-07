@@ -1032,4 +1032,20 @@ export const de: Messages = {
   'common.loading': 'Wird geladen…',
   'common.today': 'Heute',
   'common.yesterday': 'Gestern',
+
+  /* The gym card, second pass. See GYM-CARD.md. */
+  'common.saving': 'Speichern…',
+  'workout.addExercises': '＋ Übungen hinzufügen',
+  'workout.pickExercises': 'Übungen hinzufügen',
+  'workout.anyExercise': 'egal welche — nur den Muskel',
+  'workout.orNameIt': 'Oder benenne sie',
+  'workout.pointAtIt': 'Oder zeig, was du trainiert hast',
+  'workout.front': 'Vorne',
+  'workout.back': 'Hinten',
+  'workout.backToBody': (muscle: string) => `‹ ${muscle}`,
+  'workout.addCount': (count: string) => `${count} hinzufügen`,
+  'workout.aboutLength': (min: string) => `≈ ${min} Min`,
+  'workout.exactLength': (min: string) => `${min} Min`,
+  'workout.tapToFix': 'geschätzt · zum Ändern tippen',
+  'workout.whatKind': 'Welche Art von Einheit?',
 };

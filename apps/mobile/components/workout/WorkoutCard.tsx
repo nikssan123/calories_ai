@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import type {
   ChatCard,
@@ -36,8 +37,10 @@ import {
   CATEGORY_EMOJI,
   CATEGORY_TRACKS,
   blankSet,
+  categoryOf,
   draftFromType,
   draftsFromHeard,
+  guessLength,
   toDraftSet,
   toExercise,
   withSessionLength,
@@ -49,16 +52,25 @@ import {
  *
  * What the app actually needs from a session is small: the burn is category,
  * bodyweight and time, and the reps and kilos contribute nothing to it. So the
- * complete answer here is a kind and a duration — two taps, one of them usually
- * already made by the agent — and the sets underneath are a training record
- * that is worth keeping and not worth demanding.
+ * complete answer here is a kind and a duration — and the sets underneath are a
+ * training record that is worth keeping and not worth demanding.
  *
- * The port that first landed this screen asked for the opposite: a free-text
- * field per exercise and two number pads per set, with none of the catalogue
- * the web has had all along. Typing "Bulgarian split squat" on a phone after
- * training is exactly the friction that stops people logging at all, so the
- * picker is here now, and `tracks` decides which fields a set gets rather than
- * every exercise being asked for reps and a weight.
+ * The second pass over this card (GYM-CARD.md) is about everything *around* the
+ * `3 × 10 @ 60` line, which was the only part that was working. Four questions
+ * were being asked in one chat bubble and only one of them was the user's:
+ *
+ * - **The kind is no longer asked.** `ExerciseType.category` has always been on
+ *   the row, so picking "Bench press" already said "strength" — `categoryOf`
+ *   reads it back. The chips survive only for a session with no exercises at
+ *   all, where there is nothing to read and the kind is the whole answer.
+ *   Deleting them also deletes the trap where changing kind wiped the grid.
+ * - **The length is a guess you can correct**, not a labelled row of seven
+ *   chips above the exercises. It prices the burn and nothing else.
+ * - **One "start from" row**, and only while the card is empty. It used to be
+ *   four offers competing for the same job, all on screen at once.
+ * - **The picker is a full-screen sheet that multi-selects.** It used to sit
+ *   inline and collapse after every pick, so four exercises meant four trips
+ *   back down the card past a submit button that kept moving.
  *
  * `message_id` travels with it so the server can rewrite this message's card
  * into a receipt. Without it, reopening the app shows a question that was
@@ -128,24 +140,21 @@ export function WorkoutCard({
   const locale = useLocale();
   const units = useUnits();
 
-  /* Held apart so the initial `detail` can read it without narrowing itself. */
-  const opensOn: ExerciseCategory = editing?.category ?? card?.suggested_category ?? 'strength';
-  const [category, setCategory] = useState<ExerciseCategory>(opensOn);
-  const [minutes, setMinutes] = useState<number | null>(editing?.duration_min ?? null);
-  /*
-   * Whether the exercises are on screen.
+  /**
+   * What the session is when its exercises cannot say.
    *
-   * True for a correction — the numbers being fixed are in there, and making
-   * somebody tap "add what you did" to reach their own sets would be hiding the
-   * entire reason the card reopened.
-   *
-   * True for everything that is not strength, which is the change: a sport, a
-   * class and a run are all *named things of a length*, so the picker naming
-   * them has to be the first thing on screen. Strength keeps the offer behind a
-   * tap, because a saved routine fills the whole card in one and the picker
-   * would be a second, longer way to do what the chips above already did.
+   * Still needed after the chips went, for two cases that are both real: a
+   * card that has nothing in it yet, and one that is only ever going to be a
+   * duration. `suggested_category` is the agent's read of the sentence, which
+   * is the best guess available before anybody has picked anything.
    */
-  const [detail, setDetail] = useState(editing !== undefined || opensOn !== 'strength');
+  const opensOn: ExerciseCategory = editing?.category ?? card?.suggested_category ?? 'strength';
+  /** Only consulted while the session is empty; `categoryOf` wins otherwise. */
+  const [fallbackCategory, setFallbackCategory] = useState<ExerciseCategory>(opensOn);
+  /** Null means "use the guess" — see `guessLength`. */
+  const [minutes, setMinutes] = useState<number | null>(editing?.duration_min ?? null);
+  const [showLength, setShowLength] = useState(false);
+  const [picking, setPicking] = useState(false);
   const [types, setTypes] = useState<ExerciseType[] | null>(null);
   const [last, setLast] = useState<LastWorkout | null>(null);
   const [routines, setRoutines] = useState<Routine[]>([]);
@@ -156,34 +165,49 @@ export function WorkoutCard({
   const [exercises, setExercises] = useState<DraftExercise[]>([]);
   const [saving, setSaving] = useState(false);
 
+  const category = categoryOf(exercises, fallbackCategory);
+  const empty = exercises.length === 0;
+
   /*
-   * Both reads fire on the kind, not on opening the detail section: the "same
-   * as last time" offer has to be on screen *before* anyone decides whether
-   * filling a grid is worth it, or it is an offer nobody ever sees.
+   * The catalogue, whole.
+   *
+   * No category argument any more, which is what lets the chips go: the picker
+   * has to be able to reach a sport from a card that opened on strength,
+   * because the card no longer knows which it is until something is picked.
+   * `listExerciseTypes` has always taken the filter as optional, so this costs
+   * one read of a couple of hundred rows and no server change.
    */
   useEffect(() => {
     let cancelled = false;
-    setTypes(null);
-    setLast(null);
-    setRoutines([]);
-    setRoutineId(null);
-    /*
-     * `withPrevious` is what makes tapping an exercise land on real numbers.
-     * One extra join on the server, no extra round trip here, and it is the
-     * difference between the picker handing back a filled card and a blank one.
-     */
     void api
-      .exerciseTypes(category, { withPrevious: true })
+      .exerciseTypes(undefined, { withPrevious: true })
       .then(({ types }) => !cancelled && setTypes(types))
       .catch(() => !cancelled && setTypes([]));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /*
+   * The two "start from" reads, on the kind the card opened on.
+   *
+   * Deliberately not on the derived category: these only ever appear while the
+   * session is empty, so the derived answer is `fallbackCategory` anyway, and
+   * re-reading them every time an exercise is added would be a round trip to
+   * refresh offers that are no longer on screen.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    setLast(null);
+    setRoutines([]);
     void api
-      .lastWorkout(category)
+      .lastWorkout(fallbackCategory)
       .then(({ workout }) => !cancelled && setLast(workout))
       .catch(() => {
         /* Never having done one is an ordinary answer; so is a failed lookup. */
       });
     void api
-      .routines(category)
+      .routines(fallbackCategory)
       .then(({ routines }) => !cancelled && setRoutines(routines))
       .catch(() => {
         /* Having saved none is the normal state for a new account. */
@@ -191,7 +215,7 @@ export function WorkoutCard({
     return () => {
       cancelled = true;
     };
-  }, [category]);
+  }, [fallbackCategory]);
 
   /*
    * The grid, filled in from the session being corrected.
@@ -199,9 +223,7 @@ export function WorkoutCard({
    * Waits for the catalogue because a draft needs `tracks` to know whether a
    * set is reps-and-a-load or a duration, and the stored set carries only its
    * name — the same match `lastWorkout` does on the server, done here because
-   * this is where the catalogue already is. Once, guarded by the ref: the
-   * effect re-runs whenever the kind changes, and re-seeding then would undo
-   * every edit made since.
+   * this is where the catalogue already is. Once, guarded by the ref.
    */
   const seeded = useRef(false);
   useEffect(() => {
@@ -220,43 +242,33 @@ export function WorkoutCard({
     const heard = card?.exercises ?? [];
     if (heard.length === 0) return;
     seeded.current = true;
-    setExercises(draftsFromHeard(heard, types, units, category));
-    setDetail(true);
-  }, [editing, card, types, units, category]);
+    setExercises(draftsFromHeard(heard, types, units, fallbackCategory));
+  }, [editing, card, types, units, fallbackCategory]);
 
   const filled = exercises.filter((e) => toExercise(e, units) !== null);
-  const counted = withSessionLength(exercises, units, minutes);
-  const canSend = (minutes !== null || counted.length > 0) && !saving;
+  /**
+   * The length that will actually be sent.
+   *
+   * A stated number always wins. Past that, a session with exercises in it gets
+   * the guess — it is only pricing a burn the app already reports as an
+   * estimate — and an empty one gets nothing, because then the duration is the
+   * entire content of the session and guessing it would be inventing the whole
+   * record.
+   */
+  const guessed = guessLength(routineOf(routineId, routines)?.duration_min ?? null, last?.duration_min ?? null);
+  const length = minutes ?? (empty ? null : guessed);
+  const counted = withSessionLength(exercises, units, length);
+  const canSend = (length !== null || counted.length > 0) && !saving;
   const today = new Date().getDay();
   /*
-   * Today's workout first, then whatever was done most recently.
-   *
-   * Read through `routineOnWeekday` rather than straight off `usual_weekday`,
-   * which is what this did until a week somebody filled in by hand turned out
-   * to change nothing here: they could declare Monday a push day, open the card
-   * on Monday, and still be handed whatever the history had happened to notice.
-   * A declared day now wins, exactly as it does on the week screen.
-   *
-   * Still only an ordering — nothing is preselected, because logging the wrong
-   * workout is a worse outcome than one extra tap.
+   * Today's workout first, then whatever was done most recently. Still only an
+   * ordering — nothing is preselected, because logging the wrong workout is a
+   * worse outcome than one extra tap.
    */
   const todays = routineOnWeekday(routines, today);
   const ordered = [...routines].sort(
     (a, b) => Number(b.id === todays?.id) - Number(a.id === todays?.id),
   );
-  /*
-   * Anything they can log, they can save.
-   *
-   * The bar used to be two exercises, on the reasoning that one is a fragment.
-   * That quietly excluded the whole fast path: a duration-only session is a
-   * complete answer to this card, and the people using it — "cardio, 45 min",
-   * three times a week — were the only ones never offered the one-tap repeat
-   * that saving exists to give them. The offer was reserved for the people
-   * already doing the most typing, which is exactly backwards.
-   *
-   * A session that is plainly a routine they own is still not worth offering to
-   * save twice, whether or not they got to it by tapping the chip.
-   */
   const alreadySaved =
     routineId !== null ||
     matchRoutine(
@@ -264,19 +276,10 @@ export function WorkoutCard({
       routines,
       ROUTINE_MATCH_LIKELY,
     ) !== null;
-  const offerSave = !alreadySaved && canSend;
+  const offerSave = !alreadySaved && canSend && !empty;
   // Named in the words they already use: somebody whose routines are "Push" and
   // "Pull" should not be offered "Chest & Triceps".
   const suggestedName =
-    /*
-     * A session that is one named thing is called that thing.
-     *
-     * `nameFromMuscles` cannot help here and does not pretend to: a sport, a
-     * class and a run all carry no muscles, so it falls through to the category
-     * and offers to save two hours of volleyball as "Sport" — which is both
-     * useless as a name and the exact word this change spent a migration
-     * getting out of the journal.
-     */
     exercises.length === 1 && exercises[0]!.muscles.length === 0
       ? exercises[0]!.name
       : filled.length > 0
@@ -284,36 +287,35 @@ export function WorkoutCard({
             filled.map((e) => e.muscles[0]).filter((m): m is MuscleGroup => m !== undefined),
             namingStyleOf(routines.map((r) => r.name)),
           )
-        : // Nothing to read muscles off. The kind is all this session is, so it
-          // is also the most it can honestly be called.
-          tr(CATEGORY_LABEL[category]);
+        : tr(CATEGORY_LABEL[category]);
 
   /**
-   * Adding one from the picker, opened on the last time they did it.
+   * Everything ticked in the picker, in one go.
    *
    * `draftFromType` reads `type.previous`, which arrived with the catalogue, so
-   * this is the moment the whole change pays out: tapping "Bench press" puts
-   * 3 × 10 @ 60 on screen rather than three empty rows.
+   * this is the moment the whole change pays out: tapping four exercises and
+   * Add puts four filled lines on screen rather than four empty grids.
    */
-  function addExercise(type: ExerciseType) {
+  function addExercises(picked: ExerciseType[]) {
     haptics.press();
-    setExercises((prev) => [...prev, draftFromType(type, units)]);
-    setDetail(true);
+    setExercises((prev) => [...prev, ...picked.map((type) => draftFromType(type, units))]);
+    setPicking(false);
   }
 
   /**
    * Teaching the app an exercise it has never heard of, and adding it.
    *
-   * The name and the kind are all that is sent; the server fills the rest in
-   * from the category. Somebody who has just failed to find their exercise
-   * wants it to exist, and asking them for a metabolic equivalent to get there
-   * is how a two-second fix becomes an abandoned form.
+   * The name and the kind are all that is sent; the server fills the rest in.
+   * Somebody who has just failed to find their exercise wants it to exist, and
+   * asking them for a metabolic equivalent is how a two-second fix becomes an
+   * abandoned form. The kind is the session's current one, which is the only
+   * thing the card knows about what they are doing.
    */
   async function defineExercise(name: string) {
     try {
       const { type } = await api.defineExercise({ name, category });
       setTypes((prev) => (prev ? [type, ...prev.filter((t) => t.id !== type.id)] : [type]));
-      addExercise(type);
+      addExercises([type]);
     } catch (e) {
       onError(messageOf(e, tr));
     }
@@ -324,26 +326,22 @@ export function WorkoutCard({
     if (!last) return;
     haptics.press();
     setExercises(
-      last.exercises.map((exercise) => {
-        const sets = exercise.sets.map((set) => toDraftSet(set, units));
-        return {
-          name: exercise.name,
-          typeId: exercise.type_id,
-          tracks: exercise.tracks,
-          emoji: exercise.emoji,
-          muscles: [],
-          sets,
-          // These *are* last time. Printing "last time" above numbers somebody
-          // is looking at as last time's would be saying it twice.
-          previous: [],
-        };
-      }),
+      last.exercises.map((exercise) => ({
+        name: exercise.name,
+        typeId: exercise.type_id,
+        tracks: exercise.tracks,
+        emoji: exercise.emoji,
+        muscles: exercise.muscles ?? [],
+        equipment: exercise.equipment ?? null,
+        category: fallbackCategory,
+        sets: exercise.sets.map((set) => toDraftSet(set, units)),
+        // These *are* last time. Printing "last time" above numbers somebody
+        // is looking at as last time's would be saying it twice.
+        previous: [],
+      })),
     );
-    // Whatever it actually was, not the nearest chip to it. Rounding a
-    // remembered two hours down to ninety minutes was how a long session
-    // quietly lost half an hour every time it was offered back.
+    // Whatever it actually was, not the nearest chip to it.
     if (minutes === null && last.duration_min !== null) setMinutes(last.duration_min);
-    setDetail(true);
   }
 
   /**
@@ -368,18 +366,21 @@ export function WorkoutCard({
           tracks: exercise.tracks,
           emoji: exercise.emoji,
           muscles: exercise.muscles,
-          sets: Array.from({ length: wanted }, (_, i) => previous[i] ?? { ...(previous.at(-1) ?? blankSet()) }),
+          equipment: exercise.equipment ?? null,
+          category: routine.category ?? fallbackCategory,
+          sets: Array.from(
+            { length: wanted },
+            (_, i) => previous[i] ?? { ...(previous.at(-1) ?? blankSet()) },
+          ),
           previous,
         };
       }),
     );
     // A routine that is only a length carries it here: there is no grid to open
-    // and the duration *is* the workout, so tapping the chip has to fill it in
-    // or the chip does nothing at all.
+    // and the duration *is* the workout.
     if (routine.duration_min !== null) setMinutes(routine.duration_min);
     // Saving one of these again would be saving what it already is.
     setSaveAs(null);
-    setDetail(routine.exercises.length > 0);
   }
 
   async function send() {
@@ -388,13 +389,12 @@ export function WorkoutCard({
       const payload = {
         category,
         exercises: counted,
-        duration_min: minutes,
+        duration_min: length,
         routine_id: routineId,
         /*
          * A correction keeps the session where it happened. Falling through to
          * now would quietly move Tuesday's session onto Thursday because
-         * somebody fixed a typo in it — and on a day boundary it would move it
-         * off the day whose totals it belongs to.
+         * somebody fixed a typo in it.
          */
         performed_at: editing?.performed_at ?? card?.performed_at,
       };
@@ -405,17 +405,16 @@ export function WorkoutCard({
 
       /*
        * Saving the routine comes after the session and never instead of it. A
-       * failure here must not cost them the workout, which is the thing they
-       * actually came to record.
+       * failure here must not cost them the workout.
        */
       if (saveAs && saveAs.trim().length > 0) {
         await api
           .saveRoutine({
-          name: saveAs.trim(),
-          category,
-          from_entry_id: entry.id,
-          duration_min: minutes,
-        })
+            name: saveAs.trim(),
+            category,
+            from_entry_id: entry.id,
+            duration_min: length,
+          })
           .catch(() => onError(tr('workout.routineNotSavedMobile')));
       }
 
@@ -430,30 +429,6 @@ export function WorkoutCard({
 
   const chosen = new Set(exercises.map((e) => e.typeId));
 
-  const detailBlock = detail ? (
-    <>
-      {exercises.map((exercise, i) => (
-        <SetEditor
-          key={`${exercise.typeId ?? exercise.name}-${i}`}
-          exercise={exercise}
-          units={units}
-          onChange={(next) =>
-            setExercises((prev) => prev.map((e, j) => (j === i ? next : e)))
-          }
-          onRemove={() => setExercises((prev) => prev.filter((_, j) => j !== i))}
-        />
-      ))}
-      <View style={[styles.picker, { borderTopColor: colors.border }]}>
-        <ExercisePicker
-          types={types}
-          chosen={chosen}
-          onPick={addExercise}
-          onDefine={(name) => void defineExercise(name)}
-        />
-      </View>
-    </>
-  ) : null;
-
   return (
     <Chunk
       contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
@@ -467,61 +442,138 @@ export function WorkoutCard({
         </Text>
       )}
 
-      <View style={styles.categories}>
-        {EXERCISE_CATEGORIES.map((key) => {
-          const on = category === key;
-          return (
+      {/*
+        One row of "you probably did this", and only while there is nothing to
+        undo by tapping it. This used to be four separate offers — routine
+        chips under their own heading, "same as Tuesday", "add what you did",
+        and the picker's own recents — all competing for one job and all on
+        screen at once, which is most of why the card read as a form.
+      */}
+      {empty && (ordered.length > 0 || last !== null) && (
+        <View style={styles.offers}>
+          {ordered.map((routine) => (
             <Pressable
-              key={key}
-              onPress={() => {
-                haptics.press();
-                setCategory(key);
-                // The grid belonged to the old kind: a leg day's exercises are
-                // not a swim's, and carrying them across would submit work
-                // nobody did.
-                setExercises([]);
-                setDetail(key !== 'strength');
-                setRoutineId(null);
-                setSaveAs(null);
-              }}
+              key={routine.id}
+              onPress={() => openRoutine(routine)}
               accessibilityRole="button"
-              accessibilityState={{ selected: on }}
               style={({ pressed }) => [
-                styles.category,
+                styles.chip,
                 {
-                  backgroundColor: on ? colors.primary : colors.muted,
-                  borderColor: on ? 'transparent' : colors.border,
+                  backgroundColor: colors.muted,
+                  borderColor: colors.border,
                   opacity: pressed ? 0.7 : 1,
                 },
               ]}
             >
-              <Text
-                style={[
-                  styles.categoryLabel,
-                  { color: on ? colors.primaryForeground : colors.mutedForeground },
-                ]}
-              >
-                {tr(CATEGORY_LABEL[key])}
+              <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+                {routine.emoji} {routine.name}
+                {routine.id === todays?.id ? ` ${tr('workout.today')}` : ''}
               </Text>
             </Pressable>
-          );
-        })}
-      </View>
+          ))}
+          {last && (
+            <Pressable
+              onPress={repeatLast}
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                styles.chip,
+                {
+                  backgroundColor: colors.muted,
+                  borderColor: colors.border,
+                  opacity: pressed ? 0.7 : 1,
+                },
+              ]}
+            >
+              <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+                {tr('workout.sameAsShort')(when(last.local_date, locale, tr))}
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      )}
 
-      {/* Their own workouts, before anything the app came up with. One tap
-          fills the entire grid, which is the point of having saved them. */}
-      {ordered.length > 0 && (
+      {exercises.map((exercise, i) => (
+        <SetEditor
+          key={`${exercise.typeId ?? exercise.name}-${i}`}
+          exercise={exercise}
+          units={units}
+          onChange={(next) => setExercises((prev) => prev.map((e, j) => (j === i ? next : e)))}
+          onRemove={() => setExercises((prev) => prev.filter((_, j) => j !== i))}
+        />
+      ))}
+
+      <Pressable
+        onPress={() => {
+          haptics.press();
+          setPicking(true);
+        }}
+        accessibilityRole="button"
+        hitSlop={6}
+        style={({ pressed }) => [styles.addRow, { opacity: pressed ? 0.6 : 1 }]}
+      >
+        <Text style={[t.footnoteBold, { color: colors.exerciseText }]}>
+          {tr('workout.addExercises')}
+        </Text>
+      </Pressable>
+
+      {/*
+        The length, demoted.
+        Its only job is pricing the burn — the sets contribute nothing to it —
+        so it stopped being the loudest control on the card. With exercises in
+        the session it is a guess printed the way this app prints every other
+        estimate; with none, it is the whole answer and has to be asked for.
+      */}
+      <Pressable
+        onPress={() => {
+          haptics.press();
+          setShowLength((was) => !was);
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={tr('workout.howLong')}
+        hitSlop={6}
+        style={({ pressed }) => [styles.lengthRow, { opacity: pressed ? 0.6 : 1 }]}
+      >
+        <Text style={[styles.lengthValue, { color: colors.mutedForeground }]}>
+          {length === null
+            ? tr('workout.howLong')
+            : minutes === null
+              ? tr('workout.aboutLength')(String(length))
+              : tr('workout.exactLength')(String(length))}
+        </Text>
+        {length !== null && minutes === null && (
+          <Text style={[styles.lengthHint, { color: colors.mutedForeground }]}>
+            {tr('workout.tapToFix')}
+          </Text>
+        )}
+      </Pressable>
+
+      {(showLength || (empty && length === null)) && (
+        <Duration minutes={minutes} onChange={setMinutes} />
+      )}
+
+      {/*
+        The kind, asked only when nothing can answer it.
+        `categoryOf` reads it off the exercises the moment there is one, which
+        is what deleted this row from the top of the card — but a session that
+        is only a duration has nothing to read, and the burn depends on it.
+      */}
+      {empty && (
         <>
           <Text style={[t.footnote, styles.label, { color: colors.mutedForeground }]}>
-            {tr('workout.yourWorkouts')}
+            {tr('workout.whatKind')}
           </Text>
           <View style={styles.chips}>
-            {ordered.map((routine) => {
-              const on = routineId === routine.id;
+            {EXERCISE_CATEGORIES.map((key) => {
+              const on = fallbackCategory === key;
               return (
                 <Pressable
-                  key={routine.id}
-                  onPress={() => openRoutine(routine)}
+                  key={key}
+                  onPress={() => {
+                    haptics.press();
+                    setFallbackCategory(key);
+                    setRoutineId(null);
+                    setSaveAs(null);
+                  }}
                   accessibilityRole="button"
                   accessibilityState={{ selected: on }}
                   style={({ pressed }) => [
@@ -535,67 +587,17 @@ export function WorkoutCard({
                 >
                   <Text
                     style={[
-                      t.footnoteSemibold,
+                      styles.categoryLabel,
                       { color: on ? colors.primaryForeground : colors.mutedForeground },
                     ]}
                   >
-                    {routine.emoji} {routine.name}
-                    {routine.id === todays?.id && !on ? tr('workout.today') : ''}
+                    {tr(CATEGORY_LABEL[key])}
                   </Text>
                 </Pressable>
               );
             })}
           </View>
         </>
-      )}
-
-      {/*
-        Which half of the card leads, decided by the kind of session.
-
-        A sport or a class *is* its length — "two hours of volleyball" is the
-        whole answer — so the question comes first and the picker sits above it
-        naming which sport, one tap. A strength session is the opposite: the
-        exercises are the session and the duration is the throwaway that prices
-        the burn, so it stays where it was and the grid follows it.
-      */}
-      {category !== 'strength' && detailBlock}
-
-      <Text style={[t.footnote, styles.label, { color: colors.mutedForeground }]}>{tr('workout.howLong')}</Text>
-      <Duration minutes={minutes} onChange={setMinutes} />
-
-      {category === 'strength' && detailBlock}
-
-
-      {!detail && (
-        <View style={styles.offers}>
-          <Pressable
-            onPress={() => {
-              haptics.press();
-              setDetail(true);
-            }}
-            accessibilityRole="button"
-            hitSlop={6}
-            style={({ pressed }) => [styles.quiet, { opacity: pressed ? 0.6 : 1 }]}
-          >
-            <Plus color={colors.mutedForeground} />
-            <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-              {tr('workout.addWhatYouDid')}
-            </Text>
-          </Pressable>
-
-          {last && (
-            <Pressable
-              onPress={repeatLast}
-              accessibilityRole="button"
-              hitSlop={6}
-              style={({ pressed }) => [styles.quiet, { opacity: pressed ? 0.6 : 1 }]}
-            >
-              <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-                {tr('workout.sameAsShort')(when(last.local_date, locale, tr))}
-              </Text>
-            </Pressable>
-          )}
-        </View>
       )}
 
       {offerSave &&
@@ -610,7 +612,7 @@ export function WorkoutCard({
             style={({ pressed }) => [styles.saveOffer, { opacity: pressed ? 0.6 : 1 }]}
           >
             <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-              ⭑ save this as “{suggestedName}”
+              {tr('workout.saveThisAs')(suggestedName)}
             </Text>
           </Pressable>
         ) : (
@@ -637,15 +639,7 @@ export function WorkoutCard({
               accessibilityLabel={tr('workout.dontSave')}
               hitSlop={8}
             >
-              <Svg width={13} height={13} viewBox="0 0 24 24">
-                <Path
-                  d="M6 6l12 12M18 6L6 18"
-                  stroke={colors.mutedForeground}
-                  strokeWidth={2.6}
-                  strokeLinecap="round"
-                  fill="none"
-                />
-              </Svg>
+              <Cross color={colors.mutedForeground} />
             </Pressable>
           </View>
         ))}
@@ -664,36 +658,110 @@ export function WorkoutCard({
           <Text style={[t.footnoteBold, { color: colors.primaryForeground }]}>
             {editing
               ? saving
-                ? 'Saving…'
+                ? tr('common.saving')
                 : tr('workout.saveChanges')
               : saving
-                ? 'Logging…'
+                ? tr('common.saving')
                 : tr('workout.logIt')}
           </Text>
         </PressableChunk>
       </View>
+
+      <PickerSheet
+        open={picking}
+        types={types}
+        chosen={chosen}
+        onClose={() => setPicking(false)}
+        onAdd={addExercises}
+        onDefine={(name) => void defineExercise(name)}
+      />
     </Chunk>
   );
 }
 
-function Plus({ color }: { color: string }) {
+/**
+ * The picker, full screen.
+ *
+ * It used to live inline at the bottom of the card, which cost twice: the card
+ * grew by a search box, fourteen chips and a list every time it opened, and
+ * every pick collapsed it again and pushed "Log it" further away. Four
+ * exercises was four trips down a growing card.
+ *
+ * A modal is also what makes multi-select honest — the tick marks have somewhere
+ * to live, and "Add 4" has a footer to sit in that does not move.
+ */
+function PickerSheet({
+  open,
+  types,
+  chosen,
+  onClose,
+  onAdd,
+  onDefine,
+}: {
+  open: boolean;
+  types: ExerciseType[] | null;
+  chosen: Set<string | null>;
+  onClose: () => void;
+  onAdd: (types: ExerciseType[]) => void;
+  onDefine: (name: string) => void;
+}) {
+  const colors = useColors();
+  const tr = useT();
+  const insets = useSafeAreaInsets();
+
   return (
-    <Svg width={13} height={13} viewBox="0 0 24 24">
-      <Path d="M12 5v14M5 12h14" stroke={color} strokeWidth={2.6} strokeLinecap="round" fill="none" />
+    <Modal visible={open} animationType="slide" onRequestClose={onClose}>
+      <View style={[styles.sheet, { backgroundColor: colors.background }]}>
+        <View
+          style={[styles.sheetBar, { paddingTop: insets.top + 8, borderBottomColor: colors.border }]}
+        >
+          <Text style={[t.bodyBold, { color: colors.foreground }]}>
+            {tr('workout.pickExercises')}
+          </Text>
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel={tr('common.close')}
+            hitSlop={10}
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+          >
+            <Cross color={colors.mutedForeground} size={20} />
+          </Pressable>
+        </View>
+        <View style={[styles.sheetBody, { paddingBottom: insets.bottom }]}>
+          <ExercisePicker types={types} chosen={chosen} onAdd={onAdd} onDefine={onDefine} />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function Cross({ color, size = 13 }: { color: string; size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        d="M6 6l12 12M18 6L6 18"
+        stroke={color}
+        strokeWidth={2.6}
+        strokeLinecap="round"
+        fill="none"
+      />
     </Svg>
   );
 }
 
+/** The routine a session came from, for reading its length back off. */
+function routineOf(id: string | null, routines: Routine[]): Routine | null {
+  return routines.find((routine) => routine.id === id) ?? null;
+}
+
 /**
- * How long it took.
+ * How long it took, when they want to say rather than accept the guess.
  *
  * Chips, because nobody times a gym session to the minute and "about an hour"
- * is both the true answer and the one that costs a single tap. The scale used
- * to stop at 90, which was not a rounding problem: two hours of football is an
- * ordinary Sunday and there was no chip for it and no way to type one, so the
- * card could not log it at all and the session had to go through the chat.
- *
- * So 120 is on the scale, and "Other" opens a keypad for everything else.
+ * is both the true answer and the one that costs a single tap. Two hours of
+ * football is an ordinary Sunday, so 120 is on the scale, and "Other" opens a
+ * keypad for everything else.
  */
 function Duration({
   minutes,
@@ -829,6 +897,8 @@ function draftsFrom(
         tracks: type?.tracks ?? CATEGORY_TRACKS[category],
         emoji: type?.emoji ?? CATEGORY_EMOJI[category],
         muscles: type?.muscles ?? [],
+        equipment: type?.equipment ?? null,
+        category: type?.category ?? category,
         sets: [],
         previous: [],
       };
@@ -855,15 +925,21 @@ function when(localDate: string, locale: Locale, tr: ReturnType<typeof useT>): s
   return then.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
 }
 
-
 const styles = StyleSheet.create({
   card: { borderWidth: 2, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 14 },
   heard: { marginTop: 4, lineHeight: 20 },
-  categories: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
-  category: { borderWidth: 2, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
-  categoryLabel: { fontFamily: font.bold, fontSize: 13, lineHeight: 18 },
   label: { marginTop: 14, marginBottom: 6 },
-  durations: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  offers: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: { borderWidth: 2, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  categoryLabel: { fontFamily: font.bold, fontSize: 13, lineHeight: 18 },
+  addRow: { marginTop: 14 },
+  lengthRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 14 },
+  lengthValue: { fontFamily: font.displaySemibold, fontSize: 15, lineHeight: 20 },
+  lengthHint: { fontFamily: font.regular, fontSize: 12, lineHeight: 16 },
+  durations: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  duration: { flex: 1, alignItems: 'center', borderWidth: 2, borderRadius: 999, paddingVertical: 8 },
+  durationLabel: { fontFamily: font.display, fontSize: 15, lineHeight: 18 },
   otherLength: {
     height: 40,
     borderWidth: 2,
@@ -872,18 +948,6 @@ const styles = StyleSheet.create({
     paddingVertical: 0,
     marginTop: 6,
   },
-  duration: {
-    flex: 1,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderRadius: 999,
-    paddingVertical: 8,
-  },
-  durationLabel: { fontFamily: font.display, fontSize: 15, lineHeight: 18 },
-  picker: { borderTopWidth: 2, marginTop: 12, paddingTop: 12 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { borderWidth: 2, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
-  quiet: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   saveOffer: { marginTop: 14 },
   saveRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 },
   saveField: {
@@ -894,7 +958,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 0,
   },
-  offers: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 14 },
   foot: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -904,4 +967,14 @@ const styles = StyleSheet.create({
     paddingTop: 14,
   },
   send: { paddingHorizontal: 18, paddingVertical: 9 },
+  sheet: { flex: 1 },
+  sheetBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 2,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  sheetBody: { flex: 1 },
 });

@@ -1031,4 +1031,20 @@ export const es: Messages = {
   'common.loading': 'Cargando…',
   'common.today': 'Hoy',
   'common.yesterday': 'Ayer',
+
+  /* The gym card, second pass. See GYM-CARD.md. */
+  'common.saving': 'Guardando…',
+  'workout.addExercises': '＋ Añadir ejercicios',
+  'workout.pickExercises': 'Añadir ejercicios',
+  'workout.anyExercise': 'cualquiera — solo el músculo',
+  'workout.orNameIt': 'O dale nombre',
+  'workout.pointAtIt': 'O señala lo que entrenaste',
+  'workout.front': 'Frente',
+  'workout.back': 'Espalda',
+  'workout.backToBody': (muscle: string) => `‹ ${muscle}`,
+  'workout.addCount': (count: string) => `Añadir ${count}`,
+  'workout.aboutLength': (min: string) => `≈ ${min} min`,
+  'workout.exactLength': (min: string) => `${min} min`,
+  'workout.tapToFix': 'estimado · toca para cambiar',
+  'workout.whatKind': '¿Qué tipo de sesión?',
 };

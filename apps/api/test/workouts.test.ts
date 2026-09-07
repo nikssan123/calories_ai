@@ -15,7 +15,13 @@ import {
 } from '../src/services/workouts.ts';
 import { listExerciseEntries } from '../src/services/log.ts';
 import { addWeight, appFor, createUser, type TestUser } from './helpers/factories.ts';
-import { MUSCLE_GROUPS, byMuscleGroup, exerciseMatches } from '@ct/shared';
+import {
+  EQUIPMENT,
+  MUSCLE_GROUPS,
+  byMuscleGroup,
+  exerciseMatches,
+  genericMuscleOf,
+} from '@ct/shared';
 
 /**
  * Counted sessions.
@@ -88,6 +94,81 @@ describe('the catalogue', () => {
     expect(types.length).toBeGreaterThan(200);
     // The aliases are the half of search the muscle terms cannot do.
     expect(types.filter((t) => t.aliases.length > 0).length).toBeGreaterThan(100);
+  });
+
+  /*
+   * The claim the migration makes in a comment, checked here instead of
+   * asserted there. Seven UPDATE statements listing 132 names by hand is
+   * exactly the kind of thing that rots: an exercise added later slips through
+   * with a null and nobody notices, because a missing glyph looks like a
+   * deliberately missing glyph.
+   */
+  it('knows what you pick up for every built-in strength exercise', async () => {
+    const strength = (await listExerciseTypes(user.id, 'strength')).filter((t) => !t.custom);
+    const generic = strength.filter((t) => genericMuscleOf(t) !== null);
+    expect(generic).toHaveLength(MUSCLE_GROUPS.length);
+
+    // Everything that is a real movement says what it is done with...
+    const named = strength.filter((t) => genericMuscleOf(t) === null);
+    expect(named.filter((t) => t.equipment === null)).toEqual([]);
+    for (const type of named) {
+      expect(EQUIPMENT, type.name).toContain(type.equipment);
+    }
+
+    // ...and the fourteen that are not a movement deliberately do not, because
+    // not knowing the exercise means not knowing the kit.
+    expect(generic.filter((t) => t.equipment !== null)).toEqual([]);
+
+    // Every glyph the clients draw is actually reachable, so none of the six is
+    // dead code shipped against a catalogue that never uses it.
+    const used = new Set(named.map((t) => t.equipment));
+    for (const kit of EQUIPMENT) expect(used, kit).toContain(kit);
+  });
+
+  /*
+   * The point of the fourteen: somebody who knows they trained biceps and no
+   * more can still log a real session. See GYM-CARD.md §3.
+   */
+  it('offers a muscle as an exercise, with the muscle words reaching it', async () => {
+    const types = await listExerciseTypes(user.id, 'strength');
+    const biceps = types.find((t) => t.name === 'Biceps work');
+    expect(biceps).toBeDefined();
+    expect(genericMuscleOf(biceps!)).toBe('biceps');
+    expect(biceps!.muscles).toEqual(['biceps']);
+
+    // Reached by what somebody would actually type or say.
+    for (const word of ['biceps', 'bicep', 'arms']) {
+      expect(await findExerciseType(user.id, word), word).toMatchObject({ name: 'Biceps work' });
+    }
+
+    /*
+     * And the movement words are deliberately NOT aliases of it. `curl` on
+     * "Biceps work" would sort ahead of "Barbell curl" in `findExerciseType`,
+     * which breaks ties on name length — so a dictated "curls" would log the
+     * vague row over the specific one it could have had.
+     */
+    const curls = await findExerciseType(user.id, 'curls');
+    expect(curls?.name).not.toBe('Biceps work');
+  });
+
+  it('logs a session that names only the muscle', async () => {
+    const entry = await logWorkout({
+      userId: user.id,
+      category: 'strength',
+      exercises: [{ name: 'Biceps work', sets: [{ reps: 12, weight_kg: 30 }] }],
+      durationMin: 20,
+      ctx: user.ctx,
+    });
+    // It is an ordinary catalogue row, so the set keeps its type — and with it
+    // the muscle, the MET and its place in `previousSetsFor`. A generic that
+    // landed as free text would be exactly the loss it exists to prevent.
+    const rows = await query<{ name: string; type_id: string | null }>(
+      'SELECT name, type_id FROM exercise_sets WHERE entry_id = $1',
+      [entry.id],
+    );
+    expect(rows[0]!.name).toBe('Biceps work');
+    expect(rows[0]!.type_id).not.toBeNull();
+    expect(entry.kcal_burned).toBeGreaterThan(0);
   });
 
   it('has the sports people actually play, including the two-hour ones', async () => {

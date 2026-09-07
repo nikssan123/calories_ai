@@ -1,4 +1,5 @@
 import type {
+  Equipment,
   ExerciseCategory,
   ExerciseTracks,
   ExerciseType,
@@ -41,6 +42,19 @@ export interface DraftExercise {
   tracks: ExerciseTracks;
   emoji: string;
   muscles: MuscleGroup[];
+  /**
+   * What you pick up, for the tag under the name. Null for anything that is not
+   * lifting and for an exercise this account invented. See GYM-CARD.md §2.
+   */
+  equipment: Equipment | null;
+  /**
+   * The kind of session this exercise makes it.
+   *
+   * Carried per exercise because the card no longer asks: picking "Bench press"
+   * is what tells the app this is a strength session, and `categoryOf` reads
+   * the answer back off the rows. See GYM-CARD.md §5.
+   */
+  category: ExerciseCategory;
   sets: DraftSet[];
   /**
    * What they did last time, for the line above the numbers.
@@ -106,6 +120,8 @@ export function draftFromType(type: ExerciseType, units: UnitSystem): DraftExerc
     tracks: type.tracks,
     emoji: type.emoji,
     muscles: type.muscles,
+    equipment: type.equipment,
+    category: type.category,
     sets: previous.length > 0 ? previous.map((set) => ({ ...set })) : [blankSet()],
     previous,
   };
@@ -235,6 +251,8 @@ export function draftsFromHeard(
           tracks: CATEGORY_TRACKS[category],
           emoji: CATEGORY_EMOJI[category],
           muscles: [],
+          equipment: null,
+          category,
           sets: [blankSet()],
           previous: [],
         };
@@ -282,4 +300,62 @@ export function withSessionLength(
       sets: [{ duration_sec: Math.round(minutes * 60) }],
     },
   ];
+}
+
+/**
+ * What kind of session these exercises make it.
+ *
+ * The card used to ask, as five chips at the top, and the question was never
+ * really the user's: `ExerciseType.category` has always been on the row, so
+ * picking "Bench press" already said "strength". Worse, the chips owned the
+ * catalogue filter, so changing them had to wipe the grid — a leg day's
+ * exercises are not a swim's — and somebody who tapped the wrong one lost their
+ * work.
+ *
+ * Read as the commonest category rather than the first, so a strength session
+ * with a ten-minute bike warm-up in it is still strength. Ties go to the
+ * earliest, which is the one they reached for first.
+ *
+ * `fallback` is what an empty session is: whatever the agent suggested, else
+ * strength. A session with nothing in it is going to be priced by its duration
+ * alone, so the answer matters and there is nothing to read it off.
+ */
+export function categoryOf(
+  drafts: DraftExercise[],
+  fallback: ExerciseCategory,
+): ExerciseCategory {
+  const counts = new Map<ExerciseCategory, number>();
+  for (const draft of drafts) {
+    counts.set(draft.category, (counts.get(draft.category) ?? 0) + 1);
+  }
+  let best: ExerciseCategory | null = null;
+  let seen = 0;
+  for (const [category, count] of counts) {
+    if (count > seen) {
+      best = category;
+      seen = count;
+    }
+  }
+  return best ?? fallback;
+}
+
+/**
+ * How long this session probably took, when nobody has said.
+ *
+ * Its only job is pricing the burn — the sets contribute nothing to it — so the
+ * card stopped asking for it in a labelled row of seven chips above the
+ * exercises and now prints one muted, correctable line below them. That is only
+ * honest if the guess is a real one, which is what this is: the routine's own
+ * length, else the last session of this kind, else a number.
+ *
+ * Forty-five is the fallback of last resort and deliberately unremarkable. It
+ * is roughly the median gym session, it is never far wrong enough to matter to
+ * a burn figure the app already reports as an estimate, and being wrong here
+ * costs less than a question nobody wanted to answer.
+ */
+export function guessLength(
+  routineMinutes: number | null,
+  lastMinutes: number | null,
+): number {
+  return routineMinutes ?? lastMinutes ?? 45;
 }

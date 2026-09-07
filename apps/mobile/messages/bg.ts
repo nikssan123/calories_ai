@@ -1027,4 +1027,20 @@ export const bg: Messages = {
   'common.loading': 'Зарежда се…',
   'common.today': 'Днес',
   'common.yesterday': 'Вчера',
+
+  /* The gym card, second pass. See GYM-CARD.md. */
+  'common.saving': 'Запазва се…',
+  'workout.addExercises': '＋ Добави упражнения',
+  'workout.pickExercises': 'Добави упражнения',
+  'workout.anyExercise': 'без значение кое — просто мускулът',
+  'workout.orNameIt': 'Или го назови',
+  'workout.pointAtIt': 'Или посочи какво тренира',
+  'workout.front': 'Отпред',
+  'workout.back': 'Отзад',
+  'workout.backToBody': (muscle: string) => `‹ ${muscle}`,
+  'workout.addCount': (count: string) => `Добави ${count}`,
+  'workout.aboutLength': (min: string) => `≈ ${min} мин`,
+  'workout.exactLength': (min: string) => `${min} мин`,
+  'workout.tapToFix': 'приблизително · натисни за промяна',
+  'workout.whatKind': 'Какъв вид тренировка?',
 };

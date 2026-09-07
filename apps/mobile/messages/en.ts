@@ -1231,4 +1231,20 @@ export const en = {
   'common.loading': 'Loading…',
   'common.today': 'Today',
   'common.yesterday': 'Yesterday',
+
+  /* The gym card, second pass. See GYM-CARD.md. */
+  'common.saving': 'Saving…',
+  'workout.addExercises': '＋ Add exercises',
+  'workout.pickExercises': 'Add exercises',
+  'workout.anyExercise': 'any exercise — just log the muscle',
+  'workout.orNameIt': 'Or name it',
+  'workout.pointAtIt': 'Or point at what you trained',
+  'workout.front': 'Front',
+  'workout.back': 'Back',
+  'workout.backToBody': (muscle: string) => `‹ ${muscle}`,
+  'workout.addCount': (count: string) => `Add ${count}`,
+  'workout.aboutLength': (min: string) => `≈ ${min} min`,
+  'workout.exactLength': (min: string) => `${min} min`,
+  'workout.tapToFix': 'estimated · tap to fix',
+  'workout.whatKind': 'What kind of session?',
 } as const;

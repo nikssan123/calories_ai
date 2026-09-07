@@ -1,4 +1,5 @@
 import type {
+  Equipment,
   ExerciseCategory,
   ScheduledDay,
   WeekSchedule,
@@ -101,7 +102,7 @@ type BareExercise = Omit<RoutineExercise, 'previous'>;
 async function exercisesFor(routineIds: string[]): Promise<Map<string, BareExercise[]>> {
   const rows = await query<any>(
     `SELECT re.routine_id, re.name, re.type_id, re.target_sets, re.position,
-            t.tracks, t.emoji, t.muscles
+            t.tracks, t.emoji, t.muscles, t.equipment
        FROM routine_exercises re
        LEFT JOIN exercise_types t ON t.id = re.type_id
       WHERE re.routine_id = ANY($1::uuid[])
@@ -120,6 +121,7 @@ async function exercisesFor(routineIds: string[]): Promise<Map<string, BareExerc
       tracks: (row.tracks as ExerciseTracks) ?? 'reps',
       emoji: row.emoji ?? '🏋️',
       muscles: (row.muscles as MuscleGroup[]) ?? [],
+      equipment: (row.equipment as Equipment | null) ?? null,
       target_sets: row.target_sets === null ? null : Number(row.target_sets),
     });
     byRoutine.set(row.routine_id, list);

@@ -39,6 +39,7 @@ import { useUnits } from '@/lib/units';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { BodyFigure } from './BodyFigure';
 
 /**
  * The card that asks.
@@ -755,7 +756,11 @@ function ExerciseRow({
   return (
     <div className="bg-muted/40 space-y-2 rounded-xl p-2.5">
       <div className="flex items-center gap-2">
-        <span aria-hidden>{draft.emoji}</span>
+        {draft.muscles.length > 0 ? (
+          <BodyFigure muscles={draft.muscles} size={18} />
+        ) : (
+          <span aria-hidden>{draft.emoji}</span>
+        )}
         <span className="text-footnote flex-1 truncate font-medium">{draft.name}</span>
         <button
           type="button"
