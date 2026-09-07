@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthGate';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { dateRange, shortDate, signedKg } from './bits';
+import { dateRange, shortDate } from './bits';
 
 /**
  * The Monday digest, as it goes and as it went. See COACH.md §8.
@@ -129,17 +129,32 @@ function Email({
           <h2 className="text-title-2">Your roster, this Monday</h2>
           <p className="text-footnote text-muted-foreground">{dateRange(stats.week.start, stats.week.end)}</p>
         </div>
-        <p className="text-body">{first ? `Good morning, ${first}.` : 'Good morning.'}</p>
+        <p className="text-body">
+          {first ? `Good morning, ${first}. ` : 'Good morning. '}
+          {stats.clients.length === 0
+            ? 'Nobody is on your roster yet.'
+            : attention.length === 0
+              ? `All ${stats.clients.length} of your clients logged and stayed near target last week. Nothing to chase.`
+              : `${attention.length} of your ${stats.clients.length} client${stats.clients.length === 1 ? '' : 's'} ${attention.length === 1 ? 'needs' : 'need'} a word this week.${
+                  rest.length === 0 ? '' : rest.length === 1 ? ' The other one is on track.' : ` The other ${rest.length} are on track.`
+                }`}
+        </p>
 
-        {attention.length > 0 ? (
-          <Section title="Needs you today" rows={attention} tone="attn" />
-        ) : (
-          <div className="rounded-xl bg-[color-mix(in_oklch,var(--calories),transparent_86%)] px-4 py-3">
-            <p className="font-extrabold">Nobody needs chasing</p>
-            <p className="text-footnote text-muted-foreground">Every client logged and stayed near target last week.</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-muted rounded-xl px-4 py-3">
+            <p className="text-figure tnum text-2xl">{attention.length}</p>
+            <p className="text-footnote text-muted-foreground">{attention.length === 1 ? 'client needs you' : 'clients need you'}</p>
           </div>
-        )}
-        {rest.length > 0 && <Section title="Everyone else" rows={rest} tone="rest" />}
+          <div className="bg-muted rounded-xl px-4 py-3">
+            <p className="text-figure tnum text-2xl">
+              {stats.clients.filter((r) => r.days_logged === 7).length} of {stats.clients.length}
+            </p>
+            <p className="text-footnote text-muted-foreground">logged every day</p>
+          </div>
+        </div>
+
+        {attention.length > 0 && <Section title="Needs you today" rows={attention} withWeek />}
+        {rest.length > 0 && <Section title={attention.length > 0 ? 'Everyone else' : 'Your clients'} rows={rest} withWeek={false} />}
 
         <span className="bg-primary text-primary-foreground inline-block rounded-full px-4 py-2 text-[14px] font-extrabold">
           Open the roster
@@ -153,35 +168,71 @@ function Email({
   );
 }
 
-function Section({ title, rows, tone }: { title: string; rows: CoachRosterRow[]; tone: 'attn' | 'rest' }) {
+/** The mail's person card, drawn the way `email/layout.ts` draws it. */
+function Section({ title, rows, withWeek }: { title: string; rows: CoachRosterRow[]; withWeek: boolean }) {
   return (
     <div>
       <p className="text-eyebrow text-muted-foreground mb-2">{title}</p>
-      <ul className="space-y-1.5">
+      <ul className="space-y-2">
         {rows.map((row) => (
-          <li
-            key={row.client.id}
-            className={cn(
-              'grid gap-0.5 rounded-xl px-3 py-2',
-              tone === 'attn' && row.flags.some((f) => f.severity === 'critical') && 'bg-destructive/10',
-              tone === 'attn' && !row.flags.some((f) => f.severity === 'critical') && 'bg-[color-mix(in_oklch,var(--protein),transparent_85%)]',
-              tone === 'rest' && 'bg-muted',
-            )}
-          >
-            <span className="font-extrabold">
-              {row.client.display_name ?? 'Unnamed'}
-              {row.flags.length > 0 && (
-                <span className="text-muted-foreground font-bold"> · {row.flags.map((f) => f.label).join(', ')}</span>
-              )}
+          <li key={row.client.id} className="bg-muted grid gap-1.5 rounded-xl px-4 py-3">
+            <span className="text-[15px] font-extrabold">{row.client.display_name ?? 'Unnamed'}</span>
+            <span className={cn('text-[13px] font-bold', row.flags.length === 0 ? 'text-[var(--calories-text)]' : 'text-foreground')}>
+              {row.flags.length > 0 ? row.flags.map(flagSentence).join(' · ') : 'On track'}
             </span>
-            <span className="text-muted-foreground tnum text-[13px]">
-              {row.days_logged}/7 logged ·{' '}
-              {row.protein.average_g === null ? 'no protein average' : `${row.protein.average_g} of ${row.protein.target_g} g protein`} ·{' '}
-              {row.weight.weigh_ins === 0 ? 'no weigh-ins' : row.weight.change_4w_kg === null ? 'first weigh-ins' : `${signedKg(row.weight.change_4w_kg)} over 4 weeks`}
+            {withWeek && (
+              <span className="mt-1 flex gap-1.5">
+                {row.days.map((day) => {
+                  const hit = day.logged && Math.abs(day.kcal - row.kcal.target) <= row.kcal.target * 0.1;
+                  return (
+                    <span
+                      key={day.local_date}
+                      className={cn(
+                        'flex flex-1 flex-col items-center rounded-lg py-1.5 text-[11px] font-extrabold',
+                        hit && 'bg-[var(--calories)] text-[var(--primary-foreground)]',
+                        !hit && day.logged && 'bg-card',
+                        !day.logged && 'bg-border/60 text-muted-foreground',
+                      )}
+                    >
+                      {new Intl.DateTimeFormat('en-GB', { weekday: 'narrow', timeZone: 'UTC' }).format(new Date(`${day.local_date}T12:00:00Z`))}
+                      {day.logged && <span className="tnum text-[10px] font-bold opacity-75">{day.kcal.toLocaleString('en-GB')}</span>}
+                    </span>
+                  );
+                })}
+              </span>
+            )}
+            <span className="text-muted-foreground tnum text-[12px]">
+              {row.days_logged} of 7 days logged
+              {row.protein.average_g !== null && ` · ${row.protein.average_g} g protein a day against ${row.protein.target_g}`}
+              {' · '}
+              {row.weight.weigh_ins === 0
+                ? 'no weigh-ins'
+                : row.weight.change_4w_kg === null
+                  ? 'first weigh-ins'
+                  : row.weight.change_4w_kg === 0
+                    ? 'no change on the scale over 4 weeks'
+                    : `${row.weight.change_4w_kg < 0 ? 'down' : 'up'} ${Math.abs(row.weight.change_4w_kg).toFixed(1)} kg over 4 weeks`}
             </span>
           </li>
         ))}
       </ul>
     </div>
   );
+}
+
+function flagSentence(flag: CoachRosterRow['flags'][number]): string {
+  switch (flag.kind) {
+    case 'no_log':
+      return flag.days === null ? 'Nothing logged yet' : flag.days === 1 ? 'Nothing logged since yesterday' : `Nothing logged for ${flag.days} days`;
+    case 'protein_short':
+      return 'Protein under target on the days logged';
+    case 'kcal_over':
+      return 'Over the calorie target on average';
+    case 'kcal_under':
+      return 'Well under the calorie target on average';
+    case 'stalled':
+      return 'Weight flat for four weeks, on a cut';
+    case 'new':
+      return 'Joined this week';
+  }
 }

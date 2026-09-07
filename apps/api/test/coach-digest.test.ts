@@ -87,7 +87,8 @@ describe('runDueDigests', () => {
       subject: 'Monday: 1 client needs you · 1 on the roster',
     });
     expect(mailbox()[0]!.text).toContain('Elena Koleva');
-    expect(mailbox()[0]!.text).toContain('Protein short');
+    expect(mailbox()[0]!.text).toContain('Protein under target');
+    expect(mailbox()[0]!.text).toContain('M● T● W● T● F● S● S●');
     expect(mailbox()[0]!.text).toContain('/coach');
 
     // An hour later: the row is found, nothing is written, nothing is re-sent.
@@ -106,7 +107,7 @@ describe('runDueDigests', () => {
     }
     await runDueDigests(MONDAY_MORNING);
     expect(mailbox()[0]!.subject).toBe('Monday: everyone on track · 1 on the roster');
-    expect(mailbox()[0]!.text).toContain('Nobody needs chasing');
+    expect(mailbox()[0]!.text).toContain('Nothing to chase');
   });
 
   it('does nothing on a Tuesday, or for a coach with nobody', async () => {

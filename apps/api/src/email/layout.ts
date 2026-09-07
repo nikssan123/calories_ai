@@ -93,7 +93,24 @@ export type Block =
   /** Small print attached to the block above it. */
   | { kind: 'note'; text: string }
   /** A short code, sized to be read off one screen and typed into another. */
-  | { kind: 'code'; value: string };
+  | { kind: 'code'; value: string }
+  /**
+   * One person, as a card: a name, a sentence about them, optionally their
+   * week as seven cells, and one line of numbers underneath.
+   *
+   * Built for the coach's digest, where the reader is scanning a list of
+   * people rather than reading about themselves. A `facts` row cannot hold a
+   * person — the name lands in the narrow muted column and everything else
+   * wraps in the wide one — and a `callout` puts the name in the accent, which
+   * on a card about somebody who has stopped logging reads as congratulation.
+   */
+  | {
+      kind: 'person';
+      name: string;
+      status: string;
+      days?: Array<{ label: string; value: string | null; tone: 'hit' | 'logged' | 'missing' }>;
+      caption: string;
+    };
 
 export interface EmailContent {
   /** The subject, reused as the document title. */
@@ -339,6 +356,42 @@ ${block.caption ? `<p class="ct-muted" style="margin:0 0 20px;font-family:${FONT
     case 'subhead':
       return `<p class="ct-muted" style="margin:0 0 10px;font-family:${FONT};font-size:11px;line-height:1.4;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${PALETTE.muted};">${escapeHtml(block.text)}</p>`;
 
+    case 'person': {
+      /*
+       * The same three tones the week block uses, drawn smaller: the strip
+       * sits inside a card with a name over it, so the cells lose their inner
+       * figure on a phone the way the week block's do.
+       */
+      const tone = {
+        hit: { bg: PALETTE.accent, fg: PALETTE.accentInk, cls: 'ct-day-hit' },
+        logged: { bg: PALETTE.card, fg: PALETTE.ink, cls: 'ct-day-logged' },
+        missing: { bg: PALETTE.hairline, fg: PALETTE.muted, cls: 'ct-day-missing' },
+      } as const;
+      const strip = block.days
+        ? `    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:10px 0 8px;">
+      <tr>
+${block.days
+  .map((day, index) => {
+    const t = tone[day.tone];
+    return `        ${index === 0 ? '' : '<td width="4" style="width:4px;font-size:0;line-height:0;">&nbsp;</td>\n        '}<td width="13%" align="center" class="${t.cls}" style="background-color:${t.bg};border-radius:8px;padding:7px 2px;font-family:${FONT};">
+          <div style="font-size:11px;font-weight:700;letter-spacing:0.04em;color:${t.fg};">${escapeHtml(day.label)}</div>
+          ${day.value ? `<div class="ct-day-value" style="font-size:10px;color:${t.fg};opacity:0.75;padding-top:2px;">${escapeHtml(day.value)}</div>` : ''}
+        </td>`;
+  })
+  .join('\n')}
+      </tr>
+    </table>`
+        : '';
+      return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="ct-tint" style="background-color:${PALETTE.tint};border-radius:12px;margin:0 0 10px;">
+  <tr><td style="padding:14px 16px;font-family:${FONT};">
+    <div class="ct-ink" style="font-size:15px;font-weight:700;line-height:1.4;color:${PALETTE.ink};">${escapeHtml(block.name)}</div>
+    <div class="ct-ink" style="font-size:14px;line-height:1.5;color:${PALETTE.ink};padding-top:2px;">${escapeHtml(block.status)}</div>
+${strip}
+    <div class="ct-muted" style="font-size:12px;line-height:1.6;color:${PALETTE.muted};padding-top:${block.days ? '0' : '4px'};">${escapeHtml(block.caption)}</div>
+  </td></tr>
+</table>`;
+    }
+
     case 'callout':
       return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="ct-tint" style="background-color:${PALETTE.tint};border-radius:12px;margin:0 0 20px;">
   <tr><td style="padding:16px 18px;font-family:${FONT};">
@@ -451,6 +504,17 @@ function renderText(content: EmailContent): string {
         // Underscored rather than shouted: a heading in a plain-text mail is a
         // line with something under it, and has been since before HTML.
         parts.push(block.text, '-'.repeat(block.text.length), '');
+        break;
+      case 'person':
+        // The name, the sentence, the week as filled and empty circles, and
+        // the numbers — each on its own line, indented under the name.
+        parts.push(block.name, `  ${block.status}`);
+        if (block.days) {
+          parts.push(
+            `  ${block.days.map((day) => `${day.label}${day.tone === 'missing' ? '○' : '●'}`).join(' ')}`,
+          );
+        }
+        parts.push(`  ${block.caption}`, '');
         break;
       case 'callout':
         // Wrapped as one string rather than title-plus-wrapped-text, or the

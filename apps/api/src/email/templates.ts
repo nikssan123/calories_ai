@@ -1,4 +1,4 @@
-import type { CoachDigestStats, CoachRosterRow, ReviewStats, UnitSystem } from '@ct/shared';
+import type { CoachDigestStats, CoachFlag, CoachRosterRow, ReviewStats, UnitSystem } from '@ct/shared';
 import { formatNumber, formatWeightDelta, type Locale } from '@ct/shared';
 import { emailMessages, type EmailMessages } from './messages.ts';
 import { type Block, type RenderedEmail, renderEmail } from './layout.ts';
@@ -539,22 +539,8 @@ export function coachDigest(input: {
   const { stats, locale } = input;
   const attention = stats.clients.filter((row) => row.flags.some((flag) => flag.severity !== 'info'));
   const rest = stats.clients.filter((row) => !attention.includes(row));
+  const everyDay = stats.clients.filter((row) => row.days_logged === 7).length;
   const first = input.name?.trim().split(/\s+/)[0];
-
-  const line = (row: CoachRosterRow): string => {
-    const protein =
-      row.protein.average_g === null
-        ? 'no protein average'
-        : `${round(row.protein.average_g, locale)} of ${round(row.protein.target_g, locale)} g protein`;
-    const weight =
-      row.weight.weigh_ins === 0
-        ? 'no weigh-ins'
-        : row.weight.change_4w_kg === null
-          ? 'first weigh-ins'
-          : `${formatWeightDelta(row.weight.change_4w_kg, 'metric')} over 4 weeks`;
-    return `${row.days_logged}/7 logged · ${protein} · ${weight}`;
-  };
-  const reason = (row: CoachRosterRow): string => row.flags.map((flag) => flag.label).join(', ');
   const nameOf = (row: CoachRosterRow): string => row.client.display_name ?? 'Unnamed';
 
   const subject =
@@ -562,33 +548,45 @@ export function coachDigest(input: {
       ? `Monday: everyone on track · ${stats.clients.length} on the roster`
       : `Monday: ${attention.length} client${attention.length === 1 ? '' : 's'} need${attention.length === 1 ? 's' : ''} you · ${stats.clients.length} on the roster`;
 
+  /*
+   * One sentence that says the whole email, before any of it. Somebody
+   * reading this on a phone in a car park should know from the first line
+   * whether there is anything to do.
+   */
+  const opening =
+    stats.clients.length === 0
+      ? 'Nobody is on your roster yet.'
+      : attention.length === 0
+        ? `All ${stats.clients.length === 1 ? 'one' : stats.clients.length} of your clients logged and stayed near target last week. Nothing to chase.`
+        : `${countWord(attention.length)} of your ${stats.clients.length} client${stats.clients.length === 1 ? '' : 's'} ${attention.length === 1 ? 'needs' : 'need'} a word this week. ${
+            rest.length === 0 ? '' : rest.length === 1 ? 'The other one is on track.' : `The other ${rest.length} are on track.`
+          }`.trim();
+
   const blocks: Block[] = [
-    { kind: 'text', text: first ? `Good morning, ${first}.` : 'Good morning.' },
+    { kind: 'text', text: first ? `Good morning, ${first}. ${opening}` : `Good morning. ${opening}` },
+    {
+      kind: 'stats',
+      items: [
+        { label: attention.length === 1 ? 'client needs you' : 'clients need you', value: String(attention.length) },
+        { label: 'logged every day', value: `${everyDay} of ${stats.clients.length}` },
+      ],
+    },
     ...(attention.length > 0
       ? ([
           { kind: 'subhead', text: 'Needs you today' },
-          {
-            kind: 'facts',
-            items: attention.map((row) => ({ label: nameOf(row), value: `${reason(row)} — ${line(row)}` })),
-          },
+          ...attention.map((row) => personBlock(row, locale, true)),
         ] as Block[])
-      : ([{ kind: 'callout', title: 'Nobody needs chasing', text: 'Every client logged and stayed near target last week.' }] as Block[])),
+      : []),
     ...(rest.length > 0
       ? ([
-          { kind: 'subhead', text: 'Everyone else' },
-          {
-            kind: 'facts',
-            items: rest.map((row) => ({
-              label: nameOf(row),
-              value: row.flags.length > 0 ? `${reason(row)} — ${line(row)}` : line(row),
-            })),
-          },
+          { kind: 'subhead', text: attention.length > 0 ? 'Everyone else' : 'Your clients' },
+          ...rest.map((row) => personBlock(row, locale, false)),
         ] as Block[])
       : []),
     { kind: 'button', label: 'Open the roster', url: `${input.appUrl}/coach` },
     {
       kind: 'note',
-      text: `${stats.seats.used} of ${stats.seats.limit} seats in use. Flags are the app's own signals: no log, protein short, weight stalled. Sorted by days logged, never by deficit.`,
+      text: `${stats.seats.used} of ${stats.seats.limit} seats in use. A green day landed within 10% of the calorie target; a grey one had nothing logged. Sorted by days logged, never by deficit.`,
     },
   ];
 
@@ -609,6 +607,80 @@ export function coachDigest(input: {
       unsubscribeUrl: input.settingsUrl,
     }),
   };
+}
+
+/**
+ * One client as a card: the name, what is wrong in a sentence, the week as
+ * seven cells for the people who need a word, and one line of numbers.
+ */
+function personBlock(row: CoachRosterRow, locale: Locale, withWeek: boolean): Block {
+  return {
+    kind: 'person',
+    name: row.client.display_name ?? 'Unnamed',
+    status: row.flags.length > 0 ? row.flags.map((flag) => flagSentence(flag)).join(' · ') : 'On track',
+    days: withWeek
+      ? row.days.map((day) => ({
+          label: weekdayLetter(day.local_date),
+          value: day.logged ? round(day.kcal, locale) : null,
+          tone: !day.logged
+            ? 'missing'
+            : Math.abs(day.kcal - row.kcal.target) <= row.kcal.target * 0.1
+              ? 'hit'
+              : 'logged',
+        }))
+      : undefined,
+    caption: [
+      `${row.days_logged} of 7 days logged`,
+      row.protein.average_g === null
+        ? null
+        : `${round(row.protein.average_g, locale)} g protein a day against ${round(row.protein.target_g, locale)}`,
+      weightSentence(row),
+    ]
+      .filter((part): part is string => part !== null)
+      .join(' · '),
+  };
+}
+
+/** The roster's short label, said in full. */
+function flagSentence(flag: CoachFlag): string {
+  switch (flag.kind) {
+    case 'no_log':
+      return flag.days === null
+        ? 'Nothing logged yet'
+        : flag.days === 1
+          ? 'Nothing logged since yesterday'
+          : `Nothing logged for ${flag.days} days`;
+    case 'protein_short':
+      return 'Protein under target on the days logged';
+    case 'kcal_over':
+      return 'Over the calorie target on average';
+    case 'kcal_under':
+      return 'Well under the calorie target on average';
+    case 'stalled':
+      return 'Weight flat for four weeks, on a cut';
+    case 'new':
+      return 'Joined this week';
+  }
+}
+
+function weightSentence(row: CoachRosterRow): string {
+  if (row.weight.weigh_ins === 0) return 'no weigh-ins';
+  if (row.weight.change_4w_kg === null) return 'first weigh-ins';
+  const change = row.weight.change_4w_kg;
+  if (change === 0) return 'no change on the scale over 4 weeks';
+  return `${change < 0 ? 'down' : 'up'} ${Math.abs(change).toFixed(1)} kg over 4 weeks`;
+}
+
+/** "M", "T", … for a date, without dragging a timezone in: the date is already local. */
+function weekdayLetter(localDate: string): string {
+  return new Intl.DateTimeFormat('en-GB', { weekday: 'narrow', timeZone: 'UTC' }).format(
+    new Date(`${localDate}T12:00:00Z`),
+  );
+}
+
+function countWord(n: number): string {
+  const words = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
+  return words[n] ?? String(n);
 }
 
 /** The nudge's first sentence, trimmed to something a mail client will show whole. */
