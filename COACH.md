@@ -411,8 +411,15 @@ on the iOS simulator.
 **Still to do before a coach sees it in production:**
 
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SEAT_PRICE_ID` on the
-  API, one graduated price in Stripe, and the webhook endpoint pointed at
-  `/billing/stripe`. Stripe Tax is not enabled in the checkout call yet.
+  API. The sandbox (`acct_1UD3vZ2Hp2Pcfz1R`, test mode) is set up as of
+  2026-09-07: product `prod_VDV2QNPhIurOXt` "Day So Far Coach seat" with the
+  graduated EUR price `price_1UD42f2Hp2Pcfz1RZbP8fRjB` (€6 / €5 / €4 per seat
+  per month at 1–10 / 11–30 / 31+), webhook `we_1UD47D2Hp2Pcfz1R2VfAwdLt`
+  at `https://api.daysofar.com/billing/stripe` on the four checkout and
+  subscription events (API version 2026-08-26.dahlia), and the default portal
+  configuration allowing quantity changes (3–200) and cancel at period end.
+  Live mode needs the same three things again. Stripe Tax is not enabled in
+  the checkout call yet.
 - A new store build for the `/c/*` app link (Android intent filter, iOS
   associated domain via the existing AASA route).
 - Coach terms and a DPA at checkout (§13). The dashboard and the digest are
