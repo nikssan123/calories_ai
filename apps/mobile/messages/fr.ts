@@ -275,7 +275,7 @@ export const fr: Messages = {
   'today.stepsEnable': 'Compter mes pas',
   'today.stepsNoSource': 'Rien ne compte encore tes pas sur ce téléphone',
   'today.stepsNoSourceHint':
-    'Health Connect conserve les pas que d’autres applis enregistrent — Samsung Health et Fitbit le font. Touche pour voir ce qui l’alimente.',
+    'Health Connect conserve les pas que d’autres applis enregistrent. Touche pour ouvrir sa liste d’applis, puis autorise Samsung Health ou Fitbit à les écrire.',
   'today.stepsUsual': (average: string) => `d’habitude ${average}`,
   'today.stepsEnableHint':
     'Lit tes pas sur le téléphone, pour que ton objectif vienne de ce que tu fais vraiment.',

@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Pedometer } from 'expo-sensors';
 import {
@@ -189,19 +189,48 @@ export async function requestStepPermission(): Promise<StepPermission> {
 }
 
 /**
- * Health Connect's own screen, where the reader can see what feeds it.
+ * Health Connect's app list, where the reader can permit something to write.
  *
  * The answer to "permission granted, still no steps": the problem is not this
  * app and cannot be fixed from inside it, so the honest move is to open the
  * place where it *can* be fixed rather than to explain it in a paragraph
  * nobody reads. No-op on iOS, where the state it addresses cannot happen.
+ *
+ * **Which screen matters, and the library's is the wrong one.**
+ * `openHealthConnectSettings()` fires `ACTION_HEALTH_CONNECT_SETTINGS`, which on
+ * a Samsung S25 running Android 16 lands on *Data and access* — a browser of
+ * what Health Connect already holds. For the reader this row exists for it
+ * holds nothing, so it opens an empty screen with no control on it, and the
+ * back gesture leaves Health Connect entirely.
+ *
+ * `MANAGE_HEALTH_PERMISSIONS` opens the app list instead, which is where the
+ * fix actually lives. Checked on that phone on 2026-09-07: it lists installed
+ * apps that declare health permissions whether or not they have ever been
+ * granted — Samsung Health sat under "Not allowed access" beside AllTrails and
+ * Tuya — so a reader who has never opened Health Connect can tap Samsung Health
+ * there and allow it to write steps, without going near Samsung Health's own
+ * settings. That is two taps from this row; the route through Samsung Health →
+ * Settings → Connected apps and services is seven, in an app we cannot link
+ * into.
+ *
+ * The old call is kept as the fallback rather than deleted. The action is
+ * resolved by the Health Connect package, and a phone where it does not resolve
+ * is likelier to be one of the older installable-APK versions — on which the
+ * settings screen is still better than nothing happening when somebody taps.
  */
+const MANAGE_HEALTH_PERMISSIONS = 'android.health.connect.action.MANAGE_HEALTH_PERMISSIONS';
+
 export async function openStepsSettings(): Promise<void> {
   const hc = await healthConnect();
+  if (!hc) return;
   try {
-    hc?.openHealthConnectSettings();
+    await Linking.sendIntent(MANAGE_HEALTH_PERMISSIONS);
   } catch {
-    /* Health Connect uninstalled between the check and the tap. */
+    try {
+      hc.openHealthConnectSettings();
+    } catch {
+      /* Health Connect uninstalled between the check and the tap. */
+    }
   }
 }
 

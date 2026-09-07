@@ -268,7 +268,7 @@ export const de: Messages = {
   'today.stepsEnable': 'Meine Schritte zählen',
   'today.stepsNoSource': 'Auf diesem Handy zählt noch nichts Schritte',
   'today.stepsNoSourceHint':
-    'Health Connect speichert Schritte, die andere Apps aufzeichnen — Samsung Health und Fitbit tun das. Tippen, um zu sehen, was es speist.',
+    'Health Connect speichert Schritte, die andere Apps aufzeichnen. Tippen, um die App-Liste zu öffnen, und dort Samsung Health oder Fitbit das Schreiben erlauben.',
   'today.stepsUsual': (average: string) => `sonst ${average}`,
   'today.stepsEnableHint':
     'Liest die Schritte vom Handy, damit dein Ziel zu dem passt, was du wirklich tust.',

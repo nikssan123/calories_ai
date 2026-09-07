@@ -65,7 +65,7 @@ export const en = {
   'today.stepsEnable': 'Count my steps',
   'today.stepsNoSource': 'Nothing is counting steps on this phone yet',
   'today.stepsNoSourceHint':
-    'Health Connect holds steps other apps record — Samsung Health and Fitbit both write them. Tap to see what feeds it.',
+    'Health Connect holds steps other apps record. Tap to open its app list, then allow Samsung Health or Fitbit to write them.',
   'today.stepsUsual': (average: string) => `usually ${average}`,
   'today.stepsEnableHint': 'Read your step count from the phone, so your target is set by what you actually do.',
   'today.thatChange': 'That change',
