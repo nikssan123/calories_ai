@@ -16,40 +16,65 @@ this menu more than once; if it is not there, search "health" in the Console's
 own search). Note the account: `com.daysofar.app` lives under
 `n.lyutov99@gmail.com`, profile `u/1`, not the default one.
 
-## This is now blocking a release
+## What the form actually is, checked in the Console
 
-`c0900af` ("feat(steps): read Health Connect on Android") added
-`android.permission.health.READ_STEPS` to `app.json`. Release 36 predates it, so
-**versionCode 38 is the first artifact that declares a Health Connect
-permission** — and Play will not accept it, or anything after it, on any track
-until this form is answered:
+Opened on 2026-09-07 at Play Console → Monitor and improve → **Policy and
+programmes → App content → Health apps** (the path this file used to give,
+Policy → App content, is no longer where it lives; the URL is
+`/app/<id>/app-content/overview`, and `/app-content` on its own bounces to the
+app list).
+
+**It is already filed, and has been since 25 Aug 2026.** Two steps, both done:
+
+1. *Health features in your app* — **Activity and fitness** and **Nutrition and
+   weight management** ticked, nothing under Medical, Human subjects research or
+   Other. That is the right answer and needs no change.
+2. *Regional requirements* — "Currently, you're not required to provide any
+   regional requirements for your app's health declaration."
+
+App content's "Need attention" tab is empty; Health apps sits under "Actioned".
+
+**There is no demonstration video on this form.** An earlier version of this
+file said the declaration could not be filed until a Health Connect integration
+existed to record one, and then that the video was the last step before filing.
+Both were wrong about *this* form: it asks for feature categories and nothing
+else — no video, no per-permission questions, no free-text about data use. A
+video may still be wanted by the separate Health Connect policy process or asked
+for during review; it is not collected here. The draft answers below are
+therefore useful as a record of what is true about the app, and for any later
+form that does ask, rather than as fields to paste into this one.
+
+## What blocked versionCode 38, and what did not
+
+`c0900af` added `android.permission.health.READ_STEPS`, making 38 the first
+bundle to declare a Health Connect permission, and the upload was refused:
 
     Google Api Error: Invalid request -
     You must let us know whether your app includes any health features.
 
-That error comes from the track update itself, not from review, so it is not
-specific to production: closed testing is blocked by it too. The signed bundle
-is sitting at `apps/mobile/android/artifacts/daysofar-v1.0.0-vc38-production-b588c74.aab`
-waiting on this.
+That error is *not* the declaration being absent — it was complete two weeks
+before 38 was built. Read it as the declaration needing to be re-affirmed now
+that the app's manifest asks for a health permission, or as a validation
+elsewhere in the edit that `fastlane supply` builds (EAS Submit runs it with
+`skip_upload_metadata: false`, so every upload rewrites the whole listing).
 
-## The order this has to happen in
+Build 40 was submitted on 2026-09-07 with the declaration in the state above and
+was refused with the identical message, so a complete declaration is not what
+the API wants. Re-affirming it is not available either: the form has no Save on
+step 1, the Save on step 2 stays disabled unless the answers actually change,
+and a no-op tick-and-untick does not mark it dirty. The only way to bump its
+timestamp is to file an answer that is not true and then correct it, which is
+not worth doing to a legal declaration.
 
-An earlier version of this file said the declaration could not be filed at all,
-because the demonstration video needs a working Health Connect integration and
-there was none — `lib/steps.ts` was iOS-only and Android counted nothing. That
-was true when it was written and `c0900af` overtook it on 2026-09-07. The
-integration exists now: `lib/steps.ts:98` imports `react-native-health-connect`,
-the dependency is in `apps/mobile/package.json`, and `hasWriter` distinguishes
-"permission granted, nothing writing steps on this phone" from a real zero.
+The likeliest remaining reading is an ordering trap: the Health Connect part of
+this declaration may only appear once Play has *seen* a bundle that requests
+those permissions, and no such bundle has ever been accepted — the API refuses
+it for want of the declaration that the bundle would have summoned.
 
-So the remaining steps are:
-
-1. Install build 38 on a real device with a health app writing steps. A Galaxy is
-   the best case: Samsung Health is preinstalled and already counting, and
-   probably needs its Health Connect sync switched on once.
-2. Record the video: grant the permission, then show the step count appearing on
-   Today and on the widget.
-3. File this.
+**The way out is the Console's own uploader**, which takes the bundle first and
+raises any missing declaration afterwards, with a link to it: Test and release →
+Testing → Closed testing → alpha → Create new release. It has to be done by
+hand — the artifact is 96 MB and browser automation here caps uploads at 10 MB.
 
 ## What the form asks, and what to answer
 
