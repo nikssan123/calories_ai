@@ -22,7 +22,7 @@ export default function PrivacyPage() {
     <LegalPage
       title="Privacy Policy"
       summary="You tell this app what you ate. That is health information, and it is treated as such: it is not sold, not used for advertising, not analysed for anyone but you, and it leaves the server only where the feature you asked for cannot work otherwise."
-      updated="2026-08-23"
+      updated="2026-09-07"
     >
       <Clause n={1} title="Who is responsible">
         <P>
@@ -62,6 +62,32 @@ export default function PrivacyPage() {
             If you turn notifications on, a push token for that phone &mdash; the address a
             reminder is delivered to, and nothing that describes you. It is deleted when you
             turn them off, sign out, or delete the account.
+          </li>
+        </List>
+
+        <Sub>If you let the app count your steps</Sub>
+        <List>
+          <li>
+            A daily step count, read from your phone&rsquo;s own motion sensor and nothing
+            else. No location, no route, no map, and no continuous tracking &mdash; the app
+            asks for one number per day, when you open it, and asks for nothing while it is
+            closed.
+          </li>
+          <li>
+            It is off until you turn it on, from the Steps card on Today, and the phone asks
+            you before the first reading. Turning it off in your phone&rsquo;s settings stops
+            new days arriving; the days already recorded are deleted with your account like
+            everything else, or on request.
+          </li>
+          <li>
+            What it is used for: setting your calorie target from what you actually do rather
+            than from the activity level you picked when you signed up, and giving the
+            assistant something better to say about a plateau than &ldquo;eat less&rdquo;.
+            Steps are never converted into calories and never added to what you may eat.
+          </li>
+          <li>
+            Steps travel to Anthropic with the rest of today&rsquo;s totals, as a count and a
+            date, whenever you send a message. See section 4.
           </li>
         </List>
 
@@ -140,7 +166,8 @@ export default function PrivacyPage() {
           <Row label="Anthropic">
             The model that reads &ldquo;two eggs and toast&rdquo; and turns it into numbers.
             It receives the message you sent, the photo if you sent one, your profile and
-            today&rsquo;s totals, and — when you ask about your history — the entries it looks
+            today&rsquo;s totals &mdash; including your step count for the day, if you have
+            turned that on &mdash; and, when you ask about your history, the entries it looks
             up. It is used through Anthropic&rsquo;s commercial API, under terms where inputs
             and outputs are not used to train their models.{' '}
             <Out href="https://www.anthropic.com/legal/privacy">Their privacy policy</Out>.

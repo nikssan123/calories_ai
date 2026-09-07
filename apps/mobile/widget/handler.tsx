@@ -63,6 +63,19 @@ export function paint(info: WidgetInfo, snapshot: DaySnapshot | null) {
       dark: <RingWidget {...props} colors={DARK} />,
     };
   }
+  /*
+   * Kept, and currently unreachable on this platform.
+   *
+   * `app.json` does not register a Steps widget with
+   * `react-native-android-widget`, because Android cannot count steps: the
+   * pedometer path is iOS-only until Health Connect lands (see `lib/steps.ts`),
+   * so the entry would put a widget in the launcher's picker that draws its
+   * empty state forever — worse than not offering one.
+   *
+   * The branch stays because the arithmetic and the tree are already written
+   * and already shared with the iOS face. When Health Connect arrives, the
+   * whole of re-enabling this is the `app.json` entry that was removed.
+   */
   if (widgetName === 'Steps') {
     return {
       light: <StepsWidget {...props} colors={LIGHT} />,

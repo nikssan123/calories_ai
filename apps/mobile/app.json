@@ -145,19 +145,6 @@
               "maxResizeHeight": "180dp",
               "resizeMode": "horizontal|vertical",
               "updatePeriodMillis": 1800000
-            },
-            {
-              "name": "Steps",
-              "label": "Day So Far · steps",
-              "description": "Today's steps against your usual week. Drag it wider for the day's calories too.",
-              "minWidth": "40dp",
-              "minHeight": "40dp",
-              "targetCellWidth": 2,
-              "targetCellHeight": 2,
-              "maxResizeWidth": "400dp",
-              "maxResizeHeight": "250dp",
-              "resizeMode": "horizontal|vertical",
-              "updatePeriodMillis": 1800000
             }
           ]
         }
