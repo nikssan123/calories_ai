@@ -270,7 +270,7 @@ export const es: Messages = {
     'Tu teléfono cuenta desde el momento en que le diste permiso, así que aún no hay nada. Da un paseo y se irá llenando.',
   'today.stepsNoSource': 'Nada cuenta pasos en este teléfono todavía',
   'today.stepsNoSourceHint':
-    'Health Connect guarda los pasos que registran otras apps. Toca para abrir su lista de apps y permite que Samsung Health o Fitbit los escriban.',
+    'Health Connect aún no tiene nada. Algunos teléfonos necesitan otra app que cuente — toca para abrir su lista de apps y permite Samsung Health o Fitbit.',
   'today.stepsUsual': (average: string) => `normalmente ${average}`,
   'today.stepsEnableHint':
     'Lee tus pasos del teléfono, para que tu objetivo salga de lo que haces de verdad.',

@@ -278,7 +278,7 @@ export const fr: Messages = {
     'Ton téléphone compte à partir du moment où tu l’as autorisé, donc il n’y a encore rien. Marche un peu et ça se remplira.',
   'today.stepsNoSource': 'Rien ne compte encore tes pas sur ce téléphone',
   'today.stepsNoSourceHint':
-    'Health Connect conserve les pas que d’autres applis enregistrent. Touche pour ouvrir sa liste d’applis, puis autorise Samsung Health ou Fitbit à les écrire.',
+    'Health Connect n’a toujours rien. Certains téléphones ont besoin d’une autre appli pour compter — touche pour ouvrir sa liste d’applis et autorise Samsung Health ou Fitbit.',
   'today.stepsUsual': (average: string) => `d’habitude ${average}`,
   'today.stepsEnableHint':
     'Lit tes pas sur le téléphone, pour que ton objectif vienne de ce que tu fais vraiment.',

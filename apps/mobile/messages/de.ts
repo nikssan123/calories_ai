@@ -271,7 +271,7 @@ export const de: Messages = {
     'Dein Telefon zählt ab dem Moment, in dem du es erlaubt hast — deshalb ist hier noch nichts. Geh ein Stück, dann füllt es sich.',
   'today.stepsNoSource': 'Auf diesem Handy zählt noch nichts Schritte',
   'today.stepsNoSourceHint':
-    'Health Connect speichert Schritte, die andere Apps aufzeichnen. Tippen, um die App-Liste zu öffnen, und dort Samsung Health oder Fitbit das Schreiben erlauben.',
+    'Health Connect hat noch nichts. Manche Telefone brauchen eine andere App zum Zählen — tippen, um die App-Liste zu öffnen, und Samsung Health oder Fitbit erlauben.',
   'today.stepsUsual': (average: string) => `sonst ${average}`,
   'today.stepsEnableHint':
     'Liest die Schritte vom Handy, damit dein Ziel zu dem passt, was du wirklich tust.',
