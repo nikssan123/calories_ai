@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { query, queryOne } from '../db.ts';
 import { env, type StripeEnv } from '../env.ts';
-import { getCoachAccount, setCoachPlan, SOLO_SEATS } from './coach.ts';
+import { EXPIRED_SEATS, getCoachAccount, setCoachPlan } from './coach.ts';
 
 /**
  * The coach seat's card reader. See COACH.md §9.
@@ -11,17 +11,21 @@ import { getCoachAccount, setCoachPlan, SOLO_SEATS } from './coach.ts';
  * ships a hundred endpoints to make three is the wrong trade for a server
  * that otherwise carries none of them.
  *
- * One product, one graduated price, and the seat count as the quantity. That
- * is the entire catalogue, and it is why nothing here has to map a product id
- * to a plan the way `billing.ts` does for the stores: the subscription's
- * quantity *is* the seat limit, and its status *is* the plan.
+ * Two prices on one subscription: a flat monthly fee for the dashboard, and a
+ * graduated per-seat price with the seat count as the quantity. That is the
+ * entire catalogue, and it is why nothing here has to map a product id to a
+ * plan the way `billing.ts` does for the stores: the seat line's quantity *is*
+ * the seat limit, and the subscription's status *is* the plan.
  */
 
 const API = 'https://api.stripe.com/v1';
 
-/** The fewest seats a card is asked for. Solo is one seat and no card. */
-export const MIN_PAID_SEATS = 3;
+/** The fewest seats a card is asked for. The base fee is the floor; a seat is a client. */
+export const MIN_PAID_SEATS = 1;
 export const MAX_SEATS = 200;
+
+/** Stripe refuses a trial end nearer than this, so a shorter remainder is simply not passed. */
+const MIN_TRIAL_END_SECONDS = 48 * 3600;
 
 /** How long a failed card keeps Plus on the seats before they drop to free. */
 export const LAPSED_GRACE_DAYS = 14;
@@ -80,23 +84,38 @@ async function stripeRequest<T>(
 // ---- Checkout and the portal -------------------------------------------------
 
 /**
- * A Checkout Session for `seats` seats. The coach lands on Stripe's page,
- * and comes back to Settings either way; the webhook is what moves the plan,
- * never the return URL — a return URL is a browser saying it was there, and
- * that is not a payment.
+ * The rest of the free month, as a Stripe trial end: a coach who adds a card
+ * on day ten is not charged until day thirty, and the card is simply on file
+ * by then. Only a trial has a remainder — `expired` keeps the date for the
+ * billing page's copy, but the month is over.
+ */
+function remainingTrialEnd(account: { plan: string; trial_ends_at: string | null }, now: Date): number | null {
+  if (account.plan !== 'trial' || !account.trial_ends_at) return null;
+  const seconds = Math.floor(new Date(account.trial_ends_at).getTime() / 1000);
+  return seconds - now.getTime() / 1000 >= MIN_TRIAL_END_SECONDS ? seconds : null;
+}
+
+/**
+ * A Checkout Session for the dashboard and `seats` seats. The coach lands on
+ * Stripe's page, and comes back to Settings either way; the webhook is what
+ * moves the plan, never the return URL — a return URL is a browser saying it
+ * was there, and that is not a payment.
  *
  * The seat count is adjustable on Stripe's own page, within the same bounds,
- * so the number typed here is a starting point rather than a commitment.
+ * so the number typed here is a starting point rather than a commitment. The
+ * base fee is not adjustable: one dashboard, one fee.
  */
 export async function createCheckoutSession(
   coachId: string,
   seats: number,
   fetchImpl?: typeof fetch,
+  now = new Date(),
 ): Promise<{ url: string }> {
-  const { seatPriceId } = configured();
+  const { seatPriceId, basePriceId } = configured();
   const account = await getCoachAccount(coachId);
   if (!account) throw new Error('Not a coach');
   const quantity = Math.min(MAX_SEATS, Math.max(MIN_PAID_SEATS, Math.trunc(seats)));
+  const trialEnd = remainingTrialEnd(account, now);
 
   const stripeCustomer = await queryOne<{ stripe_customer_id: string | null }>(
     'SELECT stripe_customer_id FROM coach_accounts WHERE user_id = $1',
@@ -109,6 +128,7 @@ export async function createCheckoutSession(
     {
       mode: 'subscription',
       line_items: [
+        { price: basePriceId, quantity: 1 },
         {
           price: seatPriceId,
           quantity,
@@ -121,7 +141,10 @@ export async function createCheckoutSession(
       ...(stripeCustomer?.stripe_customer_id
         ? { customer: stripeCustomer.stripe_customer_id }
         : { customer_email: account.email ?? undefined }),
-      subscription_data: { metadata: { coach_user_id: coachId } },
+      subscription_data: {
+        metadata: { coach_user_id: coachId },
+        ...(trialEnd ? { trial_end: trialEnd } : {}),
+      },
       allow_promotion_codes: true,
       success_url: `${env.appUrl}/coach/settings?checkout=success`,
       cancel_url: `${env.appUrl}/coach/settings?checkout=cancelled`,
@@ -217,6 +240,25 @@ async function coachFor(object: Record<string, any>): Promise<string | null> {
   return null;
 }
 
+/** The id on a subscription item's price, however expanded the object came. */
+function priceIdOf(item: Record<string, any>): string | undefined {
+  return typeof item.price === 'string' ? item.price : item.price?.id;
+}
+
+/**
+ * The seat line's quantity. Two lines share the subscription, so the seat
+ * line is found by its price; failing that, whichever line is not the base
+ * fee, which is also what a subscription made before the base fee looks like.
+ */
+function seatQuantity(subscription: Record<string, any>): number {
+  const { seatPriceId, basePriceId } = configured();
+  const items: Record<string, any>[] = subscription.items?.data ?? [];
+  const seat =
+    items.find((item) => priceIdOf(item) === seatPriceId) ??
+    items.find((item) => priceIdOf(item) !== basePriceId);
+  return Number(seat?.quantity ?? 0);
+}
+
 /**
  * What a subscription's state means for the seats.
  *
@@ -230,7 +272,7 @@ async function applySubscription(
   subscription: Record<string, any>,
   now: Date,
 ): Promise<void> {
-  const quantity = Number(subscription.items?.data?.[0]?.quantity ?? 0);
+  const quantity = seatQuantity(subscription);
   const customer = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id;
   const stripe = { customerId: customer ?? null, subscriptionId: subscription.id ?? null };
 
@@ -252,7 +294,7 @@ async function applySubscription(
     }
     case 'canceled':
     case 'incomplete_expired':
-      await setCoachPlan(coachId, 'solo', SOLO_SEATS, stripe);
+      await setCoachPlan(coachId, 'expired', EXPIRED_SEATS, stripe);
       await query('UPDATE coach_accounts SET lapsed_at = NULL WHERE user_id = $1', [coachId]);
       return;
     default:
@@ -312,7 +354,7 @@ export async function applyStripeEvent(
 
 /**
  * Every grace period that has run out, ended: the seats drop to the free
- * tier and the plan reads Solo until the card works again, at which point
+ * tier and the dashboard closes until the card works again, at which point
  * the subscription's next `updated` event puts everything back.
  */
 export async function expireLapsed(now = new Date()): Promise<number> {
@@ -322,6 +364,6 @@ export async function expireLapsed(now = new Date()): Promise<number> {
         AND lapsed_at < $1::timestamptz - make_interval(days => $2::int)`,
     [now, LAPSED_GRACE_DAYS],
   );
-  for (const row of rows) await setCoachPlan(row.user_id, 'solo', SOLO_SEATS);
+  for (const row of rows) await setCoachPlan(row.user_id, 'expired', EXPIRED_SEATS);
   return rows.length;
 }

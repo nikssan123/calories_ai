@@ -268,41 +268,45 @@ email module the way `notify.ts` sends the weekly review.
 
 ## 9. Seats, billing, entitlement
 
-**The coach pays on the web, per seat.** One Stripe product, one graduated
-monthly price with the seat count as the quantity, and an annual twin at ten
-months' price. Stripe's proration handles adding a seat mid-month; Stripe Tax
-handles EU VAT and the reverse charge for a coach with a VAT id; EUR in the EU,
-USD elsewhere. No store product exists, the phone app never mentions coach
-pricing, and the only coach UI on the phone (accept, manage sharing) is free —
-so the store steering rules do not apply.
+**The coach pays on the web: a subscription for the dashboard, plus a seat
+per client.** One Stripe subscription with two lines — a flat monthly fee and
+a graduated per-seat price with the seat count as the quantity. Stripe's
+proration handles adding a seat mid-month; Stripe Tax handles EU VAT and the
+reverse charge for a coach with a VAT id; EUR everywhere. No store product
+exists, the phone app never mentions coach pricing, and the only coach UI on
+the phone (accept, manage sharing) is free — so the store steering rules do
+not apply.
 
-| Seats | Per seat, monthly | Notes |
+| Line | Monthly | Notes |
 |---|---|---|
-| 1 – 2 | free | *Solo*: clients sit on the free consumer tier |
-| 3 – 10 | $6 | minimum charge is 3 seats, $18 |
-| 11 – 30 | $5 | |
-| 31 + | $4 | the best customers pay closest to cost, as with the bundles |
+| The dashboard | €19 | one per coach: the roster, the digest, the comments |
+| Seats 1 – 10 | €8 each | a seat is a client with an active link, on Plus |
+| Seats 11 – 30 | €7 each | |
+| Seats 31 + | €6 each | |
 
-Annual: ten months for twelve. The price ladder mirrors `plans.ts`'s bundle
-logic on purpose, and the margin after the photo lane (§10) is 40 to 60
-percent on the paid rungs.
+A coach with five clients pays €59 a month; with fifteen, €134. The base fee
+is the part that costs nothing to serve, which is why it exists: it is the
+cushion under a heavy client (§10), and it makes a one-client coach a
+customer rather than a cost.
 
-**What is free.**
+**The free month.** Thirty days, five seats, **with** Plus allowances on
+every seat, no card. The pilot has to feel the photo logging or there is
+nothing to sell. A coach who subscribes inside the month is not charged until
+it ends: the checkout passes the remaining days as Stripe's `trial_end`, so
+the card is simply on file by then. Admins can extend `trial_ends_at` for
+hand-sold pilots. When the month ends without a card the account is
+`expired`: the links, notes and comments stay, every client drops to the
+free tier at the end of the day, and the dashboard closes behind the billing
+page — `/coach/*` answers 402 to everything but the account and billing
+routes — until a subscription exists.
 
-- *Trial*: 14 days, 5 seats, **with** Plus allowances on every seat, no card.
-  The pilot has to feel the photo logging or there is nothing to sell, but
-  Plus is capped at 8 photos a month, so the worst case is $5.11 a seat and
-  $26 a trial coach. Admins can extend `trial_ends_at` for hand-sold pilots.
-  After 14 days: card, or the seats drop to free at the end of the day.
-- *Solo, forever*: 1 seat, and the client on it gets the **free** consumer
-  tier (one lifetime photo, ten chats a month, unlimited manual and barcode),
-  which costs nothing to serve. The dashboard works fully; what a paid seat
-  buys is the client's Plus. The rule in `plans.ts`: give away what is
-  deterministic, meter what is inferential.
-- *Referral*: one free month per referred coach who pays, on both sides.
+There is no free tier for the dashboard. *Solo* (one seat, free forever) was
+the earlier design and is gone: at the measured cost of a chat turn (§10) a
+free dashboard with a free client was a cost with no customer under it.
 
-Ceiling on trial spend, all pilots together: five coaches × $26 = $130 a
-month, and less than half that at the usage actually measured.
+Ceiling on trial spend, all pilots together: five coaches × five seats × the
+Plus ceiling, about $350 a month at today's per-turn cost, and well under
+half that at the usage actually measured.
 
 **The webhook.** `POST /billing/stripe`, public prefix like `/billing/revenuecat`,
 handled in `services/billing.ts` beside it: `checkout.session.completed`,
@@ -314,8 +318,8 @@ from the Customer Portal.
 
 **What a seat grants the client.** An active link with a paid or trial seat
 resolves the client to Plus allowances in `accountGate` / `limitsFor`:
-`plan_source = 'coach_seat'` maps to the `plus` tier; a Solo seat maps to
-`free`. If the client already pays for Plus or the consumer Coach tier, their
+`plan_source = 'coach_seat'` maps to the `plus` tier; an expired account's
+seats map to `free`. If the client already pays for Plus or the consumer Coach tier, their
 own plan wins and no seat is consumed. A seat is consumed by an *active* link
 only; pending invites do not count. When seats are full, accepting a code
 fails with a message on the phone and an email to the coach.
@@ -346,9 +350,14 @@ loses money, so two things are part of this build rather than after it:
 2. **The coach side costs nothing.** Roster, week, digest and comments are SQL
    and email. No `ai_usage` row is ever written for a coach action.
 
-At $5 a seat that is a 50 percent margin on a typical client, which is where
-the incumbents' $2 to $4 per client makes the pitch "the client's app is
-included" hold up.
+Measured on 2026-09-07 rather than planned: a chat turn is $0.13 — it
+carries about 49k cached tokens of history — a photo $0.25, the average
+active account $2.88 a month and the top decile $10.58. At €8 a seat that is
+a 60 percent margin on the average client and a loss on one at the Plus
+ceiling; the €19 base fee covers about one heavy client per coach. Getting
+the turn back to the planned $0.04 — trim the carried history, cap the
+context — is the lever that fixes the ceiling case, and it is worth more
+than any price.
 
 ## 11. Rollout
 

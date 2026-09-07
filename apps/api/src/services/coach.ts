@@ -46,11 +46,11 @@ import { setTargets, targetsForDate } from './targets.ts';
  * hot path on every request stays one row.
  */
 
-/** Trial length and size. Small on purpose — see COACH.md §9. */
-export const TRIAL_DAYS = 14;
+/** The free month, and how many seats it carries — see COACH.md §9. */
+export const TRIAL_DAYS = 30;
 export const TRIAL_SEATS = 5;
-/** What a coach who never pays keeps: one client, on the free tier. */
-export const SOLO_SEATS = 1;
+/** What a coach without a subscription keeps: the links, on the free tier, and no seats. */
+export const EXPIRED_SEATS = 0;
 /** An invite is good for this long. */
 export const INVITE_DAYS = 14;
 
@@ -59,10 +59,21 @@ export const INVITE_DAYS = 14;
  *
  * `lapsed` is among them on purpose: a failed card opens a grace period, and
  * the clients did nothing wrong. `expireLapsed` in `stripe.ts` is what ends
- * it, by moving the account to Solo on a date.
+ * it, by expiring the account on a date.
  */
 export function seatsCarryPlus(plan: CoachPlan): boolean {
   return plan === 'trial' || plan === 'paid' || plan === 'lapsed';
+}
+
+/**
+ * Whether the dashboard opens at all. The free month does, a subscription
+ * does, and so does the grace period. Expired is the one plan that closes it:
+ * the roster, the invites and the digest wait behind the billing page until a
+ * subscription exists. Nothing is deleted meanwhile — the links, the notes and
+ * the comments are still the coach's.
+ */
+export function dashboardOpen(plan: CoachPlan): boolean {
+  return plan !== 'expired';
 }
 
 const DEFAULT_SCOPE: CoachScope = { meals: true, weight: true, metrics: false };
@@ -75,6 +86,15 @@ export async function isCoach(userId: string): Promise<boolean> {
     [userId],
   );
   return row !== null;
+}
+
+/** The plan alone, for the route guard: one row, no join. */
+export async function coachPlanOf(userId: string): Promise<CoachPlan | null> {
+  const row = await queryOne<{ plan: CoachPlan }>(
+    'SELECT plan FROM coach_accounts WHERE user_id = $1',
+    [userId],
+  );
+  return row?.plan ?? null;
 }
 
 export async function getCoachAccount(userId: string): Promise<CoachAccount | null> {
@@ -247,7 +267,7 @@ export async function setCoachPlan(
         SET plan = $1, seat_limit = $2,
             stripe_customer_id = COALESCE($3, stripe_customer_id),
             stripe_subscription_id = COALESCE($4, stripe_subscription_id),
-            trial_ends_at = CASE WHEN $1 = 'trial' THEN trial_ends_at ELSE NULL END,
+            trial_ends_at = CASE WHEN $1 IN ('trial', 'expired') THEN trial_ends_at ELSE NULL END,
             updated_at = now()
       WHERE user_id = $5`,
     [plan, seatLimit, stripe.customerId ?? null, stripe.subscriptionId ?? null, userId],
@@ -257,19 +277,21 @@ export async function setCoachPlan(
 }
 
 /**
- * Every trial that has run out, moved to Solo.
+ * Every free month that has run out, expired.
  *
  * The backstop the scheduler runs hourly, in the spirit of `expirePlans`: a
- * trial is a date, and a date is the honest instrument. Solo keeps one seat
- * and puts it on the free tier, which is what `syncSeats` does to the rest.
+ * trial is a date, and a date is the honest instrument. Expired keeps the
+ * links and puts every client on the free tier, which is what `syncSeats`
+ * does once the seat count is zero; `trial_ends_at` stays, so the billing
+ * page can say when the month ended.
  */
 export async function expireTrials(now = new Date()): Promise<number> {
   const rows = await query<{ user_id: string }>(
     `UPDATE coach_accounts
-        SET plan = 'solo', seat_limit = $2, trial_ends_at = NULL, updated_at = now()
+        SET plan = 'expired', seat_limit = $2, updated_at = now()
       WHERE plan = 'trial' AND trial_ends_at IS NOT NULL AND trial_ends_at < $1
       RETURNING user_id`,
-    [now, SOLO_SEATS],
+    [now, EXPIRED_SEATS],
   );
   for (const row of rows) await syncSeats(row.user_id);
   return rows.length;

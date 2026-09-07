@@ -6,6 +6,7 @@ import {
   attention,
   createInvite,
   ensureCoachAccount,
+  clientStatus,
   expireTrials,
   flagsFor,
   formatCode,
@@ -522,10 +523,14 @@ describe('seats and plans', () => {
     expect(await expireTrials()).toBe(1);
 
     const account = (await asCoach('GET', '/coach/me')).json();
-    expect(account).toMatchObject({ plan: 'solo', seat_limit: 1, seats_carry_plus: false });
+    expect(account).toMatchObject({ plan: 'expired', seat_limit: 0, seats_carry_plus: false });
+    // The date stays, so the billing page can say when the month ended.
+    expect(account.trial_ends_at).not.toBeNull();
     const user = await queryOne<any>('SELECT plan, plan_source FROM users WHERE id = $1', [client.id]);
     expect(user).toMatchObject({ plan: 'free', plan_source: 'manual' });
-    expect((await asCoach('GET', '/coach/roster')).json().clients[0].client.seat).toBe('free');
+    // The dashboard is closed until a subscription exists; the link itself is not.
+    expect((await asCoach('GET', '/coach/roster')).statusCode).toBe(402);
+    expect((await clientStatus(client.id)).link).toMatchObject({ seat: 'free' });
   });
 
   it('re-cuts the seats when the plan moves, earliest links first', async () => {
@@ -548,8 +553,8 @@ describe('seats and plans', () => {
     const lapsed = await query<any>('SELECT plan FROM users WHERE id = ANY($1::uuid[])', [[client.id, second.id]]);
     expect(lapsed.map((p) => p.plan)).toEqual(['plus', 'plus']);
 
-    await setCoachPlan(coach.id, 'solo', 1);
-    const solo = await query<any>('SELECT plan FROM users WHERE id = ANY($1::uuid[])', [[client.id, second.id]]);
-    expect(solo.map((p) => p.plan)).toEqual(['free', 'free']);
+    await setCoachPlan(coach.id, 'expired', 0);
+    const expired = await query<any>('SELECT plan FROM users WHERE id = ANY($1::uuid[])', [[client.id, second.id]]);
+    expect(expired.map((p) => p.plan)).toEqual(['free', 'free']);
   });
 });

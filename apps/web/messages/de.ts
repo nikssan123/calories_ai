@@ -749,7 +749,7 @@ export const de: Messages = {
   'auth.coachSignInTitle': 'Anmeldung für Coaches',
   'auth.coachSignInSubtitle': 'Deine Klienten, deine Einladungen und was ein Platz umfasst. Klienten nutzen die App weiter wie bisher.',
   'auth.coachCreateTitle': 'Coach-Konto erstellen',
-  'auth.coachCreateSubtitle': '14 Tage testen mit fünf Plätzen, ohne Karte. Deine Klienten lösen einen Code in der App ein, die sie schon haben.',
+  'auth.coachCreateSubtitle': 'Der erste Monat ist kostenlos, mit fünf Plätzen und ohne Karte. Deine Klienten lösen einen Code in der App ein, die sie schon haben.',
   'auth.coachName': 'Dein Name, wie Klienten ihn sehen',
   'auth.coachCreate': 'Coach-Konto erstellen',
   'auth.coachHaveAccount': 'Schon Coach hier?',

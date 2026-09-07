@@ -737,7 +737,7 @@ export const es: Messages = {
   'auth.coachSignInTitle': 'Acceso para coaches',
   'auth.coachSignInSubtitle': 'Tus clientes, tus invitaciones y lo que incluye una plaza. Tus clientes siguen usando la app.',
   'auth.coachCreateTitle': 'Crear una cuenta de coach',
-  'auth.coachCreateSubtitle': '14 días de prueba con cinco plazas, sin tarjeta. Tus clientes aceptan un código en la app que ya tienen.',
+  'auth.coachCreateSubtitle': 'El primer mes es gratis, con cinco plazas y sin tarjeta. Tus clientes aceptan un código en la app que ya tienen.',
   'auth.coachName': 'Tu nombre, como lo verán tus clientes',
   'auth.coachCreate': 'Crear una cuenta de coach',
   'auth.coachHaveAccount': '¿Ya eres coach aquí?',

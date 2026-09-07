@@ -244,7 +244,7 @@ export const en = {
   'auth.coachSignInTitle': 'Coach sign-in',
   'auth.coachSignInSubtitle': 'Your roster, your invites, and what a seat carries. Clients keep using the app.',
   'auth.coachCreateTitle': 'Create a coach account',
-  'auth.coachCreateSubtitle': 'A 14-day trial with five seats, no card. Your clients accept a code in the app they already have.',
+  'auth.coachCreateSubtitle': 'The first month is free, with five seats and no card. Your clients accept a code in the app they already have.',
   'auth.coachName': 'Your name, as clients will see it',
   'auth.coachCreate': 'Create a coach account',
   'auth.coachHaveAccount': 'Already coaching here?',

@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
-import { daysUntil, shortDate } from './bits';
+import { Notice, daysUntil, shortDate } from './bits';
 
 /**
  * The account and the seats. See COACH.md §9.
@@ -31,7 +31,7 @@ export function Settings() {
       const next = await api.coach.me();
       setAccount(next);
       setBusiness(next.business_name ?? '');
-      setSeats(Math.max(3, next.seats_used, next.plan === 'trial' ? next.seat_limit : 3));
+      setSeats(Math.max(1, next.seats_used, next.plan === 'trial' ? next.seat_limit : 1));
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -61,6 +61,7 @@ export function Settings() {
   if (!account) return <Skeleton className="h-64 w-full rounded-2xl" />;
 
   const trialDays = daysUntil(account.trial_ends_at);
+  const trialEnded = account.trial_ends_at ? shortDate(account.trial_ends_at.slice(0, 10)) : null;
 
   return (
     <div className="space-y-7">
@@ -70,6 +71,14 @@ export function Settings() {
           Signed in as {profile?.email}. Your clients see your name, {profile?.display_name ?? 'which is not set yet'}.
         </p>
       </div>
+
+      {account.plan === 'expired' && (
+        <Notice tone="warn">
+          Your free month {trialEnded ? `ended on ${trialEnded}` : 'is over'} and there is no subscription, so the
+          dashboard is closed and your clients are on the free tier. Nothing was deleted: subscribe below and the
+          roster, the invites and the digest are back as they were.
+        </Notice>
+      )}
 
       <InsetGroup title="Business" footer="Shown to a client on the accept screen, under your name.">
         <form
@@ -117,7 +126,7 @@ export function Settings() {
         </InsetRow>
         {account.plan === 'trial' && (
           <InsetRow className="justify-between">
-            <span className="text-body font-bold">Trial ends</span>
+            <span className="text-body font-bold">Free month ends</span>
             <span className="text-body tnum">
               {account.trial_ends_at ? shortDate(account.trial_ends_at.slice(0, 10)) : '—'}
               {trialDays !== null && ` · ${trialDays} day${trialDays === 1 ? '' : 's'} left`}
@@ -161,15 +170,15 @@ export function Settings() {
               <Input
                 type="number"
                 inputMode="numeric"
-                min={3}
+                min={1}
                 max={200}
                 value={seats}
                 onChange={(event) => setSeats(Number(event.target.value))}
                 className="tnum h-9 w-20"
                 aria-label="Seats"
               />
-              <Button type="submit" size="sm" disabled={busy || seats < 3}>
-                Continue to checkout
+              <Button type="submit" size="sm" disabled={busy || seats < 1}>
+                Subscribe
               </Button>
             </form>
           )}
@@ -196,11 +205,14 @@ export function Settings() {
         </InsetRow>
       </InsetGroup>
 
-      <InsetGroup title="Pricing" footer="Per seat, monthly. Annual is ten months for twelve. A seat is a client with an active link; pending codes do not count.">
-        <InsetRow className="justify-between"><span className="text-body">1 seat</span><span className="text-body tnum">free, client on the free tier</span></InsetRow>
-        <InsetRow className="justify-between"><span className="text-body">2 – 10 seats</span><span className="text-body tnum">$6 each</span></InsetRow>
-        <InsetRow className="justify-between"><span className="text-body">11 – 30 seats</span><span className="text-body tnum">$5 each</span></InsetRow>
-        <InsetRow className="justify-between"><span className="text-body">31 and up</span><span className="text-body tnum">$4 each</span></InsetRow>
+      <InsetGroup
+        title="Pricing"
+        footer="Monthly, in euro, VAT where it applies. The first month is free. A seat is a client with an active link, on Plus with photo logging; pending codes do not count, and a seat added mid-month is prorated to the day."
+      >
+        <InsetRow className="justify-between"><span className="text-body">The dashboard</span><span className="text-body tnum">€19 a month</span></InsetRow>
+        <InsetRow className="justify-between"><span className="text-body">Seats 1 – 10</span><span className="text-body tnum">€8 each</span></InsetRow>
+        <InsetRow className="justify-between"><span className="text-body">Seats 11 – 30</span><span className="text-body tnum">€7 each</span></InsetRow>
+        <InsetRow className="justify-between"><span className="text-body">Seats 31 and up</span><span className="text-body tnum">€6 each</span></InsetRow>
       </InsetGroup>
 
       <div className="px-1">
@@ -215,11 +227,11 @@ export function Settings() {
 function planLabel(account: CoachAccount): string {
   switch (account.plan) {
     case 'trial':
-      return 'Trial';
-    case 'solo':
-      return 'Solo';
+      return 'Free month';
+    case 'expired':
+      return 'No subscription';
     case 'paid':
-      return 'Per seat';
+      return 'Subscribed';
     case 'lapsed':
       return 'Payment failed';
   }
@@ -228,9 +240,9 @@ function planLabel(account: CoachAccount): string {
 function seatFooter(account: CoachAccount): string {
   switch (account.plan) {
     case 'trial':
-      return 'Every seat carries Plus during the trial. Pick a plan before it ends and nothing changes for your clients.';
-    case 'solo':
-      return 'One client, on the free tier: manual and barcode logging, one photo. A paid seat puts them on Plus.';
+      return 'Every seat carries Plus during your free month. Subscribe before it ends and nothing changes for your clients; the card is not charged until the month is over.';
+    case 'expired':
+      return 'No seats carry Plus without a subscription. Subscribe and the seats you pick are back on Plus within a minute.';
     case 'paid':
       return 'Add a seat from the billing page and it is prorated to the day.';
     case 'lapsed':

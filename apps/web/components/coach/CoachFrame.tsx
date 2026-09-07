@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { LogOut, Mail, Settings, Ticket, Users, type LucideIcon } from 'lucide-react';
+import { api } from '@/lib/api';
 import { useAuth } from '@/components/AuthGate';
 import { Logo } from '@/components/Logo';
 import { cn } from '@/lib/utils';
@@ -36,6 +37,25 @@ export function CoachFrame({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!loading && !isCoach) router.replace('/');
   }, [loading, isCoach, router]);
+
+  /*
+   * The billing page is the one room open to a coach whose free month ended
+   * without a card. The API answers 402 everywhere else; this only saves the
+   * coach from reading that as an empty roster.
+   */
+  useEffect(() => {
+    if (loading || !isCoach || pathname.startsWith('/coach/settings')) return;
+    let cancelled = false;
+    api.coach
+      .me()
+      .then((account) => {
+        if (!cancelled && account.plan === 'expired') router.replace('/coach/settings');
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, isCoach, pathname, router]);
 
   if (!isCoach) return null;
 

@@ -189,3 +189,19 @@ export function daysUntil(iso: string | null): number | null {
   if (!iso) return null;
   return Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000));
 }
+
+/** A line the page wants read before the table: the free month, a failed card. */
+export function Notice({ tone, children }: { tone: 'info' | 'warn'; children: React.ReactNode }) {
+  return (
+    <p
+      className={cn(
+        'rounded-2xl border-2 px-4 py-3 text-[14px] font-medium',
+        tone === 'warn'
+          ? 'border-[color-mix(in_oklch,var(--protein),transparent_50%)] bg-[color-mix(in_oklch,var(--protein),transparent_88%)]'
+          : 'border-border bg-card',
+      )}
+    >
+      {children}
+    </p>
+  );
+}

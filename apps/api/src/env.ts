@@ -99,6 +99,11 @@ export interface StripeEnv {
    * the quantity, is the whole catalogue — see COACH.md §9.
    */
   seatPriceId: string;
+  /**
+   * The flat monthly price for the dashboard itself, `price_…`, charged once
+   * per subscription beside the seats.
+   */
+  basePriceId: string;
 }
 
 export interface Env {
@@ -449,17 +454,19 @@ export function stripeEnv(source: NodeJS.ProcessEnv): StripeEnv | null {
   const secretKey = source.STRIPE_SECRET_KEY?.trim();
   const webhookSecret = source.STRIPE_WEBHOOK_SECRET?.trim();
   const seatPriceId = source.STRIPE_SEAT_PRICE_ID?.trim();
-  if (!secretKey || !webhookSecret || !seatPriceId) {
-    const named = [secretKey, webhookSecret, seatPriceId].filter(Boolean).length;
+  const basePriceId = source.STRIPE_BASE_PRICE_ID?.trim();
+  if (!secretKey || !webhookSecret || !seatPriceId || !basePriceId) {
+    const named = [secretKey, webhookSecret, seatPriceId, basePriceId].filter(Boolean).length;
     if (named > 0) {
       throw new Error(
-        'Stripe is half-configured: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET and ' +
-          'STRIPE_SEAT_PRICE_ID are all required together. Unset all three to run without cards.',
+        'Stripe is half-configured: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, ' +
+          'STRIPE_SEAT_PRICE_ID and STRIPE_BASE_PRICE_ID are all required together. ' +
+          'Unset all four to run without cards.',
       );
     }
     return null;
   }
-  return { secretKey, webhookSecret, seatPriceId };
+  return { secretKey, webhookSecret, seatPriceId, basePriceId };
 }
 
 /**

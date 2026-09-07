@@ -16,6 +16,7 @@ import {
   Bar,
   DotStrip,
   FlagPill,
+  Notice,
   OnTrack,
   daysUntil,
   goalLabel,
@@ -121,22 +122,21 @@ export function Roster() {
 
       {roster.account.plan === 'trial' && trialDays !== null && (
         <Notice tone={trialDays <= 3 ? 'warn' : 'info'}>
-          Trial: {trialDays} day{trialDays === 1 ? '' : 's'} left, {roster.seats.limit} seats with Plus for
+          Free month: {trialDays} day{trialDays === 1 ? '' : 's'} left, {roster.seats.limit} seats with Plus for
           every client.{' '}
           <Link href="/coach/settings" className="font-extrabold underline underline-offset-2">
-            Pick a plan
+            Subscribe
           </Link>{' '}
-          before it ends to keep them.
+          before it ends to keep them; the card is not charged until then.
         </Notice>
       )}
-      {roster.account.plan === 'solo' && (
-        <Notice tone="info">
-          Solo: one seat, and your client is on the free tier. A paid seat puts them on Plus, with photo
-          logging.{' '}
+      {roster.account.plan === 'expired' && (
+        <Notice tone="warn">
+          Your free month is over and there is no subscription, so the dashboard is closed.{' '}
           <Link href="/coach/settings" className="font-extrabold underline underline-offset-2">
-            See plans
-          </Link>
-          .
+            Subscribe
+          </Link>{' '}
+          to reopen it.
         </Notice>
       )}
       {roster.account.plan === 'lapsed' && (
@@ -333,20 +333,5 @@ function ClientCard({ row, onOpen }: { row: CoachRosterRow; onOpen: () => void }
         {row.flags.length === 0 ? <OnTrack /> : row.flags.map((flag) => <FlagPill key={flag.kind} flag={flag} />)}
       </span>
     </button>
-  );
-}
-
-function Notice({ tone, children }: { tone: 'info' | 'warn'; children: React.ReactNode }) {
-  return (
-    <p
-      className={cn(
-        'rounded-2xl border-2 px-4 py-3 text-[14px] font-medium',
-        tone === 'warn'
-          ? 'border-[color-mix(in_oklch,var(--protein),transparent_50%)] bg-[color-mix(in_oklch,var(--protein),transparent_88%)]'
-          : 'border-border bg-card',
-      )}
-    >
-      {children}
-    </p>
   );
 }

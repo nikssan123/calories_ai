@@ -22,7 +22,8 @@ import {
   ensureCoachAccount,
   getCoachAccount,
   getNotes,
-  isCoach,
+  coachPlanOf,
+  dashboardOpen,
   listComments,
   listDigests,
   listInvites,
@@ -58,18 +59,31 @@ import { env } from '../env.ts';
  */
 
 const ScopePatch = CoachScope.partial();
+/** What an expired coach can still reach: who they are, and the way back in. */
+const OPEN_WHEN_EXPIRED = ['/coach/me', '/coach/billing'] as const;
 const NotesBody = z.object({ body: z.string().max(10_000) });
 
 export async function registerCoachRoutes(app: FastifyInstance) {
   /**
    * One guard for the whole prefix. The one exception is becoming a coach,
    * which by definition is asked by somebody who is not one yet.
+   *
+   * A coach whose free month has ended without a card is still a coach — the
+   * links and the notes are theirs — but the dashboard is closed: the account
+   * and the billing routes answer, and everything else is a 402 with a reason,
+   * so the page can say why rather than show an empty roster.
    */
   async function requireCoach(request: FastifyRequest, reply: FastifyReply) {
     if (!request.url.startsWith('/coach')) return;
-    if (request.method === 'POST' && request.url.split('?')[0] === '/coach/account') return;
-    if (!request.userId || !(await isCoach(request.userId))) {
-      return reply.status(404).send({ error: 'Not found' });
+    const path = request.url.split('?')[0]!;
+    if (request.method === 'POST' && path === '/coach/account') return;
+    const plan = request.userId ? await coachPlanOf(request.userId) : null;
+    if (!plan) return reply.status(404).send({ error: 'Not found' });
+    if (!dashboardOpen(plan) && !OPEN_WHEN_EXPIRED.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))) {
+      return reply.status(402).send({
+        error: 'Your free month has ended. Subscribe to reopen the dashboard.',
+        code: 'subscription_required',
+      });
     }
   }
   app.addHook('onRequest', requireCoach);

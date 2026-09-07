@@ -37,7 +37,7 @@ let app: FastifyInstance;
 let cookie: string;
 
 beforeEach(async () => {
-  env.stripe = { secretKey: 'sk_test_x', webhookSecret: SECRET, seatPriceId: 'price_seat' };
+  env.stripe = { secretKey: 'sk_test_x', webhookSecret: SECRET, seatPriceId: 'price_seat', basePriceId: 'price_base' };
   coach = await createUser({ email: 'coach@example.com', display_name: 'Maria' });
   client = await createUser({ email: 'client@example.com', plan: 'free' });
   await ensureCoachAccount(coach.id);
@@ -159,7 +159,7 @@ describe('the webhook', () => {
     expect(await expireLapsed(new Date(Date.now() + (LAPSED_GRACE_DAYS - 1) * 86_400_000))).toBe(0);
     // Past it, Solo: one seat, on the free tier.
     expect(await expireLapsed(new Date(Date.now() + (LAPSED_GRACE_DAYS + 1) * 86_400_000))).toBe(1);
-    expect((await getCoachAccount(coach.id))!).toMatchObject({ plan: 'solo', seat_limit: 1, seats_carry_plus: false });
+    expect((await getCoachAccount(coach.id))!).toMatchObject({ plan: 'expired', seat_limit: 0, seats_carry_plus: false });
     expect((await queryOne<any>('SELECT plan FROM users WHERE id = $1', [client.id]))!.plan).toBe('free');
 
     // The card works again: straight back.
@@ -168,10 +168,10 @@ describe('the webhook', () => {
     expect((await queryOne<any>('SELECT plan FROM users WHERE id = $1', [client.id]))!.plan).toBe('plus');
   });
 
-  it('returns a cancelled coach to solo', async () => {
+  it('expires a cancelled coach', async () => {
     await post(subscriptionEvent('evt_8', 'customer.subscription.updated', 'active', 5));
     await post(subscriptionEvent('evt_9', 'customer.subscription.deleted', 'canceled', 5));
-    expect((await getCoachAccount(coach.id))!).toMatchObject({ plan: 'solo', seat_limit: 1 });
+    expect((await getCoachAccount(coach.id))!).toMatchObject({ plan: 'expired', seat_limit: 0 });
   });
 
   it('reads the subscription behind a completed checkout', async () => {
@@ -191,9 +191,35 @@ describe('the webhook', () => {
     expect((await getCoachAccount(coach.id))!).toMatchObject({ plan: 'paid', seat_limit: 9 });
   });
 
+  it('reads the seat count off the seat line, not the base fee', async () => {
+    const event = subscriptionEvent('evt_12', 'customer.subscription.updated', 'active', 0, {
+      items: { data: [{ price: { id: 'price_base' }, quantity: 1 }, { price: { id: 'price_seat' }, quantity: 7 }] },
+    });
+    expect((await post(event)).statusCode).toBe(200);
+    expect((await getCoachAccount(coach.id))!).toMatchObject({ plan: 'paid', seat_limit: 7 });
+  });
+
   it('answers 503 when the server has no Stripe', async () => {
     env.stripe = null;
     expect((await post(subscriptionEvent('evt_11', 'customer.subscription.updated', 'active', 5))).statusCode).toBe(503);
+  });
+});
+
+describe('an expired account', () => {
+  it('reaches the account and billing, and a 402 everywhere else', async () => {
+    await setCoachPlan(coach.id, 'expired', 0);
+    const get = (url: string) => app.inject({ method: 'GET', url, headers: { cookie } });
+
+    expect((await get('/coach/me')).statusCode).toBe(200);
+    expect((await get('/coach/roster')).statusCode).toBe(402);
+    expect((await get('/coach/roster')).json()).toMatchObject({ code: 'subscription_required' });
+    expect((await get('/coach/invites')).statusCode).toBe(402);
+    expect((await get('/coach/digest/preview')).statusCode).toBe(402);
+    // Billing is the way back in: no card yet is a 404 from the route, not a 402 from the guard.
+    expect((await app.inject({ method: 'POST', url: '/coach/billing/portal', headers: { cookie } })).statusCode).toBe(404);
+
+    await setCoachPlan(coach.id, 'paid', 3);
+    expect((await get('/coach/roster')).statusCode).toBe(200);
   });
 });
 
@@ -212,12 +238,36 @@ describe('checkout and the portal', () => {
     expect(calls[0]!.url).toBe('https://api.stripe.com/v1/checkout/sessions');
     const params = new URLSearchParams(calls[0]!.body);
     expect(params.get('mode')).toBe('subscription');
-    expect(params.get('line_items[0][price]')).toBe('price_seat');
-    expect(params.get('line_items[0][quantity]')).toBe(String(MIN_PAID_SEATS));
+    // The dashboard fee first, fixed at one; the seats beside it, adjustable.
+    expect(params.get('line_items[0][price]')).toBe('price_base');
+    expect(params.get('line_items[0][quantity]')).toBe('1');
+    expect(params.get('line_items[0][adjustable_quantity][enabled]')).toBeNull();
+    expect(params.get('line_items[1][price]')).toBe('price_seat');
+    expect(params.get('line_items[1][quantity]')).toBe(String(MIN_PAID_SEATS));
+    expect(params.get('line_items[1][adjustable_quantity][minimum]')).toBe(String(MIN_PAID_SEATS));
+    // A fresh coach is inside the free month, so the card is not charged until it ends.
+    const account = (await getCoachAccount(coach.id))!;
+    expect(params.get('subscription_data[trial_end]')).toBe(
+      String(Math.floor(new Date(account.trial_ends_at!).getTime() / 1000)),
+    );
     expect(params.get('client_reference_id')).toBe(coach.id);
     expect(params.get('customer_email')).toBe(coach.email);
     expect(params.get('subscription_data[metadata][coach_user_id]')).toBe(coach.id);
     expect(params.get('success_url')).toContain('/coach/settings?checkout=success');
+  });
+
+  it('charges at once when the free month is over, or nearly', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ url: 'https://checkout.stripe.com/x' }), { status: 200 }));
+    const paramsOf = (call: number) => new URLSearchParams(String((fetchImpl.mock.calls[call] as any)[1].body));
+
+    await setCoachPlan(coach.id, 'expired', 0);
+    await createCheckoutSession(coach.id, 2, fetchImpl as unknown as typeof fetch);
+    expect(paramsOf(0).get('subscription_data[trial_end]')).toBeNull();
+
+    // A day left is under Stripe's two-day floor for a trial end: no trial, charge now.
+    await query(`UPDATE coach_accounts SET plan = 'trial', trial_ends_at = now() + interval '1 day' WHERE user_id = $1`, [coach.id]);
+    await createCheckoutSession(coach.id, 2, fetchImpl as unknown as typeof fetch);
+    expect(paramsOf(1).get('subscription_data[trial_end]')).toBeNull();
   });
 
   it('reuses the customer once there is one', async () => {

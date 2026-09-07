@@ -696,7 +696,7 @@ export function tick(logger?: FastifyBaseLogger): void {
   // A trial is a date, and the sweep is the same instrument `expirePlans` is.
   expireTrials(now)
     .then((n) => {
-      if (n > 0) logger?.info({ expired: n }, 'coach trials moved to solo');
+      if (n > 0) logger?.info({ expired: n }, 'coach free months expired');
     })
     .catch((error) => {
       logger?.error({ err: error }, 'coach trial sweep failed');

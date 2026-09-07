@@ -3748,10 +3748,15 @@ export type AdminOverview = z.infer<typeof AdminOverview>;
 // draw a number the app itself would not.
 
 /**
- * `trial` and `paid` carry Plus on every seat; `solo` and `lapsed` carry the
- * free tier. The seat count is a separate number, not implied by the plan.
+ * The dashboard is a subscription: a free month (`trial`), then a card
+ * (`paid`). `lapsed` is a card that stopped working, still inside its grace
+ * period; `expired` is the free month over, or the subscription cancelled,
+ * with no card — the links survive, the dashboard closes behind the billing
+ * page. `trial`, `paid` and `lapsed` carry Plus on every seat; `expired`
+ * carries nothing. The seat count is a separate number, not implied by the
+ * plan.
  */
-export const COACH_PLANS = ['trial', 'solo', 'paid', 'lapsed'] as const;
+export const COACH_PLANS = ['trial', 'expired', 'paid', 'lapsed'] as const;
 export const CoachPlan = z.enum(COACH_PLANS);
 export type CoachPlan = z.infer<typeof CoachPlan>;
 
