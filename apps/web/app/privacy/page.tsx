@@ -68,16 +68,18 @@ export default function PrivacyPage() {
         <Sub>If you let the app count your steps</Sub>
         <List>
           <li>
-            A daily step count, read from your phone&rsquo;s own motion sensor and nothing
-            else. No location, no route, no map, and no continuous tracking &mdash; the app
-            asks for one number per day, when you open it, and asks for nothing while it is
-            closed.
+            A daily step count, and nothing else. No location, no route, no map, and no
+            continuous tracking &mdash; the app asks for one number per day, when you open
+            it, and asks for nothing while it is closed. On an iPhone it comes from the
+            phone&rsquo;s own motion sensor; on Android it is read from Health Connect,
+            which holds what other apps &mdash; Samsung Health, Fitbit &mdash; have already
+            recorded. Only the step count is read, and nothing is ever written back.
           </li>
           <li>
-            It is off until you turn it on, from the Steps card on Today, and the phone asks
-            you before the first reading. Turning it off in your phone&rsquo;s settings stops
-            new days arriving; the days already recorded are deleted with your account like
-            everything else, or on request.
+            It is off until you turn it on, from the Steps card on Today, and your phone
+            asks you before the first reading. Withdrawing it &mdash; in iOS Settings, or in
+            Health Connect on Android &mdash; stops new days arriving; the days already
+            recorded are deleted with your account like everything else, or on request.
           </li>
           <li>
             What it is used for: setting your calorie target from what you actually do rather

@@ -11,17 +11,16 @@ const { withAndroidManifest } = require('expo/config-plugins');
  * "Physical activity" on the Play listing and into the data safety form for a
  * feature this build does not have.
  *
- * It does not have it because `expo-sensors` cannot answer on Android:
- * `getStepCountAsync` throws `NotSupportedException`, and `watchStepCount`
- * reports steps since the app was foregrounded, which would be a wrong number
- * rather than a missing one. See `lib/steps.ts` for the whole argument and
- * INTEGRATIONS.md for what replaces it.
+ * Android reads steps from Health Connect, under
+ * `android.permission.health.READ_STEPS`, and never touches the raw step
+ * sensor: `expo-sensors` cannot answer there anyway — `getStepCountAsync`
+ * throws `NotSupportedException` and `watchStepCount` reports only steps since
+ * the app was foregrounded. `expo-sensors` stays installed for iOS, where
+ * `CMPedometer` is the whole implementation, and its manifest tags along.
  *
- * So this strips the merged permission rather than declaring it. When Health
- * Connect lands and Android genuinely reads steps, delete this plugin — the
- * permission it removes is exactly the one that stage needs, and its return to
- * the listing will be a change worth making deliberately rather than one that
- * arrived with a dependency.
+ * So the permission is stripped rather than inherited. Two health permissions
+ * on the listing, one of which the app never exercises, is a worse answer to
+ * Play's health declaration than one that matches the code exactly.
  *
  * `tools:node="remove"` rather than dropping the entry: the manifest merger
  * runs after this, and an entry deleted here is simply re-merged from the

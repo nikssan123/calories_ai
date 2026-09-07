@@ -31,14 +31,30 @@ still unbuilt. What the steps work did establish is the rule, in code and in a t
 `daily_metrics` is not `exercise_entries`, and `buildDaySummary` has a test asserting a
 20,000-step day still reports `burned_kcal: 0`.
 
-**Android reports steps as unavailable rather than as a wrong number.** `expo-sensors`
-throws `NotSupportedException` from `getStepCountAsync` there, and its only other door,
-`watchStepCount`, is `TYPE_STEP_COUNTER` with the baseline zeroed at subscribe — steps
-since the app came to the foreground. Somebody who opens the app twice a day would be
-told they walked four hundred steps, which is a confident lie that looks plausible. The
-real answer on Android is Health Connect, and it is a stage of its own: a native module
-and a Play data-safety declaration. Everything above `readStepWindow` is platform-blind,
-so that stage is a new implementation of one function.
+**Android reads Health Connect.** `expo-sensors` cannot answer there —
+`getStepCountAsync` throws `NotSupportedException`, and `watchStepCount` is
+`TYPE_STEP_COUNTER` with the baseline zeroed at subscribe, which reports steps since the
+app came to the foreground and would tell somebody who opens the app twice a day that
+they walked four hundred. The underlying reason is not an Expo gap: Android's base
+platform keeps no step history at all, where iOS keeps a week of it in CoreMotion.
+
+So `react-native-health-connect` reads `android.permission.health.READ_STEPS` through
+`aggregateRecord` over an explicit window — explicit rather than `aggregateGroupByPeriod`,
+which slices on the device's calendar day and would put a 1am walk on the wrong date.
+`minSdkVersion` rose 24 → 26 for it. The seam is `stepsBetween` in `lib/steps.ts`; the
+day-boundary walk above it is shared, which was the point of putting the seam there.
+
+**One state has no iOS equivalent, and it is not a bug.** Health Connect is a *store*,
+not a counter: it holds what other apps write. Permission can be granted and the answer
+still be nothing, because nothing on that phone records steps. Samsung is the best case —
+Samsung Health is preinstalled and already counting, and needs its Health Connect sync
+switched on once; a Pixel needs the Fitbit app; a device with no health app at all has
+nothing and cannot be given any. The Steps card says so and opens Health Connect's own
+settings, because that is where the fix lives and it is not in this app.
+
+**Shipping Android still needs Google's Health apps declaration** — see
+`HEALTH_CONNECT_DECLARATION.md`, which drafts every answer. It requires a demo video of
+the permission flow, so it cannot be filed before the feature exists.
 
 **Steps set the activity multiplier.** `predictTdee` was BMR times a dropdown answered
 once at onboarding — 1.2 to 1.9, well over a thousand kcal of spread on one untested

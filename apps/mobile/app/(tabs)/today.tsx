@@ -52,6 +52,7 @@ import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
 import { useCountUp } from '@/hooks/useCountUp';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
 import { useSteps } from '@/hooks/useSteps';
+import { openStepsSettings } from '@/lib/steps';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { writeDaySnapshot } from '@/lib/snapshot';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
@@ -314,11 +315,12 @@ export default function TodayScreen() {
    * steps inform the target over weeks, and are not an ingredient of it today.
    * See `lib/steps.ts`.
    */
-  const { steps, permission: stepPermission, enable: enableSteps } = useSteps(
-    profile,
-    isToday,
-    day?.steps ?? null,
-  );
+  const {
+    steps,
+    permission: stepPermission,
+    empty: stepsEmpty,
+    enable: enableSteps,
+  } = useSteps(profile, isToday, day?.steps ?? null);
 
   /*
    * Keep the home screen in step, but only while this screen is actually
@@ -757,7 +759,9 @@ export default function TodayScreen() {
             steps={steps}
             average={day.steps_average}
             permission={stepPermission}
+            empty={stepsEmpty}
             onEnable={enableSteps}
+            onOpenSettings={() => void openStepsSettings()}
           />
 
           {byMeal.length === 0 && day.exercise_entries.length === 0 && (

@@ -25,7 +25,9 @@ export function StepsCard({
   steps,
   average,
   permission,
+  empty,
   onEnable,
+  onOpenSettings,
 }: {
   steps: number | null;
   /**
@@ -39,7 +41,17 @@ export function StepsCard({
    */
   average: number | null;
   permission: StepPermission | null;
+  /**
+   * True when we are allowed to read and there was nothing to read.
+   *
+   * Android's own state, with no iOS equivalent — Health Connect is a store
+   * rather than a counter, so permission can be granted and the store still be
+   * empty because nothing on the phone writes steps into it. Null until a read
+   * has happened at all.
+   */
+  empty: boolean | null;
   onEnable: () => void;
+  onOpenSettings: () => void;
 }) {
   const colors = useColors();
   const tr = useT();
@@ -106,6 +118,47 @@ export function StepsCard({
               </Text>
               <Text style={[t.footnote, { color: colors.mutedForeground }]}>
                 {tr('today.stepsEnableHint')}
+              </Text>
+            </View>
+          </InsetRow>
+        </Pressable>
+      </InsetGroup>
+    );
+  }
+
+  /*
+   * Granted, read, and the store was empty.
+   *
+   * The one state in this feature the app cannot fix from inside itself, and
+   * therefore the one that has to hand the reader somewhere to go. Health
+   * Connect holds what other apps write; if Samsung Health or Fitbit is not
+   * feeding it, no amount of tapping in here produces a step. So this says what
+   * is true and opens the screen where it can be changed, rather than sitting
+   * blank and letting somebody conclude the feature is broken.
+   *
+   * `empty === true` specifically, not falsy: null means nothing has been read
+   * yet, which is the ordinary state for the first seconds after a grant and
+   * must not flash this row.
+   */
+  if (empty === true) {
+    return (
+      <InsetGroup title={tr('today.stepsTitle')}>
+        <Pressable
+          onPress={() => {
+            haptics.press();
+            onOpenSettings();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={tr('today.stepsNoSource')}
+          style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+        >
+          <InsetRow first>
+            <View style={styles.copy}>
+              <Text style={[t.bodySemibold, { color: colors.foreground }]}>
+                {tr('today.stepsNoSource')}
+              </Text>
+              <Text style={[t.footnote, { color: colors.mutedForeground }]}>
+                {tr('today.stepsNoSourceHint')}
               </Text>
             </View>
           </InsetRow>

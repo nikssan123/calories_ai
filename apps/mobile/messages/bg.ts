@@ -261,6 +261,9 @@ export const bg: Messages = {
   'today.stepsFooter':
     'Отчетени от телефона ти. Стъпките уточняват целта ти — никога не се добавят към нея.',
   'today.stepsEnable': 'Брой стъпките ми',
+  'today.stepsNoSource': 'Още нищо не брои стъпки на този телефон',
+  'today.stepsNoSourceHint':
+    'Health Connect пази стъпките, които други приложения записват — Samsung Health и Fitbit го правят. Докосни, за да видиш какво го захранва.',
   'today.stepsUsual': (average: string) => `обикновено ${average}`,
   'today.stepsEnableHint':
     'Чете стъпките от телефона, за да е целта ти според това, което наистина правиш.',
