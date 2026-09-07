@@ -419,20 +419,22 @@ on the iOS simulator.
 
 **Still to do before a coach sees it in production:**
 
-- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SEAT_PRICE_ID` on the
-  API. The sandbox (`acct_1UD3vZ2Hp2Pcfz1R`, test mode) is set up as of
-  2026-09-07: product `prod_VDV2QNPhIurOXt` "Day So Far Coach seat" with the
-  graduated EUR price `price_1UD42f2Hp2Pcfz1RZbP8fRjB` (€6 / €5 / €4 per seat
-  per month at 1–10 / 11–30 / 31+), webhook `we_1UD47D2Hp2Pcfz1R2VfAwdLt`
-  at `https://api.daysofar.com/billing/stripe` on the four checkout and
-  subscription events (API version 2026-08-26.dahlia), and the default portal
-  configuration allowing quantity changes (3–200) and cancel at period end.
-  Live mode has the same three as of the same day: product
-  `prod_VDVJq5AVlxLrLI`, price `price_1UD4J02Hp2Pcfz1RN4BcyfAn`, webhook
-  `we_1UD4Ky2Hp2Pcfz1RXbQk11hk`, portal configuration
-  `bpc_1UD4OU2Hp2Pcfz1RslF0CFjE`. The prod compose file forwards the three
-  variables (pass-through, so absent stays absent). Stripe Tax is not
-  enabled in the checkout call yet.
+- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_SEAT_PRICE_ID` and
+  `STRIPE_BASE_PRICE_ID` on the API; the prod compose file forwards all four
+  (pass-through, so absent stays absent). Both Stripe modes are set up as of
+  2026-09-07, account `acct_1UD3vZ2Hp2Pcfz1R`, everything EUR and monthly:
+
+  | | Live | Test |
+  |---|---|---|
+  | Seat product | `prod_VDVJq5AVlxLrLI` | `prod_VDV2QNPhIurOXt` |
+  | Seat price, graduated €8 / €7 / €6 at 1–10 / 11–30 / 31+ | `price_1UD4ff2Hp2Pcfz1RThZkDF5l` | `price_1UD4kN2Hp2Pcfz1RMSpu5Htq` |
+  | Dashboard product | `prod_VDVkHHthsKpT9c` | `prod_VDVoXTa8p3n5cZ` |
+  | Dashboard price, flat €19 | `price_1UD4il2Hp2Pcfz1Rd92camq7` | `price_1UD4mT2Hp2Pcfz1R8e2ma0SC` |
+  | Webhook, `/billing/stripe`, four checkout and subscription events | `we_1UD4Ky2Hp2Pcfz1RXbQk11hk` | `we_1UD47D2Hp2Pcfz1R2VfAwdLt` |
+  | Portal configuration, seat quantity 1–200, cancel at period end | `bpc_1UD4OU2Hp2Pcfz1RslF0CFjE` | `bpc_1UD4932Hp2Pcfz1RnVnjuPAh` |
+
+  The first €6 / €5 / €4 seat prices are archived, not deleted. Stripe Tax is
+  not enabled in the checkout call yet.
 - A new store build for the `/c/*` app link (Android intent filter, iOS
   associated domain via the existing AASA route).
 - Coach terms and a DPA at checkout (§13). The dashboard and the digest are
