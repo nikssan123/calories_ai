@@ -76,6 +76,23 @@ raises any missing declaration afterwards, with a link to it: Test and release �
 Testing → Closed testing → alpha → Create new release. It has to be done by
 hand — the artifact is 96 MB and browser automation here caps uploads at 10 MB.
 
+**That is exactly what it was, and it is now done.** Uploading versionCode 40
+through the Console made the form grow a third step. It had two — features, and
+regional requirements — and once Play had seen a bundle asking for
+`READ_STEPS` it had **1 Health features in your app · 2 Health data permissions
+· 3 Regional requirements**, with the release blocked by "You must complete the
+health declaration" and a *Go to declaration* link. Step 2 cannot be reached any
+other way: it is keyed to the uploaded bundle, and the API refused the very
+bundle that summons it.
+
+Step 2 asks one thing, a free-text box up to 10,000 characters: *Describe your
+app's use of the android.permission.health.READ_STEPS permission*. No video, no
+per-data-type questions. The answer filed on 2026-09-07 is the three uses below,
+written out — target, sanity band, assistant context — with the "never converted
+into calories" sentence, the retention-and-deletion facts, and Anthropic named as
+the processor for the third use. Saving it cleared the release error, and the
+release and the declaration went to Google together as one review.
+
 ## What the form asks, and what to answer
 
 Google reworks the wording periodically; these are the questions in substance.
