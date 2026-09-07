@@ -266,6 +266,13 @@ services:
       # in .env never reached the container and every purchase was a silent
       # no-op.
       REVENUECAT_WEBHOOK_SECRET: ${REVENUECAT_WEBHOOK_SECRET:-}
+      # The coach dashboard's card billing (COACH.md §12). Pass-through, like
+      # AI_PROVIDER above: absent from .env means the API runs without Stripe
+      # and the coach settings page offers no seat purchase. All three or none —
+      # env.ts refuses a partial set at boot rather than guess.
+      STRIPE_SECRET_KEY:
+      STRIPE_WEBHOOK_SECRET:
+      STRIPE_SEAT_PRICE_ID:
       # Whether to honour purchases the store marks SANDBOX. Off in production
       # by default and it should stay off — a sandbox purchase costs nothing, so
       # accepting one here is a free Coach plan for anybody with a tester
