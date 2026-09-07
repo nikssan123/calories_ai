@@ -63,8 +63,14 @@ export function CoachFrame({ children }: { children: React.ReactNode }) {
     href === '/coach' ? pathname === '/coach' || pathname.startsWith('/coach/clients') : pathname.startsWith(href);
 
   return (
-    <div className="bg-background flex min-h-screen w-full">
-      <aside className="border-border hidden w-64 shrink-0 flex-col border-r-2 lg:flex">
+    /*
+     * The frame owns the viewport the way <AppFrame> does: html and body are
+     * `overflow: hidden` for the whole app, so a `min-h-screen` box here grew
+     * with the roster and nothing could scroll it. A fixed-height shell with
+     * `main` as the one scrolling region is what the global rule expects.
+     */
+    <div className="bg-background h-shell flex w-full overflow-hidden">
+      <aside className="border-border hidden w-64 shrink-0 flex-col overflow-y-auto border-r-2 lg:flex">
         <div className="px-5 pt-6 pb-4">
           <Link href="/coach" className="flex items-center gap-2.5">
             <Logo size={30} />
