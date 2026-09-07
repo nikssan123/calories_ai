@@ -573,7 +573,8 @@ function SentScan({ scan }: { scan: MessageScan }) {
 function toBubble(message: ChatMessage): Bubble {
   return {
     key: message.id,
-    role: message.role,
+    // The web journal is the admin's own; a coach's comment is drawn as a reply.
+    role: message.role === 'coach' ? 'assistant' : message.role,
     content: message.content,
     photoUrl: message.photo_url ? api.photoUrl(message.photo_url) : undefined,
     actions: message.actions,

@@ -1,4 +1,10 @@
-import { ChatAction, type ChatCard, type ChatMessage, MessageScan } from '@ct/shared';
+import {
+  ChatAction,
+  type ChatCard,
+  type ChatMessage,
+  type ChatRole,
+  MessageScan,
+} from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import { signPhotoUrl } from './photos.ts';
 import { getSecret, PHOTO_URL_SECRET } from './secrets.ts';
@@ -11,7 +17,7 @@ import { getSecret, PHOTO_URL_SECRET } from './secrets.ts';
 
 export async function insertMessage(
   userId: string,
-  role: 'user' | 'assistant',
+  role: ChatRole,
   content: string,
   photoId: string | null = null,
   toolTrace: unknown = null,

@@ -1,8 +1,23 @@
 import type {
+  AcceptInviteRequest,
   AccountDeletion,
   Acknowledged,
   AdaptiveProposal,
   Allowance,
+  AuthIntent,
+  ClientCoachStatus,
+  CoachAccount,
+  CoachAccountUpdate,
+  CoachClientWeek,
+  CoachComment,
+  CoachCommentRequest,
+  CoachInvite,
+  CoachInviteRequest,
+  CoachRoster,
+  CoachScope,
+  CoachTargetsRequest,
+  LoginRequest,
+  Targets,
   BarcodeBasketRequest,
   BarcodeLogRequest,
   BarcodeLogResponse,
@@ -202,7 +217,11 @@ export function createApiClient({
     signup: (payload: SignupRequest) =>
       request<AuthStatus>('/auth/signup', { method: 'POST', body: JSON.stringify(payload) }),
 
-    login: (payload: Credentials) =>
+    /**
+     * `intent: 'coach'` is the web's second door: it lets a non-admin in and
+     * makes them a coach on the way. Omit it for the ordinary sign-in.
+     */
+    login: (payload: LoginRequest) =>
       request<AuthStatus>('/auth/login', { method: 'POST', body: JSON.stringify(payload) }),
 
     logout: () => request<AuthStatus>('/auth/logout', { method: 'POST' }),
@@ -233,6 +252,18 @@ export function createApiClient({
       const params = new URLSearchParams({ redirect, challenge });
       if (timezone) params.set('tz', timezone);
       return `${root}/auth/google/start?${params.toString()}`;
+    },
+
+    /**
+     * The browser's Google sign-in, as a URL to navigate to. `intent: 'coach'`
+     * opens the web to a non-admin and lands them on the roster.
+     */
+    googleWebStartUrl: ({ timezone, intent }: { timezone?: string; intent?: AuthIntent } = {}) => {
+      const params = new URLSearchParams();
+      if (timezone) params.set('tz', timezone);
+      if (intent) params.set('intent', intent);
+      const qs = params.toString();
+      return `${root}/auth/google/start${qs ? `?${qs}` : ''}`;
     },
 
     /** Spends the code that redirect came back with. Answers as login does. */
@@ -889,6 +920,85 @@ export function createApiClient({
      * joining it to this client's own base is the last step.
      */
     photoUrl: (signedPath: string) => `${root}${signedPath}`,
+
+    // ---- The coach seat ----
+    //
+    // The coach's side 404s for anyone without a coach account, the way the
+    // admin routes do. See COACH.md §5.
+
+    coach: {
+      /** Become a coach, or fetch the account you already have. */
+      become: () => request<CoachAccount>('/coach/account', { method: 'POST' }),
+
+      me: () => request<CoachAccount>('/coach/me'),
+
+      update: (patch: CoachAccountUpdate) =>
+        request<CoachAccount>('/coach/me', { method: 'PATCH', body: JSON.stringify(patch) }),
+
+      /** Every client, sorted by who needs attention. The Monday screen. */
+      roster: () => request<CoachRoster>('/coach/roster'),
+
+      invites: () => request<{ invites: CoachInvite[] }>('/coach/invites'),
+
+      createInvite: (payload: CoachInviteRequest = {}) =>
+        request<CoachInvite>('/coach/invites', { method: 'POST', body: JSON.stringify(payload) }),
+
+      deleteInvite: (id: string) =>
+        request<{ ok: true }>(`/coach/invites/${id}`, { method: 'DELETE' }),
+
+      /** Seven days ending `end`, or the client's yesterday when omitted. */
+      clientWeek: (id: string, end?: string) =>
+        request<CoachClientWeek>(
+          `/coach/clients/${id}/week${end ? `?end=${encodeURIComponent(end)}` : ''}`,
+        ),
+
+      setTargets: (id: string, targets: CoachTargetsRequest) =>
+        request<{ ok: true; targets: Targets }>(`/coach/clients/${id}/targets`, {
+          method: 'PUT',
+          body: JSON.stringify(targets),
+        }),
+
+      comments: (id: string) => request<{ comments: CoachComment[] }>(`/coach/clients/${id}/comments`),
+
+      /** Lands in the client's journal, with a push. */
+      addComment: (id: string, payload: CoachCommentRequest) =>
+        request<CoachComment>(`/coach/clients/${id}/comments`, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        }),
+
+      notes: (id: string) => request<{ body: string }>(`/coach/clients/${id}/notes`),
+
+      setNotes: (id: string, body: string) =>
+        request<{ ok: true }>(`/coach/clients/${id}/notes`, {
+          method: 'PUT',
+          body: JSON.stringify({ body }),
+        }),
+
+      /** Ends the link from the coach's side. */
+      removeClient: (id: string) =>
+        request<{ ok: true }>(`/coach/clients/${id}`, { method: 'DELETE' }),
+    },
+
+    /** The client's side of the same link, under the ordinary session. */
+    myCoach: {
+      status: () => request<ClientCoachStatus>('/me/coach'),
+
+      accept: (code: string) =>
+        request<ClientCoachStatus>('/me/coach/accept', {
+          method: 'POST',
+          body: JSON.stringify({ code } satisfies AcceptInviteRequest),
+        }),
+
+      setScope: (patch: Partial<CoachScope>) =>
+        request<ClientCoachStatus>('/me/coach/scope', {
+          method: 'PATCH',
+          body: JSON.stringify(patch),
+        }),
+
+      /** Stop sharing. Instant. */
+      revoke: () => request<ClientCoachStatus>('/me/coach', { method: 'DELETE' }),
+    },
 
     // ---- Admin ----
     //

@@ -228,6 +228,43 @@ export const BROWSABLE_TABLES: Record<string, TableSpec> = {
     order: 'last_seen_at DESC',
     note: 'Where notifications are delivered. One row per app install, not per account.',
   },
+  // ---- The coach seat
+  coach_accounts: {
+    group: 'Coach',
+    redact: ['stripe_customer_id', 'stripe_subscription_id'],
+    order: 'created_at DESC',
+    note: 'One row per coach: plan, seat count, trial end. See COACH.md.',
+  },
+  coach_clients: {
+    group: 'Coach',
+    redact: [],
+    order: 'accepted_at DESC',
+    note: 'Who coaches whom, with the scope the client agreed to. Revoked rows stay.',
+  },
+  coach_invites: {
+    group: 'Coach',
+    redact: [],
+    order: 'created_at DESC',
+    note: 'Codes a coach handed out. `accepted_at` set means spent.',
+  },
+  coach_comments: {
+    group: 'Coach',
+    redact: [],
+    order: 'created_at DESC',
+    note: 'What a coach wrote into a client’s journal, and whether it was read.',
+  },
+  coach_notes: {
+    group: 'Coach',
+    redact: ['body'],
+    order: 'updated_at DESC',
+    note: 'A coach’s private notes on a client. The body is redacted here on purpose.',
+  },
+  coach_digests: {
+    group: 'Coach',
+    redact: [],
+    order: 'week_start DESC',
+    note: 'The Monday email, one row per coach per week, with the numbers it carried.',
+  },
   billing_events: {
     group: 'Accounts',
     redact: [],

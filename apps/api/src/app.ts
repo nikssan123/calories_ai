@@ -6,6 +6,7 @@ import { EMAIL_UNVERIFIED, type PlanName } from '@ct/shared';
 import { registerRoutes } from './routes/index.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
 import { registerAdminRoutes } from './routes/admin.ts';
+import { registerCoachRoutes } from './routes/coach.ts';
 import { registerKitchenRoutes } from './routes/kitchen.ts';
 import { env } from './env.ts';
 import { bearerToken, resolveSession, SESSION_COOKIE } from './services/auth.ts';
@@ -250,6 +251,7 @@ export async function buildApp(
 
   await registerAuthRoutes(app);
   await registerAdminRoutes(app);
+  await registerCoachRoutes(app);
   await registerKitchenRoutes(app);
   await registerRoutes(app);
 

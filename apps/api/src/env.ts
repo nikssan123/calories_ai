@@ -89,6 +89,18 @@ export interface BillingEnv {
   acceptSandbox: boolean;
 }
 
+export interface StripeEnv {
+  /** `sk_live_…` or `sk_test_…`. The API creates checkout sessions with it. */
+  secretKey: string;
+  /** `whsec_…`, from the endpoint's page on the Stripe dashboard. */
+  webhookSecret: string;
+  /**
+   * The graduated per-seat price, `price_…`. One price, with the seat count as
+   * the quantity, is the whole catalogue — see COACH.md §9.
+   */
+  seatPriceId: string;
+}
+
 export interface Env {
   databaseUrl: string;
   port: number;
@@ -157,6 +169,12 @@ export interface Env {
   storage: StorageEnv | null;
   email: EmailEnv;
   billing: BillingEnv;
+  /**
+   * The coach seat's card reader, or null when this deployment does not take
+   * cards. Null is a working configuration: the trial and the Solo plan need
+   * no Stripe, and the checkout button is simply not drawn.
+   */
+  stripe: StripeEnv | null;
   /**
    * Google sign-in, or null when this deployment has not configured it. Null is
    * the honest default: OAuth needs a client registered against *this* server's
@@ -415,8 +433,33 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
       revenueCatSecret: isTest ? null : (source.REVENUECAT_WEBHOOK_SECRET ?? null),
       acceptSandbox: source.BILLING_ACCEPT_SANDBOX === 'true' || source.NODE_ENV !== 'production',
     },
+    // Forced off under test like every other outbound credential: the suite
+    // exercises the webhook with its own secret and never reaches Stripe.
+    stripe: isTest ? null : stripeEnv(source),
     isTest,
   };
+}
+
+/**
+ * All three or none, on the same argument `storageEnv` makes: a secret key
+ * without a price id is a checkout button that 500s after somebody has typed a
+ * card number, which is the worst place to find a missing variable.
+ */
+export function stripeEnv(source: NodeJS.ProcessEnv): StripeEnv | null {
+  const secretKey = source.STRIPE_SECRET_KEY?.trim();
+  const webhookSecret = source.STRIPE_WEBHOOK_SECRET?.trim();
+  const seatPriceId = source.STRIPE_SEAT_PRICE_ID?.trim();
+  if (!secretKey || !webhookSecret || !seatPriceId) {
+    const named = [secretKey, webhookSecret, seatPriceId].filter(Boolean).length;
+    if (named > 0) {
+      throw new Error(
+        'Stripe is half-configured: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET and ' +
+          'STRIPE_SEAT_PRICE_ID are all required together. Unset all three to run without cards.',
+      );
+    }
+    return null;
+  }
+  return { secretKey, webhookSecret, seatPriceId };
 }
 
 /**

@@ -1336,8 +1336,8 @@ export const StepsSummary = z.object({
 export type StepsSummary = z.infer<typeof StepsSummary>;
 
 /** Which pass produced a target row: the profile formula, the weekly adaptive
- * pass, or the user typing a number. */
-export const TARGET_SOURCES = ['calculated', 'adaptive', 'manual'] as const;
+ * pass, the user typing a number, or their coach setting one. */
+export const TARGET_SOURCES = ['calculated', 'adaptive', 'manual', 'coach'] as const;
 export const TargetSource = z.enum(TARGET_SOURCES);
 export type TargetSource = z.infer<typeof TargetSource>;
 
@@ -1846,7 +1846,22 @@ export const Credentials = z.object({
 });
 export type Credentials = z.infer<typeof Credentials>;
 
+/**
+ * What a caller is signing in *as*. `coach` is the only value: it opens the
+ * web to somebody who is not an admin, and creates the coach account on the
+ * way in. Absent means the ordinary journal sign-in, which on the web is
+ * admin-only. See COACH.md §5.
+ */
+export const AuthIntent = z.enum(['coach']);
+export type AuthIntent = z.infer<typeof AuthIntent>;
+
+export const LoginRequest = Credentials.extend({
+  intent: AuthIntent.optional(),
+});
+export type LoginRequest = z.infer<typeof LoginRequest>;
+
 export const SignupRequest = Credentials.extend({
+  intent: AuthIntent.optional(),
   display_name: z.string().max(80).nullable().optional(),
   /** Sent by the browser so the very first day boundary is already correct. */
   timezone: z.string().max(60).optional(),
@@ -1899,6 +1914,12 @@ export const AuthStatus = z.object({
   has_accounts: z.boolean(),
   /** Whether this account may open /admin. Decided by ADMIN_EMAILS on the API. */
   is_admin: z.boolean(),
+  /**
+   * Whether this account has a coach seat — a `coach_accounts` row — and so
+   * may open /coach on the web. Defaulted so a client built before the coach
+   * product still parses the status.
+   */
+  is_coach: z.boolean().default(false),
   /**
    * Whether this deployment has a Google client configured. The sign-in screen
    * asks before it offers the button: a self-hosted install that has not set
@@ -2353,7 +2374,13 @@ export const TrendPoint = z.object({
 });
 export type TrendPoint = z.infer<typeof TrendPoint>;
 
-export const ChatRole = z.enum(['user', 'assistant']);
+/**
+ * `coach` is the third voice in the journal: a comment written by the person
+ * the reader chose to share their log with. See COACH.md §5. It is drawn as its
+ * own bubble and never replayed to the model — a coach's remark is not part of
+ * the conversation the assistant is having.
+ */
+export const ChatRole = z.enum(['user', 'assistant', 'coach']);
 export type ChatRole = z.infer<typeof ChatRole>;
 
 /**
@@ -3698,6 +3725,216 @@ export const AdminOverview = z.object({
   }),
 });
 export type AdminOverview = z.infer<typeof AdminOverview>;
+
+// ---- Coaching ---------------------------------------------------------------
+//
+// The coach seat: one person reading another's log, by explicit grant. See
+// COACH.md. Everything a coach is shown is built from the client's own shapes
+// above — `DaySummary`, `WeightEntry`, `Targets` — so the dashboard can never
+// draw a number the app itself would not.
+
+/**
+ * `trial` and `paid` carry Plus on every seat; `solo` and `lapsed` carry the
+ * free tier. The seat count is a separate number, not implied by the plan.
+ */
+export const COACH_PLANS = ['trial', 'solo', 'paid', 'lapsed'] as const;
+export const CoachPlan = z.enum(COACH_PLANS);
+export type CoachPlan = z.infer<typeof CoachPlan>;
+
+/** What the client agreed to show. Each is a toggle on their own phone. */
+export const CoachScope = z.object({
+  /** Meals, their items and their photos. */
+  meals: z.boolean(),
+  /** Weigh-ins and the trend. */
+  weight: z.boolean(),
+  /** Steps, sleep and heart data from the device. Off until turned on. */
+  metrics: z.boolean(),
+});
+export type CoachScope = z.infer<typeof CoachScope>;
+
+export const CoachAccount = z.object({
+  user_id: z.string().uuid(),
+  display_name: z.string().nullable(),
+  email: z.string().nullable(),
+  business_name: z.string().nullable(),
+  plan: CoachPlan,
+  seat_limit: z.number().int(),
+  seats_used: z.number().int(),
+  /** Whether a seat on this plan puts the client on Plus. */
+  seats_carry_plus: z.boolean(),
+  trial_ends_at: z.string().nullable(),
+  /** Whether this deployment can take a card at all. False hides the checkout. */
+  billing_configured: z.boolean(),
+  created_at: z.string(),
+});
+export type CoachAccount = z.infer<typeof CoachAccount>;
+
+export const CoachInvite = z.object({
+  id: z.string().uuid(),
+  /** Shown as two groups of four, `7KQ4-MR2X`. Typed with or without the dash. */
+  code: z.string(),
+  /** The link that opens the accept screen: `<app>/c/<code>`. */
+  url: z.string(),
+  email: z.string().nullable(),
+  created_at: z.string(),
+  expires_at: z.string(),
+  accepted_by: z.string().uuid().nullable(),
+  accepted_name: z.string().nullable(),
+  accepted_at: z.string().nullable(),
+});
+export type CoachInvite = z.infer<typeof CoachInvite>;
+
+export const COACH_FLAG_KINDS = [
+  'no_log',
+  'protein_short',
+  'kcal_over',
+  'kcal_under',
+  'stalled',
+  'new',
+] as const;
+export const CoachFlagKind = z.enum(COACH_FLAG_KINDS);
+export type CoachFlagKind = z.infer<typeof CoachFlagKind>;
+
+/**
+ * One thing worth the coach's attention, with the words already chosen. The
+ * kinds are the signals the nudge pass computes for the client themselves;
+ * the roster shows the coach the same arithmetic.
+ */
+export const CoachFlag = z.object({
+  kind: CoachFlagKind,
+  severity: z.enum(['critical', 'warning', 'info']),
+  label: z.string(),
+  /** Days, where the flag is about a count of them. */
+  days: z.number().int().nullable(),
+});
+export type CoachFlag = z.infer<typeof CoachFlag>;
+
+/** A client as the coach sees them at the top of every page. */
+export const CoachClientHead = z.object({
+  id: z.string().uuid(),
+  display_name: z.string().nullable(),
+  goal: Goal.nullable(),
+  timezone: z.string(),
+  accepted_at: z.string(),
+  scope: CoachScope,
+  /** Whether this link currently carries Plus. */
+  seat: z.enum(['plus', 'free']),
+});
+export type CoachClientHead = z.infer<typeof CoachClientHead>;
+
+export const CoachRosterDay = z.object({
+  local_date: z.string(),
+  logged: z.boolean(),
+  kcal: z.number(),
+  protein_g: z.number(),
+});
+export type CoachRosterDay = z.infer<typeof CoachRosterDay>;
+
+export const CoachRosterRow = z.object({
+  client: CoachClientHead,
+  /** The seven days ending the client's own yesterday. */
+  week: z.object({ start: z.string(), end: z.string() }),
+  days: z.array(CoachRosterDay),
+  days_logged: z.number().int(),
+  kcal: z.object({ average: z.number().nullable(), target: z.number() }),
+  protein: z.object({ average_g: z.number().nullable(), target_g: z.number() }),
+  weight: z.object({
+    current_kg: z.number().nullable(),
+    change_4w_kg: z.number().nullable(),
+    weigh_ins: z.number().int(),
+  }),
+  flags: z.array(CoachFlag),
+  last_logged_at: z.string().nullable(),
+  last_comment_at: z.string().nullable(),
+});
+export type CoachRosterRow = z.infer<typeof CoachRosterRow>;
+
+export const CoachRoster = z.object({
+  /** The coach's own local date. */
+  today: z.string(),
+  /** Sorted by attention: most urgent first, then fewest days logged. */
+  clients: z.array(CoachRosterRow),
+  seats: z.object({ used: z.number().int(), limit: z.number().int() }),
+  account: CoachAccount,
+});
+export type CoachRoster = z.infer<typeof CoachRoster>;
+
+export const CoachComment = z.object({
+  id: z.string().uuid(),
+  local_date: z.string(),
+  food_entry_id: z.string().uuid().nullable(),
+  body: z.string(),
+  coach_name: z.string().nullable(),
+  created_at: z.string(),
+  read_at: z.string().nullable(),
+});
+export type CoachComment = z.infer<typeof CoachComment>;
+
+export const CoachClientWeek = z.object({
+  client: CoachClientHead,
+  week: z.object({ start: z.string(), end: z.string() }),
+  /** The client's own today, so the page knows which days are still open. */
+  today: z.string(),
+  /** Seven `DaySummary`s, oldest first, already cut to the client's scope. */
+  days: z.array(DaySummary),
+  /** Signed photo paths by `photo_id`, to join to the API base. */
+  photo_urls: z.record(z.string(), z.string()),
+  /** Eight weeks of weigh-ins, oldest first. Empty when weight is not shared. */
+  weights: z.array(WeightEntry),
+  targets: Targets,
+  /** The coach's private notes on this client. */
+  notes: z.string(),
+  comments: z.array(CoachComment),
+});
+export type CoachClientWeek = z.infer<typeof CoachClientWeek>;
+
+export const CoachTargetsRequest = z.object({
+  kcal: z.number().int().min(800).max(8000),
+  protein_g: z.number().int().min(0).max(600),
+  carbs_g: z.number().int().min(0).max(1500),
+  fat_g: z.number().int().min(0).max(500),
+});
+export type CoachTargetsRequest = z.infer<typeof CoachTargetsRequest>;
+
+export const CoachCommentRequest = z.object({
+  local_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  food_entry_id: z.string().uuid().nullable().optional(),
+  body: z.string().trim().min(1).max(1000),
+});
+export type CoachCommentRequest = z.infer<typeof CoachCommentRequest>;
+
+export const CoachAccountUpdate = z.object({
+  business_name: z.string().trim().max(120).nullable().optional(),
+});
+export type CoachAccountUpdate = z.infer<typeof CoachAccountUpdate>;
+
+export const CoachInviteRequest = z.object({
+  email: z.string().email().max(254).nullable().optional(),
+});
+export type CoachInviteRequest = z.infer<typeof CoachInviteRequest>;
+
+export const AcceptInviteRequest = z.object({
+  code: z.string().trim().min(8).max(12),
+});
+export type AcceptInviteRequest = z.infer<typeof AcceptInviteRequest>;
+
+/** What the phone shows under Settings, and null when nobody is coaching them. */
+export const ClientCoachStatus = z.object({
+  link: z
+    .object({
+      id: z.string().uuid(),
+      coach: z.object({
+        display_name: z.string().nullable(),
+        business_name: z.string().nullable(),
+      }),
+      scope: CoachScope,
+      accepted_at: z.string(),
+      /** Whether this seat is carrying Plus for the client right now. */
+      seat: z.enum(['plus', 'free']),
+    })
+    .nullable(),
+});
+export type ClientCoachStatus = z.infer<typeof ClientCoachStatus>;
 
 export const AdminUser = z.object({
   id: z.string().uuid(),

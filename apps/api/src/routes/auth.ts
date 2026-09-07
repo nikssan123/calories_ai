@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
-  Credentials,
+  LoginRequest,
+  type AuthIntent,
   EmailVerification,
   GoogleExchange,
   PasswordReset,
@@ -49,6 +50,7 @@ import {
   setPassword,
 } from '../services/user.ts';
 import { isAdmin, isDisabled } from '../services/admin.ts';
+import { ensureCoachAccount, isCoach } from '../services/coach.ts';
 
 /**
  * Password endpoints are the one place an anonymous caller can burn CPU on this
@@ -178,6 +180,13 @@ const HANDSHAKE_MINUTES = 10;
 interface StoredHandshake extends Handshake {
   /** The browser's timezone, if it sent one. Empty means "we never asked". */
   timezone: string;
+  /**
+   * What the browser is signing in as. `coach` is what lets somebody who is
+   * not an admin through the web's door — see COACH.md §5 — and it rides in
+   * the cookie because the callback is a redirect from Google that carries
+   * nothing of ours except this.
+   */
+  intent?: AuthIntent;
 }
 
 function packHandshake(value: StoredHandshake): string {
@@ -196,11 +205,17 @@ function readHandshake(request: FastifyRequest): StoredHandshake | null {
 
   try {
     const parsed: unknown = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'));
-    const { state, verifier, nonce, timezone } = (parsed ?? {}) as Record<string, unknown>;
+    const { state, verifier, nonce, timezone, intent } = (parsed ?? {}) as Record<string, unknown>;
     if (typeof state !== 'string' || typeof verifier !== 'string' || typeof nonce !== 'string') {
       return null;
     }
-    return { state, verifier, nonce, timezone: typeof timezone === 'string' ? timezone : '' };
+    return {
+      state,
+      verifier,
+      nonce,
+      timezone: typeof timezone === 'string' ? timezone : '',
+      intent: intent === 'coach' ? 'coach' : undefined,
+    };
   } catch {
     return null;
   }
@@ -255,6 +270,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       // Carried on the session status so the app can decide whether to render
       // the admin link without a second round trip on every page.
       is_admin: userId ? await isAdmin(userId) : false,
+      is_coach: userId ? await isCoach(userId) : false,
       google_enabled: env.google !== null,
     };
   });
@@ -266,7 +282,13 @@ export async function registerAuthRoutes(app: FastifyInstance) {
         .status(400)
         .send({ error: parsed.error.issues[0]?.message ?? 'Invalid details' });
     }
-    if (!(await signupAllowed(isAppClient(request)))) {
+    /*
+     * A coach signs up on the web, and that is the one browser sign-up the
+     * rule below allows: the account being made is for the dashboard, not for
+     * a journal the web no longer keeps. The operator's switch still applies.
+     */
+    const wantsCoach = parsed.data.intent === 'coach';
+    if (!(await signupAllowed(isAppClient(request) || wantsCoach))) {
       // Two different noes. The operator closed the door, or this is a browser
       // on a server that already has accounts — where the door was never here.
       return reply.status(403).send({
@@ -302,6 +324,10 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       parsed.data.timezone ?? '',
       locale,
     );
+    // In the same breath as the account, so there is no window in which a
+    // coach sign-up exists as an ordinary account the web would then refuse.
+    if (wantsCoach) await ensureCoachAccount(userId);
+
     const { token, expiresAt } = await createSession(userId);
     setSessionCookie(reply, token, expiresAt);
 
@@ -320,13 +346,14 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       signup_allowed: false,
       has_accounts: true,
       is_admin: await isAdmin(userId),
+      is_coach: wantsCoach,
       google_enabled: env.google !== null,
       token: tokenForBody(request, token),
     };
   });
 
   app.post('/auth/login', { config: { rateLimit: LOGIN_LIMIT } }, async (request, reply) => {
-    const parsed = Credentials.safeParse(request.body);
+    const parsed = LoginRequest.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Enter an email and password.' });
     }
@@ -351,9 +378,22 @@ export async function registerAuthRoutes(app: FastifyInstance) {
      * caller holding a working cookie for every other route on this API, which
      * is the opposite of what the sentence says.
      */
-    if (!isAppClient(request) && !(await isAdmin(userId))) {
+    /*
+     * Two more keys to the web's door beside the admin's: already being a
+     * coach, or asking to become one. The second creates the account, and it
+     * is asked for explicitly — a checkbox on the sign-in page — so an app user
+     * who mistyped their way onto the web is still told where their journal is.
+     */
+    const wantsCoach = parsed.data.intent === 'coach';
+    if (
+      !isAppClient(request) &&
+      !wantsCoach &&
+      !(await isAdmin(userId)) &&
+      !(await isCoach(userId))
+    ) {
       return reply.status(403).send({ error: APP_ONLY });
     }
+    if (wantsCoach) await ensureCoachAccount(userId);
 
     const { token, expiresAt } = await createSession(userId);
     setSessionCookie(reply, token, expiresAt);
@@ -381,6 +421,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       signup_allowed: false,
       has_accounts: true,
       is_admin: await isAdmin(userId),
+      is_coach: wantsCoach || (await isCoach(userId)),
       google_enabled: env.google !== null,
       token: tokenForBody(request, token),
     };
@@ -396,6 +437,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       signup_allowed: await signupAllowed(isAppClient(request)),
       has_accounts: (await countAccounts()) > 0,
       is_admin: false,
+      is_coach: false,
       google_enabled: env.google !== null,
     };
   });
@@ -591,6 +633,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     const handshake = beginHandshake();
     const query = request.query as Record<string, unknown>;
     const timezone = typeof query.tz === 'string' ? query.tz.slice(0, 60) : '';
+    const intent: AuthIntent | undefined = query.intent === 'coach' ? 'coach' : undefined;
 
     /*
      * A phone asks for the same handshake with two extra parameters, and gets a
@@ -629,7 +672,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       return reply.redirect(authorizeUrl(google, { ...handshake, state: packNativeState(google, native) }));
     }
 
-    reply.setCookie(OAUTH_COOKIE, packHandshake({ ...handshake, timezone }), {
+    reply.setCookie(OAUTH_COOKIE, packHandshake({ ...handshake, timezone, intent }), {
       httpOnly: true,
       /**
        * Lax, and it has to be exactly that. The callback is a cross-site
@@ -737,7 +780,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
          * transport here would tell a phone signing up with Google that
          * accounts are made in the app, which is where it already is.
          */
-        allowSignup: await signupAllowed(native !== null),
+        allowSignup: await signupAllowed(native !== null || stored?.intent === 'coach'),
         timezone: handshake.timezone,
         /*
          * The header, where the password flow prefers a field the client sent.
@@ -772,7 +815,16 @@ export async function registerAuthRoutes(app: FastifyInstance) {
        * all — `allowSignup` above is already false for the browser flow — so
        * there is nothing here to clean up either.
        */
-      if (!native && !(await isAdmin(result.userId))) return fail('app_only');
+      const wantsCoach = stored?.intent === 'coach';
+      if (
+        !native &&
+        !wantsCoach &&
+        !(await isAdmin(result.userId)) &&
+        !(await isCoach(result.userId))
+      ) {
+        return fail('app_only');
+      }
+      if (wantsCoach) await ensureCoachAccount(result.userId);
 
       /*
        * Recorded here for both flows, before the paths split, because this is
@@ -824,8 +876,10 @@ export async function registerAuthRoutes(app: FastifyInstance) {
        * different origin from this API in every deployment that has a proxy in
        * front — and the session cookie just set travels back through that same
        * proxy, which is why `redirectUri` points there in the first place.
+       *
+       * A coach's home is the roster.
        */
-      return reply.redirect(`${env.appUrl}/`);
+      return reply.redirect(`${env.appUrl}/${wantsCoach ? 'coach' : ''}`);
     },
   );
 
@@ -880,6 +934,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       signup_allowed: false,
       has_accounts: true,
       is_admin: await isAdmin(handoff.userId),
+      is_coach: await isCoach(handoff.userId),
       google_enabled: true,
       token: tokenForBody(request, token),
     };

@@ -92,6 +92,29 @@ export async function sendNudgePush(
 }
 
 /**
+ * A coach's comment, on the phone, in full.
+ *
+ * No preference is consulted, and that is a decision rather than an omission:
+ * the client chose this person and can end the link from Settings in one tap,
+ * which is a stronger opt-in than any switch. The comment itself is the body —
+ * like a nudge, it is one paragraph with nothing behind it to go and read
+ * except the meal it is about, which is where the tap lands.
+ */
+export async function sendCoachCommentPush(
+  clientId: string,
+  coachName: string,
+  body: string,
+  logger?: FastifyBaseLogger,
+): Promise<PushResult> {
+  const devices = await pushTokensFor(clientId);
+  return sendPush(
+    devices,
+    { title: `${coachName} commented`, body, data: { route: '/' }, channelId: 'coach' },
+    logger,
+  );
+}
+
+/**
  * Where a tap lands, per kind.
  *
  * Here rather than in the `alerts` row, because it is not part of the record of

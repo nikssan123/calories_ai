@@ -78,6 +78,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         signup_allowed: true,
         has_accounts: false,
         is_admin: false,
+        is_coach: false,
         google_enabled: false,
       });
     } finally {
@@ -112,6 +113,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         signup_allowed: false,
         has_accounts: true,
         is_admin: false,
+        is_coach: false,
         google_enabled: false,
       });
     }
