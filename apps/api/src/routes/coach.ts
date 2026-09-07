@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   AcceptInviteRequest,
   CoachAccountUpdate,
+  CoachCheckoutRequest,
   CoachCommentRequest,
   CoachInviteRequest,
   CoachScope,
@@ -33,6 +34,13 @@ import {
   updateCoachAccount,
   updateScope,
 } from '../services/coach.ts';
+import {
+  applyStripeEvent,
+  createCheckoutSession,
+  createPortalSession,
+  verifyStripeSignature,
+} from '../services/stripe.ts';
+import { env } from '../env.ts';
 
 /**
  * The coach seat's HTTP surface. See COACH.md §5.
@@ -82,6 +90,38 @@ export async function registerCoachRoutes(app: FastifyInstance) {
   // ---- The roster ----------------------------------------------------------
 
   app.get('/coach/roster', async (request) => roster(request.userId!));
+
+  // ---- Billing -------------------------------------------------------------
+
+  /**
+   * A Stripe Checkout page for `seats` seats. Answers with the URL rather than
+   * redirecting: the caller is a fetch from the dashboard, and a 302 to another
+   * origin is a thing a fetch cannot follow into a full-page navigation.
+   */
+  app.post('/coach/billing/checkout', async (request, reply) => {
+    if (!env.stripe) return reply.status(503).send({ error: 'This server is not taking cards yet.' });
+    const parsed = CoachCheckoutRequest.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: 'Send a whole number of seats.' });
+    try {
+      return await createCheckoutSession(request.userId!, parsed.data.seats);
+    } catch (error) {
+      request.log.error({ err: error }, 'stripe checkout failed');
+      return reply.status(502).send({ error: (error as Error).message });
+    }
+  });
+
+  /** Stripe's own page for the card, the invoices and the seat count. */
+  app.post('/coach/billing/portal', async (request, reply) => {
+    if (!env.stripe) return reply.status(503).send({ error: 'This server is not taking cards yet.' });
+    try {
+      const session = await createPortalSession(request.userId!);
+      if (!session) return reply.status(404).send({ error: 'Nothing to manage yet — no card on file.' });
+      return session;
+    } catch (error) {
+      request.log.error({ err: error }, 'stripe portal failed');
+      return reply.status(502).send({ error: (error as Error).message });
+    }
+  });
 
   // ---- The Monday digest ---------------------------------------------------
 
@@ -226,5 +266,57 @@ export async function registerCoachRoutes(app: FastifyInstance) {
     const coachId = await coachOf(request.userId!);
     if (coachId) await revokeLink(coachId, request.userId!, 'client');
     return clientStatus(request.userId!);
+  });
+
+  // ---- Stripe's webhook ----------------------------------------------------
+
+  /*
+   * Its own plugin scope, for one reason: the signature is over the bytes
+   * Stripe sent, and Fastify's default JSON parser has already turned them
+   * into an object by the time a handler runs. A content-type parser is
+   * encapsulated per scope, so declaring a string parser here changes this
+   * route and nothing else on the server.
+   *
+   * Public in `app.ts` as the full route, not a prefix, for the reason the
+   * RevenueCat entry is: a store's webhook has to arrive without a session,
+   * and nothing else under `/billing` should.
+   */
+  await app.register(async (scope) => {
+    scope.addContentTypeParser('application/json', { parseAs: 'string' }, (_request, body, done) => {
+      done(null, body);
+    });
+
+    scope.post('/billing/stripe', async (request, reply) => {
+      const stripe = env.stripe;
+      if (!stripe) {
+        request.log.warn('stripe webhook received but Stripe is not configured');
+        return reply.status(503).send({ error: 'Billing is not configured.' });
+      }
+      const raw = typeof request.body === 'string' ? request.body : '';
+      const signature = request.headers['stripe-signature'];
+      if (!verifyStripeSignature(raw, typeof signature === 'string' ? signature : undefined, stripe.webhookSecret)) {
+        request.log.warn({ ip: request.ip }, 'stripe webhook failed signature check');
+        return reply.status(400).send({ error: 'Bad signature.' });
+      }
+
+      let event: { id?: string; type?: string; data?: { object?: unknown } };
+      try {
+        event = JSON.parse(raw);
+      } catch {
+        return reply.status(400).send({ error: 'Malformed event.' });
+      }
+      if (!event.id || !event.type || !event.data?.object) {
+        return reply.status(400).send({ error: 'Malformed event.' });
+      }
+
+      try {
+        const result = await applyStripeEvent(event as never);
+        request.log.info({ eventId: event.id, type: event.type, ...result }, 'stripe event processed');
+        return { ok: true, ...result };
+      } catch (error) {
+        request.log.error({ err: error, eventId: event.id }, 'stripe event failed');
+        return reply.status(500).send({ error: 'Could not record that event.' });
+      }
+    });
   });
 }

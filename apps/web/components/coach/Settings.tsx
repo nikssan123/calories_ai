@@ -24,12 +24,14 @@ export function Settings() {
   const [account, setAccount] = useState<CoachAccount | null>(null);
   const [business, setBusiness] = useState('');
   const [busy, setBusy] = useState(false);
+  const [seats, setSeats] = useState(5);
 
   const load = useCallback(async () => {
     try {
       const next = await api.coach.me();
       setAccount(next);
       setBusiness(next.business_name ?? '');
+      setSeats(Math.max(3, next.seats_used, next.plan === 'trial' ? next.seat_limit : 3));
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -37,6 +39,23 @@ export function Settings() {
 
   useEffect(() => {
     void load();
+    /*
+     * Back from Stripe. The return URL is a browser saying it was there, not a
+     * payment: the webhook is what moves the plan, and it can land a second or
+     * two after this page does. Say so, and read the account again shortly.
+     */
+    const params = new URLSearchParams(window.location.search);
+    const checkout = params.get('checkout');
+    if (checkout) {
+      window.history.replaceState(null, '', '/coach/settings');
+      if (checkout === 'success') {
+        toast.success('Payment received. Your seats update in a moment.');
+        const timer = setTimeout(() => void load(), 3000);
+        return () => clearTimeout(timer);
+      }
+      if (checkout === 'cancelled') toast.message('Checkout cancelled. Nothing changed.');
+    }
+    return undefined;
   }, [load]);
 
   if (!account) return <Skeleton className="h-64 w-full rounded-2xl" />;
@@ -105,14 +124,54 @@ export function Settings() {
             </span>
           </InsetRow>
         )}
-        <InsetRow className="justify-between">
+        <InsetRow className="justify-between gap-3">
           <span className="text-body font-bold">Billing</span>
-          {account.billing_configured ? (
-            <Button size="sm" onClick={() => toast.message('Checkout arrives with the billing stage.')}>
-              {account.plan === 'paid' ? 'Manage billing' : 'Choose seats'}
+          {!account.billing_configured ? (
+            <span className="text-footnote text-muted-foreground">Not taking cards on this server yet.</span>
+          ) : account.plan === 'paid' || account.plan === 'lapsed' ? (
+            <Button
+              size="sm"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  window.location.href = (await api.coach.portal()).url;
+                } catch (e) {
+                  toast.error((e as Error).message);
+                  setBusy(false);
+                }
+              }}
+            >
+              {account.plan === 'lapsed' ? 'Fix the card' : 'Manage billing'}
             </Button>
           ) : (
-            <span className="text-footnote text-muted-foreground">Not taking cards on this server yet.</span>
+            <form
+              className="flex items-center gap-2"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                setBusy(true);
+                try {
+                  window.location.href = (await api.coach.checkout(seats)).url;
+                } catch (e) {
+                  toast.error((e as Error).message);
+                  setBusy(false);
+                }
+              }}
+            >
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={3}
+                max={200}
+                value={seats}
+                onChange={(event) => setSeats(Number(event.target.value))}
+                className="tnum h-9 w-20"
+                aria-label="Seats"
+              />
+              <Button type="submit" size="sm" disabled={busy || seats < 3}>
+                Continue to checkout
+              </Button>
+            </form>
           )}
         </InsetRow>
       </InsetGroup>

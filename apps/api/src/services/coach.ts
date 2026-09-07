@@ -54,9 +54,15 @@ export const SOLO_SEATS = 1;
 /** An invite is good for this long. */
 export const INVITE_DAYS = 14;
 
-/** Plans whose seats put the client on Plus. */
+/**
+ * Plans whose seats put the client on Plus.
+ *
+ * `lapsed` is among them on purpose: a failed card opens a grace period, and
+ * the clients did nothing wrong. `expireLapsed` in `stripe.ts` is what ends
+ * it, by moving the account to Solo on a date.
+ */
 export function seatsCarryPlus(plan: CoachPlan): boolean {
-  return plan === 'trial' || plan === 'paid';
+  return plan === 'trial' || plan === 'paid' || plan === 'lapsed';
 }
 
 const DEFAULT_SCOPE: CoachScope = { meals: true, weight: true, metrics: false };
@@ -1108,6 +1114,7 @@ function toAccount(row: any): CoachAccount {
     seats_used: Number(row.seats_used ?? 0),
     seats_carry_plus: seatsCarryPlus(row.plan),
     trial_ends_at: row.trial_ends_at ? new Date(row.trial_ends_at).toISOString() : null,
+    lapsed_at: row.lapsed_at ? new Date(row.lapsed_at).toISOString() : null,
     billing_configured: env.stripe !== null,
     notify_digest: row.notify_digest ?? true,
     created_at: new Date(row.created_at).toISOString(),

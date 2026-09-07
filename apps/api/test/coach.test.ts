@@ -543,8 +543,13 @@ describe('seats and plans', () => {
     const restored = await query<any>('SELECT plan FROM users WHERE id = $1', [second.id]);
     expect(restored[0].plan).toBe('plus');
 
+    // A failed card is a grace period, not the end: the seats keep Plus.
     await setCoachPlan(coach.id, 'lapsed', 5);
     const lapsed = await query<any>('SELECT plan FROM users WHERE id = ANY($1::uuid[])', [[client.id, second.id]]);
-    expect(lapsed.map((p) => p.plan)).toEqual(['free', 'free']);
+    expect(lapsed.map((p) => p.plan)).toEqual(['plus', 'plus']);
+
+    await setCoachPlan(coach.id, 'solo', 1);
+    const solo = await query<any>('SELECT plan FROM users WHERE id = ANY($1::uuid[])', [[client.id, second.id]]);
+    expect(solo.map((p) => p.plan)).toEqual(['free', 'free']);
   });
 });

@@ -3763,6 +3763,8 @@ export const CoachAccount = z.object({
   /** Whether a seat on this plan puts the client on Plus. */
   seats_carry_plus: z.boolean(),
   trial_ends_at: z.string().nullable(),
+  /** When the card stopped working. Seats keep Plus for a fortnight from here. */
+  lapsed_at: z.string().nullable().default(null),
   /** Whether this deployment can take a card at all. False hides the checkout. */
   billing_configured: z.boolean(),
   /** The Monday email. On by default; the one thing the product sends a coach unasked. */
@@ -3930,6 +3932,12 @@ export const CoachDigest = z.object({
   created_at: z.string(),
 });
 export type CoachDigest = z.infer<typeof CoachDigest>;
+
+/** How many seats to buy. Adjustable again on Stripe's own page. */
+export const CoachCheckoutRequest = z.object({
+  seats: z.number().int().min(1).max(200),
+});
+export type CoachCheckoutRequest = z.infer<typeof CoachCheckoutRequest>;
 
 export const CoachInviteRequest = z.object({
   email: z.string().email().max(254).nullable().optional(),

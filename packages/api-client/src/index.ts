@@ -8,6 +8,7 @@ import type {
   ClientCoachStatus,
   CoachAccount,
   CoachAccountUpdate,
+  CoachCheckoutRequest,
   CoachClientWeek,
   CoachComment,
   CoachCommentRequest,
@@ -987,6 +988,16 @@ export function createApiClient({
       /** Ends the link from the coach's side. */
       removeClient: (id: string) =>
         request<{ ok: true }>(`/coach/clients/${id}`, { method: 'DELETE' }),
+
+      /** A Stripe Checkout URL for this many seats. Navigate the window to it. */
+      checkout: (seats: number) =>
+        request<{ url: string }>('/coach/billing/checkout', {
+          method: 'POST',
+          body: JSON.stringify({ seats } satisfies CoachCheckoutRequest),
+        }),
+
+      /** Stripe's portal for the card, the invoices and the seat count. */
+      portal: () => request<{ url: string }>('/coach/billing/portal', { method: 'POST' }),
     },
 
     /** The client's side of the same link, under the ordinary session. */

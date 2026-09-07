@@ -202,6 +202,7 @@ export async function buildApp(
     '/photos/',
     '/email/',
     '/billing/revenuecat',
+    '/billing/stripe',
   ];
 
   /**

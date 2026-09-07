@@ -22,6 +22,7 @@ import {
   markDigestSent,
   saveDigest,
 } from './services/coach.ts';
+import { expireLapsed } from './services/stripe.ts';
 import {
   nudgeReachedAPhone,
   sendAlertPush,
@@ -699,6 +700,14 @@ export function tick(logger?: FastifyBaseLogger): void {
     })
     .catch((error) => {
       logger?.error({ err: error }, 'coach trial sweep failed');
+    });
+  // And so is the grace period after a failed card.
+  expireLapsed(now)
+    .then((n) => {
+      if (n > 0) logger?.info({ expired: n }, 'coach grace periods ended');
+    })
+    .catch((error) => {
+      logger?.error({ err: error }, 'coach lapse sweep failed');
     });
   // Not a user's clock at all — one DELETE over a small shared table, riding a
   // tick that already exists rather than earning a scheduler of its own. Every
