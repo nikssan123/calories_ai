@@ -23,7 +23,7 @@ import type { AgentNote } from '../services/notes.ts';
 import type { UsualPortion } from '../services/portions.ts';
 import { MIN_TARGET_KCAL } from '../services/targets.ts';
 import type { Wellbeing } from '../services/wellbeing.ts';
-import { localPartsFor } from '../time.ts';
+import { localDateFor, localPartsFor } from '../time.ts';
 
 /**
  * Stable half of the system prompt. Kept byte-identical across requests so it
@@ -744,6 +744,38 @@ export function dayContextPrompt(
     `Current date and time for the user: ${weekday} ${date}, ${time} (${profile.timezone}).`,
     `Their day rolls over at ${String(profile.day_start_hour).padStart(2, '0')}:00, so anything eaten before then counts toward the previous day.`,
   ];
+
+  /*
+   * Between midnight and the rollover, the wall-clock date above is not the day
+   * a log lands on — and saying only the first two lines is what made a model
+   * do the subtraction itself.
+   *
+   * At 00:01 with a 04:00 day start the block read "Thursday 2026-09-10, 00:01"
+   * and "anything eaten before then counts toward the previous day", while the
+   * figures under it were 2026-09-09's and `resolveWhen` was about to resolve an
+   * empty `when` to 2026-09-09 anyway. The model read the hour, applied the rule
+   * it had just been given, and passed `when: "yesterday"` — so the shift
+   * happened twice and a tub of yoghurt landed on 2026-09-08. It then noticed
+   * the card, moved the entry, and left two cards in one bubble: the symptom
+   * anybody would report, two days from the cause.
+   *
+   * `dayRolloverNotice` says the missing sentence already, but only fires when
+   * the *previous turn* was on another logging day. Crossing midnight inside one
+   * day's conversation is the gap, and it is four hours wide every night.
+   *
+   * So name the day in progress, and say the shift is already applied. Appended
+   * rather than replacing the line above, which is still true and is what tells
+   * the model a past day can be logged at all.
+   */
+  const loggingDay = localDateFor(new Date(), {
+    timezone: profile.timezone,
+    dayStartHour: profile.day_start_hour,
+  });
+  if (loggingDay !== date) {
+    lines.push(
+      `It is past midnight there but not yet ${String(profile.day_start_hour).padStart(2, '0')}:00, so the day in progress is still ${loggingDay}: that is the day the figures below describe, and food logged now counts toward it. That shift is already applied for you — do not move a date yourself to compensate for the hour. Leave log_food's "when" empty for anything eaten now, and pass it only for a day they actually name.`,
+    );
+  }
 
   // Exercise burn scales with bodyweight, and the latest weigh-in is often on an
   // earlier day than this one — so it comes from the weight history rather than

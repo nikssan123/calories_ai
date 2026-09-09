@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DaySummary, Profile, ReviewStats, WeeklyReview, WeightEntry } from '@ct/shared';
 import {
   dayContextPrompt,
@@ -351,6 +351,46 @@ describe('dayContextPrompt', () => {
     expect(prompt).toContain('120 / 160 g (40 short)');
     expect(prompt).toContain('Europe/Sofia');
     expect(prompt).toContain('04:00');
+  });
+
+  /*
+   * The four hours a night when the wall clock and the logging day disagree.
+   *
+   * Clock faked rather than computed from `day.local_date`, because what the
+   * function reads is the real time — and what broke was a model reading the
+   * hour and doing the day arithmetic that `resolveWhen` was about to do again.
+   */
+  describe('between midnight and the rollover', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('names the day in progress and says the shift is already applied', () => {
+      vi.useFakeTimers();
+      // 00:01 on the 10th in Sofia, which is still the 9th for logging.
+      vi.setSystemTime(new Date('2026-09-09T21:01:00Z'));
+
+      const prompt = dayContextPrompt(profile, { ...day, local_date: '2026-09-09' }, weight);
+
+      expect(prompt).toContain('the day in progress is still 2026-09-09');
+      expect(prompt).toContain('food logged now counts toward it');
+      // The line that stops the double subtraction. Without it a model at this
+      // hour passes when: "yesterday" and the entry lands two days back.
+      expect(prompt).toContain('do not move a date yourself');
+      expect(prompt).toContain(`Leave log_food's "when" empty`);
+    });
+
+    it('says none of it during the twenty hours the two agree', () => {
+      vi.useFakeTimers();
+      // 12:01 the same day: the wall-clock date is the logging day.
+      vi.setSystemTime(new Date('2026-09-09T09:01:00Z'));
+
+      const prompt = dayContextPrompt(profile, { ...day, local_date: '2026-09-09' }, weight);
+
+      expect(prompt).not.toContain('the day in progress is still');
+      // And the rule itself is still there, because a past day is still loggable.
+      expect(prompt).toContain('counts toward the previous day');
+    });
   });
 
   it('reports the step count with the rule attached to it', () => {
