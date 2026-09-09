@@ -39,6 +39,21 @@ export function applyFileEnv(target: NodeJS.ProcessEnv, fromFiles: Record<string
  * and the fallback is a working configuration by construction — it is what
  * every deployment that never sets the variable runs.
  */
+/**
+ * Whether to run the hourly tick. See `Env.schedulerEnabled` for why the
+ * default is what it is; this is only the parsing.
+ *
+ * An unrecognised value is a typo, and a typo must not silently mean "off" on
+ * the one box where off is the wrong answer — so anything that is not an
+ * explicit `off` leaves production ticking.
+ */
+function schedulerFlag(source: NodeJS.ProcessEnv): boolean {
+  const requested = source.SCHEDULER?.trim().toLowerCase();
+  if (requested === 'on' || requested === 'true') return true;
+  if (requested === 'off' || requested === 'false') return false;
+  return source.NODE_ENV === 'production';
+}
+
 function positive(raw: string | undefined, fallback: number): number {
   const value = Number(raw);
   return Number.isFinite(value) && value > 0 ? value : fallback;
@@ -188,6 +203,27 @@ export interface Env {
    */
   google: GoogleEnv | null;
   barcode: BarcodeEnv;
+  /**
+   * Whether this process runs the hourly tick that speaks to people unasked.
+   *
+   * The scheduler is the one part of the API that originates rather than
+   * responds: nobody made a request, and the output is a model-written review
+   * and an email. That is exactly right on the deployment and exactly wrong
+   * everywhere else, because *everywhere else has a seed database*. A dev box
+   * with a Resend key and eight seeded `plus` accounts is a box that mails
+   * eight weekly reviews every Monday morning, about weeks nobody logged, for
+   * people who do not exist — billed to the API key on the way out.
+   *
+   * `EMAIL_REDIRECT_TO` is what kept that survivable rather than what stopped
+   * it: the mail landed in the developer's own inbox instead of a stranger's.
+   * A redirect is a safety net under a mistake, though, not a reason to keep
+   * making it, and it does nothing at all about the model spend.
+   *
+   * So the tick is production-only by default and `SCHEDULER` is the override,
+   * both ways: `on` to work on the scheduler locally, `off` to silence a
+   * staging box that is otherwise dressed as production.
+   */
+  schedulerEnabled: boolean;
   isTest: boolean;
 }
 
@@ -389,6 +425,11 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
      * differently from anyone else's. The cases that exercise this set it.
      */
     google: isTest ? null : googleEnv(source, appUrl),
+    /*
+     * Never under test — the suite drives `runDueReviews` directly and a live
+     * timer would only race it — and otherwise production unless told.
+     */
+    schedulerEnabled: isTest ? false : schedulerFlag(source),
     barcode: {
       /**
        * Forced off under test, like every other outbound credential here: a

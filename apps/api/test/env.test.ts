@@ -51,6 +51,45 @@ describe('readEnv', () => {
   });
 
   /**
+   * The tick is the one thing in the API that speaks without being spoken to,
+   * and a developer's laptop is pointed at a seed database. Off unless this is
+   * the deployment.
+   */
+  describe('the scheduler', () => {
+    it('runs in production and nowhere else by default', () => {
+      expect(readEnv({ ...BASE, NODE_ENV: 'production' }).schedulerEnabled).toBe(true);
+      expect(readEnv({ ...BASE }).schedulerEnabled).toBe(false);
+      expect(readEnv({ ...BASE, NODE_ENV: 'development' }).schedulerEnabled).toBe(false);
+    });
+
+    it('can be switched on locally to work on it', () => {
+      expect(readEnv({ ...BASE, SCHEDULER: 'on' }).schedulerEnabled).toBe(true);
+      expect(readEnv({ ...BASE, SCHEDULER: 'true' }).schedulerEnabled).toBe(true);
+    });
+
+    it('can be switched off on a box that is otherwise dressed as production', () => {
+      expect(readEnv({ ...BASE, NODE_ENV: 'production', SCHEDULER: 'off' }).schedulerEnabled).toBe(
+        false,
+      );
+    });
+
+    /**
+     * A typo must not silently mean "off" on the one box where off is the wrong
+     * answer — that is a Monday where nobody's review goes out and nothing in
+     * the logs says why.
+     */
+    it('leaves production ticking on a value it does not recognise', () => {
+      expect(readEnv({ ...BASE, NODE_ENV: 'production', SCHEDULER: 'yes' }).schedulerEnabled).toBe(
+        true,
+      );
+    });
+
+    it('never runs under test, whatever is asked for', () => {
+      expect(readEnv({ ...BASE, NODE_ENV: 'test', SCHEDULER: 'on' }).schedulerEnabled).toBe(false);
+    });
+  });
+
+  /**
    * The guarantee that makes `pnpm test` safe to run on a laptop whose
    * DATABASE_URL points at the real development database.
    */

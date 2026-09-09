@@ -30,9 +30,22 @@ beforeEach(async () => {
    * covered separately at the foot of `runDueReviews`.
    */
   user = await createUser({ plan: 'plus' });
-  // Something in the week under review, or the account is treated as dormant.
-  await addMeal(user, { date: '2026-03-11', kcal: 2100 });
+  // Two days in the week under review, because that is the floor a week has to
+  // clear to be worth writing about — see `MIN_DAYS_FOR_REVIEW`. One is a
+  // separate case below rather than the default here, so nothing in this file
+  // passes on the strength of sitting exactly on the boundary.
+  await logTheWeek(user);
 });
+
+/**
+ * A week with enough in it to review: two logged days, which is
+ * `MIN_DAYS_FOR_REVIEW`. Every case that wants "this account used the app that
+ * week" goes through here, so raising the floor is one edit rather than twelve.
+ */
+async function logTheWeek(account: TestUser, kcal = 2000): Promise<void> {
+  await addMeal(account, { date: '2026-03-11', kcal });
+  await addMeal(account, { date: '2026-03-12', kcal });
+}
 
 describe('isReviewTime', () => {
   it('is true during the publishing hour in the user’s own timezone', () => {
@@ -105,7 +118,7 @@ describe('runDueReviews', () => {
    */
   it('skips an account whose plan does not include a review', async () => {
     const free = await createUser({ plan: 'free', timezone: 'Europe/Sofia' });
-    await addMeal(free, { date: '2026-03-11', kcal: 2100 });
+    await logTheWeek(free, 2100);
     scriptAgent({ text: 'A steady week.' });
 
     const result = await runDueReviews(MONDAY_MORNING);
@@ -147,9 +160,65 @@ describe('runDueReviews', () => {
     expect(await listReviews(dormant.id)).toEqual([]);
   });
 
+  /**
+   * The account that installed the app, logged one lunch, and left.
+   *
+   * It is not dormant by the old test — there *is* an entry in the week — and
+   * it used to get the full six hundred words about a "week" whose mean is a
+   * single day and whose trend is against a fortnight of nothing. It is also
+   * the account least able to afford another email from us, since the one thing
+   * we know about it is that it stopped.
+   */
+  it('skips a week with only one logged day in it', async () => {
+    const barely = await createUser({ plan: 'plus' });
+    await addMeal(barely, { date: '2026-03-11', kcal: 2000 });
+    scriptAgent({ text: 'A steady week.' });
+
+    const result = await runDueReviews(MONDAY_MORNING);
+
+    expect(result.generated).toEqual([user.id]);
+    expect(await listReviews(barely.id)).toEqual([]);
+    // And nothing was mailed about it either, which is the point of the gate.
+    expect(mailbox().map((mail) => mail.to)).not.toContain(barely.email);
+  });
+
+  /**
+   * The other side of the same line: two days is a thin week, not a dead one,
+   * and a thin week is exactly what somebody starting out has. The floor is
+   * there to catch the account that left, not the one that has just arrived.
+   */
+  it('publishes for a week with the minimum in it', async () => {
+    const starting = await createUser({ plan: 'plus' });
+    await addMeal(starting, { date: '2026-03-11', kcal: 2000 });
+    await addMeal(starting, { date: '2026-03-14', kcal: 2000 });
+    scriptAgent({ text: 'A steady week.' }, { text: 'A thin week, but a week.' });
+
+    const result = await runDueReviews(MONDAY_MORNING);
+
+    expect(result.generated).toContain(starting.id);
+    expect(await listReviews(starting.id)).toHaveLength(1);
+  });
+
+  /**
+   * Days, not entries. Someone who logs breakfast, lunch and dinner on one
+   * Saturday has three rows and one day, and the review is about the days.
+   */
+  it('counts days rather than entries', async () => {
+    const oneBigDay = await createUser({ plan: 'plus' });
+    for (const kcal of [600, 800, 700]) {
+      await addMeal(oneBigDay, { date: '2026-03-14', kcal });
+    }
+    scriptAgent({ text: 'A steady week.' });
+
+    const result = await runDueReviews(MONDAY_MORNING);
+
+    expect(result.generated).toEqual([user.id]);
+    expect(await listReviews(oneBigDay.id)).toEqual([]);
+  });
+
   it('ignores accounts that have not finished setup', async () => {
     const half = await createUser({ is_setup_complete: false });
-    await addMeal(half, { date: '2026-03-11', kcal: 2000 });
+    await logTheWeek(half, 2000);
     scriptAgent({ text: 'A steady week.' });
 
     const result = await runDueReviews(MONDAY_MORNING);
@@ -159,7 +228,7 @@ describe('runDueReviews', () => {
 
   it('keeps going when one account fails, and reports it', async () => {
     const second = await createUser({ plan: 'plus' });
-    await addMeal(second, { date: '2026-03-11', kcal: 2000 });
+    await logTheWeek(second, 2000);
 
     scriptAgent({ throws: 'model unavailable' }, { text: 'The other one worked.' });
 
@@ -203,7 +272,7 @@ describe('runDueReviews', () => {
    */
   it('publishes for everyone else when one account has an unreadable timezone', async () => {
     const broken = await createUser({ plan: 'plus' });
-    await addMeal(broken, { date: '2026-03-11', kcal: 2000 });
+    await logTheWeek(broken, 2000);
     // Set afterwards, because a fixture cannot log a meal in a zone `Intl`
     // refuses to read either — which is itself the point: this row can only
     // come from a client, and nothing between there and here checks it.
@@ -223,7 +292,7 @@ describe('runDueReviews', () => {
 
   it('serves each timezone at its own Monday morning', async () => {
     const la = await createUser({ timezone: 'America/Los_Angeles', plan: 'plus' });
-    await addMeal(la, { date: '2026-03-11', kcal: 2000 });
+    await logTheWeek(la, 2000);
 
     scriptAgent({ text: 'Sofia.' });
     await runDueReviews(MONDAY_MORNING);
@@ -266,7 +335,7 @@ describe('the weekly review email', () => {
 
   it('is not sent to an account that turned it off', async () => {
     const quiet = await createUser({ notify_weekly_review: false, plan: 'plus' });
-    await addMeal(quiet, { date: '2026-03-11', kcal: 2000 });
+    await logTheWeek(quiet, 2000);
     scriptAgent({ text: 'One.' }, { text: 'Two.' });
 
     const result = await runDueReviews(MONDAY_MORNING);
@@ -430,7 +499,7 @@ describe('the pass runs accounts in parallel', () => {
     const others = [];
     for (let i = 0; i < 6; i += 1) {
       const extra = await createUser({ plan: 'plus' });
-      await addMeal(extra, { date: '2026-03-11', kcal: 2000 });
+      await logTheWeek(extra, 2000);
       others.push(extra);
     }
 

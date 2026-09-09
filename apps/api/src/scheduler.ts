@@ -152,6 +152,19 @@ export async function runDueReviews(
   return result;
 }
 
+/**
+ * Days a week needs before it is worth writing about.
+ *
+ * Two rather than one because one day is not a week, and not higher because a
+ * review is also how somebody finds out the feature exists — a person who
+ * logged Tuesday and Thursday has started, and the honest report of a
+ * two-day week is a useful thing to read. `nudges.ts` asks for five before it
+ * will call a gap a lapse, which is a stricter bar for a stricter claim: that
+ * one is inferring something about a habit, this one is only summing what is
+ * there.
+ */
+const MIN_DAYS_FOR_REVIEW = 2;
+
 async function reviewPass(now: Date, logger?: FastifyBaseLogger): Promise<TickResult> {
   const result: TickResult = emptyTick();
 
@@ -215,7 +228,7 @@ async function reviewPass(now: Date, logger?: FastifyBaseLogger): Promise<TickRe
 
       // A review of a week with nothing in it is noise, and it would arrive
       // every Monday forever for a dormant account.
-      if (!(await hasEntriesBetween(user.id, week.start, week.end))) {
+      if ((await loggedDaysBetween(user.id, week.start, week.end)) < MIN_DAYS_FOR_REVIEW) {
         result.skipped += 1;
         return;
       }
@@ -660,13 +673,28 @@ function localHourFor(now: Date, timezone: string): number {
   return Number(localPartsFor(now, timezone).time.slice(0, 2));
 }
 
-async function hasEntriesBetween(userId: string, from: string, to: string): Promise<boolean> {
-  const rows = await query<{ ok: boolean }>(
-    `SELECT TRUE AS ok FROM food_entries
-      WHERE user_id = $1 AND local_date BETWEEN $2 AND $3 LIMIT 1`,
+/**
+ * Days with something logged in them, which is the unit a review is about.
+ *
+ * It used to ask whether there was *an entry* — one row, anywhere in the seven
+ * days — and that is a different question with the same answer only for people
+ * who were already going to get a review. For everybody else it is the wrong
+ * one: somebody who logged a single lunch on the Wednesday they installed the
+ * app and never came back cleared that bar, and got six hundred words on
+ * Monday about "their week". Every number in it is computed over one day — the
+ * mean *is* the day, the trend against the week before is a trend from zero,
+ * `days_on_target` is 0 or 1 — so the model is handed a blob with no pattern
+ * in it and asked for prose about the pattern. What comes back is either
+ * invented or it is a paragraph saying there is not enough here, mailed to the
+ * person least likely to want another email from us.
+ */
+async function loggedDaysBetween(userId: string, from: string, to: string): Promise<number> {
+  const [row] = await query<{ days: string }>(
+    `SELECT count(DISTINCT local_date) AS days FROM food_entries
+      WHERE user_id = $1 AND local_date BETWEEN $2 AND $3`,
     [userId, from, to],
   );
-  return rows.length > 0;
+  return Number(row?.days ?? 0);
 }
 
 /**

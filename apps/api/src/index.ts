@@ -20,7 +20,14 @@ purgeTimer.unref();
 
 // Weekly reviews. The tick is hourly and asks each user's own clock whether
 // their week has turned over, so one process serves every timezone.
-const stopScheduler = startScheduler(app.log);
+//
+// Started only where speaking unasked is the job. See `env.schedulerEnabled`:
+// a laptop pointed at a seed database would otherwise write and mail a weekly
+// review, every Monday, for eight people who are not real.
+const stopScheduler = env.schedulerEnabled ? startScheduler(app.log) : () => {};
+if (!env.schedulerEnabled) {
+  app.log.info('scheduler off (SCHEDULER=on to run reviews, nudges and alerts here)');
+}
 
 const shutdown = async (signal: string) => {
   app.log.info(`${signal} received, shutting down`);

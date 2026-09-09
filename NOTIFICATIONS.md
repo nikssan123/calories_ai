@@ -185,3 +185,79 @@ the wrong one for "we have already congratulated this streak".
 - **More kinds.** Every entry in `ALERT_KINDS` is a licence to make somebody's
   phone buzz. The argument that holds `NUDGE_KINDS` to four applies with *more*
   force to a channel that costs nothing to add to.
+
+---
+
+## 8. Who is allowed to hear anything at all — added 2026-09-10
+
+Everything above is about *what* the app says and *when*. This section is the
+question underneath it, which nothing had written down: **which processes are
+allowed to speak, and about whom.**
+
+It got written down because of a Monday morning inbox with eight weekly reviews
+in it, addressed to Elena, Lina, Maya, Aisha, Petar, Georgi, Stefan and Tom.
+None of those people exist. They are the seed fixtures, and the box that mailed
+them was a laptop.
+
+### The scheduler is a deployment concern — built
+
+`startScheduler` was called unconditionally from `index.ts`, which is correct
+for the one process where originating a message is the job and wrong for every
+other, because **every other process is pointed at a seed database.** A dev box
+with a `RESEND_API_KEY` and eight seeded `plus` accounts is a box that writes
+eight model-authored reviews every Monday and mails them — real turns, billed to
+the real key, about weeks nobody logged.
+
+`EMAIL_REDIRECT_TO` is why this was survivable rather than why it did not
+happen: the mail landed in the developer's own inbox instead of a stranger's. A
+redirect is a net under a mistake, not a reason to keep making it, and it does
+nothing whatsoever about the model spend.
+
+So `env.schedulerEnabled` decides, and it is production-only by default:
+
+```
+SCHEDULER unset  → NODE_ENV === 'production'
+SCHEDULER=on     → yes, wherever you are     (working on the scheduler)
+SCHEDULER=off    → no, wherever you are      (a staging box dressed as prod)
+NODE_ENV=test    → never, whatever is asked  (the suite drives the passes directly)
+```
+
+An unrecognised value leaves production ticking rather than falling back to
+off. A typo must not be able to cause a silent Monday.
+
+The gate is at the call site rather than inside `startScheduler`, which stays a
+mechanism: `scheduler.test.ts` still starts a real timer and asserts it ticks.
+
+### Two logged days, not one entry — built
+
+The review pass already refused a week with nothing in it. It asked the wrong
+question: *is there an entry* — one row, anywhere in seven days.
+
+That is a different question with the same answer only for people who were
+going to get a review anyway. For everybody else it is the wrong one. Somebody
+who logged a single lunch on the Wednesday they installed the app and never came
+back cleared that bar, and got six hundred words on Monday about "their week".
+Every number in the blob is computed over one day: the mean *is* the day, the
+trend is against a fortnight of nothing, `days_on_target` is 0 or 1. The model
+is handed no pattern and asked to describe the pattern, so what comes back is
+either invented or a paragraph explaining there is not enough here — mailed to
+the person least likely to want another email from us, since the one thing we
+know about them is that they stopped.
+
+`MIN_DAYS_FOR_REVIEW = 2`, counted as `count(DISTINCT local_date)` so that three
+meals on one Saturday is one day. Two rather than higher because a review is
+also how somebody finds out the feature exists: a person who logged Tuesday and
+Thursday has *started*, and the honest report of a thin week is worth reading.
+The floor is there to catch the account that left, not the one that has arrived.
+
+Compare `nudges.ts`, which wants five prior logged days before it will call a
+gap a lapse. Stricter bar, stricter claim — that one infers something about a
+habit, this one only adds up what is there.
+
+### What this does not fix
+
+**A test account on the deployment is still a real account.** Neither gate above
+can tell `appreview@daysofar.com` from a customer, because on the deployment
+there is nothing to tell: it has an address, it finished setup, it logged food.
+The store reviewer logins are a standing exception that lives in the data, and
+the only honest place to hold them is their own notification switches, off.
