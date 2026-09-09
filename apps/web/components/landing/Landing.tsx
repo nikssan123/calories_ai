@@ -35,10 +35,12 @@ export function Landing() {
    * be opened: the app.
    *
    * It used to point at the sign-up form, and there is no longer one to point
-   * at — the web is this page and the admin panel behind it. Until a store
-   * listing is live there is nowhere to send anybody, so the button scrolls to
-   * the closing section, where the store row says so in as many words. A button
-   * that admits it is waiting is better than one that 404s.
+   * at — the web is this page and the admin panel behind it. It now points at
+   * Google Play; an iPhone visitor lands on a page that says the app is not on
+   * their platform yet, which is the same thing the store row under the button
+   * says, and better than a button that 404s. If both listings ever go dark
+   * again the button falls back to scrolling at the closing section rather than
+   * pretending there is somewhere to go.
    */
   const start: Cta = STORE_HREF
     ? { href: STORE_HREF, label: 'Get the app', external: true }
@@ -1036,10 +1038,10 @@ function Privacy() {
 /* ------------------------------------------------------------------- closing */
 
 /**
- * The bottom of the page, and — while the stores are still "coming soon" —
- * where every button above it lands. So it carries the store row and no button
- * of its own: a primary action whose destination is itself is a dead end with a
- * gradient behind it.
+ * The bottom of the page. It carries the store row, and a button only when
+ * that button leads somewhere off this page: while no listing was live every
+ * button above scrolled here, and a primary action whose destination is itself
+ * is a dead end with a gradient behind it.
  */
 function Closing({ start }: { start: Cta }) {
   return (

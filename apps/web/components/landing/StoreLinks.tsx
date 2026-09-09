@@ -1,40 +1,46 @@
 import { cn } from '@/lib/utils';
 
 /**
- * App Store and Google Play, waiting for their URLs.
+ * Google Play, live; the App Store, still in review.
  *
  * Deliberately not badges. Store badges are pills, and a pill in the hero reads
  * as a peer of "Get started" — four of them side by side left the section with
  * no primary action at all. These are the smallest thing that still carries the
  * two marks, so the eye reaches them last rather than fourth.
  *
- * A store with no `href` renders inert rather than as a link to nowhere: an
- * empty `href` reloads the page and `#` scrolls it to the top, and either one
- * reads as a broken button. Fill in a URL and that entry becomes a real link;
- * fill in both and the "Coming soon" label disappears by itself.
+ * A store with no `href` renders inert, and says "soon" for itself rather than
+ * linking to nowhere: an empty `href` reloads the page and `#` scrolls it to
+ * the top, and either one reads as a broken button. The label is per store
+ * rather than a heading over the row, because the row is now half true — fill
+ * in the App Store URL and its "soon" disappears by itself.
  *
- * When those listings are written: "barcode scanner" is one of the
+ * Android leads the row, against the usual order, because it is the one a
+ * visitor can act on. The store with a URL is also where every primary button
+ * on the landing page points, so the row and the button agree.
+ *
+ * When the iOS listing is written: "barcode scanner" is one of the
  * highest-volume queries in the stores' nutrition category and belongs in the
  * subtitle and the keyword field, even though it has no business in the hero
  * headline on this page. Different surfaces, different jobs — a store listing
  * is answering a search, the landing page is making an argument.
  */
 const STORES: { name: string; href: string | null; Mark: typeof AppleMark }[] = [
+  {
+    name: 'Google Play',
+    href: 'https://play.google.com/store/apps/details?id=com.daysofar.app',
+    Mark: PlayMark,
+  },
   { name: 'App Store', href: null, Mark: AppleMark },
-  { name: 'Google Play', href: null, Mark: PlayMark },
 ];
-
-const STORES_LIVE = STORES.some((store) => store.href !== null);
 
 /**
  * Where the page's primary button points, now that the only way to open an
  * account is to install the app.
  *
  * The first store with a URL, or null while neither has one — in which case the
- * button scrolls to the section that says "coming soon" rather than pretending
- * there is somewhere to go. iOS first because that is the order the row reads
- * in; when both are live the difference is one tap on the wrong platform's
- * page, which every store redirects out of by itself.
+ * button scrolls to the section that says "soon" rather than pretending there
+ * is somewhere to go. When both are live the difference is one tap on the wrong
+ * platform's page, which every store redirects out of by itself.
  */
 export const STORE_HREF: string | null = STORES.find((store) => store.href)?.href ?? null;
 
@@ -46,13 +52,12 @@ export function StoreLinks({ className }: { className?: string }) {
         className,
       )}
     >
-      {!STORES_LIVE && <span className="opacity-70">Coming soon:</span>}
-
       {STORES.map(({ name, href, Mark }) => {
         const face = (
           <>
             <Mark className="size-[15px] shrink-0" />
             {name}
+            {!href && <span className="opacity-80">— soon</span>}
           </>
         );
 
