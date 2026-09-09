@@ -58,6 +58,15 @@ const SPREAD = {
   },
 };
 
+/**
+ * The shape that sent somebody hunting for a product they were holding: a name,
+ * a brand, a photographed nutrition label, and nobody having typed it in.
+ */
+const HALF_A_ROW = {
+  status: 1,
+  product: { code: CODE, product_name: 'Hazelnut spread', brands: 'Ferrero' },
+};
+
 /** A catalogue that answers per code, for a basket of more than one packet. */
 function stubCatalogue(byCode: Record<string, unknown>) {
   vi.stubGlobal('fetch', async (url: string) => {
@@ -135,6 +144,20 @@ describe('GET /barcode/:code', () => {
     // The client turns this into "snap the label instead", which is the whole
     // reason the miss is an ordinary reply rather than an error.
     expect(response.json().error).toContain('catalogued');
+  });
+
+  it('marks the 404 when the catalogue has the packet and not its numbers', async () => {
+    stubOff(HALF_A_ROW);
+    const response = await get(`/barcode/${CODE}`);
+
+    // Still a 404, deliberately: every build already on a phone reads that as
+    // the miss screen, which offers the label photo — the right next step here
+    // too. A status of its own would have turned it into a red toast for them.
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toMatchObject({ partial: true, barcode: CODE });
+    // And the sentence stops claiming *nobody* has catalogued a packet whose
+    // name the catalogue is holding.
+    expect(response.json().error).not.toContain('Nobody');
   });
 
   it('400s a code that did not scan cleanly, without asking anyone', async () => {

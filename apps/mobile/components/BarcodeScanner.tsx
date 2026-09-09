@@ -15,7 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import type { BarcodeProduct, ChatMessage, UnitSystem } from '@ct/shared';
 import { GRAMS_PER_OZ, SERVING_STEPS, formatMass, formatServings, massUnit } from '@ct/shared';
-import { ApiError } from '@ct/api-client';
+import { ApiError, isPartialBarcode } from '@ct/api-client';
 import { PressableChunk } from '@/components/Chunk';
 import { api } from '@/lib/api';
 import { pickPhoto, takePhoto, type PreparedPhoto } from '@/lib/image';
@@ -72,7 +72,14 @@ type Stage =
   | { at: 'scanning' }
   | { at: 'looking'; code: string }
   | { at: 'found'; product: BarcodeProduct }
-  | { at: 'missed' };
+  /**
+   * `partial` is the catalogue having the packet without enough of its label to
+   * use — a name, a brand, a photograph of the nutrition panel and nobody
+   * having typed the four numbers off it yet. Same screen, because the answer is
+   * the same camera; different sentence, because "nobody has catalogued that" is
+   * not true of this packet and reads as the app being wrong about the shelf.
+   */
+  | { at: 'missed'; partial: boolean };
 
 export function BarcodeScanner({
   open,
@@ -207,7 +214,7 @@ export function BarcodeScanner({
       setStage({ at: 'found', product });
     } catch (e) {
       if (e instanceof ApiError && e.status === 404) {
-        setStage({ at: 'missed' });
+        setStage({ at: 'missed', partial: isPartialBarcode(e) });
       } else {
         setError(messageOf(e, tr));
         setStage({ at: 'scanning' });
@@ -428,7 +435,7 @@ export function BarcodeScanner({
             busyLabel={tr('recipe.logging')}
           />
         ) : (
-          <Missed onLabelPhoto={labelPhoto} onRescan={rescan} />
+          <Missed partial={stage.partial} onLabelPhoto={labelPhoto} onRescan={rescan} />
         )}
 
         {/*
@@ -877,16 +884,24 @@ interface PortionAction {
 }
 
 /**
- * A packet nobody has catalogued.
+ * A packet the catalogues could not answer for, in either of the two ways.
  *
  * Not an apology. The label is in the user's hand and the journal can read it,
  * so the useful next step is the camera — the same one the composer uses, with
  * a sentence saying what the photo is.
+ *
+ * `partial` changes only that sentence, and it has to. Telling somebody nothing
+ * is catalogued while the catalogue holds the product's name is the version of
+ * this screen that reads as the app not seeing what they are looking at — so
+ * that case says we got part of the label, which is both true and the reason
+ * the camera is still the answer.
  */
 function Missed({
+  partial,
   onLabelPhoto,
   onRescan,
 }: {
+  partial: boolean;
   onLabelPhoto: (source: 'camera' | 'library') => Promise<void>;
   onRescan: () => void;
 }) {
@@ -896,11 +911,23 @@ function Missed({
     <View style={styles.missed}>
       <Text style={styles.mascot}>🔍</Text>
       <Text style={[t.body, styles.centred, { color: colors.foreground }]}>
-        That one isn&rsquo;t catalogued.
+        {partial ? (
+          <>Only partial info on that one.</>
+        ) : (
+          <>That one isn&rsquo;t catalogued.</>
+        )}
       </Text>
       <Text style={[t.footnote, styles.centred, { color: colors.mutedForeground }]}>
-        Own-brands often aren&rsquo;t. Photograph the nutrition label instead and the journal
-        will read it.
+        {partial ? (
+          <>
+            Not enough to log it. Photograph the nutrition label and the journal will read it.
+          </>
+        ) : (
+          <>
+            Own-brands often aren&rsquo;t. Photograph the nutrition label instead and the
+            journal will read it.
+          </>
+        )}
       </Text>
 
       <PressableChunk

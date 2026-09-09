@@ -39,6 +39,7 @@ import {
 } from '../email/inbound.ts';
 import { verifyUnsubscribe } from '../email/unsubscribe.ts';
 import {
+  BarcodePartialError,
   BarcodeUnavailableError,
   InvalidBarcodeError,
   InvalidPortionError,
@@ -125,13 +126,21 @@ import { BARCODE_BURST, CHAT_LIMIT, DELETE_ACCOUNT_LIMIT, PHOTO_BURST, REVIEW_BU
 import { logPhotoOnly } from '../ai/photo.ts';
 
 /**
- * The three ways a scan can fail, told apart.
+ * The four ways a scan can fail, told apart.
  *
  * A code that did not scan cleanly and a portion that cannot be resolved are
  * both the caller's to fix, so they are 400s carrying the sentence to show. An
  * unreachable catalogue is nobody's fault and is deliberately *not* a 404 — the
  * client's miss path says "nobody has catalogued that", which would be a lie
  * about an outage and would send someone hunting for a product that is there.
+ *
+ * A half-filled row is a 404 with a flag on it, and the status is the
+ * compatibility half of that choice. Every build already in someone's pocket
+ * reads 404 as the miss screen — the one screen that offers the label photo,
+ * which is exactly the right next step here — so a new status would have turned
+ * a good dead end into a red toast for every user who has not updated. `partial`
+ * is what a client that knows about it reads, to say we got part of the label
+ * rather than that the packet is unknown.
  */
 function barcodeFailure(error: unknown, reply: FastifyReply) {
   if (error instanceof InvalidBarcodeError || error instanceof InvalidPortionError) {
@@ -139,6 +148,11 @@ function barcodeFailure(error: unknown, reply: FastifyReply) {
   }
   if (error instanceof BarcodeUnavailableError) {
     return reply.status(502).send({ error: error.message });
+  }
+  if (error instanceof BarcodePartialError) {
+    // The code travels too, because the basket route can lose one packet out of
+    // several and "take it off the message" is unhelpful without saying which.
+    return reply.status(404).send({ error: error.message, partial: true, barcode: error.barcode });
   }
   throw error;
 }
@@ -277,10 +291,11 @@ export async function registerRoutes(app: FastifyInstance) {
      * would put a supermarket's worth of round trips in front of a sentence.
      *
      * A code that cannot be resolved is dropped rather than fatal. There are
-     * two ways that happens — nobody has catalogued the packet, or the
-     * catalogue could not be reached — and neither is worth refusing to log
-     * somebody's dinner over. What the turn must not do is pass the loss off
-     * silently, so the count travels with the survivors and the prompt says so.
+     * three ways that happens — nobody has catalogued the packet, the catalogue
+     * has it without a usable panel, or it could not be reached — and none is
+     * worth refusing to log somebody's dinner over. What the turn must not do is
+     * pass the loss off silently, so the count travels with the survivors and
+     * the prompt says so.
      */
     const attached = parsed.data.scanned ?? [];
     const settled = await Promise.all(
@@ -291,7 +306,14 @@ export async function registerRoutes(app: FastifyInstance) {
             ? { product, grams: attachment.grams, servings: attachment.servings }
             : null;
         } catch (error) {
-          if (error instanceof InvalidBarcodeError || error instanceof BarcodeUnavailableError) {
+          if (
+            error instanceof InvalidBarcodeError ||
+            error instanceof BarcodeUnavailableError ||
+            // Catalogued without its numbers, which is a third way to lose a
+            // code and the same thing to do about it: the turn says one packet
+            // went missing and the model asks, rather than refusing the dinner.
+            error instanceof BarcodePartialError
+          ) {
             return null;
           }
           throw error;

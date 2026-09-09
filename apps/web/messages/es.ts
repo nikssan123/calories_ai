@@ -521,6 +521,8 @@ export const es: Messages = {
   'barcode.wrongPacket': '¿Paquete equivocado?',
   'barcode.notFound': 'No lo encuentro',
   'barcode.notFoundBody': 'Nadie ha catalogado ese todavía — muchas marcas blancas nunca lo están. Haz una foto de la tabla nutricional y lo leo de la etiqueta.',
+  'barcode.partial': 'Solo información parcial',
+  'barcode.partialBody': 'Solo tengo parte de la información de ese — no es suficiente para registrarlo. Haz una foto de la tabla nutricional y la leo de la etiqueta.',
   'barcode.photographLabel': 'Fotografiar la etiqueta',
   'barcode.scanDifferent': 'Escanear otro paquete',
   'barcode.addToMessage': 'Añadir a mi mensaje',

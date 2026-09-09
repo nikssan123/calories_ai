@@ -533,6 +533,8 @@ export const de: Messages = {
   'barcode.wrongPacket': 'Falsche Packung?',
   'barcode.notFound': 'Nicht gefunden',
   'barcode.notFoundBody': 'Die hat noch niemand erfasst — viele Eigenmarken werden es nie. Fotografier stattdessen die Nährwerttabelle, und ich lese sie vom Etikett ab.',
+  'barcode.partial': 'Nur Teilangaben',
+  'barcode.partialBody': 'Ich habe nur einen Teil der Angaben zu der bekommen — zu wenig, um sie einzutragen. Fotografier die Nährwerttabelle, und ich lese sie vom Etikett ab.',
   'barcode.photographLabel': 'Etikett fotografieren',
   'barcode.scanDifferent': 'Andere Packung scannen',
   'barcode.addToMessage': 'Zur Nachricht hinzufügen',

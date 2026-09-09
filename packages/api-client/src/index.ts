@@ -109,6 +109,30 @@ export class ApiError extends Error {
 }
 
 /**
+ * Whether a barcode lookup's 404 was the catalogue holding half a row.
+ *
+ * Both scanners ask, so the shape of the flag is written down once rather than
+ * sniffed twice. It is a field on a 404 rather than a status of its own because
+ * builds already on phones read 404 as the miss screen — the one that offers to
+ * photograph the label, which is the right next step whichever kind of gap it
+ * was. A new status would have made that screen a toast for everyone who has
+ * not updated.
+ *
+ * Structural rather than `instanceof ApiError`, which the web app has never used
+ * and reads `status` off the caught value for. One module instance is not
+ * something a bundler guarantees, and the way that fails here is silent: the
+ * flag would read false and the user would get the sentence this exists to stop
+ * showing them.
+ *
+ * False for every other failure, the plain miss included, so a caller can branch
+ * on it without first proving what it caught.
+ */
+export function isPartialBarcode(error: unknown): boolean {
+  const failure = error as { status?: unknown; body?: { partial?: unknown } } | null;
+  return failure?.status === 404 && failure.body?.partial === true;
+}
+
+/**
  * The request never left, or never came back. No status, because there was no
  * server on the other end to supply one.
  *

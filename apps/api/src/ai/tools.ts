@@ -52,6 +52,7 @@ import { retargetFromProfile, setTargets, targetsForDate } from '../services/tar
 import { latestWeight } from '../services/log.ts';
 import { repeatFoodEntry } from '../services/history.ts';
 import {
+  BarcodePartialError,
   InvalidBarcodeError,
   InvalidPortionError,
   logScannedProduct,
@@ -2544,6 +2545,15 @@ const workoutExercisesField = z
         product = await lookupBarcode(args.barcode);
       } catch (error) {
         if (error instanceof InvalidBarcodeError) return fail(error.message);
+        // The catalogue has the packet and not its panel, which is a different
+        // sentence to say out loud: "nobody has catalogued it" is wrong about
+        // the shelf, and a model repeating it to someone holding the product
+        // sounds like the app cannot see what they are looking at.
+        if (error instanceof BarcodePartialError) {
+          return fail(
+            'That barcode is in the catalogue but its nutrition figures are missing, so there are no numbers to work from. Ask them to photograph the nutrition panel and read the figures off it instead.',
+          );
+        }
         // An outage is said as an outage. Reported as "not found", the model
         // would send someone to photograph a label for a product that is in
         // the catalogue and would be there again in a minute.
@@ -2630,6 +2640,11 @@ const workoutExercisesField = z
       } catch (error) {
         if (error instanceof InvalidPortionError || error instanceof InvalidBarcodeError) {
           return fail(error.message);
+        }
+        if (error instanceof BarcodePartialError) {
+          return fail(
+            'That barcode has no nutrition figures in the catalogue, so there is nothing to multiply. Read the label instead.',
+          );
         }
         return fail((error as Error).message);
       }

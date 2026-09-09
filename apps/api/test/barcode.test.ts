@@ -2,12 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { query, queryOne } from '../src/db.ts';
 import { env } from '../src/env.ts';
 import {
+  BarcodePartialError,
   BarcodeUnavailableError,
   HIT_TTL_DAYS,
   InvalidBarcodeError,
   lookupBarcode,
   MISS_TTL_DAYS,
   normaliseBarcode,
+  PARTIAL_TTL_HOURS,
   sweepBarcodeCache,
 } from '../src/services/barcode.ts';
 
@@ -207,26 +209,34 @@ describe('lookupBarcode', () => {
     expect(await lookupBarcode(CODE)).toMatchObject({ name: 'Lidl', brand: 'Lidl', kcal_100g: 373 });
   });
 
-  it('treats a row with neither a name nor a brand as a miss', async () => {
+  it('reads a row with neither a name nor a brand as half a row, not an absence', async () => {
     stubFetch({
       body: offProduct({ 'energy-kcal_100g': 373 }, { product_name: '', brands: '' }),
     });
 
-    expect(await lookupBarcode(CODE)).toBeNull();
+    await expect(lookupBarcode(CODE)).rejects.toThrow(BarcodePartialError);
   });
 
-  it('treats a row with a name and no macros as a miss', async () => {
+  it('reads a row with a name and no macros as half a row, not an absence', async () => {
     stubFetch({ body: { status: 1, product: { code: CODE, product_name: 'Something', nutriments: {} } } });
 
-    expect(await lookupBarcode(CODE)).toBeNull();
-    // A miss, not a zero-calorie food. The zero would look like a number.
-    expect(await cacheRow()).toMatchObject({ found: false, kcal_100g: null });
+    // The case that sent a shopper looking for a product that was in the
+    // catalogue all along: a name, a brand and a nutrition photograph nobody has
+    // transcribed. Told as "nobody has catalogued that", it reads as the app
+    // being wrong about the shelf.
+    await expect(lookupBarcode(CODE)).rejects.toThrow(BarcodePartialError);
+    // Still not a zero-calorie food — the zero would look like a number — and
+    // written down on the short clock rather than a miss's week.
+    expect(await cacheRow()).toMatchObject({ found: false, partial: true, kcal_100g: null });
   });
 
-  it('treats an implausible energy figure as a miss', async () => {
+  it('reads an implausible energy figure as half a row too', async () => {
     stubFetch({ body: offProduct({ 'energy-kcal_100g': 5390 }) });
 
-    expect(await lookupBarcode(CODE)).toBeNull();
+    // A panel that contradicts itself is a row somebody filled in wrongly, which
+    // is the same kind of gap as one they left empty: the product is there and
+    // its numbers are not usable.
+    await expect(lookupBarcode(CODE)).rejects.toThrow(BarcodePartialError);
   });
 
   it('drops a serving size the contributor left empty', async () => {
@@ -245,7 +255,8 @@ describe('lookupBarcode', () => {
     expect(await lookupBarcode(CODE)).toBeNull();
 
     expect(calls).toHaveLength(1);
-    expect(await cacheRow()).toMatchObject({ found: false });
+    // A plain absence, so it keeps the week-long clock rather than the short one.
+    expect(await cacheRow()).toMatchObject({ found: false, partial: false });
   });
 
   it('expires a miss on its own shorter clock', async () => {
@@ -284,6 +295,56 @@ describe('lookupBarcode', () => {
     stubFetch({ status: 500 });
     await expect(lookupBarcode(CODE)).rejects.toThrow(BarcodeUnavailableError);
     expect(await cacheRow()).toBeNull();
+  });
+
+  it('remembers half a row, so three scans of it in the aisle are one round trip', async () => {
+    const calls = stubFetch({ body: halfARow() });
+
+    // What a shopper actually does when the first answer is not the one they
+    // wanted: point at the same packet again, twice.
+    await expect(lookupBarcode(CODE)).rejects.toThrow(BarcodePartialError);
+    await expect(lookupBarcode(CODE)).rejects.toThrow(BarcodePartialError);
+    await expect(lookupBarcode(CODE)).rejects.toThrow(BarcodePartialError);
+
+    expect(calls).toHaveLength(1);
+    expect(await cacheRow()).toMatchObject({ found: false, partial: true });
+  });
+
+  it('re-asks about half a row the same afternoon, long before a miss is re-asked', async () => {
+    const calls = stubFetch({ body: halfARow() }, { body: offProduct({ 'energy-kcal_100g': 539 }) });
+
+    await expect(lookupBarcode(CODE)).rejects.toThrow(BarcodePartialError);
+    await backdateHours(CODE, PARTIAL_TTL_HOURS + 1);
+
+    // The gap was one contributor typing four numbers off a photograph that was
+    // already there. On a miss's week-long clock the scan would have stayed
+    // broken until long after they had.
+    expect(await lookupBarcode(CODE)).toMatchObject({ name: 'Hazelnut spread' });
+    expect(calls).toHaveLength(2);
+    // And the refreshed row is a hit now, not a half-row kept on the short clock.
+    expect(await cacheRow()).toMatchObject({ found: true, partial: false });
+  });
+
+  it('keeps a plain miss for the week it is entitled to', async () => {
+    const calls = stubFetch({ status: 404 });
+
+    expect(await lookupBarcode(CODE)).toBeNull();
+    await backdateHours(CODE, PARTIAL_TTL_HOURS + 1);
+
+    // Same age as the row above, and a different answer: nothing about this
+    // product is waiting on a small edit, so the short clock is not for it.
+    expect(await lookupBarcode(CODE)).toBeNull();
+    expect(calls).toHaveLength(1);
+  });
+
+  it('does not let FDC having never heard of it turn half a row into a miss', async () => {
+    env.barcode.fdcApiKey = 'test-key';
+    stubFetch({ body: halfARow() }, { body: { foods: [] } });
+
+    // A Bulgarian yoghurt is not on the American branded shelf, and that says
+    // nothing about the row Open Food Facts is holding.
+    await expect(lookupBarcode(CODE)).rejects.toThrow(BarcodePartialError);
+    expect(await cacheRow()).toMatchObject({ found: false, partial: true });
   });
 });
 
@@ -417,12 +478,39 @@ describe('sweepBarcodeCache', () => {
     await backdate(CODE, HIT_TTL_DAYS + 1);
     expect(await sweepBarcodeCache()).toBe(1);
   });
+
+  it('sweeps half a row on its own clock, hours after it was written', async () => {
+    stubFetch({ body: halfARow() });
+    await expect(lookupBarcode(CODE)).rejects.toThrow(BarcodePartialError);
+
+    await backdateHours(CODE, PARTIAL_TTL_HOURS - 1);
+    expect(await sweepBarcodeCache()).toBe(0);
+
+    await backdateHours(CODE, PARTIAL_TTL_HOURS + 1);
+    expect(await sweepBarcodeCache()).toBe(1);
+  });
 });
+
+/**
+ * An OFF row the way the catalogue most often half-fills one: a name, a brand,
+ * a photograph of the nutrition label, and `nutriments` nobody has typed in.
+ */
+function halfARow() {
+  return { status: 1, product: { code: CODE, product_name: 'Hazelnut spread', brands: 'Ferrero' } };
+}
 
 /** Ages a cached row, which is cheaper than moving the clock. */
 async function backdate(barcode: string, days: number): Promise<void> {
   await query(
     `UPDATE barcode_products SET fetched_at = now() - ($2 * INTERVAL '1 day') WHERE barcode = $1`,
     [barcode, days],
+  );
+}
+
+/** The same, for the one clock measured in hours. */
+async function backdateHours(barcode: string, hours: number): Promise<void> {
+  await query(
+    `UPDATE barcode_products SET fetched_at = now() - ($2 * INTERVAL '1 hour') WHERE barcode = $1`,
+    [barcode, hours],
   );
 }

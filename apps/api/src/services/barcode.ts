@@ -44,6 +44,23 @@ export const HIT_TTL_DAYS = 90;
 export const MISS_TTL_DAYS = 7;
 
 /**
+ * A half-filled row expires inside the afternoon, and that is the third clock
+ * because it is a third kind of gap.
+ *
+ * A miss waits on somebody cataloguing a product nobody has touched. This waits
+ * on somebody typing four numbers off a nutrition photograph that is already
+ * uploaded beside the name — the smallest edit Open Food Facts has, and the one
+ * a shopper who just hit this is most likely to make themselves. A week of
+ * remembering would answer the rescan in the shop, and the rescan that evening,
+ * with a row that was already stale.
+ *
+ * Hours rather than days: long enough that the three scans of the same packet
+ * in six seconds cost one round trip, short enough that coming back to it is a
+ * fresh question.
+ */
+export const PARTIAL_TTL_HOURS = 6;
+
+/**
  * Above this, per 100g, the row is wrong rather than unusual.
  *
  * Pure fat is about 900 kcal/100g and nothing edible beats it. Crowd-sourced
@@ -65,6 +82,28 @@ export class BarcodeUnavailableError extends Error {
   constructor(message = 'Could not reach the food catalogue') {
     super(message);
     this.name = 'BarcodeUnavailableError';
+  }
+}
+
+/**
+ * The catalogue has the packet and not its numbers.
+ *
+ * Thrown rather than returned, because every caller already tells the three
+ * failures apart in a `catch` and this is the fourth — and because the one
+ * thing it must never become is a product with zeroes in it. A value would sit
+ * in the same slot a usable panel sits in; an exception cannot be logged by
+ * accident.
+ *
+ * It is not an error in the user's sense and the message says so. What it
+ * replaces is being told nobody has catalogued a product whose name, brand and
+ * photographed label are all sitting in the catalogue, which reads as the app
+ * being wrong about the shelf — and sends someone hunting for a packet that is
+ * in their hand.
+ */
+export class BarcodePartialError extends Error {
+  constructor(readonly barcode: string) {
+    super('Only part of that label is catalogued');
+    this.name = 'BarcodePartialError';
   }
 }
 
@@ -170,17 +209,37 @@ interface CacheRow {
   serving_desc: string | null;
   source: BarcodeSource;
   source_url: string | null;
+  /** Catalogued without a usable panel. Only ever true when `found` is false. */
+  partial: boolean;
   fetched_at: Date;
 }
+
+/**
+ * What one round of asking produced, which is three answers rather than two.
+ *
+ * Internal to this file on purpose: outside it a lookup is a panel, an absence
+ * or a throw, and nothing downstream should have to destructure this. It exists
+ * so that "Open Food Facts has the row but not the numbers" survives the walk
+ * back up through `ask` — both as the sentence the user gets and as the clock
+ * the row is written with.
+ */
+type Answer = { product: BarcodeProduct } | { product: null; partial: boolean };
+
+/** Nothing there at all: the catalogue answered, and the answer was no row. */
+const ABSENT: Answer = { product: null, partial: false };
+/** A row, minus the figures that would make it usable. */
+const PARTIAL: Answer = { product: null, partial: true };
 
 /**
  * Cache, then Open Food Facts, then FDC when a key is configured.
  *
  * Returns null for "nobody has catalogued this", which is an ordinary outcome
- * in a real supermarket and the one the miss path exists for. It throws only
- * when the catalogues could not be *asked* — a distinction worth keeping,
- * because a negative row written from a network blip would remember an outage
- * for a week.
+ * in a real supermarket and the one the miss path exists for. It throws
+ * `BarcodeUnavailableError` when the catalogues could not be *asked* — a
+ * distinction worth keeping, because a negative row written from a network blip
+ * would remember an outage for a week — and `BarcodePartialError` when one of
+ * them has the packet without enough of its label to use, which is a third
+ * answer that spent a while being told as the first.
  */
 export async function lookupBarcode(raw: string): Promise<BarcodeProduct | null> {
   const code = normaliseBarcode(raw);
@@ -188,11 +247,17 @@ export async function lookupBarcode(raw: string): Promise<BarcodeProduct | null>
   const cached = await queryOne<CacheRow>('SELECT * FROM barcode_products WHERE barcode = $1', [
     code,
   ]);
-  if (cached && !isStale(cached)) return cached.found ? toProduct(cached) : null;
+  if (cached && !isStale(cached)) {
+    if (cached.found) return toProduct(cached);
+    if (cached.partial) throw new BarcodePartialError(code);
+    return null;
+  }
 
-  const product = await ask(code);
-  await remember(code, product);
-  return product;
+  const answer = await ask(code);
+  await remember(code, answer);
+  if (answer.product) return answer.product;
+  if (answer.partial) throw new BarcodePartialError(code);
+  return null;
 }
 
 /**
@@ -205,46 +270,61 @@ export async function lookupBarcode(raw: string): Promise<BarcodeProduct | null>
  * genuine "not in FDC" after an OFF outage is still not a confirmed miss and
  * must not be written down as one.
  */
-async function ask(code: string): Promise<BarcodeProduct | null> {
+async function ask(code: string): Promise<Answer> {
   let outage: BarcodeUnavailableError | null = null;
+  // Held across the fallback, because a half-filled OFF row is still the most
+  // informative thing anybody said about the packet. FDC having never heard of
+  // a Bulgarian yoghurt does not turn it back into an uncatalogued product.
+  let partial = false;
   try {
-    const found = await fromOpenFoodFacts(code);
-    if (found) return found;
+    const off = await fromOpenFoodFacts(code);
+    if (off.product) return off;
+    partial = off.partial;
   } catch (error) {
     if (!(error instanceof BarcodeUnavailableError)) throw error;
     outage = error;
   }
 
   const fallback = await fromFoodDataCentral(code);
-  if (fallback) return fallback;
+  if (fallback.product) return fallback;
   if (outage) throw outage;
-  return null;
+  return partial || fallback.partial ? PARTIAL : ABSENT;
 }
 
 function isStale(row: CacheRow): boolean {
-  const days = (Date.now() - row.fetched_at.getTime()) / 86_400_000;
-  return days > (row.found ? HIT_TTL_DAYS : MISS_TTL_DAYS);
+  const hours = (Date.now() - row.fetched_at.getTime()) / 3_600_000;
+  return hours > ttlHours(row);
+}
+
+/** The three clocks, in the unit the shortest of them needs. */
+function ttlHours(row: Pick<CacheRow, 'found' | 'partial'>): number {
+  if (row.found) return HIT_TTL_DAYS * 24;
+  return row.partial ? PARTIAL_TTL_HOURS : MISS_TTL_DAYS * 24;
 }
 
 /**
- * Writes the answer down, hit or miss.
+ * Writes the answer down, whichever of the three it was.
  *
  * `fetched_at` is reset on conflict so a re-fetch restarts the clock rather
- * than leaving a refreshed row instantly stale again.
+ * than leaving a refreshed row instantly stale again — and `partial` is written
+ * every time for the same reason. A row that was half-filled this morning and
+ * is a full panel by lunchtime must stop being read on the short clock, and one
+ * that went the other way must start.
  */
-async function remember(code: string, product: BarcodeProduct | null): Promise<void> {
+async function remember(code: string, answer: Answer): Promise<void> {
+  const product = answer.product;
   await query(
     `INSERT INTO barcode_products
        (barcode, found, brand, name, kcal_100g, protein_100g, carbs_100g, fat_100g,
-        serving_g, serving_desc, source, source_url)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+        serving_g, serving_desc, source, source_url, partial)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
      ON CONFLICT (barcode) DO UPDATE SET
        found = EXCLUDED.found, brand = EXCLUDED.brand, name = EXCLUDED.name,
        kcal_100g = EXCLUDED.kcal_100g, protein_100g = EXCLUDED.protein_100g,
        carbs_100g = EXCLUDED.carbs_100g, fat_100g = EXCLUDED.fat_100g,
        serving_g = EXCLUDED.serving_g, serving_desc = EXCLUDED.serving_desc,
        source = EXCLUDED.source, source_url = EXCLUDED.source_url,
-       fetched_at = now()`,
+       partial = EXCLUDED.partial, fetched_at = now()`,
     [
       code,
       product !== null,
@@ -261,6 +341,9 @@ async function remember(code: string, product: BarcodeProduct | null): Promise<v
       // reading of a negative row.
       product?.source ?? (env.barcode.fdcApiKey ? 'fdc' : 'off'),
       product?.source_url ?? null,
+      // Which clock this row is read on, and the only thing separating a packet
+      // nobody has catalogued from one catalogued without its panel.
+      product === null && answer.partial,
     ],
   );
 }
@@ -281,13 +364,14 @@ function toProduct(row: CacheRow): BarcodeProduct {
   };
 }
 
-/** Removes rows nobody will read again. Both clocks, one statement. */
+/** Removes rows nobody will read again. All three clocks, one statement. */
 export async function sweepBarcodeCache(): Promise<number> {
   const gone = await query<{ barcode: string }>(
     `DELETE FROM barcode_products
-      WHERE fetched_at < now() - make_interval(days => CASE WHEN found THEN $1::int ELSE $2::int END)
+      WHERE fetched_at < now() - make_interval(hours =>
+        CASE WHEN found THEN $1::int WHEN partial THEN $2::int ELSE $3::int END)
       RETURNING barcode`,
-    [HIT_TTL_DAYS, MISS_TTL_DAYS],
+    [HIT_TTL_DAYS * 24, PARTIAL_TTL_HOURS, MISS_TTL_DAYS * 24],
   );
   return gone.length;
 }
@@ -358,15 +442,15 @@ const OFF_LANGUAGES = [
   'lt',
 ].join(',');
 
-async function fromOpenFoodFacts(code: string): Promise<BarcodeProduct | null> {
+async function fromOpenFoodFacts(code: string): Promise<Answer> {
   const url = `${OFF_URL}/${code}.json?fields=${OFF_FIELDS}&lc=${OFF_LANGUAGES}`;
   const body = await fetchJson(url, { 'User-Agent': env.barcode.userAgent });
   // v2 answers a missing product with a 404 and an envelope, both of which
   // `fetchJson` reduces to null. Either way there is nothing here.
-  if (!body) return null;
+  if (!body) return ABSENT;
 
   const product = body.product;
-  if (body.status === 0 || !product) return null;
+  if (body.status === 0 || !product) return ABSENT;
 
   const n = product.nutriments ?? {};
   const kcal = offEnergy(n);
@@ -385,21 +469,29 @@ async function fromOpenFoodFacts(code: string): Promise<BarcodeProduct | null> {
   // cereal is uncatalogued while holding its calories, and sending them off to
   // photograph a label Open Food Facts has already transcribed.
   const name = text(product.product_name) ?? text(product.product_name_en) ?? brand;
-  if (!name) return null;
-  if (!usable(kcal, macros)) return null;
+  // Both of these are a row that exists and cannot be used, which is the state
+  // this catalogue is most often in: `status` 1, a front-of-pack photograph, a
+  // nutrition photograph nobody has transcribed, and `nutriments` empty. The
+  // half that is missing differs — a name with no panel, a panel with no name —
+  // and the answer to the person holding the packet does not, so neither does
+  // this. What they must not be told is that nobody has catalogued it.
+  if (!name) return PARTIAL;
+  if (!usable(kcal, macros)) return PARTIAL;
 
   return {
-    barcode: code,
-    brand,
-    name,
-    kcal_100g: round(kcal!),
-    protein_100g: round(macros.protein_100g!),
-    carbs_100g: round(macros.carbs_100g!),
-    fat_100g: round(macros.fat_100g!),
-    serving_g: servingGrams(product.serving_quantity),
-    serving_desc: text(product.serving_size),
-    source: 'off',
-    source_url: `https://world.openfoodfacts.org/product/${code}`,
+    product: {
+      barcode: code,
+      brand,
+      name,
+      kcal_100g: round(kcal!),
+      protein_100g: round(macros.protein_100g!),
+      carbs_100g: round(macros.carbs_100g!),
+      fat_100g: round(macros.fat_100g!),
+      serving_g: servingGrams(product.serving_quantity),
+      serving_desc: text(product.serving_size),
+      source: 'off',
+      source_url: `https://world.openfoodfacts.org/product/${code}`,
+    },
   };
 }
 
@@ -453,9 +545,9 @@ const FDC_NUTRIENTS = { kcal: '208', protein: '203', fat: '204', carbs: '205' };
  * a search endpoint rather than a lookup, so it is both slower and looser than
  * asking OFF for one code.
  */
-async function fromFoodDataCentral(code: string): Promise<BarcodeProduct | null> {
+async function fromFoodDataCentral(code: string): Promise<Answer> {
   const key = env.barcode.fdcApiKey;
-  if (!key) return null;
+  if (!key) return ABSENT;
 
   // FDC matches the GTIN as it happens to be stored, and it is stored in
   // whichever form the brand submitted — Cheerios under the 14-digit
@@ -471,13 +563,13 @@ async function fromFoodDataCentral(code: string): Promise<BarcodeProduct | null>
   // row whose number is this number.
   const url = `${FDC_URL}?query=${encodeURIComponent(gtinForms(code))}&dataType=Branded&pageSize=10&api_key=${encodeURIComponent(key)}`;
   const body = await fetchJson(url, {});
-  if (!body) return null;
+  if (!body) return ABSENT;
 
   // A search, so the first hit is not necessarily *this* product. Match the
   // GTIN back, or a scan of one cereal box could return a different one.
   const foods: any[] = body.foods ?? [];
   const food = foods.find((f) => sameGtin(f?.gtinUpc, code));
-  if (!food) return null;
+  if (!food) return ABSENT;
 
   const nutrients = new Map<string, number>();
   for (const entry of food.foodNutrients ?? []) {
@@ -492,7 +584,10 @@ async function fromFoodDataCentral(code: string): Promise<BarcodeProduct | null>
     fat_100g: nutrients.get(FDC_NUTRIENTS.fat) ?? null,
   };
   const name = text(food.description);
-  if (!name || !usable(kcal, macros)) return null;
+  // FDC's own row for this GTIN, short of what it takes to use it. Rarer here
+  // than on OFF — a branded submission arrives with its panel — but the same
+  // answer either way: the packet is known and its numbers are not.
+  if (!name || !usable(kcal, macros)) return PARTIAL;
 
   // FDC gives a serving size with its own unit, and only grams are meaningful
   // here — a serving measured in cups cannot be multiplied against per-100g.
@@ -500,17 +595,19 @@ async function fromFoodDataCentral(code: string): Promise<BarcodeProduct | null>
   const serving = unit === 'g' || unit === 'ml' ? servingGrams(food.servingSize) : null;
 
   return {
-    barcode: code,
-    brand: text(food.brandOwner) ?? text(food.brandName),
-    name,
-    kcal_100g: round(kcal!),
-    protein_100g: round(macros.protein_100g!),
-    carbs_100g: round(macros.carbs_100g!),
-    fat_100g: round(macros.fat_100g!),
-    serving_g: serving,
-    serving_desc: text(food.householdServingFullText),
-    source: 'fdc',
-    source_url: food.fdcId ? `https://fdc.nal.usda.gov/food-details/${food.fdcId}` : null,
+    product: {
+      barcode: code,
+      brand: text(food.brandOwner) ?? text(food.brandName),
+      name,
+      kcal_100g: round(kcal!),
+      protein_100g: round(macros.protein_100g!),
+      carbs_100g: round(macros.carbs_100g!),
+      fat_100g: round(macros.fat_100g!),
+      serving_g: serving,
+      serving_desc: text(food.householdServingFullText),
+      source: 'fdc',
+      source_url: food.fdcId ? `https://fdc.nal.usda.gov/food-details/${food.fdcId}` : null,
+    },
   };
 }
 

@@ -14,6 +14,7 @@ import {
   formatServings,
   massUnit,
 } from '@ct/shared';
+import { isPartialBarcode } from '@ct/api-client';
 import { useUnits } from '@/lib/units';
 import { useLocale, useT } from '@/lib/i18n';
 import { api } from '@/lib/api';
@@ -56,7 +57,15 @@ type Stage =
   | { at: 'scanning' }
   | { at: 'looking'; code: string }
   | { at: 'found'; product: BarcodeProduct }
-  | { at: 'missed' };
+  /**
+   * `partial` is the catalogue having the packet without enough of its label to
+   * use — a name, a brand, a photograph of the nutrition panel and nobody
+   * having typed the four numbers off it yet. Same screen, because the answer
+   * is the same camera; different sentence, because "nobody has catalogued
+   * that" is not true of this packet and reads as the app being wrong about the
+   * shelf.
+   */
+  | { at: 'missed'; partial: boolean };
 
 /**
  * A packet on its way into a message, rather than into the log.
@@ -191,7 +200,7 @@ export function BarcodeScanner({
         // failure — and specifically not the miss, because "nobody has
         // catalogued that" would be a lie about an outage and would send
         // someone hunting for a product that is on the shelf.
-        if (status === 404) setStage({ at: 'missed' });
+        if (status === 404) setStage({ at: 'missed', partial: isPartialBarcode(error) });
         else {
           toast.error((error as Error).message);
           // A failure that does not back off is a failure four times a second:
@@ -395,6 +404,7 @@ export function BarcodeScanner({
               />
             ) : stage.at === 'missed' ? (
               <Missed
+                partial={stage.partial}
                 onPhotograph={() => labelRef.current?.click()}
                 onRescan={() => {
                   // Asked for, so the packet in frame is fair game again.
@@ -856,9 +866,11 @@ function PortionCard({
  * teaches people the scanner is unreliable and to stop reaching for it.
  */
 function Missed({
+  partial,
   onPhotograph,
   onRescan,
 }: {
+  partial: boolean;
   onPhotograph: () => void;
   onRescan: () => void;
 }) {
@@ -869,9 +881,11 @@ function Missed({
         <span aria-hidden className="mb-2 block text-[36px] leading-none">
           🔎
         </span>
-        <h3 className="text-body font-semibold">{t('barcode.notFound')}</h3>
+        <h3 className="text-body font-semibold">
+          {t(partial ? 'barcode.partial' : 'barcode.notFound')}
+        </h3>
         <p className="text-muted-foreground mt-1 text-body leading-snug">
-          {t('barcode.notFoundBody')}
+          {t(partial ? 'barcode.partialBody' : 'barcode.notFoundBody')}
         </p>
       </div>
 

@@ -537,6 +537,8 @@ export const bg: Messages = {
   'barcode.wrongPacket': 'Грешна опаковка?',
   'barcode.notFound': 'Не я намерих',
   'barcode.notFoundBody': 'Никой още не е описал тази — много собствени марки никога не биват. Снимай хранителната таблица и ще я прочета от етикета.',
+  'barcode.partial': 'Непълни данни',
+  'barcode.partialBody': 'Данните за тази опаковка са непълни — не стигат, за да я запиша. Снимай хранителната таблица и ще я прочета от етикета.',
   'barcode.photographLabel': 'Снимай етикета',
   'barcode.scanDifferent': 'Сканирай друга опаковка',
   'barcode.addToMessage': 'Добави към съобщението',

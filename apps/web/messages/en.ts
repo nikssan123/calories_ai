@@ -657,6 +657,9 @@ export const en = {
   'barcode.notFound': 'Couldn’t find it',
   'barcode.notFoundBody':
     'Nobody has catalogued that one yet — plenty of own-brands never are. Snap the nutrition panel instead and I’ll read it off the label.',
+  'barcode.partial': 'Only partial info',
+  'barcode.partialBody':
+    'I only got partial information for that one — not enough to log it. Snap the nutrition panel and I’ll read it off the label.',
   'barcode.photographLabel': 'Photograph the label',
   'barcode.scanDifferent': 'Scan a different packet',
   'barcode.addToMessage': 'Add to my message',

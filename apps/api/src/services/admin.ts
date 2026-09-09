@@ -307,7 +307,7 @@ export const BROWSABLE_TABLES: Record<string, TableSpec> = {
     group: 'Food',
     redact: [],
     order: 'fetched_at DESC',
-    note: 'The scanner’s cache of Open Food Facts. `found = false` rows are remembered misses.',
+    note: 'The scanner’s cache of Open Food Facts. `found = false` rows are remembered misses; `partial` marks the ones the catalogue has without a usable panel, which expire in hours rather than a week.',
   },
   targets: {
     group: 'Food',

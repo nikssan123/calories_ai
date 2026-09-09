@@ -527,6 +527,8 @@ export const fr: Messages = {
   'barcode.wrongPacket': 'Mauvais paquet ?',
   'barcode.notFound': 'Introuvable',
   'barcode.notFoundBody': 'Personne ne l’a encore catalogué — beaucoup de marques de distributeur ne le sont jamais. Prends plutôt le tableau nutritionnel en photo et je le lirai sur l’étiquette.',
+  'barcode.partial': 'Informations partielles',
+  'barcode.partialBody': 'Je n’ai qu’une partie des informations pour celui-là — pas assez pour l’enregistrer. Prends le tableau nutritionnel en photo et je le lirai sur l’étiquette.',
   'barcode.photographLabel': 'Photographier l’étiquette',
   'barcode.scanDifferent': 'Scanner un autre paquet',
   'barcode.addToMessage': 'Ajouter à mon message',
