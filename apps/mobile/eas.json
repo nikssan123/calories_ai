@@ -50,6 +50,13 @@
         "ascApiKeyId": "57JH8Y5VU2",
         "ascApiKeyIssuerId": "6dca087e-d5ef-416b-9ce2-6990b78a4e3f"
       }
+    },
+    "draft": {
+      "android": {
+        "serviceAccountKeyPath": "./play-service-account.json",
+        "track": "alpha",
+        "releaseStatus": "draft"
+      }
     }
   }
 }
