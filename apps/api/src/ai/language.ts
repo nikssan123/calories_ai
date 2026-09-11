@@ -61,9 +61,9 @@ import type { Locale } from '@ct/shared';
  * The name is for a prompt, so it is in English however the reply will be
  * written: "Български" in a system prompt is a worse instruction than
  * "Bulgarian". Same reasoning as `LOCALE_ENGLISH_NAMES`, which this extends
- * past the five languages the interface itself ships in — somebody writing
- * Italian to an English app is owed Italian back, and the five-locale table
- * has nothing to say about that.
+ * past the languages the interface itself ships in — somebody writing Italian
+ * to an English app is owed Italian back, and the locale table has nothing to
+ * say about that.
  *
  * Both Norwegian standards are called "Norwegian". franc distinguishes Bokmål
  * from Nynorsk, but not from 600 characters of meal log, and being told to
@@ -155,13 +155,21 @@ const HAIKU_LANGUAGES: ReadonlySet<string> = new Set([
   'arb', 'hin', 'ind', 'zlm', 'tha', 'vie',
 ]);
 
-/** The five the interface ships in, mapped to the codes the tables above use. */
+/** The languages the interface ships in, mapped to the codes the tables above use. */
 const FRANC_CODES: Record<Locale, string> = {
   en: 'eng',
   bg: 'bul',
   de: 'deu',
   es: 'spa',
   fr: 'fra',
+  ro: 'ron',
+  uk: 'ukr',
+  sr: 'srp',
+  hr: 'hrv',
+  cs: 'ces',
+  hu: 'hun',
+  el: 'ell',
+  sk: 'slk',
 };
 
 /**
@@ -250,8 +258,8 @@ function nameFor(code: string): string | null {
 }
 
 /**
- * Which of the five interface languages a finished piece of prose is written in,
- * or null if it is none of them.
+ * Which of the interface's languages a finished piece of prose is written in, or
+ * null if it is none of them.
  *
  * The mirror of `replyLanguage`, and it exists because that function's answer
  * outlives the request that asked it. A nudge and a weekly review are written
@@ -269,18 +277,46 @@ function nameFor(code: string): string | null {
  * A single sample, so `detect` returns what the text says with nothing to
  * check it against — safe here in a way it is not on a meal log, because this
  * is paragraphs of finished writing rather than "две яйца". Null for anything
- * outside the five: an Italian nudge has no catalogue to be wrapped in, and
+ * outside them: an Italian nudge has no catalogue to be wrapped in, and
  * the caller's stored locale is the best chrome left.
  */
 export function proseLocale(text: string): Locale | null {
+  if (text.replace(/[^\p{L}]/gu, '').length < PROSE_MIN_LETTERS) return null;
   const detected = detect([text]);
   return detected.kind === 'named' ? (LOCALE_CODES[detected.code] ?? null) : null;
 }
 
-/** `FRANC_CODES` read the other way, for `proseLocale`. */
-const LOCALE_CODES: Record<string, Locale> = Object.fromEntries(
-  Object.entries(FRANC_CODES).map(([locale, code]) => [code, locale as Locale]),
-);
+/**
+ * How much prose `proseLocale` needs before it will name a language.
+ *
+ * A review is paragraphs and a nudge is a sentence or two, so this is well
+ * under anything real and well over what trigrams can be trusted with: on a
+ * fragment franc names anything, and "A steady week." reads as Czech. Before
+ * the interface shipped in Czech that guess fell through harmlessly — there was
+ * no Czech catalogue to wrap the mail in — but with thirteen catalogues a wrong
+ * name is a wrongly-dressed email. So a short text names nothing, and the
+ * caller's stored locale answers.
+ */
+const PROSE_MIN_LETTERS = 40;
+
+/**
+ * `FRANC_CODES` read the other way, for `proseLocale` — plus Bosnian, read as
+ * Croatian.
+ *
+ * franc ranks Bosnian first on Croatian prose, with Croatian a close second: the
+ * Latin-script standards share nearly every trigram, and a weekly review is not
+ * long enough to separate them. Bosnian has no catalogue, so left alone a
+ * Croatian review would come back null and arrive in whatever chrome the stored
+ * locale says. Croatian chrome is what a reader of any of them reads without
+ * noticing. Serbian needs no alias: it ships in Cyrillic, which `readCyrillic`
+ * settles by its letters before franc is asked.
+ */
+const LOCALE_CODES: Record<string, Locale> = {
+  ...Object.fromEntries(
+    Object.entries(FRANC_CODES).map(([locale, code]) => [code, locale as Locale]),
+  ),
+  bos: 'hr',
+};
 
 type Detection =
   /** A language, named. */

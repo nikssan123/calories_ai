@@ -81,8 +81,7 @@ export function DietQuality({
 
       {partial && (
         <p className="text-footnote text-muted-foreground px-1.5 pt-0.5 font-medium">
-          Only {Math.round(quality.coverage * 100)}% of today&rsquo;s calories carry these figures,
-          so the totals are a floor rather than the whole day.
+          {t('quality.partialCoverage')(String(Math.round(quality.coverage * 100)))}
         </p>
       )}
     </section>

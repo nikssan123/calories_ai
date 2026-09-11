@@ -91,7 +91,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
     setRoutines((prev) => prev?.filter((r) => r.id !== routine.id) ?? prev);
     try {
       await api.deleteRoutine(routine.id);
-      toast.success(`Deleted ${routine.name}`);
+      toast.success(t('workouts.deleted')(routine.name));
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -340,7 +340,7 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
       if (routine && routine.name.toLowerCase() !== name.trim().toLowerCase()) {
         await api.deleteRoutine(routine.id);
       }
-      toast.success(`Saved ${name.trim()}`);
+      toast.success(t('workouts.saved')(name.trim()));
       onDone();
     } catch (e) {
       toast.error((e as Error).message);

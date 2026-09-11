@@ -11,6 +11,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { duration, ease, font, type as t, useColors, type Palette } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useT } from '@/lib/i18n';
 
 /**
  * The toast, which this app went without for a while and is better for having
@@ -167,6 +168,7 @@ function Overlay({ toasts, onDismiss }: { toasts: Toast[]; onDismiss: (id: numbe
 
 function Row({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number) => void }) {
   const colors = useColors();
+  const tr = useT();
   const reduced = useReducedMotion();
   const progress = useSharedValue(0);
   /** Guards the exit against being started twice — by a tap during the timer. */
@@ -217,7 +219,7 @@ function Row({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number) => vo
         // A finger has no hover, so sonner's close button has nothing to appear
         // on. The whole toast is the dismiss target instead — except for the
         // action, which is its own button and announces itself.
-        accessibilityLabel={`${toast.text}. Tap to dismiss.`}
+        accessibilityLabel={tr('toast.tapToDismiss')(toast.text)}
         accessibilityLiveRegion="polite"
       >
         <Chunk

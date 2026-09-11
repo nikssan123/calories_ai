@@ -147,7 +147,7 @@ export function RecipeReader({
             <div className="text-footnote text-muted-foreground mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 font-medium">
               <span className="inline-flex items-center gap-1.5">
                 <Users size={13} />
-                Makes {portions} {portions === 1 ? 'portion' : 'portions'}
+                {t('recipe.makes')(portions)}
               </span>
               {typeof minutes === 'number' && (
                 <span className="inline-flex items-center gap-1.5">
@@ -165,7 +165,7 @@ export function RecipeReader({
             <div className="bg-card border-border chunk mt-4 flex flex-wrap items-end gap-x-6 gap-y-3 rounded-[var(--radius)] border-2 px-4 py-3.5">
               <div>
                 <p className="text-figure text-[34px] leading-none">{Math.round(kcal)}</p>
-                <p className="text-footnote text-muted-foreground mt-1">kcal · {servingLabel}</p>
+                <p className="text-footnote text-muted-foreground mt-1">kcal{' · '}{servingLabel}</p>
               </div>
               <div className="flex flex-wrap items-end gap-x-5 gap-y-2">
                 <Macro label={t('macro.protein')} value={protein_g} color="var(--protein)" />

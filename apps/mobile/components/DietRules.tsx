@@ -154,7 +154,7 @@ export function DietRules({
                 key={item}
                 onPress={() => void save({ avoids: profile.avoids.filter((a) => a !== item) })}
                 accessibilityRole="button"
-                accessibilityLabel={`Stop avoiding ${item}`}
+                accessibilityLabel={tr('diet.stopAvoiding')(item)}
                 style={({ pressed }) => [
                   styles.tag,
                   {

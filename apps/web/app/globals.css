@@ -345,14 +345,27 @@
  * The weight moves with the face. Baloo at 800 and Nunito at 800 are not the
  * same colour on the page: Nunito's counters are more open, so it reads lighter
  * at a given weight and needs the extra step to carry a heading.
+ *
+ * The languages listed are the Cyrillic ones in `LOCALE_SCRIPTS`, kept in step
+ * by hand because CSS cannot import it. Greek is deliberately absent: neither
+ * face has it, so its letters fall through the stack to the platform's face at
+ * the weight asked for, and there is nothing here to swap to.
  */
-:root:lang(bg) {
+:root:lang(bg),
+:root:lang(uk),
+:root:lang(sr) {
   --font-display: var(--font-display-cyrillic);
 }
 
 :lang(bg) h1,
 :lang(bg) h2,
-:lang(bg) .text-figure {
+:lang(bg) .text-figure,
+:lang(uk) h1,
+:lang(uk) h2,
+:lang(uk) .text-figure,
+:lang(sr) h1,
+:lang(sr) h2,
+:lang(sr) .text-figure {
   font-weight: 900;
 }
 

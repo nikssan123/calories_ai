@@ -171,7 +171,7 @@ export default function ProgressScreen() {
             <View style={styles.pad}>
               {progress.weight.current_kg === null ? (
                 <Text style={[t.body, styles.empty, { color: colors.mutedForeground }]}>
-                  No weigh-ins yet. Log one below, or just tell the journal.
+                  {tr('progress.noWeighIns')}
                 </Text>
               ) : (
                 <>
@@ -207,7 +207,7 @@ export default function ProgressScreen() {
                               units,
                               false,
                             )}{' '}
-                            this week
+                            {tr('progress.thisWeek')}
                           </Text>
                         </View>
                       )}
@@ -269,7 +269,7 @@ export default function ProgressScreen() {
                 onSubmitEditing={() => void submitWeight()}
                 keyboardType="decimal-pad"
                 returnKeyType="done"
-                placeholder={`Log today's weight (${bodyWeightUnit(units)})`}
+                placeholder={tr('progress.logTodaysWeight')(bodyWeightUnit(units))}
                 placeholderTextColor={colors.mutedForeground}
                 style={[
                   t.body,

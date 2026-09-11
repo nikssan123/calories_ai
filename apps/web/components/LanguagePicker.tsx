@@ -1,49 +1,63 @@
 'use client';
 
-import { LOCALES, LOCALE_NAMES, type Locale } from '@ct/shared';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { useEffect, useState } from 'react';
+import { Globe } from 'lucide-react';
+import {
+  LOCALES,
+  LOCALES_BY_NAME,
+  LOCALE_NAMES,
+  LOCALE_NAMES_IN,
+  suggestedLocales,
+  type Locale,
+} from '@ct/shared';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useLocale, useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 /**
  * The language control, in the one shape it takes everywhere.
  *
- * Three things about it are deliberate and would be easy to undo by accident:
+ * Five things about it are deliberate and would be easy to undo by accident:
  *
- * **Every option is written in its own language.** `LOCALE_NAMES` says
- * "Български", not "Bulgarian", and "Deutsch", not "German". A picker that
- * names a language in a language you cannot read is a picker for somebody who
- * did not need it — by the time you can read "German" you did not have to look
- * for it. This is the only string in the app that never goes through `useT`.
+ * **Every option leads with its own name.** `LOCALE_NAMES` says "Български",
+ * not "Bulgarian", and "Deutsch", not "German". A picker that names a language
+ * in a language you cannot read is a picker for somebody who did not need it —
+ * by the time you can read "German" you did not have to look for it.
+ *
+ * **Under it, the name in the language the screen is in** — "Ελληνικά", then
+ * "Greek" or "Гръцки". That line is for the other direction: somebody reading
+ * the current screen, scanning for a language whose own alphabet they do not
+ * read. It is left off the screen's own language, where it would say the same
+ * word twice.
+ *
+ * **A globe on the trigger.** It is the one part of this control that reads the
+ * same whatever language the screen is in, and on the sign-in screen the person
+ * who cannot read the screen is exactly who the control is for.
+ *
+ * **Suggested first, then the rest by their own names.** The language in use,
+ * then any of the browser's own that this app speaks — `navigator.languages`,
+ * the whole preference list, rather than `navigator.language`'s first entry.
+ * Everything else follows in `LOCALES_BY_NAME` order, which sorts the column
+ * the eye is actually scanning.
  *
  * **Each option carries `lang`**, so the browser applies that language's rules
- * and — the load-bearing part — so the Cyrillic display swap in `globals.css`
- * reaches "Български" even while the rest of the page is English. Without it
- * this control is the one place in the app where the fallback face shows, on
- * the one screen where somebody is looking hard at letterforms.
+ * and a screen reader picks a voice that can pronounce it.
  *
- * **It changes shape with the number of languages.** Two or three fit on one
- * line and cost one tap, which is worth keeping while it is true; five do not.
- * Past `INLINE_LIMIT` it becomes a menu — one tap, a list, a dismiss, but a
- * list that still reads at any length. The threshold is here rather than at the
- * two call sites so the sign-in screen and Settings can never disagree about it.
+ * Thirteen languages is past where a row of buttons works and short of where a
+ * search box earns its place. The menu's own typeahead covers the gap — type
+ * "hr" and it lands on Hrvatski — and `label` on each item is what it matches,
+ * so it matches the name somebody would type rather than both lines run
+ * together.
  */
-
-/**
- * How many languages still fit as a row of buttons.
- *
- * Four is where a segmented control stops being one glance on a narrow phone —
- * it is roughly where the labels start needing to shrink to fit, and a shrunk
- * label in a script you are trying to read is worse than a menu.
- */
-const INLINE_LIMIT = 4;
-
 export function LanguagePicker({
   value,
   onChange,
@@ -53,56 +67,72 @@ export function LanguagePicker({
   onChange: (locale: Locale) => void;
   className?: string;
 }) {
+  const t = useT();
+  const screen = useLocale();
+
   /*
-   * The cast the two control APIs force, narrowed against the real list rather
+   * Read after mount. The sign-in page is rendered on the server for its first
+   * paint, where there is no `navigator`, and a list that differed between the
+   * two renders would be a hydration mismatch bought for nothing.
+   */
+  const [browserTags, setBrowserTags] = useState<readonly string[]>([]);
+  useEffect(() => {
+    setBrowserTags(navigator.languages?.length ? navigator.languages : [navigator.language]);
+  }, []);
+
+  /*
+   * The cast the control's API forces, narrowed against the real list rather
    * than asserted — a stale value from storage cannot get through as a Locale.
    */
   const pick = (next: string | null) => {
     const match = LOCALES.find((locale) => locale === next);
-    if (match) onChange(match);
+    if (match && match !== value) onChange(match);
   };
 
-  if (LOCALES.length > INLINE_LIMIT) {
-    return (
-      <Select value={value} onValueChange={pick}>
-        <SelectTrigger className={cn('w-auto gap-2 pr-2.5', className)} aria-label="Language">
-          <SelectValue className="flex-none">
-            {(selected) => (
-              <span lang={selected as string}>{LOCALE_NAMES[selected as Locale]}</span>
-            )}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {LOCALES.map((locale) => (
-            <SelectItem key={locale} value={locale} lang={locale}>
-              {LOCALE_NAMES[locale]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    );
-  }
+  const suggested = suggestedLocales(value, browserTags);
+  const rest = LOCALES_BY_NAME.filter((locale) => !suggested.includes(locale));
+
+  const option = (locale: Locale) => (
+    <SelectItem key={locale} value={locale} label={LOCALE_NAMES[locale]} className="py-2">
+      <span className="flex flex-col gap-0.5">
+        <span lang={locale} className="text-sm font-bold">
+          {LOCALE_NAMES[locale]}
+        </span>
+        {locale !== screen && (
+          <span lang={screen} className="text-muted-foreground text-xs font-medium">
+            {LOCALE_NAMES_IN[screen][locale]}
+          </span>
+        )}
+      </span>
+    </SelectItem>
+  );
 
   return (
-    <ToggleGroup
-      value={[value]}
-      onValueChange={(values) => {
-        const next = values[0];
-        if (next) pick(next);
-      }}
-      className={cn('bg-muted rounded-full p-0.5', className)}
-    >
-      {LOCALES.map((locale) => (
-        <ToggleGroupItem
-          key={locale}
-          value={locale}
-          aria-label={LOCALE_NAMES[locale]}
-          lang={locale}
-          className="data-[pressed]:bg-primary data-[pressed]:text-primary-foreground text-muted-foreground h-9 rounded-full px-3.5 text-footnote font-bold transition-colors"
-        >
-          {LOCALE_NAMES[locale]}
-        </ToggleGroupItem>
-      ))}
-    </ToggleGroup>
+    <Select value={value} onValueChange={pick}>
+      <SelectTrigger
+        className={cn('w-auto gap-2 pr-2.5', className)}
+        aria-label={t('setup.language')}
+      >
+        <Globe aria-hidden className="text-muted-foreground" />
+        <SelectValue className="flex-none">
+          {(selected) => <span lang={selected as string}>{LOCALE_NAMES[selected as Locale]}</span>}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        <SelectGroup>
+          <SelectLabel className="text-eyebrow">{t('setup.languageSuggested')}</SelectLabel>
+          {suggested.map(option)}
+        </SelectGroup>
+        {rest.length > 0 && (
+          <>
+            <SelectSeparator />
+            <SelectGroup>
+              <SelectLabel className="text-eyebrow">{t('setup.languageAll')}</SelectLabel>
+              {rest.map(option)}
+            </SelectGroup>
+          </>
+        )}
+      </SelectContent>
+    </Select>
   );
 }

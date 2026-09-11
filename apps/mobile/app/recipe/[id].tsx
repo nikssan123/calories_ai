@@ -112,7 +112,7 @@ export default function GeneratedRecipeScreen() {
     return (
       <View style={[styles.centre, { paddingTop: insets.top + 64 }]}>
         <Text style={[t.body, { color: colors.foreground }]}>
-          That recipe isn&rsquo;t here any more.
+          {tr('recipe.notHere')}
         </Text>
       </View>
     );

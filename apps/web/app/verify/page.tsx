@@ -52,8 +52,7 @@ function SpendLink({ token }: { token: string }) {
 
     void (async () => {
       try {
-        const result = await api.verifyEmail(token);
-        setMessage(result.message);
+        await api.verifyEmail(token);
         setState('done');
         // The signed-in copy of the profile now says something untrue about
         // this account; ask for it again so the gate lets go.
@@ -72,7 +71,7 @@ function SpendLink({ token }: { token: string }) {
     return (
       <AuthScreen
         title={t('verify.linkFailed')}
-        subtitle={`${message} You can enter the code from the email instead.`}
+        subtitle={t('verify.failedSubtitle')(message)}
       >
         <Button render={<Link href="/verify" />} className={AUTH_BUTTON}>
           {t('verify.enterCode')}
@@ -82,7 +81,7 @@ function SpendLink({ token }: { token: string }) {
   }
 
   return (
-    <AuthScreen title={t('verify.confirmed')} subtitle={message}>
+    <AuthScreen title={t('verify.confirmed')} subtitle={t('verify.confirmedMessage')}>
       <Button render={<Link href={authenticated ? '/' : '/login'} />} className={AUTH_BUTTON}>
         {authenticated ? t('verify.startJournal') : t('auth.signIn')}
       </Button>
@@ -108,7 +107,7 @@ function EnterCode() {
         subtitle={t('verify.signInFirst')}
       >
         <Button render={<Link href="/login" />} className={AUTH_BUTTON}>
-          Sign in
+          {t('auth.signIn')}
         </Button>
       </AuthScreen>
     );
@@ -118,7 +117,7 @@ function EnterCode() {
     return (
       <AuthScreen title={t('verify.alreadyConfirmed')} subtitle={t('verify.readyMessage')}>
         <Button render={<Link href="/" />} className={AUTH_BUTTON}>
-          Start your journal
+          {t('verify.startJournal')}
         </Button>
       </AuthScreen>
     );
@@ -143,8 +142,8 @@ function EnterCode() {
   async function resend() {
     setResending(true);
     try {
-      const result = await api.resendVerification();
-      toast.success(result.message);
+      await api.resendVerification();
+      toast.success(t('verify.codeSent'));
       setCode('');
     } catch (e) {
       toast.error((e as Error).message);
@@ -158,14 +157,14 @@ function EnterCode() {
       title={t('verify.title')}
       subtitle={
         <>
-          We sent a six-digit code to{' '}
-          <span className="text-foreground font-medium">{profile?.email}</span>. Enter it to
-          finish setting up your account.
+          {t('verify.sentCodeBefore')}{' '}
+          <span className="text-foreground font-medium">{profile?.email}</span>
+          {t('verify.sentCodeAfter')}
         </>
       }
       footer={
         <>
-          Wrong address?{' '}
+          {t('verify.wrongAddress')}{' '}
           <button type="button" onClick={() => void signOut()} className="text-foreground font-medium">
             {t('verify.signOutAndRestart')}
           </button>

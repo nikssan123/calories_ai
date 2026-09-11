@@ -1,7 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { haptics } from '@/lib/haptics';
-import { useT } from '@/lib/i18n';
+import { formatNumber } from '@ct/shared';
+import { useLocale, useT } from '@/lib/i18n';
 import { type as t, useColors } from '@/theme';
 import type { StepPermission, StepsEmpty } from '@/lib/steps';
 
@@ -55,6 +56,7 @@ export function StepsCard({
 }) {
   const colors = useColors();
   const tr = useT();
+  const locale = useLocale();
 
   /*
    * A count, wherever it came from, before any question about this handset.
@@ -74,7 +76,7 @@ export function StepsCard({
         trailing={
           average === null ? null : (
             <Text style={[t.footnoteBold, t.tnum, { color: colors.mutedForeground }]}>
-              {tr('today.stepsUsual')(average.toLocaleString())}
+              {tr('today.stepsUsual')(formatNumber(average, locale))}
             </Text>
           )
         }

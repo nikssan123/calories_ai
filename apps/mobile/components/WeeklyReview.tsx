@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { formatDay } from '@ct/shared';
+import { formatDay, formatNumber } from '@ct/shared';
 import { useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
@@ -110,11 +110,7 @@ export function WeeklyReview({ onError }: { onError: (message: string) => void }
         </View>
       ) : (
         <View style={styles.body}>
-          <Text style={[t.body, { color: colors.foreground }]}>
-            Every Monday morning you&apos;ll get a short read on how the week went — what the
-            numbers actually showed, and whether your target needs to move. No lectures, just
-            the picture.
-          </Text>
+          <Text style={[t.body, { color: colors.foreground }]}>{tr('review.pitch')}</Text>
           {/*
             The one button, and which one it is depends on whether this is
             bought. Same shape, same place, same weight — a locked feature that
@@ -150,7 +146,7 @@ export function WeeklyReview({ onError }: { onError: (message: string) => void }
             </Svg>
             <Text style={[t.footnoteBold, { color: colors.secondaryForeground }]}>
               {locked
-                ? `Part of ${upsell ? TIER_NAMES[upsell.plan] : 'Plus'}`
+                ? tr('review.partOf')(upsell ? TIER_NAMES[upsell.plan] : 'Plus')
                 : writing
                   ? tr('review.writing')
                   : tr('review.writeOne')}
@@ -163,7 +159,7 @@ export function WeeklyReview({ onError }: { onError: (message: string) => void }
         <View style={[styles.waiting, { borderTopColor: colors.border, backgroundColor: colors.mutedWash }]}>
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
             <Text style={{ fontFamily: font.extrabold, color: colors.foreground }}>
-              Target {adaptive.current.kcal.toLocaleString()} kcal.
+              {tr('review.currentTarget')(formatNumber(adaptive.current.kcal, locale))}
             </Text>
             {` ${adaptive.explanation}`}
           </Text>
@@ -188,11 +184,12 @@ function TargetChange({
 }) {
   const colors = useColors();
   const tr = useT();
+  const locale = useLocale();
   return (
     <View style={[styles.change, { backgroundColor: colors.muted, borderColor: colors.border }]}>
       <View style={styles.changeRow}>
         <Text style={[t.bodyBold, t.tnum, { color: colors.mutedForeground }]}>
-          {proposal.current.kcal.toLocaleString()}
+          {formatNumber(proposal.current.kcal, locale)}
         </Text>
         <Svg width={14} height={14} viewBox="0 0 24 24">
           <Path
@@ -205,11 +202,11 @@ function TargetChange({
           />
         </Svg>
         <Text style={[t.bodyBold, t.tnum, { color: colors.caloriesText }]}>
-          {proposal.proposed.kcal.toLocaleString()} kcal
+          {tr('review.kcalUnit')(formatNumber(proposal.proposed.kcal, locale))}
         </Text>
       </View>
       <Text style={[t.footnote, styles.changeWhy, { color: colors.mutedForeground }]}>
-        {tense === 'future' ? 'Next review will apply this. ' : ''}
+        {tense === 'future' ? tr('review.willApply') : ''}
         {proposal.explanation}
       </Text>
     </View>

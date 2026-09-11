@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
-import type { Alert, AlertKind, Nudge, WeeklyReview } from '@ct/shared';
-import { getEmailRecipient } from '../services/user.ts';
+import { localeOf, type Alert, type AlertKind, type Nudge, type WeeklyReview } from '@ct/shared';
+import { emailMessages } from '../email/messages.ts';
+import { getEmailRecipient, getUser } from '../services/user.ts';
 import { pushTokensFor } from '../services/push-tokens.ts';
 import { sendPush, type PushResult } from './send.ts';
 
@@ -53,13 +54,14 @@ export async function sendWeeklyReviewPush(
   if (!recipient.notifyWeeklyReview) return SKIPPED('opted out');
 
   const devices = await pushTokensFor(userId);
+  const m = emailMessages(recipient.locale);
   return sendPush(
     devices,
     {
-      title: 'Your week is ready',
+      title: m['push.reviewTitle'],
       body: recipient.displayName
-        ? `${recipient.displayName}, here is how the week went.`
-        : 'Here is how the week went.',
+        ? m['push.reviewBody'](recipient.displayName)
+        : m['push.reviewBodyNoName'],
       data: { route: '/progress', review: review.id },
     },
     logger,
@@ -102,14 +104,26 @@ export async function sendNudgePush(
  */
 export async function sendCoachCommentPush(
   clientId: string,
-  coachName: string,
+  coachName: string | null,
   body: string,
   logger?: FastifyBaseLogger,
 ): Promise<PushResult> {
   const devices = await pushTokensFor(clientId);
+  /*
+   * In the client's language rather than the coach's, since it is the client's
+   * lock screen. Read off the profile rather than `getEmailRecipient`, which
+   * skips an account with no address — and a push does not need one.
+   */
+  const client = await getUser(clientId).catch(() => null);
+  const m = emailMessages(localeOf(client));
   return sendPush(
     devices,
-    { title: `${coachName} commented`, body, data: { route: '/' }, channelId: 'coach' },
+    {
+      title: coachName ? m['push.coachCommented'](coachName) : m['push.coachCommentedNoName'],
+      body,
+      data: { route: '/' },
+      channelId: 'coach',
+    },
     logger,
   );
 }

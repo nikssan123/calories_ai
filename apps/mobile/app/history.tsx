@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Polyline } from 'react-native-svg';
 import type { Calendar, CalendarDay, Locale } from '@ct/shared';
-import { formatBodyWeight, formatDay, formatMonth } from '@ct/shared';
+import { formatBodyWeight, formatDay, formatMonth, formatNumber } from '@ct/shared';
 import { Chunk } from '@/components/Chunk';
 import { InsetGroup } from '@/components/InsetGroup';
 import { Skeleton } from '@/components/Skeleton';
@@ -157,20 +157,20 @@ export default function HistoryScreen() {
               <View style={styles.detail}>
                 <View style={styles.detailHead}>
                   <Text style={[t.largeTitle, t.tnum, { color: colors.foreground }]}>
-                    {selectedDay.kcal.toLocaleString()}
+                    {formatNumber(selectedDay.kcal, locale)}
                   </Text>
                   <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-                    of {selectedDay.target_kcal.toLocaleString() || '—'} kcal
+                    {tr('today.ofTargetKcal')(formatNumber(selectedDay.target_kcal, locale) || '—')}
                   </Text>
                 </View>
 
                 <View style={styles.facts}>
                   <Text style={[t.footnoteSemibold, t.tnum, { color: colors.mutedForeground }]}>
-                    {selectedDay.protein_g}g protein
+                    {tr('history.proteinGrams')(formatNumber(selectedDay.protein_g, locale))}
                   </Text>
                   {selectedDay.burned_kcal > 0 && (
                     <Text style={[t.footnoteSemibold, t.tnum, { color: colors.exerciseText }]}>
-                      −{selectedDay.burned_kcal} burned
+                      {tr('journal.burned')(formatNumber(selectedDay.burned_kcal, locale))}
                     </Text>
                   )}
                   {selectedDay.weight_kg !== null && (
@@ -193,7 +193,7 @@ export default function HistoryScreen() {
               </View>
             ) : (
               <Text style={[t.body, styles.nothing, { color: colors.mutedForeground }]}>
-                Nothing logged{selectedDay ? ' that day' : ' yet'}.
+                {selectedDay ? tr('history.nothingThatDay') : tr('history.nothingYet')}
               </Text>
             )}
           </InsetGroup>
@@ -206,9 +206,10 @@ export default function HistoryScreen() {
                 value={
                   logged.length === 0
                     ? '—'
-                    : Math.round(
-                        logged.reduce((sum, d) => sum + d.kcal, 0) / logged.length,
-                      ).toLocaleString()
+                    : formatNumber(
+                        Math.round(logged.reduce((sum, d) => sum + d.kcal, 0) / logged.length),
+                        locale,
+                      )
                 }
                 unit="kcal"
               />

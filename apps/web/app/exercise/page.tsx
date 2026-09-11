@@ -69,7 +69,7 @@ export default function ExercisePage() {
     );
     try {
       await api.deleteExerciseEntry(entry.id);
-      toast.success(`Removed ${entry.description}`);
+      toast.success(t('toast.removed')(entry.description));
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -257,7 +257,7 @@ export default function ExercisePage() {
                         variant="ghost"
                         size="icon"
                         onClick={() => setEditing(entry.id)}
-                        aria-label={`Edit ${entry.description}`}
+                        aria-label={t('a11y.edit')(entry.description)}
                         className="text-muted-foreground size-8 shrink-0 rounded-full"
                       >
                         <Pencil size={15} />
@@ -267,7 +267,7 @@ export default function ExercisePage() {
                       variant="ghost"
                       size="icon"
                       onClick={() => void remove(entry)}
-                      aria-label={`Delete ${entry.description}`}
+                      aria-label={t('a11y.delete')(entry.description)}
                       className="text-muted-foreground hover:text-destructive -mr-2 size-8 shrink-0 rounded-full"
                     >
                       <Trash2 size={15} />

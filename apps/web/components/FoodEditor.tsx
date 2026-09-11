@@ -185,7 +185,7 @@ export function FoodEditor({
           onClick={onCancel}
           className="text-footnote text-muted-foreground hover:text-foreground font-semibold"
         >
-          Close
+          {t('common.close')}
         </button>
       </Shell>
     );

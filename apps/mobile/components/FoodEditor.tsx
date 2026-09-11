@@ -332,7 +332,7 @@ export function FoodEditor({
             <TextInput
               value={item.name}
               onChangeText={(name) => patch(i, { name })}
-              accessibilityLabel={`Item ${i + 1} name`}
+              accessibilityLabel={tr('editor.itemName')(String(i + 1))}
               placeholder={tr('editor.itemPlaceholder')}
               placeholderTextColor={colors.mutedForeground}
               style={[
@@ -347,7 +347,7 @@ export function FoodEditor({
             <TextInput
               value={item.quantity}
               onChangeText={(quantity) => patch(i, { quantity })}
-              accessibilityLabel={`Item ${i + 1} quantity`}
+              accessibilityLabel={tr('editor.itemQuantity')(String(i + 1))}
               placeholder={tr('editor.howMuch')}
               placeholderTextColor={colors.mutedForeground}
               style={[
@@ -360,7 +360,7 @@ export function FoodEditor({
             <Pressable
               onPress={() => setItems((prev) => prev.filter((_, j) => j !== i))}
               accessibilityRole="button"
-              accessibilityLabel={`Remove ${item.name || `item ${i + 1}`}`}
+              accessibilityLabel={tr('editor.removeItem')(item.name || tr('editor.itemFallback')(String(i + 1)))}
               hitSlop={8}
             >
               <Svg width={13} height={13} viewBox="0 0 24 24">
@@ -378,10 +378,10 @@ export function FoodEditor({
           {/* The macros wear the card's colours, so the row of cells reads as
               the row of figures it will be saved back into. */}
           <View style={styles.numbers}>
-            <Cell value={item.kcal} onChange={(kcal) => patch(i, { kcal })} label={`Item ${i + 1} calories`} unit="kcal" />
-            <Cell value={item.protein} onChange={(protein) => patch(i, { protein })} label={`Item ${i + 1} protein`} unit={tr('macro.proteinInitial')} tint={colors.proteinText} />
-            <Cell value={item.carbs} onChange={(carbs) => patch(i, { carbs })} label={`Item ${i + 1} carbs`} unit={tr('macro.carbsInitial')} tint={colors.carbsText} />
-            <Cell value={item.fat} onChange={(fat) => patch(i, { fat })} label={`Item ${i + 1} fat`} unit={tr('macro.fatInitial')} tint={colors.fatText} />
+            <Cell value={item.kcal} onChange={(kcal) => patch(i, { kcal })} label={tr('editor.itemCalories')(String(i + 1))} unit="kcal" />
+            <Cell value={item.protein} onChange={(protein) => patch(i, { protein })} label={tr('editor.itemProtein')(String(i + 1))} unit={tr('macro.proteinInitial')} tint={colors.proteinText} />
+            <Cell value={item.carbs} onChange={(carbs) => patch(i, { carbs })} label={tr('editor.itemCarbs')(String(i + 1))} unit={tr('macro.carbsInitial')} tint={colors.carbsText} />
+            <Cell value={item.fat} onChange={(fat) => patch(i, { fat })} label={tr('editor.itemFat')(String(i + 1))} unit={tr('macro.fatInitial')} tint={colors.fatText} />
           </View>
         </View>
       ))}

@@ -48,11 +48,11 @@ function RequestLink() {
     event.preventDefault();
     setBusy(true);
     try {
-      const result = await api.forgotPassword(email);
+      await api.forgotPassword(email);
       // The server says the same thing for an address it has never seen, and so
       // does this screen. Anything else here would undo the point of that.
       setSent(true);
-      toast.success(result.message);
+      toast.success(t('reset.linkSent'));
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -138,8 +138,8 @@ function ChooseNewPassword({ token }: { token: string }) {
     event.preventDefault();
     setBusy(true);
     try {
-      const result = await api.resetPassword(token, password);
-      toast.success(result.message);
+      await api.resetPassword(token, password);
+      toast.success(t('reset.passwordChanged'));
       // The reset signs every device out, including this one, and deliberately
       // does not sign the caller back in — typing the new password once at the
       // sign-in screen is what makes it stick.

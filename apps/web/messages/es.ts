@@ -51,6 +51,7 @@ export const es: Messages = {
   'today.exercise': 'Ejercicio',
   'today.roughEstimate': 'estimación aproximada',
   'today.changeHint': 'Para cambiarlo, dilo en el diario: «había más arroz».',
+  'today.ofTargetKcal': (target: string) => `de ${target} kcal`,
 
   'meal.breakfast': 'Desayuno',
   'meal.lunch': 'Comida',
@@ -91,9 +92,12 @@ export const es: Messages = {
   'composer.removeScan': (name: string) => `Quitar ${name}`,
   'composer.selectedMeal': 'Comida seleccionada',
   'composer.labelHint': 'Esta es la etiqueta: registra lo que he comido a partir de ella.',
+  'composer.photoTip':
+    'Consejo: deja un tenedor, una cuchara o tu mano en la foto — así sabemos lo grande que es el plato, que es lo más difícil de adivinar.',
 
   // ---- Setup / You --------------------------------------------------------
   'setup.title': 'Perfil',
+  'setup.subtitle': 'Lo justo para calcular un objetivo de partida. Se ajusta a medida que llegan datos reales.',
   'setup.about': 'Sobre ti',
   'setup.account': 'Cuenta',
   'setup.appearance': 'Apariencia',
@@ -107,6 +111,8 @@ export const es: Messages = {
   'setup.goal': 'Objetivo',
   'setup.units': 'Unidades',
   'setup.language': 'Idioma',
+  'setup.languageSuggested': 'Sugeridos',
+  'setup.languageAll': 'Todos los idiomas',
   'setup.dayStartsAt': 'El día empieza a las',
   'setup.timezone': 'Zona horaria',
   'setup.email': 'Correo',
@@ -156,6 +162,10 @@ export const es: Messages = {
   'auth.genericFailure': 'Algo ha fallado al iniciar sesión. Inténtalo otra vez.',
   'auth.oneMoment': 'Un momento…',
   'auth.privacyPolicy': 'Política de privacidad',
+  'auth.agreeBefore': 'Al crear una cuenta, aceptas los',
+  'auth.terms': 'Términos',
+  'auth.agreeAnd': 'y la',
+  'auth.agreeAfter': '.',
   'auth.language': 'Idioma',
 
   // ---- Confirming an address ----------------------------------------------
@@ -174,6 +184,26 @@ export const es: Messages = {
   'verify.signInFirst': 'Inicia sesión primero y luego introduce el código que te hemos enviado.',
   'verify.signOutAndRestart': 'Cerrar sesión y empezar de nuevo',
   'verify.linkFailed': 'Ese enlace no ha funcionado',
+  'verify.failedSubtitle': (message: string) =>
+    `${message} Puedes introducir el código del correo en su lugar.`,
+  'verify.confirmedMessage': 'Tu dirección de correo está confirmada.',
+  'verify.codeSent': 'Busca el código de confirmación en tu bandeja de entrada.',
+  'verify.sentCodeBefore': 'Te hemos enviado un código de seis dígitos a',
+  'verify.sentCodeAfter': '. Introdúcelo para terminar de configurar tu cuenta.',
+  'verify.wrongAddress': '¿Dirección equivocada?',
+  // ---- A coach's invite link ----------------------------------------------
+  //
+  // "Ajustes" and "Coach" are what the phone app calls those screens.
+  'invite.title': 'Tu coach te ha invitado',
+  'invite.body':
+    'Acepta la invitación en la app Day So Far para compartir tu diario con tu coach. Tú eliges lo que ve, y puedes dejar de compartir cuando quieras desde Ajustes.',
+  'invite.yourCode': 'Tu código',
+  'invite.copyCode': 'Copiar el código',
+  'invite.codeCopied': 'Código copiado',
+  'invite.openInApp': 'Abrir en la app',
+  'invite.orOpenApp': 'O abre la app, ve a Ajustes e introduce el código en el apartado Coach.',
+  'invite.noApp': '¿Aún no tienes la app?',
+  'invite.coachingYourself': '¿Tú también entrenas a alguien?',
 
 
   // ---- Cook ---------------------------------------------------------------
@@ -292,6 +322,7 @@ export const es: Messages = {
   'recipe.unsaveNamed': (title) => `Quitar ${title} de guardadas`,
   'recipe.forPortions': (portions) => `para ${portions} raciones`,
   'recipe.portionsCount': (count) => n(count, { one: 'ración', other: 'raciones' }),
+  'recipe.makes': (count: number) => `Para ${n(count, { one: 'ración', other: 'raciones' })}`,
   'recipe.howToMakeIt': (steps) => `Cómo se hace · ${steps}`,
   'recipe.ingredientsMakes': (portions) => `Ingredientes · para ${portions}`,
   'recipe.iAteThis': (kcal) => `Me lo he comido · ${kcal} kcal`,
@@ -370,6 +401,7 @@ export const es: Messages = {
   'progress.sinceStart': 'Desde el principio',
   'progress.toTarget': 'Hasta el objetivo',
   'progress.logTodaysWeight': (unit) => `Apunta el peso de hoy (${unit})`,
+  'progress.weightLogged': (weight: string) => `Peso apuntado: ${weight}`,
   'progress.caloriesTitle': '🔥  Calorías',
   'progress.avgDayTarget': (target) => `media/día · objetivo ${target}`,
   'progress.proteinTitle': '💪  Proteína',
@@ -431,6 +463,8 @@ export const es: Messages = {
   'workouts.oneFewerSet': (exercise) => `Una serie menos de ${exercise}`,
   'workouts.oneMoreSet': (exercise) => `Una serie más de ${exercise}`,
   'workouts.removeExercise': (exercise) => `Quitar ${exercise}`,
+  'workouts.saved': (name: string) => `Guardado «${name}»`,
+  'workouts.deleted': (name: string) => `Borrado «${name}»`,
   // ---- Resetting a password -----------------------------------------------
   'reset.checkInbox': 'Mira tu correo',
   'reset.sentBefore': 'Si',
@@ -448,10 +482,13 @@ export const es: Messages = {
   'reset.askAnother': 'Pide otro',
   'reset.newPassword': 'Contraseña nueva',
   'reset.savePassword': 'Guardar la contraseña',
+  'reset.linkSent': 'Si esa dirección tiene cuenta, va de camino un enlace para restablecer la contraseña.',
+  'reset.passwordChanged': 'Tu contraseña se ha cambiado. Inicia sesión con ella.',
   'unsubscribe.incompleteLink': 'Ese enlace para darse de baja está incompleto.',
   'unsubscribe.working': 'Dando de baja…',
   'unsubscribe.oneMoment': 'Un momento.',
   'unsubscribe.done': 'Baja hecha',
+  'unsubscribe.doneSubtitle': 'Ya no te enviaremos más correos sobre el producto.',
   'unsubscribe.failedSubtitle': (message) => `${message} También puedes desactivar el correo semanal desde los ajustes de tu cuenta.`,
   'unsubscribe.openSettings': 'Abrir los ajustes',
   'unsubscribe.changedMind': '¿Has cambiado de idea? Vuelve a activarlo en',
@@ -500,6 +537,7 @@ export const es: Messages = {
   'shopping.putBack': (name) => `Devolver ${name} a la lista`,
   'shopping.tickOff': (name) => `Marcar ${name}`,
   'shopping.takeOff': (name) => `Quitar ${name} de la lista`,
+  'shopping.tookOff': (name: string) => `${name} fuera de la lista`,
   // ---- The barcode scanner ------------------------------------------------
   'barcode.isThisIt': '¿Es esto?',
   'barcode.scanThePacket': 'Escanea el paquete',
@@ -586,6 +624,12 @@ export const es: Messages = {
   'chat.readTheRest': (count) => `Leer el resto (${count} más)`,
   'chat.atLoad': (loads) => ` a ${loads}`,
   'chat.setsCount': (count) => n(count, { one: 'serie', other: 'series' }),
+  'chat.avg': 'media',
+  'chat.ofTarget': (target: string) => `de ${target}`,
+  'chat.onDate': (date: string) => `el ${date}`,
+  // A semicolon before `rest`, not a full stop: `journal.left` here starts with "quedan", not the number.
+  'chat.dayProgressLabel': (after: string, target: string, when: string, meal: string, rest: string) =>
+    `${after} de ${target} kcal${when ? ` ${when}` : ''} — esta comida, ${meal}; ${rest}.`,
   'macro.proteinInitial': 'P',
   'macro.carbsInitial': 'H',
   'macro.fatInitial': 'G',
@@ -657,6 +701,8 @@ export const es: Messages = {
   'workout.removeSet': (index) => `Quitar la serie ${index}`,
   'workout.anotherSet': 'Otra serie',
   'workout.removeNamed': (name) => `Quitar ${name}`,
+  'workout.lessNamed': (caption: string) => `Menos ${caption}`,
+  'workout.moreNamed': (caption: string) => `Más ${caption}`,
   'workout.lastTime': (figure) => `la última vez ${figure}`,
   'workout.adjust': 'Ajustar',
   'workout.setsDiffered': 'Las series difieren',
@@ -681,6 +727,8 @@ export const es: Messages = {
   'quality.title': '🥦\u00a0\u00a0Calidad de la dieta',
   'quality.partlyMeasured': 'medido en parte',
   'quality.notEstimated': 'sin estimar',
+  'quality.partialCoverage': (percent: string) =>
+    `Solo el ${percent}% de las calorías de hoy lleva estas cifras, así que los totales son un mínimo y no el día entero.`,
   'nutrient.sodium': 'Sodio',
   'nutrient.satFat': 'Grasa sat.',
   'nutrient.sugar': 'Azúcar',
@@ -699,6 +747,11 @@ export const es: Messages = {
   'history.nothingYet': 'Nada apuntado todavía.',
   'history.thisMonthTitle': (month) => `📆  ${month}`,
   'history.days': 'días',
+  'history.proteinGrams': (grams: string) => `${grams} g de proteína`,
+  'history.cellLogged': (date: string, kcal: string) => `${date}, ${kcal} kcal`,
+  'history.cellLoggedOf': (date: string, kcal: string, target: string) =>
+    `${date}, ${kcal} de ${target} kcal`,
+  'history.cellEmpty': (date: string) => `${date}, nada apuntado`,
   'setup.activitySedentary': 'Trabajo de oficina, poco ejercicio',
   'setup.activityLight': 'Ejercicio suave 1–3 días/semana',
   'setup.activityModerate': 'Ejercicio moderado 3–5 días/semana',
@@ -798,6 +851,11 @@ export const es: Messages = {
   'badgeHow.days_365': 'Trescientos sesenta y cinco días registrados, en cualquier orden.',
   'badge.workouts_100': 'Cien sesiones',
   'badgeHow.workouts_100': 'Cien días con entrenamiento.',
+  // ---- Receipts and labels both apps word the same way --------------------
+  'toast.logged': (description: string, kcal: string) => `Apuntado ${description} — ${kcal} kcal`,
+  'toast.removed': (description: string) => `Quitado ${description}`,
+  'a11y.edit': (name: string) => `Editar ${name}`,
+  'a11y.delete': (name: string) => `Borrar ${name}`,
 
   'common.save': 'Guardar',
   'common.cancel': 'Cancelar',

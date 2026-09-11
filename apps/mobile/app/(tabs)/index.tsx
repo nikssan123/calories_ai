@@ -416,9 +416,9 @@ export default function JournalScreen() {
         queuedAt: new Date().toISOString(),
       });
       const kcal = draft.items.reduce((sum, item) => sum + item.kcal, 0);
-      toast.success(`Logged ${draft.description} — ${Math.round(kcal)} kcal`);
+      toast.success(tr('toast.logged')(draft.description, formatNumber(Math.round(kcal), locale)));
     },
-    [profile?.id, toast],
+    [profile?.id, toast, tr, locale],
   );
 
   /**
@@ -1084,7 +1084,7 @@ function StatusBar({ day, loading }: { day: DaySummary | null; loading: boolean 
         <Text style={[t.figure, styles.statusFigure, { color: colors.foreground }]}>
           {formatNumber(Math.round(consumed.kcal), locale)}
           <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-            {` / ${formatNumber(targets.kcal, locale)} kcal`}
+            {` / ${formatNumber(targets.kcal, locale)}`} kcal
           </Text>
         </Text>
         {/* Ink rather than red — see the note on --destructive in globals.css. */}
@@ -1371,6 +1371,7 @@ function Wall({
   onLogManually: (draft: { description: string; meal: Meal; items: FoodItemInput[] }) => void;
 }) {
   const colors = useColors();
+  const tr = useT();
   const [open, setOpen] = useState(false);
   const [logged, setLogged] = useState(false);
 
@@ -1379,8 +1380,7 @@ function Wall({
       <View style={styles.wallDone}>
         <PencilGlyph color={colors.mutedForeground} size={13} />
         <Text style={[t.footnoteSemibold, styles.wallDoneText, { color: colors.mutedForeground }]}>
-          Logged by hand — that way is always open, and never counts against
-          anything.
+          {tr('wall.loggedByHand')}
         </Text>
       </View>
     );

@@ -225,7 +225,7 @@ export function Pantry({
             <SwipeRow
               key={item.id}
               index={i}
-              actions={[removeAction(colors, item.name, () => remove(item))]}
+              actions={[removeAction(colors, tr, item.name, () => remove(item))]}
             >
               <View
                 style={[

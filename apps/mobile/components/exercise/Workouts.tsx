@@ -233,7 +233,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
               <Pressable
                 onPress={() => setEditing(routine)}
                 accessibilityRole="button"
-                accessibilityLabel={`Edit ${routine.name}`}
+                accessibilityLabel={tr('workouts.editNamed')(routine.name)}
                 hitSlop={8}
               >
                 <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('common.edit')}</Text>
@@ -241,7 +241,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
               <Pressable
                 onPress={() => void remove(routine)}
                 accessibilityRole="button"
-                accessibilityLabel={`Delete ${routine.name}`}
+                accessibilityLabel={tr('workouts.deleteNamed')(routine.name)}
                 hitSlop={8}
               >
                 <Cross color={colors.mutedForeground} />
@@ -419,7 +419,7 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
             <Pressable
               onPress={() => setChosen((prev) => prev.filter((_, j) => j !== i))}
               accessibilityRole="button"
-              accessibilityLabel={`Remove ${exercise.name}`}
+              accessibilityLabel={tr('workouts.removeExercise')(exercise.name)}
               hitSlop={8}
             >
               <Cross color={colors.mutedForeground} />
@@ -502,7 +502,7 @@ function Stepper({ value, onChange }: { value: number; onChange: (next: number) 
         <Text style={[t.footnoteBold, { color: colors.mutedForeground }]}>−</Text>
       </Pressable>
       <Text style={[t.footnote, styles.stepValue, { color: colors.foreground }]}>
-        {value} set{value === 1 ? '' : 's'}
+        {tr('workouts.sets')(value)}
       </Text>
       <Pressable
         onPress={step(1)}

@@ -107,7 +107,7 @@ export function PlanWall({
             >
               <PencilGlyph color={colors.primaryForeground} />
               <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
-                Log this one myself
+                {tr('wall.logMyself')}
               </Text>
             </PressableChunk>
           )}
@@ -196,7 +196,7 @@ export function LockedPanel({
           contentStyle={[styles.button, { backgroundColor: colors.primary }]}
         >
           <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
-            See what {TIER_NAMES[next]} adds
+            {tr('plans.seeWhatAdds')(TIER_NAMES[next])}
           </Text>
         </PressableChunk>
       )}

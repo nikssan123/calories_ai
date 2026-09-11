@@ -231,7 +231,7 @@ export default function SetupPage() {
         <div>
           <h1 className="text-large-title">{t('setup.title')}</h1>
           <p className="text-muted-foreground mt-1.5 text-body font-medium">
-            Enough to work out a starting target. It adjusts as real data comes in.
+            {t('setup.subtitle')}
           </p>
         </div>
 
@@ -521,7 +521,7 @@ export default function SetupPage() {
               href="/admin"
               className="flex items-center gap-2 px-4 py-3 text-body text-[var(--calories-text)]"
             >
-              <Shield size={16} /> Admin
+              <Shield size={16} /> {t('nav.admin')}
             </Link>
           )}
           <button
@@ -645,7 +645,7 @@ function SaveBar({
           size="lg"
           className="h-11 rounded-2xl px-7 text-body font-semibold transition-transform active:scale-[0.98]"
         >
-          Save
+          {t('setup.save')}
         </Button>
       </div>
     </div>
@@ -679,8 +679,8 @@ function EmailSettings({
   async function resend() {
     setSending(true);
     try {
-      const result = await api.resendVerification();
-      toast.success(result.message);
+      await api.resendVerification();
+      toast.success(t('verify.codeSent'));
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -858,7 +858,7 @@ function DeleteAccount({ email, hasPassword }: { email: string | null; hasPasswo
                 setPassword('');
               }}
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
           </div>
         </div>

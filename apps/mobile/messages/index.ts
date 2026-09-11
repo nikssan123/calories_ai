@@ -4,6 +4,14 @@ import { bg } from './bg';
 import { de } from './de';
 import { es } from './es';
 import { fr } from './fr';
+import { ro } from './ro';
+import { uk } from './uk';
+import { sr } from './sr';
+import { hr } from './hr';
+import { cs } from './cs';
+import { hu } from './hu';
+import { el } from './el';
+import { sk } from './sk';
 
 /**
  * The catalogues, and the lookup that does not need React.
@@ -33,7 +41,7 @@ export type StringKey = {
   [K in MessageKey]: Messages[K] extends string ? K : never;
 }[MessageKey];
 
-export const CATALOGUES: Record<Locale, Messages> = { en, bg, de, es, fr };
+export const CATALOGUES: Record<Locale, Messages> = { en, bg, de, es, fr, ro, uk, sr, hr, cs, hu, el, sk };
 
 /** The strings for a language, with English standing in for anything missing. */
 export function messagesFor(locale: Locale): Messages {

@@ -14,10 +14,10 @@ deliberately does not, and the one line of it that is genuinely hard.
 It changes what is drawn on a screen and written into an email. It changes
 nothing stored, nothing in a tool argument, and nothing about a food name.
 
-`users.locale` is `'en' | 'bg' | 'de' | 'es' | 'fr'`, nullable. Null means
-**nobody has asked** — which is not the same as English, and is what lets a
-client fall back to the device's language and the journal learn it from how
-somebody writes. Everything reads it through `localeOf(profile)`, which resolves
+`users.locale` is one of `LOCALES` — thirteen languages since 2026-09-11 — and
+nullable. Null means **nobody has asked** — which is not the same as English, and
+is what lets a client fall back to the device's language and the journal learn it
+from how somebody writes. Everything reads it through `localeOf(profile)`, which resolves
 null *and any unrecognised value* to English rather than throwing. The whole
 feature is cosmetic and has to fail that way: a row written by a newer deploy
 that has since been rolled back must render, not 500.
@@ -149,8 +149,8 @@ the two look like the same amount of ink.
 Two places name the Cyrillic display face, and **swapping to Comfortaa is a
 change to those two and nothing else**:
 
-- `apps/web/app/globals.css` — `--font-display-cyrillic`, swapped in by
-  `:root:lang(bg)`. `<html lang>` is set before paint by `LOCALE_INIT_SCRIPT`
+- `apps/web/app/globals.css` — `--font-display-cyrillic`, swapped in by the
+  `:root:lang()` list for the Cyrillic languages. `<html lang>` is set before paint by `LOCALE_INIT_SCRIPT`
   and maintained by `<LocaleSync>`.
 - `apps/mobile/theme/typography.ts` — `DISPLAY_FACES`, read through
   `typeFor(locale)` and the `useType()` hook, which is to the type scale what
@@ -172,32 +172,82 @@ Two things measured rather than assumed, before committing to Nunito:
 Comfortaa's ceiling is 700 — a step *below* Baloo rather than above — so its
 figure will read airier. Worth seeing in the ring before committing.
 
+### Eight more, measured
+
+*2026-09-11.* Romanian, Ukrainian, Serbian, Croatian, Czech, Hungarian, Greek and
+Slovak were a font question before they were a translation one, answered from the
+`cmap` of every bundled weight rather than from Google's subset list:
+
+- **Baloo 2 draws all five new Latin languages** — Romanian's comma-below ș and ț
+  (U+0219/U+021B, which plenty of faces only carry as the cedilla forms),
+  Hungarian's ő and ű, Czech's ř and ů, Slovak's ľ and ŕ, Croatian's đ. Zero font
+  bytes, as with German. The web needs nothing either: `next/font`'s `subsets`
+  only decides what is *preloaded*, and every subset's `@font-face` is emitted
+  behind its `unicode-range` regardless.
+- **Nunito has Ukrainian's і ї є ґ and Serbian's ђ ј љ њ ћ џ**, so both join the
+  Cyrillic swap exactly as Bulgarian is.
+- **Greek is in neither face** — Baloo has none, Nunito five codepoints — so
+  Greek letters fall back to the platform's face, and figures stay in Baloo
+  because figures are digits. That is the degradation this section already
+  anticipated for scripts Nunito lacks. The rounded Greek face, if one is wanted,
+  is M PLUS Rounded 1c subset to Greek.
+
+Which languages take the Cyrillic swap is no longer a `Set(['bg'])` in
+`typography.ts` beside a `locale === 'bg'` in `measure.ts`. It is `LOCALE_SCRIPTS`
+in `shared/locale.ts`, a `Record<Locale, 'latin' | 'cyrillic' | 'greek'>`, so a
+new language does not compile until somebody has said what alphabet it needs.
+`globals.css` cannot import it and carries the `:lang()` list by hand.
+
 ## The picker
 
-One component per platform, used in exactly two places: the sign-in screen and
-Settings.
+One component per platform, used on the sign-in screen, the phone's onboarding
+welcome, and Settings. Rebuilt on 2026-09-11 for thirteen languages; what it
+replaced was a row of buttons that turned into the app's ordinary menu past four.
 
-**Every option is written in its own language.** `LOCALE_NAMES` says
-"Български", never "Bulgarian" — a picker that names a language in a language
-you cannot read is a picker for somebody who did not need it. It is the only
-text in the app that never goes through `useT`. On mobile each option is drawn
-in its own script's display face via `typeFor(locale)`, and on web each carries
-`lang={locale}`, so the one screen where somebody is looking hard at letterforms
-is not the one showing a fallback.
+**Every option leads with its own name.** `LOCALE_NAMES` says "Български", never
+"Bulgarian" — a picker that names a language in a language you cannot read is a
+picker for somebody who did not need it.
 
-**Past four languages it becomes a menu.** Two or three fit on one line and
-cost one tap, which is worth keeping while it is true; five do not. The
-threshold is a named `INLINE_LIMIT` inside the component rather than at the two
-call sites, so the sign-in screen and Settings can never disagree — and on
-mobile the menu is the app's ordinary `<Picker>` sheet, the same control
-Activity and Sex already use, so it is a list somebody has already learned.
+**Under it, the name in the language the screen is in** — "Ελληνικά", then
+"Greek" in an English session or "Гръцки" in a Bulgarian one. That line is for
+the other direction: somebody who can read the current screen, scanning for an
+alphabet they cannot. It is left off the screen's own language. The names are
+`LOCALE_NAMES_IN` in `shared/locale-names.ts`, a 13×13 table of CLDR's names
+capitalised for a list, rather than `Intl.DisplayNames` — Hermes has no
+`DisplayNames`, and the polyfill would bundle every language name CLDR knows, per
+language, to print 169 strings. `locale.test.ts` checks every cell against
+`DisplayNames` under Node, so a new language fails there until its row and
+column exist.
 
-**On the sign-in screen it is the first control**, pre-filled from
-`navigator.language` on web and `Intl.DateTimeFormat().resolvedOptions().locale`
-on mobile — no `expo-localization`, because Hermes on this SDK ships full ICU
-and `lib/voice.ts` has read the device locale that way for months. For most
-people it is already right and costs nothing but the glance that confirms it.
+**A globe on the trigger.** The one part of the control that reads the same
+whatever the screen's language, and on the sign-in screen the person who cannot
+read the screen is exactly who it is for. Its accessible name is
+`setup.language`, translated — it used to be a hardcoded English "Language".
 
+**Suggested first.** `suggestedLocales(current, deviceTags)`: the language in
+use, then whichever of the device's own the app speaks — `navigator.languages`
+on the web (the whole preference list, read after mount so the server render
+agrees), `deviceLocale()` on the phone. On Settings the second is the likeliest
+way back for somebody who switched to try a language.
+
+**Then everything else by its own name**, in `LOCALES_BY_NAME` order: root
+collation, so Latin A–Z, then Greek, then Cyrillic, with "Čeština" under C. A
+literal list rather than a sort at load, because a collator is its runtime's
+opinion and Hermes's is not V8's; the test holds it to `Intl.Collator('und')`.
+
+**No search box.** Thirteen is past a row of buttons and short of where search
+earns its place. On the web the menu's typeahead covers the gap — type "hr" and
+it lands on Hrvatski, matching each item's `label` rather than both lines run
+together. Past twenty or so, a search field in the sheet is the next step.
+
+**On the phone it is its own `<Sheet>`, not `<Picker>`.** `<Picker>` draws one
+line per option and this needs two, plus a pair of headings. It is the same sheet
+underneath — grabber, scrim, ruled rows — so it is still a list somebody has
+already learned. The headings are sentence case rather than eyebrows: three
+stacked all-caps labels read as one shout, and `textTransform: 'uppercase'` keeps
+the accents Greek capitals drop.
+
+**On the sign-in screen it is the first control**, pre-filled from the device.
 It is there rather than left to Settings because **it is the only picker that
 reaches the confirmation email.** That mail goes out during the signup request,
 before there is a profile to read a preference off, so signup carries a `locale`
@@ -208,7 +258,8 @@ the column stays null and the journal learns it later.
 so changing one visibly redraws what is under it rather than something further
 down the page the eye has already left. Choosing there writes twice: the profile
 (durable, and what emails are written from) and the local preference (what the
-sign-in screen shows next time this device is signed out).
+sign-in screen shows next time this device is signed out). Choosing the language
+already in use writes nothing.
 
 `locale` is deliberately **not** in `missingProfileFields`. A null locale is not
 an incomplete profile — it is somebody who has only ever used the app in one
@@ -261,11 +312,57 @@ scripts mean either accepting the system font — which is what the stack alread
 degrades to — or bundling a face at 5–20 MB. That is the only decision that
 would move the package size meaningfully.
 
+## The Central and Eastern European eight
+
+*2026-09-11.* Romanian, Ukrainian, Serbian, Croatian, Czech, Hungarian, Greek and
+Slovak, on the argument in `COMPETITION.md §6`: go where the search box fails.
+Each is a market of home-cooked food a database serves badly, with a
+calorie-tracker category that is thinly localised, where a store listing can
+rank on its own words — Bulgarian's case, eight more times.
+
+**Polish is not on the list, on purpose.** Fitatu owns Poland with a Polish food
+database *and* AI text, photo and voice logging — this app's differentiator,
+already shipped there, by a company raising money to take it west. Adding `pl` is
+one catalogue per app and a line in each table the compiler points at; the reason
+not to is the market, not the work.
+
+**Serbian ships in Cyrillic.** Bare `sr` is Cyrillic to CLDR and to both phone
+platforms' default Serbian, so the app matches the system around it and
+`intlLocale` needs no special case. Serbians read both scripts. Latin-script
+Serbian would be `sr-Latn` and a second catalogue, not a change to this one.
+
+**Five of the eight escalate to Sonnet.** Ukrainian, Serbian, Croatian, Hungarian
+and Slovak are on `ai/language.ts`'s broken-on-Haiku list, so an account set to
+one of them runs every text log at ~3.2× a Haiku turn — Bulgarian's cost, five
+more times. Romanian, Czech and Greek were measured clean. That is the number to
+hold against those markets' conversion before spending on them.
+
+**Detection needed one alias.** `proseLocale` picks the chrome a nudge or review
+is wrapped in by reading the prose. franc ranks Bosnian first on Croatian prose,
+Croatian a close second, and Bosnian has no catalogue — so `LOCALE_CODES` reads
+`bos` as `hr`. Ukrainian and Serbian are settled by their letters before franc is
+asked; Romanian, Czech, Slovak, Hungarian and Greek came back right on their own.
+A review-length sentence per language is in `language.test.ts`.
+
+**Plurals needed no code**, which is what the `Intl.PluralRules` rewrite was for.
+Czech, Slovak and Ukrainian have four categories (`many` is Czech's and Slovak's
+decimals), Romanian three with "de" before the noun from twenty up, Serbian and
+Croatian three, Hungarian and Greek two — and Hungarian's two are the same word,
+since a noun after a number stays singular.
+
+**The words are machine-translated, and nobody native has read them yet.** Each
+language was written by one agent from one brief — register, the rule against
+gendering the reader, plural forms, script rules, and a glossary decided once and
+used across web, phone and email — then checked by a script that fails on missing
+keys, dropped arguments, cedilla Romanian, Russian letters in Ukrainian and Latin
+inside Serbian words. That catches the mechanical failures and none of the tonal
+ones. **Before a store listing goes live in one of these languages, a native
+speaker reads its three catalogues**, the way `bg.ts` was read.
+
 ## What is not done
 
-*Updated 2026-08-31, after the transactional mail went through. What follows is
-what is still English; everything the earlier drafts listed as "not yet" is
-done.*
+*Updated 2026-09-11, after the second string pass. What follows is what is
+still English; everything the earlier drafts listed as "not yet" is done.*
 
 - **The landing page**, on purpose. It is ~1,000 words of the most carefully
   written copy in the repo, it is rewritten often, and localising it needs the
@@ -279,6 +376,26 @@ done.*
   for, and a screen that renames the thing the receipt names is a support
   ticket. `TIER_PITCHES` beside them *is* translated, because that is a
   sentence about the tier rather than its name.
+- **Error messages from the API.** About eighty sentences in `routes/` and
+  `services/` — "Incorrect email or password.", "That code has expired or been
+  used up." — reach both apps' error toasts verbatim, in English, in every
+  language. The *success* messages moved to the clients in the second pass,
+  because each call site knows which one it is showing; an error has to be
+  localised where it is written, on the server, by the request's locale, and
+  that is its own change.
+- **The coach dashboard and the Monday digest**, on purpose — `COACH.md §12`.
+  The client's side of coaching, the invite page included, is translated.
+- **iOS permission prompts.** There is no `InfoPlist.strings`, so the camera,
+  microphone and photo-library prompts are English on every iPhone whatever the
+  app is set to.
+- **`Placeholder.tsx`**, a screen that is not ported yet and says so.
+- **Greek capitals on the phone keep their accents.** The eyebrow labels are
+  `textTransform: 'uppercase'`, and React Native uppercases without Greek's rule
+  that capitals drop the tonos — so a section reads «Ο ΗΜΕΡΉΣΙΟΣ ΣΤΌΧΟΣ ΣΟΥ»
+  where Greek wants «Ο ΗΜΕΡΗΣΙΟΣ ΣΤΟΧΟΣ ΣΟΥ». The web is right, because the
+  browser applies the rule from `lang`. The fix is an eyebrow that uppercases
+  through `toLocaleUpperCase` for Greek, and `type.eyebrow` is read statically at
+  too many call sites for that to be a one-line change.
 
 ## The mail, finished
 
@@ -392,11 +509,41 @@ argument it was handed. It is the other half of the completeness check:
   and interpolates one still typechecks, and so does one whose template
   references a parameter that has since been renamed.
 
-Neither of them proves a string goes through a catalogue at all. That is the
-lint still worth writing: fail on a bare string literal in JSX under `apps/web`
-and `apps/mobile`, with an allowlist for the deliberate cases above. Until it
-exists, "is it translated" is a thing somebody has to remember — and the
-evidence that nobody does is that this section had to be rewritten.
+Neither of them proves a string goes through a catalogue at all, and the third
+check does. `pnpm literals` parses every file under both apps and fails on
+English that reaches a screen without one — JSX text, the attributes a reader or
+a screen reader sees (`title`, `placeholder`, `aria-label`,
+`accessibilityLabel` and the rest), and text handed to a toast or an `Alert`.
+The deliberate English is an exclusion list at the top of `scripts/literals.cjs`,
+each entry with its reason. It is a heuristic and says so: a word assembled
+inside a helper — a swipe row's label, an undo button — is invisible to it, and
+that is exactly where the second pass found its last few, by reading.
+
+## The second string pass
+
+*2026-09-11.* The catalogues were complete and the app was not. The scan that
+became `pnpm literals` found over two hundred places still drawing English in
+every language: every "Logged … — 320 kcal" toast, every Edit and Delete label,
+"of … kcal" under the ring, the consent line on the sign-up form, the scanner's
+explanations, the notification descriptions in Settings, six hand-rolled
+`day${n === 1 ? '' : 's'}` plurals, and about twenty-five bare `toLocaleString()`
+calls printing the runtime's separator rather than the reader's.
+
+- **105 keys** — 45 on the web, 60 on the phone — in English, then in all twelve
+  other languages. Where both apps draw the same sentence they share the key and
+  the English (`toast.logged`, `a11y.delete`, `auth.agreeBefore`), so a translator
+  meets it once.
+- **The API's success messages stopped reaching the screen.** Verify, resend,
+  forgot-password, reset and unsubscribe each rendered `result.message`, an
+  English sentence written on the server. Every call site knows which action
+  just succeeded, so it says so from its own catalogue, in the API's own words.
+- **Helpers take `tr` rather than calling the hook** — `removeAction`,
+  `repeatAction` and the phone's `groupSets`, the way the web's `groupSets`
+  already did. The plan's weekday comes from the date through `weekdayName`
+  rather than from three letters of an English name off the server.
+- **The push notifications** — "Your week is ready", "<coach> commented" — were
+  literals in `push/notify.ts`. They live in `email/messages.ts` now, the server's
+  one catalogue, and speak the client's language rather than the coach's.
 
 ## What it cost
 

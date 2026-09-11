@@ -63,8 +63,8 @@ export default function VerifyScreen() {
     setBusy(true);
     setError(null);
     try {
-      const result = await api.resendVerification();
-      setSent(result.message);
+      await api.resendVerification();
+      setSent(tr('verify.codeSent'));
     } catch (e) {
       setError(messageOf(e, tr));
     } finally {
@@ -135,7 +135,7 @@ export default function VerifyScreen() {
 
         <Pressable onPress={() => void resend()} disabled={busy} accessibilityRole="button" hitSlop={8}>
           <Text style={[t.footnoteSemibold, styles.link, { color: colors.mutedForeground }]}>
-            Send it again
+            {tr('verify.sendAgain')}
           </Text>
         </Pressable>
 
@@ -144,7 +144,7 @@ export default function VerifyScreen() {
             code went to, and this screen is the whole app until they do. */}
         <Pressable onPress={() => void signOut()} accessibilityRole="button" hitSlop={8}>
           <Text style={[t.footnoteSemibold, styles.link, { color: colors.mutedForeground }]}>
-            Sign out
+            {tr('nav.signOut')}
           </Text>
         </Pressable>
       </ScrollView>

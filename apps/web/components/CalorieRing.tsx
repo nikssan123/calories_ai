@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useLocale, useT } from '@/lib/i18n';
-import { INSCRIBED, figureFace, fitFontSize } from '@ct/shared';
+import { INSCRIBED, figureFace, fitFontSize, formatNumber } from '@ct/shared';
 
 /**
  * The day, as one fat shape.
@@ -112,7 +112,7 @@ export function CalorieRing({
   // the one bound that does not care how many lines go underneath.
   const clear = size - 2 * strokeWidth - depth;
   const figure = fitFontSize({
-    text: Math.round(Math.abs(remaining)).toLocaleString(),
+    text: formatNumber(Math.round(Math.abs(remaining)), locale),
     face: figureFace(locale),
     width: clear * INSCRIBED,
     // Never zero: unlike the widget, the ring has nowhere else to put it.
@@ -190,7 +190,7 @@ export function CalorieRing({
           className="text-figure animate-pop leading-none"
           style={{ fontSize: `${figure}px`, color: over ? 'var(--foreground)' : undefined }}
         >
-          {Math.round(shown).toLocaleString()}
+          {formatNumber(Math.round(shown), locale)}
         </span>
         <span className="text-footnote text-muted-foreground mt-1 font-bold">
           {over ? t('today.over') : t('today.toGo')}

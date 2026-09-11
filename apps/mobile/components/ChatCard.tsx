@@ -17,7 +17,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import type { ChatAction, ChatCard as Card, ExerciseEntry, FoodEntry, Locale, Recipe, UnitSystem } from '@ct/shared';
-import { bodyWeightToKg, bodyWeightUnit, formatBodyWeight, formatDay, formatDistance, formatWeightDelta, isDeletion, loadUnit, toBodyWeight, toLoad } from '@ct/shared';
+import { bodyWeightToKg, bodyWeightUnit, formatBodyWeight, formatDay, formatDistance, formatNumber, formatWeightDelta, isDeletion, loadUnit, toBodyWeight, toLoad, weekdayName } from '@ct/shared';
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { FoodEditor } from '@/components/FoodEditor';
@@ -233,6 +233,7 @@ function RecipesCard({
 function SuggestedRecipe({ recipe, onLogged }: { recipe: Recipe; onLogged?: () => void }) {
   const colors = useColors();
   const tr = useT();
+  const locale = useLocale();
   const router = useRouter();
   const [servings, setServings] = useState(1);
   const [saved, setSaved] = useState(recipe.saved);
@@ -285,7 +286,9 @@ function SuggestedRecipe({ recipe, onLogged }: { recipe: Recipe; onLogged?: () =
           contentStyle={[styles.cook, { backgroundColor: colors.primary }]}
         >
           <Text style={[t.footnoteBold, { color: colors.primaryForeground }]}>
-            {cooking ? tr('recipe.logging') : `I ate this · ${Math.round(scale(recipe.kcal, servings))}`}
+            {cooking
+              ? tr('recipe.logging')
+              : tr('recipe.iAteThisPlain')(formatNumber(Math.round(scale(recipe.kcal, servings)), locale))}
           </Text>
         </PressableChunk>
       </View>
@@ -488,11 +491,12 @@ function FoodReceipt({
 }) {
   const colors = useColors();
   const tr = useT();
+  const locale = useLocale();
   const approx = card.confidence !== 'high';
   const macros = [
-    { value: card.protein_g, label: 'P', fill: colors.protein, text: colors.proteinText },
-    { value: card.carbs_g, label: 'C', fill: colors.carbs, text: colors.carbsText },
-    { value: card.fat_g, label: 'F', fill: colors.fat, text: colors.fatText },
+    { value: card.protein_g, label: tr('macro.proteinInitial'), fill: colors.protein, text: colors.proteinText },
+    { value: card.carbs_g, label: tr('macro.carbsInitial'), fill: colors.carbs, text: colors.carbsText },
+    { value: card.fat_g, label: tr('macro.fatInitial'), fill: colors.fat, text: colors.fatText },
   ];
   // Macro split by energy, not by grams — 30g of fat is more than twice the
   // calories of 30g of carbohydrate, so a gram-weighted bar misreads the meal.
@@ -518,7 +522,7 @@ function FoodReceipt({
         </View>
         <Text style={[t.figure, styles.figure, { color: colors.foreground }]}>
           {approx && '~'}
-          {card.kcal.toLocaleString()}
+          {formatNumber(card.kcal, locale)}
           <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}> kcal</Text>
         </Text>
       </View>
@@ -558,7 +562,7 @@ function FoodReceipt({
       <Pressable
         onPress={onEdit}
         accessibilityRole="button"
-        accessibilityLabel={`Edit ${card.description}`}
+        accessibilityLabel={tr('chat.editNamed')(card.description)}
         hitSlop={8}
         style={({ pressed }) => [styles.editRow, { opacity: pressed ? 0.6 : 1 }]}
       >
@@ -621,7 +625,7 @@ function DayProgress({
     { key: 'meal-over', kcal: Math.max(0, after - Math.max(before, target)), mine: true, over: true },
   ].filter((band) => band.kcal > 0);
   const last = bands.length - 1;
-  const word = dayWord(day.local_date, locale, today);
+  const word = dayWord(day.local_date, locale, tr, today);
 
   return (
     <View style={styles.progress}>
@@ -662,13 +666,13 @@ function DayProgress({
           {/* The day so far leads, at ink weight: it is the figure the bar is a
               picture of, and the one they came to the card for. */}
           <Text style={{ fontFamily: font.extrabold, color: colors.foreground }}>
-            {after.toLocaleString()}
+            {formatNumber(after, locale)}
           </Text>
-          {` of ${target.toLocaleString()} · `}
+          {` ${tr('chat.ofTarget')(formatNumber(target, locale))} · `}
           <Text style={{ fontFamily: font.bold, color: over ? colors.foreground : undefined }}>
             {over
-              ? `${Math.abs(remaining).toLocaleString()} over`
-              : `${remaining.toLocaleString()} left`}
+              ? tr('journal.over')(formatNumber(Math.abs(remaining), locale))
+              : tr('journal.left')(formatNumber(remaining, locale))}
           </Text>
           {word && ` ${word}`}
         </Text>
@@ -773,9 +777,14 @@ function bandFill(colors: Palette, mine: boolean, over: boolean): string {
  * otherwise mislead: a meal logged onto yesterday, whose bar would read as
  * today's. Silent, too, when nobody has told us which day is current.
  */
-function dayWord(isoDate: string, locale: Locale, today?: string): string {
+function dayWord(
+  isoDate: string,
+  locale: Locale,
+  tr: ReturnType<typeof useT>,
+  today?: string,
+): string {
   if (today === undefined || isoDate === today) return '';
-  return `on ${formatDate(isoDate, locale)}`;
+  return tr('chat.onDate')(formatDate(isoDate, locale));
 }
 
 /**
@@ -800,6 +809,7 @@ function ExerciseCard({
 }) {
   const colors = useColors();
   const tr = useT();
+  const locale = useLocale();
   const units = useUnits();
   const [edited, setEdited] = useState<Extract<Card, { type: 'exercise' }> | null>(null);
   const [editing, setEditing] = useState(false);
@@ -859,7 +869,7 @@ function ExerciseCard({
           </Text>
         </View>
         <Text style={[t.figure, styles.figure, { color: colors.exerciseText }]}>
-          −{shown.kcal_burned.toLocaleString()}
+          −{formatNumber(shown.kcal_burned, locale)}
           <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}> kcal</Text>
         </Text>
       </View>
@@ -879,7 +889,7 @@ function ExerciseCard({
       <Pressable
         onPress={() => setEditing(true)}
         accessibilityRole="button"
-        accessibilityLabel={`Edit ${shown.description}`}
+        accessibilityLabel={tr('chat.editNamed')(shown.description)}
         hitSlop={8}
         style={({ pressed }) => [styles.editRow, { opacity: pressed ? 0.6 : 1 }]}
       >
@@ -893,7 +903,7 @@ function ExerciseCard({
       */}
       {shown.sets.length > 0 && (
         <View style={styles.sets}>
-          {groupSets(shown.sets, units).map((group) => (
+          {groupSets(shown.sets, units, tr).map((group) => (
             <View key={group.name} style={styles.setRow}>
               <Text numberOfLines={1} style={[t.footnote, styles.flex, { color: colors.foreground }]}>
                 {group.name}
@@ -916,8 +926,15 @@ function ExerciseCard({
  * when they are not — because the set where the reps dropped is the most
  * informative thing in the session, and averaging it away would hide exactly
  * the detail the sets were stored to keep.
+ *
+ * Not a component, so it takes `tr` rather than calling the hook. Three of its
+ * four branches print a word.
  */
-export function groupSets(sets: Extract<Card, { type: 'exercise' }>['sets'], units: UnitSystem) {
+export function groupSets(
+  sets: Extract<Card, { type: 'exercise' }>['sets'],
+  units: UnitSystem,
+  tr: ReturnType<typeof useT>,
+) {
   const byName = new Map<string, typeof sets>();
   for (const set of sets) {
     byName.set(set.name, [...(byName.get(set.name) ?? []), set]);
@@ -934,14 +951,14 @@ export function groupSets(sets: Extract<Card, { type: 'exercise' }>['sets'], uni
       const same = new Set(reps).size === 1;
       const count = same ? `${reps.length} × ${reps[0]}` : reps.join(', ');
       const loads = weights.map((w) => toLoad(w, units));
-      const load = loads.length > 0 ? ` at ${loads.join('/')}${loadUnit(units)}` : '';
+      const load = loads.length > 0 ? tr('chat.atLoad')(`${loads.join('/')}${loadUnit(units)}`) : '';
       return { name, detail: `${count}${load}` };
     }
     if (seconds.length > 0) {
       const total = seconds.reduce((a, b) => a + b, 0);
-      return { name, detail: `${Math.round(total / 60)} min` };
+      return { name, detail: tr('exercise.minutes')(String(Math.round(total / 60))) };
     }
-    return { name, detail: `${group.length} sets` };
+    return { name, detail: tr('chat.setsCount')(group.length) };
   });
 }
 
@@ -1076,7 +1093,8 @@ function WeightCard({
             ]}
           >
             {card.change_7d_kg > 0 ? '+' : '−'}
-            {formatWeightDelta(Math.abs(card.change_7d_kg), units, false)} this week
+            {formatWeightDelta(Math.abs(card.change_7d_kg), units, false)}{' '}
+            {tr('progress.thisWeek')}
           </Text>
         )}
       </View>
@@ -1105,6 +1123,7 @@ function WeightCard({
 function TrendCard({ card }: { card: Extract<Card, { type: 'trend' }> }) {
   const colors = useColors();
   const tr = useT();
+  const locale = useLocale();
   const metricColor: Record<string, string> = {
     calories: colors.calories,
     protein: colors.protein,
@@ -1121,9 +1140,9 @@ function TrendCard({ card }: { card: Extract<Card, { type: 'trend' }> }) {
         </Text>
         {card.average !== null && (
           <Text style={[t.footnoteSemibold, t.tnum, { color: colors.mutedForeground }]}>
-            {'avg '}
+            {tr('chat.avg')}{' '}
             <Text style={{ fontFamily: font.extrabold, color: colors.foreground }}>
-              {card.average.toLocaleString()}
+              {formatNumber(card.average, locale)}
             </Text>
             {` ${card.unit}`}
           </Text>
@@ -1142,7 +1161,7 @@ function TrendCard({ card }: { card: Extract<Card, { type: 'trend' }> }) {
         // Better an empty state than an axis with one point on it pretending to
         // be a trend.
         <Text style={[t.footnote, styles.subline, { color: colors.mutedForeground }]}>
-          Not enough logged days yet to draw a trend.
+          {tr('chat.notEnoughDays')}
         </Text>
       )}
 
@@ -1172,9 +1191,9 @@ function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
     <Shell>
       <View style={styles.headRow}>
         <Text style={[t.figure, styles.figure, { color: colors.foreground }]}>
-          {card.consumed.kcal.toLocaleString()}
+          {formatNumber(card.consumed.kcal, locale)}
           <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-            {` / ${card.targets.kcal.toLocaleString()} kcal`}
+            {` / ${formatNumber(card.targets.kcal, locale)}`} kcal
           </Text>
         </Text>
         {/* Ink, not red: over target is information, not a telling-off. */}
@@ -1186,8 +1205,8 @@ function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
           ]}
         >
           {over
-            ? `${Math.abs(remaining).toLocaleString()} over`
-            : `${remaining.toLocaleString()} left`}
+            ? tr('journal.over')(formatNumber(Math.abs(remaining), locale))
+            : tr('journal.left')(formatNumber(remaining, locale))}
         </Text>
       </View>
 
@@ -1214,7 +1233,7 @@ function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
       {card.burned_kcal > 0 && (
         <Text style={[t.footnote, t.tnum, styles.caption, { color: colors.mutedForeground }]}>
           <Text style={{ fontFamily: font.bold, color: colors.exerciseText }}>
-            −{card.burned_kcal} burned
+            {tr('journal.burned')(formatNumber(card.burned_kcal, locale))}
           </Text>
           {` · ${formatDate(card.local_date, locale)}`}
         </Text>
@@ -1239,16 +1258,17 @@ function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
 function PlanCard({ card }: { card: Extract<Card, { type: 'plan' }> }) {
   const colors = useColors();
   const tr = useT();
+  const locale = useLocale();
   const planned = card.nights.filter((night) => night.title !== null);
 
   return (
     <Shell>
       <View style={styles.headRow}>
         <Text style={[t.bodyBold, styles.flex, { color: colors.foreground }]}>
-          This week&rsquo;s dinners
+          {tr('chat.thisWeeksDinners')}
         </Text>
         <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-          {planned.length} night{planned.length === 1 ? '' : 's'}
+          {tr('chat.nights')(planned.length)}
         </Text>
       </View>
 
@@ -1277,7 +1297,7 @@ function PlanCard({ card }: { card: Extract<Card, { type: 'plan' }> }) {
             </Text>
             {night.kcal !== null && (
               <Text style={[t.footnoteBold, t.tnum, { color: colors.mutedForeground }]}>
-                {night.kcal.toLocaleString()}
+                {formatNumber(night.kcal, locale)}
               </Text>
             )}
           </View>
@@ -1373,7 +1393,7 @@ function ReviewCard({
                 },
               ]}
             >
-              {WEEKDAY_INITIALS[new Date(`${day.date}T00:00:00Z`).getUTCDay()]}
+              {weekdayName(new Date(`${day.date}T00:00:00Z`).getUTCDay(), locale, 'narrow')}
             </Text>
           </View>
         ))}
@@ -1381,14 +1401,17 @@ function ReviewCard({
       <Text style={[t.footnote, styles.caption, { color: colors.mutedForeground }]}>
         {card.days_logged === 0
           ? tr('chat.nothingLoggedThisWeek')
-          : `${card.days_logged} day${card.days_logged === 1 ? '' : 's'} logged, ${card.days_on_target} within 10% of target.`}
+          : tr('chat.weekSummary')(
+              tr('progress.days')(card.days_logged),
+              String(card.days_on_target),
+            )}
       </Text>
 
       <View style={styles.reviewFigures}>
         <Figure
-          value={card.mean_kcal === null ? '—' : `${Math.round(card.mean_kcal).toLocaleString()}`}
+          value={card.mean_kcal === null ? '—' : formatNumber(Math.round(card.mean_kcal), locale)}
           unit=" kcal"
-          label={`a day, against ${card.target_kcal.toLocaleString()}`}
+          label={tr('chat.aDayAgainst')(formatNumber(card.target_kcal, locale))}
         />
         {card.weight_change_kg !== null ? (
           <Figure
@@ -1397,15 +1420,15 @@ function ReviewCard({
           />
         ) : card.exercise_sessions > 0 ? (
           <Figure
-            value={card.exercise_kcal.toLocaleString()}
+            value={formatNumber(card.exercise_kcal, locale)}
             unit=" kcal"
-            label={`burned over ${card.exercise_sessions} session${card.exercise_sessions === 1 ? '' : 's'}`}
+            label={tr('chat.burnedOver')(tr('exercise.sessionsCount')(card.exercise_sessions))}
           />
         ) : (
           <Figure
             value={card.mean_protein_g === null ? '—' : `${Math.round(card.mean_protein_g)}`}
             unit=" g"
-            label={`protein a day, against ${Math.round(card.target_protein_g)}`}
+            label={tr('chat.proteinADayAgainst')(formatNumber(Math.round(card.target_protein_g), locale))}
           />
         )}
       </View>
@@ -1416,7 +1439,7 @@ function ReviewCard({
         >
           <View style={styles.reviewChangeRow}>
             <Text style={[t.bodyBold, t.tnum, { color: colors.mutedForeground }]}>
-              {card.target_change.from_kcal.toLocaleString()}
+              {formatNumber(card.target_change.from_kcal, locale)}
             </Text>
             <Svg width={14} height={14} viewBox="0 0 24 24">
               <Path
@@ -1429,7 +1452,7 @@ function ReviewCard({
               />
             </Svg>
             <Text style={[t.bodyBold, t.tnum, { color: colors.caloriesText }]}>
-              {card.target_change.to_kcal.toLocaleString()} kcal
+              {formatNumber(card.target_change.to_kcal, locale)} kcal
             </Text>
           </View>
           <Text style={[t.footnote, styles.reviewChangeWhy, { color: colors.mutedForeground }]}>
@@ -1462,7 +1485,7 @@ function ReviewCard({
           style={styles.reviewMore}
         >
           <Text style={[t.footnoteBold, { color: colors.caloriesText }]}>
-            {open ? tr('chat.showLess') : `Read the rest (${rest} more)`}
+            {open ? tr('chat.showLess') : tr('chat.readTheRest')(String(rest))}
           </Text>
         </Pressable>
       )}
@@ -1486,8 +1509,6 @@ function Figure({ value, unit, label }: { value: string; unit?: string; label: s
     </View>
   );
 }
-
-const WEEKDAY_INITIALS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as const;
 
 /** Calendar arithmetic on an ISO date, without dragging a timezone into it. */
 function addDays(date: string, days: number): string {

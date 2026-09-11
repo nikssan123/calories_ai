@@ -293,15 +293,15 @@ export default function LoginPage() {
               fresh acceptance of anything. */}
           {mode === 'signup' && (
             <p className="text-footnote text-muted-foreground text-center leading-relaxed">
-              By creating an account you agree to the{' '}
+              {t('auth.agreeBefore')}{' '}
               <Link href="/terms" className="text-foreground font-semibold underline underline-offset-2">
-                Terms
+                {t('auth.terms')}
               </Link>{' '}
-              and the{' '}
+              {t('auth.agreeAnd')}{' '}
               <Link href="/privacy" className="text-foreground font-semibold underline underline-offset-2">
                 {t('auth.privacyPolicy')}
               </Link>
-              .
+              {t('auth.agreeAfter')}
             </p>
           )}
         </form>

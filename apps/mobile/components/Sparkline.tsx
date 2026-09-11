@@ -9,6 +9,7 @@ import {
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import type { TrendPoint } from '@ct/shared';
 import { useColors } from '@/theme';
+import { useT } from '@/lib/i18n';
 
 /**
  * The one chart in the product. The cards the agent draws mid-conversation
@@ -56,6 +57,7 @@ export function Sparkline({
   readout?: (point: TrendPoint, index: number) => React.ReactNode;
 }) {
   const colors = useColors();
+  const tr = useT();
   /*
    * The rendered width, measured.
    *
@@ -239,7 +241,7 @@ export function Sparkline({
       style={style}
       onLayout={onLayout}
       accessible={scrubbing}
-      accessibilityLabel={scrubbing ? 'Chart. Touch and drag to read a day.' : undefined}
+      accessibilityLabel={scrubbing ? tr('chart.touchHint') : undefined}
       onStartShouldSetResponder={() => scrubbing}
       onMoveShouldSetResponder={() => scrubbing}
       onResponderGrant={(e) => pick(e.nativeEvent.locationX)}

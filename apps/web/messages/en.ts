@@ -67,6 +67,8 @@ export const en = {
   'today.steps': (count: number) => n(count, { one: 'step', other: 'steps' }),
   'today.stepsFooter': 'Counted by your phone. Steps sharpen your target — they are never added to it.',
   'today.changeHint': 'To change this, say so in the journal — “there was more rice”.',
+  /** The day's total is set bold just before this. */
+  'today.ofTargetKcal': (target: string) => `of ${target} kcal`,
 
   'meal.breakfast': 'Breakfast',
   'meal.lunch': 'Lunch',
@@ -96,6 +98,12 @@ export const en = {
   'history.nothingYet': 'Nothing logged yet.',
   'history.thisMonthTitle': (month: string) => `📆  ${month}`,
   'history.days': 'days',
+  'history.proteinGrams': (grams: string) => `${grams}g protein`,
+  /** A calendar square's label for a screen reader. */
+  'history.cellLogged': (date: string, kcal: string) => `${date}, ${kcal} kcal`,
+  'history.cellLoggedOf': (date: string, kcal: string, target: string) =>
+    `${date}, ${kcal} kcal of ${target}`,
+  'history.cellEmpty': (date: string) => `${date}, nothing logged`,
 
   // ---- The composer -------------------------------------------------------
   'composer.placeholder': 'Two eggs and toast…',
@@ -112,9 +120,12 @@ export const en = {
   'composer.removeScan': (name: string) => `Remove ${name}`,
   'composer.selectedMeal': 'Selected meal',
   'composer.labelHint': 'This is the label — log what I ate off it.',
+  'composer.photoTip':
+    'Tip: leave a fork, spoon or your hand in the shot — it tells us how big the plate is, which is the hardest part to guess.',
 
   // ---- Setup / You --------------------------------------------------------
   'setup.title': 'You',
+  'setup.subtitle': 'Enough to work out a starting target. It adjusts as real data comes in.',
   'setup.about': 'About you',
   'setup.account': 'Account',
   'setup.appearance': 'Appearance',
@@ -129,6 +140,9 @@ export const en = {
   'setup.units': 'Units',
   /** The row this whole feature is for. */
   'setup.language': 'Language',
+  /** The two headings in the language list. See `LanguagePicker`. */
+  'setup.languageSuggested': 'Suggested',
+  'setup.languageAll': 'All languages',
   'setup.dayStartsAt': 'Day starts at',
   'setup.timezone': 'Time zone',
   'setup.email': 'Email',
@@ -225,6 +239,11 @@ export const en = {
   'auth.genericFailure': 'Something went wrong signing in. Try again.',
   'auth.oneMoment': 'Just a moment…',
   'auth.privacyPolicy': 'Privacy Policy',
+  /** One sentence around the Terms and Privacy Policy links, ending in `agreeAfter`; any piece may be left empty. */
+  'auth.agreeBefore': 'By creating an account you agree to the',
+  'auth.terms': 'Terms',
+  'auth.agreeAnd': 'and the',
+  'auth.agreeAfter': '.',
   /** The pre-account language picker's label. Sits on the sign-in screen. */
   'auth.language': 'Language',
   'auth.or': 'or',
@@ -272,6 +291,29 @@ export const en = {
   'verify.signInFirst': 'Sign in first, then enter the code we emailed you.',
   'verify.signOutAndRestart': 'Sign out and start again',
   'verify.linkFailed': 'That link didn’t work',
+  'verify.failedSubtitle': (message: string) =>
+    `${message} You can enter the code from the email instead.`,
+  'verify.confirmedMessage': 'Your email address is confirmed.',
+  'verify.codeSent': 'Check your inbox for the confirmation code.',
+  /** One sentence around the address, which is emphasised in place; either piece may be left empty. */
+  'verify.sentCodeBefore': 'We sent a six-digit code to',
+  'verify.sentCodeAfter': '. Enter it to finish setting up your account.',
+  'verify.wrongAddress': 'Wrong address?',
+
+  // ---- A coach's invite link ----------------------------------------------
+  //
+  // Opened by a client, often before they have the app. "Settings" and "Coach"
+  // name screens in the phone app, so they should match what it calls them.
+  'invite.title': 'Your coach invited you',
+  'invite.body':
+    'Accept it in the Day So Far app to share your log with them. You choose what they see, and you can stop any time from Settings.',
+  'invite.yourCode': 'Your code',
+  'invite.copyCode': 'Copy code',
+  'invite.codeCopied': 'Code copied',
+  'invite.openInApp': 'Open in the app',
+  'invite.orOpenApp': 'Or open the app, go to Settings, and enter the code under Coach.',
+  'invite.noApp': 'Do not have the app yet?',
+  'invite.coachingYourself': 'Coaching someone yourself?',
 
 
   // ---- Cook ---------------------------------------------------------------
@@ -409,6 +451,7 @@ export const en = {
   'recipe.unsaveNamed': (title: string) => `Unsave ${title}`,
   'recipe.forPortions': (portions: string) => `for ${portions} portions`,
   'recipe.portionsCount': (count: number) => n(count, { one: 'portion', other: 'portions' }),
+  'recipe.makes': (count: number) => `Makes ${n(count, { one: 'portion', other: 'portions' })}`,
   'recipe.howToMakeIt': (steps: string) => `How to make it · ${steps}`,
   'recipe.ingredientsMakes': (portions: string) => `Ingredients · makes ${portions}`,
   'recipe.iAteThis': (kcal: string) => `I ate this · ${kcal} kcal`,
@@ -471,6 +514,7 @@ export const en = {
   'progress.sinceStart': 'Since start',
   'progress.toTarget': 'To target',
   'progress.logTodaysWeight': (unit: string) => `Log today’s weight (${unit})`,
+  'progress.weightLogged': (weight: string) => `Logged ${weight}`,
   'progress.caloriesTitle': '🔥  Calories',
   'progress.avgDayTarget': (target: string) => `avg/day · target ${target}`,
   'progress.proteinTitle': '💪  Protein',
@@ -547,6 +591,8 @@ export const en = {
   'workouts.oneFewerSet': (exercise: string) => `One fewer set of ${exercise}`,
   'workouts.oneMoreSet': (exercise: string) => `One more set of ${exercise}`,
   'workouts.removeExercise': (exercise: string) => `Remove ${exercise}`,
+  'workouts.saved': (name: string) => `Saved ${name}`,
+  'workouts.deleted': (name: string) => `Deleted ${name}`,
 
   // ---- Resetting a password -----------------------------------------------
   'reset.checkInbox': 'Check your inbox',
@@ -570,11 +616,14 @@ export const en = {
   'reset.askAnother': 'Ask for another',
   'reset.newPassword': 'New password',
   'reset.savePassword': 'Save password',
+  'reset.linkSent': 'If that address has an account, a reset link is on its way.',
+  'reset.passwordChanged': 'Your password has been changed. Sign in with it.',
 
   'unsubscribe.incompleteLink': 'That unsubscribe link is incomplete.',
   'unsubscribe.working': 'Unsubscribing…',
   'unsubscribe.oneMoment': 'One moment.',
   'unsubscribe.done': 'Unsubscribed',
+  'unsubscribe.doneSubtitle': 'You will not get product email from us again.',
   'unsubscribe.failedSubtitle': (message: string) =>
     `${message} You can also turn the weekly email off from your account settings.`,
   'unsubscribe.openSettings': 'Open settings',
@@ -633,6 +682,7 @@ export const en = {
   'shopping.putBack': (name: string) => `Put ${name} back on the list`,
   'shopping.tickOff': (name: string) => `Tick off ${name}`,
   'shopping.takeOff': (name: string) => `Take ${name} off the list`,
+  'shopping.tookOff': (name: string) => `Took ${name} off the list`,
 
   // ---- The barcode scanner ------------------------------------------------
   'barcode.isThisIt': 'Is this it?',
@@ -729,6 +779,14 @@ export const en = {
   'chat.readTheRest': (count: string) => `Read the rest (${count} more)`,
   'chat.atLoad': (loads: string) => ` at ${loads}`,
   'chat.setsCount': (count: number) => n(count, { one: 'set', other: 'sets' }),
+  'chat.avg': 'avg',
+  /** The day so far is set bold just before this. */
+  'chat.ofTarget': (target: string) => `of ${target}`,
+  /** Said only when the card is not about today — "on 3 Sept". */
+  'chat.onDate': (date: string) => `on ${date}`,
+  /** The day bar, read aloud. `when` is `chat.onDate` or empty; `rest` is `journal.left` or `journal.over`. */
+  'chat.dayProgressLabel': (after: string, target: string, when: string, meal: string, rest: string) =>
+    `${after} of ${target} kcal${when ? ` ${when}` : ''} — this meal ${meal}. ${rest}.`,
 
   /** One letter each, for the macro bar's legend. Not abbreviations of the
       words above them in every language — Bulgarian's are П, В and М. */
@@ -809,6 +867,8 @@ export const en = {
   'workout.removeSet': (index: string) => `Remove set ${index}`,
   'workout.anotherSet': 'Another set',
   'workout.removeNamed': (name: string) => `Remove ${name}`,
+  'workout.lessNamed': (caption: string) => `Less ${caption}`,
+  'workout.moreNamed': (caption: string) => `More ${caption}`,
   'workout.lastTime': (figure: string) => `last time ${figure}`,
   'workout.adjust': 'Adjust',
   'workout.setsDiffered': 'Sets differed',
@@ -836,6 +896,8 @@ export const en = {
   'quality.title': '🥦\u00a0\u00a0Diet quality',
   'quality.partlyMeasured': 'partly measured',
   'quality.notEstimated': 'not estimated',
+  'quality.partialCoverage': (percent: string) =>
+    `Only ${percent}% of today’s calories carry these figures, so the totals are a floor rather than the whole day.`,
 
   'nutrient.sodium': 'Sodium',
   'nutrient.satFat': 'Sat fat',
@@ -891,6 +953,12 @@ export const en = {
   'badgeHow.days_365': 'Three hundred and sixty-five days logged, in any order.',
   'badge.workouts_100': 'A hundred sessions',
   'badgeHow.workouts_100': 'A hundred days with training on them.',
+
+  // ---- Receipts and labels both apps word the same way --------------------
+  'toast.logged': (description: string, kcal: string) => `Logged ${description} — ${kcal} kcal`,
+  'toast.removed': (description: string) => `Removed ${description}`,
+  'a11y.edit': (name: string) => `Edit ${name}`,
+  'a11y.delete': (name: string) => `Delete ${name}`,
 
   'common.save': 'Save',
   'common.cancel': 'Cancel',

@@ -43,8 +43,7 @@ export default function UnsubscribePage() {
 
     void (async () => {
       try {
-        const result = await api.unsubscribe(user, signature);
-        setMessage(result.message);
+        await api.unsubscribe(user, signature);
         setState('done');
         if (authenticated) await refresh();
       } catch (e) {
@@ -74,7 +73,7 @@ export default function UnsubscribePage() {
   return (
     <AuthScreen
       title={t('unsubscribe.done')}
-      subtitle={message}
+      subtitle={t('unsubscribe.doneSubtitle')}
       footer={
         <>
           {t('unsubscribe.changedMind')}{' '}

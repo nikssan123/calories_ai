@@ -522,8 +522,7 @@ export function Composer({
           checklist is one people stop opening.
         */}
         <Text style={[t.footnote, styles.hint, { color: colors.mutedForeground }]}>
-          Tip: leave a fork, spoon or your hand in the shot — it tells us how big
-          the plate is, which is the hardest part to guess.
+          {tr('composer.photoTip')}
         </Text>
         <Choice label={tr('composer.takePhoto')} icon="camera" onPress={() => choose('camera')} />
         <Choice label={tr('composer.choosePhoto')} icon="image" onPress={() => choose('library')} />

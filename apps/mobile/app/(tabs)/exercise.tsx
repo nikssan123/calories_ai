@@ -82,7 +82,7 @@ export default function ExerciseScreen() {
       prev ? { ...prev, entries: prev.entries.filter((e) => e.id !== entry.id) } : prev,
     );
 
-    undoably(`Removed ${entry.description}`, {
+    undoably(tr('toast.removed')(entry.description), {
       commit: () => {
         void api
           .deleteExerciseEntry(entry.id)
@@ -260,7 +260,7 @@ export default function ExerciseScreen() {
                   key={entry.id}
                   index={i}
                   style={i === 0 ? null : { borderTopWidth: 2, borderTopColor: colors.border }}
-                  actions={[removeAction(colors, entry.description, () => remove(entry))]}
+                  actions={[removeAction(colors, tr, entry.description, () => remove(entry))]}
                 >
                   <InsetRow first>
                     <Text style={styles.rowEmoji}>{exerciseEmoji(entry.description)}</Text>
@@ -293,7 +293,7 @@ export default function ExerciseScreen() {
                       <Pressable
                         onPress={() => setEditing(entry.id)}
                         accessibilityRole="button"
-                        accessibilityLabel={`Edit ${entry.description}`}
+                        accessibilityLabel={tr('a11y.edit')(entry.description)}
                         hitSlop={10}
                         style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
                       >
@@ -303,7 +303,7 @@ export default function ExerciseScreen() {
                     <Pressable
                       onPress={() => remove(entry)}
                       accessibilityRole="button"
-                      accessibilityLabel={`Delete ${entry.description}`}
+                      accessibilityLabel={tr('a11y.delete')(entry.description)}
                       hitSlop={10}
                       style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
                     >
@@ -368,7 +368,8 @@ function DayReadout({
           <Text style={[t.footnote, t.tnum, styles.readoutFigure, { color: colors.exerciseText }]}>
             {formatNumber(Math.round(kcal), locale)}
             <Text style={[styles.readoutUnit, { color: colors.mutedForeground }]}>
-              {` kcal${detail ? ` · ${detail}` : ''}`}
+              {' kcal'}
+              {detail ? ` · ${detail}` : ''}
             </Text>
           </Text>
         )}

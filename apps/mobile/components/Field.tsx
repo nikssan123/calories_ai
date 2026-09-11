@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Polyline } from 'react-native-svg';
 import { ease, font, type as t, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useT } from '@/lib/i18n';
 
 /**
  * The shell every editable value on the profile screen wears.
@@ -243,6 +244,7 @@ export function Sheet({
   children: React.ReactNode;
 }) {
   const colors = useColors();
+  const tr = useT();
   const reduced = useReducedMotion();
   /*
    * A `Modal` is its own root view and inherits nothing, including the safe
@@ -404,7 +406,7 @@ export function Sheet({
         <Animated.View style={[styles.scrim, scrim]}>
           {/* Tapping away closes it — the same affordance as tapping off a
               popover, and the only one a sheet with no chrome can offer. */}
-          <Pressable style={styles.flex} onPress={onClose} accessibilityLabel="Close" />
+          <Pressable style={styles.flex} onPress={onClose} accessibilityLabel={tr('common.close')} />
         </Animated.View>
 
         <Animated.View

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Calendar, CalendarDay, Locale } from '@ct/shared';
-import { formatBodyWeight, formatDay, formatMonth } from '@ct/shared';
+import { formatBodyWeight, formatDay, formatMonth, formatNumber } from '@ct/shared';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { InsetGroup } from '@/components/InsetGroup';
@@ -140,17 +140,19 @@ export default function HistoryPage() {
                   <div className="space-y-3 px-4 py-3.5">
                     <div className="flex items-baseline justify-between gap-3">
                       <span className="text-figure text-large-title">
-                        {selectedDay.kcal.toLocaleString()}
+                        {formatNumber(selectedDay.kcal, locale)}
                       </span>
                       <span className="text-muted-foreground text-sm font-medium">
-                        of {selectedDay.target_kcal.toLocaleString() || '—'} kcal
+                        {t('today.ofTargetKcal')(formatNumber(selectedDay.target_kcal, locale) || '—')}
                       </span>
                     </div>
                     <div className="text-footnote text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 font-semibold">
-                      <span className="tnum">{selectedDay.protein_g}g protein</span>
+                      <span className="tnum">
+                        {t('history.proteinGrams')(String(selectedDay.protein_g))}
+                      </span>
                       {selectedDay.burned_kcal > 0 && (
                         <span className="tnum text-[var(--exercise-text)]">
-                          −{selectedDay.burned_kcal} burned
+                          {t('journal.burned')(formatNumber(selectedDay.burned_kcal, locale))}
                         </span>
                       )}
                       {selectedDay.weight_kg !== null && (
@@ -163,7 +165,7 @@ export default function HistoryPage() {
                       href={`/today?date=${selected}`}
                       className="inline-block text-body font-bold text-[var(--calories-text)]"
                     >
-                      Open in Today →
+                      {t('history.openInToday')}
                     </Link>
                   </div>
                 ) : (
@@ -181,9 +183,10 @@ export default function HistoryPage() {
                     value={
                       logged.length === 0
                         ? '—'
-                        : Math.round(
-                            logged.reduce((sum, d) => sum + d.kcal, 0) / logged.length,
-                          ).toLocaleString()
+                        : formatNumber(
+                            Math.round(logged.reduce((sum, d) => sum + d.kcal, 0) / logged.length),
+                            locale,
+                          )
                     }
                     unit="kcal"
                   />
@@ -232,6 +235,7 @@ function DayCell({
   placeAbove: boolean;
 }) {
   const locale = useLocale();
+  const t = useT();
   const logged = day?.logged ?? false;
   const ratio = logged && day!.target_kcal > 0 ? day!.kcal / day!.target_kcal : null;
   const tone = toneFor(logged ? ratio : undefined);
@@ -243,10 +247,14 @@ function DayCell({
         onClick={onSelect}
         aria-label={
           logged
-            ? `${formatFullDate(date, locale)}, ${day!.kcal} kcal${
-                day!.target_kcal > 0 ? ` of ${day!.target_kcal}` : ''
-              }`
-            : `${formatFullDate(date, locale)}, nothing logged`
+            ? day!.target_kcal > 0
+              ? t('history.cellLoggedOf')(
+                  formatFullDate(date, locale),
+                  formatNumber(day!.kcal, locale),
+                  formatNumber(day!.target_kcal, locale),
+                )
+              : t('history.cellLogged')(formatFullDate(date, locale), formatNumber(day!.kcal, locale))
+            : t('history.cellEmpty')(formatFullDate(date, locale))
         }
         aria-pressed={selected}
         className={cn(
@@ -290,6 +298,7 @@ function DayHoverCard({
   placeAbove: boolean;
 }) {
   const locale = useLocale();
+  const t = useT();
   const over = day.target_kcal > 0 && day.kcal > day.target_kcal;
   const units = useUnits();
 
@@ -310,17 +319,21 @@ function DayHoverCard({
 
       <p className="mt-0.5 flex items-baseline gap-1">
         <span className={cn('text-figure text-[17px]', over && 'text-foreground')}>
-          {day.kcal.toLocaleString()}
+          {formatNumber(day.kcal, locale)}
         </span>
         <span className="text-footnote text-muted-foreground font-semibold">
-          {day.target_kcal > 0 ? `of ${day.target_kcal.toLocaleString()} kcal` : 'kcal'}
+          {day.target_kcal > 0
+            ? t('today.ofTargetKcal')(formatNumber(day.target_kcal, locale))
+            : 'kcal'}
         </span>
       </p>
 
       <div className="text-footnote text-muted-foreground mt-1 flex flex-wrap gap-x-2.5 gap-y-0.5 font-semibold">
-        <span className="tnum">{day.protein_g}g protein</span>
+        <span className="tnum">{t('history.proteinGrams')(String(day.protein_g))}</span>
         {day.burned_kcal > 0 && (
-          <span className="tnum text-[var(--exercise-text)]">−{day.burned_kcal} burned</span>
+          <span className="tnum text-[var(--exercise-text)]">
+            {t('journal.burned')(formatNumber(day.burned_kcal, locale))}
+          </span>
         )}
         {day.weight_kg !== null && (
           <span className="tnum">{formatBodyWeight(day.weight_kg, units)}</span>
@@ -381,7 +394,7 @@ function Legend() {
       ))}
       <span className="flex items-center gap-1.5">
         <span className="size-2 rounded-full" style={{ background: 'var(--exercise)' }} />
-        Exercise
+        {t('history.exercise')}
       </span>
     </div>
   );

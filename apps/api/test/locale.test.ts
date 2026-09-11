@@ -4,6 +4,11 @@ import {
   LOCALES,
   LOCALE_ENGLISH_NAMES,
   LOCALE_NAMES,
+  LOCALE_NAMES_IN,
+  LOCALE_SCRIPTS,
+  LOCALES_BY_NAME,
+  figureFace,
+  suggestedLocales,
   plural,
   localeFromAcceptLanguage,
   localeOf,
@@ -448,5 +453,54 @@ describe('the transactional mail', () => {
     // Bulgarian and Spanish group four figures not at all, which is also an
     // answer and not a fallback to something unformatted.
     expect(kcal('bg')).toContain('2320 kcal');
+  });
+});
+
+/**
+ * The picker's data. Written out as tables so Hermes — which has no
+ * `DisplayNames` and its own opinion about collation — prints what V8 would,
+ * and held here to what `Intl` under Node says, so the tables cannot drift from
+ * CLDR when a language is added.
+ */
+describe('the language picker', () => {
+  const intl = (locale: Locale) => (locale === 'en' ? 'en-GB' : locale);
+  const capitalised = (text: string, locale: Locale) =>
+    text.charAt(0).toLocaleUpperCase(intl(locale)) + text.slice(1);
+
+  it('names every language the way CLDR does, in every other', () => {
+    for (const ui of LOCALES) {
+      const names = new Intl.DisplayNames(intl(ui), { type: 'language' });
+      for (const locale of LOCALES) {
+        expect(`${ui}/${locale}: ${LOCALE_NAMES_IN[ui][locale]}`).toBe(
+          `${ui}/${locale}: ${capitalised(names.of(locale)!, ui)}`,
+        );
+      }
+    }
+  });
+
+  it('agrees with the first line about what each language calls itself', () => {
+    for (const locale of LOCALES) expect(LOCALE_NAMES_IN[locale][locale]).toBe(LOCALE_NAMES[locale]);
+  });
+
+  it('lists them in the root collation order of their own names', () => {
+    const collator = new Intl.Collator('und');
+    expect([...LOCALES_BY_NAME]).toEqual(
+      [...LOCALES].sort((a, b) => collator.compare(LOCALE_NAMES[a], LOCALE_NAMES[b])),
+    );
+  });
+
+  it('suggests the language in use first, then the device’s, each once', () => {
+    expect(suggestedLocales('ro', ['en-US', 'en', 'ro-RO', 'ja'])).toEqual(['ro', 'en']);
+    expect(suggestedLocales('en', ['en-GB'])).toEqual(['en']);
+    expect(suggestedLocales('bg', [null, undefined, ''])).toEqual(['bg']);
+  });
+
+  it('swaps the figure face for Cyrillic only', () => {
+    for (const locale of LOCALES) {
+      expect(figureFace(locale)).toBe(LOCALE_SCRIPTS[locale] === 'cyrillic' ? 'any' : 'baloo');
+    }
+    expect(figureFace('uk')).toBe('any');
+    // Greek has no display face to swap to, and a figure is digits.
+    expect(figureFace('el')).toBe('baloo');
   });
 });

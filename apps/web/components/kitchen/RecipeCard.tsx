@@ -61,7 +61,7 @@ export function RecipeCard({
     setCooking(true);
     try {
       const entry = await api.cookRecipe(recipe.id, { portions: servings });
-      toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
+      toast.success(t('toast.logged')(entry.description, formatNumber(Math.round(entry.kcal), locale)));
       onCooked();
     } catch (e) {
       toast.error((e as Error).message);

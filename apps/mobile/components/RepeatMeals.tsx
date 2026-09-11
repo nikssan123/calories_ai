@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import type { MealTemplate } from '@ct/shared';
+import { formatNumber } from '@ct/shared';
 import { foodEmoji } from '@ct/shared/food-emoji';
 import { PressableChunk } from '@/components/Chunk';
 import { InsetGroup } from '@/components/InsetGroup';
@@ -12,7 +13,7 @@ import { enqueue, newId } from '@/lib/outbox';
 import { cachedTemplates, cacheTemplates } from '@/lib/store';
 import { font, type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
-import { useT, type StringKey } from '@/lib/i18n';
+import { useLocale, useT, type StringKey } from '@/lib/i18n';
 import { messageOf } from '@/lib/errors';
 
 /**
@@ -43,6 +44,7 @@ export function RepeatMeals({
 }) {
   const colors = useColors();
   const tr = useT();
+  const locale = useLocale();
   const toast = useToast();
   const { profile } = useAuth();
   const userId = profile?.id ?? '';
@@ -119,7 +121,9 @@ export function RepeatMeals({
     });
     haptics.logged();
     setError(null);
-    toast.success(`Logged ${template.description} — ${Math.round(template.kcal)} kcal`);
+    toast.success(
+      tr('toast.logged')(template.description, formatNumber(Math.round(template.kcal), locale)),
+    );
     onLogged();
   }
 
@@ -152,7 +156,7 @@ export function RepeatMeals({
         <Text style={[t.body, styles.notice, { color: colors.mutedForeground }]}>{tr('common.loading')}</Text>
       ) : meals.length === 0 ? (
         <Text style={[t.body, styles.notice, { color: colors.mutedForeground }]}>
-          Nothing matching “{query}”.
+          {tr('cook.nothingMatching')(query)}
         </Text>
       ) : (
         meals.map((template) => (
@@ -167,7 +171,10 @@ export function RepeatMeals({
                   run of text the way `inline-flex` does on the web. */}
               <View style={styles.subLine}>
                 <Text style={[t.footnote, t.tnum, { color: colors.mutedForeground }]}>
-                  {Math.round(template.kcal)} kcal · {Math.round(template.protein_g)}g protein
+                  {tr('repeat.kcalProtein')(
+                    formatNumber(Math.round(template.kcal), locale),
+                    formatNumber(Math.round(template.protein_g), locale),
+                  )}
                   {template.times > 1 ? ' · ' : ''}
                 </Text>
                 {template.times > 1 && (
@@ -185,7 +192,7 @@ export function RepeatMeals({
               radius={999}
               onPress={() => repeat(template)}
               accessibilityRole="button"
-              accessibilityLabel={`Log ${template.description} again`}
+              accessibilityLabel={tr('repeat.logAgainNamed')(template.description)}
               contentStyle={[
                 styles.log,
                 { backgroundColor: colors.secondary, borderColor: colors.border },

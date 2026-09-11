@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Locale } from '@ct/shared';
 import { query, queryOne } from '../src/db.ts';
 import { runTurn } from '../src/ai/run.ts';
 import { listMessages } from '../src/services/chat.ts';
@@ -414,7 +415,7 @@ describe('runTurn', () => {
   describe('the language a turn is answered in', () => {
     async function turnAs(
       overrides: Record<string, unknown>,
-      spokenLocale: 'en' | 'bg' | 'de' | 'es' | 'fr' | null,
+      spokenLocale: Locale | null,
       text = 'две яйца и филия хляб с масло',
     ) {
       const account = await createUser(overrides);

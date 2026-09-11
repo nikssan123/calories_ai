@@ -3,13 +3,13 @@ import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-na
 import { useRouter } from 'expo-router';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import type { DayQuality } from '@ct/shared';
-import { QUALITY_COVERAGE_FLOOR, meterSpent } from '@ct/shared';
+import { QUALITY_COVERAGE_FLOOR, formatNumber, meterSpent } from '@ct/shared';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { useEntitlements } from '@/lib/entitlements';
 import { spentLine, TIER_NAMES, tierFor } from '@/lib/plan-copy';
 import { duration, ease, type as t, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { useT, type StringKey } from '@/lib/i18n';
+import { useLocale, useT, type StringKey } from '@/lib/i18n';
 
 /**
  * Fiber, sodium, saturated fat and sugar, under the macros.
@@ -110,8 +110,7 @@ export function DietQuality({
 
       {partial && (
         <Text style={[t.footnote, styles.footer, { color: colors.mutedForeground }]}>
-          Only {Math.round(quality.coverage * 100)}% of today’s calories carry these figures, so
-          the totals are a floor rather than the whole day.
+          {tr('quality.partialCoverage')(String(Math.round(quality.coverage * 100)))}
         </Text>
       )}
     </View>
@@ -200,7 +199,7 @@ export function QualityBlank({ style }: { style?: StyleProp<ViewStyle> }) {
           ]}
         >
           <Text style={[t.footnoteBold, { color: colors.secondaryForeground }]}>
-            See what {TIER_NAMES[next]} adds
+            {tr('plans.seeWhatAdds')(TIER_NAMES[next])}
           </Text>
         </PressableChunk>
       )}
@@ -224,6 +223,7 @@ function QualityTrack({
 }) {
   const colors = useColors();
   const tr = useT();
+  const locale = useLocale();
   const floor = target.direction === 'floor';
   const pct = value === null ? 0 : Math.min(100, (value / target.value) * 100);
 
@@ -268,7 +268,7 @@ function QualityTrack({
             <>
               <Text style={[t.figure, styles.figure, { color: colors.mutedForeground }]}>—</Text>
               <Text style={[t.footnoteSemibold, t.tnum, { color: colors.mutedForeground }]}>
-                /{target.value.toLocaleString()}
+                /{formatNumber(target.value, locale)}
                 {row.unit}
               </Text>
             </>
@@ -286,10 +286,10 @@ function QualityTrack({
                 { color: marked && floor ? colors.caloriesText : colors.foreground },
               ]}
             >
-              {Math.round(value).toLocaleString()}
+              {formatNumber(Math.round(value), locale)}
             </Text>
             <Text style={[t.footnoteSemibold, t.tnum, { color: colors.mutedForeground }]}>
-              /{target.value.toLocaleString()}
+              /{formatNumber(target.value, locale)}
               {row.unit}
             </Text>
           </>

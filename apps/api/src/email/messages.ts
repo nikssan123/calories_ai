@@ -36,6 +36,14 @@ const p = {
   de: pluralFor('de'),
   es: pluralFor('es'),
   fr: pluralFor('fr'),
+  ro: pluralFor('ro'),
+  uk: pluralFor('uk'),
+  sr: pluralFor('sr'),
+  hr: pluralFor('hr'),
+  cs: pluralFor('cs'),
+  hu: pluralFor('hu'),
+  el: pluralFor('el'),
+  sk: pluralFor('sk'),
 };
 
 const en = {
@@ -245,6 +253,14 @@ const en = {
   // only chrome it has is these two.
   'nudge.heading': 'A quick note',
   'nudge.button': 'Open the journal',
+
+  // A push has no model in front of it either, so its words live here too: it
+  // is the same server speaking, on a lock screen instead. See `push/notify.ts`.
+  'push.reviewTitle': 'Your week is ready',
+  'push.reviewBody': (name: string) => `${name}, here is how the week went.`,
+  'push.reviewBodyNoName': 'Here is how the week went.',
+  'push.coachCommented': (name: string) => `${name} commented`,
+  'push.coachCommentedNoName': 'Your coach commented',
 } as const;
 
 export type EmailMessages = {
@@ -398,6 +414,12 @@ const bg: EmailMessages = {
 
   'nudge.heading': 'Кратка бележка',
   'nudge.button': 'Отвори дневника',
+
+  'push.reviewTitle': 'Седмицата ти е готова',
+  'push.reviewBody': (name) => `${name}, ето как мина седмицата.`,
+  'push.reviewBodyNoName': 'Ето как мина седмицата.',
+  'push.coachCommented': (name) => `${name} написа коментар`,
+  'push.coachCommentedNoName': 'Нов коментар от треньора ти',
 };
 
 const de: EmailMessages = {
@@ -543,6 +565,12 @@ const de: EmailMessages = {
 
   'nudge.heading': 'Kurz notiert',
   'nudge.button': 'Journal öffnen',
+
+  'push.reviewTitle': 'Deine Woche ist da',
+  'push.reviewBody': (name) => `${name}, so lief die Woche.`,
+  'push.reviewBodyNoName': 'So lief die Woche.',
+  'push.coachCommented': (name) => `${name} hat kommentiert`,
+  'push.coachCommentedNoName': 'Neuer Kommentar von deinem Coach',
 };
 
 const es: EmailMessages = {
@@ -692,6 +720,12 @@ const es: EmailMessages = {
 
   'nudge.heading': 'Una nota rápida',
   'nudge.button': 'Abrir el diario',
+
+  'push.reviewTitle': 'Tu semana está lista',
+  'push.reviewBody': (name) => `${name}, así ha ido la semana.`,
+  'push.reviewBodyNoName': 'Así ha ido la semana.',
+  'push.coachCommented': (name) => `${name} ha comentado`,
+  'push.coachCommentedNoName': 'Nuevo comentario de tu coach',
 };
 
 const fr: EmailMessages = {
@@ -840,9 +874,1325 @@ const fr: EmailMessages = {
 
   'nudge.heading': 'Un petit mot',
   'nudge.button': 'Ouvrir le journal',
+
+  'push.reviewTitle': 'Ta semaine est prête',
+  'push.reviewBody': (name) => `${name}, voici comment s’est passée la semaine.`,
+  'push.reviewBodyNoName': 'Voici comment s’est passée la semaine.',
+  'push.coachCommented': (name) => `${name} a commenté`,
+  'push.coachCommentedNoName': 'Nouveau commentaire de ton coach',
 };
 
-const CATALOGUES: Record<Locale, EmailMessages> = { en, bg, de, es, fr };
+const ro: EmailMessages = {
+  'review.subject': (range) => `Săptămâna ta: ${range}`,
+  'review.heading': 'Bilanțul săptămânii trecute',
+  'review.greeting': (name) => `Bună, ${name},`,
+  'review.greetingNoName': 'Bună,',
+  'review.daysLogged': 'Zile notate',
+  'review.sameAsBefore': 'la fel ca săptămâna dinainte',
+  'review.weekBefore': (n) => `${n} săptămâna dinainte`,
+  'review.averageADay': 'Media pe zi',
+  'review.daysOnTarget': 'Zile la țintă',
+  'review.withinTarget': (kcal) => `la cel mult 10% de ${kcal} kcal`,
+  'review.weight': 'Greutate',
+  'review.acrossTheWeek': 'pe parcursul săptămânii',
+  'review.burnedOver': (sessions) =>
+    `Arse în ${p.ro(sessions, { one: 'sesiune', few: 'sesiuni', other: 'de sesiuni' })}`,
+  'review.onTopOfTarget': 'în plus față de țintă',
+  'review.proteinADay': 'Proteine pe zi',
+  'review.proteinTarget': (grams) => `țintă ${grams} g`,
+  'review.howItRead': 'Cum a arătat',
+  'review.onRepeat': 'Cel mai des',
+  // „de 3 ori”, „o dată”: the "de" comes before the number here, and 1 is a word.
+  'review.times': (n) =>
+    n === 1 ? 'o dată' : `de ${p.ro(n, { one: 'dată', few: 'ori', other: 'de ori' })}`,
+  'review.readWholeReview': 'Citește tot bilanțul',
+  'review.nothingThisWeek': 'Nimic notat săptămâna asta.',
+  'review.stripCaption': (logged, hits) =>
+    `${p.ro(logged, { one: 'zi notată', few: 'zile notate', other: 'de zile notate' })}, dintre care ${hits} la cel mult 10% de țintă.`,
+  'review.summaryNoMean': (days) =>
+    `${p.ro(days, { one: 'zi notată', few: 'zile notate', other: 'de zile notate' })}.`,
+  'review.summary': (days, kcal, weight) =>
+    `${p.ro(days, { one: 'zi notată', few: 'zile notate', other: 'de zile notate' })}, în medie ${kcal} kcal${weight}.`,
+  'review.summaryWeight': (delta) => `, greutate ${delta}`,
+  'review.weekdays': ['dum', 'lun', 'mar', 'mie', 'joi', 'vin', 'sâm'],
+
+  'review.averageLevel': 'la fel ca săptămâna dinainte',
+  'review.averageUp': (kcal) => `cu ${kcal} mai mult decât săptămâna dinainte`,
+  'review.averageDown': (kcal) => `cu ${kcal} mai puțin decât săptămâna dinainte`,
+  'review.targetMoved': (kcal) => `Ținta ta s-a mutat la ${kcal} kcal`,
+  'review.dayMonth': (days, month) => `${days} ${month}`,
+
+  'alert.planEnds': (plan, when) => `Planul tău ${plan} se încheie ${when}`,
+  'alert.expiryToday': 'azi',
+  'alert.expiryTomorrow': 'mâine',
+  'alert.expiryInDays': (days) => `peste ${p.ro(days, { one: 'zi', few: 'zile', other: 'de zile' })}`,
+  'alert.planBody':
+    'Nimic nu l-a reînnoit încă. Tot ce ai notat rămâne exact unde e — doar bilanțurile, antrenorul și bucătăria intră în pauză.',
+  'alert.goalTitle': 'Ai ajuns la obiectiv',
+  'alert.goalBody': (weight) =>
+    `Ultima cântărire a arătat ${weight}, adică exact obiectivul pe care ți l-ai propus. Merită să-l alegi pe următorul — să-ți menții greutatea e un obiectiv în sine, iar aplicația poate ținti spre el.`,
+  'alert.streakTitles': [
+    'O săptămână, în fiecare zi',
+    'Două săptămâni, în fiecare zi',
+    'O lună, în fiecare zi',
+    'Două luni la rând',
+    'O sută de zile',
+    'Două sute de zile',
+    'Un an, în fiecare zi',
+  ],
+  'alert.streakBody': (days) =>
+    `${p.ro(days, { one: 'zi notată', few: 'zile notate', other: 'de zile notate' })} la rând. N-ai nimic de făcut — constanța e cea care dă sens fiecărei cifre din ecranul de progres.`,
+  'alert.recapTitle': (kcal, target) => `${kcal} din ${target} kcal`,
+  'alert.recapOnTarget': 'Fix la țintă.',
+  'alert.recapUnder': (kcal) => `Îți mai rămân ${kcal} kcal.`,
+  'alert.recapOver': (kcal) => `${kcal} kcal peste țintă.`,
+  'alert.recapProtein': (got, target) => `Proteine: ${got}g din ${target}g.`,
+
+  'layout.tagline': 'Day So Far — jurnalul de calorii cu care vorbești.',
+  'layout.pasteLink': 'Sau copiază asta în browser:',
+  'layout.unsubscribePrompt': 'Nu vrei să le mai primești?',
+  'layout.unsubscribeAction': 'Oprește e-mailurile săptămânale',
+  'layout.onTarget': 'la țintă',
+
+  'common.ifNotYou':
+    'Dacă nu ai fost tu, schimbă-ți parola acum — iar dacă nu mai poți intra, răspunde la acest e-mail.',
+
+  'verify.subject': (code) => `${code} e codul tău de confirmare pentru Day So Far`,
+  'verify.preheader': (code) => `Introdu ${code} ca să termini de configurat contul.`,
+  'verify.heading': 'Confirmă-ți e-mailul',
+  // „Bun venit” does not agree with the reader, unlike „binevenit(ă)”.
+  'verify.intro': 'Bun venit în Day So Far. Introdu acest cod ca să termini de configurat contul:',
+  'verify.codeNote':
+    'Codul e valabil 24 de ore și merge de cel mult cinci ori. Dacă ceri unul nou, îl înlocuiește pe acesta.',
+  'verify.buttonHint':
+    'Citești asta pe dispozitivul pe care ți-ai făcut contul? Butonul face același lucru, fără să tastezi nimic.',
+  'verify.button': 'Confirmă e-mailul',
+  'verify.notYou':
+    'Dacă nu ți-ai creat un cont, nu s-a configurat nimic pe numele tău; ignoră acest mesaj și adresa va fi eliberată.',
+
+  'reset.subject': 'Resetează-ți parola',
+  'reset.preheader': (minutes) =>
+    `Alege o parolă nouă. Linkul e valabil ${p.ro(minutes, { one: 'minut', few: 'minute', other: 'de minute' })}.`,
+  'reset.intro':
+    'Cineva a cerut resetarea parolei pentru acest cont. Dacă ai fost tu, alege una nouă aici.',
+  'reset.button': 'Alege o parolă nouă',
+  'reset.expiry': (minutes) =>
+    `Linkul expiră în ${p.ro(minutes, { one: 'minut', few: 'minute', other: 'de minute' })} și poate fi folosit o singură dată.`,
+  'reset.notYou':
+    'Dacă nu ai fost tu, poți ignora acest mesaj — parola nu s-a schimbat și nimeni nu poate intra fără acest link.',
+
+  'changed.subject': 'Parola ta a fost schimbată',
+  'changed.preheader': 'Toate celelalte dispozitive au fost deconectate.',
+  'changed.body':
+    'Parola contului tău tocmai a fost schimbată, iar toate dispozitivele care erau conectate au fost deconectate.',
+  'changed.whenLabel': 'Data schimbării',
+
+  'signin.subject': 'Conectare nouă la Day So Far',
+  'signin.preheader': (device) => `S-a conectat un dispozitiv pe care nu l-am mai văzut — ${device}.`,
+  'signin.heading': 'Conectare nouă',
+  'signin.body': 'Contul tău a fost accesat de pe un dispozitiv pe care nu l-am mai văzut.',
+  'signin.whenLabel': 'Când',
+  'signin.deviceLabel': 'Dispozitiv',
+  'signin.ipLabel': 'Adresă IP',
+  'signin.wasYou':
+    'Dacă ai fost tu, nu trebuie să faci nimic — nu vei mai primi acest mesaj pentru același browser.',
+
+  'deleted.subject': 'Contul tău a fost șters',
+  'deleted.preheader': 'Tot ce era în el a dispărut. Acesta e ultimul e-mail de la noi.',
+  'deleted.intro':
+    'Contul tău și tot ce era în el au fost șterse definitiv. Pentru evidența ta, a fost vorba de:',
+  'deleted.mealsLabel': 'Mese notate',
+  'deleted.mealsValue': (n) => p.ro(n, { one: 'înregistrare', few: 'înregistrări', other: 'de înregistrări' }),
+  'deleted.messagesLabel': 'Mesaje',
+  'deleted.messagesValue': (n) => p.ro(n, { one: 'mesaj', few: 'mesaje', other: 'de mesaje' }),
+  'deleted.photosLabel': 'Poze',
+  'deleted.photosValue': (n) => p.ro(n, { one: 'poză', few: 'poze', other: 'de poze' }),
+  'deleted.nothingKept':
+    'Nu s-a păstrat nimic și nimic nu poate fi recuperat, nici măcar de noi. Acesta e ultimul e-mail pe care îl vei primi.',
+  'deleted.thanks': 'Mulțumim că i-ai dat o șansă.',
+
+  // „Ai fost deconectat(ă)” would agree with the reader; the access is what stopped.
+  'suspended.subject': 'Contul tău a fost suspendat',
+  'suspended.preheader': 'Accesul a fost oprit pe toate dispozitivele. Datele tale sunt neatinse.',
+  'suspended.body':
+    'Un administrator ți-a suspendat contul, așa că accesul a fost oprit peste tot și deocamdată nu te poți conecta din nou.',
+  'suspended.dataSafe':
+    'Nu s-a șters nimic — fiecare masă, poză și conversație e exact unde ai lăsat-o și revine odată cu contul.',
+  'suspended.mistake': 'Răspunde la acest e-mail dacă crezi că e o greșeală.',
+
+  'restored.subject': 'Contul tău e din nou activ',
+  'restored.preheader': 'Te poți conecta din nou și totul e unde l-ai lăsat.',
+  'restored.body':
+    'Suspendarea contului tău a fost ridicată. Te poți conecta din nou și nu s-a pierdut nimic cât timp a fost oprit.',
+  'restored.button': 'Conectează-te',
+
+  'nudge.heading': 'O notă scurtă',
+  'nudge.button': 'Deschide jurnalul',
+
+  'push.reviewTitle': 'Bilanțul săptămânii e gata',
+  'push.reviewBody': (name) => `${name}, iată cum a fost săptămâna.`,
+  'push.reviewBodyNoName': 'Iată cum a fost săptămâna.',
+  'push.coachCommented': (name) => `${name} a lăsat un comentariu`,
+  'push.coachCommentedNoName': 'Antrenorul tău a lăsat un comentariu',
+};
+
+const uk: EmailMessages = {
+  'review.subject': (range) => `Твій тиждень: ${range}`,
+  'review.heading': 'Огляд минулого тижня',
+  // Ukrainian letters open with «!», and a name cannot be put in the vocative for us.
+  'review.greeting': (name) => `Привіт, ${name}!`,
+  'review.greetingNoName': 'Привіт!',
+  'review.daysLogged': 'Днів із записами',
+  'review.sameAsBefore': 'як і тижнем раніше',
+  'review.weekBefore': (n) => `${n} тижнем раніше`,
+  'review.averageADay': 'У середньому на день',
+  'review.daysOnTarget': 'Днів у нормі',
+  'review.withinTarget': (kcal) => `у межах 10% від ${kcal} kcal`,
+  'review.weight': 'Вага',
+  'review.acrossTheWeek': 'за тиждень',
+  'review.burnedOver': (sessions) =>
+    `Спалено за ${p.uk(sessions, { one: 'тренування', few: 'тренування', many: 'тренувань', other: 'тренування' })}`,
+  'review.onTopOfTarget': 'понад норму',
+  'review.proteinADay': 'Білка на день',
+  'review.proteinTarget': (grams) => `норма ${grams} g`,
+  'review.howItRead': 'Як усе було',
+  'review.onRepeat': 'Найчастіше',
+  'review.times': (n) => p.uk(n, { one: 'раз', few: 'рази', many: 'разів', other: 'разу' }),
+  'review.readWholeReview': 'Читати весь огляд',
+  'review.nothingThisWeek': 'Цього тижня нічого не записано.',
+  'review.stripCaption': (logged, hits) =>
+    `${p.uk(logged, { one: 'день', few: 'дні', many: 'днів', other: 'дня' })} із записами, з них ${hits} — у межах 10% від норми.`,
+  'review.summaryNoMean': (days) =>
+    `${p.uk(days, { one: 'день', few: 'дні', many: 'днів', other: 'дня' })} із записами.`,
+  'review.summary': (days, kcal, weight) =>
+    `${p.uk(days, { one: 'день', few: 'дні', many: 'днів', other: 'дня' })} із записами, у середньому ${kcal} kcal${weight}.`,
+  'review.summaryWeight': (delta) => `, вага ${delta}`,
+  'review.weekdays': ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'],
+
+  'review.averageLevel': 'так само, як тижнем раніше',
+  'review.averageUp': (kcal) => `на ${kcal} більше, ніж тижнем раніше`,
+  'review.averageDown': (kcal) => `на ${kcal} менше, ніж тижнем раніше`,
+  'review.targetMoved': (kcal) => `Твоя норма тепер ${kcal} kcal`,
+  // Intl hands over the standalone nominative («серпень»); a date needs the
+  // genitive («10–16 серпня»). Anything not in the table passes through.
+  'review.dayMonth': (days, month) =>
+    `${days} ${
+      (
+        {
+          січень: 'січня',
+          лютий: 'лютого',
+          березень: 'березня',
+          квітень: 'квітня',
+          травень: 'травня',
+          червень: 'червня',
+          липень: 'липня',
+          серпень: 'серпня',
+          вересень: 'вересня',
+          жовтень: 'жовтня',
+          листопад: 'листопада',
+          грудень: 'грудня',
+        } as Record<string, string>
+      )[month] ?? month
+    }`,
+
+  'alert.planEnds': (plan, when) => `Твій тариф ${plan} закінчується ${when}`,
+  'alert.expiryToday': 'сьогодні',
+  'alert.expiryTomorrow': 'завтра',
+  'alert.expiryInDays': (days) =>
+    `через ${p.uk(days, { one: 'день', few: 'дні', many: 'днів', other: 'дня' })}`,
+  'alert.planBody':
+    'Його поки ніщо не поновило. Усе записане лишається на своїх місцях — на паузу стануть лише огляди, робота з тренером і кухня.',
+  'alert.goalTitle': 'Мету досягнуто',
+  'alert.goalBody': (weight) =>
+    `Останнє зважування — ${weight}, а це і є твоя мета. Варто обрати наступну: утримувати вагу — теж окрема ціль, і застосунок може на неї орієнтуватися.`,
+  'alert.streakTitles': [
+    'Тиждень щодня',
+    'Два тижні щодня',
+    'Місяць щодня',
+    'Два місяці поспіль',
+    'Сто днів',
+    'Двісті днів',
+    'Рік щодня',
+  ],
+  'alert.streakBody': (days) =>
+    `${p.uk(days, { one: 'день', few: 'дні', many: 'днів', other: 'дня' })} із записами поспіль. Робити нічого не треба — саме регулярність надає сенсу кожній цифрі на екрані прогресу.`,
+  'alert.recapTitle': (kcal, target) => `${kcal} з ${target} kcal`,
+  'alert.recapOnTarget': 'Точно в нормі.',
+  'alert.recapUnder': (kcal) => `Ще ${kcal} kcal у запасі.`,
+  'alert.recapOver': (kcal) => `${kcal} kcal понад норму.`,
+  'alert.recapProtein': (got, target) => `Білок: ${got}g з ${target}g.`,
+
+  'layout.tagline': 'Day So Far — щоденник калорій, з яким просто говориш.',
+  'layout.pasteLink': 'Або встав це посилання в браузер:',
+  'layout.unsubscribePrompt': 'Не хочеш таких листів?',
+  'layout.unsubscribeAction': 'Вимкнути щотижневі листи',
+  'layout.onTarget': 'у нормі',
+
+  // "If this was not you" needs a gendered past tense; "if you know nothing of it" does not.
+  'common.ifNotYou':
+    'Якщо ти про це не знаєш, негайно зміни пароль — а якщо не вдається увійти, відповідай на цей лист.',
+
+  'verify.subject': (code) => `${code} — твій код підтвердження для Day So Far`,
+  'verify.preheader': (code) => `Введи ${code}, щоб завершити налаштування акаунта.`,
+  'verify.heading': 'Підтвердь пошту',
+  'verify.intro': 'Вітаємо в Day So Far. Введи цей код, щоб завершити налаштування акаунта:',
+  'verify.codeNote':
+    'Код діє 24 години, і ввести його можна щонайбільше п’ять разів. Новий код замінює попередній.',
+  'verify.buttonHint':
+    'Читаєш це на пристрої, з якого створено акаунт? Кнопка зробить те саме — без введення коду.',
+  'verify.button': 'Підтвердити пошту',
+  'verify.notYou':
+    'Якщо акаунт створено не тобою, на твоє ім’я нічого не оформлено — просто проігноруй цей лист, і адреса звільниться.',
+
+  'reset.subject': 'Скидання пароля',
+  'reset.preheader': (minutes) =>
+    `Обери новий пароль. Посилання діє ${p.uk(minutes, { one: 'хвилину', few: 'хвилини', many: 'хвилин', other: 'хвилини' })}.`,
+  'reset.intro':
+    'Хтось попросив скинути пароль до цього акаунта. Якщо це ти, обери новий тут.',
+  'reset.button': 'Обрати новий пароль',
+  'reset.expiry': (minutes) =>
+    `Посилання перестане діяти через ${p.uk(minutes, { one: 'хвилину', few: 'хвилини', many: 'хвилин', other: 'хвилини' })}, і скористатися ним можна лише раз.`,
+  'reset.notYou':
+    'Якщо це не ти, просто проігноруй цей лист — пароль не змінився, і без цього посилання ніхто не ввійде.',
+
+  'changed.subject': 'Пароль змінено',
+  'changed.preheader': 'На всіх інших пристроях виконано вихід.',
+  'changed.body':
+    'Пароль до твого акаунта щойно змінено — і на всіх пристроях, де був виконаний вхід, тепер виконано вихід.',
+  'changed.whenLabel': 'Коли змінено',
+
+  'signin.subject': 'Новий вхід у Day So Far',
+  'signin.preheader': (device) => `Вхід із пристрою, якого ми ще не бачили, — ${device}.`,
+  'signin.heading': 'Новий вхід',
+  'signin.body': 'У твій акаунт увійшли з пристрою, якого ми раніше не бачили.',
+  'signin.whenLabel': 'Коли',
+  'signin.deviceLabel': 'Пристрій',
+  'signin.ipLabel': 'IP-адреса',
+  'signin.wasYou':
+    'Якщо це ти, нічого робити не треба — з цього самого браузера такий лист більше не прийде.',
+
+  'deleted.subject': 'Твій акаунт видалено',
+  'deleted.preheader': 'Усе, що в ньому було, стерто. Це останній лист від нас.',
+  'deleted.intro':
+    'Твій акаунт і все, що в ньому було, остаточно видалено. Для довідки — ось що там було:',
+  'deleted.mealsLabel': 'Записані прийоми їжі',
+  'deleted.mealsValue': (n) => p.uk(n, { one: 'запис', few: 'записи', many: 'записів', other: 'запису' }),
+  'deleted.messagesLabel': 'Повідомлення',
+  'deleted.messagesValue': (n) =>
+    p.uk(n, { one: 'повідомлення', few: 'повідомлення', many: 'повідомлень', other: 'повідомлення' }),
+  'deleted.photosLabel': 'Фото',
+  'deleted.photosValue': (n) => p.uk(n, { one: 'фото', few: 'фото', many: 'фото', other: 'фото' }),
+  'deleted.nothingKept':
+    'Нічого не збережено, і відновити нічого не вийде — навіть нам. Це останній лист, який ти отримаєш.',
+  // «Дякуємо, що спробував / спробувала» would gender the reader.
+  'deleted.thanks': 'Дякуємо за спробу.',
+
+  'suspended.subject': 'Твій акаунт призупинено',
+  'suspended.preheader': 'Вихід виконано на всіх пристроях. Твої дані не зачеплено.',
+  'suspended.body':
+    'Твій акаунт призупинено адміністратором, тож вихід виконано скрізь, і поки що увійти знову не вийде.',
+  'suspended.dataSafe':
+    'Нічого не видалено — кожен прийом їжі, фото й розмова лишаються на своїх місцях і повернуться разом з акаунтом.',
+  'suspended.mistake': 'Якщо вважаєш, що це помилка, відповідай на цей лист.',
+
+  'restored.subject': 'Твій акаунт знову активний',
+  'restored.preheader': 'Можна знову входити — усе на своїх місцях.',
+  'restored.body':
+    'Призупинення акаунта скасовано. Можна знову входити, і за час паузи нічого не загубилося.',
+  'restored.button': 'Увійти',
+
+  'nudge.heading': 'Коротка підказка',
+  'nudge.button': 'Відкрити щоденник',
+
+  'push.reviewTitle': 'Огляд тижня готовий',
+  'push.reviewBody': (name) => `${name}, ось як минув тиждень.`,
+  'push.reviewBodyNoName': 'Ось як минув тиждень.',
+  'push.coachCommented': (name) => `${name}: новий коментар`,
+  'push.coachCommentedNoName': 'Новий коментар від тренера',
+};
+
+const sr: EmailMessages = {
+  'review.subject': (range) => `Твоја седмица: ${range}`,
+  'review.heading': 'Прошла седмица, укратко',
+  'review.greeting': (name) => `Здраво, ${name},`,
+  'review.greetingNoName': 'Здраво,',
+  'review.daysLogged': 'Уписани дани',
+  'review.sameAsBefore': 'исто као претходне седмице',
+  'review.weekBefore': (n) => `претходне седмице: ${n}`,
+  'review.averageADay': 'Дневни просек',
+  'review.daysOnTarget': 'Дани у циљу',
+  'review.withinTarget': (kcal) => `у оквиру 10% од ${kcal} kcal`,
+  'review.weight': 'Тежина',
+  'review.acrossTheWeek': 'током седмице',
+  'review.burnedOver': (sessions) =>
+    `Сагорело за ${p.sr(sessions, { one: 'тренинг', few: 'тренинга', other: 'тренинга' })}`,
+  'review.onTopOfTarget': 'поврх циља',
+  'review.proteinADay': 'Протеини дневно',
+  'review.proteinTarget': (grams) => `циљ ${grams} g`,
+  'review.howItRead': 'Како је прошло',
+  'review.onRepeat': 'Најчешће',
+  'review.times': (n) => p.sr(n, { one: 'пут', few: 'пута', other: 'пута' }),
+  'review.readWholeReview': 'Прочитај цео преглед',
+  'review.nothingThisWeek': 'Ове седмице ништа није уписано.',
+  'review.stripCaption': (logged, hits) =>
+    `${p.sr(logged, { one: 'уписан дан', few: 'уписана дана', other: 'уписаних дана' })}, од тога ${hits} у оквиру 10% од циља.`,
+  'review.summaryNoMean': (days) =>
+    `${p.sr(days, { one: 'уписан дан', few: 'уписана дана', other: 'уписаних дана' })}.`,
+  'review.summary': (days, kcal, weight) =>
+    `${p.sr(days, { one: 'уписан дан', few: 'уписана дана', other: 'уписаних дана' })}, у просеку ${kcal} kcal${weight}.`,
+  'review.summaryWeight': (delta) => `, тежина ${delta}`,
+  'review.weekdays': ['нед', 'пон', 'уто', 'сре', 'чет', 'пет', 'суб'],
+
+  'review.averageLevel': 'исто као претходне седмице',
+  'review.averageUp': (kcal) => `${kcal} више него претходне седмице`,
+  'review.averageDown': (kcal) => `${kcal} мање него претходне седмице`,
+  'review.targetMoved': (kcal) => `Циљ ти је сада ${kcal} kcal`,
+  // Serbian puts a dot after every day number: "10.–16. август", "16. август – 2. септембар".
+  // Only a number that ends at a dash or at the end is a day, so nothing else gets a dot.
+  'review.dayMonth': (days, month) => `${String(days).replace(/(\d+)(?=[–-]|$)/g, '$1.')} ${month}`,
+
+  'alert.planEnds': (plan, when) => `Твој пакет ${plan} истиче ${when}`,
+  'alert.expiryToday': 'данас',
+  'alert.expiryTomorrow': 'сутра',
+  'alert.expiryInDays': (days) => `за ${p.sr(days, { one: 'дан', few: 'дана', other: 'дана' })}`,
+  'alert.planBody':
+    'Још га ништа није обновило. Све што је уписано остаје тачно где јесте — утихну само прегледи, рад са тренером и кухиња.',
+  // "Стигао/стигла си" is gendered; the goal is the subject instead.
+  'alert.goalTitle': 'Циљ је достигнут',
+  'alert.goalBody': (weight) =>
+    `Последње мерење показало је ${weight}, а то је твој циљ. Вреди изабрати следећи — задржати тежину је циљ сам по себи, и апликација може да ти помогне у томе.`,
+  'alert.streakTitles': [
+    'Седмица, сваки дан',
+    'Две седмице, сваки дан',
+    'Месец, сваки дан',
+    'Два месеца заредом',
+    'Сто дана',
+    'Двеста дана',
+    'Година, сваки дан',
+  ],
+  'alert.streakBody': (days) =>
+    `${p.sr(days, { one: 'дан', few: 'дана', other: 'дана' })} уписа заредом. Не треба ништа да радиш — доследност је оно што свакој бројци на екрану напретка даје смисао.`,
+  'alert.recapTitle': (kcal, target) => `${kcal} од ${target} kcal`,
+  'alert.recapOnTarget': 'Тачно у циљу.',
+  'alert.recapUnder': (kcal) => `Преостаје ${kcal} kcal.`,
+  'alert.recapOver': (kcal) => `${kcal} kcal преко циља.`,
+  'alert.recapProtein': (got, target) => `Протеини ${got}g од ${target}g.`,
+
+  'layout.tagline': 'Day So Far — дневник калорија са којим разговараш.',
+  'layout.pasteLink': 'Или налепи ову адресу у прегледач:',
+  'layout.unsubscribePrompt': 'Не желиш ове имејлове?',
+  'layout.unsubscribeAction': 'Искључи седмичне имејлове',
+  'layout.onTarget': 'у циљу',
+
+  'common.ifNotYou':
+    'Ако ово ниси ти, одмах промени лозинку — а ако не можеш да уђеш, одговори на овај имејл.',
+
+  'verify.subject': (code) => `${code} је твој код за потврду за Day So Far`,
+  'verify.preheader': (code) => `Унеси ${code} да завршиш подешавање налога.`,
+  'verify.heading': 'Потврди имејл',
+  // "Добро дошао/дошла" needs a gender the server does not know.
+  'verify.intro': 'Драго нам је што си ту. Унеси овај код да завршиш подешавање налога:',
+  'verify.codeNote':
+    'Код важи 24 сата и може да се употреби највише пет пута. Ако затражиш нови, овај престаје да важи.',
+  'verify.buttonHint':
+    'Читаш ово на уређају са ког је налог направљен? Дугме ради исто, без куцања.',
+  'verify.button': 'Потврди имејл',
+  'verify.notYou':
+    'Ако овај налог није твој, ништа није отворено на твоје име; занемари ову поруку и адреса ће бити ослобођена.',
+
+  'reset.subject': 'Постави нову лозинку',
+  'reset.preheader': (minutes) =>
+    `Изабери нову лозинку. Линк важи ${p.sr(minutes, { one: 'минут', few: 'минута', other: 'минута' })}.`,
+  'reset.intro':
+    'Неко је затражио нову лозинку за овај налог. Ако си то ти, изабери нову овде.',
+  'reset.button': 'Изабери нову лозинку',
+  'reset.expiry': (minutes) =>
+    `Линк истиче за ${p.sr(minutes, { one: 'минут', few: 'минута', other: 'минута' })} и може да се употреби само једном.`,
+  'reset.notYou':
+    'Ако то ниси ти, само занемари ову поруку — лозинка није промењена и нико не може да уђе без овог линка.',
+
+  'changed.subject': 'Лозинка ти је промењена',
+  'changed.preheader': 'Сви остали уређаји су одјављени.',
+  'changed.body':
+    'Лозинка за твој налог је управо промењена, а сви уређаји који су били пријављени сада су одјављени.',
+  'changed.whenLabel': 'Промењено',
+
+  'signin.subject': 'Нова пријава на Day So Far',
+  'signin.preheader': (device) => `Пријављен је уређај који раније нисмо видели — ${device}.`,
+  'signin.heading': 'Нова пријава',
+  'signin.body': 'На твој налог се пријавио уређај који раније нисмо видели.',
+  'signin.whenLabel': 'Када',
+  'signin.deviceLabel': 'Уређај',
+  'signin.ipLabel': 'IP адреса',
+  'signin.wasYou':
+    'Ако си то ти, не треба ништа да радиш — са истог прегледача ово више нећеш добити.',
+
+  'deleted.subject': 'Твој налог је обрисан',
+  'deleted.preheader': 'Све са њега је нестало. Ово је последњи имејл од нас.',
+  'deleted.intro':
+    'Твој налог и све у њему трајно су обрисани. Ради евиденције, ово је било:',
+  'deleted.mealsLabel': 'Уписани оброци',
+  'deleted.mealsValue': (n) => p.sr(n, { one: 'унос', few: 'уноса', other: 'уноса' }),
+  'deleted.messagesLabel': 'Поруке',
+  'deleted.messagesValue': (n) => p.sr(n, { one: 'порука', few: 'поруке', other: 'порука' }),
+  'deleted.photosLabel': 'Фотографије',
+  'deleted.photosValue': (n) => p.sr(n, { one: 'фотографија', few: 'фотографије', other: 'фотографија' }),
+  'deleted.nothingKept':
+    'Ништа није задржано и ништа не може да се врати — ни ми то не можемо. Ово је последњи имејл који ћеш добити.',
+  // "Хвала што си пробао/пробала" is gendered.
+  'deleted.thanks': 'Хвала ти на поверењу.',
+
+  'suspended.subject': 'Твој налог је суспендован',
+  // "Одјављен/одјављена си" is gendered; the devices are the subject instead.
+  'suspended.preheader': 'Сви уређаји су одјављени. Подаци су ти нетакнути.',
+  'suspended.body':
+    'Администратор је суспендовао твој налог, па је приступ прекинут на свим уређајима и поновна пријава за сада није могућа.',
+  'suspended.dataSafe':
+    'Ништа није обрисано — сваки оброк, свака фотографија и сваки разговор су тачно тамо где су били и враћају се заједно са налогом.',
+  'suspended.mistake': 'Одговори на овај имејл ако мислиш да је ово грешка.',
+
+  'restored.subject': 'Твој налог је поново активан',
+  'restored.preheader': 'Можеш поново да се пријавиш и све је тамо где је било.',
+  'restored.body':
+    'Суспензија налога је укинута. Можеш поново да се пријавиш, а ништа није изгубљено док је налог био искључен.',
+  'restored.button': 'Пријави се',
+
+  'nudge.heading': 'Кратка напомена',
+  'nudge.button': 'Отвори дневник',
+
+  'push.reviewTitle': 'Твоја седмица је спремна',
+  'push.reviewBody': (name) => `${name}, ево како је прошла седмица.`,
+  'push.reviewBodyNoName': 'Ево како је прошла седмица.',
+  // The coach's gender is unknown as well, so no «коментарисао/коментарисала».
+  'push.coachCommented': (name) => `${name}: нови коментар`,
+  'push.coachCommentedNoName': 'Нови коментар од тренера',
+};
+
+const hr: EmailMessages = {
+  'review.subject': (range) => `Tvoj tjedan: ${range}`,
+  'review.heading': 'Prošli tjedan ukratko',
+  'review.greeting': (name) => `Bok, ${name},`,
+  'review.greetingNoName': 'Bok,',
+  'review.daysLogged': 'Dani s upisima',
+  'review.sameAsBefore': 'isto kao prethodni tjedan',
+  'review.weekBefore': (n) => `prethodni tjedan: ${n}`,
+  'review.averageADay': 'Prosjek po danu',
+  'review.daysOnTarget': 'Dani na cilju',
+  'review.withinTarget': (kcal) => `unutar 10% od ${kcal} kcal`,
+  'review.weight': 'Težina',
+  'review.acrossTheWeek': 'kroz tjedan',
+  'review.burnedOver': (sessions) =>
+    `Potrošeno kroz ${p.hr(sessions, { one: 'trening', few: 'treninga', other: 'treninga' })}`,
+  'review.onTopOfTarget': 'povrh cilja',
+  'review.proteinADay': 'Proteini po danu',
+  'review.proteinTarget': (grams) => `cilj ${grams} g`,
+  'review.howItRead': 'Kako je prošlo',
+  'review.onRepeat': 'Najčešće',
+  'review.times': (n) => p.hr(n, { one: 'put', few: 'puta', other: 'puta' }),
+  'review.readWholeReview': 'Pročitaj cijeli pregled',
+  'review.nothingThisWeek': 'Ovaj tjedan ništa nije upisano.',
+  'review.stripCaption': (logged, hits) =>
+    `${p.hr(logged, { one: 'dan s upisima', few: 'dana s upisima', other: 'dana s upisima' })}, od toga ${hits} unutar 10% cilja.`,
+  'review.summaryNoMean': (days) =>
+    `${p.hr(days, { one: 'dan s upisima', few: 'dana s upisima', other: 'dana s upisima' })}.`,
+  'review.summary': (days, kcal, weight) =>
+    `${p.hr(days, { one: 'dan s upisima', few: 'dana s upisima', other: 'dana s upisima' })}, u prosjeku ${kcal} kcal${weight}.`,
+  'review.summaryWeight': (delta) => `, težina ${delta}`,
+  'review.weekdays': ['ned', 'pon', 'uto', 'sri', 'čet', 'pet', 'sub'],
+
+  'review.averageLevel': 'jednako kao prethodni tjedan',
+  'review.averageUp': (kcal) => `${kcal} više nego prethodni tjedan`,
+  'review.averageDown': (kcal) => `${kcal} manje nego prethodni tjedan`,
+  'review.targetMoved': (kcal) => `Tvoj cilj sada je ${kcal} kcal`,
+  // "10. – 16. kolovoza": an ordinal dot after each day, a spaced dash, and the
+  // month in the genitive. `formatRange` hands over "10–16" (or "16") and the
+  // standalone nominative "kolovoz".
+  'review.dayMonth': (days, month) => {
+    const genitive: Record<string, string> = {
+      siječanj: 'siječnja', veljača: 'veljače', ožujak: 'ožujka', travanj: 'travnja',
+      svibanj: 'svibnja', lipanj: 'lipnja', srpanj: 'srpnja', kolovoz: 'kolovoza',
+      rujan: 'rujna', listopad: 'listopada', studeni: 'studenoga', prosinac: 'prosinca',
+    };
+    const name = String(month);
+    const dotted = String(days).replace(/(\d+)(?=–|$)/g, '$1.').replace(/\.–/g, '. – ');
+    return `${dotted} ${genitive[name.toLowerCase()] ?? name}`;
+  },
+
+  'alert.planEnds': (plan, when) => `Tvoj paket ${plan} završava ${when}`,
+  'alert.expiryToday': 'danas',
+  'alert.expiryTomorrow': 'sutra',
+  'alert.expiryInDays': (days) => `za ${p.hr(days, { one: 'dan', few: 'dana', other: 'dana' })}`,
+  'alert.planBody':
+    'Još ga ništa nije obnovilo. Sve upisano ostaje točno gdje jest — utihnut će samo pregledi, savjeti trenera i kuhinja.',
+  // "Stigao/stigla si" is gendered; the goal is not.
+  'alert.goalTitle': 'Cilj je dostignut',
+  'alert.goalBody': (weight) =>
+    `Zadnje vaganje pokazalo je ${weight} — točno tvoj zadani cilj. Vrijedi odabrati sljedeći: održavati težinu cilj je sam po sebi, a aplikacija se može usmjeriti i na to.`,
+  'alert.streakTitles': [
+    'Tjedan, svaki dan',
+    'Dva tjedna, svaki dan',
+    'Mjesec, svaki dan',
+    'Dva mjeseca zaredom',
+    'Sto dana',
+    'Dvjesto dana',
+    'Godina, svaki dan',
+  ],
+  'alert.streakBody': (days) =>
+    `${p.hr(days, { one: 'dan', few: 'dana', other: 'dana' })} zaredom s upisima. Tu ne treba ništa poduzeti — upravo zbog te redovitosti svaki broj na zaslonu napretka nešto znači.`,
+  'alert.recapTitle': (kcal, target) => `${kcal} od ${target} kcal`,
+  'alert.recapOnTarget': 'Točno na cilju.',
+  'alert.recapUnder': (kcal) => `Preostalo je ${kcal} kcal.`,
+  'alert.recapOver': (kcal) => `${kcal} kcal preko cilja.`,
+  'alert.recapProtein': (got, target) => `Proteini ${got} g od ${target} g.`,
+
+  'layout.tagline': 'Day So Far — dnevnik kalorija s kojim razgovaraš.',
+  'layout.pasteLink': 'Ili zalijepi ovo u preglednik:',
+  'layout.unsubscribePrompt': 'Ne želiš ove poruke?',
+  'layout.unsubscribeAction': 'Isključi tjedne e-poruke',
+  'layout.onTarget': 'na cilju',
+
+  // "Ako to nisi bio/bila ti" is gendered; not recognising it is not.
+  'common.ifNotYou':
+    'Ako ovo ne prepoznaješ, odmah promijeni lozinku — a ako ne možeš ući, odgovori na ovu poruku.',
+
+  'verify.subject': (code) => `${code} je tvoj kod za potvrdu računa u Day So Far`,
+  'verify.preheader': (code) => `Upiši ${code} i dovrši postavljanje računa.`,
+  'verify.heading': 'Potvrdi e-poštu',
+  // "Dobro došao/došla" asks for a gender the server does not know; a welcome
+  // offered as a noun does not.
+  'verify.intro': 'Day So Far ti želi dobrodošlicu. Upiši ovaj kod da dovršiš postavljanje računa:',
+  'verify.codeNote':
+    'Kod vrijedi 24 sata i radi najviše pet puta. Novi kod zamjenjuje ovaj.',
+  // "Na kojem si se registrirao/registrirala" is gendered; the account is not.
+  'verify.buttonHint':
+    'Čitaš ovo na istom uređaju na kojem je račun otvoren? Gumb radi isto, bez tipkanja.',
+  'verify.button': 'Potvrdi e-poštu',
+  'verify.notYou':
+    'Ako račun nije tvoj, na tvoje ime ništa nije postavljeno; zanemari ovu poruku i adresa će biti oslobođena.',
+
+  'reset.subject': 'Postavi novu lozinku',
+  // Accusative of duration: "vrijedi 1 minutu · 3 minute · 30 minuta".
+  'reset.preheader': (minutes) =>
+    `Odaberi novu lozinku. Poveznica vrijedi ${p.hr(minutes, { one: 'minutu', few: 'minute', other: 'minuta' })}.`,
+  'reset.intro':
+    'Netko je zatražio promjenu lozinke za ovaj račun. Ako si to ti, ovdje odaberi novu.',
+  'reset.button': 'Odaberi novu lozinku',
+  'reset.expiry': (minutes) =>
+    `Poveznica istječe za ${p.hr(minutes, { one: 'minutu', few: 'minute', other: 'minuta' })} i može se upotrijebiti samo jednom.`,
+  'reset.notYou':
+    'Ako to nisi ti, slobodno zanemari ovu poruku — lozinka se nije promijenila i nitko ne može ući bez ove poveznice.',
+
+  'changed.subject': 'Lozinka ti je promijenjena',
+  'changed.preheader': 'Svi ostali uređaji su odjavljeni.',
+  'changed.body':
+    'Lozinka tvog računa upravo je promijenjena, a svi uređaji koji su bili prijavljeni sada su odjavljeni.',
+  'changed.whenLabel': 'Promijenjeno',
+
+  'signin.subject': 'Nova prijava u Day So Far',
+  'signin.preheader': (device) => `Prijavio se uređaj koji dosad nismo vidjeli — ${device}.`,
+  'signin.heading': 'Nova prijava',
+  'signin.body': 'Na tvoj račun prijavio se uređaj koji dosad nismo vidjeli.',
+  'signin.whenLabel': 'Kada',
+  'signin.deviceLabel': 'Uređaj',
+  'signin.ipLabel': 'IP adresa',
+  'signin.wasYou':
+    'Ako si to ti, ne treba ništa poduzeti — s istog preglednika ovo više nećeš dobiti.',
+
+  'deleted.subject': 'Tvoj račun je izbrisan',
+  'deleted.preheader': 'Sve s njega je nestalo. Ovo je posljednja poruka od nas.',
+  'deleted.intro':
+    'Tvoj račun i sve u njemu trajno su izbrisani. Za tvoju evidenciju, to je bilo:',
+  'deleted.mealsLabel': 'Upisani obroci',
+  'deleted.mealsValue': (n) => p.hr(n, { one: 'unos', few: 'unosa', other: 'unosa' }),
+  'deleted.messagesLabel': 'Poruke',
+  'deleted.messagesValue': (n) => p.hr(n, { one: 'poruka', few: 'poruke', other: 'poruka' }),
+  'deleted.photosLabel': 'Fotografije',
+  'deleted.photosValue': (n) => p.hr(n, { one: 'fotografija', few: 'fotografije', other: 'fotografija' }),
+  'deleted.nothingKept':
+    'Ništa nije zadržano i ništa se ne može vratiti, ni s naše strane. Ovo je posljednja poruka koju ćeš primiti.',
+  // "Hvala što si isprobao/isprobala" is gendered.
+  'deleted.thanks': 'Hvala ti na prilici.',
+
+  'suspended.subject': 'Tvoj račun je suspendiran',
+  // "Odjavljen/odjavljena si" is gendered; the sign-in is what ended.
+  'suspended.preheader': 'Prijava je prekinuta na svim uređajima. Tvoji podaci su netaknuti.',
+  'suspended.body':
+    'Administrator je suspendirao tvoj račun, pa je prijava prekinuta posvuda i zasad se ne možeš ponovno prijaviti.',
+  'suspended.dataSafe':
+    'Ništa nije izbrisano — svaki obrok, fotografija i razgovor točno su ondje gdje su i bili, i vraćaju se zajedno s računom.',
+  'suspended.mistake': 'Odgovori na ovu poruku ako misliš da je riječ o pogrešci.',
+
+  'restored.subject': 'Tvoj račun ponovno je aktivan',
+  'restored.preheader': 'Možeš se ponovno prijaviti i sve je ondje gdje je i bilo.',
+  'restored.body':
+    'Suspenzija tvog računa je ukinuta. Možeš se ponovno prijaviti, a dok je račun bio isključen, ništa nije izgubljeno.',
+  'restored.button': 'Prijavi se',
+
+  'nudge.heading': 'Kratka napomena',
+  'nudge.button': 'Otvori dnevnik',
+
+  'push.reviewTitle': 'Tvoj tjedan je spreman',
+  'push.reviewBody': (name) => `${name}, evo kako je prošao tjedan.`,
+  'push.reviewBodyNoName': 'Evo kako je prošao tjedan.',
+  // "je komentirao/komentirala" would gender the coach, whom the server knows
+  // only by name.
+  'push.coachCommented': (name) => `${name}: novi komentar`,
+  'push.coachCommentedNoName': 'Novi komentar od tvog trenera',
+};
+
+const cs: EmailMessages = {
+  'review.subject': (range) => `Tvůj týden: ${range}`,
+  'review.heading': 'Minulý týden v kostce',
+  // The vocative cannot be formed from a display name; automated Czech mail
+  // greets in the nominative.
+  'review.greeting': (name) => `Ahoj ${name},`,
+  'review.greetingNoName': 'Ahoj,',
+  'review.daysLogged': 'Zapsané dny',
+  'review.sameAsBefore': 'stejně jako týden předtím',
+  'review.weekBefore': (n) => `předchozí týden ${n}`,
+  'review.averageADay': 'Průměr za den',
+  'review.daysOnTarget': 'Dny v cíli',
+  'review.withinTarget': (kcal) => `do 10 % od ${kcal} kcal`,
+  'review.weight': 'Váha',
+  'review.acrossTheWeek': 'za týden',
+  'review.burnedOver': (sessions) =>
+    `Spáleno za ${p.cs(sessions, { one: 'cvičení', few: 'cvičení', many: 'cvičení', other: 'cvičení' })}`,
+  'review.onTopOfTarget': 'nad rámec cíle',
+  'review.proteinADay': 'Bílkoviny za den',
+  'review.proteinTarget': (grams) => `cíl ${grams} g`,
+  'review.howItRead': 'Jak to vypadalo',
+  'review.onRepeat': 'Nejčastěji',
+  'review.times': (n) => `${n}×`,
+  'review.readWholeReview': 'Přečíst celý přehled',
+  'review.nothingThisWeek': 'Tento týden nic zapsáno.',
+  'review.stripCaption': (logged, hits) =>
+    `${p.cs(logged, { one: 'zapsaný den', few: 'zapsané dny', many: 'zapsaného dne', other: 'zapsaných dní' })}, z toho ${hits} do 10 % od cíle.`,
+  'review.summaryNoMean': (days) =>
+    `${p.cs(days, { one: 'zapsaný den', few: 'zapsané dny', many: 'zapsaného dne', other: 'zapsaných dní' })}.`,
+  'review.summary': (days, kcal, weight) =>
+    `${p.cs(days, { one: 'zapsaný den', few: 'zapsané dny', many: 'zapsaného dne', other: 'zapsaných dní' })}, v průměru ${kcal} kcal${weight}.`,
+  'review.summaryWeight': (delta) => `, váha ${delta}`,
+  'review.weekdays': ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'],
+
+  'review.averageLevel': 'na stejné úrovni jako týden předtím',
+  'review.averageUp': (kcal) => `o ${kcal} víc než týden předtím`,
+  'review.averageDown': (kcal) => `o ${kcal} méně než týden předtím`,
+  'review.targetMoved': (kcal) => `Tvůj cíl se posunul na ${kcal} kcal`,
+  // Czech dates are ordinal and put the month in the genitive: "10.–16. srpna".
+  // `month` arrives from Intl in the nominative ("srpen"), so it is mapped here;
+  // anything unrecognised passes through unchanged.
+  'review.dayMonth': (days, month) =>
+    `${String(days).replace(/(\d)(?=–|$)/g, '$1.')} ${
+      ({
+        leden: 'ledna',
+        únor: 'února',
+        březen: 'března',
+        duben: 'dubna',
+        květen: 'května',
+        červen: 'června',
+        červenec: 'července',
+        srpen: 'srpna',
+        září: 'září',
+        říjen: 'října',
+        listopad: 'listopadu',
+        prosinec: 'prosince',
+      } as Record<string, string>)[month] ?? month
+    }`,
+
+  'alert.planEnds': (plan, when) => `Tvůj tarif ${plan} končí ${when}`,
+  'alert.expiryToday': 'dnes',
+  'alert.expiryTomorrow': 'zítra',
+  'alert.expiryInDays': (days) => `za ${p.cs(days, { one: 'den', few: 'dny', many: 'dne', other: 'dní' })}`,
+  'alert.planBody':
+    'Zatím ho nic neobnovilo. Všechno, co máš zapsané, zůstává přesně tam, kde je – utichnou jen přehledy, trenér a kuchyně.',
+  'alert.goalTitle': 'Jsi v cíli',
+  // "cíl, který sis nastavil" would gender the reader.
+  'alert.goalBody': (weight) =>
+    `Poslední vážení ukázalo ${weight}, a to je tvůj cíl. Stojí za to zvolit další – udržet váhu je cíl sám o sobě a aplikace na něj umí mířit.`,
+  'alert.streakTitles': [
+    'Týden, každý den',
+    'Dva týdny, každý den',
+    'Měsíc, každý den',
+    'Dva měsíce v kuse',
+    'Sto dní',
+    'Dvě stě dní',
+    'Rok, každý den',
+  ],
+  'alert.streakBody': (days) =>
+    `${p.cs(days, { one: 'den', few: 'dny', many: 'dne', other: 'dní' })} zápisů v řadě. Nic s tím dělat nemusíš – právě díky pravidelnosti má každé číslo na obrazovce pokroku nějaký smysl.`,
+  'alert.recapTitle': (kcal, target) => `${kcal} z ${target} kcal`,
+  'alert.recapOnTarget': 'Přesně v cíli.',
+  'alert.recapUnder': (kcal) => `V rezervě ${kcal} kcal.`,
+  'alert.recapOver': (kcal) => `${kcal} kcal nad cílem.`,
+  'alert.recapProtein': (got, target) => `Bílkoviny ${got}g z ${target}g.`,
+
+  'layout.tagline': 'Day So Far – kalorický deník, se kterým si povídáš.',
+  'layout.pasteLink': 'Nebo tohle vlož do prohlížeče:',
+  'layout.unsubscribePrompt': 'Nechceš je dostávat?',
+  'layout.unsubscribeAction': 'Vypnout týdenní e-maily',
+  'layout.onTarget': 'v cíli',
+
+  // "Pokud jsi to nebyl ty" is gendered; "if you know nothing about it" is not.
+  'common.ifNotYou':
+    'Pokud o tom nevíš, hned si změň heslo – a pokud se nemůžeš přihlásit, odpověz na tento e-mail.',
+
+  'verify.subject': (code) => `${code} je tvůj ověřovací kód pro Day So Far`,
+  'verify.preheader': (code) => `Zadej ${code} a dokonči nastavení účtu.`,
+  'verify.heading': 'Ověř svůj e-mail',
+  // "Vítej" is an imperative and carries no gender, unlike "vítán".
+  'verify.intro': 'Vítej v Day So Far. Zadej tento kód a dokonči nastavení účtu:',
+  'verify.codeNote':
+    'Kód platí 24 hodin a dá se použít nejvýš pětkrát. Když si řekneš o nový, tento přestane platit.',
+  'verify.buttonHint':
+    'Čteš to na stejném zařízení, na kterém proběhla registrace? Tlačítko udělá totéž bez opisování.',
+  'verify.button': 'Ověřit e-mail',
+  'verify.notYou':
+    'Pokud o žádném účtu nevíš, nic se na tvé jméno nezaložilo; tenhle e-mail ignoruj a adresa se uvolní.',
+
+  'reset.subject': 'Obnovení hesla',
+  'reset.preheader': (minutes) =>
+    `Zvol si nové heslo. Odkaz platí ${p.cs(minutes, { one: 'minutu', few: 'minuty', many: 'minuty', other: 'minut' })}.`,
+  'reset.intro':
+    'Někdo požádal o obnovení hesla k tomuto účtu. Pokud to byla tvoje žádost, zvol si tady nové.',
+  'reset.button': 'Zvolit nové heslo',
+  'reset.expiry': (minutes) =>
+    `Odkaz vyprší za ${p.cs(minutes, { one: 'minutu', few: 'minuty', many: 'minuty', other: 'minut' })} a použít se dá jen jednou.`,
+  'reset.notYou':
+    'Pokud o tom nevíš, klidně to ignoruj – heslo se nezměnilo a bez tohoto odkazu se nikdo nepřihlásí.',
+
+  'changed.subject': 'Heslo bylo změněno',
+  'changed.preheader': 'Všechna ostatní zařízení byla odhlášena.',
+  'changed.body':
+    'Heslo k tvému účtu bylo právě změněno a všechna přihlášená zařízení byla odhlášena.',
+  'changed.whenLabel': 'Změněno',
+
+  'signin.subject': 'Nové přihlášení do Day So Far',
+  'signin.preheader': (device) => `Přihlásilo se zařízení, které jsme ještě neviděli – ${device}.`,
+  'signin.heading': 'Nové přihlášení',
+  'signin.body': 'K tvému účtu se přihlásilo zařízení, které jsme ještě neviděli.',
+  'signin.whenLabel': 'Kdy',
+  'signin.deviceLabel': 'Zařízení',
+  'signin.ipLabel': 'IP adresa',
+  'signin.wasYou':
+    'Pokud to bylo tvoje přihlášení, nemusíš nic dělat – ze stejného prohlížeče už tenhle e-mail nepřijde.',
+
+  'deleted.subject': 'Tvůj účet byl smazán',
+  'deleted.preheader': 'Všechno v něm je pryč. Tohle je poslední e-mail, který od nás dostaneš.',
+  'deleted.intro':
+    'Tvůj účet a všechno v něm bylo trvale smazáno. Pro pořádek, šlo o:',
+  'deleted.mealsLabel': 'Zapsaná jídla',
+  'deleted.mealsValue': (n) => p.cs(n, { one: 'záznam', few: 'záznamy', many: 'záznamu', other: 'záznamů' }),
+  'deleted.messagesLabel': 'Zprávy',
+  'deleted.messagesValue': (n) => p.cs(n, { one: 'zpráva', few: 'zprávy', many: 'zprávy', other: 'zpráv' }),
+  'deleted.photosLabel': 'Fotky',
+  'deleted.photosValue': (n) => p.cs(n, { one: 'fotka', few: 'fotky', many: 'fotky', other: 'fotek' }),
+  'deleted.nothingKept':
+    'Nic se neuchovalo a nic nejde obnovit, ani z naší strany. Tohle je poslední e-mail, který dostaneš.',
+  // "Díky, že jsi to zkusil" is gendered.
+  'deleted.thanks': 'Díky za vyzkoušení.',
+
+  'suspended.subject': 'Tvůj účet byl pozastaven',
+  'suspended.preheader': 'Všechna zařízení jsou odhlášená. Tvoje data zůstala nedotčená.',
+  'suspended.body':
+    'Tvůj účet byl pozastaven správcem, takže proběhlo odhlášení na všech zařízeních a zatím se znovu přihlásit nejde.',
+  'suspended.dataSafe':
+    'Nic se nesmazalo – každé jídlo, fotka i konverzace jsou přesně tam, kde byly, a vrátí se spolu s účtem.',
+  'suspended.mistake': 'Pokud si myslíš, že jde o omyl, odpověz na tento e-mail.',
+
+  'restored.subject': 'Tvůj účet je znovu aktivní',
+  'restored.preheader': 'Můžeš se znovu přihlásit a všechno je na svém místě.',
+  'restored.body':
+    'Pozastavení účtu bylo zrušeno. Můžeš se znovu přihlásit a mezitím se nic neztratilo.',
+  'restored.button': 'Přihlásit se',
+
+  'nudge.heading': 'Krátká poznámka',
+  'nudge.button': 'Otevřít deník',
+
+  'push.reviewTitle': 'Přehled týdne je hotový',
+  'push.reviewBody': (name) => `${name}, tady je, jak šel týden.`,
+  'push.reviewBodyNoName': 'Tady je, jak šel týden.',
+  // "okomentoval/a" would guess the coach's gender.
+  'push.coachCommented': (name) => `${name}: nový komentář`,
+  'push.coachCommentedNoName': 'Nový komentář od trenéra',
+};
+
+const hu: EmailMessages = {
+  'review.subject': (range) => `A heted: ${range}`,
+  'review.heading': 'A múlt heted röviden',
+  'review.greeting': (name) => `Szia, ${name}!`,
+  'review.greetingNoName': 'Szia!',
+  'review.daysLogged': 'Rögzített napok',
+  'review.sameAsBefore': 'ugyanannyi, mint az előző héten',
+  'review.weekBefore': (n) => `előző héten: ${n}`,
+  'review.averageADay': 'Napi átlag',
+  'review.daysOnTarget': 'Napok a célon belül',
+  'review.withinTarget': (kcal) => `${kcal} kcal ±10%-on belül`,
+  'review.weight': 'Testsúly',
+  'review.acrossTheWeek': 'a hét során',
+  'review.burnedOver': (sessions) =>
+    `Elégetve ${p.hu(sessions, { one: 'edzés', other: 'edzés' })} alatt`,
+  'review.onTopOfTarget': 'a célon kívül',
+  'review.proteinADay': 'Napi fehérje',
+  'review.proteinTarget': (grams) => `cél: ${grams} g`,
+  'review.howItRead': 'Hogyan ment',
+  'review.onRepeat': 'Leggyakrabban',
+  'review.times': (n) => p.hu(n, { one: 'alkalommal', other: 'alkalommal' }),
+  'review.readWholeReview': 'Olvasd el a teljes értékelést',
+  'review.nothingThisWeek': 'Ezen a héten nincs semmi rögzítve.',
+  'review.stripCaption': (logged, hits) =>
+    `${p.hu(logged, { one: 'rögzített nap', other: 'rögzített nap' })}, ebből ${hits} a cél 10%-án belül.`,
+  'review.summaryNoMean': (days) =>
+    `${p.hu(days, { one: 'rögzített nap', other: 'rögzített nap' })}.`,
+  'review.summary': (days, kcal, weight) =>
+    `${p.hu(days, { one: 'rögzített nap', other: 'rögzített nap' })}, átlagosan ${kcal} kcal${weight}.`,
+  'review.summaryWeight': (delta) => `, testsúly: ${delta}`,
+  'review.weekdays': ['V', 'H', 'K', 'Sze', 'Cs', 'P', 'Szo'],
+
+  // The size arrives as a bare number, and "150-nel" would need an ending
+  // chosen for it, so the comparison is said with «plusz» and «mínusz».
+  'review.averageLevel': 'ugyanannyi, mint az előző héten',
+  'review.averageUp': (kcal) => `plusz ${kcal} az előző héthez képest`,
+  'review.averageDown': (kcal) => `mínusz ${kcal} az előző héthez képest`,
+  'review.targetMoved': (kcal) => `A célod mostantól: ${kcal} kcal`,
+  // Month first, day part closed by a dot: "augusztus 10–16.",
+  // "augusztus 16. – szeptember 2.".
+  'review.dayMonth': (days, month) => `${month} ${days}.`,
+
+  'alert.planEnds': (plan, when) => `${plan} előfizetésed ${when} lejár`,
+  'alert.expiryToday': 'ma',
+  'alert.expiryTomorrow': 'holnap',
+  'alert.expiryInDays': (days) => `${days} nap múlva`,
+  'alert.planBody':
+    'Még nem lett megújítva. Minden, amit rögzítettél, pontosan ott marad, ahol van – csak az értékelések, az edzői funkciók és a konyha némulnak el.',
+  'alert.goalTitle': 'Célba értél',
+  'alert.goalBody': (weight) =>
+    `A legutóbbi mérésed: ${weight} – pont a célod. Érdemes kitűzni a következőt: a súly megtartása is önálló cél, és az alkalmazás arra is tud célozni.`,
+  'alert.streakTitles': [
+    'Egy hét, minden nap',
+    'Két hét, minden nap',
+    'Egy hónap, minden nap',
+    'Két hónap egyhuzamban',
+    'Száz nap',
+    'Kétszáz nap',
+    'Egy év, minden nap',
+  ],
+  'alert.streakBody': (days) =>
+    `${days} nap egymás után rögzítve. Nincs vele teendő – ez a rendszeresség adja értelmét minden számnak a Haladás képernyőn.`,
+  'alert.recapTitle': (kcal, target) => `${kcal} / ${target} kcal`,
+  'alert.recapOnTarget': 'Pont a célon.',
+  'alert.recapUnder': (kcal) => `Még ${kcal} kcal belefér.`,
+  'alert.recapOver': (kcal) => `${kcal} kcal a célon felül.`,
+  'alert.recapProtein': (got, target) => `Fehérje: ${got}g / ${target}g.`,
+
+  'layout.tagline': 'Day So Far – a kalórianapló, amivel beszélgetsz.',
+  'layout.pasteLink': 'Vagy másold be ezt a böngésződbe:',
+  'layout.unsubscribePrompt': 'Nem kérsz ilyet?',
+  'layout.unsubscribeAction': 'Heti e-mailek kikapcsolása',
+  'layout.onTarget': 'célon belül',
+
+  'common.ifNotYou':
+    'Ha nem te voltál, változtasd meg most a jelszavad – ha pedig nem tudsz belépni, válaszolj erre az e-mailre.',
+
+  'verify.subject': (code) => `${code} – a Day So Far megerősítő kódod`,
+  'verify.preheader': (code) => `A fiókod beállításához írd be ezt a kódot: ${code}.`,
+  'verify.heading': 'Erősítsd meg az e-mail-címed',
+  'verify.intro': 'Örülünk, hogy itt vagy. A fiókod beállításának befejezéséhez írd be ezt a kódot:',
+  'verify.codeNote':
+    'A kód 24 óráig érvényes, és legfeljebb ötször használható. Ha újat kérsz, az lecseréli.',
+  'verify.buttonHint':
+    'Ugyanazon az eszközön olvasod ezt, amelyen regisztráltál? A gomb ugyanezt elvégzi gépelés nélkül.',
+  'verify.button': 'E-mail-cím megerősítése',
+  'verify.notYou':
+    'Ha nem te hoztál létre fiókot, a nevedben semmi nem jött létre; hagyd figyelmen kívül ezt a levelet, és a cím felszabadul.',
+
+  'reset.subject': 'Jelszó visszaállítása',
+  'reset.preheader': (minutes) =>
+    `Válassz új jelszót. A link ${p.hu(minutes, { one: 'percig', other: 'percig' })} érvényes.`,
+  'reset.intro':
+    'Valaki új jelszót kért ehhez a fiókhoz. Ha te voltál, itt választhatsz újat.',
+  'reset.button': 'Új jelszó választása',
+  'reset.expiry': (minutes) =>
+    `A link ${p.hu(minutes, { one: 'perc', other: 'perc' })} múlva lejár, és csak egyszer használható.`,
+  'reset.notYou':
+    'Ha nem te voltál, nyugodtan hagyd figyelmen kívül – a jelszavad nem változott, és e link nélkül senki nem tud belépni.',
+
+  'changed.subject': 'Megváltozott a jelszavad',
+  'changed.preheader': 'Minden más eszközön kiléptettünk.',
+  'changed.body':
+    'A fiókod jelszava az imént megváltozott, és minden bejelentkezett eszközön kiléptettünk.',
+  'changed.whenLabel': 'Időpont',
+
+  'signin.subject': 'Új belépés a Day So Far-fiókodba',
+  'signin.preheader': (device) => `Egy eddig ismeretlen eszköz lépett be: ${device}.`,
+  'signin.heading': 'Új belépés',
+  'signin.body': 'Egy eddig nem látott eszközről léptek be a fiókodba.',
+  'signin.whenLabel': 'Mikor',
+  'signin.deviceLabel': 'Eszköz',
+  'signin.ipLabel': 'IP-cím',
+  'signin.wasYou':
+    'Ha te voltál, nincs teendőd – ugyanabból a böngészőből ezt nem kapod meg újra.',
+
+  'deleted.subject': 'Töröltük a fiókodat',
+  'deleted.preheader': 'Minden eltűnt belőle. Ez az utolsó e-mail, amit tőlünk kapsz.',
+  'deleted.intro':
+    'A fiókodat és mindent, ami benne volt, véglegesen töröltük. A nyilvántartásod kedvéért ez volt benne:',
+  'deleted.mealsLabel': 'Rögzített étkezések',
+  'deleted.mealsValue': (n) => p.hu(n, { one: 'bejegyzés', other: 'bejegyzés' }),
+  'deleted.messagesLabel': 'Üzenetek',
+  'deleted.messagesValue': (n) => p.hu(n, { one: 'üzenet', other: 'üzenet' }),
+  'deleted.photosLabel': 'Fotók',
+  'deleted.photosValue': (n) => p.hu(n, { one: 'fotó', other: 'fotó' }),
+  'deleted.nothingKept':
+    'Semmit nem őriztünk meg, és semmi nem állítható vissza, még általunk sem. Ez az utolsó e-mail, amit kapsz.',
+  'deleted.thanks': 'Köszönjük, hogy kipróbáltad.',
+
+  'suspended.subject': 'A fiókodat felfüggesztettük',
+  'suspended.preheader': 'Minden eszközön kiléptettünk. Az adataidhoz nem nyúltunk.',
+  'suspended.body':
+    'Egy adminisztrátor felfüggesztette a fiókodat, ezért mindenhol kiléptettünk, és egyelőre nem tudsz újra belépni.',
+  'suspended.dataSafe':
+    'Semmit nem töröltünk – minden étkezés, fotó és beszélgetés pontosan ott van, ahol hagytad, és a fiókkal együtt visszajön.',
+  'suspended.mistake': 'Ha szerinted ez tévedés, válaszolj erre az e-mailre.',
+
+  'restored.subject': 'A fiókod újra aktív',
+  'restored.preheader': 'Újra beléphetsz, és minden ott van, ahol hagytad.',
+  'restored.body':
+    'A fiókod felfüggesztését feloldottuk. Újra beléphetsz, és közben semmi nem veszett el.',
+  'restored.button': 'Belépés',
+
+  'nudge.heading': 'Egy gyors megjegyzés',
+  'nudge.button': 'Napló megnyitása',
+
+  'push.reviewTitle': 'Elkészült a heti értékelésed',
+  'push.reviewBody': (name) => `${name}, így ment a heted.`,
+  'push.reviewBodyNoName': 'Így ment a heted.',
+  'push.coachCommented': (name) => `${name} megjegyzést írt`,
+  'push.coachCommentedNoName': 'Az edződ megjegyzést írt',
+};
+
+const el: EmailMessages = {
+  'review.subject': (range) => `Η εβδομάδα σου: ${range}`,
+  'review.heading': 'Η προηγούμενη εβδομάδα, σε ανασκόπηση',
+  'review.greeting': (name) => `Γεια σου, ${name},`,
+  'review.greetingNoName': 'Γεια σου,',
+  'review.daysLogged': 'Μέρες με καταγραφή',
+  'review.sameAsBefore': 'όσες και την προηγούμενη εβδομάδα',
+  'review.weekBefore': (n) => `${n} την προηγούμενη εβδομάδα`,
+  'review.averageADay': 'Μέσος όρος ανά μέρα',
+  'review.daysOnTarget': 'Μέρες στον στόχο',
+  'review.withinTarget': (kcal) => `εντός 10% από τις ${kcal} kcal`,
+  'review.weight': 'Βάρος',
+  'review.acrossTheWeek': 'μέσα στην εβδομάδα',
+  'review.burnedOver': (sessions) =>
+    `Κάηκαν σε ${p.el(sessions, { one: 'προπόνηση', other: 'προπονήσεις' })}`,
+  'review.onTopOfTarget': 'πέρα από τον στόχο',
+  'review.proteinADay': 'Πρωτεΐνη ανά μέρα',
+  'review.proteinTarget': (grams) => `στόχος ${grams} g`,
+  'review.howItRead': 'Πώς πήγε',
+  'review.onRepeat': 'Τα πιο συχνά',
+  'review.times': (n) => p.el(n, { one: 'φορά', other: 'φορές' }),
+  'review.readWholeReview': 'Διάβασε ολόκληρη την ανασκόπηση',
+  'review.nothingThisWeek': 'Καμία καταγραφή αυτή την εβδομάδα.',
+  'review.stripCaption': (logged, hits) =>
+    `${p.el(logged, { one: 'μέρα', other: 'μέρες' })} με καταγραφή, ${hits} από αυτές εντός 10% του στόχου.`,
+  'review.summaryNoMean': (days) =>
+    `${p.el(days, { one: 'μέρα', other: 'μέρες' })} με καταγραφή.`,
+  'review.summary': (days, kcal, weight) =>
+    `${p.el(days, { one: 'μέρα', other: 'μέρες' })} με καταγραφή, κατά μέσο όρο ${kcal} kcal${weight}.`,
+  'review.summaryWeight': (delta) => `, βάρος ${delta}`,
+  'review.weekdays': ['Κυρ', 'Δευ', 'Τρί', 'Τετ', 'Πέμ', 'Παρ', 'Σάβ'],
+
+  // «πάνω/κάτω από» are adverbs, so nothing has to agree with the figure.
+  'review.averageLevel': 'ίδιος με την προηγούμενη εβδομάδα',
+  'review.averageUp': (kcal) => `${kcal} πάνω από την προηγούμενη εβδομάδα`,
+  'review.averageDown': (kcal) => `${kcal} κάτω από την προηγούμενη εβδομάδα`,
+  'review.targetMoved': (kcal) => `Ο στόχος σου έγινε ${kcal} kcal`,
+  'review.dayMonth': (days, month) => `${days} ${month}`,
+
+  'alert.planEnds': (plan, when) => `Το πακέτο ${plan} λήγει ${when}`,
+  'alert.expiryToday': 'σήμερα',
+  'alert.expiryTomorrow': 'αύριο',
+  'alert.expiryInDays': (days) => `σε ${days} μέρες`,
+  'alert.planBody':
+    'Δεν έχει ανανεωθεί ακόμα. Ό,τι έχεις καταγράψει μένει ακριβώς εκεί που είναι — αυτά που σταματούν είναι οι ανασκοπήσεις, η καθοδήγηση και η κουζίνα.',
+  // A verb: «Τα κατάφερες» needs no gender, where «είσαι εκεί/έτοιμος» would.
+  'alert.goalTitle': 'Τα κατάφερες',
+  'alert.goalBody': (weight) =>
+    `Το τελευταίο σου ζύγισμα ήταν ${weight}, δηλαδή ο στόχος που έβαλες. Αξίζει να διαλέξεις τον επόμενο — η διατήρηση ενός βάρους είναι στόχος από μόνη της, και η εφαρμογή μπορεί να στοχεύσει σε αυτήν.`,
+  'alert.streakTitles': [
+    'Μια εβδομάδα, κάθε μέρα',
+    'Δύο εβδομάδες, κάθε μέρα',
+    'Ένας μήνας, κάθε μέρα',
+    'Δύο μήνες συνεχόμενα',
+    'Εκατό μέρες',
+    'Διακόσιες μέρες',
+    'Ένας χρόνος, κάθε μέρα',
+  ],
+  'alert.streakBody': (days) =>
+    `${days} μέρες καταγραφής στη σειρά. Δεν χρειάζεται να κάνεις τίποτα — αυτή η συνέπεια είναι που δίνει νόημα σε κάθε νούμερο στην οθόνη της προόδου.`,
+  'alert.recapTitle': (kcal, target) => `${kcal} από ${target} kcal`,
+  'alert.recapOnTarget': 'Ακριβώς στον στόχο.',
+  'alert.recapUnder': (kcal) => `Περισσεύουν ${kcal} kcal.`,
+  'alert.recapOver': (kcal) => `${kcal} kcal παραπάνω.`,
+  'alert.recapProtein': (got, target) => `Πρωτεΐνη ${got}g από ${target}g.`,
+
+  'layout.tagline': 'Day So Far — το ημερολόγιο θερμίδων που του μιλάς.',
+  'layout.pasteLink': 'Ή επικόλλησε αυτό στο πρόγραμμα περιήγησής σου:',
+  'layout.unsubscribePrompt': 'Δεν τα θέλεις;',
+  'layout.unsubscribeAction': 'Κλείσε τα εβδομαδιαία email',
+  'layout.onTarget': 'στον στόχο',
+
+  'common.ifNotYou':
+    'Αν δεν ήσουν εσύ, άλλαξε τώρα τον κωδικό πρόσβασής σου — κι αν δεν μπορείς να μπεις, απάντησε σε αυτό το email.',
+
+  'verify.subject': (code) => `${code} είναι ο κωδικός επιβεβαίωσης για το Day So Far`,
+  'verify.preheader': (code) => `Γράψε τον κωδικό ${code} για να ολοκληρώσεις τη δημιουργία του λογαριασμού σου.`,
+  'verify.heading': 'Επιβεβαίωσε το email σου',
+  // «Καλώς ήρθες» is a verb and needs no gender, unlike «Καλωσορισμένος/-η».
+  'verify.intro':
+    'Καλώς ήρθες στο Day So Far. Γράψε αυτόν τον κωδικό για να ολοκληρώσεις τη δημιουργία του λογαριασμού σου:',
+  'verify.codeNote':
+    'Ο κωδικός ισχύει 24 ώρες και δουλεύει το πολύ πέντε φορές. Αν ζητήσεις νέο, αντικαθιστά αυτόν.',
+  'verify.buttonHint':
+    'Διαβάζεις αυτό στη συσκευή όπου έκανες την εγγραφή; Το κουμπί κάνει την ίδια δουλειά χωρίς πληκτρολόγηση.',
+  'verify.button': 'Επιβεβαίωση email',
+  'verify.notYou':
+    'Αν δεν δημιούργησες εσύ λογαριασμό, τίποτα δεν έχει οριστεί στο όνομά σου. Αγνόησε αυτό το email και η διεύθυνση θα αποδεσμευτεί.',
+
+  'reset.subject': 'Επαναφορά κωδικού πρόσβασης',
+  'reset.preheader': (minutes) =>
+    `Διάλεξε νέο κωδικό πρόσβασης. Ο σύνδεσμος ισχύει για ${p.el(minutes, { one: 'λεπτό', other: 'λεπτά' })}.`,
+  'reset.intro':
+    'Ζητήθηκε επαναφορά του κωδικού πρόσβασης για αυτόν τον λογαριασμό. Αν ήσουν εσύ, διάλεξε νέο εδώ.',
+  'reset.button': 'Διάλεξε νέο κωδικό',
+  'reset.expiry': (minutes) =>
+    `Ο σύνδεσμος λήγει σε ${p.el(minutes, { one: 'λεπτό', other: 'λεπτά' })} και μπορεί να χρησιμοποιηθεί μόνο μία φορά.`,
+  'reset.notYou':
+    'Αν δεν ήσουν εσύ, μπορείς να το αγνοήσεις — ο κωδικός σου δεν άλλαξε και κανείς δεν μπορεί να μπει χωρίς αυτόν τον σύνδεσμο.',
+
+  'changed.subject': 'Ο κωδικός πρόσβασής σου άλλαξε',
+  // Impersonal «έγινε αποσύνδεση» throughout: it is the devices that were signed out.
+  'changed.preheader': 'Έγινε αποσύνδεση από όλες τις άλλες συσκευές.',
+  'changed.body':
+    'Ο κωδικός πρόσβασης του λογαριασμού σου μόλις άλλαξε, και έγινε αποσύνδεση από κάθε συσκευή που ήταν συνδεδεμένη.',
+  'changed.whenLabel': 'Αλλαγή',
+
+  'signin.subject': 'Νέα σύνδεση στο Day So Far',
+  'signin.preheader': (device) => `Συνδέθηκε μια συσκευή που δεν έχουμε ξαναδεί — ${device}.`,
+  'signin.heading': 'Νέα σύνδεση',
+  'signin.body': 'Έγινε σύνδεση στον λογαριασμό σου από συσκευή που δεν έχουμε ξαναδεί.',
+  'signin.whenLabel': 'Πότε',
+  'signin.deviceLabel': 'Συσκευή',
+  'signin.ipLabel': 'Διεύθυνση IP',
+  'signin.wasYou':
+    'Αν ήσουν εσύ, δεν χρειάζεται να κάνεις τίποτα — δεν θα το ξαναλάβεις από το ίδιο πρόγραμμα περιήγησης.',
+
+  'deleted.subject': 'Ο λογαριασμός σου διαγράφηκε',
+  'deleted.preheader': 'Όλα όσα είχε χάθηκαν. Αυτό είναι το τελευταίο email που θα λάβεις από εμάς.',
+  'deleted.intro':
+    'Ο λογαριασμός σου και όλα όσα περιείχε διαγράφηκαν οριστικά. Για το αρχείο σου, ήταν:',
+  'deleted.mealsLabel': 'Καταγεγραμμένα γεύματα',
+  'deleted.mealsValue': (n) => p.el(n, { one: 'καταχώριση', other: 'καταχωρίσεις' }),
+  'deleted.messagesLabel': 'Μηνύματα',
+  'deleted.messagesValue': (n) => p.el(n, { one: 'μήνυμα', other: 'μηνύματα' }),
+  'deleted.photosLabel': 'Φωτογραφίες',
+  'deleted.photosValue': (n) => p.el(n, { one: 'φωτογραφία', other: 'φωτογραφίες' }),
+  'deleted.nothingKept':
+    'Δεν κρατήθηκε τίποτα και τίποτα δεν μπορεί να ανακτηθεί, ούτε από εμάς. Αυτό είναι το τελευταίο email που θα λάβεις.',
+  'deleted.thanks': 'Ευχαριστούμε που το δοκίμασες.',
+
+  'suspended.subject': 'Ο λογαριασμός σου τέθηκε σε αναστολή',
+  'suspended.preheader': 'Έγινε αποσύνδεση από όλες τις συσκευές. Τα δεδομένα σου είναι ανέπαφα.',
+  'suspended.body':
+    'Ένας διαχειριστής ανέστειλε τον λογαριασμό σου, οπότε έγινε αποσύνδεση παντού και προς το παρόν δεν μπορείς να συνδεθείς ξανά.',
+  'suspended.dataSafe':
+    'Δεν διαγράφηκε τίποτα — κάθε γεύμα, φωτογραφία και συζήτηση είναι ακριβώς εκεί που τα άφησες, και επιστρέφουν μαζί με τον λογαριασμό.',
+  'suspended.mistake': 'Απάντησε σε αυτό το email αν πιστεύεις ότι έγινε λάθος.',
+
+  'restored.subject': 'Ο λογαριασμός σου είναι ξανά ενεργός',
+  'restored.preheader': 'Μπορείς να συνδεθείς ξανά, και όλα είναι εκεί που τα άφησες.',
+  'restored.body':
+    'Η αναστολή του λογαριασμού σου άρθηκε. Μπορείς να συνδεθείς ξανά, και δεν χάθηκε τίποτα όσο ήταν ανενεργός.',
+  'restored.button': 'Σύνδεση',
+
+  'nudge.heading': 'Μια σύντομη σημείωση',
+  'nudge.button': 'Άνοιξε το ημερολόγιο',
+
+  'push.reviewTitle': 'Η εβδομάδα σου είναι έτοιμη',
+  'push.reviewBody': (name) => `${name}, δες πώς πήγε η εβδομάδα.`,
+  'push.reviewBodyNoName': 'Δες πώς πήγε η εβδομάδα.',
+  'push.coachCommented': (name) => `${name} σχολίασε`,
+  'push.coachCommentedNoName': 'Νέο σχόλιο από τον προπονητή σου',
+};
+
+const sk: EmailMessages = {
+  'review.subject': (range) => `Tvoj týždeň: ${range}`,
+  'review.heading': 'Minulý týždeň v skratke',
+  'review.greeting': (name) => `Ahoj ${name},`,
+  'review.greetingNoName': 'Ahoj,',
+  'review.daysLogged': 'Zapísané dni',
+  'review.sameAsBefore': 'rovnako ako týždeň predtým',
+  'review.weekBefore': (n) => `${n} v predošlom týždni`,
+  'review.averageADay': 'Priemer za deň',
+  'review.daysOnTarget': 'Dni v cieli',
+  'review.withinTarget': (kcal) => `do 10 % od ${kcal} kcal`,
+  'review.weight': 'Váha',
+  'review.acrossTheWeek': 'za týždeň',
+  'review.burnedOver': (sessions) =>
+    `Spálené za ${p.sk(sessions, { one: 'tréning', few: 'tréningy', many: 'tréningu', other: 'tréningov' })}`,
+  'review.onTopOfTarget': 'nad rámec cieľa',
+  'review.proteinADay': 'Bielkoviny za deň',
+  'review.proteinTarget': (grams) => `cieľ ${grams} g`,
+  'review.howItRead': 'Ako to vyzeralo',
+  'review.onRepeat': 'Stále dookola',
+  // "-krát" does not inflect, so the count needs no plural forms.
+  'review.times': (n) => `${n}-krát`,
+  'review.readWholeReview': 'Prečítať celý prehľad',
+  'review.nothingThisWeek': 'Tento týždeň nič zapísané.',
+  'review.stripCaption': (logged, hits) =>
+    `${p.sk(logged, { one: 'zapísaný deň', few: 'zapísané dni', many: 'zapísaného dňa', other: 'zapísaných dní' })}, z toho ${hits} do 10 % od cieľa.`,
+  'review.summaryNoMean': (days) =>
+    `${p.sk(days, { one: 'zapísaný deň', few: 'zapísané dni', many: 'zapísaného dňa', other: 'zapísaných dní' })}.`,
+  'review.summary': (days, kcal, weight) =>
+    `${p.sk(days, { one: 'zapísaný deň', few: 'zapísané dni', many: 'zapísaného dňa', other: 'zapísaných dní' })}, v priemere ${kcal} kcal${weight}.`,
+  'review.summaryWeight': (delta) => `, váha ${delta}`,
+  'review.weekdays': ['ne', 'po', 'ut', 'st', 'št', 'pi', 'so'],
+
+  'review.averageLevel': 'rovnako ako týždeň predtým',
+  'review.averageUp': (kcal) => `o ${kcal} viac ako týždeň predtým`,
+  'review.averageDown': (kcal) => `o ${kcal} menej ako týždeň predtým`,
+  'review.targetMoved': (kcal) => `Tvoj cieľ sa posunul na ${kcal} kcal`,
+  // Slovak writes "10.–16. augusta": a period after each day number, and the
+  // month in the genitive — `formatRange` passes Intl's standalone nominative.
+  'review.dayMonth': (days, month) => {
+    const genitive: Record<string, string> = {
+      január: 'januára', február: 'februára', marec: 'marca', apríl: 'apríla',
+      máj: 'mája', jún: 'júna', júl: 'júla', august: 'augusta',
+      september: 'septembra', október: 'októbra', november: 'novembra', december: 'decembra',
+    };
+    return `${String(days).replace(/(\d)(?=–|$)/g, '$1.')} ${genitive[String(month)] ?? month}`;
+  },
+
+  'alert.planEnds': (plan, when) => `Tvoj plán ${plan} končí ${when}`,
+  'alert.expiryToday': 'dnes',
+  'alert.expiryTomorrow': 'zajtra',
+  'alert.expiryInDays': (days) => `o ${p.sk(days, { one: 'deň', few: 'dni', many: 'dňa', other: 'dní' })}`,
+  // "Čo si zapísal" would gender the reader; "tvoje záznamy" does not.
+  'alert.planBody':
+    'Zatiaľ ho nič neobnovilo. Všetky tvoje záznamy zostávajú presne tam, kde sú – stíchnu len prehľady, rady trénera a kuchyňa.',
+  'alert.goalTitle': 'Si v cieli',
+  'alert.goalBody': (weight) =>
+    `Posledné váženie ukázalo ${weight}, a to je presne tvoj cieľ. Oplatí sa zvoliť ďalší – udržať si váhu je cieľ sám osebe a aplikácia sa naň vie zamerať.`,
+  'alert.streakTitles': [
+    'Týždeň, každý deň',
+    'Dva týždne, každý deň',
+    'Mesiac, každý deň',
+    'Dva mesiace bez prestávky',
+    'Sto dní',
+    'Dvesto dní',
+    'Rok, každý deň',
+  ],
+  'alert.streakBody': (days) =>
+    `${p.sk(days, { one: 'deň', few: 'dni', many: 'dňa', other: 'dní' })} zápisov bez prestávky. Netreba s tým nič robiť – práve táto pravidelnosť dáva zmysel každému číslu na obrazovke pokroku.`,
+  'alert.recapTitle': (kcal, target) => `${kcal} z ${target} kcal`,
+  'alert.recapOnTarget': 'Presne v cieli.',
+  'alert.recapUnder': (kcal) => `Ešte ${kcal} kcal v rezerve.`,
+  'alert.recapOver': (kcal) => `${kcal} kcal navyše.`,
+  'alert.recapProtein': (got, target) => `Bielkoviny ${got} g z ${target} g.`,
+
+  'layout.tagline': 'Day So Far – kalorický denník, s ktorým sa rozprávaš.',
+  'layout.pasteLink': 'Alebo toto vlož do prehliadača:',
+  'layout.unsubscribePrompt': 'Nechceš ich?',
+  'layout.unsubscribeAction': 'Vypnúť týždenné e-maily',
+  'layout.onTarget': 'v cieli',
+
+  'common.ifNotYou':
+    'Ak to nie si ty, hneď si zmeň heslo – a ak sa nevieš prihlásiť, odpovedz na tento e-mail.',
+
+  'verify.subject': (code) => `${code} je tvoj overovací kód pre Day So Far`,
+  'verify.preheader': (code) => `Zadaj ${code} a dokonči nastavenie účtu.`,
+  'verify.heading': 'Over svoj e-mail',
+  'verify.intro': 'Vitaj v Day So Far. Zadaj tento kód a dokonči nastavenie účtu:',
+  'verify.codeNote':
+    'Kód platí 24 hodín a funguje najviac päťkrát. Nový kód tento nahradí.',
+  // "Na ktorom si sa registroval" would gender the reader.
+  'verify.buttonHint':
+    'Čítaš to na zariadení, na ktorom prebehla registrácia? Tlačidlo urobí to isté a nemusíš nič písať.',
+  'verify.button': 'Overiť e-mail',
+  // "Ak si nevytvoril účet" would gender the reader.
+  'verify.notYou':
+    'Ak tento účet nie je tvoj, na tvoje meno sa nič nezaložilo; tento e-mail ignoruj a adresa sa uvoľní.',
+
+  'reset.subject': 'Obnovenie hesla',
+  'reset.preheader': (minutes) =>
+    `Zvoľ si nové heslo. Odkaz platí ${p.sk(minutes, { one: 'minútu', few: 'minúty', many: 'minúty', other: 'minút' })}.`,
+  // "Ak si to bol ty" would gender the reader; the present tense does not.
+  'reset.intro':
+    'Niekto požiadal o obnovenie hesla k tomuto účtu. Ak si to ty, nové heslo si vyber tu.',
+  'reset.button': 'Zvoliť nové heslo',
+  'reset.expiry': (minutes) =>
+    `Odkaz vyprší o ${p.sk(minutes, { one: 'minútu', few: 'minúty', many: 'minúty', other: 'minút' })} a dá sa použiť len raz.`,
+  'reset.notYou':
+    'Ak to nie si ty, tento e-mail môžeš ignorovať – heslo sa nezmenilo a bez tohto odkazu sa nikto neprihlási.',
+
+  'changed.subject': 'Tvoje heslo bolo zmenené',
+  'changed.preheader': 'Všetky ostatné zariadenia sa odhlásili.',
+  'changed.body':
+    'Heslo k tvojmu účtu bolo práve zmenené a všetky zariadenia, ktoré boli prihlásené, sa odhlásili.',
+  'changed.whenLabel': 'Zmenené',
+
+  'signin.subject': 'Nové prihlásenie do Day So Far',
+  'signin.preheader': (device) => `Prihlásilo sa zariadenie, ktoré sme ešte nevideli – ${device}.`,
+  'signin.heading': 'Nové prihlásenie',
+  'signin.body': 'Do tvojho účtu sa prihlásilo zariadenie, ktoré sme ešte nevideli.',
+  'signin.whenLabel': 'Kedy',
+  'signin.deviceLabel': 'Zariadenie',
+  'signin.ipLabel': 'IP adresa',
+  'signin.wasYou':
+    'Ak si to ty, netreba nič robiť – z toho istého prehliadača ti už takýto e-mail nepríde.',
+
+  'deleted.subject': 'Tvoj účet bol vymazaný',
+  'deleted.preheader': 'Všetko, čo v ňom bolo, je preč. Toto je posledný e-mail, ktorý ti pošleme.',
+  'deleted.intro':
+    'Tvoj účet a všetko v ňom boli natrvalo vymazané. Pre tvoju evidenciu, išlo o:',
+  'deleted.mealsLabel': 'Zapísané jedlá',
+  'deleted.mealsValue': (n) => p.sk(n, { one: 'záznam', few: 'záznamy', many: 'záznamu', other: 'záznamov' }),
+  'deleted.messagesLabel': 'Správy',
+  'deleted.messagesValue': (n) => p.sk(n, { one: 'správa', few: 'správy', many: 'správy', other: 'správ' }),
+  'deleted.photosLabel': 'Fotky',
+  'deleted.photosValue': (n) => p.sk(n, { one: 'fotka', few: 'fotky', many: 'fotky', other: 'fotiek' }),
+  'deleted.nothingKept':
+    'Nič sa neuchovalo a nič sa nedá obnoviť, ani z našej strany. Toto je posledný e-mail, ktorý dostaneš.',
+  // "Že si to skúsil" would gender the reader.
+  'deleted.thanks': 'Ďakujeme za šancu.',
+
+  // "Bol si odhlásený" would gender the reader, so the sign-out is the subject.
+  'suspended.subject': 'Tvoj účet bol pozastavený',
+  'suspended.preheader': 'Na všetkých zariadeniach prebehlo odhlásenie. Tvoje údaje sú nedotknuté.',
+  'suspended.body':
+    'Administrátor pozastavil tvoj účet, takže odhlásenie prebehlo všade a zatiaľ sa nedá znova prihlásiť.',
+  'suspended.dataSafe':
+    'Nič sa nevymazalo – každé jedlo, fotka aj konverzácia sú presne tam, kde boli, a vrátia sa spolu s účtom.',
+  'suspended.mistake': 'Ak si myslíš, že ide o omyl, odpovedz na tento e-mail.',
+
+  'restored.subject': 'Tvoj účet je znova aktívny',
+  'restored.preheader': 'Znova sa môžeš prihlásiť a všetko je tam, kde bolo.',
+  'restored.body':
+    'Pozastavenie tvojho účtu je zrušené. Znova sa môžeš prihlásiť a počas pozastavenia sa nič nestratilo.',
+  'restored.button': 'Prihlásiť sa',
+
+  'nudge.heading': 'Krátka poznámka',
+  'nudge.button': 'Otvoriť denník',
+
+  'push.reviewTitle': 'Tvoj týždeň je pripravený',
+  'push.reviewBody': (name) => `${name}, takto vyzeral tvoj týždeň.`,
+  'push.reviewBodyNoName': 'Takto vyzeral tvoj týždeň.',
+  // "pridal/pridala" would gender the coach, whom the server also knows only by name.
+  'push.coachCommented': (name) => `Nový komentár – ${name}`,
+  'push.coachCommentedNoName': 'Nový komentár od trénera',
+};
+
+const CATALOGUES: Record<Locale, EmailMessages> = { en, bg, de, es, fr, ro, uk, sr, hr, cs, hu, el, sk };
 
 /**
  * The lookup, bound to one recipient.

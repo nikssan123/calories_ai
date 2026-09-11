@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { CalendarDays, ChevronLeft, ChevronRight, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { DaySummary, ExerciseEntry, FoodEntry, Meal } from '@ct/shared';
-import { formatBodyWeight, formatDay, formatDistance, formatMass } from '@ct/shared';
+import { formatBodyWeight, formatDay, formatDistance, formatMass, formatNumber } from '@ct/shared';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { CalorieRing } from '@/components/CalorieRing';
@@ -141,7 +141,7 @@ function TodayView() {
     );
     try {
       await api.deleteFoodEntry(entry.id);
-      toast.success(`Removed ${entry.description}`);
+      toast.success(t('toast.removed')(entry.description));
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -171,7 +171,7 @@ function TodayView() {
     );
     try {
       await api.deleteExerciseEntry(entry.id);
-      toast.success(`Removed ${entry.description}`);
+      toast.success(t('toast.removed')(entry.description));
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -182,7 +182,7 @@ function TodayView() {
   async function repeatEntry(entry: FoodEntry) {
     try {
       const copy = await api.repeatFoodEntry(entry.id);
-      toast.success(`Logged ${copy.description} — ${Math.round(copy.kcal)} kcal`);
+      toast.success(t('toast.logged')(copy.description, formatNumber(Math.round(copy.kcal), locale)));
       setDate(null);
       void load(null);
     } catch (e) {
@@ -257,13 +257,13 @@ function TodayView() {
             />
             <p className="tnum text-muted-foreground mt-5 text-body font-medium">
               <span className="text-foreground font-extrabold">
-                {Math.round(day.consumed.kcal).toLocaleString()}
+                {formatNumber(Math.round(day.consumed.kcal), locale)}
               </span>{' '}
-              of {day.targets.kcal.toLocaleString()} kcal
+              {t('today.ofTargetKcal')(formatNumber(day.targets.kcal, locale))}
             </p>
             {day.burned_kcal > 0 && (
               <p className="tnum text-footnote text-muted-foreground mt-1 font-semibold">
-                net {day.net_kcal.toLocaleString()} kcal after exercise
+                {t('rail.netAfterExercise')(formatNumber(day.net_kcal, locale))}
               </p>
             )}
             {/* Null on every day but today — see `DaySummary.streak`. */}
@@ -377,7 +377,7 @@ function TodayView() {
                 entryId={null}
                 onSaved={(entry) => {
                   setComposing(false);
-                  toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
+                  toast.success(t('toast.logged')(entry.description, formatNumber(Math.round(entry.kcal), locale)));
                   void load(null);
                 }}
                 onCancel={() => setComposing(false)}
@@ -388,7 +388,7 @@ function TodayView() {
                 onClick={() => setComposing(true)}
                 className="text-footnote text-muted-foreground hover:text-foreground w-full py-3 text-center font-semibold"
               >
-                + Log it yourself
+                + {t('editor.logItYourself')}
               </button>
             ))}
           </div>
@@ -471,7 +471,7 @@ function EntryRow({
               className="text-destructive h-8 gap-1.5 px-2"
             >
               <Trash2 size={15} />
-              Delete
+              {t('common.delete')}
             </Button>
           </div>
         </div>
@@ -546,7 +546,9 @@ function ExerciseRow({
           <p className="text-footnote text-muted-foreground font-medium">
             {[
               entry.distance_km !== null ? formatDistance(entry.distance_km, units) : null,
-              entry.duration_min !== null ? `${Math.round(entry.duration_min)} min` : null,
+              entry.duration_min !== null
+                ? t('exercise.minutes')(String(Math.round(entry.duration_min)))
+                : null,
             ]
               .filter(Boolean)
               .join(' · ')}
@@ -577,7 +579,7 @@ function ExerciseRow({
           variant="ghost"
           size="icon"
           onClick={onDelete}
-          aria-label={`Delete ${entry.description}`}
+          aria-label={t('a11y.delete')(entry.description)}
           className="text-muted-foreground hover:text-destructive -mr-2 size-8 shrink-0 rounded-full"
         >
           <Trash2 size={15} />

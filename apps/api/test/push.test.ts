@@ -9,7 +9,12 @@ import {
   registerPushToken,
 } from '../src/services/push-tokens.ts';
 import { sendPush } from '../src/push/send.ts';
-import { nudgeReachedAPhone, sendNudgePush } from '../src/push/notify.ts';
+import {
+  nudgeReachedAPhone,
+  sendCoachCommentPush,
+  sendNudgePush,
+  sendWeeklyReviewPush,
+} from '../src/push/notify.ts';
 import { appFor, createUser } from './helpers/factories.ts';
 
 function ok(count: number) {
@@ -194,6 +199,47 @@ describe('the nudge policy', () => {
 
     expect(result).toMatchObject({ status: 'skipped', reason: 'no devices' });
     expect(nudgeReachedAPhone(result)).toBe(false);
+  });
+});
+
+/*
+ * The two pushes with words of their own. Both were English literals, so a
+ * Bulgarian account had its weekly review announced in English on the lock
+ * screen. The words live in `email/messages.ts` now, in the reader's language.
+ */
+describe('what a push says', () => {
+  async function sent(run: () => Promise<unknown>) {
+    const fetchImpl = vi.fn(async (_url: string, _init: RequestInit) => ok(1));
+    vi.stubGlobal('fetch', fetchImpl);
+    try {
+      await run();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    return fetchImpl.mock.calls.map((call) => JSON.parse((call[1] as RequestInit).body as string)[0]);
+  }
+
+  it('announces the weekly review in the reader’s language', async () => {
+    const user = await createUser();
+    await query("UPDATE users SET locale = 'bg', notify_weekly_review = true WHERE id = $1", [user.id]);
+    await registerPushToken(user.id, { token: 'ExponentPushToken[l]', platform: 'ios' });
+
+    const [push] = await sent(() =>
+      sendWeeklyReviewPush(user.id, { id: '00000000-0000-0000-0000-000000000003' } as never),
+    );
+    expect(push).toMatchObject({ title: 'Седмицата ти е готова' });
+  });
+
+  it('puts a coach’s comment in the client’s language, named or not', async () => {
+    const client = await createUser();
+    await query("UPDATE users SET locale = 'de' WHERE id = $1", [client.id]);
+    await registerPushToken(client.id, { token: 'ExponentPushToken[m]', platform: 'android' });
+
+    const [named] = await sent(() => sendCoachCommentPush(client.id, 'Maria', 'Mehr Eiweiß.'));
+    const [unnamed] = await sent(() => sendCoachCommentPush(client.id, null, 'Mehr Eiweiß.'));
+
+    expect(named).toMatchObject({ title: 'Maria hat kommentiert', body: 'Mehr Eiweiß.' });
+    expect(unnamed).toMatchObject({ title: 'Neuer Kommentar von deinem Coach' });
   });
 });
 

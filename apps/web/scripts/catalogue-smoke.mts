@@ -12,9 +12,17 @@ import { bg } from '../messages/bg.ts';
 import { de } from '../messages/de.ts';
 import { es } from '../messages/es.ts';
 import { fr } from '../messages/fr.ts';
+import { ro } from '../messages/ro.ts';
+import { uk } from '../messages/uk.ts';
+import { sr } from '../messages/sr.ts';
+import { hr } from '../messages/hr.ts';
+import { cs } from '../messages/cs.ts';
+import { hu } from '../messages/hu.ts';
+import { el } from '../messages/el.ts';
+import { sk } from '../messages/sk.ts';
 
 type Any = Record<string, unknown>;
-const catalogues: Record<string, Any> = { en, bg, de, es, fr } as never;
+const catalogues: Record<string, Any> = { en, bg, de, es, fr, ro, uk, sr, hr, cs, hu, el, sk } as never;
 
 /**
  * Keys whose first argument is a count.

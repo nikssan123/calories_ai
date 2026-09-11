@@ -150,8 +150,8 @@ export default function LoginScreen() {
     setForgetting(true);
     setError(null);
     try {
-      const result = await api.forgotPassword(address);
-      setSent(result.message);
+      await api.forgotPassword(address);
+      setSent(tr('reset.linkSent'));
     } catch (e) {
       setError(messageOf(e, tr));
     } finally {
@@ -333,23 +333,23 @@ export default function LoginScreen() {
             is where the store listings point at the same two documents. */}
         {signup && (
           <Text style={[t.footnote, styles.consent, { color: colors.mutedForeground }]}>
-            By creating an account you agree to the{' '}
+            {tr('auth.agreeBefore')}{' '}
             <Text
               accessibilityRole="link"
               onPress={() => void WebBrowser.openBrowserAsync(TERMS_URL).catch(() => {})}
               style={{ color: colors.foreground, fontFamily: font.semibold }}
             >
-              Terms
+              {tr('auth.terms')}
             </Text>{' '}
-            and the{' '}
+            {tr('auth.agreeAnd')}{' '}
             <Text
               accessibilityRole="link"
               onPress={() => void WebBrowser.openBrowserAsync(PRIVACY_URL).catch(() => {})}
               style={{ color: colors.foreground, fontFamily: font.semibold }}
             >
-              Privacy Policy
+              {tr('auth.privacyPolicy')}
             </Text>
-            .
+            {tr('auth.agreeAfter')}
           </Text>
         )}
 

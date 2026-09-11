@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LOCALES, LOCALE_ENGLISH_NAMES } from '@ct/shared';
+import { LOCALES, LOCALE_ENGLISH_NAMES, type Locale } from '@ct/shared';
 import { proseLocale, replyLanguage } from '../src/ai/language.ts';
 import { MODELS, TEXT_LOG_UNSUPPORTED_LANGUAGE } from '../src/ai/client.ts';
 
@@ -175,12 +175,20 @@ describe('the language being written, when nothing has been', () => {
     }
   });
 
-  it('escalates Bulgarian, the one shipped language Haiku writes badly', () => {
-    expect(replyLanguage([], 'bg').haiku).toBe(false);
+  /*
+   * The shipped languages on the broken list in `ai/language.ts`. An account
+   * set to one of them escalates even on a turn with nothing written to go on,
+   * which is the cost side of shipping them: every text log in these six runs
+   * on Sonnet.
+   */
+  const ESCALATED: readonly Locale[] = ['bg', 'uk', 'sr', 'hr', 'hu', 'sk'];
+
+  it('escalates the shipped languages Haiku writes badly', () => {
+    for (const locale of ESCALATED) expect(replyLanguage([], locale).haiku).toBe(false);
   });
 
-  it('leaves the other four on the cheap model', () => {
-    for (const locale of ['en', 'de', 'es', 'fr'] as const) {
+  it('leaves the rest on the cheap model', () => {
+    for (const locale of LOCALES.filter((one) => !ESCALATED.includes(one))) {
       expect(replyLanguage([], locale).haiku).toBe(true);
     }
   });
@@ -272,6 +280,39 @@ describe('proseLocale', () => {
       'fr',
       'Tes calories étaient pile dans la cible toute la semaine, mais les protéines sont restées sous l’objectif les sept jours.',
     ],
+    [
+      'ro',
+      'Caloriile tale au fost exact în țintă toată săptămâna, dar proteinele au rămas sub obiectiv în toate cele șapte zile.',
+    ],
+    [
+      'uk',
+      'Твої калорії були точно в цілі весь тиждень, але білок залишався нижче мети всі сім днів.',
+    ],
+    [
+      'sr',
+      'Твоје калорије су биле тачно у циљу целе недеље, али протеини су остали испод циља свих седам дана.',
+    ],
+    // franc ranks Bosnian first on this; `LOCALE_CODES` reads Bosnian as Croatian.
+    [
+      'hr',
+      'Tvoje kalorije bile su cijeli tjedan točno na cilju, ali proteini su ostali ispod cilja svih sedam dana.',
+    ],
+    [
+      'cs',
+      'Tvoje kalorie byly celý týden přesně v cíli, ale bílkoviny zůstaly pod cílem všech sedm dní.',
+    ],
+    [
+      'hu',
+      'A kalóriáid egész héten pontosan a célon voltak, de a fehérje mind a hét napon a cél alatt maradt.',
+    ],
+    [
+      'el',
+      'Οι θερμίδες σου ήταν ακριβώς στον στόχο όλη την εβδομάδα, αλλά η πρωτεΐνη έμεινε κάτω από τον στόχο και τις επτά ημέρες.',
+    ],
+    [
+      'sk',
+      'Tvoje kalórie boli celý týždeň presne v cieli, ale bielkoviny zostali pod cieľom všetkých sedem dní.',
+    ],
   ];
 
   it.each(NUDGES)('reads a nudge written in %s', (locale, content) => {
@@ -290,6 +331,17 @@ describe('proseLocale', () => {
     expect(
       proseLocale('Твои калории всю неделю были точно в цели, но белок был ниже нормы все семь дней.'),
     ).toBeNull();
+  });
+
+  /*
+   * The scheduler's own fixture review, "A steady week.", arrived with Czech
+   * chrome the day Czech shipped. Trigrams name anything on a fragment, and
+   * with thirteen catalogues a wrong name is a wrongly-dressed email.
+   */
+  it('names nothing on a fragment, so the stored locale decides', () => {
+    expect(proseLocale('A steady week.')).toBeNull();
+    expect(proseLocale('Keep it up.')).toBeNull();
+    expect(proseLocale('Săptămână bună.')).toBeNull();
   });
 
   it('answers null rather than guessing at nothing', () => {

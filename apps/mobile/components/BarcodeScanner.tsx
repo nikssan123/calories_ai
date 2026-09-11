@@ -14,7 +14,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import type { BarcodeProduct, ChatMessage, UnitSystem } from '@ct/shared';
-import { GRAMS_PER_OZ, SERVING_STEPS, formatMass, formatServings, massUnit } from '@ct/shared';
+import { GRAMS_PER_OZ, SERVING_STEPS, formatMass, formatNumber, formatServings, massUnit } from '@ct/shared';
 import { ApiError, isPartialBarcode } from '@ct/api-client';
 import { PressableChunk } from '@/components/Chunk';
 import { api } from '@/lib/api';
@@ -22,7 +22,7 @@ import { pickPhoto, takePhoto, type PreparedPhoto } from '@/lib/image';
 import { useUnits } from '@/lib/units';
 import { font, type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
-import { useT } from '@/lib/i18n';
+import { useLocale, useT } from '@/lib/i18n';
 import { messageOf } from '@/lib/errors';
 
 /**
@@ -376,7 +376,7 @@ export function BarcodeScanner({
                 {permission !== null && !permission.granted && (
                   <>
                     <Text style={[t.footnote, styles.centred, { color: colors.mutedForeground }]}>
-                      Nothing is uploaded — the code is read on the phone.
+                      {tr('barcode.nothingUploaded')}
                     </Text>
                     <PressableChunk
                       radius={999}
@@ -387,7 +387,7 @@ export function BarcodeScanner({
                       contentStyle={[styles.button, { backgroundColor: colors.primary }]}
                     >
                       <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
-                        Allow the camera
+                        {tr('barcode.allowCamera')}
                       </Text>
                     </PressableChunk>
                   </>
@@ -590,6 +590,7 @@ function Portion({
 }) {
   const colors = useColors();
   const tr = useT();
+  const locale = useLocale();
   const units = useUnits();
   const basis = BASIS[units];
   /*
@@ -664,8 +665,11 @@ function Portion({
           )}
           <Text style={[styles.productName, { color: colors.foreground }]}>{product.name}</Text>
           <Text style={[t.footnote, styles.basis, { color: colors.mutedForeground }]}>
-            {Math.round((product.kcal_100g * basis.grams) / 100)} kcal ·{' '}
-            {Math.round((product.protein_100g * basis.grams) / 100)}g protein per {basis.label}
+            {tr('barcode.perBasis')(
+              formatNumber(Math.round((product.kcal_100g * basis.grams) / 100), locale),
+              formatNumber(Math.round((product.protein_100g * basis.grams) / 100), locale),
+              basis.label,
+            )}
           </Text>
         </View>
 
@@ -712,7 +716,7 @@ function Portion({
                   figure between two buttons reads as the stepper's readout, so
                   people pressed + until they got close and logged that. */}
               <Text style={[t.footnote, styles.typeHint, { color: colors.mutedForeground }]}>
-                Tap the figure to type it
+                {tr('barcode.tapToType')}
               </Text>
             </View>
             <View style={[styles.steps, { backgroundColor: colors.muted, borderColor: colors.border }]}>
@@ -743,7 +747,7 @@ function Portion({
                   }}
                   keyboardType="decimal-pad"
                   selectTextOnFocus
-                  accessibilityLabel={`How much did you have, in ${massUnit(units)}`}
+                  accessibilityLabel={tr('barcode.howMuchIn')(massUnit(units))}
                   style={[styles.typedInput, { color: colors.foreground, fontFamily: font.display }]}
                 />
                 <Text style={[t.footnote, { color: colors.mutedForeground }]}>{massUnit(units)}</Text>
@@ -762,8 +766,10 @@ function Portion({
             {Math.round(product.kcal_100g * share)}
           </Text>
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-            kcal · {Math.round(product.protein_100g * share)}g protein ·{' '}
-            {formatMass(eatenGrams, units)}
+            {tr('barcode.totalLine')(
+              formatNumber(Math.round(product.protein_100g * share), locale),
+              formatMass(eatenGrams, units),
+            )}
           </Text>
         </View>
 
@@ -911,23 +917,10 @@ function Missed({
     <View style={styles.missed}>
       <Text style={styles.mascot}>🔍</Text>
       <Text style={[t.body, styles.centred, { color: colors.foreground }]}>
-        {partial ? (
-          <>Only partial info on that one.</>
-        ) : (
-          <>That one isn&rsquo;t catalogued.</>
-        )}
+        {partial ? tr('barcode.partialTitle') : tr('barcode.notCatalogued')}
       </Text>
       <Text style={[t.footnote, styles.centred, { color: colors.mutedForeground }]}>
-        {partial ? (
-          <>
-            Not enough to log it. Photograph the nutrition label and the journal will read it.
-          </>
-        ) : (
-          <>
-            Own-brands often aren&rsquo;t. Photograph the nutrition label instead and the
-            journal will read it.
-          </>
-        )}
+        {partial ? tr('barcode.partialHint') : tr('barcode.notCataloguedHint')}
       </Text>
 
       <PressableChunk
@@ -939,7 +932,7 @@ function Missed({
         contentStyle={[styles.button, { backgroundColor: colors.primary }]}
       >
         <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
-          Photograph the label
+          {tr('barcode.photographLabel')}
         </Text>
       </PressableChunk>
 

@@ -790,7 +790,7 @@ function TierCard({
             price directly above it. */}
         {period === 'year' && perMonth && !current && (
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-            Works out at {perMonth} a month.
+            {tr('plans.worksOutAt')(perMonth)}
           </Text>
         )}
       </Chunk>

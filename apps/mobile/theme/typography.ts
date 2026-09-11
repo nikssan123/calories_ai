@@ -1,5 +1,5 @@
 import { Platform, StyleSheet, type TextStyle } from 'react-native';
-import type { Locale } from '@ct/shared';
+import { LOCALE_SCRIPTS, type Locale } from '@ct/shared';
 
 /**
  * The type scale from `globals.css`, and the one trap in porting it.
@@ -63,11 +63,17 @@ const DISPLAY_FACES = {
   },
 } as const;
 
-/** Which of the two a locale needs. Everything not listed draws in Latin. */
-const CYRILLIC_LOCALES: ReadonlySet<Locale> = new Set(['bg']);
-
+/**
+ * Which of the two a locale needs, read off the script `LOCALE_SCRIPTS` says it
+ * is written in.
+ *
+ * Greek takes the Latin table, and not because Baloo can draw it — neither face
+ * can. Its letters fall back to the platform's face whichever table is chosen,
+ * so the only thing the choice decides is the figures, which are digits, and
+ * Baloo has those.
+ */
 export const displayFacesFor = (locale: Locale) =>
-  CYRILLIC_LOCALES.has(locale) ? DISPLAY_FACES.cyrillic : DISPLAY_FACES.latin;
+  LOCALE_SCRIPTS[locale] === 'cyrillic' ? DISPLAY_FACES.cyrillic : DISPLAY_FACES.latin;
 
 /**
  * The platform's monospace face, for a code span or fence in a reply.

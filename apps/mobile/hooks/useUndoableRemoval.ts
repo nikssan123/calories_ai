@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { TOAST_LIFETIME_MS, useToast } from '@/components/Toast';
+import { useT } from '@/lib/i18n';
 
 interface Removal {
   /**
@@ -40,6 +41,7 @@ interface Removal {
  */
 export function useUndoableRemoval() {
   const toast = useToast();
+  const tr = useT();
   const pending = useRef(new Map<number, { run: () => void; timer: ReturnType<typeof setTimeout> }>());
   const nextId = useRef(0);
 
@@ -71,7 +73,7 @@ export function useUndoableRemoval() {
       pending.current.set(id, { run, timer });
 
       toast.success(message, {
-        label: 'Undo',
+        label: tr('common.undo'),
         run: () => {
           /*
            * Gone from the map means the delete has already gone out — the
@@ -87,6 +89,6 @@ export function useUndoableRemoval() {
         },
       });
     },
-    [toast],
+    [toast, tr],
   );
 }

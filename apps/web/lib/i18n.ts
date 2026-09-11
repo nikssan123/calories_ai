@@ -8,6 +8,14 @@ import { bg } from '@/messages/bg';
 import { de } from '@/messages/de';
 import { es } from '@/messages/es';
 import { fr } from '@/messages/fr';
+import { ro } from '@/messages/ro';
+import { uk } from '@/messages/uk';
+import { sr } from '@/messages/sr';
+import { hr } from '@/messages/hr';
+import { cs } from '@/messages/cs';
+import { hu } from '@/messages/hu';
+import { el } from '@/messages/el';
+import { sk } from '@/messages/sk';
 
 /**
  * Which language to draw in, and the strings to draw.
@@ -65,7 +73,7 @@ export type StringKey = {
   [K in MessageKey]: Messages[K] extends string ? K : never;
 }[MessageKey];
 
-const CATALOGUES: Record<Locale, Messages> = { en, bg, de, es, fr };
+const CATALOGUES: Record<Locale, Messages> = { en, bg, de, es, fr, ro, uk, sr, hr, cs, hu, el, sk };
 
 const STORAGE_KEY = 'nutrition-locale';
 

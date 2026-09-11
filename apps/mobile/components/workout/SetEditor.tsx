@@ -354,6 +354,7 @@ function Stepper({
   onChange: (next: number | null) => void;
 }) {
   const colors = useColors();
+  const tr = useT();
   const move = (delta: number) => () => {
     haptics.press();
     // Stepping from nothing lands on the step itself rather than on zero, which
@@ -368,7 +369,7 @@ function Stepper({
         <Pressable
           onPress={move(-step)}
           accessibilityRole="button"
-          accessibilityLabel={`Less ${caption}`}
+          accessibilityLabel={tr('workout.lessNamed')(caption)}
           hitSlop={4}
           style={({ pressed }) => [
             styles.stepButton,
@@ -392,7 +393,7 @@ function Stepper({
         <Pressable
           onPress={move(step)}
           accessibilityRole="button"
-          accessibilityLabel={`More ${caption}`}
+          accessibilityLabel={tr('workout.moreNamed')(caption)}
           hitSlop={4}
           style={({ pressed }) => [
             styles.stepButton,

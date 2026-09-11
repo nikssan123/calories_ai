@@ -13,7 +13,21 @@ import { z } from 'zod';
  * deliberately do not translate.
  */
 
-export const LOCALES = ['en', 'bg', 'de', 'es', 'fr'] as const;
+export const LOCALES = [
+  'en',
+  'bg',
+  'de',
+  'es',
+  'fr',
+  'ro',
+  'uk',
+  'sr',
+  'hr',
+  'cs',
+  'hu',
+  'el',
+  'sk',
+] as const;
 export const Locale = z.enum(LOCALES);
 export type Locale = z.infer<typeof Locale>;
 
@@ -31,6 +45,14 @@ export const LOCALE_NAMES: Record<Locale, string> = {
   de: 'Deutsch',
   es: 'Español',
   fr: 'Français',
+  ro: 'Română',
+  uk: 'Українська',
+  sr: 'Српски',
+  hr: 'Hrvatski',
+  cs: 'Čeština',
+  hu: 'Magyar',
+  el: 'Ελληνικά',
+  sk: 'Slovenčina',
 };
 
 /**
@@ -44,6 +66,54 @@ export const LOCALE_ENGLISH_NAMES: Record<Locale, string> = {
   de: 'German',
   es: 'Spanish',
   fr: 'French',
+  ro: 'Romanian',
+  uk: 'Ukrainian',
+  sr: 'Serbian',
+  hr: 'Croatian',
+  cs: 'Czech',
+  hu: 'Hungarian',
+  el: 'Greek',
+  sk: 'Slovak',
+};
+
+/**
+ * Which alphabet each language is written in.
+ *
+ * A `Record`, so that adding a language does not compile until somebody has
+ * answered the question that decides whether the display face can draw it.
+ * Measured in the font files rather than assumed:
+ *
+ * - **Baloo 2** has every Latin letter the languages here use — Romanian's
+ *   comma-below ș and ț, Hungarian's ő and ű, Czech's ř and ů, Slovak's ľ and
+ *   ŕ, Croatian's đ — and no Cyrillic or Greek at all.
+ * - **Nunito** adds Cyrillic, Ukrainian's і ї є ґ and Serbian's ђ ј љ њ ћ џ
+ *   among it, and still has no Greek.
+ *
+ * So Cyrillic swaps the display face to Nunito, and Greek has nothing to swap
+ * to: its letters draw in the platform's own face, which has Greek on every OS
+ * this app runs on, while its figures — digits — stay in Baloo. See
+ * LANGUAGES.md, "The font problem".
+ *
+ * Read by `figureFace` in `measure.ts` and `displayFacesFor` in the native
+ * app's `theme/typography.ts`. The web's copy is the `:lang()` list in
+ * `globals.css`, which cannot import this and is kept in step by hand.
+ */
+export type LocaleScript = 'latin' | 'cyrillic' | 'greek';
+
+export const LOCALE_SCRIPTS: Record<Locale, LocaleScript> = {
+  en: 'latin',
+  bg: 'cyrillic',
+  de: 'latin',
+  es: 'latin',
+  fr: 'latin',
+  ro: 'latin',
+  uk: 'cyrillic',
+  sr: 'cyrillic',
+  hr: 'latin',
+  cs: 'latin',
+  hu: 'latin',
+  el: 'greek',
+  sk: 'latin',
 };
 
 /**
@@ -112,9 +182,12 @@ export function localeFromAcceptLanguage(header: string | null | undefined): Loc
  * a distinction only the formatter cares about. Every `Intl` call in this file
  * goes through here; nothing else needs to know.
  *
- * The other four are their own tags already — `bg`, `de`, `fr` have no split
- * this app cares about, and `es` resolves to the Peninsular forms the Spanish
- * catalogue is written in.
+ * Every other one is its own tag already. `bg`, `de`, `fr` and the rest have no
+ * split this app cares about; `es` resolves to the Peninsular forms the Spanish
+ * catalogue is written in; and bare `sr` is Cyrillic to CLDR, which is the
+ * script this app's Serbian is written in — the one a Serbian phone defaults
+ * to, so the app matches the system around it. Latin-script Serbian would be
+ * `sr-Latn` and a second catalogue, not a change to this one.
  */
 export function intlLocale(locale: Locale): string {
   return locale === 'en' ? 'en-GB' : locale;

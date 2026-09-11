@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Bookmark, Check, Clock, UtensilsCrossed } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatNumber } from '@ct/shared';
 import { listWords } from '@ct/shared/words';
 import { useLocale, useT } from '@/lib/i18n';
 
@@ -121,7 +122,7 @@ export function RecipeTile({
         <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <span className="text-figure text-[21px] leading-none">{Math.round(kcal)}</span>
           <span className="text-footnote text-muted-foreground">
-            kcal · {Math.round(protein_g)}g protein · {servingLabel}
+            {t('plan.kcalProtein')(formatNumber(Math.round(protein_g), locale))} · {servingLabel}
           </span>
         </div>
 

@@ -13,6 +13,7 @@ import ReanimatedSwipeable, {
 import { type as t, useColors, type Palette } from '@/theme';
 import { Glyph } from '@/components/Glyph';
 import { haptics } from '@/lib/haptics';
+import type { useT } from '@/lib/i18n';
 
 export interface SwipeAction {
   /** Printed under the mark. Keep it to one word. */
@@ -208,12 +209,18 @@ const styles = StyleSheet.create({
 /**
  * The two things a pulled row offers, built here rather than at each call site
  * so that "delete" is the same red, the same width and the same word wherever
- * it is reached from.
+ * it is reached from. They take `tr` rather than calling the hook, because they
+ * are not components.
  */
-export function removeAction(colors: Palette, what: string, onPress: () => void): SwipeAction {
+export function removeAction(
+  colors: Palette,
+  tr: ReturnType<typeof useT>,
+  what: string,
+  onPress: () => void,
+): SwipeAction {
   return {
-    label: 'Delete',
-    announce: `Delete ${what}`,
+    label: tr('common.delete'),
+    announce: tr('a11y.delete')(what),
     tint: colors.destructive,
     ink: colors.destructiveForeground,
     icon: <Glyph icon="trash" color={colors.destructiveForeground} size={19} />,
@@ -221,10 +228,15 @@ export function removeAction(colors: Palette, what: string, onPress: () => void)
   };
 }
 
-export function repeatAction(colors: Palette, what: string, onPress: () => void): SwipeAction {
+export function repeatAction(
+  colors: Palette,
+  tr: ReturnType<typeof useT>,
+  what: string,
+  onPress: () => void,
+): SwipeAction {
   return {
-    label: 'Repeat',
-    announce: `Log ${what} again`,
+    label: tr('common.repeat'),
+    announce: tr('repeat.logAgainNamed')(what),
     tint: colors.primary,
     ink: colors.primaryForeground,
     icon: <Glyph icon="repeat" color={colors.primaryForeground} size={19} />,

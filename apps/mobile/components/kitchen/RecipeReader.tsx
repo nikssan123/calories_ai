@@ -176,9 +176,9 @@ export function RecipeReader({
           )}
 
           <View style={styles.meta}>
-            <Fact label={`Makes ${portions} ${portions === 1 ? 'portion' : 'portions'}`} icon="users" />
-            {typeof minutes === 'number' && <Fact label={`${minutes} min`} icon="clock" />}
-            <Fact label={`${steps.length} ${steps.length === 1 ? 'step' : 'steps'}`} icon="check" />
+            <Fact label={tr('recipe.makes')(portions)} icon="users" />
+            {typeof minutes === 'number' && <Fact label={tr('brief.minutes')(minutes)} icon="clock" />}
+            <Fact label={tr('recipe.steps')(steps.length)} icon="check" />
           </View>
         </View>
 
@@ -191,7 +191,7 @@ export function RecipeReader({
               {Math.round(kcal)}
             </Text>
             <Text style={[t.footnote, styles.costUnit, { color: colors.mutedForeground }]}>
-              kcal · {servingLabel}
+              {tr('recipe.kcalPer')(servingLabel)}
             </Text>
           </View>
           <View style={styles.macros}>

@@ -42,9 +42,9 @@ export function DayRail({ day }: { day: DaySummary | null }) {
             />
             <p className="tnum text-muted-foreground mt-4 text-sm font-medium">
               <span className="text-foreground font-extrabold">
-                {Math.round(day.consumed.kcal).toLocaleString()}
+                {formatNumber(Math.round(day.consumed.kcal), locale)}
               </span>{' '}
-              of {day.targets.kcal.toLocaleString()} kcal
+              {t('today.ofTargetKcal')(formatNumber(day.targets.kcal, locale))}
             </p>
             {day.burned_kcal > 0 && (
               <p className="tnum text-footnote text-muted-foreground mt-1 font-semibold">

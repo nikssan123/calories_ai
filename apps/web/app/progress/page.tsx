@@ -84,7 +84,7 @@ export default function ProgressPage() {
       const kg = bodyWeightToKg(value, units);
       await api.logWeight(kg);
       setWeightInput('');
-      toast.success(`Logged ${formatBodyWeight(kg, units)}`);
+      toast.success(t('progress.weightLogged')(formatBodyWeight(kg, units)));
       await load(days);
     } catch (e) {
       toast.error((e as Error).message);

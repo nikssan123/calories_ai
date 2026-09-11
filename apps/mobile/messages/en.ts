@@ -81,6 +81,11 @@ export const en = {
   'today.macroLine': (protein: string, carbs: string, fat: string) =>
     `${protein}P · ${carbs}C · ${fat}F`,
   'today.changeHint': 'To change this, say so in the journal — “there was more rice”.',
+  'today.logItYourself': '+ Log it yourself',
+  /** The day's own figure is set larger and sits just before this. */
+  'today.ofTargetKcal': (target: string) => `of ${target} kcal`,
+  /** The web's rail says the same sentence under its ring, so it keeps the web's key. */
+  'rail.netAfterExercise': (kcal: string) => `net ${kcal} kcal after exercise`,
 
   'meal.breakfast': 'Breakfast',
   'meal.lunch': 'Lunch',
@@ -116,6 +121,7 @@ export const en = {
   'history.nothingYet': 'Nothing logged yet.',
   'history.days': 'days',
   'history.back': 'Back',
+  'history.proteinGrams': (grams: string) => `${grams}g protein`,
 
   // ---- The composer -------------------------------------------------------
   'composer.placeholder': 'Two eggs and toast…',
@@ -138,6 +144,8 @@ export const en = {
   'composer.photoUnreadable': 'That photo could not be read. Try another one.',
   'composer.selectedMeal': 'Selected meal',
   'composer.labelHint': 'This is the label — log what I ate off it.',
+  'composer.photoTip':
+    'Tip: leave a fork, spoon or your hand in the shot — it tells us how big the plate is, which is the hardest part to guess.',
 
   // ---- Setup / You --------------------------------------------------------
   'setup.title': 'You',
@@ -155,6 +163,9 @@ export const en = {
   'setup.units': 'Units',
   /** The row this whole feature is for. */
   'setup.language': 'Language',
+  /** The two headings in the language list. See `LanguagePicker`. */
+  'setup.languageSuggested': 'Suggested',
+  'setup.languageAll': 'All languages',
   'setup.dayStartsAt': 'Day starts at',
   'setup.timezone': 'Time zone',
   'setup.email': 'Email',
@@ -188,6 +199,9 @@ export const en = {
     'Food eaten before the day starts counts toward the previous day — so a 1am snack lands on the evening it belongs to.',
   'setup.appearanceFooter': 'System follows your device, including its light and dark schedule.',
   'setup.signedInAs': 'Signed in as',
+  'setup.subtitle': 'Enough to work out a starting target. It adjusts as real data comes in.',
+  'setup.targetDisclaimer':
+    'A population average for someone your size, not medical advice. It is corrected from your own logged data after a fortnight. If you are pregnant or breastfeeding, or managing a condition like diabetes or kidney disease, get your number from a clinician and set it by hand here.',
 
   // ---- Coach ----------------------------------------------------------------
   'coach.title': 'Coach',
@@ -373,6 +387,12 @@ export const en = {
   'auth.createAccountSubtitle':
     'Then tell the journal a little about yourself and it will work out your targets.',
   'auth.emailFirst': 'Put your email in first and I’ll send a link.',
+  /** One sentence around the Terms and Privacy Policy links, ending in `agreeAfter`; any piece may be left empty. */
+  'auth.agreeBefore': 'By creating an account you agree to the',
+  'auth.terms': 'Terms',
+  'auth.agreeAnd': 'and the',
+  'auth.agreeAfter': '.',
+  'reset.linkSent': 'If that address has an account, a reset link is on its way.',
 
   // ---- Confirming an address ----------------------------------------------
   'verify.checkEmail': 'Check your email',
@@ -393,6 +413,8 @@ export const en = {
   'verify.signInFirst': 'Sign in first, then enter the code we emailed you.',
   'verify.signOutAndRestart': 'Sign out and start again',
   'verify.linkFailed': 'That link didn’t work',
+  'verify.codeSent': 'Check your inbox for the confirmation code.',
+  'verify.sendAgain': 'Send it again',
 
   // ---- Cook ---------------------------------------------------------------
   //
@@ -572,6 +594,11 @@ export const en = {
   'recipe.confidenceMedium':
     'The numbers are an estimate — close enough to log, worth a second look if it matters.',
   'recipe.confidenceLow': 'These numbers are a rough guess. Weigh what you can if the day is tight.',
+  /** The kcal figure is set larger and sits just before each of these two. */
+  'recipe.tileQualifier': (protein: string, serving: string) =>
+    `kcal · ${protein}g protein · ${serving}`,
+  'recipe.kcalPer': (serving: string) => `kcal · ${serving}`,
+  'recipe.makes': (count: number) => `Makes ${n(count, { one: 'portion', other: 'portions' })}`,
 
   // ---- Progress -----------------------------------------------------------
   //
@@ -800,6 +827,11 @@ export const en = {
   'chat.readTheRest': (count: string) => `Read the rest (${count} more)`,
   'chat.atLoad': (loads: string) => ` at ${loads}`,
   'chat.setsCount': (count: number) => n(count, { one: 'set', other: 'sets' }),
+  /** The day so far is set bold just before this. */
+  'chat.ofTarget': (target: string) => `of ${target}`,
+  'chat.avg': 'avg',
+  /** Only said when the meal landed on a day other than today. */
+  'chat.onDate': (date: string) => `on ${date}`,
 
   /** One letter each, for the macro bar's legend. Not abbreviations of the
       words above them in every language — Bulgarian's are П, В and М. */
@@ -899,6 +931,8 @@ export const en = {
   'review.currentTarget': (kcal: string) => `Target ${kcal} kcal.`,
   'review.willApply': 'Next review will apply this. ',
   'review.kcalUnit': (kcal: string) => `${kcal} kcal`,
+  /** `plan` is a tier name, which stays as the store spells it. */
+  'review.partOf': (plan: string) => `Part of ${plan}`,
 
   'quality.title': '🥦\u00a0\u00a0Diet quality',
   'quality.partlyMeasured': 'partly measured',
@@ -910,6 +944,7 @@ export const en = {
 
   'chart.daily': 'Daily chart',
   'chart.arrowHint': (label: string) => `${label}. Use the arrow keys to read a day.`,
+  'chart.touchHint': 'Chart. Touch and drag to read a day.',
 
   // ---- What the phone says and the web does not ---------------------------
   //
@@ -953,6 +988,20 @@ export const en = {
   'barcode.addedToMessage': (count: number) =>
     `${n(count, { one: 'packet', other: 'packets' })} added to your message`,
   'barcode.nothingAddedYet': 'Nothing added yet',
+  'barcode.nothingUploaded': 'Nothing is uploaded — the code is read on the phone.',
+  'barcode.allowCamera': 'Allow the camera',
+  /** `basis` is what the figures are quoted against — "100 g" or "1 oz". */
+  'barcode.perBasis': (kcal: string, protein: string, basis: string) =>
+    `${kcal} kcal · ${protein}g protein per ${basis}`,
+  'barcode.tapToType': 'Tap the figure to type it',
+  /** The kcal figure itself is set larger and sits just before this. */
+  'barcode.totalLine': (protein: string, mass: string) => `kcal · ${protein}g protein · ${mass}`,
+  'barcode.partialTitle': 'Only partial info on that one.',
+  'barcode.partialHint':
+    'Not enough to log it. Photograph the nutrition label and the journal will read it.',
+  'barcode.notCatalogued': 'That one isn’t catalogued.',
+  'barcode.notCataloguedHint':
+    'Own-brands often aren’t. Photograph the nutrition label instead and the journal will read it.',
 
   'composer.listening': 'Listening…',
   'composer.stopListening': 'Stop listening',
@@ -999,11 +1048,25 @@ export const en = {
   'plan.batchCooking': 'Batch cooking',
   'plan.planning': 'Planning…',
   'plan.dinnersTitle': '🍽  Dinners',
+  'plan.lockedBody':
+    "Seven dinners against your targets and what's already in your kitchen, batched where it helps, with the shopping list written for you.",
+  'plan.planItFooter':
+    "Seven dinners against your targets and what's already in the kitchen. Batching means one cook covering two nights.",
+  'plan.cookingFor': 'Cooking for',
+  'plan.atMost': 'At most',
+  'plan.batchHint': 'One cook covering two nights.',
+  'plan.covers': (count: number) => ` · covers ${n(count, { one: 'night', other: 'nights' })}`,
+  'plan.cookedNamed': (title: string) => `Cooked ${title}`,
+  'plan.clearNamed': (day: string) => `Clear ${day}`,
   'shopping.titleShort': '🧾  Shopping',
   'shopping.addSomethingElse': 'Add something else',
+  'shopping.alreadyHave': (things: string) => `Left off because you already have them: ${things}.`,
+  'shopping.nothingToBuy': 'Nothing to buy yet.',
 
   'progress.openExerciseTab': 'Open the exercise tab',
   'quality.fillThemselvesIn': 'Tell the journal what you ate and they fill themselves in.',
+  'quality.partialCoverage': (percent: string) =>
+    `Only ${percent}% of today’s calories carry these figures, so the totals are a floor rather than the whole day.`,
   'quality.spentTail': (spent: string, plan: string, allowed: string) =>
     `${spent} — ${plan} includes ${allowed} a month.`,
   'quality.estimateNote': (tail: string) =>
@@ -1048,6 +1111,8 @@ export const en = {
   'plans.yourPlan': 'Your plan',
   'plans.aYear': 'a year',
   'plans.aMonth': 'a month',
+  /** `price` is the store's own per-month figure, currency and all. */
+  'plans.worksOutAt': (price: string) => `Works out at ${price} a month.`,
   'plans.onFree': 'You’re on Free. Everything you type in stays free — these buy the parts that think.',
   'plans.onPlan': (plan: string) => `You’re on ${plan}.`,
   'plans.savePercent': (percent: string) => ` · save ${percent}%`,
@@ -1088,10 +1153,15 @@ export const en = {
     `Until you confirm ${email}, a forgotten password cannot be reset — there would be no way to know the mailbox is yours.`,
   'setup.sendLinkAgain': 'Send the link again',
   'setup.weeklyReview': 'Weekly review',
+  'setup.weeklyReviewHint': 'Last week, summarised, on Monday.',
   'setup.sendMeReview': 'Send me the weekly review',
   'setup.nudges': 'Nudges',
+  'setup.nudgesHintMobile':
+    'At most one a week, when something in your log is worth a mention. They always appear in the journal; this sends it to your phone as well — or to your email, if notifications are off.',
   'setup.sendMeNudges': 'Send me nudges',
   'setup.streaksAndGoals': 'Streaks and goals',
+  'setup.streaksHint':
+    'A run of logged days worth noticing, and the day the scale reaches the number you set. Rare by construction, and never emailed — these go to your phone or nowhere.',
   'setup.tellMeStreaks': 'Tell me about streaks and goals',
   'setup.eveningRecap': 'Evening recap',
   'setup.eveningRecapHint':
@@ -1101,10 +1171,14 @@ export const en = {
   'setup.remindersFooter':
     'Set here, kept here. These need no account and no connection, they arrive whatever your plan is, and they do not follow you to a new phone.',
   'setup.logYourDay': 'Log your day',
+  'setup.logYourDayHint':
+    'A nudge from your own phone, at an hour you pick. It knows nothing about what you have logged — it is an alarm, not an opinion.',
   'setup.remindMeToLog': 'Remind me to log',
   'setup.at': 'At',
   'setup.reminderTime': 'Reminder time',
   'setup.weighIn': 'Weigh in',
+  'setup.weighInHint':
+    "Once a week, before breakfast. Weighing daily measures yesterday's salt more than it measures you, which is why this one is not offered daily.",
   'setup.remindMeToWeigh': 'Remind me to weigh in',
   'setup.on': 'On',
   'setup.weighInDay': 'Weigh-in day',
@@ -1147,6 +1221,8 @@ export const en = {
   'wall.bodyMealPlan':
     'The week you last planned is still there, and you can still cook from a saved recipe.',
   'wall.remaining': (count: number, noun: string) => `${count} ${noun} left`,
+  'wall.logMyself': 'Log this one myself',
+  'wall.loggedByHand': 'Logged by hand — that way is always open, and never counts against anything.',
 
   'tier.reviewAndNudge': 'A weekly review, and a nudge when you go quiet',
   'tier.review': 'A weekly review of how you ate',
@@ -1221,9 +1297,18 @@ export const en = {
   'widget.stepsWord': 'steps',
   'widget.usual': (average: string) => `of your usual ${average}`,
 
+  'toast.logged': (description: string, kcal: string) => `Logged ${description} — ${kcal} kcal`,
+  'toast.removed': (description: string) => `Removed ${description}`,
+  'toast.tapToDismiss': (text: string) => `${text}. Tap to dismiss.`,
+  'a11y.edit': (name: string) => `Edit ${name}`,
+  'a11y.delete': (name: string) => `Delete ${name}`,
+  'a11y.remove': (name: string) => `Remove ${name}`,
+
   'common.save': 'Save',
   'common.cancel': 'Cancel',
   'common.delete': 'Delete',
+  'common.repeat': 'Repeat',
+  'common.undo': 'Undo',
   'common.done': 'Done',
   'common.add': 'Add',
   'common.edit': 'Edit',
@@ -1250,4 +1335,6 @@ export const en = {
   'workout.exactLength': (min: string) => `${min} min`,
   'workout.tapToFix': 'estimated · tap to fix',
   'workout.whatKind': 'What kind of session?',
+  'workout.lessNamed': (caption: string) => `Less ${caption}`,
+  'workout.moreNamed': (caption: string) => `More ${caption}`,
 } as const;

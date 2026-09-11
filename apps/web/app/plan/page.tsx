@@ -107,7 +107,7 @@ export default function PlanPage() {
   async function cook(slot: MealPlanSlot) {
     try {
       const entry = await api.cookSlot(slot.id);
-      toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
+      toast.success(t('toast.logged')(entry.description, formatNumber(Math.round(entry.kcal), locale)));
       await load();
     } catch (e) {
       toast.error((e as Error).message);
@@ -497,7 +497,7 @@ function Shopping({
   async function remove(item: ShoppingItem) {
     try {
       await api.deleteShoppingItem(item.extra_id!);
-      toast.success(`Took ${item.name} off the list`);
+      toast.success(t('shopping.tookOff')(item.name));
       onList(await api.shoppingList(week));
     } catch (e) {
       toast.error((e as Error).message);

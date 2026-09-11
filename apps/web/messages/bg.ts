@@ -66,6 +66,7 @@ export const bg: Messages = {
   'today.exercise': 'Движение',
   'today.roughEstimate': 'груба преценка',
   'today.changeHint': 'За да го промениш, кажи го в дневника — „ориза беше повече“.',
+  'today.ofTargetKcal': (target: string) => `от ${target} kcal`,
 
   'meal.breakfast': 'Закуска',
   'meal.lunch': 'Обяд',
@@ -106,9 +107,12 @@ export const bg: Messages = {
   'composer.removeScan': (name: string) => `Премахни ${name}`,
   'composer.selectedMeal': 'Избрано хранене',
   'composer.labelHint': 'Това е етикетът — запиши каквото изядох по него.',
+  'composer.photoTip':
+    'Съвет: остави в кадъра вилица, лъжица или ръката си — по тях се вижда колко голяма е чинията, а това се преценява най-трудно.',
 
   // ---- Setup / You --------------------------------------------------------
   'setup.title': 'Профил',
+  'setup.subtitle': 'Колкото да се изчисли начална цел. После тя се уточнява според истинските ти записи.',
   'setup.about': 'За теб',
   'setup.account': 'Акаунт',
   'setup.appearance': 'Изглед',
@@ -122,6 +126,8 @@ export const bg: Messages = {
   'setup.goal': 'Цел',
   'setup.units': 'Мерни единици',
   'setup.language': 'Език',
+  'setup.languageSuggested': 'Предложени',
+  'setup.languageAll': 'Всички езици',
   'setup.dayStartsAt': 'Денят започва в',
   'setup.timezone': 'Часова зона',
   'setup.email': 'Имейл',
@@ -171,6 +177,11 @@ export const bg: Messages = {
   'auth.genericFailure': 'Нещо се обърка при влизането. Опитай пак.',
   'auth.oneMoment': 'Момент…',
   'auth.privacyPolicy': 'Политика за поверителност',
+  // «нашите» governs both links, so neither title needs an article.
+  'auth.agreeBefore': 'Като създадеш акаунт, приемаш нашите',
+  'auth.terms': 'Условия за ползване',
+  'auth.agreeAnd': 'и',
+  'auth.agreeAfter': '.',
   'auth.language': 'Език',
 
   // ---- Confirming an address ----------------------------------------------
@@ -189,6 +200,27 @@ export const bg: Messages = {
   'verify.signInFirst': 'Първо влез, после въведи кода, който ти изпратихме.',
   'verify.signOutAndRestart': 'Излез и започни отначало',
   'verify.linkFailed': 'Връзката не сработи',
+  'verify.failedSubtitle': (message: string) => `${message} Можеш вместо това да въведеш кода от имейла.`,
+  'verify.confirmedMessage': 'Имейл адресът ти е потвърден.',
+  'verify.codeSent': 'Изпратихме ти кода — провери пощата си.',
+  'verify.sentCodeBefore': 'Изпратихме шестцифрен код на',
+  'verify.sentCodeAfter': '. Въведи го, за да завършиш регистрацията.',
+  'verify.wrongAddress': 'Грешен адрес?',
+
+  // ---- A coach's invite link ----------------------------------------------
+  //
+  // «Настройки» for Settings, as the phone's reviewed `coach.canStop` already
+  // says it, and «Треньор» for the section inside.
+  'invite.title': 'Имаш покана от треньора си',
+  'invite.body':
+    'Приеми я в приложението Day So Far, за да споделяш дневника си с треньора. Ти избираш какво вижда, а споделянето можеш да спреш по всяко време от Настройки.',
+  'invite.yourCode': 'Твоят код',
+  'invite.copyCode': 'Копирай кода',
+  'invite.codeCopied': 'Кодът е копиран',
+  'invite.openInApp': 'Отвори в приложението',
+  'invite.orOpenApp': 'Или отвори приложението, отиди в Настройки и въведи кода в раздела Треньор.',
+  'invite.noApp': 'Още нямаш приложението?',
+  'invite.coachingYourself': 'А ти тренираш ли някого?',
 
 
   // ---- Cook ---------------------------------------------------------------
@@ -309,6 +341,7 @@ export const bg: Messages = {
   'recipe.unsaveNamed': (title) => `Премахни ${title} от запазените`,
   'recipe.forPortions': (portions) => `за ${portions} порции`,
   'recipe.portionsCount': (count) => n(count, { one: 'порция', other: 'порции' }),
+  'recipe.makes': (count) => `За ${n(count, { one: 'порция', other: 'порции' })}`,
   'recipe.howToMakeIt': (steps) => `Как се прави · ${steps}`,
   'recipe.ingredientsMakes': (portions) => `Продукти · за ${portions}`,
   'recipe.iAteThis': (kcal) => `Изядох това · ${kcal} kcal`,
@@ -386,6 +419,7 @@ export const bg: Messages = {
   'progress.sinceStart': 'От началото',
   'progress.toTarget': 'До целта',
   'progress.logTodaysWeight': (unit) => `Запиши днешното тегло (${unit})`,
+  'progress.weightLogged': (weight) => `Записах ${weight}`,
   'progress.caloriesTitle': '🔥  Калории',
   'progress.avgDayTarget': (target) => `средно на ден · цел ${target}`,
   'progress.proteinTitle': '💪  Протеин',
@@ -447,6 +481,8 @@ export const bg: Messages = {
   'workouts.oneFewerSet': (exercise) => `Една серия по-малко от ${exercise}`,
   'workouts.oneMoreSet': (exercise) => `Една серия повече от ${exercise}`,
   'workouts.removeExercise': (exercise) => `Премахни ${exercise}`,
+  'workouts.saved': (name) => `Запазих „${name}“`,
+  'workouts.deleted': (name) => `Изтрих „${name}“`,
   // ---- Resetting a password -----------------------------------------------
   'reset.checkInbox': 'Провери пощата си',
   'reset.sentBefore': 'Ако',
@@ -464,10 +500,13 @@ export const bg: Messages = {
   'reset.askAnother': 'Поискай друга',
   'reset.newPassword': 'Нова парола',
   'reset.savePassword': 'Запази паролата',
+  'reset.linkSent': 'Ако този адрес има профил, връзка за нова парола вече пътува.',
+  'reset.passwordChanged': 'Паролата ти е сменена. Влез с новата.',
   'unsubscribe.incompleteLink': 'Тази връзка за отписване е непълна.',
   'unsubscribe.working': 'Отписвам…',
   'unsubscribe.oneMoment': 'Един момент.',
   'unsubscribe.done': 'Отписан',
+  'unsubscribe.doneSubtitle': 'Повече няма да ти пращаме имейли за приложението.',
   'unsubscribe.failedSubtitle': (message) => `${message} Можеш и да изключиш седмичния имейл от настройките на профила си.`,
   'unsubscribe.openSettings': 'Отвори настройките',
   'unsubscribe.changedMind': 'Размисли ли? Включи го пак в',
@@ -516,6 +555,7 @@ export const bg: Messages = {
   'shopping.putBack': (name) => `Върни ${name} в списъка`,
   'shopping.tickOff': (name) => `Отбележи ${name}`,
   'shopping.takeOff': (name) => `Махни ${name} от списъка`,
+  'shopping.tookOff': (name) => `Махнах ${name} от списъка`,
   // ---- The barcode scanner ------------------------------------------------
   'barcode.isThisIt': 'Това ли е?',
   'barcode.scanThePacket': 'Сканирай опаковката',
@@ -602,6 +642,12 @@ export const bg: Messages = {
   'chat.readTheRest': (count) => `Прочети останалото (още ${count})`,
   'chat.atLoad': (loads) => ` с ${loads}`,
   'chat.setsCount': (count) => n(count, { one: 'серия', other: 'серии' }),
+  'chat.avg': 'средно',
+  'chat.ofTarget': (target) => `от ${target}`,
+  'chat.onDate': (date) => `на ${date}`,
+  // A comma before `rest`, not a full stop: `journal.left` starts lower-case.
+  'chat.dayProgressLabel': (after, target, when, meal, rest) =>
+    `${after} от ${target} kcal${when ? ` ${when}` : ''} — това хранене добавя ${meal}, ${rest}.`,
   'macro.proteinInitial': 'П',
   'macro.carbsInitial': 'В',
   'macro.fatInitial': 'М',
@@ -673,6 +719,8 @@ export const bg: Messages = {
   'workout.removeSet': (index) => `Премахни серия ${index}`,
   'workout.anotherSet': 'Още една серия',
   'workout.removeNamed': (name) => `Премахни ${name}`,
+  'workout.lessNamed': (caption) => `По-малко ${caption}`,
+  'workout.moreNamed': (caption) => `Повече ${caption}`,
   'workout.lastTime': (figure) => `миналия път ${figure}`,
   'workout.adjust': 'Промени',
   'workout.setsDiffered': 'Сериите се различават',
@@ -697,6 +745,8 @@ export const bg: Messages = {
   'quality.title': '🥦\u00a0\u00a0Качество на храненето',
   'quality.partlyMeasured': 'частично измерено',
   'quality.notEstimated': 'без оценка',
+  'quality.partialCoverage': (percent) =>
+    `Само ${percent}% от днешните калории носят тези числа, така че истинските стойности за деня са поне толкова.`,
   'nutrient.sodium': 'Натрий',
   'nutrient.satFat': 'Нас. мазнини',
   'nutrient.sugar': 'Захар',
@@ -715,6 +765,10 @@ export const bg: Messages = {
   'history.nothingYet': 'Още нищо записано.',
   'history.thisMonthTitle': (month) => `📆  ${month}`,
   'history.days': 'дни',
+  'history.proteinGrams': (grams) => `${grams}g протеин`,
+  'history.cellLogged': (date, kcal) => `${date}, ${kcal} kcal`,
+  'history.cellLoggedOf': (date, kcal, target) => `${date}, ${kcal} от ${target} kcal`,
+  'history.cellEmpty': (date) => `${date}, нищо записано`,
   'setup.activitySedentary': 'Офисна работа, малко движение',
   'setup.activityLight': 'Леко движение 1–3 дни седмично',
   'setup.activityModerate': 'Умерено движение 3–5 дни седмично',
@@ -814,6 +868,12 @@ export const bg: Messages = {
   'badgeHow.days_365': 'Триста шейсет и пет записани дни, в произволен ред.',
   'badge.workouts_100': 'Сто тренировки',
   'badgeHow.workouts_100': 'Сто дни с тренировка.',
+
+  // ---- Receipts and labels both apps word the same way --------------------
+  'toast.logged': (description: string, kcal: string) => `Записах ${description} — ${kcal} kcal`,
+  'toast.removed': (description: string) => `Премахнах ${description}`,
+  'a11y.edit': (name: string) => `Редактирай ${name}`,
+  'a11y.delete': (name: string) => `Изтрий ${name}`,
 
   'common.save': 'Запази',
   'common.cancel': 'Откажи',

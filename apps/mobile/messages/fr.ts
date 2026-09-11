@@ -58,6 +58,9 @@ export const fr: Messages = {
   'today.exercise': 'Sport',
   'today.roughEstimate': 'estimation approximative',
   'today.changeHint': 'Pour le changer, dis-le dans le journal : « il y avait plus de riz ».',
+  'today.logItYourself': '+ Note-le toi-même',
+  'today.ofTargetKcal': (target: string) => `sur ${target} kcal`,
+  'rail.netAfterExercise': (kcal: string) => `net ${kcal} kcal après l’activité`,
 
   'meal.breakfast': 'Petit-déjeuner',
   'meal.lunch': 'Déjeuner',
@@ -104,6 +107,8 @@ export const fr: Messages = {
   'composer.photoUnreadable': 'Cette photo n’a pas pu être lue. Essaie-en une autre.',
   'composer.selectedMeal': 'Repas sélectionné',
   'composer.labelHint': 'Voici l’étiquette — enregistre ce que j’ai mangé à partir d’elle.',
+  'composer.photoTip':
+    'Astuce : laisse une fourchette, une cuillère ou ta main dans le cadre — ça nous donne la taille de l’assiette, et c’est le plus dur à deviner.',
 
   // ---- Setup / You --------------------------------------------------------
   'setup.title': 'Profil',
@@ -120,6 +125,8 @@ export const fr: Messages = {
   'setup.goal': 'Objectif',
   'setup.units': 'Unités',
   'setup.language': 'Langue',
+  'setup.languageSuggested': 'Suggestions',
+  'setup.languageAll': 'Toutes les langues',
   'setup.dayStartsAt': 'La journée commence à',
   'setup.timezone': 'Fuseau horaire',
   'setup.email': 'E-mail',
@@ -263,6 +270,8 @@ export const fr: Messages = {
   'verify.signInFirst': 'Connecte-toi d’abord, puis saisis le code qu’on t’a envoyé.',
   'verify.signOutAndRestart': 'Se déconnecter et recommencer',
   'verify.linkFailed': 'Ce lien n’a pas fonctionné',
+  'verify.codeSent': 'Le code de confirmation t’attend dans ta boîte de réception.',
+  'verify.sendAgain': 'Le renvoyer',
 
 
   // ---- Everything the string pass added, in en.ts order -------------------
@@ -298,6 +307,7 @@ export const fr: Messages = {
   'history.nothingYet': 'Rien noté pour l’instant.',
   'history.days': 'jours',
   'history.back': 'Retour',
+  'history.proteinGrams': (grams: string) => `${grams} g de protéines`,
   'setup.activitySedentary': 'Travail de bureau, peu d’activité',
   'setup.activityLight': 'Activité légère 1–3 jours/semaine',
   'setup.activityModerate': 'Activité modérée 3–5 jours/semaine',
@@ -309,6 +319,9 @@ export const fr: Messages = {
   'setup.dayFooter': 'Ce qui est mangé avant le début de la journée compte pour la veille — un encas à 1 h du matin tombe donc sur la soirée à laquelle il appartient.',
   'setup.appearanceFooter': '« Système » suit ton appareil, y compris son passage clair/sombre.',
   'setup.signedInAs': 'Connecté en tant que',
+  'setup.subtitle': 'Assez pour calculer un objectif de départ. Il s’ajuste à mesure que les vraies données arrivent.',
+  'setup.targetDisclaimer':
+    'Une moyenne de population pour quelqu’un de ta taille, pas un avis médical. Il est corrigé à partir de tes propres données au bout de quinze jours. Si tu es enceinte ou tu allaites, ou si tu vis avec une maladie comme le diabète ou une insuffisance rénale, demande ton chiffre à un soignant et règle-le ici à la main.',
 
   // ---- Coach ----------------------------------------------------------------
   'coach.title': 'Coach',
@@ -365,6 +378,11 @@ export const fr: Messages = {
   'auth.or': 'ou',
   'auth.createAccountSubtitle': 'Ensuite raconte deux ou trois choses sur toi au journal et il calculera tes objectifs.',
   'auth.emailFirst': 'Mets d’abord ton adresse et je t’envoie un lien.',
+  'auth.agreeBefore': 'En créant un compte, tu acceptes les',
+  'auth.terms': 'Conditions d’utilisation',
+  'auth.agreeAnd': 'et la',
+  'auth.agreeAfter': '.',
+  'reset.linkSent': 'Si cette adresse a un compte, un lien de réinitialisation est en route.',
   'cook.title': 'Cuisine',
   'cook.kitchenEmpty': 'Ta cuisine est vide',
   'cook.things': (count) => n(count, { one: 'chose', other: 'choses' }),
@@ -500,6 +518,10 @@ export const fr: Messages = {
   'recipe.confidenceHigh': 'Ces chiffres sont ce que l’app fait de mieux sans rien peser.',
   'recipe.confidenceMedium': 'Les chiffres sont une estimation — assez juste pour être noté, à revoir si ça compte.',
   'recipe.confidenceLow': 'Ces chiffres sont une approximation grossière. Pèse ce que tu peux si la journée est serrée.',
+  'recipe.tileQualifier': (protein: string, serving: string) =>
+    `kcal · ${protein} g de protéines · ${serving}`,
+  'recipe.kcalPer': (serving: string) => `kcal · ${serving}`,
+  'recipe.makes': (count: number) => `Pour ${n(count, { one: 'portion', other: 'portions' })}`,
   'progress.title': 'Progrès',
   'progress.daysWindow': (count) => n(count, { one: 'jour', other: 'jours' }),
   'progress.daysShort': (count) => `${count} j`,
@@ -687,6 +709,9 @@ export const fr: Messages = {
   'chat.readTheRest': (count) => `Lire la suite (${count} de plus)`,
   'chat.atLoad': (loads) => ` à ${loads}`,
   'chat.setsCount': (count) => n(count, { one: 'série', other: 'séries' }),
+  'chat.ofTarget': (target: string) => `sur ${target}`,
+  'chat.avg': 'moyenne',
+  'chat.onDate': (date: string) => `le ${date}`,
   'journal.promptEggs': 'Deux œufs, une tartine et un café',
   'journal.promptLunch': 'Poulet riz à midi',
   'journal.promptRun': (distance) => `J’ai couru ${distance}`,
@@ -761,6 +786,7 @@ export const fr: Messages = {
   'review.currentTarget': (kcal) => `Objectif ${kcal} kcal.`,
   'review.willApply': 'Le prochain bilan appliquera ça. ',
   'review.kcalUnit': (kcal) => `${kcal} kcal`,
+  'review.partOf': (plan: string) => `Fait partie de ${plan}`,
   'quality.title': '🥦\u00a0\u00a0Qualité de l’alimentation',
   'quality.partlyMeasured': 'partiellement mesuré',
   'quality.notEstimated': 'non estimé',
@@ -769,6 +795,7 @@ export const fr: Messages = {
   'nutrient.sugar': 'Sucre',
   'chart.daily': 'Graphique du jour',
   'chart.arrowHint': (label) => `${label}. Utilise les flèches pour lire jour par jour.`,
+  'chart.touchHint': 'Graphique. Touche et fais glisser pour lire un jour.',
   'cook.photographFridge': 'photographie ton frigo',
   'cook.kitchenLocked': 'La cuisine fait partie de Coach',
   'cook.kitchenLockedBody': 'Photographie ton frigo, obtiens une recette écrite autour de ce qu’il y a dedans, et planifie une semaine de dîners à partir de là. La bibliothèque de recettes en dessous reste gratuite — parcours-la, cuisine-la, note-la.',
@@ -802,6 +829,18 @@ export const fr: Messages = {
   'barcode.addedToMessage': (count: number) =>
     `${n(count, { one: 'paquet', other: 'paquets' })} dans ton message`,
   'barcode.nothingAddedYet': 'Rien d’ajouté pour l’instant',
+  'barcode.nothingUploaded': 'Rien n’est envoyé — le code est lu sur le téléphone.',
+  'barcode.allowCamera': 'Autoriser la caméra',
+  'barcode.perBasis': (kcal: string, protein: string, basis: string) =>
+    `${kcal} kcal · ${protein} g de protéines pour ${basis}`,
+  'barcode.tapToType': 'Touche le chiffre pour le saisir',
+  'barcode.totalLine': (protein: string, mass: string) => `kcal · ${protein} g de protéines · ${mass}`,
+  'barcode.partialTitle': 'Seulement des informations partielles pour celui-là.',
+  'barcode.partialHint':
+    'Pas assez pour le noter. Prends le tableau nutritionnel en photo et le journal le lira.',
+  'barcode.notCatalogued': 'Celui-là n’est pas catalogué.',
+  'barcode.notCataloguedHint':
+    'Les marques de distributeur ne le sont souvent pas. Prends plutôt le tableau nutritionnel en photo et le journal le lira.',
   'composer.listening': 'J’écoute…',
   'composer.stopListening': 'Arrêter d’écouter',
   'composer.sayWhatYouAte': 'Dis ce que tu as mangé',
@@ -843,10 +882,24 @@ export const fr: Messages = {
   'plan.batchCooking': 'Cuisiner en plus grand',
   'plan.planning': 'Je planifie…',
   'plan.dinnersTitle': '🍽  Dîners',
+  'plan.lockedBody':
+    'Sept dîners chiffrés contre tes objectifs et ce qu’il y a déjà dans ta cuisine, cuisinés en plus grand quand ça aide, avec la liste de courses écrite pour toi.',
+  'plan.planItFooter':
+    'Sept dîners chiffrés contre tes objectifs et ce qu’il y a déjà en cuisine. Cuisiner en plus grand, c’est une seule cuisson pour deux soirs.',
+  'plan.cookingFor': 'Cuisiner pour',
+  'plan.atMost': 'Au plus',
+  'plan.batchHint': 'Une seule cuisson pour deux soirs.',
+  'plan.covers': (count: number) => ` · pour ${n(count, { one: 'soir', other: 'soirs' })}`,
+  'plan.cookedNamed': (title: string) => `Cuisiné : ${title}`,
+  'plan.clearNamed': (day: string) => `Vider ${day}`,
   'shopping.titleShort': '🧾  Courses',
   'shopping.addSomethingElse': 'Ajouter autre chose',
+  'shopping.alreadyHave': (things: string) => `Laissé de côté parce que tu les as déjà : ${things}.`,
+  'shopping.nothingToBuy': 'Rien à acheter pour l’instant.',
   'progress.openExerciseTab': 'Ouvrir l’onglet activité',
   'quality.fillThemselvesIn': 'Dis au journal ce que tu as mangé et elles se remplissent toutes seules.',
+  'quality.partialCoverage': (percent: string) =>
+    `Seulement ${percent}% des calories d’aujourd’hui portent ces chiffres, les totaux sont donc un minimum plutôt que la journée entière.`,
   'quality.spentTail': (spent, plan, allowed) => `${spent} — ${plan} inclut ${allowed} par mois.`,
   'quality.estimateNote': (tail) => `Ces quatre-là sont l’estimation du modèle, donc seuls les repas que le journal note les portent — les repas tapés, répétés et scannés restent vides. ${tail}`,
   'plans.spent': 'Ton forfait est épuisé',
@@ -886,6 +939,7 @@ export const fr: Messages = {
   'plans.yourPlan': 'Ton forfait',
   'plans.aYear': 'par an',
   'plans.aMonth': 'par mois',
+  'plans.worksOutAt': (price: string) => `Soit ${price} par mois.`,
   'plans.onFree': 'Tu es sur Free. Tout ce que tu tapes toi-même reste gratuit — ceux-là achètent les parties qui réfléchissent.',
   'plans.onPlan': (plan) => `Tu es sur ${plan}.`,
   'plans.savePercent': (percent) => ` · ${percent}% d’économie`,
@@ -919,10 +973,15 @@ export const fr: Messages = {
   'setup.confirmFirst': (email) => `Tant que tu ne confirmes pas ${email}, un mot de passe oublié ne peut pas être réinitialisé — rien ne permettrait de savoir que la boîte est la tienne.`,
   'setup.sendLinkAgain': 'Renvoyer le lien',
   'setup.weeklyReview': 'Bilan hebdomadaire',
+  'setup.weeklyReviewHint': 'La semaine passée, résumée, le lundi.',
   'setup.sendMeReview': 'Envoie-moi le bilan hebdomadaire',
   'setup.nudges': 'Petits rappels',
+  'setup.nudgesHintMobile':
+    'Au plus un par semaine, quand quelque chose dans ton journal mérite un mot. Ils apparaissent toujours dans le journal ; ceci les envoie aussi sur ton téléphone — ou par e-mail, si les notifications sont désactivées.',
   'setup.sendMeNudges': 'Envoie-moi les petits rappels',
   'setup.streaksAndGoals': 'Séries et objectifs',
+  'setup.streaksHint':
+    'Une série de jours notés qui vaut d’être signalée, et le jour où la balance atteint le chiffre que tu as fixé. Rares par nature, et jamais par e-mail — c’est ton téléphone ou rien.',
   'setup.tellMeStreaks': 'Parle-moi des séries et des objectifs',
   'setup.eveningRecap': 'Récap du soir',
   'setup.eveningRecapHint': 'Les calories et les protéines du jour contre les objectifs du jour, à neuf heures. Chaque jour où tu as noté quelque chose — la seule notification ici qui ne soit pas occasionnelle.',
@@ -930,10 +989,14 @@ export const fr: Messages = {
   'setup.remindersTitle': 'Rappels sur ce téléphone',
   'setup.remindersFooter': 'Réglés ici, gardés ici. Ils n’ont besoin ni de compte ni de connexion, ils arrivent quel que soit ton forfait, et ils ne te suivent pas sur un nouveau téléphone.',
   'setup.logYourDay': 'Note ta journée',
+  'setup.logYourDayHint':
+    'Un petit rappel de ton propre téléphone, à l’heure que tu choisis. Il ne sait rien de ce que tu as noté — c’est une alarme, pas un avis.',
   'setup.remindMeToLog': 'Rappelle-moi de noter',
   'setup.at': 'À',
   'setup.reminderTime': 'Heure du rappel',
   'setup.weighIn': 'Se peser',
+  'setup.weighInHint':
+    'Une fois par semaine, avant le petit-déjeuner. Se peser tous les jours mesure le sel de la veille plus que toi, c’est pourquoi celui-ci n’est pas proposé chaque jour.',
   'setup.remindMeToWeigh': 'Rappelle-moi de me peser',
   'setup.on': 'Le',
   'setup.weighInDay': 'Jour de pesée',
@@ -960,6 +1023,8 @@ export const fr: Messages = {
   'wall.bodyRecipe': 'Tout ce que tu as déjà cuisiné est toujours gardé, et la bibliothèque de recettes est libre à parcourir.',
   'wall.bodyMealPlan': 'La semaine que tu as planifiée est toujours là, et tu peux toujours cuisiner depuis une recette gardée.',
   'wall.remaining': (count, noun) => `${count} ${noun} restants`,
+  'wall.logMyself': 'Je le note moi-même',
+  'wall.loggedByHand': 'Noté à la main — ce chemin reste toujours ouvert, et il n’est jamais compté.',
   'tier.reviewAndNudge': 'Un bilan hebdomadaire, et un petit rappel quand tu te tais',
   'tier.review': 'Un bilan hebdomadaire de ta façon de manger',
   'tier.nudge': 'Un petit rappel quand tu te tais',
@@ -1028,10 +1093,19 @@ export const fr: Messages = {
   'widget.steps': (count: number) => n(count, { one: 'pas', other: 'pas' }),
   'widget.stepsWord': 'pas',
   'widget.usual': (average: string) => `sur tes ${average} habituels`,
+  // "Noté : …" rather than "… noté": the description can be any gender or number.
+  'toast.logged': (description: string, kcal: string) => `Noté : ${description} — ${kcal} kcal`,
+  'toast.removed': (description: string) => `Retiré : ${description}`,
+  'toast.tapToDismiss': (text: string) => `${text}. Touche pour fermer.`,
+  'a11y.edit': (name: string) => `Modifier ${name}`,
+  'a11y.delete': (name: string) => `Supprimer ${name}`,
+  'a11y.remove': (name: string) => `Retirer ${name}`,
 
   'common.save': 'Enregistrer',
   'common.cancel': 'Annuler',
   'common.delete': 'Supprimer',
+  'common.repeat': 'Répéter',
+  'common.undo': 'Annuler',
   'common.done': 'Terminé',
   'common.add': 'Ajouter',
   'common.edit': 'Modifier',
@@ -1058,4 +1132,6 @@ export const fr: Messages = {
   'workout.exactLength': (min: string) => `${min} min`,
   'workout.tapToFix': 'estimé · touche pour corriger',
   'workout.whatKind': 'Quel type de séance ?',
+  'workout.lessNamed': (caption: string) => `Moins de ${caption}`,
+  'workout.moreNamed': (caption: string) => `Plus de ${caption}`,
 };

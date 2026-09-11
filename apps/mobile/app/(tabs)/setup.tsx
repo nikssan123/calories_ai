@@ -345,7 +345,7 @@ export default function SetupScreen() {
         <View>
           <Text style={[t.largeTitle, { color: colors.foreground }]}>{tr('setup.title')}</Text>
           <Text style={[t.body, styles.blurb, { color: colors.mutedForeground }]}>
-            Enough to work out a starting target. It adjusts as real data comes in.
+            {tr('setup.subtitle')}
           </Text>
         </View>
 
@@ -733,7 +733,7 @@ function TargetCard({ day }: { day: DaySummary }) {
       <View style={styles.target}>
         <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>{tr('setup.dailyTarget')}</Text>
         <Text style={[t.figure, styles.targetFigure, { color: colors.foreground }]}>
-          {day.targets.kcal.toLocaleString()}
+          {formatNumber(day.targets.kcal, locale)}
           <Text style={[styles.targetUnit, { color: colors.mutedForeground }]}> kcal</Text>
         </Text>
 
@@ -758,10 +758,7 @@ function TargetCard({ day }: { day: DaySummary }) {
           diabetes, needs to have read before treating it as an instruction.
         */}
         <Text style={[t.footnote, styles.disclaimer, { color: colors.mutedForeground }]}>
-          A population average for someone your size, not medical advice. It is corrected from
-          your own logged data after a fortnight. If you are pregnant or breastfeeding, or
-          managing a condition like diabetes or kidney disease, get your number from a
-          clinician and set it by hand here.
+          {tr('setup.targetDisclaimer')}
         </Text>
       </View>
     </InsetGroup>
@@ -1067,8 +1064,8 @@ function EmailSettings({
   async function resend() {
     setSending(true);
     try {
-      const result = await api.resendVerification();
-      setSent(result.message);
+      await api.resendVerification();
+      setSent(tr('verify.codeSent'));
     } catch (e) {
       onError(messageOf(e, tr));
     } finally {
@@ -1127,7 +1124,7 @@ function EmailSettings({
       {profile.email_verified ? (
         <InsetRow first>
           <Text style={[t.body, styles.label, { color: colors.foreground }]}>
-            Address confirmed
+            {tr('setup.addressConfirmed')}
           </Text>
         </InsetRow>
       ) : (
@@ -1163,7 +1160,7 @@ function EmailSettings({
         <View style={styles.label}>
           <Text style={[t.body, { color: colors.foreground }]}>{tr('setup.weeklyReview')}</Text>
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-            Last week, summarised, on Monday.
+            {tr('setup.weeklyReviewHint')}
           </Text>
         </View>
         <Switch
@@ -1180,9 +1177,7 @@ function EmailSettings({
         <View style={styles.label}>
           <Text style={[t.body, { color: colors.foreground }]}>{tr('setup.nudges')}</Text>
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-            At most one a week, when something in your log is worth a mention. They always
-            appear in the journal; this sends it to your phone as well — or to your email,
-            if notifications are off.
+            {tr('setup.nudgesHintMobile')}
           </Text>
         </View>
         <Switch
@@ -1199,8 +1194,7 @@ function EmailSettings({
         <View style={styles.label}>
           <Text style={[t.body, { color: colors.foreground }]}>{tr('setup.streaksAndGoals')}</Text>
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-            A run of logged days worth noticing, and the day the scale reaches the number you
-            set. Rare by construction, and never emailed — these go to your phone or nowhere.
+            {tr('setup.streaksHint')}
           </Text>
         </View>
         <Switch
@@ -1288,8 +1282,7 @@ function PhoneReminders() {
         <View style={styles.label}>
           <Text style={[t.body, { color: colors.foreground }]}>{tr('setup.logYourDay')}</Text>
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-            A nudge from your own phone, at an hour you pick. It knows nothing about what you
-            have logged — it is an alarm, not an opinion.
+            {tr('setup.logYourDayHint')}
           </Text>
         </View>
         <Switch
@@ -1317,8 +1310,7 @@ function PhoneReminders() {
         <View style={styles.label}>
           <Text style={[t.body, { color: colors.foreground }]}>{tr('setup.weighIn')}</Text>
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-            Once a week, before breakfast. Weighing daily measures yesterday's salt more than
-            it measures you, which is why this one is not offered daily.
+            {tr('setup.weighInHint')}
           </Text>
         </View>
         <Switch

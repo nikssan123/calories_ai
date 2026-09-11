@@ -1,38 +1,50 @@
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { LOCALES, LOCALE_NAMES, type Locale } from '@ct/shared';
-import { typeFor, useColors } from '@/theme';
-import { Picker } from '@/components/Field';
+import Svg, { Circle, Path, Polyline } from 'react-native-svg';
+import {
+  LOCALES_BY_NAME,
+  LOCALE_NAMES,
+  LOCALE_NAMES_IN,
+  suggestedLocales,
+  type Locale,
+} from '@ct/shared';
+import { fieldStyle, Sheet } from '@/components/Field';
 import { haptics } from '@/lib/haptics';
+import { useLocale, useT } from '@/lib/i18n';
+import { deviceLocale } from '@/messages';
+import { type as t, useColors } from '@/theme';
 
 /**
- * The language control, in the one shape it takes on both screens that have it.
+ * The language control, in the one shape it takes on every screen that has it.
  *
- * Four things about it are deliberate:
+ * Five things about it are deliberate:
  *
- * **Every option is written in its own language.** `LOCALE_NAMES` says
- * "Български", not "Bulgarian", and "Deutsch", not "German" — a picker that
- * names a language in a language you cannot read is a picker for somebody who
- * did not need it. This is the only text in the app that never goes through
- * `useT`.
+ * **Every option leads with its own name.** `LOCALE_NAMES` says "Български",
+ * not "Bulgarian" — a picker that names a language in a language you cannot
+ * read is a picker for somebody who did not need it.
  *
- * **Each label is drawn in its own script's display face.** `typeFor(locale)`
- * per option rather than `useType()` once for the control: the whole point of
- * this screen is choosing between alphabets, and drawing "Български" in Baloo —
- * which has no Cyrillic — would show the fallback face in the one place
- * somebody is looking hard at the letterforms.
+ * **Under it, the name in the language the screen is in** — "Ελληνικά", then
+ * "Greek" or "Гръцки" — for somebody reading the current screen and scanning
+ * for a language whose own alphabet they do not read. Left off the screen's own
+ * language, where it would say the same word twice.
  *
- * **It changes shape with the number of languages.** Two or three fit on one
- * line and cost one tap, which is worth keeping while it is true; five do not.
- * Past `INLINE_LIMIT` it becomes the app's ordinary `<Picker>` sheet — the same
- * control Activity and Sex already use, so it is a list somebody has already
- * learned rather than a new thing to explain.
+ * **A globe on the trigger.** The one part of the control that reads the same
+ * whatever language the screen is in, and on the sign-in screen the person who
+ * cannot read the screen is exactly who it is for.
  *
- * **The threshold lives here**, not at the two call sites, so the sign-in
- * screen and Settings can never disagree about it. Its web twin holds the same
- * number for the same reason.
+ * **Suggested first, then the rest by their own names.** The language in use,
+ * then the device's — the likeliest way back for somebody who switched to try
+ * one — then everything else in `LOCALES_BY_NAME` order.
+ *
+ * **Its own sheet rather than `<Picker>`.** `<Picker>` draws one line per
+ * option, and this needs two and a pair of headings. It is the same `<Sheet>`
+ * underneath — the grabber, the scrim, the rows with a rule between them — so it
+ * is still a list somebody has already learned.
+ *
+ * Every name is drawn in the body face, which has covered Cyrillic since the
+ * first build. Greek falls back to the platform's face, here as everywhere else
+ * in the app; see `LOCALE_SCRIPTS`.
  */
-const INLINE_LIMIT = 4;
-
 export function LanguagePicker({
   value,
   onChange,
@@ -41,62 +53,126 @@ export function LanguagePicker({
   onChange: (locale: Locale) => void;
 }) {
   const colors = useColors();
+  const tr = useT();
+  const screen = useLocale();
+  const [open, setOpen] = useState(false);
 
-  if (LOCALES.length > INLINE_LIMIT) {
+  const suggested = suggestedLocales(value, [deviceLocale()]);
+  const rest = LOCALES_BY_NAME.filter((locale) => !suggested.includes(locale));
+
+  const option = (locale: Locale) => {
+    const selected = locale === value;
+    const translated = locale === screen ? undefined : LOCALE_NAMES_IN[screen][locale];
     return (
-      <Picker
-        label="Language"
-        value={value}
-        options={LOCALES}
-        onChange={(next) => {
+      <Pressable
+        key={locale}
+        onPress={() => {
           haptics.selected();
-          onChange(next);
+          setOpen(false);
+          if (!selected) onChange(locale);
         }}
-        /*
-         * The sheet draws its options in the *body* face, which has covered
-         * Cyrillic since the first build — so unlike the inline control below,
-         * this path needs no per-option face and every name renders correctly
-         * as it is.
-         */
-        render={(locale) => LOCALE_NAMES[locale]}
-      />
+        accessibilityRole="button"
+        accessibilityLabel={LOCALE_NAMES[locale]}
+        accessibilityHint={translated}
+        accessibilityState={{ selected }}
+        style={({ pressed }) => [
+          styles.option,
+          { borderTopColor: colors.border, opacity: pressed ? 0.6 : 1 },
+        ]}
+      >
+        <View style={styles.names}>
+          <Text style={[t.bodySemibold, { color: colors.foreground }]}>{LOCALE_NAMES[locale]}</Text>
+          {translated && (
+            <Text style={[t.footnote, { color: colors.mutedForeground }]}>{translated}</Text>
+          )}
+        </View>
+        {selected && (
+          <Svg width={18} height={18} viewBox="0 0 24 24">
+            <Path
+              d="M20 6 9 17l-5-5"
+              stroke={colors.caloriesText}
+              strokeWidth={3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+          </Svg>
+        )}
+      </Pressable>
     );
-  }
+  };
+
+  /*
+   * Sentence case rather than the sheet title's eyebrow. Three stacked
+   * all-caps labels read as one shout, and `textTransform: 'uppercase'` keeps
+   * Greek's accents, which Greek capitals drop.
+   */
+  const heading = (label: string) => (
+    <Text
+      accessibilityRole="header"
+      style={[t.footnoteBold, styles.heading, { color: colors.mutedForeground }]}
+    >
+      {label}
+    </Text>
+  );
 
   return (
-    <View style={[styles.segment, { backgroundColor: colors.muted }]}>
-      {LOCALES.map((locale) => {
-        const active = value === locale;
-        // The face that can draw this option's own name.
-        const scale = typeFor(locale);
-        return (
-          <Pressable
-            key={locale}
-            onPress={() => {
-              haptics.selected();
-              onChange(locale);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={LOCALE_NAMES[locale]}
-            accessibilityState={{ selected: active }}
-            style={[styles.item, active ? { backgroundColor: colors.primary } : null]}
-          >
-            <Text
-              style={[
-                scale.footnoteBold,
-                { color: active ? colors.primaryForeground : colors.mutedForeground },
-              ]}
-            >
-              {LOCALE_NAMES[locale]}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
+    <>
+      <Pressable
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={tr('setup.language')}
+        accessibilityValue={{ text: LOCALE_NAMES[value] }}
+        style={({ pressed }) => [fieldStyle(colors), styles.trigger, { opacity: pressed ? 0.6 : 1 }]}
+      >
+        <Svg width={16} height={16} viewBox="0 0 24 24">
+          <Circle cx={12} cy={12} r={10} stroke={colors.mutedForeground} strokeWidth={2.2} fill="none" />
+          <Path
+            d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20M2 12h20"
+            stroke={colors.mutedForeground}
+            strokeWidth={2.2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+          />
+        </Svg>
+        <Text style={[t.bodySemibold, { color: colors.foreground }]}>{LOCALE_NAMES[value]}</Text>
+        <Svg width={16} height={16} viewBox="0 0 24 24">
+          <Polyline
+            points="6 9 12 15 18 9"
+            stroke={colors.mutedForeground}
+            strokeWidth={2.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+          />
+        </Svg>
+      </Pressable>
+
+      <Sheet open={open} title={tr('setup.language')} onClose={() => setOpen(false)}>
+        {heading(tr('setup.languageSuggested'))}
+        {suggested.map(option)}
+        {rest.length > 0 && (
+          <>
+            {heading(tr('setup.languageAll'))}
+            {rest.map(option)}
+          </>
+        )}
+      </Sheet>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  segment: { flexDirection: 'row', borderRadius: 999, padding: 2, gap: 2 },
-  item: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999 },
+  trigger: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  heading: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 8 },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderTopWidth: 2,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  names: { flex: 1, gap: 2 },
 });

@@ -1039,8 +1039,6 @@ export async function addComment(
     'SELECT display_name FROM users WHERE id = $1',
     [coachId],
   );
-  const name = coach?.display_name ?? 'Your coach';
-
   const message: ChatMessage = await insertMessage(clientId, 'coach', input.body, null, {
     kind: 'coach_comment',
     coach_user_id: coachId,
@@ -1056,7 +1054,7 @@ export async function addComment(
     [coachId, clientId, input.local_date, input.food_entry_id ?? null, input.body, message.id],
   );
 
-  await sendCoachCommentPush(clientId, name, input.body, logger);
+  await sendCoachCommentPush(clientId, coach?.display_name ?? null, input.body, logger);
   return toComment({ ...row, coach_name: coach?.display_name ?? null });
 }
 

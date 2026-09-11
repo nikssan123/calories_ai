@@ -475,10 +475,10 @@ function FoodReceipt({
       <button
         type="button"
         onClick={onEdit}
-        aria-label={`Edit ${card.description}`}
+        aria-label={t('chat.editNamed')(card.description)}
         className="text-footnote text-muted-foreground hover:text-foreground mt-1.5 ml-auto block font-semibold"
       >
-        Edit
+        {t('common.edit')}
       </button>
 
       {card.day && <DayProgress day={card.day} kcal={card.kcal} today={today} />}
@@ -539,16 +539,15 @@ function DayProgress({
     <div className="border-border/70 mt-3 border-t-2 border-dashed pt-2.5">
       <div
         role="img"
-        aria-label={[
-          `${after.toLocaleString()} of ${target.toLocaleString()} kcal`,
-          dayWord(day.local_date, locale, today),
-          `— this meal ${kcal.toLocaleString()}.`,
+        aria-label={t('chat.dayProgressLabel')(
+          formatNumber(after, locale),
+          formatNumber(target, locale),
+          dayWord(day.local_date, locale, t, today),
+          formatNumber(kcal, locale),
           over
-            ? `${Math.abs(remaining).toLocaleString()} over.`
-            : `${remaining.toLocaleString()} left.`,
-        ]
-          .filter(Boolean)
-          .join(' ')}
+            ? t('journal.over')(formatNumber(Math.abs(remaining), locale))
+            : t('journal.left')(formatNumber(remaining, locale)),
+        )}
         // A hairline of track between the bands, exactly as the macro bar
         // above separates its three — it is what makes the day so far and this
         // meal read as two things rather than one two-tone one.
@@ -597,15 +596,15 @@ function DayProgress({
       <div className="tnum text-footnote text-muted-foreground mt-2 font-semibold">
         {/* The day so far leads, at ink weight: it is the figure the bar is
             a picture of, and the one they came to the card for. */}
-        <span className="text-foreground font-extrabold">{after.toLocaleString()}</span> of{' '}
-        {target.toLocaleString()}
+        <span className="text-foreground font-extrabold">{formatNumber(after, locale)}</span>{' '}
+        {t('chat.ofTarget')(formatNumber(target, locale))}
         {' · '}
         <span className={cn('font-bold', over && 'text-foreground')}>
           {over
             ? t('journal.over')(formatNumber(Math.abs(remaining), locale))
             : t('journal.left')(formatNumber(remaining, locale))}
         </span>
-        {dayWord(day.local_date, locale, today) && ` ${dayWord(day.local_date, locale, today)}`}
+        {dayWord(day.local_date, locale, t, today) && ` ${dayWord(day.local_date, locale, t, today)}`}
       </div>
     </div>
   );
@@ -641,9 +640,14 @@ function bandFill(mine: boolean, over: boolean): string {
  * today's day. Silent, too, when nobody has told us which day is current; a
  * guess is the one answer that could be wrong without looking wrong.
  */
-function dayWord(isoDate: string, locale: Locale, today?: string): string {
+function dayWord(
+  isoDate: string,
+  locale: Locale,
+  t: ReturnType<typeof useT>,
+  today?: string,
+): string {
   if (today === undefined || isoDate === today) return '';
-  return `on ${formatDate(isoDate, locale)}`;
+  return t('chat.onDate')(formatDate(isoDate, locale));
 }
 
 /**
@@ -678,7 +682,9 @@ function ExerciseCard({
 
   const detail = [
     shown.distance_km !== null ? formatDistance(shown.distance_km, units) : null,
-    shown.duration_min !== null ? `${Math.round(shown.duration_min)} min` : null,
+    shown.duration_min !== null
+      ? t('exercise.minutes')(String(Math.round(shown.duration_min)))
+      : null,
   ].filter(Boolean);
 
   if (editing) {
@@ -702,7 +708,7 @@ function ExerciseCard({
           onClick={() => setEditing(false)}
           className="text-footnote text-muted-foreground hover:text-foreground mt-1.5 ml-auto block font-semibold"
         >
-          Cancel
+          {t('common.cancel')}
         </button>
       </>
     );
@@ -740,7 +746,7 @@ function ExerciseCard({
         aria-label={t('chat.editNamed')(shown.description)}
         className="text-footnote text-muted-foreground hover:text-foreground mt-1.5 ml-auto block font-semibold"
       >
-        Edit
+        {t('common.edit')}
       </button>
 
       {/*
@@ -940,7 +946,7 @@ function WeightCard({
           aria-label={t('chat.editWeighIn')}
           className="text-footnote text-muted-foreground hover:text-foreground mt-1.5 ml-auto block font-semibold"
         >
-          Edit
+          {t('common.edit')}
         </button>
       )}
     </Shell>
@@ -956,6 +962,7 @@ const METRIC_COLOR: Record<string, string> = {
 
 function TrendCard({ card }: { card: Extract<Card, { type: 'trend' }> }) {
   const t = useT();
+  const locale = useLocale();
   const hasPoints = card.series.some((point) => point.average !== null);
 
   return (
@@ -964,9 +971,9 @@ function TrendCard({ card }: { card: Extract<Card, { type: 'trend' }> }) {
         <p className="min-w-0 flex-1 truncate text-body font-bold">{card.title}</p>
         {card.average !== null && (
           <span className="tnum text-muted-foreground shrink-0 text-footnote font-semibold">
-            avg{' '}
+            {t('chat.avg')}{' '}
             <span className="text-foreground font-extrabold">
-              {card.average.toLocaleString()}
+              {formatNumber(card.average, locale)}
             </span>{' '}
             {card.unit}
           </span>

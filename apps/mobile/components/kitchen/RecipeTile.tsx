@@ -1,5 +1,6 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path, Polyline } from 'react-native-svg';
+import { formatNumber } from '@ct/shared';
 import { listWords } from '@ct/shared/words';
 import { useLocale, useT } from '@/lib/i18n';
 import { Chunk } from '@/components/Chunk';
@@ -105,7 +106,7 @@ export function RecipeTile({
               {Math.round(kcal)}
             </Text>
             <Text style={[t.footnote, styles.qualifier, { color: colors.mutedForeground }]}>
-              kcal · {Math.round(protein_g)}g protein · {servingLabel}
+              {tr('recipe.tileQualifier')(formatNumber(Math.round(protein_g), locale), servingLabel)}
             </Text>
           </View>
 
@@ -176,7 +177,7 @@ export function RecipeTile({
         onPress={onToggleSave}
         accessibilityRole="button"
         accessibilityState={{ selected: saved }}
-        accessibilityLabel={saved ? `Unsave ${title}` : `Save ${title}`}
+        accessibilityLabel={saved ? tr('recipe.unsaveNamed')(title) : tr('recipe.saveNamed')(title)}
         hitSlop={8}
         style={({ pressed }) => [
           styles.save,

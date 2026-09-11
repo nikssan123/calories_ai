@@ -12,7 +12,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import type { MealPlan, MealPlanSlot, ShoppingList } from '@ct/shared';
-import { formatMass, meterLocked } from '@ct/shared';
+import { formatMass, formatNumber, intlLocale, meterLocked, weekdayName } from '@ct/shared';
 import { foodEmoji } from '@ct/shared/food-emoji';
 import { PressableChunk } from '@/components/Chunk';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
@@ -122,7 +122,7 @@ export default function PlanScreen() {
       haptics.logged();
       // The plan draws the week, never the day, so logging a night's dinner
       // from here changes nothing anybody can see on this screen.
-      toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
+      toast.success(tr('toast.logged')(entry.description, formatNumber(Math.round(entry.kcal), locale)));
       await load();
     } catch (e) {
       setError(messageOf(e, tr));
@@ -171,7 +171,7 @@ export default function PlanScreen() {
       prev ? { ...prev, items: prev.items.filter((i) => i.extra_id !== extraId) } : prev,
     );
 
-    undoably(`Removed ${name}`, {
+    undoably(tr('toast.removed')(name), {
       commit: () => {
         void api.deleteShoppingItem(extraId).catch((e: Error) => {
           setError(messageOf(e, tr));
@@ -231,12 +231,12 @@ export default function PlanScreen() {
             <LockedPanel
               meter="meal_plan"
               title={tr('plan.locked')}
-              body="Seven dinners against your targets and what's already in your kitchen, batched where it helps, with the shopping list written for you."
+              body={tr('plan.lockedBody')}
             />
           ) : (
           <InsetGroup
             title={tr('plan.planItTitle')}
-            footer="Seven dinners against your targets and what's already in the kitchen. Batching means one cook covering two nights."
+            footer={tr('plan.planItFooter')}
           >
             <View style={styles.form}>
               <TextInput
@@ -258,7 +258,7 @@ export default function PlanScreen() {
               <View style={styles.numbers}>
                 <View style={styles.number}>
                   <Text style={[t.footnote, styles.label, { color: colors.mutedForeground }]}>
-                    Cooking for
+                    {tr('plan.cookingFor')}
                   </Text>
                   <NumberField
                     value={servings}
@@ -269,7 +269,7 @@ export default function PlanScreen() {
                 </View>
                 <View style={styles.number}>
                   <Text style={[t.footnote, styles.label, { color: colors.mutedForeground }]}>
-                    At most
+                    {tr('plan.atMost')}
                   </Text>
                   <NumberField
                     value={minutes}
@@ -284,7 +284,7 @@ export default function PlanScreen() {
                 <View style={styles.flex}>
                   <Text style={[t.body, { color: colors.foreground }]}>{tr('plan.batchWhereItHelps')}</Text>
                   <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-                    One cook covering two nights.
+                    {tr('plan.batchHint')}
                   </Text>
                 </View>
                 <Switch value={batch} onValueChange={setBatch} accessibilityLabel={tr('plan.batchCooking')} />
@@ -327,7 +327,7 @@ export default function PlanScreen() {
               title={tr('shopping.titleShort')}
               footer={
                 list.have_already.length > 0
-                  ? `Left off because you already have them: ${list.have_already.join(', ')}.`
+                  ? tr('shopping.alreadyHave')(list.have_already.join(', '))
                   : undefined
               }
             >
@@ -377,7 +377,7 @@ export default function PlanScreen() {
 
               {list.items.length === 0 ? (
                 <Text style={[t.body, styles.empty, { color: colors.mutedForeground }]}>
-                  Nothing to buy yet.
+                  {tr('shopping.nothingToBuy')}
                 </Text>
               ) : (
                 list.items.map((item, i) => (
@@ -388,7 +388,7 @@ export default function PlanScreen() {
                     actions={
                       item.extra_id
                         ? [
-                            removeAction(colors, item.name, () =>
+                            removeAction(colors, tr, item.name, () =>
                               removeLine(item.extra_id!, item.name),
                             ),
                           ]
@@ -454,7 +454,7 @@ export default function PlanScreen() {
                         <Pressable
                           onPress={() => removeLine(item.extra_id!, item.name)}
                           accessibilityRole="button"
-                          accessibilityLabel={`Remove ${item.name}`}
+                          accessibilityLabel={tr('a11y.remove')(item.name)}
                           hitSlop={8}
                           style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
                         >
@@ -507,8 +507,12 @@ function Night({
 
   return (
     <InsetRow first={first}>
+      {/* From the date rather than `slot.weekday`, which is an English name off
+          the server — and three letters is English's abbreviation, nobody else's.
+          Same call as the web's plan. */}
       <Text style={[t.footnoteBold, styles.weekday, { color: colors.mutedForeground }]}>
-        {slot.weekday.slice(0, 3).toUpperCase()}
+        {weekdayName(new Date(`${slot.local_date}T00:00:00Z`).getUTCDay(), locale, 'short')
+          .toLocaleUpperCase(intlLocale(locale))}
       </Text>
 
       {slot.recipe ? (
@@ -527,7 +531,7 @@ function Night({
             </Text>
             <Text style={[t.footnote, t.tnum, { color: colors.mutedForeground }]}>
               {Math.round(slot.recipe.kcal)} kcal
-              {slot.covers.length > 0 && ` · covers ${slot.covers.length + 1} nights`}
+              {slot.covers.length > 0 && tr('plan.covers')(slot.covers.length + 1)}
             </Text>
           </Pressable>
 
@@ -538,7 +542,7 @@ function Night({
               <Pressable
                 onPress={onCook}
                 accessibilityRole="button"
-                accessibilityLabel={`Cooked ${slot.recipe.title}`}
+                accessibilityLabel={tr('plan.cookedNamed')(slot.recipe.title)}
                 hitSlop={6}
                 style={({ pressed }) => [
                   styles.cookButton,
@@ -554,7 +558,7 @@ function Night({
               <Pressable
                 onPress={onClear}
                 accessibilityRole="button"
-                accessibilityLabel={`Clear ${slot.weekday}`}
+                accessibilityLabel={tr('plan.clearNamed')(slot.weekday)}
                 hitSlop={8}
                 style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
               >

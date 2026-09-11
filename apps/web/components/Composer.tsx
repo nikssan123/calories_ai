@@ -183,7 +183,7 @@ export function Composer({
     // the picker — but dropping the file without a word would look like the
     // camera button is simply broken.
     if (!prepared) {
-      toast.error("I can't read that image format — a JPEG or PNG will work.");
+      toast.error(t('barcode.badFormat'));
       return;
     }
     setPhoto(prepared);
@@ -311,8 +311,7 @@ export function Composer({
               dinner plate, and every gram after that is a guess.
             */}
             <p className="text-muted-foreground max-w-56 px-2 pt-1.5 pb-2 text-[0.8125rem] leading-snug">
-              Tip: leave a fork, spoon or your hand in the shot — it tells us how big
-              the plate is, which is the hardest part to guess.
+              {t('composer.photoTip')}
             </p>
             {hasCameraApp && (
               <DropdownMenuItem

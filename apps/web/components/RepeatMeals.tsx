@@ -45,7 +45,7 @@ export function RepeatMeals({ onLogged }: { onLogged: () => void }) {
     setBusy(template.entry_id);
     try {
       const entry = await api.repeatFoodEntry(template.entry_id);
-      toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
+      toast.success(t('toast.logged')(entry.description, formatNumber(Math.round(entry.kcal), locale)));
       onLogged();
     } catch (e) {
       toast.error((e as Error).message);

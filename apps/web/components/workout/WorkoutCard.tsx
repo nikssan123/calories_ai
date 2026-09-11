@@ -980,13 +980,14 @@ function Stepper({
   onType: (value: string) => void;
   stepBy: number;
 }) {
+  const t = useT();
   return (
     <div className="bg-card flex-1 rounded-lg px-1 py-1">
       <div className="flex items-center justify-between gap-1">
         <button
           type="button"
           onClick={() => onStep(-stepBy)}
-          aria-label={`Less ${caption}`}
+          aria-label={t('workout.lessNamed')(caption)}
           className="text-muted-foreground hover:text-foreground hover:bg-muted/60 grid size-6 shrink-0 place-items-center rounded"
         >
           <Minus size={13} />
@@ -1003,7 +1004,7 @@ function Stepper({
         <button
           type="button"
           onClick={() => onStep(stepBy)}
-          aria-label={`More ${caption}`}
+          aria-label={t('workout.moreNamed')(caption)}
           className="text-muted-foreground hover:text-foreground hover:bg-muted/60 grid size-6 shrink-0 place-items-center rounded"
         >
           <Plus size={13} />

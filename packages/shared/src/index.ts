@@ -13,6 +13,9 @@ export * from './units.ts';
 /** Which language the app is drawn in. Rendering only. See LANGUAGES.md. */
 export * from './locale.ts';
 
+/** The language picker's order, second lines and suggestions. */
+export * from './locale-names.ts';
+
 /**
  * Day boundaries and the arithmetic that turns entries into a `DaySummary`.
  *

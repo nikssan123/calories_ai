@@ -19,7 +19,7 @@
  * advances, so there the answer is the widest a digit gets in either.
  */
 
-import type { Locale } from './locale.ts';
+import { LOCALE_SCRIPTS, type Locale } from './locale.ts';
 
 export type Face = 'baloo' | 'any';
 
@@ -91,13 +91,14 @@ export function fitFontSize({
 /**
  * Which of the two a figure in this language will be set in.
  *
- * Baloo 2 has no Cyrillic, so Bulgarian falls back to the face that does and
- * every advance changes with it. Mirrors `CYRILLIC_LOCALES` in the native
- * app's `theme/typography.ts` and `:root:lang(bg)` in the web's `globals.css`
- * — the same rule, in the one place both of them can ask about it.
+ * Baloo 2 has no Cyrillic, so Bulgarian, Ukrainian and Serbian fall back to
+ * the face that does and every advance changes with it. Greek stays in Baloo:
+ * a figure is digits, Baloo has those, and there is no Greek display face to
+ * swap to anyway. The rule is `LOCALE_SCRIPTS`, which the native app's
+ * `theme/typography.ts` reads too and the web's `globals.css` copies by hand.
  */
 export function figureFace(locale: Locale): Face {
-  return locale === 'bg' ? 'any' : 'baloo';
+  return LOCALE_SCRIPTS[locale] === 'cyrillic' ? 'any' : 'baloo';
 }
 
 /**

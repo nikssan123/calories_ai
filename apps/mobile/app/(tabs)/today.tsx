@@ -20,7 +20,7 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Svg, { Path, Polyline, Rect } from 'react-native-svg';
 import type { DaySummary, ExerciseEntry, FoodEntry, FoodItemInput, Locale, Meal } from '@ct/shared';
-import { formatBodyWeight, formatDay, formatDistance, formatMass, inferMeal } from '@ct/shared';
+import { formatBodyWeight, formatDay, formatDistance, formatMass, formatNumber, inferMeal } from '@ct/shared';
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 import { CalorieRing } from '@/components/CalorieRing';
 import { StreakChip } from '@/components/StreakChip';
@@ -493,7 +493,7 @@ export default function TodayScreen() {
     if (unsent.has(entry.id)) {
       const forgotten = intents.find((intent) => intent.id === entry.id);
       void drop(entry.id);
-      undoably(`Removed ${entry.description}`, {
+      undoably(tr('toast.removed')(entry.description), {
         commit: () => {},
         restore: () => {
           if (forgotten) void enqueue(forgotten);
@@ -532,7 +532,7 @@ export default function TodayScreen() {
         : prev,
     );
 
-    undoably(`Removed ${entry.description}`, {
+    undoably(tr('toast.removed')(entry.description), {
       commit: () => {
         /*
          * Queued rather than sent. The four seconds of undo have already
@@ -579,7 +579,7 @@ export default function TodayScreen() {
         : prev,
     );
 
-    undoably(`Removed ${entry.description}`, {
+    undoably(tr('toast.removed')(entry.description), {
       commit: () => {
         void api
           .deleteExerciseEntry(entry.id)
@@ -619,7 +619,7 @@ export default function TodayScreen() {
       queuedAt: new Date().toISOString(),
     });
     haptics.logged();
-    toast.success(`Logged ${entry.description} — ${Math.round(entry.kcal)} kcal`);
+    toast.success(tr('toast.logged')(entry.description, formatNumber(Math.round(entry.kcal), locale)));
     setDate(null);
     void load(null);
   }
@@ -648,7 +648,7 @@ export default function TodayScreen() {
       queuedAt: new Date().toISOString(),
     });
     const kcal = draft.items.reduce((sum, item) => sum + item.kcal, 0);
-    toast.success(`Logged ${draft.description} — ${Math.round(kcal)} kcal`);
+    toast.success(tr('toast.logged')(draft.description, formatNumber(Math.round(kcal), locale)));
   }
 
   const byMeal = MEAL_ORDER.map((meal) => ({
@@ -736,7 +736,7 @@ export default function TodayScreen() {
             <Total consumed={day.consumed.kcal} target={day.targets.kcal} />
             {day.burned_kcal > 0 && (
               <Text style={[t.footnoteSemibold, t.tnum, { color: colors.mutedForeground }]}>
-                net {day.net_kcal.toLocaleString()} kcal after exercise
+                {tr('rail.netAfterExercise')(formatNumber(day.net_kcal, locale))}
               </Text>
             )}
             {/* Null on every day but today — see `DaySummary.streak`. A run
@@ -804,7 +804,7 @@ export default function TodayScreen() {
                 style={({ pressed }) => [styles.manual, { opacity: pressed ? 0.6 : 1 }]}
               >
                 <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-                  + Log it yourself
+                  {tr('today.logItYourself')}
                 </Text>
               </Pressable>
             ))}
@@ -972,14 +972,16 @@ export default function TodayScreen() {
  */
 function Total({ consumed, target }: { consumed: number; target: number }) {
   const colors = useColors();
+  const tr = useT();
+  const locale = useLocale();
   const shown = useCountUp(Math.round(consumed), 900);
 
   return (
     <Text style={[t.body, t.tnum, styles.total, { color: colors.mutedForeground }]}>
       <Text style={{ fontFamily: font.extrabold, color: colors.foreground }}>
-        {Math.round(shown).toLocaleString()}
+        {formatNumber(Math.round(shown), locale)}
       </Text>
-      {` of ${target.toLocaleString()} kcal`}
+      {` ${tr('today.ofTargetKcal')(formatNumber(target, locale))}`}
     </Text>
   );
 }
@@ -1020,8 +1022,8 @@ function EntryRow({
        * takes the longer pull.
        */
       actions={[
-        repeatAction(colors, entry.description, onRepeat),
-        removeAction(colors, entry.description, onDelete),
+        repeatAction(colors, tr, entry.description, onRepeat),
+        removeAction(colors, tr, entry.description, onDelete),
       ]}
     >
       <Pressable
@@ -1180,7 +1182,7 @@ function ExerciseRow({
       // The divider stays out here so it holds still while the row slides out
       // from under it.
       style={first ? null : { borderTopWidth: 2, borderTopColor: colors.border }}
-      actions={[removeAction(colors, entry.description, onDelete)]}
+      actions={[removeAction(colors, tr, entry.description, onDelete)]}
     >
       <Pressable
         onPress={counted ? onToggle : undefined}
@@ -1212,7 +1214,7 @@ function ExerciseRow({
         </Text>
         <IconButton
           icon="trash"
-          label={`Delete ${entry.description}`}
+          label={tr('a11y.delete')(entry.description)}
           onPress={onDelete}
         />
       </Pressable>
@@ -1220,7 +1222,7 @@ function ExerciseRow({
       {open && (
         <View style={[styles.details, { backgroundColor: colors.mutedWash }]}>
           <View style={styles.items}>
-            {groupSets(entry.sets, units).map((group) => (
+            {groupSets(entry.sets, units, tr).map((group) => (
               <View key={group.name} style={styles.item}>
                 <Text
                   numberOfLines={1}
