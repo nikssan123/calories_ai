@@ -442,21 +442,47 @@ www.daysofar.com {
 }
 ```
 
-The fault is one DNS record. Every other host on the zone points straight at the
-origin; `www` alone is proxied through Cloudflare, which then cannot complete a
-TLS handshake to an origin that never got a certificate for it — because the
-HTTP-01 challenge never reaches Caddy.
+The record was un-proxied from Cloudflare on 2026-09-12, which removed the 525
+but did not fix it, because `www` does not point at the origin at all. It is a
+CNAME to Resend's click-tracking host:
 
 ```
-daysofar.com       A  204.168.249.73                  DNS only
-api.daysofar.com   A  204.168.249.73                  DNS only
-www.daysofar.com   A  172.67.212.102, 104.21.69.194   PROXIED  <- the odd one out
+www.daysofar.com  CNAME  links1.resend-dns.com
+                       -> dnimfezcq57tg.cloudfront.net
+                       -> 3.165.206.11/.17/.42/.114
 ```
 
-**Fix:** in Cloudflare DNS, set the `www` record to **DNS only** (grey cloud) and
-point it at `204.168.249.73`, matching its siblings. Caddy then issues a
-certificate over HTTP-01 and the existing redirect starts working. One toggle; no
-deploy.
+CloudFront holds no certificate for that name, so https now fails the TLS
+handshake outright and http still answers 403.
+
+Resend's own API confirms what the record is and that nothing needs it:
+
+| Record | Name | Status |
+|---|---|---|
+| DKIM (TXT) | `resend._domainkey` | verified |
+| SPF (MX) | `send` | verified |
+| SPF (TXT) | `send` | verified |
+| Receiving (MX) | apex | verified |
+| **Tracking (CNAME)** | **`www`** | **failed** |
+
+`click_tracking` and `open_tracking` are both **false** on the domain, so the
+tracking CNAME is doing nothing but breaking the website's `www`. Deleting it
+cannot affect delivery — DKIM, SPF and receiving are separate records and all
+verified.
+
+**Fix, in Cloudflare DNS:**
+
+1. Delete the `www` CNAME to `links1.resend-dns.com`.
+2. Add `www` as an **A** record to `204.168.249.73`, **DNS only** (grey cloud),
+   matching `daysofar.com` and `api.daysofar.com`.
+
+Caddy then issues a certificate over HTTP-01 and the existing redirect starts
+working. No deploy needed.
+
+Resend will keep reporting the domain as `partially_failed` while the tracking
+record is absent. That is cosmetic unless click tracking is ever wanted, and if
+it is, it belongs on its own subdomain (`links.daysofar.com`) rather than on
+`www` — Resend lets you choose the subdomain.
 
 ### Next, in order
 
