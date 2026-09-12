@@ -19,9 +19,9 @@ import { isNoindexPath } from '@/lib/seo';
  * waiting for the day Google's renderer starts crediting them with content.
  *
  * The matcher excludes Next's own asset paths and the files that have to stay
- * fetchable for this to work at all: robots.txt and sitemap.xml, plus the icons
- * and the Open Graph image, which a crawler fetches while unfurling a link and
- * must not be told to forget.
+ * fetchable for this to work at all: robots.txt, sitemap.xml and llms.txt, plus
+ * the icons and the Open Graph image, which a crawler fetches while unfurling a
+ * link and must not be told to forget.
  */
 export function middleware(request: NextRequest) {
   const response = NextResponse.next();
@@ -33,6 +33,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|api/|robots\\.txt|sitemap\\.xml|opengraph-image|icon|apple-icon|favicon\\.ico|\\.well-known/).*)',
+    '/((?!_next/static|_next/image|api/|robots\\.txt|sitemap\\.xml|llms\\.txt|opengraph-image|icon|apple-icon|favicon\\.ico|\\.well-known/).*)',
   ],
 };

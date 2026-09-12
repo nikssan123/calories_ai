@@ -344,6 +344,8 @@ export const de: Messages = {
   'recipe.logged': (what, kcal) => `${what} eingetragen — ${kcal} kcal`,
   'recipe.forServings': (servings, unit) => `für ${servings} × ${unit}`,
   'recipe.publicDomain': 'gemeinfrei',
+  'recipe.logItWithApp': 'Trag es in der App ein — der Tag rechnet sich von selbst zusammen.',
+  'recipe.allRecipes': 'Alle Rezepte',
   'recipe.iAteThisPlain': (kcal) => `Das hab ich gegessen · ${kcal}`,
   'recipe.youdNeed': (things) => `Du bräuchtest: ${things}`,
   'recipe.fromLibrary': 'Aus der Bibliothek',

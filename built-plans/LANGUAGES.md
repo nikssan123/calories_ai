@@ -62,6 +62,13 @@ arguments were already won:
 - **Privacy and Terms.** Legal text. A dictionary translation of a document
   somebody may have to rely on is worse than an English one they can read. The
   one remaining display `en-GB`, in `LegalPage.tsx`, is that decision.
+- **The recipe library index.** `/cook/library` is chrome around ninety-nine
+  recipes whose titles, ingredients and method are English and stay English:
+  they are public-domain USDA text, reproduced rather than written here, and a
+  machine-translated ingredient list is a page that lies about what it is. The
+  recipe pages themselves inherit the same decision. Note that this is *not* the
+  rule for `/blog`, which is written per locale from that locale's own keyword
+  research and never translated from the English — see SEO.md.
 - **The landing page.** Deferred — see the end.
 
 ## The four generations that used to be English

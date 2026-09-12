@@ -338,6 +338,8 @@ export const fr: Messages = {
   'recipe.logged': (what, kcal) => `${what} noté — ${kcal} kcal`,
   'recipe.forServings': (servings, unit) => `pour ${servings} × ${unit}`,
   'recipe.publicDomain': 'domaine public',
+  'recipe.logItWithApp': 'Note-le dans l’app, et la journée s’additionne toute seule.',
+  'recipe.allRecipes': 'Toutes les recettes',
   'recipe.iAteThisPlain': (kcal) => `J’ai mangé ça · ${kcal}`,
   'recipe.youdNeed': (things) => `Il te manque : ${things}`,
   'recipe.fromLibrary': 'De la bibliothèque',

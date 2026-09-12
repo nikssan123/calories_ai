@@ -384,6 +384,8 @@ export const sk: Messages = {
   'recipe.logged': (what: string, kcal: string) => `Zapísané: ${what} – ${kcal} kcal`,
   'recipe.forServings': (servings: string, unit: string) => `na ${servings} × ${unit}`,
   'recipe.publicDomain': 'voľné dielo',
+  'recipe.logItWithApp': 'Zapíš to v aplikácii a deň sa spočíta sám.',
+  'recipe.allRecipes': 'Všetky recepty',
   'recipe.iAteThisPlain': (kcal: string) => `Zjedené · ${kcal}`,
   'recipe.youdNeed': (things: string) => `Treba dokúpiť: ${things}`,
   'recipe.fromLibrary': 'Z knižnice',

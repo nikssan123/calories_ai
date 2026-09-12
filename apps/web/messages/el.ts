@@ -384,6 +384,8 @@ export const el: Messages = {
   'recipe.logged': (what: string, kcal: string) => `Καταγράφηκε: ${what} — ${kcal} kcal`,
   'recipe.forServings': (servings: string, unit: string) => `για ${servings} × ${unit}`,
   'recipe.publicDomain': 'κοινό κτήμα',
+  'recipe.logItWithApp': 'Κατάγραψέ το στην εφαρμογή και η μέρα προστίθεται μόνη της.',
+  'recipe.allRecipes': 'Όλες οι συνταγές',
   'recipe.iAteThisPlain': (kcal: string) => `Το έφαγα · ${kcal}`,
   'recipe.youdNeed': (things: string) => `Θα χρειαστείς: ${things}`,
   'recipe.fromLibrary': 'Από τη βιβλιοθήκη',

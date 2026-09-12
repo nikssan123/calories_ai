@@ -350,6 +350,8 @@ export const bg: Messages = {
   'recipe.logged': (what, kcal) => `Записах ${what} — ${kcal} kcal`,
   'recipe.forServings': (servings, unit) => `за ${servings} × ${unit}`,
   'recipe.publicDomain': 'обществено достояние',
+  'recipe.logItWithApp': 'Запиши го в приложението и денят се събира сам.',
+  'recipe.allRecipes': 'Всички рецепти',
   'recipe.iAteThisPlain': (kcal) => `Изядох това · ${kcal}`,
   'recipe.youdNeed': (things) => `Ще ти трябва: ${things}`,
   'recipe.fromLibrary': 'От библиотеката',

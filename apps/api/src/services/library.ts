@@ -1,4 +1,11 @@
-import type { FoodEntry, LibraryRecipe, Meal, PantryItem } from '@ct/shared';
+import type {
+  FoodEntry,
+  LibraryCard,
+  LibraryRecipe,
+  Meal,
+  PantryItem,
+  PublicLibraryRecipe,
+} from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import { createFoodEntry } from './log.ts';
 import { listPantry } from './pantry.ts';
@@ -311,6 +318,7 @@ function toRecipe(
     source: row.source,
     source_url: row.source_url,
     rating: row.rating === null ? null : Number(row.rating),
+    rating_count: row.rating_count === null ? null : Number(row.rating_count),
     saved,
     have: match.have,
     missing: match.missing,
@@ -330,3 +338,77 @@ async function savedSlugs(userId: string): Promise<Set<string>> {
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// ---- The library with nobody signed in ------------------------------------
+//
+// Everything above resolves a recipe against a person: what is in their pantry,
+// what is left of their day, whether they saved it. These two do not, and that
+// is the entire point of them. A recipe page that needs a session cannot be
+// served to a crawler, and ninety-nine pages of real ingredients, real steps
+// and measured per-portion nutrition were sitting behind one.
+//
+// Kept deliberately narrow. They read `library_recipes` and nothing else — no
+// join to `saved_library_recipes`, no pantry, no day — so there is no path from
+// an anonymous caller to anybody's data even by accident.
+
+const PUBLIC_COLUMNS = `
+  slug, title, summary, category, portions, serving_size,
+  ingredients, steps, kcal, protein_g, carbs_g, fat_g,
+  image_path, source, source_url, rating, rating_count
+`;
+
+function toPublicRecipe(row: any): PublicLibraryRecipe {
+  return {
+    slug: row.slug,
+    title: row.title,
+    summary: row.summary,
+    category: row.category,
+    portions: Number(row.portions),
+    serving_size: row.serving_size,
+    ingredients: row.ingredients ?? [],
+    steps: row.steps ?? [],
+    kcal: Number(row.kcal),
+    protein_g: Number(row.protein_g),
+    carbs_g: Number(row.carbs_g),
+    fat_g: Number(row.fat_g),
+    image_path: row.image_path,
+    source: row.source,
+    source_url: row.source_url,
+    rating: row.rating === null ? null : Number(row.rating),
+    rating_count: row.rating_count === null ? null : Number(row.rating_count),
+  };
+}
+
+/** One recipe by slug, to anyone who asks. Null when there is no such slug. */
+export async function getPublicLibraryRecipe(slug: string): Promise<PublicLibraryRecipe | null> {
+  const row = await queryOne<any>(
+    `SELECT ${PUBLIC_COLUMNS} FROM library_recipes WHERE slug = $1`,
+    [slug],
+  );
+  return row ? toPublicRecipe(row) : null;
+}
+
+/**
+ * Every recipe, as cards, alphabetically.
+ *
+ * Unsorted by score on purpose: there is no day and no kitchen to score
+ * against, and a stable order is what an index page and a sitemap both want.
+ */
+export async function listPublicLibrary(): Promise<LibraryCard[]> {
+  const rows = await query<any>(
+    `SELECT slug, title, summary, category, kcal, protein_g, image_path, rating, rating_count
+       FROM library_recipes
+      ORDER BY title`,
+  );
+  return rows.map((row) => ({
+    slug: row.slug,
+    title: row.title,
+    summary: row.summary,
+    category: row.category,
+    kcal: Number(row.kcal),
+    protein_g: Number(row.protein_g),
+    image_path: row.image_path,
+    rating: row.rating === null ? null : Number(row.rating),
+    rating_count: row.rating_count === null ? null : Number(row.rating_count),
+  }));
+}

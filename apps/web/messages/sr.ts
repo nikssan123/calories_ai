@@ -383,6 +383,8 @@ export const sr: Messages = {
   'recipe.logged': (what: string, kcal: string) => `Уписано: ${what} — ${kcal} kcal`,
   'recipe.forServings': (servings: string, unit: string) => `за ${servings} × ${unit}`,
   'recipe.publicDomain': 'јавно власништво',
+  'recipe.logItWithApp': 'Упиши то у апликацији и дан се сабере сам.',
+  'recipe.allRecipes': 'Сви рецепти',
   'recipe.iAteThisPlain': (kcal: string) => `Поједено · ${kcal}`,
   'recipe.youdNeed': (things: string) => `Требаће ти: ${things}`,
   'recipe.fromLibrary': 'Из библиотеке',

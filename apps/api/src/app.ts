@@ -8,6 +8,7 @@ import { registerAuthRoutes } from './routes/auth.ts';
 import { registerAdminRoutes } from './routes/admin.ts';
 import { registerCoachRoutes } from './routes/coach.ts';
 import { registerKitchenRoutes } from './routes/kitchen.ts';
+import { registerPublicRoutes } from './routes/public.ts';
 import { env } from './env.ts';
 import { bearerToken, resolveSession, SESSION_COOKIE } from './services/auth.ts';
 import { closeRedis, createRedis } from './services/redis.ts';
@@ -201,6 +202,10 @@ export async function buildApp(
     '/auth/',
     '/photos/',
     '/email/',
+    // Read-only recipe data with no session in it — see routes/public.ts. A
+    // prefix rather than a route list because the namespace announces itself:
+    // nothing may be added under `/public/` that reads a user.
+    '/public/',
     '/billing/revenuecat',
     '/billing/stripe',
   ];
@@ -254,6 +259,7 @@ export async function buildApp(
   await registerAdminRoutes(app);
   await registerCoachRoutes(app);
   await registerKitchenRoutes(app);
+  await registerPublicRoutes(app);
   await registerRoutes(app);
 
   return app;

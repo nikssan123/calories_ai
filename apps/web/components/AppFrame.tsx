@@ -5,7 +5,13 @@ import { useAuth } from '@/components/AuthGate';
 import { CoachFrame } from '@/components/coach/CoachFrame';
 import { Nav } from '@/components/Nav';
 import { Sidebar } from '@/components/Sidebar';
-import { isCoachRoute, isEmailedRoute, isInviteRoute, isLegalRoute } from '@/lib/routes';
+import {
+  isCoachRoute,
+  isEmailedRoute,
+  isInviteRoute,
+  isLegalRoute,
+  isRecipeLibraryRoute,
+} from '@/lib/routes';
 
 /**
  * The app shell — or, for the landing page, nothing at all.
@@ -45,6 +51,16 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
    * are ordinary pages within the app.
    */
   if (!authenticated && (pathname === '/' || isEmailedRoute(pathname))) return <>{children}</>;
+
+  /*
+   * A recipe, to a reader with no session.
+   *
+   * For a signed-in cook these are pages inside the app and keep the shell —
+   * the tab bar is how they got here and how they leave. For someone who
+   * arrived from a search result it is a document, and the shell would offer
+   * them five tabs that all bounce off the sign-in form.
+   */
+  if (!authenticated && isRecipeLibraryRoute(pathname)) return <>{children}</>;
 
   return (
     <div className="bg-background h-shell flex w-full overflow-hidden">

@@ -3569,7 +3569,15 @@ export const LibraryIngredient = z.object({
 });
 export type LibraryIngredient = z.infer<typeof LibraryIngredient>;
 
-export const LibraryRecipe = z.object({
+/**
+ * A library recipe as it reads to nobody in particular.
+ *
+ * Everything here is a property of the recipe rather than of the person looking
+ * at it, which is what makes it servable without a session — and therefore what
+ * makes the page indexable. `LibraryRecipe` below is this plus the four fields
+ * that only mean anything once there is a kitchen and a day to compare against.
+ */
+export const PublicLibraryRecipe = z.object({
   slug: z.string(),
   title: z.string(),
   summary: z.string().nullable(),
@@ -3590,6 +3598,31 @@ export const LibraryRecipe = z.object({
   source: z.string(),
   source_url: z.string().nullable(),
   rating: z.number().nullable(),
+  /**
+   * How many ratings the source published for it. Carried because Schema.org's
+   * `AggregateRating` requires a count beside the value and will not render a
+   * star without one — the column has existed since the library shipped and
+   * nothing had ever read it.
+   */
+  rating_count: z.number().int().nullable(),
+});
+export type PublicLibraryRecipe = z.infer<typeof PublicLibraryRecipe>;
+
+/** One card in the library index: enough to list it, not enough to cook it. */
+export const LibraryCard = PublicLibraryRecipe.pick({
+  slug: true,
+  title: true,
+  summary: true,
+  category: true,
+  kcal: true,
+  protein_g: true,
+  image_path: true,
+  rating: true,
+  rating_count: true,
+});
+export type LibraryCard = z.infer<typeof LibraryCard>;
+
+export const LibraryRecipe = PublicLibraryRecipe.extend({
   saved: z.boolean(),
   /**
    * Why this one is being shown, resolved per request against the kitchen and

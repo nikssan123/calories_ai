@@ -81,7 +81,12 @@ export function RecipeReader({
   /** Attribution, provenance, whatever has to travel with the recipe. */
   footnote?: React.ReactNode;
   saved: boolean;
-  onToggleSave: () => void;
+  /**
+   * Absent when there is nowhere to save to. A recipe read from a search result
+   * by someone with no account gets no bookmark button rather than one that
+   * bounces them to a sign-in form.
+   */
+  onToggleSave?: () => void;
   /** The servings stepper and the buttons, pinned to the bottom of the page. */
   actions: React.ReactNode;
 }) {
@@ -98,6 +103,7 @@ export function RecipeReader({
             {backLabel}
           </Link>
 
+          {onToggleSave && (
           <button
             type="button"
             onClick={onToggleSave}
@@ -112,6 +118,7 @@ export function RecipeReader({
             />
             {saved ? t('recipe.saved') : t('recipe.save')}
           </button>
+          )}
         </div>
 
         {/*

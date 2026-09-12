@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Home } from '@/components/Home';
+import { jsonLd, softwareApplicationSchema } from '@/lib/schema';
 
 /**
  * A server component wrapping a client one, for the sake of two lines of
@@ -15,5 +16,13 @@ export const metadata: Metadata = {
 };
 
 export default function HomePage() {
-  return <Home />;
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: jsonLd(softwareApplicationSchema()) }}
+      />
+      <Home />
+    </>
+  );
 }

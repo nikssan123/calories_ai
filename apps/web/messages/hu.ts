@@ -380,6 +380,8 @@ export const hu: Messages = {
   'recipe.logged': (what: string, kcal: string) => `Rögzítve: ${what} – ${kcal} kcal`,
   'recipe.forServings': (servings: string, unit: string) => `${servings} × ${unit}`,
   'recipe.publicDomain': 'közkincs',
+  'recipe.logItWithApp': 'Írd be az appban, és a nap magától összeáll.',
+  'recipe.allRecipes': 'Összes recept',
   'recipe.iAteThisPlain': (kcal: string) => `Ezt ettem · ${kcal}`,
   'recipe.youdNeed': (things: string) => `Kellene még: ${things}`,
   'recipe.fromLibrary': 'A könyvtárból',

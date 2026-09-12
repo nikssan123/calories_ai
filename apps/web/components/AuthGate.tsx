@@ -10,6 +10,7 @@ import {
   isInviteRoute,
   isLegalRoute,
   isPrerenderableRoute,
+  isRecipeLibraryRoute,
 } from '@/lib/routes';
 
 interface AuthValue {
@@ -85,7 +86,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     pathname === '/' ||
     isEmailedRoute(pathname) ||
     isLegalRoute(pathname) ||
-    isInviteRoute(pathname);
+    isInviteRoute(pathname) ||
+    // A recipe read from a search result, by someone who has never signed in.
+    isRecipeLibraryRoute(pathname);
 
   const refresh = useCallback(async () => {
     try {
@@ -168,7 +171,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     !isCoach &&
     !isEmailedRoute(pathname) &&
     !isLegalRoute(pathname) &&
-    !isInviteRoute(pathname);
+    !isInviteRoute(pathname) &&
+    !isRecipeLibraryRoute(pathname);
 
   useEffect(() => {
     if (loading || !status) return;

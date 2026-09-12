@@ -386,6 +386,8 @@ export const ro: Messages = {
   'recipe.logged': (what: string, kcal: string) => `Am notat ${what} — ${kcal} kcal`,
   'recipe.forServings': (servings: string, unit: string) => `pentru ${servings} × ${unit}`,
   'recipe.publicDomain': 'domeniu public',
+  'recipe.logItWithApp': 'Notează-l în aplicație, iar ziua se adună singură.',
+  'recipe.allRecipes': 'Toate rețetele',
   'recipe.iAteThisPlain': (kcal: string) => `Am mâncat asta · ${kcal}`,
   'recipe.youdNeed': (things: string) => `Ți-ar trebui: ${things}`,
   'recipe.fromLibrary': 'Din bibliotecă',

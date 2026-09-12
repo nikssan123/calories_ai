@@ -376,6 +376,8 @@ export const uk: Messages = {
   'recipe.logged': (what: string, kcal: string) => `Записано: ${what} — ${kcal} kcal`,
   'recipe.forServings': (servings: string, unit: string) => `на ${servings} × ${unit}`,
   'recipe.publicDomain': 'суспільне надбання',
+  'recipe.logItWithApp': 'Запиши це в застосунку — і день порахується сам.',
+  'recipe.allRecipes': 'Усі рецепти',
   'recipe.iAteThisPlain': (kcal: string) => `З’їдено · ${kcal}`,
   'recipe.youdNeed': (things: string) => `Знадобиться: ${things}`,
   'recipe.fromLibrary': 'З бібліотеки',

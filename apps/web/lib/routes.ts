@@ -65,7 +65,7 @@ export function isLegalRoute(pathname: string): boolean {
  * session resolves would put a tab bar on a sign-in form for one frame.
  */
 export function isPrerenderableRoute(pathname: string): boolean {
-  return pathname === '/' || isLegalRoute(pathname);
+  return pathname === '/' || isLegalRoute(pathname) || isRecipeLibraryRoute(pathname);
 }
 
 /**
@@ -88,4 +88,20 @@ export function isCoachRoute(pathname: string): boolean {
  */
 export function isInviteRoute(pathname: string): boolean {
   return pathname.startsWith('/c/');
+}
+
+/**
+ * The starter library, read rather than cooked from.
+ *
+ * `/cook/library` and the ninety-nine pages under it are the only part of the
+ * app that is worth landing on from a search result: real ingredients, real
+ * method, and per-portion nutrition measured by the source rather than summed
+ * by us. They are public and server-rendered for that reason alone.
+ *
+ * Note the boundary. `/cook` itself is the shelf — ranked against your kitchen
+ * and your day, meaningless without a session — and `/cook/recipe/:id` is
+ * somebody's own generated recipe. Neither is here, and neither should be.
+ */
+export function isRecipeLibraryRoute(pathname: string): boolean {
+  return pathname === '/cook/library' || pathname.startsWith('/cook/library/');
 }

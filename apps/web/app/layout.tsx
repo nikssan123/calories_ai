@@ -7,6 +7,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { THEME_INIT_SCRIPT, ThemeSync } from '@/components/ThemeSync';
 import { LOCALE_INIT_SCRIPT, LocaleSync } from '@/lib/i18n';
 import { KeyboardInset } from '@/components/KeyboardInset';
+import { jsonLd, organizationSchema } from '@/lib/schema';
 
 /*
  * Two rounded faces, loaded as variables and referenced from --font-sans and
@@ -119,6 +120,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: LOCALE_INIT_SCRIPT }} />
+        {/*
+          * Who publishes this, on every page.
+          *
+          * Sitewide rather than on the landing page alone because its job is
+          * entity resolution, and the pages most likely to be found cold are
+          * the recipes — which point back at this node by `@id` rather than
+          * restating it. The brand needs the help: "Day So Far" is a common
+          * English phrase, and a bare-name search currently returns a
+          * reporting term, a payroll product and an unrelated album.
+          */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLd(organizationSchema()) }}
+        />
       </head>
       <body suppressHydrationWarning>
         <ThemeSync />

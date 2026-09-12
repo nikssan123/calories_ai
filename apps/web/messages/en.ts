@@ -460,6 +460,8 @@ export const en = {
   'recipe.logged': (what: string, kcal: string) => `Logged ${what} — ${kcal} kcal`,
   'recipe.forServings': (servings: string, unit: string) => `for ${servings} × ${unit}`,
   'recipe.publicDomain': 'public domain',
+  'recipe.logItWithApp': 'Log this in the app, and the day adds itself up.',
+  'recipe.allRecipes': 'All recipes',
   'recipe.iAteThisPlain': (kcal: string) => `I ate this · ${kcal}`,
   'recipe.youdNeed': (things: string) => `You’d need ${things}`,
   'recipe.fromLibrary': 'From the library',

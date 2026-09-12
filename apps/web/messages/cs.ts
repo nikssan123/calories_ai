@@ -391,6 +391,8 @@ export const cs: Messages = {
   'recipe.logged': (what: string, kcal: string) => `Zapsáno: ${what} – ${kcal} kcal`,
   'recipe.forServings': (servings: string, unit: string) => `pro ${servings} × ${unit}`,
   'recipe.publicDomain': 'volné dílo',
+  'recipe.logItWithApp': 'Zapiš to v aplikaci a den se sečte sám.',
+  'recipe.allRecipes': 'Všechny recepty',
   'recipe.iAteThisPlain': (kcal: string) => `Snědeno · ${kcal}`,
   'recipe.youdNeed': (things: string) => `Bude potřeba: ${things}`,
   'recipe.fromLibrary': 'Z knihovny',

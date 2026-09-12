@@ -36,12 +36,26 @@ export const INDEXABLE_ROUTES = [
 const INDEXABLE_PATHS: readonly string[] = INDEXABLE_ROUTES.map((route) => route.path);
 
 /**
+ * The one indexable subtree, as opposed to the fixed pages above.
+ *
+ * `/cook/library` and every recipe under it. Deliberately not `/cook`, which is
+ * the shelf and needs a session, and deliberately not `/cook/recipe/`, which is
+ * somebody's own generated recipe — a prefix test that caught either would put
+ * private pages in a search index.
+ */
+export function isIndexableLibraryPath(pathname: string): boolean {
+  return pathname === '/cook/library' || pathname.startsWith('/cook/library/');
+}
+
+/**
  * Whether a path should carry `X-Robots-Tag: noindex`.
  *
- * Written as "everything except the four" rather than as a list of app routes,
- * so a screen added next month is private by default. Getting that backwards is
- * how a half-finished route ends up in a search result.
+ * Written as "everything except the ones named" rather than as a list of app
+ * routes, so a screen added next month is private by default. Getting that
+ * backwards is how a half-finished route ends up in a search result.
  */
 export function isNoindexPath(pathname: string): boolean {
-  return !INDEXABLE_PATHS.includes(pathname);
+  if (INDEXABLE_PATHS.includes(pathname)) return false;
+  if (isIndexableLibraryPath(pathname)) return false;
+  return true;
 }
