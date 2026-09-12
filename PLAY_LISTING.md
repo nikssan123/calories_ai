@@ -454,6 +454,12 @@ only the **production track** it cannot touch (see the note in
 production stays a Console job. Never run it while another Play upload is in
 flight: one edit per app, and a second one deletes the first.
 
+It needs `google-auth` and `requests`, which no Python on this machine has by
+default — the repo is not a Python project and nothing pins them:
+
+    python3 -m venv /tmp/playenv && /tmp/playenv/bin/pip install google-auth requests
+    /tmp/playenv/bin/python store/tools/publish-listings.py
+
 `--only el-GR,hr,sr` narrows the run to those languages, for fixing a few
 without rewriting all twelve. The release notes are still written for every
 language whatever the filter says, because that PUT replaces the draft's notes
