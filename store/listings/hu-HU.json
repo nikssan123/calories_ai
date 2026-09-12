@@ -1,0 +1,33 @@
+{
+  "language": "hu-HU",
+  "title": "Day So Far: Kalóriaszámláló",
+  "shortDescription": "Mondd el, mit ettél. AI étkezési napló, makrók és kalóriaszámolás.",
+  "fullDescription": "A legtöbb kalóriaszámláló arra kényszerít, hogy adatbázisban keresd meg az ételt. A Day So Far csak annyit kérdez: mit ettél?\n\n„Két tojás, egy kifli és egy kis sajt.” Ezzel kész is a reggeli – 407 kalória, 24 g fehérje, a nap pedig rögtön frissül. Nincs keresés, nincs görgetés, nincs negyven „kifli” közül a jó kiválasztása.\n\n<b>Így megy itt a kalóriaszámolás</b>\n\n1. Írj egy mondatot arról, mit ettél\n2. A Day So Far kalóriát, fehérjét, szénhidrátot és zsírt csinál belőle\n3. A napod frissül\n\n<b>Meggondolhatod magad – szavakkal</b>\n\nMondd, hogy „több rizs volt”, és a már rögzített étkezés megváltozik. Nem javítás alá ragasztva, nem törlés és újragépelés – maga az étkezés frissül. Minden más étkezési napló visszaküld, hogy kézzel írd át a sort.\n\n<b>Térerő nélkül is működik</b>\n\nBevásárlóközpontok mélygarázsa, konditerem, lift, repülő – az emberek pontosan itt rögzítik az ételt, és a legtöbb kalóriaszámláló pontosan itt adja fel. Írd be az étkezést offline: a telefonodon marad, azonnal beleszámít a napodba, és magától szinkronizál, amint újra van térerő. Semmi nem vész el, és semmi nem kerül be kétszer.\n\n<b>Kalóriaszámláló, amely érti, mit főzöl valójában</b>\n\nRögzíts bármilyen nyelven. Egy tányér rakott krumpli, egy tál gulyásleves, a nagymamád töltött káposztája – akárhogy hívtátok otthon. Egy mondathoz nem kell vonalkód, és nem kell amerikai étteremlánc tétele ahhoz, hogy egy otthon főzött étel érthető legyen. A legtöbb kalóriaszámláló pontosan itt bukik el csendben, és pontosan ezért készült ez az étkezési napló.\n\n<b>Amit kapsz</b>\n\n• <b>Rögzítés írással</b> – egy mondat, nem keresőmező\n• <b>Rögzítés hanggal</b> – mondd ki az ételt, a hallgatást a telefon intézi\n• <b>Rögzítés offline</b> – írd be bárhol, szinkronizál, ha újra van térerő\n• <b>Vonalkód-olvasó</b> – az étrend bolti feléhez\n• <b>Rögzítés fotóról</b> – fotózd le a tányért vagy a címkét\n• <b>Makrók</b> – fehérje, szénhidrát és zsír, plusz rost, nátrium és cukor\n• <b>Alkalmazkodó kalóriacél</b> – ahhoz igazodik, amit valóban eszel, és ahogy a mérleg valóban mozog, nem egy egyszer kitöltött képlethez\n• <b>Kezdőképernyős widget</b> – a maradék kalória az app megnyitása nélkül\n• <b>Heti értékelés</b> – a saját számaidból írva, nem sablonból\n• <b>Mozgás rögzítése</b> – ugyanúgy mondatban, mint az ételt\n• <b>Metrikus vagy angolszász</b> – válts bármikor, az előzményed újrarajzolódik, semmi nem íródik át\n\n<b>A konyha</b>\n\nFotózd le a hűtődet. Kapsz belőle recepteket, a receptekből heti étrendet, a hiányzó hozzávalókra pedig bevásárlólistát. Kalóriát számolni minden app tud. Eldönteni, hogy mi legyen a vacsora – ez az a rész, ami az embereket tényleg megállítja.\n\n<b>A nap akkor ér véget, amikor a tiéd</b>\n\nA hajnali egykor bekapott nasi ahhoz az estéhez számít, ahová tartozik, nem a holnap reggelhez. Állítsd be, mikor kezdődik a napod, és ne vesszen el több késői étkezés a naptár miatt.\n\n<b>Kinek való</b>\n\nAzoknak, akik fogyás, súlytartás vagy tömegnövelés miatt számolnak kalóriát. Azoknak, akik inkább főznek, mint vesznek. Azoknak, akik próbáltak már étkezési naplót, kilenc napig rögzítettek, aztán abbahagyták, mert egy otthon főzött vacsora beírása négy percig tartott.\n\n<b>Free, Plus és Coach</b>\n\nAz ételeidet ingyen rögzítheted. Plus: heti értékelés, több naplóüzenet, több fotóelemzés. Coach: a konyha is – hűtőfotó, recept, heti étrend.\n\nA Day So Far egy kalóriaszámláló, étkezési napló és makrókövető azoknak, akiknek elegük van abból, hogy egy adatbázisban görgessenek, csak hogy rögzítsenek egy szendvicset.",
+  "releaseNotes": "A Day So Far mostantól magyarul beszél. Az egész alkalmazás – a napló, a konyha, a heti értékelés és a widget – magyar lett, és az ételeidet is magyarul írhatod be, úgy, ahogy otthon mondod. „Két tojás, egy kifli és egy kávé” elég is. A nyelvet bármikor átállíthatod a beállításokban.",
+  "captions": [
+    {
+      "headline": "Mondd el,\nmit ettél",
+      "sub": "Nincs adatbázis, nincs keresés. Egy mondat."
+    },
+    {
+      "headline": "Meggondoltad\nmagad?",
+      "sub": "Mondd el, és a rögzített étkezés frissül."
+    },
+    {
+      "headline": "A napod,\nahogy telik",
+      "sub": "Kalória, makrók és az étrend minősége."
+    }
+  ],
+  "shots": {
+    "userLog": "csirkemell rizzsel és párolt zöldséggel",
+    "replyLog": "715 kcal, 59 g fehérje. Ma 2065 / 2200 kcal – 135 maradt, épp egy joghurtra vagy egy gyümölcsre.",
+    "cardTitle": "Csirkemell rizzsel",
+    "items": [
+      "Csirkemell ~200 g",
+      "Rizs ~250 g",
+      "Párolt zöldség ~200 g"
+    ],
+    "userCorrection": "több rizs volt, kb. 300 g",
+    "replyCorrection": "Frissítve: csirkemell rizzsel – most 780 kcal, 60 g fehérje. Ma 2130 / 2200 kcal, 70 maradt."
+  }
+}

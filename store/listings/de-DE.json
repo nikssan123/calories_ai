@@ -1,0 +1,33 @@
+{
+  "language": "de-DE",
+  "title": "Day So Far: Kalorienzähler",
+  "shortDescription": "Sag, was du gegessen hast. KI-Ernährungstagebuch, Makros, Kalorien zählen.",
+  "fullDescription": "Die meisten Kalorienzähler lassen dich dein Essen erst in einer Datenbank suchen. Day So Far fragt einfach, was du gegessen hast.\n\n„Zwei Eier, ein Brötchen und etwas Käse.“ Das ist ein erfasstes Frühstück — 407 Kalorien, 24 g Eiweiß, schon auf deinen Tag gerechnet. Kein Suchen, kein Scrollen, kein Aussuchen aus vierzig Einträgen namens „Brötchen“.\n\n<b>So funktioniert Kalorien zählen hier</b>\n\n1. Schreib einen Satz über deine Mahlzeit\n2. Day So Far macht daraus Kalorien, Eiweiß, Kohlenhydrate und Fett\n3. Dein Tag aktualisiert sich\n\n<b>Überleg es dir anders — in Worten</b>\n\nSag „es war mehr Reis“, und der Eintrag, den du schon erfasst hast, ändert sich. Keine Korrektur, die darunter hängt, kein Löschen und Neutippen — die Mahlzeit selbst wird angepasst. Jedes andere Ernährungstagebuch schickt dich zurück, um die Zeile von Hand zu bearbeiten.\n\n<b>Es läuft auch ohne Empfang weiter</b>\n\nSupermarktkeller, Fitnessstudios, Aufzüge und Flugzeuge — dort wird wirklich eingetragen, und dort geben die meisten Apps zum Kalorien zählen auf. Trag eine Mahlzeit offline ein: Sie liegt auf deinem Handy, zählt sofort für deinen Tag und synchronisiert sich von selbst, sobald du wieder Empfang hast. Nichts geht verloren, und nichts wird doppelt eingetragen.\n\n<b>Ein Kalorienzähler, der weiß, was bei dir wirklich gekocht wird</b>\n\nTrag in jeder Sprache ein. Ein Teller Rouladen mit Rotkohl, eine Schüssel Linseneintopf, wie auch immer deine Oma es genannt hat — ein Satz braucht weder einen Barcode noch den Eintrag einer amerikanischen Restaurantkette, um selbstgekochtes Essen zu verstehen. Genau hier scheitern die meisten Apps zum Kalorien zählen still und leise, und genau deshalb gibt es dieses Ernährungstagebuch.\n\n<b>Was du bekommst</b>\n\n• <b>Eintragen durch Schreiben</b> — ein Satz, kein Suchfeld\n• <b>Eintragen durch Sprechen</b> — sag die Mahlzeit laut, dein Handy hört zu\n• <b>Offline eintragen</b> — trag überall ein, es synchronisiert sich, sobald du wieder online bist\n• <b>Barcode-Scanner</b> — für die verpackte Hälfte deiner Ernährung\n• <b>Foto-Eintrag</b> — fotografier den Teller oder das Etikett\n• <b>Makro-Tracker</b> — Eiweiß, Kohlenhydrate und Fett, dazu Ballaststoffe, Natrium und Zucker\n• <b>Mitwachsende Kalorienziele</b> — dein Ziel rechnet sich neu aus dem, was du wirklich isst und was die Waage macht, nicht aus einer Formel, die du einmal ausgefüllt hast\n• <b>Widget für den Startbildschirm</b> — übrige Kalorien, ohne die App zu öffnen\n• <b>Wochenrückblick</b> — aus deinen echten Zahlen geschrieben, nicht aus einer Vorlage\n• <b>Sport eintragen</b> — in Sätzen, genau wie das Essen\n• <b>Metrisch oder imperial</b> — jederzeit umschaltbar; dein Verlauf wird neu gezeichnet, nichts wird umgeschrieben\n\n<b>Die Küche</b>\n\nFotografier, was in deinem Kühlschrank ist. Du bekommst Rezepte, die es verwenden, einen Wochenplan aus diesen Rezepten und eine Einkaufsliste für das, was fehlt. Kalorien zählen ist der Teil, den jede Ernährungs-App kann. Zu entscheiden, was es geben soll, ist der Teil, an dem die Leute wirklich aufhören.\n\n<b>Ein Tag, der endet, wenn deiner endet</b>\n\nEin Snack um ein Uhr nachts zählt zu dem Abend, zu dem er gehört, nicht zum nächsten Morgen. Stell ein, wann dein Tag anfängt, und verlier keine späten Mahlzeiten mehr an den Kalender.\n\n<b>Für wen das ist</b>\n\nFür alle, die Kalorien zählen — zum Abnehmen, zum Halten oder zum Zunehmen. Für alle, die kochen statt zu kaufen. Für alle, die schon mal ein Ernährungstagebuch geführt, neun Tage durchgehalten und aufgehört haben, weil das Eintragen eines selbstgekochten Abendessens vier Minuten gedauert hat.\n\n<b>Free, Plus und Coach</b>\n\nTrag dein Essen kostenlos ein. Plus bringt den Wochenrückblick, mehr Journal-Runden und mehr Foto-Scans. Coach bringt die Küche dazu — Kühlschrank-Scans, Rezepte und Wochenpläne.\n\nDay So Far ist Kalorienzähler, Ernährungstagebuch und Makro-Tracker für alle, die keine Lust mehr haben, für ein Butterbrot durch eine Datenbank zu scrollen.",
+  "releaseNotes": "Day So Far spricht jetzt Deutsch. Die ganze App — das Journal, dein Tag, die Küche, der Wochenrückblick, die E-Mails — in deiner Sprache, nicht nur ein paar Knöpfe.\n\nZwölf weitere Sprachen sind dazugekommen; umschalten kannst du jederzeit unter Profil → Sprache. Was du eingetragen hast, bleibt so stehen, wie du es geschrieben hast.\n\nKlingt ein Satz schief? Schreib uns. Das Deutsch hier ist von Hand geschrieben.",
+  "captions": [
+    {
+      "headline": "Sag einfach,\nwas du isst",
+      "sub": "Keine Datenbank. Keine Suche. Ein Satz."
+    },
+    {
+      "headline": "Anders\nüberlegt?",
+      "sub": "Sag es — die erfasste Mahlzeit ändert sich."
+    },
+    {
+      "headline": "Dein Tag,\nwie er läuft",
+      "sub": "Kalorien, Makros und die Qualität darunter."
+    }
+  ],
+  "shots": {
+    "userLog": "hähnchen mit reis und brokkoli",
+    "replyLog": "715 kcal, davon 59 g Eiweiß — starker Teller. Damit stehst du bei 2.065 von 2.200, es bleiben 135 für später.",
+    "cardTitle": "Hähnchen mit Reis und Brokkoli",
+    "items": [
+      "Hähnchenbrust ~200 g",
+      "Reis, gekocht ~150 g",
+      "Brokkoli ~100 g"
+    ],
+    "userCorrection": "es war mehr reis, so 300 g",
+    "replyCorrection": "Angepasst: 780 kcal, jetzt 92 g Kohlenhydrate. Dein Tag steht bei 2.130 von 2.200 — 70 übrig."
+  }
+}

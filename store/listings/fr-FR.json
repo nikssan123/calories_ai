@@ -1,0 +1,33 @@
+{
+  "language": "fr-FR",
+  "title": "Day So Far: Compteur Calories",
+  "shortDescription": "Dis ce que tu as mangé. Journal alimentaire IA, macros et suivi des calories.",
+  "fullDescription": "La plupart des compteurs de calories t’obligent à chercher ton repas dans une base de données. Day So Far te demande simplement ce que tu as mangé.\n\n« Deux œufs, une tartine et un peu de fromage. » Voilà un petit-déjeuner enregistré — 407 calories, 24 g de protéines, déjà comptées sur ta journée. Pas de recherche, pas de défilement, pas de tri entre quarante entrées appelées « tartine ».\n\n<b>Comment on compte les calories ici</b>\n\n1. Écris une phrase sur ton repas\n2. Day So Far en tire les calories, les protéines, les glucides et les lipides\n3. Ta journée se met à jour\n\n<b>Changer d’avis, avec des mots</b>\n\nDis « il y avait plus de riz » et l’entrée déjà enregistrée change. Pas une correction accrochée en dessous, pas un effacer-retaper : c’est le repas lui-même qui se met à jour. Ailleurs, un journal alimentaire te renvoie modifier la ligne à la main.\n\n<b>Ça marche aussi sans réseau</b>\n\nSous-sols de supermarché, salles de sport, ascenseurs, avions : c’est là qu’on note vraiment ses repas, et là que la plupart des applis pour compter les calories abandonnent. Note un repas hors ligne : il reste sur ton téléphone, il compte tout de suite dans ta journée, et se synchronise seul dès que tu as du réseau. Rien n’est perdu, rien n’est enregistré deux fois.\n\n<b>Un compteur de calories qui connaît ta vraie cuisine</b>\n\nEnregistre dans n’importe quelle langue. Un hachis parmentier, un bol de soupe de poireaux, la blanquette de ta grand-mère — une phrase n’a besoin ni d’un code-barres ni d’une fiche de chaîne américaine pour comprendre un plat fait maison. C’est là que la plupart des applis pour compter les calories échouent en silence, et c’est toute la raison d’être de ce journal alimentaire.\n\n<b>Ce que tu as</b>\n\n• <b>Noter en écrivant</b> — une phrase, pas un champ de recherche\n• <b>Noter en parlant</b> — dis ton repas à voix haute, ton téléphone écoute\n• <b>Enregistrement hors ligne</b> — note tes repas partout, ils se synchronisent au retour du réseau\n• <b>Scanner de codes-barres</b> — pour la moitié emballée de ton alimentation\n• <b>Enregistrement par photo</b> — photographie l’assiette ou l’étiquette\n• <b>Suivi des macros</b> — protéines, glucides et lipides, plus fibres, sodium et sucre\n• <b>Objectifs de calories qui s’ajustent</b> — ton objectif se recalcule sur ce que tu manges vraiment et ce que fait la balance, pas sur une formule remplie une fois\n• <b>Widget sur l’écran d’accueil</b> — les calories qui restent, sans ouvrir l’appli\n• <b>Bilan hebdomadaire</b> — écrit à partir de tes vrais chiffres, pas d’un modèle\n• <b>Enregistrement du sport</b> — en phrases, comme pour les repas\n• <b>Métrique ou impérial</b> — change quand tu veux ; ton historique se redessine, rien n’est réécrit\n\n<b>La cuisine</b>\n\nPhotographie ce qu’il y a dans ton frigo. Tu reçois des recettes qui l’utilisent, un plan de la semaine bâti dessus, et une liste de courses pour ce qui manque. Compter les calories, c’est la partie que fait n’importe quelle appli de nutrition. Décider quoi manger, c’est celle qui fait vraiment arrêter les gens.\n\n<b>Une journée qui finit quand la tienne finit</b>\n\nUn en-cas à une heure du matin compte pour la soirée à laquelle il appartient, pas pour le lendemain. Règle l’heure où ta journée commence, et arrête de perdre tes repas tardifs à cause du calendrier.\n\n<b>Pour qui c’est fait</b>\n\nPour qui compte les calories : perdre du poids, se maintenir, en prendre. Pour qui cuisine plutôt que d’acheter. Pour qui a déjà tenu un journal alimentaire, neuf jours, et a arrêté parce que noter un dîner fait maison prenait quatre minutes.\n\n<b>Free, Plus et Coach</b>\n\nEnregistre tes repas gratuitement. Plus ajoute le bilan hebdomadaire, plus de tours de journal et de scans de photo. Coach ajoute la cuisine — scans du frigo, recettes et plans de la semaine.\n\nDay So Far est un compteur de calories, un journal alimentaire et un suivi des macros pour qui en a assez de faire défiler une base de données pour un sandwich.",
+  "releaseNotes": "Day So Far parle maintenant français. Toute l’appli — le journal, ta journée, la cuisine, le bilan hebdomadaire, les e-mails — dans ta langue, pas seulement quelques boutons.\n\nDouze autres langues arrivent avec cette version, et tu peux changer quand tu veux dans Profil → Langue. Ce que tu as mangé reste écrit comme tu l’as noté.\n\nUne phrase sonne faux ? Dis-le-nous : le français d’ici est écrit à la main.",
+  "captions": [
+    {
+      "headline": "Dis ce que\ntu as mangé",
+      "sub": "Aucune base de données. Une phrase suffit."
+    },
+    {
+      "headline": "Tu as changé\nd’avis ?",
+      "sub": "Dis-le : le repas enregistré se met à jour."
+    },
+    {
+      "headline": "Ta journée,\nen direct",
+      "sub": "Calories, macros et la qualité en dessous."
+    }
+  ],
+  "shots": {
+    "userLog": "blanc de poulet avec du riz et des courgettes",
+    "replyLog": "715 kcal, dont 59 g de protéines — belle assiette. Ta journée est à 2 065 sur 2 200, il te reste 135 pour plus tard.",
+    "cardTitle": "Poulet, riz et courgettes",
+    "items": [
+      "Blanc de poulet ~200 g",
+      "Riz cuit ~150 g",
+      "Courgettes ~100 g"
+    ],
+    "userCorrection": "il y avait plus de riz, environ 300 g",
+    "replyCorrection": "Mis à jour : 780 kcal et 92 g de glucides. Ta journée est à 2 130 sur 2 200, il te reste 70."
+  }
+}

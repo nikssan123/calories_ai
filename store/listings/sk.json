@@ -1,0 +1,33 @@
+{
+  "language": "sk",
+  "title": "Day So Far: Počítadlo kalórií",
+  "shortDescription": "Stačí napísať, čo bolo na tanieri. AI denník stravy, makrá a kalórie.",
+  "fullDescription": "Väčšina počítadiel kalórií ťa núti hľadať jedlo v databáze. Day So Far sa len spýta, čo bolo na tanieri.\n\n„Dve vajcia, hrianka a kúsok syra.“ A raňajky sú zapísané – 407 kalórií, 24 g bielkovín, a deň sa rovno prepočítal. Žiadne hľadanie, žiadne listovanie, žiadne vyberanie jednej položky zo štyridsiatich, ktoré sa všetky volajú „hrianka“.\n\n<b>Ako tu funguje počítanie kalórií</b>\n\n1. Napíš vetu o tom, čo bolo na tanieri\n2. Day So Far z nej spraví kalórie, bielkoviny, sacharidy a tuky\n3. Tvoj deň sa prepočíta\n\n<b>Zmena názoru, slovami</b>\n\nPovedz „ryže bolo viac“ a jedlo, ktoré už máš zapísané, sa zmení. Nie oprava prilepená pod ním, nie zmazať a písať odznova – zmení sa samotné jedlo. Každý iný denník stravy ťa pošle späť opraviť riadok ručne.\n\n<b>Funguje aj úplne bez signálu</b>\n\nPodzemné poschodia supermarketov, posilňovne, výťahy a lietadlá – presne tam sa jedlo naozaj zapisuje a presne tam väčšina aplikácií na počítanie kalórií končí. Zapíš jedlo offline: uloží sa v telefóne, hneď sa započíta do tvojho dňa a samo sa zosynchronizuje, keď budeš zase online. Nič sa nestratí a nič sa nezapíše dvakrát.\n\n<b>Počítadlo kalórií, ktoré rozumie tomu, čo naozaj varíš</b>\n\nZapisuj v akomkoľvek jazyku. Tanier bryndzových halušiek, miska kapustnice, babkine zemiakové placky – nech sa to doma volalo akokoľvek. Veta nepotrebuje čiarový kód ani položku z americkej reťazcovej reštaurácie, aby pochopila domáce jedlo. Presne tu väčšina aplikácií na počítanie kalórií ticho zlyháva a presne preto tento denník stravy vznikol.\n\n<b>Čo dostaneš</b>\n\n• <b>Zápis písaním</b> – veta, nie vyhľadávacie pole\n• <b>Zápis hlasom</b> – povedz jedlo nahlas, počúvanie zvládne telefón\n• <b>Zápis offline</b> – zapisuj kdekoľvek, zosynchronizuje sa to, keď budeš online\n• <b>Skener čiarových kódov</b> – na balenú polovicu jedálnička\n• <b>Zápis z fotky</b> – odfoť tanier alebo etiketu\n• <b>Makroživiny</b> – bielkoviny, sacharidy a tuky, k tomu vláknina, sodík a cukor\n• <b>Cieľ, ktorý sa prispôsobí</b> – prepočíta sa podľa toho, čo naozaj ješ a ako sa naozaj hýbe váha, nie podľa vzorca vyplneného raz na začiatku\n• <b>Widget na plochu</b> – koľko kalórií zostáva, bez otvárania aplikácie\n• <b>Týždenný prehľad</b> – napísaný z tvojich skutočných čísel, nie zo šablóny\n• <b>Zápis pohybu</b> – rovnako vetou ako jedlo\n• <b>Metrické alebo imperiálne</b> – prepni kedykoľvek, história sa prekreslí a nič sa neprepíše\n\n<b>Kuchyňa</b>\n\nOdfoť, čo máš v chladničke. Dostaneš recepty z toho, čo v nej je, jedálniček poskladaný z tých receptov a nákupný zoznam na to, čo chýba. Počítanie kalórií zvládne každá aplikácia. Rozhodnúť sa, čo bude na tanieri, je tá časť, na ktorej to ľuďom naozaj padá.\n\n<b>Deň, ktorý sa končí vtedy, keď ten tvoj</b>\n\nNočné maškrtenie o jednej sa počíta k večeru, ku ktorému patrí, nie k zajtrajšiemu ránu. Nastav si, kedy sa ti začína deň, a prestaň prichádzať o neskoré jedlá kvôli kalendáru.\n\n<b>Pre koho to je</b>\n\nPre ľudí, ktorí počítajú kalórie kvôli chudnutiu, udržaniu váhy alebo naberaniu. Pre ľudí, ktorí varia, namiesto toho aby nakupovali. Pre ľudí, ktorí denník stravy už skúšali, zapisovali deväť dní a prestali, lebo zapísať domácu večeru trvalo štyri minúty.\n\n<b>Free, Plus a Coach</b>\n\nZapisuj jedlo zadarmo. Plus pridáva týždenný prehľad, viac správ v denníku a viac skenov z fotiek. Coach pridáva kuchyňu – skeny chladničky, recepty a jedálničky.\n\nDay So Far je počítadlo kalórií, denník stravy a sledovanie makroživín pre ľudí, ktorých nebaví prehľadávať databázu len preto, aby si zapísali chlieb so syrom.",
+  "releaseNotes": "Day So Far už hovorí po slovensky. Celá aplikácia – denník, kuchyňa, týždenný prehľad aj widget – je v slovenčine a jedlo si môžeš zapisovať po slovensky, tak ako o ňom hovoríš doma. Stačí „dve vajcia, hrianka a káva“. Jazyk sa dá kedykoľvek prepnúť v nastaveniach.",
+  "captions": [
+    {
+      "headline": "Napíš, čo bolo\nna tanieri",
+      "sub": "Žiadna databáza, žiadne hľadanie. Len veta."
+    },
+    {
+      "headline": "Zmena\nnázoru?",
+      "sub": "Povedz to a zapísané jedlo sa samo zmení."
+    },
+    {
+      "headline": "Tvoj deň,\nako beží",
+      "sub": "Kalórie, makrá a kvalita stravy."
+    }
+  ],
+  "shots": {
+    "userLog": "kuracie prsia s ryžou a dusenou zeleninou",
+    "replyLog": "715 kcal, 59 g bielkovín. Dnes máš 2065 z 2200 kcal – zostáva 135, tak akurát na jogurt alebo kus ovocia.",
+    "cardTitle": "Kuracie prsia s ryžou",
+    "items": [
+      "Kuracie prsia ~200 g",
+      "Ryža ~250 g",
+      "Dusená zelenina ~200 g"
+    ],
+    "userCorrection": "ryže bolo viac, tak 300 g",
+    "replyCorrection": "Upravené: kuracie prsia s ryžou – teraz 780 kcal a 60 g bielkovín. Dnes máš 2130 z 2200 kcal, zostáva 70."
+  }
+}

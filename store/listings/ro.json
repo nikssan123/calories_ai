@@ -1,0 +1,33 @@
+{
+  "language": "ro",
+  "title": "Day So Far: Contor de calorii",
+  "shortDescription": "Spune ce ai mâncat. Jurnal alimentar cu AI, calorii și macronutrienți.",
+  "fullDescription": "Majoritatea aplicațiilor de numărat calorii te pun să-ți cauți mâncarea într-o bază de date. Day So Far te întreabă pur și simplu ce ai mâncat.\n\n„Două ouă, pâine prăjită și niște brânză.” Asta e deja un mic dejun notat — 407 calorii, 24g proteine, socotite în ziua ta. Fără căutare, fără derulat, fără să alegi una din patruzeci de intrări numite „pâine”.\n\n<b>Cum se numără caloriile aici</b>\n\n1. Scrie o propoziție despre masa ta\n2. Day So Far o transformă în calorii, proteine, carbohidrați și grăsimi\n3. Ziua ta se actualizează\n\n<b>Te răzgândești, în cuvinte</b>\n\nSpui „era mai mult orez” și intrarea deja notată se schimbă. Nu o corectură adăugată dedesubt, nu ștergere și scris din nou — se actualizează masa însăși. Orice alt jurnal alimentar te trimite înapoi să editezi rândul de mână.\n\n<b>Merge și fără semnal</b>\n\nSubsolurile de supermarket, sălile de sport, lifturile și avioanele — acolo notează oamenii mâncarea și acolo renunță majoritatea aplicațiilor de calorii. Notează o masă offline: rămâne pe telefon, se socotește imediat în ziua ta și se sincronizează singură când revii în semnal. Nu se pierde nimic și nimic nu se notează de două ori.\n\n<b>Un contor de calorii care știe ce gătești</b>\n\nNotează în orice limbă vorbești. O porție de sarmale cu mămăligă, un castron de ciorbă de perișoare, salata de boeuf făcută cum o face bunica — ca să înțeleagă o mâncare gătită acasă, unei propoziții nu-i trebuie nici cod de bare, nici o intrare dintr-un lanț de restaurante american. Exact aici cedează în tăcere majoritatea aplicațiilor de numărat calorii și exact de asta există acest jurnal alimentar.\n\n<b>Ce primești</b>\n\n• <b>Notezi scriind</b> — o propoziție, nu o casetă de căutare\n• <b>Notezi vorbind</b> — spune masa cu voce tare; telefonul ascultă\n• <b>Notare offline</b> — notezi oriunde, se sincronizează când revii în semnal\n• <b>Scanare de cod de bare</b> — pentru jumătatea ambalată a mesei\n• <b>Notare din poză</b> — fotografiază farfuria sau eticheta\n• <b>Macronutrienți</b> — proteine, carbohidrați și grăsimi, plus fibre, sodiu și zahăr\n• <b>Ținta de calorii se mișcă</b> — se recalculează din ce mănânci de fapt și din cum se mișcă greutatea ta, nu dintr-o formulă completată o dată\n• <b>Widget pe ecranul principal</b> — caloriile rămase fără să deschizi aplicația\n• <b>Bilanț săptămânal</b> — scris din cifrele tale reale, nu după un șablon\n• <b>Notarea mișcării</b> — la fel, dintr-o propoziție\n• <b>Metrice sau imperiale</b> — schimbi oricând; istoricul se recalculează, nimic nu se rescrie\n\n<b>Bucătăria</b>\n\nFotografiază ce ai în frigider. Primești rețete din ce e acolo, un plan de mese construit din rețetele alea și o listă de cumpărături pentru ce lipsește. Numărătoarea caloriilor e partea pe care o face orice aplicație de nutriție. Partea care chiar oprește oamenii e să decidă ce mănâncă.\n\n<b>O zi care se termină când se termină a ta</b>\n\nO gustare la 1 noaptea se socotește la seara căreia îi aparține, nu la dimineața următoare. Pune ziua să înceapă când te trezești tu și nu mai pierzi mesele târzii din cauza calendarului.\n\n<b>Pentru cine e</b>\n\nPentru oameni care numără calorii ca să slăbească, să se mențină sau să ia în greutate. Pentru oameni care gătesc, nu cumpără gata. Pentru oameni care au mai încercat un jurnal alimentar, au notat nouă zile și s-au oprit fiindcă notatul unei cine gătite acasă lua patru minute.\n\n<b>Free, Plus și Coach</b>\n\nNotează-ți mâncarea gratuit. Plus adaugă bilanțul săptămânal, mai multe mesaje în jurnal și mai multe scanări foto. Coach adaugă bucătăria — scanări de frigider, rețete și planuri de mese.\n\nDay So Far e un contor de calorii, un jurnal alimentar și un tracker de macronutrienți pentru oameni sătui să deruleze o bază de date ca să noteze un sandviș.",
+  "releaseNotes": "Day So Far vorbește acum românește — jurnalul, țintele, bilanțul săptămânal și bucătăria, de la un capăt la altul.\n\nAplicația ia limba telefonului. Dacă vrei alta, o schimbi din Profil → Limbă; sunt treisprezece acolo.\n\nDacă ceva sună strâmb în română, scrie-ne — citim tot.",
+  "captions": [
+    {
+      "headline": "Spune ce\nai mâncat",
+      "sub": "Fără bază de date. Fără căutare. O propoziție."
+    },
+    {
+      "headline": "Te-ai\nrăzgândit?",
+      "sub": "Spune — masa notată se actualizează singură."
+    },
+    {
+      "headline": "Ziua ta,\nîn desfășurare",
+      "sub": "Calorii, macronutrienți și calitatea mesei."
+    }
+  ],
+  "shots": {
+    "userLog": "piept de pui cu orez și salată la cină",
+    "replyLog": "Am notat cina — 715 kcal, 59g proteine. Ziua ta e la 2065 din 2200, îți mai rămân 135 — cât un iaurt înainte de culcare.",
+    "cardTitle": "Piept de pui cu orez și salată",
+    "items": [
+      "Piept de pui ~200 g",
+      "Orez fiert ~250 g",
+      "Salată de roșii ~150 g"
+    ],
+    "userCorrection": "era mai mult orez, vreo 300 g",
+    "replyCorrection": "Corectat — cina e acum 780 kcal, ziua ta 2130 din 2200, îți mai rămân 70. Diferența vine doar din orez."
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "language": "cs-CZ",
+  "title": "Day So Far: Počítadlo kalorií",
+  "shortDescription": "Prostě napiš, co bylo k jídlu. AI jídelní deník, makra a počítání kalorií.",
+  "fullDescription": "Většina počítadel kalorií tě nutí hledat jídlo v databázi. Day So Far se jenom zeptá, co bylo k jídlu.\n\n„Dvě vajíčka, rohlík a kousek sýra.“ A snídaně je zapsaná – 407 kalorií, 24 g bílkovin, a den se rovnou přepočítal. Žádné hledání, žádné listování, žádné vybírání jedné položky ze čtyřiceti, které se všechny jmenují „rohlík“.\n\n<b>Jak tu funguje počítání kalorií</b>\n\n1. Napiš větu o tom, co bylo k jídlu\n2. Day So Far z ní udělá kalorie, bílkoviny, sacharidy a tuky\n3. Tvůj den se přepočítá\n\n<b>Změna názoru, slovy</b>\n\nŘekni „rýže bylo víc“ a jídlo, které už máš zapsané, se změní. Ne oprava přilepená pod ním, ne smazat a psát znovu – změní se to jídlo samotné. Každý jiný jídelní deník tě pošle zpátky opravit řádek ručně.\n\n<b>Funguje i úplně bez signálu</b>\n\nPodzemní patra supermarketů, posilovny, výtahy a letadla – přesně tam se jídlo doopravdy zapisuje a přesně tam většina aplikací na počítání kalorií končí. Zapiš jídlo offline: uloží se v telefonu, hned se započítá do tvého dne a samo se srovná, až budeš zase online. Nic se neztratí a nic se nezapíše dvakrát.\n\n<b>Počítadlo kalorií, které rozumí tomu, co doopravdy vaříš</b>\n\nZapisuj v jakémkoli jazyce. Talíř svíčkové, miska česnečky, babiččin bramborák – ať se to doma jmenovalo jakkoli. Věta nepotřebuje čárový kód ani položku z americké řetězcové restaurace, aby pochopila domácí jídlo. Přesně tady většina aplikací na počítání kalorií tiše selhává a přesně proto tenhle jídelní deník vznikl.\n\n<b>Co dostaneš</b>\n\n• <b>Zápis psaním</b> – věta, ne vyhledávací pole\n• <b>Zápis hlasem</b> – řekni jídlo nahlas, poslouchání zvládne telefon\n• <b>Zápis offline</b> – zapisuj kdekoli, srovná se to, až budeš online\n• <b>Skener čárových kódů</b> – na balenou půlku jídelníčku\n• <b>Zápis z fotky</b> – vyfoť talíř nebo etiketu\n• <b>Makra</b> – bílkoviny, sacharidy a tuky, k tomu vláknina, sodík a cukr\n• <b>Cíl, který se přizpůsobí</b> – přepočítá se podle toho, co doopravdy jíš a jak se doopravdy hýbe váha, ne podle vzorce vyplněného jednou na začátku\n• <b>Widget na plochu</b> – kolik kalorií zbývá, bez otevírání aplikace\n• <b>Týdenní přehled</b> – psaný z tvých skutečných čísel, ne ze šablony\n• <b>Zápis pohybu</b> – stejně větou jako jídlo\n• <b>Metrické nebo imperiální</b> – přepni kdykoli, historie se překreslí a nic se nepřepíše\n\n<b>Kuchyně</b>\n\nVyfoť, co máš v lednici. Dostaneš recepty z toho, co v ní je, jídelníček poskládaný z těch receptů a nákupní seznam na to, co chybí. Počítání kalorií zvládne každá aplikace. Rozhodnout, co bude k jídlu, je ta část, na které to lidem doopravdy padá.\n\n<b>Den, který končí, když končí ten tvůj</b>\n\nSvačina v jednu v noci se počítá k večeru, ke kterému patří, ne k zítřejšímu ránu. Nastav si, kdy ti začíná den, a přestaň přicházet o pozdní jídla kvůli kalendáři.\n\n<b>Pro koho to je</b>\n\nPro lidi, kteří počítají kalorie kvůli hubnutí, udržení váhy nebo nabírání. Pro lidi, kteří vaří, místo aby nakupovali. Pro lidi, kteří jídelní deník už zkoušeli, zapisovali devět dní a přestali, protože zapsat domácí večeři trvalo čtyři minuty.\n\n<b>Free, Plus a Coach</b>\n\nZapisuj jídlo zdarma. Plus přidává týdenní přehled, víc zpráv v deníku a víc skenů z fotek. Coach přidává kuchyni – skeny lednice, recepty a jídelníčky.\n\nDay So Far je počítadlo kalorií, jídelní deník a sledování maker pro lidi, které nebaví prohledávat databázi, jen aby si zapsali chleba se sýrem.",
+  "releaseNotes": "Day So Far teď mluví česky. Celá aplikace – deník, kuchyně, týdenní přehled i widget – je v češtině, a jídlo si můžeš zapisovat česky, tak jak o něm mluvíš doma. „Dvě vajíčka, rohlík a kafe“ stačí. Jazyk se dá kdykoli přepnout v nastavení.",
+  "captions": [
+    {
+      "headline": "Napiš, co\nbylo k jídlu",
+      "sub": "Žádná databáze, žádné hledání. Jen věta."
+    },
+    {
+      "headline": "Změna\nnázoru?",
+      "sub": "Řekni to a zapsané jídlo se samo změní."
+    },
+    {
+      "headline": "Tvůj den,\njak běží",
+      "sub": "Kalorie, makra a kvalita stravy."
+    }
+  ],
+  "shots": {
+    "userLog": "kuřecí prsa s rýží a dušenou zeleninou",
+    "replyLog": "715 kcal, 59 g bílkovin. Dnes máš 2065 z 2200 kcal – zbývá 135, tak akorát na jogurt nebo kus ovoce.",
+    "cardTitle": "Kuřecí prsa s rýží",
+    "items": [
+      "Kuřecí prsa ~200 g",
+      "Rýže ~250 g",
+      "Dušená zelenina ~200 g"
+    ],
+    "userCorrection": "rýže bylo víc, tak 300 g",
+    "replyCorrection": "Upraveno: kuřecí prsa s rýží – teď 780 kcal a 60 g bílkovin. Dnes máš 2130 z 2200 kcal, zbývá 70."
+  }
+}

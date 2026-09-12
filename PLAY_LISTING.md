@@ -401,3 +401,56 @@ build meant only for the handful of people already on the internal list, and to
 **Propagation is not instant.** A newly granted service account is commonly refused by
 the Publishing API for a few minutes to a few hours after step 3. A first submit that
 fails on permissions is usually this, not a wrong key.
+
+---
+
+## 11. The twelve localised listings
+
+*2026-09-12, with 1.1.0.* The app speaks thirteen languages, so the listing does
+too. Everything here is in the repo rather than only in Play:
+
+- **`store/listings/<code>.json`** — title, short and full description, the
+  release notes, the three screenshot captions, and the strings the screenshots
+  are seeded with. Codes are Play's: `bg ro uk sr hr cs-CZ sk hu-HU el-GR de-DE
+  es-ES fr-FR`.
+- **`store/screenshots-localised/<code>/`** — `01-log`, `02-correct`,
+  `03-today`, the three frames from §5 that carry the listing. Play shows a
+  language its own screenshots when it has any and the default language's
+  otherwise, so the remaining five frames stay English until somebody shoots
+  them.
+
+**The copy is written per language, not translated.** Each title leads with the
+brand and then that language's own highest-volume calorie term, which is why
+none of them is a literal rendering of the English: `Брояч на калории`,
+`Contor de calorii`, `Лічильник калорій`, `Počítadlo kalorií`,
+`Kalóriaszámláló`, `μετρητής θερμίδων`. The home-cooked paragraph names dishes
+people there actually eat. Nothing claims more than §4 claims.
+
+**How the screenshots are made.** The three frames are app captures with the
+caption burned in, so a localised set needs the app in that language:
+
+1. `apps/api/src/store-shots.ts` seeds `shots@example.invalid` on the dev
+   database from one language's JSON — the same dinner, the same correction,
+   the same 1,350-of-2,200 day every time, so twelve listings differ only in
+   their words.
+2. `store/tools/capture-shots.sh <code> <locale>` seeds, relaunches the app on
+   the emulator against Metro, and captures the three states. Today is reached
+   by `daysofar://today`, because a tap lands on the LogBox toast instead.
+3. `store/tools/compose-shots.sh <code>` draws the caption over each capture
+   with the geometry measured off the English set — 1080×1920, ground
+   `rgb(26,21,18)`, headline at 92px from x=100, the 96×7 green rule. Headlines
+   fall back per script exactly as the app does, Baloo having neither Cyrillic
+   nor Greek.
+
+**Headlines are two lines of at most fourteen characters**, and the sub line at
+most fifty-two. That is what the measured layout holds without shrinking, and it
+is the constraint the translations were written against.
+
+**Pushing them.** `store/tools/publish-listings.py --commit` writes all twelve
+listings, replaces each language's phone screenshots, and attaches the localised
+release notes to the alpha draft. The service account may do all of that — it is
+only the **production track** it cannot touch (see the note in
+`play-service-account-cannot-touch-production`), so promoting a build to
+production stays a Console job. Never run it while another Play upload is in
+flight: one edit per app, and a second one deletes the first.
+

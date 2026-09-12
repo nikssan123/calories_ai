@@ -1,0 +1,33 @@
+{
+  "language": "es-ES",
+  "title": "Day So Far: Contador Calorías",
+  "shortDescription": "Di lo que has comido. Diario de comidas con IA, macros y contar calorías.",
+  "fullDescription": "La mayoría de los contadores de calorías te obligan a buscar tu comida en una base de datos. Day So Far solo pregunta qué has comido.\n\n«Dos huevos, una tostada y un poco de queso.» Eso es un desayuno registrado — 407 calorías, 24 g de proteína, ya contadas en tu día. Sin buscar, sin desplazarte, sin elegir entre cuarenta entradas llamadas «tostada».\n\n<b>Así se cuentan las calorías aquí</b>\n\n1. Escribe una frase sobre tu comida\n2. Day So Far la convierte en calorías, proteína, carbohidratos y grasa\n3. Tu día se actualiza\n\n<b>Cambiar de idea, con palabras</b>\n\nDi «había más arroz» y la entrada que ya habías registrado cambia. No es una corrección colgada debajo, ni borrar y volver a escribir: la comida misma se actualiza. Cualquier otro diario de comidas te manda a editar la fila a mano.\n\n<b>Sigue funcionando sin cobertura</b>\n\nLos sótanos de los supermercados, los gimnasios, los ascensores y los aviones son donde la gente registra la comida de verdad, y donde casi todas las apps para contar calorías se rinden. Apunta una comida sin conexión y se guarda en tu móvil, cuenta para tu día al momento y se sincroniza sola cuando vuelves a tener señal. No se pierde nada y nada se registra dos veces.\n\n<b>Un contador de calorías que sabe lo que cocinas de verdad</b>\n\nRegistra en cualquier idioma. Un plato de lentejas, un bol de gazpacho, la tortilla de patatas como la hacía tu abuela — a una frase no le hace falta un código de barras ni la ficha de una cadena americana para entender un plato de casa. Aquí es donde casi todas las apps para contar calorías fallan en silencio, y es la razón entera por la que existe este registro de comidas.\n\n<b>Lo que te llevas</b>\n\n• <b>Registrar escribiendo</b> — una frase, no un buscador\n• <b>Registrar hablando</b> — di la comida en voz alta; tu móvil escucha\n• <b>Registro sin conexión</b> — apunta comidas donde sea, se sincronizan al volver la señal\n• <b>Escáner de códigos de barras</b> — para la mitad envasada de tu dieta\n• <b>Registro por foto</b> — haz una foto al plato o a la etiqueta\n• <b>Control de macros</b> — proteína, carbohidratos y grasa, más fibra, sodio y azúcar\n• <b>Objetivos de calorías que se ajustan</b> — tu objetivo se recalcula con lo que comes de verdad y con lo que hace la báscula, no con una fórmula que rellenaste una vez\n• <b>Widget en la pantalla de inicio</b> — las calorías que te quedan sin abrir la app\n• <b>Repaso semanal</b> — escrito con tus números reales, no con una plantilla\n• <b>Registro de ejercicio</b> — con frases, igual que la comida\n• <b>Métrico o imperial</b> — cambia cuando quieras; tu historial se vuelve a dibujar, no se reescribe nada\n\n<b>La cocina</b>\n\nFotografía lo que hay en tu nevera. Te damos recetas que lo usan, un plan semanal hecho con esas recetas y una lista de la compra para lo que falta. Contar calorías es la parte que hace cualquier app de nutrición. Decidir qué comer es la parte que de verdad hace que la gente lo deje.\n\n<b>Un día que acaba cuando acaba el tuyo</b>\n\nUn tentempié a la una de la madrugada cuenta para la noche a la que pertenece, no para la mañana siguiente. Pon a qué hora empieza tu día y deja de perder las comidas tardías por culpa del calendario.\n\n<b>Para quién es</b>\n\nPara quien cuenta calorías para perder peso, mantenerse o ganar. Para quien cocina en vez de comprar hecho. Para quien ya ha probado un diario de comidas, ha aguantado nueve días y lo ha dejado porque registrar una cena de casa costaba cuatro minutos.\n\n<b>Free, Plus y Coach</b>\n\nRegistra tu comida gratis. Plus añade el repaso semanal, más turnos de diario y más escaneos de foto. Coach añade la cocina — escaneos de nevera, recetas y planes semanales.\n\nDay So Far es un contador de calorías, un diario de comidas y un control de macros para quien ya no quiere recorrer una base de datos para apuntar un bocadillo.",
+  "releaseNotes": "Day So Far ya habla español. Toda la app — el diario, tu día, la cocina, el repaso semanal, los correos — en tu idioma, no solo cuatro botones.\n\nCon esta versión llegan doce idiomas más, y puedes cambiar cuando quieras en Perfil → Idioma. Lo que has comido se queda tal y como lo escribiste.\n\n¿Alguna frase suena rara? Escríbenos: el español de aquí está escrito a mano.",
+  "captions": [
+    {
+      "headline": "Di lo que\nhas comido",
+      "sub": "Sin base de datos. Sin buscar. Una frase."
+    },
+    {
+      "headline": "¿Has cambiado\nde idea?",
+      "sub": "Dilo: la comida registrada se actualiza sola."
+    },
+    {
+      "headline": "Tu día,\nsegún pasa",
+      "sub": "Calorías, macros y la calidad que hay debajo."
+    }
+  ],
+  "shots": {
+    "userLog": "pechuga de pollo con arroz y verduras",
+    "replyLog": "715 kcal y 59 g de proteína — buen plato. Con esto vas por 2065 de 2200, así que te quedan 135 para luego.",
+    "cardTitle": "Pollo con arroz y verduras",
+    "items": [
+      "Pechuga de pollo ~200 g",
+      "Arroz cocido ~150 g",
+      "Verduras ~100 g"
+    ],
+    "userCorrection": "había más arroz, unos 300 g",
+    "replyCorrection": "Actualizado: 780 kcal y 92 g de carbohidratos. Tu día va por 2130 de 2200, te quedan 70."
+  }
+}
