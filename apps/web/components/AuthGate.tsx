@@ -13,7 +13,7 @@ import {
   isRecipeLibraryRoute,
   isBlogRoute,
 } from '@/lib/routes';
-import { isLandingPath } from '@/lib/landing';
+import { isLandingPath, isLocalizedLandingPath } from '@/lib/landing';
 
 interface AuthValue {
   /** Whether there is a session at all. `profile` is null for other reasons too. */
@@ -224,6 +224,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       !isDocumentRoute(pathname) &&
       !isEmailedRoute(pathname) &&
       !isInviteRoute(pathname) &&
+      // `/bg`, `/de`: the landing page, which is the same page for a coach.
+      !isLocalizedLandingPath(pathname) &&
       !onLogin
     ) {
       router.replace('/coach');

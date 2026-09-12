@@ -1,5 +1,6 @@
 'use client';
 
+import type { ComponentProps } from 'react';
 import { useAuth } from '@/components/AuthGate';
 import { Journal } from '@/components/Journal';
 import { Landing } from '@/components/landing/Landing';
@@ -16,7 +17,7 @@ import { Landing } from '@/components/landing/Landing';
  * accounts the web journal is still open to it is one paint they then lose.
  * See `isPrerenderableRoute` in lib/routes.ts.
  */
-export function Home() {
+export function Home({ landing }: { landing: ComponentProps<typeof Landing> }) {
   const { authenticated } = useAuth();
-  return authenticated ? <Journal /> : <Landing />;
+  return authenticated ? <Journal /> : <Landing {...landing} />;
 }

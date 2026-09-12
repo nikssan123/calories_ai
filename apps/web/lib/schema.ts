@@ -73,7 +73,19 @@ export function organizationSchema() {
  * the field is required for the star snippet — so the snippet waits until there
  * is a number to put in it.
  */
-export function softwareApplicationSchema() {
+export function softwareApplicationSchema(
+  description = 'A calorie journal you talk to. Describe the meal in your own words — or photograph it, scan the packet, or say "my usual" — and the day adds itself up.',
+  prices: {
+    currency: string;
+    plus: { monthly: string; annual: string };
+    coach: { monthly: string; annual: string };
+  } = {
+    currency: 'USD',
+    plus: { monthly: '9.99', annual: '99.99' },
+    coach: { monthly: '24.99', annual: '249.99' },
+  },
+) {
+  const { currency } = prices;
   return {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
@@ -83,28 +95,27 @@ export function softwareApplicationSchema() {
     operatingSystem: 'Android',
     installUrl: 'https://play.google.com/store/apps/details?id=com.daysofar.app',
     publisher: { '@id': `${ORIGIN}/#organization` },
-    description:
-      'A calorie journal you talk to. Describe the meal in your own words — or photograph it, scan the packet, or say "my usual" — and the day adds itself up.',
+    description,
     offers: [
-      { '@type': 'Offer', name: 'Free', price: '0', priceCurrency: 'USD' },
-      offer('Plus — monthly', '9.99', 'P1M'),
-      offer('Plus — annual', '99.99', 'P1Y'),
-      offer('Coach — monthly', '24.99', 'P1M'),
-      offer('Coach — annual', '249.99', 'P1Y'),
+      { '@type': 'Offer', name: 'Free', price: '0', priceCurrency: currency },
+      offer('Plus — monthly', prices.plus.monthly, 'P1M', currency),
+      offer('Plus — annual', prices.plus.annual, 'P1Y', currency),
+      offer('Coach — monthly', prices.coach.monthly, 'P1M', currency),
+      offer('Coach — annual', prices.coach.annual, 'P1Y', currency),
     ],
   };
 }
 
-function offer(name: string, price: string, billingDuration: string) {
+function offer(name: string, price: string, billingDuration: string, priceCurrency: string) {
   return {
     '@type': 'Offer',
     name,
     price,
-    priceCurrency: 'USD',
+    priceCurrency,
     priceSpecification: {
       '@type': 'UnitPriceSpecification',
       price,
-      priceCurrency: 'USD',
+      priceCurrency,
       billingDuration,
     },
   };

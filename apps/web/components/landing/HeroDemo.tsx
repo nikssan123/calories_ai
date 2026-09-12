@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, Camera } from 'lucide-react';
-import type { ChatAction, DayQuality, Nutrition, Targets } from '@ct/shared';
+import { formatNumber, type ChatAction, type DayQuality, type Locale, type Nutrition, type Targets } from '@ct/shared';
 import { CalorieRing } from '@/components/CalorieRing';
 import { ChatActionCard } from '@/components/ChatCard';
 import { DietQuality } from '@/components/DietQuality';
 import { MacroBars } from '@/components/MacroBars';
 import { useReducedMotion } from '@/components/landing/Reveal';
+import type { LandingCopy } from '@/components/landing/copy/types';
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 /**
@@ -69,39 +71,38 @@ const TODAY = (() => {
 /** Breakfast and a snack: what the day already held before the turn on screen. */
 const EARLIER: Nutrition = { kcal: 502, protein_g: 25, carbs_g: 56, fat_g: 21 };
 
-/** The turn that is already on screen when the demo starts. */
+/**
+ * The turn that is already on screen when the demo starts, and the one it
+ * types. The numbers live here and the words come from the page's copy, so
+ * thirteen languages cannot disagree about what double chicken costs.
+ */
 const LOGGED = {
-  text: 'Chicken salad with avocado, and a flat white',
-  reply: 'Logged as lunch — a palm-sized chicken breast, half an avocado and a small flat white.',
   nutrition: { kcal: 550, protein_g: 45, carbs_g: 30, fat_g: 28 } satisfies Nutrition,
   quality: { fiber_g: 14, sodium_mg: 1180, sat_fat_g: 12, sugar_g: 22 },
-  chicken: '100 g',
 };
 
-/** And the one it types. */
 const CORRECTED = {
-  text: 'make that double chicken',
-  reply: 'Done — same entry, 200g of chicken now, and the day has moved with it.',
   nutrition: { kcal: 715, protein_g: 76, carbs_g: 30, fat_g: 32 } satisfies Nutrition,
   quality: { fiber_g: 14, sodium_mg: 1310, sat_fat_g: 13, sugar_g: 22 },
-  chicken: '200 g',
 };
 
-function lunch(turn: typeof LOGGED): ChatAction {
+type Demo = LandingCopy['demo'];
+
+function lunch(turn: typeof LOGGED, corrected: boolean, copy: Demo): ChatAction {
   return {
     kind: 'food_logged',
     entry_id: ENTRY_ID,
-    summary: 'Logged lunch',
+    summary: copy.summary,
     card: {
       type: 'food',
       entry_id: ENTRY_ID,
       meal: 'lunch',
-      description: 'Chicken salad and a flat white',
+      description: copy.description,
       confidence: 'medium',
       items: [
-        { name: 'Chicken breast', quantity: turn.chicken },
-        { name: 'Avocado', quantity: 'half' },
-        { name: 'Flat white', quantity: 'small' },
+        { name: copy.chicken, quantity: corrected ? copy.chickenAfter : copy.chickenBefore },
+        { name: copy.avocado, quantity: copy.avocadoQuantity },
+        { name: copy.coffee, quantity: copy.coffeeQuantity },
       ],
       ...turn.nutrition,
       day: {
@@ -119,23 +120,27 @@ const TYPE_MS = 42;
 
 type Phase = 'resting' | 'typing' | 'sent' | 'thinking' | 'corrected';
 
-/** How long each beat holds before the next one starts. */
-const SCRIPT: { phase: Phase; ms: number }[] = [
-  // Long enough to read the day before anything moves on it.
-  { phase: 'resting', ms: 2600 },
-  { phase: 'typing', ms: CORRECTED.text.length * TYPE_MS + 520 },
-  { phase: 'sent', ms: 380 },
-  { phase: 'thinking', ms: 1500 },
-  // The long one: the corrected numbers are the point, so leave them up.
-  { phase: 'corrected', ms: 5600 },
-];
+/**
+ * How long each beat holds before the next one starts. The typing beat is as
+ * long as the sentence being typed, which is a different length in every
+ * language.
+ */
+function scriptFor(correction: string): { phase: Phase; ms: number }[] {
+  return [
+    // Long enough to read the day before anything moves on it.
+    { phase: 'resting', ms: 2600 },
+    { phase: 'typing', ms: correction.length * TYPE_MS + 520 },
+    { phase: 'sent', ms: 380 },
+    { phase: 'thinking', ms: 1500 },
+    // The long one: the corrected numbers are the point, so leave them up.
+    { phase: 'corrected', ms: 5600 },
+  ];
+}
 
-const AT = Object.fromEntries(SCRIPT.map((beat, i) => [beat.phase, i])) as Record<Phase, number>;
+const AT: Record<Phase, number> = { resting: 0, typing: 1, sent: 2, thinking: 3, corrected: 4 };
+const BEATS = Object.keys(AT).length;
 
-const CAPTION =
-  'A conversation with the journal. A day with breakfast and a snack already on it; "chicken salad with avocado, and a flat white" is logged as lunch at about 550 calories, drawn as a band on the end of the day\'s calorie bar — then corrected to double chicken, and the same entry updates in place to 715 while the ring, the macros and the fiber, sodium, saturated fat and sugar tracks move with it.';
-
-export function HeroDemo({ className }: { className?: string }) {
+export function HeroDemo({ className, copy, locale }: { className?: string; copy: Demo; locale: Locale }) {
   const ref = useRef<HTMLDivElement>(null);
   const reduced = useReducedMotion();
   const [beat, setBeat] = useState(0);
@@ -157,16 +162,16 @@ export function HeroDemo({ className }: { className?: string }) {
   useEffect(() => {
     if (reduced || !onScreen) return;
     const timer = setTimeout(
-      () => setBeat((current) => (current + 1) % SCRIPT.length),
-      SCRIPT[beat]!.ms,
+      () => setBeat((current) => (current + 1) % BEATS),
+      scriptFor(copy.correction)[beat]!.ms,
     );
     return () => clearTimeout(timer);
-  }, [beat, reduced, onScreen]);
+  }, [beat, reduced, onScreen, copy.correction]);
 
   // Asked for less movement: show the finished conversation and leave it there.
   const stage = reduced ? AT.corrected : beat;
 
-  const draft = useTypewriter(stage === AT.typing ? CORRECTED.text : '');
+  const draft = useTypewriter(stage === AT.typing ? copy.correction : '');
 
   const sent = stage >= AT.sent;
   const corrected = stage >= AT.corrected;
@@ -183,7 +188,7 @@ export function HeroDemo({ className }: { className?: string }) {
     <div
       ref={ref}
       role="img"
-      aria-label={CAPTION}
+      aria-label={copy.caption}
       className={cn(
         'bg-card border-border overflow-hidden rounded-[2rem] border-2',
         'shadow-[0_10px_0_0_var(--chunk),0_50px_100px_-45px_rgb(0_0_0/0.35)]',
@@ -201,7 +206,7 @@ export function HeroDemo({ className }: { className?: string }) {
         <div className="flex min-w-0 flex-col lg:min-h-0">
           {/* The app's own responsive split: the day is a strip above the
               conversation where there is no room beside it, and the rail below. */}
-          <StatusStrip consumed={consumed.kcal} className="lg:hidden" />
+          <StatusStrip consumed={consumed.kcal} locale={locale} className="lg:hidden" />
 
           <div
             // `overflow-hidden` and `min-h-0` together are what let the column
@@ -215,9 +220,9 @@ export function HeroDemo({ className }: { className?: string }) {
               WebkitMaskImage: 'linear-gradient(to bottom, transparent, #000 16%)',
             }}
           >
-            <UserBubble>{LOGGED.text}</UserBubble>
+            <UserBubble>{copy.logged}</UserBubble>
             <Assistant>
-              <p className="text-body leading-relaxed">{LOGGED.reply}</p>
+              <p className="text-body leading-relaxed">{copy.loggedReply}</p>
               <div
                 className="rounded-2xl"
                 // A one-shot ring the moment the entry is corrected. The card
@@ -228,24 +233,24 @@ export function HeroDemo({ className }: { className?: string }) {
                     : undefined
                 }
               >
-                <ChatActionCard action={lunch(turn)} today={TODAY} />
+                <ChatActionCard action={lunch(turn, corrected, copy)} today={TODAY} />
               </div>
             </Assistant>
-            {sent && <UserBubble>{CORRECTED.text}</UserBubble>}
+            {sent && <UserBubble>{copy.correction}</UserBubble>}
             {stage === AT.thinking && <Thinking />}
             {corrected && (
               <Assistant>
-                <p className="text-body leading-relaxed">{CORRECTED.reply}</p>
+                <p className="text-body leading-relaxed">{copy.correctionReply}</p>
               </Assistant>
             )}
           </div>
 
           <div className="px-4 pb-4 sm:px-5 sm:pb-5">
-            <FakeComposer draft={draft} />
+            <FakeComposer draft={draft} placeholder={copy.placeholder} />
           </div>
         </div>
 
-        <DayRail consumed={consumed} quality={turn.quality} />
+        <DayRail consumed={consumed} quality={turn.quality} locale={locale} />
       </div>
     </div>
   );
@@ -303,7 +308,7 @@ function Thinking() {
 }
 
 /** The composer, with its keyboard held by someone else. */
-function FakeComposer({ draft }: { draft: string }) {
+function FakeComposer({ draft, placeholder }: { draft: string; placeholder: string }) {
   return (
     <div className="border-border bg-card chunk flex items-end gap-2 rounded-[1.75rem] border-2 px-2.5 py-2">
       <span className="text-muted-foreground flex size-9 shrink-0 items-center justify-center">
@@ -316,7 +321,7 @@ function FakeComposer({ draft }: { draft: string }) {
             <span className="bg-foreground ml-px inline-block h-[1.05em] w-px translate-y-[0.15em] animate-pulse align-baseline" />
           </>
         ) : (
-          <span className="text-muted-foreground">Two eggs and toast…</span>
+          <span className="text-muted-foreground">{placeholder}</span>
         )}
       </p>
       <span
@@ -332,21 +337,22 @@ function FakeComposer({ draft }: { draft: string }) {
 }
 
 /** What the phone gets instead of the rail: the same answer, one line high. */
-function StatusStrip({ consumed, className }: { consumed: number; className?: string }) {
+function StatusStrip({ consumed, locale, className }: { consumed: number; locale: Locale; className?: string }) {
+  const t = useT();
   const pct = Math.min(100, (consumed / TARGETS.kcal) * 100);
 
   return (
     <header className={cn('border-border shrink-0 border-b-2 px-4 py-2.5', className)}>
       <div className="flex items-baseline justify-between">
         <p className="text-figure text-body">
-          {consumed.toLocaleString()}
+          {formatNumber(consumed, locale)}
           <span className="text-muted-foreground font-normal">
             {' '}
-            / {TARGETS.kcal.toLocaleString()} kcal
+            / {formatNumber(TARGETS.kcal, locale)} kcal
           </span>
         </p>
         <p className="tnum text-footnote text-muted-foreground">
-          {(TARGETS.kcal - consumed).toLocaleString()} left
+          {t('journal.left')(formatNumber(TARGETS.kcal - consumed, locale))}
         </p>
       </div>
       <div className="bg-muted border-border mt-2 h-2.5 overflow-hidden rounded-full border">
@@ -371,14 +377,23 @@ function StatusStrip({ consumed, className }: { consumed: number; className?: st
  * The four quality tracks say more about the product than a third copy of
  * "Breakfast · ~407" does, and the shot has to stay the height it was.
  */
-function DayRail({ consumed, quality }: { consumed: Nutrition; quality: typeof LOGGED.quality }) {
+function DayRail({
+  consumed,
+  quality,
+  locale,
+}: {
+  consumed: Nutrition;
+  quality: typeof LOGGED.quality;
+  locale: Locale;
+}) {
+  const t = useT();
   return (
     <aside className="border-border hidden flex-col border-l-2 px-5 py-6 lg:flex">
       <div className="flex flex-col items-center">
         <CalorieRing consumed={consumed.kcal} target={TARGETS.kcal} size={132} strokeWidth={11} />
         <p className="tnum text-muted-foreground mt-3 text-sm">
-          <span className="text-figure text-foreground">{consumed.kcal.toLocaleString()}</span> of{' '}
-          {TARGETS.kcal.toLocaleString()} kcal
+          <span className="text-figure text-foreground">{formatNumber(consumed.kcal, locale)}</span>{' '}
+          {t('chat.ofTarget')(formatNumber(TARGETS.kcal, locale))} kcal
         </p>
       </div>
 

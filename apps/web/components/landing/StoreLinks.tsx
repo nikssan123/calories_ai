@@ -1,3 +1,4 @@
+import type { Locale } from '@ct/shared';
 import { cn } from '@/lib/utils';
 
 /**
@@ -44,7 +45,28 @@ const STORES: { name: string; href: string | null; Mark: typeof AppleMark }[] = 
  */
 export const STORE_HREF: string | null = STORES.find((store) => store.href)?.href ?? null;
 
-export function StoreLinks({ className }: { className?: string }) {
+/** The App Store listing, once there is one — what an iPhone's button points at. */
+export const APP_STORE_HREF: string | null = STORES.find((store) => store.name === 'App Store')?.href ?? null;
+
+/**
+ * The listing in the page's language. Play reads `hl`; Apple has no such
+ * parameter and picks the storefront from the visitor's own account.
+ */
+function localized(href: string, locale: Locale | undefined): string {
+  if (!locale || !href.includes('play.google.com')) return href;
+  return `${href}${href.includes('?') ? '&' : '?'}hl=${locale}`;
+}
+
+export function StoreLinks({
+  className,
+  locale,
+  soon = 'soon',
+}: {
+  className?: string;
+  locale?: Locale;
+  /** "soon", in the page's language. The English pages outside the landing leave it be. */
+  soon?: string;
+}) {
   return (
     <div
       className={cn(
@@ -57,14 +79,14 @@ export function StoreLinks({ className }: { className?: string }) {
           <>
             <Mark className="size-[15px] shrink-0" />
             {name}
-            {!href && <span className="opacity-80">— soon</span>}
+            {!href && <span className="opacity-80">— {soon}</span>}
           </>
         );
 
         return href ? (
           <a
             key={name}
-            href={href}
+            href={localized(href, locale)}
             target="_blank"
             rel="noreferrer"
             className="hover:text-foreground inline-flex items-center gap-1.5 transition-colors"

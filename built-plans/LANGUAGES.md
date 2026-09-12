@@ -376,12 +376,13 @@ speaker reads its three catalogues**, the way `bg.ts` was read.
 *Updated 2026-09-11, after the second string pass. What follows is what is
 still English; everything the earlier drafts listed as "not yet" is done.*
 
-- **The landing page**, on purpose. It is ~1,000 words of the most carefully
-  written copy in the repo, it is rewritten often, and localising it needs the
-  `[locale]` routing this deliberately avoided plus `hreflang`, `sitemap.ts` and
-  `robots.ts`, none of which exist. Ship the app in Bulgarian, see whether
-  anyone arrives, and localise the front door once there is evidence it is the
-  door they are trying.
+- ~~**The landing page**~~ — done 2026-09-13. The blog had since brought the
+  `[locale]` segment, `hreflang` and a sitemap, so the front door followed: `/`
+  is English and `/bg`, `/de` and the rest are the same page in each language,
+  with the copy in `apps/web/components/landing/copy/` (English is the typed
+  contract; a translation missing a key or a list item does not compile). No
+  `Accept-Language` redirect — a bar in the reader's own language offers the
+  page instead. None of the twelve has had a native reader yet; Bulgarian first.
 - **Privacy and Terms**, on purpose, for the reason above.
 - **The admin panel**, on purpose. One operator, who wrote it.
 - **`TIER_NAMES`** — "Free", "Plus", "Coach". These are what the stores charge
