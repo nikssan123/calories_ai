@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { publicLibrary } from '@/lib/public-api';
 import { breadcrumbSchema, jsonLd } from '@/lib/schema';
 import { ORIGIN } from '@/lib/seo';
+import { PublicShell } from '@/components/PublicShell';
 
 /*
  * Rendered on demand, with the upstream call cached for an hour.
@@ -47,7 +48,7 @@ export default async function LibraryIndexPage() {
   const categories = [...byCategory.entries()].sort(([a], [b]) => a.localeCompare(b));
 
   return (
-    <div className="bg-background min-h-screen">
+    <PublicShell locale="en" wide>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -83,60 +84,54 @@ export default async function LibraryIndexPage() {
         }}
       />
 
-      <div className="mx-auto w-full max-w-3xl px-5 py-12 sm:px-6 sm:py-16">
-        <Link href="/" className="text-footnote text-muted-foreground underline underline-offset-2">
-          Day So Far
-        </Link>
+      <h1 className="text-display text-balance">Recipes</h1>
+      <p className="text-body text-muted-foreground mt-4 max-w-2xl">
+        {recipes.length} recipes with the ingredients, the method, and what one serving actually
+        comes to. They are public-domain recipes from{' '}
+        <a
+          href="https://www.myplate.gov/myplate-kitchen/recipes"
+          className="underline underline-offset-2"
+          rel="noopener"
+        >
+          USDA MyPlate Kitchen
+        </a>
+        , and the nutrition is the source&rsquo;s own measurement of the finished dish rather than
+        a sum of its parts.
+      </p>
 
-        <h1 className="text-display mt-6 text-balance">Recipes</h1>
-        <p className="text-body text-muted-foreground mt-4 max-w-2xl">
-          {recipes.length} recipes with the ingredients, the method, and what one serving actually
-          comes to. They are public-domain recipes from{' '}
-          <a
-            href="https://www.myplate.gov/myplate-kitchen/recipes"
-            className="underline underline-offset-2"
-            rel="noopener"
-          >
-            USDA MyPlate Kitchen
-          </a>
-          , and the nutrition is the source&rsquo;s own measurement of the finished dish rather than
-          a sum of its parts.
+      {recipes.length === 0 && (
+        <p className="text-body text-muted-foreground mt-10">
+          The library is not loading just now. Please try again shortly.
         </p>
+      )}
 
-        {recipes.length === 0 && (
-          <p className="text-body text-muted-foreground mt-10">
-            The library is not loading just now. Please try again shortly.
-          </p>
-        )}
-
-        {categories.map(([category, list]) => (
-          <section key={category} className="mt-12">
-            <h2 className="text-section-title">{category}</h2>
-            <ul className="mt-4 space-y-3">
-              {list.map((recipe) => (
-                <li key={recipe.slug}>
-                  <Link
-                    href={`/cook/library/${recipe.slug}`}
-                    className="group block rounded-[var(--radius)] py-1"
-                  >
-                    <span className="text-body font-semibold underline-offset-4 group-hover:underline">
-                      {recipe.title}
+      {categories.map(([category, list]) => (
+        <section key={category} className="mt-12">
+          <h2 className="text-section-title">{category}</h2>
+          <ul className="mt-4 space-y-3">
+            {list.map((recipe) => (
+              <li key={recipe.slug}>
+                <Link
+                  href={`/cook/library/${recipe.slug}`}
+                  className="group block rounded-[var(--radius)] py-1"
+                >
+                  <span className="text-body font-semibold underline-offset-4 group-hover:underline">
+                    {recipe.title}
+                  </span>
+                  <span className="text-footnote text-muted-foreground ml-2 whitespace-nowrap">
+                    {Math.round(recipe.kcal)} kcal · {recipe.protein_g} g protein
+                  </span>
+                  {recipe.summary && (
+                    <span className="text-footnote text-muted-foreground mt-0.5 block">
+                      {recipe.summary}
                     </span>
-                    <span className="text-footnote text-muted-foreground ml-2 whitespace-nowrap">
-                      {Math.round(recipe.kcal)} kcal · {recipe.protein_g} g protein
-                    </span>
-                    {recipe.summary && (
-                      <span className="text-footnote text-muted-foreground mt-0.5 block">
-                        {recipe.summary}
-                      </span>
-                    )}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
-      </div>
-    </div>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </PublicShell>
   );
 }

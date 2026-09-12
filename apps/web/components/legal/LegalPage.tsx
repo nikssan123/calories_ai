@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { Logo } from '@/components/Logo';
+import { DocumentScroll } from '@/components/DocumentScroll';
 import { cn } from '@/lib/utils';
 
 /**
@@ -29,18 +29,10 @@ export function LegalPage({
   updated: string;
   children: React.ReactNode;
 }) {
-  // The app shell owns the viewport and never scrolls the document. A policy is
-  // a document, so it asks for the window back while it is mounted — the same
-  // arrangement the landing page has.
-  useEffect(() => {
-    document.documentElement.dataset.scroll = 'document';
-    return () => {
-      delete document.documentElement.dataset.scroll;
-    };
-  }, []);
 
   return (
     <div className="bg-background text-foreground min-h-dvh">
+      <DocumentScroll />
       <header className="material border-border sticky top-0 z-40 border-b-2">
         <div className="mx-auto flex h-16 w-full max-w-3xl items-center gap-4 px-6">
           <Link href="/" className="flex items-center gap-2.5">
