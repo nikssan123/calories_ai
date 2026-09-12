@@ -18,7 +18,8 @@ export function isEmailedRoute(pathname: string): boolean {
 }
 
 /**
- * The privacy policy, the terms, and the support page.
+ * The documents: the policy, the terms, support, and the three pages that say
+ * who builds this and how far to trust its numbers.
  *
  * Public for a harder reason than the landing page is. Someone has to be able
  * to read what they are agreeing to *before* they agree to it, the app stores
@@ -31,15 +32,28 @@ export function isEmailedRoute(pathname: string): boolean {
  * this list until now, which meant the one page a locked-out person is sent to
  * bounced them to the sign-in form they could not use.
  *
+ * About, how-it-works and accuracy are here because a person deciding whether
+ * to believe a calorie estimate has not signed up yet, and because a product
+ * that guesses at nutrition and will not say who wrote it or how well it does
+ * has not earned the guess. They are the same shape as the rest: one column of
+ * prose, no session, the same to everybody.
+ *
  * They keep their own chrome even for a signed-in reader, unlike the emailed
  * routes above, which lose it only for a stranger. These are documents rather
  * than screens: the shell owns the viewport and never scrolls, and eight
  * hundred lines of prose inside it would be a dead page with a tab bar.
  */
-export const LEGAL_ROUTES = ['/privacy', '/terms', '/support'] as const;
+export const DOCUMENT_ROUTES = [
+  '/privacy',
+  '/terms',
+  '/support',
+  '/about',
+  '/how-it-works',
+  '/accuracy',
+] as const;
 
-export function isLegalRoute(pathname: string): boolean {
-  return (LEGAL_ROUTES as readonly string[]).includes(pathname);
+export function isDocumentRoute(pathname: string): boolean {
+  return (DOCUMENT_ROUTES as readonly string[]).includes(pathname);
 }
 
 /**
@@ -65,7 +79,7 @@ export function isLegalRoute(pathname: string): boolean {
  * session resolves would put a tab bar on a sign-in form for one frame.
  */
 export function isPrerenderableRoute(pathname: string): boolean {
-  return pathname === '/' || isLegalRoute(pathname) || isRecipeLibraryRoute(pathname);
+  return pathname === '/' || isDocumentRoute(pathname) || isRecipeLibraryRoute(pathname);
 }
 
 /**

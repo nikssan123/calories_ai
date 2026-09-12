@@ -9,7 +9,7 @@ import {
   isCoachRoute,
   isEmailedRoute,
   isInviteRoute,
-  isLegalRoute,
+  isDocumentRoute,
   isRecipeLibraryRoute,
 } from '@/lib/routes';
 
@@ -37,7 +37,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
    * scroll. Nothing else would be readable inside it. An invite link is a
    * document too — one card, one code, one button to the app.
    */
-  if (isLegalRoute(pathname) || isInviteRoute(pathname)) return <>{children}</>;
+  if (isDocumentRoute(pathname) || isInviteRoute(pathname)) return <>{children}</>;
 
   if (isCoachRoute(pathname)) return <CoachFrame>{children}</CoachFrame>;
 

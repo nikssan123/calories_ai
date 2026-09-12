@@ -18,12 +18,18 @@ export const ORIGIN = process.env.APP_URL ?? 'https://daysofar.com';
 /**
  * Every page on this site a search engine should hold.
  *
- * It is four entries long, and the shortness is the point rather than an
- * oversight — the web half of this product is a landing page and three
- * documents. Everything else at daysofar.com is an app screen behind a session.
+ * The fixed pages only. The recipe library is a subtree rather than a list and
+ * is handled separately, in `isIndexableLibraryPath` below and in sitemap.ts.
+ *
+ * `/how-it-works` and `/accuracy` outrank `/about` deliberately. "How does it
+ * work" and "is it accurate" are questions people actually type; "about" is a
+ * page they read once they already care.
  */
 export const INDEXABLE_ROUTES = [
   { path: '/', changeFrequency: 'monthly', priority: 1 },
+  { path: '/how-it-works', changeFrequency: 'monthly', priority: 0.8 },
+  { path: '/accuracy', changeFrequency: 'monthly', priority: 0.8 },
+  { path: '/about', changeFrequency: 'monthly', priority: 0.6 },
   { path: '/support', changeFrequency: 'monthly', priority: 0.5 },
   { path: '/privacy', changeFrequency: 'yearly', priority: 0.3 },
   { path: '/terms', changeFrequency: 'yearly', priority: 0.3 },

@@ -1069,10 +1069,25 @@ function Footer() {
           <Logo size={22} />
           <span className="text-sm font-bold">Day So Far</span>
         </div>
-        {/* Privacy and Terms, and nothing else. Both are here because somebody
-            has to be able to reach them without an account; "Sign in" was here
-            because there was once something behind it for a visitor. */}
+        {/* Everything here is reachable without an account, which is the test
+            for being here at all. It used to be Privacy and Terms alone; the
+            four before them are the pages that answer "how does this work",
+            "how wrong is it", "who wrote it" and "where are the recipes" —
+            questions a visitor has before they have a session to ask them
+            with, and the only internal links the recipe pages have. */}
         <nav className="text-muted-foreground flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
+          <Link href="/how-it-works" className="hover:text-foreground transition-colors">
+            How it works
+          </Link>
+          <Link href="/accuracy" className="hover:text-foreground transition-colors">
+            Accuracy
+          </Link>
+          <Link href="/cook/library" className="hover:text-foreground transition-colors">
+            Recipes
+          </Link>
+          <Link href="/about" className="hover:text-foreground transition-colors">
+            About
+          </Link>
           <Link href="/privacy" className="hover:text-foreground transition-colors">
             Privacy
           </Link>

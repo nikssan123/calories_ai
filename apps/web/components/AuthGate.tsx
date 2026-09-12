@@ -8,7 +8,7 @@ import {
   isCoachRoute,
   isEmailedRoute,
   isInviteRoute,
-  isLegalRoute,
+  isDocumentRoute,
   isPrerenderableRoute,
   isRecipeLibraryRoute,
 } from '@/lib/routes';
@@ -85,7 +85,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     onLogin ||
     pathname === '/' ||
     isEmailedRoute(pathname) ||
-    isLegalRoute(pathname) ||
+    isDocumentRoute(pathname) ||
     isInviteRoute(pathname) ||
     // A recipe read from a search result, by someone who has never signed in.
     isRecipeLibraryRoute(pathname);
@@ -170,7 +170,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     !isAdmin &&
     !isCoach &&
     !isEmailedRoute(pathname) &&
-    !isLegalRoute(pathname) &&
+    !isDocumentRoute(pathname) &&
     !isInviteRoute(pathname) &&
     !isRecipeLibraryRoute(pathname);
 
@@ -199,7 +199,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       // Except on the policy and the terms. Someone stopped at the code is
       // mid-signup, which is exactly when a person wants to read what they
       // just agreed to, and holding them away from it would be perverse.
-      !isLegalRoute(pathname)
+      !isDocumentRoute(pathname)
     ) {
       router.replace('/verify');
       return;
@@ -215,7 +215,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       status.authenticated &&
       coachOnly &&
       !isCoachRoute(pathname) &&
-      !isLegalRoute(pathname) &&
+      !isDocumentRoute(pathname) &&
       !isEmailedRoute(pathname) &&
       !isInviteRoute(pathname) &&
       !onLogin

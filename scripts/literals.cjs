@@ -46,7 +46,7 @@ const DIRS = [
   'apps/mobile/widget',
 ];
 const EXCLUDED =
-  /\/(admin|privacy|terms|support|messages|scripts|ui|coach|landing)\/|\/cook\/library\/page\.tsx$|LegalPage|Placeholder\.tsx$|\.test\.|\.d\.ts$/;
+  /\/(admin|privacy|terms|support|about|how-it-works|accuracy|messages|scripts|ui|coach|landing)\/|\/cook\/library\/page\.tsx$|LegalPage|Placeholder\.tsx$|\.test\.|\.d\.ts$/;
 const ATTRS = new Set([
   'title',
   'placeholder',

@@ -62,6 +62,11 @@ arguments were already won:
 - **Privacy and Terms.** Legal text. A dictionary translation of a document
   somebody may have to rely on is worse than an English one they can read. The
   one remaining display `en-GB`, in `LegalPage.tsx`, is that decision.
+- **About, How it works, Accuracy.** The same argument as the legal pages, and
+  one more: `/accuracy` publishes measured error rates with their method and
+  their caveats attached, and a caveat is exactly the kind of sentence that
+  survives translation worst. A page that overstates how well the app performs
+  because a hedge did not carry is not a cosmetic bug.
 - **The recipe library index.** `/cook/library` is chrome around ninety-nine
   recipes whose titles, ingredients and method are English and stay English:
   they are public-domain USDA text, reproduced rather than written here, and a
