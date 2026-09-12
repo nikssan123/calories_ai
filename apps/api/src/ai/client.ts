@@ -170,6 +170,19 @@ export const MODELS: Record<TurnKind, ModelChoice> = {
   // to spend more: this runs unprompted, so its cost is the app's, not a
   // request somebody chose to make.
   nudge: { model: 'claude-sonnet-5', effort: 'high' },
+  /*
+   * A blog post, and the only writing on this site that a stranger reads before
+   * they have any reason to trust it.
+   *
+   * Opus at high effort, which is the same call `review` makes and for the same
+   * reason: it is long-form prose read end to end, it is infrequent, and the
+   * failure mode is not a wrong number but a page that reads like it was
+   * generated — which is both the thing Google's scaled-content policy is
+   * looking for and the thing a reader can smell. The volume argument that puts
+   * `text_log` on Haiku does not apply: this runs a handful of times a week, on
+   * the subscription, where the marginal token is free.
+   */
+  content: { model: 'claude-opus-5', effort: 'high' },
   // A week of dinners in one run, and the largest output the product produces.
   // Where the review goes, for the same reason: it is read end to end, it is
   // the thing people would pay for, and the constraint that makes it good —

@@ -1,6 +1,18 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { localeOf } from '@ct/shared';
+import { LOCALES, Locale, PostStatus, localeOf } from '@ct/shared';
+import { draftPost } from '../ai/content.ts';
+import {
+  createTopic,
+  deleteTopic,
+  editPost,
+  getPost,
+  getTopic,
+  listTopics,
+  missingLocales,
+  setPostStatus,
+  upsertPost,
+} from '../services/content.ts';
 import { generateWeeklyReview } from '../ai/review.ts';
 import {
   sendAccountDeletedEmail,
@@ -106,6 +118,111 @@ export async function registerAdminRoutes(app: FastifyInstance) {
   });
 
   // ---- Read-only: the database ---------------------------------------------
+
+  // ---- The blog -------------------------------------------------------------
+  //
+  // The write half of the content pipeline. The read half is public and lives
+  // in routes/public.ts, which serves published posts only.
+  //
+  // Nothing here publishes as a side effect. Generating writes a draft, and
+  // regenerating over a live post writes a draft too and leaves the live one
+  // standing: this is a health-adjacent site, most of what the blog will say
+  // contains a nutrition claim, and an unreviewed one going out is the most
+  // expensive thing that can happen to it. Publishing is a separate button
+  // pressed by a person who has read the thing.
+
+  app.get('/admin/content', async () => ({ topics: await listTopics() }));
+
+  app.post('/admin/content/topics', async (request, reply) => {
+    const parsed = z
+      .object({ name: z.string().min(1).max(200), brief: z.string().min(1).max(4000) })
+      .safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid topic' });
+    return createTopic(parsed.data.name, parsed.data.brief);
+  });
+
+  app.delete('/admin/content/topics/:id', async (request, reply) => {
+    const gone = await deleteTopic((request.params as any).id);
+    if (!gone) return reply.status(404).send({ error: 'No such topic' });
+    return reply.status(204).send();
+  });
+
+  /**
+   * Write one language's post for a topic.
+   *
+   * One locale per request, on purpose. Thirteen Opus articles in a single HTTP
+   * request is several minutes with a socket held open and nothing to show for
+   * it if the twelfth fails; the panel drives the loop instead and shows each
+   * one landing. `locale` omitted means "the next one missing", which is what
+   * makes that loop a one-liner on the client.
+   */
+  app.post('/admin/content/topics/:id/write', async (request, reply) => {
+    const topic = await getTopic((request.params as any).id);
+    if (!topic) return reply.status(404).send({ error: 'No such topic' });
+
+    const asked = (request.body as any)?.locale;
+    let locale: Locale;
+    if (asked === undefined || asked === null) {
+      const [next] = await missingLocales(topic.id);
+      if (!next) return reply.status(409).send({ error: 'Every language already has a post.' });
+      locale = next;
+    } else {
+      const parsed = Locale.safeParse(asked);
+      if (!parsed.success) return reply.status(400).send({ error: 'No such language' });
+      locale = parsed.data;
+    }
+
+    try {
+      const { post, model, costUsd } = await draftPost(topic, locale);
+      const saved = await upsertPost({
+        topicId: topic.id,
+        locale,
+        slug: post.slug,
+        title: post.title,
+        description: post.description,
+        bodyMd: post.body_md,
+        keyword: post.keyword,
+        model,
+        costUsd,
+      });
+      return { post: saved, remaining: await missingLocales(topic.id) };
+    } catch (error) {
+      // A failed draft is a 502 rather than a 500: the fault is upstream, and
+      // the panel says so instead of showing a stack trace to the one person
+      // who could have fixed it if they knew which half broke.
+      request.log.error({ err: error, topic: topic.id, locale }, 'content draft failed');
+      return reply.status(502).send({ error: (error as Error).message });
+    }
+  });
+
+  app.patch('/admin/content/posts/:id', async (request, reply) => {
+    const parsed = z
+      .object({
+        title: z.string().min(1).max(200).optional(),
+        description: z.string().min(1).max(400).optional(),
+        body_md: z.string().min(1).optional(),
+        slug: z
+          .string()
+          .min(1)
+          .max(90)
+          .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+          .optional(),
+        status: PostStatus.optional(),
+      })
+      .safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid edit' });
+
+    const id = (request.params as any).id;
+    if (!(await getPost(id))) return reply.status(404).send({ error: 'No such post' });
+
+    const { status, body_md, ...rest } = parsed.data;
+    let post = await editPost(id, { ...rest, bodyMd: body_md });
+    if (status) post = await setPostStatus(id, status);
+    return post;
+  });
+
+  /** The languages, for the panel's picker. */
+  app.get('/admin/content/locales', async () => ({ locales: LOCALES }));
 
   app.get('/admin/tables', async () => ({ tables: await listTables() }));
 

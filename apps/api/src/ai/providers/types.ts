@@ -98,7 +98,14 @@ export type TurnKind =
   | 'pantry_scan'
   | 'recipe'
   | 'nudge'
-  | 'meal_plan';
+  | 'meal_plan'
+  /**
+   * One blog post, in one language. Nobody is waiting on it and it is not
+   * anybody's turn — it belongs to the site rather than to an account — which
+   * is why `content.ts` runs it on the subscription lane whatever the
+   * deployment's own lane is, and why it never touches a meter.
+   */
+  | 'content';
 
 /**
  * `photo` is the journal's `log_food` and nothing else: the photo-only lane

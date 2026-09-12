@@ -1082,6 +1082,9 @@ function Footer() {
           <Link href="/accuracy" className="hover:text-foreground transition-colors">
             Accuracy
           </Link>
+          <Link href="/blog" className="hover:text-foreground transition-colors">
+            Blog
+          </Link>
           <Link href="/cook/library" className="hover:text-foreground transition-colors">
             Recipes
           </Link>

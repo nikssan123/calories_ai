@@ -1,4 +1,4 @@
-import type { LibraryCard, PublicLibraryRecipe } from '@ct/shared';
+import type { Locale, LibraryCard, PostCard, PublicLibraryRecipe, PublicPost } from '@ct/shared';
 
 /**
  * The server's own read path to the API, for the pages a crawler has to be able
@@ -58,4 +58,25 @@ export async function publicRecipe(slug: string): Promise<PublicLibraryRecipe | 
 export async function publicLibrary(): Promise<LibraryCard[]> {
   const body = await get<{ recipes: LibraryCard[] }>('/public/library');
   return body?.recipes ?? [];
+}
+
+// ---- The blog ---------------------------------------------------------------
+
+export async function publicPosts(locale: Locale): Promise<PostCard[]> {
+  const body = await get<{ posts: PostCard[] }>(`/public/posts/${locale}`);
+  return body?.posts ?? [];
+}
+
+export async function publicPost(locale: Locale, slug: string): Promise<PublicPost | null> {
+  return get<PublicPost>(`/public/posts/${locale}/${encodeURIComponent(slug)}`);
+}
+
+/** Every published post in every language, for the sitemap. */
+export async function publicPostSitemap(): Promise<
+  { locale: Locale; slug: string; updated_at: string }[]
+> {
+  const body = await get<{ posts: { locale: Locale; slug: string; updated_at: string }[] }>(
+    '/public/posts',
+  );
+  return body?.posts ?? [];
 }

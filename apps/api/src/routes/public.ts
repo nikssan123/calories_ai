@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
+import { Locale } from '@ct/shared';
 import { getPublicLibraryRecipe, listPublicLibrary } from '../services/library.ts';
+import { publicIndex, publicPost, publicSitemap } from '../services/content.ts';
 
 /**
  * The read-only, session-less corner of the API.
@@ -30,4 +32,28 @@ export async function registerPublicRoutes(app: FastifyInstance) {
     if (!recipe) return reply.status(404).send({ error: 'No such recipe' });
     return recipe;
   });
+
+  // ---- The blog ------------------------------------------------------------
+  //
+  // Only `status = 'published'` ever leaves here; see services/content.ts. A
+  // draft is an unreviewed nutrition claim, and the whole review step is worth
+  // nothing if a URL can be guessed to see one early.
+
+  app.get('/public/posts/:locale', async (request, reply) => {
+    const locale = Locale.safeParse((request.params as any).locale);
+    if (!locale.success) return reply.status(404).send({ error: 'No such language' });
+    return { posts: await publicIndex(locale.data) };
+  });
+
+  app.get('/public/posts/:locale/:slug', async (request, reply) => {
+    const params = request.params as any;
+    const locale = Locale.safeParse(params.locale);
+    if (!locale.success) return reply.status(404).send({ error: 'No such language' });
+    const post = await publicPost(locale.data, params.slug);
+    if (!post) return reply.status(404).send({ error: 'No such post' });
+    return post;
+  });
+
+  /** Every published post in every language, for the sitemap. */
+  app.get('/public/posts', async () => ({ posts: await publicSitemap() }));
 }

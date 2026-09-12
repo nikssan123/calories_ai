@@ -1,3 +1,5 @@
+import { isBlogPath } from '@/lib/blog';
+
 /**
  * Screens reached from a link in an email rather than from inside the app.
  *
@@ -79,7 +81,12 @@ export function isDocumentRoute(pathname: string): boolean {
  * session resolves would put a tab bar on a sign-in form for one frame.
  */
 export function isPrerenderableRoute(pathname: string): boolean {
-  return pathname === '/' || isDocumentRoute(pathname) || isRecipeLibraryRoute(pathname);
+  return (
+    pathname === '/' ||
+    isDocumentRoute(pathname) ||
+    isRecipeLibraryRoute(pathname) ||
+    isBlogRoute(pathname)
+  );
 }
 
 /**
@@ -118,4 +125,16 @@ export function isInviteRoute(pathname: string): boolean {
  */
 export function isRecipeLibraryRoute(pathname: string): boolean {
   return pathname === '/cook/library' || pathname.startsWith('/cook/library/');
+}
+
+/**
+ * The blog, in any of the thirteen.
+ *
+ * Public, prerendered and chrome-less for the same reasons the recipes are: a
+ * reader arrives from a search result with no session and nothing to sign into.
+ * The matcher itself lives in lib/blog.ts, next to the functions that build
+ * these URLs, so there is one definition of what a blog path looks like.
+ */
+export function isBlogRoute(pathname: string): boolean {
+  return isBlogPath(pathname);
 }

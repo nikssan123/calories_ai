@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { PREFIXED_LOCALES } from '@/lib/blog';
 import { isNoindexPath } from '@/lib/seo';
 
 /**
@@ -24,8 +25,46 @@ import { isNoindexPath } from '@/lib/seo';
  * link and must not be told to forget.
  */
 export function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  /*
+   * `/en/blog...` is `/blog...`, permanently.
+   *
+   * English owns the bare path and the other twelve take a prefix, so
+   * `/en/blog/x` is a second address for a page that already has one. Caught
+   * here rather than in the page because a redirect belongs before a render:
+   * `redirect()` from inside `generateMetadata` is swallowed, which is how this
+   * shipped once already as a 200 with an empty body.
+   */
+  if (pathname === '/en/blog' || pathname.startsWith('/en/blog/')) {
+    const url = request.nextUrl.clone();
+    url.pathname = pathname.slice('/en'.length);
+    return NextResponse.redirect(url, 308);
+  }
+
+  /*
+   * `/<anything>/blog` where <anything> is not one of the twelve.
+   *
+   * `[locale]` is a bare dynamic segment at the root of the app, so it catches
+   * every first path segment there is, and an unknown one has to 404 rather
+   * than render an empty page at 200. It is settled here because it cannot be
+   * settled in the route: `notFound()` from a page swaps the body after the
+   * status line has gone out, and `notFound()` from `generateMetadata` does not
+   * set the status either — both answer 200 with a 404 page inside, which is a
+   * soft 404 and the exact thing Search Console complains about.
+   *
+   * A rewrite rather than a bare response, so the reader still gets the app's
+   * own not-found page; the status is the part that had to be fixed.
+   */
+  const localeBlog = /^\/([^/]+)\/blog(?:\/|$)/.exec(pathname);
+  if (localeBlog && !(PREFIXED_LOCALES as readonly string[]).includes(localeBlog[1]!)) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/_not-found';
+    return NextResponse.rewrite(url, { status: 404 });
+  }
+
   const response = NextResponse.next();
-  if (isNoindexPath(request.nextUrl.pathname)) {
+  if (isNoindexPath(pathname)) {
     response.headers.set('X-Robots-Tag', 'noindex, nofollow');
   }
   return response;

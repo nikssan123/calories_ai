@@ -12,6 +12,7 @@ export * from './units.ts';
 
 /** Which language the app is drawn in. Rendering only. See LANGUAGES.md. */
 export * from './locale.ts';
+export * from './content.ts';
 
 /** The language picker's order, second lines and suggestions. */
 export * from './locale-names.ts';

@@ -89,6 +89,11 @@ import type {
   ShoppingExtraInput,
   ShoppingExtraUpdate,
   DeleteAccountRequest,
+  ContentPost,
+  ContentTopic,
+  Locale,
+  PostStatus,
+  TopicWithPosts,
 } from '@ct/shared';
 import { SESSION_TRANSPORT_HEADER } from '@ct/shared';
 
@@ -1114,6 +1119,45 @@ export function createApiClient({
         request<{ ok: true; handled: boolean }>(`/admin/support/${id}/handled`, {
           method: 'POST',
           body: JSON.stringify({ handled }),
+        }),
+
+      // ---- The blog ------------------------------------------------------
+      //
+      // Writing is one language per call, driven as a loop by the panel: the
+      // alternative is a single request holding a socket open for thirteen
+      // Opus articles and showing nothing until the last one lands.
+
+      content: () => request<{ topics: TopicWithPosts[] }>('/admin/content'),
+
+      createTopic: (name: string, brief: string) =>
+        request<ContentTopic>('/admin/content/topics', {
+          method: 'POST',
+          body: JSON.stringify({ name, brief }),
+        }),
+
+      deleteTopic: (id: string) =>
+        request<void>(`/admin/content/topics/${id}`, { method: 'DELETE' }),
+
+      /** Write one post. Omit `locale` for the next language still missing one. */
+      writePost: (topicId: string, locale?: Locale) =>
+        request<{ post: ContentPost; remaining: Locale[] }>(
+          `/admin/content/topics/${topicId}/write`,
+          { method: 'POST', body: JSON.stringify(locale ? { locale } : {}) },
+        ),
+
+      updatePost: (
+        id: string,
+        fields: {
+          title?: string;
+          description?: string;
+          body_md?: string;
+          slug?: string;
+          status?: PostStatus;
+        },
+      ) =>
+        request<ContentPost>(`/admin/content/posts/${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(fields),
         }),
 
       costs: (days = 30) => request<CostReport>(`/admin/costs?days=${days}`),

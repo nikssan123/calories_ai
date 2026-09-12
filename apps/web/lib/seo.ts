@@ -1,3 +1,5 @@
+import { isBlogPath } from '@/lib/blog';
+
 /**
  * The two facts a crawler needs that nothing else in the app had to state: what
  * this site's address is, and which of its pages are meant to be found.
@@ -63,5 +65,8 @@ export function isIndexableLibraryPath(pathname: string): boolean {
 export function isNoindexPath(pathname: string): boolean {
   if (INDEXABLE_PATHS.includes(pathname)) return false;
   if (isIndexableLibraryPath(pathname)) return false;
+  // Thirteen languages of it, at /blog and /<locale>/blog. Kept in lib/blog.ts
+  // beside the path builders, so the matcher and the URLs cannot disagree.
+  if (isBlogPath(pathname)) return false;
   return true;
 }

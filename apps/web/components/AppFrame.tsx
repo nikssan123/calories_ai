@@ -11,6 +11,7 @@ import {
   isInviteRoute,
   isDocumentRoute,
   isRecipeLibraryRoute,
+  isBlogRoute,
 } from '@/lib/routes';
 
 /**
@@ -61,6 +62,10 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
    * them five tabs that all bounce off the sign-in form.
    */
   if (!authenticated && isRecipeLibraryRoute(pathname)) return <>{children}</>;
+
+  // The blog is a document for everybody, signed in or not — there is no
+  // version of it that belongs inside the app shell.
+  if (isBlogRoute(pathname)) return <>{children}</>;
 
   return (
     <div className="bg-background h-shell flex w-full overflow-hidden">

@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
-import { publicLibrary } from '@/lib/public-api';
+import { publicLibrary, publicPostSitemap } from '@/lib/public-api';
+import { blogIndexPath, blogPostPath } from '@/lib/blog';
 import { INDEXABLE_ROUTES, ORIGIN } from '@/lib/seo';
 
 /**
@@ -49,5 +50,31 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       ]
     : [];
 
-  return [...fixed, ...library];
+  /*
+   * The blog, in every language it has been published in.
+   *
+   * A language appears only once it has a post: a `/de/blog` index listing
+   * nothing is a thin page inviting a crawler to remember an empty room, and
+   * the whole point of the per-locale layout is that each language earns its
+   * own authority rather than being handed a stub.
+   */
+  const posts = await publicPostSitemap();
+  const localesWithPosts = [...new Set(posts.map((post) => post.locale))].sort();
+
+  const blog: MetadataRoute.Sitemap = [
+    ...localesWithPosts.map((locale) => ({
+      url: `${ORIGIN}${blogIndexPath(locale)}`,
+      lastModified: new Date(),
+      changeFrequency: 'weekly' as const,
+      priority: 0.7,
+    })),
+    ...posts.map((post) => ({
+      url: `${ORIGIN}${blogPostPath(post.locale, post.slug)}`,
+      lastModified: new Date(post.updated_at),
+      changeFrequency: 'monthly' as const,
+      priority: 0.7,
+    })),
+  ];
+
+  return [...fixed, ...library, ...blog];
 }
