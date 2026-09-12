@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: 'Support — Day So Far',
   description:
     'How to get help with Day So Far: where to write, what to include, and the answers to the things people ask most.',
+  alternates: { canonical: '/support' },
 };
 
 /**

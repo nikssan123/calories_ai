@@ -4,7 +4,13 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 import { usePathname, useRouter } from 'next/navigation';
 import type { AuthStatus, Profile } from '@ct/shared';
 import { api } from '@/lib/api';
-import { isCoachRoute, isEmailedRoute, isInviteRoute, isLegalRoute } from '@/lib/routes';
+import {
+  isCoachRoute,
+  isEmailedRoute,
+  isInviteRoute,
+  isLegalRoute,
+  isPrerenderableRoute,
+} from '@/lib/routes';
 
 interface AuthValue {
   /** Whether there is a session at all. `profile` is null for other reasons too. */
@@ -222,11 +228,31 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     setStatus((prev) => (prev ? { ...prev, profile } : prev));
   }, []);
 
-  // Avoid flashing the app shell before we know who this is — and avoid one
-  // frame of somebody's journal in the gap between the effect above deciding to
-  // close their session and the server saying it has.
-  if (loading || strandedSession) return null;
-  if (!status?.authenticated && !isPublic) return null;
+  /*
+   * Avoid one frame of somebody's journal in the gap between the effect above
+   * deciding to close their session and the server saying it has.
+   */
+  if (strandedSession) return null;
+  /*
+   * Avoid flashing the app shell before we know who this is — everywhere the
+   * shell is what would flash.
+   *
+   * The exception is the whole reason this is three lines instead of one.
+   * `loading` starts true and only clears inside an effect, and effects do not
+   * run when React renders on the server, so a gate that waits for it waits
+   * forever server-side: every route was served as a title, a meta description
+   * and an empty <body>. The routes that read the same to everybody are drawn
+   * immediately instead, which is what puts them in the HTML.
+   *
+   * On `/` that costs a signed-in admin one paint of the landing page before
+   * `api.me()` answers and the journal replaces it. That is a real flash, and
+   * it is the right trade: the page is statically prerendered so the swap is
+   * one round trip, the audience for it is the handful of accounts the web
+   * journal is still open to, and the alternative is the whole site staying
+   * invisible to everything that does not run JavaScript.
+   */
+  if (loading && !isPrerenderableRoute(pathname)) return null;
+  if (!loading && !status?.authenticated && !isPublic) return null;
 
   return (
     <AuthContext.Provider

@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: 'Terms of Service — Day So Far',
   description:
     'The agreement for using Day So Far: what it is, what it is not, what is expected of an account, and what is not promised.',
+  alternates: { canonical: '/terms' },
 };
 
 /**

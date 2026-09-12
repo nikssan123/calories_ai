@@ -18,23 +18,54 @@ export function isEmailedRoute(pathname: string): boolean {
 }
 
 /**
- * The privacy policy and the terms.
+ * The privacy policy, the terms, and the support page.
  *
  * Public for a harder reason than the landing page is. Someone has to be able
  * to read what they are agreeing to *before* they agree to it, the app stores
- * fetch both URLs from a listing that has never held a session, and the address
- * in a GDPR erasure request has to be findable by someone who has already
- * deleted their account. Every one of those is a visit with no cookie.
+ * fetch all three URLs from a listing that has never held a session, and the
+ * address in a GDPR erasure request has to be findable by someone who has
+ * already deleted their account. Every one of those is a visit with no cookie.
+ *
+ * Support belongs here for the bluntest version of that argument: Apple
+ * requires the URL on the listing and a reviewer opens it cold. It sat outside
+ * this list until now, which meant the one page a locked-out person is sent to
+ * bounced them to the sign-in form they could not use.
  *
  * They keep their own chrome even for a signed-in reader, unlike the emailed
  * routes above, which lose it only for a stranger. These are documents rather
  * than screens: the shell owns the viewport and never scrolls, and eight
  * hundred lines of prose inside it would be a dead page with a tab bar.
  */
-export const LEGAL_ROUTES = ['/privacy', '/terms'] as const;
+export const LEGAL_ROUTES = ['/privacy', '/terms', '/support'] as const;
 
 export function isLegalRoute(pathname: string): boolean {
   return (LEGAL_ROUTES as readonly string[]).includes(pathname);
+}
+
+/**
+ * The routes that are drawn the same way for everybody, and so can be drawn
+ * before anyone knows who is asking.
+ *
+ * This is the list `<AuthGate>` is allowed to render *through* while the
+ * session is still in flight — which, on the server, is always: `api.me()`
+ * runs in an effect, and effects do not run during a render on the server. Any
+ * route not on this list renders nothing until the answer arrives, so any
+ * route not on this list is served to a crawler as an empty document.
+ *
+ * That was every route on the site until this list existed. A search engine
+ * that executes JavaScript eventually recovers the page; Bing, GPTBot,
+ * ClaudeBot, PerplexityBot and every link-unfurling bot in every chat app do
+ * not execute anything and saw a blank body with a title.
+ *
+ * The bar for being on this list is that the anonymous rendering is the
+ * *correct* one, not merely a harmless one. `/` qualifies because the landing
+ * page is what `/` is for; the three documents qualify because they say the
+ * same thing to everyone. `/login` deliberately does not: it is public, but it
+ * is also inside the app shell, and drawing the shell around it before the
+ * session resolves would put a tab bar on a sign-in form for one frame.
+ */
+export function isPrerenderableRoute(pathname: string): boolean {
+  return pathname === '/' || isLegalRoute(pathname);
 }
 
 /**

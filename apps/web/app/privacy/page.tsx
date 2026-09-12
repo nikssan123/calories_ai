@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: 'Privacy Policy — Day So Far',
   description:
     'What Day So Far records about you, who it is sent to, how long it is kept, and how to get rid of it.',
+  alternates: { canonical: '/privacy' },
 };
 
 /**
