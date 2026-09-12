@@ -82,6 +82,8 @@ export const TURN_INPUT_TOKENS: Record<TurnKind, number> = {
   // figure barely matters — a post is generated from a queue that nobody is
   // waiting on, so it is never the turn a burst is admitted against.
   content: 4_000,
+  // A house style and a list of names already taken. Smaller than a post.
+  content_plan: 2_000,
   // The pantry, the preferences and the library, across several calls.
   recipe: 20_000,
   // Two sentences from stats that were computed in SQL before the call.
@@ -101,7 +103,7 @@ export const TURN_INPUT_TOKENS: Record<TurnKind, number> = {
  * written. A pass that walks every user is also the one thing in this product
  * that can empty a bucket by itself.
  */
-const UNWATCHED: ReadonlySet<TurnKind> = new Set<TurnKind>(['review', 'nudge', 'content']);
+const UNWATCHED: ReadonlySet<TurnKind> = new Set<TurnKind>(['review', 'nudge', 'content', 'content_plan']);
 
 /**
  * How long an unwatched turn will wait before giving up.

@@ -294,8 +294,8 @@ export async function suggestTopics(
   }
 
   const request: AgentRequest = {
-    kind: 'content',
-    model: MODELS.content,
+    kind: 'content_plan',
+    model: MODELS.content_plan,
     staticSystemPrompt: TOPIC_SYSTEM_PROMPT,
     dynamicSystemPrompt: '',
     text: topicTaskPrompt(existing, count),

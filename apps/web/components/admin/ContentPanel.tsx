@@ -34,6 +34,30 @@ import { cn } from '@/lib/utils';
 
 type Busy = { topicId: string; locale: Locale | null } | null;
 
+/**
+ * Seconds since the thing started, or null when nothing is running.
+ *
+ * Writing an article takes about a minute; choosing eight subjects takes about
+ * the same. A spinner alone does not survive that — the first report of this
+ * panel was "I clicked Suggest topics and nothing happened", from a request
+ * that was working perfectly and answered ninety seconds later. A number that
+ * moves is the difference between waiting and being ignored.
+ */
+function useElapsed(running: boolean): number | null {
+  const [seconds, setSeconds] = useState<number | null>(null);
+  useEffect(() => {
+    if (!running) {
+      setSeconds(null);
+      return;
+    }
+    const started = Date.now();
+    setSeconds(0);
+    const id = setInterval(() => setSeconds(Math.round((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(id);
+  }, [running]);
+  return seconds;
+}
+
 export function ContentPanel() {
   const [topics, setTopics] = useState<TopicWithPosts[] | null>(null);
   const [busy, setBusy] = useState<Busy>(null);
@@ -49,6 +73,7 @@ export function ContentPanel() {
   const [suggested, setSuggested] = useState<SuggestedTopic[] | null>(null);
   const [chosen, setChosen] = useState<Set<number>>(new Set());
   const [thinking, setThinking] = useState(false);
+  const elapsed = useElapsed(thinking || busy !== null);
 
   const load = useCallback(async () => {
     try {
@@ -226,6 +251,27 @@ export function ContentPanel() {
               <Button onClick={() => void addTopic()} className="h-9 rounded-full">
                 Add
               </Button>
+            </div>
+          </div>
+        </InsetGroup>
+      )}
+
+      {elapsed !== null && (
+        <InsetGroup>
+          <div className="flex items-center gap-3 p-4">
+            <Loader2 size={18} className="animate-spin shrink-0" />
+            <div className="min-w-0">
+              <p className="text-body font-semibold">
+                {busy
+                  ? `Writing ${busy.locale ? LOCALE_ENGLISH_NAMES[busy.locale] : 'the next language'}…`
+                  : suggested
+                    ? 'Adding topics…'
+                    : 'Choosing subjects…'}{' '}
+                <span className="text-muted-foreground tabular-nums">{elapsed}s</span>
+              </p>
+              <p className="text-footnote text-muted-foreground mt-0.5">
+                This normally takes about a minute. Leave the tab open.
+              </p>
             </div>
           </div>
         </InsetGroup>

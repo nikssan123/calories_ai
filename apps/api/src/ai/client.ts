@@ -183,6 +183,17 @@ export const MODELS: Record<TurnKind, ModelChoice> = {
    * the subscription, where the marginal token is free.
    */
   content: { model: 'claude-opus-5', effort: 'high' },
+  /*
+   * Choosing what to write about, as opposed to writing it.
+   *
+   * Same model, lower effort, and the difference is the shape of the task: a
+   * list of eight subjects with a brief each is a shorter thought than a
+   * twelve-hundred-word article, and the first version of this spent ninety
+   * seconds at high effort producing a list that medium produces in a third of
+   * that. Ninety seconds behind a button is indistinguishable from a broken
+   * button, which is exactly how it was reported.
+   */
+  content_plan: { model: 'claude-opus-5', effort: 'medium' },
   // A week of dinners in one run, and the largest output the product produces.
   // Where the review goes, for the same reason: it is read end to end, it is
   // the thing people would pay for, and the constraint that makes it good —

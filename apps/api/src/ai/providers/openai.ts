@@ -74,6 +74,7 @@ export function readOpenAiConfig(source: NodeJS.ProcessEnv = process.env): OpenA
       // model. It is also the one kind this provider is unlikely ever to serve:
       // the content pipeline asks for the subscription lane by name.
       content: source.OPENAI_MODEL_REVIEW ?? base,
+      content_plan: source.OPENAI_MODEL_REVIEW ?? base,
       // Two sentences from numbers already computed. No slot of its own, and it
       // does not follow the review's: a nudge is the smallest job here, and a
       // deployment that pointed its review model at something expensive should

@@ -105,7 +105,9 @@ export type TurnKind =
    * is why `content.ts` runs it on the subscription lane whatever the
    * deployment's own lane is, and why it never touches a meter.
    */
-  | 'content';
+  | 'content'
+  /** Picking the subjects, rather than writing them. Cheaper and much faster. */
+  | 'content_plan';
 
 /**
  * `photo` is the journal's `log_food` and nothing else: the photo-only lane
