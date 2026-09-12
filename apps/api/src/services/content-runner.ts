@@ -11,7 +11,8 @@ import {
   getTopic,
   isCancelled,
   markJobCurrent,
-  markJobResult,
+  markJobDone,
+  markJobFailed,
   nextUnfinishedTopic,
   runningJob,
   topicCoverage,
@@ -90,34 +91,65 @@ async function run(
       const topic = await getTopic(topicId);
       if (!topic) return 'gone' as const;
 
-      try {
-        const { post, model, costUsd } = await draftPost(
-          topic,
-          locale,
-          await claimedKeywords(locale),
-        );
-        await upsertPost({
-          topicId,
-          locale,
-          slug: post.slug,
-          title: post.title,
-          description: post.description,
-          bodyMd: post.body_md,
-          keyword: post.keyword,
-          model,
-          costUsd,
-        });
-        await markJobResult(jobId, locale, true);
+      /*
+       * Two attempts, because the first real production failure was a language
+       * that worked perfectly on the very next try.
+       *
+       * Writing a post is one long non-deterministic call, and its failure
+       * modes are mostly of a kind that does not repeat: a slug that came back
+       * with a diacritic in it, a reply the JSON parser could not find an
+       * object in, a turn that ran out of steps while thinking. Retrying once
+       * costs a minute and converts most of those into a post. What it must
+       * not do is grind: a genuinely broken locale gets two goes and then
+       * counts as one failure toward the consecutive limit below.
+       */
+      let lastError: Error | null = null;
+      let wrote = false;
+
+      for (let attempt = 0; attempt < 2 && !wrote; attempt++) {
+        if (attempt > 0 && (await isCancelled(jobId))) return 'cancelled' as const;
+        try {
+          const { post, model, costUsd } = await draftPost(
+            topic,
+            locale,
+            await claimedKeywords(locale),
+          );
+          await upsertPost({
+            topicId,
+            locale,
+            slug: post.slug,
+            title: post.title,
+            description: post.description,
+            bodyMd: post.body_md,
+            keyword: post.keyword,
+            model,
+            costUsd,
+          });
+          wrote = true;
+        } catch (error) {
+          lastError = error as Error;
+          logger?.warn(
+            { err: error, job: jobId, locale, attempt: attempt + 1 },
+            'content draft attempt failed',
+          );
+        }
+      }
+
+      if (wrote) {
+        await markJobDone(jobId, locale);
         consecutive = 0;
-      } catch (error) {
-        logger?.error({ err: error, job: jobId, locale }, 'content draft failed');
-        await markJobResult(jobId, locale, false);
+      } else {
+        // The message is stored on the row, not only logged. A container that
+        // gets replaced by a deploy takes its log with it, which is exactly how
+        // the reason for the first failure was lost.
+        logger?.error({ err: lastError, job: jobId, locale }, 'content draft failed twice');
+        await markJobFailed(jobId, locale, lastError?.message ?? 'Unknown error');
         consecutive++;
         /*
-         * One failure is a language having a bad minute and the rest are still
-         * worth writing. Two in a row is the lane being unavailable, and
-         * grinding through eleven more is eleven more minutes of the same
-         * error.
+         * One failure is a language having a bad minute — twice over, by now —
+         * and the rest are still worth writing. Two in a row is the lane being
+         * unavailable, and grinding through eleven more is eleven more minutes
+         * of the same error.
          */
         if (consecutive >= 2) {
           await finishJob(jobId, 'failed', 'Two languages failed in a row — stopped.');

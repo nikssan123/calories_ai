@@ -387,6 +387,7 @@ function toJob(row: any): ContentJob {
     locales: row.locales,
     done: row.done,
     failed: row.failed,
+    errors: row.errors ?? {},
     current: row.current,
     status: row.status,
     error: row.error,
@@ -395,7 +396,7 @@ function toJob(row: any): ContentJob {
   };
 }
 
-const JOB_COLUMNS = `id, topic_id, locales, done, failed, current, status, error, started_at, finished_at`;
+const JOB_COLUMNS = `id, topic_id, locales, done, failed, errors, current, status, error, started_at, finished_at`;
 
 export async function createJob(topicId: string, locales: Locale[]): Promise<ContentJob> {
   const row = await queryOne<any>(
@@ -432,12 +433,26 @@ export async function markJobCurrent(id: string, locale: Locale): Promise<void> 
   await query('UPDATE content_jobs SET current = $2 WHERE id = $1', [id, locale]);
 }
 
-export async function markJobResult(id: string, locale: Locale, ok: boolean): Promise<void> {
+export async function markJobDone(id: string, locale: Locale): Promise<void> {
   await query(
-    ok
-      ? 'UPDATE content_jobs SET done = array_append(done, $2), current = NULL WHERE id = $1'
-      : 'UPDATE content_jobs SET failed = array_append(failed, $2), current = NULL WHERE id = $1',
+    'UPDATE content_jobs SET done = array_append(done, $2), current = NULL WHERE id = $1',
     [id, locale],
+  );
+}
+
+/** A failure, with the sentence that explains it — see migration 054. */
+export async function markJobFailed(
+  id: string,
+  locale: Locale,
+  reason: string,
+): Promise<void> {
+  await query(
+    `UPDATE content_jobs
+        SET failed = array_append(failed, $2),
+            errors = errors || jsonb_build_object($2::text, $3::text),
+            current = NULL
+      WHERE id = $1`,
+    [id, locale, reason.slice(0, 500)],
   );
 }
 

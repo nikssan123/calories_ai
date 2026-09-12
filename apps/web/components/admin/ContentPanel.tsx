@@ -430,6 +430,7 @@ export function ContentPanel() {
               {job.locales.map((locale) => (
                 <span
                   key={locale}
+                  title={job.errors[locale] ?? undefined}
                   className={cn(
                     'text-footnote inline-flex h-6 min-w-[2.5rem] items-center justify-center rounded-full border-2 px-2 font-semibold uppercase',
                     job.done.includes(locale) &&
@@ -466,6 +467,18 @@ export function ContentPanel() {
               {lastJob.done.length} written, {lastJob.failed.length} failed, of{' '}
               {lastJob.locales.length} asked for.
             </p>
+            {/* Why, per language — the thing a locale code on its own could
+                never say, and which used to live only in a container log. */}
+            {lastJob.failed.length > 0 && (
+              <ul className="text-footnote text-muted-foreground mt-2 space-y-1">
+                {lastJob.failed.map((locale) => (
+                  <li key={locale}>
+                    <span className="font-semibold uppercase">{locale}</span>{' '}
+                    {lastJob.errors[locale] ?? 'no reason recorded'}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </InsetGroup>
       )}

@@ -141,6 +141,14 @@ export const ContentJob = z.object({
   locales: z.array(Locale),
   done: z.array(Locale),
   failed: z.array(Locale),
+  /**
+   * Why each failed language failed. Keyed by locale.
+   *
+   * Separate from `failed` because the array answers "which" and the panel
+   * needs "why" — a locale code alone sent the first real production failure
+   * to the container log, where a deploy then ate it.
+   */
+  errors: z.record(z.string(), z.string()),
   /** The language being written this minute, or null between the two states. */
   current: Locale.nullable(),
   status: z.enum(['running', 'done', 'cancelled', 'failed']),
