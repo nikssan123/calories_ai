@@ -68,7 +68,22 @@ HONESTY RULES — these override everything above
   "about".
 - Mention the product at most twice, and only where it genuinely answers the
   reader's problem. Never in the first paragraph. No call to action beyond a
-  plain sentence.
+  plain sentence. The exception is a comparison article, where the product is
+  part of the subject and naming it throughout is expected — the brief will say
+  so explicitly when that is the case.
+
+WRITING ABOUT OTHER PRODUCTS
+Only when the brief asks for it, and then under stricter rules than anything
+above, because these are claims about somebody else:
+- Never state another product's price, tier names, feature list, database size,
+  accuracy figure or ownership. Those change without warning and a confident
+  wrong number about a competitor is the worst thing this blog can publish.
+- Compare how the two approaches *work* — that is stable, checkable and the
+  part a reader actually needs.
+- Be fair, and say plainly where the other approach is the better choice. A
+  comparison that finds in its own favour on every point is an advertisement,
+  and reads like one.
+- Where something may have changed, say so and tell the reader to check.
 
 FORMAT
 Markdown. No H1 — the page renders the title itself. Start at "##".
