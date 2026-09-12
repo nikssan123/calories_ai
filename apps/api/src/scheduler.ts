@@ -33,6 +33,7 @@ import { dueAlert, saveAlert } from './services/alerts.ts';
 import { sweepBarcodeCache } from './services/barcode.ts';
 import { ALERT_JOB, DIGEST_JOB, NUDGE_JOB, REVIEW_JOB, withJobLock } from './services/job-lock.ts';
 import { expirePlans } from './services/billing.ts';
+import { runDailyContent } from './services/content-runner.ts';
 import { dueNudge, NUDGE_HOUR } from './services/nudges.ts';
 import { reviewForWeek, reviewWeekFor } from './services/reviews.ts';
 import {
@@ -737,6 +738,18 @@ export function tick(logger?: FastifyBaseLogger): void {
     .catch((error) => {
       logger?.error({ err: error }, 'coach lapse sweep failed');
     });
+  /*
+   * The blog, once a night.
+   *
+   * Independent of the four above like everything else here, and the only pass
+   * that belongs to the site rather than to a person: there is no user's clock
+   * to consult, just an hour in UTC. It writes drafts and never publishes, and
+   * when there is nothing left to write it says so by email rather than
+   * silently doing nothing for a fortnight.
+   */
+  runDailyContent(now, logger).catch((error) => {
+    logger?.error({ err: error }, 'nightly blog pass failed');
+  });
   // Not a user's clock at all — one DELETE over a small shared table, riding a
   // tick that already exists rather than earning a scheduler of its own. Every
   // read checks its own row's age, so this is only about disk: it is safe to

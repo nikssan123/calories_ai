@@ -487,3 +487,48 @@ export async function reconcileAbandonedJobs(): Promise<number> {
   );
   return rows.length;
 }
+
+/**
+ * The topic the nightly pass should pick up, and how much is left of it.
+ *
+ * Oldest first, and only ones with a language still missing. Oldest rather than
+ * newest because a topic added a week ago and half written is more use finished
+ * than a fresh one started — the blog wants complete clusters, since a post
+ * with no siblings has nothing to point `hreflang` at.
+ */
+export async function nextUnfinishedTopic(): Promise<{
+  topic: ContentTopic;
+  missing: Locale[];
+} | null> {
+  const row = await queryOne<any>(
+    `SELECT t.id, t.name, t.brief, t.created_at
+       FROM content_topics t
+      WHERE EXISTS (
+              SELECT 1 FROM unnest($1::text[]) AS l(locale)
+               WHERE NOT EXISTS (
+                     SELECT 1 FROM content_posts p
+                      WHERE p.topic_id = t.id AND p.locale = l.locale)
+            )
+      ORDER BY t.created_at
+      LIMIT 1`,
+    [[...LOCALES]],
+  );
+  if (!row) return null;
+
+  const topic = toTopic(row);
+  return { topic, missing: await missingLocales(topic.id) };
+}
+
+/** For the "nothing to do" email: how many topics there are, and how many are finished. */
+export async function topicCoverage(): Promise<{ topics: number; complete: number }> {
+  const row = await queryOne<{ topics: string; complete: string }>(
+    `SELECT count(*)::text AS topics,
+            count(*) FILTER (
+              WHERE (SELECT count(DISTINCT locale) FROM content_posts p WHERE p.topic_id = t.id)
+                    >= $1
+            )::text AS complete
+       FROM content_topics t`,
+    [LOCALES.length],
+  );
+  return { topics: Number(row?.topics ?? 0), complete: Number(row?.complete ?? 0) };
+}

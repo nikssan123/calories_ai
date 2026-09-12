@@ -720,3 +720,54 @@ function summaryLine(
       : m['review.summaryWeight'](formatWeightDelta(stats.weight_change_kg, units));
   return m['review.summary'](stats.days_logged, Math.round(stats.mean_kcal), weight);
 }
+
+/**
+ * The nightly blog pass has nothing to write, addressed to whoever runs the
+ * deployment.
+ *
+ * English, and not through `emailMessages`, because this is the only template
+ * in the file that goes to an operator rather than to a member. Localising an
+ * internal notice to the person who chose the locales would be a joke at their
+ * expense.
+ */
+export function blogNeedsTopics(input: {
+  topics: number;
+  complete: number;
+  adminUrl: string;
+}): EmailMessage {
+  const nothingAtAll = input.topics === 0;
+  return {
+    template: 'blog_needs_topics',
+    category: 'account',
+    ...renderEmail({
+      locale: 'en',
+      subject: 'The blog has nothing left to write',
+      preheader: 'Every topic has all thirteen languages. Add more to keep the nightly pass going.',
+      heading: 'The blog needs topics',
+      blocks: [
+        {
+          kind: 'text',
+          text: nothingAtAll
+            ? 'The nightly pass ran and found no topics at all, so nothing was written.'
+            : 'The nightly pass ran and found nothing left to do — every topic already has a post in all thirteen languages.',
+        },
+        {
+          kind: 'facts',
+          items: [
+            { label: 'Topics', value: String(input.topics) },
+            { label: 'Complete in all languages', value: String(input.complete) },
+          ],
+        },
+        {
+          kind: 'text',
+          text: 'Open the Blog tab in the admin panel and press Suggest topics. Tick the ones worth writing and the pass will pick one up tonight.',
+        },
+        { kind: 'button', label: 'Open the admin panel', url: input.adminUrl },
+        {
+          kind: 'note',
+          text: 'Drafts still wait for you. Nothing the pass writes goes live until you publish it.',
+        },
+      ],
+    }),
+  };
+}

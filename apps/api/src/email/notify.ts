@@ -440,3 +440,40 @@ export function formatRange(startDate: string, endDate: string, locale: Locale):
     ? m['review.dayMonth'](`${day(start)}–${day(end)}`, month(end))
     : `${m['review.dayMonth'](day(start), month(start))} – ${m['review.dayMonth'](day(end), month(end))}`;
 }
+
+/**
+ * Tell the operator the blog has run dry.
+ *
+ * To every address in `ADMIN_EMAILS`, because that is already the list of
+ * people who run this deployment, and keyed by the day so a pass that finds
+ * nothing on Tuesday and again on Wednesday sends two notices rather than one
+ * per hour or one ever.
+ */
+export async function sendBlogNeedsTopicsEmail(
+  input: { topics: number; complete: number; day: string },
+  logger?: FastifyBaseLogger,
+): Promise<SendResult[]> {
+  const recipients = env.adminEmails;
+  if (recipients.length === 0) {
+    logger?.warn('blog has no topics and ADMIN_EMAILS is empty — nobody to tell');
+    return [];
+  }
+
+  return Promise.all(
+    recipients.map((to) =>
+      sendEmail({
+        to,
+        userId: null,
+        logger,
+        // One per address per day. The pass runs hourly and only acts once, but
+        // the key is what makes that true rather than merely likely.
+        idempotencyKey: `blog-needs-topics:${input.day}:${to}`,
+        message: templates.blogNeedsTopics({
+          topics: input.topics,
+          complete: input.complete,
+          adminUrl: `${env.appUrl}/admin`,
+        }),
+      }),
+    ),
+  );
+}
