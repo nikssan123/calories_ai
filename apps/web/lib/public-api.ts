@@ -31,24 +31,42 @@ const API_URL =
 const REVALIDATE = 3600;
 
 async function get<T>(path: string): Promise<T | null> {
-  try {
-    const response = await fetch(`${API_URL}${path}`, {
-      headers: { accept: 'application/json' },
-      next: { revalidate: REVALIDATE },
-    });
-    if (!response.ok) return null;
-    return (await response.json()) as T;
-  } catch {
-    /*
-     * Null rather than a throw, and every caller treats it as "not found".
-     *
-     * The API being unreachable during a render is a real possibility — a
-     * restart, a cold start, a deploy — and the alternatives are worse than a
-     * 404: an unhandled throw is a 500 that Google records as a site-level
-     * fault, and a cached error page would outlive the outage that caused it.
-     */
-    return null;
+  /*
+   * Three attempts, because the failure this guards against is a deploy.
+   *
+   * `docker compose up -d` recreates the web and API containers together, and
+   * the web app can be answering requests a second or two before the API is.
+   * A single attempt would return null there — and then ISR would cache that
+   * null for the full hour, which is how a deploy shipped a four-URL sitemap
+   * and a recipe index reading "the library is not loading just now" while the
+   * API beside it was serving all ninety-nine perfectly well.
+   *
+   * A transient failure must not become an hour of a wrong page.
+   */
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, attempt * 750));
+    try {
+      const response = await fetch(`${API_URL}${path}`, {
+        headers: { accept: 'application/json' },
+        next: { revalidate: REVALIDATE },
+      });
+      // A 404 is an answer, not a failure: the slug does not exist and retrying
+      // will not change that.
+      if (response.status === 404) return null;
+      if (!response.ok) continue;
+      return (await response.json()) as T;
+    } catch {
+      // Network-level: the API is not listening yet, or not any more.
+    }
   }
+
+  /*
+   * Null rather than a throw, and every caller treats it as "not found" or "no
+   * rows". The alternatives are worse than a thin page: an unhandled throw is a
+   * 500 that Google records as a site-level fault, and an error page would be
+   * cached exactly as long as the empty one.
+   */
+  return null;
 }
 
 export async function publicRecipe(slug: string): Promise<PublicLibraryRecipe | null> {
