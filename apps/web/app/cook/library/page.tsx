@@ -4,19 +4,24 @@ import { publicLibrary } from '@/lib/public-api';
 import { breadcrumbSchema, jsonLd } from '@/lib/schema';
 import { ORIGIN } from '@/lib/seo';
 
-/**
- * The index the ninety-nine recipe pages never had.
+/*
+ * Rendered on demand, with the upstream call cached for an hour.
  *
- * Without it every one of them was an orphan: reachable only from inside the
- * authenticated `/cook` shelf, which no crawler can open, and linked from
- * nowhere a visitor could arrive at. A sitemap alone does not fix that — it
- * gets a page discovered, not connected — so this is as much an internal
- * linking fix as a page in its own right.
+ * `export const revalidate` alone was wrong here and silently so. A page with
+ * no dynamic segment and a revalidate window is *prerendered at build time* —
+ * and the build runs in a container with no API and no database, so the fetch
+ * failed, the empty result was baked into the image, and production served a
+ * page saying the library would not load while the API beside it answered all
+ * ninety-nine. It would have corrected itself an hour after the first request,
+ * which is a long time to be wrong on the pages a crawler reads.
  *
- * Deliberately plain, and server-rendered whole. It is a list of links to
- * documents, which is the one thing the web has always been good at.
+ * `force-dynamic` keeps the build from calling anything. `fetchCache` then puts
+ * the caching back where it belongs: on the fetch in lib/public-api.ts, which
+ * carries its own hour. The render is cheap; the round trip is what was worth
+ * caching.
  */
-export const revalidate = 3600;
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'default-cache';
 
 const DESCRIPTION =
   'Every recipe in the Day So Far starter library — ingredients, method, and measured calories and macros per serving. Public-domain recipes from USDA MyPlate Kitchen.';

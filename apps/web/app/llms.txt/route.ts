@@ -1,21 +1,24 @@
 import { publicLibrary } from '@/lib/public-api';
 import { ORIGIN } from '@/lib/seo';
 
-/**
- * /llms.txt — the site, described for something that is going to summarise it
- * rather than rank it.
+/*
+ * Rendered on demand, with the upstream call cached for an hour.
  *
- * A route rather than a file in `public/` because the recipe count and the
- * library are real data, and a hand-maintained number is a number that goes
- * stale the first time somebody seeds a recipe.
+ * `export const revalidate` alone was wrong here and silently so. A page with
+ * no dynamic segment and a revalidate window is *prerendered at build time* —
+ * and the build runs in a container with no API and no database, so the fetch
+ * failed, the empty result was baked into the image, and production served a
+ * page saying the library would not load while the API beside it answered all
+ * ninety-nine. It would have corrected itself an hour after the first request,
+ * which is a long time to be wrong on the pages a crawler reads.
  *
- * The convention is not a standard and no crawler is obliged to read it. It is
- * cheap, though, and the alternative for this site was nothing at all: an
- * assistant asked about Day So Far has, until now, had a title and a 38-word
- * tagline to work from, and no way to tell the product from the ordinary
- * English phrase or the unrelated album of the same name.
+ * `force-dynamic` keeps the build from calling anything. `fetchCache` then puts
+ * the caching back where it belongs: on the fetch in lib/public-api.ts, which
+ * carries its own hour. The render is cheap; the round trip is what was worth
+ * caching.
  */
-export const revalidate = 3600;
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'default-cache';
 
 export async function GET() {
   const recipes = await publicLibrary();
