@@ -89,6 +89,7 @@ import type {
   ShoppingExtraInput,
   ShoppingExtraUpdate,
   DeleteAccountRequest,
+  ContentJob,
   ContentPost,
   ContentTopic,
   Locale,
@@ -1159,6 +1160,19 @@ export function createApiClient({
           `/admin/content/topics/${topicId}/write`,
           { method: 'POST', body: JSON.stringify(locale ? { locale } : {}) },
         ),
+
+      /** Start a server-side batch. Returns immediately; poll `contentJobs`. */
+      writeBatch: (topicId: string, locales: Locale[]) =>
+        request<ContentJob>(`/admin/content/topics/${topicId}/batch`, {
+          method: 'POST',
+          body: JSON.stringify({ locales }),
+        }),
+
+      contentJobs: () =>
+        request<{ running: ContentJob | null; recent: ContentJob[] }>('/admin/content/jobs'),
+
+      cancelContentJob: (id: string) =>
+        request<void>(`/admin/content/jobs/${id}/cancel`, { method: 'POST' }),
 
       updatePost: (
         id: string,

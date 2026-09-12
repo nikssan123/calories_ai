@@ -2,6 +2,8 @@ import type { MetadataRoute } from 'next';
 import { publicLibrary, publicPostSitemap } from '@/lib/public-api';
 import { blogIndexPath, blogPostPath } from '@/lib/blog';
 import { INDEXABLE_ROUTES, ORIGIN } from '@/lib/seo';
+import { PREFIXED_LOCALES } from '@/lib/blog';
+import { landingHreflang, landingPath } from '@/lib/landing';
 
 /*
  * Rendered on demand, with the upstream call cached for an hour.
@@ -33,8 +35,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: new Date(),
       changeFrequency,
       priority,
+      ...(path === '/' ? { alternates: { languages: landingAlternates() } } : {}),
     }),
   );
+
+  /*
+   * The landing page in the other twelve, each carrying the whole cluster.
+   *
+   * Every member of an hreflang cluster has to list every other member and
+   * itself, in the sitemap as much as in the head — a page that names its
+   * siblings but is not named back is ignored as a one-way claim.
+   */
+  const landings: MetadataRoute.Sitemap = PREFIXED_LOCALES.map((locale) => ({
+    url: `${ORIGIN}${landingPath(locale)}`,
+    lastModified: new Date(),
+    changeFrequency: 'monthly' as const,
+    priority: 0.9,
+    alternates: { languages: landingAlternates() },
+  }));
 
   const recipes = await publicLibrary();
   const library: MetadataRoute.Sitemap = recipes.length
@@ -80,5 +98,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })),
   ];
 
-  return [...fixed, ...library, ...blog];
+  return [...fixed, ...landings, ...library, ...blog];
+}
+
+/** Absolute URLs, which a sitemap requires and the head's relative map is not. */
+function landingAlternates(): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(landingHreflang()).map(([lang, path]) => [
+      lang,
+      path === '/' ? ORIGIN : `${ORIGIN}${path}`,
+    ]),
+  );
 }

@@ -13,6 +13,7 @@ import {
   isRecipeLibraryRoute,
   isBlogRoute,
 } from '@/lib/routes';
+import { isLocalizedLandingPath } from '@/lib/landing';
 
 /**
  * The app shell — or, for the landing page, nothing at all.
@@ -66,6 +67,10 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   // The blog is a document for everybody, signed in or not — there is no
   // version of it that belongs inside the app shell.
   if (isBlogRoute(pathname)) return <>{children}</>;
+
+  // `/bg`, `/de` and the rest are the landing page to everybody. Only `/`
+  // doubles as the journal, so only `/` needs to know who is asking.
+  if (isLocalizedLandingPath(pathname)) return <>{children}</>;
 
   return (
     <div className="bg-background h-shell flex w-full overflow-hidden">

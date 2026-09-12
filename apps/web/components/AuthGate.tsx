@@ -13,6 +13,7 @@ import {
   isRecipeLibraryRoute,
   isBlogRoute,
 } from '@/lib/routes';
+import { isLandingPath } from '@/lib/landing';
 
 interface AuthValue {
   /** Whether there is a session at all. `profile` is null for other reasons too. */
@@ -84,7 +85,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
    */
   const isPublic =
     onLogin ||
-    pathname === '/' ||
+    // `/` and `/bg`, `/de` and the rest: the landing page in each language.
+    isLandingPath(pathname) ||
     isEmailedRoute(pathname) ||
     isDocumentRoute(pathname) ||
     isInviteRoute(pathname) ||

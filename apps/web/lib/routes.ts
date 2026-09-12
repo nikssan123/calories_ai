@@ -1,4 +1,5 @@
 import { isBlogPath } from '@/lib/blog';
+import { isLandingPath } from '@/lib/landing';
 
 /**
  * Screens reached from a link in an email rather than from inside the app.
@@ -82,7 +83,7 @@ export function isDocumentRoute(pathname: string): boolean {
  */
 export function isPrerenderableRoute(pathname: string): boolean {
   return (
-    pathname === '/' ||
+    isLandingPath(pathname) ||
     isDocumentRoute(pathname) ||
     isRecipeLibraryRoute(pathname) ||
     isBlogRoute(pathname)

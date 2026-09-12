@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { createContext, createElement, useCallback, useContext, useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { localeOf, matchLocale, type Locale } from '@ct/shared';
 import { useAuth } from '@/components/AuthGate';
+import { pathLocale } from '@/lib/landing';
 import { en } from '@/messages/en';
 import { bg } from '@/messages/bg';
 import { de } from '@/messages/de';
@@ -141,6 +143,7 @@ export function preferredLocale(): Locale {
  * still the best one available and this keeps using it.
  */
 export function useLocale(): Locale {
+  const scoped = useContext(LocaleScopeContext);
   const { profile } = useAuth();
   const [preferred, setPreferred] = useState<Locale>('en');
 
@@ -153,7 +156,24 @@ export function useLocale(): Locale {
     };
   }, []);
 
+  if (scoped) return scoped;
   return profile?.locale ? localeOf(profile) : preferred;
+}
+
+const LocaleScopeContext = createContext<Locale | null>(null);
+
+/**
+ * A subtree whose language is fixed by the page rather than by the reader.
+ *
+ * The landing page at `/bg` is Bulgarian for everybody, and it draws the app's
+ * own components — the ring, the chat card, the quality panel — which ask
+ * `useT()` for their labels. Without this they would answer in the browser's
+ * language: a German visitor would read a Bulgarian page with a German card in
+ * the middle of it. It also makes the server render right the first time,
+ * because a scope needs no effect to resolve.
+ */
+export function LocaleScope({ locale, children }: { locale: Locale; children: React.ReactNode }) {
+  return createElement(LocaleScopeContext.Provider, { value: locale }, children);
 }
 
 /**
@@ -182,9 +202,14 @@ export function useT(): <K extends MessageKey>(key: K) => Messages[K] {
  */
 export function LocaleSync() {
   const locale = useLocale();
+  const pathname = usePathname();
+  const { authenticated } = useAuth();
+  // A page whose URL names its language keeps it, whoever is reading; and `/`
+  // is the English landing page to anyone without a session.
+  const declared = pathLocale(pathname) ?? (pathname === '/' && !authenticated ? 'en' : locale);
   useEffect(() => {
-    applyToDocument(locale);
-  }, [locale]);
+    applyToDocument(declared);
+  }, [declared]);
   return null;
 }
 
@@ -197,11 +222,20 @@ export function LocaleSync() {
  * for the browser's, which is right for a first visit and right for everyone
  * whose account language matches their browser. `<LocaleSync>` fixes the rest,
  * and swapping a face after paint is a reflow rather than a flash of fallback.
+ *
+ * Except where the URL already says: `/bg` and `/bg/blog/...` are Bulgarian, and
+ * `/` and `/blog` are English, whatever the browser prefers. The pattern is
+ * `pathLocale` in lib/landing.ts, spelled out again for the same reason.
  */
 export const LOCALE_INIT_SCRIPT = `try{
-  var l = null;
-  try { l = localStorage.getItem('${STORAGE_KEY}'); } catch (e) {}
-  l = l || navigator.language || 'en';
-  l = String(l).toLowerCase().split(/[-_]/)[0];
-  document.documentElement.lang = ${JSON.stringify(Object.keys(CATALOGUES))}.indexOf(l) === -1 ? 'en' : l;
+  var codes = ${JSON.stringify(Object.keys(CATALOGUES))};
+  var p = location.pathname, m = /^\\/([a-z]{2})(\\/blog(\\/.*)?)?$/.exec(p), l = null;
+  if (m && codes.indexOf(m[1]) !== -1) l = m[1];
+  else if (p === '/' || p === '/blog' || p.indexOf('/blog/') === 0) l = 'en';
+  if (!l) {
+    try { l = localStorage.getItem('${STORAGE_KEY}'); } catch (e) {}
+    l = l || navigator.language || 'en';
+    l = String(l).toLowerCase().split(/[-_]/)[0];
+  }
+  document.documentElement.lang = codes.indexOf(l) === -1 ? 'en' : l;
 }catch(e){}`;

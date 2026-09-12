@@ -38,6 +38,17 @@ export const NUDGE_JOB = 'nudges';
 export const ALERT_JOB = 'alerts';
 /** The coach's Monday digest. Arithmetic like the alerts, so the lock is for the second replica. */
 export const DIGEST_JOB = 'coach-digests';
+/**
+ * Writing a batch of blog posts.
+ *
+ * Unlike the four above this is started by a person pressing a button rather
+ * than by the clock, and the lock is doing a different job: not preventing an
+ * overlap that would duplicate work, but keeping thirteen minutes of sequential
+ * model calls from being started twice and racing each other into the
+ * subscription's rate limit. A second press while one is running is refused
+ * rather than queued — the panel says so.
+ */
+export const CONTENT_JOB = 'content-batch';
 
 /**
  * Runs `fn` holding the named lock, or returns null without running it because

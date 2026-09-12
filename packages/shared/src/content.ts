@@ -128,3 +128,24 @@ export const SuggestedTopic = z.object({
   distinct_from: z.string().min(1).max(400),
 });
 export type SuggestedTopic = z.infer<typeof SuggestedTopic>;
+
+/**
+ * A batch of posts being written, seen from the panel.
+ *
+ * The run lives on the server, so this is the only thing the browser needs in
+ * order to draw it — and the reason a refresh no longer costs anything.
+ */
+export const ContentJob = z.object({
+  id: z.string().uuid(),
+  topic_id: z.string().uuid(),
+  locales: z.array(Locale),
+  done: z.array(Locale),
+  failed: z.array(Locale),
+  /** The language being written this minute, or null between the two states. */
+  current: Locale.nullable(),
+  status: z.enum(['running', 'done', 'cancelled', 'failed']),
+  error: z.string().nullable(),
+  started_at: z.string(),
+  finished_at: z.string().nullable(),
+});
+export type ContentJob = z.infer<typeof ContentJob>;

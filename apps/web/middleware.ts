@@ -36,6 +36,12 @@ export function middleware(request: NextRequest) {
    * `redirect()` from inside `generateMetadata` is swallowed, which is how this
    * shipped once already as a 200 with an empty body.
    */
+  if (pathname === '/en') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/';
+    return NextResponse.redirect(url, 308);
+  }
+
   if (pathname === '/en/blog' || pathname.startsWith('/en/blog/')) {
     const url = request.nextUrl.clone();
     url.pathname = pathname.slice('/en'.length);

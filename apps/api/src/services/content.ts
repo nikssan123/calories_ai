@@ -1,4 +1,5 @@
 import type {
+  ContentJob,
   ContentPost,
   ContentTopic,
   Locale,
@@ -375,4 +376,114 @@ export async function claimedKeywords(locale: Locale): Promise<string[]> {
     [locale],
   );
   return rows.map((r) => r.keyword);
+}
+
+// ---- A batch, as a row ------------------------------------------------------
+
+function toJob(row: any): ContentJob {
+  return {
+    id: row.id,
+    topic_id: row.topic_id,
+    locales: row.locales,
+    done: row.done,
+    failed: row.failed,
+    current: row.current,
+    status: row.status,
+    error: row.error,
+    started_at: new Date(row.started_at).toISOString(),
+    finished_at: row.finished_at ? new Date(row.finished_at).toISOString() : null,
+  };
+}
+
+const JOB_COLUMNS = `id, topic_id, locales, done, failed, current, status, error, started_at, finished_at`;
+
+export async function createJob(topicId: string, locales: Locale[]): Promise<ContentJob> {
+  const row = await queryOne<any>(
+    `INSERT INTO content_jobs (topic_id, locales) VALUES ($1, $2) RETURNING ${JOB_COLUMNS}`,
+    [topicId, locales],
+  );
+  return toJob(row!);
+}
+
+/** The one job that may be in flight, if there is one. */
+export async function runningJob(): Promise<ContentJob | null> {
+  const row = await queryOne<any>(
+    `SELECT ${JOB_COLUMNS} FROM content_jobs WHERE status = 'running'
+      ORDER BY started_at DESC LIMIT 1`,
+  );
+  return row ? toJob(row) : null;
+}
+
+export async function getJob(id: string): Promise<ContentJob | null> {
+  const row = await queryOne<any>(`SELECT ${JOB_COLUMNS} FROM content_jobs WHERE id = $1`, [id]);
+  return row ? toJob(row) : null;
+}
+
+/** The last few, so the panel can show what happened after a refresh. */
+export async function recentJobs(limit = 5): Promise<ContentJob[]> {
+  const rows = await query<any>(
+    `SELECT ${JOB_COLUMNS} FROM content_jobs ORDER BY started_at DESC LIMIT $1`,
+    [limit],
+  );
+  return rows.map(toJob);
+}
+
+export async function markJobCurrent(id: string, locale: Locale): Promise<void> {
+  await query('UPDATE content_jobs SET current = $2 WHERE id = $1', [id, locale]);
+}
+
+export async function markJobResult(id: string, locale: Locale, ok: boolean): Promise<void> {
+  await query(
+    ok
+      ? 'UPDATE content_jobs SET done = array_append(done, $2), current = NULL WHERE id = $1'
+      : 'UPDATE content_jobs SET failed = array_append(failed, $2), current = NULL WHERE id = $1',
+    [id, locale],
+  );
+}
+
+export async function finishJob(
+  id: string,
+  status: 'done' | 'cancelled' | 'failed',
+  error?: string,
+): Promise<void> {
+  await query(
+    `UPDATE content_jobs SET status = $2, error = $3, current = NULL, finished_at = now()
+      WHERE id = $1`,
+    [id, status, error ?? null],
+  );
+}
+
+/** Cooperative cancellation: the runner checks this between languages. */
+export async function requestCancel(id: string): Promise<boolean> {
+  const rows = await query<{ id: string }>(
+    `UPDATE content_jobs SET status = 'cancelled', current = NULL, finished_at = now()
+      WHERE id = $1 AND status = 'running' RETURNING id`,
+    [id],
+  );
+  return rows.length > 0;
+}
+
+export async function isCancelled(id: string): Promise<boolean> {
+  const row = await queryOne<{ status: string }>(
+    'SELECT status FROM content_jobs WHERE id = $1',
+    [id],
+  );
+  return row?.status !== 'running';
+}
+
+/**
+ * Any job still marked running when the process starts is a lie left by the
+ * previous one — a deploy or a crash killed the loop mid-language.
+ *
+ * Reconciled at boot rather than left to confuse the panel forever. The posts
+ * already written are safe; it is only the row that is stale.
+ */
+export async function reconcileAbandonedJobs(): Promise<number> {
+  const rows = await query<{ id: string }>(
+    `UPDATE content_jobs
+        SET status = 'failed', current = NULL, finished_at = now(),
+            error = 'Interrupted — the server restarted mid-run.'
+      WHERE status = 'running' RETURNING id`,
+  );
+  return rows.length;
 }

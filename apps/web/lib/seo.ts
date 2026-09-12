@@ -1,4 +1,5 @@
 import { isBlogPath } from '@/lib/blog';
+import { isLocalizedLandingPath } from '@/lib/landing';
 
 /**
  * The two facts a crawler needs that nothing else in the app had to state: what
@@ -68,5 +69,7 @@ export function isNoindexPath(pathname: string): boolean {
   // Thirteen languages of it, at /blog and /<locale>/blog. Kept in lib/blog.ts
   // beside the path builders, so the matcher and the URLs cannot disagree.
   if (isBlogPath(pathname)) return false;
+  // The landing page in the twelve prefixed languages. `/` is on the list above.
+  if (isLocalizedLandingPath(pathname)) return false;
   return true;
 }

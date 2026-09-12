@@ -5,10 +5,20 @@ import { startScheduler } from './scheduler.ts';
 import { purgeExpiredSessions } from './services/auth.ts';
 import { purgeExpiredTokens } from './services/tokens.ts';
 import { authDescription, AUTH_HELP, hasSubscriptionAuth } from './ai/client.ts';
+import { reconcileAbandonedJobs } from './services/content.ts';
 
 await ensureDirectories();
 
 const app = await buildApp();
+
+/*
+ * A content batch still marked running is a lie left by the previous process —
+ * a deploy or a crash killed the loop between languages. The posts it had
+ * already written are safe, because each commits on its own; it is the row that
+ * is stale, and left alone it would tell the panel a run was in flight forever.
+ */
+const abandoned = await reconcileAbandonedJobs();
+if (abandoned > 0) app.log.warn(`marked ${abandoned} interrupted content batch(es) as failed`);
 
 // Expired rows are harmless but unbounded; clear them out periodically. Spent
 // reset and confirmation links go the same way, on the same schedule.

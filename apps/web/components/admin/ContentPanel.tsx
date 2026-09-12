@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import {
   LOCALES,
   LOCALE_ENGLISH_NAMES,
+  type ContentJob,
   type ContentPost,
   type Locale,
   type SuggestedTopic,
@@ -49,6 +50,13 @@ import { cn } from '@/lib/utils';
  * exercise in mouse mileage.
  */
 
+/**
+ * The run, as the server sees it.
+ *
+ * There is no client-side loop any more. The panel starts a job and polls this;
+ * refreshing the page, closing the tab or losing the network costs nothing,
+ * because the work is not happening here.
+ */
 type Busy = { topicId: string; locale: Locale | null } | null;
 
 /**
@@ -79,6 +87,8 @@ export function ContentPanel() {
   const [topics, setTopics] = useState<TopicWithPosts[] | null>(null);
   const [busy, setBusy] = useState<Busy>(null);
   const [thinking, setThinking] = useState(false);
+  const [job, setJob] = useState<ContentJob | null>(null);
+  const [lastJob, setLastJob] = useState<ContentJob | null>(null);
 
   /** Which languages are ticked, per topic. Keyed by topic so two cannot bleed. */
   const [picked, setPicked] = useState<Record<string, Set<Locale>>>({});
@@ -102,9 +112,38 @@ export function ContentPanel() {
     }
   }, []);
 
+  const pollJobs = useCallback(async () => {
+    try {
+      const { running, recent } = await api.admin.contentJobs();
+      setJob(running);
+      setLastJob(recent[0] ?? null);
+      return running;
+    } catch {
+      // A failed poll is not worth a toast — the next one is three seconds away.
+      return null;
+    }
+  }, []);
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void pollJobs();
+  }, [load, pollJobs]);
+
+  /*
+   * Poll while something is running, and once more after it stops so the chips
+   * reflect the last language written. Three seconds: the unit of work is a
+   * minute, so this is about twenty polls per language and costs nothing.
+   */
+  useEffect(() => {
+    if (!job) return;
+    const id = setInterval(() => {
+      void (async () => {
+        const running = await pollJobs();
+        if (!running) await load();
+      })();
+    }, 3000);
+    return () => clearInterval(id);
+  }, [job, pollJobs, load]);
 
   // ---- selection ------------------------------------------------------------
 
@@ -212,51 +251,33 @@ export function ContentPanel() {
   // ---- writing --------------------------------------------------------------
 
   /**
-   * The ticked languages, one after another.
+   * Hand the ticked languages to the server and stop caring what this tab does.
    *
-   * Sequential rather than parallel, and not for politeness: thirteen
-   * concurrent Opus turns on one subscription is how you find its rate limit.
-   *
-   * One failure does not end the run — a language can fail for its own reasons
-   * and the rest are still worth having. Two in a row does: that is the lane
-   * being unavailable, and grinding through eleven more is eleven more minutes
-   * of the same error.
+   * This used to be a loop in the browser, awaiting one request per language.
+   * It worked and it was wrong: a refresh killed the run, the languages already
+   * written survived only because each is its own request, and nothing on the
+   * screen remembered that nine more were supposed to follow.
    */
   async function writeSelected(topicId: string) {
     const wanted = LOCALES.filter((l) => selectionFor(topicId).has(l));
     if (wanted.length === 0) return;
-
-    let written = 0;
-    let failed = 0;
-    let consecutive = 0;
-
-    for (const locale of wanted) {
-      setBusy({ topicId, locale });
-      try {
-        await api.admin.writePost(topicId, locale);
-        written++;
-        consecutive = 0;
-        // Untick as each lands, so an interrupted run leaves exactly what is
-        // left still ticked.
-        untick(topicId, locale);
-      } catch (e) {
-        failed++;
-        consecutive++;
-        toast.error(`${LOCALE_ENGLISH_NAMES[locale]}: ${(e as Error).message}`);
-        if (consecutive >= 2) {
-          toast.error('Two in a row failed — stopping.');
-          break;
-        }
-      }
+    try {
+      setJob(await api.admin.writeBatch(topicId, wanted));
+      setSelection(topicId, []);
+    } catch (e) {
+      toast.error((e as Error).message);
     }
+  }
 
-    setBusy(null);
-    if (written > 0) {
-      toast.success(
-        `Wrote ${written} language${written === 1 ? '' : 's'}${failed ? `, ${failed} failed` : ''}`,
-      );
+  async function cancelJob() {
+    if (!job) return;
+    try {
+      await api.admin.cancelContentJob(job.id);
+      await pollJobs();
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message);
     }
-    await load();
   }
 
   async function write(topicId: string, locale: Locale) {
@@ -368,21 +389,102 @@ export function ContentPanel() {
         </div>
       </div>
 
-      {elapsed !== null && (
+      {job && (
+        <InsetGroup>
+          <div className="space-y-3 p-4">
+            <div className="flex items-center gap-3">
+              <Loader2 size={18} className="shrink-0 animate-spin" />
+              <div className="min-w-0 flex-1">
+                <p className="text-body font-semibold">
+                  Writing {job.current ? LOCALE_ENGLISH_NAMES[job.current] : 'the next language'} ·{' '}
+                  <span className="tabular-nums">
+                    {job.done.length + job.failed.length} of {job.locales.length}
+                  </span>
+                </p>
+                <p className="text-footnote text-muted-foreground mt-0.5">
+                  Running on the server — you can close this tab. About a minute each.
+                  {job.failed.length > 0 && ` ${job.failed.length} failed so far.`}
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={() => void cancelJob()}
+                className="h-9 shrink-0 rounded-full"
+              >
+                Stop
+              </Button>
+            </div>
+
+            {/* A bar rather than a spinner, because the useful question is how
+                much is left rather than whether anything is happening. */}
+            <div className="bg-card h-2 w-full overflow-hidden rounded-full">
+              <div
+                className="bg-[var(--protein-text)] h-full transition-[width] duration-500"
+                style={{
+                  width: `${Math.round(((job.done.length + job.failed.length) / job.locales.length) * 100)}%`,
+                }}
+              />
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {job.locales.map((locale) => (
+                <span
+                  key={locale}
+                  className={cn(
+                    'text-footnote inline-flex h-6 min-w-[2.5rem] items-center justify-center rounded-full border-2 px-2 font-semibold uppercase',
+                    job.done.includes(locale) &&
+                      'border-transparent bg-[var(--protein-text)] text-white',
+                    job.failed.includes(locale) && 'border-destructive text-destructive',
+                    job.current === locale && 'border-foreground',
+                    !job.done.includes(locale) &&
+                      !job.failed.includes(locale) &&
+                      job.current !== locale &&
+                      'border-border text-muted-foreground',
+                  )}
+                >
+                  {locale}
+                </span>
+              ))}
+            </div>
+          </div>
+        </InsetGroup>
+      )}
+
+      {/*
+        * What the last run did, once it is no longer running. Shown because a
+        * batch that stopped while the tab was closed would otherwise leave no
+        * trace but a gap in the chips.
+        */}
+      {!job && lastJob && lastJob.status !== 'done' && (
+        <InsetGroup>
+          <div className="p-4">
+            <p className="text-body font-semibold">
+              Last run {lastJob.status}
+              {lastJob.error ? ` — ${lastJob.error}` : ''}
+            </p>
+            <p className="text-footnote text-muted-foreground mt-0.5">
+              {lastJob.done.length} written, {lastJob.failed.length} failed, of{' '}
+              {lastJob.locales.length} asked for.
+            </p>
+          </div>
+        </InsetGroup>
+      )}
+
+      {elapsed !== null && !job && (
         <InsetGroup>
           <div className="flex items-center gap-3 p-4">
             <Loader2 size={18} className="shrink-0 animate-spin" />
             <div className="min-w-0">
               <p className="text-body font-semibold">
                 {busy
-                  ? `Writing ${busy.locale ? LOCALE_ENGLISH_NAMES[busy.locale] : 'the next language'}…`
+                  ? `Rewriting ${busy.locale ? LOCALE_ENGLISH_NAMES[busy.locale] : ''}…`
                   : suggested
                     ? 'Saving…'
                     : 'Choosing subjects…'}{' '}
                 <span className="text-muted-foreground tabular-nums">{elapsed}s</span>
               </p>
               <p className="text-footnote text-muted-foreground mt-0.5">
-                About a minute per article. Leave the tab open.
+                About a minute. Leave the tab open for this one.
               </p>
             </div>
           </div>
@@ -504,7 +606,7 @@ export function ContentPanel() {
       {topics.map(({ topic, posts }) => {
         const byLocale = new Map(posts.map((p) => [p.locale, p]));
         const missingLocales = LOCALES.filter((l) => !byLocale.has(l));
-        const working = busy?.topicId === topic.id;
+        const working = job?.topic_id === topic.id || busy?.topicId === topic.id;
         const selection = selectionFor(topic.id);
 
         const selectedPosts = [...selection]
@@ -545,7 +647,7 @@ export function ContentPanel() {
               <div className="flex flex-wrap gap-1.5">
                 {LOCALES.map((locale) => {
                   const post = byLocale.get(locale);
-                  const isBusy = working && busy?.locale === locale;
+                  const isBusy = job?.current === locale && job.topic_id === topic.id;
                   const isPicked = selection.has(locale);
                   return (
                     <span
@@ -597,13 +699,11 @@ export function ContentPanel() {
                 {selection.size > 0 && (
                   <Button
                     onClick={() => void writeSelected(topic.id)}
-                    disabled={working || thinking}
+                    disabled={job !== null || thinking}
                     className="h-9 gap-1.5 rounded-full"
                   >
                     {working ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
-                    {working
-                      ? `Writing ${busy?.locale ? LOCALE_ENGLISH_NAMES[busy.locale] : '…'}`
-                      : `Write ${selection.size}`}
+                    {working ? 'Writing…' : `Write ${selection.size}`}
                   </Button>
                 )}
 

@@ -2,12 +2,16 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { LOCALES, Locale, PostStatus, localeOf } from '@ct/shared';
 import { draftPost, suggestTopics } from '../ai/content.ts';
+import { startBatch } from '../services/content-runner.ts';
 import {
   claimedKeywords,
   createTopic,
   deleteTopic,
   markSuggestion,
+  recentJobs,
   rememberSuggestions,
+  requestCancel,
+  runningJob,
   suggestionMemory,
   editPost,
   getPost,
@@ -252,6 +256,40 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       request.log.error({ err: error, topic: topic.id, locale }, 'content draft failed');
       return reply.status(502).send({ error: (error as Error).message });
     }
+  });
+
+  /**
+   * Write several languages, on the server.
+   *
+   * Answers immediately with the job, because the work behind it is about a
+   * minute per language and an HTTP request is the wrong place to keep that.
+   * Progress is read back from `/admin/content/jobs`.
+   */
+  app.post('/admin/content/topics/:id/batch', async (request, reply) => {
+    const parsed = z
+      .object({ locales: z.array(Locale).min(1).max(LOCALES.length) })
+      .safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid request' });
+
+    const { job, refused } = await startBatch(
+      (request.params as any).id,
+      parsed.data.locales,
+      request.log,
+    );
+    if (!job) return reply.status(409).send({ error: refused });
+    return job;
+  });
+
+  /** Whatever is running, plus the last few, so a reloaded panel can catch up. */
+  app.get('/admin/content/jobs', async () => ({
+    running: await runningJob(),
+    recent: await recentJobs(),
+  }));
+
+  app.post('/admin/content/jobs/:id/cancel', async (request, reply) => {
+    const stopped = await requestCancel((request.params as any).id);
+    if (!stopped) return reply.status(409).send({ error: 'That job is not running.' });
+    return reply.status(204).send();
   });
 
   app.patch('/admin/content/posts/:id', async (request, reply) => {
