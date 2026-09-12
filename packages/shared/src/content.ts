@@ -118,5 +118,13 @@ export const SuggestedTopic = z.object({
    * choosing; it is never stored and never reaches a writer.
    */
   rationale: z.string().min(1).max(400),
+  /**
+   * How this differs from the nearest thing already considered.
+   *
+   * Asked for so the planner has to actually check rather than pattern-match a
+   * plausible-looking list, and shown to the editor so the check is auditable.
+   * Never stored and never reaches a writer.
+   */
+  distinct_from: z.string().min(1).max(400),
 });
 export type SuggestedTopic = z.infer<typeof SuggestedTopic>;

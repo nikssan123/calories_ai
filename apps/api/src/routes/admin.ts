@@ -3,8 +3,12 @@ import { z } from 'zod';
 import { LOCALES, Locale, PostStatus, localeOf } from '@ct/shared';
 import { draftPost, suggestTopics } from '../ai/content.ts';
 import {
+  claimedKeywords,
   createTopic,
   deleteTopic,
+  markSuggestion,
+  rememberSuggestions,
+  suggestionMemory,
   editPost,
   getPost,
   getTopic,
@@ -147,14 +151,39 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       .safeParse(request.body ?? {});
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid request' });
 
-    const existing = (await listTopics()).map((t) => t.topic.name);
+    /*
+     * Everything ever proposed, not merely everything currently accepted.
+     * Deleting a topic must not erase the memory that it was already thought
+     * of — clearing the table to start fresh is exactly when re-proposing the
+     * same eight would be most annoying and least noticed.
+     */
+    const seen = await suggestionMemory();
     try {
-      const { topics } = await suggestTopics(existing, parsed.data.count ?? 8);
+      const { topics } = await suggestTopics(seen, parsed.data.count ?? 8);
+      // Recorded as proposed the moment they are shown, so a suggestion the
+      // editor simply closes the tab on still counts as seen.
+      await rememberSuggestions(topics);
       return { topics };
     } catch (error) {
       request.log.error({ err: error }, 'topic suggestion failed');
       return reply.status(502).send({ error: (error as Error).message });
     }
+  });
+
+  /**
+   * Turn a suggestion down.
+   *
+   * Worth a route of its own rather than silently forgetting: a rejection is
+   * the strongest signal the planner can be given, and the whole reason the
+   * same subject kept coming back was that nobody was writing it down.
+   */
+  app.post('/admin/content/suggestions/reject', async (request, reply) => {
+    const parsed = z
+      .object({ names: z.array(z.string().min(1)).min(1).max(24) })
+      .safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid request' });
+    for (const name of parsed.data.names) await markSuggestion(name, 'rejected');
+    return reply.status(204).send();
   });
 
   /** Accept one or more suggestions, or a topic typed by hand. */
@@ -163,6 +192,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       .object({ name: z.string().min(1).max(200), brief: z.string().min(1).max(4000) })
       .safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid topic' });
+    await markSuggestion(parsed.data.name, 'accepted');
     return createTopic(parsed.data.name, parsed.data.brief);
   });
 
@@ -198,7 +228,11 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     }
 
     try {
-      const { post, model, costUsd } = await draftPost(topic, locale);
+      const { post, model, costUsd } = await draftPost(
+        topic,
+        locale,
+        await claimedKeywords(locale),
+      );
       const saved = await upsertPost({
         topicId: topic.id,
         locale,

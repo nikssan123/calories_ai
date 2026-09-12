@@ -287,3 +287,92 @@ export async function publicSitemap(): Promise<
     updated_at: new Date(row.updated_at).toISOString(),
   }));
 }
+
+// ---- What the planner has already thought of --------------------------------
+
+/**
+ * Every subject offered, whatever became of it.
+ *
+ * Deliberately not derived from `content_topics`: that table holds what is
+ * currently accepted, and the question the planner needs answered is what has
+ * already been *considered*. A deleted topic and a rejected suggestion are both
+ * things not to propose again, and neither leaves a trace in the accepted set.
+ */
+export async function rememberSuggestions(
+  proposals: { name: string; brief: string }[],
+): Promise<void> {
+  if (proposals.length === 0) return;
+  await query(
+    `INSERT INTO content_suggestions (name, brief)
+     SELECT * FROM unnest($1::text[], $2::text[])`,
+    [proposals.map((p) => p.name), proposals.map((p) => p.brief)],
+  );
+}
+
+export async function markSuggestion(
+  name: string,
+  status: 'accepted' | 'rejected',
+): Promise<void> {
+  await query(
+    `UPDATE content_suggestions SET status = $2
+      WHERE id = (SELECT id FROM content_suggestions
+                   WHERE name = $1 AND status = 'proposed'
+                   ORDER BY created_at DESC LIMIT 1)`,
+    [name, status],
+  );
+}
+
+/**
+ * The memory handed to the planner: everything it should not propose again.
+ *
+ * Two sources, unioned, and the split is the whole design:
+ *
+ *   * **Topics that exist right now.** Obvious, and the only thing the first
+ *     version looked at.
+ *   * **Suggestions recorded as offered or turned down.** These outlive the
+ *     screen they appeared on, so unticking one is a decision that sticks
+ *     rather than a preference the next click forgets.
+ *
+ * What is deliberately *not* in here is a topic that was created and then
+ * deleted. Deleting is how you say you do not want something, including
+ * wanting it out of the way — reviving it as a permanent veto would make
+ * clearing the table a thing you could not undo by clearing the table.
+ *
+ * The brief travels with the name because names hide overlap: three subjects
+ * can read as three and be one, and only the substance shows that.
+ *
+ * Capped, because this goes into a prompt and has to stay one. Sixty is several
+ * months of planning at the rate a blog like this moves.
+ */
+export async function suggestionMemory(
+  limit = 60,
+): Promise<{ name: string; brief: string; status: string }[]> {
+  const rows = await query<{ name: string; brief: string; status: string }>(
+    `SELECT name, brief, status, created_at FROM (
+       SELECT name, brief, 'live'::text AS status, created_at FROM content_topics
+       UNION ALL
+       SELECT name, brief, status, created_at FROM content_suggestions
+       WHERE status <> 'accepted'
+     ) memory
+     ORDER BY created_at DESC
+     LIMIT $1`,
+    [limit],
+  );
+  return rows;
+}
+
+/**
+ * Every target query already claimed in one language.
+ *
+ * The real duplicate is not two topics that sound alike — it is two articles
+ * chasing the same search, which is two of your own pages competing and each
+ * ranking worse for it. The `keyword` column has recorded what each locale
+ * chose since the library shipped; this is what makes it useful.
+ */
+export async function claimedKeywords(locale: Locale): Promise<string[]> {
+  const rows = await query<{ keyword: string }>(
+    `SELECT keyword FROM content_posts WHERE locale = $1 AND status <> 'binned'`,
+    [locale],
+  );
+  return rows.map((r) => r.keyword);
+}

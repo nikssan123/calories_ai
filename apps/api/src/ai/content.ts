@@ -89,9 +89,26 @@ FORMAT
 Markdown. No H1 — the page renders the title itself. Start at "##".
 No front matter, no code fences around the whole thing, no images.`;
 
-function taskPrompt(topic: ContentTopic, locale: Locale): string {
+function taskPrompt(topic: ContentTopic, locale: Locale, claimed: string[]): string {
   const language = LOCALE_ENGLISH_NAMES[locale];
-  return `Write one article in ${language}.
+  /*
+   * The queries this language has already claimed.
+   *
+   * This is the duplicate that actually costs something. Two topics that merely
+   * sound alike are an editorial annoyance; two articles chasing the same
+   * search are two of your own pages competing for one result, and both rank
+   * worse than either would alone. Per locale, because the whole point of
+   * writing each language separately is that they choose different queries.
+   */
+  const taken =
+    claimed.length > 0
+      ? `\n\nQUERIES THIS LANGUAGE HAS ALREADY CLAIMED — pick a different one. Two of
+our own articles chasing one search compete with each other and both lose:\n${claimed
+          .map((k) => `- ${k}`)
+          .join('\n')}`
+      : '';
+
+  return `Write one article in ${language}.${taken}
 
 SUBJECT
 ${topic.name}
@@ -133,7 +150,11 @@ export interface DraftResult {
  * Draft one post. Throws rather than returning a partial: a half-written
  * article is not worth storing, and the caller is a queue that can try again.
  */
-export async function draftPost(topic: ContentTopic, locale: Locale): Promise<DraftResult> {
+export async function draftPost(
+  topic: ContentTopic,
+  locale: Locale,
+  claimed: string[] = [],
+): Promise<DraftResult> {
   /*
    * A tool context with no user in it.
    *
@@ -167,7 +188,7 @@ export async function draftPost(topic: ContentTopic, locale: Locale): Promise<Dr
     // the language ride in the user turn.
     staticSystemPrompt: SYSTEM_PROMPT,
     dynamicSystemPrompt: '',
-    text: taskPrompt(topic, locale),
+    text: taskPrompt(topic, locale, claimed),
     photo: null,
     tools: NO_TOOLS,
     toolNames: [],
@@ -258,13 +279,40 @@ language chooses its own search query from your brief. So the brief must
 describe the *substance* — what to cover, what angle, what to avoid — and must
 not prescribe an English phrasing, an English example, or a specific title.`;
 
-function topicTaskPrompt(existing: string[], count: number): string {
+export interface SeenSubject {
+  name: string;
+  brief: string;
+  status: string;
+}
+
+function topicTaskPrompt(seen: SeenSubject[], count: number): string {
+  /*
+   * Names and briefs, not names alone.
+   *
+   * Overlap does not show up in a title. "Why a calculated maintenance number
+   * rarely matches the scale", "What a weight-loss plateau usually is" and
+   * "Weekend intake versus weekday intake" read as three subjects and are
+   * three windows onto one, and a planner given only the three names cannot
+   * see that. The brief is where the substance is, so the brief goes up.
+   */
   const already =
-    existing.length > 0
-      ? `\n\nALREADY COVERED — do not propose these again, or anything that would\nsubstantially overlap them:\n${existing.map((n) => `- ${n}`).join('\n')}`
+    seen.length > 0
+      ? `\n\nALREADY CONSIDERED — every one of these has been put in front of the
+editor before. Do not propose any of them again, and do not propose anything
+that would substantially overlap one. A subject marked "rejected" was seen and
+turned down: treat that as a stronger signal than the others, and one marked
+"live" is a subject that already exists on the blog.\n\n${seen
+          .map((s) => `- [${s.status}] ${s.name}\n    ${s.brief.replace(/\s+/g, ' ').slice(0, 240)}`)
+          .join('\n')}`
       : '';
 
   return `Propose ${count} subjects.${already}
+
+Two subjects overlap when a reader who has read one would find little new in
+the other, whatever the titles say. Check each of yours against the list above
+*and against the others you are proposing in this same reply* — a batch of
+eight that is really three subjects said five ways is a failure, and it is the
+usual one.
 
 For each, give:
 - "name": the subject as an internal label, in English, under 90 characters.
@@ -273,10 +321,13 @@ For each, give:
   no title, no keyword.
 - "rationale": one sentence on why this is worth writing, for the person
   deciding whether to commission it.
+- "distinct_from": one sentence naming the closest thing already considered or
+  proposed alongside it, and what a reader would get here that they would not
+  get there. If nothing is close, say so plainly.
 
 Reply with nothing but a single JSON object:
 
-{ "topics": [ { "name": "...", "brief": "...", "rationale": "..." } ] }`;
+{ "topics": [ { "name": "...", "brief": "...", "rationale": "...", "distinct_from": "..." } ] }`;
 }
 
 /**
@@ -288,7 +339,7 @@ Reply with nothing but a single JSON object:
  * and cut down, and agreeing to one of these is agreeing to thirteen articles.
  */
 export async function suggestTopics(
-  existing: string[],
+  seen: SeenSubject[],
   count = 8,
 ): Promise<{ topics: SuggestedTopic[]; model: string | null; costUsd: number }> {
   const toolContext = {
@@ -313,7 +364,7 @@ export async function suggestTopics(
     model: MODELS.content_plan,
     staticSystemPrompt: TOPIC_SYSTEM_PROMPT,
     dynamicSystemPrompt: '',
-    text: topicTaskPrompt(existing, count),
+    text: topicTaskPrompt(seen, count),
     photo: null,
     tools: NO_TOOLS,
     toolNames: [],

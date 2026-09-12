@@ -1137,6 +1137,13 @@ export function createApiClient({
           body: JSON.stringify(count ? { count } : {}),
         }),
 
+      /** Record that these suggestions were turned down, so they stop coming back. */
+      rejectSuggestions: (names: string[]) =>
+        request<void>('/admin/content/suggestions/reject', {
+          method: 'POST',
+          body: JSON.stringify({ names }),
+        }),
+
       createTopic: (name: string, brief: string) =>
         request<ContentTopic>('/admin/content/topics', {
           method: 'POST',

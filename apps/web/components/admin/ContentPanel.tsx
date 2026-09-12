@@ -144,21 +144,46 @@ export function ContentPanel() {
     }
   }
 
+  /**
+   * Take the ticked ones — and record the rest as turned down.
+   *
+   * The unticked half is the more valuable signal. Silently dropping it is why
+   * the same subject kept reappearing every time the button was pressed.
+   */
   async function acceptSuggested() {
     if (!suggested) return;
     const wanted = suggested.filter((_, i) => chosen.has(i));
+    const refused = suggested.filter((_, i) => !chosen.has(i));
     if (wanted.length === 0) return;
     setThinking(true);
     try {
       for (const topic of wanted) await api.admin.createTopic(topic.name, topic.brief);
+      if (refused.length > 0) await api.admin.rejectSuggestions(refused.map((t) => t.name));
       setSuggested(null);
       setChosen(new Set());
-      toast.success(`Added ${wanted.length} topic${wanted.length === 1 ? '' : 's'}`);
+      toast.success(
+        `Added ${wanted.length}${refused.length ? `, turned down ${refused.length}` : ''}`,
+      );
       await load();
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
       setThinking(false);
+    }
+  }
+
+  /** Discarding the whole batch is a rejection of all of it. */
+  async function discardSuggested() {
+    const all = suggested ?? [];
+    setSuggested(null);
+    setChosen(new Set());
+    if (all.length > 0) {
+      try {
+        await api.admin.rejectSuggestions(all.map((t) => t.name));
+      } catch {
+        // Not worth a toast: the batch is gone from the screen either way, and
+        // the worst case is the planner offers one of them again.
+      }
     }
   }
 
@@ -405,7 +430,7 @@ export function ContentPanel() {
               </h3>
               <button
                 type="button"
-                onClick={() => setSuggested(null)}
+                onClick={() => void discardSuggested()}
                 className="text-footnote text-muted-foreground underline underline-offset-2"
               >
                 Discard
@@ -434,6 +459,12 @@ export function ContentPanel() {
                       </span>
                       <span className="text-footnote text-muted-foreground mt-1 block">
                         {topic.brief}
+                      </span>
+                      {/* The planner's own answer to "how is this not one of
+                          the others" — the sentence that makes the overlap
+                          check auditable rather than assumed. */}
+                      <span className="text-footnote text-muted-foreground mt-1 block">
+                        <span className="font-semibold">Distinct:</span> {topic.distinct_from}
                       </span>
                     </span>
                   </label>
