@@ -2,9 +2,15 @@
 
   python store/tools/publish-listings.py            # stage, validate, change nothing
   python store/tools/publish-listings.py --commit   # ...and commit, which sends them for review
+  python store/tools/publish-listings.py --only el-GR,hr,sr --commit   # just those three
 
 Never run while another Play upload is in flight: one edit per app, and a second
 one deletes the first (see the play-edits-are-exclusive note).
+
+Committing is not a quiet save. Managed publishing is off, so a commit puts the
+listings straight into review, and if a review is already running it cancels and
+restarts that one — the whole batch, release included, goes back to the start of
+the queue. Use --only to keep a re-push small, and expect the clock to reset.
 """
 import json, sys, warnings, pathlib
 warnings.filterwarnings('ignore')
@@ -23,7 +29,14 @@ EN_NOTES = (
     "app, the weekly review and every email. The app starts in your phone's language; change it "
     "any time under Settings."
 )
-CODES = ['bg', 'ro', 'uk', 'sr', 'hr', 'cs-CZ', 'sk', 'hu-HU', 'el-GR', 'de-DE', 'es-ES', 'fr-FR']
+ALL_CODES = ['bg', 'ro', 'uk', 'sr', 'hr', 'cs-CZ', 'sk', 'hu-HU', 'el-GR', 'de-DE', 'es-ES', 'fr-FR']
+CODES = list(ALL_CODES)
+if '--only' in sys.argv:
+    want = sys.argv[sys.argv.index('--only') + 1].split(',')
+    unknown = [c for c in want if c not in ALL_CODES]
+    if unknown:
+        sys.exit(f'--only: not a listing language: {", ".join(unknown)}')
+    CODES = [c for c in ALL_CODES if c in want]
 
 creds = service_account.Credentials.from_service_account_file(
     M + 'play-service-account.json', scopes=['https://www.googleapis.com/auth/androidpublisher'])
@@ -54,8 +67,11 @@ try:
     # The alpha draft carries version 41 already; give it release notes in every
     # language, so promoting it to production in the Console brings them along
     # rather than asking for twelve pastes into the release form.
+    # Always every language, never the --only subset: this PUT replaces the
+    # draft's release notes wholesale, so filtering here would quietly drop the
+    # languages the run was not asked to touch.
     notes = [{'language': 'en-GB', 'text': EN_NOTES}]
-    for code in CODES:
+    for code in ALL_CODES:
         pack = json.loads((STORE / 'listings' / f'{code}.json').read_text())
         notes.append({'language': code, 'text': pack['releaseNotes']})
     track = {'track': 'alpha', 'releases': [

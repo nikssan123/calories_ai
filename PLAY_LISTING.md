@@ -454,3 +454,23 @@ only the **production track** it cannot touch (see the note in
 production stays a Console job. Never run it while another Play upload is in
 flight: one edit per app, and a second one deletes the first.
 
+`--only el-GR,hr,sr` narrows the run to those languages, for fixing a few
+without rewriting all twelve. The release notes are still written for every
+language whatever the filter says, because that PUT replaces the draft's notes
+wholesale and a filtered list would drop the rest.
+
+**A commit is a publish, not a save.** Managed publishing is off, so committing
+the edit sends the listings to review by itself — no Console click — and they go
+live on approval. If a review is already running, committing cancels and
+restarts it, taking everything pending back to the start of the queue. On
+2026-09-12 the twelve listings were live within the hour while version 41 was
+still in review beside them.
+
+**Check frame 2 before pushing.** The captures are timing-dependent, and el-GR,
+hr and sr once shipped a picture of the loading skeleton — a card of blank
+pills, approved by Google without comment, live on the store. A good frame is
+around 240–265 KB; a skeleton is around 50 KB, which is the cheapest check
+there is:
+
+    ls -l store/screenshots-localised/*/02-correct.png
+
