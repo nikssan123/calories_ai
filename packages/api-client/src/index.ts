@@ -93,6 +93,7 @@ import type {
   ContentTopic,
   Locale,
   PostStatus,
+  SuggestedTopic,
   TopicWithPosts,
 } from '@ct/shared';
 import { SESSION_TRANSPORT_HEADER } from '@ct/shared';
@@ -1128,6 +1129,13 @@ export function createApiClient({
       // Opus articles and showing nothing until the last one lands.
 
       content: () => request<{ topics: TopicWithPosts[] }>('/admin/content'),
+
+      /** Ask the model for subjects. Writes nothing — the panel submits them. */
+      suggestTopics: (count?: number) =>
+        request<{ topics: SuggestedTopic[] }>('/admin/content/topics/suggest', {
+          method: 'POST',
+          body: JSON.stringify(count ? { count } : {}),
+        }),
 
       createTopic: (name: string, brief: string) =>
         request<ContentTopic>('/admin/content/topics', {

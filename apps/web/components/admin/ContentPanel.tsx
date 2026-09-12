@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Eye, Loader2, Plus, RefreshCw, Trash2, Wand2 } from 'lucide-react';
+import { Check, Eye, Lightbulb, Loader2, Plus, RefreshCw, Trash2, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   LOCALES,
   LOCALE_ENGLISH_NAMES,
   type ContentPost,
   type Locale,
+  type SuggestedTopic,
   type TopicWithPosts,
 } from '@ct/shared';
 import { api } from '@/lib/api';
@@ -40,6 +41,14 @@ export function ContentPanel() {
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [brief, setBrief] = useState('');
+  /*
+   * Suggestions live here and nowhere else until they are submitted. The model
+   * proposes, nothing is written, and the list is cut down before any of it
+   * becomes work — one topic is thirteen articles.
+   */
+  const [suggested, setSuggested] = useState<SuggestedTopic[] | null>(null);
+  const [chosen, setChosen] = useState<Set<number>>(new Set());
+  const [thinking, setThinking] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -52,6 +61,39 @@ export function ContentPanel() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function suggest() {
+    setThinking(true);
+    try {
+      const { topics } = await api.admin.suggestTopics();
+      setSuggested(topics);
+      // Everything ticked, because the common case is "these are fine" and the
+      // work is in removing the one that is not.
+      setChosen(new Set(topics.map((_, i) => i)));
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setThinking(false);
+    }
+  }
+
+  async function acceptSuggested() {
+    if (!suggested) return;
+    const picked = suggested.filter((_, i) => chosen.has(i));
+    if (picked.length === 0) return;
+    setThinking(true);
+    try {
+      for (const topic of picked) await api.admin.createTopic(topic.name, topic.brief);
+      setSuggested(null);
+      setChosen(new Set());
+      toast.success(`Added ${picked.length} topic${picked.length === 1 ? '' : 's'}`);
+      await load();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setThinking(false);
+    }
+  }
 
   async function addTopic() {
     if (!name.trim() || !brief.trim()) return;
@@ -146,9 +188,17 @@ export function ContentPanel() {
             <RefreshCw size={14} />
             Refresh
           </Button>
-          <Button onClick={() => setAdding((v) => !v)} className="h-9 gap-1.5 rounded-full">
+          <Button
+            variant="secondary"
+            onClick={() => setAdding((v) => !v)}
+            className="h-9 gap-1.5 rounded-full"
+          >
             <Plus size={14} />
-            Topic
+            By hand
+          </Button>
+          <Button onClick={() => void suggest()} disabled={thinking} className="h-9 gap-1.5 rounded-full">
+            {thinking ? <Loader2 size={14} className="animate-spin" /> : <Lightbulb size={14} />}
+            Suggest topics
           </Button>
         </div>
       </div>
@@ -181,9 +231,77 @@ export function ContentPanel() {
         </InsetGroup>
       )}
 
-      {topics.length === 0 && (
+      {suggested && (
+        <InsetGroup>
+          <div className="space-y-3 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-body font-bold">
+                {suggested.length} suggestions — untick anything you do not want
+              </h3>
+              <button
+                type="button"
+                onClick={() => setSuggested(null)}
+                className="text-footnote text-muted-foreground underline underline-offset-2"
+              >
+                Discard
+              </button>
+            </div>
+
+            <ul className="space-y-3">
+              {suggested.map((topic, i) => (
+                <li key={i}>
+                  <label className="flex cursor-pointer items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={chosen.has(i)}
+                      onChange={(e) => {
+                        const next = new Set(chosen);
+                        if (e.target.checked) next.add(i);
+                        else next.delete(i);
+                        setChosen(next);
+                      }}
+                      className="mt-1 size-4 shrink-0"
+                    />
+                    <span className="min-w-0">
+                      <span className="text-body block font-semibold">{topic.name}</span>
+                      <span className="text-footnote text-muted-foreground mt-0.5 block italic">
+                        {topic.rationale}
+                      </span>
+                      <span className="text-footnote text-muted-foreground mt-1 block">
+                        {topic.brief}
+                      </span>
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => void suggest()}
+                disabled={thinking}
+                className="h-9 gap-1.5 rounded-full"
+              >
+                {thinking ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                Again
+              </Button>
+              <Button
+                onClick={() => void acceptSuggested()}
+                disabled={thinking || chosen.size === 0}
+                className="h-9 rounded-full"
+              >
+                Add {chosen.size}
+              </Button>
+            </div>
+          </div>
+        </InsetGroup>
+      )}
+
+      {topics.length === 0 && !suggested && (
         <p className="text-body text-muted-foreground py-8 text-center">
-          No topics yet. A topic is a subject; each language writes its own article from it.
+          No topics yet. Press <span className="font-semibold">Suggest topics</span> and the model
+          proposes some; each language then writes its own article from the one you keep.
         </p>
       )}
 

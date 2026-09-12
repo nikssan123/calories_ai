@@ -1,4 +1,11 @@
-import { DraftedPost, LOCALE_ENGLISH_NAMES, type ContentTopic, type Locale } from '@ct/shared';
+import {
+  DraftedPost,
+  LOCALE_ENGLISH_NAMES,
+  SuggestedTopic,
+  type ContentTopic,
+  type Locale,
+} from '@ct/shared';
+import { z } from 'zod';
 import { MODELS } from './client.ts';
 import { createProvider, type AgentRequest } from './providers/index.ts';
 
@@ -152,7 +159,15 @@ export async function draftPost(topic: ContentTopic, locale: Locale): Promise<Dr
     history: [],
     readOnly: true,
     toolset: 'journal',
-    maxTurns: 1,
+    /*
+     * Four, for a job that makes one request and needs no tools at all.
+     *
+     * A turn is not a message here — the Agent SDK counts its own steps, and on
+     * a reasoning model the thinking that precedes the answer spends them. At 1
+     * this returned "Reached maximum number of turns" instead of a topic list.
+     * Four is slack, not budget: there is nothing for it to loop on.
+     */
+    maxTurns: 4,
   };
 
   const outcome = await provider.run(request, null);
@@ -173,26 +188,149 @@ export async function draftPost(topic: ContentTopic, locale: Locale): Promise<Dr
  * past that is a real failure and throws.
  */
 export function parseDraft(text: string): DraftedPost {
-  const trimmed = text.trim();
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const candidate = fenced ? fenced[1]! : trimmed;
-
-  // The first `{` to the last `}`, for the case where a sentence of preamble
-  // survived the instruction not to write one.
-  const start = candidate.indexOf('{');
-  const end = candidate.lastIndexOf('}');
-  if (start === -1 || end <= start) throw new Error('The writer did not return JSON.');
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(candidate.slice(start, end + 1));
-  } catch {
-    throw new Error('The writer returned something that is not valid JSON.');
-  }
-
-  const result = DraftedPost.safeParse(parsed);
+  const result = DraftedPost.safeParse(extractJson(text));
   if (!result.success) {
     throw new Error(`The writer's JSON is the wrong shape: ${result.error.issues[0]?.message}`);
   }
   return result.data;
+}
+
+/** The first `{` to the last `}`, fence or no fence, preamble or none. */
+function extractJson(text: string): unknown {
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const candidate = fenced ? fenced[1]! : trimmed;
+
+  const start = candidate.indexOf('{');
+  const end = candidate.lastIndexOf('}');
+  if (start === -1 || end <= start) throw new Error('The model did not return JSON.');
+
+  try {
+    return JSON.parse(candidate.slice(start, end + 1));
+  } catch {
+    throw new Error('The model returned something that is not valid JSON.');
+  }
+}
+
+// ---- Choosing what to write about -------------------------------------------
+
+const TOPIC_SYSTEM_PROMPT = `You plan the editorial calendar for the blog of Day
+So Far, a calorie-tracking app where you describe a meal in plain language
+instead of searching a food database. It also learns your real maintenance
+intake from what you log against what the scale does, rather than trusting a
+formula.
+
+Your job is to propose subjects worth writing about. A good one:
+
+- Answers a question people genuinely type into a search engine. Not a theme —
+  a question. "Why did my weight go up overnight" is a subject; "Nutrition and
+  wellness" is not.
+- Can be answered well by someone who understands food logging and arithmetic,
+  without clinical expertise and without citing studies.
+- Is something this product has a real perspective on. The best subjects are the
+  ones where the honest answer is more interesting than the popular one.
+- Is not a brochure. If the only way to answer it is "use our app", it is a bad
+  subject.
+
+Avoid, always:
+- Anything requiring medical advice, or aimed at a named condition.
+- Anything aimed at eating as little as possible, or at rapid weight loss.
+- Subjects that need invented statistics or studies to be worth reading.
+- Near-duplicates of each other, or of what already exists.
+
+Each subject will be written thirteen times, once per language, and each
+language chooses its own search query from your brief. So the brief must
+describe the *substance* — what to cover, what angle, what to avoid — and must
+not prescribe an English phrasing, an English example, or a specific title.`;
+
+function topicTaskPrompt(existing: string[], count: number): string {
+  const already =
+    existing.length > 0
+      ? `\n\nALREADY COVERED — do not propose these again, or anything that would\nsubstantially overlap them:\n${existing.map((n) => `- ${n}`).join('\n')}`
+      : '';
+
+  return `Propose ${count} subjects.${already}
+
+For each, give:
+- "name": the subject as an internal label, in English, under 90 characters.
+- "brief": 3-6 sentences describing what the article should cover, what angle to
+  take, and anything to avoid. Substance only — no English phrasings to reuse,
+  no title, no keyword.
+- "rationale": one sentence on why this is worth writing, for the person
+  deciding whether to commission it.
+
+Reply with nothing but a single JSON object:
+
+{ "topics": [ { "name": "...", "brief": "...", "rationale": "..." } ] }`;
+}
+
+/**
+ * Ask for subjects rather than being handed them.
+ *
+ * Same lane and the same reasoning as `draftPost`: this is the site's own work,
+ * not anybody's turn, so it runs on the subscription whatever the deployment is
+ * on. Nothing here is written to the database — a suggestion is a list to read
+ * and cut down, and agreeing to one of these is agreeing to thirteen articles.
+ */
+export async function suggestTopics(
+  existing: string[],
+  count = 8,
+): Promise<{ topics: SuggestedTopic[]; model: string | null; costUsd: number }> {
+  const toolContext = {
+    userId: '',
+    ctx: { timezone: 'UTC', dayStartHour: 0 },
+    now: new Date(),
+    photoId: null,
+    actions: [],
+    units: 'metric' as const,
+  };
+
+  const provider = createProvider(toolContext as never, 'anthropic');
+  const authError = provider.checkAuth();
+  if (authError) {
+    throw new Error(
+      `The content pipeline runs on the Claude Code subscription and it is not signed in: ${authError}`,
+    );
+  }
+
+  const request: AgentRequest = {
+    kind: 'content',
+    model: MODELS.content,
+    staticSystemPrompt: TOPIC_SYSTEM_PROMPT,
+    dynamicSystemPrompt: '',
+    text: topicTaskPrompt(existing, count),
+    photo: null,
+    tools: NO_TOOLS,
+    toolNames: [],
+    history: [],
+    readOnly: true,
+    toolset: 'journal',
+    /*
+     * Four, for a job that makes one request and needs no tools at all.
+     *
+     * A turn is not a message here — the Agent SDK counts its own steps, and on
+     * a reasoning model the thinking that precedes the answer spends them. At 1
+     * this returned "Reached maximum number of turns" instead of a topic list.
+     * Four is slack, not budget: there is nothing for it to loop on.
+     */
+    maxTurns: 4,
+  };
+
+  const outcome = await provider.run(request, null);
+  if (outcome.error) throw new Error(outcome.error);
+
+  return {
+    topics: parseTopics(outcome.text),
+    model: outcome.model ?? null,
+    costUsd: outcome.costUsd,
+  };
+}
+
+export function parseTopics(text: string): SuggestedTopic[] {
+  const parsed = extractJson(text);
+  const result = z.object({ topics: z.array(SuggestedTopic).min(1) }).safeParse(parsed);
+  if (!result.success) {
+    throw new Error(`The planner's JSON is the wrong shape: ${result.error.issues[0]?.message}`);
+  }
+  return result.data.topics;
 }

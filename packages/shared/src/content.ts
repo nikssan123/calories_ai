@@ -102,3 +102,21 @@ export const DraftedPost = z.object({
   body_md: z.string().min(1),
 });
 export type DraftedPost = z.infer<typeof DraftedPost>;
+
+/**
+ * A topic the model proposed, before anybody has agreed to it.
+ *
+ * Not a `ContentTopic`: it has no id and no row. The suggestion step exists so
+ * the list can be read and cut down before any of it becomes work — thirteen
+ * articles is what agreeing to one of these costs.
+ */
+export const SuggestedTopic = z.object({
+  name: z.string().min(1).max(200),
+  brief: z.string().min(1).max(4000),
+  /**
+   * Why this one is worth writing, in a sentence. Purely for the person
+   * choosing; it is never stored and never reaches a writer.
+   */
+  rationale: z.string().min(1).max(400),
+});
+export type SuggestedTopic = z.infer<typeof SuggestedTopic>;

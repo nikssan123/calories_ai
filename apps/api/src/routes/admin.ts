@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { LOCALES, Locale, PostStatus, localeOf } from '@ct/shared';
-import { draftPost } from '../ai/content.ts';
+import { draftPost, suggestTopics } from '../ai/content.ts';
 import {
   createTopic,
   deleteTopic,
@@ -133,6 +133,31 @@ export async function registerAdminRoutes(app: FastifyInstance) {
 
   app.get('/admin/content', async () => ({ topics: await listTopics() }));
 
+  /**
+   * Ask for subjects instead of thinking of them.
+   *
+   * Returns a list and writes nothing: agreeing to a topic is agreeing to
+   * thirteen articles, so the list is meant to be read and cut down first. The
+   * names already in the table go up with the request, so the planner does not
+   * propose the same thing twice.
+   */
+  app.post('/admin/content/topics/suggest', async (request, reply) => {
+    const parsed = z
+      .object({ count: z.number().int().min(1).max(12).optional() })
+      .safeParse(request.body ?? {});
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid request' });
+
+    const existing = (await listTopics()).map((t) => t.topic.name);
+    try {
+      const { topics } = await suggestTopics(existing, parsed.data.count ?? 8);
+      return { topics };
+    } catch (error) {
+      request.log.error({ err: error }, 'topic suggestion failed');
+      return reply.status(502).send({ error: (error as Error).message });
+    }
+  });
+
+  /** Accept one or more suggestions, or a topic typed by hand. */
   app.post('/admin/content/topics', async (request, reply) => {
     const parsed = z
       .object({ name: z.string().min(1).max(200), brief: z.string().min(1).max(4000) })
