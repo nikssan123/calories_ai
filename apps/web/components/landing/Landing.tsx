@@ -407,6 +407,25 @@ function Header({ copy, locale, start }: { copy: LandingCopy; locale: Locale; st
               {link.label}
             </a>
           ))}
+          {/*
+            * The two that leave the page, grouped after the four that do not.
+            *
+            * The blog is the only thing this site publishes that a stranger
+            * might arrive for on its own, and the footer was the only way to
+            * it — which is a long way down a page this long. Its label is
+            * `footer.blog` rather than a `nav.blog` beside it: it is the same
+            * word in the same language, and a second copy of it in thirteen
+            * files is thirteen chances for the two to drift apart.
+            *
+            * Per locale, so a visitor reading `/bg` goes to `/bg/blog` rather
+            * than being dropped into English.
+            */}
+          <Link
+            href={blogIndexPath(locale)}
+            className="hover:text-foreground transition-colors"
+          >
+            {copy.footer.blog}
+          </Link>
           {/* The one link on this page that leads to a sign-in: the coach's
               door, which is the only one a visitor can actually open. */}
           <a href="/login?coach=1" className="hover:text-foreground transition-colors">
