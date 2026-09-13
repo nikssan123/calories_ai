@@ -46,6 +46,9 @@ export * from './body.ts';
 /** What you pick up, and the rows that mean "this muscle, exercise unstated". */
 export * from './equipment.ts';
 
+/** How many camera frames have to agree on a barcode before it is looked up. */
+export * from './scan.ts';
+
 export const MEALS = ['breakfast', 'lunch', 'dinner', 'snack'] as const;
 export const Meal = z.enum(MEALS);
 export type Meal = z.infer<typeof Meal>;

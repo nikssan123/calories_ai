@@ -6,9 +6,11 @@ import { toast } from 'sonner';
 import {
   type BarcodeProduct,
   type ChatMessage,
+  type ReadStreak,
   type UnitSystem,
   GRAMS_PER_OZ,
   SERVING_STEPS,
+  agreeRead,
   formatMass,
   formatNumber,
   formatServings,
@@ -236,6 +238,9 @@ export function BarcodeScanner({
 
     let live = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    // Frames that agree on a code, since one frame can be a misread with a
+    // valid check digit. Fresh per loop, so a return to the camera starts over.
+    let streak: ReadStreak | null = null;
 
     (async () => {
       try {
@@ -264,9 +269,13 @@ export function BarcodeScanner({
           // A repeat keeps the camera running rather than tearing it down for a
           // lookup that would be thrown away.
           if (code && !justRead(code)) {
-            stopCamera();
-            void resolve(code);
-            return;
+            const read = agreeRead(streak, code);
+            streak = read.streak;
+            if (read.agreed) {
+              stopCamera();
+              void resolve(code);
+              return;
+            }
           }
           timer = setTimeout(() => void step(), FRAME_MS);
         };

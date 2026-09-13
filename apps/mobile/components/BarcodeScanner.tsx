@@ -14,7 +14,16 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import type { BarcodeProduct, ChatMessage, UnitSystem } from '@ct/shared';
-import { GRAMS_PER_OZ, SERVING_STEPS, formatMass, formatNumber, formatServings, massUnit } from '@ct/shared';
+import {
+  GRAMS_PER_OZ,
+  SERVING_STEPS,
+  agreeRead,
+  formatMass,
+  formatNumber,
+  formatServings,
+  massUnit,
+  type ReadStreak,
+} from '@ct/shared';
 import { ApiError, isPartialBarcode } from '@ct/api-client';
 import { PressableChunk } from '@/components/Chunk';
 import { api } from '@/lib/api';
@@ -178,6 +187,13 @@ export function BarcodeScanner({
    */
   const settled = useRef<{ code: string; at: number } | null>(null);
 
+  /*
+   * The frames so far that agree on a code. One decoded frame can be a glare
+   * misread with a valid check digit, so nothing is looked up until several in
+   * a row say the same thing — see `agreeRead`.
+   */
+  const streak = useRef<ReadStreak | null>(null);
+
   const onScanned = useCallback(async (code: string) => {
     if (claimed.current) return;
     const last = settled.current;
@@ -185,6 +201,10 @@ export function BarcodeScanner({
       last.at = Date.now();
       return;
     }
+    const read = agreeRead(streak.current, code);
+    streak.current = read.streak;
+    if (!read.agreed) return;
+    streak.current = null;
     claimed.current = true;
     settled.current = { code, at: Date.now() };
     /*
@@ -231,6 +251,7 @@ export function BarcodeScanner({
     // Asked for, so the packet in frame is fair game again even if it is the
     // one that just failed.
     settled.current = null;
+    streak.current = null;
     setError(null);
     setStage({ at: 'scanning' });
   }
@@ -238,6 +259,7 @@ export function BarcodeScanner({
   function close() {
     claimed.current = false;
     settled.current = null;
+    streak.current = null;
     setStage({ at: 'scanning' });
     setError(null);
     setCaught(null);
