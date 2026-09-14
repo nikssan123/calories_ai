@@ -31,6 +31,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { BIRTH_DATE_FLOOR } from '@/lib/birth-date';
 import { setPreferredLocale, useLocale, useT, type StringKey } from '@/lib/i18n';
+import { reachedStep } from '@/lib/funnel';
 import { useOnboarding } from '@/lib/onboarding';
 import { column, type as t, useColors, useType } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -243,6 +244,19 @@ export default function OnboardingScreen() {
     ? (screens.slice(0, index).reverse().find((id): id is StepId => !id.startsWith('tease')) ?? 'goal')
     : (current as StepId);
   const questionNumber = steps.indexOf(step) + 1;
+
+  /*
+   * The first-run funnel (`lib/funnel.ts`): which screens a new install
+   * reaches. Only for the walk before an account — a signed-in account being
+   * sent back to finish setup is not a new install, and counting it would put
+   * people who already converted back at the top of the funnel.
+   */
+  useEffect(() => {
+    if (!guest) return;
+    if (phase === 'welcome') reachedStep('welcome');
+    else if (phase === 'questions' && !teasing) reachedStep(step);
+    else if (phase === 'plan') reachedStep('plan');
+  }, [guest, phase, teasing, step]);
 
   /*
    * A goal weight nobody has moved yet, proposed from the weight they just gave.
@@ -470,6 +484,7 @@ export default function OnboardingScreen() {
    */
   const savePlan = useCallback(async () => {
     if (!draft) return;
+    reachedStep('save');
     await saveDraft({ ...draft, completed_at: new Date().toISOString() });
   }, [draft, saveDraft]);
 
@@ -510,10 +525,14 @@ export default function OnboardingScreen() {
         <Welcome
           guest={guest}
           onStart={() => {
+            if (guest) reachedStep('start');
             setDirection('forward');
             setPhase('questions');
           }}
-          onSignIn={() => chooseSignIn(true)}
+          onSignIn={() => {
+            reachedStep('existing');
+            chooseSignIn(true);
+          }}
         />
       </View>
     );

@@ -23,7 +23,7 @@ export default function PrivacyPage() {
     <LegalPage
       title="Privacy Policy"
       summary="You tell this app what you ate. That is health information, and it is treated as such: it is not sold, not used for advertising, not analysed for anyone but you, and it leaves the server only where the feature you asked for cannot work otherwise."
-      updated="2026-09-07"
+      updated="2026-09-14"
     >
       <Clause n={1} title="Who is responsible">
         <P>
@@ -124,6 +124,17 @@ export default function PrivacyPage() {
           </li>
         </List>
 
+        <Sub>Before there is an account</Sub>
+        <List>
+          <li>
+            Which screens of the first-run questions a new install reaches &mdash; the welcome
+            screen, each question, the plan, the sign-up form &mdash; as a count per day, per
+            platform and app version. Nothing identifies the phone or the person: no device or
+            install id, no account, no address is stored with it, and each screen is sent at most
+            once. It tells us where people give up, and it cannot tell us who.
+          </li>
+        </List>
+
         <P>
           There is no analytics package, no advertising network, no third-party tracking script
           and no fingerprinting SDK anywhere in this product. Nobody is paid for a view of your
@@ -147,6 +158,11 @@ export default function PrivacyPage() {
           <Row label="Security">
             Sign-in alerts, rate limits, keeping the service standing up. Legitimate interests
             &mdash; Article 6(1)(f).
+          </Row>
+          <Row label="First-run counts">
+            Seeing which question new installs stop at, so the questions can be made shorter or
+            clearer. Anonymous counts that identify nobody &mdash; legitimate interests, where they
+            count as personal data at all.
           </Row>
           <Row label="Cost accounting">
             Knowing what a turn costs, so the service can be priced or stopped honestly.

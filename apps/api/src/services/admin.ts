@@ -473,6 +473,12 @@ export const BROWSABLE_TABLES: Record<string, TableSpec> = {
     order: 'received_at DESC',
     note: 'Mail this deployment received. The Inbox tab is a nicer view of the same rows.',
   },
+  onboarding_funnel: {
+    group: 'Ops',
+    redact: [],
+    order: 'day DESC',
+    note: 'How many new installs reached each first-run screen, per day. Counts only — the Funnel tab reads it.',
+  },
   app_secrets: {
     group: 'Ops',
     redact: ['value'],

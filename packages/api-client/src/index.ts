@@ -27,6 +27,7 @@ import type {
   BarcodeLogResponse,
   BarcodeProduct,
   Calendar,
+  AdminFunnel,
   AdminOverview,
   AdminUser,
   AuthStatus,
@@ -1082,6 +1083,9 @@ export function createApiClient({
         request<{ migrations: Array<{ name: string; applied_at: string }> }>('/admin/migrations'),
 
       tables: () => request<{ tables: TableSummary[] }>('/admin/tables'),
+
+      /** How far new installs got through the first-run walk, over the last `days` days. */
+      funnel: (days = 7) => request<AdminFunnel>(`/admin/funnel?days=${days}`),
 
       /**
        * One page of one table. `q` searches every visible column at once —

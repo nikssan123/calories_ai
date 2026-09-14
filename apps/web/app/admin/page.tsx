@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { useAuth } from '@/components/AuthGate';
 import { ContentPanel } from '@/components/admin/ContentPanel';
 import { CostPanel } from '@/components/admin/CostPanel';
+import { FunnelPanel } from '@/components/admin/FunnelPanel';
 import { InboxPanel } from '@/components/admin/InboxPanel';
 import { OverviewPanel } from '@/components/admin/OverviewPanel';
 import { TablesPanel } from '@/components/admin/TablesPanel';
@@ -14,6 +15,8 @@ import { cn } from '@/lib/utils';
 
 const TABS = [
   { id: 'cost', label: 'Cost' },
+  // Before Accounts: it is the question of how many accounts there should have been.
+  { id: 'funnel', label: 'Funnel' },
   { id: 'users', label: 'Accounts' },
   // Next to Accounts, because the two are used together: almost every message
   // that arrives is about an account on the tab beside it.
@@ -77,6 +80,7 @@ export default function AdminPage() {
         </div>
 
         {tab === 'cost' && <CostPanel />}
+        {tab === 'funnel' && <FunnelPanel />}
         {tab === 'users' && <UsersPanel />}
         {tab === 'inbox' && <InboxPanel />}
         {tab === 'content' && <ContentPanel />}

@@ -3705,6 +3705,77 @@ export const AdminOverview = z.object({
 });
 export type AdminOverview = z.infer<typeof AdminOverview>;
 
+// ---- The first-run funnel --------------------------------------------------
+
+/**
+ * How far a new install gets through the walk before there is an account.
+ *
+ * The walk runs on the phone and says nothing to the server until the account
+ * step, so an install that opens the app and leaves is indistinguishable from
+ * one that answered five questions and left — both are a `GET /auth/me` and
+ * silence. These are the screens it passes, in order, each sent at most once
+ * per install and counted per day. There is no identifier in it: not a device
+ * id, not an install id, not an account. A count per step is the whole record,
+ * which is enough to see where people stop and too little to follow anybody.
+ *
+ * `target` only exists for a goal that is not "maintain", so it reads low by
+ * design. `existing` is off the main line: somebody who tapped "I already have
+ * an account" on the welcome screen.
+ */
+export const FUNNEL_STEPS = [
+  'welcome',
+  'start',
+  'goal',
+  'sex',
+  'birth',
+  'body',
+  'target',
+  'activity',
+  'plan',
+  'save',
+  'signup_email',
+  'signup_google',
+  'account',
+  'in_app',
+  'existing',
+] as const;
+export const FunnelStep = z.enum(FUNNEL_STEPS);
+export type FunnelStep = z.infer<typeof FunnelStep>;
+
+export const FunnelPing = z.object({
+  step: FunnelStep,
+  platform: z.enum(['ios', 'android']),
+  /** The store version, e.g. "1.2.1" — so a changed screen can be read against the one before it. */
+  app_version: z
+    .string()
+    .regex(/^\d+(\.\d+){0,3}$/)
+    .max(20),
+});
+export type FunnelPing = z.infer<typeof FunnelPing>;
+
+export const AdminFunnel = z.object({
+  days: z.number().int(),
+  steps: z.array(
+    z.object({
+      step: FunnelStep,
+      reached: z.number().int(),
+      ios: z.number().int(),
+      android: z.number().int(),
+    }),
+  ),
+  /** Per version, because the walk changes between releases and a mixed total hides which one lost people. */
+  versions: z.array(
+    z.object({
+      app_version: z.string(),
+      step: FunnelStep,
+      reached: z.number().int(),
+    }),
+  ),
+  /** Accounts made in the same window, from `users` — the server's own count, not the phone's. */
+  accounts_created: z.number().int(),
+});
+export type AdminFunnel = z.infer<typeof AdminFunnel>;
+
 // ---- Coaching ---------------------------------------------------------------
 //
 // The coach seat: one person reading another's log, by explicit grant. See

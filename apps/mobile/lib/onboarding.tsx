@@ -3,6 +3,7 @@ import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ActivityLevel, Goal, Locale, OnboardingState, Sex, UnitSystem } from '@ct/shared';
 import { api } from '@/lib/api';
+import { reachedStep } from '@/lib/funnel';
 import { useAuth } from '@/lib/auth';
 import { preferredLocale } from '@/lib/i18n';
 
@@ -204,6 +205,8 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
           setState(next);
           // Dropped only once the server has it.
           await dropDraft();
+          // The last step of the first-run funnel: the plan is on the account.
+          reachedStep('in_app');
         }
       }
       return next;

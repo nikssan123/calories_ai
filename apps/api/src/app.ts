@@ -9,6 +9,7 @@ import { registerAdminRoutes } from './routes/admin.ts';
 import { registerCoachRoutes } from './routes/coach.ts';
 import { registerKitchenRoutes } from './routes/kitchen.ts';
 import { registerPublicRoutes } from './routes/public.ts';
+import { registerFunnelRoutes } from './routes/funnel.ts';
 import { env } from './env.ts';
 import { bearerToken, resolveSession, SESSION_COOKIE } from './services/auth.ts';
 import { closeRedis, createRedis } from './services/redis.ts';
@@ -206,6 +207,9 @@ export async function buildApp(
     // prefix rather than a route list because the namespace announces itself:
     // nothing may be added under `/public/` that reads a user.
     '/public/',
+    // A count of how far new installs get before there is an account — sent by
+    // a phone with no session, and never linked to one. See routes/funnel.ts.
+    '/funnel',
     '/billing/revenuecat',
     '/billing/stripe',
   ];
@@ -260,6 +264,7 @@ export async function buildApp(
   await registerCoachRoutes(app);
   await registerKitchenRoutes(app);
   await registerPublicRoutes(app);
+  await registerFunnelRoutes(app);
   await registerRoutes(app);
 
   return app;

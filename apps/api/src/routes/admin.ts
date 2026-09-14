@@ -41,6 +41,7 @@ import {
   setDisabled,
   signOutEverywhere,
 } from '../services/admin.ts';
+import { readFunnel } from '../services/funnel.ts';
 import { listSupportEmails, setHandled, unhandledCount } from '../services/support.ts';
 import { getUserContext } from '../services/user.ts';
 import {
@@ -352,6 +353,11 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     if (!user) return reply.status(404).send({ error: 'User not found' });
     return user;
   });
+
+  // ---- Read-only: the first-run funnel ----------------------------------------
+
+  /** How far new installs got through the walk before an account, over `days`. */
+  app.get('/admin/funnel', async (request) => readFunnel(clampDays((request.query as any)?.days, 7)));
 
   // ---- Read-only: cost ------------------------------------------------------
 

@@ -22,6 +22,7 @@ import { Stage } from '@/components/onboarding/Stage';
 import { useOnboarding } from '@/lib/onboarding';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { reachedStep } from '@/lib/funnel';
 import { signInWithGoogle } from '@/lib/google';
 import { PRIVACY_URL, TERMS_URL } from '@/lib/links';
 import { font, type as t, useColors, useType } from '@/theme';
@@ -108,6 +109,10 @@ export default function LoginScreen() {
   async function submit() {
     setBusy(true);
     setError(null);
+    // Sign-ups that carry a plan are the end of the first-run funnel; a sign-in,
+    // or an account made without walking the questions, is not part of it.
+    const fromWalk = signup && planWaiting;
+    if (fromWalk) reachedStep('signup_email');
     try {
       const status = signup
         ? await api.signup({
@@ -129,6 +134,7 @@ export default function LoginScreen() {
       // The token arrives in this response and nowhere else, so it is stored
       // before anything else can fire a request without it.
       await adoptSession(status);
+      if (fromWalk) reachedStep('account');
       // …and the status is re-read, because signup answers before the profile
       // the rest of the app renders from exists.
       await refresh();
@@ -142,12 +148,15 @@ export default function LoginScreen() {
   async function continueWithGoogle() {
     setGoogle(true);
     setError(null);
+    const fromWalk = planWaiting;
+    if (fromWalk) reachedStep('signup_google');
     try {
       const status = await signInWithGoogle();
       // Null is "they closed it", which is a decision rather than a failure and
       // gets no message at all.
       if (!status) return;
       await adoptSession(status);
+      if (fromWalk) reachedStep('account');
       await refresh();
     } catch (e) {
       setError(messageOf(e, tr));
