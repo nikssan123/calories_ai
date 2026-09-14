@@ -31,7 +31,7 @@ export function CoachBanner() {
         { backgroundColor: withAlpha(colors.calories, 0.16), opacity: pressed ? 0.7 : 1 },
       ]}
     >
-      <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+      <View style={[styles.avatar, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}>
         <Text style={[t.footnoteSemibold, { color: colors.primaryForeground }]}>
           {initialsOf(link.coach.display_name)}
         </Text>

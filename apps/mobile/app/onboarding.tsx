@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { FadeIn, FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Svg, { Path } from 'react-native-svg';
 import type { ActivityLevel, Goal, Sex, Targets, UnitSystem } from '@ct/shared';
@@ -7,24 +9,31 @@ import {
   ACTIVITY_LEVELS,
   bodyWeightToKg,
   bodyWeightUnit,
+  calculateTargets,
   cmToFeetInches,
   feetInchesToCm,
   formatWeightDelta,
+  predictTdee,
   toBodyWeight,
 } from '@ct/shared';
-import { PressableChunk } from '@/components/Chunk';
-import { Lockup } from '@/components/Lockup';
+import { Glass } from '@/components/Glass';
+import { GlowButton } from '@/components/GlowButton';
 import { LanguagePicker } from '@/components/LanguagePicker';
+import { RingObject } from '@/components/RingObject';
+import { Serif } from '@/components/Serif';
 import { Advance, Rail, Step } from '@/components/onboarding/Chrome';
 import { Measure, Segmented, Stepper } from '@/components/onboarding/Inputs';
 import { OptionCard } from '@/components/onboarding/OptionCard';
-import { Building, Plan } from '@/components/onboarding/Reveal';
+import { Building, Plan, projectionFor } from '@/components/onboarding/Reveal';
+import { Stage } from '@/components/onboarding/Stage';
+import { DayTease, JournalTease } from '@/components/onboarding/Tease';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { BIRTH_DATE_FLOOR } from '@/lib/birth-date';
 import { setPreferredLocale, useLocale, useT, type StringKey } from '@/lib/i18n';
 import { useOnboarding } from '@/lib/onboarding';
 import { column, type as t, useColors, useType } from '@/theme';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 /**
  * Setup, as a form somebody walks through once.
@@ -51,6 +60,17 @@ import { column, type as t, useColors, useType } from '@/theme';
  * offer made once at the start where somebody reading in the wrong one can
  * still find it. The old brief argued all of those, and it argued them well.
  *
+ * **It now runs before there is an account** (GLOW-UP.md). With no session the
+ * answers go into a draft on the phone, the plan is worked out here with the
+ * same shared arithmetic the server uses, and the last button saves the plan
+ * by asking for an account — `lib/onboarding.tsx` writes the draft up once one
+ * exists. A signed-in account that is not set up yet (made on the web, say)
+ * still walks the same screens and saves straight to the server.
+ *
+ * Between the questions sit two looks at the product (`Tease.tsx`), and the
+ * whole walk stands in the same warm moving light (`Stage.tsx`), because this is
+ * where somebody decides what kind of app this is.
+ *
  * The screen is a gate: `app/_layout.tsx` will not draw the tabs until the
  * profile is complete. That is a real change of posture — the old flow let you
  * walk past it and left every target in the app a placeholder with a banner
@@ -61,6 +81,12 @@ import { column, type as t, useColors, useType } from '@/theme';
 
 /** The questions, in order. `target` drops out when nothing is being aimed at. */
 type StepId = 'goal' | 'sex' | 'birth' | 'body' | 'target' | 'activity';
+
+/** A look at the product between two questions. Not counted on the rail. */
+type TeaseId = 'teaseJournal' | 'teaseDay';
+
+/** Where the teases fall: after the question named. Two across the walk, never more. */
+const TEASE_AFTER: Partial<Record<StepId, TeaseId>> = { sex: 'teaseJournal', body: 'teaseDay' };
 
 /** Which screen the reader is on. The questions are one phase between two. */
 type Phase = 'welcome' | 'questions' | 'building' | 'plan';
@@ -111,21 +137,29 @@ function guessUnits(): UnitSystem {
 
 export default function OnboardingScreen() {
   const colors = useColors();
+  const type = useType();
   const tr = useT();
   const locale = useLocale();
-  const { profile, adoptProfile } = useAuth();
-  const { refresh: refreshOnboarding } = useOnboarding();
+  const { authenticated, profile, adoptProfile } = useAuth();
+  const { refresh: refreshOnboarding, draft, saveDraft, chooseSignIn } = useOnboarding();
+  /* No session: answers go to the draft and the plan is worked out here. */
+  const guest = !authenticated;
+  /* What a relaunch mid-walk restores from, for somebody without an account. */
+  const seed = guest ? draft : null;
 
   const [phase, setPhase] = useState<Phase>('welcome');
+  /** Position in `screens` — questions and teases together. */
   const [index, setIndex] = useState(0);
   /* Which way the next step should arrive from. Written on every move. */
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
 
-  const [goal, setGoal] = useState<Goal | null>(profile?.goal ?? null);
-  const [sex, setSex] = useState<Sex | null>(profile?.sex ?? null);
-  const [birthDate, setBirthDate] = useState<string | null>(profile?.birth_date ?? null);
-  const [activity, setActivity] = useState<ActivityLevel | null>(profile?.activity_level ?? null);
-  const [units, setUnits] = useState<UnitSystem>(profile?.units ?? guessUnits());
+  const [goal, setGoal] = useState<Goal | null>(seed?.goal ?? profile?.goal ?? null);
+  const [sex, setSex] = useState<Sex | null>(seed?.sex ?? profile?.sex ?? null);
+  const [birthDate, setBirthDate] = useState<string | null>(seed?.birth_date ?? profile?.birth_date ?? null);
+  const [activity, setActivity] = useState<ActivityLevel | null>(
+    seed?.activity_level ?? profile?.activity_level ?? null,
+  );
+  const [units, setUnits] = useState<UnitSystem>(seed?.units ?? profile?.units ?? guessUnits());
 
   /*
    * Height and weight are held as the strings that are actually in the boxes,
@@ -136,15 +170,14 @@ export default function OnboardingScreen() {
    * round-trip it back into the field as something the reader did not type.
    * The conversion happens once, at the bottom, where the values are read.
    */
-  const [cm, setCm] = useState(() => (profile?.height_cm ? String(Math.round(profile.height_cm)) : ''));
-  const [feet, setFeet] = useState(() =>
-    profile?.height_cm ? String(cmToFeetInches(profile.height_cm).feet) : '',
+  const startHeight = seed?.height_cm ?? profile?.height_cm ?? null;
+  const [cm, setCm] = useState(() => (startHeight ? String(Math.round(startHeight)) : ''));
+  const [feet, setFeet] = useState(() => (startHeight ? String(cmToFeetInches(startHeight).feet) : ''));
+  const [inches, setInches] = useState(() => (startHeight ? String(cmToFeetInches(startHeight).inches) : ''));
+  const [weight, setWeight] = useState(() =>
+    seed?.weight_kg ? String(round1(toBodyWeight(seed.weight_kg, seed.units))) : '',
   );
-  const [inches, setInches] = useState(() =>
-    profile?.height_cm ? String(cmToFeetInches(profile.height_cm).inches) : '',
-  );
-  const [weight, setWeight] = useState('');
-  const [targetWeight, setTargetWeight] = useState<number | null>(null);
+  const [targetWeight, setTargetWeight] = useState<number | null>(seed?.target_weight_kg ?? null);
   /*
    * Whether they went past the goal weight rather than setting one.
    *
@@ -157,7 +190,13 @@ export default function OnboardingScreen() {
   const [targetSkipped, setTargetSkipped] = useState(false);
 
   const [targets, setTargets] = useState<Targets | null>(null);
+  /** The maintenance the plan was worked out from, for the trajectory. */
+  const [maintenance, setMaintenance] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
+  /** How many of the loader's three lines are true yet. */
+  const [stages, setStages] = useState(0);
+  /* Android's date dialog, open. It opens itself the first time the step shows. */
+  const [picking, setPicking] = useState(birthDate === null);
 
   const heightCm = units === 'imperial' ? imperialHeight(feet, inches) : decimal(cm);
   const weightKg = useMemo(() => {
@@ -183,7 +222,21 @@ export default function OnboardingScreen() {
    * on two answers rather than one should fail by asking about a goal again
    * rather than by crashing on the first frame of somebody's account.
    */
-  const step = steps[Math.min(index, steps.length - 1)] ?? 'goal';
+  /*
+   * The walk as drawn: the questions with the two teases slotted between them.
+   * The rail counts questions only — a tease is the app talking, not asking —
+   * so it reads the question number off `steps`, not off this.
+   */
+  const screens = useMemo<(StepId | TeaseId)[]>(
+    () => steps.flatMap((id) => (TEASE_AFTER[id] ? [id, TEASE_AFTER[id]!] : [id])),
+    [steps],
+  );
+  const current = screens[Math.min(index, screens.length - 1)] ?? 'goal';
+  const teasing = current === 'teaseJournal' || current === 'teaseDay';
+  const step: StepId = teasing
+    ? (screens.slice(0, index).reverse().find((id): id is StepId => !id.startsWith('tease')) ?? 'goal')
+    : (current as StepId);
+  const questionNumber = steps.indexOf(step) + 1;
 
   /*
    * A goal weight nobody has moved yet, proposed from the weight they just gave.
@@ -214,7 +267,8 @@ export default function OnboardingScreen() {
   })();
 
   const answered =
-    blocker === null &&
+    teasing ||
+    (blocker === null &&
     ((step === 'goal' && goal !== null) ||
       (step === 'sex' && sex !== null) ||
       (step === 'birth' && birthDate !== null) ||
@@ -226,7 +280,7 @@ export default function OnboardingScreen() {
         weightKg >= WEIGHT_KG.min &&
         weightKg <= WEIGHT_KG.max) ||
       (step === 'target' && targetWeight !== null) ||
-      (step === 'activity' && activity !== null));
+      (step === 'activity' && activity !== null)));
 
   /**
    * The way past a question, for the questions that have one.
@@ -279,12 +333,12 @@ export default function OnboardingScreen() {
 
   const forward = useCallback(() => {
     setDirection('forward');
-    if (index + 1 < steps.length) {
+    if (index + 1 < screens.length) {
       setIndex(index + 1);
       return;
     }
     setPhase('building');
-  }, [index, steps.length]);
+  }, [index, screens.length]);
 
   /**
    * The one write this screen makes, and the order inside it is load-bearing.
@@ -299,8 +353,54 @@ export default function OnboardingScreen() {
    */
   const submit = useCallback(async () => {
     setFailed(false);
+    setStages(0);
+
+    if (guest) {
+      /*
+       * No account to write to, so the plan is worked out here with the same
+       * shared arithmetic the server will run when the draft is uploaded — the
+       * number on the reveal is the number the account will have. The beats are
+       * paced rather than instant because there is no request to cover, and a
+       * plan that appears the frame after the last answer reads as a constant.
+       */
+      if (sex === null || birthDate === null || heightCm === null || weightKg === null || goal === null) {
+        setFailed(true);
+        return;
+      }
+      const inputs = {
+        sex,
+        birth_date: birthDate,
+        height_cm: heightCm,
+        weight_kg: weightKg,
+        activity_level: activity ?? 'moderate',
+        goal,
+      } as const;
+      await saveDraft({
+        goal,
+        sex,
+        birth_date: birthDate,
+        height_cm: heightCm,
+        weight_kg: weightKg,
+        target_weight_kg: goal === 'maintain' || targetSkipped ? null : targetWeight,
+        activity_level: activity ?? 'moderate',
+        units,
+        locale,
+        completed_at: null,
+      });
+      for (let stage = 1; stage <= 3; stage++) {
+        await pause(700);
+        setStages(stage);
+      }
+      await pause(450);
+      setMaintenance(predictTdee(inputs));
+      setTargets(calculateTargets(inputs));
+      setPhase('plan');
+      return;
+    }
+
     try {
       if (weightKg !== null) await api.logWeight(weightKg);
+      setStages(1);
       const saved = await api.updateProfile({
         sex,
         birth_date: birthDate,
@@ -319,13 +419,31 @@ export default function OnboardingScreen() {
         target_weight_kg: goal === 'maintain' || targetSkipped ? null : targetWeight,
       });
       adoptProfile(saved);
+      setStages(2);
       const day = await api.day();
+      setStages(3);
+      if (sex && birthDate && heightCm && weightKg) {
+        setMaintenance(
+          predictTdee({ sex, birth_date: birthDate, height_cm: heightCm, weight_kg: weightKg, activity_level: activity, goal }),
+        );
+      }
+      await pause(400);
       setTargets(day.targets);
       setPhase('plan');
     } catch {
       setFailed(true);
     }
-  }, [weightKg, sex, birthDate, heightCm, goal, activity, units, targetWeight, targetSkipped, locale, profile?.locale, adoptProfile]);
+  }, [guest, weightKg, sex, birthDate, heightCm, goal, activity, units, targetWeight, targetSkipped, locale, profile?.locale, adoptProfile, saveDraft]);
+
+  /**
+   * "Save my plan", for somebody with no account. Marking the draft finished is
+   * the whole action: the gate sees a plan waiting and brings up sign-up, and
+   * the provider writes the draft to the account once there is one.
+   */
+  const savePlan = useCallback(async () => {
+    if (!draft) return;
+    await saveDraft({ ...draft, completed_at: new Date().toISOString() });
+  }, [draft, saveDraft]);
 
   /*
    * Fired by arriving at the building screen rather than by the button that
@@ -352,39 +470,44 @@ export default function OnboardingScreen() {
     await refreshOnboarding();
   }, [refreshOnboarding]);
 
+  const projection =
+    targets && goal !== 'maintain' && !targetSkipped
+      ? projectionFor({ weightKg, targetKg: targetWeight, maintenance, targetKcal: targets.kcal, units })
+      : null;
+
   if (phase === 'welcome') {
     return (
-      <Welcome
-        onStart={() => {
-          setDirection('forward');
-          setPhase('questions');
-        }}
-      />
+      <View style={styles.flex}>
+        <Stage />
+        <Welcome
+          guest={guest}
+          onStart={() => {
+            setDirection('forward');
+            setPhase('questions');
+          }}
+          onSignIn={() => chooseSignIn(true)}
+        />
+      </View>
     );
   }
 
   if (phase === 'building') {
     return (
       <View style={styles.flex}>
+        <Stage />
         <Rail step={steps.length} total={steps.length} />
         {failed ? (
           <View style={[styles.centre, column]}>
             <Text style={[t.bodyBold, styles.centred, { color: colors.foreground }]}>
               {tr('ob.buildingFailed')}
             </Text>
-            <PressableChunk
-              color={colors.caloriesDeep}
-              radius={999}
-              onPress={() => void submit()}
-              accessibilityRole="button"
-              contentStyle={[styles.retry, { backgroundColor: colors.primary }]}
-            >
-              <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>{tr('ob.retry')}</Text>
-            </PressableChunk>
+            <GlowButton label={tr('ob.retry')} onPress={() => void submit()} style={styles.retry} />
           </View>
         ) : (
           <Building
             steps={[tr('ob.buildingStep1'), tr('ob.buildingStep2'), tr('ob.buildingStep3')]}
+            done={stages}
+            notes={[tr('ob.buildingNote1'), tr('ob.buildingNote2'), tr('ob.buildingNote3')]}
           />
         )}
       </View>
@@ -393,35 +516,52 @@ export default function OnboardingScreen() {
 
   if (phase === 'plan' && targets) {
     return (
-      <Plan
-        targets={targets}
-        footer={
-          <Advance label={tr('ob.planStart')} onPress={() => void finish()} />
-        }
-      />
+      <View style={styles.flex}>
+        <Stage />
+        <Plan
+          targets={targets}
+          projection={projection}
+          footer={
+            guest ? (
+              <View style={styles.saveFoot}>
+                <Text style={[t.footnote, styles.centred, { color: colors.mutedForeground }]}>
+                  {tr('ob.planSaveHint')}
+                </Text>
+                <GlowButton label={tr('ob.planSave')} onPress={() => void savePlan()} />
+              </View>
+            ) : (
+              <Advance label={tr('ob.planStart')} onPress={() => void finish()} />
+            )
+          }
+        />
+      </View>
     );
   }
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior="padding">
-      <Rail step={index + 1} total={steps.length} onBack={back} />
+      <Stage />
+      <Rail step={questionNumber} total={steps.length} onBack={back} />
 
       <Step
-        id={step}
+        id={current}
         direction={direction}
-        title={titleFor(step, tr)}
-        body={bodyFor(step, tr)}
+        title={teasing ? tr(current === 'teaseJournal' ? 'ob.teaseJournalTitle' : 'ob.teaseDayTitle') : titleFor(step, tr)}
+        body={teasing ? tr(current === 'teaseJournal' ? 'ob.teaseJournalBody' : 'ob.teaseDayBody') : bodyFor(step, tr)}
         footer={
           <Advance
             label={tr('ob.continue')}
             onPress={forward}
             disabled={!answered}
-            hint={blocker}
-            skip={skipFor(step)}
+            hint={teasing ? null : blocker}
+            skip={teasing ? undefined : skipFor(step)}
           />
         }
       >
-        {step === 'goal' && (
+        {current === 'teaseJournal' && <JournalTease />}
+        {current === 'teaseDay' && <DayTease />}
+
+        {!teasing && step === 'goal' && (
           <View style={styles.options}>
             {(['lose', 'maintain', 'gain'] as const).map((option) => (
               <OptionCard
@@ -436,7 +576,7 @@ export default function OnboardingScreen() {
           </View>
         )}
 
-        {step === 'sex' && (
+        {!teasing && step === 'sex' && (
           <View style={styles.options}>
             {(['female', 'male'] as const).map((option) => (
               <OptionCard
@@ -449,26 +589,53 @@ export default function OnboardingScreen() {
           </View>
         )}
 
-        {step === 'birth' && (
+        {!teasing && step === 'birth' && (
           <View style={styles.wheel}>
-            <DateTimePicker
-              value={birthDate ? new Date(`${birthDate}T12:00:00Z`) : new Date(1995, 0, 1)}
-              mode="date"
-              display="spinner"
-              minimumDate={BIRTH_DATE_FLOOR}
-              maximumDate={new Date()}
-              onChange={(event, date) => {
-                if (event.type === 'dismissed' || !date) return;
-                // Local parts rather than `toISOString`: the picker hands back
-                // local midnight, and in a negative offset that is yesterday in
-                // UTC — which is a birthday a day early, every time.
-                setBirthDate(
-                  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
-                    date.getDate(),
-                  ).padStart(2, '0')}`,
-                );
-              }}
-            />
+            {/*
+              * Android's picker is a dialog, not a wheel on the page: it opens
+              * once when mounted and, closed, leaves nothing behind to press. So
+              * on Android the answer is drawn as a card that opens it again;
+              * iOS keeps its inline spinner, which is already that card.
+              */}
+            {Platform.OS === 'android' && (
+              <Glass strong radius={22} style={styles.dateCard}>
+                <Pressable
+                  onPress={() => setPicking(true)}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [styles.dateCardFace, { opacity: pressed ? 0.6 : 1 }]}
+                >
+                  <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>{tr('setup.birthDate')}</Text>
+                  <Text style={[type.greeting, { color: birthDate ? colors.foreground : colors.mutedForeground }]}>
+                    {birthDate
+                      ? new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric' }).format(
+                          new Date(`${birthDate}T12:00:00Z`),
+                        )
+                      : '—'}
+                  </Text>
+                </Pressable>
+              </Glass>
+            )}
+            {(Platform.OS === 'ios' || picking) && (
+              <DateTimePicker
+                value={birthDate ? new Date(`${birthDate}T12:00:00Z`) : new Date(1995, 0, 1)}
+                mode="date"
+                display="spinner"
+                minimumDate={BIRTH_DATE_FLOOR}
+                maximumDate={new Date()}
+                onChange={(event, date) => {
+                  setPicking(false);
+                  if (event.type === 'dismissed' || !date) return;
+                  // Local parts rather than `toISOString`: the picker hands back
+                  // local midnight, and in a negative offset that is yesterday in
+                  // UTC — which is a birthday a day early, every time.
+                  setBirthDate(
+                    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+                      date.getDate(),
+                    ).padStart(2, '0')}`,
+                  );
+                }}
+              />
+            )}
             {age !== null && blocker === null && (
               <Text style={[t.bodySemibold, styles.centred, { color: colors.mutedForeground }]}>
                 {tr('ob.birthAge')(age)}
@@ -477,7 +644,7 @@ export default function OnboardingScreen() {
           </View>
         )}
 
-        {step === 'body' && (
+        {!teasing && step === 'body' && (
           <View>
             <Segmented
               value={units}
@@ -543,7 +710,7 @@ export default function OnboardingScreen() {
           </View>
         )}
 
-        {step === 'target' && weightKg !== null && targetWeight !== null && (
+        {!teasing && step === 'target' && weightKg !== null && targetWeight !== null && (
           <View style={styles.target}>
             <Stepper
               value={round1(toBodyWeight(targetWeight, units))}
@@ -567,7 +734,7 @@ export default function OnboardingScreen() {
           </View>
         )}
 
-        {step === 'activity' && (
+        {!teasing && step === 'activity' && (
           <View style={styles.options}>
             {ACTIVITY_LEVELS.map((option) => (
               <OptionCard
@@ -596,25 +763,50 @@ export default function OnboardingScreen() {
  * never opens, and someone reading the wrong one has to be able to fix it
  * before being asked anything.
  */
-function Welcome({ onStart }: { onStart: () => void }) {
+function Welcome({
+  guest,
+  onStart,
+  onSignIn,
+}: {
+  guest: boolean;
+  onStart: () => void;
+  onSignIn: () => void;
+}) {
   const colors = useColors();
   const type = useType();
   const tr = useT();
   const locale = useLocale();
+  const insets = useSafeAreaInsets();
+  const reduced = useReducedMotion();
+  const enter = (delay: number) =>
+    reduced ? undefined : FadeInDown.delay(delay).duration(700).reduceMotion(ReduceMotion.System);
 
   return (
-    <View style={styles.flex}>
-      <View style={[styles.centre, column]}>
-        <Lockup size={54} />
-        <Text style={[type.largeTitle, styles.centred, { color: colors.foreground }]}>
-          {tr('ob.welcomeTitle')}
-        </Text>
-        <Text style={[t.body, styles.centred, styles.welcomeBody, { color: colors.mutedForeground }]}>
-          {tr('ob.welcomeBody')}
-        </Text>
+    <View style={[styles.flex, { paddingTop: insets.top }]}>
+      {/*
+        * The arrival. The logo ring, in three dimensions, turning in the light
+        * with the macro dots in orbit; then the name; then the one sentence
+        * about what the next half-minute buys. See `RingObject`.
+        */}
+      <View style={[styles.hero, column]}>
+        <Animated.View entering={reduced ? undefined : FadeIn.duration(900)}>
+          <RingObject size={168} />
+        </Animated.View>
+        <Animated.View entering={enter(250)} style={styles.wordmark}>
+          <Serif style={[type.hero, styles.centred, { color: colors.foreground }]}>Day *So* Far</Serif>
+          <Text style={[t.eyebrow, styles.tagline, { color: colors.mutedForeground }]}>
+            {tr('ob.wordmarkTagline')}
+          </Text>
+        </Animated.View>
+        <Animated.View entering={enter(550)} style={styles.welcomeCopy}>
+          <Serif style={[type.greeting, styles.centred, { color: colors.foreground }]}>{tr('ob.welcomeTitle')}</Serif>
+          <Text style={[t.body, styles.centred, styles.welcomeBody, { color: colors.mutedForeground }]}>
+            {tr('ob.welcomeBody')}
+          </Text>
+        </Animated.View>
       </View>
 
-      <View style={[styles.welcomeFoot, column]}>
+      <Animated.View entering={enter(800)} style={[styles.welcomeFoot, column, { paddingBottom: insets.bottom + 18 }]}>
         <View style={styles.language}>
           <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
             {tr('setup.language')}
@@ -624,11 +816,24 @@ function Welcome({ onStart }: { onStart: () => void }) {
           </View>
         </View>
 
-        <Advance label={tr('ob.welcomeStart')} onPress={onStart} />
-      </View>
+        <GlowButton label={tr('ob.welcomeStart')} onPress={onStart} />
+        {guest && (
+          <Pressable
+            onPress={onSignIn}
+            accessibilityRole="button"
+            hitSlop={10}
+            style={({ pressed }) => [styles.haveAccount, { opacity: pressed ? 0.5 : 1 }]}
+          >
+            <Text style={[t.bodySemibold, { color: colors.foreground }]}>{tr('ob.haveAccount')}</Text>
+          </Pressable>
+        )}
+      </Animated.View>
     </View>
   );
 }
+
+/** A beat, for the loader that has no request to wait on. */
+const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const GOAL_LABELS: Record<Goal, StringKey> = {
   lose: 'ob.goalLose',
@@ -721,14 +926,22 @@ const styles = StyleSheet.create({
   centred: { textAlign: 'center' },
 
   options: { gap: 14 },
-  wheel: { gap: 8 },
+  wheel: { gap: 12 },
+  dateCard: { alignSelf: 'stretch' },
+  dateCardFace: { paddingHorizontal: 18, paddingVertical: 16, gap: 4 },
   measures: { gap: 18 },
   target: { paddingTop: 12 },
 
+  hero: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 24 },
+  wordmark: { alignItems: 'center', gap: 2, marginTop: -6 },
+  tagline: { letterSpacing: 3 },
+  welcomeCopy: { alignItems: 'center', gap: 10, marginTop: 22 },
   welcomeBody: { maxWidth: 340 },
-  welcomeFoot: { paddingHorizontal: 20, paddingBottom: 28, gap: 18 },
+  welcomeFoot: { paddingHorizontal: 20, gap: 14 },
   language: { gap: 8 },
   languageControl: { alignSelf: 'stretch' },
+  haveAccount: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 16 },
+  saveFoot: { gap: 10 },
 
-  retry: { height: 52, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+  retry: { alignSelf: 'stretch' },
 });

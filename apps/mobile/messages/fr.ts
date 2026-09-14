@@ -44,6 +44,13 @@ export const fr: Messages = {
 
   // ---- Today --------------------------------------------------------------
   'today.title': 'Aujourd’hui',
+  // French has no "good afternoon" that is not a goodbye, so the afternoon keeps
+  // «Bonjour» until the evening's «Bonsoir».
+  'today.greetMorning': (name: string) => (name ? `*Bonjour*, ${name}` : '*Bonjour*'),
+  'today.greetAfternoon': (name: string) => (name ? `*Bonjour*, ${name}` : '*Bonjour*'),
+  'today.greetEvening': (name: string) => (name ? `*Bonsoir*, ${name}` : '*Bonsoir*'),
+  'today.greetNight': (name: string) => (name ? `Encore *debout*, ${name} ?` : 'Encore *debout* ?'),
+  'today.backToToday': 'Revenir à aujourd’hui',
   'today.toGo': 'restantes',
   'today.over': 'au-dessus',
   'today.burned': (kcal: string) => `+${kcal} brûlées`,
@@ -149,12 +156,14 @@ export const fr: Messages = {
   'ob.back': 'Retour',
   'ob.continue': 'Continuer',
 
-  'ob.welcomeTitle': 'On construit ton plan',
+  'ob.welcomeTitle': 'On construit ton *plan*',
   'ob.welcomeBody':
     'Six questions rapides — une demi-minute — et tu auras un objectif de calories et de protéines calculé pour ton corps, pas pour personne en particulier. Tout est modifiable ensuite.',
   'ob.welcomeStart': 'C’est parti',
+  'ob.haveAccount': 'J’ai déjà un compte',
+  'ob.wordmarkTagline': 'Ta journée, jusqu’ici',
 
-  'ob.goalTitle': 'Tu es là pour quoi ?',
+  'ob.goalTitle': 'Tu es là pour *quoi* ?',
   'ob.goalBody': 'Cela décide si ta journée passe sous, à, ou au-dessus de ce que tu brûles.',
   'ob.goalLose': 'Perdre du poids',
   'ob.goalLoseHint': 'Un déficit tranquille que tu peux vraiment tenir',
@@ -196,7 +205,7 @@ export const fr: Messages = {
   'ob.activityBody':
     'Ta semaine ordinaire — sans compter les séances que tu enregistres dans l’app.',
 
-  'ob.buildingTitle': 'On construit ton plan',
+  'ob.buildingTitle': 'On construit ton *plan*',
   'ob.buildingStep1': 'On calcule ce que tu brûles',
   'ob.buildingStep2': 'On fixe tes calories du jour',
   'ob.buildingStep3': 'On répartit protéines, glucides et lipides',
@@ -208,6 +217,33 @@ export const fr: Messages = {
   'ob.planFootnote':
     'Un point de départ, pas un verdict. Il s’ajuste chaque semaine selon ce que tu enregistres et ce que fait la balance.',
   'ob.planStart': 'Commencer à enregistrer',
+  'ob.planSave': 'Enregistrer mon plan',
+  'ob.planSaveHint': 'Il te faut ensuite un compte pour le garder. C’est gratuit et ça prend une minute.',
+  'ob.planWhere': 'Où ça te *mène*',
+  'ob.planToday': (weight: string) => `${weight} aujourd’hui`,
+  'ob.planGoal': (weight: string) => `objectif ${weight}`,
+  'ob.planArrives': (date: string, rate: string) => `Vers le ${date} · ${rate} par semaine`,
+
+  'ob.buildingNote1': 'Écris ce que tu as mangé avec tes mots — le journal s’occupe des chiffres.',
+  'ob.buildingNote2': 'Ton objectif s’ajuste à tes pesées, semaine après semaine.',
+  'ob.buildingNote3': 'Une photo de ton assiette ou un code-barres, ça marche aussi.',
+
+  'ob.teaseJournalTitle': 'Écris ce que tu as mangé. C’est *noté*.',
+  'ob.teaseJournalBody': 'Pas de recherche, pas de tableaux de portions. Le journal comprend et s’occupe des chiffres.',
+  'ob.teaseJournalYou1': '2 œufs, tartine beurrée, café crème',
+  'ob.teaseJournalReply1': 'Noté au petit-déjeuner',
+  'ob.teaseJournalYou2': 'et une banane',
+  'ob.teaseJournalReply2': 'Ajouté',
+  'ob.teaseJournalComposer': 'Tu as mangé quoi ?',
+  'ob.teaseChipType': 'Écris-le, simplement',
+  'ob.teaseChipPhoto': 'Ou une photo',
+  'ob.teaseChipBarcode': 'Ou un code-barres',
+  'ob.teaseDayTitle': 'Ta journée, *éclairée* heure par heure',
+  'ob.teaseDayBody': '« Aujourd’hui » suit l’horloge, et l’anneau se remplit à chaque ajout. Un coup d’œil suffit pour savoir où en est ta journée.',
+
+  'saving.title': 'On enregistre ton *plan*',
+  'saving.body': 'On range tes réponses dans ton nouveau compte.',
+  'saving.welcomeBack': 'Un *instant*',
 
   'sex.male': 'Homme',
   'sex.female': 'Femme',
@@ -234,6 +270,11 @@ export const fr: Messages = {
   'auth.signInSubtitle': 'Connecte-toi et reprends où tu t’es arrêté.',
   'auth.createAccount': 'Créer un compte',
   'auth.createAccountTitle': 'Crée ton compte',
+  'auth.savePlanTitle': 'Garde ton *plan*',
+  'auth.savePlanSubtitle': (kcal: string) =>
+    `${kcal} kcal par jour, calculées et prêtes. Un compte les garde — sur ce téléphone et sur tous les autres.`,
+  'auth.buildPlanFirst': 'Nouveau ici ? Crée d’abord ton plan',
+  'auth.changeAnswers': 'Modifier mes réponses',
   'auth.email': 'E-mail',
   'auth.password': 'Mot de passe',
   'auth.passwordHint': 'Au moins 8 caractères.',
@@ -277,7 +318,7 @@ export const fr: Messages = {
   // ---- Everything the string pass added, in en.ts order -------------------
   'today.exerciseFooter': 'Affiché à part de ton objectif — le brûlé à l’effort est une estimation grossière.',
   'today.exerciseTitle': '🏃  Activité',
-  'today.stepsTitle': '👟  Pas',
+  'today.stepsTitle': 'Pas',
   'today.steps': (count: number) => n(count, { one: 'pas', other: 'pas' }),
   'today.stepsFooter':
     'Comptés par ton téléphone. Les pas affinent ton objectif — ils ne s’y ajoutent jamais.',
@@ -525,7 +566,7 @@ export const fr: Messages = {
   'progress.title': 'Progrès',
   'progress.daysWindow': (count) => n(count, { one: 'jour', other: 'jours' }),
   'progress.daysShort': (count) => `${count} j`,
-  'progress.weightTitle': '⚖️  Poids',
+  'progress.weightTitle': 'Poids',
   'progress.noWeighIns': 'Aucune pesée pour l’instant. Note-en une ci-dessous, ou dis-le simplement au journal.',
   'progress.noWeighIn': 'Pas de pesée',
   'progress.trendReadout': (value) => `Moyenne 7 jours ${value} — la courbe`,
@@ -534,13 +575,13 @@ export const fr: Messages = {
   'progress.sinceStart': 'Depuis le début',
   'progress.toTarget': 'Jusqu’à l’objectif',
   'progress.logTodaysWeight': (unit) => `Note le poids du jour (${unit})`,
-  'progress.caloriesTitle': '🔥  Calories',
+  'progress.caloriesTitle': 'Calories',
   'progress.avgDayTarget': (target) => `moyenne/jour · objectif ${target}`,
-  'progress.proteinTitle': '💪  Protéines',
+  'progress.proteinTitle': 'Protéines',
   'progress.hitTargetBefore': 'Objectif atteint',
   'progress.ofDays': (hit, logged) => `${hit} sur ${logged}`,
   'progress.hitTargetAfter': 'jours notés.',
-  'progress.qualityTitle': '🥦  Qualité de l’alimentation',
+  'progress.qualityTitle': 'Qualité de l’alimentation',
   'progress.days': (count) => n(count, { one: 'jour', other: 'jours' }),
   'progress.qualityFooter': (days, percent) => `Moyenne sur ${days} — ${percent}% de ce que tu as noté porte ces chiffres.`,
   'progress.chartNutrient': (label) => `Afficher ${label} sur le graphique`,
@@ -787,7 +828,7 @@ export const fr: Messages = {
   'review.willApply': 'Le prochain bilan appliquera ça. ',
   'review.kcalUnit': (kcal) => `${kcal} kcal`,
   'review.partOf': (plan: string) => `Fait partie de ${plan}`,
-  'quality.title': '🥦\u00a0\u00a0Qualité de l’alimentation',
+  'quality.title': 'Qualité de l’alimentation',
   'quality.partlyMeasured': 'partiellement mesuré',
   'quality.notEstimated': 'non estimé',
   'nutrient.sodium': 'Sodium',

@@ -364,7 +364,7 @@ export function ExercisePicker({
           disabled={picked.length === 0}
           accessibilityRole="button"
           style={{ opacity: picked.length === 0 ? 0.4 : 1 }}
-          contentStyle={[styles.addButton, { backgroundColor: colors.primary }]}
+          contentStyle={[styles.addButton, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
         >
           <Text style={[t.footnoteBold, { color: colors.primaryForeground }]}>
             {picked.length === 0
@@ -453,10 +453,10 @@ function Row({
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   pad: { paddingHorizontal: 16, paddingVertical: 18 },
-  head: { borderBottomWidth: 2, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12, gap: 10 },
+  head: { borderBottomWidth: 1, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12, gap: 10 },
   search: {
     height: 40,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 0,
@@ -481,7 +481,7 @@ const styles = StyleSheet.create({
   viewLabel: { flex: 1, textAlign: 'center', fontFamily: font.bold, fontSize: 10, letterSpacing: 1 },
   chipScroll: { flexGrow: 0 },
   chips: { flexDirection: 'row', gap: 6, paddingHorizontal: 16, paddingTop: 12 },
-  chip: { borderWidth: 2, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
   add: { alignSelf: 'flex-start', borderStyle: 'dashed', marginHorizontal: 16, marginTop: 12 },
   row: {
     flexDirection: 'row',
@@ -495,8 +495,8 @@ const styles = StyleSheet.create({
   rowTags: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   genericName: { fontFamily: font.display, fontSize: 16, lineHeight: 21 },
   sub: { fontFamily: font.semibold, fontSize: 11.5, lineHeight: 15, flexShrink: 1 },
-  tick: { width: 22, height: 22, borderRadius: 999, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  tick: { width: 22, height: 22, borderRadius: 999, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   tickMark: { fontSize: 12, lineHeight: 16, fontFamily: font.bold },
-  foot: { borderTopWidth: 2, paddingHorizontal: 16, paddingVertical: 12 },
+  foot: { borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 12 },
   addButton: { alignItems: 'center', paddingVertical: 11 },
 });

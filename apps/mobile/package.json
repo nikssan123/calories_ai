@@ -18,6 +18,8 @@
     "@ct/api-client": "workspace:*",
     "@ct/shared": "workspace:*",
     "@expo-google-fonts/baloo-2": "^0.4.2",
+    "@expo-google-fonts/fraunces": "^0.4.1",
+    "@expo-google-fonts/literata": "^0.4.3",
     "@expo-google-fonts/nunito": "^0.4.2",
     "@expo/plist": "^0.8.1",
     "@expo/ui": "~57.0.14",

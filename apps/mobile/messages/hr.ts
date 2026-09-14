@@ -35,6 +35,12 @@ export const hr: Messages = {
 
   // ---- Today --------------------------------------------------------------
   'today.title': 'Danas',
+  // "Još si budan/budna?" is gendered; «Još ne spavaš?» is not.
+  'today.greetMorning': (name: string) => (name ? `Dobro *jutro*, ${name}` : 'Dobro *jutro*'),
+  'today.greetAfternoon': (name: string) => (name ? `Dobar *dan*, ${name}` : 'Dobar *dan*'),
+  'today.greetEvening': (name: string) => (name ? `Dobra *večer*, ${name}` : 'Dobra *večer*'),
+  'today.greetNight': (name: string) => (name ? `Još ne *spavaš*, ${name}?` : 'Još ne *spavaš*?'),
+  'today.backToToday': 'Natrag na danas',
   // Under the figure in the ring: what the number *is*, so no preposition.
   'today.toGo': 'preostalo',
   'today.over': 'preko cilja',
@@ -52,7 +58,7 @@ export const hr: Messages = {
   'today.roughEstimate': 'gruba procjena',
   'today.exerciseFooter': 'Prikazano odvojeno od cilja — potrošnja na vježbanju samo je gruba procjena.',
   'today.exerciseTitle': '🏃  Vježbanje',
-  'today.stepsTitle': '👟  Koraci',
+  'today.stepsTitle': 'Koraci',
   'today.steps': (count: number) => n(count, { one: 'korak', few: 'koraka', other: 'koraka' }),
   'today.stepsFooter': 'Broji ih tvoj telefon. Koraci pomažu da cilj bude točniji — nikad mu se ne pribrajaju.',
   'today.stepsEnable': 'Broji moje korake',
@@ -249,12 +255,14 @@ export const hr: Messages = {
   'ob.back': 'Natrag',
   'ob.continue': 'Nastavi',
 
-  'ob.welcomeTitle': 'Složimo tvoj plan',
+  'ob.welcomeTitle': 'Složimo *tvoj* plan',
   'ob.welcomeBody':
     'Šest brzih pitanja — oko pola minute — i imat ćeš cilj kalorija i proteina izračunat za svoje tijelo, a ne za prosječnu osobu. Sve možeš promijeniti kasnije.',
   'ob.welcomeStart': 'Krenimo',
+  'ob.haveAccount': 'Već imam račun',
+  'ob.wordmarkTagline': 'Tvoj dan dosad',
 
-  'ob.goalTitle': 'Što želiš postići?',
+  'ob.goalTitle': 'Što želiš *postići*?',
   'ob.goalBody': 'O ovome ovisi hoće li dnevni unos biti ispod potrošnje, jednak njoj ili iznad nje.',
   'ob.goalLose': 'Smršavjeti',
   'ob.goalLoseHint': 'Umjeren manjak koji stvarno možeš održati',
@@ -296,7 +304,7 @@ export const hr: Messages = {
   'ob.activityTitle': 'Koliko se krećeš?',
   'ob.activityBody': 'Tvoj uobičajeni tjedan — bez treninga koje upisuješ u aplikaciji.',
 
-  'ob.buildingTitle': 'Slažemo tvoj plan',
+  'ob.buildingTitle': 'Slažemo *tvoj* plan',
   'ob.buildingStep1': 'Računamo koliko trošiš',
   'ob.buildingStep2': 'Postavljamo dnevne kalorije',
   'ob.buildingStep3': 'Raspoređujemo proteine, ugljikohidrate i masti',
@@ -308,6 +316,33 @@ export const hr: Messages = {
   'ob.planFootnote':
     'Polazna točka, ne presuda. Svaki se tjedan prilagođava onome što upisuješ i što pokazuje vaga.',
   'ob.planStart': 'Počni upisivati',
+  'ob.planSave': 'Spremi moj plan',
+  'ob.planSaveHint': 'Sljedeći je korak račun u kojem ga čuvaš. Besplatan je i traje minutu.',
+  'ob.planWhere': 'Kamo te ovo *vodi*',
+  'ob.planToday': (weight: string) => `${weight} danas`,
+  'ob.planGoal': (weight: string) => `cilj ${weight}`,
+  'ob.planArrives': (date: string, rate: string) => `Oko ${date} · ${rate} tjedno`,
+
+  'ob.buildingNote1': 'Upiši običnim riječima što je bilo na tanjuru — dnevnik sam računa brojke.',
+  'ob.buildingNote2': 'Cilj se svaki tjedan prilagođava tvojim vaganjima.',
+  'ob.buildingNote3': 'Može i fotografija tanjura ili barkod.',
+
+  'ob.teaseJournalTitle': 'Upiši što je bilo na tanjuru. I *gotovo*.',
+  'ob.teaseJournalBody': 'Bez pretraživanja, bez tablica s porcijama. Dnevnik razumije i sam računa brojke.',
+  'ob.teaseJournalYou1': '2 jaja, kruh s maslacem, bijela kava',
+  'ob.teaseJournalReply1': 'Upisano u doručak',
+  'ob.teaseJournalYou2': 'i banana',
+  'ob.teaseJournalReply2': 'Dodano',
+  'ob.teaseJournalComposer': 'Što je bilo na tanjuru?',
+  'ob.teaseChipType': 'Samo utipkaj',
+  'ob.teaseChipPhoto': 'Ili fotografija',
+  'ob.teaseChipBarcode': 'Ili barkod',
+  'ob.teaseDayTitle': 'Tvoj dan, *obasjan* iz sata u sat',
+  'ob.teaseDayBody': '„Danas“ prati sat, a prsten se puni sa svakim upisom. Jedan pogled i znaš kako ti prolazi dan.',
+
+  'saving.title': 'Spremamo *tvoj* plan',
+  'saving.body': 'Prebacujemo tvoje odgovore u novi račun.',
+  'saving.welcomeBack': 'Samo *trenutak*',
 
   // Adjectives agreeing with «spol», not with the person.
   'sex.male': 'Muški',
@@ -338,6 +373,11 @@ export const hr: Messages = {
   'auth.signInSubtitle': 'Prijavi se i nastavi ondje gdje je sve stalo.',
   'auth.createAccount': 'Izradi račun',
   'auth.createAccountTitle': 'Izradi svoj račun',
+  'auth.savePlanTitle': 'Spremi *svoj* plan',
+  'auth.savePlanSubtitle': (kcal: string) =>
+    `${kcal} kcal dnevno, izračunato i spremno. Uz račun plan ostaje na ovom mobitelu i na svakom drugom.`,
+  'auth.buildPlanFirst': 'Prvi put ovdje? Najprije složi plan',
+  'auth.changeAnswers': 'Promijeni odgovore',
   'auth.email': 'E-pošta',
   'auth.password': 'Lozinka',
   'auth.passwordHint': 'Najmanje 8 znakova.',
@@ -562,7 +602,7 @@ export const hr: Messages = {
   'progress.title': 'Napredak',
   'progress.daysWindow': (count: number) => n(count, { one: 'dan', few: 'dana', other: 'dana' }),
   'progress.daysShort': (count: number) => `${count} d`,
-  'progress.weightTitle': '⚖️  Težina',
+  'progress.weightTitle': 'Težina',
   'progress.noWeighIns': 'Još nema vaganja. Upiši jedno ispod ili samo reci dnevniku.',
   'progress.noWeighIn': 'Bez vaganja',
   'progress.trendReadout': (value: string) => `Prosjek 7 dana: ${value} — linija`,
@@ -571,15 +611,15 @@ export const hr: Messages = {
   'progress.sinceStart': 'Od početka',
   'progress.toTarget': 'Do cilja',
   'progress.logTodaysWeight': (unit: string) => `Upiši današnju težinu (${unit})`,
-  'progress.caloriesTitle': '🔥  Kalorije',
+  'progress.caloriesTitle': 'Kalorije',
   'progress.avgDayTarget': (target: string) => `prosjek/dan · cilj ${target}`,
-  'progress.proteinTitle': '💪  Proteini',
+  'progress.proteinTitle': 'Proteini',
   // Reads "Cilj pogođen u 5 od 12 upisanih dana." — «od» takes the genitive
   // plural that `hitTargetAfter` already is.
   'progress.hitTargetBefore': 'Cilj pogođen u',
   'progress.ofDays': (hit: string, logged: string) => `${hit} od ${logged}`,
   'progress.hitTargetAfter': 'upisanih dana.',
-  'progress.qualityTitle': '🥦  Kvaliteta prehrane',
+  'progress.qualityTitle': 'Kvaliteta prehrane',
   'progress.days': (count: number) => n(count, { one: 'dan', few: 'dana', other: 'dana' }),
   'progress.qualityFooter': (days: string, percent: string) =>
     `Prosjek kroz ${days} — ove brojke ima ${percent}% upisanog.`,
@@ -875,7 +915,7 @@ export const hr: Messages = {
   'review.kcalUnit': (kcal: string) => `${kcal} kcal`,
   'review.partOf': (plan: string) => `Dio paketa ${plan}`,
 
-  'quality.title': '🥦\u00a0\u00a0Kvaliteta prehrane',
+  'quality.title': 'Kvaliteta prehrane',
   'quality.partlyMeasured': 'djelomično izmjereno',
   'quality.notEstimated': 'nije procijenjeno',
 

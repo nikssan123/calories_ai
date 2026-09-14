@@ -28,6 +28,12 @@ export const uk: Messages = {
 
   // ---- Today --------------------------------------------------------------
   'today.title': 'Сьогодні',
+  // «Ще не спиш?» is present tense; «Ще не ліг / не лягла?» would gender the reader.
+  'today.greetMorning': (name: string) => (name ? `Доброго *ранку*, ${name}` : 'Доброго *ранку*'),
+  'today.greetAfternoon': (name: string) => (name ? `Доброго *дня*, ${name}` : 'Доброго *дня*'),
+  'today.greetEvening': (name: string) => (name ? `Доброго *вечора*, ${name}` : 'Доброго *вечора*'),
+  'today.greetNight': (name: string) => (name ? `Ще не *спиш*, ${name}?` : 'Ще не *спиш*?'),
+  'today.backToToday': 'Повернутися до сьогодні',
   'today.toGo': 'лишилося',
   'today.over': 'понад норму',
   'today.burned': (kcal: string) => `+${kcal} спалено`,
@@ -44,7 +50,7 @@ export const uk: Messages = {
   'today.roughEstimate': 'приблизна оцінка',
   'today.exerciseFooter': 'Показано окремо від норми — витрати на рух оцінено приблизно.',
   'today.exerciseTitle': '🏃  Рух',
-  'today.stepsTitle': '👟  Кроки',
+  'today.stepsTitle': 'Кроки',
   'today.steps': (count: number) => n(count, { one: 'крок', few: 'кроки', many: 'кроків', other: 'кроку' }),
   'today.stepsFooter': 'Рахує телефон. Кроки уточнюють твою норму — але ніколи до неї не додаються.',
   'today.stepsEnable': 'Рахувати мої кроки',
@@ -244,12 +250,14 @@ export const uk: Messages = {
   'ob.back': 'Назад',
   'ob.continue': 'Далі',
 
-  'ob.welcomeTitle': 'Складімо твій план',
+  'ob.welcomeTitle': 'Складімо *твій* план',
   'ob.welcomeBody':
     'Шість коротких запитань — десь пів хвилини — і в тебе буде норма калорій і білка, розрахована саме для твого тіла, а не для когось усередненого. Будь-що можна змінити пізніше.',
   'ob.welcomeStart': 'Почати',
+  'ob.haveAccount': 'У мене вже є акаунт',
+  'ob.wordmarkTagline': 'Твій день на цю мить',
 
-  'ob.goalTitle': 'Чого хочеш досягти?',
+  'ob.goalTitle': 'Чого хочеш *досягти*?',
   'ob.goalBody': 'Від цього залежить, чи буде твій день нижче, на рівні чи вище того, що ти спалюєш.',
   'ob.goalLose': 'Схуднути',
   'ob.goalLoseHint': 'Помірний дефіцит, який реально витримати',
@@ -290,7 +298,7 @@ export const uk: Messages = {
   'ob.activityTitle': 'Скільки ти рухаєшся?',
   'ob.activityBody': 'Звичайний тиждень — без тренувань, які ти записуєш у застосунку.',
 
-  'ob.buildingTitle': 'Складаємо твій план',
+  'ob.buildingTitle': 'Складаємо *твій* план',
   'ob.buildingStep1': 'Рахуємо, скільки ти спалюєш',
   'ob.buildingStep2': 'Визначаємо денні калорії',
   'ob.buildingStep3': 'Розподіляємо білки, вуглеводи й жири',
@@ -302,6 +310,33 @@ export const uk: Messages = {
   'ob.planFootnote':
     'Це відправна точка, а не вирок. Щотижня вона підлаштовується під твої записи й показники ваг.',
   'ob.planStart': 'Почати записувати',
+  'ob.planSave': 'Зберегти план',
+  'ob.planSaveHint': 'Далі — акаунт, де він зберігатиметься. Це безкоштовно й займе хвилину.',
+  'ob.planWhere': 'Куди це тебе *приведе*',
+  'ob.planToday': (weight: string) => `${weight} сьогодні`,
+  'ob.planGoal': (weight: string) => `мета ${weight}`,
+  'ob.planArrives': (date: string, rate: string) => `Приблизно ${date} · ${rate} на тиждень`,
+
+  'ob.buildingNote1': 'Опиши звичайними словами, що було на тарілці. Цифри щоденник порахує сам.',
+  'ob.buildingNote2': 'Твоя норма підлаштовується під зважування — тиждень за тижнем.',
+  'ob.buildingNote3': 'Можна й фото тарілки чи штрихкод.',
+
+  'ob.teaseJournalTitle': 'Напиши, що було на тарілці. І *все*.',
+  'ob.teaseJournalBody': 'Жодного пошуку, жодних таблиць порцій. Щоденник сам усе зрозуміє й порахує.',
+  'ob.teaseJournalYou1': '2 яйця, бутерброд з маслом, кава з молоком',
+  'ob.teaseJournalReply1': 'Записано до сніданку',
+  'ob.teaseJournalYou2': 'і банан',
+  'ob.teaseJournalReply2': 'Додано',
+  'ob.teaseJournalComposer': 'Що було на тарілці?',
+  'ob.teaseChipType': 'Просто напиши',
+  'ob.teaseChipPhoto': 'Або фото',
+  'ob.teaseChipBarcode': 'Або штрихкод',
+  'ob.teaseDayTitle': 'Твій день у *барвах* години',
+  'ob.teaseDayBody': '«Сьогодні» йде за годинником, а кільце наповнюється з кожним записом. Один погляд — і ясно, як минає день.',
+
+  'saving.title': 'Зберігаємо *твій* план',
+  'saving.body': 'Переносимо твої відповіді в новий акаунт.',
+  'saving.welcomeBack': 'Одну *мить*',
 
   'sex.male': 'Чоловік',
   'sex.female': 'Жінка',
@@ -330,6 +365,11 @@ export const uk: Messages = {
   'auth.signInSubtitle': 'Увійди, щоб продовжити з того самого місця.',
   'auth.createAccount': 'Створити акаунт',
   'auth.createAccountTitle': 'Створи акаунт',
+  'auth.savePlanTitle': 'Збережи *свій* план',
+  'auth.savePlanSubtitle': (kcal: string) =>
+    `${kcal} kcal на день — уже пораховано. Акаунт збереже план на цьому телефоні й на будь-якому іншому.`,
+  'auth.buildPlanFirst': 'Уперше тут? Спершу склади план',
+  'auth.changeAnswers': 'Змінити відповіді',
   'auth.email': 'Ел. пошта',
   'auth.password': 'Пароль',
   'auth.passwordHint': 'Щонайменше 8 символів.',
@@ -555,7 +595,7 @@ export const uk: Messages = {
   'progress.title': 'Прогрес',
   'progress.daysWindow': (count: number) => n(count, { one: 'день', few: 'дні', many: 'днів', other: 'дня' }),
   'progress.daysShort': (count: number) => `${count} дн.`,
-  'progress.weightTitle': '⚖️  Вага',
+  'progress.weightTitle': 'Вага',
   'progress.noWeighIns': 'Зважувань поки немає. Запиши одне нижче або просто скажи щоденнику.',
   'progress.noWeighIn': 'Без зважування',
   'progress.trendReadout': (value: string) => `Середнє за 7 днів: ${value} — це лінія`,
@@ -564,13 +604,13 @@ export const uk: Messages = {
   'progress.sinceStart': 'Від початку',
   'progress.toTarget': 'До цілі',
   'progress.logTodaysWeight': (unit: string) => `Запиши сьогоднішню вагу (${unit})`,
-  'progress.caloriesTitle': '🔥  Калорії',
+  'progress.caloriesTitle': 'Калорії',
   'progress.avgDayTarget': (target: string) => `у середньому на день · норма ${target}`,
-  'progress.proteinTitle': '💪  Білок',
+  'progress.proteinTitle': 'Білок',
   'progress.hitTargetBefore': 'Норму виконано в',
   'progress.ofDays': (hit: string, logged: string) => `${hit} з ${logged}`,
   'progress.hitTargetAfter': 'днів із записами.',
-  'progress.qualityTitle': '🥦  Якість харчування',
+  'progress.qualityTitle': 'Якість харчування',
   'progress.days': (count: number) => n(count, { one: 'день', few: 'дні', many: 'днів', other: 'дня' }),
   'progress.qualityFooter': (days: string, percent: string) =>
     `У середньому за ${days} — ці показники є в ${percent}% записаного.`,
@@ -864,7 +904,7 @@ export const uk: Messages = {
   'review.kcalUnit': (kcal: string) => `${kcal} kcal`,
   'review.partOf': (plan: string) => `Входить у ${plan}`,
 
-  'quality.title': '🥦\u00a0\u00a0Якість харчування',
+  'quality.title': 'Якість харчування',
   'quality.partlyMeasured': 'частково виміряно',
   'quality.notEstimated': 'без оцінки',
 

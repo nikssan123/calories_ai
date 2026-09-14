@@ -47,6 +47,8 @@ import { FoodEditor } from '@/components/FoodEditor';
 import { Markdown } from '@/components/Markdown';
 import { Material } from '@/components/Material';
 import { PressableChunk } from '@/components/Chunk';
+import { Glossy } from '@/components/icons/Glossy';
+import { Serif } from '@/components/Serif';
 import { MeterChip, PencilGlyph, PlanWall } from '@/components/PlanWall';
 import { Skeleton } from '@/components/Skeleton';
 import { useToast } from '@/components/Toast';
@@ -849,12 +851,14 @@ export default function JournalScreen() {
 
         {!loading && bubbles.length === 0 && (
           <View style={styles.empty}>
-            {/* The one screen in the app with room for a mascot, and the one
+            {/* The one screen in the app with room for an illustration, and the one
                 that otherwise offers a new account a wall of text. */}
-            <Text style={styles.mascot}>🍽️</Text>
-            <Text style={[t.largeTitle, { color: colors.foreground }]}>
+            <View style={styles.emptyArt}>
+              <Glossy name="plate" size={72} />
+            </View>
+            <Serif accessibilityRole="header" style={[t.hero, { color: colors.foreground }]}>
               {tr('journal.emptyTitle')}
-            </Text>
+            </Serif>
             <Text style={[t.body, styles.blurb, { color: colors.mutedForeground }]}>
               {tr('journal.emptyBody')}
             </Text>
@@ -868,7 +872,7 @@ export default function JournalScreen() {
                   accessibilityRole="button"
                   contentStyle={[
                     styles.prompt,
-                    { backgroundColor: colors.card, borderColor: colors.border },
+                    { backgroundColor: colors.glassStrong, borderColor: colors.glassEdge },
                   ]}
                 >
                   <Text style={[styles.promptLabel, { color: colors.secondaryForeground }]}>
@@ -1101,8 +1105,8 @@ function StatusBar({ day, loading }: { day: DaySummary | null; loading: boolean 
         </Text>
       </View>
 
-      <View style={[styles.track, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-        <Bar pct={pct} color={over ? colors.foreground : colors.calories} />
+      <View style={[styles.track, { backgroundColor: colors.hairline, borderColor: 'transparent' }]}>
+        <Bar pct={pct} color={over ? colors.foreground : colors.calories} glow={!over} />
       </View>
 
       {/*
@@ -1131,7 +1135,8 @@ function StatusBar({ day, loading }: { day: DaySummary | null; loading: boolean 
  * frame reports the same fact without any of that. It is also the only feedback
  * on this screen that the number at the top changed.
  */
-function Bar({ pct, color }: { pct: number; color: string }) {
+function Bar({ pct, color, glow }: { pct: number; color: string; glow: boolean }) {
+  const colors = useColors();
   const reduced = useReducedMotion();
   const width = useSharedValue(pct);
 
@@ -1147,7 +1152,21 @@ function Bar({ pct, color }: { pct: number; color: string }) {
     width: `${Math.max(0, Math.min(100, width.value))}%`,
   }));
 
-  return <Animated.View style={[styles.fill, { backgroundColor: color }, style]} />;
+  return (
+    <Animated.View
+      style={[
+        styles.fill,
+        { backgroundColor: color },
+        glow
+          ? {
+              experimental_backgroundImage: `linear-gradient(90deg, ${colors.calories}, ${colors.logoRamp})`,
+              boxShadow: `0px 0px 8px ${colors.ring}`,
+            }
+          : null,
+        style,
+      ]}
+    />
+  );
 }
 
 /**
@@ -1226,10 +1245,15 @@ const Row = memo(function Row({
           {bubble.content.length > 0 && (
             <View style={styles.userBubbleWrap}>
               <View
-                style={[styles.userLedge, { backgroundColor: colors.caloriesDeep }]}
-                pointerEvents="none"
-              />
-              <View style={[styles.userBubble, { backgroundColor: colors.primary }]}>
+                style={[
+                  styles.userBubble,
+                  {
+                    backgroundColor: colors.primary,
+                    experimental_backgroundImage: `linear-gradient(135deg, ${colors.calories} 0%, ${colors.logoRamp} 100%)`,
+                    boxShadow: `0px 10px 22px -12px ${colors.calories}, inset 0px 1px 0px rgba(255,255,255,0.45)`,
+                  },
+                ]}
+              >
                 <Text style={[t.body, styles.userText, { color: colors.primaryForeground }]}>
                   {bubble.content}
                 </Text>
@@ -1528,7 +1552,7 @@ const styles = StyleSheet.create({
   wallDone: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 2 },
   wallDoneText: { flexShrink: 1 },
   flex: { flex: 1 },
-  status: { borderBottomWidth: 2, paddingHorizontal: 16, paddingBottom: 10 },
+  status: { borderBottomWidth: 1, paddingHorizontal: 16, paddingBottom: 10 },
   statusSkeleton: { height: 16, width: 160, borderRadius: 8 },
   statusRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
   statusFigure: { fontSize: 16, lineHeight: 24 },
@@ -1543,10 +1567,10 @@ const styles = StyleSheet.create({
   burn: { marginTop: 6 },
   column: { paddingHorizontal: 16, paddingVertical: 20, gap: 20 },
   empty: { paddingTop: 40 },
-  mascot: { fontSize: 44, lineHeight: 52, marginBottom: 12 },
+  emptyArt: { marginBottom: 12 },
   blurb: { marginTop: 12, lineHeight: 24 },
   prompts: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 28 },
-  prompt: { borderWidth: 2, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
+  prompt: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
   promptLabel: { fontFamily: font.bold, fontSize: 14, lineHeight: 20 },
   userRow: { alignItems: 'flex-end' },
   sentScans: { alignSelf: 'flex-end', alignItems: 'flex-end', gap: 6, maxWidth: '100%' },
@@ -1555,7 +1579,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     maxWidth: '100%',
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 5,
@@ -1573,22 +1597,15 @@ const styles = StyleSheet.create({
    * zero height and never distorts; carrying the real dimensions through is
    * worth doing when the photo becomes tappable.
    */
-  photo: { width: 240, height: 240, borderRadius: 24, borderWidth: 2 },
+  photo: { width: 240, height: 240, borderRadius: 24, borderWidth: 1 },
   /*
-   * The ledge again, and drawn by hand rather than with <Chunk> because this
-   * one is not a rounded rectangle: the corner nearest the sender is tucked in,
-   * which is the whole reason a chat bubble reads as coming *from* somewhere.
+   * Lit rather than ledged, like every surface since the glow-up: the logo's
+   * green-to-teal ramp and a glow of its own colour under it. Still drawn here
+   * rather than with <Chunk>, because the corner nearest the sender is tucked
+   * in — which is the whole reason a chat bubble reads as coming *from*
+   * somewhere.
    */
   userBubbleWrap: { alignSelf: 'flex-end' },
-  userLedge: {
-    position: 'absolute',
-    top: 3,
-    right: 0,
-    bottom: -3,
-    left: 0,
-    borderRadius: 22,
-    borderBottomRightRadius: TUCK,
-  },
   userBubble: {
     borderRadius: 22,
     borderBottomRightRadius: TUCK,
@@ -1599,7 +1616,7 @@ const styles = StyleSheet.create({
   userText: { fontFamily: font.semibold, lineHeight: 26 },
   assistantRow: { maxWidth: '92%', gap: 10 },
   actions: { gap: 6 },
-  receipt: { borderWidth: 2, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },
+  receipt: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },
   waiting: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
   steps: { gap: 4, paddingBottom: 2 },
   dots: { flexDirection: 'row', gap: 8 },

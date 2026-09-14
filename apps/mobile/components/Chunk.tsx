@@ -12,51 +12,45 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { CHUNK_DEPTH, duration, ease, RADIUS, useColors } from '@/theme';
+import { CHUNK_DEPTH, duration, ease, RADIUS, tint, useColors, useTheme, type Palette } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { haptics } from '@/lib/haptics';
 
 /**
- * The ledge.
+ * A surface, lit.
  *
- * On the web `--chunk` is a solid, *zero-blur*, offset shadow, and that is the
- * one decision the whole design rests on: nothing here is a hairline, every
- * surface has an edge you could pick up. RN cannot express it as a shadow on
- * both platforms — iOS can, with `shadowRadius: 0`, but Android has only
- * `elevation`, which is always blurred and always centred. Faking it twice
- * would split the platforms on the single thing that must not vary.
+ * This was the ledge: a solid, zero-blur slab offset under every card, which
+ * made each surface an object you could pick up and made the whole app read as
+ * a stack of identical boxes on a flat sheet. The glow-up replaced it with light
+ * (GLOW-UP.md, "depth"): a long warm shadow held inside the surface's own
+ * footprint, and a one-pixel lit edge along the top. Depth still varies — it is
+ * what `depth` now scales — but it varies the way light does rather than by a
+ * fixed four pixels of brown.
  *
- * So the ledge is a real `View`: same radius, `--chunk` colour, offset down by
- * its own depth, with the card laid on top. That is what the CSS is imitating
- * anyway, it is identical on both platforms, and the press falls out for free —
- * translating the card down by the depth consumes the ledge exactly the way
- * `:active` does on the web, because there is nothing left underneath.
+ * Both are a single `boxShadow`, which is what made the swap cheap. React
+ * Native draws CSS box shadows natively on both platforms since the new
+ * architecture, inset ones included, so there is no second view to keep in
+ * register and nothing that differs between iOS and Android — the property the
+ * ledge was built as a real `View` to protect.
  *
- * Layout, though, follows the CSS exactly: a `box-shadow` occupies no space, so
- * neither does the ledge. It overhangs whatever comes next by its own depth,
- * which is what makes a column of cards `gap: 28` apart read the same here as
- * on the web. `reserve` is the port of `chunk-slot`, for the few places that
- * genuinely need the travel held open.
- *
- * It occupies no space *outward*, though, rather than by being drawn outside
- * the chunk's own box. The ledge is held inside the bounds by `Overhang`, and
- * the box is pulled back over its neighbour with a negative margin — see both
- * for why an out-of-bounds ledge cost the send button its bottom edge.
+ * The API is the ledge's, unchanged, so the hundred and sixty call sites did not
+ * have to learn anything: `color` used to be the slab under a green button and
+ * is now the tint of its glow, and `reserve` is accepted and means nothing,
+ * because a shadow overhangs no neighbour.
  */
 export function Chunk({
   depth = CHUNK_DEPTH,
   color,
   radius = RADIUS,
-  reserve = false,
   style,
   contentStyle,
   children,
 }: {
   depth?: number;
-  /** Overrides `--chunk` — a green button sits on a dark green ledge. */
+  /** Tints the glow — a green button glows green. */
   color?: string;
   radius?: number;
-  /** `chunk-slot`: hold the ledge's depth open so it overhangs nothing. */
+  /** Kept for the call sites that held the ledge's travel open. Inert. */
   reserve?: boolean;
   /** Laid on the wrapper. */
   style?: StyleProp<ViewStyle>;
@@ -64,44 +58,38 @@ export function Chunk({
   contentStyle?: StyleProp<ViewStyle>;
   children?: React.ReactNode;
 }) {
-  const colors = useColors();
+  const { scheme, colors } = useTheme();
+  const lit = useMemo(() => light(colors, scheme, depth, color), [colors, scheme, depth, color]);
   return (
-    <View style={[reserve ? null : { marginBottom: -depth }, style]}>
-      <Ledge depth={depth} radius={radius} color={color ?? colors.chunk} />
-      <View style={[{ borderRadius: radius }, contentStyle]}>{children}</View>
-      <Overhang depth={depth} />
+    <View style={style}>
+      <View style={[{ borderRadius: radius, boxShadow: lit }, contentStyle]}>{children}</View>
     </View>
   );
 }
 
 /**
- * A `Chunk` you can press. The surface travels exactly its own depth and lands
- * flush with the page, rather than sliding around on top of it.
+ * A `Chunk` you can press.
  *
- * The travel is animated rather than toggled because the web transitions it
- * over `--dur-quick`; an instant snap reads as a glitch at the top of the
- * motion and as a dropped frame at the bottom. Reduced motion collapses the
- * duration, which leaves the press correct and immediate rather than absent —
- * the sink is feedback, not decoration, and removing it would leave a control
- * that does not answer.
+ * The press used to travel the surface down into its own ledge. With no ledge
+ * there is nothing to travel into, so it settles instead: the surface gives a
+ * few percent under the thumb and its shadow draws in, which is what something
+ * lit from above does when it is pushed towards the thing it is lit against.
  *
- * It also buzzes, which is the half of the metaphor a browser cannot reach:
- * every chunky control in the app inherits one light impact from here. See
- * `lib/haptics` for why that hangs off `onPress` and not the press-in the
- * sink hangs off. `haptic={false}` is for the few controls that answer with
- * a stronger one of their own a moment later.
+ * Still animated rather than toggled, still collapsed rather than removed under
+ * reduced motion — the give is feedback, not decoration — and it still buzzes.
+ * See `lib/haptics` for why that hangs off `onPress` and not the press-in.
  */
 export function PressableChunk({
   depth = CHUNK_DEPTH,
   color,
   radius = RADIUS,
-  reserve = false,
   style,
   contentStyle,
   children,
   disabled,
   haptic = true,
   onPress,
+  reserve: _reserve,
   ...props
 }: Omit<PressableProps, 'children' | 'style'> & {
   depth?: number;
@@ -115,21 +103,27 @@ export function PressableChunk({
   /*
    * Narrowed from `PressableProps`, which also allows a render function of the
    * pressed state. There is nothing for one to do here: the press is expressed
-   * by the surface travelling into its own ledge, and a second, ad-hoc pressed
-   * style at the call site is exactly the drift this component exists to stop.
+   * by the surface itself, and a second, ad-hoc pressed style at the call site
+   * is exactly the drift this component exists to stop.
    */
   children?: React.ReactNode;
 }) {
-  const colors = useColors();
+  const { scheme, colors } = useTheme();
   const reduced = useReducedMotion();
   const pressed = useSharedValue(0);
   const timing = useMemo(
     () => ({ duration: reduced ? 0 : duration.quick, easing: ease.out }),
     [reduced],
   );
+  const lit = useMemo(() => light(colors, scheme, depth, color), [colors, scheme, depth, color]);
+  /* Pressed, the shadow is a third of its depth: the surface has come down to meet it. */
+  const pushed = useMemo(
+    () => light(colors, scheme, Math.max(1, depth / 3), color),
+    [colors, scheme, depth, color],
+  );
 
   const surface = useAnimatedStyle(() => ({
-    transform: [{ translateY: pressed.value * depth }],
+    transform: [{ scale: 1 - pressed.value * 0.03 }, { translateY: pressed.value * 1.5 }],
   }));
 
   return (
@@ -138,16 +132,11 @@ export function PressableChunk({
       /*
        * Flatten before fading, on Android.
        *
-       * A disabled chunk is drawn at reduced opacity, and Android applies a
-       * parent's opacity to each child *separately* unless it is told to
-       * composite the group offscreen first. The ledge sits behind an opaque
-       * surface, so per-child fading lets it show straight through — a disabled
-       * send button wore its own ledge as a halo on every side instead of a
-       * crescent underneath. iOS and the browser both flatten first, which is
-       * why this only ever went wrong on one platform.
-       *
-       * Only while disabled: the offscreen buffer is not free, and at full
-       * opacity there is nothing to composite.
+       * A disabled surface is drawn at reduced opacity, and Android applies a
+       * parent's opacity to each child separately unless it is told to
+       * composite the group offscreen first — so the glow and the face would
+       * fade at different rates and the glow would show through the face. Only
+       * while disabled: the offscreen buffer is not free.
        */
       needsOffscreenAlphaCompositing={disabled === true}
       onPressIn={() => {
@@ -164,58 +153,39 @@ export function PressableChunk({
               onPress(event);
             }
       }
-      style={[
-        reserve ? null : { marginBottom: -depth },
-        disabled ? styles.disabled : null,
-        style,
-      ]}
+      style={[disabled ? styles.disabled : null, style]}
       {...props}
     >
-      <Ledge depth={depth} radius={radius} color={color ?? colors.chunk} />
-      <Animated.View style={[{ borderRadius: radius }, contentStyle, surface]}>
-        {children}
-      </Animated.View>
-      <Overhang depth={depth} />
+      {({ pressed: down }) => (
+        <Animated.View
+          style={[{ borderRadius: radius, boxShadow: down ? pushed : lit }, contentStyle, surface]}
+        >
+          {children}
+        </Animated.View>
+      )}
     </Pressable>
   );
 }
 
 /**
- * The slab under the surface. Inset to the top by its own depth so only the
- * bottom edge shows — a full-height copy would paint a dark halo out of the
- * sides on any surface with a transparent corner.
+ * The shadow and the lit edge, as one CSS `box-shadow`.
  *
- * It stops at the bottom of the chunk's box rather than hanging below it, which
- * is `Overhang`'s whole reason for existing.
+ * The outer shadow grows with `depth` the way the ledge used to, so a small chip
+ * and a full card are still visibly different objects. A tinted surface — the
+ * green button on its green "ledge" — glows in that colour instead of the warm
+ * brown every neutral surface casts, which keeps the thing you are meant to
+ * press the brightest object on the screen.
  */
-function Ledge({ depth, radius, color }: { depth: number; radius: number; color: string }) {
-  return (
-    <View
-      pointerEvents="none"
-      style={[
-        StyleSheet.absoluteFill,
-        { top: depth, borderRadius: radius, backgroundColor: color },
-      ]}
-    />
-  );
-}
-
-/**
- * The ledge's own depth, as layout, so the chunk's box contains every pixel it
- * draws. Paired with the negative `marginBottom` above, which takes the same
- * depth straight back off again — so the space the chunk *occupies* is still
- * the surface alone, exactly as a `box-shadow` does.
- *
- * This is not tidiness. A view that draws outside its bounds is at the mercy of
- * anything that composites it, and on Android two things do. `overflow: hidden`
- * on an ancestor is the obvious one. The other is `needsOffscreenAlphaCompositing`,
- * which the disabled state above needs and which renders the group into a
- * buffer the size of its bounds — so the ledge, hanging below them, was
- * *clipped away*, and the app's most permanently-disabled control, the send
- * button on an empty composer, sat there with its bottom edge sliced off.
- */
-function Overhang({ depth }: { depth: number }) {
-  return <View pointerEvents="none" style={{ height: depth }} />;
+function light(colors: Palette, scheme: 'light' | 'dark', depth: number, color?: string): string {
+  const y = Math.round(depth * 2.5);
+  const blur = Math.round(depth * 5.5);
+  const spread = -Math.round(depth * 3);
+  const shade = color
+    ? tint(color, scheme === 'dark' ? 0.55 : 0.5)
+    : scheme === 'dark'
+      ? 'rgba(0, 0, 0, 0.7)'
+      : tint(colors.chunk, 0.34);
+  return `0px ${y}px ${blur}px ${spread}px ${shade}, inset 0px 1px 0px ${colors.glassEdge}`;
 }
 
 const styles = StyleSheet.create({

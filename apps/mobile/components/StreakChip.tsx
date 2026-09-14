@@ -1,5 +1,16 @@
+import { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import Animated, {
+  Easing,
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
+import { Glossy } from '@/components/icons/Glossy';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { useIsFocused, useRouter } from 'expo-router';
 import type { Streak } from '@ct/shared';
 import { useT } from '@/lib/i18n';
 import { haptics } from '@/lib/haptics';
@@ -28,19 +39,53 @@ import { font, type as t, useColors } from '@/theme';
 const WORTH_DRAWING = 4;
 
 export function StreakChip({ streak }: { streak: Streak }) {
-  const colors = useColors();
-  const tr = useT();
-  const router = useRouter();
-
   if (streak.state === 'none' || streak.current < WORTH_DRAWING) return null;
 
   /*
    * The at-risk case is the whole reason this component knows about `state`.
    * The run is intact and has nothing in it today — which is true for most of
    * every morning — so it is drawn in full and given the one line that says
-   * what to do about it, rather than being dimmed or hidden.
+   * what to do about it, rather than being hidden. (The flame dims; the words
+   * and the count stay at full strength.)
    */
   const atRisk = streak.state === 'at_risk';
+
+  return <Chip streak={streak} atRisk={atRisk} />;
+}
+
+/**
+ * The chip itself, split out so the early return above stays ahead of the hooks.
+ *
+ * The flame is the app's own icon now, and it is alive when today is logged —
+ * a slow flicker, drawn from its base — and still and dimmed while the run is
+ * at risk. The dim flame says "log today to keep it" before the words do.
+ */
+function Chip({ streak, atRisk }: { streak: Streak; atRisk: boolean }) {
+  const colors = useColors();
+  const tr = useT();
+  const router = useRouter();
+  const reduced = useReducedMotion();
+  const focused = useIsFocused();
+  const flicker = useSharedValue(0);
+
+  useEffect(() => {
+    if (reduced || atRisk || !focused) {
+      cancelAnimation(flicker);
+      flicker.value = 0;
+      return;
+    }
+    flicker.value = withRepeat(withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }), -1, true);
+    return () => cancelAnimation(flicker);
+  }, [reduced, atRisk, focused, flicker]);
+
+  const alive = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: 9 },
+      { scaleY: 1 + flicker.value * 0.1 },
+      { scaleX: 1 - flicker.value * 0.05 },
+      { translateY: -9 },
+    ],
+  }));
 
   return (
     <Pressable
@@ -54,8 +99,19 @@ export function StreakChip({ streak }: { streak: Streak }) {
       hitSlop={8}
       style={({ pressed }) => [styles.wrap, { opacity: pressed ? 0.6 : 1 }]}
     >
-      <View style={styles.row}>
-        <Text style={styles.flame}>{atRisk ? '🕯️' : '🔥'}</Text>
+      <View
+        style={[
+          styles.row,
+          styles.pill,
+          {
+            backgroundColor: colors.glassStrong,
+            boxShadow: `0px 8px 20px -12px ${colors.protein}, inset 0px 1px 0px ${colors.glassEdge}`,
+          },
+        ]}
+      >
+        <Animated.View style={[{ opacity: atRisk ? 0.45 : 1 }, alive]}>
+          <Glossy name="streak" size={18} />
+        </Animated.View>
         {/* `streak.days` goes through `plural()`, which returns "21 days" —
             the count already formatted for the locale. Putting the number in
             front of it as well is how this first read "21 21 days". */}
@@ -83,6 +139,6 @@ export function StreakChip({ streak }: { streak: Streak }) {
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', gap: 2 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  flame: { fontSize: 13 },
+  pill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
   nudge: { fontFamily: font.semibold, fontSize: 12, lineHeight: 16 },
 });

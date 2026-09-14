@@ -20,7 +20,7 @@ export function CoachBubble({ content }: { content: string }) {
 
   return (
     <View style={styles.row}>
-      <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+      <View style={[styles.avatar, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}>
         <Text style={[t.footnoteSemibold, { color: colors.primaryForeground }]}>{initialsOf(name)}</Text>
       </View>
       <View style={styles.stack}>
@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
   },
   stack: { flex: 1, gap: 4 },
   bubble: {
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 18,
     borderTopLeftRadius: 6,
     paddingHorizontal: 14,

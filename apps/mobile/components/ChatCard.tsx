@@ -283,7 +283,7 @@ function SuggestedRecipe({ recipe, onLogged }: { recipe: Recipe; onLogged?: () =
           onPress={() => void cook()}
           disabled={cooking}
           accessibilityRole="button"
-          contentStyle={[styles.cook, { backgroundColor: colors.primary }]}
+          contentStyle={[styles.cook, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
         >
           <Text style={[t.footnoteBold, { color: colors.primaryForeground }]}>
             {cooking
@@ -1066,7 +1066,7 @@ function WeightCard({
             disabled={saving}
             accessibilityRole="button"
             style={{ opacity: saving ? 0.4 : 1 }}
-            contentStyle={[styles.weightSave, { backgroundColor: colors.primary }]}
+            contentStyle={[styles.weightSave, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
           >
             <Text style={[t.footnoteBold, { color: colors.primaryForeground }]}>
               {saving ? tr('setup.saving') : tr('common.save')}
@@ -1522,7 +1522,7 @@ const formatDate = (isoDate: string, locale: Locale) =>
 
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
-  shell: { borderWidth: 2, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 14 },
+  shell: { borderWidth: 1, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 14 },
   recipes: { gap: 12 },
   suggestion: { gap: 8 },
   suggestionActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -1535,7 +1535,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 6,
@@ -1574,7 +1574,7 @@ const styles = StyleSheet.create({
   subline: { marginTop: 6 },
   /** Aligned right so it reads as an action on the card, not a line of it. */
   editRow: { marginTop: 8, alignSelf: 'flex-end' },
-  weightField: { flex: 1, borderWidth: 2, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6 },
+  weightField: { flex: 1, borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6 },
   weightFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
   weightSave: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999 },
   caption: { marginTop: 8 },
@@ -1597,16 +1597,16 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 30,
     borderRadius: 9,
-    borderWidth: 2,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   reviewFigures: { flexDirection: 'row', gap: 12, marginTop: 14 },
-  reviewChange: { borderWidth: 2, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, marginTop: 14 },
+  reviewChange: { borderWidth: 1, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12, marginTop: 14 },
   reviewChangeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   reviewChangeWhy: { marginTop: 6, lineHeight: 20 },
   reviewFigure: { fontSize: 20, lineHeight: 26 },
-  reviewProse: { borderTopWidth: 2, marginTop: 14, paddingTop: 12, gap: 10 },
+  reviewProse: { borderTopWidth: 1, marginTop: 14, paddingTop: 12, gap: 10 },
   reviewParagraph: { lineHeight: 24 },
   reviewMore: { marginTop: 10, alignSelf: 'flex-start' },
   nights: { gap: 6, marginTop: 10 },

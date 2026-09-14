@@ -37,6 +37,12 @@ export const hu: Messages = {
   // ---- Today --------------------------------------------------------------
   // Under the ring's figure: "850 maradt". The widget reads it as "… kcal maradt ma".
   'today.title': 'Ma',
+  // The name stands alone after a comma, so it never needs an ending.
+  'today.greetMorning': (name: string) => (name ? `Jó *reggelt*, ${name}` : 'Jó *reggelt*'),
+  'today.greetAfternoon': (name: string) => (name ? `Szép *délutánt*, ${name}` : 'Szép *délutánt*'),
+  'today.greetEvening': (name: string) => (name ? `Jó *estét*, ${name}` : 'Jó *estét*'),
+  'today.greetNight': (name: string) => (name ? `Még *ébren* vagy, ${name}?` : 'Még *ébren* vagy?'),
+  'today.backToToday': 'Vissza a mai naphoz',
   'today.toGo': 'maradt',
   'today.over': 'célon felül',
   'today.burned': (kcal: string) => `+${kcal} elégetve`,
@@ -52,7 +58,7 @@ export const hu: Messages = {
   'today.roughEstimate': 'durva becslés',
   'today.exerciseFooter': 'A céltól külön mutatjuk – a mozgással elégetett kalória csak durva becslés.',
   'today.exerciseTitle': '🏃  Mozgás',
-  'today.stepsTitle': '👟  Lépések',
+  'today.stepsTitle': 'Lépések',
   'today.steps': (count: number) => n(count, { one: 'lépés', other: 'lépés' }),
   'today.stepsFooter': 'A telefonod számolja. A lépések pontosítják a célodat – de sosem adódnak hozzá.',
   'today.stepsEnable': 'Lépések számolása',
@@ -248,12 +254,14 @@ export const hu: Messages = {
   'ob.back': 'Vissza',
   'ob.continue': 'Tovább',
 
-  'ob.welcomeTitle': 'Állítsuk össze a terved',
+  'ob.welcomeTitle': 'Állítsuk össze a *terved*',
   'ob.welcomeBody':
     'Hat gyors kérdés – nagyjából fél perc –, és kész is a kalória- és fehérjecélod, a te testedre szabva, nem egy átlagemberre. Később bármit módosíthatsz.',
   'ob.welcomeStart': 'Kezdjük',
+  'ob.haveAccount': 'Már van fiókom',
+  'ob.wordmarkTagline': 'A napod eddig',
 
-  'ob.goalTitle': 'Mi a célod?',
+  'ob.goalTitle': 'Mi a *célod*?',
   'ob.goalBody': 'Ettől függ, hogy kevesebbet, ugyanannyit vagy többet egyél, mint amennyit elégetsz.',
   'ob.goalLose': 'Fogyni szeretnék',
   'ob.goalLoseHint': 'Egyenletes kalóriadeficit, amit tényleg tartani tudsz',
@@ -293,7 +301,7 @@ export const hu: Messages = {
   'ob.activityTitle': 'Mennyit mozogsz?',
   'ob.activityBody': 'Egy átlagos heted – az alkalmazásban rögzített edzések nélkül.',
 
-  'ob.buildingTitle': 'Készül a terved',
+  'ob.buildingTitle': 'Készül a *terved*',
   'ob.buildingStep1': 'Kiszámoljuk, mennyit égetsz',
   'ob.buildingStep2': 'Beállítjuk a napi kalóriát',
   'ob.buildingStep3': 'Elosztjuk a fehérjét, a szénhidrátot és a zsírt',
@@ -305,6 +313,34 @@ export const hu: Messages = {
   'ob.planFootnote':
     'Kiindulópont, nem ítélet. Hetente igazodik ahhoz, amit rögzítesz, és ahhoz, amit a mérleg mutat.',
   'ob.planStart': 'Kezdjük a rögzítést',
+  'ob.planSave': 'Tervem mentése',
+  'ob.planSaveHint': 'Most jön egy fiók, amelyben megmarad. Ingyenes, és egy perc az egész.',
+  'ob.planWhere': 'Hová *vezet* ez',
+  'ob.planToday': (weight: string) => `ma ${weight}`,
+  'ob.planGoal': (weight: string) => `cél ${weight}`,
+  // A postposition after the date, so `Intl`'s "2027. március 12." needs no suffix.
+  'ob.planArrives': (date: string, rate: string) => `${date} körül · heti ${rate}`,
+
+  'ob.buildingNote1': 'Írd le a saját szavaiddal, mit ettél – a számokat a napló intézi.',
+  'ob.buildingNote2': 'A célod hétről hétre igazodik a méréseidhez.',
+  'ob.buildingNote3': 'Egy fotó a tányérodról vagy egy vonalkód is jó.',
+
+  'ob.teaseJournalTitle': 'Írd le, mit ettél. *Ennyi* az egész.',
+  'ob.teaseJournalBody': 'Nincs keresgélés, nincsenek adagtáblázatok. A napló megérti, és beírja a számokat.',
+  'ob.teaseJournalYou1': '2 tojás, vajas kenyér, tejeskávé',
+  'ob.teaseJournalReply1': 'Rögzítve a reggelihez',
+  'ob.teaseJournalYou2': 'és egy banán',
+  'ob.teaseJournalReply2': 'Hozzáadva',
+  'ob.teaseJournalComposer': 'Mit ettél?',
+  'ob.teaseChipType': 'Csak írd be',
+  'ob.teaseChipPhoto': 'Vagy egy fotó',
+  'ob.teaseChipBarcode': 'Vagy egy vonalkód',
+  'ob.teaseDayTitle': 'A napod az óra *fényében*',
+  'ob.teaseDayBody': 'A „Ma” nézet az órához igazodik, a kör pedig minden rögzítéssel telik. Egy pillantás, és látod, hogy áll a napod.',
+
+  'saving.title': 'Mentjük a *terved*',
+  'saving.body': 'Átvisszük a válaszaidat az új fiókodba.',
+  'saving.welcomeBack': 'Egy *pillanat*',
 
   'sex.male': 'Férfi',
   'sex.female': 'Nő',
@@ -332,6 +368,11 @@ export const hu: Messages = {
   'auth.signInSubtitle': 'Lépj be, és folytasd ott, ahol abbahagytad.',
   'auth.createAccount': 'Fiók létrehozása',
   'auth.createAccountTitle': 'Hozd létre a fiókodat',
+  'auth.savePlanTitle': 'Mentsd el a *terved*',
+  'auth.savePlanSubtitle': (kcal: string) =>
+    `Napi ${kcal} kcal, kiszámolva és készen. Egy fiókkal megmarad – ezen a telefonon és bármelyik másikon is.`,
+  'auth.buildPlanFirst': 'Új vagy itt? Előbb állítsd össze a terved',
+  'auth.changeAnswers': 'Válaszaim módosítása',
   'auth.email': 'E-mail',
   'auth.password': 'Jelszó',
   'auth.passwordHint': 'Legalább 8 karakter.',
@@ -554,7 +595,7 @@ export const hu: Messages = {
   'progress.title': 'Haladás',
   'progress.daysWindow': (count: number) => `${count} nap`,
   'progress.daysShort': (count: number) => `${count} nap`,
-  'progress.weightTitle': '⚖️  Testsúly',
+  'progress.weightTitle': 'Testsúly',
   'progress.noWeighIns': 'Még nincs mérés. Rögzíts egyet lent, vagy csak mondd el a naplónak.',
   'progress.noWeighIn': 'Nincs mérés',
   'progress.trendReadout': (value: string) => `7 napos átlag: ${value} – ez a vonal`,
@@ -563,15 +604,15 @@ export const hu: Messages = {
   'progress.sinceStart': 'Kezdés óta',
   'progress.toTarget': 'Célig',
   'progress.logTodaysWeight': (unit: string) => `Mai testsúly rögzítése (${unit})`,
-  'progress.caloriesTitle': '🔥  Kalória',
+  'progress.caloriesTitle': 'Kalória',
   'progress.avgDayTarget': (target: string) => `átlag/nap · cél: ${target}`,
-  'progress.proteinTitle': '💪  Fehérje',
+  'progress.proteinTitle': 'Fehérje',
   // "Elérted a célt [20 rögzített napból 12] napon." The bold middle carries
   // both numbers, and the noun after each stays in the fixed text.
   'progress.hitTargetBefore': 'Elérted a célt',
   'progress.ofDays': (hit: string, logged: string) => `${logged} rögzített napból ${hit}`,
   'progress.hitTargetAfter': 'napon.',
-  'progress.qualityTitle': '🥦  Étrend minősége',
+  'progress.qualityTitle': 'Étrend minősége',
   'progress.days': (count: number) => n(count, { one: 'nap', other: 'nap' }),
   'progress.qualityFooter': (days: string, percent: string) =>
     `Átlag, ${days} alapján – a rögzítettek közül ${percent}% tartalmaz ilyen adatot.`,
@@ -863,7 +904,7 @@ export const hu: Messages = {
   'review.kcalUnit': (kcal: string) => `${kcal} kcal`,
   'review.partOf': (plan: string) => `${plan} csomagban elérhető`,
 
-  'quality.title': '🥦\u00a0\u00a0Étrend minősége',
+  'quality.title': 'Étrend minősége',
   'quality.partlyMeasured': 'részben mért',
   'quality.notEstimated': 'nincs becslés',
 

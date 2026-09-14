@@ -169,7 +169,7 @@ export default function LibraryRecipeScreen() {
               style={styles.flex}
               contentStyle={[
                 styles.button,
-                { backgroundColor: colors.secondary, borderWidth: 2, borderColor: colors.border },
+                { backgroundColor: colors.secondary, borderWidth: 1, borderColor: colors.border },
               ]}
             >
               {adapting && <ActivityIndicator size="small" color={colors.secondaryForeground} />}
@@ -185,7 +185,7 @@ export default function LibraryRecipeScreen() {
               disabled={cooking || adapting}
               accessibilityRole="button"
               style={styles.flex}
-              contentStyle={[styles.button, { backgroundColor: colors.primary }]}
+              contentStyle={[styles.button, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
             >
               <Text style={[styles.buttonLabel, { color: colors.primaryForeground }]}>
                 {cooking

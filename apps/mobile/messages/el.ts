@@ -37,6 +37,12 @@ export const el: Messages = {
 
   // ---- Today --------------------------------------------------------------
   'today.title': 'Σήμερα',
+  // Not «Ακόμα ξύπνιος;», which genders the reader.
+  'today.greetMorning': (name: string) => (name ? `*Καλημέρα*, ${name}` : '*Καλημέρα*'),
+  'today.greetAfternoon': (name: string) => (name ? `Καλό *απόγευμα*, ${name}` : 'Καλό *απόγευμα*'),
+  'today.greetEvening': (name: string) => (name ? `*Καλησπέρα*, ${name}` : '*Καλησπέρα*'),
+  'today.greetNight': (name: string) => (name ? `Δεν *κοιμάσαι* ακόμα, ${name};` : 'Δεν *κοιμάσαι* ακόμα;'),
+  'today.backToToday': 'Πίσω στο σήμερα',
   'today.toGo': 'απομένουν',
   'today.over': 'παραπάνω',
   'today.burned': (kcal: string) => `+${kcal} καμένες`,
@@ -54,7 +60,7 @@ export const el: Messages = {
   'today.roughEstimate': 'πρόχειρη εκτίμηση',
   'today.exerciseFooter': 'Εμφανίζεται χωριστά από τον στόχο σου — η καύση από την άσκηση είναι πρόχειρη εκτίμηση.',
   'today.exerciseTitle': '🏃  Άσκηση',
-  'today.stepsTitle': '👟  Βήματα',
+  'today.stepsTitle': 'Βήματα',
   'today.steps': (count: number) => n(count, { one: 'βήμα', other: 'βήματα' }),
   'today.stepsFooter': 'Τα μετράει το τηλέφωνό σου. Τα βήματα κάνουν τον στόχο σου πιο ακριβή — δεν προστίθενται ποτέ σε αυτόν.',
   'today.stepsEnable': 'Μέτρα τα βήματά μου',
@@ -247,12 +253,14 @@ export const el: Messages = {
   'ob.back': 'Πίσω',
   'ob.continue': 'Συνέχεια',
 
-  'ob.welcomeTitle': 'Ας φτιάξουμε το πλάνο σου',
+  'ob.welcomeTitle': 'Ας φτιάξουμε το *πλάνο* σου',
   'ob.welcomeBody':
     'Έξι γρήγορες ερωτήσεις — περίπου μισό λεπτό — και θα έχεις στόχο για θερμίδες και πρωτεΐνη, υπολογισμένο για το δικό σου σώμα κι όχι για έναν μέσο όρο. Μπορείς να αλλάξεις οτιδήποτε αργότερα.',
   'ob.welcomeStart': 'Ξεκινάμε',
+  'ob.haveAccount': 'Έχω ήδη λογαριασμό',
+  'ob.wordmarkTagline': 'Η μέρα σου ως τώρα',
 
-  'ob.goalTitle': 'Τι θέλεις να πετύχεις;',
+  'ob.goalTitle': 'Τι θέλεις να *πετύχεις*;',
   'ob.goalBody': 'Αυτό ορίζει αν η μέρα σου θα είναι κάτω, ίσα ή πάνω από όσα καις.',
   'ob.goalLose': 'Να χάσω βάρος',
   'ob.goalLoseHint': 'Σταθερό έλλειμμα που μπορείς πραγματικά να κρατήσεις',
@@ -294,7 +302,7 @@ export const el: Messages = {
   'ob.activityTitle': 'Πόσο κινείσαι;',
   'ob.activityBody': 'Μια συνηθισμένη εβδομάδα σου — χωρίς τις προπονήσεις που καταγράφεις στην εφαρμογή.',
 
-  'ob.buildingTitle': 'Φτιάχνουμε το πλάνο σου',
+  'ob.buildingTitle': 'Φτιάχνουμε το *πλάνο* σου',
   'ob.buildingStep1': 'Υπολογίζουμε πόσα καις',
   'ob.buildingStep2': 'Ορίζουμε τις ημερήσιες θερμίδες',
   'ob.buildingStep3': 'Μοιράζουμε πρωτεΐνη, υδατάνθρακες και λιπαρά',
@@ -306,6 +314,33 @@ export const el: Messages = {
   'ob.planFootnote':
     'Σημείο εκκίνησης, όχι ετυμηγορία. Προσαρμόζεται κάθε εβδομάδα με βάση όσα καταγράφεις και όσα δείχνει η ζυγαριά.',
   'ob.planStart': 'Ξεκίνα την καταγραφή',
+  'ob.planSave': 'Αποθήκευσε το πλάνο μου',
+  'ob.planSaveHint': 'Μετά, ένας λογαριασμός για να το κρατήσεις. Είναι δωρεάν και θέλει ένα λεπτό.',
+  'ob.planWhere': 'Πού θα σε *φτάσει*',
+  'ob.planToday': (weight: string) => `${weight} σήμερα`,
+  'ob.planGoal': (weight: string) => `στόχος ${weight}`,
+  'ob.planArrives': (date: string, rate: string) => `Γύρω στις ${date} · ${rate} την εβδομάδα`,
+
+  'ob.buildingNote1': 'Γράψε με απλά λόγια τι έφαγες — το ημερολόγιο βάζει τα νούμερα.',
+  'ob.buildingNote2': 'Ο στόχος σου προσαρμόζεται στα ζυγίσματά σου, εβδομάδα με την εβδομάδα.',
+  'ob.buildingNote3': 'Κάνει και μια φωτογραφία του πιάτου ή ένα barcode.',
+
+  'ob.teaseJournalTitle': 'Γράψε τι έφαγες. Και *τέλος*.',
+  'ob.teaseJournalBody': 'Χωρίς αναζήτηση, χωρίς πίνακες μερίδων. Το ημερολόγιο το καταλαβαίνει και βάζει τα νούμερα.',
+  'ob.teaseJournalYou1': '2 αυγά, φρυγανιά με βούτυρο, φρέντο',
+  'ob.teaseJournalReply1': 'Καταγράφηκε στο πρωινό',
+  'ob.teaseJournalYou2': 'και μια μπανάνα',
+  'ob.teaseJournalReply2': 'Προστέθηκε',
+  'ob.teaseJournalComposer': 'Τι έφαγες;',
+  'ob.teaseChipType': 'Απλώς γράψ’ το',
+  'ob.teaseChipPhoto': 'Ή μια φωτογραφία',
+  'ob.teaseChipBarcode': 'Ή ένα barcode',
+  'ob.teaseDayTitle': 'Η μέρα σου, στο *φως* κάθε ώρας',
+  'ob.teaseDayBody': 'Το «Σήμερα» ακολουθεί το ρολόι και ο κύκλος γεμίζει με κάθε καταγραφή. Μια ματιά σου λέει πώς πάει η μέρα.',
+
+  'saving.title': 'Αποθηκεύουμε το *πλάνο* σου',
+  'saving.body': 'Περνάμε τις απαντήσεις σου στον νέο σου λογαριασμό.',
+  'saving.welcomeBack': 'Μια *στιγμή*',
 
   'sex.male': 'Άνδρας',
   'sex.female': 'Γυναίκα',
@@ -333,6 +368,11 @@ export const el: Messages = {
   'auth.signInSubtitle': 'Συνδέσου και συνέχισε από εκεί που σταμάτησες.',
   'auth.createAccount': 'Δημιουργία λογαριασμού',
   'auth.createAccountTitle': 'Φτιάξε τον λογαριασμό σου',
+  'auth.savePlanTitle': 'Κράτα το *πλάνο* σου',
+  'auth.savePlanSubtitle': (kcal: string) =>
+    `${kcal} kcal τη μέρα, υπολογισμένες και έτοιμες. Ένας λογαριασμός τις κρατά — σε αυτό το κινητό και σε κάθε άλλο.`,
+  'auth.buildPlanFirst': 'Πρώτη φορά εδώ; Ξεκίνα από το πλάνο σου',
+  'auth.changeAnswers': 'Αλλαγή απαντήσεων',
   'auth.email': 'Email',
   'auth.password': 'Κωδικός πρόσβασης',
   'auth.passwordHint': 'Τουλάχιστον 8 χαρακτήρες.',
@@ -555,7 +595,7 @@ export const el: Messages = {
   'progress.title': 'Πρόοδος',
   'progress.daysWindow': (count: number) => `${count} μέρες`,
   'progress.daysShort': (count: number) => `${count} ημ.`,
-  'progress.weightTitle': '⚖️  Βάρος',
+  'progress.weightTitle': 'Βάρος',
   'progress.noWeighIns': 'Κανένα ζύγισμα ακόμα. Κατάγραψε ένα από κάτω ή απλώς πες το στο ημερολόγιο.',
   'progress.noWeighIn': 'Χωρίς ζύγισμα',
   'progress.trendReadout': (value: string) => `Μέσος όρος 7 ημερών ${value} — η γραμμή`,
@@ -564,13 +604,13 @@ export const el: Messages = {
   'progress.sinceStart': 'Από την αρχή',
   'progress.toTarget': 'Ως τον στόχο',
   'progress.logTodaysWeight': (unit: string) => `Κατάγραψε το σημερινό βάρος (${unit})`,
-  'progress.caloriesTitle': '🔥  Θερμίδες',
+  'progress.caloriesTitle': 'Θερμίδες',
   'progress.avgDayTarget': (target: string) => `μ.ό./μέρα · στόχος ${target}`,
-  'progress.proteinTitle': '💪  Πρωτεΐνη',
+  'progress.proteinTitle': 'Πρωτεΐνη',
   'progress.hitTargetBefore': 'Πέτυχες τον στόχο σε',
   'progress.ofDays': (hit: string, logged: string) => `${hit} από ${logged}`,
   'progress.hitTargetAfter': 'μέρες με καταγραφή.',
-  'progress.qualityTitle': '🥦  Ποιότητα διατροφής',
+  'progress.qualityTitle': 'Ποιότητα διατροφής',
   'progress.days': (count: number) => n(count, { one: 'μέρα', other: 'μέρες' }),
   'progress.qualityFooter': (days: string, percent: string) =>
     `Μέσος όρος για ${days} — το ${percent}% όσων κατέγραψες έχει αυτά τα στοιχεία.`,
@@ -858,7 +898,7 @@ export const el: Messages = {
   'review.kcalUnit': (kcal: string) => `${kcal} kcal`,
   'review.partOf': (plan: string) => `Μέρος του ${plan}`,
 
-  'quality.title': '🥦\u00a0\u00a0Ποιότητα διατροφής',
+  'quality.title': 'Ποιότητα διατροφής',
   'quality.partlyMeasured': 'εν μέρει μετρημένο',
   'quality.notEstimated': 'χωρίς εκτίμηση',
 

@@ -27,7 +27,56 @@ export const font = {
   displaySemibold: 'Baloo2_600SemiBold',
   displayBold: 'Baloo2_700Bold',
   display: 'Baloo2_800ExtraBold',
+  /* The editorial serif. See SERIF_FACES. */
+  serif: 'Fraunces_400Regular',
+  serifMedium: 'Fraunces_500Medium',
+  serifItalic: 'Fraunces_300Light_Italic',
 } as const;
+
+/**
+ * The serif, per script — the sentences that matter.
+ *
+ * Nunito and Baloo are what make this app friendly, and they stay for every
+ * control, every label and every row. What they cannot do is sound like a
+ * moment: a greeting, a question somebody is being asked about their body, the
+ * number the whole plan comes down to. Set in the rounded face those read as
+ * more UI. Set in a soft, warm serif they read as the app speaking, which is the
+ * one register this design was missing (GLOW-UP.md, "editorial type").
+ *
+ * Fraunces for Latin, because its soft terminals are the serif that belongs
+ * next to Nunito's round ones. It has no Cyrillic and no Greek, so those
+ * scripts get Literata — the nearest serif that has both, drawn for reading on
+ * screens — rather than falling back per glyph to the system face on the
+ * largest words in the app. Same bargain as `DISPLAY_FACES`, and the same two
+ * places to change: this table and the `useFonts` call in `app/_layout.tsx`.
+ *
+ * Three cuts each: regular for words, medium for figures, a light italic for
+ * the single stressed word a greeting or a question leans on.
+ *
+ * Neither static Fraunces cut carries tabular figures, so a serif figure that
+ * counts is laid out digit by digit instead — see `<Figure>`.
+ */
+const SERIF_FACES = {
+  fraunces: { regular: font.serif, medium: font.serifMedium, italic: font.serifItalic },
+  literata: {
+    regular: 'Literata_400Regular',
+    medium: 'Literata_500Medium',
+    italic: 'Literata_300Light_Italic',
+  },
+} as const;
+
+export const serifFacesFor = (locale: Locale) =>
+  LOCALE_SCRIPTS[locale] === 'latin' ? SERIF_FACES.fraunces : SERIF_FACES.literata;
+
+/**
+ * The serif's floor, in the same sense as `DISPLAY_LEADING`.
+ *
+ * Fraunces' descender is 0.255em and its caps 0.70em, so a figure alone would
+ * survive at 1em — but a capital with a caron or an acute on top of it does
+ * not, and Czech, Hungarian and Romanian headings put one on the first line
+ * constantly. Literata is taller on both counts and gets its own.
+ */
+export const SERIF_LEADING = { fraunces: 1.14, literata: 1.24 } as const;
 
 /**
  * The display face, per script.
@@ -107,19 +156,23 @@ const tnum = { fontVariant: ['tabular-nums'] } satisfies TextStyle;
 export const DISPLAY_LEADING = 1.15;
 
 export const type = StyleSheet.create({
+  /*
+   * Screen titles and section headlines, in the serif since the glow-up
+   * (GLOW-UP.md, "editorial type"). They were Baloo at 800, which is what made
+   * every screen open by shouting; set in Fraunces at regular weight the same
+   * words read as the app speaking. Figures stay in Baloo — see `figure`.
+   */
   largeTitle: {
-    fontFamily: font.display,
+    fontFamily: font.serif,
     fontSize: 36,
-    // The web sets 40 (`leading-10`), which is 1.111em — just under the floor,
-    // and enough to shave the top off a capital or a figure. See DISPLAY_LEADING.
-    lineHeight: 42,
-    letterSpacing: -0.54,
+    lineHeight: Math.round(36 * SERIF_LEADING.fraunces),
+    letterSpacing: -0.6,
   },
   title2: {
-    fontFamily: font.display,
-    fontSize: 23,
-    lineHeight: 28,
-    letterSpacing: -0.23,
+    fontFamily: font.serif,
+    fontSize: 24,
+    lineHeight: Math.round(24 * SERIF_LEADING.fraunces),
+    letterSpacing: -0.3,
   },
   /*
    * The app's default reading size. The body runs at 500 rather than 400:
@@ -182,6 +235,38 @@ export const type = StyleSheet.create({
     letterSpacing: 0.72,
     textTransform: 'uppercase',
   },
+  /*
+   * The serif scale. Regular weight throughout, which is the whole trick: the
+   * size and the face carry the moment, and weight would only turn it back
+   * into a heading.
+   */
+  hero: {
+    fontFamily: font.serif,
+    fontSize: 38,
+    lineHeight: Math.round(38 * SERIF_LEADING.fraunces),
+    letterSpacing: -0.6,
+  },
+  greeting: {
+    fontFamily: font.serif,
+    fontSize: 30,
+    lineHeight: Math.round(30 * SERIF_LEADING.fraunces),
+    letterSpacing: -0.3,
+  },
+  serifTitle: {
+    fontFamily: font.serif,
+    fontSize: 22,
+    lineHeight: Math.round(22 * SERIF_LEADING.fraunces),
+    letterSpacing: -0.2,
+  },
+  /** A big figure in the serif. Size it at the call site. */
+  serifFigure: {
+    fontFamily: font.serifMedium,
+    letterSpacing: -0.4,
+  },
+  /** The stressed word inside a serif line, nested as a child `Text`. */
+  serifItalic: {
+    fontFamily: font.serifItalic,
+  },
   tnum,
 });
 
@@ -215,14 +300,21 @@ export function typeFor(locale: Locale): TypeScale {
   if (cached) return cached;
 
   const faces = displayFacesFor(locale);
+  const serif = serifFacesFor(locale);
+  const lead = serif === SERIF_FACES.fraunces ? SERIF_LEADING.fraunces : SERIF_LEADING.literata;
   const scale =
-    faces === DISPLAY_FACES.latin
+    faces === DISPLAY_FACES.latin && serif === SERIF_FACES.fraunces
       ? type
       : StyleSheet.create({
           ...type,
-          largeTitle: { ...type.largeTitle, fontFamily: faces.extrabold },
-          title2: { ...type.title2, fontFamily: faces.extrabold },
+          largeTitle: { ...type.largeTitle, fontFamily: serif.regular, lineHeight: Math.round(36 * lead) },
+          title2: { ...type.title2, fontFamily: serif.regular, lineHeight: Math.round(24 * lead) },
           figure: { ...type.figure, fontFamily: faces.extrabold },
+          hero: { ...type.hero, fontFamily: serif.regular, lineHeight: Math.round(38 * lead) },
+          greeting: { ...type.greeting, fontFamily: serif.regular, lineHeight: Math.round(30 * lead) },
+          serifTitle: { ...type.serifTitle, fontFamily: serif.regular, lineHeight: Math.round(22 * lead) },
+          serifFigure: { ...type.serifFigure, fontFamily: serif.medium },
+          serifItalic: { fontFamily: serif.italic },
         });
 
   SCALES.set(locale, scale);

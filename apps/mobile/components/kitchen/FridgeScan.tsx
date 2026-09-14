@@ -296,7 +296,7 @@ export function FridgeScan({
                 style={styles.flex}
                 contentStyle={[
                   styles.button,
-                  { backgroundColor: colors.secondary, borderWidth: 2, borderColor: colors.border },
+                  { backgroundColor: colors.secondary, borderWidth: 1, borderColor: colors.border },
                 ]}
               >
                 <Text style={[t.bodyBold, { color: colors.secondaryForeground }]}>
@@ -312,7 +312,7 @@ export function FridgeScan({
                   disabled={busy}
                   accessibilityRole="button"
                   style={styles.flex}
-                  contentStyle={[styles.button, { backgroundColor: colors.primary }]}
+                  contentStyle={[styles.button, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
                 >
                   <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
                     {saving === 'cook' ? tr('scan.cooking') : tr('scan.cookFromThese')}
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 7,
@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    borderTopWidth: 2,
+    borderTopWidth: 1,
     paddingHorizontal: 20,
     paddingVertical: 12,
   },
@@ -369,21 +369,21 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 8,
-    borderWidth: 2,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   findBody: { flex: 1 },
-  foot: { flexDirection: 'row', gap: 8, borderTopWidth: 2, padding: 12 },
+  foot: { flexDirection: 'row', gap: 8, borderTopWidth: 1, padding: 12 },
   button: { height: 44, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
-  choice: { borderTopWidth: 2, paddingHorizontal: 20, paddingVertical: 16 },
+  choice: { borderTopWidth: 1, paddingHorizontal: 20, paddingVertical: 16 },
   // Inside the kitchen sheet: a row on the list rather than a chip beside it.
   wide: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 16,
     paddingVertical: 12,
     marginHorizontal: 12,
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 44,
     height: 44,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 999,
   },
 });

@@ -103,7 +103,7 @@ export function PlanWall({
               radius={999}
               onPress={onLogManually}
               accessibilityRole="button"
-              contentStyle={[styles.button, { backgroundColor: colors.primary }]}
+              contentStyle={[styles.button, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
             >
               <PencilGlyph color={colors.primaryForeground} />
               <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
@@ -124,7 +124,7 @@ export function PlanWall({
               accessibilityRole="button"
               contentStyle={[
                 styles.button,
-                { backgroundColor: colors.card, borderWidth: 2, borderColor: colors.border },
+                { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
               ]}
             >
               <Text style={[t.bodySemibold, { color: colors.foreground }]}>
@@ -193,7 +193,7 @@ export function LockedPanel({
              between a chunk's surface and its `Overhang` — which stretches the
              ledge to 14px and reads as a button dropped in mud. */
           style={styles.loneAction}
-          contentStyle={[styles.button, { backgroundColor: colors.primary }]}
+          contentStyle={[styles.button, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
         >
           <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
             {tr('plans.seeWhatAdds')(TIER_NAMES[next])}
@@ -287,7 +287,7 @@ export function MeterChip({
         hitSlop={6}
         style={({ pressed }) => [styles.chip, { opacity: pressed ? 0.55 : 1 }]}
       >
-        <View style={[styles.chipDot, { backgroundColor: colors.primary }]} />
+        <View style={[styles.chipDot, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]} />
         <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
           {remainingLine(allowance, left, tr)}
         </Text>
@@ -394,7 +394,7 @@ function Land({ children, style }: { children: React.ReactNode; style?: StylePro
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 2, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 16, gap: 10 },
+  card: { borderWidth: 1, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 16, gap: 10 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   // `flexShrink` rather than `flex: 1`: the title wraps to as many lines as it
   // needs beside a badge that never shrinks.

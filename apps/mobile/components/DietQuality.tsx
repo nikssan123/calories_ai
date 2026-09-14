@@ -10,6 +10,7 @@ import { spentLine, TIER_NAMES, tierFor } from '@/lib/plan-copy';
 import { duration, ease, type as t, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
+import { Glossy } from '@/components/icons/Glossy';
 
 /**
  * Fiber, sodium, saturated fat and sugar, under the macros.
@@ -76,7 +77,10 @@ export function DietQuality({
   return (
     <View style={style}>
       <View style={styles.header}>
-        <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>{tr('quality.title')}</Text>
+        <View style={styles.titleRow}>
+          <Glossy name="avocado" size={18} />
+          <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>{tr('quality.title')}</Text>
+        </View>
         {(partial || !measured) && (
           <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
             {measured ? tr('quality.partlyMeasured') : tr('quality.notEstimated')}
@@ -87,7 +91,7 @@ export function DietQuality({
       <Chunk
         contentStyle={{
           backgroundColor: colors.card,
-          borderWidth: 2,
+          borderWidth: 1,
           borderColor: colors.border,
           paddingHorizontal: 16,
           paddingVertical: 16,
@@ -304,6 +308,7 @@ function QualityTrack({
 }
 
 const styles = StyleSheet.create({
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   header: {
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -333,7 +338,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     height: 34,
     borderRadius: 999,
-    borderWidth: 2,
+    borderWidth: 1,
     paddingHorizontal: 14,
   },
 });

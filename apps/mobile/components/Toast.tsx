@@ -327,7 +327,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    borderWidth: 2,
+    borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
@@ -340,5 +340,5 @@ const styles = StyleSheet.create({
    * ledge inside the first reads as a button floating away from the thing it
    * belongs to.
    */
-  action: { paddingHorizontal: 12, paddingVertical: 5, borderWidth: 2, borderRadius: 999 },
+  action: { paddingHorizontal: 12, paddingVertical: 5, borderWidth: 1, borderRadius: 999 },
 });

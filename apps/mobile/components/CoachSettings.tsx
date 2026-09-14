@@ -193,9 +193,9 @@ const styles = StyleSheet.create({
   rowButton: {
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderTopWidth: 2,
+    borderTopWidth: 1,
   },
-  confirm: { padding: 16, gap: 12, borderTopWidth: 2 },
+  confirm: { padding: 16, gap: 12, borderTopWidth: 1 },
   confirmButtons: { flexDirection: 'row', gap: 10 },
   confirmButton: {
     flex: 1,

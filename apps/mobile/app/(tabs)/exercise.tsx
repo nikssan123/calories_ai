@@ -120,7 +120,7 @@ export default function ExerciseScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`${w} days`}
                 accessibilityState={{ selected: active }}
-                style={[styles.window, active ? { backgroundColor: colors.primary } : null]}
+                style={[styles.window, active ? { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp } : null]}
               >
                 <Text
                   style={[
@@ -259,7 +259,7 @@ export default function ExerciseScreen() {
                 <SwipeRow
                   key={entry.id}
                   index={i}
-                  style={i === 0 ? null : { borderTopWidth: 2, borderTopColor: colors.border }}
+                  style={i === 0 ? null : { borderTopWidth: 1, borderTopColor: colors.hairline }}
                   actions={[removeAction(colors, tr, entry.description, () => remove(entry))]}
                 >
                   <InsetRow first>
@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   page: { paddingHorizontal: 16, paddingBottom: 40, gap: 28 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  windows: { flexDirection: 'row', borderWidth: 2, borderRadius: 999, padding: 4 },
+  windows: { flexDirection: 'row', borderWidth: 1, borderRadius: 999, padding: 4 },
   window: {
     height: 32,
     borderRadius: 999,

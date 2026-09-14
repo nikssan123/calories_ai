@@ -376,7 +376,7 @@ function Bars({
 const styles = StyleSheet.create({
   readout: {
     position: 'absolute',
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 20,
     paddingHorizontal: 10,
     paddingVertical: 6,

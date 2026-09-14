@@ -421,7 +421,7 @@ export default function SetupScreen() {
                     accessibilityState={{ selected: active }}
                     style={[
                       styles.segmentItem,
-                      active ? { backgroundColor: colors.primary } : null,
+                      active ? { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp } : null,
                     ]}
                   >
                     <Text
@@ -715,7 +715,7 @@ function SaveBar({
           color={colors.caloriesDeep}
           accessibilityRole="button"
           accessibilityLabel={tr('setup.saveChanges')}
-          contentStyle={[styles.save, { backgroundColor: colors.primary }]}
+          contentStyle={[styles.save, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
         >
           <Text style={[styles.saveLabel, { color: colors.primaryForeground }]}>{tr('setup.save')}</Text>
         </PressableChunk>
@@ -1452,7 +1452,7 @@ function ExternalRow({
       }}
       style={({ pressed }) => [
         styles.rowButton,
-        first ? null : { borderTopWidth: 2, borderTopColor: colors.border },
+        first ? null : { borderTopWidth: 1, borderTopColor: colors.hairline },
         { opacity: pressed ? 0.6 : 1 },
       ]}
     >
@@ -1639,7 +1639,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     borderRadius: 999,
-    borderWidth: 2,
+    borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
@@ -1662,14 +1662,14 @@ const styles = StyleSheet.create({
     // oval — the exact failure the field treatment exists to prevent.
     minWidth: 140,
     borderRadius: 999,
-    borderWidth: 2,
+    borderWidth: 1,
     paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   goals: { flexDirection: 'row', gap: 8, padding: 8 },
   goal: {
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 24,
     paddingVertical: 10,
     alignItems: 'center',
@@ -1683,7 +1683,7 @@ const styles = StyleSheet.create({
     // the two read as the same control on the same screen.
     minWidth: 88,
     borderRadius: 999,
-    borderWidth: 2,
+    borderWidth: 1,
     paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1695,7 +1695,7 @@ const styles = StyleSheet.create({
   resend: {
     height: 36,
     borderRadius: 999,
-    borderWidth: 2,
+    borderWidth: 1,
     paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1703,7 +1703,7 @@ const styles = StyleSheet.create({
   danger: { paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
   dangerButtons: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   dangerButton: {
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 16,
     paddingVertical: 12,
     alignItems: 'center',
@@ -1713,7 +1713,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    borderTopWidth: 2,
+    borderTopWidth: 1,
     paddingHorizontal: 16,
     paddingVertical: 12,
   },

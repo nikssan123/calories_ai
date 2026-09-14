@@ -93,6 +93,12 @@ importers:
       '@expo-google-fonts/baloo-2':
         specifier: ^0.4.2
         version: 0.4.2
+      '@expo-google-fonts/fraunces':
+        specifier: ^0.4.1
+        version: 0.4.1
+      '@expo-google-fonts/literata':
+        specifier: ^0.4.3
+        version: 0.4.3
       '@expo-google-fonts/nunito':
         specifier: ^0.4.2
         version: 0.4.2
@@ -982,6 +988,12 @@ packages:
 
   '@expo-google-fonts/baloo-2@0.4.2':
     resolution: {integrity: sha512-uvrw1I+sP72PY8xROJQ6CMiGHu9+WJCdi72Q+OiWpQ3sKsIRyIEXimDfgUnkk2vpWVej0JX9fLc87iDmjKE86A==}
+
+  '@expo-google-fonts/fraunces@0.4.1':
+    resolution: {integrity: sha512-gYc9P92ObyWvz1rWPOeWSvVKyBFIuA8hgOdhvo4DSiPBaWLbFA6v8uLIEIBwW+0oWTlXbBzjeBReHQI2H7UNjQ==}
+
+  '@expo-google-fonts/literata@0.4.3':
+    resolution: {integrity: sha512-AuxE7NB6Ae1laRK8uTcap5xI2MYTZOXrAWul4SNGBiq4igP7r/q8IO3vdvO/P1MGiRczuyZ1zhTwSm/CaYeq9A==}
 
   '@expo-google-fonts/material-symbols@0.4.44':
     resolution: {integrity: sha512-36JP9Chcy/QEVZ9ZGY4i6zInlyFPbQjkIm6gRNuWWltScIj0WR8rddcD57EIjSC5YKCe2ZKLO6eO/N5r8Jit0A==}
@@ -6078,6 +6090,10 @@ snapshots:
 
   '@expo-google-fonts/baloo-2@0.4.2': {}
 
+  '@expo-google-fonts/fraunces@0.4.1': {}
+
+  '@expo-google-fonts/literata@0.4.3': {}
+
   '@expo-google-fonts/material-symbols@0.4.44': {}
 
   '@expo-google-fonts/nunito@0.4.2': {}
@@ -7166,9 +7182,7 @@ snapshots:
       metro-runtime: 0.84.5
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.86.3': {}
 

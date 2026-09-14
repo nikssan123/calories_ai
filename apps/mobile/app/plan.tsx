@@ -296,7 +296,7 @@ export default function PlanScreen() {
                 onPress={() => void planWeek()}
                 disabled={thinking}
                 accessibilityRole="button"
-                contentStyle={[styles.plan, { backgroundColor: colors.primary }]}
+                contentStyle={[styles.plan, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
               >
                 {thinking && <ActivityIndicator size="small" color={colors.primaryForeground} />}
                 <Text style={[styles.planLabel, { color: colors.primaryForeground }]}>
@@ -384,7 +384,7 @@ export default function PlanScreen() {
                   <SwipeRow
                     key={item.extra_id ?? `${item.name}-${i}`}
                     index={i}
-                    style={i === 0 ? null : { borderTopWidth: 2, borderTopColor: colors.border }}
+                    style={i === 0 ? null : { borderTopWidth: 1, borderTopColor: colors.hairline }}
                     actions={
                       item.extra_id
                         ? [
@@ -590,7 +590,7 @@ const styles = StyleSheet.create({
   form: { padding: 12, gap: 12 },
   wants: {
     height: 44,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 0,
@@ -612,18 +612,18 @@ const styles = StyleSheet.create({
   weekday: { width: 36 },
   emoji: { fontSize: 20, lineHeight: 24 },
   cooked: { textDecorationLine: 'line-through' },
-  cookButton: { borderWidth: 2, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
+  cookButton: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   addRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     padding: 12,
-    borderBottomWidth: 2,
+    borderBottomWidth: 1,
   },
   addInput: {
     flex: 1,
     height: 44,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 16,
     paddingVertical: 0,
@@ -632,7 +632,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 999,
-    borderWidth: 2,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -640,7 +640,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 8,
-    borderWidth: 2,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },

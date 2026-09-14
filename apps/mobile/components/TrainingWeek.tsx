@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
   wrap: { alignItems: 'center', gap: 8, paddingVertical: 4 },
   dots: { flexDirection: 'row', gap: 10 },
   day: { alignItems: 'center', gap: 4 },
-  dot: { width: 18, height: 18, borderRadius: 9, borderWidth: 2 },
+  dot: { width: 18, height: 18, borderRadius: 9, borderWidth: 1 },
   letter: { fontFamily: font.semibold, fontSize: 11, lineHeight: 14 },
   hint: { fontFamily: font.semibold, fontSize: 12, lineHeight: 16, textAlign: 'center' },
 });

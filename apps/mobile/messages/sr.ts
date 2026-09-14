@@ -34,6 +34,12 @@ export const sr: Messages = {
 
   // ---- Today --------------------------------------------------------------
   'today.title': 'Данас',
+  // "Још си будан/будна?" is gendered; «Још не спаваш?» is not.
+  'today.greetMorning': (name: string) => (name ? `Добро *јутро*, ${name}` : 'Добро *јутро*'),
+  'today.greetAfternoon': (name: string) => (name ? `Добар *дан*, ${name}` : 'Добар *дан*'),
+  'today.greetEvening': (name: string) => (name ? `Добро *вече*, ${name}` : 'Добро *вече*'),
+  'today.greetNight': (name: string) => (name ? `Још не *спаваш*, ${name}?` : 'Још не *спаваш*?'),
+  'today.backToToday': 'Назад на данас',
   // Under the ring's figure: «преостало» is what the number is, no preposition needed.
   'today.toGo': 'преостало',
   'today.over': 'преко циља',
@@ -51,7 +57,7 @@ export const sr: Messages = {
   'today.roughEstimate': 'груба процена',
   'today.exerciseFooter': 'Приказано одвојено од циља — калорије сагореле вежбањем су груба процена.',
   'today.exerciseTitle': '🏃  Вежбање',
-  'today.stepsTitle': '👟  Кораци',
+  'today.stepsTitle': 'Кораци',
   'today.steps': (count: number) => n(count, { one: 'корак', few: 'корака', other: 'корака' }),
   'today.stepsFooter': 'Броји их телефон. Кораци прецизирају твој циљ — никад се не додају на њега.',
   'today.stepsEnable': 'Броји моје кораке',
@@ -254,12 +260,14 @@ export const sr: Messages = {
   'ob.back': 'Назад',
   'ob.continue': 'Настави',
 
-  'ob.welcomeTitle': 'Хајде да направимо твој план',
+  'ob.welcomeTitle': 'Хајде да направимо *твој* план',
   'ob.welcomeBody':
     'Шест кратких питања — око пола минута — и имаћеш циљ за калорије и протеине израчунат за твоје тело, а не за било кога. Све можеш да промениш касније.',
   'ob.welcomeStart': 'Почни',
+  'ob.haveAccount': 'Већ имам налог',
+  'ob.wordmarkTagline': 'Твој дан до сада',
 
-  'ob.goalTitle': 'Шта желиш да постигнеш?',
+  'ob.goalTitle': 'Шта желиш да *постигнеш*?',
   'ob.goalBody': 'Ово одређује да ли ћеш јести мање, колико или више него што сагориш.',
   // Answers in the reader's voice, as first-person present — no gendered past.
   'ob.goalLose': 'Да смршам',
@@ -303,7 +311,7 @@ export const sr: Messages = {
   'ob.activityTitle': 'Колико се крећеш?',
   'ob.activityBody': 'Твоја обична седмица — без тренинга које уписујеш у апликацији.',
 
-  'ob.buildingTitle': 'Правимо твој план',
+  'ob.buildingTitle': 'Правимо *твој* план',
   'ob.buildingStep1': 'Рачунамо колико сагориш',
   'ob.buildingStep2': 'Одређујемо дневне калорије',
   'ob.buildingStep3': 'Делимо протеине, угљене хидрате и масти',
@@ -315,6 +323,34 @@ export const sr: Messages = {
   'ob.planFootnote':
     'Полазна тачка, не пресуда. Сваке седмице се прилагођава према ономе што уписујеш и ономе што показује вага.',
   'ob.planStart': 'Почни да уписујеш',
+  'ob.planSave': 'Сачувај мој план',
+  'ob.planSaveHint': 'Затим налог где ћеш га чувати. Бесплатан је и траје минут.',
+  'ob.planWhere': 'Куда те ово *води*',
+  'ob.planToday': (weight: string) => `${weight} данас`,
+  'ob.planGoal': (weight: string) => `циљ ${weight}`,
+  // «Отприлике» governs no case, so the date stays as `Intl` prints it.
+  'ob.planArrives': (date: string, rate: string) => `Отприлике ${date} · ${rate} седмично`,
+
+  'ob.buildingNote1': 'Напиши обичним речима шта је било за јело — дневник сам рачуна бројке.',
+  'ob.buildingNote2': 'Циљ се сваке седмице прилагођава твојим мерењима.',
+  'ob.buildingNote3': 'Може и фотографија тањира или бар-код.',
+
+  'ob.teaseJournalTitle': 'Напиши шта је било за јело. И *готово*.',
+  'ob.teaseJournalBody': 'Без претраге, без табела с порцијама. Дневник разуме и сам рачуна бројке.',
+  'ob.teaseJournalYou1': '2 јаја, хлеб и кајмак, кафа',
+  'ob.teaseJournalReply1': 'Уписано у доручак',
+  'ob.teaseJournalYou2': 'и банана',
+  'ob.teaseJournalReply2': 'Додато',
+  'ob.teaseJournalComposer': 'Шта је било за јело?',
+  'ob.teaseChipType': 'Само напиши',
+  'ob.teaseChipPhoto': 'Или фотографија',
+  'ob.teaseChipBarcode': 'Или бар-код',
+  'ob.teaseDayTitle': 'Твој дан, *обасјан* сат по сат',
+  'ob.teaseDayBody': '„Данас“ прати сат, а прстен се пуни са сваким уписом. Један поглед и знаш како дан пролази.',
+
+  'saving.title': 'Чувамо *твој* план',
+  'saving.body': 'Пребацујемо твоје одговоре у нови налог.',
+  'saving.welcomeBack': 'Само *тренутак*',
 
   'sex.male': 'Мушки',
   'sex.female': 'Женски',
@@ -343,6 +379,11 @@ export const sr: Messages = {
   'auth.signInSubtitle': 'Пријави се и настави тамо где је стало.',
   'auth.createAccount': 'Направи налог',
   'auth.createAccountTitle': 'Направи свој налог',
+  'auth.savePlanTitle': 'Сачувај *свој* план',
+  'auth.savePlanSubtitle': (kcal: string) =>
+    `${kcal} kcal дневно, израчунато и спремно. Уз налог план остаје на овом телефону и на сваком другом.`,
+  'auth.buildPlanFirst': 'Први пут овде? Прво направи план',
+  'auth.changeAnswers': 'Промени одговоре',
   'auth.email': 'Имејл',
   'auth.password': 'Лозинка',
   'auth.passwordHint': 'Најмање 8 знакова.',
@@ -576,7 +617,7 @@ export const sr: Messages = {
   'progress.title': 'Напредак',
   'progress.daysWindow': (count: number) => n(count, { one: 'дан', few: 'дана', other: 'дана' }),
   'progress.daysShort': (count: number) => `${count}д`,
-  'progress.weightTitle': '⚖️  Тежина',
+  'progress.weightTitle': 'Тежина',
   'progress.noWeighIns': 'Још нема мерења. Упиши једно испод или само реци дневнику.',
   'progress.noWeighIn': 'Без мерења',
   'progress.trendReadout': (value: string) => `Просек 7 дана ${value} — линија`,
@@ -585,13 +626,13 @@ export const sr: Messages = {
   'progress.sinceStart': 'Од почетка',
   'progress.toTarget': 'До циља',
   'progress.logTodaysWeight': (unit: string) => `Упиши данашњу тежину (${unit})`,
-  'progress.caloriesTitle': '🔥  Калорије',
+  'progress.caloriesTitle': 'Калорије',
   'progress.avgDayTarget': (target: string) => `просек/дан · циљ ${target}`,
-  'progress.proteinTitle': '💪  Протеини',
+  'progress.proteinTitle': 'Протеини',
   'progress.hitTargetBefore': 'Циљ погођен у',
   'progress.ofDays': (hit: string, logged: string) => `${hit} од ${logged}`,
   'progress.hitTargetAfter': 'уписаних дана.',
-  'progress.qualityTitle': '🥦  Квалитет исхране',
+  'progress.qualityTitle': 'Квалитет исхране',
   'progress.days': (count: number) => n(count, { one: 'дан', few: 'дана', other: 'дана' }),
   'progress.qualityFooter': (days: string, percent: string) =>
     `Просек за ${days} — ове податке има ${percent}% уписаног.`,
@@ -887,7 +928,7 @@ export const sr: Messages = {
   'review.kcalUnit': (kcal: string) => `${kcal} kcal`,
   'review.partOf': (plan: string) => `Део пакета ${plan}`,
 
-  'quality.title': '🥦\u00a0\u00a0Квалитет исхране',
+  'quality.title': 'Квалитет исхране',
   'quality.partlyMeasured': 'делимично измерено',
   'quality.notEstimated': 'без процене',
 

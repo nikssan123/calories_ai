@@ -424,7 +424,7 @@ export function FoodEditor({
           disabled={saving}
           accessibilityRole="button"
           style={{ opacity: saving ? 0.4 : 1 }}
-          contentStyle={[styles.save, { backgroundColor: colors.primary }]}
+          contentStyle={[styles.save, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
         >
           <Text style={[t.footnoteBold, { color: colors.primaryForeground }]}>
             {saving ? tr('setup.saving') : creating ? tr('editor.log') : tr('common.save')}
@@ -581,17 +581,17 @@ function fromDraft(draft: DraftItem) {
 const styles = StyleSheet.create({
   // The shell of the card this replaces, to the pixel: tapping Edit should
   // open a receipt, not swap it for a differently shaped box.
-  card: { borderWidth: 2, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 14, gap: 10 },
+  card: { borderWidth: 1, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 14, gap: 10 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   figure: { fontSize: 16, lineHeight: 24 },
-  title: { flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: 2, paddingBottom: 6 },
+  title: { flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: 1, paddingBottom: 6 },
   titleInput: { flex: 1, padding: 0 },
   emoji: { fontSize: 22, lineHeight: 28 },
   split: { flexDirection: 'row', gap: 1, height: 10, borderRadius: 999, borderWidth: 1, overflow: 'hidden' },
-  field: { borderWidth: 2, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8 },
+  field: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8 },
   meals: { flexDirection: 'row', gap: 6 },
-  meal: { flex: 1, borderWidth: 2, borderRadius: 999, paddingVertical: 7, alignItems: 'center' },
-  item: { borderTopWidth: 2, paddingTop: 10, gap: 8 },
+  meal: { flex: 1, borderWidth: 1, borderRadius: 999, paddingVertical: 7, alignItems: 'center' },
+  item: { borderTopWidth: 1, paddingTop: 10, gap: 8 },
   itemHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // The portion is short — "180g", "1 cup" — and the name is not, so the row
   // is split rather than halved.
@@ -603,7 +603,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 6,
@@ -614,7 +614,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderTopWidth: 2,
+    borderTopWidth: 1,
     paddingTop: 10,
   },
   save: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999 },

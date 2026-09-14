@@ -216,7 +216,7 @@ export function RecipeReader({
                 key={index}
                 style={[
                   styles.ingredient,
-                  index === 0 ? null : { borderTopWidth: 2, borderTopColor: colors.border },
+                  index === 0 ? null : { borderTopWidth: 1, borderTopColor: colors.hairline },
                 ]}
               >
                 <Text
@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
   page: { paddingHorizontal: 16, paddingBottom: 32, gap: 20 },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   back: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 },
-  saveFace: { borderWidth: 2, borderRadius: 999 },
+  saveFace: { borderWidth: 1, borderRadius: 999 },
   saveInner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -351,7 +351,7 @@ const styles = StyleSheet.create({
     height: 36,
     paddingHorizontal: 14,
   },
-  hero: { borderWidth: 2, borderRadius: 24, overflow: 'hidden' },
+  hero: { borderWidth: 1, borderRadius: 24, overflow: 'hidden' },
   heroImage: { width: '100%', aspectRatio: 4 / 3 },
   /*
    * Shorter than the photograph it stands in for, for the same reason the tile's
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'flex-end',
     gap: 24,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 24,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
   macroDot: { width: 10, height: 10, borderRadius: 5 },
   macroFigure: { fontSize: 19, lineHeight: 24 },
   sectionTitle: { paddingHorizontal: 4, marginBottom: 8 },
-  list: { borderWidth: 2, borderRadius: 24, overflow: 'hidden' },
+  list: { borderWidth: 1, borderRadius: 24, overflow: 'hidden' },
   ingredient: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
   step: {
     flexDirection: 'row',
     gap: 14,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 24,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -407,12 +407,12 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 999,
-    borderWidth: 2,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   stepNumberText: { fontSize: 15, lineHeight: 20 },
   stepText: { flex: 1, lineHeight: 26 },
-  footnote: { borderTopWidth: 2, paddingTop: 16, marginTop: 4, lineHeight: 20 },
-  actions: { borderTopWidth: 2, paddingHorizontal: 16, paddingTop: 12 },
+  footnote: { borderTopWidth: 1, paddingTop: 16, marginTop: 4, lineHeight: 20 },
+  actions: { borderTopWidth: 1, paddingHorizontal: 16, paddingTop: 12 },
 });

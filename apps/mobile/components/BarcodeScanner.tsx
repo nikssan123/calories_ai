@@ -26,6 +26,8 @@ import {
 } from '@ct/shared';
 import { ApiError, isPartialBarcode } from '@ct/api-client';
 import { PressableChunk } from '@/components/Chunk';
+import { ScanWindow } from '@/components/ScanWindow';
+import { Glossy } from '@/components/icons/Glossy';
 import { api } from '@/lib/api';
 import { pickPhoto, takePhoto, type PreparedPhoto } from '@/lib/image';
 import { useUnits } from '@/lib/units';
@@ -355,7 +357,7 @@ export function BarcodeScanner({
                 {/* A window rather than instructions: where to put the packet is
                     a shape, and a sentence about it is a sentence to read while
                     holding a tin. */}
-                <View style={styles.window} pointerEvents="none" />
+                <ScanWindow looking={stage.at === 'looking'} />
                 <View style={styles.hint} pointerEvents="none">
                   <Text style={[t.footnoteSemibold, styles.hintText]}>
                     {stage.at === 'looking' ? tr('barcode.lookingUp') : tr('barcode.pointAtBarcode')}
@@ -363,10 +365,10 @@ export function BarcodeScanner({
                 </View>
                 {caught && (
                   <View
-                    style={[styles.caught, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    style={[styles.caught, { backgroundColor: 'rgba(30, 27, 24, 0.86)', borderColor: 'rgba(255,255,255,0.14)' }]}
                     pointerEvents="none"
                   >
-                    <View style={[styles.tick, { backgroundColor: colors.primary }]}>
+                    <View style={[styles.tick, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}>
                       <Svg width={12} height={12} viewBox="0 0 24 24">
                         <Path
                           d="M5 13l4 4L19 7"
@@ -380,7 +382,7 @@ export function BarcodeScanner({
                     </View>
                     <Text
                       numberOfLines={1}
-                      style={[t.footnoteSemibold, styles.caughtName, { color: colors.foreground }]}
+                      style={[t.footnoteSemibold, styles.caughtName, { color: '#ffffff' }]}
                     >
                       {tr('barcode.added')(caught)}
                     </Text>
@@ -389,7 +391,7 @@ export function BarcodeScanner({
               </>
             ) : (
               <View style={styles.permission}>
-                <Text style={styles.mascot}>📷</Text>
+                <Glossy name="bar" size={64} />
                 <Text style={[t.body, styles.centred, { color: colors.foreground }]}>
                   {permission === null
                     ? tr('barcode.checkingCamera')
@@ -406,7 +408,7 @@ export function BarcodeScanner({
                       onPress={() => void requestPermission()}
                       accessibilityRole="button"
                       style={styles.permissionButton}
-                      contentStyle={[styles.button, { backgroundColor: colors.primary }]}
+                      contentStyle={[styles.button, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
                     >
                       <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
                         {tr('barcode.allowCamera')}
@@ -495,7 +497,7 @@ export function BarcodeScanner({
               color={colors.caloriesDeep}
               onPress={close}
               accessibilityRole="button"
-              contentStyle={[styles.done, { backgroundColor: colors.primary }]}
+              contentStyle={[styles.done, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
             >
               <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
                 {tr('common.done')}
@@ -801,7 +803,7 @@ function Portion({
           onPress={() => primary.onPress(portion)}
           disabled={busy}
           accessibilityRole="button"
-          contentStyle={[styles.button, { backgroundColor: colors.primary }]}
+          contentStyle={[styles.button, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
         >
           <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
             {busy && busyLabel ? busyLabel : primary.label}
@@ -951,7 +953,7 @@ function Missed({
         onPress={() => void onLabelPhoto('camera')}
         accessibilityRole="button"
         style={styles.missedButton}
-        contentStyle={[styles.button, { backgroundColor: colors.primary }]}
+        contentStyle={[styles.button, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
       >
         <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
           {tr('barcode.photographLabel')}
@@ -1116,7 +1118,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 2,
+    borderBottomWidth: 1,
     paddingHorizontal: 16,
     paddingBottom: 12,
   },
@@ -1124,14 +1126,14 @@ const styles = StyleSheet.create({
   /* Black only behind a running camera. The permission panel is page furniture,
      and on a black backdrop its themed text was brown-on-black in light mode. */
   live: { backgroundColor: '#000' },
-  window: {
-    width: '72%',
-    aspectRatio: 1.6,
-    borderRadius: 24,
-    borderWidth: 3,
-    borderColor: 'rgba(255, 255, 255, 0.85)',
+  hint: {
+    position: 'absolute',
+    bottom: 40,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(30, 27, 24, 0.6)',
   },
-  hint: { position: 'absolute', bottom: 48 },
   hintText: { color: '#fff' },
   /* Above the hint rather than over the window: the packet in frame is the
      thing being aimed, and a card across it would cover what it is confirming. */
@@ -1142,7 +1144,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 999,
     paddingVertical: 7,
     paddingLeft: 10,
@@ -1155,7 +1157,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    borderTopWidth: 2,
+    borderTopWidth: 1,
     paddingHorizontal: 16,
     paddingTop: 12,
   },
@@ -1174,7 +1176,7 @@ const styles = StyleSheet.create({
   productName: { fontFamily: font.display, fontSize: 18, lineHeight: 24, marginTop: 4 },
   basis: { marginTop: 6 },
   modes: { flexDirection: 'row', gap: 8 },
-  mode: { borderWidth: 2, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
+  mode: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
   modeLabel: { fontFamily: font.bold, fontSize: 14, lineHeight: 20 },
   stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   stepperLabel: { flexShrink: 1 },
@@ -1182,7 +1184,7 @@ const styles = StyleSheet.create({
   steps: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 999,
     flexShrink: 0,
   },
@@ -1197,7 +1199,7 @@ const styles = StyleSheet.create({
     gap: 3,
     height: 30,
     marginVertical: 3,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
   },
@@ -1212,7 +1214,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 8,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 24,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -1227,7 +1229,7 @@ const styles = StyleSheet.create({
   },
   /* The border eats two of the 48, which is what keeps a filled button and an
      outlined one the same height standing next to each other. */
-  outlined: { height: 48, borderWidth: 2 },
+  outlined: { height: 48, borderWidth: 1 },
   missed: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
   mascot: { fontSize: 40, lineHeight: 48 },
   missedButton: { alignSelf: 'stretch', marginTop: 12 },

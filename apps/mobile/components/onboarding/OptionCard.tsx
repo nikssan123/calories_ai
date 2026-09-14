@@ -1,6 +1,8 @@
+import { useId } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
 import { PressableChunk } from '@/components/Chunk';
+import { haptics } from '@/lib/haptics';
 import { type as t, useColors, withAlpha } from '@/theme';
 
 /**
@@ -13,9 +15,13 @@ import { type as t, useColors, withAlpha } from '@/theme';
  * the same sink as every other pressable surface — rather than a radio row,
  * because a radio row is a settings screen and this is not one.
  *
+ * It is glass over the onboarding light rather than a white card, so the
+ * warmth behind the question comes through the answers too; chosen, it turns
+ * nearly opaque and glows green from underneath.
+ *
  * The selected state is carried by three things at once, which is one more
- * than looks necessary and exactly as many as it takes: a tinted ground, a
- * green border, and a filled tick. Colour alone fails for the reader who
+ * than looks necessary and exactly as many as it takes: a glowing ground, a
+ * green edge, and a filled tick. Colour alone fails for the reader who
  * cannot separate the green from the cream, the border alone is invisible at
  * arm's length, and the tick alone reads as decoration until you go looking
  * for it. Together, none of them is load-bearing on its own.
@@ -39,24 +45,30 @@ export function OptionCard({
 
   return (
     <PressableChunk
-      depth={3}
-      radius={20}
-      onPress={onPress}
+      depth={selected ? 6 : 3}
+      radius={22}
+      color={selected ? colors.calories : undefined}
+      haptic={false}
+      onPress={() => {
+        haptics.selected();
+        onPress();
+      }}
       accessibilityRole="radio"
       accessibilityState={{ selected }}
       accessibilityLabel={hint ? `${label}. ${hint}` : label}
       contentStyle={[
         styles.face,
         {
-          backgroundColor: selected ? withAlpha(colors.primary, 0.12) : colors.card,
-          borderColor: selected ? colors.primary : colors.border,
+          backgroundColor: selected ? colors.glassStrong : colors.glass,
+          borderColor: selected ? withAlpha(colors.primary, 0.7) : colors.glassEdge,
+          borderWidth: 1.5,
         },
       ]}
     >
       {icon && <View style={styles.icon}>{icon}</View>}
 
       <View style={styles.text}>
-        <Text style={[t.bodyBold, { color: colors.foreground }]}>{label}</Text>
+        <Text style={[t.bodyBold, styles.label, { color: colors.foreground }]}>{label}</Text>
         {hint && (
           <Text style={[t.footnote, { color: colors.mutedForeground }]} numberOfLines={2}>
             {hint}
@@ -79,15 +91,22 @@ export function OptionCard({
  */
 function Tick({ on }: { on: boolean }) {
   const colors = useColors();
+  const id = `tick-${useId().replace(/:/g, '')}`;
   return (
     <Svg width={26} height={26} viewBox="0 0 24 24">
+      <Defs>
+        <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0" stopColor={colors.calories} />
+          <Stop offset="1" stopColor={colors.logoRamp} />
+        </LinearGradient>
+      </Defs>
       <Circle
         cx={12}
         cy={12}
         r={10.4}
-        fill={on ? colors.primary : 'none'}
+        fill={on ? `url(#${id})` : 'none'}
         stroke={on ? colors.primary : colors.input}
-        strokeWidth={2}
+        strokeWidth={on ? 0 : 2}
       />
       {on && (
         <Path
@@ -108,11 +127,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    minHeight: 70,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderWidth: 2,
+    minHeight: 74,
+    paddingVertical: 15,
+    paddingHorizontal: 17,
   },
+  label: { fontSize: 17 },
   icon: { width: 26, alignItems: 'center' },
   text: { flex: 1, gap: 2 },
 });

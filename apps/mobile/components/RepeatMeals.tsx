@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
   search: { padding: 12 },
   input: {
     height: 40,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 16,
     // Android centres single-line input by default; iOS pads from the top.
@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
     gap: 4,
     height: 32,
     paddingHorizontal: 12,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 999,
   },
   // `text-[0.8rem]` at the web's 16px root, and bold — not the body scale.

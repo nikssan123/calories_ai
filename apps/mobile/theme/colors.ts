@@ -53,8 +53,37 @@ export interface Palette {
 
   /** The translucent header and tab bar. See <Material>. */
   material: string;
-  /** The ledge. Alpha, so one value works over cream, over white and over a photo. */
+  /**
+   * What used to be the ledge colour, and is now only the tint of a surface's
+   * shadow. See `<Chunk>` for why the slab went.
+   */
   chunk: string;
+
+  /*
+   * Light, rather than edges. Everything below arrived with the glow-up
+   * (GLOW-UP.md) and has no twin in `globals.css` yet — the web still draws
+   * the ledge, and these are the values to port when it stops.
+   */
+  /** A surface that lets the ground through: the sky, the blobs, the mist. */
+  glass: string;
+  /** The same surface where the words on it have to win over what is behind. */
+  glassStrong: string;
+  /** The one-pixel lit edge along the top of a glass surface. */
+  glassEdge: string;
+  /** A divider inside a surface. Quieter than `border`, which still outlines fields. */
+  hairline: string;
+  /** The resting shadow under a surface, as a CSS `box-shadow`. */
+  shadow: string;
+  /** The ambient washes behind a whole screen, as a CSS `background-image`. */
+  ambient: string;
+  /** The ink for words set directly on a sky that has gone dark. */
+  skyInk: string;
+  /**
+   * The logo's ramp, as a CSS `background-image`, for anything filled with the
+   * primary. Always laid over `backgroundColor: primary`, which stays the solid
+   * colour for anything that cannot draw a gradient.
+   */
+  primaryRamp: string;
 }
 
 export const light: Palette = {
@@ -95,6 +124,24 @@ export const light: Palette = {
 
   material: 'rgba(255, 246, 236, 0.85)',
   chunk: 'rgba(49, 38, 30, 0.14)',
+
+  glass: 'rgba(255, 255, 255, 0.62)',
+  glassStrong: 'rgba(255, 255, 255, 0.84)',
+  glassEdge: 'rgba(255, 255, 255, 0.95)',
+  hairline: 'rgba(49, 38, 30, 0.08)',
+  /*
+   * Warm, long and faint: a brown shadow rather than a grey one, because a
+   * neutral shadow on cream reads as dirt. The negative spread keeps it inside
+   * the surface's own footprint, so a column of cards does not merge into one
+   * smudge the way a plain blur would.
+   */
+  shadow: '0px 14px 30px -18px rgba(120, 80, 20, 0.42)',
+  ambient:
+    'radial-gradient(120% 60% at 0% 0%, rgba(35, 211, 176, 0.13) 0%, rgba(35, 211, 176, 0) 60%), ' +
+    'radial-gradient(110% 55% at 100% 8%, rgba(255, 178, 80, 0.20) 0%, rgba(255, 178, 80, 0) 62%), ' +
+    'radial-gradient(120% 50% at 50% 100%, rgba(255, 150, 120, 0.10) 0%, rgba(255, 150, 120, 0) 70%)',
+  skyInk: '#f6efe4',
+  primaryRamp: 'linear-gradient(135deg, #12b76a 0%, #23d3b0 100%)',
 };
 
 export const dark: Palette = {
@@ -140,6 +187,22 @@ export const dark: Palette = {
    * read as flat until this is pushed most of the way down.
    */
   chunk: 'rgba(0, 0, 0, 0.88)',
+
+  glass: 'rgba(48, 38, 32, 0.62)',
+  glassStrong: 'rgba(40, 32, 27, 0.88)',
+  glassEdge: 'rgba(255, 255, 255, 0.09)',
+  hairline: 'rgba(255, 255, 255, 0.07)',
+  /*
+   * A shadow barely registers on a ground this dark, so on dark the lit top
+   * edge does the separating and this only has to stop a surface looking
+   * pasted on.
+   */
+  shadow: '0px 16px 32px -16px rgba(0, 0, 0, 0.75)',
+  ambient:
+    'radial-gradient(120% 60% at 0% 0%, rgba(46, 230, 196, 0.08) 0%, rgba(46, 230, 196, 0) 60%), ' +
+    'radial-gradient(110% 55% at 100% 8%, rgba(255, 170, 70, 0.07) 0%, rgba(255, 170, 70, 0) 62%)',
+  skyInk: '#f6efe4',
+  primaryRamp: 'linear-gradient(135deg, #3ddc97 0%, #2ee6c4 100%)',
 };
 
 /**
@@ -154,4 +217,18 @@ export const dark: Palette = {
 export function withAlpha(hex: string, alpha: number): string {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+/**
+ * A colour at an alpha, whichever way the palette spelled it.
+ *
+ * `withAlpha` is for the flat hex entries; a glow tint is often handed one of
+ * the `rgba` ones — a ledge colour, a wash — so this re-alphas those instead of
+ * returning NaN channels.
+ */
+export function tint(color: string, alpha: number): string {
+  if (color.startsWith('#')) return withAlpha(color, alpha);
+  const channels = color.match(/[\d.]+/g);
+  if (!channels || channels.length < 3) return color;
+  return `rgba(${channels[0]}, ${channels[1]}, ${channels[2]}, ${alpha})`;
 }

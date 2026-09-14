@@ -487,7 +487,7 @@ function Plus({ color }: { color: string }) {
 }
 
 const styles = StyleSheet.create({
-  exercise: { borderTopWidth: 2, marginTop: 12, paddingTop: 12, gap: 8 },
+  exercise: { borderTopWidth: 1, marginTop: 12, paddingTop: 12, gap: 8 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   name: { flex: 1, minWidth: 0, gap: 3 },
   kit: { flexDirection: 'row' },
@@ -496,7 +496,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 10,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -506,7 +506,7 @@ const styles = StyleSheet.create({
   stepper: {
     flex: 1,
     minWidth: 0,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 14,
     paddingHorizontal: 4,
     paddingTop: 5,
@@ -544,7 +544,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 6,
     height: 36,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 12,
   },

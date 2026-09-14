@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Pressable,
   ScrollView,
@@ -10,8 +9,11 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Chunk, PressableChunk } from '@/components/Chunk';
-import { Lockup } from '@/components/Lockup';
+import { Chunk } from '@/components/Chunk';
+import { GlowButton } from '@/components/GlowButton';
+import { RingObject } from '@/components/RingObject';
+import { Serif } from '@/components/Serif';
+import { Stage } from '@/components/onboarding/Stage';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { font, useColors, useType } from '@/theme';
@@ -74,6 +76,7 @@ export default function VerifyScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior="padding">
+      <Stage />
       <ScrollView
         contentContainerStyle={[
           styles.page,
@@ -81,10 +84,12 @@ export default function VerifyScreen() {
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        <Lockup size={64} />
-        <Text style={[t.largeTitle, styles.title, { color: colors.foreground }]}>
+        <View style={styles.mark}>
+          <RingObject size={96} />
+        </View>
+        <Serif accessibilityRole="header" style={[t.hero, styles.title, { color: colors.foreground }]}>
           {tr('verify.checkEmail')}
-        </Text>
+        </Serif>
         <Text style={[t.body, styles.blurb, { color: colors.mutedForeground }]}>
           {profile?.email ? tr('verify.sentTo')(profile.email) : tr('verify.sentBlind')}
         </Text>
@@ -102,7 +107,7 @@ export default function VerifyScreen() {
             returnKeyType="go"
             style={[
               styles.input,
-              { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground },
+              { backgroundColor: colors.glassStrong, borderColor: colors.glassEdge, color: colors.foreground },
             ]}
           />
         </Chunk>
@@ -118,20 +123,13 @@ export default function VerifyScreen() {
           </Text>
         )}
 
-        <PressableChunk
+        <GlowButton
           onPress={() => void submit()}
-          disabled={busy || code.length < 6}
-          color={colors.caloriesDeep}
-          radius={24}
-          style={[styles.submit, { opacity: busy || code.length < 6 ? 0.4 : 1 }]}
-          contentStyle={[styles.submitFace, { backgroundColor: colors.primary }]}
-        >
-          {busy ? (
-            <ActivityIndicator color={colors.primaryForeground} />
-          ) : (
-            <Text style={[styles.submitLabel, { color: colors.primaryForeground }]}>{tr('verify.confirm')}</Text>
-          )}
-        </PressableChunk>
+          disabled={code.length < 6}
+          busy={busy}
+          style={styles.submit}
+          label={tr('verify.confirm')}
+        />
 
         <Pressable onPress={() => void resend()} disabled={busy} accessibilityRole="button" hitSlop={8}>
           <Text style={[t.footnoteSemibold, styles.link, { color: colors.mutedForeground }]}>
@@ -155,22 +153,21 @@ export default function VerifyScreen() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   page: { paddingHorizontal: 24, alignItems: 'stretch' },
+  mark: { alignItems: 'flex-start', marginLeft: -18, marginBottom: -20 },
   title: { marginTop: 20 },
   blurb: { marginTop: 8, lineHeight: 26 },
   field: { marginTop: 28 },
   input: {
     height: 64,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 18,
     textAlign: 'center',
-    fontFamily: font.display,
-    fontSize: 30,
-    letterSpacing: 8,
+    fontFamily: font.serifMedium,
+    fontSize: 32,
+    letterSpacing: 10,
     paddingVertical: 0,
   },
   message: { marginTop: 12, textAlign: 'center' },
   submit: { marginTop: 20 },
-  submitFace: { height: 52, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  submitLabel: { fontFamily: font.extrabold, fontSize: 16, lineHeight: 24 },
   link: { textAlign: 'center', marginTop: 20 },
 });

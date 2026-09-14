@@ -147,7 +147,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
           setLogging(true);
         }}
         accessibilityRole="button"
-        contentStyle={[styles.logButton, { backgroundColor: colors.primary }]}
+        contentStyle={[styles.logButton, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
       >
         <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>{tr('workouts.logActionMobile')}</Text>
       </PressableChunk>
@@ -470,7 +470,7 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
             disabled={!ready}
             accessibilityRole="button"
             style={{ opacity: ready ? 1 : 0.4 }}
-            contentStyle={[styles.save, { backgroundColor: colors.primary }]}
+            contentStyle={[styles.save, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
           >
             <Text style={[t.footnoteBold, { color: colors.primaryForeground }]}>
               {saving ? tr('setup.saving') : tr('common.save')}
@@ -536,7 +536,7 @@ const styles = StyleSheet.create({
   dayName: { width: 38 },
   dayChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, flex: 1 },
   dayChip: {
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 9,
     paddingVertical: 5,
@@ -546,7 +546,7 @@ const styles = StyleSheet.create({
   editor: { padding: 12, gap: 10 },
   nameField: {
     height: 40,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 0,
@@ -563,7 +563,7 @@ const styles = StyleSheet.create({
   stepButton: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   stepValue: { width: 48, textAlign: 'center' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { borderWidth: 2, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
   editorFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   save: { paddingHorizontal: 18, paddingVertical: 9 },
 });

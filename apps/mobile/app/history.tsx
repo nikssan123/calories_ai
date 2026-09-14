@@ -295,7 +295,7 @@ function DayCell({
           style={[
             styles.cellFace,
             { backgroundColor: tone.background },
-            selected ? { borderWidth: 2, borderColor: colors.foreground } : null,
+            selected ? { borderWidth: 1, borderColor: colors.foreground } : null,
           ]}
         >
           <Text style={[t.tnum, styles.cellNumber, { color: tone.text(colors) }]}>
@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
   chevron: { padding: 10 },
   page: { paddingHorizontal: 16, paddingTop: 16, gap: 24 },
   loadingGrid: { height: 320, borderRadius: 24 },
-  card: { borderWidth: 2, borderRadius: 24, padding: 12 },
+  card: { borderWidth: 1, borderRadius: 24, padding: 12 },
   week: { flexDirection: 'row', marginBottom: 4 },
   weekday: { flex: 1, textAlign: 'center', paddingVertical: 4 },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },

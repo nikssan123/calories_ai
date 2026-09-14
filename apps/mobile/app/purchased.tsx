@@ -170,7 +170,7 @@ export default function PurchasedScreen() {
         radius={999}
         onPress={() => router.back()}
         accessibilityRole="button"
-        contentStyle={[styles.cta, { backgroundColor: colors.primary }]}
+        contentStyle={[styles.cta, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
       >
         <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
           {landed ? tr('plans.startLogging') : tr('plans.backToJournal')}
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
   },
   title: { marginTop: 4 },
   lede: { marginTop: -8 },
-  card: { padding: 16, borderWidth: 2, borderRadius: 20, gap: 12 },
+  card: { padding: 16, borderWidth: 1, borderRadius: 20, gap: 12 },
   lines: { gap: 10 },
   line: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   check: { marginTop: 3 },

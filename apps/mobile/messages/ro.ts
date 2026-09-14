@@ -39,6 +39,12 @@ export const ro: Messages = {
 
   // ---- Today --------------------------------------------------------------
   'today.title': 'Azi',
+  // „Încă treaz?” would agree with the reader; a verb does not.
+  'today.greetMorning': (name: string) => (name ? `Bună *dimineața*, ${name}` : 'Bună *dimineața*'),
+  'today.greetAfternoon': (name: string) => (name ? `Bună *ziua*, ${name}` : 'Bună *ziua*'),
+  'today.greetEvening': (name: string) => (name ? `Bună *seara*, ${name}` : 'Bună *seara*'),
+  'today.greetNight': (name: string) => (name ? `Nu *dormi* încă, ${name}?` : 'Nu *dormi* încă?'),
+  'today.backToToday': 'Înapoi la azi',
   // Agrees with the calories the figure counts, not with the reader.
   'today.toGo': 'rămase',
   'today.over': 'peste țintă',
@@ -56,7 +62,7 @@ export const ro: Messages = {
   'today.roughEstimate': 'estimare aproximativă',
   'today.exerciseFooter': 'Afișate separat de ținta ta — caloriile arse prin mișcare sunt doar o estimare.',
   'today.exerciseTitle': '🏃  Mișcare',
-  'today.stepsTitle': '👟  Pași',
+  'today.stepsTitle': 'Pași',
   'today.steps': (count: number) => n(count, { one: 'pas', few: 'pași', other: 'de pași' }),
   'today.stepsFooter': 'Numărați de telefonul tău. Pașii îți fac ținta mai precisă — nu se adună niciodată la ea.',
   'today.stepsEnable': 'Numără-mi pașii',
@@ -253,12 +259,14 @@ export const ro: Messages = {
   'ob.back': 'Înapoi',
   'ob.continue': 'Continuă',
 
-  'ob.welcomeTitle': 'Hai să-ți facem planul',
+  'ob.welcomeTitle': 'Hai să-ți facem *planul*',
   'ob.welcomeBody':
     'Șase întrebări rapide — cam o jumătate de minut — și vei avea o țintă de calorii și proteine calculată pentru corpul tău, nu pentru un om oarecare. Poți schimba orice mai târziu.',
   'ob.welcomeStart': 'Să începem',
+  'ob.haveAccount': 'Am deja cont',
+  'ob.wordmarkTagline': 'Ziua ta, până acum',
 
-  'ob.goalTitle': 'Ce vrei să obții?',
+  'ob.goalTitle': 'Ce vrei să *obții*?',
   'ob.goalBody': 'De aici se stabilește dacă ziua ta rămâne sub, la nivelul sau peste ce arzi.',
   'ob.goalLose': 'Să slăbesc',
   'ob.goalLoseHint': 'Un deficit constant, pe care chiar îl poți ține',
@@ -300,7 +308,7 @@ export const ro: Messages = {
   'ob.activityTitle': 'Cât te miști?',
   'ob.activityBody': 'O săptămână obișnuită — fără antrenamentele pe care le notezi în aplicație.',
 
-  'ob.buildingTitle': 'Îți facem planul',
+  'ob.buildingTitle': 'Îți facem *planul*',
   'ob.buildingStep1': 'Calculăm cât arzi',
   'ob.buildingStep2': 'Stabilim caloriile zilnice',
   'ob.buildingStep3': 'Împărțim proteinele, carbohidrații și grăsimile',
@@ -312,6 +320,33 @@ export const ro: Messages = {
   'ob.planFootnote':
     'Un punct de plecare, nu o sentință. Se ajustează în fiecare săptămână după ce notezi și ce arată cântarul.',
   'ob.planStart': 'Începe să notezi',
+  'ob.planSave': 'Salvează-mi planul',
+  'ob.planSaveHint': 'Urmează un cont în care să-l păstrezi. E gratuit și durează un minut.',
+  'ob.planWhere': 'Unde te *duce* asta',
+  'ob.planToday': (weight: string) => `azi ${weight}`,
+  'ob.planGoal': (weight: string) => `ținta ${weight}`,
+  'ob.planArrives': (date: string, rate: string) => `Pe la ${date} · ${rate} pe săptămână`,
+
+  'ob.buildingNote1': 'Scrie ce ai mâncat, cu vorbele tale — jurnalul pune cifrele.',
+  'ob.buildingNote2': 'Ținta se ajustează după cântăriri, săptămână de săptămână.',
+  'ob.buildingNote3': 'Merge și o poză cu farfuria sau un cod de bare.',
+
+  'ob.teaseJournalTitle': 'Scrie ce ai mâncat. *Atât*.',
+  'ob.teaseJournalBody': 'Fără căutări, fără tabele cu porții. Jurnalul înțelege și pune cifrele.',
+  'ob.teaseJournalYou1': '2 ouă, pâine cu unt, cafea cu lapte',
+  'ob.teaseJournalReply1': 'Notat la micul dejun',
+  'ob.teaseJournalYou2': 'și o banană',
+  'ob.teaseJournalReply2': 'Adăugat',
+  'ob.teaseJournalComposer': 'Ce ai mâncat?',
+  'ob.teaseChipType': 'Scrie și gata',
+  'ob.teaseChipPhoto': 'Sau o poză',
+  'ob.teaseChipBarcode': 'Sau un cod de bare',
+  'ob.teaseDayTitle': 'Ziua ta, *luminată* ceas cu ceas',
+  'ob.teaseDayBody': '„Azi” urmează ceasul, iar cercul se umple pe măsură ce notezi. Dintr-o privire vezi cum îți merge ziua.',
+
+  'saving.title': 'Îți salvăm *planul*',
+  'saving.body': 'Îți mutăm răspunsurile în contul nou.',
+  'saving.welcomeBack': 'O *clipă*',
 
   'sex.male': 'Bărbat',
   'sex.female': 'Femeie',
@@ -341,6 +376,11 @@ export const ro: Messages = {
   'auth.signInSubtitle': 'Conectează-te și continuă de unde ai rămas.',
   'auth.createAccount': 'Creează cont',
   'auth.createAccountTitle': 'Creează-ți contul',
+  'auth.savePlanTitle': 'Salvează-ți *planul*',
+  'auth.savePlanSubtitle': (kcal: string) =>
+    `${kcal} kcal pe zi, calculate și gata. Un cont le păstrează — pe acest telefon și pe oricare altul.`,
+  'auth.buildPlanFirst': 'Prima dată aici? Fă-ți întâi planul',
+  'auth.changeAnswers': 'Schimbă răspunsurile',
   'auth.email': 'E-mail',
   'auth.password': 'Parolă',
   'auth.passwordHint': 'Cel puțin 8 caractere.',
@@ -563,7 +603,7 @@ export const ro: Messages = {
   'progress.title': 'Progres',
   'progress.daysWindow': (count: number) => n(count, { one: 'zi', few: 'zile', other: 'de zile' }),
   'progress.daysShort': (count: number) => `${count}z`,
-  'progress.weightTitle': '⚖️  Greutate',
+  'progress.weightTitle': 'Greutate',
   'progress.noWeighIns': 'Nicio cântărire încă. Notează una mai jos sau spune-i pur și simplu jurnalului.',
   'progress.noWeighIn': 'Fără cântărire',
   'progress.trendReadout': (value: string) => `Media pe 7 zile: ${value} — linia`,
@@ -572,13 +612,13 @@ export const ro: Messages = {
   'progress.sinceStart': 'De la început',
   'progress.toTarget': 'Până la țintă',
   'progress.logTodaysWeight': (unit: string) => `Notează greutatea de azi (${unit})`,
-  'progress.caloriesTitle': '🔥  Calorii',
+  'progress.caloriesTitle': 'Calorii',
   'progress.avgDayTarget': (target: string) => `medie/zi · țintă ${target}`,
-  'progress.proteinTitle': '💪  Proteine',
+  'progress.proteinTitle': 'Proteine',
   'progress.hitTargetBefore': 'Ținta atinsă în',
   'progress.ofDays': (hit: string, logged: string) => `${hit} din ${logged}`,
   'progress.hitTargetAfter': 'zile notate.',
-  'progress.qualityTitle': '🥦  Calitatea alimentației',
+  'progress.qualityTitle': 'Calitatea alimentației',
   'progress.days': (count: number) => n(count, { one: 'zi', few: 'zile', other: 'de zile' }),
   'progress.qualityFooter': (days: string, percent: string) =>
     `Medie pe ${days} — ${percent}% din ce ai notat are aceste valori.`,
@@ -871,7 +911,7 @@ export const ro: Messages = {
   'review.kcalUnit': (kcal: string) => `${kcal} kcal`,
   'review.partOf': (plan: string) => `Face parte din ${plan}`,
 
-  'quality.title': '🥦\u00a0\u00a0Calitatea alimentației',
+  'quality.title': 'Calitatea alimentației',
   'quality.partlyMeasured': 'măsurat parțial',
   'quality.notEstimated': 'neestimat',
 

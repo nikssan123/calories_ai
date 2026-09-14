@@ -12,7 +12,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
-import { PressableChunk } from '@/components/Chunk';
+import { GlowButton } from '@/components/GlowButton';
+import { Serif } from '@/components/Serif';
 import { column, ease, type as t, useColors, useType } from '@/theme';
 import { useT } from '@/lib/i18n';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -101,11 +102,20 @@ export function Rail({
         </View>
 
         <View
-          style={[styles.track, { backgroundColor: colors.muted }]}
+          style={[styles.track, { backgroundColor: colors.hairline }]}
           accessibilityRole="progressbar"
           accessibilityValue={{ min: 0, max: total, now: Math.min(step, total) }}
         >
-          <Animated.View style={[styles.fill, { backgroundColor: colors.primary }, grown]} />
+          <Animated.View
+            style={[
+              styles.fill,
+              {
+                backgroundColor: colors.primary,
+                experimental_backgroundImage: `linear-gradient(90deg, ${colors.calories}, ${colors.logoRamp})`,
+              },
+              grown,
+            ]}
+          />
         </View>
 
         {/* Balances the back slot, so the track is centred rather than merely
@@ -187,9 +197,18 @@ export function Step({
             showsVerticalScrollIndicator={false}
           >
             <View style={column}>
-              <Text style={[type.largeTitle, styles.title, { color: colors.foreground }]}>
+              {/*
+                * The question is the hero, in the serif. Onboarding is where
+                * somebody decides what kind of app this is, and a question set
+                * like a sentence someone is asking them reads differently from
+                * one set like a form label (GLOW-UP.md, "editorial type").
+                */}
+              <Serif
+                accessibilityRole="header"
+                style={[type.hero, styles.title, { color: colors.foreground }]}
+              >
                 {title}
-              </Text>
+              </Serif>
               {body && (
                 <Text style={[t.body, styles.body, { color: colors.mutedForeground }]}>{body}</Text>
               )}
@@ -248,19 +267,7 @@ export function Advance({
       {hint && (
         <Text style={[t.footnote, styles.hint, { color: colors.mutedForeground }]}>{hint}</Text>
       )}
-      <PressableChunk
-        color={colors.caloriesDeep}
-        radius={999}
-        depth={4}
-        disabled={disabled}
-        onPress={onPress}
-        accessibilityRole="button"
-        accessibilityState={{ disabled }}
-        style={{ opacity: disabled ? 0.45 : 1 }}
-        contentStyle={[styles.advanceFace, { backgroundColor: colors.primary }]}
-      >
-        <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>{label}</Text>
-      </PressableChunk>
+      <GlowButton label={label} onPress={onPress} disabled={disabled} />
 
       {skip && (
         <Pressable
@@ -284,16 +291,15 @@ const styles = StyleSheet.create({
   railRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   backSlot: { width: 26, height: 26, justifyContent: 'center' },
   back: { width: 26, height: 26, alignItems: 'flex-start', justifyContent: 'center' },
-  track: { flex: 1, height: 8, borderRadius: 999, overflow: 'hidden' },
+  track: { flex: 1, height: 5, borderRadius: 999, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 999 },
 
   scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 28 },
-  title: { marginBottom: 8 },
-  body: { marginBottom: 24 },
+  title: { marginBottom: 10, marginTop: 8 },
+  body: { marginBottom: 26, maxWidth: 360 },
 
   footer: { paddingHorizontal: 20, paddingTop: 8 },
   advance: { gap: 10 },
   skip: { alignSelf: 'center', paddingVertical: 6, paddingHorizontal: 16 },
   hint: { textAlign: 'center' },
-  advanceFace: { height: 54, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
 });

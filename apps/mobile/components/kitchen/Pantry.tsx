@@ -423,7 +423,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     height: 44,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 16,
     paddingVertical: 0,
@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 44,
     height: 44,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 999,
   },
 
@@ -447,7 +447,7 @@ const styles = StyleSheet.create({
      Rows run full-bleed inside it and the panel clips them, which is what keeps
      swipe-to-delete looking deliberate: the red slides out under the rounded
      edge rather than a square corner appearing beside a rounded card. */
-  asking: { borderWidth: 2, borderRadius: 20, overflow: 'hidden' },
+  asking: { borderWidth: 1, borderRadius: 20, overflow: 'hidden' },
   askingHeading: { paddingHorizontal: 12, paddingTop: 10, paddingBottom: 8 },
   row: {
     flexDirection: 'row',
@@ -455,10 +455,10 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 12,
     paddingVertical: 11,
-    borderTopWidth: 2,
+    borderTopWidth: 1,
   },
   rowBody: { flex: 1, minWidth: 0 },
-  still: { borderWidth: 2, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
+  still: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   staplesChips: { marginTop: 2 },
@@ -468,7 +468,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     maxWidth: '100%',
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 999,
     paddingLeft: 12,
     paddingRight: 6,

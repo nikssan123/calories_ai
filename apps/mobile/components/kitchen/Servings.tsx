@@ -123,7 +123,7 @@ export function scale(perServing: number, servings: number): number {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   label: { flexShrink: 1, minWidth: 0 },
-  stepper: { flexDirection: 'row', alignItems: 'center', borderWidth: 2, borderRadius: 999 },
+  stepper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 999 },
   step: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   count: { width: 40, textAlign: 'center', fontSize: 16, lineHeight: 24, fontFamily: font.display },
 });

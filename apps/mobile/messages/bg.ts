@@ -31,6 +31,13 @@ export const bg: Messages = {
 
   // ---- Today --------------------------------------------------------------
   'today.title': 'Днес',
+  // The greeting over the sky; `name` may be empty. «Още не спиш» rather than
+  // «Още си буден», which would gender the reader.
+  'today.greetMorning': (name: string) => (name ? `Добро *утро*, ${name}` : 'Добро *утро*'),
+  'today.greetAfternoon': (name: string) => (name ? `Добър *ден*, ${name}` : 'Добър *ден*'),
+  'today.greetEvening': (name: string) => (name ? `Добър *вечер*, ${name}` : 'Добър *вечер*'),
+  'today.greetNight': (name: string) => (name ? `Още не спиш, *${name}*?` : 'Още не *спиш*?'),
+  'today.backToToday': 'Обратно към днес',
   // Under the figure in the ring. «остават» is what the number *is*, and it
   // needs no preposition — the English "to go" has one only because it must.
   'today.toGo': 'остават',
@@ -139,12 +146,14 @@ export const bg: Messages = {
   'ob.back': 'Назад',
   'ob.continue': 'Напред',
 
-  'ob.welcomeTitle': 'Да направим твоя план',
+  'ob.welcomeTitle': 'Да направим *твоя* план',
   'ob.welcomeBody':
     'Шест бързи въпроса — около половин минута — и ще имаш цел за калории и протеин, сметната за твоето тяло, а не за никого. Всичко може да се промени после.',
   'ob.welcomeStart': 'Да започваме',
+  'ob.haveAccount': 'Вече имам акаунт',
+  'ob.wordmarkTagline': 'Денят ти досега',
 
-  'ob.goalTitle': 'Какво искаш да постигнеш?',
+  'ob.goalTitle': 'Какво искаш да *постигнеш*?',
   'ob.goalBody': 'Това решава дали денят ти е под, на, или над това, което изгаряш.',
   'ob.goalLose': 'Да отслабна',
   'ob.goalLoseHint': 'Умерен дефицит, който наистина се издържа',
@@ -185,7 +194,7 @@ export const bg: Messages = {
   'ob.activityTitle': 'Колко се движиш?',
   'ob.activityBody': 'Обикновената ти седмица — без тренировките, които записваш в приложението.',
 
-  'ob.buildingTitle': 'Правим плана ти',
+  'ob.buildingTitle': 'Правим *плана* ти',
   'ob.buildingStep1': 'Смятаме колко изгаряш',
   'ob.buildingStep2': 'Определяме дневните калории',
   'ob.buildingStep3': 'Разпределяме протеин, въглехидрати и мазнини',
@@ -197,6 +206,35 @@ export const bg: Messages = {
   'ob.planFootnote':
     'Отправна точка, не присъда. Обновява се всяка седмица според това, което записваш, и какво прави кантарът.',
   'ob.planStart': 'Започни да записваш',
+  'ob.planSave': 'Запази плана ми',
+  'ob.planSaveHint': 'Остава само акаунт, в който да го пазиш. Безплатен е и отнема минута.',
+  'ob.planWhere': 'Докъде ще те *доведе*',
+  'ob.planToday': (weight: string) => `днес ${weight}`,
+  'ob.planGoal': (weight: string) => `цел ${weight}`,
+  'ob.planArrives': (date: string, rate: string) => `Около ${date} · по ${rate} седмично`,
+
+  'ob.buildingNote1': 'Описваш храната с обикновени думи, а дневникът сам смята числата.',
+  'ob.buildingNote2': 'Всяка седмица целта ти се донастройва според претеглянията.',
+  'ob.buildingNote3': 'Става и със снимка на чинията или с баркод.',
+
+  // «яде» is the aorist, as in `journal.emptyTitle` — "what you ate", without
+  // the gendered «си ял».
+  'ob.teaseJournalTitle': 'Напиши какво яде. И *толкова*.',
+  'ob.teaseJournalBody': 'Без търсене и без таблици с порции. Дневникът разбира написаното и сам слага числата.',
+  'ob.teaseJournalYou1': '2 яйца, филия с масло, кафе с мляко',
+  'ob.teaseJournalReply1': 'Записано за закуска',
+  'ob.teaseJournalYou2': 'и един банан',
+  'ob.teaseJournalReply2': 'Добавено',
+  'ob.teaseJournalComposer': 'Какво хапна?',
+  'ob.teaseChipType': 'Просто го напиши',
+  'ob.teaseChipPhoto': 'Или снимка',
+  'ob.teaseChipBarcode': 'Или баркод',
+  'ob.teaseDayTitle': 'Денят ти, *огрян* час по час',
+  'ob.teaseDayBody': 'Екранът „Днес“ се мени според часа, а пръстенът се пълни с всеки запис. С един поглед виждаш как върви денят.',
+
+  'saving.title': 'Запазваме *плана* ти',
+  'saving.body': 'Прехвърляме отговорите в новия ти акаунт.',
+  'saving.welcomeBack': 'Само *момент*',
 
   'sex.male': 'Мъж',
   'sex.female': 'Жена',
@@ -223,6 +261,11 @@ export const bg: Messages = {
   'auth.signInSubtitle': 'Влез и продължи оттам, докъдето стигна.',
   'auth.createAccount': 'Създай акаунт',
   'auth.createAccountTitle': 'Създай своя акаунт',
+  'auth.savePlanTitle': 'Запази *плана* си',
+  'auth.savePlanSubtitle': (kcal: string) =>
+    `${kcal} kcal на ден, сметнати и готови. Акаунтът ги пази — на този телефон и на всеки друг.`,
+  'auth.buildPlanFirst': 'Нов си тук? Първо си направи плана',
+  'auth.changeAnswers': 'Промени отговорите си',
   'auth.email': 'Имейл',
   'auth.password': 'Парола',
   'auth.passwordHint': 'Поне 8 знака.',
@@ -266,7 +309,7 @@ export const bg: Messages = {
   // ---- Everything the string pass added, in en.ts order -------------------
   'today.exerciseFooter': 'Показано отделно от целта ти — изгореното от движение е груба оценка.',
   'today.exerciseTitle': '🏃  Движение',
-  'today.stepsTitle': '👟  Стъпки',
+  'today.stepsTitle': 'Стъпки',
   'today.steps': (count: number) => n(count, { one: 'стъпка', other: 'стъпки' }),
   'today.stepsFooter':
     'Отчетени от телефона ти. Стъпките уточняват целта ти — никога не се добавят към нея.',
@@ -514,7 +557,7 @@ export const bg: Messages = {
   'progress.title': 'Напредък',
   'progress.daysWindow': (count) => n(count, { one: 'ден', other: 'дни' }),
   'progress.daysShort': (count) => `${count}д`,
-  'progress.weightTitle': '⚖️  Тегло',
+  'progress.weightTitle': 'Тегло',
   'progress.noWeighIns': 'Още няма измервания. Запиши едно отдолу или просто кажи на дневника.',
   'progress.noWeighIn': 'Без измерване',
   'progress.trendReadout': (value) => `Средно за 7 дни ${value} — линията`,
@@ -523,13 +566,13 @@ export const bg: Messages = {
   'progress.sinceStart': 'От началото',
   'progress.toTarget': 'До целта',
   'progress.logTodaysWeight': (unit) => `Запиши днешното тегло (${unit})`,
-  'progress.caloriesTitle': '🔥  Калории',
+  'progress.caloriesTitle': 'Калории',
   'progress.avgDayTarget': (target) => `средно на ден · цел ${target}`,
-  'progress.proteinTitle': '💪  Протеин',
+  'progress.proteinTitle': 'Протеин',
   'progress.hitTargetBefore': 'Улучи целта в',
   'progress.ofDays': (hit, logged) => `${hit} от ${logged}`,
   'progress.hitTargetAfter': 'записани дни.',
-  'progress.qualityTitle': '🥦  Качество на храненето',
+  'progress.qualityTitle': 'Качество на храненето',
   'progress.days': (count) => n(count, { one: 'ден', other: 'дни' }),
   'progress.qualityFooter': (days, percent) => `Осреднено за ${days} — ${percent}% от записаното носи тези числа.`,
   'progress.chartNutrient': (label) => `Покажи ${label} на графиката`,
@@ -776,7 +819,7 @@ export const bg: Messages = {
   'review.willApply': 'Следващият преглед ще приложи това. ',
   'review.kcalUnit': (kcal) => `${kcal} kcal`,
   'review.partOf': (plan) => `Част от ${plan}`,
-  'quality.title': '🥦\u00a0\u00a0Качество на храненето',
+  'quality.title': 'Качество на храненето',
   'quality.partlyMeasured': 'частично измерено',
   'quality.notEstimated': 'без оценка',
   'nutrient.sodium': 'Натрий',

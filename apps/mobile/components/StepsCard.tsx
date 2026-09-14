@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
+import { Glossy } from '@/components/icons/Glossy';
 import { haptics } from '@/lib/haptics';
 import { formatNumber } from '@ct/shared';
 import { useLocale, useT } from '@/lib/i18n';
@@ -73,6 +74,7 @@ export function StepsCard({
     return (
       <InsetGroup
         title={tr('today.stepsTitle')}
+        icon={<Glossy name="steps" size={18} />}
         trailing={
           average === null ? null : (
             <Text style={[t.footnoteBold, t.tnum, { color: colors.mutedForeground }]}>
@@ -103,7 +105,8 @@ export function StepsCard({
    */
   if (permission === 'undetermined') {
     return (
-      <InsetGroup title={tr('today.stepsTitle')}>
+      <InsetGroup title={tr('today.stepsTitle')}
+        icon={<Glossy name="steps" size={18} />}>
         <Pressable
           onPress={() => {
             haptics.press();
@@ -152,7 +155,8 @@ export function StepsCard({
    */
   if (empty === 'starting') {
     return (
-      <InsetGroup title={tr('today.stepsTitle')}>
+      <InsetGroup title={tr('today.stepsTitle')}
+        icon={<Glossy name="steps" size={18} />}>
         <InsetRow first>
           <View style={styles.copy}>
             <Text style={[t.bodySemibold, { color: colors.foreground }]}>
@@ -169,7 +173,8 @@ export function StepsCard({
 
   if (empty === 'no-source') {
     return (
-      <InsetGroup title={tr('today.stepsTitle')}>
+      <InsetGroup title={tr('today.stepsTitle')}
+        icon={<Glossy name="steps" size={18} />}>
         <Pressable
           onPress={() => {
             haptics.press();

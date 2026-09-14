@@ -39,6 +39,18 @@ import { Nunito_900Black } from '@expo-google-fonts/nunito/900Black';
  */
 import { Nunito_500Medium_Italic } from '@expo-google-fonts/nunito/500Medium_Italic';
 import { Nunito_800ExtraBold_Italic } from '@expo-google-fonts/nunito/800ExtraBold_Italic';
+/*
+ * The serif, for the sentences that are moments rather than interface — see
+ * SERIF_FACES in `theme/typography.ts`. Fraunces is ~80 KB a cut; Literata,
+ * which stands in for Cyrillic and Greek, is ~250 KB a cut and is loaded
+ * unconditionally for the same reason the Cyrillic Nunito is.
+ */
+import { Fraunces_400Regular } from '@expo-google-fonts/fraunces/400Regular';
+import { Fraunces_500Medium } from '@expo-google-fonts/fraunces/500Medium';
+import { Fraunces_300Light_Italic } from '@expo-google-fonts/fraunces/300Light_Italic';
+import { Literata_400Regular } from '@expo-google-fonts/literata/400Regular';
+import { Literata_500Medium } from '@expo-google-fonts/literata/500Medium';
+import { Literata_300Light_Italic } from '@expo-google-fonts/literata/300Light_Italic';
 import * as Notifications from 'expo-notifications';
 import { ToastProvider } from '@/components/Toast';
 import { SharedPhotoRoot } from '@/lib/share';
@@ -81,6 +93,12 @@ export default function RootLayout() {
     Baloo2_600SemiBold,
     Baloo2_700Bold,
     Baloo2_800ExtraBold,
+    Fraunces_400Regular,
+    Fraunces_500Medium,
+    Fraunces_300Light_Italic,
+    Literata_400Regular,
+    Literata_500Medium,
+    Literata_300Light_Italic,
   });
 
   // A font that will not load is not a reason to show nothing forever. The
@@ -174,20 +192,35 @@ function Themed() {
  */
 function Gate() {
   const { authenticated, emailVerified, loading } = useAuth();
-  const { ready: setupResolved, needsSetup } = useOnboarding();
+  const {
+    ready: setupResolved,
+    needsSetup,
+    draftLoaded,
+    planWaiting,
+    signingIn,
+  } = useOnboarding();
   const colors = useColors();
   const router = useRouter();
 
   /*
-   * Three boundaries now, not two.
+   * Four boundaries now, and the first one moved.
    *
-   * Setup is the third, and it is the one that changed: it used to be a
-   * conversation on the journal that anybody could walk past, leaving the app
-   * drawing five screens of targets calculated for nobody in particular. It is
-   * a form and a gate now — nothing behind it is drawn until the profile can
-   * support a real number. See `app/onboarding.tsx`.
+   * Setup used to sit behind the account: sign in, verify, then answer the
+   * questions. It is in front of it now (GLOW-UP.md) — somebody with no session
+   * is shown the questions and the plan they buy before being asked for an email
+   * address, and the account is how that plan is kept. So with no session the
+   * choice is between onboarding and the sign-in screen, and it turns on whether
+   * there is a plan waiting to be saved or they said they already have an
+   * account.
+   *
+   * With a session the old order holds — verify, then setup if the server says
+   * it is unfinished — with one screen added between the two: `saving`, which
+   * covers the second or so it takes to write a draft up to a brand-new account
+   * so the tabs never draw a target from before the profile landed.
    */
-  const settled = !loading && (!authenticated || !emailVerified || setupResolved);
+  const welcoming = !authenticated && !planWaiting && !signingIn;
+  const settled =
+    !loading && draftLoaded && (!authenticated || !emailVerified || setupResolved);
 
   useEffect(() => {
     /*
@@ -288,11 +321,16 @@ function Gate() {
         * nothing behind this to swipe back to — the wizard's own rail carries
         * the way back through the questions.
         */}
-      <Stack.Protected guard={authenticated && emailVerified && needsSetup}>
+      <Stack.Protected guard={(authenticated && emailVerified && needsSetup) || welcoming}>
         <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
       </Stack.Protected>
 
-      <Stack.Protected guard={authenticated && emailVerified && !needsSetup}>
+      {/* The plan a new account arrived with, being written to it. See above. */}
+      <Stack.Protected guard={authenticated && emailVerified && !setupResolved}>
+        <Stack.Screen name="saving" options={{ animation: 'fade', gestureEnabled: false }} />
+      </Stack.Protected>
+
+      <Stack.Protected guard={authenticated && emailVerified && setupResolved && !needsSetup}>
         <Stack.Screen name="(tabs)" />
         {/*
           * History sits outside the tabs, as it does on the web: it is reached
@@ -328,8 +366,8 @@ function Gate() {
             reads as a bounce. */}
         <Stack.Screen name="purchased" options={{ animation: 'fade', gestureEnabled: false }} />
       </Stack.Protected>
-      <Stack.Protected guard={!authenticated}>
-        <Stack.Screen name="login" />
+      <Stack.Protected guard={!authenticated && !welcoming}>
+        <Stack.Screen name="login" options={{ animation: 'fade' }} />
       </Stack.Protected>
     </Stack>
   );

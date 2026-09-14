@@ -204,7 +204,7 @@ function TableView({
       contentContainerStyle={styles.tableBody}
     >
       <View style={styles.flex}>
-        <View style={[styles.row, { backgroundColor: colors.muted, borderBottomColor: colors.border, borderBottomWidth: 2 }]}>
+        <View style={[styles.row, { backgroundColor: colors.muted, borderBottomColor: colors.hairline, borderBottomWidth: 1 }]}>
           {block.head.map((head, i) => (
             <Text
               key={i}
@@ -342,10 +342,10 @@ const styles = StyleSheet.create({
   marker: { minWidth: 14, textAlign: 'right' },
   itemBody: { flex: 1 },
   quote: { borderLeftWidth: 2, paddingLeft: 12, gap: 8 },
-  fence: { borderWidth: 2, borderRadius: 24, flexGrow: 0 },
+  fence: { borderWidth: 1, borderRadius: 24, flexGrow: 0 },
   fenceBody: { padding: 12 },
-  rule: { borderTopWidth: 2 },
-  table: { borderWidth: 2, borderRadius: 24, flexGrow: 0 },
+  rule: { borderTopWidth: 1 },
+  table: { borderWidth: 1, borderRadius: 24, flexGrow: 0 },
   tableBody: { minWidth: '100%' },
   flex: { flex: 1 },
   row: { flexDirection: 'row' },

@@ -3,20 +3,25 @@ import { Chunk } from '@/components/Chunk';
 import { type as t, useColors } from '@/theme';
 
 /**
- * A titled section of rows on a card. Real outline, real ledge — six of them
- * stacked read as six objects, which is what they are.
+ * A titled section of rows on a lit surface. Six of them stacked still read as
+ * six objects, which is what they are — the shadow and the lit edge do what the
+ * outline and the ledge used to (see `<Chunk>`), and the dividers are hairlines
+ * so the rows read as one surface rather than a stack of boxes inside a box.
  *
  * The title is set as an eyebrow: small, heavy, letterspaced caps. At this
  * weight the caps need the tracking or they clot.
  */
 export function InsetGroup({
   title,
+  icon,
   trailing,
   footer,
   style,
   children,
 }: {
   title?: string;
+  /** Drawn before the title — one of the glossy icons, where an emoji used to be. */
+  icon?: React.ReactNode;
   trailing?: React.ReactNode;
   footer?: React.ReactNode;
   style?: StyleProp<ViewStyle>;
@@ -29,7 +34,10 @@ export function InsetGroup({
       {(title || trailing) && (
         <View style={styles.header}>
           {title ? (
-            <Text style={[t.eyebrow, styles.title, { color: colors.mutedForeground }]}>{title}</Text>
+            <View style={[styles.title, styles.titleRow]}>
+              {icon}
+              <Text style={[t.eyebrow, styles.title, { color: colors.mutedForeground }]}>{title}</Text>
+            </View>
           ) : (
             <View style={styles.title} />
           )}
@@ -40,8 +48,8 @@ export function InsetGroup({
       <Chunk
         contentStyle={{
           backgroundColor: colors.card,
-          borderWidth: 2,
-          borderColor: colors.border,
+          borderWidth: 1,
+          borderColor: colors.hairline,
           // `divide-y-2` on the web; here each row but the first draws its own
           // top border, so the card can clip them at the corners.
           overflow: 'hidden',
@@ -75,7 +83,7 @@ export function InsetRow({
     <View
       style={[
         styles.row,
-        first ? null : { borderTopWidth: 2, borderTopColor: colors.border },
+        first ? null : { borderTopWidth: 1, borderTopColor: colors.hairline },
         style,
       ]}
     >
@@ -87,13 +95,14 @@ export function InsetRow({
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
     paddingHorizontal: 6,
     marginBottom: 8,
   },
   title: { flexShrink: 1 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   footer: { paddingHorizontal: 6, paddingTop: 2 },
   row: {
     flexDirection: 'row',

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -12,9 +12,14 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import * as WebBrowser from 'expo-web-browser';
+import { calculateTargets, formatNumber } from '@ct/shared';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { Glyph } from '@/components/Glyph';
-import { Lockup } from '@/components/Lockup';
+import { GlowButton } from '@/components/GlowButton';
+import { RingObject } from '@/components/RingObject';
+import { Serif } from '@/components/Serif';
+import { Stage } from '@/components/onboarding/Stage';
+import { useOnboarding } from '@/lib/onboarding';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { signInWithGoogle } from '@/lib/google';
@@ -42,6 +47,16 @@ export default function LoginScreen() {
   const locale = useLocale();
   const insets = useSafeAreaInsets();
   const { adoptSession, googleEnabled, hasAccounts, signupAllowed, refresh, loading } = useAuth();
+  const { draft, planWaiting, signingIn, chooseSignIn, saveDraft } = useOnboarding();
+  /*
+   * The plan this sign-up is saving, when there is one. Worked out again from
+   * the draft rather than carried across, because it is pure and cheap and the
+   * draft is the thing that will actually be uploaded.
+   */
+  const planKcal = useMemo(
+    () => (planWaiting && draft ? calculateTargets(draft).kcal : null),
+    [planWaiting, draft],
+  );
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
@@ -79,8 +94,14 @@ export default function LoginScreen() {
   useEffect(() => {
     if (loading || decided.current) return;
     decided.current = true;
-    setMode(hasAccounts ? 'signin' : 'signup');
-  }, [loading, hasAccounts]);
+    /*
+     * Onboarding runs before this screen now, so how somebody arrived says which
+     * form they want: a finished plan came to be saved, "I already have an
+     * account" came to sign in. Only a launch that is neither falls back to
+     * asking whether the server has any accounts.
+     */
+    setMode(planWaiting ? 'signup' : signingIn ? 'signin' : hasAccounts ? 'signin' : 'signup');
+  }, [loading, hasAccounts, planWaiting, signingIn]);
 
   const signup = mode === 'signup';
 
@@ -170,6 +191,7 @@ export default function LoginScreen() {
        */
       behavior="padding"
     >
+      <Stage />
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
@@ -189,13 +211,17 @@ export default function LoginScreen() {
         </View>
 
         <View style={styles.head}>
-          <Lockup size={64} />
-          <Text style={[t.largeTitle, styles.title, { color: colors.foreground }]}>
-            {signup ? tr('auth.createAccountTitle') : tr('auth.signIn')}
-          </Text>
+          <View style={styles.mark}>
+            <RingObject size={96} />
+          </View>
+          <Serif accessibilityRole="header" style={[t.hero, styles.title, { color: colors.foreground }]}>
+            {signup ? (planKcal !== null ? tr('auth.savePlanTitle') : tr('auth.createAccountTitle')) : tr('auth.signIn')}
+          </Serif>
           <Text style={[t.body, { color: colors.mutedForeground }]}>
             {signup
-              ? tr('auth.createAccountSubtitle')
+              ? planKcal !== null
+                ? tr('auth.savePlanSubtitle')(formatNumber(planKcal, locale))
+                : tr('auth.createAccountSubtitle')
               : tr('auth.signInSubtitle')}
           </Text>
         </View>
@@ -209,7 +235,7 @@ export default function LoginScreen() {
               accessibilityRole="button"
               contentStyle={[
                 styles.googleFace,
-                { backgroundColor: colors.card, borderColor: colors.border },
+                { backgroundColor: colors.glassStrong, borderColor: colors.glassEdge },
               ]}
             >
               {google ? (
@@ -226,9 +252,9 @@ export default function LoginScreen() {
 
             {/* The line that says "or", which is the whole reason it is here. */}
             <View style={styles.orRow}>
-              <View style={[styles.rule, { backgroundColor: colors.border }]} />
+              <View style={[styles.rule, { backgroundColor: colors.hairline }]} />
               <Text style={[t.footnote, { color: colors.mutedForeground }]}>{tr('auth.or')}</Text>
-              <View style={[styles.rule, { backgroundColor: colors.border }]} />
+              <View style={[styles.rule, { backgroundColor: colors.hairline }]} />
             </View>
           </View>
         )}
@@ -311,22 +337,13 @@ export default function LoginScreen() {
           </Text>
         )}
 
-        <PressableChunk
+        <GlowButton
           onPress={() => void submit()}
-          disabled={busy || !email || password.length < 8}
-          color={colors.caloriesDeep}
-          radius={24}
+          disabled={!email || password.length < 8}
+          busy={busy}
           style={styles.submit}
-          contentStyle={[styles.submitFace, { backgroundColor: colors.primary }]}
-        >
-          {busy ? (
-            <ActivityIndicator color={colors.primaryForeground} />
-          ) : (
-            <Text style={[styles.submitLabel, { color: colors.primaryForeground }]}>
-              {signup ? tr('auth.createAccount') : tr('auth.signIn')}
-            </Text>
-          )}
-        </PressableChunk>
+          label={signup ? tr('auth.createAccount') : tr('auth.signIn')}
+        />
 
         {/* Under the button that does the agreeing, and only on the screen where
             something is being agreed to. Both open in the browser sheet, which
@@ -369,16 +386,44 @@ export default function LoginScreen() {
           </Text>
         )}
 
+        {/*
+          The way back into the questions from a plan waiting to be saved. The
+          answers stay; marking the draft unfinished is all it takes for the gate
+          to put the walk back in front of this form.
+        */}
+        {signup && planWaiting && draft && (
+          <Text
+            accessibilityRole="button"
+            onPress={() => void saveDraft({ ...draft, completed_at: null })}
+            style={[t.footnoteSemibold, styles.switch, { color: colors.mutedForeground }]}
+          >
+            {tr('auth.changeAnswers')}
+          </Text>
+        )}
+
         {(signup || signupAllowed) && (
           <Text
             accessibilityRole="button"
             onPress={() => {
-              setMode(signup ? 'signin' : 'signup');
               setError(null);
+              /*
+               * An account is made at the end of a plan now, not from nothing.
+               * Somebody on the sign-in form with no plan behind them is sent
+               * back to build one; the questions end on this form again.
+               */
+              if (!signup && !planWaiting) {
+                chooseSignIn(false);
+                return;
+              }
+              setMode(signup ? 'signin' : 'signup');
             }}
             style={[t.footnoteSemibold, styles.switch, { color: colors.mutedForeground }]}
           >
-            {signup ? `${tr('auth.haveAccount')} ${tr('auth.signIn')}` : tr('auth.createAccount')}
+            {signup
+              ? `${tr('auth.haveAccount')} ${tr('auth.signIn')}`
+              : planWaiting
+                ? tr('auth.createAccount')
+                : tr('auth.buildPlanFirst')}
           </Text>
         )}
       </ScrollView>
@@ -432,9 +477,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <Chunk
         radius={18}
         contentStyle={{
-          backgroundColor: colors.card,
-          borderWidth: 2,
-          borderColor: colors.border,
+          backgroundColor: colors.glassStrong,
+          borderWidth: 1,
+          borderColor: colors.glassEdge,
           height: 48,
           justifyContent: 'center',
         }}
@@ -456,7 +501,8 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
-  head: { marginBottom: 32, gap: 10 },
+  head: { marginBottom: 28, gap: 8 },
+  mark: { alignItems: 'flex-start', marginLeft: -18, marginBottom: -20 },
   google: { marginBottom: 24 },
   googleFace: {
     flexDirection: 'row',
@@ -464,12 +510,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
     height: 48,
-    borderWidth: 2,
+    borderWidth: 1,
   },
   googleLabel: { fontFamily: font.extrabold, fontSize: 16 },
   orRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 24 },
   // `h-0.5 rounded-full` on the web: a rule with a shape, not a hairline.
-  rule: { flex: 1, height: 2, borderRadius: 999 },
+  rule: { flex: 1, height: 1, borderRadius: 999 },
   title: { marginTop: 10 },
   field: { gap: 6, marginBottom: 16 },
   input: { height: 44, paddingHorizontal: 14 },
@@ -480,8 +526,6 @@ const styles = StyleSheet.create({
   reveal: { height: 44, justifyContent: 'center', paddingHorizontal: 14 },
   error: { marginBottom: 12 },
   submit: { marginTop: 8 },
-  submitFace: { height: 48, alignItems: 'center', justifyContent: 'center' },
-  submitLabel: { fontFamily: font.extrabold, fontSize: 16 },
   switch: { marginTop: 24, textAlign: 'center' },
   // Closer to the button than the mode switch below it: this belongs to the
   // thing it sits under, not to the row of links at the foot of the screen.

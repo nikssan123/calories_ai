@@ -17,8 +17,8 @@ Mockups: https://claude.ai/code/artifact/aed99166-bb22-4b1d-88fc-f1100da93e8f
 
 ## Libraries
 - **Already installed:** `react-native-reanimated` 4.5.1, `react-native-svg`, `expo-blur`, `expo-haptics`, `expo-sensors`, `expo-splash-screen`, `expo-font`, `expo-camera`.
-- **To add:** `@shopify/react-native-skia` and `rive-react-native`. Both are native, so they need a `--local` rebuild on both platforms.
-- **Skip:** `expo-gl` and three. Rive covers the 3D splash at a fraction of the cost.
+- **Added:** `@expo-google-fonts/fraunces` and `@expo-google-fonts/literata` (Literata stands in for Cyrillic and Greek, which Fraunces does not draw). JS assets only.
+- **Decided against Skia and Rive** (2026-09-14, while building). React Native 0.86 on the new architecture draws CSS `boxShadow` (inset too), `linear-gradient` and `radial-gradient` natively on both platforms, which covers every glow, sky, mist and highlight in the mockups with no canvas. The 3D ring is layered SVG with per-layer projected offsets (`RingObject.tsx`), not a Rive file — nobody here authors in the Rive editor, and a binary asset nobody can edit is a liability. Net effect: the whole redesign is JavaScript and fonts, with no native rebuild.
 
 The tokens are ported from `apps/web/app/globals.css`. Retheme both places together, or the app and the site will drift apart.
 
@@ -31,6 +31,12 @@ Today `Gate()` in `apps/mobile/app/_layout.tsx` runs authenticated → emailVeri
 - **New gate, session and verified:** if the server says `needsSetup`, upload the draft when there is one, otherwise go to onboarding. If not, go to the tabs.
 - Existing users on a new phone still skip onboarding, because the server returns `needsSetup=false`.
 - `verify.tsx` posts the draft on the first verified session. The draft is cleared only after a 2xx.
+
+## Decisions made while building
+- **The loader rotates true sentences, not testimonials.** The mockup's "Example review" cards would be fabricated praise on the first screen a new user sees.
+- **Per-food emoji stay.** The glossy set replaces the chrome emoji (macros, meal headings, steps, streak, weight, empty states, section titles); a row's own food emoji is information about that food, and twelve icons cannot stand in for it.
+- **The arrival moment lives on the welcome screen**, not as a delay in front of Today on every cold launch.
+- **"Change my answers"** on the save-your-plan form puts the questions back with the answers kept.
 
 ## Layout rule
 - **Nothing floats over text.** No FAB, chip, toast, orb or particle may sit on top of words at rest. Anything decorative lives in empty space or behind content; scroll views pad their ends so the last line clears the tab bar.

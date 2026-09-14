@@ -22,7 +22,13 @@ import Svg, { Path, Polyline, Rect } from 'react-native-svg';
 import type { DaySummary, ExerciseEntry, FoodEntry, FoodItemInput, Locale, Meal } from '@ct/shared';
 import { formatBodyWeight, formatDay, formatDistance, formatMass, formatNumber, inferMeal } from '@ct/shared';
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
-import { CalorieRing } from '@/components/CalorieRing';
+import { Chunk } from '@/components/Chunk';
+import { DateStrip } from '@/components/DateStrip';
+import { GlowRing } from '@/components/GlowRing';
+import { Glossy, type GlossyName } from '@/components/icons/Glossy';
+import { Serif } from '@/components/Serif';
+import { Sky, useSky } from '@/components/Sky';
+import { greetingFor } from '@/lib/greeting';
 import { StreakChip } from '@/components/StreakChip';
 import { DietQuality } from '@/components/DietQuality';
 import { FoodEditor } from '@/components/FoodEditor';
@@ -42,7 +48,7 @@ import { drop, enqueue, newId, onRejected } from '@/lib/outbox';
 import { maybeAskForReview } from '@/lib/review-prompt';
 import { useOutbox } from '@/hooks/useOutbox';
 import { useUnits } from '@/lib/units';
-import { duration, ease, font, type as t, useColors, type Palette } from '@/theme';
+import { duration, ease, font, type as t, useColors, useType, type Palette } from '@/theme';
 import { haptics } from '@/lib/haptics';
 import { entryRemoved } from '@/lib/removals';
 import { DeferToRows, removeAction, repeatAction, SwipeRow } from '@/components/SwipeRow';
@@ -70,12 +76,15 @@ const MEAL_LABEL: Record<Meal, StringKey> = {
   snack: 'meal.snack',
 };
 
-/** The section headings get a picture too, so the day skims as a menu. */
-const MEAL_EMOJI: Record<Meal, string> = {
-  breakfast: '🌅',
-  lunch: '🥪',
-  dinner: '🌙',
-  snack: '🍪',
+/**
+ * The section headings get a picture too, so the day skims as a menu. The app's
+ * own glossy icons rather than emoji, which every phone drew differently.
+ */
+const MEAL_ICON: Record<Meal, GlossyName> = {
+  breakfast: 'egg',
+  lunch: 'bowl',
+  dinner: 'fish',
+  snack: 'apple',
 };
 
 export default function TodayScreen() {
@@ -84,6 +93,8 @@ export default function TodayScreen() {
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTop(scrollRef);
   const colors = useColors();
+  const type = useType();
+  const sky = useSky();
   const insets = useSafeAreaInsets();
   const units = useUnits();
   const router = useRouter();
@@ -667,7 +678,7 @@ export default function TodayScreen() {
       style={styles.flex}
       onScroll={onScroll}
       scrollEventThrottle={16}
-      contentContainerStyle={{ paddingTop: insets.top + 12, paddingBottom: 32 }}
+      contentContainerStyle={{ paddingBottom: 32 }}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -680,43 +691,74 @@ export default function TodayScreen() {
       }
     >
       <Animated.View style={sliding}>
+      {/*
+        * The sky of the hour, behind the greeting, the days and the ring. It is
+        * laid under the content and scrolls away with it; nothing in it is ever
+        * drawn over a word. See `<Sky>` and GLOW-UP.md.
+        */}
+      <Sky sky={sky} height={insets.top + 520} hazeTop={insets.top + 330} />
       <View
-        style={styles.header}
+        style={[styles.header, { paddingTop: insets.top + 14 }]}
         onLayout={(event) => {
           headerHeight.value = event.nativeEvent.layout.height;
         }}
       >
-        <StepButton direction="back" onPress={() => step(-1)} />
-        {/* The date is the way to the calendar, as on the web — and here it is
-            the *only* way, since the bottom bar has no room for History. So it
-            wears an outline and a calendar mark at rest: on the web a pointer
-            finds it by hovering the heading, and a thumb has no such move. */}
+        {/* The greeting is the way to the calendar, as the date was: on the web a
+            pointer finds History by hovering the heading, and a thumb has no such
+            move, so the line under it wears the calendar mark at rest. */}
         <Pressable
           onPress={() => router.push('/history')}
           accessibilityRole="button"
           accessibilityLabel={tr('today.viewCalendar')}
-          style={({ pressed }) => [styles.headerLabel, { opacity: pressed ? 0.6 : 1 }]}
+          style={({ pressed }) => [styles.greeting, { opacity: pressed ? 0.6 : 1 }]}
         >
-          <View
-            style={[styles.headerChip, { backgroundColor: colors.card, borderColor: colors.border }]}
+          <Serif
+            accessibilityRole="header"
+            numberOfLines={2}
+            style={[type.greeting, { color: sky.inkLight ? colors.skyInk : colors.foreground }]}
           >
-            <Text style={[t.title2, styles.centred, { color: colors.foreground }]}>
-              {isToday ? tr('today.title') : formatLocalDay(day?.local_date, locale)}
+            {isToday || !day ? greetingFor(tr, profile?.display_name ?? null) : formatLocalDay(day.local_date, locale)}
+          </Serif>
+          <View style={styles.headerSub}>
+            <CalendarMark color={sky.inkLight ? colors.skyInk : colors.mutedForeground} />
+            <Text
+              style={[
+                t.footnoteSemibold,
+                { color: sky.inkLight ? colors.skyInk : colors.mutedForeground, opacity: sky.inkLight ? 0.85 : 1 },
+              ]}
+            >
+              {isToday && day ? formatLocalDay(day.local_date, locale) : tr('today.viewCalendar')}
             </Text>
-            {/* Reserved even when empty: without it the header jumps a line every
-                time you step off today. The mark rides this line rather than the
-                heading above it — "Wednesday 23 September" already spends every
-                pixel between the two chevrons, and a glyph up there pushed it
-                into the arrows. */}
-            <View style={styles.headerSub}>
-              <CalendarMark color={colors.mutedForeground} />
-              <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-                {isToday && day ? formatLocalDay(day.local_date, locale) : tr('today.viewCalendar')}
-              </Text>
-            </View>
           </View>
         </Pressable>
-        <StepButton direction="forward" onPress={() => step(1)} disabled={isToday} />
+
+        {today && (
+          <DateStrip
+            today={today}
+            selected={day?.local_date ?? today}
+            onSelect={(next) => setDate(next === today ? null : next)}
+            onSky={sky.inkLight ? 'dark' : 'light'}
+          />
+        )}
+
+        {/* In the flow under the strip, never floating over it. */}
+        {!isToday && day && (
+          <View style={styles.backRow}>
+            <Pressable
+              onPress={() => {
+                haptics.selected();
+                setDate(null);
+              }}
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                styles.backChip,
+                { backgroundColor: colors.glassStrong, boxShadow: colors.shadow, opacity: pressed ? 0.6 : 1 },
+              ]}
+            >
+              <Text style={[t.footnoteBold, { color: colors.caloriesText }]}>{tr('today.backToToday')}</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
 
       {loading || !day ? (
@@ -728,10 +770,11 @@ export default function TodayScreen() {
         <View style={styles.page}>
           <CoachBanner />
           <View style={styles.summary}>
-            <CalorieRing
+            <GlowRing
               consumed={day.consumed.kcal}
               target={day.targets.kcal}
               burned={day.burned_kcal}
+              day={day.local_date}
             />
             <Total consumed={day.consumed.kcal} target={day.targets.kcal} />
             {day.burned_kcal > 0 && (
@@ -745,7 +788,9 @@ export default function TodayScreen() {
             {day.streak && <StreakChip streak={day.streak} />}
           </View>
 
-          <MacroBars consumed={day.consumed} targets={day.targets} />
+          <Chunk contentStyle={[styles.macroCard, { backgroundColor: colors.card, borderColor: colors.hairline }]}>
+            <MacroBars consumed={day.consumed} targets={day.targets} />
+          </Chunk>
 
           {/* `logged` so a day with nothing in it keeps its own empty state
               rather than gaining a second one — see `DietQuality`. */}
@@ -766,7 +811,7 @@ export default function TodayScreen() {
 
           {byMeal.length === 0 && day.exercise_entries.length === 0 && (
             <View style={styles.empty}>
-              <Text style={styles.mascot}>🍽️</Text>
+              <Glossy name="plate" size={64} />
               <Text style={[t.body, styles.centred, { color: colors.mutedForeground }]}>
                 {tr('today.nothingLogged')}
                 {'\n'}
@@ -812,7 +857,8 @@ export default function TodayScreen() {
           {byMeal.map(({ meal, entries }) => (
             <InsetGroup
               key={meal}
-              title={`${MEAL_EMOJI[meal]}  ${tr(MEAL_LABEL[meal])}`}
+              title={tr(MEAL_LABEL[meal])}
+              icon={<Glossy name={MEAL_ICON[meal]} size={18} />}
               trailing={
                 <Text style={[t.footnoteBold, t.tnum, { color: colors.mutedForeground }]}>
                   {Math.round(entries.reduce((sum, e) => sum + e.kcal, 0))} kcal
@@ -870,7 +916,7 @@ export default function TodayScreen() {
           )}
 
           {day.weight && (
-            <InsetGroup title={`⚖️  ${tr('today.weight')}`}>
+            <InsetGroup title={tr('today.weight')} icon={<Glossy name="weight" size={18} />}>
               <InsetRow first>
                 <Text style={[t.bodySemibold, styles.rowBody, { color: colors.foreground }]}>
                   {tr('today.weighed')}
@@ -1014,7 +1060,7 @@ function EntryRow({
   return (
     <SwipeRow
       index={index}
-      style={first ? null : { borderTopWidth: 2, borderTopColor: colors.border }}
+      style={first ? null : { borderTopWidth: 1, borderTopColor: colors.hairline }}
       /*
        * Both of the things the expanded row already offers, reachable without
        * expanding it. The order matters: delete is furthest from the edge the
@@ -1181,7 +1227,7 @@ function ExerciseRow({
       index={index}
       // The divider stays out here so it holds still while the row slides out
       // from under it.
-      style={first ? null : { borderTopWidth: 2, borderTopColor: colors.border }}
+      style={first ? null : { borderTopWidth: 1, borderTopColor: colors.hairline }}
       actions={[removeAction(colors, tr, entry.description, onDelete)]}
     >
       <Pressable
@@ -1371,13 +1417,11 @@ const styles = StyleSheet.create({
      row padding, so the form does not sit flush against the divider. */
   sessionEditor: { padding: 12, gap: 10 },
   editCancel: { alignSelf: 'center', paddingVertical: 4 },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    paddingBottom: 4,
-  },
+  header: { gap: 16, paddingBottom: 4 },
+  greeting: { paddingHorizontal: 22, gap: 4 },
+  backRow: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 18, marginTop: -4 },
+  backChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999 },
+  macroCard: { padding: 16, borderWidth: 1 },
   headerLabel: { flex: 1, alignItems: 'center' },
   /*
    * Over the scroll rather than in it, so the content passes underneath the
@@ -1390,22 +1434,20 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 16,
     paddingBottom: 10,
-    borderBottomWidth: 2,
+    borderBottomWidth: 1,
   },
-  headerChip: { borderWidth: 2, borderRadius: 16, paddingHorizontal: 10, paddingVertical: 3 },
-  headerSub: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
+  headerSub: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   centred: { textAlign: 'center' },
   step: { padding: 10 },
-  page: { paddingHorizontal: 16, paddingTop: 16, gap: 28 },
+  page: { paddingHorizontal: 16, paddingTop: 4, gap: 24 },
   summary: { alignItems: 'center' },
-  total: { marginTop: 20, marginBottom: 4 },
+  total: { marginTop: 4, marginBottom: 6 },
   loading: { alignItems: 'center', gap: 24, paddingHorizontal: 16, paddingVertical: 32 },
   loadingRing: { width: 176, height: 176, borderRadius: 88 },
   loadingBar: { height: 48, alignSelf: 'stretch', borderRadius: 16 },
   empty: { alignItems: 'center', paddingVertical: 40, gap: 12 },
   manual: { alignItems: 'center', paddingVertical: 12 },
   unsent: { opacity: 0.55 },
-  mascot: { fontSize: 40, lineHeight: 46 },
   entry: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
   rowEmoji: { fontSize: 20, lineHeight: 24 },
   rowBody: { flex: 1 },

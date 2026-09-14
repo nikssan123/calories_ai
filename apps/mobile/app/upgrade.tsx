@@ -2,10 +2,22 @@ import { useCallback, useEffect, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  Easing,
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 import type { CreditMeter, PlanName } from '@ct/shared';
 import { Chunk, PressableChunk } from '@/components/Chunk';
+import { GlowButton } from '@/components/GlowButton';
+import { Logo } from '@/components/Logo';
+import { Serif } from '@/components/Serif';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useToast } from '@/components/Toast';
 import { useEntitlements } from '@/lib/entitlements';
 import { api } from '@/lib/api';
@@ -31,7 +43,7 @@ import {
 import { haptics } from '@/lib/haptics';
 import { PRIVACY_URL, TERMS_URL } from '@/lib/links';
 import { useLocale, useT, type MessageKey } from '@/lib/i18n';
-import { type as t, useColors, withAlpha } from '@/theme';
+import { type as t, useColors, useTheme, useType, withAlpha } from '@/theme';
 import { messageOf } from '@/lib/errors';
 
 /**
@@ -134,6 +146,7 @@ const PACK_ICONS = {
  */
 export default function UpgradeScreen() {
   const colors = useColors();
+  const type = useType();
   const tr = useT();
   const locale = useLocale();
   const router = useRouter();
@@ -330,8 +343,10 @@ export default function UpgradeScreen() {
   );
 
   return (
+    <View style={styles.flex}>
+    <PaywallLight />
     <ScrollView
-      style={[styles.flex, { backgroundColor: colors.background }]}
+      style={styles.flex}
       contentContainerStyle={[
         styles.page,
         { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 40 },
@@ -357,8 +372,11 @@ export default function UpgradeScreen() {
         </Pressable>
       </View>
 
-      <Text style={[t.largeTitle, { color: colors.foreground }]}>{tr('plans.keepItGoing')}</Text>
-      <Text style={[t.body, styles.lede, { color: colors.mutedForeground }]}>
+      <Beacon />
+      <Serif accessibilityRole="header" style={[type.hero, styles.centred, { color: colors.foreground }]}>
+        {tr('plans.keepItGoing')}
+      </Serif>
+      <Text style={[t.body, styles.lede, styles.centred, { color: colors.mutedForeground }]}>
         {plan === 'free' ? tr('plans.onFree') : tr('plans.onPlan')(TIER_NAMES[plan])}
       </Text>
 
@@ -374,7 +392,7 @@ export default function UpgradeScreen() {
         page arguing for the longer commitment.
       */}
       {periods.has('month') && periods.has('year') && (
-        <View style={[styles.periods, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+        <View style={[styles.periods, { backgroundColor: colors.hairline, borderColor: 'transparent' }]}>
           {(['month', 'year'] as const).map((option) => {
             const on = period === option;
             return (
@@ -388,7 +406,7 @@ export default function UpgradeScreen() {
                 accessibilityState={{ selected: on }}
                 style={[
                   styles.period,
-                  on && { backgroundColor: colors.card, borderColor: colors.border },
+                  on && { backgroundColor: colors.glassStrong, borderColor: colors.glassEdge, boxShadow: colors.shadow },
                 ]}
               >
                 <Text
@@ -434,27 +452,20 @@ export default function UpgradeScreen() {
       </View>
 
       {sellable && chosen !== plan && (
-        <PressableChunk
-          color={colors.caloriesDeep}
-          radius={999}
-          disabled={busy || !offer}
-          haptic={false}
+        <GlowButton
+          disabled={!offer}
+          busy={busy}
           onPress={() => void buy()}
-          accessibilityRole="button"
-          style={{ opacity: busy || !offer ? 0.5 : 1 }}
-          contentStyle={[styles.cta, { backgroundColor: colors.primary }]}
-        >
-          <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
-            {busy ? tr('plans.oneMoment') : tr('plans.get')(chosen ? TIER_NAMES[chosen] : '')}
-          </Text>
-        </PressableChunk>
+          style={styles.cta}
+          label={tr('plans.get')(chosen ? TIER_NAMES[chosen] : '')}
+        />
       )}
 
       {!sellable && (
         <Chunk
           contentStyle={[
             styles.notice,
-            { backgroundColor: colors.card, borderColor: colors.border },
+            { backgroundColor: colors.glassStrong, borderColor: colors.glassEdge },
           ]}
         >
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
@@ -508,7 +519,7 @@ export default function UpgradeScreen() {
         return (
           <View key={section.meter} style={styles.packs}>
             <View style={styles.packHead}>
-              <Text style={[t.title2, { color: colors.foreground }]}>{tr(copy.heading)}</Text>
+              <Serif style={[type.serifTitle, { color: colors.foreground }]}>{tr(copy.heading)}</Serif>
               <Text style={[t.footnote, { color: colors.mutedForeground }]}>{tr(copy.body)}</Text>
             </View>
             {forSale.map((pack) => {
@@ -525,17 +536,25 @@ export default function UpgradeScreen() {
                   contentStyle={[
                     styles.pack,
                     {
-                      backgroundColor: colors.card,
-                      // The best rung carries the accent border the selected
+                      backgroundColor: colors.glassStrong,
+                      // The best rung carries the accent edge the selected
                       // tier does, so the eye finds the same signal twice on
                       // one page rather than learning a second one.
-                      borderColor: isBest ? colors.primary : colors.border,
+                      borderColor: isBest ? colors.primary : colors.glassEdge,
                     },
                   ]}
                 >
                   <View style={styles.packLeft}>
-                    <View style={[styles.packBadge, { backgroundColor: colors.accent }]}>
-                      <Icon color={colors.caloriesText} />
+                    <View
+                      style={[
+                        styles.packBadge,
+                        {
+                          experimental_backgroundImage: `linear-gradient(135deg, ${colors.calories}, ${colors.logoRamp})`,
+                          boxShadow: `0px 8px 18px -8px ${colors.calories}, inset 0px 1px 0px rgba(255,255,255,0.55)`,
+                        },
+                      ]}
+                    >
+                      <Icon color="#ffffff" />
                     </View>
                     <View style={styles.packText}>
                       <Text style={[t.bodyBold, { color: colors.foreground }]}>
@@ -672,6 +691,119 @@ export default function UpgradeScreen() {
         </Text>
       </View>
     </ScrollView>
+    </View>
+  );
+}
+
+/**
+ * The paywall's light: daylight, not a different app.
+ *
+ * Moonly sells in the dark; this sells in the brand at its warmest (GLOW-UP.md,
+ * "paywall"). A sun-warm pool at the top, and two slow mists — teal on one side,
+ * amber on the other — drifting behind the glass cards. Radial gradients, no
+ * blur, and behind everything: the prices and the small print are never under
+ * anything that moves.
+ */
+function PaywallLight() {
+  const { scheme, colors } = useTheme();
+  const reduced = useReducedMotion();
+  const drift = useSharedValue(0);
+  useEffect(() => {
+    if (reduced) return;
+    drift.value = withRepeat(withTiming(1, { duration: 16000, easing: Easing.inOut(Easing.sin) }), -1, true);
+    return () => cancelAnimation(drift);
+  }, [reduced, drift]);
+  const left = useAnimatedStyle(() => ({ transform: [{ translateX: drift.value * 40 }, { translateY: drift.value * 30 }] }));
+  const right = useAnimatedStyle(() => ({ transform: [{ translateX: -drift.value * 36 }, { translateY: -drift.value * 24 }] }));
+  const dark = scheme === 'dark';
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, overflow: 'hidden' }]}>
+      <View
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            experimental_backgroundImage: dark
+              ? 'radial-gradient(90% 45% at 50% 0%, rgba(255,190,110,0.20) 0%, rgba(255,190,110,0) 100%)'
+              : 'radial-gradient(95% 50% at 50% 0%, #ffe0a8 0%, rgba(255,239,214,0.8) 45%, rgba(255,246,236,0) 100%)',
+          },
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.mist,
+          { left: -160, top: 220, experimental_backgroundImage: `radial-gradient(circle, ${dark ? 'rgba(46,230,196,0.12)' : 'rgba(35,211,176,0.26)'} 0%, rgba(35,211,176,0) 62%)` },
+          left,
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.mist,
+          { right: -170, top: 520, experimental_backgroundImage: `radial-gradient(circle, ${dark ? 'rgba(255,170,70,0.10)' : 'rgba(255,165,31,0.24)'} 0%, rgba(255,165,31,0) 62%)` },
+          right,
+        ]}
+      />
+    </View>
+  );
+}
+
+/** The logo ring, breathing in a bloom of its own light. */
+function Beacon() {
+  const colors = useColors();
+  const reduced = useReducedMotion();
+  const breath = useSharedValue(0);
+  useEffect(() => {
+    if (reduced) return;
+    breath.value = withRepeat(withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.sin) }), -1, true);
+    return () => cancelAnimation(breath);
+  }, [reduced, breath]);
+  const bloom = useAnimatedStyle(() => ({ transform: [{ scale: 1 + breath.value * 0.08 }], opacity: 0.75 + breath.value * 0.25 }));
+  const mark = useAnimatedStyle(() => ({ transform: [{ scale: 1 + breath.value * 0.035 }] }));
+  return (
+    <View style={styles.beacon}>
+      <Animated.View
+        style={[
+          styles.bloom,
+          { experimental_backgroundImage: `radial-gradient(circle, ${withAlpha(colors.logoRamp, 0.45)} 0%, ${withAlpha(colors.calories, 0.15)} 45%, rgba(18,183,106,0) 70%)` },
+          bloom,
+        ]}
+      />
+      <Animated.View style={mark}>
+        <Logo size={92} />
+      </Animated.View>
+    </View>
+  );
+}
+
+/**
+ * The frame around the armed tier: a band of the logo's ramp, turning slowly.
+ *
+ * React Native draws linear and radial gradients but not a conic one, so the
+ * sweep is a square of linear gradient twice the card's size rotating behind a
+ * card inset by two points — which, through a rounded two-point gap, is exactly
+ * what a conic border looks like. One rotating view, on the UI thread.
+ */
+function Sweep({ radius }: { radius: number }) {
+  const colors = useColors();
+  const reduced = useReducedMotion();
+  const turn = useSharedValue(0);
+  useEffect(() => {
+    if (reduced) return;
+    turn.value = withRepeat(withTiming(1, { duration: 4000, easing: Easing.linear }), -1, false);
+    return () => cancelAnimation(turn);
+  }, [reduced, turn]);
+  const spinning = useAnimatedStyle(() => ({ transform: [{ rotate: `${turn.value * 360}deg` }] }));
+  return (
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: radius + 2, overflow: 'hidden' }]}>
+      <Animated.View
+        style={[
+          styles.sweep,
+          {
+            experimental_backgroundImage: `linear-gradient(90deg, ${colors.calories} 0%, ${colors.logoRamp} 30%, ${colors.protein} 50%, ${colors.logoRamp} 70%, ${colors.calories} 100%)`,
+          },
+          spinning,
+        ]}
+      />
+    </View>
   );
 }
 
@@ -715,20 +847,24 @@ function TierCard({
   onPress: () => void;
 }) {
   const colors = useColors();
+  const type = useType();
   const tr = useT();
-  const locale = useLocale();
 
   return (
     <Pressable onPress={onPress} accessibilityRole="radio" accessibilityState={{ selected }}>
+      {/* The armed tier sits in a turning band of the logo's own colours. */}
+      {selected && <Sweep radius={24} />}
       <Chunk
-        depth={selected ? 5 : 3}
+        depth={selected ? 7 : 3}
+        color={selected ? colors.calories : undefined}
+        style={styles.armed}
         contentStyle={[
           styles.tier,
           {
-            // Selection is the border and the ledge, not a fill — see the
-            // note in `PlanWall` on what a green wash does over cream.
-            backgroundColor: colors.card,
-            borderColor: selected ? colors.primary : colors.border,
+            // Selection is the band and the glow, not a fill — see the note in
+            // `PlanWall` on what a green wash does over cream.
+            backgroundColor: selected ? colors.card : colors.glassStrong,
+            borderColor: selected ? 'transparent' : colors.glassEdge,
           },
         ]}
       >
@@ -738,7 +874,7 @@ function TierCard({
                 difference somebody has to look for. Which tier is armed decides
                 what the button at the bottom buys, so it is worth a glyph. */}
             <Radio on={selected} />
-            <Text style={[t.title2, { color: colors.foreground }]}>{name}</Text>
+            <Serif style={[type.serifTitle, styles.tierTitle, { color: colors.foreground }]}>{name}</Serif>
           </View>
 
           {current ? (
@@ -750,7 +886,7 @@ function TierCard({
           ) : (
             price && (
               <View style={styles.price}>
-                <Text style={[t.title2, t.tnum, { color: colors.foreground }]}>{price}</Text>
+                <Text style={[type.serifFigure, styles.priceFigure, { color: colors.foreground }]}>{price}</Text>
                 <Text style={[t.footnote, { color: colors.mutedForeground }]}>
                   {period === 'year' ? tr('plans.aYear') : tr('plans.aMonth')}
                 </Text>
@@ -761,7 +897,7 @@ function TierCard({
 
         <Text style={[t.footnote, { color: colors.mutedForeground }]}>{pitch}</Text>
 
-        <View style={[styles.rule, { backgroundColor: colors.border }]} />
+        <View style={[styles.rule, { backgroundColor: colors.hairline }]} />
 
         <View style={styles.tierLines}>
           {carries && (
@@ -808,7 +944,11 @@ function Radio({ on }: { on: boolean }) {
       style={[
         styles.radio,
         on
-          ? { backgroundColor: colors.primary, borderColor: colors.primary }
+          ? {
+              borderColor: 'transparent',
+              experimental_backgroundImage: `linear-gradient(135deg, ${colors.calories}, ${colors.logoRamp})`,
+              boxShadow: `0px 0px 10px ${colors.ring}`,
+            }
           : { backgroundColor: 'transparent', borderColor: colors.input },
       ]}
     >
@@ -854,7 +994,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    borderWidth: 2,
+    borderWidth: 1,
     paddingVertical: 12,
     paddingLeft: 12,
     paddingRight: 12,
@@ -872,52 +1012,54 @@ const styles = StyleSheet.create({
   // the price is the only thing on it that says so.
   packPrice: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
   flex: { flex: 1 },
+  centred: { textAlign: 'center' },
   page: { paddingHorizontal: 20, gap: 14 },
+  mist: { position: 'absolute', width: 440, height: 440, borderRadius: 220 },
+  beacon: { alignSelf: 'center', width: 150, height: 130, alignItems: 'center', justifyContent: 'center', marginTop: -8 },
+  bloom: { position: 'absolute', width: 190, height: 190, borderRadius: 95 },
+  sweep: { position: 'absolute', left: '-50%', top: '-120%', width: '200%', height: '340%' },
+  armed: { margin: 2 },
+  tierTitle: { fontSize: 24, lineHeight: 28 },
+  priceFigure: { fontSize: 22, lineHeight: 26 },
   topRow: { flexDirection: 'row', justifyContent: 'flex-end' },
   close: { padding: 6, marginRight: -6 },
-  lede: { marginTop: -6 },
+  lede: { marginTop: -6, paddingHorizontal: 12 },
   periods: {
     flexDirection: 'row',
     alignSelf: 'flex-start',
     padding: 3,
     borderRadius: 999,
-    borderWidth: 2,
+    borderWidth: 1,
     gap: 2,
   },
   period: {
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 999,
-    borderWidth: 2,
+    borderWidth: 1,
     // Transparent rather than absent, so selecting one does not resize the row.
     borderColor: 'transparent',
   },
   tiers: { gap: 20, marginTop: 4 },
-  tier: { borderWidth: 2, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 16, gap: 8 },
+  tier: { borderWidth: 1, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 16, gap: 8 },
   tierHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   tierName: { flexDirection: 'row', alignItems: 'center', gap: 9, flexShrink: 1 },
   radio: {
     width: 22,
     height: 22,
     borderRadius: 999,
-    borderWidth: 2,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   // The cadence sits under the figure rather than beside it, so two cards'
   // prices line up on the same baseline whatever their currency is worth.
   price: { alignItems: 'flex-end' },
-  rule: { height: 2, borderRadius: 999, marginTop: 2 },
+  rule: { height: 1, borderRadius: 999, marginTop: 2 },
   tierLines: { gap: 6, marginTop: 2 },
   tag: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },
-  cta: {
-    height: 52,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 6,
-  },
-  notice: { borderWidth: 2, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 12 },
+  cta: { marginTop: 6 },
+  notice: { borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 12 },
   afters: { marginTop: 2 },
   restore: { alignItems: 'center', paddingVertical: 10 },
   restoreNote: { textAlign: 'center', marginTop: 3, paddingHorizontal: 24 },

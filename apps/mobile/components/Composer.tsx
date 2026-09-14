@@ -464,7 +464,7 @@ export function Composer({
             // the resting state of an empty composer, and at 0.5 it reads as a
             // button waiting to be pressed.
             style={{ opacity: canSend ? 1 : 0.3 }}
-            contentStyle={[styles.send, { backgroundColor: colors.primary }]}
+            contentStyle={[styles.send, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
           >
             {/*
               A tick rather than an arrow when there is nothing to send.
@@ -786,7 +786,7 @@ function CameraGlyph({ color, size = 22 }: { color: string; size?: number }) {
 const styles = StyleSheet.create({
   // `px-3 py-2.5` — both halves of the `py`, or the bar sits flush on the tab
   // bar below it and the field looks welded to the wrong edge.
-  bar: { borderTopWidth: 2, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10 },
+  bar: { borderTopWidth: 1, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10 },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   attach: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   input: {
@@ -795,7 +795,7 @@ const styles = StyleSheet.create({
     // `max-h-33` on the web — about four lines, after which it scrolls rather
     // than eating the conversation it belongs to.
     maxHeight: 132,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingTop: 8,
@@ -814,7 +814,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     maxWidth: '100%',
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 999,
     paddingLeft: 12,
     paddingRight: 6,
@@ -838,7 +838,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    borderWidth: 2,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -846,7 +846,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    borderTopWidth: 2,
+    borderTopWidth: 1,
     paddingHorizontal: 20,
     paddingVertical: 16,
   },

@@ -38,6 +38,12 @@ export const cs: Messages = {
 
   // ---- Today --------------------------------------------------------------
   'today.title': 'Dnes',
+  // The name stays in the nominative: it cannot be put in the vocative from here.
+  'today.greetMorning': (name: string) => (name ? `Dobré *ráno*, ${name}` : 'Dobré *ráno*'),
+  'today.greetAfternoon': (name: string) => (name ? `Dobré *odpoledne*, ${name}` : 'Dobré *odpoledne*'),
+  'today.greetEvening': (name: string) => (name ? `Dobrý *večer*, ${name}` : 'Dobrý *večer*'),
+  'today.greetNight': (name: string) => (name ? `Ještě *nespíš*, ${name}?` : 'Ještě *nespíš*?'),
+  'today.backToToday': 'Zpět na dnešek',
   'today.toGo': 'zbývá',
   'today.over': 'nad cílem',
   'today.burned': (kcal: string) => `+${kcal} spáleno`,
@@ -55,7 +61,7 @@ export const cs: Messages = {
   'today.roughEstimate': 'hrubý odhad',
   'today.exerciseFooter': 'Zobrazeno zvlášť od tvého cíle – kalorie spálené pohybem jsou jen hrubý odhad.',
   'today.exerciseTitle': '🏃  Pohyb',
-  'today.stepsTitle': '👟  Kroky',
+  'today.stepsTitle': 'Kroky',
   'today.steps': (count: number) => n(count, { one: 'krok', few: 'kroky', many: 'kroku', other: 'kroků' }),
   'today.stepsFooter': 'Počítá je tvůj telefon. Kroky zpřesňují tvůj cíl – nikdy se k němu nepřičítají.',
   'today.stepsEnable': 'Počítat moje kroky',
@@ -259,12 +265,14 @@ export const cs: Messages = {
   'ob.back': 'Zpět',
   'ob.continue': 'Pokračovat',
 
-  'ob.welcomeTitle': 'Pojďme sestavit tvůj plán',
+  'ob.welcomeTitle': 'Pojďme sestavit *tvůj* plán',
   'ob.welcomeBody':
     'Šest rychlých otázek – asi na půl minuty – a budeš mít cíl pro kalorie a bílkoviny spočítaný pro tvoje tělo, ne pro někoho obecného. Cokoli z toho můžeš později změnit.',
   'ob.welcomeStart': 'Začít',
+  'ob.haveAccount': 'Už mám účet',
+  'ob.wordmarkTagline': 'Tvůj den až doteď',
 
-  'ob.goalTitle': 'Čeho chceš dosáhnout?',
+  'ob.goalTitle': 'Čeho chceš *dosáhnout*?',
   'ob.goalBody': 'Podle toho budeš jíst méně, stejně, nebo víc, než spálíš.',
   'ob.goalLose': 'Zhubnout',
   'ob.goalLoseHint': 'Mírný deficit, který se dá opravdu vydržet',
@@ -306,7 +314,7 @@ export const cs: Messages = {
   'ob.activityTitle': 'Kolik se hýbeš?',
   'ob.activityBody': 'Tvůj běžný týden – bez tréninků, které zapisuješ v aplikaci.',
 
-  'ob.buildingTitle': 'Sestavujeme tvůj plán',
+  'ob.buildingTitle': 'Sestavujeme *tvůj* plán',
   'ob.buildingStep1': 'Počítáme, kolik spálíš',
   'ob.buildingStep2': 'Nastavujeme denní kalorie',
   'ob.buildingStep3': 'Rozdělujeme bílkoviny, sacharidy a tuky',
@@ -318,6 +326,33 @@ export const cs: Messages = {
   'ob.planFootnote':
     'Výchozí bod, ne verdikt. Každý týden se upraví podle toho, co zapisuješ a co ukazuje váha.',
   'ob.planStart': 'Začít zapisovat',
+  'ob.planSave': 'Uložit plán',
+  'ob.planSaveHint': 'Teď ještě účet, kde zůstane uložený. Je zdarma a zabere minutu.',
+  'ob.planWhere': 'Kam tě to *dovede*',
+  'ob.planToday': (weight: string) => `${weight} dnes`,
+  'ob.planGoal': (weight: string) => `cíl ${weight}`,
+  'ob.planArrives': (date: string, rate: string) => `Kolem ${date} · ${rate} týdně`,
+
+  'ob.buildingNote1': 'Napiš vlastními slovy, co bylo k jídlu – deník sám doplní čísla.',
+  'ob.buildingNote2': 'Tvůj cíl se každý týden upraví podle vážení.',
+  'ob.buildingNote3': 'Stačí i fotka talíře nebo čárový kód.',
+
+  'ob.teaseJournalTitle': 'Napiš, co bylo k jídlu. A *hotovo*.',
+  'ob.teaseJournalBody': 'Žádné hledání, žádné tabulky porcí. Deník tomu rozumí a čísla doplní sám.',
+  'ob.teaseJournalYou1': '2 vajíčka, rohlík s máslem, kafe s mlékem',
+  'ob.teaseJournalReply1': 'Zapsáno ke snídani',
+  'ob.teaseJournalYou2': 'a banán',
+  'ob.teaseJournalReply2': 'Přidáno',
+  'ob.teaseJournalComposer': 'Co bylo k jídlu?',
+  'ob.teaseChipType': 'Prostě napiš',
+  'ob.teaseChipPhoto': 'Nebo fotka',
+  'ob.teaseChipBarcode': 'Nebo čárový kód',
+  'ob.teaseDayTitle': 'Tvůj den ve *světle* hodiny',
+  'ob.teaseDayBody': '„Dnes“ jde s hodinami a kruh se plní s každým zápisem. Stačí jeden pohled a víš, jak ti den jde.',
+
+  'saving.title': 'Ukládáme *tvůj* plán',
+  'saving.body': 'Přenášíme tvoje odpovědi do nového účtu.',
+  'saving.welcomeBack': 'Jen *moment*',
 
   'sex.male': 'Muž',
   'sex.female': 'Žena',
@@ -346,6 +381,11 @@ export const cs: Messages = {
   'auth.signInSubtitle': 'Přihlas se a navaž tam, kde to máš rozdělané.',
   'auth.createAccount': 'Vytvořit účet',
   'auth.createAccountTitle': 'Vytvoř si účet',
+  'auth.savePlanTitle': 'Ulož si *svůj* plán',
+  'auth.savePlanSubtitle': (kcal: string) =>
+    `${kcal} kcal denně, spočítané a připravené. S účtem ti plán zůstane – v tomhle telefonu i v každém dalším.`,
+  'auth.buildPlanFirst': 'Poprvé tady? Nejdřív si sestav plán',
+  'auth.changeAnswers': 'Změnit odpovědi',
   'auth.email': 'E-mail',
   'auth.password': 'Heslo',
   'auth.passwordHint': 'Aspoň 8 znaků.',
@@ -573,7 +613,7 @@ export const cs: Messages = {
   'progress.title': 'Pokrok',
   'progress.daysWindow': (count: number) => n(count, { one: 'den', few: 'dny', many: 'dne', other: 'dní' }),
   'progress.daysShort': (count: number) => `${count} d`,
-  'progress.weightTitle': '⚖️  Váha',
+  'progress.weightTitle': 'Váha',
   'progress.noWeighIns': 'Zatím žádné vážení. Zapiš ho níže, nebo to prostě řekni deníku.',
   'progress.noWeighIn': 'Bez vážení',
   'progress.trendReadout': (value: string) => `7denní průměr ${value} – čára`,
@@ -582,13 +622,13 @@ export const cs: Messages = {
   'progress.sinceStart': 'Od začátku',
   'progress.toTarget': 'Do cíle',
   'progress.logTodaysWeight': (unit: string) => `Zapsat dnešní váhu (${unit})`,
-  'progress.caloriesTitle': '🔥  Kalorie',
+  'progress.caloriesTitle': 'Kalorie',
   'progress.avgDayTarget': (target: string) => `průměr/den · cíl ${target}`,
-  'progress.proteinTitle': '💪  Bílkoviny',
+  'progress.proteinTitle': 'Bílkoviny',
   'progress.hitTargetBefore': 'Cíl splněn v',
   'progress.ofDays': (hit: string, logged: string) => `${hit} z ${logged}`,
   'progress.hitTargetAfter': 'zapsaných dní.',
-  'progress.qualityTitle': '🥦  Kvalita stravy',
+  'progress.qualityTitle': 'Kvalita stravy',
   'progress.days': (count: number) => n(count, { one: 'den', few: 'dny', many: 'dne', other: 'dní' }),
   'progress.qualityFooter': (days: string, percent: string) =>
     `Průměr za ${days} – tyto hodnoty má ${percent} % zapsaných jídel.`,
@@ -885,7 +925,7 @@ export const cs: Messages = {
   'review.kcalUnit': (kcal: string) => `${kcal} kcal`,
   'review.partOf': (plan: string) => `Součást tarifu ${plan}`,
 
-  'quality.title': '🥦\u00a0\u00a0Kvalita stravy',
+  'quality.title': 'Kvalita stravy',
   'quality.partlyMeasured': 'částečně změřeno',
   'quality.notEstimated': 'bez odhadu',
 

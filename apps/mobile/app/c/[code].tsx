@@ -133,7 +133,7 @@ export default function AcceptInviteScreen() {
             onPress={() => void agree()}
             disabled={busy}
             color={colors.primary}
-            contentStyle={[styles.button, { backgroundColor: colors.primary }]}
+            contentStyle={[styles.button, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
           >
             <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>{tr('coach.accept')}</Text>
           </PressableChunk>

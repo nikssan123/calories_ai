@@ -9,6 +9,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import Svg, { Circle, Path, Polyline, Rect } from 'react-native-svg';
+import { Backdrop } from '@/components/Backdrop';
 import { Material } from '@/components/Material';
 import { duration, ease, font, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -48,15 +49,23 @@ export default function TabsLayout() {
   const colors = useColors();
   const t = useT();
   return (
-    <Tabs
-      // Named for the same reason the Stack's is — see app/_layout.tsx.
-      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.background } }}
-      tabBar={(props) => <TabBar {...props} />}
-    >
-      {TABS.map((tab) => (
-        <Tabs.Screen key={tab.name} name={tab.name} options={{ title: t(tab.label) }} />
-      ))}
-    </Tabs>
+    <View style={styles.fill}>
+      {/*
+        * The light every tab stands in, drawn once for all six. The scenes are
+        * transparent over it rather than each painting the ground, which is the
+        * one place that is safe to do: tabs swap without a transition, so there
+        * is never a frame with two scenes showing through each other.
+        */}
+      <Backdrop />
+      <Tabs
+        screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: 'transparent' } }}
+        tabBar={(props) => <TabBar {...props} />}
+      >
+        {TABS.map((tab) => (
+          <Tabs.Screen key={tab.name} name={tab.name} options={{ title: t(tab.label) }} />
+        ))}
+      </Tabs>
+    </View>
   );
 }
 
@@ -160,7 +169,7 @@ function TabBar({
       style={[
         styles.bar,
         {
-          borderTopColor: colors.border,
+          borderTopColor: colors.hairline,
           /*
            * The inset *less* the row's own bottom padding, not on top of it.
            *
@@ -391,7 +400,8 @@ const LOZENGE_MAX_WIDTH = 56;
 const TAB_PADDING_BOTTOM = 8;
 
 const styles = StyleSheet.create({
-  bar: { borderTopWidth: 2 },
+  fill: { flex: 1 },
+  bar: { borderTopWidth: 1 },
   row: { flexDirection: 'row' },
   tab: { flex: 1, alignItems: 'center', paddingTop: 6, paddingBottom: TAB_PADDING_BOTTOM, gap: 2 },
   lozengeSlot: {

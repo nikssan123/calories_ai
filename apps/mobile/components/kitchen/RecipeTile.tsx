@@ -225,7 +225,7 @@ function Clock({ color }: { color: string }) {
 }
 
 const styles = StyleSheet.create({
-  tile: { borderWidth: 2, borderRadius: 24, overflow: 'hidden' },
+  tile: { borderWidth: 1, borderRadius: 24, overflow: 'hidden' },
   photo: { width: '100%', aspectRatio: 16 / 10 },
   /*
    * A band rather than the photo's 16:10.
@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
     height: 116,
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomWidth: 2,
+    borderBottomWidth: 1,
   },
   standInGlyph: { fontSize: 56, lineHeight: 66, opacity: 0.9 },
   body: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, gap: 6 },
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 999,
-    borderWidth: 2,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },

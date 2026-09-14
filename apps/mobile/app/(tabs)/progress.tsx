@@ -16,6 +16,7 @@ import {
 } from '@ct/shared';
 import { AchievementsRow } from '@/components/Achievements';
 import { Chunk, PressableChunk } from '@/components/Chunk';
+import { Glossy } from '@/components/icons/Glossy';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { QualityBlank } from '@/components/DietQuality';
 import { Skeleton } from '@/components/Skeleton';
@@ -138,7 +139,7 @@ export default function ProgressScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`${w} days`}
                 accessibilityState={{ selected: active }}
-                style={[styles.window, active ? { backgroundColor: colors.primary } : null]}
+                style={[styles.window, active ? { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp } : null]}
               >
                 <Text
                   style={[
@@ -167,7 +168,7 @@ export default function ProgressScreen() {
           <AchievementsRow earned={progress.achievements} />
 
           {/* §12: lead with the trend, not any individual day. */}
-          <InsetGroup title={tr('progress.weightTitle')}>
+          <InsetGroup title={tr('progress.weightTitle')} icon={<Glossy name="weight" size={18} />}>
             <View style={styles.pad}>
               {progress.weight.current_kg === null ? (
                 <Text style={[t.body, styles.empty, { color: colors.mutedForeground }]}>
@@ -289,14 +290,14 @@ export default function ProgressScreen() {
                 disabled={!weightInput || saving}
                 accessibilityRole="button"
                 style={{ opacity: !weightInput || saving ? 0.3 : 1 }}
-                contentStyle={[styles.logSave, { backgroundColor: colors.primary }]}
+                contentStyle={[styles.logSave, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
               >
                 <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>{tr('common.save')}</Text>
               </PressableChunk>
             </View>
           </InsetGroup>
 
-          <InsetGroup title={tr('progress.caloriesTitle')}>
+          <InsetGroup title={tr('progress.caloriesTitle')} icon={<Glossy name="streak" size={18} />}>
             <View style={styles.pad}>
               <View style={styles.headline}>
                 <Text style={[t.largeTitle, t.tnum, { color: colors.foreground }]}>
@@ -317,7 +318,7 @@ export default function ProgressScreen() {
             </View>
           </InsetGroup>
 
-          <InsetGroup title={tr('progress.proteinTitle')}>
+          <InsetGroup title={tr('progress.proteinTitle')} icon={<Glossy name="protein" size={18} />}>
             <View style={styles.pad}>
               <View style={styles.headline}>
                 <Text style={[t.largeTitle, t.tnum, { color: colors.foreground }]}>
@@ -345,6 +346,7 @@ export default function ProgressScreen() {
           {progress.quality.days_measured > 0 ? (
             <InsetGroup
               title={tr('progress.qualityTitle')}
+              icon={<Glossy name="avocado" size={18} />}
               footer={
                 progress.quality.coverage < QUALITY_COVERAGE_FLOOR
                   ? tr('progress.qualityFooter')(
@@ -421,7 +423,7 @@ export default function ProgressScreen() {
               the card stays, empty, and says what fills it. See
               `components/DietQuality`.
             */
-            <InsetGroup title={tr('progress.qualityTitle')}>
+            <InsetGroup title={tr('progress.qualityTitle')} icon={<Glossy name="avocado" size={18} />}>
               <Stats>
                 {NUTRIENTS.map((n, index) => (
                   <Stat key={n.key} first={index === 0} label={tr(n.label)} value="—" unit={n.unit} />
@@ -613,7 +615,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   page: { paddingHorizontal: 16, paddingBottom: 40, gap: 28 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  windows: { flexDirection: 'row', borderWidth: 2, borderRadius: 999, padding: 4 },
+  windows: { flexDirection: 'row', borderWidth: 1, borderRadius: 999, padding: 4 },
   window: {
     height: 32,
     borderRadius: 999,
@@ -627,7 +629,7 @@ const styles = StyleSheet.create({
   // The chips already own the space above, so the figure sits closer to them
   // than a card's first row normally would.
   qualityPad: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 12 },
-  blank: { borderTopWidth: 2, paddingHorizontal: 16, paddingVertical: 14 },
+  blank: { borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 14 },
   chip: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6 },
   empty: { paddingVertical: 8 },
   headline: { flexDirection: 'row', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' },
@@ -642,7 +644,7 @@ const styles = StyleSheet.create({
   logInput: {
     flex: 1,
     height: 44,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 16,
     paddingVertical: 0,

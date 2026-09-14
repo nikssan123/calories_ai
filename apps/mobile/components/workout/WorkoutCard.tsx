@@ -653,7 +653,7 @@ export function WorkoutCard({
           disabled={!canSend}
           accessibilityRole="button"
           style={{ opacity: canSend ? 1 : 0.4 }}
-          contentStyle={[styles.send, { backgroundColor: colors.primary }]}
+          contentStyle={[styles.send, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
         >
           <Text style={[t.footnoteBold, { color: colors.primaryForeground }]}>
             {editing
@@ -926,23 +926,23 @@ function when(localDate: string, locale: Locale, tr: ReturnType<typeof useT>): s
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 2, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 14 },
+  card: { borderWidth: 1, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 14 },
   heard: { marginTop: 4, lineHeight: 20 },
   label: { marginTop: 14, marginBottom: 6 },
   offers: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { borderWidth: 2, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
   categoryLabel: { fontFamily: font.bold, fontSize: 13, lineHeight: 18 },
   addRow: { marginTop: 14 },
   lengthRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 14 },
   lengthValue: { fontFamily: font.displaySemibold, fontSize: 15, lineHeight: 20 },
   lengthHint: { fontFamily: font.regular, fontSize: 12, lineHeight: 16 },
   durations: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
-  duration: { flex: 1, alignItems: 'center', borderWidth: 2, borderRadius: 999, paddingVertical: 8 },
+  duration: { flex: 1, alignItems: 'center', borderWidth: 1, borderRadius: 999, paddingVertical: 8 },
   durationLabel: { fontFamily: font.display, fontSize: 15, lineHeight: 18 },
   otherLength: {
     height: 40,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 0,
@@ -953,7 +953,7 @@ const styles = StyleSheet.create({
   saveField: {
     flex: 1,
     height: 40,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 0,
@@ -962,7 +962,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    borderTopWidth: 2,
+    borderTopWidth: 1,
     marginTop: 14,
     paddingTop: 14,
   },
@@ -972,7 +972,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 2,
+    borderBottomWidth: 1,
     paddingHorizontal: 16,
     paddingBottom: 12,
   },

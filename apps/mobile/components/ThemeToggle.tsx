@@ -128,9 +128,9 @@ function Glyph({
 }
 
 const styles = StyleSheet.create({
-  group: { flexDirection: 'row', gap: 4, borderWidth: 2, borderRadius: 999, padding: 4 },
+  group: { flexDirection: 'row', gap: 4, borderWidth: 1, borderRadius: 999, padding: 4 },
   slot: { flex: 1 },
-  active: { borderWidth: 2, borderRadius: 999 },
+  active: { borderWidth: 1, borderRadius: 999 },
   option: {
     flexDirection: 'row',
     alignItems: 'center',

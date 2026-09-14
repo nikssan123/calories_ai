@@ -4,6 +4,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } fro
 import type { Nutrition, Targets } from '@ct/shared';
 import { duration, ease, type as t, useColors, type Palette } from '@/theme';
 import { Confetti } from '@/components/Confetti';
+import { Glossy, type GlossyName } from '@/components/icons/Glossy';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useCountUp } from '@/hooks/useCountUp';
 import { useT, type StringKey } from '@/lib/i18n';
@@ -17,19 +18,23 @@ import { useT, type StringKey } from '@/lib/i18n';
  * three coloured stubs with three short labels is exactly the arrangement a
  * glance skips.
  *
+ * The glow-up made each bar a lit capsule — a glossy highlight along its top and
+ * a glow in its own colour — and swapped the emoji for the app's own icons,
+ * which draw the same picture on both platforms (GLOW-UP.md).
+ *
  * Crossing a target throws confetti — once, out of the bar that did it. That is
  * the app's only celebration and it is deliberately on the macros rather than
  * on calories: "you have reached your protein" is unambiguously good news and
  * "you have reached your calorie limit" is not.
  */
 const MACROS = [
-  { key: 'protein_g', label: 'macro.protein', emoji: '💪', fill: 'protein', ink: 'proteinText' },
-  { key: 'carbs_g', label: 'macro.carbs', emoji: '🌾', fill: 'carbs', ink: 'carbsText' },
-  { key: 'fat_g', label: 'macro.fat', emoji: '🥑', fill: 'fat', ink: 'fatText' },
+  { key: 'protein_g', label: 'macro.protein', icon: 'protein', fill: 'protein', ink: 'proteinText' },
+  { key: 'carbs_g', label: 'macro.carbs', icon: 'carbs', fill: 'carbs', ink: 'carbsText' },
+  { key: 'fat_g', label: 'macro.fat', icon: 'fat', fill: 'fat', ink: 'fatText' },
 ] as const satisfies readonly {
   key: keyof Nutrition & keyof Targets;
   label: StringKey;
-  emoji: string;
+  icon: GlossyName;
   fill: keyof Palette;
   ink: keyof Palette;
 }[];
@@ -117,7 +122,7 @@ function MacroTrack({
       <Confetti trigger={crossings || null} />
 
       <View style={styles.labelRow}>
-        <Text style={styles.emoji}>{macro.emoji}</Text>
+        <Glossy name={macro.icon} size={18} />
         <Text
           numberOfLines={1}
           style={[t.footnoteSemibold, styles.label, { color: colors.mutedForeground }]}
@@ -126,19 +131,32 @@ function MacroTrack({
         </Text>
       </View>
 
-      <View style={styles.figureRow}>
-        <Text
-          style={[t.figure, styles.figure, { color: met ? colors[macro.ink] : colors.foreground }]}
-        >
+      {/*
+        One text run, not two sibling views. As siblings, Android re-measured
+        "/54" against the counting figure beside it and on some frames kept the
+        narrower measurement, drawing "26 /" with the target cut off; a single
+        run is laid out once, as a line.
+      */}
+      <Text numberOfLines={1} style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+        <Text style={[t.figure, styles.figure, { color: met ? colors[macro.ink] : colors.foreground }]}>
           {Math.round(shown)}
         </Text>
-        <Text style={[t.footnoteSemibold, t.tnum, { color: colors.mutedForeground }]}>
-          /{target}
-        </Text>
-      </View>
+        {` /${target}`}
+      </Text>
 
-      <View style={[styles.bar, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-        <Animated.View style={[styles.fill, fill, { backgroundColor: colors[macro.fill] }]} />
+      <View style={[styles.bar, { backgroundColor: colors.hairline }]}>
+        <Animated.View
+          style={[
+            styles.fill,
+            fill,
+            {
+              backgroundColor: colors[macro.fill],
+              experimental_backgroundImage:
+                'linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0) 55%)',
+              boxShadow: `0px 0px 10px ${colors[macro.fill]}`,
+            },
+          ]}
+        />
       </View>
     </View>
   );
@@ -148,9 +166,7 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', gap: 12 },
   track: { flex: 1, gap: 8 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  emoji: { fontSize: 13, lineHeight: 15 },
   label: { flexShrink: 1 },
-  figureRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
   /*
    * `leading-none` on the web, but not spelled 16/16 here.
    *
@@ -161,10 +177,8 @@ const styles = StyleSheet.create({
    */
   figure: { fontSize: 16, lineHeight: 20 },
   bar: {
-    height: 10,
+    height: 12,
     borderRadius: 999,
-    borderWidth: 1,
-    overflow: 'hidden',
   },
   fill: { height: '100%', borderRadius: 999 },
 });

@@ -40,6 +40,16 @@ export const en = {
 
   // ---- Today --------------------------------------------------------------
   'today.title': 'Today',
+  /**
+   * The greeting over the sky. `name` is empty when there is none, and the
+   * sentence has to read whole either way. The asterisks mark the word the
+   * serif sets in italic.
+   */
+  'today.greetMorning': (name: string) => (name ? `Good *morning*, ${name}` : 'Good *morning*'),
+  'today.greetAfternoon': (name: string) => (name ? `Good *afternoon*, ${name}` : 'Good *afternoon*'),
+  'today.greetEvening': (name: string) => (name ? `Good *evening*, ${name}` : 'Good *evening*'),
+  'today.greetNight': (name: string) => (name ? `Still up, *${name}*?` : 'Still *up*?'),
+  'today.backToToday': 'Back to today',
   /** The ring's caption under the figure. Two words at the outside. */
   'today.toGo': 'to go',
   'today.over': 'over',
@@ -56,7 +66,7 @@ export const en = {
   'today.roughEstimate': 'rough estimate',
   'today.exerciseFooter': 'Shown separately from your target — exercise burn is a rough estimate.',
   'today.exerciseTitle': '🏃  Exercise',
-  'today.stepsTitle': '👟  Steps',
+  'today.stepsTitle': 'Steps',
   'today.steps': (count: number) => n(count, { one: 'step', other: 'steps' }),
   /* The rule from INTEGRATIONS.md, in the one place a reader will meet it.
      Everybody arrives expecting steps to buy them calories; saying so here is
@@ -273,12 +283,15 @@ export const en = {
   'ob.back': 'Back',
   'ob.continue': 'Continue',
 
-  'ob.welcomeTitle': 'Let’s build your plan',
+  'ob.welcomeTitle': 'Let’s build *your* plan',
   'ob.welcomeBody':
     'Six quick questions — about half a minute — and you’ll have a calorie and protein target worked out for your body rather than for nobody in particular. You can change any of it later.',
   'ob.welcomeStart': 'Get started',
+  /** Under the start button, for somebody reinstalling rather than arriving. */
+  'ob.haveAccount': 'I already have an account',
+  'ob.wordmarkTagline': 'Your day, so far',
 
-  'ob.goalTitle': 'What are you here to do?',
+  'ob.goalTitle': 'What are you *here* to do?',
   'ob.goalBody': 'This sets whether your day sits under, at, or over what you burn.',
   'ob.goalLose': 'Lose weight',
   'ob.goalLoseHint': 'A steady deficit you can actually keep to',
@@ -327,7 +340,7 @@ export const en = {
   'ob.activityTitle': 'How much do you move?',
   'ob.activityBody': 'Your ordinary week — not counting workouts you log in the app.',
 
-  'ob.buildingTitle': 'Building your plan',
+  'ob.buildingTitle': 'Building *your* plan',
   'ob.buildingStep1': 'Working out what you burn',
   'ob.buildingStep2': 'Setting your daily calories',
   'ob.buildingStep3': 'Splitting your protein, carbs and fat',
@@ -339,6 +352,47 @@ export const en = {
   'ob.planFootnote':
     'A starting point, not a verdict. It adjusts each week from what you log and what the scale does.',
   'ob.planStart': 'Start logging',
+  /**
+   * The plan screen for somebody with no account yet. The button saves the
+   * plan by asking for one, and the line under the plan says so before they
+   * press it — an email field arriving unannounced reads as a trick.
+   */
+  'ob.planSave': 'Save my plan',
+  'ob.planSaveHint': 'Next, an account to keep it in. It’s free and takes a minute.',
+  /** The trajectory card. Asterisks mark the word the serif leans on. */
+  'ob.planWhere': 'Where this *takes* you',
+  'ob.planToday': (weight: string) => `${weight} today`,
+  'ob.planGoal': (weight: string) => `${weight} goal`,
+  /** `date` is spelled out for the locale; `rate` arrives with its unit. */
+  'ob.planArrives': (date: string, rate: string) => `Around ${date} · ${rate} a week`,
+
+  /**
+   * True sentences, rotated under the loader while the plan is worked out.
+   * They replaced quoted reviews in the design: nobody wrote those, and a
+   * first screen that invents its own praise is not one to trust with a body.
+   */
+  'ob.buildingNote1': 'Type what you ate in plain words — the journal fills in the numbers.',
+  'ob.buildingNote2': 'Your target learns from your weigh-ins, week by week.',
+  'ob.buildingNote3': 'A photo of your plate or a barcode works too.',
+
+  /** The two feature teases between questions. */
+  'ob.teaseJournalTitle': 'Type what you ate. *That’s* the logging.',
+  'ob.teaseJournalBody': 'No search, no portion grids. The journal reads it and fills in the numbers.',
+  'ob.teaseJournalYou1': '2 eggs, toast with butter, flat white',
+  'ob.teaseJournalReply1': 'Logged to breakfast',
+  'ob.teaseJournalYou2': 'and a banana',
+  'ob.teaseJournalReply2': 'Added',
+  'ob.teaseJournalComposer': 'What did you eat?',
+  'ob.teaseChipType': 'Just type it',
+  'ob.teaseChipPhoto': 'Or a photo',
+  'ob.teaseChipBarcode': 'Or a barcode',
+  'ob.teaseDayTitle': 'Your day, *lit* by the hour',
+  'ob.teaseDayBody': 'Today follows the clock, and the ring fills as you log. One look tells you how the day is going.',
+
+  /** Between signing up and the tabs, while the plan is written to the account. */
+  'saving.title': 'Saving *your* plan',
+  'saving.body': 'Putting your answers into your new account.',
+  'saving.welcomeBack': 'One *moment*',
 
   'sex.male': 'Male',
   'sex.female': 'Female',
@@ -366,6 +420,14 @@ export const en = {
   'auth.signInSubtitle': 'Sign in to pick up where you left off.',
   'auth.createAccount': 'Create account',
   'auth.createAccountTitle': 'Create your account',
+  /** Sign-up, reached from a finished plan rather than from nothing. */
+  'auth.savePlanTitle': 'Save *your* plan',
+  'auth.savePlanSubtitle': (kcal: string) =>
+    `${kcal} kcal a day, worked out and waiting. An account keeps it — on this phone and any other.`,
+  /** On sign-in, for somebody who tapped "I already have an account" by mistake. */
+  'auth.buildPlanFirst': 'New here? Build your plan first',
+  /** Under the sign-up form that saves a plan: back into the questions, answers kept. */
+  'auth.changeAnswers': 'Change my answers',
   'auth.email': 'Email',
   'auth.password': 'Password',
   'auth.passwordHint': 'At least 8 characters.',
@@ -607,7 +669,7 @@ export const en = {
   'progress.title': 'Progress',
   'progress.daysWindow': (count: number) => `${count} days`,
   'progress.daysShort': (count: number) => `${count}d`,
-  'progress.weightTitle': '⚖️  Weight',
+  'progress.weightTitle': 'Weight',
   'progress.noWeighIns': 'No weigh-ins yet. Log one below, or just tell the journal.',
   'progress.noWeighIn': 'No weigh-in',
   'progress.trendReadout': (value: string) => `7-day avg ${value} — the line`,
@@ -616,9 +678,9 @@ export const en = {
   'progress.sinceStart': 'Since start',
   'progress.toTarget': 'To target',
   'progress.logTodaysWeight': (unit: string) => `Log today’s weight (${unit})`,
-  'progress.caloriesTitle': '🔥  Calories',
+  'progress.caloriesTitle': 'Calories',
   'progress.avgDayTarget': (target: string) => `avg/day · target ${target}`,
-  'progress.proteinTitle': '💪  Protein',
+  'progress.proteinTitle': 'Protein',
   /**
    * Split around the emphasised count, which is bold in place. The middle is
    * its own key so a language can put the two numbers together its own way.
@@ -626,7 +688,7 @@ export const en = {
   'progress.hitTargetBefore': 'Hit the target on',
   'progress.ofDays': (hit: string, logged: string) => `${hit} of ${logged}`,
   'progress.hitTargetAfter': 'logged days.',
-  'progress.qualityTitle': '🥦  Diet quality',
+  'progress.qualityTitle': 'Diet quality',
   'progress.days': (count: number) => n(count, { one: 'day', other: 'days' }),
   'progress.qualityFooter': (days: string, percent: string) =>
     `Averaged over ${days} — ${percent}% of what you logged carries these figures.`,
@@ -934,7 +996,7 @@ export const en = {
   /** `plan` is a tier name, which stays as the store spells it. */
   'review.partOf': (plan: string) => `Part of ${plan}`,
 
-  'quality.title': '🥦\u00a0\u00a0Diet quality',
+  'quality.title': 'Diet quality',
   'quality.partlyMeasured': 'partly measured',
   'quality.notEstimated': 'not estimated',
 

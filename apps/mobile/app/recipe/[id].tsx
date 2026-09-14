@@ -172,7 +172,7 @@ export default function GeneratedRecipeScreen() {
             onPress={() => void cook()}
             disabled={cooking}
             accessibilityRole="button"
-            contentStyle={[styles.cook, { backgroundColor: colors.primary }]}
+            contentStyle={[styles.cook, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
           >
             <Text style={[styles.cookLabel, { color: colors.primaryForeground }]}>
               {cooking

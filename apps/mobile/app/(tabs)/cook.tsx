@@ -418,8 +418,8 @@ export default function CookScreen() {
           contentStyle={[
             styles.find,
             spent
-              ? { backgroundColor: colors.secondary, borderWidth: 2, borderColor: colors.border }
-              : { backgroundColor: colors.primary },
+              ? { backgroundColor: colors.secondary, borderWidth: 1, borderColor: colors.border }
+              : { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp },
           ]}
         >
           {thinking ? (
@@ -536,8 +536,8 @@ export default function CookScreen() {
             contentStyle={[
               styles.find,
               spent
-                ? { backgroundColor: colors.secondary, borderWidth: 2, borderColor: colors.border }
-                : { backgroundColor: colors.primary },
+                ? { backgroundColor: colors.secondary, borderWidth: 1, borderColor: colors.border }
+                : { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp },
             ]}
           >
             <Sparkles color={spent ? colors.secondaryForeground : colors.primaryForeground} />
@@ -585,7 +585,7 @@ export default function CookScreen() {
             disabled={!importText.trim() || importing}
             accessibilityRole="button"
             style={{ opacity: !importText.trim() || importing ? 0.4 : 1 }}
-            contentStyle={[styles.find, { backgroundColor: colors.primary }]}
+            contentStyle={[styles.find, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
           >
             <Text style={[styles.findLabel, { color: colors.primaryForeground }]}>
               {importing ? tr('cook.readingIt') : tr('cook.workOutCalories')}
@@ -611,7 +611,7 @@ export default function CookScreen() {
                 onPress={() => setTab(key)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
-                style={[styles.switcherItem, active ? { backgroundColor: colors.primary } : null]}
+                style={[styles.switcherItem, active ? { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp } : null]}
               >
                 <Text
                   style={[
@@ -798,7 +798,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   page: { paddingHorizontal: 16, paddingBottom: 40, gap: 12 },
   titleRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  chip: { borderWidth: 2, borderRadius: 999 },
+  chip: { borderWidth: 1, borderRadius: 999 },
   chipInner: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8 },
   chipGlyph: { fontSize: 14, lineHeight: 18 },
   ask: { gap: 10, marginTop: 4 },
@@ -827,16 +827,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
-  sheetFoot: { borderTopWidth: 2, padding: 12 },
+  sheetFoot: { borderTopWidth: 1, padding: 12 },
   importBody: { paddingHorizontal: 20, paddingVertical: 12, gap: 10 },
   importInput: {
     minHeight: 180,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -854,7 +854,7 @@ const styles = StyleSheet.create({
   findLabel: { fontFamily: font.bold, fontSize: 15, lineHeight: 20 },
   plan: { paddingHorizontal: 4, lineHeight: 20 },
   tabs: { flexDirection: 'row', marginTop: 8 },
-  switcher: { flexDirection: 'row', borderWidth: 2, borderRadius: 999, padding: 4 },
+  switcher: { flexDirection: 'row', borderWidth: 1, borderRadius: 999, padding: 4 },
   switcherItem: {
     height: 32,
     borderRadius: 999,
@@ -865,7 +865,7 @@ const styles = StyleSheet.create({
   switcherLabel: { fontFamily: font.bold, fontSize: 12, lineHeight: 16 },
   search: {
     height: 40,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 16,
     paddingVertical: 0,

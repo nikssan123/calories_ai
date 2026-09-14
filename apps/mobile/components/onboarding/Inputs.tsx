@@ -38,7 +38,7 @@ export function Segmented<T extends string>({
   const colors = useColors();
 
   return (
-    <View style={[styles.segmented, { backgroundColor: colors.muted }]}>
+    <View style={[styles.segmented, { backgroundColor: colors.hairline }]}>
       {options.map((option) => {
         const on = option.value === value;
         return (
@@ -53,7 +53,7 @@ export function Segmented<T extends string>({
             accessibilityState={{ selected: on }}
             style={({ pressed }) => [
               styles.segment,
-              on && { backgroundColor: colors.card, borderColor: colors.border },
+              on && { backgroundColor: colors.glassStrong, borderColor: colors.glassEdge, boxShadow: colors.shadow },
               { opacity: pressed && !on ? 0.6 : 1 },
             ]}
           >
@@ -106,7 +106,7 @@ export function Measure({
   const colors = useColors();
 
   return (
-    <Chunk depth={3} radius={20} contentStyle={[styles.measure, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <Chunk depth={3} radius={22} contentStyle={[styles.measure, { backgroundColor: colors.glassStrong, borderColor: colors.glassEdge }]}>
       <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>{label}</Text>
 
       <View style={styles.measureRow}>
@@ -224,7 +224,7 @@ function Nudge({
       accessibilityRole="button"
       accessibilityLabel={sign}
       style={{ opacity: disabled ? 0.35 : 1 }}
-      contentStyle={[styles.nudge, { backgroundColor: colors.card, borderColor: colors.border }]}
+      contentStyle={[styles.nudge, { backgroundColor: colors.glassStrong, borderColor: colors.glassEdge }]}
     >
       <Svg width={22} height={22} viewBox="0 0 24 24">
         <Path
@@ -248,19 +248,20 @@ const styles = StyleSheet.create({
     gap: 1,
     paddingVertical: 10,
     borderRadius: 999,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: 'transparent',
   },
   segmentHint: { fontFamily: font.medium, fontSize: 11, lineHeight: 14 },
 
-  measure: { gap: 6, paddingVertical: 16, paddingHorizontal: 18, borderWidth: 2 },
+  measure: { gap: 6, paddingVertical: 16, paddingHorizontal: 18, borderWidth: 1 },
   measureRow: { flexDirection: 'row', alignItems: 'baseline', gap: 18 },
   measurePart: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  /* The serif, like every other number onboarding introduces. */
   figure: {
-    fontFamily: font.display,
-    fontSize: 40,
-    lineHeight: 48,
-    letterSpacing: -0.5,
+    fontFamily: font.serifMedium,
+    fontSize: 42,
+    lineHeight: 50,
+    letterSpacing: -0.6,
     minWidth: 72,
     padding: 0,
   },
@@ -269,7 +270,7 @@ const styles = StyleSheet.create({
   stepper: { alignItems: 'center', gap: 18 },
   stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 22 },
   stepperValue: { flexDirection: 'row', alignItems: 'baseline', gap: 6, minWidth: 150, justifyContent: 'center' },
-  stepperFigure: { fontFamily: font.display, fontSize: 52, lineHeight: 60, letterSpacing: -0.8 },
-  nudge: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center', borderWidth: 2 },
+  stepperFigure: { fontFamily: font.serifMedium, fontSize: 56, lineHeight: 66, letterSpacing: -1 },
+  nudge: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   caption: { textAlign: 'center' },
 });
