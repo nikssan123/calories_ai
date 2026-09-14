@@ -49,6 +49,12 @@ export * from './equipment.ts';
 /** How many camera frames have to agree on a barcode before it is looked up. */
 export * from './scan.ts';
 
+/**
+ * Profile in, calorie and macro target out. Shared so the phone can draw a plan
+ * before an account exists; see `targets.ts`.
+ */
+export * from './targets.ts';
+
 export const MEALS = ['breakfast', 'lunch', 'dinner', 'snack'] as const;
 export const Meal = z.enum(MEALS);
 export type Meal = z.infer<typeof Meal>;
