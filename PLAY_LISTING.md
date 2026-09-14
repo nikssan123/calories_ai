@@ -437,10 +437,13 @@ caption burned in, so a localised set needs the app in that language:
    the emulator against Metro, and captures the three states. Today is reached
    by `daysofar://today`, because a tap lands on the LogBox toast instead.
 3. `store/tools/compose-shots.sh <code>` draws the caption over each capture
-   with the geometry measured off the English set — 1080×1920, ground
-   `rgb(26,21,18)`, headline at 92px from x=100, the 96×7 green rule. Headlines
-   fall back per script exactly as the app does, Baloo having neither Cyrillic
-   nor Greek.
+   with the geometry measured off the English set — 1080×1920, headline at
+   92px from x=100, the 96×7 green-to-teal rule. Since the glow-up
+   (2026-09-14, GLOW-UP.md) the ground is the onboarding's warm light rather
+   than `rgb(26,21,18)`, and the headline is Fraunces with Literata carrying
+   Cyrillic and Greek, exactly as the app draws them. `COMPOSE_TARGET=iphone`
+   and `COMPOSE_TARGET=ipad` render the App Store's 6.9" and 13" slots from the
+   same layout.
 
 **Headlines are two lines of at most fourteen characters**, and the sub line at
 most fifty-two. That is what the measured layout holds without shrinking, and it

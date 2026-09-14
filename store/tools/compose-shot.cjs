@@ -46,15 +46,20 @@ const [capture, out, headline, sub] = process.argv.slice(2);
  * carries a listing at thumbnail size, so it keeps its proportions everywhere.
  * `crop` is the capture's status bar at the card's 934pt width.
  *
- *   COMPOSE_TARGET=iphone node compose-shot.cjs …   # 1320×2868, the 6.9" slot
+ *   COMPOSE_TARGET=iphone node compose-shot.cjs …   # 1284×2778, the 6.5" slot
  *   COMPOSE_TARGET=ipad   node compose-shot.cjs …   # 2064×2752, the 13" slot
+ *
+ * `COMPOSE_CROP` overrides the status-bar crop, for a capture from a device
+ * whose bar is a different share of its width (62pt of a 402pt iPhone 17 Pro is
+ * 144 at card width; of a 440pt Pro Max, 132).
  */
 const TARGETS = {
   play: { width: 1080, height: 1920, crop: 83 },
-  iphone: { width: 1320, height: 2868, crop: 144 },
-  ipad: { width: 2064, height: 2752, crop: 22 },
+  iphone: { width: 1284, height: 2778, crop: 144 },
+  ipad: { width: 2064, height: 2752, crop: 40 },
 };
-const target = TARGETS[process.env.COMPOSE_TARGET || 'play'];
+const target = { ...TARGETS[process.env.COMPOSE_TARGET || 'play'] };
+if (process.env.COMPOSE_CROP) target.crop = Number(process.env.COMPOSE_CROP);
 const scale = target.width / 1080;
 const pageHeight = Math.round(target.height / scale);
 const FONTS = path.resolve(__dirname, '../../node_modules/.pnpm');

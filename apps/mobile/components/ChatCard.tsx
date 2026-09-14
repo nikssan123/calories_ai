@@ -630,12 +630,13 @@ function DayProgress({
   return (
     <View style={styles.progress}>
       <DashedRule color={withAlpha(colors.border, 0.7)} />
-      <View style={[styles.bar, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+      <View style={[styles.bar, { backgroundColor: colors.hairline, borderColor: 'transparent' }]}>
         {bands.map((band, i) => (
           <Band
             key={band.key}
             width={bandWidth(band.kcal, band.mine, scale)}
             color={bandFill(colors, band.mine, band.over)}
+            lit={band.mine && !band.over}
             mine={band.mine}
             roundedEnd={i === last}
           />
@@ -693,13 +694,17 @@ function Band({
   width,
   color,
   mine,
+  lit = false,
   roundedEnd,
 }: {
   width: number;
   color: string;
   mine: boolean;
+  /** This meal's own band, under target: lit in the logo's ramp, like the ring. */
+  lit?: boolean;
   roundedEnd: boolean;
 }) {
+  const colors = useColors();
   const reduced = useReducedMotion();
   const grow = useSharedValue(mine && !reduced ? 0 : 1);
 
@@ -721,6 +726,7 @@ function Band({
       style={[
         styles.band,
         { width: `${width}%`, backgroundColor: color },
+        lit ? { experimental_backgroundImage: colors.primaryRamp } : null,
         roundedEnd ? styles.bandEnd : null,
         animated,
       ]}

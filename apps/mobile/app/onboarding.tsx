@@ -264,7 +264,16 @@ export default function OnboardingScreen() {
     const key = `${round1(weightKg)}|${goal}`;
     if (proposedFor.current === key) return;
     proposedFor.current = key;
-    setTargetWeight(round1(weightKg * (goal === 'lose' ? 0.9 : 1.05)));
+    /*
+     * Rounded to the stepper's own step in the units on screen — a whole pound
+     * or half a kilo — so the first figure shown is one the buttons could have
+     * produced, not "166.4 lb".
+     */
+    const step = units === 'imperial' ? 1 : 0.5;
+    const proposed = toBodyWeight(weightKg * (goal === 'lose' ? 0.9 : 1.05), units);
+    setTargetWeight(round2(bodyWeightToKg(Math.round(proposed / step) * step, units)));
+    // `units` is read, not watched: switching units is not a new proposal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weightKg, goal]);
 
   const age = birthDate === null ? null : ageFrom(birthDate);
@@ -745,7 +754,9 @@ export default function OnboardingScreen() {
               onChange={(next) => {
                 // Moving it is answering it, whatever was pressed last time.
                 setTargetSkipped(false);
-                setTargetWeight(round1(bodyWeightToKg(next, units)));
+                // Two places, not one: a pound is 0.4536 kg, and a goal stored to
+                // a tenth of a kilo reads back as 164.9 lb for the 165 pressed.
+                setTargetWeight(round2(bodyWeightToKg(next, units)));
               }}
               caption={
                 Math.abs(targetWeight - weightKg) < 0.05
@@ -932,6 +943,7 @@ function imperialHeight(feet: string, inches: string): number | null {
 }
 
 const round1 = (value: number): number => Math.round(value * 10) / 10;
+const round2 = (value: number): number => Math.round(value * 100) / 100;
 
 /** Whole years, counted the way `ageFrom` on the server does. */
 function ageFrom(birthDate: string): number | null {

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -24,22 +24,39 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
  * everything and are never over a word: the questions and the options are laid
  * out above them in the normal flow.
  */
+/*
+ * Placed as fractions of the screen rather than in points, so the light lands in
+ * the same corners on an iPad as on a phone — the first version put all three
+ * pools in the left 400pt, which on a 1032pt tablet left half the page flat.
+ */
 const POOLS = {
   light: [
-    { color: 'rgba(255, 196, 120, 0.75)', size: 420, left: -160, top: -120, dx: 40, dy: 30, period: 14000 },
-    { color: 'rgba(160, 236, 210, 0.70)', size: 360, left: 190, top: 150, dx: -30, dy: 40, period: 17000 },
-    { color: 'rgba(255, 190, 160, 0.55)', size: 380, left: -40, top: 560, dx: 36, dy: -30, period: 20000 },
+    { color: 'rgba(255, 196, 120, 0.75)', size: 1.1, x: 0.0, y: 0.02, dx: 40, dy: 30, period: 14000 },
+    { color: 'rgba(160, 236, 210, 0.70)', size: 0.95, x: 0.95, y: 0.3, dx: -30, dy: 40, period: 17000 },
+    { color: 'rgba(255, 190, 160, 0.55)', size: 1.0, x: 0.3, y: 0.82, dx: 36, dy: -30, period: 20000 },
   ],
   dark: [
-    { color: 'rgba(255, 150, 60, 0.20)', size: 420, left: -160, top: -120, dx: 40, dy: 30, period: 14000 },
-    { color: 'rgba(46, 230, 196, 0.16)', size: 360, left: 190, top: 150, dx: -30, dy: 40, period: 17000 },
-    { color: 'rgba(255, 120, 90, 0.12)', size: 380, left: -40, top: 560, dx: 36, dy: -30, period: 20000 },
+    { color: 'rgba(255, 150, 60, 0.20)', size: 1.1, x: 0.0, y: 0.02, dx: 40, dy: 30, period: 14000 },
+    { color: 'rgba(46, 230, 196, 0.16)', size: 0.95, x: 0.95, y: 0.3, dx: -30, dy: 40, period: 17000 },
+    { color: 'rgba(255, 120, 90, 0.12)', size: 1.0, x: 0.3, y: 0.82, dx: 36, dy: -30, period: 20000 },
   ],
 } as const;
 
 export function Stage({ style }: { style?: StyleProp<ViewStyle> }) {
   const { scheme, colors } = useTheme();
-  const pools = POOLS[scheme];
+  const { width, height } = useWindowDimensions();
+  /* A pool's diameter is a share of the shorter side, so a tablet gets pools in
+     proportion to its page rather than three phone-sized spots on it. */
+  const unit = Math.min(width, height) * 0.9;
+  const pools = POOLS[scheme].map((pool) => ({
+    color: pool.color,
+    size: unit * pool.size,
+    left: width * pool.x - (unit * pool.size) / 2,
+    top: height * pool.y - (unit * pool.size) / 2,
+    dx: pool.dx,
+    dy: pool.dy,
+    period: pool.period,
+  }));
   return (
     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, overflow: 'hidden' }, style]}>
       {pools.map((pool, i) => (
