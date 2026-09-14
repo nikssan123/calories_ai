@@ -10,8 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, Path, Polyline, Rect } from 'react-native-svg';
 import { Backdrop } from '@/components/Backdrop';
-import { Material } from '@/components/Material';
-import { duration, ease, font, useColors } from '@/theme';
+import { duration, ease, font, tint, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
 import { haptics } from '@/lib/haptics';
@@ -36,14 +35,25 @@ import { useT, type StringKey } from '@/lib/i18n';
  * that read its words once at import would keep them after somebody changed
  * language in the settings two screens away.
  */
+/*
+ * Today first, and the tab the app opens on (GLOW-UP.md). The journal led for as
+ * long as logging was the whole product, but the screen the redesign is built
+ * around — the sky, the ring, the day at a glance — is the one people open the
+ * app to read, and logging is one tap to its right. The rest follow the mockup:
+ * the places you act (Cook, Exercise) before the place you review (Progress),
+ * and your own details last.
+ */
 const TABS = [
-  { name: 'index', label: 'nav.journal', icon: 'chat' },
   { name: 'today', label: 'nav.today', icon: 'flame' },
-  { name: 'progress', label: 'nav.progress', icon: 'chart' },
-  { name: 'exercise', label: 'nav.exercise', icon: 'person' },
+  { name: 'index', label: 'nav.journal', icon: 'chat' },
   { name: 'cook', label: 'nav.cook', icon: 'chef' },
+  { name: 'exercise', label: 'nav.exercise', icon: 'person' },
+  { name: 'progress', label: 'nav.progress', icon: 'chart' },
   { name: 'setup', label: 'nav.you', icon: 'user' },
 ] as const satisfies readonly { name: string; label: StringKey; icon: string }[];
+
+/** Expo Router's way of saying which tab a cold start lands on. */
+export const unstable_settings = { initialRouteName: 'today' };
 
 export default function TabsLayout() {
   const colors = useColors();
@@ -58,6 +68,7 @@ export default function TabsLayout() {
         */}
       <Backdrop />
       <Tabs
+        initialRouteName="today"
         screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: 'transparent' } }}
         tabBar={(props) => <TabBar {...props} />}
       >
@@ -165,86 +176,104 @@ function TabBar({
   if (typing) return null;
 
   return (
-    <Material
+    /*
+     * A lit glass pill, inset from the edges of the screen (GLOW-UP.md) — the
+     * bar in the mockup, with one change: it is laid out rather than floated.
+     * It takes its own strip at the foot of the screen and the page ends above
+     * it, so no line of a scrolling list ever rests underneath. What shows
+     * around its rounded corners is the page's own ambient light, drawn once
+     * behind every tab by `TabsLayout`.
+     */
+    <View
       style={[
-        styles.bar,
+        styles.dock,
         {
-          borderTopColor: colors.hairline,
           /*
-           * The inset *less* the row's own bottom padding, not on top of it.
-           *
-           * Every tab already ends in `styles.tab`'s `paddingBottom`, so adding
-           * the whole safe-area inset double-counts the gap. On Android the
-           * inset is ~0 and that padding is the breathing room, which is why
-           * this read correctly there; on iOS the inset is 34 and the two
-           * together left 42pt of dead space under the labels — visibly looser
-           * than any other tab bar on the phone. Subtracting leaves exactly the
-           * inset, which is what clears the home indicator and nothing more.
+           * The home indicator's inset, and a floor under it: on a phone with no
+           * inset the pill still needs to sit off the bottom edge to read as a
+           * pill rather than as a bar with rounded corners cut off.
            */
-          paddingBottom: Math.max(insets.bottom - TAB_PADDING_BOTTOM, 0),
+          paddingBottom: Math.max(insets.bottom, 12),
         },
       ]}
     >
       <View
-        style={styles.row}
-        onLayout={(e) => {
-          const width = e.nativeEvent.layout.width;
-          setRowWidth((previous) => (previous === width ? previous : width));
-        }}
+        style={[
+          styles.pill,
+          {
+            backgroundColor: colors.glassStrong,
+            borderColor: colors.glassEdge,
+            boxShadow: `0px 16px 34px -16px ${tint(colors.chunk, 0.9)}, inset 0px 1px 0px ${colors.glassEdge}`,
+          },
+        ]}
       >
-        {/* Withheld until the row has a width, so it cannot animate in from 0,
-            and while nothing in the row is the open screen. */}
-        {rowWidth > 0 && selected >= 0 && (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.lozenge,
-              sliding,
-              { width: lozengeWidth, backgroundColor: colors.caloriesWash },
-            ]}
-          />
-        )}
-        {shown.map((route, index) => {
-          const tab = TABS.find((candidate) => candidate.name === route.name);
-          if (!tab) return null;
-          const active = selected === index;
+        <View
+          style={styles.row}
+          onLayout={(e) => {
+            const width = e.nativeEvent.layout.width;
+            setRowWidth((previous) => (previous === width ? previous : width));
+          }}
+        >
+          {/* Withheld until the row has a width, so it cannot animate in from 0,
+              and while nothing in the row is the open screen. */}
+          {rowWidth > 0 && selected >= 0 && (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.lozenge,
+                sliding,
+                {
+                  width: lozengeWidth,
+                  backgroundColor: colors.caloriesWash,
+                  /* The logo's ramp, faint, with its own glow — the one lit thing in the bar. */
+                  experimental_backgroundImage: `linear-gradient(135deg, ${tint(colors.calories, 0.2)}, ${tint(colors.logoRamp, 0.24)})`,
+                  boxShadow: `0px 6px 16px -8px ${tint(colors.calories, 0.7)}, inset 0px 1px 0px ${tint('#ffffff', 0.5)}`,
+                },
+              ]}
+            />
+          )}
+          {shown.map((route, index) => {
+            const tab = TABS.find((candidate) => candidate.name === route.name);
+            if (!tab) return null;
+            const active = selected === index;
 
-          return (
-            <Pressable
-              key={route.key}
-              accessibilityRole="button"
-              accessibilityState={active ? { selected: true } : {}}
-              accessibilityLabel={t(tab.label)}
-              onPress={() => {
-                // Every chunky control in the app answers a press; the bar is
-                // not chunky and would otherwise be the one thing that does
-                // not. Fired whether or not it navigates — pressing the tab
-                // you are already on is still a press, and silence there reads
-                // as a missed tap.
-                //
-                // `selected` rather than `press`, which is what this was and
-                // what made the bar the heaviest-feeling thing in the app: six
-                // targets across the bottom of every screen, each answering a
-                // thumb that is resting there anyway with the same buzz a
-                // button gives. Nothing here goes down and comes back up —
-                // a tab is a choice among six, so it gets the tick a choice
-                // gets. See `lib/haptics`.
-                haptics.selected();
-                const event = navigation.emit({
-                  type: 'tabPress',
-                  target: route.key,
-                  canPreventDefault: true,
-                });
-                if (!active && !event.defaultPrevented) navigation.navigate(route.name);
-              }}
-              style={styles.tab}
-            >
-              <TabItem tab={tab} active={active} />
-            </Pressable>
-          );
-        })}
+            return (
+              <Pressable
+                key={route.key}
+                accessibilityRole="button"
+                accessibilityState={active ? { selected: true } : {}}
+                accessibilityLabel={t(tab.label)}
+                onPress={() => {
+                  // Every chunky control in the app answers a press; the bar is
+                  // not chunky and would otherwise be the one thing that does
+                  // not. Fired whether or not it navigates — pressing the tab
+                  // you are already on is still a press, and silence there reads
+                  // as a missed tap.
+                  //
+                  // `selected` rather than `press`, which is what this was and
+                  // what made the bar the heaviest-feeling thing in the app: six
+                  // targets across the bottom of every screen, each answering a
+                  // thumb that is resting there anyway with the same buzz a
+                  // button gives. Nothing here goes down and comes back up —
+                  // a tab is a choice among six, so it gets the tick a choice
+                  // gets. See `lib/haptics`.
+                  haptics.selected();
+                  const event = navigation.emit({
+                    type: 'tabPress',
+                    target: route.key,
+                    canPreventDefault: true,
+                  });
+                  if (!active && !event.defaultPrevented) navigation.navigate(route.name);
+                }}
+                style={styles.tab}
+              >
+                <TabItem tab={tab} active={active} />
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
-    </Material>
+    </View>
   );
 }
 
@@ -396,12 +425,13 @@ function TabIcon({ name, color, strokeWidth }: { name: (typeof TABS)[number]['ic
 /** `lozengeSlot`'s `maxWidth`: the pill never grows past this on a wide phone. */
 const LOZENGE_MAX_WIDTH = 56;
 
-/** Named because the bar subtracts it from the safe-area inset; see the bar's style. */
+/** The breathing room under each label, inside the pill. */
 const TAB_PADDING_BOTTOM = 8;
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  bar: { borderTopWidth: 1 },
+  dock: { paddingHorizontal: 12, paddingTop: 6 },
+  pill: { borderRadius: 28, borderWidth: 1, paddingHorizontal: 4, paddingTop: 2, paddingBottom: 2 },
   row: { flexDirection: 'row' },
   tab: { flex: 1, alignItems: 'center', paddingTop: 6, paddingBottom: TAB_PADDING_BOTTOM, gap: 2 },
   lozengeSlot: {

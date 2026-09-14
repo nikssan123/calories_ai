@@ -30,8 +30,8 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
  * copy is a plane parallel to the others. So each layer gets the same rotation
  * and is then moved, in two dimensions, to where its depth would have projected
  * — `(d·sin b, −d·cos b·sin a)`, scaled for perspective — and shaded darker the
- * further back it sits. Fourteen layers of one SVG path on the UI thread is a
- * lighter load than any canvas, and it looks like an extrusion because
+ * further back it sits. Ten layers of one SVG path, each rasterised once and moved as a
+ * texture, is a lighter load than any canvas, and it looks like an extrusion because
  * geometrically it is one.
  *
  * The spheres orbit on a tilted plane in the same way, and pass behind the ring
@@ -76,7 +76,7 @@ export function RingObject({ size = 220, animate = true }: { size?: number; anim
   );
 }
 
-const LAYERS = 14;
+const LAYERS = 10;
 /** The perspective distance, in points. Nearer is more dramatic and less legible. */
 const PERSPECTIVE = 800;
 
@@ -119,8 +119,19 @@ function Layer({ clock, layer, size }: { clock: SharedValue<number>; layer: numb
   const shade = 1 - (layer / (LAYERS - 1)) * 0.32;
 
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, styles.centre, style]} pointerEvents="none">
-      <Svg width={size} height={size} viewBox="0 0 64 64" style={{ opacity: front ? 1 : 1 }}>
+    <Animated.View
+      style={[StyleSheet.absoluteFill, styles.centre, style]}
+      pointerEvents="none"
+      /*
+       * Drawn once and moved as a texture. The layer's picture never changes —
+       * only its transform does — and without these every frame re-rasterised
+       * the SVG on the UI thread, which on an Android emulator took the frame
+       * past 30ms and long enough that input queued behind it tripped an ANR.
+       */
+      renderToHardwareTextureAndroid
+      shouldRasterizeIOS
+    >
+      <Svg width={size} height={size} viewBox="0 0 64 64">
         <Defs>
           <LinearGradient id={gradient} gradientUnits="userSpaceOnUse" x1="8.5" y1="6.8" x2="55.5" y2="57.2">
             <Stop offset="0" stopColor={mix(colors.calories, '#0b3d27', 1 - shade)} />

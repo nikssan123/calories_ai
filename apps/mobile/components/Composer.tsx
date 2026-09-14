@@ -9,7 +9,6 @@ import type {
   UnitSystem,
 } from '@ct/shared';
 import { formatMass, formatServings } from '@ct/shared';
-import { Material } from '@/components/Material';
 import { Sheet } from '@/components/Field';
 import { BarcodeScanner, PortionSheet, type Scan } from '@/components/BarcodeScanner';
 import { PressableChunk } from '@/components/Chunk';
@@ -291,7 +290,13 @@ export function Composer({
   }
 
   return (
-    <Material style={[styles.bar, { borderTopColor: colors.border }]}>
+    /*
+     * No bar of its own any more. The field is a glass pill and the tab bar
+     * under it is another, so the two sit in the page's own light rather than
+     * on a strip of cream ruled off from the conversation. It is still laid out
+     * below the list, never over it.
+     */
+    <View style={styles.bar}>
       {photo && (
         <View style={styles.thumbWrap}>
           <Image source={{ uri: photo.uri }} style={styles.thumb} />
@@ -393,8 +398,9 @@ export function Composer({
           style={[
             styles.input,
             {
-              backgroundColor: colors.card,
-              borderColor: colors.input,
+              backgroundColor: colors.glassStrong,
+              borderColor: colors.glassEdge,
+              boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
               color: colors.foreground,
               opacity: disabled ? 0.6 : 1,
             },
@@ -423,7 +429,7 @@ export function Composer({
             style={{ opacity: disabled ? 0.3 : 1 }}
             contentStyle={[
               styles.send,
-              { backgroundColor: dictation.listening ? colors.destructive : colors.card },
+              { backgroundColor: dictation.listening ? colors.destructive : colors.glassStrong },
             ]}
           >
             {dictation.listening ? (
@@ -448,7 +454,7 @@ export function Composer({
             // step it down to 3.
             depth={4}
             radius={999}
-            color={colors.caloriesDeep}
+            color={colors.calories}
             onPress={submit}
           // No press buzz. Sending is the one control in the app that is
           // answered rather than acted on: the reply streams back a moment
@@ -575,7 +581,7 @@ export function Composer({
           )
         }
       />
-    </Material>
+    </View>
   );
 }
 
@@ -786,20 +792,20 @@ function CameraGlyph({ color, size = 22 }: { color: string; size?: number }) {
 const styles = StyleSheet.create({
   // `px-3 py-2.5` — both halves of the `py`, or the bar sits flush on the tab
   // bar below it and the field looks welded to the wrong edge.
-  bar: { borderTopWidth: 1, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10 },
+  bar: { paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4 },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   attach: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   input: {
     flex: 1,
-    minHeight: 40,
+    minHeight: 42,
     // `max-h-33` on the web — about four lines, after which it scrolls rather
     // than eating the conversation it belongs to.
     maxHeight: 132,
     borderWidth: 1,
-    borderRadius: 20,
+    borderRadius: 22,
     paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 8,
+    paddingTop: 9,
+    paddingBottom: 9,
     fontFamily: font.medium,
     fontSize: 16,
     lineHeight: 24,

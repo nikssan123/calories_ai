@@ -28,7 +28,7 @@ import { Touched } from '@/components/Touched';
 import { WorkoutCard } from '@/components/workout/WorkoutCard';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
-import { duration, ease, font, type as t, useColors, withAlpha, type Palette } from '@/theme';
+import { duration, ease, font, type as t, useColors, useType, withAlpha, type Palette } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { haptics } from '@/lib/haptics';
 import { useLocale } from '@/lib/i18n';
@@ -490,6 +490,7 @@ function FoodReceipt({
   onEdit: () => void;
 }) {
   const colors = useColors();
+  const type = useType();
   const tr = useT();
   const locale = useLocale();
   const approx = card.confidence !== 'high';
@@ -520,7 +521,9 @@ function FoodReceipt({
             </Text>
           </View>
         </View>
-        <Text style={[t.figure, styles.figure, { color: colors.foreground }]}>
+        {/* The meal's number in the serif the ring on Today speaks in — the one
+            figure on the card somebody reads first. */}
+        <Text style={[type.serifFigure, styles.serifFigure, { color: colors.foreground }]}>
           {approx && '~'}
           {formatNumber(card.kcal, locale)}
           <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}> kcal</Text>
@@ -528,11 +531,17 @@ function FoodReceipt({
       </View>
 
       {total > 0 && (
-        <View style={[styles.split, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+        /* Lit like the capsules on Today: a sheen along the top of the split, and
+           gaps between the macros so each reads as its own share. */
+        <View style={[styles.split, { backgroundColor: colors.hairline, borderColor: 'transparent' }]}>
           {energy.map((value, i) => (
             <View
               key={macros[i]!.label}
-              style={{ width: `${(value / total) * 100}%`, backgroundColor: macros[i]!.fill }}
+              style={{
+                width: `${(value / total) * 100}%`,
+                backgroundColor: macros[i]!.fill,
+                experimental_backgroundImage: 'linear-gradient(180deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0) 60%)',
+              }}
             />
           ))}
         </View>
@@ -1552,9 +1561,10 @@ const styles = StyleSheet.create({
   headBody: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 },
   emoji: { fontSize: 22, lineHeight: 28 },
   figure: { fontSize: 16, lineHeight: 24 },
+  serifFigure: { fontSize: 20, lineHeight: 26 },
   split: {
     flexDirection: 'row',
-    gap: 1,
+    gap: 2,
     height: 10,
     borderRadius: 999,
     borderWidth: 1,

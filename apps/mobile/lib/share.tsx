@@ -63,12 +63,13 @@ function Receiver({ children }: { children: React.ReactNode }) {
         if (cancelled || !photo) return;
         setPending(photo);
         /*
-         * The journal, because that is where the composer is. `navigate` rather
+         * The journal, because that is where the composer is — `/`, its own
+         * address, since the tabs now open on Today. `navigate` rather
          * than `push`: a share can arrive when the app is already open on Cook,
          * and stacking a second journal behind the first would leave a back
          * gesture that goes nowhere anybody asked for.
          */
-        router.navigate('/(tabs)');
+        router.navigate('/');
       },
     );
     return () => {

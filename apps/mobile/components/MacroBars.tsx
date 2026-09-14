@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withDelay, withTiming } from 'react-native-reanimated';
 import type { Nutrition, Targets } from '@ct/shared';
-import { duration, ease, type as t, useColors, type Palette } from '@/theme';
+import { duration, ease, tint, type as t, useColors, type Palette } from '@/theme';
 import { Confetti } from '@/components/Confetti';
 import { Glossy, type GlossyName } from '@/components/icons/Glossy';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -19,7 +19,7 @@ import { useT, type StringKey } from '@/lib/i18n';
  * glance skips.
  *
  * The glow-up made each bar a lit capsule — a glossy highlight along its top and
- * a glow in its own colour — and swapped the emoji for the app's own icons,
+ * a soft lift in its own colour — and swapped the emoji for the app's own icons,
  * which draw the same picture on both platforms (GLOW-UP.md).
  *
  * Crossing a target throws confetti — once, out of the bar that did it. That is
@@ -161,7 +161,9 @@ function MacroTrack({
               backgroundColor: colors[macro.fill],
               experimental_backgroundImage:
                 'linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0) 55%)',
-              boxShadow: `0px 0px 10px ${colors[macro.fill]}`,
+              /* A lift, not a glow: the bars sit under the ring, which is the one
+                 thing on the screen that gives off light. */
+              boxShadow: `0px 2px 5px -2px ${tint(colors[macro.fill], 0.55)}`,
             },
           ]}
         />

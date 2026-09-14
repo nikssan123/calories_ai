@@ -19,7 +19,17 @@
  */
 import './lib/intl-polyfill';
 
+import { LogBox } from 'react-native';
 import { registerWidgetTaskHandler } from 'react-native-android-widget';
+
+/*
+ * Store screenshots are captured from a dev client, and a dev client puts
+ * LogBox's toast for every console error — RevenueCat has no billing on an
+ * emulator, so there always is one — across the bottom of the screen, on top of
+ * the tab bar the frames are meant to show. `store/tools/capture-shots.sh` runs
+ * Metro with this set. Development builds only; a release never reads it.
+ */
+if (__DEV__ && process.env.EXPO_PUBLIC_QUIET_LOGBOX === '1') LogBox.ignoreAllLogs(true);
 import { widgetTaskHandler } from './widget/handler';
 
 registerWidgetTaskHandler(widgetTaskHandler);

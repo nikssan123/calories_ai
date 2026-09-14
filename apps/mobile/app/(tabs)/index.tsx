@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
+  useAnimatedProps,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -51,6 +52,9 @@ import { Glossy } from '@/components/icons/Glossy';
 import { Serif } from '@/components/Serif';
 import { MeterChip, PencilGlyph, PlanWall } from '@/components/PlanWall';
 import { Skeleton } from '@/components/Skeleton';
+import { Sky, useSky } from '@/components/Sky';
+import Svg, { Circle, Defs, G, LinearGradient, Stop } from 'react-native-svg';
+import { useCountUp } from '@/hooks/useCountUp';
 import { useToast } from '@/components/Toast';
 import { api, planLimitOf } from '@/lib/api';
 import { uploadPhotoFile } from '@/lib/image';
@@ -59,7 +63,7 @@ import { useEntitlements } from '@/lib/entitlements';
 import { enqueue, newId } from '@/lib/outbox';
 import { useOutbox } from '@/hooks/useOutbox';
 import { useRefreshOnReturn } from '@/hooks/useRefreshOnReturn';
-import { duration, ease, font, type as t, useColors } from '@/theme';
+import { duration, ease, font, type as t, useColors, useType } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { haptics } from '@/lib/haptics';
 import { onEntryRemoved } from '@/lib/removals';
@@ -1061,123 +1065,145 @@ async function reconcile(
   }
 }
 
-/** Compact always-visible answer to "how am I doing today?" (§25). */
+/**
+ * Compact always-visible answer to "how am I doing today?" (§25).
+ *
+ * Since the glow-up it is the top of Today's sky, folded down to one line
+ * (GLOW-UP.md): the hour's gradient behind it running into the page, a small
+ * lit ring for where the day has got to, and what is left set in the serif the
+ * ring on Today uses. The journal and Today are one tap apart, and the header
+ * is what makes them read as two views of one day rather than two apps.
+ *
+ * It is laid out above the conversation, not over it — nothing scrolls under
+ * this band, so nothing in it ever sits on top of a message.
+ */
 function StatusBar({ day, loading }: { day: DaySummary | null; loading: boolean }) {
   const colors = useColors();
+  const type = useType();
   const insets = useSafeAreaInsets();
   const tr = useT();
   const locale = useLocale();
-  const frame = [styles.status, { borderBottomColor: colors.border, paddingTop: insets.top + 10 }];
-
-  if (loading || !day) {
-    return (
-      <Material style={frame}>
-        <Skeleton style={styles.statusSkeleton} />
-      </Material>
-    );
-  }
-
-  const { consumed, targets } = day;
-  const remaining = targets.kcal - consumed.kcal;
-  const pct = Math.min(100, (consumed.kcal / Math.max(1, targets.kcal)) * 100);
-  const over = remaining < 0;
+  const sky = useSky();
+  const ink = sky.inkLight ? colors.skyInk : colors.foreground;
+  const quiet = sky.inkLight ? colors.skyInk : colors.mutedForeground;
 
   return (
-    <Material style={frame}>
-      <View style={styles.statusRow}>
-        <Text style={[t.figure, styles.statusFigure, { color: colors.foreground }]}>
-          {formatNumber(Math.round(consumed.kcal), locale)}
-          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-            {` / ${formatNumber(targets.kcal, locale)}`} kcal
-          </Text>
-        </Text>
-        {/* Ink rather than red — see the note on --destructive in globals.css. */}
-        <Text
-          style={[
-            t.footnoteBold,
-            t.tnum,
-            { color: over ? colors.foreground : colors.mutedForeground },
-          ]}
-        >
-          {over
-            ? tr('journal.over')(formatNumber(Math.abs(remaining), locale))
-            : tr('journal.left')(formatNumber(remaining, locale))}
-        </Text>
-      </View>
-
-      <View style={[styles.track, { backgroundColor: colors.hairline, borderColor: 'transparent' }]}>
-        <Bar pct={pct} color={over ? colors.foreground : colors.calories} glow={!over} />
-      </View>
-
-      {/*
-        §9: the bar tracks the plain target, so a run never quietly enlarges the
-        budget. But logging one has to visibly change this screen — otherwise
-        the only feedback is a chat bubble — so the burn and the net sit under it.
-      */}
-      {day.burned_kcal > 0 && (
-        <Text style={[t.footnoteSemibold, t.tnum, styles.burn, { color: colors.mutedForeground }]}>
-          <Text style={{ fontFamily: font.bold, color: colors.exerciseText }}>
-            {tr('journal.burned')(formatNumber(day.burned_kcal, locale))}
-          </Text>
-          {tr('journal.net')(formatNumber(day.net_kcal, locale))}
-        </Text>
+    <View style={[styles.status, { paddingTop: insets.top + 8 }]}>
+      <Sky sky={sky} height={insets.top + 150} hazeTop={insets.top + 150} />
+      {loading || !day ? (
+        <Skeleton style={styles.statusSkeleton} />
+      ) : (
+        <StatusLine day={day} ink={ink} quiet={quiet} type={type} tr={tr} locale={locale} />
       )}
-    </Material>
+    </View>
   );
 }
 
+function StatusLine({
+  day,
+  ink,
+  quiet,
+  type,
+  tr,
+  locale,
+}: {
+  day: DaySummary;
+  ink: string;
+  quiet: string;
+  type: ReturnType<typeof useType>;
+  tr: ReturnType<typeof useT>;
+  locale: ReturnType<typeof useLocale>;
+}) {
+  const colors = useColors();
+  const { consumed, targets } = day;
+  const remaining = targets.kcal - consumed.kcal;
+  const over = remaining < 0;
+  const shown = useCountUp(Math.abs(Math.round(remaining)), 900);
+
+  return (
+    <View style={styles.statusRow}>
+      <MiniRing consumed={consumed.kcal} target={targets.kcal} />
+      <View style={styles.statusText}>
+        <Text style={[type.serifFigure, styles.statusFigure, { color: ink }]} numberOfLines={1}>
+          {formatNumber(Math.round(shown), locale)}
+          {/* Ink rather than red — see the note on --destructive in globals.css. */}
+          <Text style={[t.footnoteBold, { color: quiet }]}>
+            {`  ${over ? tr('today.over') : tr('today.toGo')}`}
+          </Text>
+        </Text>
+        <Text style={[t.footnoteSemibold, t.tnum, { color: quiet }]} numberOfLines={1}>
+          {`${formatNumber(Math.round(consumed.kcal), locale)} / ${formatNumber(targets.kcal, locale)} kcal`}
+          {/*
+            §9: the ring tracks the plain target, so a run never quietly enlarges
+            the budget. But logging one has to visibly change this screen, so the
+            burn sits beside the day's total.
+          */}
+          {day.burned_kcal > 0 && (
+            <Text style={{ fontFamily: font.bold, color: colors.exerciseText }}>
+              {`  ${tr('journal.burned')(formatNumber(day.burned_kcal, locale))}`}
+            </Text>
+          )}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+const AnimatedArc = Animated.createAnimatedComponent(Circle);
+
 /**
- * The fill, which travels rather than jumps.
- *
- * `transition: width var(--dur-spring) var(--ease-spring)` on the web, and the
- * overshoot is the point: logging a meal is the moment the app is meant to feel
- * like it did something, and a bar that is simply at its new length the next
- * frame reports the same fact without any of that. It is also the only feedback
- * on this screen that the number at the top changed.
+ * The ring on Today, at the size of an avatar. Springs to a new total the way
+ * the big one does — the only feedback on this screen that the number at the
+ * top changed — and turns to ink past the target rather than to red.
  */
-function Bar({ pct, color, glow }: { pct: number; color: string; glow: boolean }) {
+function MiniRing({ consumed, target }: { consumed: number; target: number }) {
   const colors = useColors();
   const reduced = useReducedMotion();
-  const width = useSharedValue(pct);
+  const size = 46;
+  const stroke = 6;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const ratio = Math.min(1, Math.max(0, consumed / Math.max(1, target)));
+  const over = consumed > target;
+  const arc = useSharedValue(circumference * ratio);
 
   useEffect(() => {
-    width.value = reduced
-      ? pct
-      : withTiming(pct, { duration: duration.spring, easing: ease.spring });
-  }, [pct, reduced, width]);
+    arc.value = reduced
+      ? circumference * ratio
+      : withTiming(circumference * ratio, { duration: duration.spring, easing: ease.spring });
+  }, [ratio, reduced, arc, circumference]);
 
-  const style = useAnimatedStyle(() => ({
-    // The spring overshoots, and a fill wider than its track paints out of the
-    // rounded end — so the clamp lives here rather than in the easing.
-    width: `${Math.max(0, Math.min(100, width.value))}%`,
+  const props = useAnimatedProps(() => ({
+    strokeDasharray: [Math.max(0, Math.min(circumference, arc.value)), circumference],
   }));
 
   return (
-    <Animated.View
-      style={[
-        styles.fill,
-        { backgroundColor: color },
-        glow
-          ? {
-              experimental_backgroundImage: `linear-gradient(90deg, ${colors.calories}, ${colors.logoRamp})`,
-              boxShadow: `0px 0px 8px ${colors.ring}`,
-            }
-          : null,
-        style,
-      ]}
-    />
+    <View style={[styles.miniRing, { boxShadow: over ? undefined : `0px 6px 18px -8px ${colors.calories}` }]}>
+      <Svg width={size} height={size}>
+        <Defs>
+          <LinearGradient id="mini" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor={colors.calories} />
+            <Stop offset="1" stopColor={colors.logoRamp} />
+          </LinearGradient>
+        </Defs>
+        <Circle cx={size / 2} cy={size / 2} r={radius} stroke={colors.glassStrong} strokeWidth={stroke} fill="none" />
+        <G rotation={-90} originX={size / 2} originY={size / 2}>
+          <AnimatedArc
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke={over ? colors.foreground : 'url(#mini)'}
+            strokeWidth={stroke}
+            strokeLinecap={ratio > 0 ? 'round' : 'butt'}
+            fill="none"
+            animatedProps={props}
+          />
+        </G>
+      </Svg>
+    </View>
   );
 }
 
-/**
- * Memoised, which matters here rather than elsewhere.
- *
- * A streamed reply lands as tens of state updates a second, and every one of
- * them would otherwise re-render the whole conversation to add a word to the
- * last row. `bubble` is a fresh object only for the row that changed, so with
- * `onLogged` held stable by the caller this narrows each delta to the one row
- * it actually touches.
- */
 /**
  * One packet, as it reads back on a message already sent.
  *
@@ -1515,7 +1541,7 @@ function Dot({ color, index }: { color: string; index: number }) {
 
   const style = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
 
-  return <Animated.View style={[styles.dot, { backgroundColor: color }, style]} />;
+  return <Animated.View style={[styles.dot, { backgroundColor: color, boxShadow: `0px 0px 8px ${color}` }, style]} />;
 }
 
 /** `translateY(-25%)` of a 10px dot. */
@@ -1552,10 +1578,12 @@ const styles = StyleSheet.create({
   wallDone: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 2 },
   wallDoneText: { flexShrink: 1 },
   flex: { flex: 1 },
-  status: { borderBottomWidth: 1, paddingHorizontal: 16, paddingBottom: 10 },
-  statusSkeleton: { height: 16, width: 160, borderRadius: 8 },
-  statusRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  statusFigure: { fontSize: 16, lineHeight: 24 },
+  status: { paddingHorizontal: 16, paddingBottom: 12 },
+  statusSkeleton: { height: 46, width: 180, borderRadius: 23 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  statusText: { flex: 1, gap: 1 },
+  statusFigure: { fontSize: 26, lineHeight: 30 },
+  miniRing: { width: 46, height: 46, borderRadius: 23 },
   track: {
     height: 10,
     borderRadius: 999,

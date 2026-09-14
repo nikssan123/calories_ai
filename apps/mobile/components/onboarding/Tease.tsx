@@ -161,7 +161,7 @@ export function DayTease() {
                     {
                       width: `${(consumed > 0 ? macro.fill : 0) * 100}%`,
                       backgroundColor: macro.color,
-                      boxShadow: `0px 0px 10px ${macro.color}`,
+                      boxShadow: `0px 2px 5px -2px ${macro.color}`,
                     },
                   ]}
                 />
