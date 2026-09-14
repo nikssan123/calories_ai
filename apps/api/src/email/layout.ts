@@ -22,7 +22,7 @@ import { emailMessages, type EmailMessages } from './messages.ts';
  *   through a terminal gets — generating it from the same source is the only
  *   way it stays true as templates change.
  * - Nothing is loaded from the network. No images, no fonts, no tracking pixel:
- *   the mark is drawn with a border-radius and a letter, so the message looks
+ *   the mark is drawn with borders and a border-radius, so the message looks
  *   the same with remote content blocked, which is how most people read it.
  * - Every word this module draws by itself — the footer, the line under a
  *   button — comes out of `messages.ts` rather than out of a template literal
@@ -31,20 +31,171 @@ import { emailMessages, type EmailMessages } from './messages.ts';
  *   accident, which is what happened until 2026-08-31.
  */
 
-/** Warm paper and ink, matching the app's own light theme. */
+/**
+ * Cream paper and warm ink, matching the app's light theme since the 2026-09
+ * redesign. The inbox is the one place the product is seen next to everybody
+ * else's mail, so it should look like the app someone installed rather than
+ * like a receipt from it.
+ */
 const PALETTE = {
-  ground: '#f2f0ec',
-  card: '#ffffff',
-  ink: '#171614',
-  muted: '#6b6862',
-  hairline: '#e6e2dc',
+  ground: '#fbf3e7',
+  card: '#fffaf2',
+  ink: '#31261e',
+  muted: '#77685b',
+  hairline: '#eadcc9',
+  /**
+   * The button and the filled day. Deliberately not the band's brighter
+   * `#12b76a`: white on that is about 2.6:1, and a button label is text
+   * somebody has to read, not a logotype. This green is 5.2:1.
+   */
   accent: '#0f7b5c',
   accentInk: '#ffffff',
-  tint: '#f0f7f4',
+  /**
+   * Green, lightly — a callout, and a day that was logged but missed. It stays
+   * green on a cream card on purpose: the week strip is read as "solid green,
+   * pale green, grey", and a warm tint here would put the middle state in the
+   * same family as the paper and lose it.
+   */
+  tint: '#e8f4ec',
+  /** A deeper cream for anything set into the card: a figure, a code, a person. */
+  inset: '#f6ecdf',
+  /**
+   * A day with nothing on it. A cool grey rather than another cream, because
+   * the coach digest's own legend calls it "a grey one", and because on a
+   * person card it sits against `inset` and has to be told apart from it.
+   */
+  empty: '#e6e1db',
+  /** The header band, as a pair: a gradient where it renders, `band` alone where not. */
+  band: '#12b76a',
+  bandTo: '#23d3b0',
+  onBand: '#ffffff',
+  /**
+   * The logo's faint track, as white at about a third over the band's green.
+   * Mixed down to a solid colour rather than written as `rgba()`, because the
+   * Word engine drops an rgba border and would draw the ring closed.
+   */
+  onBandTrack: '#65d09e',
+  /**
+   * The macro colours, exactly as the app draws protein, carbs and fat. Used
+   * once, as a signature above the heading, and nowhere that could be read as
+   * data: a stat cell tinted orange would say "protein" about a number that is
+   * not protein.
+   */
+  protein: '#ffa51f',
+  carbs: '#3b9eff',
+  fat: '#b06bff',
+};
+
+/**
+ * The dark counterpart, applied only through the overrides in `DARK_RULES`.
+ * There is no `band` here: the band is the same green in both themes — it is
+ * the brand, and it already reads as a lit surface on a dark ground.
+ */
+const DARK = {
+  ground: '#1a1512',
+  card: '#241d19',
+  ink: '#f7efe6',
+  muted: '#a79a8d',
+  hairline: '#4d3d33',
+  accent: '#34d9a4',
+  accentInk: '#0d1512',
+  tint: '#1c3228',
+  inset: '#2f2621',
+  empty: '#3a312b',
 };
 
 const FONT =
   "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
+
+/**
+ * The heading face. Fraunces is the app's display serif, and it is named first
+ * only so the rare machine that has it installed uses it — nothing here loads
+ * it, because a web font is a network fetch and this module makes none. The
+ * face almost everybody actually sees is Georgia, which ships with macOS, iOS
+ * and Windows and was drawn for screens; Android has no Georgia and lands on
+ * `serif`, which is Noto Serif and holds the same editorial register. Outlook's
+ * Word engine gets Georgia forced on it separately — see the `mso` block in
+ * the head.
+ */
+const SERIF = "Fraunces, Georgia, 'Times New Roman', serif";
+
+/**
+ * The header band's gradient, written once so the inline style and the dark
+ * overrides cannot drift.
+ *
+ * The gradient is decoration, and the solid green under it is written twice
+ * more on the band's cell; neither copy is redundant. Outlook's Word engine
+ * and Gmail both discard a gradient, and Gmail has been known to discard a
+ * whole style attribute over one declaration it dislikes. So the solid colour
+ * sits in the style *before* the gradient, for clients that drop only the
+ * image, and in `bgcolor`, which lives outside the style attribute and
+ * survives it being stripped. Without both, the white wordmark lands on the
+ * cream card and vanishes — the one failure here that loses a word rather
+ * than a flourish.
+ */
+const BAND_GRADIENT = `linear-gradient(135deg,${PALETTE.band},${PALETTE.bandTo})`;
+
+/**
+ * A warm shadow under the card. It is the one thing in this layout most
+ * clients drop — Gmail and every Outlook among them — and the card's hairline
+ * border is why that costs nothing: the card still has an edge against the
+ * cream without it. Never lean on the shadow to separate anything.
+ */
+const CARD_SHADOW = '0 18px 40px -24px rgba(120,80,20,.35)';
+
+/**
+ * Every dark-theme override, as data, so the two places that need it are
+ * generated from one list: the `prefers-color-scheme` query that Apple Mail,
+ * iOS and Outlook for Mac honour, and the `[data-ogsc]`/`[data-ogsb]` hooks
+ * that Outlook.com stamps on the elements it has recoloured in its own dark
+ * mode. Written twice by hand, they would disagree within a release.
+ *
+ * Only ever an override of the inline light palette; nothing here is load
+ * bearing, because plenty of clients will never run it.
+ */
+const DARK_RULES: Array<[selector: string, declarations: string[]]> = [
+  ['.ct-ground', [`background-color: ${DARK.ground}`]],
+  ['.ct-card', [`background-color: ${DARK.card}`, `border-color: ${DARK.hairline}`]],
+  ['.ct-ink', [`color: ${DARK.ink}`]],
+  ['.ct-muted', [`color: ${DARK.muted}`]],
+  ['.ct-rule', [`border-color: ${DARK.hairline}`]],
+  ['.ct-tint', [`background-color: ${DARK.tint}`]],
+  ['.ct-inset', [`background-color: ${DARK.inset}`]],
+  ['.ct-accent', [`color: ${DARK.accent}`]],
+  ['.ct-btn', [`background-color: ${DARK.accent}`]],
+  ['.ct-btn a', [`color: ${DARK.accentInk}`]],
+  /*
+   * The band and what sits on it are restated rather than changed. In Apple
+   * Mail that is a no-op; in Outlook.com it is the whole point, because its
+   * dark mode darkens any background it finds, and a muddy olive band with a
+   * grey wordmark on it is worse than no band at all.
+   */
+  ['.ct-band', [`background-color: ${PALETTE.band}`, `background-image: ${BAND_GRADIENT}`]],
+  ['.ct-on-band', [`color: ${PALETTE.onBand}`]],
+  [
+    '.ct-mark',
+    [`border-color: ${PALETTE.onBand} ${PALETTE.onBand} ${PALETTE.onBand} ${PALETTE.onBandTrack}`],
+  ],
+  ['.ct-mark-dot', [`background-color: ${PALETTE.onBand}`]],
+  /*
+   * The week strip carries its text colour on the cell's children rather than
+   * the cell, because the three states invert differently: a filled day keeps
+   * dark text on the light accent, an empty one goes the other way.
+   */
+  ['.ct-day-hit', [`background-color: ${DARK.accent}`]],
+  ['.ct-day-hit div', [`color: ${DARK.accentInk}`]],
+  ['.ct-day-logged', [`background-color: ${DARK.tint}`]],
+  ['.ct-day-logged div', [`color: ${DARK.ink}`]],
+  ['.ct-day-missing', [`background-color: ${DARK.empty}`]],
+  ['.ct-day-missing div', [`color: ${DARK.muted}`]],
+];
+
+function darkRules(prefix: (selector: string) => string, indent: string): string {
+  return DARK_RULES.map(
+    ([selector, declarations]) =>
+      `${indent}${prefix(selector)} { ${declarations.map((d) => `${d} !important;`).join(' ')} }`,
+  ).join('\n');
+}
 
 export type Block =
   /** A paragraph. The workhorse. */
@@ -160,6 +311,19 @@ export function renderEmail(content: EmailContent): RenderedEmail {
 
 // ---- HTML ------------------------------------------------------------------
 
+/**
+ * The column is fluid — 100% wide, capped at 600 — with a fixed 600px table
+ * around it that only Outlook can see.
+ *
+ * It used to be the other way up: `width:600px; max-width:100%`. That reads as
+ * "600, or less on a phone", but a percentage cap inside a table cell resolves
+ * against a cell whose width is itself waiting on its content, so engines skip
+ * it when sizing the cell, the cell grows to 600, and on a 375pt screen the
+ * card ran off the right edge — or the client zoomed the whole message out to
+ * fit, and the phone styles below applied to text too small to read. Outlook's
+ * Word engine is the one that ignores `max-width` and would stretch a fluid
+ * column across a desktop monitor, hence the conditional table.
+ */
 function renderHtml(content: EmailContent): string {
   const m = emailMessages(content.locale);
   const blocks = content.blocks.map((block) => htmlBlock(block, m)).join('\n');
@@ -176,27 +340,9 @@ function renderHtml(content: EmailContent): string {
 <meta name="supported-color-schemes" content="light dark">
 <title>${escapeHtml(content.subject)}</title>
 <style>
-  /* Only ever an override of the inline light palette; nothing here is load
-     bearing, because plenty of clients will never run it. */
+  /* The dark palette. Generated from DARK_RULES in layout.ts. */
   @media (prefers-color-scheme: dark) {
-    .ct-ground { background-color: #100f0e !important; }
-    .ct-card   { background-color: #1a1917 !important; }
-    .ct-ink    { color: #f5f3ef !important; }
-    .ct-muted  { color: #a3a09a !important; }
-    .ct-rule   { border-color: #2a2825 !important; }
-    .ct-tint   { background-color: #16211d !important; }
-    .ct-accent { color: #34d9a4 !important; }
-    .ct-btn    { background-color: #34d9a4 !important; }
-    .ct-btn a  { color: #0d1512 !important; }
-    /* The week strip carries its text colour on the cell's children rather than
-       the cell, because the three states invert differently: a filled day keeps
-       dark text on the light accent, an empty one goes the other way. */
-    .ct-day-hit     { background-color: #34d9a4 !important; }
-    .ct-day-hit div { color: #0d1512 !important; }
-    .ct-day-logged     { background-color: #16211d !important; }
-    .ct-day-logged div { color: #f5f3ef !important; }
-    .ct-day-missing     { background-color: #232120 !important; }
-    .ct-day-missing div { color: #7d7a75 !important; }
+${darkRules((selector) => selector, '    ')}
   }
   /* Phones: let the card use the full width rather than keeping side gutters
      that cost a third of a small screen. */
@@ -211,6 +357,21 @@ function renderHtml(content: EmailContent): string {
     .ct-day-value { display: none !important; }
   }
 </style>
+<style>
+  /* Outlook.com's dark mode, in a block of its own. Gmail throws away a whole
+     <style> element over a selector it will not parse, and attribute selectors
+     are the likeliest candidate — kept apart, the worst it can cost is these
+     rules rather than the phone layout above with them. */
+${darkRules((selector) => `[data-ogsc] ${selector}, [data-ogsb] ${selector}`, '  ')}
+</style>
+<!--[if mso]>
+<style>
+  /* Outlook's Word engine is unreliable about walking a font stack past a
+     first face it lacks, and drops to Times New Roman when it gives up. Close,
+     but Georgia is the heading everyone else sees, so it is named outright. */
+  .ct-serif { font-family: Georgia, 'Times New Roman', serif !important; }
+</style>
+<![endif]-->
 </head>
 <body class="ct-ground" style="margin:0;padding:0;background-color:${PALETTE.ground};">
 <div style="display:none;font-size:1px;color:${PALETTE.ground};line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">${escapeHtml(content.preheader)}${
@@ -220,19 +381,21 @@ function renderHtml(content: EmailContent): string {
   }</div>
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="ct-ground" style="background-color:${PALETTE.ground};">
   <tr>
-    <td align="center" style="padding:32px 12px;">
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:100%;">
+    <td align="center" style="padding:40px 12px 32px;">
+      <!--[if mso]><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" align="center"><tr><td><![endif]-->
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;max-width:600px;margin:0 auto;">
         <tr>
-          <td class="ct-pad" style="padding:0 8px 20px;">
-            ${wordmark()}
-          </td>
-        </tr>
-        <tr>
-          <td class="ct-card" style="background-color:${PALETTE.card};border-radius:16px;">
+          <td class="ct-card" bgcolor="${PALETTE.card}" style="background-color:${PALETTE.card};border:1px solid ${PALETTE.hairline};border-radius:24px;box-shadow:${CARD_SHADOW};">
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
               <tr>
-                <td class="ct-pad" style="padding:36px 40px 40px;">
-                  <h1 class="ct-ink" style="margin:0 0 ${content.subheading ? '6px' : '20px'};font-family:${FONT};font-size:24px;line-height:1.3;font-weight:600;letter-spacing:-0.02em;color:${PALETTE.ink};">${escapeHtml(content.heading)}</h1>
+                <td class="ct-band ct-pad" bgcolor="${PALETTE.band}" style="background-color:${PALETTE.band};background-image:${BAND_GRADIENT};border-radius:23px 23px 0 0;padding:20px 40px;">
+                  ${wordmark()}
+                </td>
+              </tr>
+              <tr>
+                <td class="ct-pad" style="padding:30px 40px 40px;">
+                  ${signature()}
+                  <h1 class="ct-ink ct-serif" style="margin:0 0 ${content.subheading ? '8px' : '20px'};font-family:${SERIF};font-size:30px;line-height:1.2;font-weight:500;letter-spacing:-0.015em;color:${PALETTE.ink};">${escapeHtml(content.heading)}</h1>
 ${
   content.subheading
     ? `                  <p class="ct-muted" style="margin:0 0 24px;font-family:${FONT};font-size:14px;line-height:1.5;font-weight:600;color:${PALETTE.muted};">${escapeHtml(content.subheading)}</p>`
@@ -250,6 +413,7 @@ ${blocks}
           </td>
         </tr>
       </table>
+      <!--[if mso]></td></tr></table><![endif]-->
     </td>
   </tr>
 </table>
@@ -258,18 +422,58 @@ ${blocks}
 }
 
 /**
- * The mark, drawn rather than loaded: a rounded square in the app's forest
- * green with the wordmark beside it. An `<img>` here would be blocked by
- * default in most inboxes and leave a broken-image icon as the first thing
- * anyone sees.
+ * The mark, drawn rather than loaded, with the wordmark beside it, both in
+ * white on the band. An `<img>` here would be blocked by default in most
+ * inboxes and leave a broken-image icon as the first thing anyone sees; an
+ * inline `<svg>` of `logo.svg` fares no better, since Gmail deletes it and
+ * Outlook never draws it, and the band would open on a hole.
+ *
+ * So the logo is rebuilt from what every engine can draw: a table cell with a
+ * thick border and a 50% radius is the ring, and three cells inside it are the
+ * three dots. Three sides of the border are solid and the left one is the faint
+ * track, which puts the break in the ring on the left the way the logo's own
+ * arc breaks at the upper left — near enough at 26 pixels, and turning the
+ * box to match exactly would need `transform`, which Gmail and Outlook ignore.
+ * The bubble's tail is left out: it hangs off the ring, and hanging anything
+ * off anything needs positioning no mail client honours. Outlook's Word engine
+ * ignores the radius, and draws a small square frame with three dots in it —
+ * still a mark, still white, where the old one was a blank square everywhere.
+ *
+ * White on the band's green is well under the 4.5:1 body text needs, and that
+ * is acceptable only because this is a logotype, which the contrast rules
+ * exempt. It is also why nothing else is ever put in the band: no heading, no
+ * date, no copy. The moment a sentence goes up there it has to be read.
  */
 function wordmark(): string {
+  const dot = `<td width="3" height="3" class="ct-mark-dot" bgcolor="${PALETTE.onBand}" style="width:3px;height:3px;background-color:${PALETTE.onBand};border-radius:50%;font-size:0;line-height:0;">&nbsp;</td>`;
+  const gap = '<td width="2" style="width:2px;font-size:0;line-height:0;">&nbsp;</td>';
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
-  <td width="28" style="width:28px;">
-    <div class="ct-btn" style="width:24px;height:24px;border-radius:8px;background-color:${PALETTE.accent};"></div>
+  <td width="36" style="width:36px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+      <td class="ct-mark" width="18" height="18" align="center" valign="middle" style="width:18px;height:18px;border:4px solid ${PALETTE.onBand};border-left-color:${PALETTE.onBandTrack};border-radius:50%;font-size:0;line-height:0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>${dot}${gap}${dot}${gap}${dot}</tr></table>
+      </td>
+    </tr></table>
   </td>
-  <td class="ct-ink" style="font-family:${FONT};font-size:15px;font-weight:600;letter-spacing:-0.01em;color:${PALETTE.ink};padding-left:4px;">Day So Far</td>
+  <td class="ct-on-band" style="font-family:${FONT};font-size:16px;font-weight:600;letter-spacing:-0.01em;color:${PALETTE.onBand};">Day So Far</td>
 </tr></table>`;
+}
+
+/**
+ * Three short bars in the macro colours, above the heading — the app's
+ * protein/carbs/fat bar, reduced to a signature.
+ *
+ * The one place those colours appear, and it says nothing: it is the same on
+ * a password reset as on a weekly review, so no reader can take it for a
+ * figure. Each bar is a table cell with `bgcolor` as well as a background, for
+ * the same reason the band has one, and a fixed height with no line box in it,
+ * which is the only way to get a 4px-tall cell out of Outlook.
+ */
+function signature(): string {
+  const bar = (colour: string) =>
+    `<td width="16" height="4" bgcolor="${colour}" style="width:16px;height:4px;background-color:${colour};border-radius:2px;font-size:0;line-height:0;">&nbsp;</td>`;
+  const gap = '<td width="4" style="width:4px;font-size:0;line-height:0;">&nbsp;</td>';
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px;"><tr>${bar(PALETTE.protein)}${gap}${bar(PALETTE.carbs)}${gap}${bar(PALETTE.fat)}</tr></table>`;
 }
 
 function htmlBlock(block: Block, m: EmailMessages): string {
@@ -284,9 +488,15 @@ function htmlBlock(block: Block, m: EmailMessages): string {
       // The bare URL underneath is not clutter: corporate mail gateways rewrite
       // or strip anchors, and a reset link that cannot be copied by hand is a
       // support ticket.
+      //
+      // Solid, where the band above is a gradient. A second gradient would
+      // compete with the band for the eye, and any stop lighter than this green
+      // takes the white label under 4.5:1 for part of its width. `bgcolor` is
+      // there for the same reason as the band's: Outlook paints it when it
+      // paints nothing else.
       return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 20px;">
-  <tr><td class="ct-btn" style="background-color:${PALETTE.accent};border-radius:12px;">
-    <a href="${escapeAttr(block.url)}" style="display:inline-block;padding:13px 26px;font-family:${FONT};font-size:15px;font-weight:600;color:${PALETTE.accentInk};text-decoration:none;">${escapeHtml(block.label)}</a>
+  <tr><td class="ct-btn" bgcolor="${PALETTE.accent}" style="background-color:${PALETTE.accent};border-radius:14px;">
+    <a href="${escapeAttr(block.url)}" style="display:inline-block;padding:14px 28px;font-family:${FONT};font-size:15px;font-weight:600;color:${PALETTE.accentInk};text-decoration:none;border-radius:14px;">${escapeHtml(block.label)}</a>
   </td></tr>
 </table>
 <p class="ct-muted" style="margin:0 0 20px;font-family:${FONT};font-size:12px;line-height:1.6;color:${PALETTE.muted};word-break:break-all;">${escapeHtml(m['layout.pasteLink'])}<br><span class="ct-muted" style="color:${PALETTE.muted};">${escapeHtml(block.url)}</span></p>`;
@@ -307,11 +517,18 @@ ${block.items
       // Two to a row, each figure in its own tinted cell, and a spacer column
       // between them — `border-spacing` is not reliable enough to hang the
       // gutter on, and margins on a `<td>` do nothing at all.
+      //
+      // The spacer holds a 12px block, and that block is the gutter. Its
+      // `width` alone was never honoured: two 50% cells already claim the whole
+      // table, so the automatic table algorithm squeezes the fixed column down
+      // to its content — a zero-size `&nbsp;` — and the tiles met with about
+      // 2px between them. A column cannot be squeezed below its content, so the
+      // 50% cells give way instead, at every card width, phones included.
       const rows: string[] = [];
       for (let i = 0; i < block.items.length; i += 2) {
         rows.push(`  <tr>
 ${statCell(block.items[i]!)}
-    <td width="12" style="width:12px;font-size:0;line-height:0;">&nbsp;</td>
+    <td width="12" style="width:12px;min-width:12px;font-size:0;line-height:0;"><div style="width:12px;height:1px;font-size:0;line-height:0;"></div></td>
 ${block.items[i + 1] ? statCell(block.items[i + 1]!) : '    <td width="50%">&nbsp;</td>'}
   </tr>
   <tr><td colspan="3" height="12" style="height:12px;font-size:0;line-height:0;">&nbsp;</td></tr>`);
@@ -335,7 +552,7 @@ ${rows.join('\n')}
       const tone = {
         hit: { bg: PALETTE.accent, fg: PALETTE.accentInk, cls: 'ct-day-hit' },
         logged: { bg: PALETTE.tint, fg: PALETTE.ink, cls: 'ct-day-logged' },
-        missing: { bg: PALETTE.hairline, fg: PALETTE.muted, cls: 'ct-day-missing' },
+        missing: { bg: PALETTE.empty, fg: PALETTE.muted, cls: 'ct-day-missing' },
       } as const;
       return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 8px;">
   <tr>
@@ -361,11 +578,17 @@ ${block.caption ? `<p class="ct-muted" style="margin:0 0 20px;font-family:${FONT
        * The same three tones the week block uses, drawn smaller: the strip
        * sits inside a card with a name over it, so the cells lose their inner
        * figure on a phone the way the week block's do.
+       *
+       * Genuinely the same three, now. The card used to sit in the green tint,
+       * so a logged day had to borrow the card's white to show up against it —
+       * and in dark mode the two resolved to one colour and the day vanished.
+       * With the card in the cream inset, a logged day can be pale green here
+       * exactly as it is in the week block.
        */
       const tone = {
         hit: { bg: PALETTE.accent, fg: PALETTE.accentInk, cls: 'ct-day-hit' },
-        logged: { bg: PALETTE.card, fg: PALETTE.ink, cls: 'ct-day-logged' },
-        missing: { bg: PALETTE.hairline, fg: PALETTE.muted, cls: 'ct-day-missing' },
+        logged: { bg: PALETTE.tint, fg: PALETTE.ink, cls: 'ct-day-logged' },
+        missing: { bg: PALETTE.empty, fg: PALETTE.muted, cls: 'ct-day-missing' },
       } as const;
       const strip = block.days
         ? `    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:10px 0 8px;">
@@ -382,7 +605,7 @@ ${block.days
       </tr>
     </table>`
         : '';
-      return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="ct-tint" style="background-color:${PALETTE.tint};border-radius:12px;margin:0 0 10px;">
+      return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="ct-inset" style="background-color:${PALETTE.inset};border-radius:16px;margin:0 0 10px;">
   <tr><td style="padding:14px 16px;font-family:${FONT};">
     <div class="ct-ink" style="font-size:15px;font-weight:700;line-height:1.4;color:${PALETTE.ink};">${escapeHtml(block.name)}</div>
     <div class="ct-ink" style="font-size:14px;line-height:1.5;color:${PALETTE.ink};padding-top:2px;">${escapeHtml(block.status)}</div>
@@ -393,7 +616,7 @@ ${strip}
     }
 
     case 'callout':
-      return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="ct-tint" style="background-color:${PALETTE.tint};border-radius:12px;margin:0 0 20px;">
+      return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="ct-tint" style="background-color:${PALETTE.tint};border-radius:16px;margin:0 0 20px;">
   <tr><td style="padding:16px 18px;font-family:${FONT};">
     <div class="ct-accent" style="font-size:14px;font-weight:700;color:${PALETTE.accent};">${escapeHtml(block.title)}</div>
     <div class="ct-ink" style="font-size:14px;line-height:1.6;color:${PALETTE.ink};padding-top:4px;">${escapeHtml(block.text)}</div>
@@ -414,7 +637,7 @@ ${strip}
        * clients that honour it, and costs nothing on the ones that do not.
        */
       return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 20px;">
-  <tr><td class="ct-tint" style="background-color:${PALETTE.tint};border-radius:12px;padding:18px 28px;">
+  <tr><td class="ct-inset" style="background-color:${PALETTE.inset};border-radius:16px;padding:18px 28px;">
     <div class="ct-ink" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:32px;font-weight:600;letter-spacing:0.22em;color:${PALETTE.ink};user-select:all;">${escapeHtml(block.value)}</div>
   </td></tr>
 </table>`;
@@ -431,9 +654,16 @@ ${block.text
   }
 }
 
-/** One figure, its label, and the aside under it, in a tinted half-width cell. */
+/**
+ * One figure, its label, and the aside under it, in an inset half-width cell.
+ *
+ * The figure stays in the sans face while the heading above went serif.
+ * Georgia draws old-style numerals — the 3, 4, 5, 7 and 9 drop below the
+ * line — which is lovely in a sentence and wrong in a grid, where "1 842" and
+ * "5/7" should sit on one baseline and be compared at a glance.
+ */
 function statCell(item: { label: string; value: string; hint?: string }): string {
-  return `    <td width="50%" valign="top" class="ct-tint" style="width:50%;background-color:${PALETTE.tint};border-radius:12px;padding:14px 16px;font-family:${FONT};">
+  return `    <td width="50%" valign="top" class="ct-inset" style="width:50%;background-color:${PALETTE.inset};border-radius:16px;padding:16px 18px;font-family:${FONT};">
       <div class="ct-ink ct-fig" style="font-size:24px;font-weight:600;letter-spacing:-0.02em;line-height:1.15;color:${PALETTE.ink};">${escapeHtml(item.value)}</div>
       <div class="ct-muted" style="font-size:12px;line-height:1.4;color:${PALETTE.muted};padding-top:4px;">${escapeHtml(item.label)}</div>${
         item.hint

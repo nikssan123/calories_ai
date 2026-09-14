@@ -34,7 +34,59 @@ describe('renderEmail', () => {
     expect(email.html).toContain('name="color-scheme" content="light dark"');
     expect(email.html).toContain('@media (prefers-color-scheme: dark)');
     // The inline background is what a client that strips <style> falls back to.
-    expect(email.html).toContain('background-color:#f2f0ec');
+    expect(email.html).toContain('background-color:#fbf3e7');
+    expect(email.html).toContain('background-color:#fffaf2;border:1px solid #eadcc9');
+    // And the dark one mirrors it, in both the media query and Outlook.com's hooks.
+    expect(email.html).toContain('.ct-ground { background-color: #1a1512 !important; }');
+    expect(email.html).toContain('[data-ogsb] .ct-card { background-color: #241d19 !important;');
+  });
+
+  it('gives the header band a solid colour that survives a stripped gradient', () => {
+    const email = renderEmail(BASE);
+    const band = email.html.match(/<td class="ct-band[^"]*"[^>]*>/)?.[0];
+
+    expect(band).toBeDefined();
+    // Outlook and Gmail both drop the gradient. `bgcolor` survives even a
+    // stripped style attribute; the inline colour covers clients that drop only
+    // the image — so it must come *before* the gradient, not after.
+    expect(band).toContain('bgcolor="#12b76a"');
+    expect(band).toMatch(
+      /background-color:#12b76a;background-image:linear-gradient\(135deg,#12b76a,#23d3b0\)/,
+    );
+    // The wordmark sits in it, not on the cream above the card.
+    expect(email.html.indexOf('Day So Far')).toBeGreaterThan(email.html.indexOf(band!));
+  });
+
+  it('draws the logo as a ring on the band, not a filled box', () => {
+    const email = renderEmail(BASE);
+    const mark = email.html.match(/<td class="ct-mark"[^>]*>/)?.[0];
+
+    expect(mark).toBeDefined();
+    expect(mark).toContain('border:4px solid #ffffff');
+    expect(mark).toContain('border-radius:50%');
+    expect(mark).not.toMatch(/background-color/);
+    expect(email.html.match(/class="ct-mark-dot"/g)).toHaveLength(3);
+  });
+
+  it('holds the gutter between two stat tiles open with content, not just a width', () => {
+    const email = renderEmail({
+      ...BASE,
+      blocks: [{ kind: 'stats', items: [{ label: 'a', value: '1' }, { label: 'b', value: '2' }] }],
+    });
+
+    // Two 50% cells squeeze a width-only spacer to nothing; a 12px block cannot be.
+    expect(email.html).toMatch(/<td width="12"[^>]*><div style="width:12px;/);
+  });
+
+  it('sets the heading in a serif that needs no web font to arrive', () => {
+    const email = renderEmail(BASE);
+    const heading = email.html.match(/<h1\b[^>]*>A heading<\/h1>/)?.[0];
+
+    expect(heading).toBeDefined();
+    expect(heading).toMatch(/font-family:Fraunces, Georgia, 'Times New Roman', serif;/);
+    // Outlook is told Georgia outright rather than trusted to walk the stack.
+    expect(heading).toContain('ct-serif');
+    expect(email.html).toMatch(/<!--\[if mso\]>[\s\S]*\.ct-serif \{ font-family: Georgia/);
   });
 
   it('loads nothing from the network', () => {
