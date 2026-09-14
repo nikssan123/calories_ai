@@ -41,27 +41,50 @@ const path = require('path');
 const [capture, out, headline, sub] = process.argv.slice(2);
 /*
  * Which store slot the frame is for. The layout is the Play frame's, measured at
- * 1080 wide; a taller slot keeps that width and scales the whole page up to the
- * slot's pixel width, giving the extra height to the card — the headline is what
- * carries a listing at thumbnail size, so it keeps its proportions everywhere.
- * `crop` is the capture's status bar at the card's 934pt width.
+ * 1080 wide; a taller phone slot keeps that width and scales the whole page up to
+ * the slot's pixel width, so the headline keeps its proportions everywhere. The
+ * tablet is laid out on a wider page instead (1440 × 1920, the Play frame's
+ * height): at 1080 wide its 4:3 page left the caption at full size and the screen
+ * a third of the frame's width.
  *
  *   COMPOSE_TARGET=iphone node compose-shot.cjs …   # 1284×2778, the 6.5" slot
  *   COMPOSE_TARGET=ipad   node compose-shot.cjs …   # 2064×2752, the 13" slot
- *
- * `COMPOSE_CROP` overrides the status-bar crop, for a capture from a device
- * whose bar is a different share of its width (62pt of a 402pt iPhone 17 Pro is
- * 144 at card width; of a 440pt Pro Max, 132).
  */
 const TARGETS = {
-  play: { width: 1080, height: 1920, crop: 83 },
-  iphone: { width: 1284, height: 2778, crop: 144 },
-  ipad: { width: 2064, height: 2752, crop: 40 },
+  play: { width: 1080, height: 1920, page: 1080 },
+  iphone: { width: 1284, height: 2778, page: 1080 },
+  ipad: { width: 2064, height: 2752, page: 1440 },
 };
-const target = { ...TARGETS[process.env.COMPOSE_TARGET || 'play'] };
-if (process.env.COMPOSE_CROP) target.crop = Number(process.env.COMPOSE_CROP);
-const scale = target.width / 1080;
+const target = TARGETS[process.env.COMPOSE_TARGET || 'play'];
+const pageWidth = target.page;
+const scale = target.width / pageWidth;
 const pageHeight = Math.round(target.height / scale);
+
+/*
+ * The whole screen, tab bar included, fitted into the space under the caption.
+ * The capture used to be laid in at the caption's full width and cut off at the
+ * bottom of the frame, which on a phone as tall as the Play frame is narrow took
+ * the tab bar with it — and the tab bar is half of what says this is an app.
+ * Now the card is sized to the capture's own proportions, so it is narrower on
+ * a tall phone and wider on a tablet, and always shows the screen top to bottom
+ * minus the status bar.
+ */
+const pngSize = (file) => {
+  const b = fs.readFileSync(file);
+  return { width: b.readUInt32BE(16), height: b.readUInt32BE(20) };
+};
+const shot = pngSize(capture);
+/* The status bar, in the capture's own pixels, by device. */
+const CROPS = { 1080: 120, 1206: 186, 1320: 186, 1284: 186, 2064: 60 };
+const cropRaw = Number(process.env.COMPOSE_CROP_RAW ?? CROPS[shot.width] ?? Math.round(shot.width * 0.11));
+const CARD_TOP = 470;
+const CARD_BOTTOM = 56;
+const available = pageHeight - CARD_TOP - CARD_BOTTOM;
+const visibleRatio = (shot.height - cropRaw) / shot.width;
+const cardWidth = Math.min(pageWidth - 120, Math.round(available / visibleRatio));
+const cardHeight = Math.round(cardWidth * visibleRatio);
+const cardLeft = Math.round((pageWidth - cardWidth) / 2);
+const imgOffset = Math.round((cropRaw * cardWidth) / shot.width);
 const FONTS = path.resolve(__dirname, '../../node_modules/.pnpm');
 function findFont(glob) {
   const hit = require('child_process').execSync(`find ${FONTS} -path '*${glob}' -maxdepth 6 | head -1`).toString().trim();
@@ -75,29 +98,30 @@ const html = `<!doctype html><meta charset="utf-8"><style>
   @font-face { font-family: DisplayCyr; src: url('file://${literata}'); }
   @font-face { font-family: Body; src: url('file://${nunitoMedium}'); }
   * { margin: 0; box-sizing: border-box; }
-  body { width: 1080px; height: ${pageHeight}px; overflow: hidden; position: relative; -webkit-font-smoothing: antialiased;
+  body { width: ${pageWidth}px; height: ${pageHeight}px; overflow: hidden; position: relative; -webkit-font-smoothing: antialiased;
          background:
            radial-gradient(900px 700px at 0% 0%, rgba(255,196,120,.75), rgba(255,196,120,0) 70%),
            radial-gradient(800px 800px at 100% 30%, rgba(160,236,210,.65), rgba(160,236,210,0) 70%),
            radial-gradient(900px 700px at 20% 100%, rgba(255,190,160,.5), rgba(255,190,160,0) 70%),
            #fff6ec; }
-  h1 { position: absolute; left: 100px; top: 112px; width: 900px;
+  h1 { position: absolute; left: 60px; right: 60px; top: 104px; text-align: center;
        font-family: Display, DisplayCyr, Body, Georgia, serif; font-weight: 400;
        font-size: 92px; line-height: 98px; letter-spacing: -1.5px; color: #31261e; white-space: pre-line; }
-  p  { position: absolute; left: 100px; top: 326px; width: 900px;
+  p  { position: absolute; left: 80px; right: 80px; top: 318px; text-align: center;
        font-family: Body, system-ui, sans-serif; font-weight: 500; font-size: 34px; line-height: 42px;
        color: #4f3f31; }
-  .bar { position: absolute; left: 100px; top: 400px; width: 96px; height: 7px; border-radius: 4px;
+  .bar { position: absolute; left: ${pageWidth / 2 - 48}px; top: 392px; width: 96px; height: 7px; border-radius: 4px;
          background: linear-gradient(90deg, #12b76a, #23d3b0); box-shadow: 0 0 14px rgba(18,183,106,.5); }
-  .card { position: absolute; left: 73px; top: 480px; width: 934px; height: ${pageHeight - 420}px; border-radius: 36px; z-index: 1;
-          overflow: hidden; background: rgb(255,246,236); box-shadow: 0 40px 90px -30px rgba(90,60,20,.55), 0 0 0 2px rgba(120,80,20,.10); }
-  .card img { width: 934px; display: block; margin-top: -${target.crop}px; }  /* crop the status bar */
+  .card { position: absolute; left: ${cardLeft}px; top: ${CARD_TOP}px; width: ${cardWidth}px; height: ${cardHeight}px;
+          border-radius: 44px; z-index: 1; overflow: hidden; background: rgb(255,246,236);
+          box-shadow: 0 40px 90px -30px rgba(90,60,20,.55), 0 0 0 2px rgba(120,80,20,.10); }
+  .card img { width: ${cardWidth}px; display: block; margin-top: -${imgOffset}px; }
 </style>
 <h1>${headline.replace(/\\n/g, '\n')}</h1><p>${sub}</p><div class="bar"></div>
 <div class="card"><img src="file://${path.resolve(capture)}"></div>`;
 (async () => {
   const browser = await chromium.launch({ executablePath: `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1148/chrome-mac/Chromium.app/Contents/MacOS/Chromium`, headless: true });
-  const page = await browser.newPage({ viewport: { width: 1080, height: pageHeight }, deviceScaleFactor: scale });
+  const page = await browser.newPage({ viewport: { width: pageWidth, height: pageHeight }, deviceScaleFactor: scale });
   // Written next to the capture and opened as a file:// page — Chromium refuses
   // local images to a page with no file origin, which is why setContent left the card empty.
   const tmp = path.join(path.dirname(path.resolve(out)), '.compose.html');

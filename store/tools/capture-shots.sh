@@ -29,6 +29,11 @@ till(){ t=$SECONDS
     if ! up; then $A -s emulator-5554 shell am start -a android.intent.action.VIEW -d "$LINK" >/dev/null 2>&1; w 3; continue; fi
     $A -s emulator-5554 shell uiautomator dump /sdcard/w.xml >/dev/null 2>&1 || continue
     $A -s emulator-5554 shell grep -q -- "$1" /sdcard/w.xml 2>/dev/null && return 0
+    # The app opens on Today since 1.2.0, and the frames start in the journal,
+    # which is the root route. Asked for again on every miss, because a link
+    # fired while the bundle is still loading is dropped.
+    [ -n "${2+x}" ] && $A -s emulator-5554 shell am start -a android.intent.action.VIEW -d "daysofar:///" >/dev/null 2>&1
+    w 2
   done
   echo "capture-shots: '$1' never appeared in ${2}s — $CODE not captured" >&2; exit 1; }
 

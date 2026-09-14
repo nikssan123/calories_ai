@@ -1,0 +1,43 @@
+{
+  "language": "en-GB",
+  "_note": "The default listing's screenshot captions and seed strings. Its title and descriptions are edited in Play Console and live in PLAY_LISTING.md, so they are not here.",
+  "releaseNotes": "A new look for Day So Far. Today now opens the app, under a sky that follows the time of day, with your calories left in a glowing ring. Every screen has lighter cards, new icons and smoother motion, and switching tabs glides.\n\nNew here? Answer a few questions and see your calorie plan before you create an account.\n\nThe journal, paywall and barcode scanner got the same care.",
+  "captions": [
+    {
+      "headline": "Just say\nwhat you ate",
+      "sub": "No database. No searching. A sentence."
+    },
+    {
+      "headline": "Changed\nyour mind?",
+      "sub": "Say so — the meal you logged updates itself."
+    },
+    {
+      "headline": "Your day,\nas it happens",
+      "sub": "Calories, macros and the quality underneath them."
+    },
+    {
+      "headline": "A plan made\nfor your body",
+      "sub": "Six questions, and your target is worked out."
+    },
+    {
+      "headline": "Proof it\nis working",
+      "sub": "Weight, intake and protein over weeks, not days."
+    },
+    {
+      "headline": "Movement,\ncounted",
+      "sub": "Sessions, distance and time — logged the same way."
+    }
+  ],
+  "shots": {
+    "userLog": "chicken with rice and broccoli",
+    "replyLog": "715 kcal, 59 g of it protein — a strong plate. That puts you at 2,065 of 2,200, with 135 left for later.",
+    "cardTitle": "Chicken with rice and broccoli",
+    "items": [
+      "Chicken breast ~200 g",
+      "Rice, cooked ~150 g",
+      "Broccoli ~100 g"
+    ],
+    "userCorrection": "there was more rice, about 300 g",
+    "replyCorrection": "Updated: 780 kcal, now 92 g of carbs. Your day is at 2,130 of 2,200 — 70 left."
+  }
+}

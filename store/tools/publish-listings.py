@@ -1,16 +1,30 @@
-"""Pushes the twelve localised listings and their screenshots to Play in one edit.
+"""Pushes the store listings' screenshots and localised copy to Play in one edit.
 
   python store/tools/publish-listings.py            # stage, validate, change nothing
   python store/tools/publish-listings.py --commit   # ...and commit, which sends them for review
   python store/tools/publish-listings.py --only el-GR,hr,sr --commit   # just those three
+
+What it writes:
+
+- **en-GB, the default listing** — its phone screenshots from `store/screenshots/`,
+  and the same frames into the 7" and 10" tablet slots, which is what those slots
+  have always held. Its title and descriptions are edited in the Console and are
+  not touched.
+- **the twelve localised listings** — title, short and full description from
+  `store/listings/<code>.json`, and their three phone screenshots from
+  `store/screenshots-localised/<code>/`.
+
+Release notes are not written here. They belong to a release, and production
+releases can only be made in the Console — the service account is 403 on a
+production edit (see the play-service-account-cannot-touch-production note).
+The `releaseNotes` in each listing file are the text to paste there.
 
 Never run while another Play upload is in flight: one edit per app, and a second
 one deletes the first (see the play-edits-are-exclusive note).
 
 Committing is not a quiet save. Managed publishing is off, so a commit puts the
 listings straight into review, and if a review is already running it cancels and
-restarts that one — the whole batch, release included, goes back to the start of
-the queue. Use --only to keep a re-push small, and expect the clock to reset.
+restarts that one. Use --only to keep a re-push small.
 """
 import json, sys, warnings, pathlib
 warnings.filterwarnings('ignore')
@@ -23,13 +37,8 @@ M = str(REPO / 'apps' / 'mobile') + '/'
 BASE = 'https://androidpublisher.googleapis.com/androidpublisher/v3/applications/com.daysofar.app'
 UP = 'https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/com.daysofar.app'
 COMMIT = '--commit' in sys.argv
-EN_NOTES = (
-    "Day So Far now speaks thirteen languages. Romanian, Ukrainian, Serbian, Croatian, Czech, "
-    "Hungarian, Greek and Slovak join English, Bulgarian, German, Spanish and French — the whole "
-    "app, the weekly review and every email. The app starts in your phone's language; change it "
-    "any time under Settings."
-)
-ALL_CODES = ['bg', 'ro', 'uk', 'sr', 'hr', 'cs-CZ', 'sk', 'hu-HU', 'el-GR', 'de-DE', 'es-ES', 'fr-FR']
+LOCALISED = ['bg', 'ro', 'uk', 'sr', 'hr', 'cs-CZ', 'sk', 'hu-HU', 'el-GR', 'de-DE', 'es-ES', 'fr-FR']
+ALL_CODES = ['en-GB'] + LOCALISED
 CODES = list(ALL_CODES)
 if '--only' in sys.argv:
     want = sys.argv[sys.argv.index('--only') + 1].split(',')
@@ -42,10 +51,29 @@ creds = service_account.Credentials.from_service_account_file(
     M + 'play-service-account.json', scopes=['https://www.googleapis.com/auth/androidpublisher'])
 s = AuthorizedSession(creds)
 
+
+def replace_images(edit, code, kind, shots):
+    r = s.delete(f'{BASE}/edits/{edit}/listings/{code}/{kind}')
+    r.raise_for_status()
+    for shot in shots:
+        r = s.post(f'{UP}/edits/{edit}/listings/{code}/{kind}?uploadType=media',
+                   data=shot.read_bytes(), headers={'Content-Type': 'image/png'})
+        print(f'  image   {code:6} {kind:22} {r.status_code} {shot.name}')
+        r.raise_for_status()
+
+
 edit = s.post(f'{BASE}/edits').json()['id']
 print('edit', edit)
 try:
     for code in CODES:
+        if code == 'en-GB':
+            shots = sorted((STORE / 'screenshots').glob('0*.png'))
+            if not 2 <= len(shots) <= 8:
+                sys.exit(f'en-GB: {len(shots)} screenshots — Play takes 2 to 8')
+            for kind in ('phoneScreenshots', 'sevenInchScreenshots', 'tenInchScreenshots'):
+                replace_images(edit, code, kind, shots)
+            continue
+
         pack = json.loads((STORE / 'listings' / f'{code}.json').read_text())
         body = {'language': code, 'title': pack['title'],
                 'shortDescription': pack['shortDescription'], 'fullDescription': pack['fullDescription']}
@@ -57,28 +85,7 @@ try:
         if len(shots) != 3:
             print(f'  !! {code}: {len(shots)} screenshots, expected 3 — skipping images')
             continue
-        s.delete(f'{BASE}/edits/{edit}/listings/{code}/phoneScreenshots')
-        for shot in shots:
-            r = s.post(f'{UP}/edits/{edit}/listings/{code}/phoneScreenshots?uploadType=media',
-                       data=shot.read_bytes(), headers={'Content-Type': 'image/png'})
-            print(f'  image   {code:6} {r.status_code} {shot.name}')
-            r.raise_for_status()
-
-    # The alpha draft carries version 41 already; give it release notes in every
-    # language, so promoting it to production in the Console brings them along
-    # rather than asking for twelve pastes into the release form.
-    # Always every language, never the --only subset: this PUT replaces the
-    # draft's release notes wholesale, so filtering here would quietly drop the
-    # languages the run was not asked to touch.
-    notes = [{'language': 'en-GB', 'text': EN_NOTES}]
-    for code in ALL_CODES:
-        pack = json.loads((STORE / 'listings' / f'{code}.json').read_text())
-        notes.append({'language': code, 'text': pack['releaseNotes']})
-    track = {'track': 'alpha', 'releases': [
-        {'versionCodes': ['41'], 'status': 'draft', 'releaseNotes': notes}]}
-    r = s.put(f'{BASE}/edits/{edit}/tracks/alpha', json=track)
-    print('alpha draft notes', r.status_code, '' if r.ok else r.text[:200])
-    r.raise_for_status()
+        replace_images(edit, code, 'phoneScreenshots', shots)
 
     v = s.post(f'{BASE}/edits/{edit}:validate')
     print('validate', v.status_code, '' if v.ok else v.text[:300])
@@ -91,7 +98,7 @@ try:
     else:
         s.delete(f'{BASE}/edits/{edit}')
         print('dry run — edit deleted, nothing changed')
-except Exception as exc:
+except BaseException as exc:
     s.delete(f'{BASE}/edits/{edit}')
     print('aborted, edit deleted:', exc)
     raise
