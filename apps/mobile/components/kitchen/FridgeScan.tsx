@@ -307,7 +307,7 @@ export function FridgeScan({
               {canCook && (
                 <PressableChunk
                   radius={999}
-                  color={colors.caloriesDeep}
+                  color={colors.calories}
                   onPress={() => void commit('cook')}
                   disabled={busy}
                   accessibilityRole="button"

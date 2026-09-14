@@ -33,7 +33,13 @@ export type GlossyName =
   | 'apple'
   | 'bowl'
   | 'bar'
-  | 'plate';
+  | 'plate'
+  | 'dumbbell'
+  | 'calendar'
+  | 'medal'
+  | 'repeat'
+  | 'chef'
+  | 'basket';
 
 type Ramp = readonly [string, string, string];
 
@@ -52,6 +58,10 @@ const RAMPS: Record<string, Ramp> = {
   scale: ['#b8f5e2', '#23d3b0', '#0d8a70'],
   wood: ['#8a6a4a', '#5e422b', '#3b2415'],
   plate: ['#ffffff', '#f6efe4', '#e3d6c4'],
+  pink: ['#ffc2dc', '#ff5fa2', '#c13a7a'],
+  sky: ['#bfe3ff', '#3b9eff', '#1c5bb3'],
+  gold: ['#fff2a8', '#ffc83d', '#c98a0b'],
+  mint: ['#b8f5d8', '#12b76a', '#0a7a48'],
 };
 
 export function Glossy({ name, size = 24 }: { name: GlossyName; size?: number }) {
@@ -101,6 +111,12 @@ const RAMPS_FOR: Record<GlossyName, (keyof typeof RAMPS)[]> = {
   bowl: ['wood'],
   bar: ['wood'],
   plate: ['plate', 'avo', 'fish'],
+  dumbbell: ['pink'],
+  calendar: ['sky', 'plate'],
+  medal: ['gold', 'pink'],
+  repeat: ['mint'],
+  chef: ['plate'],
+  basket: ['wood', 'apple', 'avo'],
 };
 
 type Fill = (ramp: keyof typeof RAMPS) => string;
@@ -237,6 +253,81 @@ const DRAW: Record<GlossyName, (fill: Fill, sheen: string) => React.ReactNode> =
       <Ellipse cx="26" cy="32" rx="8" ry="6" fill={fill('avo')} />
       <Ellipse cx="38" cy="38" rx="7" ry="5" fill={fill('fish')} />
       <Circle cx="32" cy="34" r="26" fill={sheen} opacity={0.6} />
+    </G>
+  ),
+  dumbbell: (fill, sheen) => (
+    <G>
+      <Rect x="22" y="29" width="20" height="6" rx="3" fill="#8a7a6c" />
+      <Rect x="12" y="18" width="10" height="28" rx="4" fill={fill('pink')} />
+      <Rect x="42" y="18" width="10" height="28" rx="4" fill={fill('pink')} />
+      <Rect x="5" y="24" width="7" height="16" rx="3" fill={fill('pink')} />
+      <Rect x="52" y="24" width="7" height="16" rx="3" fill={fill('pink')} />
+      <Rect x="12" y="18" width="10" height="28" rx="4" fill={sheen} opacity={0.7} />
+      <Rect x="42" y="18" width="10" height="28" rx="4" fill={sheen} opacity={0.7} />
+    </G>
+  ),
+  calendar: (fill, sheen) => (
+    <G>
+      <Rect x="8" y="12" width="48" height="44" rx="10" fill={fill('plate')} />
+      <Path d="M8 22a10 10 0 0 1 10-10h28a10 10 0 0 1 10 10v6H8z" fill={fill('sky')} />
+      <Rect x="19" y="6" width="5" height="12" rx="2.5" fill="#5e422b" />
+      <Rect x="40" y="6" width="5" height="12" rx="2.5" fill="#5e422b" />
+      <Circle cx="21" cy="38" r="3" fill="#c9b9a6" />
+      <Circle cx="32" cy="38" r="3" fill="#c9b9a6" />
+      <Circle cx="43" cy="38" r="3" fill={fill('sky')} />
+      <Circle cx="21" cy="48" r="3" fill="#c9b9a6" />
+      <Circle cx="32" cy="48" r="3" fill="#c9b9a6" />
+      <Rect x="8" y="12" width="48" height="44" rx="10" fill={sheen} opacity={0.6} />
+    </G>
+  ),
+  medal: (fill, sheen) => (
+    <G>
+      <Path d="M20 4h10l6 22H26z" fill={fill('pink')} />
+      <Path d="M44 4H34l-6 22h10z" fill={fill('pink')} opacity={0.85} />
+      <Circle cx="32" cy="40" r="18" fill={fill('gold')} />
+      <Circle cx="32" cy="40" r="12.5" fill="none" stroke="#fff" strokeOpacity={0.55} strokeWidth={2} />
+      <Path d="M32 31l2.6 5.4 5.9.8-4.3 4.1 1 5.9L32 44.4l-5.2 2.8 1-5.9-4.3-4.1 5.9-.8z" fill="#fff" opacity={0.9} />
+      <Circle cx="32" cy="40" r="18" fill={sheen} opacity={0.7} />
+    </G>
+  ),
+  repeat: (fill, sheen) => (
+    <G>
+      <Path
+        d="M14 34a18 18 0 0 1 30-13.4M50 30a18 18 0 0 1-30 13.4"
+        stroke={fill('mint')}
+        strokeWidth={9}
+        strokeLinecap="round"
+        fill="none"
+      />
+      <Path d="M40 12l10 8-11 5z" fill={fill('mint')} />
+      <Path d="M24 52l-10-8 11-5z" fill={fill('mint')} />
+      <Path d="M14 34a18 18 0 0 1 30-13.4" stroke="#fff" strokeOpacity={0.45} strokeWidth={2.5} strokeLinecap="round" fill="none" transform="translate(-1 -3)" />
+    </G>
+  ),
+  chef: (fill, sheen) => (
+    <G>
+      <Path
+        d="M18 38c-7 0-12-5-12-11s5-11 11-11c2-6 8-10 15-10s13 4 15 10c6 0 11 5 11 11s-5 11-12 11z"
+        fill={fill('plate')}
+      />
+      <Rect x="16" y="38" width="32" height="16" rx="4" fill={fill('plate')} />
+      <Path d="M16 44h32" stroke="#e3d6c4" strokeWidth={2} />
+      <Path d="M24 40v14M32 40v14M40 40v14" stroke="#e3d6c4" strokeWidth={1.6} />
+      <Path
+        d="M18 38c-7 0-12-5-12-11s5-11 11-11c2-6 8-10 15-10s13 4 15 10c6 0 11 5 11 11s-5 11-12 11z"
+        fill={sheen}
+        opacity={0.8}
+      />
+    </G>
+  ),
+  basket: (fill, sheen) => (
+    <G>
+      <Circle cx="24" cy="26" r="9" fill={fill('apple')} />
+      <Ellipse cx="40" cy="25" rx="9" ry="10" fill={fill('avo')} />
+      <Path d="M6 30h52l-6 24a4 4 0 0 1-4 3H16a4 4 0 0 1-4-3z" fill={fill('wood')} />
+      <Path d="M12 38h40M14 46h36" stroke="#fff" strokeOpacity={0.2} strokeWidth={2} />
+      <Path d="M22 30l-2 26M32 30v26M42 30l2 26" stroke="#fff" strokeOpacity={0.15} strokeWidth={2} />
+      <Path d="M6 30h52l-6 24a4 4 0 0 1-4 3H16a4 4 0 0 1-4-3z" fill={sheen} opacity={0.5} />
     </G>
   ),
 };

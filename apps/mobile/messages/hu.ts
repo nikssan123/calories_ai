@@ -57,7 +57,7 @@ export const hu: Messages = {
   'today.exercise': 'Mozgás',
   'today.roughEstimate': 'durva becslés',
   'today.exerciseFooter': 'A céltól külön mutatjuk – a mozgással elégetett kalória csak durva becslés.',
-  'today.exerciseTitle': '🏃  Mozgás',
+  'today.exerciseTitle': 'Mozgás',
   'today.stepsTitle': 'Lépések',
   'today.steps': (count: number) => n(count, { one: 'lépés', other: 'lépés' }),
   'today.stepsFooter': 'A telefonod számolja. A lépések pontosítják a célodat – de sosem adódnak hozzá.',
@@ -617,7 +617,7 @@ export const hu: Messages = {
   'progress.qualityFooter': (days: string, percent: string) =>
     `Átlag, ${days} alapján – a rögzítettek közül ${percent}% tartalmaz ilyen adatot.`,
   'progress.chartNutrient': (label: string) => `Grafikon: ${label}`,
-  'progress.exerciseTitle': '🏃  Mozgás',
+  'progress.exerciseTitle': 'Mozgás',
   'progress.exerciseFooter':
     'Kérdezz bármit a naplótól ezekről az adatokról – „miért nem fogytam ezen a héten?”',
   'progress.sessionsOver': (kcal: string, days: string) =>
@@ -631,14 +631,14 @@ export const hu: Messages = {
   'exercise.title': 'Mozgás',
   'exercise.nothingLogged': (days: string) => `Az elmúlt ${days} napban nincs semmi rögzítve.`,
   'exercise.tellTheJournal': (example: string) => `Mondd el a naplónak – „voltam futni, ${example}”.`,
-  'exercise.consistencyTitle': '🔁  Rendszeresség',
+  'exercise.consistencyTitle': 'Rendszeresség',
   'exercise.activeOf': (days: string, sessions: string) => `aktív nap (${days} napból) · ${sessions}`,
   'exercise.sessionsCount': (count: number) => n(count, { one: 'edzés', other: 'edzés' }),
   'exercise.burnedPerDay': 'Elégetett kalória naponta',
   'exercise.burned': 'Elégetve',
   'exercise.distance': 'Táv',
   'exercise.time': 'Idő',
-  'exercise.sessionsTitle': '🏃  Edzések',
+  'exercise.sessionsTitle': 'Edzések',
   'exercise.burnNote': (example: string) =>
     `Az elégetett kalória becslés, és sosem számít bele a kalóriacélodba. Javítsd a naplóban – „az a futás inkább ${example} volt”.`,
   'exercise.minutes': (minutes: string) => `${minutes} perc`,
@@ -648,7 +648,7 @@ export const hu: Messages = {
   // ---- Saved workouts -----------------------------------------------------
   'workouts.logTitle': '🏋️  Edzés rögzítése',
   'workouts.logAction': 'Edzés rögzítése',
-  'workouts.savedTitle': '🏋️  Mentett edzések',
+  'workouts.savedTitle': 'Mentett edzések',
   'workouts.buildOne': 'Új edzés',
   'workouts.reuseHint': 'Egy koppintás kitölti az egész kártyát, a legutóbb használt súlyokkal.',
   'workouts.whereSessionsGo':
@@ -661,15 +661,15 @@ export const hu: Messages = {
   'workouts.doneTimes': (times: string) => ` · ${times}× elvégezve`,
   'workouts.editNamed': (name: string) => `Szerkesztés: ${name}`,
   'workouts.deleteNamed': (name: string) => `Törlés: ${name}`,
-  'workouts.weekTitle': '🗓️  A heted',
+  'workouts.weekTitle': 'A heted',
   'workouts.weekFooter':
     'Az általad beállított napok fixek. A szabadon hagyottak azt követik, amit ténylegesen csinálsz.',
   'workouts.workoutFor': (day: string) => `Edzés: ${day}`,
   'workouts.usually': (workout: string) => `${workout} – általában`,
   'workouts.youSetThis': 'te állítottad be',
   'workouts.learned': 'megfigyelt',
-  'workouts.editTitle': '✏️  Edzés szerkesztése',
-  'workouts.buildTitle': '🏋️  Edzés összeállítása',
+  'workouts.editTitle': 'Edzés szerkesztése',
+  'workouts.buildTitle': 'Edzés összeállítása',
   'workouts.icon': 'Ikon',
   'workouts.namePlaceholder': 'Toló nap, Mellnap, Láb A…',
   'workouts.nameLabel': 'Edzés neve',
@@ -893,8 +893,8 @@ export const hu: Messages = {
   'workout.removeNamed': (name: string) => `Eltávolítás: ${name}`,
 
   // ---- The weekly review --------------------------------------------------
-  'review.lastWeek': '📅  Múlt hét',
-  'review.title': '📅  Heti értékelés',
+  'review.lastWeek': 'Múlt hét',
+  'review.title': 'Heti értékelés',
   'review.pitch':
     'Minden hétfő reggel kapsz egy rövid összegzést arról, hogyan ment a heted – mit mutattak valójában a számok, és kell-e módosítani a célodon. Kioktatás nélkül, csak a tények.',
   'review.writing': 'Írom…',
@@ -1004,14 +1004,14 @@ export const hu: Messages = {
   'plan.cookTab': 'Konyha',
   'plan.theWeek': 'A hét',
   'plan.locked': 'A heti tervezés a Coach csomag része',
-  'plan.planItTitle': '🗓  Tervezés',
+  'plan.planItTitle': 'Tervezés',
   'plan.wantsPlaceholderShort': 'Van kérésed? – „hal nélkül”',
   'plan.peopleUnit': 'fő',
   'plan.minUnit': 'perc',
   'plan.batchWhereItHelps': 'Előre főzés, ahol érdemes',
   'plan.batchCooking': 'Előre főzés',
   'plan.planning': 'Tervezem…',
-  'plan.dinnersTitle': '🍽  Vacsorák',
+  'plan.dinnersTitle': 'Vacsorák',
   'plan.lockedBody':
     'Hét vacsora a céljaidhoz és a konyhádban lévőkhöz igazítva, ahol érdemes, előre főzve – a bevásárlólistát pedig megírjuk helyetted.',
   'plan.planItFooter':
@@ -1022,7 +1022,7 @@ export const hu: Messages = {
   'plan.covers': (count: number) => ` · ${n(count, { one: 'estére', other: 'estére' })} elég`,
   'plan.cookedNamed': (title: string) => `Megfőzve: ${title}`,
   'plan.clearNamed': (day: string) => `Vacsora törlése: ${day}`,
-  'shopping.titleShort': '🧾  Bevásárlás',
+  'shopping.titleShort': 'Bevásárlás',
   'shopping.addSomethingElse': 'Valami más hozzáadása',
   'shopping.alreadyHave': (things: string) => `Kihagyva, mert már megvan: ${things}.`,
   'shopping.nothingToBuy': 'Még nincs mit venni.',

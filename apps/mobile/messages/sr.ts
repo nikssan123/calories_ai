@@ -56,7 +56,7 @@ export const sr: Messages = {
   'today.exercise': 'Вежбање',
   'today.roughEstimate': 'груба процена',
   'today.exerciseFooter': 'Приказано одвојено од циља — калорије сагореле вежбањем су груба процена.',
-  'today.exerciseTitle': '🏃  Вежбање',
+  'today.exerciseTitle': 'Вежбање',
   'today.stepsTitle': 'Кораци',
   'today.steps': (count: number) => n(count, { one: 'корак', few: 'корака', other: 'корака' }),
   'today.stepsFooter': 'Броји их телефон. Кораци прецизирају твој циљ — никад се не додају на њега.',
@@ -637,7 +637,7 @@ export const sr: Messages = {
   'progress.qualityFooter': (days: string, percent: string) =>
     `Просек за ${days} — ове податке има ${percent}% уписаног.`,
   'progress.chartNutrient': (label: string) => `Прикажи на графикону: ${label}`,
-  'progress.exerciseTitle': '🏃  Вежбање',
+  'progress.exerciseTitle': 'Вежбање',
   // "зашто нисам смршао" would be gendered; the present tense asks the same thing.
   'progress.exerciseFooter':
     'Питај дневник било шта о овим подацима — „зашто ове седмице не губим тежину?“',
@@ -652,14 +652,14 @@ export const sr: Messages = {
   'exercise.title': 'Вежбање',
   'exercise.nothingLogged': (days: string) => `Ништа није уписано у последњих ${days} дана.`,
   'exercise.tellTheJournal': (example: string) => `Реци дневнику — „трчање, ${example}“.`,
-  'exercise.consistencyTitle': '🔁  Доследност',
+  'exercise.consistencyTitle': 'Доследност',
   'exercise.activeOf': (days: string, sessions: string) => `активних од ${days} дана · ${sessions}`,
   'exercise.sessionsCount': (count: number) => n(count, { one: 'тренинг', few: 'тренинга', other: 'тренинга' }),
   'exercise.burnedPerDay': 'Сагорене калорије по дану',
   'exercise.burned': 'Сагорело',
   'exercise.distance': 'Раздаљина',
   'exercise.time': 'Време',
-  'exercise.sessionsTitle': '🏃  Тренинзи',
+  'exercise.sessionsTitle': 'Тренинзи',
   'exercise.burnNote': (example: string) =>
     `Сагореле калорије су процена и никад се не одузимају од циља. Исправи у дневнику — „то трчање је било ближе ${example}“.`,
   'exercise.minutes': (minutes: string) => `${minutes} мин`,
@@ -669,7 +669,7 @@ export const sr: Messages = {
   // ---- Saved workouts -----------------------------------------------------
   'workouts.logTitle': '🏋️  Упиши тренинг',
   'workouts.logAction': 'Упиши тренинг',
-  'workouts.savedTitle': '🏋️  Сачувани тренинзи',
+  'workouts.savedTitle': 'Сачувани тренинзи',
   'workouts.buildOne': 'Направи',
   'workouts.reuseHint': 'Један додир попуњава целу картицу, са тежинама од прошлог пута.',
   'workouts.whereSessionsGo':
@@ -682,7 +682,7 @@ export const sr: Messages = {
   'workouts.doneTimes': (times: string) => ` · урађено ${times}×`,
   'workouts.editNamed': (name: string) => `Измени: ${name}`,
   'workouts.deleteNamed': (name: string) => `Обриши: ${name}`,
-  'workouts.weekTitle': '🗓️  Твоја седмица',
+  'workouts.weekTitle': 'Твоја седмица',
   'workouts.weekFooter':
     'Дани које подесиш су фиксни. Дани које оставиш отворене прате оно што стварно наставиш да радиш.',
   // `day` is a weekday name in the nominative; «за среду» would need the accusative, so a dash instead.
@@ -691,8 +691,8 @@ export const sr: Messages = {
   // "ти си подесио" is gendered.
   'workouts.youSetThis': 'твој избор',
   'workouts.learned': 'научено',
-  'workouts.editTitle': '✏️  Измени тренинг',
-  'workouts.buildTitle': '🏋️  Направи тренинг',
+  'workouts.editTitle': 'Измени тренинг',
+  'workouts.buildTitle': 'Направи тренинг',
   'workouts.icon': 'Иконица',
   'workouts.namePlaceholder': 'Груди, Ноге А, Леђа…',
   'workouts.nameLabel': 'Назив тренинга',
@@ -917,8 +917,8 @@ export const sr: Messages = {
   'workout.removeNamed': (name: string) => `Уклони: ${name}`,
 
   // ---- The weekly review --------------------------------------------------
-  'review.lastWeek': '📅  Прошла седмица',
-  'review.title': '📅  Седмични преглед',
+  'review.lastWeek': 'Прошла седмица',
+  'review.title': 'Седмични преглед',
   'review.pitch':
     'Сваког понедељка ујутру стиже кратак осврт на то како је прошла седмица — шта су бројке стварно показале и да ли циљ треба померити. Без предавања, само слика.',
   'review.writing': 'Пишем…',
@@ -1029,14 +1029,14 @@ export const sr: Messages = {
   'plan.cookTab': 'Кухиња',
   'plan.theWeek': 'Седмица',
   'plan.locked': 'Планирање седмице је део пакета Coach',
-  'plan.planItTitle': '🗓  Испланирај',
+  'plan.planItTitle': 'Испланирај',
   'plan.wantsPlaceholderShort': 'Нешто на уму? — „ништа са рибом“',
   'plan.peopleUnit': 'особе',
   'plan.minUnit': 'мин',
   'plan.batchWhereItHelps': 'Кувај унапред где има смисла',
   'plan.batchCooking': 'Кување унапред',
   'plan.planning': 'Планирам…',
-  'plan.dinnersTitle': '🍽  Вечере',
+  'plan.dinnersTitle': 'Вечере',
   'plan.lockedBody':
     'Седам вечера према твојим циљевима и ономе што већ имаш у кухињи, са кувањем унапред где има смисла и већ написаним списком за куповину.',
   'plan.planItFooter':
@@ -1047,7 +1047,7 @@ export const sr: Messages = {
   'plan.covers': (count: number) => ` · покрива ${n(count, { one: 'вече', few: 'вечери', other: 'вечери' })}`,
   'plan.cookedNamed': (title: string) => `Скувано: ${title}`,
   'plan.clearNamed': (day: string) => `Испразни: ${day}`,
-  'shopping.titleShort': '🧾  Куповина',
+  'shopping.titleShort': 'Куповина',
   'shopping.addSomethingElse': 'Додај још нешто',
   'shopping.alreadyHave': (things: string) => `Изостављено јер то већ имаш: ${things}.`,
   'shopping.nothingToBuy': 'Још нема шта да се купи.',

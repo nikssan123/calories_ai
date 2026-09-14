@@ -65,7 +65,7 @@ export const en = {
   'today.exercise': 'Exercise',
   'today.roughEstimate': 'rough estimate',
   'today.exerciseFooter': 'Shown separately from your target — exercise burn is a rough estimate.',
-  'today.exerciseTitle': '🏃  Exercise',
+  'today.exerciseTitle': 'Exercise',
   'today.stepsTitle': 'Steps',
   'today.steps': (count: number) => n(count, { one: 'step', other: 'steps' }),
   /* The rule from INTEGRATIONS.md, in the one place a reader will meet it.
@@ -693,7 +693,7 @@ export const en = {
   'progress.qualityFooter': (days: string, percent: string) =>
     `Averaged over ${days} — ${percent}% of what you logged carries these figures.`,
   'progress.chartNutrient': (label: string) => `Chart ${label}`,
-  'progress.exerciseTitle': '🏃  Exercise',
+  'progress.exerciseTitle': 'Exercise',
   'progress.exerciseFooter':
     'Ask the journal anything about this data — “why haven’t I lost weight this week?”',
   'progress.sessionsOver': (kcal: string, days: string) =>
@@ -708,14 +708,14 @@ export const en = {
   'exercise.nothingLogged': (days: string) => `Nothing logged in the last ${days} days.`,
   /** `example` is a distance in this person's own units — "5km", "3 mile". */
   'exercise.tellTheJournal': (example: string) => `Tell the journal — “went for a ${example} run”.`,
-  'exercise.consistencyTitle': '🔁  Consistency',
+  'exercise.consistencyTitle': 'Consistency',
   'exercise.activeOf': (days: string, sessions: string) => `active of ${days} days · ${sessions}`,
   'exercise.sessionsCount': (count: number) => n(count, { one: 'session', other: 'sessions' }),
   'exercise.burnedPerDay': 'Calories burned per day',
   'exercise.burned': 'Burned',
   'exercise.distance': 'Distance',
   'exercise.time': 'Time',
-  'exercise.sessionsTitle': '🏃  Sessions',
+  'exercise.sessionsTitle': 'Sessions',
   'exercise.burnNote': (example: string) =>
     `Burn is an estimate and is never netted off your calorie target. Correct one in the journal — “that run was closer to ${example}”.`,
   'exercise.minutes': (minutes: string) => `${minutes} min`,
@@ -725,7 +725,7 @@ export const en = {
   // ---- Saved workouts -----------------------------------------------------
   'workouts.logTitle': '🏋️  Log a workout',
   'workouts.logAction': 'Log a workout',
-  'workouts.savedTitle': '🏋️  Saved workouts',
+  'workouts.savedTitle': 'Saved workouts',
   'workouts.buildOne': 'Build one',
   'workouts.reuseHint': 'One tap fills the whole card in, with the weights you used last time.',
   'workouts.whereSessionsGo':
@@ -738,15 +738,15 @@ export const en = {
   'workouts.doneTimes': (times: string) => ` · done ${times}×`,
   'workouts.editNamed': (name: string) => `Edit ${name}`,
   'workouts.deleteNamed': (name: string) => `Delete ${name}`,
-  'workouts.weekTitle': '🗓️  Your week',
+  'workouts.weekTitle': 'Your week',
   'workouts.weekFooter':
     'Days you set are fixed. Days you leave open follow whatever you actually keep doing.',
   'workouts.workoutFor': (day: string) => `Workout for ${day}`,
   'workouts.usually': (workout: string) => `${workout} — usually`,
   'workouts.youSetThis': 'you set this',
   'workouts.learned': 'learned',
-  'workouts.editTitle': '✏️  Edit workout',
-  'workouts.buildTitle': '🏋️  Build a workout',
+  'workouts.editTitle': 'Edit workout',
+  'workouts.buildTitle': 'Build a workout',
   'workouts.icon': 'Icon',
   'workouts.namePlaceholder': 'Push, Chest day, Legs A…',
   'workouts.nameLabel': 'Workout name',
@@ -984,8 +984,8 @@ export const en = {
   'workout.removeNamed': (name: string) => `Remove ${name}`,
 
   // ---- The weekly review --------------------------------------------------
-  'review.lastWeek': '📅  Last week',
-  'review.title': '📅  Weekly review',
+  'review.lastWeek': 'Last week',
+  'review.title': 'Weekly review',
   'review.pitch':
     'Every Monday morning you’ll get a short read on how the week went — what the numbers actually showed, and whether your target needs to move. No lectures, just the picture.',
   'review.writing': 'Writing…',
@@ -1102,14 +1102,14 @@ export const en = {
   'plan.cookTab': 'Cook',
   'plan.theWeek': 'The week',
   'plan.locked': 'Planning a week is part of Coach',
-  'plan.planItTitle': '🗓  Plan it',
+  'plan.planItTitle': 'Plan it',
   'plan.wantsPlaceholderShort': 'Anything in mind? — “nothing with fish”',
   'plan.peopleUnit': 'people',
   'plan.minUnit': 'min',
   'plan.batchWhereItHelps': 'Batch where it helps',
   'plan.batchCooking': 'Batch cooking',
   'plan.planning': 'Planning…',
-  'plan.dinnersTitle': '🍽  Dinners',
+  'plan.dinnersTitle': 'Dinners',
   'plan.lockedBody':
     "Seven dinners against your targets and what's already in your kitchen, batched where it helps, with the shopping list written for you.",
   'plan.planItFooter':
@@ -1120,7 +1120,7 @@ export const en = {
   'plan.covers': (count: number) => ` · covers ${n(count, { one: 'night', other: 'nights' })}`,
   'plan.cookedNamed': (title: string) => `Cooked ${title}`,
   'plan.clearNamed': (day: string) => `Clear ${day}`,
-  'shopping.titleShort': '🧾  Shopping',
+  'shopping.titleShort': 'Shopping',
   'shopping.addSomethingElse': 'Add something else',
   'shopping.alreadyHave': (things: string) => `Left off because you already have them: ${things}.`,
   'shopping.nothingToBuy': 'Nothing to buy yet.',

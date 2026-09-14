@@ -168,7 +168,7 @@ export default function GeneratedRecipeScreen() {
           <Servings value={servings} onChange={setServings} unit={tr('recipe.portion')} />
           <PressableChunk
             radius={999}
-            color={colors.caloriesDeep}
+            color={colors.calories}
             onPress={() => void cook()}
             disabled={cooking}
             accessibilityRole="button"

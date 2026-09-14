@@ -57,7 +57,7 @@ export const hr: Messages = {
   'today.exercise': 'Vježbanje',
   'today.roughEstimate': 'gruba procjena',
   'today.exerciseFooter': 'Prikazano odvojeno od cilja — potrošnja na vježbanju samo je gruba procjena.',
-  'today.exerciseTitle': '🏃  Vježbanje',
+  'today.exerciseTitle': 'Vježbanje',
   'today.stepsTitle': 'Koraci',
   'today.steps': (count: number) => n(count, { one: 'korak', few: 'koraka', other: 'koraka' }),
   'today.stepsFooter': 'Broji ih tvoj telefon. Koraci pomažu da cilj bude točniji — nikad mu se ne pribrajaju.',
@@ -624,7 +624,7 @@ export const hr: Messages = {
   'progress.qualityFooter': (days: string, percent: string) =>
     `Prosjek kroz ${days} — ove brojke ima ${percent}% upisanog.`,
   'progress.chartNutrient': (label: string) => `Grafikon: ${label}`,
-  'progress.exerciseTitle': '🏃  Vježbanje',
+  'progress.exerciseTitle': 'Vježbanje',
   // "Zašto nisam smršavio/smršavjela" would gender the reader.
   'progress.exerciseFooter':
     'Pitaj dnevnik bilo što o ovim podacima — „zašto mi težina ovaj tjedan ne pada?“',
@@ -640,14 +640,14 @@ export const hr: Messages = {
   'exercise.nothingLogged': (days: string) => `U zadnjih ${days} dana ništa nije upisano.`,
   // "Trčao/trčala sam" is gendered; a distance and a time of day are not.
   'exercise.tellTheJournal': (example: string) => `Reci dnevniku — „jutros ${example} trčanja“.`,
-  'exercise.consistencyTitle': '🔁  Redovitost',
+  'exercise.consistencyTitle': 'Redovitost',
   'exercise.activeOf': (days: string, sessions: string) => `od ${days} dana aktivno · ${sessions}`,
   'exercise.sessionsCount': (count: number) => n(count, { one: 'trening', few: 'treninga', other: 'treninga' }),
   'exercise.burnedPerDay': 'Potrošene kalorije po danu',
   'exercise.burned': 'Potrošeno',
   'exercise.distance': 'Udaljenost',
   'exercise.time': 'Vrijeme',
-  'exercise.sessionsTitle': '🏃  Treninzi',
+  'exercise.sessionsTitle': 'Treninzi',
   'exercise.burnNote': (example: string) =>
     `Potrošnja je procjena i nikad se ne oduzima od cilja kalorija. Ispravi je u dnevniku — „to je trčanje bilo bliže ${example}“.`,
   'exercise.minutes': (minutes: string) => `${minutes} min`,
@@ -657,7 +657,7 @@ export const hr: Messages = {
   // ---- Saved workouts -----------------------------------------------------
   'workouts.logTitle': '🏋️  Upiši trening',
   'workouts.logAction': 'Upiši trening',
-  'workouts.savedTitle': '🏋️  Spremljeni treninzi',
+  'workouts.savedTitle': 'Spremljeni treninzi',
   'workouts.buildOne': 'Složi novi',
   'workouts.reuseHint': 'Jedan dodir ispunjava cijelu karticu, s težinama od prošlog puta.',
   'workouts.whereSessionsGo':
@@ -670,7 +670,7 @@ export const hr: Messages = {
   'workouts.doneTimes': (times: string) => ` · odrađeno ${times}×`,
   'workouts.editNamed': (name: string) => `Uredi trening ${name}`,
   'workouts.deleteNamed': (name: string) => `Izbriši trening ${name}`,
-  'workouts.weekTitle': '🗓️  Tvoj tjedan',
+  'workouts.weekTitle': 'Tvoj tjedan',
   'workouts.weekFooter':
     'Dani koje postaviš su fiksni. Dani koje ostaviš slobodnima prate ono što stvarno redovito radiš.',
   // `day` is a weekday in the nominative, so it stands apart rather than after «za».
@@ -679,8 +679,8 @@ export const hr: Messages = {
   // "Ti si postavio/postavila" is gendered.
   'workouts.youSetThis': 'tvoj odabir',
   'workouts.learned': 'naučeno',
-  'workouts.editTitle': '✏️  Uredi trening',
-  'workouts.buildTitle': '🏋️  Složi trening',
+  'workouts.editTitle': 'Uredi trening',
+  'workouts.buildTitle': 'Složi trening',
   'workouts.icon': 'Ikona',
   'workouts.namePlaceholder': 'Gornji dio, Prsa, Noge A…',
   'workouts.nameLabel': 'Naziv treninga',
@@ -904,8 +904,8 @@ export const hr: Messages = {
   'workout.removeNamed': (name: string) => `Ukloni vježbu ${name}`,
 
   // ---- The weekly review --------------------------------------------------
-  'review.lastWeek': '📅  Prošli tjedan',
-  'review.title': '📅  Tjedni pregled',
+  'review.lastWeek': 'Prošli tjedan',
+  'review.title': 'Tjedni pregled',
   'review.pitch':
     'Svakog ponedjeljka ujutro stiže kratak osvrt na tjedan — što su brojke zapravo pokazale i treba li pomaknuti cilj. Bez predavanja, samo slika.',
   'review.writing': 'Pišem…',
@@ -1017,7 +1017,7 @@ export const hr: Messages = {
   'plan.cookTab': 'Kuhinja',
   'plan.theWeek': 'Tjedan',
   'plan.locked': 'Planiranje tjedna dio je paketa Coach',
-  'plan.planItTitle': '🗓  Isplaniraj',
+  'plan.planItTitle': 'Isplaniraj',
   'plan.wantsPlaceholderShort': 'Imaš nešto na umu? — „ništa s ribom“',
   // Beside a stepper that goes from 1 upwards: an abbreviation fits every count.
   'plan.peopleUnit': 'os.',
@@ -1025,7 +1025,7 @@ export const hr: Messages = {
   'plan.batchWhereItHelps': 'Kuhaj unaprijed gdje pomaže',
   'plan.batchCooking': 'Kuhanje unaprijed',
   'plan.planning': 'Planiram…',
-  'plan.dinnersTitle': '🍽  Večere',
+  'plan.dinnersTitle': 'Večere',
   'plan.lockedBody':
     'Sedam večera prema tvojim ciljevima i onome što već imaš u kuhinji, s kuhanjem unaprijed gdje pomaže i gotovim popisom za kupnju.',
   'plan.planItFooter':
@@ -1036,7 +1036,7 @@ export const hr: Messages = {
   'plan.covers': (count: number) => ` · pokriva ${n(count, { one: 'večer', few: 'večeri', other: 'večeri' })}`,
   'plan.cookedNamed': (title: string) => `Skuhano: ${title}`,
   'plan.clearNamed': (day: string) => `Ukloni večeru — ${day}`,
-  'shopping.titleShort': '🧾  Kupnja',
+  'shopping.titleShort': 'Kupnja',
   'shopping.addSomethingElse': 'Dodaj još nešto',
   'shopping.alreadyHave': (things: string) => `Izostavljeno jer to već imaš: ${things}.`,
   'shopping.nothingToBuy': 'Još nema ništa za kupiti.',

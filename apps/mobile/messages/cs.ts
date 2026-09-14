@@ -60,7 +60,7 @@ export const cs: Messages = {
   'today.exercise': 'Pohyb',
   'today.roughEstimate': 'hrubý odhad',
   'today.exerciseFooter': 'Zobrazeno zvlášť od tvého cíle – kalorie spálené pohybem jsou jen hrubý odhad.',
-  'today.exerciseTitle': '🏃  Pohyb',
+  'today.exerciseTitle': 'Pohyb',
   'today.stepsTitle': 'Kroky',
   'today.steps': (count: number) => n(count, { one: 'krok', few: 'kroky', many: 'kroku', other: 'kroků' }),
   'today.stepsFooter': 'Počítá je tvůj telefon. Kroky zpřesňují tvůj cíl – nikdy se k němu nepřičítají.',
@@ -633,7 +633,7 @@ export const cs: Messages = {
   'progress.qualityFooter': (days: string, percent: string) =>
     `Průměr za ${days} – tyto hodnoty má ${percent} % zapsaných jídel.`,
   'progress.chartNutrient': (label: string) => `Graf: ${label}`,
-  'progress.exerciseTitle': '🏃  Pohyb',
+  'progress.exerciseTitle': 'Pohyb',
   // The reader's own question: "proč jsem nezhubl" would gender them.
   'progress.exerciseFooter':
     'Zeptej se deníku na cokoli o těchto datech – „proč mi tento týden neklesá váha?“',
@@ -650,7 +650,7 @@ export const cs: Messages = {
   'exercise.title': 'Pohyb',
   'exercise.nothingLogged': (days: string) => `Za posledních ${days} dní nic zapsáno.`,
   'exercise.tellTheJournal': (example: string) => `Napiš to do deníku – „běh na ${example}“.`,
-  'exercise.consistencyTitle': '🔁  Pravidelnost',
+  'exercise.consistencyTitle': 'Pravidelnost',
   // Follows the active-day count set large: "12 z 30 dní aktivně".
   'exercise.activeOf': (days: string, sessions: string) => `z ${days} dní aktivně · ${sessions}`,
   'exercise.sessionsCount': (count: number) => n(count, { one: 'cvičení', few: 'cvičení', many: 'cvičení', other: 'cvičení' }),
@@ -658,7 +658,7 @@ export const cs: Messages = {
   'exercise.burned': 'Spáleno',
   'exercise.distance': 'Vzdálenost',
   'exercise.time': 'Čas',
-  'exercise.sessionsTitle': '🏃  Cvičení',
+  'exercise.sessionsTitle': 'Cvičení',
   'exercise.burnNote': (example: string) =>
     `Spálené kalorie jsou odhad a nikdy se neodečítají od tvého cíle. Oprav je v deníku – „ten běh byl spíš ${example}“.`,
   'exercise.minutes': (minutes: string) => `${minutes} min`,
@@ -670,7 +670,7 @@ export const cs: Messages = {
   // "cvičení"; a movement inside it is a "cvik".
   'workouts.logTitle': '🏋️  Zapsat trénink',
   'workouts.logAction': 'Zapsat trénink',
-  'workouts.savedTitle': '🏋️  Uložené tréninky',
+  'workouts.savedTitle': 'Uložené tréninky',
   'workouts.buildOne': 'Vytvořit',
   'workouts.reuseHint': 'Jedním klepnutím vyplníš celou kartu, i s vahami z minula.',
   'workouts.whereSessionsGo':
@@ -683,15 +683,15 @@ export const cs: Messages = {
   'workouts.doneTimes': (times: string) => ` · odcvičeno ${times}×`,
   'workouts.editNamed': (name: string) => `Upravit: ${name}`,
   'workouts.deleteNamed': (name: string) => `Smazat: ${name}`,
-  'workouts.weekTitle': '🗓️  Tvůj týden',
+  'workouts.weekTitle': 'Tvůj týden',
   'workouts.weekFooter':
     'Dny, které nastavíš, jsou pevné. Volné dny se řídí tím, co opravdu děláš.',
   'workouts.workoutFor': (day: string) => `Trénink – ${day}`,
   'workouts.usually': (workout: string) => `${workout} – obvykle`,
   'workouts.youSetThis': 'tvoje volba',
   'workouts.learned': 'podle zvyku',
-  'workouts.editTitle': '✏️  Upravit trénink',
-  'workouts.buildTitle': '🏋️  Vytvořit trénink',
+  'workouts.editTitle': 'Upravit trénink',
+  'workouts.buildTitle': 'Vytvořit trénink',
   'workouts.icon': 'Ikona',
   'workouts.namePlaceholder': 'Tlaky, Hrudník, Nohy A…',
   'workouts.nameLabel': 'Název tréninku',
@@ -914,8 +914,8 @@ export const cs: Messages = {
   'workout.removeNamed': (name: string) => `Odebrat: ${name}`,
 
   // ---- The weekly review --------------------------------------------------
-  'review.lastWeek': '📅  Minulý týden',
-  'review.title': '📅  Týdenní přehled',
+  'review.lastWeek': 'Minulý týden',
+  'review.title': 'Týdenní přehled',
   'review.pitch':
     'Každé pondělí ráno dostaneš krátké shrnutí, jak týden proběhl – co čísla opravdu ukázala a jestli je potřeba posunout cíl. Žádné poučování, jen jasný obrázek.',
   'review.writing': 'Píšu…',
@@ -1024,14 +1024,14 @@ export const cs: Messages = {
   'plan.cookTab': 'Kuchyně',
   'plan.theWeek': 'Týden',
   'plan.locked': 'Plánování týdne je součástí tarifu Coach',
-  'plan.planItTitle': '🗓  Naplánovat',
+  'plan.planItTitle': 'Naplánovat',
   'plan.wantsPlaceholderShort': 'Něco na přání? – „nic s rybou“',
   'plan.peopleUnit': 'os.',
   'plan.minUnit': 'min',
   'plan.batchWhereItHelps': 'Vařit do zásoby, kde se to hodí',
   'plan.batchCooking': 'Vaření do zásoby',
   'plan.planning': 'Plánuji…',
-  'plan.dinnersTitle': '🍽  Večeře',
+  'plan.dinnersTitle': 'Večeře',
   'plan.lockedBody':
     'Sedm večeří podle tvých cílů a toho, co už máš v kuchyni, s vařením do zásoby, kde se to hodí, a s nákupním seznamem sepsaným za tebe.',
   'plan.planItFooter':
@@ -1043,7 +1043,7 @@ export const cs: Messages = {
     ` · vystačí na ${n(count, { one: 'večer', few: 'večery', many: 'večera', other: 'večerů' })}`,
   'plan.cookedNamed': (title: string) => `Uvařeno: ${title}`,
   'plan.clearNamed': (day: string) => `Vymazat: ${day}`,
-  'shopping.titleShort': '🧾  Nákup',
+  'shopping.titleShort': 'Nákup',
   'shopping.addSomethingElse': 'Přidat něco dalšího',
   'shopping.alreadyHave': (things: string) => `Vynecháno, protože už máš: ${things}.`,
   'shopping.nothingToBuy': 'Zatím není co kupovat.',

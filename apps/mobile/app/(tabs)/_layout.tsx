@@ -3,6 +3,8 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
+  FadeIn,
+  FadeOut,
   useAnimatedStyle,
   useSharedValue,
   withSequence,
@@ -55,8 +57,83 @@ const TABS = [
 /** Expo Router's way of saying which tab a cold start lands on. */
 export const unstable_settings = { initialRouteName: 'today' };
 
+/** Which tab was on show last, so an arriving tab knows which side it came from. */
+let lastFocused: number | null = null;
+
+/**
+ * The tab transition: a short glide and a fade, run by Reanimated.
+ *
+ * A glide rather than a cut (GLOW-UP.md). The screens are transparent over one
+ * shared light, so the arriving tab drifts in from the side it lies on — which
+ * says which way along the bar you went, in the same motion the pill makes —
+ * and eases up to full size. Short, so a thumb flicking between tabs never
+ * waits on it, and off under reduced motion.
+ *
+ * Not the navigator's own `animation: 'shift'`, which was tried first. That one
+ * is driven by React Native's Animated on the native driver, and on the new
+ * architecture its commits overwrite props Reanimated has animated anywhere
+ * else on screen with whatever React last rendered: a tab label stayed lit
+ * after being left, and the segmented pill snapped back to its starting width.
+ *
+ * Only the arriving tab animates, and it is hidden the moment another tab takes
+ * the focus rather than on every blur — a screen pushed over the tabs also blurs
+ * them, and one made invisible then would be blank under the back gesture.
+ */
+function TabScene({
+  route,
+  navigation,
+  children,
+}: {
+  route: { key: string };
+  navigation: {
+    addListener: (event: 'focus' | 'blur', callback: () => void) => () => void;
+    getState: () => { index: number; routes: { key: string }[] };
+    isFocused: () => boolean;
+  };
+  children: React.ReactNode;
+}) {
+  const reduced = useReducedMotion();
+  const shown = useSharedValue(1);
+  const side = useSharedValue(0);
+
+  useEffect(() => {
+    const indexOf = () => navigation.getState().routes.findIndex((r) => r.key === route.key);
+    if (navigation.isFocused()) lastFocused = indexOf();
+
+    const onFocus = navigation.addListener('focus', () => {
+      const index = indexOf();
+      const from = lastFocused;
+      lastFocused = index;
+      if (reduced || from === null || from === index) {
+        shown.value = 1;
+        return;
+      }
+      side.value = Math.sign(index - from);
+      shown.value = 0;
+      shown.value = withTiming(1, { duration: 320, easing: ease.out });
+    });
+    const onBlur = navigation.addListener('blur', () => {
+      const state = navigation.getState();
+      if (state.routes[state.index]?.key !== route.key) shown.value = 0;
+    });
+    return () => {
+      onFocus();
+      onBlur();
+    };
+  }, [navigation, route.key, reduced, shown, side]);
+
+  const gliding = useAnimatedStyle(() => ({
+    opacity: shown.value,
+    transform: [
+      { translateX: (1 - shown.value) * 28 * side.value },
+      { scale: 0.985 + shown.value * 0.015 },
+    ],
+  }));
+
+  return <Animated.View style={[styles.fill, gliding]}>{children}</Animated.View>;
+}
+
 export default function TabsLayout() {
-  const colors = useColors();
   const t = useT();
   return (
     <View style={styles.fill}>
@@ -69,7 +146,11 @@ export default function TabsLayout() {
       <Backdrop />
       <Tabs
         initialRouteName="today"
-        screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: 'transparent' } }}
+        screenLayout={(props) => <TabScene {...props} />}
+        screenOptions={{
+          headerShown: false,
+          sceneStyle: { backgroundColor: 'transparent' },
+        }}
         tabBar={(props) => <TabBar {...props} />}
       >
         {TABS.map((tab) => (
@@ -147,20 +228,44 @@ function TabBar({
    * not of anything in pixels — so a rotation or a font-size change that
    * re-measures the row moves the pill without re-animating it.
    */
-  const travel = useSharedValue(selected);
+  /*
+   * The pill's two edges travel separately, which is what makes it read as
+   * liquid rather than as a box being slid (GLOW-UP.md). The edge on the side
+   * you pointed leaves first and fast; the other follows a beat later and
+   * settles with the spring, so on the way the pill stretches towards the tab
+   * and then gathers itself up under it.
+   */
+  const leftEdge = useSharedValue(selected);
+  const rightEdge = useSharedValue(selected);
+  const previous = useRef(selected);
   useEffect(() => {
     if (selected < 0) return;
-    travel.value = withTiming(selected, {
-      duration: reduced ? 0 : duration.pop,
-      easing: ease.spring,
-    });
-  }, [selected, travel, reduced]);
+    const from = previous.current;
+    previous.current = selected;
+    if (reduced || from < 0) {
+      leftEdge.value = selected;
+      rightEdge.value = selected;
+      return;
+    }
+    const lead = { duration: 240, easing: ease.out };
+    const follow = { duration: duration.pop + 80, easing: ease.spring };
+    if (selected > from) {
+      rightEdge.value = withTiming(selected, lead);
+      leftEdge.value = withTiming(selected, follow);
+    } else {
+      leftEdge.value = withTiming(selected, lead);
+      rightEdge.value = withTiming(selected, follow);
+    }
+  }, [selected, leftEdge, rightEdge, reduced]);
 
-  const sliding = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: travel.value * columnWidth + (columnWidth - lozengeWidth) / 2 },
-    ],
-  }));
+  const sliding = useAnimatedStyle(() => {
+    const left = Math.min(leftEdge.value, rightEdge.value);
+    const right = Math.max(leftEdge.value, rightEdge.value);
+    return {
+      width: (right - left) * columnWidth + lozengeWidth,
+      transform: [{ translateX: left * columnWidth + (columnWidth - lozengeWidth) / 2 }],
+    };
+  });
 
   /*
    * Out of the way while typing. The bar is behind the keyboard regardless, but
@@ -278,7 +383,8 @@ function TabBar({
 }
 
 /**
- * One tab's icon and label, each drawn twice and cross-faded.
+ * One tab's icon and label: a resting copy, and a lit copy laid over it that
+ * fades in when the tab is chosen.
  *
  * The fade uses `ease.out` rather than the `ease.spring` the pill travels on,
  * because opacity is the one property in this design that cannot overshoot:
@@ -289,21 +395,13 @@ function TabItem({ tab, active }: { tab: (typeof TABS)[number]; active: boolean 
   const colors = useColors();
   const t = useT();
   const reduced = useReducedMotion();
-  const on = useSharedValue(active ? 1 : 0);
   const pop = useSharedValue(1);
-
-  useEffect(() => {
-    on.value = withTiming(active ? 1 : 0, {
-      duration: reduced ? 0 : duration.pop,
-      easing: ease.out,
-    });
-  }, [active, on, reduced]);
 
   /*
    * A small kick on the icon that was just chosen, and only on that one:
    * popping the tab being left would pull the eye back to where the user has
    * just decided not to be. Skipped on the first render, or every launch would
-   * open with the Journal icon bouncing at nobody.
+   * open with the Today icon bouncing at nobody.
    */
   const mounted = useRef(false);
   useEffect(() => {
@@ -313,21 +411,37 @@ function TabItem({ tab, active }: { tab: (typeof TABS)[number]; active: boolean 
     }
     if (!active || reduced) return;
     pop.value = withSequence(
-      withTiming(1.12, { duration: duration.quick / 2, easing: ease.pop }),
+      withTiming(1.14, { duration: duration.quick / 2, easing: ease.pop }),
       withTiming(1, { duration: duration.quick, easing: ease.out }),
     );
   }, [active, pop, reduced]);
 
-  const fade = useAnimatedStyle(() => ({ opacity: on.value }));
   const kick = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
+
+  /*
+   * The lit copy is mounted only while the tab is chosen, and fades in and out
+   * as it mounts and unmounts. It used to be always mounted with an animated
+   * opacity, and a re-render of the bar could put back an opacity the fade had
+   * already moved on from — a tab stayed lit after being left. Whether it is lit
+   * is React's to say; the fade only dresses the change.
+   */
+  const fadeIn = reduced ? undefined : FadeIn.duration(duration.pop).easing(ease.out);
+  const fadeOut = reduced ? undefined : FadeOut.duration(duration.quick).easing(ease.out);
 
   return (
     <>
       <Animated.View style={[styles.lozengeSlot, kick]}>
         <TabIcon name={tab.icon} color={colors.mutedForeground} strokeWidth={2.1} />
-        <Animated.View style={[StyleSheet.absoluteFill, styles.centred, fade]} pointerEvents="none">
-          <TabIcon name={tab.icon} color={colors.caloriesText} strokeWidth={2.6} />
-        </Animated.View>
+        {active && (
+          <Animated.View
+            entering={fadeIn}
+            exiting={fadeOut}
+            style={[StyleSheet.absoluteFill, styles.centred, { backgroundColor: 'transparent' }]}
+            pointerEvents="none"
+          >
+            <TabIcon name={tab.icon} color={colors.caloriesText} strokeWidth={2.6} />
+          </Animated.View>
+        )}
       </Animated.View>
       <View style={styles.labelSlot}>
         <Text
@@ -336,18 +450,21 @@ function TabItem({ tab, active }: { tab: (typeof TABS)[number]; active: boolean 
         >
           {t(tab.label)}
         </Text>
-        <Animated.Text
-          numberOfLines={1}
-          pointerEvents="none"
-          style={[
-            styles.label,
-            StyleSheet.absoluteFill,
-            { fontFamily: font.extrabold, color: colors.caloriesText },
-            fade,
-          ]}
-        >
-          {t(tab.label)}
-        </Animated.Text>
+        {active && (
+          <Animated.Text
+            entering={fadeIn}
+            exiting={fadeOut}
+            numberOfLines={1}
+            pointerEvents="none"
+            style={[
+              styles.label,
+              StyleSheet.absoluteFill,
+              { fontFamily: font.extrabold, color: colors.caloriesText },
+            ]}
+          >
+            {t(tab.label)}
+          </Animated.Text>
+        )}
       </View>
     </>
   );

@@ -4,6 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ExerciseEntry, ExerciseSummary, Locale } from '@ct/shared';
 import { distanceUnit, formatDay, formatDistance, formatNumber, toDistance } from '@ct/shared';
 import { exerciseEmoji } from '@ct/shared/food-emoji';
+import { Segments } from '@/components/Segments';
+import { Sky, useSky } from '@/components/Sky';
 import { Chunk } from '@/components/Chunk';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { Skeleton } from '@/components/Skeleton';
@@ -22,6 +24,7 @@ import { WorkoutCard } from '@/components/workout/WorkoutCard';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
 import { useLocale, useT } from '@/lib/i18n';
 import { messageOf } from '@/lib/errors';
+import { Glossy } from '@/components/icons/Glossy';
 
 /**
  * Exercise, split out of Progress so it gets a screen rather than a single row.
@@ -40,6 +43,7 @@ export default function ExerciseScreen() {
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTop(scrollRef);
   const colors = useColors();
+  const sky = useSky();
   const insets = useSafeAreaInsets();
   const units = useUnits();
 
@@ -101,39 +105,16 @@ export default function ExerciseScreen() {
       style={styles.flex}
       contentContainerStyle={[styles.page, { paddingTop: insets.top + 20 }]}
     >
+      {/* The hour's sky behind the title, as on Today and the journal: every tab
+          opens under the same light, and nothing in it sits over a word. */}
+      <Sky sky={sky} height={insets.top + 190} hazeTop={insets.top + 60} style={styles.sky} />
       <View style={styles.header}>
-        <Text style={[t.largeTitle, { color: colors.foreground }]}>{tr('exercise.title')}</Text>
-        <Chunk
-          depth={2}
-          radius={999}
-          contentStyle={[
-            styles.windows,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-        >
-          {WINDOWS.map((w) => {
-            const active = days === w;
-            return (
-              <Pressable
-                key={w}
-                onPress={() => setDays(w)}
-                accessibilityRole="button"
-                accessibilityLabel={`${w} days`}
-                accessibilityState={{ selected: active }}
-                style={[styles.window, active ? { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp } : null]}
-              >
-                <Text
-                  style={[
-                    styles.windowLabel,
-                    { color: active ? colors.primaryForeground : colors.mutedForeground },
-                  ]}
-                >
-                  {w}d
-                </Text>
-              </Pressable>
-            );
-          })}
-        </Chunk>
+        <Text style={[t.largeTitle, { color: sky.inkLight ? colors.skyInk : colors.foreground }]}>{tr('exercise.title')}</Text>
+        <Segments
+          options={WINDOWS.map((w) => ({ value: String(w), label: `${w}d`, accessibilityLabel: `${w} days` }))}
+          value={String(days)}
+          onChange={(next) => setDays(Number(next))}
+        />
       </View>
 
       {/* Saved workouts and the week, above the history: this is the half of
@@ -161,7 +142,9 @@ export default function ExerciseScreen() {
       ) : summary.sessions === 0 ? (
         <InsetGroup>
           <View style={styles.empty}>
-            <Text style={styles.mascot}>🏃</Text>
+            <View style={styles.mascot}>
+              <Glossy name="steps" size={64} />
+            </View>
             <Text style={[t.body, styles.centred, { color: colors.mutedForeground }]}>
               {tr('exercise.nothingLogged')(String(days))}
               {'\n'}
@@ -171,7 +154,7 @@ export default function ExerciseScreen() {
         </InsetGroup>
       ) : (
         <>
-          <InsetGroup title={tr('exercise.consistencyTitle')}>
+          <InsetGroup title={tr('exercise.consistencyTitle')} icon={<Glossy name="repeat" size={18} />}>
             <View style={styles.pad}>
               <View style={styles.headline}>
                 <Text style={[t.largeTitle, t.tnum, { color: colors.foreground }]}>
@@ -225,6 +208,7 @@ export default function ExerciseScreen() {
 
           <InsetGroup
             title={tr('exercise.sessionsTitle')}
+            icon={<Glossy name="steps" size={18} />}
             footer={tr('exercise.burnNote')(units === 'imperial' ? '4.5 miles' : '7km')}
           >
             {summary.entries.map((entry, i) =>
@@ -416,21 +400,13 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   page: { paddingHorizontal: 16, paddingBottom: 40, gap: 28 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  windows: { flexDirection: 'row', borderWidth: 1, borderRadius: 999, padding: 4 },
-  window: {
-    height: 32,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  windowLabel: { fontFamily: font.bold, fontSize: 12, lineHeight: 16 },
+  sky: { top: 0 },
   pad: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 },
   headline: { flexDirection: 'row', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' },
   aside: { flexShrink: 1 },
   chart: { marginTop: 16 },
   empty: { alignItems: 'center', paddingHorizontal: 16, paddingVertical: 48 },
-  mascot: { fontSize: 40, lineHeight: 48, marginBottom: 12 },
+  mascot: { marginBottom: 12 },
   centred: { textAlign: 'center' },
   rowEmoji: { fontSize: 20, lineHeight: 24 },
   figure: { fontSize: 16, lineHeight: 24 },

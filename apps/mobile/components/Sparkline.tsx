@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,7 +6,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, Defs, Line, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import type { TrendPoint } from '@ct/shared';
 import { useColors } from '@/theme';
 import { useT } from '@/lib/i18n';
@@ -58,6 +58,7 @@ export function Sparkline({
 }) {
   const colors = useColors();
   const tr = useT();
+  const gradient = `spark-${useId().replace(/:/g, '')}`;
   /*
    * The rendered width, measured.
    *
@@ -136,6 +137,10 @@ export function Sparkline({
     ) : null;
 
   const active = held !== null && held < points.length ? held : null;
+  const lastIndex = (() => {
+    for (let i = values.length - 1; i >= 0; i--) if (values[i] !== null) return i;
+    return null;
+  })();
   // The point on the trace the readout is talking about. Null on a day the line
   // does not reach — before the first sample there is nothing to mark, and the
   // readout says so in words.
@@ -163,6 +168,7 @@ export function Sparkline({
         view={VIEW}
         held={active}
         card={colors.foreground}
+        fill={`url(#${gradient})`}
       />
     ) : (
       <>
@@ -179,6 +185,13 @@ export function Sparkline({
             strokeLinecap="round"
           />
         )}
+        {/*
+          The light under the line (GLOW-UP.md): the area it encloses, in its own
+          colour and fading to nothing, so the shape of the month reads before
+          any single day does. Drawn per unbroken run, the same as the trace, so
+          a gap in the data stays a gap rather than a ramp across it.
+        */}
+        <Path d={area(points, accessor, x, y, height)} fill={`url(#${gradient})`} />
         <Path
           d={trace(points, accessor, x, y)}
           fill="none"
@@ -187,6 +200,20 @@ export function Sparkline({
           strokeLinecap="round"
           strokeLinejoin="round"
         />
+        {/* Where the line has got to: a lit dot on the last day with a reading. */}
+        {active === null && lastIndex !== null && (
+          <>
+            <Circle cx={x(lastIndex)} cy={y(values[lastIndex]!)} r={9} fill={stroke} opacity={0.18} />
+            <Circle
+              cx={x(lastIndex)}
+              cy={y(values[lastIndex]!)}
+              r={4.5}
+              fill={stroke}
+              stroke={colors.card}
+              strokeWidth={2.5}
+            />
+          </>
+        )}
         {/* Ringed in the card's own colour so the dot reads as a dot against a
             trace of the same ink, at any density of samples. */}
         {marked !== null && (
@@ -251,6 +278,12 @@ export function Sparkline({
     >
       {width > 0 && (
         <Svg width={width} height={drawn} viewBox={`0 0 ${VIEW} ${height}`}>
+          <Defs>
+            <LinearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor={stroke} stopOpacity={variant === 'bars' ? 1 : 0.22} />
+              <Stop offset="1" stopColor={stroke} stopOpacity={variant === 'bars' ? 0.45 : 0} />
+            </LinearGradient>
+          </Defs>
           {targetLine}
           {body}
         </Svg>
@@ -320,6 +353,7 @@ function Bars({
   view,
   held,
   card,
+  fill,
 }: {
   points: TrendPoint[];
   accessor: 'value' | 'average';
@@ -329,6 +363,8 @@ function Bars({
   view: number;
   held: number | null;
   card: string;
+  /** The bar's own colour fading towards its foot. */
+  fill: string;
 }) {
   // Leave a hairline of gap between bars, but never let them vanish on a
   // 365-day window — below about a pixel the chart reads as an empty box.
@@ -364,7 +400,7 @@ function Bars({
             // as a day rather than as a gap.
             height={Math.max(1.5, height - 5 - top)}
             rx={Math.min(3, barWidth / 2)}
-            fill={stroke}
+            fill={fill}
             opacity={held === null || held === i ? 1 : 0.35}
           />
         );
@@ -405,5 +441,31 @@ function trace(
     penDown = true;
   });
 
+  return path.trim();
+}
+
+/** The area under each unbroken run of the trace, closed down to the chart's foot. */
+function area(
+  points: TrendPoint[],
+  accessor: 'value' | 'average',
+  x: (i: number) => number,
+  y: (v: number) => number,
+  height: number,
+): string {
+  let path = '';
+  let run: number[] = [];
+  const close = () => {
+    if (run.length > 1) {
+      path += `M${x(run[0]!).toFixed(1)},${height} `;
+      for (const i of run) path += `L${x(i).toFixed(1)},${y(points[i]![accessor]!).toFixed(1)} `;
+      path += `L${x(run[run.length - 1]!).toFixed(1)},${height} Z `;
+    }
+    run = [];
+  };
+  points.forEach((point, i) => {
+    if (point[accessor] === null) close();
+    else run.push(i);
+  });
+  close();
   return path.trim();
 }

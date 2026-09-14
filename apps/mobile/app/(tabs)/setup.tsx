@@ -64,6 +64,9 @@ import { setPreferredLocale, useLocale, useT, type StringKey } from '@/lib/i18n'
 import { registerForPush } from '@/lib/push';
 import { applyReminders, loadReminders, type ReminderSettings } from '@/lib/reminders';
 import { messageOf } from '@/lib/errors';
+import { Glossy } from '@/components/icons/Glossy';
+import { Segments } from '@/components/Segments';
+import { Sky, useSky } from '@/components/Sky';
 
 /** §10: short setup. Enough to establish a starting target, nothing more. */
 
@@ -108,6 +111,7 @@ const STORE_URL = storeListingUrl();
 
 export default function SetupScreen() {
   const colors = useColors();
+  const sky = useSky();
   const insets = useSafeAreaInsets();
   const { signOut, adoptProfile, profile: signedIn } = useAuth();
   const { refresh: refreshOnboarding } = useOnboarding();
@@ -342,9 +346,11 @@ export default function SetupScreen() {
         // padding above lands a frame late.
         automaticallyAdjustKeyboardInsets
       >
+        {/* The hour's sky behind the title, as on every tab. */}
+        <Sky sky={sky} height={insets.top + 210} hazeTop={insets.top + 60} style={styles.sky} />
         <View>
-          <Text style={[t.largeTitle, { color: colors.foreground }]}>{tr('setup.title')}</Text>
-          <Text style={[t.body, styles.blurb, { color: colors.mutedForeground }]}>
+          <Text style={[t.largeTitle, { color: sky.inkLight ? colors.skyInk : colors.foreground }]}>{tr('setup.title')}</Text>
+          <Text style={[t.body, styles.blurb, { color: sky.inkLight ? colors.skyInk : colors.mutedForeground }]}>
             {tr('setup.subtitle')}
           </Text>
         </View>
@@ -409,33 +415,15 @@ export default function SetupScreen() {
             <Text style={[t.body, styles.label, { color: colors.foreground }]}>
               {tr('setup.units')}
             </Text>
-            <View style={[styles.segment, { backgroundColor: colors.muted }]}>
-              {(Object.keys(UNIT_LABELS) as UnitSystem[]).map((system) => {
-                const active = units === system;
-                return (
-                  <Pressable
-                    key={system}
-                    onPress={() => patch('units', system)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${tr(UNIT_LABELS[system])} — ${UNIT_EXAMPLES[system]}`}
-                    accessibilityState={{ selected: active }}
-                    style={[
-                      styles.segmentItem,
-                      active ? { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp } : null,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        t.footnoteBold,
-                        { color: active ? colors.primaryForeground : colors.mutedForeground },
-                      ]}
-                    >
-                      {tr(UNIT_LABELS[system])}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            <Segments
+              options={(Object.keys(UNIT_LABELS) as UnitSystem[]).map((system) => ({
+                value: system,
+                label: tr(UNIT_LABELS[system]),
+                accessibilityLabel: `${tr(UNIT_LABELS[system])} — ${UNIT_EXAMPLES[system]}`,
+              }))}
+              value={units}
+              onChange={(system) => patch('units', system)}
+            />
           </InsetRow>
 
           <InsetRow>
@@ -473,36 +461,12 @@ export default function SetupScreen() {
 
         <InsetGroup title={tr('setup.goal')}>
           <View style={styles.goals}>
-            {(Object.keys(GOAL_LABELS) as Goal[]).map((goal) => {
-              const active = profile.goal === goal;
-              return (
-                <PressableChunk
-                  key={goal}
-                  depth={3}
-                  radius={24}
-                  color={active ? colors.caloriesDeep : undefined}
-                  onPress={() => patch('goal', goal)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: active }}
-                  style={styles.flex}
-                  contentStyle={[
-                    styles.goal,
-                    active
-                      ? { backgroundColor: colors.primary, borderColor: 'transparent' }
-                      : { backgroundColor: colors.muted, borderColor: colors.border },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.goalLabel,
-                      { color: active ? colors.primaryForeground : colors.mutedForeground },
-                    ]}
-                  >
-                    {tr(GOAL_LABELS[goal])}
-                  </Text>
-                </PressableChunk>
-              );
-            })}
+            <Segments
+              fill
+              options={(Object.keys(GOAL_LABELS) as Goal[]).map((goal) => ({ value: goal, label: tr(GOAL_LABELS[goal]) }))}
+              value={profile.goal ?? 'maintain'}
+              onChange={(goal) => patch('goal', goal)}
+            />
           </View>
 
           <InsetRow>
@@ -712,7 +676,7 @@ function SaveBar({
           disabled={saving || !dirty}
           reserve
           radius={22}
-          color={colors.caloriesDeep}
+          color={colors.calories}
           accessibilityRole="button"
           accessibilityLabel={tr('setup.saveChanges')}
           contentStyle={[styles.save, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
@@ -726,13 +690,15 @@ function SaveBar({
 
 function TargetCard({ day }: { day: DaySummary }) {
   const colors = useColors();
+  const type = useType();
   const tr = useT();
   const locale = useLocale();
   return (
     <InsetGroup>
       <View style={styles.target}>
         <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>{tr('setup.dailyTarget')}</Text>
-        <Text style={[t.figure, styles.targetFigure, { color: colors.foreground }]}>
+        {/* The serif figure the plan reveal introduced this number with. */}
+        <Text style={[type.serifFigure, styles.targetFigure, { color: colors.caloriesText }]}>
           {formatNumber(day.targets.kcal, locale)}
           <Text style={[styles.targetUnit, { color: colors.mutedForeground }]}> kcal</Text>
         </Text>
@@ -770,8 +736,8 @@ function MacroChip({ label, value, color }: { label: string; value: number; colo
   const tr = useT();
   const locale = useLocale();
   return (
-    <View style={[styles.chip, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-      <View style={[styles.chipDot, { backgroundColor: color }]} />
+    <View style={[styles.chip, { backgroundColor: colors.glassStrong, borderColor: colors.glassEdge, boxShadow: colors.shadow }]}>
+      <View style={[styles.chipDot, { backgroundColor: color, boxShadow: `0px 0px 6px ${color}` }]} />
       <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{label}</Text>
       <Text style={[t.footnote, { fontFamily: font.display, color: colors.foreground }]}>
         {value}g
@@ -1601,7 +1567,7 @@ function AchievementsLink() {
         style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
       >
         <InsetRow first>
-          <Text style={styles.linkGlyph}>🏅</Text>
+          <Glossy name="medal" size={22} />
           <Text style={[t.body, styles.flex, { color: colors.foreground }]}>
             {tr('achievements.title')}
           </Text>
@@ -1627,11 +1593,11 @@ const styles = StyleSheet.create({
   page: { paddingHorizontal: 16, paddingBottom: 40, gap: 28 },
   blurb: { marginTop: 6 },
   label: { flex: 1 },
-  linkGlyph: { fontSize: 17 },
+  sky: { top: 0 },
   wide: { width: 176 },
   centred: { textAlign: 'center' },
   target: { alignItems: 'center', padding: 20 },
-  targetFigure: { fontSize: 44, lineHeight: 52, marginTop: 6 },
+  targetFigure: { fontSize: 50, lineHeight: 58, marginTop: 6 },
   targetUnit: { fontFamily: font.bold, fontSize: 18, lineHeight: 24 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 16 },
   chip: {
@@ -1645,14 +1611,6 @@ const styles = StyleSheet.create({
   },
   chipDot: { width: 10, height: 10, borderRadius: 5 },
   disclaimer: { marginTop: 20, textAlign: 'center', lineHeight: 20 },
-  segment: { flexDirection: 'row', borderRadius: 999, padding: 2 },
-  segmentItem: {
-    height: 36,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   height: { flexDirection: 'row', gap: 8 },
   heightPart: { width: 88 },
   dateField: {
@@ -1667,14 +1625,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  goals: { flexDirection: 'row', gap: 8, padding: 8 },
-  goal: {
-    borderWidth: 1,
-    borderRadius: 24,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  goalLabel: { fontFamily: font.bold, fontSize: 14, lineHeight: 20 },
+  goals: { padding: 8 },
   appearance: { padding: 12 },
   reminderWhen: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   timeField: {

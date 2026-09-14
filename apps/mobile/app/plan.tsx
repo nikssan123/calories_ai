@@ -30,6 +30,7 @@ import { useUndoableRemoval } from '@/hooks/useUndoableRemoval';
 import { useEntitlements } from '@/lib/entitlements';
 import { useLocale, useT } from '@/lib/i18n';
 import { messageOf } from '@/lib/errors';
+import { Glossy } from '@/components/icons/Glossy';
 
 /**
  * The week's dinners, and the shop that follows from them.
@@ -236,6 +237,7 @@ export default function PlanScreen() {
           ) : (
           <InsetGroup
             title={tr('plan.planItTitle')}
+            icon={<Glossy name="calendar" size={18} />}
             footer={tr('plan.planItFooter')}
           >
             <View style={styles.form}>
@@ -292,7 +294,7 @@ export default function PlanScreen() {
 
               <PressableChunk
                 radius={999}
-                color={colors.caloriesDeep}
+                color={colors.calories}
                 onPress={() => void planWeek()}
                 disabled={thinking}
                 accessibilityRole="button"
@@ -308,7 +310,7 @@ export default function PlanScreen() {
           )}
 
           {plan && (
-            <InsetGroup title={tr('plan.dinnersTitle')}>
+            <InsetGroup title={tr('plan.dinnersTitle')} icon={<Glossy name="plate" size={18} />}>
               {plan.slots.map((slot, i) => (
                 <Night
                   key={slot.id}
@@ -325,6 +327,7 @@ export default function PlanScreen() {
           {list && (
             <InsetGroup
               title={tr('shopping.titleShort')}
+              icon={<Glossy name="basket" size={18} />}
               footer={
                 list.have_already.length > 0
                   ? tr('shopping.alreadyHave')(list.have_already.join(', '))

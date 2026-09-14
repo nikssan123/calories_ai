@@ -55,7 +55,7 @@ export const sk: Messages = {
   'today.exercise': 'Pohyb',
   'today.roughEstimate': 'hrubý odhad',
   'today.exerciseFooter': 'Zobrazené oddelene od tvojho cieľa – kalórie spálené pohybom sú len hrubý odhad.',
-  'today.exerciseTitle': '🏃  Pohyb',
+  'today.exerciseTitle': 'Pohyb',
   'today.stepsTitle': 'Kroky',
   'today.steps': (count: number) => n(count, { one: 'krok', few: 'kroky', many: 'kroku', other: 'krokov' }),
   'today.stepsFooter': 'Počíta ich tvoj telefón. Kroky spresňujú tvoj cieľ – nikdy sa k nemu nepripočítavajú.',
@@ -626,7 +626,7 @@ export const sk: Messages = {
   'progress.qualityFooter': (days: string, percent: string) =>
     `Priemer za ${days} – tieto hodnoty má ${percent} % zapísaného.`,
   'progress.chartNutrient': (label: string) => `Zobraziť v grafe: ${label}`,
-  'progress.exerciseTitle': '🏃  Pohyb',
+  'progress.exerciseTitle': 'Pohyb',
   // "Prečo som neschudol" genders the reader; the scale can be the subject instead.
   'progress.exerciseFooter':
     'Opýtaj sa denníka čokoľvek o týchto údajoch – „prečo mi tento týždeň neklesá váha?“',
@@ -643,7 +643,7 @@ export const sk: Messages = {
   'exercise.nothingLogged': (days: string) => `Za posledných ${days} dní nič zapísané.`,
   // No "bol som behať": the example is a note, not a gendered past tense.
   'exercise.tellTheJournal': (example: string) => `Povedz to denníku – „dnes beh na ${example}“.`,
-  'exercise.consistencyTitle': '🔁  Pravidelnosť',
+  'exercise.consistencyTitle': 'Pravidelnosť',
   'exercise.activeOf': (days: string, sessions: string) => `z ${days} dní aktívnych · ${sessions}`,
   'exercise.sessionsCount': (count: number) =>
     n(count, { one: 'tréning', few: 'tréningy', many: 'tréningu', other: 'tréningov' }),
@@ -651,7 +651,7 @@ export const sk: Messages = {
   'exercise.burned': 'Spálené',
   'exercise.distance': 'Vzdialenosť',
   'exercise.time': 'Čas',
-  'exercise.sessionsTitle': '🏃  Tréningy',
+  'exercise.sessionsTitle': 'Tréningy',
   'exercise.burnNote': (example: string) =>
     `Spálené kalórie sú len odhad a nikdy sa neodpočítavajú od tvojho cieľa. Oprav ho v denníku – „ten beh bol skôr ${example}“.`,
   'exercise.minutes': (minutes: string) => `${minutes} min`,
@@ -661,7 +661,7 @@ export const sk: Messages = {
   // ---- Saved workouts -----------------------------------------------------
   'workouts.logTitle': '🏋️  Zapísať tréning',
   'workouts.logAction': 'Zapísať tréning',
-  'workouts.savedTitle': '🏋️  Uložené tréningy',
+  'workouts.savedTitle': 'Uložené tréningy',
   'workouts.buildOne': 'Vytvoriť',
   'workouts.reuseHint': 'Jedno ťuknutie vyplní celú kartu aj s váhami z minula.',
   'workouts.whereSessionsGo':
@@ -674,7 +674,7 @@ export const sk: Messages = {
   'workouts.doneTimes': (times: string) => ` · odcvičené ${times}×`,
   'workouts.editNamed': (name: string) => `Upraviť: ${name}`,
   'workouts.deleteNamed': (name: string) => `Vymazať: ${name}`,
-  'workouts.weekTitle': '🗓️  Tvoj týždeň',
+  'workouts.weekTitle': 'Tvoj týždeň',
   'workouts.weekFooter':
     'Nastavené dni sú pevné. Voľné dni sa riadia tým, čo naozaj pravidelne robíš.',
   // Weekday names arrive in the nominative, which "na"/"v" would have to change.
@@ -683,8 +683,8 @@ export const sk: Messages = {
   // "Nastavil si" genders the reader.
   'workouts.youSetThis': 'tvoje nastavenie',
   'workouts.learned': 'naučené',
-  'workouts.editTitle': '✏️  Upraviť tréning',
-  'workouts.buildTitle': '🏋️  Vytvoriť tréning',
+  'workouts.editTitle': 'Upraviť tréning',
+  'workouts.buildTitle': 'Vytvoriť tréning',
   'workouts.icon': 'Ikona',
   'workouts.namePlaceholder': 'Tlaky, Hrudník, Nohy A…',
   'workouts.nameLabel': 'Názov tréningu',
@@ -909,8 +909,8 @@ export const sk: Messages = {
   'workout.removeNamed': (name: string) => `Odstrániť: ${name}`,
 
   // ---- The weekly review --------------------------------------------------
-  'review.lastWeek': '📅  Minulý týždeň',
-  'review.title': '📅  Týždenný prehľad',
+  'review.lastWeek': 'Minulý týždeň',
+  'review.title': 'Týždenný prehľad',
   'review.pitch':
     'Každý pondelok ráno dostaneš krátke zhodnotenie týždňa – čo čísla naozaj ukázali a či treba posunúť tvoj cieľ. Žiadne kázanie, len jasný obraz.',
   'review.writing': 'Píšem…',
@@ -1022,7 +1022,7 @@ export const sk: Messages = {
   'plan.cookTab': 'Kuchyňa',
   'plan.theWeek': 'Týždeň',
   'plan.locked': 'Plánovanie týždňa je súčasťou plánu Coach',
-  'plan.planItTitle': '🗓  Naplánovať',
+  'plan.planItTitle': 'Naplánovať',
   'plan.wantsPlaceholderShort': 'Niečo konkrétne? – „nič s rybou“',
   // Abbreviated, so it reads after any count without agreeing with it.
   'plan.peopleUnit': 'os.',
@@ -1030,7 +1030,7 @@ export const sk: Messages = {
   'plan.batchWhereItHelps': 'Variť do zásoby, kde to pomôže',
   'plan.batchCooking': 'Varenie do zásoby',
   'plan.planning': 'Plánujem…',
-  'plan.dinnersTitle': '🍽  Večere',
+  'plan.dinnersTitle': 'Večere',
   'plan.lockedBody':
     'Sedem večerí podľa tvojich cieľov a toho, čo už máš v kuchyni – do zásoby, kde to pomôže, a s hotovým nákupným zoznamom.',
   'plan.planItFooter':
@@ -1043,7 +1043,7 @@ export const sk: Messages = {
     ` · vystačí na ${n(count, { one: 'večer', few: 'večery', many: 'večera', other: 'večerov' })}`,
   'plan.cookedNamed': (title: string) => `Uvarené: ${title}`,
   'plan.clearNamed': (day: string) => `Vyprázdniť: ${day}`,
-  'shopping.titleShort': '🧾  Nákup',
+  'shopping.titleShort': 'Nákup',
   'shopping.addSomethingElse': 'Pridať niečo iné',
   'shopping.alreadyHave': (things: string) => `Vynechané, lebo to už máš: ${things}.`,
   'shopping.nothingToBuy': 'Zatiaľ netreba nič kúpiť.',

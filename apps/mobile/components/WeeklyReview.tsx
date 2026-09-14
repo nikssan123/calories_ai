@@ -14,6 +14,7 @@ import { font, type as t, useColors } from '@/theme';
 import { useRefreshOnReturn } from '@/hooks/useRefreshOnReturn';
 import { useLocale } from '@/lib/i18n';
 import { messageOf } from '@/lib/errors';
+import { Glossy } from '@/components/icons/Glossy';
 
 /**
  * Last week, and what it did to the target.
@@ -95,7 +96,7 @@ export function WeeklyReview({ onError }: { onError: (message: string) => void }
   const change = review?.stats.adaptive ?? adaptive;
 
   return (
-    <InsetGroup title={review ? tr('review.lastWeek') : tr('review.title')}>
+    <InsetGroup title={review ? tr('review.lastWeek') : tr('review.title')} icon={<Glossy name="calendar" size={18} />}>
       {review ? (
         <View style={styles.body}>
           <Text style={[t.footnoteBold, { color: colors.mutedForeground }]}>

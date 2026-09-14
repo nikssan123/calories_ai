@@ -11,6 +11,7 @@ import { haptics } from '@/lib/haptics';
 import { font, type as t, useColors } from '@/theme';
 import { useLocale, useT } from '@/lib/i18n';
 import { messageOf } from '@/lib/errors';
+import { Glossy } from '@/components/icons/Glossy';
 
 /**
  * Saved workouts and the week they sit in, on the Exercise screen.
@@ -141,7 +142,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
       <PressableChunk
         depth={3}
         radius={16}
-        color={colors.caloriesDeep}
+        color={colors.calories}
         onPress={() => {
           haptics.press();
           setLogging(true);
@@ -154,6 +155,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
 
       <InsetGroup
         title={tr('workouts.savedTitle')}
+        icon={<Glossy name="dumbbell" size={18} />}
         trailing={
           <Pressable onPress={() => setEditing('new')} accessibilityRole="button" hitSlop={8}>
             <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('workouts.buildOne')}</Text>
@@ -254,6 +256,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
       {!failed && routines !== null && routines.length > 0 && (
         <InsetGroup
           title={tr('workouts.weekTitle')}
+          icon={<Glossy name="calendar" size={18} />}
           footer={tr('workouts.weekFooter')}
         >
           {WEEK_ORDER.map((weekday) => {
@@ -381,7 +384,7 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
   }
 
   return (
-    <InsetGroup title={routine ? tr('workouts.editTitle') : tr('workouts.buildTitle')}>
+    <InsetGroup title={routine ? tr('workouts.editTitle') : tr('workouts.buildTitle')} icon={<Glossy name="dumbbell" size={18} />}>
       <View style={styles.editor}>
         {error && <Text style={[t.footnote, { color: colors.destructive }]}>{error}</Text>}
 
@@ -465,7 +468,7 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
           <PressableChunk
             depth={3}
             radius={999}
-            color={colors.caloriesDeep}
+            color={colors.calories}
             onPress={() => void save()}
             disabled={!ready}
             accessibilityRole="button"

@@ -49,7 +49,7 @@ export const uk: Messages = {
   'today.exercise': 'Рух',
   'today.roughEstimate': 'приблизна оцінка',
   'today.exerciseFooter': 'Показано окремо від норми — витрати на рух оцінено приблизно.',
-  'today.exerciseTitle': '🏃  Рух',
+  'today.exerciseTitle': 'Рух',
   'today.stepsTitle': 'Кроки',
   'today.steps': (count: number) => n(count, { one: 'крок', few: 'кроки', many: 'кроків', other: 'кроку' }),
   'today.stepsFooter': 'Рахує телефон. Кроки уточнюють твою норму — але ніколи до неї не додаються.',
@@ -615,7 +615,7 @@ export const uk: Messages = {
   'progress.qualityFooter': (days: string, percent: string) =>
     `У середньому за ${days} — ці показники є в ${percent}% записаного.`,
   'progress.chartNutrient': (label: string) => `Графік: ${label}`,
-  'progress.exerciseTitle': '🏃  Рух',
+  'progress.exerciseTitle': 'Рух',
   // The reader’s own words would be «чому я не схуд / не схудла»; the scale has no gender.
   'progress.exerciseFooter':
     'Питай щоденник про ці дані що завгодно — «чому вага не зменшилася цього тижня?»',
@@ -632,7 +632,7 @@ export const uk: Messages = {
   // The window is 14, 30 or 90 days, all of which take «днів».
   'exercise.nothingLogged': (days: string) => `За останні ${days} днів нічого не записано.`,
   'exercise.tellTheJournal': (example: string) => `Розкажи щоденнику — «пробіжка на ${example}».`,
-  'exercise.consistencyTitle': '🔁  Регулярність',
+  'exercise.consistencyTitle': 'Регулярність',
   'exercise.activeOf': (days: string, sessions: string) => `із ${days} днів з активністю · ${sessions}`,
   'exercise.sessionsCount': (count: number) =>
     n(count, { one: 'тренування', few: 'тренування', many: 'тренувань', other: 'тренування' }),
@@ -640,7 +640,7 @@ export const uk: Messages = {
   'exercise.burned': 'Спалено',
   'exercise.distance': 'Відстань',
   'exercise.time': 'Час',
-  'exercise.sessionsTitle': '🏃  Тренування',
+  'exercise.sessionsTitle': 'Тренування',
   'exercise.burnNote': (example: string) =>
     `Витрати — це оцінка, і їх ніколи не віднімають від норми калорій. Виправити можна в щоденнику — «пробіжка була ближче до ${example}».`,
   'exercise.minutes': (minutes: string) => `${minutes} хв`,
@@ -650,7 +650,7 @@ export const uk: Messages = {
   // ---- Saved workouts -----------------------------------------------------
   'workouts.logTitle': '🏋️  Записати тренування',
   'workouts.logAction': 'Записати тренування',
-  'workouts.savedTitle': '🏋️  Збережені тренування',
+  'workouts.savedTitle': 'Збережені тренування',
   'workouts.buildOne': 'Створити',
   'workouts.reuseHint': 'Один дотик заповнює всю картку — з вагами з минулого разу.',
   'workouts.whereSessionsGo':
@@ -663,15 +663,15 @@ export const uk: Messages = {
   'workouts.doneTimes': (times: string) => ` · виконано ${times}×`,
   'workouts.editNamed': (name: string) => `Редагувати ${name}`,
   'workouts.deleteNamed': (name: string) => `Видалити ${name}`,
-  'workouts.weekTitle': '🗓️  Твій тиждень',
+  'workouts.weekTitle': 'Твій тиждень',
   'workouts.weekFooter':
     'Задані тобою дні незмінні. Вільні дні підлаштовуються під те, що ти справді робиш.',
   'workouts.workoutFor': (day: string) => `Тренування: ${day}`,
   'workouts.usually': (workout: string) => `${workout} — зазвичай`,
   'workouts.youSetThis': 'твій вибір',
   'workouts.learned': 'за звичкою',
-  'workouts.editTitle': '✏️  Редагувати тренування',
-  'workouts.buildTitle': '🏋️  Створити тренування',
+  'workouts.editTitle': 'Редагувати тренування',
+  'workouts.buildTitle': 'Створити тренування',
   'workouts.icon': 'Іконка',
   'workouts.namePlaceholder': 'Жими, День грудей, Ноги А…',
   'workouts.nameLabel': 'Назва тренування',
@@ -893,8 +893,8 @@ export const uk: Messages = {
   'workout.removeNamed': (name: string) => `Прибрати ${name}`,
 
   // ---- The weekly review --------------------------------------------------
-  'review.lastWeek': '📅  Минулий тиждень',
-  'review.title': '📅  Тижневий огляд',
+  'review.lastWeek': 'Минулий тиждень',
+  'review.title': 'Тижневий огляд',
   'review.pitch':
     'Щопонеділка вранці — короткий огляд того, як минув тиждень: що насправді показали цифри і чи варто змінити норму. Без нотацій — лише картина.',
   'review.writing': 'Пишу…',
@@ -1004,14 +1004,14 @@ export const uk: Messages = {
   'plan.cookTab': 'Кухня',
   'plan.theWeek': 'Тиждень',
   'plan.locked': 'Планування тижня входить у Coach',
-  'plan.planItTitle': '🗓  Спланувати',
+  'plan.planItTitle': 'Спланувати',
   'plan.wantsPlaceholderShort': 'Є побажання? — «нічого з рибою»',
   'plan.peopleUnit': 'ос.',
   'plan.minUnit': 'хв',
   'plan.batchWhereItHelps': 'Готувати із запасом, де доречно',
   'plan.batchCooking': 'Готування із запасом',
   'plan.planning': 'Планую…',
-  'plan.dinnersTitle': '🍽  Вечері',
+  'plan.dinnersTitle': 'Вечері',
   'plan.lockedBody':
     'Сім вечер під твої норми і те, що вже є на кухні, — із запасом, де це доречно, і з готовим списком покупок.',
   'plan.planItFooter':
@@ -1023,7 +1023,7 @@ export const uk: Messages = {
     ` · на ${n(count, { one: 'вечір', few: 'вечори', many: 'вечорів', other: 'вечора' })}`,
   'plan.cookedNamed': (title: string) => `Приготовано: ${title}`,
   'plan.clearNamed': (day: string) => `Очистити: ${day}`,
-  'shopping.titleShort': '🧾  Покупки',
+  'shopping.titleShort': 'Покупки',
   'shopping.addSomethingElse': 'Додати ще щось',
   'shopping.alreadyHave': (things: string) => `Не додано, бо вже є: ${things}.`,
   'shopping.nothingToBuy': 'Поки нічого купувати.',

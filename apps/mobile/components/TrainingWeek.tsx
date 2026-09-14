@@ -3,6 +3,7 @@ import type { Streak, TrainingWeek as Week } from '@ct/shared';
 import { addDays, WEEK_ORDER, weekdayName } from '@ct/shared';
 import { useLocale, useT } from '@/lib/i18n';
 import { font, type as t, useColors } from '@/theme';
+import { Glossy } from '@/components/icons/Glossy';
 
 /**
  * The training week, as seven cells rather than as a fraction.
@@ -39,10 +40,15 @@ export function TrainingWeek({ week, streak }: { week: Week; streak: Streak }) {
               <View
                 style={[
                   styles.dot,
-                  {
-                    backgroundColor: done ? colors.exercise : colors.mutedField,
-                    borderColor: done ? colors.exercise : colors.border,
-                  },
+                  done
+                    ? {
+                        /* A trained day is lit in exercise pink; a rest day is an empty glass bead. */
+                        backgroundColor: colors.exercise,
+                        borderColor: 'rgba(255, 255, 255, 0.7)',
+                        experimental_backgroundImage: `radial-gradient(circle at 35% 30%, #ffffff 0%, ${colors.exercise} 55%)`,
+                        boxShadow: `0px 3px 8px -3px ${colors.exercise}`,
+                      }
+                    : { backgroundColor: colors.glass, borderColor: colors.hairline },
                 ]}
               />
               <Text style={[styles.letter, { color: colors.mutedForeground }]}>
@@ -63,10 +69,13 @@ export function TrainingWeek({ week, streak }: { week: Week; streak: Streak }) {
        * underneath tells a first-timer what the bar even is instead.
        */}
       {streak.current > 0 ? (
-        <Text style={[t.footnoteBold, t.tnum, { color: colors.foreground }]}>
-          🏋️ {tr('streak.weeks')(streak.current)}
-          {streak.best > streak.current ? `  ${tr('streak.best')(streak.best)}` : ''}
-        </Text>
+        <View style={styles.run}>
+          <Glossy name="dumbbell" size={16} />
+          <Text style={[t.footnoteBold, t.tnum, { color: colors.foreground }]}>
+            {tr('streak.weeks')(streak.current)}
+            {streak.best > streak.current ? `  ${tr('streak.best')(streak.best)}` : ''}
+          </Text>
+        </View>
       ) : (
         <Text style={[styles.hint, { color: colors.mutedForeground }]}>
           {tr('streak.startTraining')}
@@ -80,7 +89,8 @@ const styles = StyleSheet.create({
   wrap: { alignItems: 'center', gap: 8, paddingVertical: 4 },
   dots: { flexDirection: 'row', gap: 10 },
   day: { alignItems: 'center', gap: 4 },
-  dot: { width: 18, height: 18, borderRadius: 9, borderWidth: 1 },
+  dot: { width: 20, height: 20, borderRadius: 10, borderWidth: 1 },
+  run: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   letter: { fontFamily: font.semibold, fontSize: 11, lineHeight: 14 },
   hint: { fontFamily: font.semibold, fontSize: 12, lineHeight: 16, textAlign: 'center' },
 });

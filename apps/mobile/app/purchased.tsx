@@ -167,7 +167,7 @@ export default function PurchasedScreen() {
       )}
 
       <PressableChunk
-        color={colors.caloriesDeep}
+        color={colors.calories}
         radius={999}
         onPress={() => router.back()}
         accessibilityRole="button"

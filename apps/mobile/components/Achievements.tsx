@@ -7,6 +7,7 @@ import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
 import { haptics } from '@/lib/haptics';
 import { type as t, useColors } from '@/theme';
+import { Glossy } from '@/components/icons/Glossy';
 
 /**
  * The badge wall, and the one row on Progress that leads to it.
@@ -76,7 +77,7 @@ export function AchievementsRow({ earned }: { earned: Achievement[] }) {
   const got = new Set(earned.map((badge) => badge.key));
 
   return (
-    <InsetGroup title={tr('achievements.title')}>
+    <InsetGroup title={tr('achievements.title')} icon={<Glossy name="medal" size={18} />}>
       <Pressable
         onPress={() => {
           haptics.selected();
@@ -94,9 +95,7 @@ export function AchievementsRow({ earned }: { earned: Achievement[] }) {
               tell apart. */}
           <View style={styles.strip}>
             {ACHIEVEMENT_KEYS.map((key) => (
-              <Text key={key} style={[styles.rowGlyph, got.has(key) ? null : styles.locked]}>
-                {GLYPH[key]}
-              </Text>
+              <Medallion key={key} badgeKey={key} got={got.has(key)} size={24} />
             ))}
           </View>
           <Text style={[t.footnoteSemibold, t.tnum, { color: colors.mutedForeground }]}>
@@ -178,7 +177,7 @@ function BadgeRow({
 
   return (
     <InsetRow first={first} style={styles.badgeRow}>
-      <Text style={[styles.glyph, got ? null : styles.locked]}>{GLYPH[badgeKey]}</Text>
+      <Medallion badgeKey={badgeKey} got={Boolean(got)} size={42} />
 
       <View style={styles.flex}>
         <Text style={[t.bodyBold, { color: got ? colors.foreground : colors.mutedForeground }]}>
@@ -207,7 +206,8 @@ function BadgeRow({
                     // A run of nothing still draws a sliver, so the bar reads as
                     // a bar rather than as an empty box somebody forgot to fill.
                     width: `${Math.max(2, (toward.current / toward.goal) * 100)}%`,
-                    backgroundColor: colors.caloriesText,
+                    backgroundColor: colors.primary,
+                    experimental_backgroundImage: colors.primaryRamp,
                   },
                 ]}
               />
@@ -219,6 +219,43 @@ function BadgeRow({
         )}
       </View>
     </InsetRow>
+  );
+}
+
+/**
+ * A badge, set in a medallion.
+ *
+ * The badges stay pictures — each one's glyph says what it was for — but they
+ * no longer float loose on the card. Earned, the glyph sits in a warm gold disc
+ * with a lit rim; not yet earned, in a plain glass one, dimmed. The difference
+ * reads at the size of a strip of fourteen, where a faded emoji alone did not.
+ */
+function Medallion({ badgeKey, got, size }: { badgeKey: AchievementKey; got: boolean; size: number }) {
+  const colors = useColors();
+  return (
+    <View
+      style={[
+        styles.medallion,
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          borderColor: got ? 'rgba(255, 255, 255, 0.85)' : colors.hairline,
+        },
+        got
+          ? {
+              backgroundColor: '#ffd36a',
+              experimental_backgroundImage:
+                'radial-gradient(circle at 35% 30%, #fff6c8 0%, #ffd36a 45%, #e8a21a 100%)',
+              boxShadow: '0px 4px 10px -4px rgba(232, 162, 26, 0.9)',
+            }
+          : { backgroundColor: colors.glass },
+      ]}
+    >
+      <Text style={[{ fontSize: size * 0.52, lineHeight: size * 0.68 }, got ? null : styles.locked]}>
+        {GLYPH[badgeKey]}
+      </Text>
+    </View>
   );
 }
 
@@ -241,12 +278,11 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   wall: { gap: 20 },
   strip: { flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 },
-  rowGlyph: { fontSize: 15, lineHeight: 20 },
+  medallion: { alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   badgeRow: { alignItems: 'flex-start', paddingVertical: 12 },
-  glyph: { fontSize: 24, lineHeight: 30 },
   locked: { opacity: 0.3 },
   how: { marginTop: 1 },
   progress: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
-  track: { flex: 1, height: 6, borderRadius: 999, overflow: 'hidden' },
+  track: { flex: 1, height: 8, borderRadius: 999, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 999 },
 });

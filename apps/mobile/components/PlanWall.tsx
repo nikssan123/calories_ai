@@ -99,7 +99,7 @@ export function PlanWall({
         <View style={styles.actions}>
           {onLogManually && (
             <PressableChunk
-              color={colors.caloriesDeep}
+              color={colors.calories}
               radius={999}
               onPress={onLogManually}
               accessibilityRole="button"
@@ -184,7 +184,7 @@ export function LockedPanel({
       <Text style={[t.body, { color: colors.mutedForeground }]}>{body}</Text>
       {next && (
         <PressableChunk
-          color={colors.caloriesDeep}
+          color={colors.calories}
           radius={999}
           /* Same as the wall's: the panel names a tier, so it opens on it. */
           onPress={() => router.push({ pathname: '/upgrade', params: { plan: next } })}

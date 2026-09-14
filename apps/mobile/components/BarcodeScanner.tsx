@@ -404,7 +404,7 @@ export function BarcodeScanner({
                     </Text>
                     <PressableChunk
                       radius={999}
-                      color={colors.caloriesDeep}
+                      color={colors.calories}
                       onPress={() => void requestPermission()}
                       accessibilityRole="button"
                       style={styles.permissionButton}
@@ -494,7 +494,7 @@ export function BarcodeScanner({
             </Text>
             <PressableChunk
               radius={999}
-              color={colors.caloriesDeep}
+              color={colors.calories}
               onPress={close}
               accessibilityRole="button"
               contentStyle={[styles.done, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
@@ -799,7 +799,7 @@ function Portion({
 
         <PressableChunk
           radius={999}
-          color={colors.caloriesDeep}
+          color={colors.calories}
           onPress={() => primary.onPress(portion)}
           disabled={busy}
           accessibilityRole="button"
@@ -949,7 +949,7 @@ function Missed({
 
       <PressableChunk
         radius={999}
-        color={colors.caloriesDeep}
+        color={colors.calories}
         onPress={() => void onLabelPhoto('camera')}
         accessibilityRole="button"
         style={styles.missedButton}

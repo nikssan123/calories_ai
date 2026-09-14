@@ -93,13 +93,19 @@ export const light: Palette = {
   cardForeground: '#31261e',
   primary: '#12b76a',
   primaryForeground: '#31261e',
-  secondary: '#f5ebdd',
+  /*
+   * Wells, not tan slabs. Since the glow-up the fills behind a field, a chip or
+   * a track are a faint warm tint of the ink rather than an opaque beige, so
+   * they sit into whatever surface they are on — a white card, a glass one, the
+   * sky — instead of pasting a second colour of card on top of it.
+   */
+  secondary: 'rgba(120, 90, 50, 0.07)',
   secondaryForeground: '#31261e',
-  muted: '#f3e8d9',
+  muted: 'rgba(120, 90, 50, 0.08)',
   mutedWash: 'rgba(243, 232, 217, 0.4)',
   mutedField: 'rgba(243, 232, 217, 0.6)',
   mutedForeground: '#77685b',
-  accent: '#f5ebdd',
+  accent: 'rgba(120, 90, 50, 0.07)',
   accentForeground: '#31261e',
   destructive: '#ce3527',
   destructiveForeground: '#ffffff',
@@ -151,13 +157,13 @@ export const dark: Palette = {
   cardForeground: '#f7efe6',
   primary: '#3ddc97',
   primaryForeground: '#1a1512',
-  secondary: '#322822',
+  secondary: 'rgba(255, 255, 255, 0.07)',
   secondaryForeground: '#f7efe6',
-  muted: '#322822',
+  muted: 'rgba(255, 255, 255, 0.08)',
   mutedWash: 'rgba(50, 40, 34, 0.4)',
   mutedField: 'rgba(50, 40, 34, 0.6)',
   mutedForeground: '#a79a8d',
-  accent: '#322822',
+  accent: 'rgba(255, 255, 255, 0.07)',
   accentForeground: '#f7efe6',
   destructive: '#ff6a5c',
   destructiveForeground: '#1a1512',

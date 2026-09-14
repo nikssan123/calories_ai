@@ -884,6 +884,7 @@ export default function TodayScreen() {
           {day.exercise_entries.length > 0 && (
             <InsetGroup
               title={tr('today.exerciseTitle')}
+              icon={<Glossy name="steps" size={18} />}
               trailing={
                 <Text style={[t.footnoteBold, t.tnum, { color: colors.exerciseText }]}>
                   −{day.burned_kcal} kcal

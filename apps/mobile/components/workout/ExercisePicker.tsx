@@ -359,7 +359,7 @@ export function ExercisePicker({
         <PressableChunk
           depth={3}
           radius={999}
-          color={colors.caloriesDeep}
+          color={colors.calories}
           onPress={commit}
           disabled={picked.length === 0}
           accessibilityRole="button"

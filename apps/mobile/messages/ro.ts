@@ -61,7 +61,7 @@ export const ro: Messages = {
   'today.exercise': 'Mișcare',
   'today.roughEstimate': 'estimare aproximativă',
   'today.exerciseFooter': 'Afișate separat de ținta ta — caloriile arse prin mișcare sunt doar o estimare.',
-  'today.exerciseTitle': '🏃  Mișcare',
+  'today.exerciseTitle': 'Mișcare',
   'today.stepsTitle': 'Pași',
   'today.steps': (count: number) => n(count, { one: 'pas', few: 'pași', other: 'de pași' }),
   'today.stepsFooter': 'Numărați de telefonul tău. Pașii îți fac ținta mai precisă — nu se adună niciodată la ea.',
@@ -623,7 +623,7 @@ export const ro: Messages = {
   'progress.qualityFooter': (days: string, percent: string) =>
     `Medie pe ${days} — ${percent}% din ce ai notat are aceste valori.`,
   'progress.chartNutrient': (label: string) => `Arată ${label} pe grafic`,
-  'progress.exerciseTitle': '🏃  Mișcare',
+  'progress.exerciseTitle': 'Mișcare',
   'progress.exerciseFooter':
     'Întreabă jurnalul orice despre datele astea — „de ce n-am slăbit săptămâna asta?”',
   // `days` is a bare number, so the noun takes its plural form from it.
@@ -639,7 +639,7 @@ export const ro: Messages = {
   'exercise.nothingLogged': (days: string) =>
     `Nimic notat în ultimele ${days} ${w(Number(days), { one: 'zi', few: 'zile', other: 'de zile' })}.`,
   'exercise.tellTheJournal': (example: string) => `Spune-i jurnalului — „am alergat ${example}”.`,
-  'exercise.consistencyTitle': '🔁  Constanță',
+  'exercise.consistencyTitle': 'Constanță',
   // Follows the large count of active days: "12 zile active din 30 · 14 sesiuni".
   'exercise.activeOf': (days: string, sessions: string) => `zile active din ${days} · ${sessions}`,
   'exercise.sessionsCount': (count: number) => n(count, { one: 'sesiune', few: 'sesiuni', other: 'de sesiuni' }),
@@ -647,7 +647,7 @@ export const ro: Messages = {
   'exercise.burned': 'Arse',
   'exercise.distance': 'Distanță',
   'exercise.time': 'Timp',
-  'exercise.sessionsTitle': '🏃  Sesiuni',
+  'exercise.sessionsTitle': 'Sesiuni',
   'exercise.burnNote': (example: string) =>
     `Caloriile arse sunt o estimare și nu se scad niciodată din ținta ta. Corectează în jurnal — „alergarea aia a fost mai degrabă ${example}”.`,
   'exercise.minutes': (minutes: string) => `${minutes} min`,
@@ -657,7 +657,7 @@ export const ro: Messages = {
   // ---- Saved workouts -----------------------------------------------------
   'workouts.logTitle': '🏋️  Notează un antrenament',
   'workouts.logAction': 'Notează un antrenament',
-  'workouts.savedTitle': '🏋️  Antrenamente salvate',
+  'workouts.savedTitle': 'Antrenamente salvate',
   'workouts.buildOne': 'Creează unul',
   'workouts.reuseHint': 'O atingere completează tot cardul, cu greutățile folosite data trecută.',
   'workouts.whereSessionsGo':
@@ -670,15 +670,15 @@ export const ro: Messages = {
   'workouts.doneTimes': (times: string) => ` · făcut de ${times}×`,
   'workouts.editNamed': (name: string) => `Editează ${name}`,
   'workouts.deleteNamed': (name: string) => `Șterge ${name}`,
-  'workouts.weekTitle': '🗓️  Săptămâna ta',
+  'workouts.weekTitle': 'Săptămâna ta',
   'workouts.weekFooter':
     'Zilele pe care le setezi rămân fixe. Cele lăsate libere urmează ce faci de fapt, constant.',
   'workouts.workoutFor': (day: string) => `Antrenament pentru ${day}`,
   'workouts.usually': (workout: string) => `${workout} — de obicei`,
   'workouts.youSetThis': 'setat de tine',
   'workouts.learned': 'învățat',
-  'workouts.editTitle': '✏️  Editează antrenamentul',
-  'workouts.buildTitle': '🏋️  Creează un antrenament',
+  'workouts.editTitle': 'Editează antrenamentul',
+  'workouts.buildTitle': 'Creează un antrenament',
   'workouts.icon': 'Pictogramă',
   'workouts.namePlaceholder': 'Împins, Zi de piept, Picioare A…',
   'workouts.nameLabel': 'Numele antrenamentului',
@@ -900,8 +900,8 @@ export const ro: Messages = {
   'workout.removeNamed': (name: string) => `Scoate ${name}`,
 
   // ---- The weekly review --------------------------------------------------
-  'review.lastWeek': '📅  Săptămâna trecută',
-  'review.title': '📅  Bilanț săptămânal',
+  'review.lastWeek': 'Săptămâna trecută',
+  'review.title': 'Bilanț săptămânal',
   'review.pitch':
     'În fiecare luni dimineață primești o scurtă trecere în revistă a săptămânii — ce au arătat de fapt cifrele și dacă ținta ta trebuie mutată. Fără predici, doar tabloul de ansamblu.',
   'review.writing': 'Scriu…',
@@ -1011,14 +1011,14 @@ export const ro: Messages = {
   'plan.cookTab': 'Gătit',
   'plan.theWeek': 'Săptămâna',
   'plan.locked': 'Planificarea săptămânii face parte din Coach',
-  'plan.planItTitle': '🗓  Planifică',
+  'plan.planItTitle': 'Planifică',
   'plan.wantsPlaceholderShort': 'Ai ceva în minte? — „nimic cu pește”',
   'plan.peopleUnit': 'persoane',
   'plan.minUnit': 'min',
   'plan.batchWhereItHelps': 'Gătește în avans unde ajută',
   'plan.batchCooking': 'Gătit în avans',
   'plan.planning': 'Planific…',
-  'plan.dinnersTitle': '🍽  Cine',
+  'plan.dinnersTitle': 'Cine',
   'plan.lockedBody':
     'Șapte cine calculate după țintele tale și după ce ai deja în bucătărie, gătite în avans unde ajută, cu lista de cumpărături scrisă pentru tine.',
   'plan.planItFooter':
@@ -1029,7 +1029,7 @@ export const ro: Messages = {
   'plan.covers': (count: number) => ` · ajunge pentru ${n(count, { one: 'seară', few: 'seri', other: 'de seri' })}`,
   'plan.cookedNamed': (title: string) => `Am gătit ${title}`,
   'plan.clearNamed': (day: string) => `Șterge cina de ${day}`,
-  'shopping.titleShort': '🧾  Cumpărături',
+  'shopping.titleShort': 'Cumpărături',
   'shopping.addSomethingElse': 'Adaugă altceva',
   'shopping.alreadyHave': (things: string) => `Nu le-am trecut, pentru că le ai deja: ${things}.`,
   'shopping.nothingToBuy': 'Nimic de cumpărat încă.',

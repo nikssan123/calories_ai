@@ -59,7 +59,7 @@ export const el: Messages = {
   'today.exercise': 'Άσκηση',
   'today.roughEstimate': 'πρόχειρη εκτίμηση',
   'today.exerciseFooter': 'Εμφανίζεται χωριστά από τον στόχο σου — η καύση από την άσκηση είναι πρόχειρη εκτίμηση.',
-  'today.exerciseTitle': '🏃  Άσκηση',
+  'today.exerciseTitle': 'Άσκηση',
   'today.stepsTitle': 'Βήματα',
   'today.steps': (count: number) => n(count, { one: 'βήμα', other: 'βήματα' }),
   'today.stepsFooter': 'Τα μετράει το τηλέφωνό σου. Τα βήματα κάνουν τον στόχο σου πιο ακριβή — δεν προστίθενται ποτέ σε αυτόν.',
@@ -615,7 +615,7 @@ export const el: Messages = {
   'progress.qualityFooter': (days: string, percent: string) =>
     `Μέσος όρος για ${days} — το ${percent}% όσων κατέγραψες έχει αυτά τα στοιχεία.`,
   'progress.chartNutrient': (label: string) => `Γράφημα: ${label}`,
-  'progress.exerciseTitle': '🏃  Άσκηση',
+  'progress.exerciseTitle': 'Άσκηση',
   'progress.exerciseFooter':
     'Ρώτα το ημερολόγιο ό,τι θέλεις για αυτά τα δεδομένα — «γιατί δεν έχασα βάρος αυτή την εβδομάδα;»',
   'progress.sessionsOver': (kcal: string, days: string) =>
@@ -629,14 +629,14 @@ export const el: Messages = {
   'exercise.title': 'Άσκηση',
   'exercise.nothingLogged': (days: string) => `Δεν καταγράφηκε τίποτα τις τελευταίες ${days} μέρες.`,
   'exercise.tellTheJournal': (example: string) => `Πες το στο ημερολόγιο — «έτρεξα ${example}».`,
-  'exercise.consistencyTitle': '🔁  Συνέπεια',
+  'exercise.consistencyTitle': 'Συνέπεια',
   'exercise.activeOf': (days: string, sessions: string) => `ενεργές από ${days} μέρες · ${sessions}`,
   'exercise.sessionsCount': (count: number) => n(count, { one: 'προπόνηση', other: 'προπονήσεις' }),
   'exercise.burnedPerDay': 'Θερμίδες που κάηκαν ανά μέρα',
   'exercise.burned': 'Καμένες',
   'exercise.distance': 'Απόσταση',
   'exercise.time': 'Χρόνος',
-  'exercise.sessionsTitle': '🏃  Προπονήσεις',
+  'exercise.sessionsTitle': 'Προπονήσεις',
   'exercise.burnNote': (example: string) =>
     `Η καύση είναι εκτίμηση και δεν αφαιρείται ποτέ από τον στόχο θερμίδων σου. Αν κάποια είναι λάθος, διόρθωσέ τη στο ημερολόγιο — «εκείνο το τρέξιμο ήταν μάλλον ${example}».`,
   'exercise.minutes': (minutes: string) => `${minutes} λεπ.`,
@@ -646,7 +646,7 @@ export const el: Messages = {
   // ---- Saved workouts -----------------------------------------------------
   'workouts.logTitle': '🏋️  Κατάγραψε προπόνηση',
   'workouts.logAction': 'Κατάγραψε προπόνηση',
-  'workouts.savedTitle': '🏋️  Αποθηκευμένες προπονήσεις',
+  'workouts.savedTitle': 'Αποθηκευμένες προπονήσεις',
   'workouts.buildOne': 'Φτιάξε μία',
   'workouts.reuseHint': 'Ένα πάτημα συμπληρώνει όλη την κάρτα, με τα βάρη της προηγούμενης φοράς.',
   'workouts.whereSessionsGo':
@@ -659,15 +659,15 @@ export const el: Messages = {
   'workouts.doneTimes': (times: string) => ` · έγινε ${times}×`,
   'workouts.editNamed': (name: string) => `Επεξεργασία: ${name}`,
   'workouts.deleteNamed': (name: string) => `Διαγραφή: ${name}`,
-  'workouts.weekTitle': '🗓️  Η εβδομάδα σου',
+  'workouts.weekTitle': 'Η εβδομάδα σου',
   'workouts.weekFooter':
     'Οι μέρες που ορίζεις μένουν σταθερές. Όσες αφήνεις ανοιχτές ακολουθούν ό,τι κάνεις στην πράξη.',
   'workouts.workoutFor': (day: string) => `Προπόνηση: ${day}`,
   'workouts.usually': (workout: string) => `${workout} — συνήθως`,
   'workouts.youSetThis': 'το όρισες εσύ',
   'workouts.learned': 'από όσα κάνεις',
-  'workouts.editTitle': '✏️  Επεξεργασία προπόνησης',
-  'workouts.buildTitle': '🏋️  Φτιάξε προπόνηση',
+  'workouts.editTitle': 'Επεξεργασία προπόνησης',
+  'workouts.buildTitle': 'Φτιάξε προπόνηση',
   'workouts.icon': 'Εικονίδιο',
   'workouts.namePlaceholder': 'Στήθος-τρικέφαλα, Πλάτη, Πόδια Α…',
   'workouts.nameLabel': 'Όνομα προπόνησης',
@@ -887,8 +887,8 @@ export const el: Messages = {
   'workout.removeNamed': (name: string) => `Αφαίρεση: ${name}`,
 
   // ---- The weekly review --------------------------------------------------
-  'review.lastWeek': '📅  Η προηγούμενη εβδομάδα',
-  'review.title': '📅  Εβδομαδιαία ανασκόπηση',
+  'review.lastWeek': 'Η προηγούμενη εβδομάδα',
+  'review.title': 'Εβδομαδιαία ανασκόπηση',
   'review.pitch':
     'Κάθε Δευτέρα πρωί θα παίρνεις μια σύντομη ματιά στο πώς πήγε η εβδομάδα — τι έδειξαν στην πράξη τα νούμερα και αν ο στόχος σου πρέπει να αλλάξει. Χωρίς κήρυγμα, μόνο η εικόνα.',
   'review.writing': 'Γράφω…',
@@ -998,14 +998,14 @@ export const el: Messages = {
   'plan.cookTab': 'Κουζίνα',
   'plan.theWeek': 'Η εβδομάδα',
   'plan.locked': 'Η οργάνωση της εβδομάδας ανήκει στο Coach',
-  'plan.planItTitle': '🗓  Οργάνωσέ την',
+  'plan.planItTitle': 'Οργάνωσέ την',
   'plan.wantsPlaceholderShort': 'Κάτι στο μυαλό σου; — «τίποτα με ψάρι»',
   'plan.peopleUnit': 'άτομα',
   'plan.minUnit': 'λεπ.',
   'plan.batchWhereItHelps': 'Μαγείρεμα για δύο μέρες όπου βοηθάει',
   'plan.batchCooking': 'Μαγείρεμα για πολλές μέρες',
   'plan.planning': 'Οργανώνω…',
-  'plan.dinnersTitle': '🍽  Βραδινά',
+  'plan.dinnersTitle': 'Βραδινά',
   'plan.lockedBody':
     'Επτά βραδινά με βάση τους στόχους σου και ό,τι έχεις ήδη στην κουζίνα, με μαγείρεμα για δύο μέρες όπου βοηθάει και τη λίστα για ψώνια γραμμένη για σένα.',
   'plan.planItFooter':
@@ -1016,7 +1016,7 @@ export const el: Messages = {
   'plan.covers': (count: number) => ` · καλύπτει ${n(count, { one: 'βραδιά', other: 'βραδιές' })}`,
   'plan.cookedNamed': (title: string) => `Το μαγείρεψα: ${title}`,
   'plan.clearNamed': (day: string) => `Αφαίρεση βραδινού: ${day}`,
-  'shopping.titleShort': '🧾  Ψώνια',
+  'shopping.titleShort': 'Ψώνια',
   'shopping.addSomethingElse': 'Πρόσθεσε κάτι άλλο',
   'shopping.alreadyHave': (things: string) => `Δεν μπήκαν γιατί τα έχεις ήδη: ${things}.`,
   'shopping.nothingToBuy': 'Δεν υπάρχει τίποτα να αγοράσεις ακόμα.',

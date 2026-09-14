@@ -15,6 +15,8 @@ import {
   toBodyWeight,
 } from '@ct/shared';
 import { AchievementsRow } from '@/components/Achievements';
+import { Segments } from '@/components/Segments';
+import { Sky, useSky } from '@/components/Sky';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { Glossy } from '@/components/icons/Glossy';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
@@ -54,6 +56,7 @@ export default function ProgressScreen() {
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTop(scrollRef);
   const colors = useColors();
+  const sky = useSky();
   const tr = useT();
   const locale = useLocale();
   const insets = useSafeAreaInsets();
@@ -120,39 +123,16 @@ export default function ProgressScreen() {
       contentContainerStyle={[styles.page, { paddingTop: insets.top + 20 }]}
       keyboardShouldPersistTaps="handled"
     >
+      {/* The hour's sky behind the title, as on Today and the journal: every tab
+          opens under the same light, and nothing in it sits over a word. */}
+      <Sky sky={sky} height={insets.top + 190} hazeTop={insets.top + 60} style={styles.sky} />
       <View style={styles.header}>
-        <Text style={[t.largeTitle, { color: colors.foreground }]}>{tr('progress.title')}</Text>
-        <Chunk
-          depth={2}
-          radius={999}
-          contentStyle={[
-            styles.windows,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-        >
-          {WINDOWS.map((w) => {
-            const active = days === w;
-            return (
-              <Pressable
-                key={w}
-                onPress={() => setDays(w)}
-                accessibilityRole="button"
-                accessibilityLabel={`${w} days`}
-                accessibilityState={{ selected: active }}
-                style={[styles.window, active ? { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp } : null]}
-              >
-                <Text
-                  style={[
-                    styles.windowLabel,
-                    { color: active ? colors.primaryForeground : colors.mutedForeground },
-                  ]}
-                >
-                  {w}d
-                </Text>
-              </Pressable>
-            );
-          })}
-        </Chunk>
+        <Text style={[t.largeTitle, { color: sky.inkLight ? colors.skyInk : colors.foreground }]}>{tr('progress.title')}</Text>
+        <Segments
+          options={WINDOWS.map((w) => ({ value: String(w), label: `${w}d`, accessibilityLabel: `${w} days` }))}
+          value={String(days)}
+          onChange={(next) => setDays(Number(next))}
+        />
       </View>
 
       {!progress ? (
@@ -224,7 +204,7 @@ export default function ProgressScreen() {
                     */}
                   <Sparkline
                     points={progress.weight.series}
-                    stroke={colors.foreground}
+                    stroke={colors.logoRamp}
                     style={styles.chart}
                     readout={(point) => <WeightReadout point={point} />}
                   />
@@ -285,7 +265,7 @@ export default function ProgressScreen() {
               <PressableChunk
                 depth={3}
                 radius={999}
-                color={colors.caloriesDeep}
+                color={colors.calories}
                 onPress={() => void submitWeight()}
                 disabled={!weightInput || saving}
                 accessibilityRole="button"
@@ -438,6 +418,7 @@ export default function ProgressScreen() {
           {/* Exercise has its own tab; this is the pointer, not the data. */}
           <InsetGroup
             title={tr('progress.exerciseTitle')}
+            icon={<Glossy name="steps" size={18} />}
             footer={tr('progress.exerciseFooter')}
           >
             <Pressable
@@ -615,15 +596,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   page: { paddingHorizontal: 16, paddingBottom: 40, gap: 28 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  windows: { flexDirection: 'row', borderWidth: 1, borderRadius: 999, padding: 4 },
-  window: {
-    height: 32,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  windowLabel: { fontFamily: font.bold, fontSize: 12, lineHeight: 16 },
+  sky: { top: 0 },
   pad: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 16, paddingTop: 14 },
   // The chips already own the space above, so the figure sits closer to them

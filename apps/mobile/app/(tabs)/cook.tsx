@@ -23,6 +23,9 @@ import { font, type as t, useColors } from '@/theme';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
 import { useLocale, useT } from '@/lib/i18n';
 import { AppError, messageOf } from '@/lib/errors';
+import { Glossy } from '@/components/icons/Glossy';
+import { Segments } from '@/components/Segments';
+import { Sky, useSky } from '@/components/Sky';
 
 /**
  * Cook — what you could make, from what you have, that fits what is left.
@@ -44,6 +47,7 @@ export default function CookScreen() {
   const scrollRef = useRef<ScrollView>(null);
   useScrollToTop(scrollRef);
   const colors = useColors();
+  const sky = useSky();
   const insets = useSafeAreaInsets();
   const tr = useT();
   const locale = useLocale();
@@ -343,15 +347,17 @@ export default function CookScreen() {
         precondition, not an answer — it does not get the top third of the
         screen for something checked ten seconds a week.
       */}
+      {/* The hour's sky behind the title, as on every tab. */}
+      <Sky sky={sky} height={insets.top + 190} hazeTop={insets.top + 60} style={styles.sky} />
       <View style={styles.titleRow}>
-        <Text style={[t.largeTitle, { color: colors.foreground }]}>{tr('cook.title')}</Text>
+        <Text style={[t.largeTitle, { color: sky.inkLight ? colors.skyInk : colors.foreground }]}>{tr('cook.title')}</Text>
         {items !== null && (
           <Chunk
             depth={2}
             radius={999}
             contentStyle={[
               styles.chip,
-              { backgroundColor: colors.card, borderColor: colors.border },
+              { backgroundColor: colors.glassStrong, borderColor: colors.glassEdge },
             ]}
           >
             <Pressable
@@ -359,7 +365,7 @@ export default function CookScreen() {
               accessibilityRole="button"
               style={({ pressed }) => [styles.chipInner, { opacity: pressed ? 0.6 : 1 }]}
             >
-              <Text style={styles.chipGlyph}>🧺</Text>
+              <Glossy name="basket" size={18} />
               <Text style={[t.footnoteSemibold, { color: colors.foreground }]}>
                 {fresh.length === 0 ? tr('cook.kitchenEmpty') : tr('cook.things')(fresh.length)}
               </Text>
@@ -411,7 +417,8 @@ export default function CookScreen() {
       <View style={styles.ask}>
         <PressableChunk
           radius={999}
-          color={spent ? undefined : colors.caloriesDeep}
+          depth={spent ? 4 : 6}
+          color={spent ? undefined : colors.calories}
           onPress={() => void suggest()}
           disabled={thinking || spent}
           accessibilityRole="button"
@@ -580,7 +587,7 @@ export default function CookScreen() {
           />
           <PressableChunk
             radius={999}
-            color={colors.caloriesDeep}
+            color={colors.calories}
             onPress={() => void importRecipe()}
             disabled={!importText.trim() || importing}
             accessibilityRole="button"
@@ -595,38 +602,17 @@ export default function CookScreen() {
       </Sheet>
 
       <View style={styles.tabs}>
-        <Chunk
-          depth={2}
-          radius={999}
-          contentStyle={[
-            styles.switcher,
-            { backgroundColor: colors.card, borderColor: colors.border },
+        <Segments
+          options={[
+            {
+              value: 'ideas' as const,
+              label: `${tr('cook.forYou')}${recipes.length > 0 ? ` · ${recipes.length}` : ''}`,
+            },
+            { value: 'library' as const, label: tr('cook.library') },
           ]}
-        >
-          {(['ideas', 'library'] as const).map((key) => {
-            const active = tab === key;
-            return (
-              <Pressable
-                key={key}
-                onPress={() => setTab(key)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                style={[styles.switcherItem, active ? { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp } : null]}
-              >
-                <Text
-                  style={[
-                    styles.switcherLabel,
-                    { color: active ? colors.primaryForeground : colors.mutedForeground },
-                  ]}
-                >
-                  {key === 'ideas'
-                    ? `${tr('cook.forYou')}${recipes.length > 0 ? ` · ${recipes.length}` : ''}`
-                    : tr('cook.library')}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </Chunk>
+          value={tab}
+          onChange={setTab}
+        />
       </View>
 
       {/* The shelf's own filter, in the row that switches to the shelf. */}
@@ -639,7 +625,7 @@ export default function CookScreen() {
           style={[
             t.body,
             styles.search,
-            { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground },
+            { backgroundColor: colors.glassStrong, borderColor: colors.glassEdge, color: colors.foreground },
           ]}
         />
       )}
@@ -665,7 +651,9 @@ export default function CookScreen() {
 
           {recipes.length === 0 ? (
             <View style={styles.empty}>
-              <Text style={styles.mascot}>👩‍🍳</Text>
+              <View style={styles.mascot}>
+                <Glossy name="chef" size={64} />
+              </View>
               {/* Which sentence depends on whether the button it names is on
                   the screen. Pointing somebody at "Find me something" on a plan
                   where that control has been replaced by a lock is the kind of
@@ -800,7 +788,7 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   chip: { borderWidth: 1, borderRadius: 999 },
   chipInner: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8 },
-  chipGlyph: { fontSize: 14, lineHeight: 18 },
+  sky: { top: 0 },
   ask: { gap: 10, marginTop: 4 },
   /*
    * No separators between these.
@@ -854,15 +842,6 @@ const styles = StyleSheet.create({
   findLabel: { fontFamily: font.bold, fontSize: 15, lineHeight: 20 },
   plan: { paddingHorizontal: 4, lineHeight: 20 },
   tabs: { flexDirection: 'row', marginTop: 8 },
-  switcher: { flexDirection: 'row', borderWidth: 1, borderRadius: 999, padding: 4 },
-  switcherItem: {
-    height: 32,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  switcherLabel: { fontFamily: font.bold, fontSize: 12, lineHeight: 16 },
   search: {
     height: 40,
     borderWidth: 1,
@@ -873,6 +852,6 @@ const styles = StyleSheet.create({
   aside: { paddingHorizontal: 4, lineHeight: 24 },
   tileSkeleton: { height: 288, borderRadius: 24 },
   empty: { alignItems: 'center', paddingVertical: 48 },
-  mascot: { fontSize: 40, lineHeight: 48, marginBottom: 12 },
+  mascot: { marginBottom: 12 },
   centred: { textAlign: 'center' },
 });

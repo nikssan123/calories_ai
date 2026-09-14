@@ -52,15 +52,16 @@ export function Switch({
         styles.track,
         {
           backgroundColor: value ? colors.calories : colors.muted,
-          borderColor: value ? colors.caloriesDeep : colors.border,
+          borderColor: value ? 'transparent' : colors.hairline,
+          // On, the logo's ramp with its own glow — the same lit object as every
+          // other "yes" in the app since the glow-up.
+          experimental_backgroundImage: value ? colors.primaryRamp : undefined,
+          boxShadow: value ? `0px 4px 12px -5px ${colors.calories}` : undefined,
           opacity: disabled ? 0.5 : 1,
         },
       ]}
     >
       <Animated.View style={[styles.thumbWrap, thumb]}>
-        {/* The same ledge as every other object in the app, at the size a
-            22px thumb can carry. */}
-        <View style={styles.thumbLedge} />
         <View style={styles.thumb} />
       </Animated.View>
     </Pressable>
@@ -80,14 +81,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   thumbWrap: { width: 22, height: 22 },
-  thumbLedge: {
-    position: 'absolute',
-    top: 2,
-    left: 0,
-    right: 0,
-    bottom: -2,
+  thumb: {
+    width: 22,
+    height: 22,
     borderRadius: 999,
-    backgroundColor: 'rgba(49, 38, 30, 0.2)',
+    backgroundColor: '#ffffff',
+    boxShadow: '0px 2px 5px rgba(49, 38, 30, 0.25)',
   },
-  thumb: { width: 22, height: 22, borderRadius: 999, backgroundColor: '#ffffff' },
 });

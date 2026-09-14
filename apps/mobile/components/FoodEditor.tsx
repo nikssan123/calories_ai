@@ -419,7 +419,7 @@ export function FoodEditor({
         <PressableChunk
           depth={3}
           radius={999}
-          color={colors.caloriesDeep}
+          color={colors.calories}
           onPress={() => void save()}
           disabled={saving}
           accessibilityRole="button"

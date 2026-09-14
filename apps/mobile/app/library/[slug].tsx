@@ -180,7 +180,7 @@ export default function LibraryRecipeScreen() {
 
             <PressableChunk
               radius={999}
-              color={colors.caloriesDeep}
+              color={colors.calories}
               onPress={() => void cook()}
               disabled={cooking || adapting}
               accessibilityRole="button"
