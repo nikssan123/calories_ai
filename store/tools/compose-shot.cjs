@@ -49,11 +49,14 @@ const [capture, out, headline, sub] = process.argv.slice(2);
  *
  *   COMPOSE_TARGET=iphone node compose-shot.cjs …   # 1284×2778, the 6.5" slot
  *   COMPOSE_TARGET=ipad   node compose-shot.cjs …   # 2064×2752, the 13" slot
+ *   COMPOSE_TARGET=ad-portrait / ad-square …        # 1200×1500 and 1200×1200, Google Ads
  */
 const TARGETS = {
   play: { width: 1080, height: 1920, page: 1080 },
   iphone: { width: 1284, height: 2778, page: 1080 },
   ipad: { width: 2064, height: 2752, page: 1440 },
+  'ad-portrait': { width: 1200, height: 1500, page: 1080 },
+  'ad-square': { width: 1200, height: 1200, page: 1080 },
 };
 const target = TARGETS[process.env.COMPOSE_TARGET || 'play'];
 const pageWidth = target.page;
@@ -81,7 +84,13 @@ const CARD_TOP = 470;
 const CARD_BOTTOM = 56;
 const available = pageHeight - CARD_TOP - CARD_BOTTOM;
 const visibleRatio = (shot.height - cropRaw) / shot.width;
-const cardWidth = Math.min(pageWidth - 120, Math.round(available / visibleRatio));
+/*
+ * COMPOSE_CARD=wide lays the card at the caption's full width and lets it run
+ * off the bottom of the frame — the old store look, and the right one for an ad
+ * image, which is too short to hold a whole screen at a readable size.
+ */
+const wide = process.env.COMPOSE_CARD === 'wide';
+const cardWidth = wide ? pageWidth - 120 : Math.min(pageWidth - 120, Math.round(available / visibleRatio));
 const cardHeight = Math.round(cardWidth * visibleRatio);
 const cardLeft = Math.round((pageWidth - cardWidth) / 2);
 const imgOffset = Math.round((cropRaw * cardWidth) / shot.width);
