@@ -296,8 +296,13 @@ function Gate() {
          * grey page under a cream tab bar and quietly cancelled the warmest
          * decision in the palette. `transparent` is not enough either: the card
          * still paints, so the colour has to be named.
+         *
+         * With the ambient washes on it since the glow-up, so a pushed screen —
+         * History, a recipe, the paywall's success page — stands in the same
+         * light as the tabs. Painted by each scene's own container, which is
+         * what keeps a push opaque: nothing shows through mid-slide.
          */
-        contentStyle: { backgroundColor: colors.background },
+        contentStyle: { backgroundColor: colors.background, experimental_backgroundImage: colors.ambient },
       }}
     >
       {/*

@@ -10,6 +10,7 @@ import { carriesFrom, TIER_NAMES, TIER_PITCHES, tierLines } from '@/lib/plan-cop
 import { haptics } from '@/lib/haptics';
 import { type as t, useColors, withAlpha } from '@/theme';
 import { useLocale, useT } from '@/lib/i18n';
+import { Confetti } from '@/components/Confetti';
 
 /**
  * What somebody sees immediately after paying.
@@ -112,7 +113,7 @@ export default function PurchasedScreen() {
 
   return (
     <ScrollView
-      style={[styles.flex, { backgroundColor: colors.background }]}
+      style={styles.flex}
       contentContainerStyle={[
         styles.page,
         { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 40 },
@@ -140,7 +141,7 @@ export default function PurchasedScreen() {
       {landed && tier && (
         <Chunk
           depth={5}
-          contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+          contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.hairline }]}
         >
           <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>
             {tr('plans.whatThatOpens')}
@@ -196,12 +197,26 @@ function Mark({ landed }: { landed: boolean }) {
   const tr = useT();
   const locale = useLocale();
   return (
-    <View style={[styles.mark, { backgroundColor: withAlpha(colors.primary, 0.2) }]}>
+    <View
+      style={[
+        styles.mark,
+        landed
+          ? {
+              /* Landed, the mark lights: the logo's ramp and a glow of its own,
+                 with the confetti the macros use thrown out of it once. */
+              backgroundColor: colors.primary,
+              experimental_backgroundImage: colors.primaryRamp,
+              boxShadow: `0px 16px 40px -12px ${colors.calories}, inset 0px 1px 0px rgba(255,255,255,0.5)`,
+            }
+          : { backgroundColor: withAlpha(colors.primary, 0.2) },
+      ]}
+    >
+      <Confetti trigger={landed ? 1 : 0} />
       <Svg width={40} height={40} viewBox="0 0 24 24">
         {landed ? (
           <Path
             d="M20 6 9 17l-5-5"
-            stroke={colors.primary}
+            stroke={colors.primaryForeground}
             strokeWidth={3}
             strokeLinecap="round"
             strokeLinejoin="round"
