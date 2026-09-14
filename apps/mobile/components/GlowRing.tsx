@@ -91,13 +91,39 @@ export function GlowRing({
   }));
 
   /* ---- The logged moment ---------------------------------------------- */
+  /*
+   * A moment is the day's total passing the highest it has been seen at — not
+   * any rise. The total on Today is the fetched day plus the unsent queue, so it
+   * dips and recovers on its own: a queued meal leaves the queue a beat before
+   * the refetch returns it, and an undone delete puts back a meal already
+   * celebrated. Measured against the peak, neither plays.
+   *
+   * And only while the screen is on show. A meal logged in the journal raises
+   * this ring on a hidden tab; the moment waits and plays when Today is looked
+   * at, which is when there is somebody to see it.
+   */
+  const focused = useIsFocused();
   const flash = useSharedValue(0);
   const [burst, setBurst] = useState(0);
-  const last = useRef({ day, consumed });
+  const peak = useRef({ day, consumed });
   useEffect(() => {
-    const previous = last.current;
-    last.current = { day, consumed };
-    if (previous.day !== day || consumed <= previous.consumed) return;
+    if (peak.current.day !== day) {
+      peak.current = { day, consumed };
+      return;
+    }
+    /*
+     * A total that stays below the peak is a real removal, not a sync blip: after
+     * five seconds the peak comes down to it, so the next meal logged after a
+     * deletion is still a moment.
+     */
+    if (consumed < peak.current.consumed) {
+      const settle = setTimeout(() => {
+        peak.current = { day, consumed };
+      }, 5000);
+      return () => clearTimeout(settle);
+    }
+    if (consumed === peak.current.consumed || !focused) return;
+    peak.current = { day, consumed };
     haptics.logged();
     if (reduced) return;
     setBurst((n) => n + 1);
@@ -105,7 +131,7 @@ export function GlowRing({
       withDelay(520, withTiming(1, { duration: 160, easing: Easing.out(Easing.quad) })),
       withTiming(0, { duration: 700, easing: Easing.in(Easing.quad) }),
     );
-  }, [consumed, day, reduced, flash]);
+  }, [consumed, day, focused, reduced, flash]);
 
   const flashing = useAnimatedStyle(() => ({
     opacity: flash.value,
@@ -118,7 +144,6 @@ export function GlowRing({
    * the app, and an orbit left turning behind the Journal is a frame a second
    * of work for a picture nobody can see. It resumes from where it stopped.
    */
-  const focused = useIsFocused();
   const turn = useSharedValue(0);
   useEffect(() => {
     if (reduced || !focused) {

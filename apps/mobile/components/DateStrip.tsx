@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Locale } from '@ct/shared';
 import { haptics } from '@/lib/haptics';
@@ -47,12 +47,6 @@ export function DateStrip({
     return Array.from({ length: back + 1 }, (_, i) => shift(today, i - back));
   }, [today, selected]);
 
-  useEffect(() => {
-    // After layout, and without animation: arriving on Today should find the
-    // strip already at today, not watch it travel there.
-    const timer = setTimeout(() => scroll.current?.scrollToEnd({ animated: false }), 0);
-    return () => clearTimeout(timer);
-  }, [days.length]);
 
   const ink = onSky === 'dark' ? colors.skyInk : colors.foreground;
 
@@ -65,6 +59,14 @@ export function DateStrip({
          scroller would otherwise clip flat at its own edges. */
       style={styles.scroller}
       contentContainerStyle={styles.row}
+      /*
+       * To the end whenever the row's width changes — which is on arrival and
+       * when a day from the calendar widens it — and without animation:
+       * arriving on Today should find the strip already at today, not watch it
+       * travel there. A timer after mount fired before the row was measured and
+       * left it parked three weeks back.
+       */
+      onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: false })}
     >
       {days.map((iso) => {
         const on = iso === selected;

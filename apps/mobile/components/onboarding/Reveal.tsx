@@ -474,6 +474,14 @@ export function projectionFor({
   const gap = Math.abs(maintenance - targetKcal);
   const distance = Math.abs(weightKg - targetKg);
   if (gap < 50 || distance < 0.5) return null;
+  /*
+   * The line has to go where the calories do. A floored target — 1,200 kcal for
+   * somebody whose maintenance is lower — is a surplus even on a "lose" goal,
+   * and drawing a descent with an arrival date over it would be a promise the
+   * arithmetic underneath is making in the opposite direction.
+   */
+  const losing = targetKg < weightKg;
+  if (losing !== targetKcal < maintenance) return null;
   const kgPerWeek = (gap * 7) / KCAL_PER_KG;
   const weeks = distance / kgPerWeek;
   if (weeks > 104) return null;

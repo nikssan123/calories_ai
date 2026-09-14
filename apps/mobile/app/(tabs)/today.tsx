@@ -1421,7 +1421,7 @@ const styles = StyleSheet.create({
   greeting: { paddingHorizontal: 22, gap: 4 },
   backRow: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 18, marginTop: -4 },
   backChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999 },
-  macroCard: { padding: 16, borderWidth: 1 },
+  macroCard: { paddingVertical: 16, paddingHorizontal: 14, borderWidth: 1 },
   headerLabel: { flex: 1, alignItems: 'center' },
   /*
    * Over the scroll rather than in it, so the content passes underneath the

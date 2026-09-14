@@ -141,11 +141,15 @@ export default function OnboardingScreen() {
   const tr = useT();
   const locale = useLocale();
   const { authenticated, profile, adoptProfile } = useAuth();
-  const { refresh: refreshOnboarding, draft, saveDraft, chooseSignIn } = useOnboarding();
+  const { refresh: refreshOnboarding, draft, saveDraft, dropDraft, chooseSignIn } = useOnboarding();
   /* No session: answers go to the draft and the plan is worked out here. */
   const guest = !authenticated;
-  /* What a relaunch mid-walk restores from, for somebody without an account. */
-  const seed = guest ? draft : null;
+  /*
+   * What the answers start from. A relaunch mid-walk restores the draft; so does
+   * a signed-in account whose draft failed to upload at sign-in, which is sent
+   * back here to finish rather than into the tabs with a generic target.
+   */
+  const seed = draft;
 
   const [phase, setPhase] = useState<Phase>('welcome');
   /** Position in `screens` — questions and teases together. */
@@ -187,7 +191,9 @@ export default function OnboardingScreen() {
    * that point would quietly un-skip the step. This way the control keeps its
    * position and the answer stays "none".
    */
-  const [targetSkipped, setTargetSkipped] = useState(false);
+  const [targetSkipped, setTargetSkipped] = useState(
+    () => seed !== null && seed.goal !== 'maintain' && seed.target_weight_kg === null,
+  );
 
   const [targets, setTargets] = useState<Targets | null>(null);
   /** The maintenance the plan was worked out from, for the trajectory. */
@@ -245,8 +251,19 @@ export default function OnboardingScreen() {
    * about. It is a starting position for the stepper, not a recommendation, and
    * it is re-proposed whenever the weight or the goal changes underneath it.
    */
+  /*
+   * Keyed on what it was proposed for, so arriving with a saved goal weight — a
+   * relaunch, or "Change my answers" — keeps it until the weight or the goal it
+   * was set against actually changes.
+   */
+  const proposedFor = useRef(
+    seed?.target_weight_kg != null ? `${round1(seed.weight_kg)}|${seed.goal}` : null,
+  );
   useEffect(() => {
     if (weightKg === null || goal === null || goal === 'maintain') return;
+    const key = `${round1(weightKg)}|${goal}`;
+    if (proposedFor.current === key) return;
+    proposedFor.current = key;
     setTargetWeight(round1(weightKg * (goal === 'lose' ? 0.9 : 1.05)));
   }, [weightKg, goal]);
 
@@ -429,11 +446,13 @@ export default function OnboardingScreen() {
       }
       await pause(400);
       setTargets(day.targets);
+      // The server has the answers now; a leftover draft has nothing to add.
+      await dropDraft();
       setPhase('plan');
     } catch {
       setFailed(true);
     }
-  }, [guest, weightKg, sex, birthDate, heightCm, goal, activity, units, targetWeight, targetSkipped, locale, profile?.locale, adoptProfile, saveDraft]);
+  }, [guest, weightKg, sex, birthDate, heightCm, goal, activity, units, targetWeight, targetSkipped, locale, profile?.locale, adoptProfile, saveDraft, dropDraft]);
 
   /**
    * "Save my plan", for somebody with no account. Marking the draft finished is
@@ -551,7 +570,12 @@ export default function OnboardingScreen() {
         footer={
           <Advance
             label={tr('ob.continue')}
-            onPress={forward}
+            onPress={() => {
+              // Continue on the goal weight is an answer: the value on screen,
+              // whether or not it was skipped on an earlier pass.
+              if (!teasing && step === 'target') setTargetSkipped(false);
+              forward();
+            }}
             disabled={!answered}
             hint={teasing ? null : blocker}
             skip={teasing ? undefined : skipFor(step)}

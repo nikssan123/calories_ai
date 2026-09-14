@@ -219,6 +219,13 @@ function Gate() {
    * so the tabs never draw a target from before the profile landed.
    */
   const welcoming = !authenticated && !planWaiting && !signingIn;
+
+  /*
+   * Nothing is routed until the draft is off the disk. The first screen of a
+   * relaunch mid-walk is the onboarding screen, and it takes its answers from
+   * the draft as initial state — mounted a frame before the draft arrived, it
+   * would start blank and never look again. The splash covers the wait.
+   */
   const settled =
     !loading && draftLoaded && (!authenticated || !emailVerified || setupResolved);
 
@@ -283,6 +290,8 @@ function Gate() {
     });
     return () => tap.remove();
   }, [router]);
+
+  if (!draftLoaded) return null;
 
   return (
     <Stack

@@ -1,8 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ActivityLevel, Goal, Locale, OnboardingState, Sex, UnitSystem } from '@ct/shared';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { preferredLocale } from '@/lib/i18n';
 
 /**
  * Whether this person has been through setup — and now, whether they have been
@@ -65,6 +67,8 @@ interface OnboardingValue {
   /** Whether the draft has a plan at the end of it, waiting for an account. */
   planWaiting: boolean;
   saveDraft: (draft: OnboardingDraft) => Promise<void>;
+  /** Forget the draft — once setup has reached the server some other way. */
+  dropDraft: () => Promise<void>;
   /**
    * "I already have an account", pressed on the way in. Held in memory only:
    * the next cold launch with no session asks again, which is right for a phone
@@ -88,6 +92,7 @@ const OnboardingContext = createContext<OnboardingValue>({
   draft: null,
   planWaiting: false,
   saveDraft: async () => {},
+  dropDraft: async () => {},
   signingIn: false,
   chooseSignIn: () => {},
   saving: false,
@@ -145,13 +150,30 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     draftRef.current = draft;
   }, [draft]);
 
+  /*
+   * One attempt per session. `refresh` is also what Setup calls after a save,
+   * and a draft that failed to upload at sign-in must not be written over the
+   * profile somebody has since edited by hand — so the upload is tried once, and
+   * a failure hands the draft to the onboarding screen to finish instead.
+   */
+  const uploadTried = useRef(false);
+
   const refresh = useCallback(async (): Promise<OnboardingState | null> => {
     try {
       let next = await api.onboarding();
+      /*
+       * Adopted before the upload rather than after it. If the upload then
+       * fails, the gate reads an unfinished account and puts the questions
+       * back — prefilled from the draft — instead of the tabs drawing the
+       * generic target for somebody who was just shown their own.
+       */
+      setState(next);
       const waiting = draftRef.current;
-      if (waiting?.completed_at) {
-        if (next.complete) {
-          // An account that already knows who it is keeps what it knows.
+      if (waiting && !uploadTried.current) {
+        uploadTried.current = true;
+        if (next.complete || !waiting.completed_at) {
+          // An account that already knows who it is keeps what it knows, and a
+          // walk abandoned half way has nothing worth writing to one.
           await dropDraft();
         } else {
           setSaving(true);
@@ -169,17 +191,21 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
             goal: waiting.goal,
             activity_level: waiting.activity_level,
             units: waiting.units,
-            locale: waiting.locale,
+            /*
+             * The language in force now, not the one the questions were
+             * answered in: the picker is on the sign-up form too, and sign-up
+             * has already stored that choice — the draft's would undo it.
+             */
+            locale: preferredLocale(),
             target_weight_kg: waiting.goal === 'maintain' ? null : waiting.target_weight_kg,
           });
           adoptProfile(saved);
           next = await api.onboarding();
-          // Dropped only once the server has it. A failure above leaves the
-          // draft in place for the next launch to try again.
+          setState(next);
+          // Dropped only once the server has it.
           await dropDraft();
         }
       }
-      setState(next);
       return next;
     } catch {
       /*
@@ -195,6 +221,37 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       setReady(true);
     }
   }, [adoptProfile, dropDraft]);
+
+  /*
+   * A plan that could not even be asked about — `api.onboarding()` itself
+   * failed, so no upload was attempted — is tried again when the app comes back
+   * to the front, rather than waiting for the next cold launch.
+   */
+  useEffect(() => {
+    if (!authenticated || !emailVerified || !draft?.completed_at) return;
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'active' && !uploadTried.current) void refresh();
+    });
+    return () => subscription.remove();
+  }, [authenticated, emailVerified, draft?.completed_at, refresh]);
+
+  /*
+   * Signing out forgets the draft. A plan is the answers of whoever typed them,
+   * and a phone handed to somebody else must not offer them that person's body
+   * to save — or prefill it into their questions.
+   */
+  const wasSignedIn = useRef(false);
+  useEffect(() => {
+    if (authenticated) {
+      wasSignedIn.current = true;
+      return;
+    }
+    if (wasSignedIn.current) {
+      wasSignedIn.current = false;
+      uploadTried.current = false;
+      void dropDraft();
+    }
+  }, [authenticated, dropDraft]);
 
   /*
    * Verified as well as signed in: the API answers 403 to every route outside
@@ -225,11 +282,12 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       draft,
       planWaiting: Boolean(draft?.completed_at),
       saveDraft,
+      dropDraft,
       signingIn,
       chooseSignIn: setSigningIn,
       saving,
     }),
-    [state, ready, refresh, draftLoaded, draft, saveDraft, signingIn, saving],
+    [state, ready, refresh, draftLoaded, draft, saveDraft, dropDraft, signingIn, saving],
   );
 
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;

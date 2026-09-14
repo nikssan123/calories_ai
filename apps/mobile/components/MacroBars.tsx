@@ -122,9 +122,17 @@ function MacroTrack({
       <Confetti trigger={crossings || null} />
 
       <View style={styles.labelRow}>
-        <Glossy name={macro.icon} size={18} />
+        <Glossy name={macro.icon} size={16} />
+        {/*
+          Shrinks rather than truncates. Three columns inside a card leave about
+          seventy points for the word, and "Kohlenhydrate" or "Въглехидрати" is
+          wider than that — cut to "Kohlenhydr…" the one word that says which bar
+          this is stops saying it.
+        */}
         <Text
           numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.72}
           style={[t.footnoteSemibold, styles.label, { color: colors.mutedForeground }]}
         >
           {tr(macro.label)}
@@ -163,9 +171,9 @@ function MacroTrack({
 }
 
 const styles = StyleSheet.create({
-  grid: { flexDirection: 'row', gap: 12 },
+  grid: { flexDirection: 'row', gap: 10 },
   track: { flex: 1, gap: 8 },
-  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   label: { flexShrink: 1 },
   /*
    * `leading-none` on the web, but not spelled 16/16 here.

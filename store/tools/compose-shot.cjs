@@ -39,6 +39,24 @@ const chromium = loadChromium();
 const fs = require('fs');
 const path = require('path');
 const [capture, out, headline, sub] = process.argv.slice(2);
+/*
+ * Which store slot the frame is for. The layout is the Play frame's, measured at
+ * 1080 wide; a taller slot keeps that width and scales the whole page up to the
+ * slot's pixel width, giving the extra height to the card — the headline is what
+ * carries a listing at thumbnail size, so it keeps its proportions everywhere.
+ * `crop` is the capture's status bar at the card's 934pt width.
+ *
+ *   COMPOSE_TARGET=iphone node compose-shot.cjs …   # 1320×2868, the 6.9" slot
+ *   COMPOSE_TARGET=ipad   node compose-shot.cjs …   # 2064×2752, the 13" slot
+ */
+const TARGETS = {
+  play: { width: 1080, height: 1920, crop: 83 },
+  iphone: { width: 1320, height: 2868, crop: 144 },
+  ipad: { width: 2064, height: 2752, crop: 22 },
+};
+const target = TARGETS[process.env.COMPOSE_TARGET || 'play'];
+const scale = target.width / 1080;
+const pageHeight = Math.round(target.height / scale);
 const FONTS = path.resolve(__dirname, '../../node_modules/.pnpm');
 function findFont(glob) {
   const hit = require('child_process').execSync(`find ${FONTS} -path '*${glob}' -maxdepth 6 | head -1`).toString().trim();
@@ -52,7 +70,7 @@ const html = `<!doctype html><meta charset="utf-8"><style>
   @font-face { font-family: DisplayCyr; src: url('file://${literata}'); }
   @font-face { font-family: Body; src: url('file://${nunitoMedium}'); }
   * { margin: 0; box-sizing: border-box; }
-  body { width: 1080px; height: 1920px; overflow: hidden; position: relative; -webkit-font-smoothing: antialiased;
+  body { width: 1080px; height: ${pageHeight}px; overflow: hidden; position: relative; -webkit-font-smoothing: antialiased;
          background:
            radial-gradient(900px 700px at 0% 0%, rgba(255,196,120,.75), rgba(255,196,120,0) 70%),
            radial-gradient(800px 800px at 100% 30%, rgba(160,236,210,.65), rgba(160,236,210,0) 70%),
@@ -66,15 +84,15 @@ const html = `<!doctype html><meta charset="utf-8"><style>
        color: #4f3f31; }
   .bar { position: absolute; left: 100px; top: 400px; width: 96px; height: 7px; border-radius: 4px;
          background: linear-gradient(90deg, #12b76a, #23d3b0); box-shadow: 0 0 14px rgba(18,183,106,.5); }
-  .card { position: absolute; left: 73px; top: 480px; width: 934px; height: 1500px; border-radius: 36px; z-index: 1;
-          overflow: hidden; background: rgb(255,246,236); box-shadow: 0 40px 90px -30px rgba(90,60,20,.55), 0 0 0 1px rgba(255,255,255,.7); }
-  .card img { width: 934px; display: block; margin-top: -83px; }  /* crop the status bar */
+  .card { position: absolute; left: 73px; top: 480px; width: 934px; height: ${pageHeight - 420}px; border-radius: 36px; z-index: 1;
+          overflow: hidden; background: rgb(255,246,236); box-shadow: 0 40px 90px -30px rgba(90,60,20,.55), 0 0 0 2px rgba(120,80,20,.10); }
+  .card img { width: 934px; display: block; margin-top: -${target.crop}px; }  /* crop the status bar */
 </style>
 <h1>${headline.replace(/\\n/g, '\n')}</h1><p>${sub}</p><div class="bar"></div>
 <div class="card"><img src="file://${path.resolve(capture)}"></div>`;
 (async () => {
   const browser = await chromium.launch({ executablePath: `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1148/chrome-mac/Chromium.app/Contents/MacOS/Chromium`, headless: true });
-  const page = await browser.newPage({ viewport: { width: 1080, height: 1920 } });
+  const page = await browser.newPage({ viewport: { width: 1080, height: pageHeight }, deviceScaleFactor: scale });
   // Written next to the capture and opened as a file:// page — Chromium refuses
   // local images to a page with no file origin, which is why setContent left the card empty.
   const tmp = path.join(path.dirname(path.resolve(out)), '.compose.html');
