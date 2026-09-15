@@ -29,7 +29,10 @@ restarts that one. Use --only to keep a re-push small.
 
 `--hold` commits with `changesNotSentForReview`, so the listings join the
 Console's *Changes not yet sent for review* instead, and nothing goes to Google
-until somebody presses *Send changes for review* there.
+until somebody presses *Send changes for review* there. It only works with
+managed publishing on: with it off, Google refuses the commit ("Changes are sent
+for review automatically. The query parameter changesNotSentForReview must not
+be set.") and the edit is deleted, so nothing is half-sent.
 """
 import json, sys, warnings, pathlib
 warnings.filterwarnings('ignore')
