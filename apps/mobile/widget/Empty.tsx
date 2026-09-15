@@ -1,6 +1,7 @@
 import { FlexWidget, OverlapWidget, SvgWidget, TextWidget } from 'react-native-android-widget';
 import { ringSvg } from './ring';
 import { ringLayout } from './layout';
+import { castSvg, trio } from './cast';
 import { DISPLAY, OPEN_JOURNAL, type WidgetPalette } from './theme';
 import type { WidgetText } from './text';
 
@@ -16,6 +17,9 @@ import type { WidgetText } from './text';
  * so the empty state there is the dial with its track and nothing run round it,
  * and a plus where the number will go. An empty ring is the same statement
  * without the words, and the plus is what the tap does.
+ *
+ * Where there is room above the sentence, the cast stands there saying hello
+ * (CAST.md): the first picture of the app anybody sees on a home screen.
  */
 export function Empty({
   colors,
@@ -123,8 +127,24 @@ export function Empty({
     );
   }
 
+  /* Above the two lines of words, which take about forty points between them. */
+  const side = Math.min(64, Math.round(height - 2 * (14 + 2) - 44));
+  const group = side >= 34 ? trio(side, ['idle', 'wave', 'idle']) : null;
+
   return (
     <FlexWidget {...shell} style={{ ...shell.style, borderRadius: 28, padding: 14 }}>
+      {group && (
+        <SvgWidget
+          svg={castSvg({
+            width: group.width,
+            height: side,
+            placed: group.placed,
+            shadow: colors.shadow,
+            shadowOpacity: colors.shadowOpacity,
+          })}
+          style={{ height: side, width: group.width, marginBottom: 4 }}
+        />
+      )}
       <TextWidget
         text="Day So Far"
         allowFontScaling={false}

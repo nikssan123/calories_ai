@@ -1,6 +1,7 @@
 import { FlexWidget, OverlapWidget, SvgWidget, TextWidget } from 'react-native-android-widget';
 import { ringSvg } from './ring';
-import { LINE_HEIGHT, dayLayout, detailLines, type DayCard, type DayLine } from './layout';
+import { CAST_GAP, LINE_HEIGHT, dayLayout, detailLines, type DayCard, type DayLine } from './layout';
+import { castSvg, companion } from './cast';
 import { DISPLAY, OPEN_JOURNAL, type WidgetPalette } from './theme';
 import { Empty } from './Empty';
 import type { WidgetText } from './text';
@@ -38,7 +39,7 @@ export function DayWidget({
   const spoken = `${text.n(Math.abs(remaining))} kcal ${text.today(layout.label)}`;
 
   return layout.shape === 'line' ? (
-    <Line layout={layout} colors={colors} spoken={spoken} over={remaining < 0} />
+    <Line layout={layout} colors={colors} spoken={spoken} over={remaining < 0} snapshot={snapshot} />
   ) : (
     <Card layout={layout} colors={colors} spoken={spoken} snapshot={snapshot} text={text} />
   );
@@ -66,85 +67,107 @@ const shell = (colors: WidgetPalette) =>
  * The ratio is the only part that can be dropped, and it is dropped by
  * measurement rather than by a guess about how many cells wide the reader
  * chose — see `dayLayout`.
+ *
+ * Where the whole line fits with room to spare, one of the cast stands at its
+ * start (CAST.md). See `companion` for who, and `dayLayout` for when.
  */
 function Line({
   layout,
   colors,
   spoken,
   over,
+  snapshot,
 }: {
   layout: DayLine;
   colors: WidgetPalette;
   spoken: string;
   over: boolean;
+  snapshot: DaySnapshot;
 }) {
+  const who = layout.cast > 0 ? companion(snapshot) : null;
+
   return (
     <FlexWidget
       {...OPEN_JOURNAL}
       accessibilityLabel={spoken}
       style={{
         ...shell(colors),
-        justifyContent: 'center',
+        flexDirection: 'row',
+        alignItems: 'center',
         paddingHorizontal: layout.paddingHorizontal,
         paddingVertical: layout.padding,
       }}
     >
-      <FlexWidget style={{ width: 'match_parent', flexDirection: 'row', alignItems: 'center' }}>
-        <TextWidget
-          text={layout.figureText}
-          allowFontScaling={false}
-          maxLines={1}
-          style={{
-            fontSize: layout.figure,
-            lineHeight: Math.round(layout.figure * LINE_HEIGHT),
-            fontFamily: DISPLAY,
-            color: colors.foreground,
-          }}
+      {who && (
+        <SvgWidget
+          svg={castSvg({
+            width: layout.cast,
+            height: layout.cast,
+            placed: [{ ...who, x: 0, y: 0, size: layout.cast }],
+            shadow: colors.shadow,
+            shadowOpacity: colors.shadowOpacity,
+          })}
+          style={{ height: layout.cast, width: layout.cast, marginRight: CAST_GAP }}
         />
-        <TextWidget
-          text={` ${layout.label}`}
-          allowFontScaling={false}
-          maxLines={1}
-          style={{
-            fontSize: layout.wording,
-            fontWeight: '600',
-            color: colors.mutedForeground,
-          }}
-        />
-        <FlexWidget style={{ flex: 1 }} />
-        {layout.ratio > 0 && (
+      )}
+      <FlexWidget style={{ width: layout.track, justifyContent: 'center' }}>
+        <FlexWidget style={{ width: 'match_parent', flexDirection: 'row', alignItems: 'center' }}>
           <TextWidget
-            text={layout.ratioText}
+            text={layout.figureText}
             allowFontScaling={false}
             maxLines={1}
-            style={{ fontSize: layout.ratio, fontWeight: '600', color: colors.mutedForeground }}
-          />
-        )}
-      </FlexWidget>
-      {/*
-        * The bar is two nested boxes rather than a drawn shape: `RemoteViews`
-        * has no percentage widths, so the fill is measured in dp from the
-        * width the launcher reported.
-        */}
-      <FlexWidget
-        style={{
-          height: layout.bar,
-          width: layout.track,
-          backgroundColor: colors.muted,
-          borderRadius: 999,
-          marginTop: layout.gap,
-        }}
-      >
-        {layout.fill > 0 && (
-          <FlexWidget
             style={{
-              height: layout.bar,
-              width: layout.fill,
-              backgroundColor: over ? colors.foreground : colors.calories,
-              borderRadius: 999,
+              fontSize: layout.figure,
+              lineHeight: Math.round(layout.figure * LINE_HEIGHT),
+              fontFamily: DISPLAY,
+              color: colors.foreground,
             }}
           />
-        )}
+          <TextWidget
+            text={` ${layout.label}`}
+            allowFontScaling={false}
+            maxLines={1}
+            style={{
+              fontSize: layout.wording,
+              fontWeight: '600',
+              color: colors.mutedForeground,
+            }}
+          />
+          <FlexWidget style={{ flex: 1 }} />
+          {layout.ratio > 0 && (
+            <TextWidget
+              text={layout.ratioText}
+              allowFontScaling={false}
+              maxLines={1}
+              style={{ fontSize: layout.ratio, fontWeight: '600', color: colors.mutedForeground }}
+            />
+          )}
+        </FlexWidget>
+        {/*
+          * The bar is two nested boxes rather than a drawn shape: `RemoteViews`
+          * has no percentage widths, so the fill is measured in dp from the
+          * width the launcher reported.
+          */}
+        <FlexWidget
+          style={{
+            height: layout.bar,
+            width: layout.track,
+            backgroundColor: colors.muted,
+            borderRadius: 999,
+            marginTop: layout.gap,
+          }}
+        >
+          {layout.fill > 0 && (
+            <FlexWidget
+              style={{
+                height: layout.bar,
+                width: layout.fill,
+                backgroundColor: over ? colors.foreground : colors.calories,
+                borderRadius: 999,
+              }}
+            />
+          )}
+        </FlexWidget>
       </FlexWidget>
     </FlexWidget>
   );

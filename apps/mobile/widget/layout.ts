@@ -301,6 +301,17 @@ export interface DayLine extends DayCommon {
   gap: number;
   track: number;
   fill: number;
+  /**
+   * The side of the figure from the cast that stands at the line's start, or 0
+   * when there is no room for one (CAST.md).
+   *
+   * Only ever spare room. The whole line is measured first, ratio included,
+   * and the figure appears only where it fits beside all of it, since nothing
+   * may stand over a word and the words don't give anything up for a picture.
+   * A one-row widget is too short for a face. Dragged to two rows and wide,
+   * which is when this shape has the most room to spare, there is one.
+   */
+  cast: number;
 }
 
 export interface DayCard extends DayCommon {
@@ -448,6 +459,10 @@ export function dayLayout({
     const left = displayWidth(figureText, figure, text.face) + displayWidth(` ${label}`, wording);
     const asked = left + displayWidth(ratioText, ratio) + 20;
 
+    const side = clamp(height - 2 * (padding + BORDER), 0, CAST_MAX);
+    const cast = side >= CAST_MIN && track - side - CAST_GAP >= asked ? side : 0;
+    const line = cast > 0 ? track - cast - CAST_GAP : track;
+
     return {
       shape: 'line',
       padding,
@@ -456,15 +471,16 @@ export function dayLayout({
       figure,
       figureText,
       wording,
-      ratio: asked <= track ? ratio : 0,
+      ratio: asked <= line ? ratio : 0,
       ratioText,
       bar,
       gap,
-      track,
+      track: line,
       /* No percentages in `RemoteViews`, so the fill is dp off the reported
        * width — and never zero once anything has been eaten, because a bar
        * with no nub reads as a bar that is broken. */
-      fill: portion > 0 ? clamp(Math.max(6, track * portion), 6, track) : 0,
+      fill: portion > 0 ? clamp(Math.max(6, line * portion), 6, line) : 0,
+      cast,
     };
   }
 
@@ -517,3 +533,10 @@ export function dayLayout({
     detailRows,
   };
 }
+
+/** The room between a figure from the cast and the line beside it. */
+export const CAST_GAP = 10;
+/** Smaller than this, a face is a smudge. */
+const CAST_MIN = 44;
+/** Larger than this, the figure outweighs the number it stands beside. */
+const CAST_MAX = 64;

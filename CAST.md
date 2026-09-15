@@ -21,8 +21,17 @@ Mockups: https://claude.ai/artifact/N26P3aEFAHJQGXHGhp52wr
 4. **Badge medallions.** The fourteen emoji in `Achievements.tsx` become drawn glyphs, tinted by group: streaks amber, training pink, firsts teal, totals blue.
 5. **Welcome.** The trio stands under the ring, with Skye waving.
 6. **After midnight.** Between 00:00 and `day_start_hour`, Today shows Plum asleep beside `setup.dayFooter`, which already explains where a 1am snack lands.
+7. **Home-screen widget (Android).** `components/cast/figure.ts` holds the geometry, shared by `Character` and the widget's SVG string, so the two can't drift apart.
+   - Before the app has left a note, the empty widget shows the trio saying hello.
+   - Dragged to two rows and wide, the Day widget's one-line layout gets one figure at its start, only where the whole line, ratio included, still fits beside it:
+     - Skye waving while nothing is logged.
+     - Plum asleep after midnight.
+     - Ember the rest of the day.
 
 ## Not now
 - **Direction B scenes** (drawn landscapes). Only if the cast reads too young.
 - **"Surprised" on the barcode sheet.**
 - **The web client.** It has no cast yet.
+- **The iOS widget.**
+  - WidgetKit draws with `@expo/ui` shapes and has no SVG.
+  - Its medium Day widget is the ring card, never the one-line layout, and `dayLayout` finds no spare room beside the card's words.

@@ -40,6 +40,9 @@ export interface WidgetPalette {
    */
   ledge: HexColor;
   ledgeOpacity: number;
+  /** The shadow a figure from the cast stands on, split the same way as the ledge. */
+  shadow: HexColor;
+  shadowOpacity: number;
 }
 
 export const LIGHT: WidgetPalette = {
@@ -53,6 +56,8 @@ export const LIGHT: WidgetPalette = {
   burn: '#c13a7a',
   ledge: '#31261e',
   ledgeOpacity: 0.14,
+  shadow: '#784f14',
+  shadowOpacity: 0.16,
 };
 
 export const DARK: WidgetPalette = {
@@ -66,6 +71,8 @@ export const DARK: WidgetPalette = {
   burn: '#ff8fbe',
   ledge: '#000000',
   ledgeOpacity: 0.88,
+  shadow: '#000000',
+  shadowOpacity: 0.32,
 };
 
 /**
