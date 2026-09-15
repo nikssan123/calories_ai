@@ -1,0 +1,94 @@
+{
+  "_about": "Google Ads App campaign copy and images, one campaign per language. See ADS.md. Limits: 5 headlines <= 30 chars, 5 descriptions <= 90 chars; check with node store/tools/check-ad-copy.cjs.",
+  "app": "com.daysofar.app",
+  "campaigns": {
+    "de-DE": {
+      "name": "Day So Far - DE - Installs",
+      "country": "DE",
+      "language": "German",
+      "dailyBudgetEur": 5,
+      "headlines": [
+        "Sag einfach, was du isst",
+        "Keine Datenbank. Ein Satz.",
+        "Ein Satz, kein Suchfeld",
+        "Anders überlegt? Sag es.",
+        "KI-Ernährungstagebuch & Makros"
+      ],
+      "descriptions": [
+        "„Zwei Eier, ein Brötchen und etwas Käse.“ Das ist ein erfasstes Frühstück.",
+        "Sag „es war mehr Reis“, und der Eintrag, den du schon erfasst hast, ändert sich.",
+        "Rouladen mit Rotkohl oder Linseneintopf: Selbstgekochtes trägst du mit einem Satz ein.",
+        "Trag auch offline ein. Nichts geht verloren, und nichts wird doppelt eingetragen.",
+        "Barcode-Scanner, Makro-Tracker und Offline-Tagebuch: dein Essen kostenlos eintragen."
+      ],
+      "images": [
+        "de-DE/01-log-landscape.png",
+        "de-DE/01-log-square.png",
+        "de-DE/01-log-portrait.png",
+        "de-DE/03-today-landscape.png",
+        "de-DE/03-today-square.png",
+        "de-DE/03-today-portrait.png"
+      ],
+      "googleAdsCampaignId": "24260141956"
+    },
+    "fr-FR": {
+      "name": "Day So Far - FR - Installs",
+      "country": "FR",
+      "language": "French",
+      "dailyBudgetEur": 5,
+      "headlines": [
+        "Dis ce que tu as mangé",
+        "Une phrase suffit",
+        "Une phrase, pas de recherche",
+        "Tu as changé d’avis ? Dis-le.",
+        "Journal alimentaire IA, macros"
+      ],
+      "descriptions": [
+        "« Deux œufs, une tartine et un peu de fromage. » Voilà un petit-déjeuner enregistré.",
+        "Dis « il y avait plus de riz » et l’entrée déjà enregistrée se met à jour.",
+        "Hachis parmentier ou blanquette de ta grand-mère : le fait maison en une seule phrase.",
+        "Note un repas hors ligne. Rien n’est perdu, rien n’est enregistré deux fois.",
+        "Codes-barres, suivi des macros et journal hors ligne : enregistre tes repas gratuitement."
+      ],
+      "images": [
+        "fr-FR/01-log-landscape.png",
+        "fr-FR/01-log-square.png",
+        "fr-FR/01-log-portrait.png",
+        "fr-FR/03-today-landscape.png",
+        "fr-FR/03-today-square.png",
+        "fr-FR/03-today-portrait.png"
+      ],
+      "googleAdsCampaignId": "24254674928"
+    },
+    "en-US": {
+      "name": "Day So Far - US - Installs",
+      "country": "US",
+      "language": "English",
+      "dailyBudgetEur": 5,
+      "headlines": [
+        "Just say what you ate",
+        "No database. One sentence.",
+        "A sentence, not a search box",
+        "Changed your mind? Say so.",
+        "AI food diary & macro tracker"
+      ],
+      "descriptions": [
+        "“Two eggs, toast and some cheese.” That’s a logged breakfast.",
+        "Say “there was more rice” and the meal you already logged updates itself.",
+        "Chili, meatloaf or grandma’s mac and cheese: log home cooking in one sentence.",
+        "Log offline too. Nothing is lost, and nothing is logged twice.",
+        "Barcode scanner, macro tracker and offline food diary: log your food for free."
+      ],
+      "images": [
+        "en-US/01-log-landscape.png",
+        "en-US/01-log-square.png",
+        "en-US/01-log-portrait.png",
+        "en-US/03-today-landscape.png",
+        "en-US/03-today-square.png",
+        "en-US/03-today-portrait.png"
+      ],
+      "googleAdsCampaignId": "24249218637"
+    }
+  },
+  "googleAdsAccount": "994-316-1862"
+}

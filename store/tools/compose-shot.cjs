@@ -50,6 +50,11 @@ const [capture, out, headline, sub] = process.argv.slice(2);
  *   COMPOSE_TARGET=iphone node compose-shot.cjs …   # 1284×2778, the 6.5" slot
  *   COMPOSE_TARGET=ipad   node compose-shot.cjs …   # 2064×2752, the 13" slot
  *   COMPOSE_TARGET=ad-portrait / ad-square …        # 1200×1500 and 1200×1200, Google Ads
+ *   COMPOSE_TARGET=ad-landscape …                   # 1200×628, Google Ads
+ *
+ * The landscape slot is too short for a caption over a card, so it is laid out
+ * side by side: the caption in the left half, the card in the right, running off
+ * the bottom like COMPOSE_CARD=wide.
  */
 const TARGETS = {
   play: { width: 1080, height: 1920, page: 1080 },
@@ -57,6 +62,7 @@ const TARGETS = {
   ipad: { width: 2064, height: 2752, page: 1440 },
   'ad-portrait': { width: 1200, height: 1500, page: 1080 },
   'ad-square': { width: 1200, height: 1200, page: 1080 },
+  'ad-landscape': { width: 1200, height: 628, page: 1200, side: true },
 };
 const target = TARGETS[process.env.COMPOSE_TARGET || 'play'];
 const pageWidth = target.page;
@@ -90,9 +96,11 @@ const visibleRatio = (shot.height - cropRaw) / shot.width;
  * image, which is too short to hold a whole screen at a readable size.
  */
 const wide = process.env.COMPOSE_CARD === 'wide';
-const cardWidth = wide ? pageWidth - 120 : Math.min(pageWidth - 120, Math.round(available / visibleRatio));
+const side = Boolean(target.side);
+const cardWidth = side ? 520 : wide ? pageWidth - 120 : Math.min(pageWidth - 120, Math.round(available / visibleRatio));
 const cardHeight = Math.round(cardWidth * visibleRatio);
-const cardLeft = Math.round((pageWidth - cardWidth) / 2);
+const cardLeft = side ? pageWidth - 64 - cardWidth : Math.round((pageWidth - cardWidth) / 2);
+const cardTop = side ? 56 : CARD_TOP;
 const imgOffset = Math.round((cropRaw * cardWidth) / shot.width);
 const FONTS = path.resolve(__dirname, '../../node_modules/.pnpm');
 function findFont(glob) {
@@ -121,12 +129,18 @@ const html = `<!doctype html><meta charset="utf-8"><style>
        color: #4f3f31; }
   .bar { position: absolute; left: ${pageWidth / 2 - 48}px; top: 392px; width: 96px; height: 7px; border-radius: 4px;
          background: linear-gradient(90deg, #12b76a, #23d3b0); box-shadow: 0 0 14px rgba(18,183,106,.5); }
-  .card { position: absolute; left: ${cardLeft}px; top: ${CARD_TOP}px; width: ${cardWidth}px; height: ${cardHeight}px;
+  .card { position: absolute; left: ${cardLeft}px; top: ${cardTop}px; width: ${cardWidth}px; height: ${cardHeight}px;
           border-radius: 44px; z-index: 1; overflow: hidden; background: rgb(255,246,236);
           box-shadow: 0 40px 90px -30px rgba(90,60,20,.55), 0 0 0 2px rgba(120,80,20,.10); }
   .card img { width: ${cardWidth}px; display: block; margin-top: -${imgOffset}px; }
+  .side { position: absolute; left: 64px; width: ${cardLeft - 64 - 48}px; top: 0; bottom: 0;
+          display: flex; flex-direction: column; justify-content: center; }
+  .side h1, .side p, .side .bar { position: static; text-align: left; }
+  .side h1 { font-size: 74px; line-height: 80px; letter-spacing: -1.2px; }
+  .side p { margin-top: 22px; font-size: 30px; line-height: 38px; text-wrap: balance; }
+  .side .bar { margin-top: 30px; }
 </style>
-<h1>${headline.replace(/\\n/g, '\n')}</h1><p>${sub}</p><div class="bar"></div>
+${side ? '<div class="side">' : ''}<h1>${headline.replace(/\\n/g, '\n')}</h1><p>${sub}</p><div class="bar"></div>${side ? '</div>' : ''}
 <div class="card"><img src="file://${path.resolve(capture)}"></div>`;
 (async () => {
   const browser = await chromium.launch({ executablePath: `${process.env.HOME}/Library/Caches/ms-playwright/chromium-1148/chrome-mac/Chromium.app/Contents/MacOS/Chromium`, headless: true });
