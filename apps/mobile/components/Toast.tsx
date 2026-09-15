@@ -228,7 +228,7 @@ function Row({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number) => vo
           reserve
           contentStyle={[
             styles.toast,
-            { backgroundColor: colors.card, borderColor: colors.border },
+            { backgroundColor: colors.card, borderColor: colors.hairline },
           ]}
         >
           <Icon variant={toast.variant} colors={colors} />
@@ -254,10 +254,10 @@ function Row({ toast, onDismiss }: { toast: Toast; onDismiss: (id: number) => vo
               accessibilityLabel={toast.action.label}
               contentStyle={[
                 styles.action,
-                { backgroundColor: colors.background, borderColor: colors.border },
+                { backgroundColor: colors.mutedField, borderColor: colors.hairline },
               ]}
             >
-              <Text style={[t.footnoteBold, { color: colors.foreground }]}>
+              <Text style={[t.footnoteBold, { color: colors.caloriesText }]}>
                 {toast.action.label}
               </Text>
             </PressableChunk>

@@ -6,6 +6,8 @@ import { formatNumber } from '@ct/shared';
 import { foodEmoji } from '@ct/shared/food-emoji';
 import { PressableChunk } from '@/components/Chunk';
 import { InsetGroup } from '@/components/InsetGroup';
+import { wellStyle } from '@/components/Field';
+import { Glossy } from '@/components/icons/Glossy';
 import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -133,6 +135,7 @@ export function RepeatMeals({
   return (
     <InsetGroup
       title={tr('today.logAgain')}
+      icon={<Glossy name="repeat" size={18} />}
       footer={tr('repeat.footer')}
     >
       <View style={styles.search}>
@@ -144,11 +147,7 @@ export function RepeatMeals({
           autoCapitalize="none"
           autoCorrect={false}
           returnKeyType="search"
-          style={[
-            t.body,
-            styles.input,
-            { backgroundColor: colors.mutedField, borderColor: colors.border, color: colors.foreground },
-          ]}
+          style={[t.body, styles.input, wellStyle(colors), { color: colors.foreground }]}
         />
       </View>
 
@@ -193,13 +192,15 @@ export function RepeatMeals({
               onPress={() => repeat(template)}
               accessibilityRole="button"
               accessibilityLabel={tr('repeat.logAgainNamed')(template.description)}
+              // A glass pill with the app's green on it: the one thing in the row
+              // to press, lit rather than outlined.
               contentStyle={[
                 styles.log,
-                { backgroundColor: colors.secondary, borderColor: colors.border },
+                { backgroundColor: colors.glassStrong, borderColor: colors.hairline },
               ]}
             >
-              <Plus color={colors.secondaryForeground} />
-              <Text style={[styles.logLabel, { color: colors.secondaryForeground }]}>{tr('editor.log')}</Text>
+              <Plus color={colors.caloriesText} />
+              <Text style={[styles.logLabel, { color: colors.caloriesText }]}>{tr('editor.log')}</Text>
             </PressableChunk>
           </View>
         ))
@@ -248,7 +249,6 @@ const styles = StyleSheet.create({
   search: { padding: 12 },
   input: {
     height: 40,
-    borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 16,
     // Android centres single-line input by default; iOS pads from the top.

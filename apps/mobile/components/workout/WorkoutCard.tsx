@@ -27,7 +27,7 @@ import {
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
-import { font, type as t, useColors } from '@/theme';
+import { font, type as t, useColors, type Palette } from '@/theme';
 import { haptics } from '@/lib/haptics';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
 import { messageOf } from '@/lib/errors';
@@ -431,7 +431,8 @@ export function WorkoutCard({
 
   return (
     <Chunk
-      contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+      radius={26}
+      contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.hairline }]}
     >
       <Text style={[t.bodyBold, { color: colors.foreground }]}>
         {editing ? tr('workout.fixWhatsWrong') : tr('workout.whatDidYouDo')}
@@ -458,14 +459,11 @@ export function WorkoutCard({
               accessibilityRole="button"
               style={({ pressed }) => [
                 styles.chip,
-                {
-                  backgroundColor: colors.muted,
-                  borderColor: colors.border,
-                  opacity: pressed ? 0.7 : 1,
-                },
+                chipLook(colors, false),
+                { opacity: pressed ? 0.7 : 1 },
               ]}
             >
-              <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+              <Text style={[t.footnoteSemibold, { color: colors.foreground }]}>
                 {routine.emoji} {routine.name}
                 {routine.id === todays?.id ? ` ${tr('workout.today')}` : ''}
               </Text>
@@ -477,14 +475,11 @@ export function WorkoutCard({
               accessibilityRole="button"
               style={({ pressed }) => [
                 styles.chip,
-                {
-                  backgroundColor: colors.muted,
-                  borderColor: colors.border,
-                  opacity: pressed ? 0.7 : 1,
-                },
+                chipLook(colors, false),
+                { opacity: pressed ? 0.7 : 1 },
               ]}
             >
-              <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+              <Text style={[t.footnoteSemibold, { color: colors.foreground }]}>
                 {tr('workout.sameAsShort')(when(last.local_date, locale, tr))}
               </Text>
             </Pressable>
@@ -578,17 +573,14 @@ export function WorkoutCard({
                   accessibilityState={{ selected: on }}
                   style={({ pressed }) => [
                     styles.chip,
-                    {
-                      backgroundColor: on ? colors.primary : colors.muted,
-                      borderColor: on ? 'transparent' : colors.border,
-                      opacity: pressed ? 0.7 : 1,
-                    },
+                    chipLook(colors, on),
+                    { opacity: pressed ? 0.7 : 1 },
                   ]}
                 >
                   <Text
                     style={[
                       styles.categoryLabel,
-                      { color: on ? colors.primaryForeground : colors.mutedForeground },
+                      { color: on ? '#ffffff' : colors.foreground },
                     ]}
                   >
                     {tr(CATEGORY_LABEL[key])}
@@ -626,11 +618,8 @@ export function WorkoutCard({
               style={[
                 t.bodySemibold,
                 styles.saveField,
-                {
-                  backgroundColor: colors.mutedField,
-                  borderColor: colors.border,
-                  color: colors.foreground,
-                },
+                fieldLook(colors),
+                { color: colors.foreground },
               ]}
             />
             <Pressable
@@ -644,7 +633,7 @@ export function WorkoutCard({
           </View>
         ))}
 
-      <View style={[styles.foot, { borderTopColor: colors.border }]}>
+      <View style={[styles.foot, { borderTopColor: colors.hairline }]}>
         <PressableChunk
           depth={3}
           radius={999}
@@ -713,7 +702,7 @@ function PickerSheet({
     <Modal visible={open} animationType="slide" onRequestClose={onClose}>
       <View style={[styles.sheet, { backgroundColor: colors.background }]}>
         <View
-          style={[styles.sheetBar, { paddingTop: insets.top + 8, borderBottomColor: colors.border }]}
+          style={[styles.sheetBar, { paddingTop: insets.top + 8, borderBottomColor: colors.hairline }]}
         >
           <Text style={[t.bodyBold, { color: colors.foreground }]}>
             {tr('workout.pickExercises')}
@@ -793,17 +782,14 @@ function Duration({
               accessibilityState={{ selected: on }}
               style={({ pressed }) => [
                 styles.duration,
-                {
-                  backgroundColor: on ? colors.primary : colors.muted,
-                  borderColor: on ? 'transparent' : colors.border,
-                  opacity: pressed ? 0.7 : 1,
-                },
+                chipLook(colors, on),
+                { opacity: pressed ? 0.7 : 1 },
               ]}
             >
               <Text
                 style={[
                   styles.durationLabel,
-                  { color: on ? colors.primaryForeground : colors.mutedForeground },
+                  { color: on ? '#ffffff' : colors.foreground },
                 ]}
               >
                 {sessionDurationLabel(value)}
@@ -821,17 +807,14 @@ function Duration({
           accessibilityState={{ selected: typing || offScale }}
           style={({ pressed }) => [
             styles.duration,
-            {
-              backgroundColor: offScale ? colors.primary : colors.muted,
-              borderColor: offScale ? 'transparent' : colors.border,
-              opacity: pressed ? 0.7 : 1,
-            },
+            chipLook(colors, offScale),
+            { opacity: pressed ? 0.7 : 1 },
           ]}
         >
           <Text
             style={[
               styles.durationLabel,
-              { color: offScale ? colors.primaryForeground : colors.mutedForeground },
+              { color: offScale ? '#ffffff' : colors.foreground },
             ]}
           >
             {tr('workout.otherLength')}
@@ -854,11 +837,8 @@ function Duration({
           style={[
             t.bodySemibold,
             styles.otherLength,
-            {
-              backgroundColor: colors.mutedField,
-              borderColor: colors.border,
-              color: colors.foreground,
-            },
+            fieldLook(colors),
+            { color: colors.foreground },
           ]}
         />
       )}
@@ -925,8 +905,33 @@ function when(localDate: string, locale: Locale, tr: ReturnType<typeof useT>): s
   return then.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
 }
 
+/** A chip at rest is glass; chosen, it is the date strip's lit green (GLOW-UP.md). */
+function chipLook(colors: Palette, on: boolean) {
+  return on
+    ? {
+        backgroundColor: colors.calories,
+        borderColor: 'transparent',
+        experimental_backgroundImage: `linear-gradient(180deg, ${colors.calories}, ${colors.caloriesDeep})`,
+        boxShadow: `0px 8px 16px -10px ${colors.calories}, inset 0px 1px 0px rgba(255,255,255,0.5)`,
+      }
+    : {
+        backgroundColor: colors.glassStrong,
+        borderColor: colors.glassEdge,
+        boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
+      };
+}
+
+/** A field, the composer's glass pill. */
+function fieldLook(colors: Palette) {
+  return {
+    backgroundColor: colors.glassStrong,
+    borderColor: colors.glassEdge,
+    boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
+  };
+}
+
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 14 },
+  card: { borderWidth: 1, borderRadius: 26, paddingHorizontal: 16, paddingVertical: 14 },
   heard: { marginTop: 4, lineHeight: 20 },
   label: { marginTop: 14, marginBottom: 6 },
   offers: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
@@ -941,10 +946,10 @@ const styles = StyleSheet.create({
   duration: { flex: 1, alignItems: 'center', borderWidth: 1, borderRadius: 999, paddingVertical: 8 },
   durationLabel: { fontFamily: font.display, fontSize: 15, lineHeight: 18 },
   otherLength: {
-    height: 40,
+    height: 44,
     borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    borderRadius: 22,
+    paddingHorizontal: 16,
     paddingVertical: 0,
     marginTop: 6,
   },
@@ -952,10 +957,10 @@ const styles = StyleSheet.create({
   saveRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 },
   saveField: {
     flex: 1,
-    height: 40,
+    height: 44,
     borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    borderRadius: 22,
+    paddingHorizontal: 16,
     paddingVertical: 0,
   },
   foot: {

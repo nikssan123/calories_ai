@@ -1,9 +1,10 @@
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path, Polyline } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import { Chunk } from '@/components/Chunk';
 import { Material } from '@/components/Material';
+import { GlassPill, ScreenGround, ScreenHeader } from '@/components/ScreenHeader';
+import { useSky } from '@/components/Sky';
 import { font, type as t, useColors } from '@/theme';
 import { useT } from '@/lib/i18n';
 
@@ -88,68 +89,43 @@ export function RecipeReader({
   const colors = useColors();
   const tr = useT();
   const insets = useSafeAreaInsets();
-  const router = useRouter();
+  const sky = useSky();
 
   return (
-    <View style={styles.flex}>
+    <ScreenGround>
       <ScrollView
         style={styles.flex}
-        contentContainerStyle={[styles.page, { paddingTop: insets.top + 12 }]}
+        contentContainerStyle={styles.page}
       >
-        <View style={styles.topBar}>
-          <Pressable
-            onPress={() => router.back()}
-            accessibilityRole="button"
-            hitSlop={8}
-            style={({ pressed }) => [styles.back, { opacity: pressed ? 0.6 : 1 }]}
-          >
-            <Svg width={15} height={15} viewBox="0 0 24 24">
-              <Path
-                d="M19 12H5M11 18l-6-6 6-6"
-                stroke={colors.mutedForeground}
-                strokeWidth={2.4}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                fill="none"
-              />
-            </Svg>
-            <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{backLabel}</Text>
-          </Pressable>
-
-          <Chunk
-            depth={2}
-            radius={999}
-            contentStyle={[
-              styles.saveFace,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <Pressable
+        {/* The hour's sky over the top of the recipe, and the way back to
+            wherever it was opened from — Cook, or the week's plan. */}
+        <ScreenHeader
+          backFallback={backLabel}
+          action={
+            <GlassPill
               onPress={onToggleSave}
-              accessibilityRole="button"
-              accessibilityState={{ selected: saved }}
+              onSky={sky.inkLight}
+              selected={saved}
               accessibilityLabel={saved ? tr('recipe.unsaveThis') : tr('recipe.saveThis')}
-              style={({ pressed }) => [styles.saveInner, { opacity: pressed ? 0.6 : 1 }]}
-            >
-              <Svg width={14} height={14} viewBox="0 0 24 24">
-                <Path
-                  d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"
-                  stroke={saved ? colors.caloriesText : colors.mutedForeground}
-                  strokeWidth={2.2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  fill={saved ? colors.caloriesText : 'none'}
-                />
-              </Svg>
-              <Text style={[t.footnoteSemibold, { color: colors.foreground }]}>
-                {saved ? tr('recipe.saved') : tr('recipe.save')}
-              </Text>
-            </Pressable>
-          </Chunk>
-        </View>
+              label={saved ? tr('recipe.saved') : tr('recipe.save')}
+              icon={
+                <Svg width={14} height={14} viewBox="0 0 24 24">
+                  <Path
+                    d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"
+                    stroke={saved ? (sky.inkLight ? colors.skyInk : colors.caloriesText) : sky.inkLight ? colors.skyInk : colors.mutedForeground}
+                    strokeWidth={2.2}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    fill={saved ? (sky.inkLight ? colors.skyInk : colors.caloriesText) : 'none'}
+                  />
+                </Svg>
+              }
+            />
+          }
+        />
 
         {photo ? (
-          <Chunk contentStyle={[styles.hero, { borderColor: colors.border }]}>
+          <Chunk contentStyle={[styles.hero, { borderColor: colors.hairline, boxShadow: colors.shadow }]}>
             <Image source={{ uri: photo }} style={styles.heroImage} resizeMode="cover" />
           </Chunk>
         ) : (
@@ -158,7 +134,7 @@ export function RecipeReader({
               contentStyle={[
                 styles.hero,
                 styles.heroStandIn,
-                { backgroundColor: colors.mutedWash, borderColor: colors.border },
+                { backgroundColor: colors.mutedWash, borderColor: colors.hairline },
               ]}
             >
               <Text style={styles.heroGlyph}>{emoji}</Text>
@@ -184,7 +160,7 @@ export function RecipeReader({
 
         {/* What it costs, at the size the decision deserves. */}
         <Chunk
-          contentStyle={[styles.cost, { backgroundColor: colors.card, borderColor: colors.border }]}
+          contentStyle={[styles.cost, { backgroundColor: colors.card, borderColor: colors.hairline, boxShadow: colors.shadow }]}
         >
           <View>
             <Text style={[t.figure, styles.costFigure, { color: colors.foreground }]}>
@@ -208,7 +184,7 @@ export function RecipeReader({
           <Chunk
             contentStyle={[
               styles.list,
-              { backgroundColor: colors.card, borderColor: colors.border },
+              { backgroundColor: colors.card, borderColor: colors.hairline, boxShadow: colors.shadow },
             ]}
           >
             {ingredients.map((item, index) => (
@@ -262,7 +238,7 @@ export function RecipeReader({
                 key={index}
                 contentStyle={[
                   styles.step,
-                  { backgroundColor: colors.card, borderColor: colors.border },
+                  { backgroundColor: colors.card, borderColor: colors.hairline, boxShadow: colors.shadow },
                 ]}
               >
                 {/* Numbered as an object rather than a superscript: this is the
@@ -270,7 +246,7 @@ export function RecipeReader({
                 <View
                   style={[
                     styles.stepNumber,
-                    { backgroundColor: colors.muted, borderColor: colors.border },
+                    { backgroundColor: colors.caloriesWash, borderColor: colors.hairline },
                   ]}
                 >
                   <Text style={[t.figure, styles.stepNumberText, { color: colors.foreground }]}>
@@ -284,7 +260,7 @@ export function RecipeReader({
         </View>
 
         {footnote && (
-          <Text style={[t.footnote, styles.footnote, { color: colors.mutedForeground, borderTopColor: colors.border }]}>
+          <Text style={[t.footnote, styles.footnote, { color: colors.mutedForeground, borderTopColor: colors.hairline }]}>
             {footnote}
           </Text>
         )}
@@ -292,10 +268,10 @@ export function RecipeReader({
 
       {/* Pinned, because the decision to log is made at the end of the method
           and the method is longer than a screen. */}
-      <Material style={[styles.actions, { borderTopColor: colors.border, paddingBottom: insets.bottom + 12 }]}>
+      <Material style={[styles.actions, { borderTopColor: colors.hairline, paddingBottom: insets.bottom + 12 }]}>
         {actions}
       </Material>
-    </View>
+    </ScreenGround>
   );
 }
 
@@ -341,16 +317,6 @@ function Macro({ label, value, color }: { label: string; value: number; color: s
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   page: { paddingHorizontal: 16, paddingBottom: 32, gap: 20 },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  back: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 },
-  saveFace: { borderWidth: 1, borderRadius: 999 },
-  saveInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    height: 36,
-    paddingHorizontal: 14,
-  },
   hero: { borderWidth: 1, borderRadius: 24, overflow: 'hidden' },
   heroImage: { width: '100%', aspectRatio: 4 / 3 },
   /*

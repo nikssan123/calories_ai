@@ -4,7 +4,7 @@ import { formatNumber } from '@ct/shared';
 import { listWords } from '@ct/shared/words';
 import { useLocale, useT } from '@/lib/i18n';
 import { Chunk } from '@/components/Chunk';
-import { font, type as t, useColors } from '@/theme';
+import { type as t, useColors, useType } from '@/theme';
 
 /**
  * One recipe, as something to choose between.
@@ -63,12 +63,14 @@ export function RecipeTile({
   onToggleSave: () => void;
 }) {
   const colors = useColors();
+  const type = useType();
   const tr = useT();
   const locale = useLocale();
 
   return (
     <Chunk
-      contentStyle={[styles.tile, { backgroundColor: colors.card, borderColor: colors.border }]}
+      radius={26}
+      contentStyle={[styles.tile, { backgroundColor: colors.card, borderColor: colors.hairline }]}
     >
       <Pressable
         onPress={onPress}
@@ -84,7 +86,11 @@ export function RecipeTile({
           <View
             style={[
               styles.standIn,
-              { backgroundColor: colors.mutedWash, borderBottomColor: colors.border },
+              {
+                backgroundColor: colors.mutedWash,
+                borderBottomColor: colors.hairline,
+                experimental_backgroundImage: `radial-gradient(circle at 50% 60%, ${colors.caloriesWash} 0%, transparent 70%)`,
+              },
             ]}
           >
             <Text style={styles.standInGlyph}>{emoji ?? '🍳'}</Text>
@@ -92,7 +98,8 @@ export function RecipeTile({
         )}
 
         <View style={styles.body}>
-          <Text style={[styles.title, { color: colors.foreground }]}>{title}</Text>
+          {/* The dish's name in the serif, as the reader it opens titles it. */}
+          <Text style={[type.serifTitle, styles.title, { color: colors.foreground }]}>{title}</Text>
 
           {summary && (
             <Text numberOfLines={2} style={[t.body, styles.summary, { color: colors.mutedForeground }]}>
@@ -181,9 +188,11 @@ export function RecipeTile({
         hitSlop={8}
         style={({ pressed }) => [
           styles.save,
+          // Glass over the photograph, like the reader's Save.
           {
-            backgroundColor: colors.card,
-            borderColor: colors.border,
+            backgroundColor: colors.glassStrong,
+            borderColor: colors.glassEdge,
+            boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
             opacity: pressed ? 0.6 : 1,
           },
         ]}
@@ -225,7 +234,7 @@ function Clock({ color }: { color: string }) {
 }
 
 const styles = StyleSheet.create({
-  tile: { borderWidth: 1, borderRadius: 24, overflow: 'hidden' },
+  tile: { borderWidth: 1, borderRadius: 26, overflow: 'hidden' },
   photo: { width: '100%', aspectRatio: 16 / 10 },
   /*
    * A band rather than the photo's 16:10.
@@ -245,7 +254,7 @@ const styles = StyleSheet.create({
   },
   standInGlyph: { fontSize: 56, lineHeight: 66, opacity: 0.9 },
   body: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, gap: 6 },
-  title: { fontFamily: font.display, fontSize: 17, lineHeight: 22 },
+  title: { fontSize: 20, lineHeight: 25 },
   summary: { lineHeight: 22 },
   figureRow: { flexDirection: 'row', alignItems: 'baseline', flexWrap: 'wrap', gap: 8, marginTop: 2 },
   figure: { fontSize: 21, lineHeight: 26 },

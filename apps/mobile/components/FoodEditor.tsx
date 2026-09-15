@@ -11,6 +11,7 @@ import {
 } from '@ct/shared';
 import { foodEmoji } from '@ct/shared/food-emoji';
 import { Chunk, PressableChunk } from '@/components/Chunk';
+import { chipStyle, chipTextColor, wellStyle } from '@/components/Field';
 import { api } from '@/lib/api';
 import { type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
@@ -217,7 +218,7 @@ export function FoodEditor({
 
   if (error !== null && entry === null) {
     return (
-      <Chunk contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Chunk contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.hairline }]}>
         <Text style={[t.footnoteSemibold, { color: colors.destructive }]}>{error}</Text>
         <Quiet label={tr('common.close')} onPress={onCancel} />
       </Chunk>
@@ -226,7 +227,7 @@ export function FoodEditor({
 
   if (entry === null && !creating) {
     return (
-      <Chunk contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Chunk contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.hairline }]}>
         <Text style={[t.footnote, { color: colors.mutedForeground }]}>{tr('common.loading')}</Text>
       </Chunk>
     );
@@ -249,7 +250,7 @@ export function FoodEditor({
   const split = energy.reduce((a, band) => a + band.kcal, 0);
 
   return (
-    <Chunk contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <Chunk contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.hairline }]}>
       {/* What this card is, kept to the weight of a caption — the meal's name is
           the title here, and a bold heading above it said the same thing twice.
           The total sits where the receipt puts it, and counts while you type. */}
@@ -266,7 +267,7 @@ export function FoodEditor({
       {/* The receipt's head, made editable: the same picture, the same line of
           bold text. Ruled underneath rather than boxed, so the title reads as
           the card's name and the boxes below it are the data being corrected. */}
-      <View style={[styles.title, { borderBottomColor: colors.border }]}>
+      <View style={[styles.title, { borderBottomColor: colors.hairline }]}>
         <Text style={styles.emoji}>{foodEmoji(description, meal)}</Text>
         <TextInput
           value={description}
@@ -279,7 +280,7 @@ export function FoodEditor({
       </View>
 
       {split > 0 && (
-        <View style={[styles.split, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+        <View style={[styles.split, { backgroundColor: colors.mutedField }]}>
           {energy.map((band) => (
             <View
               key={band.key}
@@ -303,17 +304,16 @@ export function FoodEditor({
               accessibilityState={{ selected: on }}
               style={({ pressed }) => [
                 styles.meal,
-                {
-                  backgroundColor: on ? colors.primary : colors.muted,
-                  borderColor: on ? 'transparent' : colors.border,
-                  opacity: pressed ? 0.7 : 1,
-                },
+                // Glass at rest and lit green when chosen, like every choice
+                // since the glow-up. See `chipStyle`.
+                chipStyle(colors, on),
+                { opacity: pressed ? 0.7 : 1 },
               ]}
             >
               <Text
                 style={[
-                  t.footnoteSemibold,
-                  { color: on ? colors.primaryForeground : colors.mutedForeground },
+                  on ? t.footnoteBold : t.footnoteSemibold,
+                  { color: on ? chipTextColor(colors, true) : colors.mutedForeground },
                 ]}
               >
                 {tr(label)}
@@ -324,7 +324,7 @@ export function FoodEditor({
       </View>
 
       {items.map((item, i) => (
-        <View key={i} style={[styles.item, { borderTopColor: colors.border }]}>
+        <View key={i} style={[styles.item, { borderTopColor: colors.hairline }]}>
           {/* Name and portion on one line, the way the receipt writes them:
               "chicken 180g". They were two full-width boxes stacked, which made
               a two-item meal eight boxes tall before a number was typed. */}
@@ -339,7 +339,8 @@ export function FoodEditor({
                 t.bodySemibold,
                 styles.name,
                 styles.field,
-                { backgroundColor: colors.mutedField, borderColor: colors.border, color: colors.foreground },
+                wellStyle(colors),
+                { color: colors.foreground },
               ]}
             />
             {/* The words, kept as words. "1 medium banana" is the assumption the
@@ -354,7 +355,8 @@ export function FoodEditor({
                 t.body,
                 styles.quantity,
                 styles.field,
-                { backgroundColor: colors.mutedField, borderColor: colors.border, color: colors.foreground },
+                wellStyle(colors),
+                { color: colors.foreground },
               ]}
             />
             <Pressable
@@ -412,7 +414,7 @@ export function FoodEditor({
         </View>
       )}
 
-      <View style={[styles.foot, { borderTopColor: colors.border }]}>
+      <View style={[styles.foot, { borderTopColor: colors.hairline }]}>
         <Pressable onPress={onCancel} accessibilityRole="button" hitSlop={8}>
           <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('common.cancel')}</Text>
         </Pressable>
@@ -482,10 +484,7 @@ function Cell({
   const colors = useColors();
   return (
     <View
-      style={[
-        styles.cell,
-        { backgroundColor: colors.mutedField, borderColor: colors.border },
-      ]}
+      style={[styles.cell, wellStyle(colors)]}
     >
       <TextInput
         value={value}
@@ -587,10 +586,10 @@ const styles = StyleSheet.create({
   title: { flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: 1, paddingBottom: 6 },
   titleInput: { flex: 1, padding: 0 },
   emoji: { fontSize: 22, lineHeight: 28 },
-  split: { flexDirection: 'row', gap: 1, height: 10, borderRadius: 999, borderWidth: 1, overflow: 'hidden' },
+  split: { flexDirection: 'row', gap: 1, height: 10, borderRadius: 999, overflow: 'hidden' },
   field: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8 },
   meals: { flexDirection: 'row', gap: 6 },
-  meal: { flex: 1, borderWidth: 1, borderRadius: 999, paddingVertical: 7, alignItems: 'center' },
+  meal: { flex: 1, borderRadius: 999, paddingVertical: 7, alignItems: 'center' },
   item: { borderTopWidth: 1, paddingTop: 10, gap: 8 },
   itemHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   // The portion is short — "180g", "1 cup" — and the name is not, so the row

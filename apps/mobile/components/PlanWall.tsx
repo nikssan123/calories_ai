@@ -79,24 +79,22 @@ export function PlanWall({
   return (
     <Land style={style}>
       <Chunk
-        contentStyle={[
-          styles.card,
-          {
-            /*
-             * The card surface, with the accent spent entirely on the border.
-             *
-             * A tinted *fill* was the obvious move and it is wrong here: the
-             * ground is cream, so nine per cent of a green over it comes out
-             * olive — a colour that is in neither palette, next to a vivid green
-             * user bubble that shows up exactly how muddy it is. The border
-             * carries the same signal at full chroma and leaves the card
-             * reading like every other card in the conversation, which is what
-             * it should read like. It is a message, not an alert.
-             */
-            backgroundColor: colors.card,
-            borderColor: withAlpha(colors.primary, 0.55),
-          },
-        ]}
+        /*
+         * The card surface, with the accent spent on its light rather than on
+         * a fill or an outline.
+         *
+         * A tinted *fill* was the obvious move and it is wrong here: the ground
+         * is cream, so nine per cent of a green over it comes out olive — a
+         * colour that is in neither palette, next to a vivid green user bubble
+         * that shows up exactly how muddy it is. It wore a green border for a
+         * while; since the glow-up nothing is outlined, so the card glows green
+         * instead — the same signal, at full chroma, cast rather than drawn —
+         * and still reads like every other card in the conversation. It is a
+         * message, not an alert.
+         */
+        color={colors.calories}
+        depth={5}
+        contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.hairline }]}
       >
         <View style={styles.head}>
           <Badge colors={colors} />
@@ -131,7 +129,7 @@ export function PlanWall({
               accessibilityRole="button"
               contentStyle={[
                 styles.button,
-                { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+                { backgroundColor: colors.glassStrong, borderWidth: 1, borderColor: colors.hairline },
               ]}
             >
               <Text style={[t.bodySemibold, { color: colors.foreground }]}>{tr('guest.saveRow')}</Text>
@@ -150,7 +148,7 @@ export function PlanWall({
               accessibilityRole="button"
               contentStyle={[
                 styles.button,
-                { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+                { backgroundColor: colors.glassStrong, borderWidth: 1, borderColor: colors.hairline },
               ]}
             >
               <Text style={[t.bodySemibold, { color: colors.foreground }]}>
@@ -198,10 +196,10 @@ export function LockedPanel({
   return (
     <Chunk
       style={style}
-      contentStyle={[
-        styles.card,
-        { backgroundColor: colors.card, borderColor: withAlpha(colors.primary, 0.55) },
-      ]}
+      // Lit green rather than outlined green — see `PlanWall`.
+      color={colors.calories}
+      depth={5}
+      contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.hairline }]}
     >
       <View style={styles.head}>
         <Badge colors={colors} icon="lock" />
@@ -351,7 +349,15 @@ function Badge({ colors, icon = 'sparkles' }: { colors: Palette; icon?: 'sparkle
     fill: 'none',
   };
   return (
-    <View style={[styles.badge, { backgroundColor: withAlpha(colors.primary, 0.22) }]}>
+    <View
+      style={[
+        styles.badge,
+        {
+          backgroundColor: withAlpha(colors.primary, 0.22),
+          boxShadow: `inset 0px 1px 0px ${colors.glassEdge}`,
+        },
+      ]}
+    >
       <Svg width={17} height={17} viewBox="0 0 24 24">
         {icon === 'sparkles' ? (
           <>

@@ -34,6 +34,7 @@ import { haptics } from '@/lib/haptics';
 import { useLocale } from '@/lib/i18n';
 import { useT, type StringKey } from '@/lib/i18n';
 import { messageOf } from '@/lib/errors';
+import { wellStyle } from '@/components/Field';
 
 /**
  * The visual half of a turn — and the thing this app should be recognised by.
@@ -141,7 +142,7 @@ function Chip({ action }: { action: ChatAction }) {
         style={styles.chipWrap}
         contentStyle={[
           styles.chip,
-          { backgroundColor: colors.card, borderColor: colors.border },
+          { backgroundColor: colors.card, borderColor: colors.hairline },
         ]}
       >
         <View
@@ -410,7 +411,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <Land>
       <Chunk
-        contentStyle={[styles.shell, { backgroundColor: colors.card, borderColor: colors.border }]}
+        contentStyle={[styles.shell, { backgroundColor: colors.card, borderColor: colors.hairline }]}
       >
         {children}
       </Chunk>
@@ -1062,11 +1063,8 @@ function WeightCard({
             style={[
               t.figure,
               styles.weightField,
-              {
-                backgroundColor: colors.mutedField,
-                borderColor: colors.border,
-                color: colors.foreground,
-              },
+              wellStyle(colors),
+              { color: colors.foreground },
             ]}
           />
           <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
@@ -1241,7 +1239,7 @@ function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
         </Text>
       </View>
 
-      <View style={[styles.dayTrack, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+      <View style={[styles.dayTrack, { backgroundColor: colors.hairline }]}>
         <Band
           width={pct}
           color={over ? colors.foreground : colors.calories}
@@ -1408,7 +1406,7 @@ function ReviewCard({
                   : day.kcal !== null
                     ? colors.muted
                     : 'transparent',
-                borderColor: day.kcal !== null ? 'transparent' : colors.border,
+                borderColor: day.kcal !== null ? 'transparent' : colors.hairline,
               },
             ]}
           >
@@ -1466,7 +1464,7 @@ function ReviewCard({
 
       {card.target_change && (
         <View
-          style={[styles.reviewChange, { backgroundColor: colors.muted, borderColor: colors.border }]}
+          style={[styles.reviewChange, wellStyle(colors)]}
         >
           <View style={styles.reviewChangeRow}>
             <Text style={[t.bodyBold, t.tnum, { color: colors.mutedForeground }]}>
@@ -1493,7 +1491,7 @@ function ReviewCard({
       )}
 
       {shown.length > 0 && (
-        <View style={[styles.reviewProse, { borderTopColor: colors.border }]}>
+        <View style={[styles.reviewProse, { borderTopColor: colors.hairline }]}>
           {shown.map((paragraph, index) => (
             <Text
               key={index}
@@ -1620,7 +1618,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     height: 10,
     borderRadius: 999,
-    borderWidth: 1,
     overflow: 'hidden',
     marginTop: 10,
   },

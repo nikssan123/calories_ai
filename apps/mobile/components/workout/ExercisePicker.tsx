@@ -187,7 +187,7 @@ export function ExercisePicker({
 
   return (
     <View style={styles.fill}>
-      <View style={[styles.head, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+      <View style={[styles.head, { backgroundColor: colors.card, borderBottomColor: colors.hairline }]}>
         <TextInput
           value={query}
           onChangeText={setQuery}
@@ -201,8 +201,9 @@ export function ExercisePicker({
             t.bodySemibold,
             styles.search,
             {
-              backgroundColor: colors.mutedField,
-              borderColor: colors.border,
+              backgroundColor: colors.glassStrong,
+              borderColor: colors.glassEdge,
+              boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
               color: colors.foreground,
             },
           ]}
@@ -219,10 +220,15 @@ export function ExercisePicker({
             hitSlop={6}
             style={({ pressed }) => [
               styles.back,
-              { backgroundColor: colors.primary, opacity: pressed ? 0.7 : 1 },
+              {
+                backgroundColor: colors.calories,
+                experimental_backgroundImage: `linear-gradient(180deg, ${colors.calories}, ${colors.caloriesDeep})`,
+                boxShadow: `0px 8px 16px -10px ${colors.calories}, inset 0px 1px 0px rgba(255,255,255,0.5)`,
+                opacity: pressed ? 0.7 : 1,
+              },
             ]}
           >
-            <Text style={[t.footnoteSemibold, { color: colors.primaryForeground }]}>
+            <Text style={[t.footnoteSemibold, { color: '#ffffff' }]}>
               {tr('workout.backToBody')(muscleLabel(muscle))}
             </Text>
           </Pressable>
@@ -293,13 +299,14 @@ export function ExercisePicker({
                   style={({ pressed }) => [
                     styles.chip,
                     {
-                      backgroundColor: colors.muted,
-                      borderColor: colors.border,
+                      backgroundColor: colors.glassStrong,
+                      borderColor: colors.glassEdge,
+                      boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
                       opacity: pressed ? 0.7 : 1,
                     },
                   ]}
                 >
-                  <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+                  <Text style={[t.footnoteSemibold, { color: colors.foreground }]}>
                     {muscleLabel(key)}
                   </Text>
                 </Pressable>
@@ -345,17 +352,17 @@ export function ExercisePicker({
             style={({ pressed }) => [
               styles.chip,
               styles.add,
-              { borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+              { backgroundColor: colors.caloriesWash, borderColor: 'transparent', opacity: pressed ? 0.7 : 1 },
             ]}
           >
-            <Text style={[t.footnoteSemibold, { color: colors.foreground }]}>
+            <Text style={[t.footnoteSemibold, { color: colors.caloriesText }]}>
               {tr('workout.addNamed')(typed)}
             </Text>
           </Pressable>
         )}
       </ScrollView>
 
-      <View style={[styles.foot, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+      <View style={[styles.foot, { backgroundColor: colors.card, borderTopColor: colors.hairline }]}>
         <PressableChunk
           depth={3}
           radius={999}
@@ -412,7 +419,7 @@ function Row({
       style={({ pressed }) => [
         styles.row,
         {
-          borderBottomColor: colors.border,
+          borderBottomColor: colors.hairline,
           backgroundColor: generic ? colors.mutedField : 'transparent',
           opacity: pressed ? 0.7 : 1,
         },
@@ -438,13 +445,17 @@ function Row({
       <View
         style={[
           styles.tick,
-          {
-            borderColor: on ? 'transparent' : colors.border,
-            backgroundColor: on ? colors.primary : 'transparent',
-          },
+          on
+            ? {
+                borderColor: 'transparent',
+                backgroundColor: colors.calories,
+                experimental_backgroundImage: `linear-gradient(180deg, ${colors.calories}, ${colors.caloriesDeep})`,
+                boxShadow: `0px 6px 12px -8px ${colors.calories}, inset 0px 1px 0px rgba(255,255,255,0.5)`,
+              }
+            : { borderColor: colors.hairline, backgroundColor: colors.mutedField },
         ]}
       >
-        {on && <Text style={[styles.tickMark, { color: colors.primaryForeground }]}>✓</Text>}
+        {on && <Text style={[styles.tickMark, { color: '#ffffff' }]}>✓</Text>}
       </View>
     </Pressable>
   );
@@ -455,13 +466,13 @@ const styles = StyleSheet.create({
   pad: { paddingHorizontal: 16, paddingVertical: 18 },
   head: { borderBottomWidth: 1, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 12, gap: 10 },
   search: {
-    height: 40,
+    height: 44,
     borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    borderRadius: 22,
+    paddingHorizontal: 16,
     paddingVertical: 0,
   },
-  back: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
+  back: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6 },
   // `flexGrow` so the body map can centre itself in whatever is left. An
   // account with history fills this space with its recents; a new one does not,
   // and a map pinned to the top of an empty screen reads as a failed load.
@@ -482,7 +493,7 @@ const styles = StyleSheet.create({
   chipScroll: { flexGrow: 0 },
   chips: { flexDirection: 'row', gap: 6, paddingHorizontal: 16, paddingTop: 12 },
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
-  add: { alignSelf: 'flex-start', borderStyle: 'dashed', marginHorizontal: 16, marginTop: 12 },
+  add: { alignSelf: 'flex-start', marginHorizontal: 16, marginTop: 12 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

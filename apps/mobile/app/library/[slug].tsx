@@ -169,7 +169,12 @@ export default function LibraryRecipeScreen() {
               style={styles.flex}
               contentStyle={[
                 styles.button,
-                { backgroundColor: colors.secondary, borderWidth: 1, borderColor: colors.border },
+                {
+                  backgroundColor: colors.glassStrong,
+                  borderWidth: 1,
+                  borderColor: colors.glassEdge,
+                  boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
+                },
               ]}
             >
               {adapting && <ActivityIndicator size="small" color={colors.secondaryForeground} />}

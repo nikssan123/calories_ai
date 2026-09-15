@@ -1,9 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
-import { Chunk } from '@/components/Chunk';
 import { useThemePreference, type ThemePreference } from '@/lib/theme-preference';
 import { useT, type StringKey } from '@/lib/i18n';
-import { font, useColors } from '@/theme';
+import { font, tint, useColors } from '@/theme';
 
 const OPTIONS: Array<{ value: ThemePreference; label: StringKey }> = [
   { value: 'system', label: 'theme.system' },
@@ -30,7 +29,14 @@ export function ThemeToggle() {
     <View
       accessibilityRole="radiogroup"
       accessibilityLabel={tr('theme.label')}
-      style={[styles.group, { backgroundColor: colors.muted, borderColor: colors.border }]}
+      style={[
+        styles.group,
+        {
+          backgroundColor: colors.glass,
+          borderColor: colors.glassEdge,
+          boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
+        },
+      ]}
     >
       {OPTIONS.map(({ value, label }) => {
         const active = preference === value;
@@ -39,13 +45,13 @@ export function ThemeToggle() {
           <View style={styles.option}>
             <Glyph
               kind={value}
-              color={active ? colors.foreground : colors.mutedForeground}
+              color={active ? colors.primaryForeground : colors.mutedForeground}
               weight={active ? 2.6 : 2.1}
             />
             <Text
               style={[
                 styles.label,
-                { color: active ? colors.foreground : colors.mutedForeground },
+                { color: active ? colors.primaryForeground : colors.mutedForeground },
               ]}
             >
               {tr(label)}
@@ -62,16 +68,19 @@ export function ThemeToggle() {
             style={styles.slot}
           >
             {active ? (
-              <Chunk
-                depth={2}
-                radius={999}
-                contentStyle={[
+              // Lit like the chosen segment everywhere else (see `Segments`).
+              <View
+                style={[
                   styles.active,
-                  { backgroundColor: colors.card, borderColor: colors.border },
+                  {
+                    backgroundColor: colors.primary,
+                    experimental_backgroundImage: colors.primaryRamp,
+                    boxShadow: `0px 6px 14px -6px ${tint(colors.calories, 0.8)}, inset 0px 1px 0px rgba(255, 255, 255, 0.45)`,
+                  },
                 ]}
               >
                 {face}
-              </Chunk>
+              </View>
             ) : (
               face
             )}
@@ -130,7 +139,7 @@ function Glyph({
 const styles = StyleSheet.create({
   group: { flexDirection: 'row', gap: 4, borderWidth: 1, borderRadius: 999, padding: 4 },
   slot: { flex: 1 },
-  active: { borderWidth: 1, borderRadius: 999 },
+  active: { borderRadius: 999 },
   option: {
     flexDirection: 'row',
     alignItems: 'center',

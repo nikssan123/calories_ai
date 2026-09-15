@@ -66,7 +66,12 @@ export function BriefToggle({ value, onPress }: { value: RecipeBrief; onPress: (
       accessibilityRole="button"
       style={({ pressed }) => [
         styles.toggle,
-        { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.6 : 1 },
+        {
+          backgroundColor: colors.glassStrong,
+          borderColor: colors.glassEdge,
+          boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
+          opacity: pressed ? 0.6 : 1,
+        },
       ]}
     >
       <Svg width={13} height={13} viewBox="0 0 24 24">
@@ -82,8 +87,8 @@ export function BriefToggle({ value, onPress }: { value: RecipeBrief; onPress: (
         {tr('cook.anythingSpecific')}
       </Text>
       {active > 0 && (
-        <View style={[styles.badge, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-          <Text style={[styles.badgeText, { color: colors.secondaryForeground }]}>{active}</Text>
+        <View style={[styles.badge, { backgroundColor: colors.caloriesWash, borderColor: 'transparent' }]}>
+          <Text style={[styles.badgeText, { color: colors.caloriesText }]}>{active}</Text>
         </View>
       )}
     </Pressable>
@@ -123,8 +128,9 @@ export function Brief({
             t.body,
             styles.wants,
             {
-              backgroundColor: colors.mutedField,
-              borderColor: colors.border,
+              backgroundColor: colors.glassStrong,
+              borderColor: colors.glassEdge,
+              boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
               color: colors.foreground,
             },
           ]}
@@ -214,17 +220,26 @@ function Chip({ on, onPress, label }: { on: boolean; onPress: () => void; label:
       accessibilityState={{ selected: on }}
       style={({ pressed }) => [
         styles.chip,
-        {
-          backgroundColor: on ? colors.primary : colors.muted,
-          borderColor: on ? 'transparent' : colors.border,
-          opacity: pressed ? 0.7 : 1,
-        },
+        /* Chosen, the date strip's lit green; otherwise glass (GLOW-UP.md). */
+        on
+          ? {
+              backgroundColor: colors.calories,
+              borderColor: 'transparent',
+              experimental_backgroundImage: `linear-gradient(180deg, ${colors.calories}, ${colors.caloriesDeep})`,
+              boxShadow: `0px 8px 18px -10px ${colors.calories}, inset 0px 1px 0px rgba(255,255,255,0.5)`,
+            }
+          : {
+              backgroundColor: colors.glassStrong,
+              borderColor: colors.glassEdge,
+              boxShadow: `inset 0px 1px 0px ${colors.glassEdge}`,
+            },
+        { opacity: pressed ? 0.7 : 1 },
       ]}
     >
       <Text
         style={[
           styles.chipLabel,
-          { color: on ? colors.primaryForeground : colors.mutedForeground },
+          { color: on ? '#ffffff' : colors.foreground },
         ]}
       >
         {label}
@@ -251,8 +266,8 @@ const styles = StyleSheet.create({
   wants: {
     height: 44,
     borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    borderRadius: 22,
+    paddingHorizontal: 16,
     paddingVertical: 0,
   },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },

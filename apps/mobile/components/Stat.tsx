@@ -30,7 +30,7 @@ export function Stat({
     <View
       style={[
         styles.stat,
-        first ? null : { borderLeftWidth: 2, borderLeftColor: colors.border },
+        first ? null : { borderLeftWidth: 1, borderLeftColor: colors.hairline },
       ]}
     >
       <Text style={[t.footnoteSemibold, styles.centred, { color: colors.mutedForeground }]}>

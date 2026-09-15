@@ -108,7 +108,7 @@ function BlockView({
 
     case 'quote':
       return (
-        <View style={[styles.quote, { borderLeftColor: colors.border }]}>
+        <View style={[styles.quote, { borderLeftColor: colors.hairline }]}>
           {block.children.map((child, i) => (
             <BlockView
               key={i}
@@ -125,7 +125,10 @@ function BlockView({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          style={[styles.fence, { backgroundColor: colors.muted, borderColor: colors.border }]}
+          style={[
+            styles.fence,
+            { backgroundColor: colors.mutedField, borderColor: colors.hairline, boxShadow: `inset 0px 1px 0px ${colors.glassEdge}` },
+          ]}
           contentContainerStyle={styles.fenceBody}
         >
           <Text style={[t.footnote, { fontFamily: MONO, color: colors.foreground }]}>
@@ -138,7 +141,7 @@ function BlockView({
       return <TableView block={block} colors={colors} />;
 
     case 'rule':
-      return <View style={[styles.rule, { borderTopColor: colors.border }]} />;
+      return <View style={[styles.rule, { borderTopColor: colors.hairline }]} />;
   }
 }
 
@@ -192,7 +195,7 @@ function TableView({
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      style={[styles.table, { borderColor: colors.border }]}
+      style={[styles.table, { backgroundColor: colors.card, borderColor: colors.hairline, boxShadow: colors.shadow }]}
       /*
        * `w-full` on the web, and it has to be said twice here. The scroller
        * exists for a table too wide to fit, but without this its content sizes
@@ -222,7 +225,7 @@ function TableView({
               styles.row,
               r === block.rows.length - 1
                 ? null
-                : { borderBottomWidth: 1, borderBottomColor: colors.border },
+                : { borderBottomWidth: 1, borderBottomColor: colors.hairline },
             ]}
           >
             {block.head.map((_, c) => (

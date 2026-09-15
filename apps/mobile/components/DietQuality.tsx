@@ -92,7 +92,7 @@ export function DietQuality({
         contentStyle={{
           backgroundColor: colors.card,
           borderWidth: 1,
-          borderColor: colors.border,
+          borderColor: colors.hairline,
           paddingHorizontal: 16,
           paddingVertical: 16,
         }}
@@ -199,10 +199,10 @@ export function QualityBlank({ style }: { style?: StyleProp<ViewStyle> }) {
           style={styles.blankAction}
           contentStyle={[
             styles.blankButton,
-            { backgroundColor: colors.secondary, borderColor: colors.border },
+            { backgroundColor: colors.glassStrong, borderColor: colors.hairline },
           ]}
         >
-          <Text style={[t.footnoteBold, { color: colors.secondaryForeground }]}>
+          <Text style={[t.footnoteBold, { color: colors.caloriesText }]}>
             {tr('plans.seeWhatAdds')(TIER_NAMES[next])}
           </Text>
         </PressableChunk>
@@ -300,7 +300,7 @@ function QualityTrack({
         )}
       </View>
 
-      <View style={[styles.bar, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+      <View style={[styles.bar, { backgroundColor: colors.mutedField }]}>
         <Animated.View style={[styles.fill, fill, { backgroundColor: fillColor }]} />
       </View>
     </View>
@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
   figureRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
   // `leading-none`, less the amount RN would clip off the top. See MacroBars.
   figure: { fontSize: 13, lineHeight: 17 },
-  bar: { height: 6, borderRadius: 999, borderWidth: 1, overflow: 'hidden' },
+  bar: { height: 6, borderRadius: 999, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 999 },
   footer: { paddingHorizontal: 6, paddingTop: 2 },
   blank: { marginTop: 14 },

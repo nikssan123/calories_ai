@@ -31,7 +31,8 @@ import { Glossy } from '@/components/icons/Glossy';
 import { api } from '@/lib/api';
 import { pickPhoto, takePhoto, type PreparedPhoto } from '@/lib/image';
 import { useUnits } from '@/lib/units';
-import { font, type as t, useColors } from '@/theme';
+import { font, type as t, useColors, useType } from '@/theme';
+import { chipStyle, chipTextColor, fieldStyle, wellStyle } from '@/components/Field';
 import { haptics } from '@/lib/haptics';
 import { useLocale, useT } from '@/lib/i18n';
 import { messageOf } from '@/lib/errors';
@@ -318,27 +319,8 @@ export function BarcodeScanner({
 
   return (
     <Modal visible={open} animationType="slide" onRequestClose={close}>
-      <View style={[styles.screen, { backgroundColor: colors.background }]}>
-        <View style={[styles.bar, { paddingTop: insets.top + 8, borderBottomColor: colors.border }]}>
-          <Text style={[t.bodyBold, { color: colors.foreground }]}>{tr('barcode.title')}</Text>
-          <Pressable
-            onPress={close}
-            accessibilityRole="button"
-            accessibilityLabel={tr('common.close')}
-            hitSlop={10}
-            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-          >
-            <Svg width={20} height={20} viewBox="0 0 24 24">
-              <Path
-                d="M18 6 6 18M6 6l12 12"
-                stroke={colors.mutedForeground}
-                strokeWidth={2.6}
-                strokeLinecap="round"
-                fill="none"
-              />
-            </Svg>
-          </Pressable>
-        </View>
+      <View style={[styles.screen, { backgroundColor: colors.background, experimental_backgroundImage: colors.ambient }]}>
+        <TopBar title={tr('barcode.title')} onClose={close} top={insets.top} />
 
         {stage.at === 'scanning' || stage.at === 'looking' ? (
           <View style={[styles.viewfinder, permission?.granted && styles.live]}>
@@ -479,8 +461,9 @@ export function BarcodeScanner({
             style={[
               styles.tally,
               {
-                borderTopColor: colors.border,
-                backgroundColor: colors.background,
+                borderTopColor: colors.glassEdge,
+                backgroundColor: colors.glassStrong,
+                boxShadow: `0px -12px 28px -20px ${colors.chunk}`,
                 paddingBottom: insets.bottom + 14,
               },
             ]}
@@ -614,6 +597,7 @@ function Portion({
   initial?: Portioned;
 }) {
   const colors = useColors();
+  const type = useType();
   const tr = useT();
   const locale = useLocale();
   const units = useUnits();
@@ -689,7 +673,7 @@ function Portion({
             {product.brand && (
               <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>{product.brand}</Text>
             )}
-            <Text style={[styles.productName, { color: colors.foreground }]}>{product.name}</Text>
+            <Text style={[type.serifTitle, styles.productName, { color: colors.foreground }]}>{product.name}</Text>
             <Text style={[t.footnote, styles.basis, { color: colors.mutedForeground }]}>
               {tr('barcode.perBasis')(
                 formatNumber(Math.round((product.kcal_100g * basis.grams) / 100), locale),
@@ -720,7 +704,7 @@ function Portion({
         {mode === 'serving' && (
           <View style={styles.stepper}>
             <Text style={[t.body, { color: colors.foreground }]}>{tr('barcode.howMany')}</Text>
-            <View style={[styles.steps, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+            <View style={[styles.steps, fieldStyle(colors), styles.stepsReset]}>
               <Step
                 sign="minus"
                 disabled={rung === 0}
@@ -749,13 +733,13 @@ function Portion({
                 {tr('barcode.tapToType')}
               </Text>
             </View>
-            <View style={[styles.steps, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+            <View style={[styles.steps, fieldStyle(colors), styles.stepsReset]}>
               <Step
                 sign="minus"
                 disabled={weighed <= basis.weighMin}
                 onStep={() => nudge(-1)}
               />
-              <View style={[styles.typed, { backgroundColor: colors.card, borderColor: colors.input }]}>
+              <View style={[styles.typed, wellStyle(colors)]}>
                 <TextInput
                   value={draft ?? String(settle(weighed))}
                   /*
@@ -791,8 +775,17 @@ function Portion({
           </View>
         )}
 
-        <View style={[styles.total, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[t.figure, styles.totalFigure, { color: colors.foreground }]}>
+        <View
+          style={[
+            styles.total,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.hairline,
+              boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
+            },
+          ]}
+        >
+          <Text style={[type.serifFigure, styles.totalFigure, t.tnum, { color: colors.foreground }]}>
             {Math.round(product.kcal_100g * share)}
           </Text>
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
@@ -825,7 +818,7 @@ function Portion({
             contentStyle={[
               styles.button,
               styles.outlined,
-              { backgroundColor: colors.card, borderColor: colors.input },
+              { backgroundColor: colors.glassStrong, borderColor: colors.hairline },
             ]}
           >
             <Text style={[t.bodyBold, { color: colors.foreground }]}>{secondary.label}</Text>
@@ -872,27 +865,8 @@ export function PortionSheet({
 
   return (
     <Modal visible={scan !== null} animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.screen, { backgroundColor: colors.background }]}>
-        <View style={[styles.bar, { paddingTop: insets.top + 8, borderBottomColor: colors.border }]}>
-          <Text style={[t.bodyBold, { color: colors.foreground }]}>{tr('barcode.howMuch')}</Text>
-          <Pressable
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel={tr('common.close')}
-            hitSlop={10}
-            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-          >
-            <Svg width={20} height={20} viewBox="0 0 24 24">
-              <Path
-                d="M18 6 6 18M6 6l12 12"
-                stroke={colors.mutedForeground}
-                strokeWidth={2.6}
-                strokeLinecap="round"
-                fill="none"
-              />
-            </Svg>
-          </Pressable>
-        </View>
+      <View style={[styles.screen, { backgroundColor: colors.background, experimental_backgroundImage: colors.ambient }]}>
+        <TopBar title={tr('barcode.howMuch')} onClose={onClose} top={insets.top} />
 
         {scan && (
           <Portion
@@ -945,7 +919,9 @@ function Missed({
   const tr = useT();
   return (
     <View style={styles.missed}>
-      <Text style={styles.mascot}>🔍</Text>
+      {/* Skye, who reads the barcodes, thinking about the one it couldn't
+          (CAST.md) — in place of a magnifying-glass emoji. */}
+      <Character name="skye" mood="thinking" size={76} />
       <Text style={[t.body, styles.centred, { color: colors.foreground }]}>
         {partial ? tr('barcode.partialTitle') : tr('barcode.notCatalogued')}
       </Text>
@@ -981,21 +957,50 @@ function Mode({ on, onPress, label }: { on: boolean; onPress: () => void; label:
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: on }}
-      style={({ pressed }) => [
-        styles.mode,
-        {
-          backgroundColor: on ? colors.primary : colors.muted,
-          borderColor: on ? 'transparent' : colors.border,
-          opacity: pressed ? 0.7 : 1,
-        },
-      ]}
+      style={({ pressed }) => [styles.mode, chipStyle(colors, on), { opacity: pressed ? 0.7 : 1 }]}
     >
       <Text
-        style={[styles.modeLabel, { color: on ? colors.primaryForeground : colors.mutedForeground }]}
+        style={[styles.modeLabel, { color: on ? chipTextColor(colors, true) : colors.mutedForeground }]}
       >
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+/**
+ * The scanner's own top: the step it is on, in the serif, and a glass way out.
+ * It used to be a bold line over a rule, the last ruled bar in the app.
+ */
+function TopBar({ title, onClose, top }: { title: string; onClose: () => void; top: number }) {
+  const colors = useColors();
+  const type = useType();
+  const tr = useT();
+  return (
+    <View style={[styles.bar, { paddingTop: top + 10 }]}>
+      <Text numberOfLines={1} style={[type.serifTitle, styles.barTitle, { color: colors.foreground }]}>
+        {title}
+      </Text>
+      <Pressable
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel={tr('common.close')}
+        hitSlop={8}
+        style={({ pressed }) => [
+          styles.close,
+          {
+            backgroundColor: colors.glassStrong,
+            borderColor: colors.hairline,
+            boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
+            opacity: pressed ? 0.6 : 1,
+          },
+        ]}
+      >
+        <Svg width={16} height={16} viewBox="0 0 24 24">
+          <Path d="M18 6 6 18M6 6l12 12" stroke={colors.foreground} strokeWidth={2.6} strokeLinecap="round" fill="none" />
+        </Svg>
+      </Pressable>
+    </View>
   );
 }
 
@@ -1124,10 +1129,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    paddingHorizontal: 16,
+    gap: 12,
+    paddingHorizontal: 20,
     paddingBottom: 12,
   },
+  barTitle: { flexShrink: 1 },
+  close: { width: 38, height: 38, borderRadius: 999, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   viewfinder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   /* Black only behind a running camera. The permission panel is page furniture,
      and on a black backdrop its themed text was brown-on-black in light mode. */
@@ -1180,10 +1187,10 @@ const styles = StyleSheet.create({
   centred: { textAlign: 'center' },
   product: { padding: 20, gap: 16 },
   productHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  productName: { fontFamily: font.display, fontSize: 18, lineHeight: 24, marginTop: 4 },
+  productName: { marginTop: 4 },
   basis: { marginTop: 6 },
   modes: { flexDirection: 'row', gap: 8 },
-  mode: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
+  mode: { borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
   modeLabel: { fontFamily: font.bold, fontSize: 14, lineHeight: 20 },
   stepper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   stepperLabel: { flexShrink: 1 },
@@ -1195,6 +1202,8 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     flexShrink: 0,
   },
+  // `fieldStyle` is a 40pt text pill; the stepper sizes to its buttons instead.
+  stepsReset: { height: undefined, paddingHorizontal: 0 },
   step: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   count: { width: 44, textAlign: 'center', fontSize: 16, lineHeight: 24 },
   /* Its own inset pill inside the stepper, because a bare figure between two
@@ -1226,7 +1235,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
-  totalFigure: { fontSize: 28, lineHeight: 36 },
+  totalFigure: { fontSize: 30, lineHeight: 38 },
   button: {
     height: 48,
     borderRadius: 999,
@@ -1238,7 +1247,6 @@ const styles = StyleSheet.create({
      outlined one the same height standing next to each other. */
   outlined: { height: 48, borderWidth: 1 },
   missed: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
-  mascot: { fontSize: 40, lineHeight: 48 },
   missedButton: { alignSelf: 'stretch', marginTop: 12 },
   error: { textAlign: 'center', padding: 16 },
 });

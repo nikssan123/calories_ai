@@ -4,6 +4,8 @@ import Svg, { Path } from 'react-native-svg';
 import type { Diet, Profile } from '@ct/shared';
 import { DIETS } from '@ct/shared';
 import { InsetGroup } from '@/components/InsetGroup';
+import { chipStyle, chipTextColor, wellStyle } from '@/components/Field';
+import { Glossy } from '@/components/icons/Glossy';
 import { api } from '@/lib/api';
 import { font, type as t, useColors } from '@/theme';
 import { useT, type StringKey } from '@/lib/i18n';
@@ -73,6 +75,7 @@ export function DietRules({
   return (
     <InsetGroup
       title={tr('diet.title')}
+      icon={<Glossy name="plate" size={18} />}
       footer={tr('diet.footer')}
     >
       <View style={styles.diets}>
@@ -84,19 +87,12 @@ export function DietRules({
               onPress={() => void save({ diet })}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
-              style={({ pressed }) => [
-                styles.diet,
-                {
-                  backgroundColor: active ? colors.muted : colors.mutedWash,
-                  borderColor: active ? colors.caloriesText : 'transparent',
-                  opacity: pressed ? 0.6 : 1,
-                },
-              ]}
+              style={({ pressed }) => [styles.diet, chipStyle(colors, active), { opacity: pressed ? 0.6 : 1 }]}
             >
               <Text
                 style={[
-                  t.footnote,
-                  { color: active ? colors.foreground : colors.mutedForeground },
+                  active ? t.footnoteBold : t.footnote,
+                  { color: active ? chipTextColor(colors, true) : colors.mutedForeground },
                 ]}
               >
                 {tr(LABELS[diet])}
@@ -106,7 +102,7 @@ export function DietRules({
         })}
       </View>
 
-      <View style={[styles.avoids, { borderTopColor: colors.border }]}>
+      <View style={[styles.avoids, { borderTopColor: colors.hairline }]}>
         <View style={styles.addRow}>
           <TextInput
             value={draft}
@@ -115,11 +111,7 @@ export function DietRules({
             returnKeyType="done"
             placeholder={tr('diet.avoidPlaceholder')}
             placeholderTextColor={colors.mutedForeground}
-            style={[
-              t.body,
-              styles.addInput,
-              { backgroundColor: colors.mutedField, borderColor: colors.border, color: colors.foreground },
-            ]}
+            style={[t.body, styles.addInput, wellStyle(colors), { color: colors.foreground }]}
           />
           <Pressable
             onPress={addAvoid}
@@ -128,11 +120,9 @@ export function DietRules({
             accessibilityLabel={tr('common.add')}
             style={({ pressed }) => [
               styles.add,
-              {
-                backgroundColor: colors.muted,
-                borderColor: colors.border,
-                opacity: !draft.trim() ? 0.4 : pressed ? 0.6 : 1,
-              },
+              chipStyle(colors, false),
+              { boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}` },
+              { opacity: !draft.trim() ? 0.4 : pressed ? 0.6 : 1 },
             ]}
           >
             <Svg width={18} height={18} viewBox="0 0 24 24">
@@ -157,11 +147,8 @@ export function DietRules({
                 accessibilityLabel={tr('diet.stopAvoiding')(item)}
                 style={({ pressed }) => [
                   styles.tag,
-                  {
-                    backgroundColor: colors.muted,
-                    borderColor: colors.border,
-                    opacity: pressed ? 0.6 : 1,
-                  },
+                  chipStyle(colors, false),
+                  { opacity: pressed ? 0.6 : 1 },
                 ]}
               >
                 <Text style={[t.footnoteSemibold, { color: colors.foreground }]}>{item}</Text>
@@ -185,13 +172,12 @@ export function DietRules({
 
 const styles = StyleSheet.create({
   diets: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, padding: 12 },
-  diet: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6 },
+  diet: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   avoids: { borderTopWidth: 1, padding: 12 },
   addRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   addInput: {
     flex: 1,
     height: 44,
-    borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 16,
     paddingVertical: 0,
@@ -201,7 +187,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 999,
-    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -211,7 +196,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     borderRadius: 999,
-    borderWidth: 1,
     paddingLeft: 12,
     paddingRight: 8,
     paddingVertical: 4,

@@ -20,7 +20,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Polyline } from 'react-native-svg';
-import { ease, font, type as t, useColors } from '@/theme';
+import { ease, font, type as t, useColors, useType } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useT } from '@/lib/i18n';
 
@@ -31,16 +31,62 @@ import { useT } from '@/lib/i18n';
  * was unusable in practice: an empty height field rendered as the word "cm"
  * floating in white space with nothing to say it could be typed into. A field
  * has to look like a field. This is the quietest treatment that still does.
+ *
+ * Lit glass since the glow-up, the composer's own field in miniature: a pale
+ * pill with a hairline for its edge on a white card, the page's warm shadow
+ * under it and the lit top edge every surface has — rather than a brown outline
+ * around a tinted well, which was the one outlined thing left on the profile.
  */
 export function fieldStyle(colors: ReturnType<typeof useColors>) {
   return {
     height: 40,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.muted,
+    borderColor: colors.hairline,
+    backgroundColor: colors.glassStrong,
+    boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
     paddingHorizontal: 14,
   };
+}
+
+/**
+ * A smaller input inside a dense form — an item's grams and kcal, a search box
+ * in a list. A soft well rather than a lifted pill: eight shadows in a grid of
+ * numbers is a grid of shadows, and a well reads as "type here" without one.
+ */
+export function wellStyle(colors: ReturnType<typeof useColors>) {
+  return {
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    backgroundColor: colors.mutedField,
+    boxShadow: `inset 0px 1px 0px ${colors.glassEdge}`,
+  };
+}
+
+/**
+ * A choice among a few, drawn as a pill: glass at rest, the logo's green lit
+ * from above when chosen — the date strip's chosen day, at the size of a word.
+ * Pair with `chipTextColor` for its label.
+ */
+export function chipStyle(colors: ReturnType<typeof useColors>, on: boolean) {
+  return on
+    ? {
+        borderWidth: 1,
+        borderColor: 'transparent',
+        backgroundColor: colors.calories,
+        experimental_backgroundImage: `linear-gradient(180deg, ${colors.calories}, ${colors.caloriesDeep})`,
+        boxShadow: `0px 6px 14px -8px ${colors.calories}, inset 0px 1px 0px rgba(255, 255, 255, 0.45)`,
+      }
+    : {
+        borderWidth: 1,
+        borderColor: colors.hairline,
+        backgroundColor: colors.glassStrong,
+        boxShadow: `inset 0px 1px 0px ${colors.glassEdge}`,
+      };
+}
+
+export function chipTextColor(colors: ReturnType<typeof useColors>, on: boolean): string {
+  return on ? '#ffffff' : colors.secondaryForeground;
 }
 
 /** A plain text value — a name, a timezone. */
@@ -184,7 +230,7 @@ export function Picker<T extends string>({
             accessibilityState={{ selected: option === value }}
             style={({ pressed }) => [
               styles.option,
-              { borderTopColor: colors.border, opacity: pressed ? 0.6 : 1 },
+              { borderTopColor: colors.hairline, opacity: pressed ? 0.6 : 1 },
             ]}
           >
             <Text style={[t.body, styles.optionLabel, { color: colors.foreground }]}>
@@ -244,6 +290,7 @@ export function Sheet({
   children: React.ReactNode;
 }) {
   const colors = useColors();
+  const type = useType();
   const tr = useT();
   const reduced = useReducedMotion();
   /*
@@ -417,8 +464,16 @@ export function Sheet({
             styles.sheet,
             panel,
             {
-              backgroundColor: colors.card,
-              borderColor: colors.border,
+              /*
+               * The page's own ground and its ambient light, lifted: a sheet is
+               * a piece of the screen come up to meet the thumb, so what sits
+               * in it — cards, fields, rows — looks the way it does on a page.
+               * The lit edge along the top is the only line it draws.
+               */
+              backgroundColor: colors.background,
+              experimental_backgroundImage: colors.ambient,
+              borderColor: colors.glassEdge,
+              boxShadow: `0px -18px 40px -24px ${colors.chunk}, inset 0px 1px 0px ${colors.glassEdge}`,
               paddingBottom: Math.max(insets.bottom, 16) + 12,
             },
           ]}
@@ -427,8 +482,8 @@ export function Sheet({
             {/* The grabber and the title are one target: a 4pt bar is a mark,
                 not something a thumb can find. */}
             <View>
-              <View style={[styles.grabber, { backgroundColor: colors.border }]} />
-              <Text style={[t.eyebrow, styles.sheetTitle, { color: colors.mutedForeground }]}>
+              <View style={[styles.grabber, { backgroundColor: colors.mutedForeground }]} />
+              <Text numberOfLines={2} style={[type.serifTitle, styles.sheetTitle, { color: colors.foreground }]}>
                 {title}
               </Text>
             </View>
@@ -477,12 +532,13 @@ const styles = StyleSheet.create({
   grabber: {
     alignSelf: 'center',
     width: 40,
-    height: 4,
+    height: 5,
     borderRadius: 999,
     marginTop: 10,
-    marginBottom: 2,
+    marginBottom: 4,
+    opacity: 0.28,
   },
-  sheetTitle: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 10 },
+  sheetTitle: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
   option: {
     flexDirection: 'row',
     alignItems: 'center',

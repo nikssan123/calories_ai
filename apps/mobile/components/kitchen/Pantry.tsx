@@ -167,8 +167,9 @@ export function Pantry({
             t.body,
             styles.composeInput,
             {
-              backgroundColor: colors.mutedField,
-              borderColor: colors.border,
+              backgroundColor: colors.glassStrong,
+              borderColor: colors.glassEdge,
+              boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
               color: colors.foreground,
             },
           ]}
@@ -183,13 +184,13 @@ export function Pantry({
           style={{ opacity: !draft.trim() || busy ? 0.4 : 1 }}
           contentStyle={[
             styles.composeButton,
-            { backgroundColor: colors.secondary, borderColor: colors.border },
+            { backgroundColor: colors.glassStrong, borderColor: colors.glassEdge },
           ]}
         >
           <Svg width={18} height={18} viewBox="0 0 24 24">
             <Path
               d="M12 5v14M5 12h14"
-              stroke={colors.secondaryForeground}
+              stroke={colors.foreground}
               strokeWidth={2.6}
               strokeLinecap="round"
               fill="none"
@@ -215,7 +216,7 @@ export function Pantry({
         <View
           style={[
             styles.asking,
-            { borderColor: colors.border, backgroundColor: colors.mutedWash },
+            { borderColor: colors.hairline, backgroundColor: colors.card, boxShadow: colors.shadow },
           ]}
         >
           <Text style={[t.eyebrow, styles.askingHeading, { color: colors.fatText }]}>
@@ -230,7 +231,7 @@ export function Pantry({
               <View
                 style={[
                   styles.row,
-                  { backgroundColor: colors.card, borderTopColor: colors.border },
+                  { backgroundColor: colors.card, borderTopColor: colors.hairline },
                 ]}
               >
                 <View style={styles.rowBody}>
@@ -254,13 +255,13 @@ export function Pantry({
                   style={({ pressed }) => [
                     styles.still,
                     {
-                      backgroundColor: colors.secondary,
-                      borderColor: colors.border,
+                      backgroundColor: colors.caloriesWash,
+                      borderColor: 'transparent',
                       opacity: pressed ? 0.6 : 1,
                     },
                   ]}
                 >
-                  <Text style={[t.footnoteBold, { color: colors.secondaryForeground }]}>{tr('pantry.yes')}</Text>
+                  <Text style={[t.footnoteBold, { color: colors.caloriesText }]}>{tr('pantry.yes')}</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => remove(item)}
@@ -295,7 +296,7 @@ export function Pantry({
                   item={item}
                   colors={colors}
                   onRemove={() => remove(item)}
-                  fill={colors.secondary}
+                  fill={colors.glassStrong}
                 />
               ))}
             </View>
@@ -341,7 +342,7 @@ export function Pantry({
                   item={item}
                   colors={colors}
                   onRemove={() => remove(item)}
-                  fill={colors.muted}
+                  fill={colors.mutedWash}
                 />
               ))}
             </View>
@@ -375,7 +376,12 @@ function Chip({
 }) {
   const tr = useT();
   return (
-    <View style={[styles.chip, { backgroundColor: fill, borderColor: colors.border }]}>
+    <View
+      style={[
+        styles.chip,
+        { backgroundColor: fill, borderColor: colors.glassEdge, boxShadow: `inset 0px 1px 0px ${colors.glassEdge}` },
+      ]}
+    >
       <Text
         numberOfLines={1}
         style={[t.footnoteSemibold, styles.chipText, { color: colors.foreground }]}
@@ -447,7 +453,7 @@ const styles = StyleSheet.create({
      Rows run full-bleed inside it and the panel clips them, which is what keeps
      swipe-to-delete looking deliberate: the red slides out under the rounded
      edge rather than a square corner appearing beside a rounded card. */
-  asking: { borderWidth: 1, borderRadius: 20, overflow: 'hidden' },
+  asking: { borderWidth: 1, borderRadius: 24, overflow: 'hidden' },
   askingHeading: { paddingHorizontal: 12, paddingTop: 10, paddingBottom: 8 },
   row: {
     flexDirection: 'row',

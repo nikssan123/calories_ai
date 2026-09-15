@@ -31,6 +31,7 @@ import { useEntitlements } from '@/lib/entitlements';
 import { useLocale, useT } from '@/lib/i18n';
 import { messageOf } from '@/lib/errors';
 import { Glossy } from '@/components/icons/Glossy';
+import { ScreenGround, ScreenHeader } from '@/components/ScreenHeader';
 
 /**
  * The week's dinners, and the shop that follows from them.
@@ -184,33 +185,13 @@ export default function PlanScreen() {
   }
 
   return (
+    <ScreenGround>
     <ScrollView
       style={styles.flex}
-      contentContainerStyle={[styles.page, { paddingTop: insets.top + 12 }]}
+      contentContainerStyle={[styles.page, { paddingBottom: insets.bottom + 40 }]}
       keyboardShouldPersistTaps="handled"
     >
-      <View style={styles.topBar}>
-        <Pressable
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          hitSlop={8}
-          style={({ pressed }) => [styles.back, { opacity: pressed ? 0.6 : 1 }]}
-        >
-          <Svg width={15} height={15} viewBox="0 0 24 24">
-            <Path
-              d="M19 12H5M11 18l-6-6 6-6"
-              stroke={colors.mutedForeground}
-              strokeWidth={2.4}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-          </Svg>
-          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('plan.cookTab')}</Text>
-        </Pressable>
-      </View>
-
-      <Text style={[t.largeTitle, { color: colors.foreground }]}>{tr('plan.theWeek')}</Text>
+      <ScreenHeader title={tr('plan.theWeek')} />
 
       {loading ? (
         <>
@@ -251,7 +232,7 @@ export default function PlanScreen() {
                   styles.wants,
                   {
                     backgroundColor: colors.mutedField,
-                    borderColor: colors.border,
+                    borderColor: colors.hairline,
                     color: colors.foreground,
                   },
                 ]}
@@ -334,7 +315,7 @@ export default function PlanScreen() {
                   : undefined
               }
             >
-              <View style={[styles.addRow, { borderBottomColor: colors.border }]}>
+              <View style={[styles.addRow, { borderBottomColor: colors.hairline }]}>
                 <TextInput
                   value={draft}
                   onChangeText={setDraft}
@@ -347,7 +328,7 @@ export default function PlanScreen() {
                     styles.addInput,
                     {
                       backgroundColor: colors.mutedField,
-                      borderColor: colors.border,
+                      borderColor: colors.hairline,
                       color: colors.foreground,
                     },
                   ]}
@@ -361,7 +342,7 @@ export default function PlanScreen() {
                     styles.addButton,
                     {
                       backgroundColor: colors.muted,
-                      borderColor: colors.border,
+                      borderColor: colors.hairline,
                       opacity: !draft.trim() ? 0.4 : pressed ? 0.6 : 1,
                     },
                   ]}
@@ -411,10 +392,14 @@ export default function PlanScreen() {
                           hitSlop={6}
                           style={[
                             styles.box,
-                            {
-                              backgroundColor: item.bought ? colors.primary : 'transparent',
-                              borderColor: item.bought ? colors.caloriesDeep : colors.border,
-                            },
+                            item.bought
+                              ? {
+                                  backgroundColor: colors.calories,
+                                  borderColor: 'transparent',
+                                  experimental_backgroundImage: `linear-gradient(180deg, ${colors.calories}, ${colors.caloriesDeep})`,
+                                  boxShadow: `0px 6px 14px -8px ${colors.calories}, inset 0px 1px 0px rgba(255,255,255,0.45)`,
+                                }
+                              : { backgroundColor: colors.mutedField, borderColor: colors.hairline },
                           ]}
                         >
                           {item.bought && (
@@ -487,6 +472,7 @@ export default function PlanScreen() {
         </Text>
       )}
     </ScrollView>
+    </ScreenGround>
   );
 }
 
@@ -550,13 +536,13 @@ function Night({
                 style={({ pressed }) => [
                   styles.cookButton,
                   {
-                    backgroundColor: colors.secondary,
-                    borderColor: colors.border,
+                    backgroundColor: colors.caloriesWash,
+                    borderColor: colors.hairline,
                     opacity: pressed ? 0.6 : 1,
                   },
                 ]}
               >
-                <Text style={[t.footnoteBold, { color: colors.secondaryForeground }]}>{tr('plan.cooked')}</Text>
+                <Text style={[t.footnoteBold, { color: colors.caloriesText }]}>{tr('plan.cooked')}</Text>
               </Pressable>
               <Pressable
                 onPress={onClear}
@@ -587,9 +573,7 @@ function Night({
 
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
-  page: { paddingHorizontal: 16, paddingBottom: 40, gap: 20 },
-  topBar: { flexDirection: 'row', alignItems: 'center' },
-  back: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 },
+  page: { paddingHorizontal: 16, gap: 20 },
   form: { padding: 12, gap: 12 },
   wants: {
     height: 44,

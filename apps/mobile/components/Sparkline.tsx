@@ -335,7 +335,8 @@ function Readout({
           left: left - shift,
           maxWidth: max,
           backgroundColor: colors.card,
-          borderColor: colors.border,
+          borderColor: colors.hairline,
+          boxShadow: colors.shadow,
         },
       ]}
     >

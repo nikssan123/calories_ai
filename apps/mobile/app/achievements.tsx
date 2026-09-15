@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Polyline } from 'react-native-svg';
 import type { Progress } from '@ct/shared';
 import { ACHIEVEMENT_KEYS } from '@ct/shared';
 import { AchievementWall } from '@/components/Achievements';
 import { Skeleton } from '@/components/Skeleton';
+import { ScreenGround, ScreenHeader } from '@/components/ScreenHeader';
+import { useSky } from '@/components/Sky';
+import { Glossy } from '@/components/icons/Glossy';
 import { api } from '@/lib/api';
 import { useT } from '@/lib/i18n';
 import { type as t, useColors } from '@/theme';
@@ -33,7 +34,7 @@ export default function AchievementsScreen() {
   const colors = useColors();
   const tr = useT();
   const insets = useSafeAreaInsets();
-  const router = useRouter();
+  const sky = useSky();
 
   const [progress, setProgress] = useState<Progress | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -59,66 +60,48 @@ export default function AchievementsScreen() {
   useRefreshOnReturn(load);
 
   return (
-    <ScrollView
-      style={styles.flex}
-      contentContainerStyle={[
-        styles.page,
-        { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 32 },
-      ]}
-    >
-      <View style={styles.topBar}>
-        <Pressable
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel={tr('progress.title')}
-          hitSlop={8}
-          style={({ pressed }) => [styles.chevron, { opacity: pressed ? 0.5 : 1 }]}
-        >
-          <Svg width={20} height={20} viewBox="0 0 24 24">
-            <Polyline
-              points="15 18 9 12 15 6"
-              stroke={colors.mutedForeground}
-              strokeWidth={2.4}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-            />
-          </Svg>
-        </Pressable>
-        <Text style={[t.largeTitle, styles.heading, { color: colors.foreground }]}>
-          {tr('achievements.title')}
-        </Text>
-        {progress && (
-          <Text style={[t.footnoteSemibold, t.tnum, { color: colors.mutedForeground }]}>
-            {tr('achievements.count')(progress.achievements.length, ACHIEVEMENT_KEYS.length)}
+    <ScreenGround>
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={[styles.page, { paddingBottom: insets.bottom + 32 }]}
+      >
+        <ScreenHeader
+          title={tr('achievements.title')}
+          trailing={
+            progress && (
+              <View style={[styles.count, { backgroundColor: sky.inkLight ? 'rgba(255,255,255,0.12)' : colors.glassStrong, boxShadow: `inset 0px 1px 0px ${colors.glassEdge}` }]}>
+                <Glossy name="medal" size={16} />
+                <Text style={[t.footnoteBold, t.tnum, { color: sky.inkLight ? colors.skyInk : colors.foreground }]}>
+                  {tr('achievements.count')(progress.achievements.length, ACHIEVEMENT_KEYS.length)}
+                </Text>
+              </View>
+            )
+          }
+        />
+
+        {!progress ? (
+          <View style={styles.loading}>
+            <Skeleton style={styles.block} />
+            <Skeleton style={styles.block} />
+          </View>
+        ) : (
+          <AchievementWall earned={progress.achievements} facts={progress.achievement_facts} />
+        )}
+
+        {error && (
+          <Text style={[t.footnoteSemibold, styles.centred, { color: colors.destructive }]}>
+            {error}
           </Text>
         )}
-      </View>
-
-      {!progress ? (
-        <View style={styles.loading}>
-          <Skeleton style={styles.block} />
-          <Skeleton style={styles.block} />
-        </View>
-      ) : (
-        <AchievementWall earned={progress.achievements} facts={progress.achievement_facts} />
-      )}
-
-      {error && (
-        <Text style={[t.footnoteSemibold, styles.centred, { color: colors.destructive }]}>
-          {error}
-        </Text>
-      )}
-    </ScrollView>
+      </ScrollView>
+    </ScreenGround>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   page: { paddingHorizontal: 16, gap: 20 },
-  topBar: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  chevron: { padding: 4 },
-  heading: { flex: 1 },
+  count: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingLeft: 8, paddingRight: 12, height: 32 },
   loading: { gap: 20 },
   block: { height: 220, borderRadius: 24 },
   centred: { textAlign: 'center' },

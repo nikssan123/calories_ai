@@ -43,7 +43,7 @@ import { untilWords } from '@ct/shared/words';
 import { PressableChunk } from '@/components/Chunk';
 import { DietRules } from '@/components/DietRules';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
-import { NumberField, Picker, Sheet, TextField } from '@/components/Field';
+import { NumberField, Picker, Sheet, TextField, wellStyle } from '@/components/Field';
 import { Material } from '@/components/Material';
 import { Skeleton } from '@/components/Skeleton';
 import { Switch } from '@/components/Switch';
@@ -681,7 +681,7 @@ function SaveBar({
       entering={SlideInDown.duration(duration.quick).reduceMotion(ReduceMotion.System)}
       exiting={SlideOutDown.duration(duration.quick).reduceMotion(ReduceMotion.System)}
     >
-      <Material style={[styles.bar, { borderTopColor: colors.border }]}>
+      <Material style={[styles.bar, { borderTopColor: colors.hairline }]}>
         <Text
           accessibilityLiveRegion="polite"
           style={[
@@ -821,7 +821,8 @@ function BirthDate({
         accessibilityLabel={tr('setup.birthDate')}
         style={({ pressed }) => [
           styles.dateField,
-          { borderColor: colors.border, backgroundColor: colors.muted, opacity: pressed ? 0.6 : 1 },
+          wellStyle(colors),
+          { opacity: pressed ? 0.6 : 1 },
         ]}
       >
         <Text style={[t.bodySemibold, { color: value ? colors.foreground : colors.mutedForeground }]}>
@@ -1146,7 +1147,11 @@ function EmailSettings({
               style={styles.resendWrap}
               contentStyle={[
                 styles.resend,
-                { backgroundColor: colors.card, borderColor: colors.border },
+                {
+                  backgroundColor: colors.glassStrong,
+                  borderColor: colors.glassEdge,
+                  boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
+                },
               ]}
             >
               <Text style={[t.footnoteBold, { color: colors.foreground }]}>
@@ -1389,7 +1394,8 @@ function TimeField({
         accessibilityLabel={label}
         style={({ pressed }) => [
           styles.timeField,
-          { borderColor: colors.border, backgroundColor: colors.muted, opacity: pressed ? 0.6 : 1 },
+          wellStyle(colors),
+          { opacity: pressed ? 0.6 : 1 },
         ]}
       >
         <Text style={[t.bodySemibold, { color: colors.foreground }]}>{shown}</Text>

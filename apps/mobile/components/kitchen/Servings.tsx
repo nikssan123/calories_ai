@@ -46,7 +46,17 @@ export function Servings({
         </Text>
       </View>
 
-      <View style={[styles.stepper, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+      {/* A glass pill like the composer's field, not an outlined slab (GLOW-UP.md). */}
+      <View
+        style={[
+          styles.stepper,
+          {
+            backgroundColor: colors.glassStrong,
+            borderColor: colors.glassEdge,
+            boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
+          },
+        ]}
+      >
         <Step
           sign="minus"
           onPress={() => step(-SERVING_STEP)}

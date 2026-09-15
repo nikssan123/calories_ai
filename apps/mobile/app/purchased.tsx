@@ -11,6 +11,7 @@ import { haptics } from '@/lib/haptics';
 import { type as t, useColors, withAlpha } from '@/theme';
 import { useLocale, useT } from '@/lib/i18n';
 import { Confetti } from '@/components/Confetti';
+import { ScreenGround, ScreenHeader } from '@/components/ScreenHeader';
 
 /**
  * What somebody sees immediately after paying.
@@ -112,31 +113,34 @@ export default function PurchasedScreen() {
   const below = tier ? paid[paid.indexOf(tier) - 1] : undefined;
 
   return (
+    <ScreenGround>
     <ScrollView
       style={styles.flex}
-      contentContainerStyle={[
-        styles.page,
-        { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 40 },
-      ]}
+      contentContainerStyle={[styles.page, { paddingBottom: insets.bottom + 40 }]}
     >
-      <Mark landed={landed} />
-
-      <Text style={[t.largeTitle, styles.title, { color: colors.foreground }]}>
-        {landed && bought
-          ? tr('plans.youreOnPlan')(TIER_NAMES[bought])
-          : tr('plans.paymentReceived')}
-      </Text>
-
-      <Text style={[t.body, styles.lede, { color: colors.mutedForeground }]}>
-        {landed && bought
-          ? tr(TIER_PITCHES[bought])
-          : waited
-            ? // Deliberately not an apology and not an instruction. There is
-              // nothing for them to do, `expirePlans` is not involved, and the
-              // honest shape of this is "it is coming, you are not out of pocket".
-              tr('plans.pendingLong')
-            : tr('plans.pendingShort')}
-      </Text>
+      {/* No way back but the button at the foot: this replaces the wall rather
+          than sitting on top of it, and there is nothing behind it to return to. */}
+      <ScreenHeader
+        back={false}
+        inset={20}
+        skyHeight={380}
+        top={<View style={styles.markRoom}><Mark landed={landed} /></View>}
+        title={
+          landed && bought
+            ? (tr('plans.youreOnPlan')(TIER_NAMES[bought]) as string)
+            : (tr('plans.paymentReceived') as string)
+        }
+        subtitle={
+          (landed && bought
+            ? tr(TIER_PITCHES[bought])
+            : waited
+              ? // Deliberately not an apology and not an instruction. There is
+                // nothing for them to do, `expirePlans` is not involved, and the
+                // honest shape of this is "it is coming, you are not out of pocket".
+                tr('plans.pendingLong')
+              : tr('plans.pendingShort')) as string
+        }
+      />
 
       {landed && tier && (
         <Chunk
@@ -182,6 +186,7 @@ export default function PurchasedScreen() {
         {tr('plans.manageOnStore')}
       </Text>
     </ScrollView>
+    </ScreenGround>
   );
 }
 
@@ -273,8 +278,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { marginTop: 4 },
-  lede: { marginTop: -8 },
+  markRoom: { paddingTop: 28, paddingBottom: 6 },
   card: { padding: 16, borderWidth: 1, borderRadius: 20, gap: 12 },
   lines: { gap: 10 },
   line: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },

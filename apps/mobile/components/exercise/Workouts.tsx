@@ -284,17 +284,26 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
                         accessibilityState={{ selected: on }}
                         style={({ pressed }) => [
                           styles.dayChip,
-                          {
-                            backgroundColor: on ? colors.primary : colors.muted,
-                            borderColor: on ? 'transparent' : colors.border,
-                            opacity: pressed ? 0.7 : 1,
-                          },
+                          // The date strip's lit green when chosen; glass otherwise.
+                          on
+                            ? {
+                                backgroundColor: colors.calories,
+                                borderColor: 'transparent',
+                                experimental_backgroundImage: `linear-gradient(180deg, ${colors.calories}, ${colors.caloriesDeep})`,
+                                boxShadow: `0px 8px 16px -10px ${colors.calories}, inset 0px 1px 0px rgba(255,255,255,0.5)`,
+                              }
+                            : {
+                                backgroundColor: colors.glassStrong,
+                                borderColor: colors.glassEdge,
+                                boxShadow: `inset 0px 1px 0px ${colors.glassEdge}`,
+                              },
+                          { opacity: pressed ? 0.7 : 1 },
                         ]}
                       >
                         <Text
                           style={[
                             styles.dayChipLabel,
-                            { color: on ? colors.primaryForeground : colors.mutedForeground },
+                            { color: on ? '#ffffff' : colors.mutedForeground },
                           ]}
                         >
                           {routine.emoji}
@@ -398,8 +407,9 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
             t.bodySemibold,
             styles.nameField,
             {
-              backgroundColor: colors.mutedField,
-              borderColor: colors.border,
+              backgroundColor: colors.glassStrong,
+              borderColor: colors.glassEdge,
+              boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
               color: colors.foreground,
             },
           ]}
@@ -408,7 +418,7 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
         {chosen.map((exercise, i) => (
           <View
             key={`${exercise.typeId ?? exercise.name}-${i}`}
-            style={[styles.chosenRow, { backgroundColor: colors.muted }]}
+            style={[styles.chosenRow, { backgroundColor: colors.mutedField, borderColor: colors.hairline }]}
           >
             <Text style={[t.footnoteSemibold, styles.grow, { color: colors.foreground }]} numberOfLines={1}>
               {exercise.name}
@@ -447,13 +457,14 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
                   style={({ pressed }) => [
                     styles.chip,
                     {
-                      backgroundColor: colors.muted,
-                      borderColor: colors.border,
+                      backgroundColor: colors.glassStrong,
+                      borderColor: colors.glassEdge,
+                      boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
                       opacity: pressed ? 0.7 : 1,
                     },
                   ]}
                 >
-                  <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+                  <Text style={[t.footnoteSemibold, { color: colors.foreground }]}>
                     {type.emoji} {type.name}
                   </Text>
                 </Pressable>
@@ -500,7 +511,14 @@ function Stepper({ value, onChange }: { value: number; onChange: (next: number) 
         accessibilityRole="button"
         accessibilityLabel={tr('workouts.oneFewerSetShort')}
         hitSlop={6}
-        style={[styles.stepButton, { backgroundColor: colors.card }]}
+        style={[
+          styles.stepButton,
+          {
+            backgroundColor: colors.glassStrong,
+            borderColor: colors.glassEdge,
+            boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
+          },
+        ]}
       >
         <Text style={[t.footnoteBold, { color: colors.mutedForeground }]}>−</Text>
       </Pressable>
@@ -512,7 +530,14 @@ function Stepper({ value, onChange }: { value: number; onChange: (next: number) 
         accessibilityRole="button"
         accessibilityLabel={tr('workouts.oneMoreSetShort')}
         hitSlop={6}
-        style={[styles.stepButton, { backgroundColor: colors.card }]}
+        style={[
+          styles.stepButton,
+          {
+            backgroundColor: colors.glassStrong,
+            borderColor: colors.glassEdge,
+            boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
+          },
+        ]}
       >
         <Text style={[t.footnoteBold, { color: colors.mutedForeground }]}>+</Text>
       </Pressable>
@@ -548,22 +573,23 @@ const styles = StyleSheet.create({
   daySource: { width: 66, textAlign: 'right' },
   editor: { padding: 12, gap: 10 },
   nameField: {
-    height: 40,
+    height: 44,
     borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    borderRadius: 22,
+    paddingHorizontal: 16,
     paddingVertical: 0,
   },
   chosenRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderRadius: 12,
-    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 12,
     paddingVertical: 8,
   },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  stepButton: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  stepButton: { width: 28, height: 28, borderWidth: 1, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   stepValue: { width: 48, textAlign: 'center' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },

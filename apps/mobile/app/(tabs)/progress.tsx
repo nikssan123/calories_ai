@@ -16,6 +16,7 @@ import {
 } from '@ct/shared';
 import { AchievementsRow } from '@/components/Achievements';
 import { Segments } from '@/components/Segments';
+import { chipStyle, chipTextColor, wellStyle } from '@/components/Field';
 import { Sky, useSky } from '@/components/Sky';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { Glossy } from '@/components/icons/Glossy';
@@ -260,11 +261,8 @@ export default function ProgressScreen() {
                 style={[
                   t.body,
                   styles.logInput,
-                  {
-                    backgroundColor: colors.mutedField,
-                    borderColor: colors.border,
-                    color: colors.foreground,
-                  },
+                  wellStyle(colors),
+                  { color: colors.foreground },
                 ]}
               />
               <PressableChunk
@@ -363,17 +361,14 @@ export default function ProgressScreen() {
                       accessibilityState={{ selected: active }}
                       style={({ pressed }) => [
                         styles.chip,
-                        {
-                          backgroundColor: active ? colors.muted : colors.mutedWash,
-                          borderColor: active ? colors.caloriesText : 'transparent',
-                          opacity: pressed ? 0.6 : 1,
-                        },
+                        chipStyle(colors, active),
+                        { opacity: pressed ? 0.6 : 1 },
                       ]}
                     >
                       <Text
                         style={[
-                          t.footnote,
-                          { color: active ? colors.foreground : colors.mutedForeground },
+                          active ? t.footnoteBold : t.footnote,
+                          { color: chipTextColor(colors, active) },
                         ]}
                       >
                         {tr(n.label)}
@@ -414,7 +409,7 @@ export default function ProgressScreen() {
                   <Stat key={n.key} first={index === 0} label={tr(n.label)} value="—" unit={n.unit} />
                 ))}
               </Stats>
-              <View style={[styles.blank, { borderTopColor: colors.border }]}>
+              <View style={[styles.blank, { borderTopColor: colors.hairline }]}>
                 <QualityBlank />
               </View>
             </InsetGroup>

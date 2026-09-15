@@ -2,16 +2,18 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Polyline } from 'react-native-svg';
 import type { Calendar, CalendarDay, Locale } from '@ct/shared';
-import { formatBodyWeight, formatDay, formatMonth, formatNumber } from '@ct/shared';
+import { formatBodyWeight, formatDay, formatMonth, formatNumber, weekdayName } from '@ct/shared';
 import { Chunk } from '@/components/Chunk';
 import { InsetGroup } from '@/components/InsetGroup';
+import { Chevron, GlassPill, ScreenGround, ScreenHeader } from '@/components/ScreenHeader';
 import { Skeleton } from '@/components/Skeleton';
-import { Stat, Stats } from '@/components/Stat';
+import { Glossy } from '@/components/icons/Glossy';
+import { Character } from '@/components/cast/Character';
 import { api } from '@/lib/api';
+import { haptics } from '@/lib/haptics';
 import { useUnits } from '@/lib/units';
-import { font, type as t, useColors, useTheme, type Scheme } from '@/theme';
+import { font, type as t, tint, useColors, useType, type Palette } from '@/theme';
 import { useLocale, useT } from '@/lib/i18n';
 import { messageOf } from '@/lib/errors';
 
@@ -29,14 +31,22 @@ import { messageOf } from '@/lib/errors';
  * selects, and the card below the grid says everything the hover card said —
  * so on a phone the hover card would only be a slower way to reach the panel
  * that is already open.
+ *
+ * **Under the hour's sky, like the day it is reached from** (GLOW-UP.md). The
+ * cells speak the date strip's language — a lit green day for the one chosen,
+ * a dot under today — so stepping from the strip into the month reads as the
+ * same row of days opening out, not as a different screen's widget. And Plum,
+ * who keeps the evenings and the look back (CAST.md), sits on the month.
  */
 
-const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+/** Monday first, as `monthGrid` lays the days out; 0 is Sunday in `weekdayName`. */
+const WEEK = [1, 2, 3, 4, 5, 6, 0];
 
 export default function HistoryScreen() {
   const locale = useLocale();
   const tr = useT();
   const colors = useColors();
+  const type = useType();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const units = useUnits();
@@ -44,6 +54,7 @@ export default function HistoryScreen() {
   // Month cursor as a first-of-month ISO date, so all arithmetic is on dates
   // rather than on a Date object in some ambient timezone.
   const [month, setMonth] = useState<string | null>(null);
+  const [today, setToday] = useState<string | null>(null);
   const [calendar, setCalendar] = useState<Calendar | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,9 +64,10 @@ export default function HistoryScreen() {
       try {
         // Anchor on the server's idea of today: it honours day_start_hour, so a
         // 1am snack belongs to the evening before here as everywhere else.
-        const today = await api.day();
-        setMonth(`${today.local_date.slice(0, 7)}-01`);
-        setSelected(today.local_date);
+        const day = await api.day();
+        setToday(day.local_date);
+        setMonth(`${day.local_date.slice(0, 7)}-01`);
+        setSelected(day.local_date);
       } catch (e) {
         setError(messageOf(e, tr));
       }
@@ -80,157 +92,192 @@ export default function HistoryScreen() {
     [calendar],
   );
 
+  // `narrow` is one letter in English and whatever this language's calendar
+  // prints — "П" three times over in Bulgarian — never an English array.
+  const weekdays = useMemo(() => WEEK.map((day) => weekdayName(day, locale, 'narrow')), [locale]);
   const cells = useMemo(() => (month ? monthGrid(month) : []), [month]);
   const selectedDay = selected ? byDate.get(selected) : undefined;
   const logged = (calendar?.days ?? []).filter((d) => d.logged);
+  // A month that has not started has nothing to page forward to.
+  const atLatest = Boolean(month && today && month >= `${today.slice(0, 7)}-01`);
 
   return (
-    <ScrollView
-      style={styles.flex}
-      contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: insets.bottom + 32 }}
-    >
-      <View style={styles.topBar}>
-        <Chevron direction="back" label={tr('history.back')} onPress={() => router.back()} />
-        <Text style={[t.largeTitle, styles.heading, { color: colors.foreground }]}>{tr('history.title')}</Text>
-      </View>
+    <ScreenGround>
+      <ScrollView
+        style={styles.flex}
+        contentContainerStyle={[styles.page, { paddingBottom: insets.bottom + 32 }]}
+      >
+        <ScreenHeader title={tr('history.title')} />
 
-      <View style={styles.monthBar}>
-        <Chevron
-          direction="back"
-          label={tr('history.previousMonth')}
-          onPress={() => setMonth((m) => (m ? shiftMonth(m, -1) : m))}
-        />
-        <Text style={[t.body, styles.monthLabel, { color: colors.foreground }]}>
-          {month ? monthLabel(month, locale) : ''}
-        </Text>
-        <Chevron
-          direction="forward"
-          label={tr('history.nextMonth')}
-          onPress={() => setMonth((m) => (m ? shiftMonth(m, 1) : m))}
-        />
-      </View>
-
-      {!calendar || !month ? (
-        <View style={styles.page}>
+        {!calendar || !month ? (
           <Skeleton style={styles.loadingGrid} />
-        </View>
-      ) : (
-        <View style={styles.page}>
-          <Chunk
-            contentStyle={[
-              styles.card,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <View style={styles.week}>
-              {WEEKDAYS.map((label, i) => (
-                <Text
-                  key={i}
-                  style={[t.footnoteBold, styles.weekday, { color: colors.mutedForeground }]}
-                >
-                  {label}
-                </Text>
-              ))}
-            </View>
-
-            <View style={styles.grid}>
-              {cells.map((date, i) =>
-                date === null ? (
-                  <View key={`pad-${i}`} style={styles.cell} />
-                ) : (
-                  <DayCell
-                    key={date}
-                    date={date}
-                    day={byDate.get(date)}
-                    selected={date === selected}
-                    onSelect={() => setSelected(date)}
+        ) : (
+          <>
+            {/* Plum sits on the month, legs over its top edge, in room the card
+                keeps free above the weekday letters (CAST.md). */}
+            <View style={styles.shelf}>
+              <Chunk
+                radius={28}
+                contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.hairline }]}
+              >
+                {/* The month, on the card it pages rather than on the sky: down
+                    where the sky has faded to haze, light ink on it disappeared. */}
+                <View style={styles.monthBar}>
+                  <Text numberOfLines={1} style={[type.title2, styles.monthLabel, { color: colors.foreground }]}>
+                    {monthLabel(month, locale)}
+                  </Text>
+                  <GlassPill
+                    label=""
+                    icon={<Chevron direction="back" color={colors.foreground} />}
+                    accessibilityLabel={tr('history.previousMonth')}
+                    onSky={false}
+                    onPress={() => {
+                      haptics.selected();
+                      setMonth((m) => (m ? shiftMonth(m, -1) : m));
+                    }}
                   />
-                ),
-              )}
+                  <View style={{ opacity: atLatest ? 0.35 : 1 }} pointerEvents={atLatest ? 'none' : 'auto'}>
+                    <GlassPill
+                      label=""
+                      icon={<Chevron direction="forward" color={colors.foreground} />}
+                      accessibilityLabel={tr('history.nextMonth')}
+                      onSky={false}
+                      onPress={() => {
+                        haptics.selected();
+                        setMonth((m) => (m ? shiftMonth(m, 1) : m));
+                      }}
+                    />
+                  </View>
+                </View>
+                <View style={styles.week}>
+                  {weekdays.map((label, i) => (
+                    <Text
+                      key={i}
+                      style={[t.footnoteBold, styles.weekday, { color: colors.mutedForeground }]}
+                    >
+                      {label.toLocaleUpperCase()}
+                    </Text>
+                  ))}
+                </View>
+
+                <View style={styles.grid}>
+                  {cells.map((date, i) =>
+                    date === null ? (
+                      <View key={`pad-${i}`} style={styles.cell} />
+                    ) : (
+                      <DayCell
+                        key={date}
+                        date={date}
+                        day={byDate.get(date)}
+                        selected={date === selected}
+                        isToday={date === today}
+                        future={today !== null && date > today}
+                        onSelect={() => {
+                          if (date === selected) return;
+                          haptics.selected();
+                          setSelected(date);
+                        }}
+                      />
+                    ),
+                  )}
+                </View>
+
+                <Legend />
+              </Chunk>
+              <View pointerEvents="box-none" style={styles.sitter}>
+                <Character name="plum" mood="sit" size={SITTER} />
+              </View>
             </View>
 
-            <Legend />
-          </Chunk>
-
-          <InsetGroup title={selected ? formatFullDate(selected, locale) : tr('history.day')}>
-            {selectedDay && selectedDay.logged ? (
-              <View style={styles.detail}>
-                <View style={styles.detailHead}>
-                  <Text style={[t.largeTitle, t.tnum, { color: colors.foreground }]}>
-                    {formatNumber(selectedDay.kcal, locale)}
-                  </Text>
-                  <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-                    {tr('today.ofTargetKcal')(formatNumber(selectedDay.target_kcal, locale) || '—')}
-                  </Text>
-                </View>
-
-                <View style={styles.facts}>
-                  <Text style={[t.footnoteSemibold, t.tnum, { color: colors.mutedForeground }]}>
-                    {tr('history.proteinGrams')(formatNumber(selectedDay.protein_g, locale))}
-                  </Text>
-                  {selectedDay.burned_kcal > 0 && (
-                    <Text style={[t.footnoteSemibold, t.tnum, { color: colors.exerciseText }]}>
-                      {tr('journal.burned')(formatNumber(selectedDay.burned_kcal, locale))}
+            <InsetGroup
+              title={selected ? formatFullDate(selected, locale) : tr('history.day')}
+              icon={<Glossy name="plate" size={18} />}
+            >
+              {selectedDay && selectedDay.logged ? (
+                <View style={styles.detail}>
+                  <View style={styles.detailHead}>
+                    <Text style={[type.serifFigure, styles.detailFigure, t.tnum, { color: colors.foreground }]}>
+                      {formatNumber(selectedDay.kcal, locale)}
                     </Text>
-                  )}
-                  {selectedDay.weight_kg !== null && (
-                    <Text style={[t.footnoteSemibold, t.tnum, { color: colors.mutedForeground }]}>
-                      {formatBodyWeight(selectedDay.weight_kg, units)}
+                    <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+                      {tr('today.ofTargetKcal')(formatNumber(selectedDay.target_kcal, locale) || '—')}
                     </Text>
-                  )}
-                </View>
+                  </View>
 
-                <Pressable
-                  // `navigate`, not `push`: Today is already down the stack, and
-                  // pushing would stack a second copy of it behind this one.
-                  onPress={() => router.navigate({ pathname: '/today', params: { date: selected! } })}
-                  accessibilityRole="button"
-                  hitSlop={8}
-                  style={({ pressed }) => ({ opacity: pressed ? 0.5 : 1 })}
-                >
-                  <Text style={[t.bodyBold, { color: colors.caloriesText }]}>{tr('history.openInToday')}</Text>
-                </Pressable>
+                  {selectedDay.target_kcal > 0 && (
+                    <Capsule ratio={selectedDay.kcal / selectedDay.target_kcal} />
+                  )}
+
+                  <View style={styles.facts}>
+                    <Fact
+                      text={tr('history.proteinGrams')(formatNumber(selectedDay.protein_g, locale))}
+                      dot={colors.protein}
+                    />
+                    {selectedDay.burned_kcal > 0 && (
+                      <Fact
+                        text={tr('journal.burned')(formatNumber(selectedDay.burned_kcal, locale))}
+                        dot={colors.exercise}
+                        ink={colors.exerciseText}
+                      />
+                    )}
+                    {selectedDay.weight_kg !== null && (
+                      <Fact text={formatBodyWeight(selectedDay.weight_kg, units)} dot={colors.logoRamp} />
+                    )}
+                  </View>
+
+                  <Pressable
+                    // `navigate`, not `push`: Today is already down the stack, and
+                    // pushing would stack a second copy of it behind this one.
+                    onPress={() => router.navigate({ pathname: '/today', params: { date: selected! } })}
+                    accessibilityRole="button"
+                    hitSlop={8}
+                    style={({ pressed }) => [
+                      styles.open,
+                      { backgroundColor: colors.caloriesWash, opacity: pressed ? 0.6 : 1 },
+                    ]}
+                  >
+                    <Text style={[t.footnoteBold, { color: colors.caloriesText }]}>{tr('history.openInToday')}</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Text style={[t.body, styles.nothing, { color: colors.mutedForeground }]}>
+                  {selectedDay ? tr('history.nothingThatDay') : tr('history.nothingYet')}
+                </Text>
+              )}
+            </InsetGroup>
+
+            <InsetGroup title={tr('history.thisMonth')} icon={<Glossy name="calendar" size={18} />}>
+              <View style={styles.stats}>
+                <MonthStat label={tr('history.logged')} value={`${logged.length}`} unit={tr('history.days')} first />
+                <MonthStat
+                  label={tr('history.avgIntake')}
+                  value={
+                    logged.length === 0
+                      ? '—'
+                      : formatNumber(
+                          Math.round(logged.reduce((sum, d) => sum + d.kcal, 0) / logged.length),
+                          locale,
+                        )
+                  }
+                  unit="kcal"
+                />
+                <MonthStat
+                  label={tr('history.onTarget')}
+                  value={`${logged.filter((d) => d.target_kcal > 0 && d.kcal <= d.target_kcal).length}`}
+                  unit={tr('history.days')}
+                />
               </View>
-            ) : (
-              <Text style={[t.body, styles.nothing, { color: colors.mutedForeground }]}>
-                {selectedDay ? tr('history.nothingThatDay') : tr('history.nothingYet')}
-              </Text>
-            )}
-          </InsetGroup>
+            </InsetGroup>
+          </>
+        )}
 
-          <InsetGroup title={`📆  ${tr('history.thisMonth')}`}>
-            <Stats>
-              <Stat label={tr('history.logged')} value={`${logged.length}`} unit={tr('history.days')} first />
-              <Stat
-                label={tr('history.avgIntake')}
-                value={
-                  logged.length === 0
-                    ? '—'
-                    : formatNumber(
-                        Math.round(logged.reduce((sum, d) => sum + d.kcal, 0) / logged.length),
-                        locale,
-                      )
-                }
-                unit="kcal"
-              />
-              <Stat
-                label={tr('history.onTarget')}
-                value={`${
-                  logged.filter((d) => d.target_kcal > 0 && d.kcal <= d.target_kcal).length
-                }`}
-                unit={tr('history.days')}
-              />
-            </Stats>
-          </InsetGroup>
-
-          {error && (
-            <Text style={[t.footnoteSemibold, styles.centred, { color: colors.destructive }]}>
-              {error}
-            </Text>
-          )}
-        </View>
-      )}
-    </ScrollView>
+        {error && (
+          <Text style={[t.footnoteSemibold, styles.centred, { color: colors.destructive }]}>
+            {error}
+          </Text>
+        )}
+      </ScrollView>
+    </ScreenGround>
   );
 }
 
@@ -244,24 +291,33 @@ export default function HistoryScreen() {
  * A logged day whose target is unknown still gets a fill — a neutral one. The
  * grid's first job is "did I log?", and that answer does not depend on having
  * a target to judge the day against.
+ *
+ * The chosen day is the date strip's: the green, lit from above, with the
+ * figure in white. Today wears the strip's dot under its number, in whatever
+ * state it is in.
  */
 function DayCell({
   date,
   day,
   selected,
+  isToday,
+  future,
   onSelect,
 }: {
   date: string;
   day: CalendarDay | undefined;
   selected: boolean;
+  isToday: boolean;
+  future: boolean;
   onSelect: () => void;
 }) {
   const colors = useColors();
+  const type = useType();
   const locale = useLocale();
-  const { scheme } = useTheme();
   const logged = day?.logged ?? false;
   const ratio = logged && day!.target_kcal > 0 ? day!.kcal / day!.target_kcal : null;
-  const tone = toneFor(scheme, logged ? ratio : undefined);
+  const fill = toneFor(colors, logged ? ratio : undefined);
+  const ink = selected ? '#ffffff' : logged ? colors.foreground : colors.mutedForeground;
 
   const label = logged
     ? `${formatFullDate(date, locale)}, ${day!.kcal} kcal${
@@ -271,95 +327,68 @@ function DayCell({
 
   return (
     <View style={styles.cell}>
-      <Chunk
-        // Only a logged day is an object; a blank one is a hole in the month.
-        depth={logged ? 2 : 0}
-        radius={CELL_RADIUS}
-        color={logged ? colors.chunk : 'transparent'}
-        style={styles.flex}
-        /*
-         * The height has to be handed down both levels. The cell is a fixed
-         * square and the face fills it, but `Chunk`'s inner surface is a plain
-         * View: without a flex of its own it sizes to its content, and a child
-         * asking for `flex: 1` inside a container of undefined height collapses
-         * to nothing — which left every square showing only its own ledge, with
-         * the date invisible inside a face zero pixels tall.
-         */
-        contentStyle={styles.flex}
+      <Pressable
+        onPress={onSelect}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ selected }}
+        style={({ pressed }) => [
+          styles.cellFace,
+          selected
+            ? {
+                experimental_backgroundImage: `linear-gradient(180deg, ${colors.calories}, ${colors.caloriesDeep})`,
+                boxShadow: `0px 8px 18px -8px ${colors.calories}, inset 0px 1px 0px rgba(255,255,255,0.55)`,
+              }
+            : fill
+              ? { backgroundColor: fill, boxShadow: `inset 0px 1px 0px ${colors.glassEdge}` }
+              : null,
+          { opacity: pressed && !selected ? 0.7 : future && !selected ? 0.4 : 1 },
+        ]}
       >
-        <Pressable
-          onPress={onSelect}
-          accessibilityRole="button"
-          accessibilityLabel={label}
-          accessibilityState={{ selected }}
-          style={[
-            styles.cellFace,
-            { backgroundColor: tone.background },
-            selected ? { borderWidth: 1, borderColor: colors.foreground } : null,
-          ]}
-        >
-          <Text style={[t.tnum, styles.cellNumber, { color: tone.text(colors) }]}>
-            {Number(date.slice(8))}
-          </Text>
-          {logged && day!.burned_kcal > 0 && (
-            <View style={[styles.burnDot, { backgroundColor: colors.exercise }]} />
-          )}
-        </Pressable>
-      </Chunk>
+        <Text style={[type.serifFigure, t.tnum, styles.cellNumber, { color: ink }]}>
+          {Number(date.slice(8))}
+        </Text>
+        <View style={[styles.todayDot, { backgroundColor: ink, opacity: isToday ? 0.9 : 0 }]} />
+        {logged && day!.burned_kcal > 0 && (
+          <View
+            style={[
+              styles.burnDot,
+              { backgroundColor: colors.exercise, borderColor: selected ? '#ffffff' : colors.card },
+            ]}
+          />
+        )}
+      </Pressable>
     </View>
   );
 }
 
 /**
- * The fill for one day.
+ * The fill for one day, as a wash of the page's own colours rather than a
+ * swatch of its own.
  *
- * On the web these are `color-mix(in oklch, …)` against `--card`, computed by
- * the browser. React Native has no `color-mix`, so each step is precomputed
- * here — converted to OKLCH, mixed on the polar axis the way CSS Color 4
- * specifies, and converted back. They are the exact colours the web renders,
- * which is why the dark scale drifts toward olive: dark's card is a warm brown
- * with real chroma, so mixing a green into it moves the hue as well as the
- * lightness. That is the web's behaviour, faithfully, not a substitution.
+ * These used to be opaque OKLCH mixes precomputed against the card, faithful to
+ * the web's `color-mix` — which is also what made the dark month drift olive.
+ * On the lit card a wash does the same job in both themes: the green deepens as
+ * the day gets closer to its target, and over target steps to ink rather than
+ * to red, because a month grid is exactly where a wall of red squares would
+ * read as a verdict on the person rather than on the data.
+ *
+ * `undefined` is nothing logged, and gets no fill at all. `null` is logged
+ * against no target: neutral rather than absent — it happened, there is just
+ * nothing to grade it against.
  */
-const TONES: Record<Scheme, { under: string; mid: string; onTarget: string; over: string; noTarget: string }> = {
-  light: {
-    under: '#e9f7ed',
-    mid: '#cbecd5',
-    onTarget: '#96d9ac',
-    over: '#c5c1be',
-    noTarget: '#eae9e8',
-  },
-  dark: {
-    under: '#3a2c1e',
-    mid: '#554321',
-    onTarget: '#73752c',
-    over: '#544c47',
-    noTarget: '#342d28',
-  },
-};
-
-type Tone = { background: string; text: (c: ReturnType<typeof useColors>) => string };
-
-function toneFor(scheme: Scheme, ratio: number | null | undefined): Tone {
-  const tones = TONES[scheme];
-  // undefined — nothing logged. Left blank on purpose.
-  if (ratio === undefined) return { background: 'transparent', text: (c) => c.mutedForeground };
-  // null — logged, but against no target we can hold it to. Neutral rather
-  // than absent: it happened, we just have nothing to grade it against.
-  if (ratio === null) return { background: tones.noTarget, text: (c) => c.foreground };
-  // Over target is the one state that steps outside the scale — but it steps
-  // to ink rather than to red. A month grid is exactly where a wall of red
-  // squares would read as a verdict on the person rather than on the data.
-  if (ratio > 1.05) return { background: tones.over, text: (c) => c.foreground };
-  if (ratio >= 0.85) return { background: tones.onTarget, text: (c) => c.foreground };
-  if (ratio >= 0.6) return { background: tones.mid, text: (c) => c.foreground };
-  return { background: tones.under, text: (c) => c.foreground };
+function toneFor(colors: Palette, ratio: number | null | undefined): string | null {
+  if (ratio === undefined) return null;
+  if (ratio === null) return colors.muted;
+  if (ratio > 1.05) return tint(colors.foreground, 0.16);
+  if (ratio >= 0.85) return tint(colors.calories, 0.36);
+  if (ratio >= 0.6) return tint(colors.calories, 0.2);
+  return tint(colors.calories, 0.1);
 }
 
 function Legend() {
   const colors = useColors();
   const tr = useT();
-  const { scheme } = useTheme();
   const swatches: Array<{ label: string; ratio: number | null }> = [
     { label: tr('history.under'), ratio: 0.5 },
     { label: tr('history.onTarget'), ratio: 0.95 },
@@ -369,12 +398,10 @@ function Legend() {
   ];
 
   return (
-    <View style={styles.legend}>
+    <View style={[styles.legend, { borderTopColor: colors.hairline }]}>
       {swatches.map(({ label, ratio }) => (
         <View key={label} style={styles.legendItem}>
-          <View
-            style={[styles.swatch, { backgroundColor: toneFor(scheme, ratio).background }]}
-          />
+          <View style={[styles.swatch, { backgroundColor: toneFor(colors, ratio) ?? 'transparent' }]} />
           <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{label}</Text>
         </View>
       ))}
@@ -386,35 +413,51 @@ function Legend() {
   );
 }
 
-function Chevron({
-  direction,
-  label,
-  onPress,
-}: {
-  direction: 'back' | 'forward';
-  label: string;
-  onPress: () => void;
-}) {
+/** The day against its target, as one of Today's glowing capsules. */
+function Capsule({ ratio }: { ratio: number }) {
+  const colors = useColors();
+  const over = ratio > 1.05;
+  return (
+    <View style={[styles.capsule, { backgroundColor: colors.muted }]}>
+      <View
+        style={[
+          styles.capsuleFill,
+          {
+            width: `${Math.round(Math.min(1, Math.max(0.04, ratio)) * 100)}%`,
+            backgroundColor: over ? colors.foreground : colors.primary,
+            experimental_backgroundImage: over ? undefined : colors.primaryRamp,
+            boxShadow: over ? undefined : `0px 4px 10px -4px ${colors.calories}`,
+          },
+        ]}
+      />
+    </View>
+  );
+}
+
+function Fact({ text, dot, ink }: { text: string; dot: string; ink?: string }) {
   const colors = useColors();
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      hitSlop={8}
-      style={({ pressed }) => [styles.chevron, { opacity: pressed ? 0.5 : 1 }]}
-    >
-      <Svg width={20} height={20} viewBox="0 0 24 24">
-        <Polyline
-          points={direction === 'back' ? '15 18 9 12 15 6' : '9 18 15 12 9 6'}
-          stroke={colors.mutedForeground}
-          strokeWidth={2.4}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill="none"
-        />
-      </Svg>
-    </Pressable>
+    <View style={[styles.fact, { backgroundColor: colors.muted }]}>
+      <View style={[styles.factDot, { backgroundColor: dot }]} />
+      <Text style={[t.footnoteSemibold, t.tnum, { color: ink ?? colors.foreground }]}>{text}</Text>
+    </View>
+  );
+}
+
+/** A month's figure, divided from its neighbour by a hairline rather than a rule. */
+function MonthStat({ label, value, unit, first }: { label: string; value: string; unit: string; first?: boolean }) {
+  const colors = useColors();
+  const type = useType();
+  return (
+    <View style={[styles.stat, first ? null : { borderLeftWidth: 1, borderLeftColor: colors.hairline }]}>
+      <Text style={[t.footnoteSemibold, styles.centred, { color: colors.mutedForeground }]}>{label}</Text>
+      <Text style={[type.serifFigure, t.tnum, styles.statValue, { color: colors.foreground }]}>
+        {value}
+        {value !== '—' && unit !== '' && (
+          <Text style={[styles.statUnit, { color: colors.mutedForeground }]}> {unit}</Text>
+        )}
+      </Text>
+    </View>
   );
 }
 
@@ -453,28 +496,34 @@ const monthLabel = (firstOfMonth: string, locale: Locale) =>
 
 const formatFullDate = (isoDate: string, locale: Locale) => formatDay(isoDate, locale);
 
-const CELL_RADIUS = 16;
-/** `gap-1.5` between cells, as a share of the row each cell has to give up. */
-const CELL_GAP = 6;
+/** Plum's size on the month, and how far its legs hang over the card's top edge. */
+const SITTER = 44;
+const OVERHANG = 10;
+
+const CELL_RADIUS = 14;
+/** The gap between cells, as padding inside each seventh of the row. */
+const CELL_GAP = 5;
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  topBar: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8 },
-  heading: { flex: 1 },
+  page: { paddingHorizontal: 16, gap: 24 },
   monthBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingHorizontal: 8,
-    paddingBottom: 4,
+    gap: 8,
+    paddingHorizontal: 6,
+    marginTop: 6,
+    marginBottom: 10,
   },
-  monthLabel: { minWidth: 144, textAlign: 'center' },
-  chevron: { padding: 10 },
-  page: { paddingHorizontal: 16, paddingTop: 16, gap: 24 },
-  loadingGrid: { height: 320, borderRadius: 24 },
-  card: { borderWidth: 1, borderRadius: 24, padding: 12 },
-  week: { flexDirection: 'row', marginBottom: 4 },
-  weekday: { flex: 1, textAlign: 'center', paddingVertical: 4 },
+  monthLabel: { flex: 1 },
+  loadingGrid: { height: 360, borderRadius: 28 },
+  shelf: { paddingTop: SITTER - OVERHANG },
+  // Over the middle of the month's name row rather than its buttons, so its
+  // legs hang into padding and never over a control.
+  sitter: { position: 'absolute', top: 0, right: '38%' },
+  card: { borderWidth: 1, borderRadius: 28, paddingHorizontal: 10, paddingTop: 16, paddingBottom: 14 },
+  week: { flexDirection: 'row', marginBottom: 2 },
+  weekday: { flex: 1, textAlign: 'center', paddingVertical: 4, fontSize: 11, letterSpacing: 0.3 },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   /*
    * Seven to a row without a `gap`, because a wrapping row of percentage-width
@@ -482,30 +531,50 @@ const styles = StyleSheet.create({
    * padding *inside* each seventh instead, which lands the cells in the same
    * places and lets the row add up to exactly 100%.
    */
-  cell: { width: '14.2857%', aspectRatio: 1, padding: CELL_GAP / 2 },
+  cell: { width: '14.2857%', aspectRatio: 0.9, padding: CELL_GAP / 2 },
   cellFace: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: CELL_RADIUS,
   },
-  cellNumber: { fontFamily: font.bold, fontSize: 13, lineHeight: 16 },
-  burnDot: { position: 'absolute', bottom: 4, width: 6, height: 6, borderRadius: 3 },
+  cellNumber: { fontSize: 16, lineHeight: 20 },
+  todayDot: { width: 4, height: 4, borderRadius: 2, marginTop: 2 },
+  burnDot: { position: 'absolute', top: 4, right: 4, width: 7, height: 7, borderRadius: 4, borderWidth: 1 },
   legend: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 6,
     columnGap: 12,
-    paddingHorizontal: 4,
-    marginTop: 14,
+    paddingHorizontal: 6,
+    paddingTop: 12,
+    marginTop: 10,
+    borderTopWidth: 1,
   },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  swatch: { width: 10, height: 10, borderRadius: 4 },
+  swatch: { width: 12, height: 12, borderRadius: 4 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
-  detail: { paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
+  detail: { paddingHorizontal: 16, paddingVertical: 16, gap: 12 },
   detailHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 },
-  facts: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, columnGap: 12 },
+  detailFigure: { fontSize: 36, lineHeight: 42 },
+  capsule: { height: 10, borderRadius: 999, overflow: 'hidden' },
+  capsuleFill: { height: '100%', borderRadius: 999 },
+  facts: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  fact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  factDot: { width: 7, height: 7, borderRadius: 4 },
+  open: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8, marginTop: 2 },
   nothing: { paddingHorizontal: 16, paddingVertical: 24, textAlign: 'center' },
+  stats: { flexDirection: 'row' },
+  stat: { flex: 1, paddingHorizontal: 10, paddingVertical: 14, alignItems: 'center', gap: 2 },
+  statValue: { fontSize: 22, lineHeight: 28 },
+  statUnit: { fontFamily: font.semibold, fontSize: 12, lineHeight: 16 },
   centred: { textAlign: 'center' },
 });

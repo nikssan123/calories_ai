@@ -81,7 +81,7 @@ export function SetEditor({
   }
 
   return (
-    <View style={[styles.exercise, { borderTopColor: colors.border }]}>
+    <View style={[styles.exercise, { borderTopColor: colors.hairline }]}>
       <View style={styles.head}>
         {/* The muscles it works, drawn rather than an emoji — see
             GYM-CARD.md §1. Nothing to draw for a sport or a run, whose
@@ -139,9 +139,10 @@ export function SetEditor({
           accessibilityLabel={tr('workout.adjust')}
           style={({ pressed }) => [
             styles.summary,
+            // A well in the card, not an outlined box (GLOW-UP.md).
             {
               backgroundColor: colors.mutedField,
-              borderColor: colors.border,
+              borderColor: colors.hairline,
               opacity: pressed ? 0.7 : 1,
             },
           ]}
@@ -364,7 +365,7 @@ function Stepper({
     onChange(round(Math.min(max, Math.max(min, base + delta)), decimal ? 2 : 0));
   };
   return (
-    <View style={[styles.stepper, { backgroundColor: colors.mutedField, borderColor: colors.border }]}>
+    <View style={[styles.stepper, { backgroundColor: colors.mutedField, borderColor: colors.hairline }]}>
       <View style={styles.stepperRow}>
         <Pressable
           onPress={move(-step)}
@@ -373,7 +374,12 @@ function Stepper({
           hitSlop={4}
           style={({ pressed }) => [
             styles.stepButton,
-            { backgroundColor: colors.card, opacity: pressed ? 0.6 : 1 },
+            {
+              backgroundColor: colors.glassStrong,
+              borderColor: colors.glassEdge,
+              boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
+              opacity: pressed ? 0.6 : 1,
+            },
           ]}
         >
           <Text style={[styles.stepGlyph, { color: colors.mutedForeground }]}>−</Text>
@@ -397,7 +403,12 @@ function Stepper({
           hitSlop={4}
           style={({ pressed }) => [
             styles.stepButton,
-            { backgroundColor: colors.card, opacity: pressed ? 0.6 : 1 },
+            {
+              backgroundColor: colors.glassStrong,
+              borderColor: colors.glassEdge,
+              boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
+              opacity: pressed ? 0.6 : 1,
+            },
           ]}
         >
           <Text style={[styles.stepGlyph, { color: colors.mutedForeground }]}>+</Text>
@@ -421,7 +432,16 @@ function Cell({
 }) {
   const colors = useColors();
   return (
-    <View style={[styles.cell, { backgroundColor: colors.mutedField, borderColor: colors.border }]}>
+    <View
+      style={[
+        styles.cell,
+        {
+          backgroundColor: colors.glassStrong,
+          borderColor: colors.glassEdge,
+          boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
+        },
+      ]}
+    >
       <TextInput
         value={value === null ? '' : String(value)}
         onChangeText={(next) => {
@@ -497,7 +517,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 10,
     borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
@@ -507,7 +527,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     borderWidth: 1,
-    borderRadius: 14,
+    borderRadius: 18,
     paddingHorizontal: 4,
     paddingTop: 5,
     paddingBottom: 4,
@@ -521,7 +541,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     gap: 2,
   },
-  stepButton: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  stepButton: { width: 26, height: 26, borderWidth: 1, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   stepGlyph: { fontFamily: font.display, fontSize: 15, lineHeight: 19 },
   stepValue: {
     flex: 1,

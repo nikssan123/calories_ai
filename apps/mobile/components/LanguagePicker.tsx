@@ -77,7 +77,7 @@ export function LanguagePicker({
         accessibilityState={{ selected }}
         style={({ pressed }) => [
           styles.option,
-          { borderTopColor: colors.border, opacity: pressed ? 0.6 : 1 },
+          { borderTopColor: colors.hairline, opacity: pressed ? 0.6 : 1 },
         ]}
       >
         <View style={styles.names}>

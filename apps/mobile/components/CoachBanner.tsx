@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { initialsOf, useCoachLink } from '@/lib/coach';
 import { useT } from '@/lib/i18n';
-import { type as t, useColors, withAlpha } from '@/theme';
+import { type as t, useColors } from '@/theme';
 
 /**
  * The one permanent sign that somebody else can see this log.
@@ -28,7 +28,13 @@ export function CoachBanner() {
       accessibilityLabel={`${tr('coach.sharedWith')(name)}. ${tr('coach.bannerManage')}`}
       style={({ pressed }) => [
         styles.banner,
-        { backgroundColor: withAlpha(colors.calories, 0.16), opacity: pressed ? 0.7 : 1 },
+        // A glass pill on the sky, like the date strip's days — a green wash
+        // over the hour's colours came out muddy at dusk.
+        {
+          backgroundColor: colors.glassStrong,
+          boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
+          opacity: pressed ? 0.7 : 1,
+        },
       ]}
     >
       <View style={[styles.avatar, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}>

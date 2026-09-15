@@ -171,11 +171,16 @@ export function FridgeScan({
         accessibilityLabel={variant === 'icon' ? tr('scan.photographShelf') : undefined}
         style={({ pressed }) => [
           variant === 'chip' ? styles.chip : variant === 'icon' ? styles.square : styles.wide,
-          {
-            backgroundColor: variant === 'icon' ? colors.secondary : colors.card,
-            borderColor: colors.border,
-            opacity: scanning || pressed ? 0.6 : 1,
-          },
+          // Glass, like every control since the glow-up; the wide row inside the
+          // kitchen sheet is a lit card instead, since it is a row of the list.
+          variant === 'button'
+            ? { backgroundColor: colors.card, borderColor: colors.hairline, boxShadow: colors.shadow }
+            : {
+                backgroundColor: colors.glassStrong,
+                borderColor: colors.glassEdge,
+                boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
+              },
+          { opacity: scanning || pressed ? 0.6 : 1 },
         ]}
       >
         {scanning ? (
@@ -188,7 +193,7 @@ export function FridgeScan({
           >
             <Path
               d="M14.5 4h-5L8 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-4l-1.5-2ZM12 16.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"
-              stroke={variant === 'icon' ? colors.secondaryForeground : colors.mutedForeground}
+              stroke={variant === 'icon' ? colors.foreground : colors.mutedForeground}
               strokeWidth={2}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -246,16 +251,20 @@ export function FridgeScan({
                     accessibilityState={{ checked: on }}
                     style={({ pressed }) => [
                       styles.find,
-                      { borderTopColor: colors.border, opacity: pressed ? 0.6 : 1 },
+                      { borderTopColor: colors.hairline, opacity: pressed ? 0.6 : 1 },
                     ]}
                   >
                     <View
                       style={[
                         styles.box,
-                        {
-                          backgroundColor: on ? colors.primary : 'transparent',
-                          borderColor: on ? colors.caloriesDeep : colors.border,
-                        },
+                        on
+                          ? {
+                              backgroundColor: colors.calories,
+                              borderColor: 'transparent',
+                              experimental_backgroundImage: `linear-gradient(180deg, ${colors.calories}, ${colors.caloriesDeep})`,
+                              boxShadow: `0px 6px 14px -8px ${colors.calories}, inset 0px 1px 0px rgba(255,255,255,0.45)`,
+                            }
+                          : { backgroundColor: colors.mutedField, borderColor: colors.hairline },
                       ]}
                     >
                       {on && (
@@ -287,7 +296,7 @@ export function FridgeScan({
               })}
             </ScrollView>
 
-            <View style={[styles.foot, { borderTopColor: colors.border }]}>
+            <View style={[styles.foot, { borderTopColor: colors.hairline }]}>
               <PressableChunk
                 radius={999}
                 onPress={() => void commit('stock')}
@@ -296,10 +305,15 @@ export function FridgeScan({
                 style={styles.flex}
                 contentStyle={[
                   styles.button,
-                  { backgroundColor: colors.secondary, borderWidth: 1, borderColor: colors.border },
+                  {
+                    backgroundColor: colors.glassStrong,
+                    borderWidth: 1,
+                    borderColor: colors.glassEdge,
+                    boxShadow: `inset 0px 1px 0px ${colors.glassEdge}`,
+                  },
                 ]}
               >
-                <Text style={[t.bodyBold, { color: colors.secondaryForeground }]}>
+                <Text style={[t.bodyBold, { color: colors.foreground }]}>
                   {saving === 'stock' ? tr('scan.adding') : tr('scan.addToKitchenShort')}
                 </Text>
               </PressableChunk>
@@ -335,7 +349,7 @@ function Choice({ label, onPress }: { label: string; onPress: () => void }) {
       accessibilityRole="button"
       style={({ pressed }) => [
         styles.choice,
-        { borderTopColor: colors.border, opacity: pressed ? 0.6 : 1 },
+        { borderTopColor: colors.hairline, opacity: pressed ? 0.6 : 1 },
       ]}
     >
       <Text style={[t.body, { fontFamily: font.semibold, color: colors.foreground }]}>{label}</Text>
@@ -384,7 +398,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: 22,
     paddingVertical: 12,
     marginHorizontal: 12,
     marginBottom: 12,

@@ -59,7 +59,7 @@ export function CoachSettings() {
           accessibilityRole="button"
           style={({ pressed }) => [
             styles.rowButton,
-            { borderTopColor: colors.border, opacity: pressed || clean.length !== 8 ? 0.5 : 1 },
+            { borderTopColor: colors.hairline, opacity: pressed || clean.length !== 8 ? 0.5 : 1 },
           ]}
         >
           <Text style={[t.body, { color: colors.caloriesText }]}>{tr('coach.continue')}</Text>
@@ -127,7 +127,7 @@ export function CoachSettings() {
       />
 
       {confirming ? (
-        <View style={[styles.confirm, { borderTopColor: colors.border }]}>
+        <View style={[styles.confirm, { borderTopColor: colors.hairline }]}>
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>{tr('coach.stopConfirm')(name)}</Text>
           <View style={styles.confirmButtons}>
             <Pressable
@@ -136,7 +136,11 @@ export function CoachSettings() {
               accessibilityRole="button"
               style={({ pressed }) => [
                 styles.confirmButton,
-                { backgroundColor: colors.destructive, opacity: pressed || busy ? 0.6 : 1 },
+                {
+                  backgroundColor: colors.destructive,
+                  boxShadow: `0px 6px 14px -8px ${colors.destructive}, inset 0px 1px 0px rgba(255, 255, 255, 0.3)`,
+                  opacity: pressed || busy ? 0.6 : 1,
+                },
               ]}
             >
               <Text style={[t.bodyBold, { color: colors.destructiveForeground }]}>{tr('coach.stop')}</Text>
@@ -144,7 +148,16 @@ export function CoachSettings() {
             <Pressable
               onPress={() => setConfirming(false)}
               accessibilityRole="button"
-              style={({ pressed }) => [styles.confirmButton, { opacity: pressed ? 0.6 : 1 }]}
+              style={({ pressed }) => [
+                styles.confirmButton,
+                {
+                  backgroundColor: colors.glassStrong,
+                  borderWidth: 1,
+                  borderColor: colors.hairline,
+                  boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
+                  opacity: pressed ? 0.6 : 1,
+                },
+              ]}
             >
               <Text style={[t.bodyBold, { color: colors.foreground }]}>{tr('coach.keep')}</Text>
             </Pressable>
@@ -154,7 +167,7 @@ export function CoachSettings() {
         <Pressable
           onPress={() => setConfirming(true)}
           accessibilityRole="button"
-          style={({ pressed }) => [styles.rowButton, { borderTopColor: colors.border, opacity: pressed ? 0.6 : 1 }]}
+          style={({ pressed }) => [styles.rowButton, { borderTopColor: colors.hairline, opacity: pressed ? 0.6 : 1 }]}
         >
           <Text style={[t.body, { color: colors.destructive }]}>{tr('coach.stopSharing')}</Text>
         </Pressable>
@@ -201,6 +214,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     paddingVertical: 11,
-    borderRadius: 14,
+    borderRadius: 999,
   },
 });

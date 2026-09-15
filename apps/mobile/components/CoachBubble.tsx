@@ -27,7 +27,16 @@ export function CoachBubble({ content }: { content: string }) {
         <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
           {name ? `${name} · ${tr('coach.yourCoach')}` : tr('coach.yourCoachCapital')}
         </Text>
-        <View style={[styles.bubble, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View
+          style={[
+            styles.bubble,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.hairline,
+              boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
+            },
+          ]}
+        >
           <Text style={[t.body, { color: colors.foreground }]}>{content}</Text>
         </View>
       </View>
