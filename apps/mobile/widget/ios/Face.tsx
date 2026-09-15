@@ -263,8 +263,29 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
    * a wrong one. The honest answer says what to do about it.
    */
   if (!props.known) {
+    /*
+     * The three of them above the words (CAST.md): a round face in each macro
+     * colour, two eyes apiece. This is what the widget gallery shows too, since
+     * it draws with no props, so it is the first picture of the app on an
+     * iPhone. Only shapes this runtime already draws. No path is available
+     * here, so the silhouettes the app gives them are left out.
+     */
+    const face = (colour: string) => (
+      <ZStack>
+        <Circle modifiers={[frame({ width: 22, height: 22 }), foregroundStyle(colour)]} />
+        <HStack spacing={4} modifiers={[offset({ y: -1 })]}>
+          <Capsule modifiers={[frame({ width: 3, height: 4.5 }), foregroundStyle('#2a1f18')]} />
+          <Capsule modifiers={[frame({ width: 3, height: 4.5 }), foregroundStyle('#2a1f18')]} />
+        </HStack>
+      </ZStack>
+    );
     return shell(
       <VStack spacing={2} modifiers={[padding({ all: 14 })]}>
+        <HStack spacing={5} modifiers={[padding({ bottom: 6 })]}>
+          {face('#ffa51f')}
+          {face('#3b9eff')}
+          {face('#b06bff')}
+        </HStack>
         <Text
           modifiers={[
             font({ size: 15, weight: 'bold' }),
