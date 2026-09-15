@@ -329,6 +329,71 @@ describe('runTurn', () => {
     spy.mockRestore();
   });
 
+  /*
+   * The model logs to the wrong day, reads the date back, deletes and logs
+   * again. The bubble shows the meal once; the trace keeps all three steps.
+   */
+  describe('an entry the turn created and then deleted', () => {
+    const lunch = {
+      description: 'Pasta with chicken',
+      meal: 'lunch',
+      items: [{ name: 'Pasta', quantity_g: 300, quantity_desc: null, kcal: 570, protein_g: 50, carbs_g: 55, fat_g: 15 }],
+      note: null,
+      confidence: 'medium',
+    };
+
+    async function scriptTools(act: (call: (name: string, args: object) => Promise<any>) => Promise<void>) {
+      const tools = await import('../src/ai/tools.ts');
+      const spy = vi.spyOn(tools, 'buildNutritionServer');
+      scriptAgent({
+        text: 'Logged.',
+        act: async () => {
+          const built = spy.mock.results.at(-1)!.value as ReturnType<typeof tools.buildNutritionServer>;
+          await act(async (name, args) => {
+            const result = await built.tools.find((t) => t.name === name)!.handler(args as never, {});
+            return JSON.parse((result.content[0] as { text: string }).text);
+          });
+        },
+      });
+      return spy;
+    }
+
+    it('drops out of the cards, leaving only the entry that stayed', async () => {
+      const spy = await scriptTools(async (call) => {
+        const wrong = await call('log_food', { ...lunch, when: "yesterday's earlier no — today lunch" });
+        await call('delete_entry', { entry_id: wrong.entry_id, kind: 'food' });
+        await call('log_food', { ...lunch, when: null });
+      });
+
+      const response = await turn('pasta with chicken for lunch');
+
+      expect(response.actions).toHaveLength(1);
+      expect(response.actions[0]).toMatchObject({ kind: 'food_logged', card: { kcal: 570 } });
+      expect(response.actions[0]!.entry_id).toBe(response.day.food_entries[0]!.id);
+      expect(response.message.actions).toEqual(response.actions);
+
+      const row = await queryOne<{ tool_trace: any }>(
+        'SELECT tool_trace FROM chat_messages WHERE id = $1',
+        [response.message.id],
+      );
+      expect(row!.tool_trace.tools).toEqual(['food_logged', 'food_deleted', 'food_logged']);
+      spy.mockRestore();
+    });
+
+    it('keeps the line for an entry logged before this turn', async () => {
+      const { localDateFor } = await import('../src/time.ts');
+      const toast = await addMeal(user, { date: localDateFor(new Date(), user.ctx), kcal: 200, description: 'Toast' });
+      const spy = await scriptTools(async (call) => {
+        await call('delete_entry', { entry_id: toast.id, kind: 'food' });
+      });
+
+      const response = await turn('I did not have the toast');
+
+      expect(response.actions).toEqual([expect.objectContaining({ kind: 'food_deleted' })]);
+      spy.mockRestore();
+    });
+  });
+
   /**
    * Today's numbers ride on the user turn, and keeping them off the system
    * prompt is a billing constraint rather than a stylistic one: the system

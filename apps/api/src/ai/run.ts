@@ -1,5 +1,5 @@
 import type { ChatAction, ChatResponse, Locale, Profile } from '@ct/shared';
-import { localeOf, unitsOf } from '@ct/shared';
+import { isDeletion, localeOf, unitsOf } from '@ct/shared';
 import { queryOne, query as sql } from '../db.ts';
 import type { DayContext } from '../time.ts';
 import { localDateFor } from '../time.ts';
@@ -401,6 +401,7 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
       servings,
     })),
   );
+  const shown = withoutRetractions(actions);
   const assistantMessage = await insertMessage(
     input.userId,
     'assistant',
@@ -412,9 +413,11 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
       cost_usd: outcome.costUsd,
       model: outcome.model,
       kind: request.kind,
+      // Every action, retracted ones included: the trace is for debugging, and
+      // a log-then-delete is exactly what somebody debugging needs to see.
       tools: actions.map((a) => a.kind),
     },
-    actions,
+    shown,
   );
 
   // Re-read the day: tools may have written to it, and the client should not
@@ -431,10 +434,35 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
     // The reader's own row, so the client can retire the optimistic one it drew
     // from a cache file rather than living on it. See `ChatResponse`.
     user_message: userMessage,
-    actions,
+    actions: shown,
     day: updatedDay,
     profile: updatedProfile,
   };
+}
+
+/**
+ * The cards a turn shows: what it did, not how it got there.
+ *
+ * A model that writes an entry to the wrong day reads `local_date` back, deletes
+ * it and logs it again — and every one of those steps used to become a card, so
+ * the bubble said a meal was added, removed and added again. On 2026-09-15 a
+ * `when` of "yesterday's earlier no — today lunch" put a lunch on the 14th for
+ * sixty milliseconds, and the person saw all three.
+ *
+ * So an entry both created and deleted inside one turn drops out entirely, along
+ * with any correction to it in between. Only entries *created* this turn: a
+ * deletion of something logged earlier is a real change and keeps its line.
+ */
+export function withoutRetractions(actions: ChatAction[]): ChatAction[] {
+  const created = new Set(
+    actions
+      .filter((a) => a.kind === 'food_logged' || a.kind === 'exercise_logged')
+      .map((a) => a.entry_id),
+  );
+  const retracted = new Set(
+    actions.filter((a) => isDeletion(a) && created.has(a.entry_id)).map((a) => a.entry_id),
+  );
+  return actions.filter((a) => a.entry_id === null || !retracted.has(a.entry_id));
 }
 
 /**
