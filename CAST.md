@@ -58,10 +58,28 @@ The first pass left them at the edges: once somebody logged anything, they were 
   - When every meal card's wrapper held its own `useAnimatedStyle`, cards stopped showing. `ChatCard`'s `Land` entrance left them at opacity 0.
   - `CardPeek` is a plain view, and only the active card mounts the animated `Peeker`.
 
+## Third pass: the app's own moments, the season, the site
+- **Streak at risk:** Ember, hands clasped, beside "Log today to keep it" (`StreakChip`).
+- **Scanned packet:** Skye, surprised, beside the product name (`BarcodeScanner`).
+- **Weekly review:** its icon is Plum with a mug (`CastIcon`).
+- **Badge earned in the last fortnight:** its group's character holds up a medal at the end of the row.
+  - streaks: Ember
+  - training: Plum
+  - firsts and totals: Skye
+- **Progress:** a hill scene. It's scenery, not a chart, so nothing on it moves with the numbers.
+- **Onboarding:**
+  - Skye looks over the top of the picked option (`EdgePeek`, clipped at the card's edge because the card is glass).
+  - The plan reveal ends with the three of them cheering, then waving.
+- **Seasons** (`useSeason`), northern-hemisphere months:
+  - scarf: December–February
+  - flower: March–May
+  - leaf: September–November
+- **Web:** the geometry moved to `@ct/shared/cast`, and the landing hero draws the three with CSS motion (`apps/web/components/Cast.tsx`).
+- **Emails:** the signature's three bars are three round faces built from table cells, with nothing loaded, like the logo.
+- **iOS widget:** the empty state and gallery preview show three faces built from Circle and Capsule.
+- **Fix:** a journal card's `Land` entrance now starts on layout, not on mount.
+
 ## Not now
 - **Direction B scenes** (drawn landscapes). Only if the cast reads too young.
-- **"Surprised" on the barcode sheet.**
-- **The web client.** It has no cast yet.
-- **The iOS widget.**
-  - WidgetKit draws with `@expo/ui` shapes and has no SVG.
-  - Its medium Day widget is the ring card, never the one-line layout, and `dayLayout` finds no spare room beside the card's words.
+- **The web app behind the login.** Only the landing page has the cast so far.
+- **The iOS widget beyond its empty state.** Its medium Day widget is the ring card, and `dayLayout` finds no room beside the card's words.

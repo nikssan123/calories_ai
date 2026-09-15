@@ -468,7 +468,7 @@ const HILL_CAST: Record<DayPart, Placed[]> = {
   afternoon: [
     { name: 'plum', mood: 'idle', x: 18, size: 44, ground: 146 },
     { name: 'skye', mood: 'idle', x: 120, size: 44, ground: 112 },
-    { name: 'ember', mood: 'cheer', x: 238, size: 42, ground: 52 },
+    { name: 'ember', mood: 'idle', x: 238, size: 42, ground: 52 },
   ],
   evening: [
     { name: 'plum', mood: 'idle', x: 118, size: 42, ground: 112 },
