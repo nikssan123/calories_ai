@@ -16,11 +16,13 @@ import type { CreditMeter, PlanName } from '@ct/shared';
 import { untilWords } from '@ct/shared/words';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { GlowButton } from '@/components/GlowButton';
-import { Logo } from '@/components/Logo';
+import { Trio } from '@/components/cast/Character';
 import { Serif } from '@/components/Serif';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useToast } from '@/components/Toast';
 import { useEntitlements } from '@/lib/entitlements';
+import { useAuth } from '@/lib/auth';
+import { useSaveAccount } from '@/lib/save-account';
 import { api } from '@/lib/api';
 import {
   billingAvailable,
@@ -163,6 +165,8 @@ export default function UpgradeScreen() {
   const insets = useSafeAreaInsets();
   const toast = useToast();
   const navigation = useNavigation();
+  const { guest } = useAuth();
+  const save = useSaveAccount();
   const reduced = useReducedMotion();
   const { plan, tiers, allowances, refresh } = useEntitlements();
   /*
@@ -274,6 +278,12 @@ export default function UpgradeScreen() {
   async function buy() {
     const offer = chosen ? offerFor(chosen) : null;
     if (!offer || busy) return;
+    // What is bought belongs to an account, so a guest saves one first and
+    // comes back here to buy (GUEST-ACCOUNTS.md).
+    if (guest) {
+      save.open('purchase');
+      return;
+    }
     setBusy(true);
     try {
       await purchase(offer, refresh);
@@ -415,7 +425,12 @@ export default function UpgradeScreen() {
         </Pressable>
       </Animated.View>
 
-      <Beacon />
+      {/*
+        The cast, saying hello above the headline rather than the logo breathing
+        there. Its own row, never over a word, and the only moving group on the
+        page — the light behind is too slow to count as one (CAST.md).
+      */}
+      <Trio size={72} gap={4} moods={['idle', 'wave', 'hopeful']} style={styles.cast} />
       <Serif accessibilityRole="header" style={[type.hero, styles.centred, { color: colors.foreground }]}>
         {trialOver ? tr('plans.trialOverTitle') : tr('plans.keepItGoing')}
       </Serif>
@@ -795,34 +810,6 @@ function PaywallLight() {
   );
 }
 
-/** The logo ring, breathing in a bloom of its own light. */
-function Beacon() {
-  const colors = useColors();
-  const reduced = useReducedMotion();
-  const breath = useSharedValue(0);
-  useEffect(() => {
-    if (reduced) return;
-    breath.value = withRepeat(withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.sin) }), -1, true);
-    return () => cancelAnimation(breath);
-  }, [reduced, breath]);
-  const bloom = useAnimatedStyle(() => ({ transform: [{ scale: 1 + breath.value * 0.08 }], opacity: 0.75 + breath.value * 0.25 }));
-  const mark = useAnimatedStyle(() => ({ transform: [{ scale: 1 + breath.value * 0.035 }] }));
-  return (
-    <View style={styles.beacon}>
-      <Animated.View
-        style={[
-          styles.bloom,
-          { experimental_backgroundImage: `radial-gradient(circle, ${withAlpha(colors.logoRamp, 0.45)} 0%, ${withAlpha(colors.calories, 0.15)} 45%, rgba(18,183,106,0) 70%)` },
-          bloom,
-        ]}
-      />
-      <Animated.View style={mark}>
-        <Logo size={92} />
-      </Animated.View>
-    </View>
-  );
-}
-
 /**
  * The frame around the armed tier: a band of the logo's ramp, turning slowly.
  *
@@ -1064,8 +1051,7 @@ const styles = StyleSheet.create({
   centred: { textAlign: 'center' },
   page: { paddingHorizontal: 20, gap: 14 },
   mist: { position: 'absolute', width: 440, height: 440, borderRadius: 220 },
-  beacon: { alignSelf: 'center', width: 150, height: 130, alignItems: 'center', justifyContent: 'center', marginTop: -8 },
-  bloom: { position: 'absolute', width: 190, height: 190, borderRadius: 95 },
+  cast: { alignSelf: 'center', marginTop: -4, marginBottom: 2 },
   sweep: { position: 'absolute', left: '-50%', top: '-120%', width: '200%', height: '340%' },
   armed: { margin: 2 },
   tierTitle: { fontSize: 24, lineHeight: 28 },

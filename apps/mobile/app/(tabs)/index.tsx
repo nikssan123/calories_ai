@@ -53,6 +53,7 @@ import { api, planLimitOf } from '@/lib/api';
 import { uploadPhotoFile } from '@/lib/image';
 import { useAuth } from '@/lib/auth';
 import { useEntitlements } from '@/lib/entitlements';
+import { useSaveAccount } from '@/lib/save-account';
 import { enqueue, newId } from '@/lib/outbox';
 import { useOutbox } from '@/hooks/useOutbox';
 import { useRefreshOnReturn } from '@/hooks/useRefreshOnReturn';
@@ -179,6 +180,7 @@ export default function JournalScreen() {
   const tr = useT();
   const toast = useToast();
   const { adopt, refresh: refreshPlan } = useEntitlements();
+  const save = useSaveAccount();
 
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [day, setDay] = useState<DaySummary | null>(null);
@@ -749,6 +751,9 @@ export default function JournalScreen() {
                 : b,
             ),
           );
+          // A guest's day is spent: the answer is saving the account, which
+          // starts the trial. The wall stays in the transcript behind it.
+          if (limit.allowance?.trial === 'guest') save.open('guest_limit');
           return;
         }
 
@@ -806,6 +811,7 @@ export default function JournalScreen() {
       commitDay,
       adopt,
       refreshPlan,
+      save,
     ],
   );
 

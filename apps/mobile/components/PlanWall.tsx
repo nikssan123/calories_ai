@@ -7,6 +7,7 @@ import type { Allowance, MeterName } from '@ct/shared';
 import { meterLocked, meterRemaining } from '@ct/shared';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { useEntitlements } from '@/lib/entitlements';
+import { useSaveAccount } from '@/lib/save-account';
 import { remainingLine, TIER_NAMES, tierFor, wallBody, wallTitle } from '@/lib/plan-copy';
 import { duration, ease, type as t, useColors, withAlpha, type Palette } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -52,6 +53,12 @@ export function PlanWall({
   const locale = useLocale();
   const router = useRouter();
   const { plan, tiers } = useEntitlements();
+  const save = useSaveAccount();
+  /*
+   * A guest's wall offers the account, not a plan: saving it is what starts the
+   * free week, and a guest cannot buy anything yet (GUEST-ACCOUNTS.md).
+   */
+  const guest = allowance?.trial === 'guest';
 
   const title = allowance ? wallTitle(allowance, tr, locale) : (message ?? tr('plans.spent'));
   const body = allowance ? wallBody(allowance, tr, locale) : undefined;
@@ -112,7 +119,22 @@ export function PlanWall({
             </PressableChunk>
           )}
 
-          {next && (
+          {guest && (
+            <PressableChunk
+              depth={3}
+              radius={999}
+              onPress={() => save.open('guest_limit')}
+              accessibilityRole="button"
+              contentStyle={[
+                styles.button,
+                { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+              ]}
+            >
+              <Text style={[t.bodySemibold, { color: colors.foreground }]}>{tr('guest.saveRow')}</Text>
+            </PressableChunk>
+          )}
+
+          {next && !guest && (
             <PressableChunk
               depth={3}
               radius={999}

@@ -80,36 +80,33 @@ Unlimited and unmetered: manual entry, repeat-a-meal, barcode, weight,
 Today/History/Progress, the outbox. That is a complete food diary, roughly what
 MyFitnessPal's free tier is, and it costs nothing to serve.
 
-Metered: **10 journal turns a month**, and 1 photo scan, ever.
+The model is a road with three stops, not a monthly grant (2026-09-15):
 
-The two clocks are the load-bearing decision, and they are deliberately different.
+| stop | when | chat | photo |
+|---|---|---:|---:|
+| guest | no saved account yet | 4 | 1 |
+| trial | 7 days from saving the account | 28 | 1 |
+| ended | after day 7 | none | none |
 
-**Chat is monthly, and it is knowingly a recurring bill.** At $0.041 a turn a free
-account that spends its ten costs **$0.41/month** for as long as it exists, against
-a one-time $0.82 under the lifetime grant this replaced — so it pays for itself
-against the old scheme in two months and then keeps going. What that buys is the one
-thing a lifetime grant cannot: a free account that is still alive next month. Twenty
-turns that never return is a demo with a cliff — spend it in week one, and every
-month after that the app is a diary with a dead button in it, which is nobody's
-upgrade decision because there is no longer a moment at which one gets made. Ten a
-month puts a small, repeating taste of the paid product in front of somebody who is
-*currently* using the app, which is the only place a paywall converts.
+All three are one-off grants (`period: 'ever'`); the trial counts from
+`users.trial_started_at`, so the guest's four do not come out of the trial's 28.
+The numbers are `GUEST` and `TRIAL` in `@ct/shared`; the logic is `freeStage` and
+`freeMeter` in `plans.ts`.
 
-Ten rather than twenty because the ceiling now recurs. It holds the steady state at
-$0.41/month, and it is still half again what the old lifetime grant gave per month to
-anybody who lasted longer than eight weeks.
+**Why a week instead of ten a month.** Ten a month kept a free account alive *on the
+model* — a slow AI diary for nothing, which is a strong reason never to pay for the
+fast one. A week at four a day is the product at the pace somebody actually uses it,
+then a decision. It is also the cheaper bill: the worst case is about $1.45 for an
+account's whole life (guest day plus trial), against $0.41 every month, for ever, for
+every free account that stayed.
 
-**The photo stays lifetime.** It is the sharpest wall in the product and the whole
-conversion argument: one scan, ever, means every free user sees the best thing the
-app does exactly once and hits the wall while still impressed. Handing it back every
-month would be giving away the pitch.
+**The paywall opens once by itself** when the trial ends — the first time the tabs are
+in front of that account on that phone (`lib/trial-paywall.ts`) — and its close
+button appears after five seconds. After that the wall in the journal and the locked
+buttons carry it.
 
-**The count is visible from the fifth message.** `MeterChip` shows the remainder once
-half a small grant is gone — half the grant, floored at three and capped at five — so
-free's ten start counting down at five left rather than at three. A ceiling somebody
-can watch approach is a plan; the same ceiling discovered by hitting it is a trap, and
-three out of ten would have meant 70% of the allowance spent before the app said a
-word.
+Existing accounts got a fresh week on the day `057` ran, rather than being counted
+from sign-up and losing the model on release day.
 
 No model-written nudges. A nudge is $0.025 and a dormant free account can collect one
 every week indefinitely. Free accounts hear from the app over a templated push, which
@@ -223,11 +220,11 @@ and upgrades.
 ### Subscribers only, and only on the way in
 
 `subscriberOnly` in `@ct/shared` is true on the message packs and false on the
-photo ones. Free gets ten messages a month, and a free account that can refill
-for $3.99 has no reason to ever subscribe — so the wall on Free sells the plan
-and draws no message packs at all. Photos have no such problem: Free gets one
-scan *ever*, so a pack there is a genuine purchase rather than a subscription
-substitute.
+photo ones. Free gets a week of trial and then no messages, and a free account
+that can buy thirty for $3.99 has no reason to ever subscribe — so the wall on
+Free sells the plan and draws no message packs at all. Photos have no such
+problem: Free gets one scan in its trial, so a pack there is a genuine purchase
+rather than a subscription substitute.
 
 It gates the **offer** and not the spend, and the difference matters for one
 person: the subscriber who buys a hundred messages, lets the subscription
@@ -350,7 +347,8 @@ refactor.
    back later", for a feature that never comes back). Every entitlement refusal is
    **402**; throttles stay 429.
 2. ~~The lifetime photo counter.~~ **Done** — `period: 'ever'`, on the free photo.
-   Free chat moved to `period: 'month'` afterwards; see §"Free".
+   Free chat moved to `period: 'month'` afterwards, then to the seven-day trial;
+   see §"Free".
 3. **Stripe.** Checkout, the webhook, and the column write. Annual as the default
    selection. Sell on the web where the post-Epic link-out window allows it; keep IAP
    at 15% as the convenient path. The store half is done — RevenueCat's webhook in
