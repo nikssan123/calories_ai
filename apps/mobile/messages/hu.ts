@@ -424,6 +424,7 @@ export const hu: Messages = {
   'auth.createAccountSubtitle':
     'Utána mesélj egy kicsit magadról a naplónak, és kiszámolja a céljaidat.',
   'auth.emailFirst': 'Előbb add meg az e-mail-címed, és küldök egy linket.',
+  'auth.passwordFirst': 'Add meg a jelszavad is.',
   // The privacy link reuses `auth.privacyPolicy`, which cannot take an
   // accusative ending, so both link names follow a colon as they are.
   'auth.agreeBefore': 'A fiók létrehozásával elfogadod a következőket:',

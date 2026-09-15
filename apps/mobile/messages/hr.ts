@@ -430,6 +430,7 @@ export const hr: Messages = {
   'auth.createAccountSubtitle':
     'Zatim reci dnevniku nešto o sebi i on će izračunati tvoje ciljeve.',
   'auth.emailFirst': 'Najprije upiši e-poštu, a ja ću poslati poveznicu.',
+  'auth.passwordFirst': 'Upiši i lozinku.',
   // Built so both links stay in the nominative: "… vrijede Uvjeti korištenja i Pravila privatnosti."
   'auth.agreeBefore': 'Izradom računa pristaješ da za tebe vrijede',
   'auth.terms': 'Uvjeti korištenja',

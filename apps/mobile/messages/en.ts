@@ -481,6 +481,7 @@ export const en = {
   'auth.createAccountSubtitle':
     'Then tell the journal a little about yourself and it will work out your targets.',
   'auth.emailFirst': 'Put your email in first and I’ll send a link.',
+  'auth.passwordFirst': 'Type your password too.',
   /** One sentence around the Terms and Privacy Policy links, ending in `agreeAfter`; any piece may be left empty. */
   'auth.agreeBefore': 'By creating an account you agree to the',
   'auth.terms': 'Terms',

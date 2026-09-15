@@ -438,6 +438,7 @@ export const cs: Messages = {
   'auth.createAccountSubtitle':
     'Pak řekni deníku něco o sobě a on ti spočítá cíle.',
   'auth.emailFirst': 'Nejdřív zadej e-mail a pošlu ti odkaz.',
+  'auth.passwordFirst': 'Zadej i heslo.',
   // "přijímáš" takes the accusative, which for both link labels (feminine
   // plurals) is the nominative they already use; "souhlasíš s" would need them
   // declined.

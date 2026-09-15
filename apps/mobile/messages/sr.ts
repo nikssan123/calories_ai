@@ -437,6 +437,7 @@ export const sr: Messages = {
   'auth.createAccountSubtitle':
     'Затим реци дневнику нешто о себи и он ће израчунати твоје циљеве.',
   'auth.emailFirst': 'Прво упиши имејл, па ћу послати линк.',
+  'auth.passwordFirst': 'Упиши и лозинку.',
   // The two link names stay in the nominative, so the sentence is «прихваташ да важе Услови… и Политика…».
   'auth.agreeBefore': 'Прављењем налога прихваташ да важе',
   'auth.terms': 'Услови коришћења',

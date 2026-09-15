@@ -423,6 +423,7 @@ export const uk: Messages = {
   'auth.createAccountSubtitle':
     'Потім трохи розкажи щоденнику про себе — і він розрахує твої норми.',
   'auth.emailFirst': 'Спершу введи пошту — і я надішлю посилання.',
+  'auth.passwordFirst': 'Введи й пароль.',
   // A colon keeps both link texts in the nominative they have everywhere else.
   'auth.agreeBefore': 'Створюючи акаунт, ти погоджуєшся з документами:',
   'auth.terms': 'Умови використання',

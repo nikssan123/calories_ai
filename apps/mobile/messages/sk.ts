@@ -431,6 +431,7 @@ export const sk: Messages = {
   'auth.createAccountSubtitle':
     'Potom povedz denníku niečo o sebe a on vypočíta tvoje ciele.',
   'auth.emailFirst': 'Najprv zadaj e-mail a pošlem ti odkaz.',
+  'auth.passwordFirst': 'Zadaj aj heslo.',
   // Accusative after „prijímaš“, so both links keep the form they already have:
   // „Vytvorením účtu prijímaš Podmienky používania a Zásady ochrany súkromia.“
   'auth.agreeBefore': 'Vytvorením účtu prijímaš',

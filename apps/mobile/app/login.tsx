@@ -124,6 +124,10 @@ export default function LoginScreen() {
       setError(tr('auth.invalidEmail'));
       return;
     }
+    if (!password) {
+      setError(tr('auth.passwordFirst'));
+      return;
+    }
     if (signup && password.length < 8) {
       // The rule is already written under the field; it turns red rather than
       // being said a second time underneath itself.
@@ -409,7 +413,8 @@ export default function LoginScreen() {
 
         <GlowButton
           onPress={() => void submit()}
-          disabled={!email || !password}
+          // Never grey for an empty field: `submit` says what is missing, in
+          // words, which a button that will not press cannot (see above).
           busy={busy}
           style={styles.submit}
           label={signup ? tr('auth.createAccount') : tr('auth.signIn')}

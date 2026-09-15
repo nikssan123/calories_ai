@@ -442,6 +442,7 @@ export const bg: Messages = {
   'auth.or': 'или',
   'auth.createAccountSubtitle': 'После разкажи на дневника малко за себе си и той ще изчисли целите ти.',
   'auth.emailFirst': 'Първо въведи имейла си и ще ти пратя връзка.',
+  'auth.passwordFirst': 'Въведи и паролата си.',
   // «нашите» governs both links, so neither title needs an article.
   'auth.agreeBefore': 'Като създадеш акаунт, приемаш нашите',
   'auth.terms': 'Условия за ползване',

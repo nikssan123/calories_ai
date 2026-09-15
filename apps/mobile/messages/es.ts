@@ -442,6 +442,7 @@ export const es: Messages = {
   'auth.or': 'o',
   'auth.createAccountSubtitle': 'Luego cuéntale al diario un poco sobre ti y calculará tus objetivos.',
   'auth.emailFirst': 'Pon primero tu correo y te envío un enlace.',
+  'auth.passwordFirst': 'Pon también tu contraseña.',
   'auth.agreeBefore': 'Al crear una cuenta, aceptas los',
   'auth.terms': 'Términos',
   'auth.agreeAnd': 'y la',

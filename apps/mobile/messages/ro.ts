@@ -434,6 +434,7 @@ export const ro: Messages = {
   'auth.createAccountSubtitle':
     'Apoi spune-i jurnalului câte ceva despre tine și îți va calcula țintele.',
   'auth.emailFirst': 'Scrie mai întâi e-mailul și îți trimit un link.',
+  'auth.passwordFirst': 'Scrie și parola.',
   // „de acord” does not agree with the reader, so the sentence can say "you".
   'auth.agreeBefore': 'Creând un cont, ești de acord cu',
   'auth.terms': 'Termenii',

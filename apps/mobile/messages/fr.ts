@@ -450,6 +450,7 @@ export const fr: Messages = {
   'auth.or': 'ou',
   'auth.createAccountSubtitle': 'Ensuite raconte deux ou trois choses sur toi au journal et il calculera tes objectifs.',
   'auth.emailFirst': 'Mets d’abord ton adresse et je t’envoie un lien.',
+  'auth.passwordFirst': 'Mets aussi ton mot de passe.',
   'auth.agreeBefore': 'En créant un compte, tu acceptes les',
   'auth.terms': 'Conditions d’utilisation',
   'auth.agreeAnd': 'et la',

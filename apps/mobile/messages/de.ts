@@ -441,6 +441,7 @@ export const de: Messages = {
   'auth.or': 'oder',
   'auth.createAccountSubtitle': 'Erzähl dem Journal dann kurz etwas über dich, und es rechnet deine Ziele aus.',
   'auth.emailFirst': 'Trag zuerst deine Adresse ein, dann schicke ich dir einen Link.',
+  'auth.passwordFirst': 'Trag auch dein Passwort ein.',
   'auth.agreeBefore': 'Wenn du ein Konto erstellst, akzeptierst du die',
   'auth.terms': 'Nutzungsbedingungen',
   'auth.agreeAnd': 'und die',

@@ -426,6 +426,7 @@ export const el: Messages = {
   'auth.createAccountSubtitle':
     'Μετά πες στο ημερολόγιο λίγα πράγματα για σένα και θα υπολογίσει τους στόχους σου.',
   'auth.emailFirst': 'Βάλε πρώτα το email σου και θα σου στείλω σύνδεσμο.',
+  'auth.passwordFirst': 'Βάλε και τον κωδικό σου.',
   // «Όρους χρήσης» is accusative: the link sits inside «αποδέχεσαι τους … και την …».
   'auth.agreeBefore': 'Δημιουργώντας λογαριασμό, αποδέχεσαι τους',
   'auth.terms': 'Όρους χρήσης',

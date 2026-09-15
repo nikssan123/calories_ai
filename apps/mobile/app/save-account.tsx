@@ -351,7 +351,7 @@ export default function SaveAccountScreen() {
 
             <GlowButton
               onPress={() => void claim()}
-              disabled={!email || !password}
+              // Pressable with a field empty: `claim` says which, in words.
               busy={busy}
               style={styles.submit}
               label={tr('save.saveButton')}
