@@ -1203,6 +1203,15 @@ export const hu: Messages = {
 
   'spent.everGrant': (count: number, noun: string) => `Az ingyenes keret elfogyott: ${count} ${noun}`,
   'spent.monthly': (count: number, noun: string) => `A havi keret elfogyott: ${count} ${noun}`,
+  // ---- The free trial: a week, then the diary. See `TRIAL` in @ct/shared.
+  'wall.trialGrant': (count: number, noun: string) => `Ennyi volt a próbaidőszakban: ${count} ${noun}`,
+  'wall.trialEnded': 'Az ingyenes próbaidőszakod véget ért',
+  'spent.trial': (count: number, noun: string) => `A próbaidőszak kerete elfogyott: ${count} ${noun}`,
+  'plans.trialOverTitle': 'Letelt az ingyenes heted.',
+  'plans.trialOverBody': 'Amit magad írsz be, az örökre ingyenes marad. Egy csomag visszahozza a gondolkodó részeket.',
+  'plans.onTrial': (when: string) =>
+    `Az ingyenes próbaidőszakod vége: ${when}. Amit magad írsz be, az mindig ingyenes – ezekkel a gondolkodó részeket kapod meg.`,
+  'plans.leftInTrial': (left: string, when: string) => `${left} maradt · a próbaidőszak vége: ${when}`,
 
   // ---- Words the whole app uses -------------------------------------------
   // ---- Streaks and achievements. See STREAKS.md. ----

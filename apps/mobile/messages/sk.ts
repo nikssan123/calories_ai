@@ -1246,6 +1246,16 @@ export const sk: Messages = {
     `Bezplatný balík (${count} ${noun}) je minutý`,
   'spent.monthly': (count: number, noun: string) =>
     `Balík na tento mesiac (${count} ${noun}) je minutý`,
+  // ---- The free trial: a week, then the diary. See `TRIAL` in @ct/shared.
+  'wall.trialGrant': (count: number, noun: string) => `Balík zo skúšobného obdobia sa minul: ${count} ${noun}`,
+  'wall.trialEnded': 'Tvoje bezplatné skúšobné obdobie sa skončilo',
+  'spent.trial': (count: number, noun: string) =>
+    `Balík zo skúšobného obdobia (${count} ${noun}) je minutý`,
+  'plans.trialOverTitle': 'Tvoj bezplatný týždeň sa skončil.',
+  'plans.trialOverBody': 'Všetko, čo zapíšeš ručne, zostáva zadarmo navždy. Plán vráti časti, ktoré premýšľajú.',
+  'plans.onTrial': (when: string) =>
+    `Bezplatné skúšobné obdobie sa skončí ${when}. Všetko, čo zapíšeš ručne, zostáva zadarmo – plány platia za časti, ktoré premýšľajú.`,
+  'plans.leftInTrial': (left: string, when: string) => `ešte ${left} · skúšobné obdobie sa skončí ${when}`,
 
   // ---- Words the whole app uses -------------------------------------------
   // ---- Streaks and achievements. See STREAKS.md. ----

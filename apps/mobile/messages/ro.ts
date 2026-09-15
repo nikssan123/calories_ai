@@ -1223,6 +1223,15 @@ export const ro: Messages = {
 
   'spent.everGrant': (count: number, noun: string) => `Ai folosit tot ce aveai gratis: ${count} ${noun}`,
   'spent.monthly': (count: number, noun: string) => `Ai folosit tot pe luna asta: ${count} ${noun}`,
+  // ---- The free trial: a week, then the diary. See `TRIAL` in @ct/shared.
+  'wall.trialGrant': (count: number, noun: string) => `Atât a fost în perioada de probă: ${count} ${noun}`,
+  'wall.trialEnded': 'Perioada ta de probă gratuită s-a încheiat',
+  'spent.trial': (count: number, noun: string) => `Ai folosit tot din perioada de probă: ${count} ${noun}`,
+  'plans.trialOverTitle': 'Săptămâna ta gratuită s-a încheiat.',
+  'plans.trialOverBody': 'Tot ce scrii tu rămâne gratuit, pentru totdeauna. Un plan aduce înapoi părțile care gândesc.',
+  'plans.onTrial': (when: string) =>
+    `Perioada de probă gratuită se încheie ${when}. Tot ce scrii tu rămâne gratuit — acestea plătesc părțile care gândesc.`,
+  'plans.leftInTrial': (left: string, when: string) => `încă ${left} · proba se încheie ${when}`,
 
   // ---- Words the whole app uses -------------------------------------------
   // ---- Streaks and achievements. See STREAKS.md. ----

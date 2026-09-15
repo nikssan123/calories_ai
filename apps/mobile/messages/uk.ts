@@ -1220,6 +1220,15 @@ export const uk: Messages = {
 
   'spent.everGrant': (count: number, noun: string) => `Безкоштовний ліміт (${count} ${noun}) вичерпано`,
   'spent.monthly': (count: number, noun: string) => `Місячний ліміт (${count} ${noun}) вичерпано`,
+  // ---- The free trial: a week, then the diary. See `TRIAL` in @ct/shared.
+  'wall.trialGrant': (count: number, noun: string) => `Ліміт безкоштовного пробного періоду вичерпано: ${count} ${noun}`,
+  'wall.trialEnded': 'Твій безкоштовний пробний період закінчився',
+  'spent.trial': (count: number, noun: string) => `Ліміт пробного періоду (${count} ${noun}) вичерпано`,
+  'plans.trialOverTitle': 'Твій безкоштовний тиждень закінчився.',
+  'plans.trialOverBody': 'Усе, що вводиш вручну, лишається безкоштовним назавжди. План повертає те, що думає.',
+  'plans.onTrial': (when: string) =>
+    `Безкоштовний пробний період закінчиться ${when}. Усе, що вводиш вручну, лишається безкоштовним — платиш лише за те, що думає.`,
+  'plans.leftInTrial': (left: string, when: string) => `лишилося ${left} · пробний період закінчиться ${when}`,
 
   // ---- Words the whole app uses -------------------------------------------
   // ---- Streaks and achievements. See STREAKS.md. ----

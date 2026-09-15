@@ -1084,6 +1084,14 @@ export const fr: Messages = {
   'free.offline': 'Noter sans aucun réseau',
   'spent.everGrant': (count, noun) => `Tes ${count} ${noun} gratuits sont épuisés`,
   'spent.monthly': (count, noun) => `Les ${count} ${noun} de ce mois sont épuisés`,
+  // ---- The free trial: a week, then the diary. See `TRIAL` in @ct/shared.
+  'wall.trialGrant': (count, noun) => `C’étaient tes ${count} ${noun} de l’essai gratuit`,
+  'wall.trialEnded': 'Ton essai gratuit est terminé',
+  'spent.trial': (count, noun) => `Les ${count} ${noun} de ton essai sont épuisés`,
+  'plans.trialOverTitle': 'Ta semaine gratuite est terminée.',
+  'plans.trialOverBody': 'Tout ce que tu tapes toi-même reste gratuit, pour toujours. Un abonnement ramène les parties qui réfléchissent.',
+  'plans.onTrial': (when) => `Ton essai gratuit se termine ${when}. Tout ce que tu tapes toi-même reste gratuit — ceux-là achètent les parties qui réfléchissent.`,
+  'plans.leftInTrial': (left, when) => `${left} restants · l’essai se termine ${when}`,
 
   // ---- Words the whole app uses -------------------------------------------
   // ---- Streaks and achievements. See STREAKS.md. ----

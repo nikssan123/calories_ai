@@ -39,6 +39,7 @@ import {
   unitsOf,
   weekdayName,
 } from '@ct/shared';
+import { untilWords } from '@ct/shared/words';
 import { PressableChunk } from '@/components/Chunk';
 import { DietRules } from '@/components/DietRules';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
@@ -936,9 +937,11 @@ function PlanSettings() {
             <Text style={[t.bodySemibold, t.tnum, { color: colors.foreground }]}>
               {allowance.unlimited
                 ? tr('plans.unlimited')
-                : (allowance.period === 'ever'
-                    ? tr('plans.leftEver')(String(left))
-                    : tr('plans.leftThisMonth')(String(left))) +
+                : (allowance.trial === 'trial' && allowance.trial_ends_at
+                    ? tr('plans.leftInTrial')(String(left), untilWords(allowance.trial_ends_at, locale))
+                    : allowance.period === 'ever'
+                      ? tr('plans.leftEver')(String(left))
+                      : tr('plans.leftThisMonth')(String(left))) +
                   /* Stock bought outright, named separately from the grant.
                      Folding it into `left` would be true this month and a lie
                      the next — the grant comes back and this does not — which

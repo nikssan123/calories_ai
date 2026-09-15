@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -13,6 +13,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 import type { CreditMeter, PlanName } from '@ct/shared';
+import { untilWords } from '@ct/shared/words';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { GlowButton } from '@/components/GlowButton';
 import { Logo } from '@/components/Logo';
@@ -122,6 +123,15 @@ const PACK_ICONS = {
 } as const satisfies Record<CreditMeter, (props: { color: string }) => React.ReactElement>;
 
 /**
+ * How long the close button waits before it appears.
+ *
+ * Long enough to read the headline and see what a plan costs, short enough
+ * that nobody is held. The back gesture and Android's back button wait with
+ * it, or the wait would only apply to people who did not know about them.
+ */
+const CLOSE_AFTER_MS = 5000;
+
+/**
  * The wall itself — the screen `SUBSCRIPTIONS.md` has had on its build list as
  * "one sentence and two buttons" since the entitlement seam landed.
  *
@@ -152,7 +162,34 @@ export default function UpgradeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const toast = useToast();
-  const { plan, tiers, refresh } = useEntitlements();
+  const navigation = useNavigation();
+  const reduced = useReducedMotion();
+  const { plan, tiers, allowances, refresh } = useEntitlements();
+  /*
+   * Where a free account is on its trial — see `TRIAL` in `@ct/shared`. The
+   * chat meter carries it; photo says the same thing.
+   */
+  const chat = plan === 'free' ? (allowances?.chat ?? null) : null;
+  const trialOver = chat?.trial === 'ended';
+  const trialEndsIn =
+    chat?.trial === 'trial' && chat.trial_ends_at ? untilWords(chat.trial_ends_at, locale) : null;
+
+  const [closable, setClosable] = useState(false);
+  const closeOpacity = useSharedValue(0);
+  useEffect(() => {
+    const timer = setTimeout(() => setClosable(true), CLOSE_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, []);
+  useEffect(() => {
+    navigation.setOptions({ gestureEnabled: closable });
+    if (closable) {
+      closeOpacity.value = reduced ? 1 : withTiming(1, { duration: 320 });
+      return;
+    }
+    const back = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => back.remove();
+  }, [closable, navigation, reduced, closeOpacity]);
+  const closeStyle = useAnimatedStyle(() => ({ opacity: closeOpacity.value }));
   /*
    * The tier the screen that sent us here was talking about.
    *
@@ -352,9 +389,15 @@ export default function UpgradeScreen() {
         { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 40 },
       ]}
     >
-      <View style={styles.topRow}>
+      <Animated.View
+        style={[styles.topRow, closeStyle]}
+        pointerEvents={closable ? 'auto' : 'none'}
+        accessibilityElementsHidden={!closable}
+        importantForAccessibility={closable ? 'auto' : 'no-hide-descendants'}
+      >
         <Pressable
           onPress={() => router.back()}
+          disabled={!closable}
           accessibilityRole="button"
           accessibilityLabel={tr('common.close')}
           hitSlop={12}
@@ -370,14 +413,20 @@ export default function UpgradeScreen() {
             />
           </Svg>
         </Pressable>
-      </View>
+      </Animated.View>
 
       <Beacon />
       <Serif accessibilityRole="header" style={[type.hero, styles.centred, { color: colors.foreground }]}>
-        {tr('plans.keepItGoing')}
+        {trialOver ? tr('plans.trialOverTitle') : tr('plans.keepItGoing')}
       </Serif>
       <Text style={[t.body, styles.lede, styles.centred, { color: colors.mutedForeground }]}>
-        {plan === 'free' ? tr('plans.onFree') : tr('plans.onPlan')(TIER_NAMES[plan])}
+        {plan !== 'free'
+          ? tr('plans.onPlan')(TIER_NAMES[plan])
+          : trialOver
+            ? tr('plans.trialOverBody')
+            : trialEndsIn
+              ? tr('plans.onTrial')(trialEndsIn)
+              : tr('plans.onFree')}
       </Text>
 
       {/*

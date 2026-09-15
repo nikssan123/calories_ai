@@ -1074,6 +1074,14 @@ export const bg: Messages = {
   'free.offline': 'Записване без никакъв сигнал',
   'spent.everGrant': (count, noun) => `Твоите ${count} безплатни ${noun} са изчерпани`,
   'spent.monthly': (count, noun) => `${count}-те ${noun} за този месец са изчерпани`,
+  // ---- The free trial: a week, then the diary. See `TRIAL` in @ct/shared.
+  'wall.trialGrant': (count, noun) => `Това са всичките ${count} ${noun} от безплатния пробен период`,
+  'wall.trialEnded': 'Безплатният пробен период свърши',
+  'spent.trial': (count, noun) => `${count}-те ${noun} от пробния период са изчерпани`,
+  'plans.trialOverTitle': 'Безплатната седмица свърши.',
+  'plans.trialOverBody': 'Всичко, което пишеш сам, остава безплатно завинаги. Планът връща частите, които мислят.',
+  'plans.onTrial': (when) => `Безплатният пробен период свършва ${when}. Всичко, което пишеш сам, остава безплатно — тези купуват частите, които мислят.`,
+  'plans.leftInTrial': (left, when) => `остават ${left} · пробният период свършва ${when}`,
 
   // ---- Words the whole app uses -------------------------------------------
   // ---- Streaks and achievements. See STREAKS.md. ----

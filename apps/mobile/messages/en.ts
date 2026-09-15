@@ -1308,6 +1308,16 @@ export const en = {
     `Your ${count} free ${noun} ${count === 1 ? 'is' : 'are'} spent`,
   'spent.monthly': (count: number, noun: string) =>
     `This month’s ${count} ${noun} ${count === 1 ? 'is' : 'are'} spent`,
+  // ---- The free trial: a week, then the diary. See `TRIAL` in @ct/shared.
+  'wall.trialGrant': (count: number, noun: string) => `That’s all ${count} ${noun} in your free trial`,
+  'wall.trialEnded': 'Your free trial has ended',
+  'spent.trial': (count: number, noun: string) =>
+    `Your trial’s ${count} ${noun} ${count === 1 ? 'is' : 'are'} spent`,
+  'plans.trialOverTitle': 'Your free week is up.',
+  'plans.trialOverBody': 'Everything you type in stays free, for good. A plan brings back the parts that think.',
+  'plans.onTrial': (when: string) =>
+    `Your free trial ends ${when}. Everything you type in stays free — these buy the parts that think.`,
+  'plans.leftInTrial': (left: string, when: string) => `${left} left · trial ends ${when}`,
 
   // ---- Words the whole app uses -------------------------------------------
   // ---- Streaks and achievements. See STREAKS.md. ----

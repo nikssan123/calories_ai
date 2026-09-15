@@ -105,12 +105,17 @@ export function tierFor(meter: MeterName, tiers: PlanTier[], current: PlanName):
  */
 export function wallTitle(allowance: Allowance, t: T, locale: Locale): string {
   const { meter, allowed, period } = allowance;
+  // Free's road — see `GUEST` and `TRIAL` in `@ct/shared`. An ended trial is a
+  // locked meter to every button, and it is still not "not on your plan": it
+  // was, for a week, and the sentence says so.
+  if (allowance.trial === 'ended') return t('wall.trialEnded');
   if (meterLocked(allowance)) {
     // Two, so every language picks its plural category rather than English's.
     return t('wall.notOnPlan')(capitalise(meterNoun(meter, 2, t), locale));
   }
   const count = allowed ?? 0;
   const noun = meterNoun(meter, count, t);
+  if (allowance.trial === 'trial') return t('wall.trialGrant')(count, noun);
   return period === 'ever'
     ? t('wall.freeGrant')(count, noun)
     : t('wall.monthlyGrant')(count, noun);
@@ -242,11 +247,13 @@ export const ALWAYS_FREE: StringKey[] = [
  * event.
  */
 export function spentLine(allowance: Allowance, t: T): string {
+  if (allowance.trial === 'ended') return t('wall.trialEnded');
   const count = allowance.allowed ?? 0;
   const noun = meterNoun(allowance.meter, count, t);
   // The verb agrees inside each catalogue rather than out here: English needs
   // is/are, Bulgarian needs neither, and a verb chosen in this file would be
   // English's answer imposed on every language.
+  if (allowance.trial === 'trial') return t('spent.trial')(count, noun);
   return allowance.period === 'ever'
     ? t('spent.everGrant')(count, noun)
     : t('spent.monthly')(count, noun);

@@ -17,6 +17,7 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
 import { haptics } from '@/lib/haptics';
 import { useT, type StringKey } from '@/lib/i18n';
+import { useTrialEndedPaywall } from '@/lib/trial-paywall';
 
 /**
  * Six, which is one past where a bottom bar is usually said to stop.
@@ -135,6 +136,7 @@ function TabScene({
 
 export default function TabsLayout() {
   const t = useT();
+  useTrialEndedPaywall();
   return (
     <View style={styles.fill}>
       {/*

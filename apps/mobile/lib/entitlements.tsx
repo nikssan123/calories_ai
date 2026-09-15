@@ -147,6 +147,8 @@ function byMeter(list: Allowance[]): Record<MeterName, Allowance> {
       // here for the same reason `allowed: null` is — this branch is the meter
       // the server did not mention, so nothing has been bought either.
       credits: 0,
+      trial: null,
+      trial_ends_at: null,
     };
   }
   return keyed;
