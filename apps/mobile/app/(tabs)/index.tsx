@@ -31,6 +31,7 @@ import {
   formatServings,
   inferMeal,
   isDeletion,
+  meterSpent,
   unitsOf,
 } from '@ct/shared';
 import { ChatActionCard } from '@/components/ChatCard';
@@ -167,7 +168,7 @@ const prompts = (tr: ReturnType<typeof useT>, units: UnitSystem): string[] => [
  */
 export default function JournalScreen() {
   const colors = useColors();
-  const { profile, adoptProfile } = useAuth();
+  const { profile, adoptProfile, guest } = useAuth();
   const units = unitsOf(profile);
   /*
    * The language this screen is drawn in, which is also the language the reply
@@ -179,7 +180,7 @@ export default function JournalScreen() {
   const locale = useLocale();
   const tr = useT();
   const toast = useToast();
-  const { adopt, refresh: refreshPlan } = useEntitlements();
+  const { adopt, refresh: refreshPlan, allowances } = useEntitlements();
   const save = useSaveAccount();
 
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
@@ -815,6 +816,30 @@ export default function JournalScreen() {
     ],
   );
 
+  /*
+   * Asked before the camera opens. A spent photo meter used to be found out
+   * after the picture was taken and uploaded — a wasted shot and a stored file
+   * nobody reads — so the wall lands first, the same card a refused turn
+   * leaves, with nothing typed to carry. Bought scans still count as room, and
+   * an unknown meter (still loading, offline) lets the server decide.
+   */
+  const canAttachPhoto = useCallback((): boolean => {
+    const photo = allowances?.photo;
+    if (!photo || !meterSpent(photo) || photo.credits > 0) return true;
+    pinned.current = true;
+    setBubbles((prev) => [
+      ...prev,
+      {
+        key: `local-${Date.now()}-wall`,
+        role: 'assistant',
+        content: '',
+        wall: { allowance: photo, message: '', text: '' },
+      },
+    ]);
+    if (photo.trial === 'guest' && guest) save.open('guest_limit');
+    return false;
+  }, [allowances, guest, save]);
+
   return (
     <KeyboardAvoidingView
       style={styles.flex}
@@ -915,6 +940,7 @@ export default function JournalScreen() {
 
       <Composer
         onSend={(p) => void send(p)}
+        canAttachPhoto={canAttachPhoto}
         // A scanned packet is logged by the scanner itself, without a turn — so
         // the message it produced is dropped into the conversation here, and the
         // status bar above told to re-read itself.

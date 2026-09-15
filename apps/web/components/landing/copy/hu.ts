@@ -277,7 +277,7 @@ export const hu: LandingCopy = {
       },
       {
         q: 'Mi történik, ha elfogynak az üzeneteim?',
-        a: 'A napló tovább működik: továbbra is beírhatod az étkezéseket, megismételheted őket, és beolvashatod a vonalkódokat. Az üzenetek naponta töltődnek vissza, vagy válthatsz nagyobb csomagra.',
+        a: 'A napló tovább működik: továbbra is beírhatod az étkezéseket, megismételheted őket, és beolvashatod a vonalkódokat. A Plus és a Coach csomagban naponta töltődnek vissza. Az ingyenes próbaidőszak után egy csomag hozza vissza őket.',
       },
       {
         q: 'Hogyan mondhatom le?',

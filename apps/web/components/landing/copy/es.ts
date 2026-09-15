@@ -278,7 +278,7 @@ export const es: LandingCopy = {
       },
       {
         q: '¿Qué pasa si me quedo sin mensajes?',
-        a: 'El diario sigue funcionando: puedes seguir apuntando comidas a mano, repetirlas y escanear códigos de barras. Los mensajes se recargan día a día, o puedes pasarte a un plan superior.',
+        a: 'El diario sigue funcionando: puedes seguir apuntando comidas a mano, repetirlas y escanear códigos de barras. En Plus y Coach se recargan día a día. Después de la prueba gratis, un plan los devuelve.',
       },
       {
         q: '¿Cómo cancelo?',

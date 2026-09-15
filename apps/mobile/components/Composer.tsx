@@ -73,8 +73,15 @@ export function Composer({
   onSend,
   onLogged,
   disabled,
+  canAttachPhoto,
 }: {
   onSend: (payload: ComposerPayload) => void;
+  /**
+   * Asked before the camera or the library opens. False when the photo meter
+   * is spent: the refusal is shown before a picture is taken and uploaded,
+   * rather than after. Barcode is never asked — it costs nothing.
+   */
+  canAttachPhoto?: () => boolean;
   /**
    * Something was logged without going through the conversation — a scanned
    * packet. The server writes it into the journal itself and hands back the
@@ -268,7 +275,7 @@ export function Composer({
   const afterSheet = useRef<'camera' | 'library' | 'barcode' | null>(null);
 
   function choose(next: 'camera' | 'library' | 'barcode') {
-    afterSheet.current = next;
+    afterSheet.current = next === 'barcode' || !canAttachPhoto || canAttachPhoto() ? next : null;
     setChoosing(false);
   }
 

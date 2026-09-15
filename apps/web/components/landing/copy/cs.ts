@@ -279,7 +279,7 @@ export const cs: LandingCopy = {
       },
       {
         q: 'Co když mi dojdou zprávy?',
-        a: 'Deník funguje dál: jídla můžeš pořád zapisovat ručně, opakovat a skenovat čárové kódy. Zprávy se doplňují den po dni, nebo můžeš přejít na vyšší tarif.',
+        a: 'Deník funguje dál: jídla můžeš pořád zapisovat ručně, opakovat a skenovat čárové kódy. V tarifech Plus a Coach se doplňují den po dni. Po zkušební době zdarma je vrátí tarif.',
       },
       {
         q: 'Jak předplatné zruším?',

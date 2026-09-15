@@ -277,7 +277,7 @@ export const de: LandingCopy = {
       },
       {
         q: 'Was passiert, wenn meine Nachrichten aufgebraucht sind?',
-        a: 'Das Tagebuch funktioniert weiter: Du kannst Mahlzeiten weiterhin eintippen, wiederholen und Barcodes scannen. Nachrichten füllen sich Tag für Tag wieder auf, oder du machst ein Upgrade.',
+        a: 'Das Tagebuch funktioniert weiter: Du kannst Mahlzeiten weiterhin eintippen, wiederholen und Barcodes scannen. Bei Plus und Coach füllen sie sich Tag für Tag wieder auf. Nach der kostenlosen Testphase bringt ein Plan sie zurück.',
       },
       {
         q: 'Wie kündige ich?',

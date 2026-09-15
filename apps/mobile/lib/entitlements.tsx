@@ -26,6 +26,12 @@ interface EntitlementsValue {
   allowances: Record<MeterName, Allowance> | null;
   /** Every tier, cheapest first, as `plans.ts` defines them. */
   tiers: PlanTier[];
+  /**
+   * When the server last answered `/entitlements` — not when an allowance was
+   * adopted from a turn. Moments that should happen on opening the app rather
+   * than mid-sentence key on this; see `useTrialEndedPaywall`.
+   */
+  fetchedAt: number | null;
   /** Re-read from the server; returns the plan it now reports. */
   refresh: () => Promise<PlanName>;
   /**
@@ -40,6 +46,7 @@ const EMPTY: EntitlementsValue = {
   plan: 'free',
   allowances: null,
   tiers: [],
+  fetchedAt: null,
   refresh: async () => 'free',
   adopt: () => {},
 };
@@ -54,11 +61,12 @@ export function useAllowance(meter: MeterName): Allowance | null {
 }
 
 export function EntitlementsProvider({ children }: { children: React.ReactNode }) {
-  const { authenticated, emailVerified, profile } = useAuth();
+  const { authenticated, emailVerified, guest, profile } = useAuth();
   const userId = profile?.id ?? null;
 
   const [allowances, setAllowances] = useState<Record<MeterName, Allowance> | null>(null);
   const [tiers, setTiers] = useState<PlanTier[]>([]);
+  const [fetchedAt, setFetchedAt] = useState<number | null>(null);
   /*
    * Seeded from the profile rather than left at `free` until `/entitlements` answers.
    *
@@ -78,6 +86,7 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
       setPlan(entitlements.plan);
       setTiers(entitlements.tiers);
       setAllowances(byMeter(entitlements.allowances));
+      setFetchedAt(Date.now());
       return entitlements.plan;
     } catch {
       /*
@@ -91,7 +100,9 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
   }, [plan]);
 
   useEffect(() => {
-    if (!authenticated || !emailVerified) {
+    // A guest has proved no address and is still somebody with a meter — the
+    // count above the composer and the plans screen need theirs as much.
+    if (!authenticated || (!emailVerified && !guest)) {
       setAllowances(null);
       return;
     }
@@ -100,7 +111,7 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
     // this effect changes, and following it would re-fetch every time the plan
     // moved. The session arriving is the only thing that should start a load.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authenticated, emailVerified]);
+  }, [authenticated, emailVerified, guest]);
 
   /*
    * Tell the store who this is, as soon as there is an account to tell it
@@ -122,8 +133,8 @@ export function EntitlementsProvider({ children }: { children: React.ReactNode }
   }, []);
 
   const value = useMemo<EntitlementsValue>(
-    () => ({ plan, allowances, tiers, refresh, adopt }),
-    [plan, allowances, tiers, refresh, adopt],
+    () => ({ plan, allowances, tiers, fetchedAt, refresh, adopt }),
+    [plan, allowances, tiers, fetchedAt, refresh, adopt],
   );
 
   return <EntitlementsContext.Provider value={value}>{children}</EntitlementsContext.Provider>;

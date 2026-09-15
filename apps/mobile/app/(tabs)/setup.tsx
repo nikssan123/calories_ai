@@ -895,6 +895,8 @@ function PlanSettings() {
   const locale = useLocale();
   const router = useRouter();
   const { plan, allowances, refresh } = useEntitlements();
+  const { guest } = useAuth();
+  const save = useSaveAccount();
   const [restoring, setRestoring] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
@@ -908,11 +910,21 @@ function PlanSettings() {
    * count, which is the one thing this screen exists to tell somebody who is
    * not going to hit a wall.
    */
+  // A meter the plan no longer carries still gets its row while bought stock
+  // sits on it — packs outlive a subscription, and so does the count of them.
   const carried = allowances
-    ? Object.values(allowances).filter((allowance) => !meterLocked(allowance))
+    ? Object.values(allowances).filter(
+        (allowance) => !meterLocked(allowance) || allowance.credits > 0,
+      )
     : [];
 
   async function restorePurchase() {
+    // A restore binds the store's purchases to whoever is signed in; a guest
+    // saves the account first, as for a purchase (GUEST-ACCOUNTS.md).
+    if (guest) {
+      save.open('purchase');
+      return;
+    }
     setRestoring(true);
     setNote(null);
     try {

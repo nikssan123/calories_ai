@@ -282,7 +282,7 @@ export const fr: LandingCopy = {
       },
       {
         q: 'Que se passe-t-il quand je n’ai plus de messages ?',
-        a: 'Le journal continue de fonctionner : tu peux toujours taper tes repas, les répéter et scanner des codes-barres. Les messages se rechargent jour après jour, ou tu peux passer au forfait supérieur.',
+        a: 'Le journal continue de fonctionner : tu peux toujours taper tes repas, les répéter et scanner des codes-barres. Avec Plus et Coach, ils se rechargent jour après jour. Après l’essai gratuit, un abonnement les ramène.',
       },
       {
         q: 'Comment résilier ?',

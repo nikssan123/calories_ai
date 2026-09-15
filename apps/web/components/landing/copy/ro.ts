@@ -281,7 +281,7 @@ export const ro: LandingCopy = {
       },
       {
         q: 'Ce se întâmplă când rămân fără mesaje?',
-        a: 'Jurnalul merge în continuare: poți să scrii mese, să le repeți și să scanezi coduri de bare. Mesajele se reîncarcă zi de zi. Sau faci upgrade.',
+        a: 'Jurnalul merge în continuare: poți să scrii mese, să le repeți și să scanezi coduri de bare. Pe Plus și Coach se reîncarcă zi de zi. După perioada de probă gratuită, le aduce înapoi un plan.',
       },
       {
         q: 'Cum anulez?',

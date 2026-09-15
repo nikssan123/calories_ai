@@ -279,7 +279,7 @@ export const hr: LandingCopy = {
       },
       {
         q: 'Što ako mi ponestane poruka?',
-        a: 'Dnevnik i dalje radi: obroke i dalje možeš upisivati i ponavljati, a barkodove skenirati. Poruke se vraćaju dan po dan, a možeš i nadograditi paket.',
+        a: 'Dnevnik i dalje radi: obroke i dalje možeš upisivati i ponavljati, a barkodove skenirati. U paketima Plus i Coach vraćaju se dan po dan. Nakon besplatne probe vraća ih paket.',
       },
       {
         q: 'Kako otkazati?',

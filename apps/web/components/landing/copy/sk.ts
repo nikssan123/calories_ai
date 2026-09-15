@@ -274,7 +274,7 @@ export const sk: LandingCopy = {
       },
       {
         q: 'Čo keď sa mi minú správy?',
-        a: 'Denník funguje ďalej: jedlá môžeš stále zapisovať ručne, opakovať a skenovať čiarové kódy. Správy sa dopĺňajú deň po dni, alebo môžeš prejsť na vyšší plán.',
+        a: 'Denník funguje ďalej: jedlá môžeš stále zapisovať ručne, opakovať a skenovať čiarové kódy. V plánoch Plus a Coach sa dopĺňajú deň po dni. Po bezplatnom skúšobnom období ich vráti plán.',
       },
       {
         q: 'Ako zruším predplatné?',

@@ -286,7 +286,7 @@ export const en = {
       },
       {
         q: 'What happens when I run out of messages?',
-        a: 'The diary keeps working: you can still type meals in, repeat them and scan barcodes. Messages refill a day at a time, or you can upgrade.',
+        a: 'The diary keeps working: you can still type meals in, repeat them and scan barcodes. On Plus and Coach they come back a day at a time. After the free trial, a plan brings them back.',
       },
       {
         q: 'How do I cancel?',

@@ -126,11 +126,15 @@ const PACK_ICONS = {
 } as const satisfies Record<CreditMeter, (props: { color: string }) => React.ReactElement>;
 
 /**
- * How long the close button waits before it appears.
+ * How long the close button waits before it appears, when the plans opened by
+ * themselves — the once-only screen after a trial ends (`lib/trial-paywall.ts`).
  *
  * Long enough to read the headline and see what a plan costs, short enough
  * that nobody is held. The back gesture and Android's back button wait with
  * it, or the wait would only apply to people who did not know about them.
+ *
+ * Only then. Somebody who tapped their way here asked to see the plans, and
+ * holding the door shut on a screen they chose to open is a trap, not a pitch.
  */
 const CLOSE_AFTER_MS = 5000;
 
@@ -179,12 +183,15 @@ export default function UpgradeScreen() {
   const trialEndsIn =
     chat?.trial === 'trial' && chat.trial_ends_at ? untilWords(chat.trial_ends_at, locale) : null;
 
-  const [closable, setClosable] = useState(false);
-  const closeOpacity = useSharedValue(0);
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  const holdClose = from === 'trial';
+  const [closable, setClosable] = useState(!holdClose);
+  const closeOpacity = useSharedValue(holdClose ? 0 : 1);
   useEffect(() => {
+    if (!holdClose) return;
     const timer = setTimeout(() => setClosable(true), CLOSE_AFTER_MS);
     return () => clearTimeout(timer);
-  }, []);
+  }, [holdClose]);
   useEffect(() => {
     navigation.setOptions({ gestureEnabled: closable });
     if (closable) {
@@ -277,14 +284,15 @@ export default function UpgradeScreen() {
   })();
 
   async function buy() {
-    const offer = chosen ? offerFor(chosen) : null;
-    if (!offer || busy) return;
     // What is bought belongs to an account, so a guest saves one first and
-    // comes back here to buy (GUEST-ACCOUNTS.md).
+    // comes back here to buy (GUEST-ACCOUNTS.md). Ahead of the offer check, so
+    // it holds even before the store has answered.
     if (guest) {
       save.open('purchase');
       return;
     }
+    const offer = chosen ? offerFor(chosen) : null;
+    if (!offer || busy) return;
     setBusy(true);
     try {
       await purchase(offer, refresh);
@@ -313,6 +321,12 @@ export default function UpgradeScreen() {
 
   async function restorePurchase() {
     if (busy) return;
+    // A restore binds the store account's purchases to whoever is signed in, and
+    // a guest row is one erase away from gone — save it first, as for a purchase.
+    if (guest) {
+      save.open('purchase');
+      return;
+    }
     setBusy(true);
     try {
       const found = await restore(refresh);
@@ -353,6 +367,10 @@ export default function UpgradeScreen() {
    */
   async function buyPack(pack: Bundle) {
     if (buying) return;
+    if (guest) {
+      save.open('purchase');
+      return;
+    }
     setBuying(pack.id);
     try {
       const landed = await purchaseBundle(pack, async () => {
@@ -376,10 +394,10 @@ export default function UpgradeScreen() {
   /*
    * The packs this account may actually be offered.
    *
-   * `subscriberOnly` is on the message packs, and this is the only place it is
-   * enforced: the wall on Free sells the plan, because ten messages a month
-   * plus a $3.99 refill is a cheaper product than Plus and would be the one
-   * everybody bought. See the note on `BUNDLES` in `@ct/shared`.
+   * `subscriberOnly` is on every pack, and this is the only place it is
+   * enforced: the wall on Free sells the plan, because a finished trial plus a
+   * $3.99 refill is a cheaper product than Plus and would be the one everybody
+   * bought. See the note on `BUNDLES` in `@ct/shared`.
    *
    * It is a filter on *offering*, not on spending. A subscriber who buys a
    * hundred messages and later lapses keeps them — credits do not expire — and
