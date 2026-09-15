@@ -12,7 +12,8 @@
     "build:ios:sim": "bash scripts/build-ios.sh --sim",
     "messages": "tsx scripts/catalogue-smoke.mts",
     "intl": "tsx scripts/intl-hermes.mts",
-    "widget": "tsx scripts/widget-smoke.mts"
+    "widget": "tsx scripts/widget-smoke.mts",
+    "splash-icon": "tsx scripts/splash-icon.mts"
   },
   "dependencies": {
     "@ct/api-client": "workspace:*",

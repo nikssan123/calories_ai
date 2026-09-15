@@ -52,6 +52,7 @@ import { Literata_400Regular } from '@expo-google-fonts/literata/400Regular';
 import { Literata_500Medium } from '@expo-google-fonts/literata/500Medium';
 import { Literata_300Light_Italic } from '@expo-google-fonts/literata/300Light_Italic';
 import * as Notifications from 'expo-notifications';
+import { Boot } from '@/components/Boot';
 import { ToastProvider } from '@/components/Toast';
 import { SharedPhotoRoot } from '@/lib/share';
 import { AuthProvider, useAuth } from '@/lib/auth';
@@ -238,21 +239,17 @@ function Gate() {
    * Nothing is routed until the draft is off the disk. The first screen of a
    * relaunch mid-walk is the onboarding screen, and it takes its answers from
    * the draft as initial state — mounted a frame before the draft arrived, it
-   * would start blank and never look again. The splash covers the wait.
+   * would start blank and never look again. `Boot` covers the wait.
+   *
+   * Held until the session *and* the setup state have resolved, so nobody sees
+   * a frame of the wrong screen on the way to the right one. Waiting on the
+   * second one is what stops a brand-new account glimpsing the tab bar before
+   * being sent to the first question — `ready` is set even when the request
+   * fails, so this cannot become a loading screen with no exit.
    */
   const settled =
     !loading && draftLoaded && (!authenticated || !(emailVerified || guest) || setupResolved);
 
-  useEffect(() => {
-    /*
-     * Held until the session *and* the setup state have resolved, so nobody
-     * sees a frame of the wrong screen on the way to the right one. Waiting on
-     * the second one is what stops a brand-new account glimpsing the tab bar
-     * before being sent to the first question — `ready` is set even when the
-     * request fails, so this cannot become a splash screen with no exit.
-     */
-    if (settled) void SplashScreen.hideAsync();
-  }, [settled]);
 
   /*
    * Re-register this phone's address once there is a session to attach it to.
@@ -307,100 +304,104 @@ function Gate() {
     return () => tap.remove();
   }, [router]);
 
-  if (!draftLoaded) return null;
-
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        /*
-         * The ground, spelled out.
-         *
-         * React Navigation paints every scene with its own default theme —
-         * a cool #f2f2f2 — over whatever is behind it. Leaving it alone put a
-         * grey page under a cream tab bar and quietly cancelled the warmest
-         * decision in the palette. `transparent` is not enough either: the card
-         * still paints, so the colour has to be named.
-         *
-         * With the ambient washes on it since the glow-up, so a pushed screen —
-         * History, a recipe, the paywall's success page — stands in the same
-         * light as the tabs. Painted by each scene's own container, which is
-         * what keeps a push opaque: nothing shows through mid-slide.
-         */
-        contentStyle: { backgroundColor: colors.background, experimental_backgroundImage: colors.ambient },
-      }}
-    >
-      {/*
-        * Declarative guards rather than a `router.replace` in an effect. The
-        * imperative version dispatches into a navigator that has not finished
-        * mounting on the first pass, which React reports as a state update on a
-        * component that has not mounted yet — and it is a real race, not just a
-        * warning: the tab bar gets a frame before the redirect lands.
-        */}
-      <Stack.Protected guard={authenticated && !emailVerified && !guest}>
-        <Stack.Screen name="verify" />
-      </Stack.Protected>
+    <>
+      {draftLoaded && (
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            /*
+             * The ground, spelled out.
+             *
+             * React Navigation paints every scene with its own default theme —
+             * a cool #f2f2f2 — over whatever is behind it. Leaving it alone put a
+             * grey page under a cream tab bar and quietly cancelled the warmest
+             * decision in the palette. `transparent` is not enough either: the card
+             * still paints, so the colour has to be named.
+             *
+             * With the ambient washes on it since the glow-up, so a pushed screen —
+             * History, a recipe, the paywall's success page — stands in the same
+             * light as the tabs. Painted by each scene's own container, which is
+             * what keeps a push opaque: nothing shows through mid-slide.
+             */
+            contentStyle: { backgroundColor: colors.background, experimental_backgroundImage: colors.ambient },
+          }}
+        >
+          {/*
+            * Declarative guards rather than a `router.replace` in an effect. The
+            * imperative version dispatches into a navigator that has not finished
+            * mounting on the first pass, which React reports as a state update on a
+            * component that has not mounted yet — and it is a real race, not just a
+            * warning: the tab bar gets a frame before the redirect lands.
+            */}
+          <Stack.Protected guard={authenticated && !emailVerified && !guest}>
+            <Stack.Screen name="verify" />
+          </Stack.Protected>
 
-      {/*
-        * Setup, before anything that shows a target.
-        *
-        * Its own guard rather than a redirect out of the tabs, for the reason
-        * every other boundary here is declarative: an imperative replace fires
-        * into a navigator that has not finished mounting, and the tab bar gets
-        * a frame before it lands. `gestureEnabled: false` because there is
-        * nothing behind this to swipe back to — the wizard's own rail carries
-        * the way back through the questions.
-        */}
-      <Stack.Protected guard={(inside && needsSetup) || welcoming}>
-        <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
-      </Stack.Protected>
+          {/*
+            * Setup, before anything that shows a target.
+            *
+            * Its own guard rather than a redirect out of the tabs, for the reason
+            * every other boundary here is declarative: an imperative replace fires
+            * into a navigator that has not finished mounting, and the tab bar gets
+            * a frame before it lands. `gestureEnabled: false` because there is
+            * nothing behind this to swipe back to — the wizard's own rail carries
+            * the way back through the questions.
+            */}
+          <Stack.Protected guard={(inside && needsSetup) || welcoming}>
+            <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
+          </Stack.Protected>
 
-      {/* The plan a new account arrived with, being written to it. See above. */}
-      <Stack.Protected guard={(inside && !setupResolved) || startingGuest}>
-        <Stack.Screen name="saving" options={{ animation: 'fade', gestureEnabled: false }} />
-      </Stack.Protected>
+          {/* The plan a new account arrived with, being written to it. See above. */}
+          <Stack.Protected guard={(inside && !setupResolved) || startingGuest}>
+            <Stack.Screen name="saving" options={{ animation: 'fade', gestureEnabled: false }} />
+          </Stack.Protected>
 
-      <Stack.Protected guard={inside && setupResolved && !needsSetup}>
-        <Stack.Screen name="(tabs)" />
-        {/*
-          * History sits outside the tabs, as it does on the web: it is reached
-          * from the date at the top of Today and nowhere else. A seventh tab
-          * would put a calendar in the thumb's way all day for something used
-          * once a week.
-          */}
-        <Stack.Screen name="history" options={{ animation: 'slide_from_right' }} />
-        {/* The badge wall, reached from the one row Progress keeps for it. A
-            push rather than a block on Progress: badges are not measurements,
-            and the wall wants a full-width row for the bar under each one. */}
-        <Stack.Screen name="achievements" options={{ animation: 'slide_from_right' }} />
-        {/* A recipe is a place you go from Cook and come back from, so it
-            pushes rather than becoming a seventh tab. */}
-        <Stack.Screen name="recipe/[id]" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="library/[slug]" options={{ animation: 'slide_from_right' }} />
-        <Stack.Screen name="plan" options={{ animation: 'slide_from_right' }} />
-        {/*
-          * Reached from a wall in the journal, a locked kitchen and the plan row
-          * in settings — three places, none of them a tab, which is what makes
-          * it a pushed screen. `slide_from_bottom` rather than the horizontal
-          * push the others use: it is asking for something rather than going
-          * somewhere, and the vertical entrance is the one people already read
-          * as "this is a decision you can back out of".
-          */}
-        <Stack.Screen name="upgrade" options={{ animation: 'slide_from_bottom' }} />
-        {/* A coach's invite, from the link or from the code typed under
-            Settings. The same vertical entrance as the paywall, for the same
-            reason: it is asking for a decision, and one you can back out of. */}
-        <Stack.Screen name="c/[code]" options={{ animation: 'slide_from_bottom' }} />
-        {/* No animation: it replaces the wall rather than covering it, and a
-            second slide-from-bottom on a screen that is already at the bottom
-            reads as a bounce. */}
-        <Stack.Screen name="purchased" options={{ animation: 'fade', gestureEnabled: false }} />
-        {/* Saving a guest's account (GUEST-ACCOUNTS.md): the paywall's entrance, for the same kind of decision. */}
-        <Stack.Screen name="save-account" options={{ animation: 'slide_from_bottom' }} />
-      </Stack.Protected>
-      <Stack.Protected guard={!authenticated && !welcoming && !startingGuest}>
-        <Stack.Screen name="login" options={{ animation: 'fade' }} />
-      </Stack.Protected>
-    </Stack>
+          <Stack.Protected guard={inside && setupResolved && !needsSetup}>
+            <Stack.Screen name="(tabs)" />
+            {/*
+              * History sits outside the tabs, as it does on the web: it is reached
+              * from the date at the top of Today and nowhere else. A seventh tab
+              * would put a calendar in the thumb's way all day for something used
+              * once a week.
+              */}
+            <Stack.Screen name="history" options={{ animation: 'slide_from_right' }} />
+            {/* The badge wall, reached from the one row Progress keeps for it. A
+                push rather than a block on Progress: badges are not measurements,
+                and the wall wants a full-width row for the bar under each one. */}
+            <Stack.Screen name="achievements" options={{ animation: 'slide_from_right' }} />
+            {/* A recipe is a place you go from Cook and come back from, so it
+                pushes rather than becoming a seventh tab. */}
+            <Stack.Screen name="recipe/[id]" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="library/[slug]" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="plan" options={{ animation: 'slide_from_right' }} />
+            {/*
+              * Reached from a wall in the journal, a locked kitchen and the plan row
+              * in settings — three places, none of them a tab, which is what makes
+              * it a pushed screen. `slide_from_bottom` rather than the horizontal
+              * push the others use: it is asking for something rather than going
+              * somewhere, and the vertical entrance is the one people already read
+              * as "this is a decision you can back out of".
+              */}
+            <Stack.Screen name="upgrade" options={{ animation: 'slide_from_bottom' }} />
+            {/* A coach's invite, from the link or from the code typed under
+                Settings. The same vertical entrance as the paywall, for the same
+                reason: it is asking for a decision, and one you can back out of. */}
+            <Stack.Screen name="c/[code]" options={{ animation: 'slide_from_bottom' }} />
+            {/* No animation: it replaces the wall rather than covering it, and a
+                second slide-from-bottom on a screen that is already at the bottom
+                reads as a bounce. */}
+            <Stack.Screen name="purchased" options={{ animation: 'fade', gestureEnabled: false }} />
+            {/* Saving a guest's account (GUEST-ACCOUNTS.md): the paywall's entrance, for the same kind of decision. */}
+            <Stack.Screen name="save-account" options={{ animation: 'slide_from_bottom' }} />
+          </Stack.Protected>
+          <Stack.Protected guard={!authenticated && !welcoming && !startingGuest}>
+            <Stack.Screen name="login" options={{ animation: 'fade' }} />
+          </Stack.Protected>
+        </Stack>
+      )}
+      {/* Over the stack, and after it in the tree so the right screen is drawn underneath when it fades. */}
+      <Boot settled={settled} />
+    </>
   );
 }
