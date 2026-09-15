@@ -1,0 +1,36 @@
+diff --git a/android/src/main/java/com/swmansion/reanimated/NativeProxy.kt b/android/src/main/java/com/swmansion/reanimated/NativeProxy.kt
+index 48e37714232d5ccf74d99d61cb2fac56314087aa..e8f0aa75a010562a869deb0fb7df79c68ba45fff 100644
+--- a/android/src/main/java/com/swmansion/reanimated/NativeProxy.kt
++++ b/android/src/main/java/com/swmansion/reanimated/NativeProxy.kt
+@@ -245,6 +245,17 @@ open class NativeProxy {
+             }.apply { isAccessible = true }
+     }
+ 
++    // Day So Far patch: the registry replayed here still holds views that have been
++    // unmounted or never mounted. Updating one threw inside MountingManager and was
++    // logged with a full stack trace, once per view per event-in-draw — thousands a
++    // second on a screen of animated SVG figures. Skip views that do not exist.
++    private val viewExistsMethod by lazy {
++        mountingManager.javaClass.methods
++            .first {
++                it.name.startsWith("getViewExists") && it.parameterTypes.size == 1
++            }.apply { isAccessible = true }
++    }
++
+     @DoNotStrip
+     fun synchronouslyUpdateUIProps(
+         intBuffer: IntArray,
+@@ -253,9 +264,11 @@ open class NativeProxy {
+         SynchronousPropsBufferParser.parse(intBuffer, doubleBuffer) { viewTag, props ->
+             if (BuildConfig.IS_REACT_NATIVE_86_OR_NEWER) {
+                 try {
+-                    updatePropsSynchronouslyMethod.invoke(mountingManager, viewTag, props)
++                    if (viewExistsMethod.invoke(mountingManager, viewTag) == true) {
++                        updatePropsSynchronouslyMethod.invoke(mountingManager, viewTag, props)
++                    }
+                 } catch (e: Exception) {
+-                    Log.w("Reanimated", "synchronouslyUpdateUIProps failed for tag $viewTag", e)
++                    Log.w("Reanimated", "synchronouslyUpdateUIProps failed for tag $viewTag")
+                 }
+             } else {
+                 mFabricUIManager.synchronouslyUpdateViewOnUIThread(viewTag, props)

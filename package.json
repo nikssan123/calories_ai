@@ -36,6 +36,9 @@
     ],
     "overrides": {
       "@expo/metro-runtime": "57.0.14"
+    },
+    "patchedDependencies": {
+      "react-native-reanimated@4.5.1": "patches/react-native-reanimated@4.5.1.patch"
     }
   }
 }
