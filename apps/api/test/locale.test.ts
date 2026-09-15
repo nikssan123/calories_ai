@@ -33,6 +33,7 @@ import * as templates from '../src/email/templates.ts';
 const profile: Profile = {
   id: '11111111-1111-1111-1111-111111111111',
   email: 'nik@example.com',
+  guest: false,
   email_verified: true,
   has_password: true,
   units: 'metric',

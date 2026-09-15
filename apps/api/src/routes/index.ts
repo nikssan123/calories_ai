@@ -1410,10 +1410,29 @@ export async function registerRoutes(app: FastifyInstance) {
 
     const userId = request.userId!;
     const profile = await getUser(userId);
-    // No email means no password to check against — the pre-accounts
-    // placeholder row. Refusing is the safe answer while there is no second way
-    // to prove who is asking.
+    /*
+     * A guest with no address: nothing to re-check and nothing to type, so the
+     * explicit `erase_guest` flag is the deliberate act. Only ever for a guest —
+     * an account with an identity on it goes through the checks below.
+     */
+    if ('erase_guest' in parsed.data) {
+      if (!profile.guest || profile.email) {
+        return reply.status(400).send({ error: 'Enter your password to confirm.' });
+      }
+      // No receipt: there is no address to send one to.
+      const erased = await deleteAccount(userId);
+      if (!erased) return reply.status(404).send({ error: 'Account not found' });
+      reply.clearCookie(SESSION_COOKIE, { path: '/' });
+      return {
+        food_entries: erased.food_entries,
+        chat_messages: erased.chat_messages,
+        photos: erased.photos.length,
+      };
+    }
     if (!profile.email) {
+      // No email means no password to check against — the pre-accounts
+      // placeholder row. Refusing is the safe answer while there is no second way
+      // to prove who is asking.
       return reply.status(400).send({ error: 'This account cannot be deleted from here.' });
     }
 

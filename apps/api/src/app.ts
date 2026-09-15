@@ -11,7 +11,7 @@ import { registerKitchenRoutes } from './routes/kitchen.ts';
 import { registerPublicRoutes } from './routes/public.ts';
 import { registerFunnelRoutes } from './routes/funnel.ts';
 import { env } from './env.ts';
-import { bearerToken, resolveSession, SESSION_COOKIE } from './services/auth.ts';
+import { bearerToken, extendSession, resolveSession, SESSION_COOKIE } from './services/auth.ts';
 import { closeRedis, createRedis } from './services/redis.ts';
 import { accountGate } from './services/user.ts';
 
@@ -25,6 +25,13 @@ declare module 'fastify' {
      * questions are one database read.
      */
     emailVerified: boolean;
+    /**
+     * Whether this account is a guest (GUEST-ACCOUNTS.md): made on first launch,
+     * no identity proved yet. Guests are let past the verification gate — there
+     * may be no address to verify — and are metered as guests by the trial
+     * stage in `usage.ts`, which reads `trial_started_at` rather than this.
+     */
+    guest: boolean;
     /**
      * What this account is entitled to, from the same read as the two above.
      *
@@ -163,6 +170,7 @@ export async function buildApp(
 
   app.decorateRequest('userId', null);
   app.decorateRequest('emailVerified', false);
+  app.decorateRequest('guest', false);
   app.decorateRequest('plan', 'free');
   app.decorateRequest('unmetered', false);
 
@@ -181,6 +189,8 @@ export async function buildApp(
     // one from a device that never came back — stops working immediately.
     request.userId = gate?.disabled ? null : userId;
     request.emailVerified = gate?.verified ?? false;
+    request.guest = gate?.guest ?? false;
+    if (token && request.userId && request.guest) await extendSession(token);
     request.plan = gate?.plan ?? 'free';
     request.unmetered = gate?.unmetered ?? false;
   });
@@ -251,7 +261,13 @@ export async function buildApp(
      * in screen — it needs to show the verification screen instead, and it can
      * only tell the two apart if this says which one it is.
      */
-    if (!request.emailVerified && !escapeHatch(request)) {
+    /*
+     * A guest is the exception. It may have no address to confirm at all, or
+     * one it claimed and has not confirmed yet — and the point of a guest is
+     * that the journal works before any of that. It stays on guest meters until
+     * it proves something, which is the incentive, not a wall.
+     */
+    if (!request.emailVerified && !request.guest && !escapeHatch(request)) {
       return reply.status(403).send({
         error: 'Confirm your email address to continue.',
         code: EMAIL_UNVERIFIED,

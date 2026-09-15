@@ -1655,6 +1655,16 @@ export const Profile = z.object({
   id: z.string().uuid(),
   email: z.string().nullable(),
   /**
+   * Whether this account has not proved who it is yet (GUEST-ACCOUNTS.md).
+   *
+   * True for a row made on first launch with no address, and still true once an
+   * address is claimed but not confirmed. It turns false when an identity is
+   * proved — a confirmed address, Google or Apple — which is also the moment the
+   * seven-day trial starts. The app reads it to offer "Save your account" and to
+   * warn that signing out erases a journal nobody else can get back.
+   */
+  guest: z.boolean().default(false),
+  /**
    * Whether the address has been proved. Nothing is gated on it — the app works
    * either way — but a password reset can only ever reach a mailbox someone can
    * actually open, so the setup screen offers to send the link again.
@@ -1887,8 +1897,26 @@ export type AuthStatus = z.infer<typeof AuthStatus>;
 export const DeleteAccountRequest = z.union([
   z.object({ password: z.string().min(1).max(200) }),
   z.object({ confirm_email: z.string().min(1).max(254) }),
+  /**
+   * A guest with no address has neither to offer. The app asks "erase this
+   * journal?" and sends this; the session proves who, the flag proves meant-to.
+   * Refused for any account that is not a guest.
+   */
+  z.object({ erase_guest: z.literal(true) }),
 ]);
 export type DeleteAccountRequest = z.infer<typeof DeleteAccountRequest>;
+
+/**
+ * Starting as a guest (GUEST-ACCOUNTS.md): a session for a phone that finished
+ * the first-run walk, with no address. The same two hints sign-up sends, for
+ * the same reasons — the first day should break at local midnight, and anything
+ * the account is ever sent should be in the language the walk was read in.
+ */
+export const GuestRequest = z.object({
+  timezone: z.string().max(60).optional(),
+  locale: Locale.optional(),
+});
+export type GuestRequest = z.infer<typeof GuestRequest>;
 
 /**
  * Asking for a reset link.

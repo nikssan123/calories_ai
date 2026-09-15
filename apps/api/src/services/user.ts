@@ -158,8 +158,13 @@ export async function createAccount(
 ): Promise<string> {
   const passwordHash = password === null ? null : await hashPassword(password);
 
+  /*
+   * Never a guest's row. A fresh deployment's first sign-up adopts the
+   * pre-accounts placeholder; before guests existed that was the only kind of
+   * row with no address, and now a stranger's guest journal is one too.
+   */
   const orphan = await queryOne<{ id: string }>(
-    `SELECT id FROM users WHERE email IS NULL
+    `SELECT id FROM users WHERE email IS NULL AND guest_since IS NULL
       AND (SELECT count(*) FROM users WHERE email IS NOT NULL) = 0
    ORDER BY created_at ASC LIMIT 1`,
   );
@@ -183,6 +188,23 @@ export async function createAccount(
      VALUES ($1,$2,$3, COALESCE(NULLIF($4, ''), 'UTC'), $5)
      RETURNING id`,
     [email, passwordHash, displayName, timezone, locale],
+  );
+  return row!.id;
+}
+
+/**
+ * A guest: a real row with no address, made for a phone that finished the
+ * first-run walk (GUEST-ACCOUNTS.md).
+ *
+ * `trial_started_at` is left at its default of null on purpose — the trial is
+ * what saving the account earns, and until then the row is metered as a guest.
+ */
+export async function createGuest(timezone: string, locale: Locale | null): Promise<string> {
+  const row = await queryOne<{ id: string }>(
+    `INSERT INTO users (timezone, locale, guest_since)
+     VALUES (COALESCE(NULLIF($1, ''), 'UTC'), $2, now())
+     RETURNING id`,
+    [timezone, locale],
   );
   return row!.id;
 }
@@ -240,6 +262,8 @@ export interface EmailRecipient {
 export interface AccountGate {
   disabled: boolean;
   verified: boolean;
+  /** A guest has not proved an identity, and is let past the verification gate. */
+  guest: boolean;
   /**
    * What this account is entitled to. Read here rather than in the routes that
    * need it for the same reason as the two above — it is the same row, and the
@@ -264,9 +288,11 @@ export async function accountGate(userId: string): Promise<AccountGate> {
     email_verified_at: string | null;
     plan: PlanName;
     email: string | null;
-  }>('SELECT disabled_at, email_verified_at, plan, email FROM users WHERE id = $1', [userId]);
+    guest_since: string | null;
+  }>('SELECT disabled_at, email_verified_at, plan, email, guest_since FROM users WHERE id = $1', [userId]);
   return {
     disabled: row?.disabled_at != null,
+    guest: row?.guest_since != null,
     // A missing row is treated as unverified, but the session hook will already
     // have failed to resolve it — this is belt and braces, not a live path.
     verified: row?.email_verified_at != null,
@@ -376,6 +402,7 @@ function toProfile(row: any): Profile {
   return {
     id: row.id,
     email: row.email ?? null,
+    guest: row.guest_since != null,
     email_verified: row.email_verified_at !== null,
     // The fact, never the hash: this is the shape that leaves the server.
     has_password: row.password_hash !== null && row.password_hash !== undefined,

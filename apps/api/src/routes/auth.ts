@@ -4,6 +4,7 @@ import {
   type AuthIntent,
   EmailVerification,
   GoogleExchange,
+  GuestRequest,
   PasswordReset,
   PasswordResetRequest,
   SESSION_TRANSPORT_HEADER,
@@ -44,6 +45,7 @@ import {
   authenticate,
   countAccounts,
   createAccount,
+  createGuest,
   emailInUse,
   getUser,
   markEmailVerified,
@@ -59,6 +61,14 @@ import { ensureCoachAccount, isCoach } from '../services/coach.ts';
  */
 const LOGIN_LIMIT = { max: 10, timeWindow: '15 minutes' };
 const SIGNUP_LIMIT = { max: 5, timeWindow: '1 hour' };
+
+/**
+ * New guests per address. A guest is free to make and each one carries a small
+ * AI allowance, so this is the first line against a script minting rows to spend
+ * it; the global guest spend cap in `usage.ts` is the one that actually bounds
+ * the bill. Ten an hour is a family on one router reinstalling twice, not a farm.
+ */
+const GUEST_LIMIT = { max: 10, timeWindow: '1 hour' };
 
 /**
  * Anything that puts a link in somebody else's mailbox.
@@ -272,6 +282,46 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       is_admin: userId ? await isAdmin(userId) : false,
       is_coach: userId ? await isCoach(userId) : false,
       google_enabled: env.google !== null,
+    };
+  });
+
+  /**
+   * Starting as a guest: the end of the first-run walk (GUEST-ACCOUNTS.md).
+   *
+   * The phone has answered the questions and seen its plan; it gets a session
+   * for a row with no address and goes straight into the app. Saving the account
+   * later attaches an identity to this same row, so nothing logged as a guest is
+   * moved or lost.
+   *
+   * App clients only, and behind the operator's sign-up switch: a guest is an
+   * account in every sense the server cares about, and a browser has no journal
+   * to keep one in.
+   */
+  app.post('/auth/guest', { config: { rateLimit: GUEST_LIMIT } }, async (request, reply) => {
+    const parsed = GuestRequest.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid details' });
+    }
+    if (!isAppClient(request) || !(await signupAllowed(true))) {
+      return reply.status(403).send({ error: 'Sign-ups are closed on this server.' });
+    }
+
+    const locale =
+      parsed.data.locale ?? localeFromAcceptLanguage(request.headers['accept-language'] ?? null);
+    const userId = await createGuest(parsed.data.timezone ?? '', locale);
+    const { token, expiresAt } = await createSession(userId);
+    setSessionCookie(reply, token, expiresAt);
+    await rememberDevice(userId, request.headers['user-agent'], request.ip);
+
+    return {
+      authenticated: true,
+      profile: await getUser(userId),
+      signup_allowed: await signupAllowed(true),
+      has_accounts: (await countAccounts()) > 0,
+      is_admin: false,
+      is_coach: false,
+      google_enabled: env.google !== null,
+      token: tokenForBody(request, token),
     };
   });
 

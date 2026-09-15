@@ -75,6 +75,25 @@ export async function resolveSession(token: string): Promise<string | null> {
   return row?.user_id ?? null;
 }
 
+/**
+ * Pushes a session's expiry out again, for an account that is still in use.
+ *
+ * Only guests call this. Every other session ends sixty days after sign-in and
+ * signing in again costs a password or a tap on Google; a guest has neither, so
+ * a fixed expiry would turn someone who logs lunch every day into a stranger on
+ * day sixty-one with their journal behind a door that has no key. Renewed only
+ * once it is within a month of running out, so it is one write a month, not one
+ * per request.
+ */
+export async function extendSession(token: string): Promise<void> {
+  await query(
+    `UPDATE auth_sessions
+        SET expires_at = now() + make_interval(days => $2)
+      WHERE token_hash = $1 AND expires_at < now() + interval '30 days'`,
+    [hashToken(token), SESSION_DAYS],
+  );
+}
+
 export async function destroySession(token: string): Promise<void> {
   await query('DELETE FROM auth_sessions WHERE token_hash = $1', [hashToken(token)]);
 }
