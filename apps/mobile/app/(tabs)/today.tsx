@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -15,6 +16,7 @@ import Animated, {
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
+  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -143,7 +145,18 @@ export default function TodayScreen() {
    * so it is reported as a footnote rather than a banner. See OFFLINE.md §6.
    */
   const [live, setLive] = useState(true);
-  const [fetched, setFetched] = useState<DaySummary | null>(null);
+  /*
+   * Every day fetched this session, by date, rather than only the last one.
+   *
+   * Holding just the one meant a step to another day had nothing to draw until
+   * the round trip came back: the strip, the heading and the ring all sat on
+   * the old day for as long as the network took, which read as the tap not
+   * having landed. A day already seen is drawn at once and refetched
+   * underneath; a day never seen is a skeleton. Neither is the disk cache —
+   * everything here came off the network in this session, so the rule in
+   * `loadDay` about not serving old copies to feel fast still holds.
+   */
+  const [loaded, setLoaded] = useState<Record<string, DaySummary>>({});
   /*
    * The date being shown, or null for "whatever the server calls today". Held
    * as a date rather than an offset so History can link straight to a day.
@@ -159,7 +172,6 @@ export default function TodayScreen() {
   const [date, setDate] = useState<string | null>(requested);
   const appliedParam = useRef(requested);
   const [today, setToday] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -181,6 +193,25 @@ export default function TodayScreen() {
    * asked for last.
    */
   const latest = useRef(0);
+  /*
+   * The day before the one on screen, fetched quietly so the swipe back to it
+   * has something to slide in. Once per date per session — the swipe is the
+   * common move and a wasted request is cheap, but not on every refocus.
+   */
+  const asked = useRef(new Set<string>());
+  const prefetch = useCallback(
+    (localDate: string) => {
+      if (!profile || asked.current.has(localDate)) return;
+      asked.current.add(localDate);
+      loadDay(profile.id, localDate)
+        .then(({ day: summary, live: fresh }) => {
+          if (!fresh) return;
+          setLoaded((all) => (all[summary.local_date] ? all : { ...all, [summary.local_date]: summary }));
+        })
+        .catch(() => asked.current.delete(localDate));
+    },
+    [profile],
+  );
 
   const load = useCallback(
     async (target: string | null) => {
@@ -195,43 +226,70 @@ export default function TodayScreen() {
       const resolved = target ?? (profile ? localToday(profile) : null);
       try {
         const { day: summary, live: fresh } = await loadDay(profile?.id ?? '', resolved);
-        if (seq !== latest.current) return;
-        setFetched(summary);
+        if (seq !== latest.current) {
+          // Overtaken, but still a true answer about its own day — kept if
+          // there is nothing better, so stepping back to it is instant.
+          setLoaded((all) => (all[summary.local_date] ? all : { ...all, [summary.local_date]: summary }));
+          return;
+        }
+        setLoaded((all) => ({ ...all, [summary.local_date]: summary }));
         setLive(fresh);
         setError(null);
         // Today is whatever the server says when asked without a date; it
         // honours day_start_hour, so it is not always the device's calendar
         // date. Offline the phone's own answer stands in, computed the same way.
         if (target === null) setToday(summary.local_date);
+        if (fresh) prefetch(shiftDate(summary.local_date, -1));
       } catch (e) {
         if (seq !== latest.current) return;
         setError(messageOf(e, tr));
-      } finally {
-        if (seq === latest.current) setLoading(false);
       }
     },
-    [profile],
+    [profile, prefetch],
   );
+
+  /*
+   * The day being looked at, known the moment it is chosen — before anything
+   * about it has come back. Null only on the very first load, before the
+   * server has said which day today is.
+   */
+  const shownDate = date ?? today;
+  const onToday = date === null || date === today;
+  const fetched = shownDate === null ? null : (loaded[shownDate] ?? null);
+  /*
+   * The last day drawn, kept on the page — hidden, and deaf to touches — while
+   * the one chosen is still on its way, with the skeleton laid over it.
+   *
+   * Swapping the page for the skeleton outright would unmount it and mount it
+   * again a round trip later, and a fresh mount restarts every looping
+   * animation in it — the cast, the ring's orbit — which on Android floods the
+   * log with a stack trace per failed prop update while the day slides in.
+   */
+  const held = useRef<DaySummary | null>(null);
+  if (fetched) held.current = fetched;
+  const source = fetched ?? held.current;
+  const ready = fetched !== null;
+  /** The optimistic edits below, applied to the day they were made on. */
+  const patchDay = (localDate: string, change: (day: DaySummary) => DaySummary) =>
+    setLoaded((all) => {
+      const current = all[localDate];
+      return current ? { ...all, [localDate]: change(current) } : all;
+    });
 
   /*
    * What the screen actually draws: the day as fetched, plus everything still
    * in the queue, re-added up by the same function the API uses.
    */
-  const day = fetched === null ? null : withPending(fetched, intents);
-  const unsent = pendingIds(intents, fetched?.local_date ?? '');
+  const day = source === null ? null : withPending(source, intents);
+  const unsent = pendingIds(intents, source?.local_date ?? '');
   /** Everything queued, not just what shows on this day — deletes count too. */
   const waiting = intents.length;
 
   useEffect(() => {
-    if (requested === appliedParam.current) return;
-    appliedParam.current = requested;
-    if (requested) setDate(requested);
-  }, [requested]);
-
-  useEffect(() => {
+    // A failure belongs to the day that failed, not to the one stepped to.
+    setError((current) => (current === null ? current : null));
     void load(date);
   }, [load, date]);
-
 
   /*
    * And again every time the tab comes back.
@@ -247,7 +305,7 @@ export default function TodayScreen() {
    * question "what have I eaten" is being asked again, so it is the moment to
    * go and ask.
    *
-   * `load` only ever clears `loading`, never re-raises it, so this refills the
+   * A day already drawn stays drawn while `load` asks again, so this refills the
    * screen underneath the reader rather than throwing it back to skeletons.
    *
    * The date is read through a ref so this callback can stay stable: the hook
@@ -372,9 +430,6 @@ export default function TodayScreen() {
     void maybeAskForReview(run);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isToday, waiting, day?.streak?.current]);
-  const step = (days: number) =>
-    setDate((current) => shiftDate(current ?? day?.local_date ?? today ?? '', days));
-
   /*
    * Swipe the day across.
    *
@@ -384,24 +439,91 @@ export default function TodayScreen() {
    * has changed is that the arbitration turns out to be stateable rather than
    * guessy — a finger that lands on a meal is talking about that meal, and
    * `DeferToRows` says so to the gesture system, so the pan can only take over
-   * where there is no row under the thumb. That is most of the screen: the
-   * ring, the macros, the quality panel, the headings, the space beside them.
+   * where there is no row under the thumb. That is most of the day: the ring,
+   * the macros, the quality panel, the headings, the space beside them.
+   *
+   * Not the header. The strip of days is a horizontal scroller of its own, and
+   * with the pan over it too, running a thumb along the week stepped the day
+   * back instead of scrolling — the strip never moved and the day did.
    *
    * The page follows the finger rather than waiting for the lift, because a
    * gesture that answers only on release is indistinguishable from one that is
    * not there — and this one has to be discoverable by trying it.
    */
   const reduced = useReducedMotion();
+  const { width } = useWindowDimensions();
   const drift = useSharedValue(0);
+  const fade = useSharedValue(1);
   /*
    * Mirrored into a shared value because the wall at today has to be felt on
    * the drag itself. Read off the JS thread it would arrive a frame late, which
    * on the one gesture the app refuses is exactly where it would be noticed.
    */
   const atToday = useSharedValue(true);
+  /** Whether the page holds the chosen day, or an old one hidden under the skeleton. */
+  const present = useSharedValue(true);
   useEffect(() => {
-    atToday.value = isToday;
-  }, [isToday, atToday]);
+    atToday.value = onToday;
+    present.value = ready;
+  }, [onToday, ready, atToday, present]);
+
+  /**
+   * Every change of day comes through here.
+   *
+   * Today is held as null, however it was reached, so there is one way to be on
+   * it. The old day fades out first, a touch towards the side it is leaving
+   * by, and the new one is drawn only once that has finished — on the UI
+   * thread, where it is known to have. Hiding it from here instead, alongside
+   * the `setDate`, loses the race with React's commit: the new day was drawn in
+   * place at full strength for a frame or two and then jumped aside to slide
+   * in, which is the flicker this is here to prevent.
+   *
+   * One render for the whole change, not one for the heading and another for
+   * the page: a render of this screen is the expensive part of a step, and the
+   * fade is already under way while it happens. The strip marks the day the
+   * moment it is tapped, on its own (see `DateStrip`).
+   *
+   * `hidden` is the swipe, which has already taken the old day off the page.
+   */
+  const heading = useRef<string | null | undefined>(undefined);
+  const land = useCallback((next: string | null) => {
+    heading.current = undefined;
+    setDate(next);
+  }, []);
+  const go = (next: string | null, hidden = false): boolean => {
+    const normal = next === today ? null : next;
+    const current = heading.current === undefined ? date : heading.current;
+    if (normal === current) return false;
+    if (hidden || reduced || normal === date || (normal === null && onToday)) {
+      // Back to the day still on the page before it had finished leaving:
+      // overruling the fade also cancels its hand-over to the other day.
+      if (heading.current !== undefined && !hidden) {
+        drift.value = withTiming(0, { duration: duration.quick, easing: ease.out });
+        fade.value = withTiming(1, { duration: duration.quick });
+      }
+      land(normal);
+      return true;
+    }
+    heading.current = normal;
+    const later = (normal ?? today ?? '') >= (shownDate ?? '');
+    const out = { duration: 90, easing: ease.out };
+    drift.value = withTiming(later ? -16 : 16, out);
+    fade.value = withTiming(0, out, (finished) => {
+      if (finished) runOnJS(land)(normal);
+    });
+    return true;
+  };
+  const step = (by: number, hidden = false) => {
+    const from = heading.current === undefined ? date : heading.current;
+    return go(shiftDate(from ?? today ?? day?.local_date ?? '', by), hidden);
+  };
+
+  useEffect(() => {
+    if (requested === appliedParam.current) return;
+    appliedParam.current = requested;
+    if (requested) go(requested);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requested]);
 
   /*
    * `step` closes over the day on screen, so it is a new function every render;
@@ -410,16 +532,37 @@ export default function TodayScreen() {
    * two.
    */
   const stepper = useRef(step);
+  const chooser = useRef(go);
   useEffect(() => {
     stepper.current = step;
+    chooser.current = go;
   });
-  const stepBy = useCallback((days: number) => {
-    haptics.selected();
-    stepper.current(days);
+  // Stable, so the strip — memoised — is not redrawn by every render of Today.
+  const choose = useCallback((next: string) => chooser.current(next), []);
+  const stepBy = useCallback(
+    (by: number) => {
+      if (stepper.current(by, true)) return;
+      /*
+       * The new day brings the page back as it arrives (see `pageKey`). A step
+       * that changed nothing has no new day, and would otherwise leave the page
+       * swiped off and invisible for good.
+       */
+      drift.value = withTiming(0, { duration: duration.quick, easing: ease.out });
+      fade.value = withTiming(1, { duration: duration.quick });
+    },
+    [drift, fade],
+  );
+  const buzz = useCallback(() => haptics.selected(), []);
+  /** A thumb on the page overrules a tapped day still fading in. */
+  const abandon = useCallback(() => {
+    heading.current = undefined;
   }, []);
 
-  const days = useMemo(
-    () =>
+  const swipe = useMemo(() => {
+    /** Where the page is gone by: past here it has nothing left to show. */
+    const gone = width * 0.6;
+    const settle = { duration: reduced ? 0 : duration.quick, easing: ease.out };
+    return (
       Gesture.Pan()
         /*
          * Deliberate, and sideways. The activation offset is wide because this
@@ -427,54 +570,118 @@ export default function TodayScreen() {
          * trying to scroll; `failOffsetY` gives the gesture up the moment one
          * of them turns out to be.
          */
-        .activeOffsetX([-24, 24])
-        .failOffsetY([-16, 16])
+        .activeOffsetX([-20, 20])
+        .failOffsetY([-14, 14])
+        .onStart(() => {
+          runOnJS(abandon)();
+        })
         .onChange((event) => {
-          /*
-           * Damped either way, and damped nearly flat past today. Tomorrow has
-           * not happened, so the edge has to read as a wall the page is up
-           * against rather than as a swipe that was ignored.
-           */
-          const wall = event.translationX < 0 && atToday.value;
-          drift.value = event.translationX * (wall ? 0.08 : 0.32);
+          const x = event.translationX;
+          if (x < 0 && atToday.value) {
+            /*
+             * Tomorrow has not happened, so the edge has to read as a wall the
+             * page is up against rather than as a swipe that was ignored: it
+             * gives a little and then stops giving, however far the thumb goes.
+             */
+            drift.value = -32 * (1 - Math.exp(x / 140));
+            fade.value = present.value ? 1 : 0;
+            return;
+          }
+          // With the finger, one to one, and fading as it goes — the day is
+          // being handed over, and a page at full strength half off the screen
+          // reads as the layout breaking rather than as a page turning.
+          drift.value = x;
+          fade.value = present.value ? 1 - Math.min(Math.abs(x) / gone, 1) * 0.75 : 0;
         })
         .onEnd((event) => {
-          // Distance *or* speed, like the sheet's dismiss: a slow drag most of
-          // the way and a quick flick both plainly mean "the next one".
-          const decided = Math.abs(event.translationX) > 64 || Math.abs(event.velocityX) > 550;
-          const forward = event.translationX < 0;
-          if (decided && !(forward && atToday.value)) runOnJS(stepBy)(forward ? 1 : -1);
+          const x = event.translationX;
+          const forward = x < 0;
           /*
-           * Home either way. The day itself is what changes; the page does not
-           * travel to the new one, because `loadDay` goes to the network before
-           * it answers — so for the length of that round trip the only thing
-           * there is to slide in is the day you just swiped away from, and
-           * sliding the old numbers in to have them change under the reader is
-           * worse than a screen that simply settles.
-           *
-           * Settled with `ease.out` and not the spring: the spring is for a
-           * number arriving somewhere, and its overshoot is the whole point of
-           * it. Here there is nowhere to arrive — the page is going back where
-           * it started — so an overshoot reads as the screen coming loose.
+           * Distance *or* speed, like the sheet's dismiss: a slow drag a quarter
+           * of the way and a quick flick both plainly mean "the next one". A
+           * flick back the way it came means "never mind".
            */
-          drift.value = withTiming(0, {
-            duration: reduced ? 0 : duration.quick,
-            easing: ease.out,
+          const decided =
+            !(forward && atToday.value) &&
+            (Math.abs(x) > width * 0.25 ||
+              (Math.abs(event.velocityX) > 500 && Math.sign(event.velocityX) === Math.sign(x)));
+          if (!decided) {
+            // Home, with `ease.out` and not the spring — an overshoot on the
+            // way back to where it started reads as the screen coming loose.
+            drift.value = withTiming(0, settle);
+            fade.value = withTiming(present.value ? 1 : 0, settle);
+            return;
+          }
+          runOnJS(buzz)();
+          /*
+           * Off the rest of the way, and only then the step. The next day
+           * arrives from the far side once it is drawn — see `pageKey` — so what
+           * is on screen in between is nothing, never the old day sliding back
+           * in to have its numbers change under the reader.
+           */
+          const leave = { duration: reduced ? 0 : 150, easing: ease.out };
+          fade.value = withTiming(0, leave);
+          drift.value = withTiming(forward ? -gone : gone, leave, (finished) => {
+            if (finished) runOnJS(stepBy)(forward ? 1 : -1);
           });
-        }),
-    [atToday, drift, reduced, stepBy],
-  );
+        })
+    );
+  }, [abandon, atToday, buzz, drift, fade, present, reduced, stepBy, width]);
 
   /*
-   * Carried by the content and not by the scroller.
+   * Carried by the day and not by the scroller.
    *
    * On the `ScrollView` itself this moved the viewport — its own background and
    * its clip bounds went with it, so the drag slid the whole window sideways
    * off the screen behind it, and slid it *under* the compact bar, which is
    * outside the scroller and stayed exactly where it was. The frame is meant to
-   * be the thing that holds still while the day inside it moves.
+   * be the thing that holds still while the day inside it moves — and so are
+   * the sky and the header above it, which belong to the hour, not the day.
    */
-  const sliding = useAnimatedStyle(() => ({ transform: [{ translateX: drift.value }] }));
+  const sliding = useAnimatedStyle(() => ({
+    opacity: fade.value,
+    transform: [{ translateX: drift.value }],
+  }));
+
+  /*
+   * The day arriving: from the left for an earlier day and the right for a
+   * later one, worked out against the day that was showing — so a tap on the
+   * strip, the arrows, "back to today" and the swipe all move the same way.
+   * Nothing on the first draw; the screen opening is not a day changing.
+   *
+   * Played on the frame rather than by remounting the day under a key. A fresh
+   * mount would have been the tidier sequence, but it restarts every looping
+   * animation on the page — the cast, the ring's orbit — and on Android that
+   * floods the log with a stack trace per failed prop update for seconds after
+   * each step, which stalls the very slide it is meant to be.
+   */
+  const pageKey = onToday ? 'today' : (date ?? 'today');
+  const drawn = useRef<{ key: string; date: string | null } | null>(null);
+  useEffect(() => {
+    const previous = drawn.current;
+    if (!ready) {
+      // Nothing to bring in yet. The day being left stays out of sight under
+      // the skeleton — already faded by `go` or the swipe, except when motion
+      // is reduced and nothing faded it.
+      if (previous && previous.key !== pageKey) fade.value = 0;
+      return;
+    }
+    drawn.current = { key: pageKey, date: shownDate };
+    if (!previous || previous.key === pageKey) return;
+    const side = (shownDate ?? '') >= (previous.date ?? '') ? 1 : -1;
+    const distance = reduced ? 0 : Math.min(width * 0.22, 96);
+    drift.value = withSequence(
+      withTiming(side * distance, { duration: 0 }),
+      withTiming(0, { duration: reduced ? 0 : 280, easing: ease.out }),
+    );
+    fade.value = withSequence(withTiming(0, { duration: 0 }), withTiming(1, { duration: reduced ? 0 : 220 }));
+    // Only a change of day plays it, and only once that day is there to show;
+    // today's date arriving on the first load is the same page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageKey, ready]);
+  useEffect(() => {
+    if (drawn.current) drawn.current.date = shownDate;
+  }, [shownDate]);
 
   /*
    * The three things on this screen that answer over it rather than in it.
@@ -520,21 +727,19 @@ export default function TodayScreen() {
      * It settles on the next load.
      */
     const before = fetched;
-    setFetched((prev) =>
-      prev
-        ? {
-            ...prev,
-            food_entries: prev.food_entries.filter((e) => e.id !== entry.id),
-            consumed: {
-              kcal: prev.consumed.kcal - entry.kcal,
-              protein_g: prev.consumed.protein_g - entry.protein_g,
-              carbs_g: prev.consumed.carbs_g - entry.carbs_g,
-              fat_g: prev.consumed.fat_g - entry.fat_g,
-            },
-            net_kcal: prev.net_kcal - entry.kcal,
-          }
-        : prev,
-    );
+    if (before) {
+      patchDay(before.local_date, (prev) => ({
+        ...prev,
+        food_entries: prev.food_entries.filter((e) => e.id !== entry.id),
+        consumed: {
+          kcal: prev.consumed.kcal - entry.kcal,
+          protein_g: prev.consumed.protein_g - entry.protein_g,
+          carbs_g: prev.consumed.carbs_g - entry.carbs_g,
+          fat_g: prev.consumed.fat_g - entry.fat_g,
+        },
+        net_kcal: prev.net_kcal - entry.kcal,
+      }));
+    }
 
     undoably(tr('toast.removed')(entry.description), {
       commit: () => {
@@ -556,7 +761,9 @@ export default function TodayScreen() {
         entryRemoved(entry.id);
         void load(date);
       },
-      restore: () => setFetched(before),
+      restore: () => {
+        if (before) patchDay(before.local_date, () => before);
+      },
     });
   }
 
@@ -572,16 +779,14 @@ export default function TodayScreen() {
   function removeExercise(entry: ExerciseEntry) {
     const burn = Math.round(entry.kcal_burned);
     const before = fetched;
-    setFetched((prev) =>
-      prev
-        ? {
-            ...prev,
-            exercise_entries: prev.exercise_entries.filter((e) => e.id !== entry.id),
-            burned_kcal: prev.burned_kcal - burn,
-            net_kcal: prev.net_kcal + burn,
-          }
-        : prev,
-    );
+    if (before) {
+      patchDay(before.local_date, (prev) => ({
+        ...prev,
+        exercise_entries: prev.exercise_entries.filter((e) => e.id !== entry.id),
+        burned_kcal: prev.burned_kcal - burn,
+        net_kcal: prev.net_kcal + burn,
+      }));
+    }
 
     undoably(tr('toast.removed')(entry.description), {
       commit: () => {
@@ -591,7 +796,9 @@ export default function TodayScreen() {
           .catch((e: Error) => toast.error(messageOf(e, tr)))
           .finally(() => void load(date));
       },
-      restore: () => setFetched(before),
+      restore: () => {
+        if (before) patchDay(before.local_date, () => before);
+      },
     });
   }
 
@@ -624,7 +831,7 @@ export default function TodayScreen() {
     });
     haptics.logged();
     toast.success(tr('toast.logged')(entry.description, formatNumber(Math.round(entry.kcal), locale)));
-    setDate(null);
+    go(null);
     void load(null);
   }
 
@@ -660,12 +867,21 @@ export default function TodayScreen() {
     entries: day?.food_entries.filter((e) => e.meal === meal) ?? [],
   })).filter((group) => group.entries.length > 0);
 
+  /** What stands in for a day that has not arrived: the reason, or its outline. */
+  const placeholder = error ? (
+    <Text style={[t.footnoteSemibold, styles.centred, styles.loading, { color: colors.destructive }]}>{error}</Text>
+  ) : (
+    <View style={styles.loading}>
+      <Skeleton style={styles.loadingRing} />
+      <Skeleton style={styles.loadingBar} />
+    </View>
+  );
+
   return (
     <>
     {/* Around the scroller and not inside it, so every row on the screen —
         including any added later — inherits the right to outrank the pan. */}
-    <DeferToRows gesture={days}>
-    <GestureDetector gesture={days}>
+    <DeferToRows gesture={swipe}>
     <Animated.ScrollView
       ref={scrollRef}
       style={styles.flex}
@@ -683,7 +899,6 @@ export default function TodayScreen() {
         />
       }
     >
-      <Animated.View style={sliding}>
       {/*
         * The sky of the hour, behind the greeting, the days and the ring. It is
         * laid under the content and scrolls away with it; nothing in it is ever
@@ -710,7 +925,7 @@ export default function TodayScreen() {
             numberOfLines={2}
             style={[type.greeting, { color: sky.inkLight ? colors.skyInk : colors.foreground }]}
           >
-            {isToday || !day ? greetingFor(tr, profile?.display_name ?? null) : formatLocalDay(day.local_date, locale)}
+            {onToday || !shownDate ? greetingFor(tr, profile?.display_name ?? null) : formatLocalDay(shownDate, locale)}
           </Serif>
           <View style={styles.headerSub}>
             <CalendarMark color={sky.inkLight ? colors.skyInk : colors.mutedForeground} />
@@ -720,7 +935,7 @@ export default function TodayScreen() {
                 { color: sky.inkLight ? colors.skyInk : colors.mutedForeground, opacity: sky.inkLight ? 0.85 : 1 },
               ]}
             >
-              {isToday && day ? formatLocalDay(day.local_date, locale) : tr('today.viewCalendar')}
+              {onToday && today ? formatLocalDay(today, locale) : tr('today.viewCalendar')}
             </Text>
           </View>
         </Pressable>
@@ -728,19 +943,19 @@ export default function TodayScreen() {
         {today && (
           <DateStrip
             today={today}
-            selected={day?.local_date ?? today}
-            onSelect={(next) => setDate(next === today ? null : next)}
+            selected={shownDate ?? today}
+            onSelect={choose}
             onSky={sky.inkLight ? 'dark' : 'light'}
           />
         )}
 
         {/* In the flow under the strip, never floating over it. */}
-        {!isToday && day && (
+        {!onToday && (
           <View style={styles.backRow}>
             <Pressable
               onPress={() => {
                 haptics.selected();
-                setDate(null);
+                go(null);
               }}
               accessibilityRole="button"
               style={({ pressed }) => [
@@ -754,11 +969,18 @@ export default function TodayScreen() {
         )}
       </View>
 
-      {loading || !day ? (
-        <View style={styles.loading}>
-          <Skeleton style={styles.loadingRing} />
-          <Skeleton style={styles.loadingBar} />
-        </View>
+      {/*
+        * The day itself: the one part of the screen that belongs to the date
+        * rather than to the hour, so the only part that moves when it changes.
+        *
+        * The pan sits on the frame and the transform on the view inside it, so
+        * the gesture measures the finger against something that holds still.
+        */}
+      <GestureDetector gesture={swipe}>
+      <View collapsable={false}>
+      <Animated.View style={sliding} collapsable={false} pointerEvents={ready ? 'auto' : 'none'}>
+      {!day ? (
+        placeholder
       ) : (
         <View style={styles.page}>
           <CoachBanner />
@@ -973,8 +1195,14 @@ export default function TodayScreen() {
         </View>
       )}
       </Animated.View>
+      {!ready && day && (
+        <View style={styles.waiting} pointerEvents="none">
+          {placeholder}
+        </View>
+      )}
+      </View>
+      </GestureDetector>
     </Animated.ScrollView>
-    </GestureDetector>
     </DeferToRows>
 
       {/*
@@ -1012,10 +1240,10 @@ export default function TodayScreen() {
             style={({ pressed }) => [styles.headerLabel, { opacity: pressed ? 0.6 : 1 }]}
           >
             <Text numberOfLines={1} style={[t.bodyBold, { color: colors.foreground }]}>
-              {isToday ? tr('today.title') : formatLocalDay(day?.local_date, locale)}
+              {onToday ? tr('today.title') : formatLocalDay(shownDate ?? undefined, locale)}
             </Text>
           </Pressable>
-          <StepButton direction="forward" onPress={() => step(1)} disabled={isToday} />
+          <StepButton direction="forward" onPress={() => step(1)} disabled={onToday} />
         </Material>
       </Animated.View>
 
@@ -1457,6 +1685,7 @@ const styles = StyleSheet.create({
   summary: { alignItems: 'center' },
   total: { marginTop: 4, marginBottom: 6 },
   loading: { alignItems: 'center', gap: 24, paddingHorizontal: 16, paddingVertical: 32 },
+  waiting: { position: 'absolute', top: 0, left: 0, right: 0 },
   loadingRing: { width: 176, height: 176, borderRadius: 88 },
   loadingBar: { height: 48, alignSelf: 'stretch', borderRadius: 16 },
   empty: { alignItems: 'center', paddingVertical: 32, gap: 12 },

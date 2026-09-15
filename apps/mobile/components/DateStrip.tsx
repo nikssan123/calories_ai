@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Locale } from '@ct/shared';
 import { haptics } from '@/lib/haptics';
@@ -13,17 +13,25 @@ import { font, useTheme, useType } from '@/theme';
  * arrows could not: it shows the week before you step into it, and any day in
  * it is one tap rather than a tap per day (GLOW-UP.md, "nothing lost").
  *
- * Three weeks, ending at today, scrolled to the end on arrival — further back
- * than that is what the calendar behind the date is for. A day already chosen
- * from the calendar that is older than the strip widens it, so the strip never
- * shows a selection it cannot draw.
+ * Three weeks, ending at today, scrolled to the chosen day on arrival — which
+ * is the end, most of the time — and further back than that is what the
+ * calendar behind the date is for. A day already chosen from the calendar that
+ * is older than the strip widens it, so the strip never shows a selection it
+ * cannot draw.
  *
  * Tomorrow is not in it. There is no future to log against, and the arrow that
  * refused to step past today is now simply the edge of the row.
  */
 const SPAN = 21;
+const CELL = 46;
+const GAP = 8;
+const INSET = 18;
 
-export function DateStrip({
+/**
+ * Memoised, because it sits in the header of the busiest screen in the app and
+ * every fetch, sync and keystroke on Today would otherwise redraw all of it.
+ */
+export const DateStrip = memo(function DateStrip({
   today,
   selected,
   onSelect,
@@ -42,10 +50,81 @@ export function DateStrip({
   const { colors } = useTheme();
   const scroll = useRef<ScrollView>(null);
 
-  const days = useMemo(() => {
-    const back = Math.max(SPAN - 1, daysBetween(selected, today) + 3);
-    return Array.from({ length: back + 1 }, (_, i) => shift(today, i - back));
-  }, [today, selected]);
+  /*
+   * The day just tapped, marked straight away rather than when Today has
+   * redrawn around it — which is a whole screen's render later, and was the
+   * gap that made a tap feel like it had not landed. Only while `selected` is
+   * still what it was when tapped; the moment it moves, it is the truth again.
+   * And not for ever: a change that never lands (a swipe that overruled it)
+   * must not leave the wrong day marked.
+   */
+  const [tapped, setTapped] = useState<{ iso: string; over: string } | null>(null);
+  const chosen = tapped && tapped.over === selected ? tapped.iso : selected;
+  useEffect(() => {
+    if (!tapped) return;
+    const expire = setTimeout(() => setTapped(null), 1500);
+    return () => clearTimeout(expire);
+  }, [tapped]);
+
+  const back = Math.max(SPAN - 1, daysBetween(selected, today) + 3);
+  const days = useMemo(
+    () => Array.from({ length: back + 1 }, (_, i) => shift(today, i - back)),
+    [today, back],
+  );
+  /*
+   * The words, worked out once per row rather than per render. Two formatted
+   * dates a cell over three weeks was forty-two trips through `Intl` every time
+   * the selection moved, and on Android that alone was most of the wait
+   * between tapping a day and seeing it chosen.
+   */
+  const labels = useMemo(
+    () =>
+      days.map((iso) => ({
+        iso,
+        weekday: formatter(locale, 'weekday').format(noon(iso)),
+        long: formatter(locale, 'long').format(noon(iso)),
+      })),
+    [days, locale],
+  );
+
+  /*
+   * Where the row is and how wide the window onto it is, kept off React state:
+   * they are read only to decide whether to scroll, never to draw.
+   */
+  const offset = useRef(0);
+  const viewport = useRef(0);
+  const contentWidth = useRef(0);
+
+  /**
+   * Brings the chosen day into view, centred where the row allows — which for
+   * today is flush against the end. Left alone when it is already comfortably
+   * in view, unless `always`.
+   *
+   * This used to be a `scrollToEnd` on every content-size change, and that
+   * fires for more than the row widening; a thumb that had run back through
+   * the week to pick a Tuesday had the row thrown back to today under it.
+   */
+  const reveal = (animated: boolean, always: boolean) => {
+    const width = viewport.current;
+    const index = days.indexOf(selected);
+    if (!width || !contentWidth.current || index < 0) return;
+    const left = INSET + index * (CELL + GAP);
+    if (!always && left >= offset.current + INSET && left + CELL <= offset.current + width - INSET) return;
+    const end = Math.max(0, contentWidth.current - width);
+    const x = Math.min(end, Math.max(0, left + CELL / 2 - width / 2));
+    offset.current = x;
+    scroll.current?.scrollTo({ x, animated });
+  };
+
+  /*
+   * A day chosen somewhere else — the swipe, the arrows, "back to today" — that
+   * has left the part of the row on screen. A tap on the row is always in view
+   * already, so it moves nothing.
+   */
+  useEffect(() => {
+    reveal(true, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected]);
 
 
   const ink = onSky === 'dark' ? colors.skyInk : colors.foreground;
@@ -59,17 +138,30 @@ export function DateStrip({
          scroller would otherwise clip flat at its own edges. */
       style={styles.scroller}
       contentContainerStyle={styles.row}
+      scrollEventThrottle={32}
+      onScroll={(event) => {
+        offset.current = event.nativeEvent.contentOffset.x;
+      }}
+      onLayout={(event) => {
+        const first = viewport.current === 0;
+        viewport.current = event.nativeEvent.layout.width;
+        if (first) reveal(false, true);
+      }}
       /*
-       * To the end whenever the row's width changes — which is on arrival and
-       * when a day from the calendar widens it — and without animation:
-       * arriving on Today should find the strip already at today, not watch it
-       * travel there. A timer after mount fired before the row was measured and
-       * left it parked three weeks back.
+       * Placed once the row is measured, and again only if its width really
+       * changed — on arrival, and when a day from the calendar widens it — and
+       * without animation: arriving on Today should find the strip already at
+       * today, not watch it travel there. A timer after mount fired before the
+       * row was measured and left it parked three weeks back.
        */
-      onContentSizeChange={() => scroll.current?.scrollToEnd({ animated: false })}
+      onContentSizeChange={(width) => {
+        if (width === contentWidth.current) return;
+        contentWidth.current = width;
+        reveal(false, true);
+      }}
     >
-      {days.map((iso) => {
-        const on = iso === selected;
+      {labels.map(({ iso, weekday, long }) => {
+        const on = iso === chosen;
         const isToday = iso === today;
         return (
           <Pressable
@@ -77,11 +169,12 @@ export function DateStrip({
             onPress={() => {
               if (on) return;
               haptics.selected();
+              setTapped({ iso, over: selected });
               onSelect(iso);
             }}
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
-            accessibilityLabel={isToday ? tr('today.title') : longDay(iso, locale)}
+            accessibilityLabel={isToday ? tr('today.title') : long}
             style={({ pressed }) => [
               styles.day,
               on
@@ -103,7 +196,7 @@ export function DateStrip({
               ]}
               numberOfLines={1}
             >
-              {weekday(iso, locale)}
+              {weekday}
             </Text>
             <Text style={[type.serifFigure, styles.date, { color: on ? '#ffffff' : ink }]}>
               {Number(iso.slice(8, 10))}
@@ -114,7 +207,7 @@ export function DateStrip({
       })}
     </ScrollView>
   );
-}
+});
 
 function shift(isoDate: string, days: number): string {
   const [y, m, d] = isoDate.split('-').map(Number);
@@ -127,19 +220,30 @@ function daysBetween(from: string, to: string): number {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 }
 
-const weekday = (iso: string, locale: Locale) =>
-  new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${iso}T12:00:00Z`));
+const noon = (iso: string) => new Date(`${iso}T12:00:00Z`);
 
-const longDay = (iso: string, locale: Locale) =>
-  new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' }).format(
-    new Date(`${iso}T12:00:00Z`),
-  );
+/** One formatter per locale and shape, for the life of the app. */
+const formatters = new Map<string, Intl.DateTimeFormat>();
+function formatter(locale: Locale, shape: 'weekday' | 'long'): Intl.DateTimeFormat {
+  const key = `${locale}:${shape}`;
+  let found = formatters.get(key);
+  if (!found) {
+    found = new Intl.DateTimeFormat(
+      locale,
+      shape === 'weekday'
+        ? { weekday: 'short', timeZone: 'UTC' }
+        : { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' },
+    );
+    formatters.set(key, found);
+  }
+  return found;
+}
 
 const styles = StyleSheet.create({
   scroller: { marginVertical: -12 },
-  row: { gap: 8, paddingHorizontal: 18, paddingVertical: 12 },
+  row: { gap: GAP, paddingHorizontal: INSET, paddingVertical: 12 },
   day: {
-    width: 46,
+    width: CELL,
     height: 64,
     borderRadius: 16,
     alignItems: 'center',
