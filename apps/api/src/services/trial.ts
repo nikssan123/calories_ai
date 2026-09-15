@@ -1,6 +1,27 @@
 import { queryOne } from '../db.ts';
 
 /**
+ * The store reviewers' logins, whose trial never ends.
+ *
+ * `appreview@` is on Free on purpose — its App Store review notes say so, so
+ * the reviewer can reach the paywall and buy in the sandbox — and a trial that
+ * ran out seven days after it was made would leave every later review with a
+ * journal that refuses to answer. So on these two the week rolls instead of
+ * ending: always the trial's allowance, counted over the last seven days.
+ * `play-review@` is on Coach and never reaches this, but it is the same kind of
+ * account and belongs on the same list. See the store-reviewer note in the
+ * project memory for why neither may ever be purged.
+ */
+export const STORE_REVIEWERS: readonly string[] = [
+  'appreview@daysofar.com',
+  'play-review@daysofar.com',
+];
+
+export function trialNeverEnds(email: string | null | undefined): boolean {
+  return !!email && STORE_REVIEWERS.includes(email.trim().toLowerCase());
+}
+
+/**
  * Start a free account's seven-day trial — see `LIMITS.free` in `plans.ts`.
  *
  * Called when an account is saved: an address confirmed, or a Google or Apple

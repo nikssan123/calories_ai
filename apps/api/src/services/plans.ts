@@ -322,9 +322,9 @@ export const PRICING: Record<Exclude<PlanName, 'free'>, { monthlyUsd: number; an
  * beat the tier above it would be a leak dressed as a feature.
  *
  * `subscriberOnly` in `@ct/shared` is the other half of holding that line, and
- * it is why there is no message pack on Free: a finished trial plus a $3.99
- * refill is a cheaper product than Plus, and it would be the one everybody
- * bought.
+ * it is why there is no pack of either kind on Free: a finished trial plus a
+ * $3.99 refill is a cheaper product than Plus, and it would be the one
+ * everybody bought.
  */
 const BUNDLE_PRICES_USD: Record<BundleId, number> = {
   photo_10: 3.99,

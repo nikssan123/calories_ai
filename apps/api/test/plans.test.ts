@@ -3,7 +3,12 @@ import type { FastifyInstance } from 'fastify';
 import { query } from '../src/db.ts';
 import { GUEST, METERS, PLANS, TRIAL } from '@ct/shared';
 import { freeMeter, freeStage, hasKitchen, limitsFor, meterFor, tiers } from '../src/services/plans.ts';
-import { allowanceFor, PlanLimitError, requireAllowance } from '../src/services/usage.ts';
+import {
+  allowanceFor,
+  GUEST_DAILY_CAP_USD,
+  PlanLimitError,
+  requireAllowance,
+} from '../src/services/usage.ts';
 import { startTrial } from '../src/services/trial.ts';
 import { accountGate, getUser } from '../src/services/user.ts';
 import { scriptAgent } from './helpers/agent-mock.ts';
@@ -687,6 +692,21 @@ describe('the free trial', () => {
     expect((refusal as PlanLimitError).message).toContain('free 7-day trial');
   });
 
+  it('pauses guests who still have logs left once all guests have spent the day’s cap', async () => {
+    await asGuest(user.id);
+    await query('UPDATE users SET guest_since = now() WHERE id = $1', [user.id]);
+    await query(
+      `INSERT INTO ai_usage (user_id, kind, occurred_at, cost_usd, provider, model)
+       VALUES ($1, 'setup', now(), $2, 'anthropic-api', 'claude-sonnet-5')`,
+      [user.id, GUEST_DAILY_CAP_USD],
+    );
+
+    const refusal = await requireAllowance(user.id, 'free', 'photo').catch((e: unknown) => e);
+    expect(refusal).toBeInstanceOf(PlanLimitError);
+    expect((refusal as PlanLimitError).code).toBe('GUEST_LIMIT');
+    expect((refusal as PlanLimitError).allowance).toMatchObject({ used: 0, allowed: GUEST.photo });
+  });
+
   it('does not charge the guest turns against the trial', async () => {
     await asGuest(user.id);
     for (let i = 0; i < GUEST.chat; i++) {
@@ -708,6 +728,32 @@ describe('the free trial', () => {
     expect(allowance).toMatchObject({ trial: 'trial', trial_ends_at: '2026-09-17T00:00:00.000Z' });
     const over = await allowanceFor(user.id, 'free', 'photo', false, new Date('2026-09-17T00:00:00Z'));
     expect(over).toMatchObject({ trial: 'ended', allowed: null });
+  });
+
+  it('never ends the trial for a store reviewer, and counts a rolling week', async () => {
+    await query(
+      `UPDATE users SET email = 'appreview@daysofar.com', trial_started_at = now() - interval '60 days'
+        WHERE id = $1`,
+      [user.id],
+    );
+    await spendAt(user.id, 'text_log', new Date(Date.now() - 10 * 86_400_000).toISOString());
+    await spendAt(user.id, 'text_log', new Date().toISOString());
+
+    const allowance = await allowanceFor(user.id, 'free', 'chat');
+    expect(allowance).toMatchObject({
+      trial: 'trial',
+      trial_ends_at: null,
+      allowed: TRIAL.chat,
+      used: 1,
+    });
+  });
+
+  /** Packs are for subscribers, so Free's photo wall must not offer one. */
+  it('does not offer a photo pack on a free photo wall', async () => {
+    await spendAt(user.id, 'photo_log', new Date().toISOString());
+    const refusal = await requireAllowance(user.id, 'free', 'photo').catch((e: unknown) => e);
+    expect(refusal).toBeInstanceOf(PlanLimitError);
+    expect((refusal as PlanLimitError).message).not.toContain('add more');
   });
 
   it('leaves paid plans off the road', async () => {

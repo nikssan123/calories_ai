@@ -219,12 +219,10 @@ and upgrades.
 
 ### Subscribers only, and only on the way in
 
-`subscriberOnly` in `@ct/shared` is true on the message packs and false on the
-photo ones. Free gets a week of trial and then no messages, and a free account
-that can buy thirty for $3.99 has no reason to ever subscribe — so the wall on
-Free sells the plan and draws no message packs at all. Photos have no such
-problem: Free gets one scan in its trial, so a pack there is a genuine purchase
-rather than a subscription substitute.
+`subscriberOnly` in `@ct/shared` is true on every pack, messages and photos
+alike (photos since 2026-09-15). Free gets a week of trial and then no AI, and a
+free account that can buy thirty messages or ten scans for $3.99 has no reason to
+ever subscribe — so the wall on Free sells the plan and draws no packs at all.
 
 It gates the **offer** and not the spend, and the difference matters for one
 person: the subscriber who buys a hundred messages, lets the subscription

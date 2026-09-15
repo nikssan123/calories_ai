@@ -192,15 +192,15 @@ export type TrialStage = z.infer<typeof TrialStage>;
  *
  * ---- `subscriberOnly` ---------------------------------------------------------
  *
- * True on the message packs and false on the photo ones, and it governs who is
- * *offered* a pack rather than who may spend one.
+ * True on every pack, and it governs who is *offered* one rather than who may
+ * spend one.
  *
- * Free gets a seven-day trial and then no messages at all. A free account that
- * can buy thirty for the price of a coffee has no reason to ever subscribe, and
- * the pack would quietly become the cheapest tier in the product — so the wall
- * on Free sells the plan, and the message packs are drawn only for somebody
- * already paying. Photos have no such problem: Free gets one scan in its trial,
- * so a pack there is a genuine purchase rather than a subscription substitute.
+ * Free gets a seven-day trial and then no AI at all. A free account that can
+ * buy thirty messages or ten photo scans for the price of a coffee has no reason
+ * to ever subscribe, and the pack would quietly become the cheapest tier in the
+ * product — so the wall on Free sells the plan, and packs are drawn only for
+ * somebody already paying. Photos used to be the exception, while Free had a
+ * scan to top up; after the trial there is nothing to top up, only a plan.
  *
  * It is deliberately not enforced at spend time. Credits do not expire, so a
  * subscriber who buys a hundred messages and later lapses still owns them, and
@@ -208,9 +208,9 @@ export type TrialStage = z.infer<typeof TrialStage>;
  * `requireAllowance`.
  */
 export const BUNDLES = [
-  { id: 'photo_10', meter: 'photo', units: 10, subscriberOnly: false },
-  { id: 'photo_25', meter: 'photo', units: 25, subscriberOnly: false },
-  { id: 'photo_50', meter: 'photo', units: 50, subscriberOnly: false },
+  { id: 'photo_10', meter: 'photo', units: 10, subscriberOnly: true },
+  { id: 'photo_25', meter: 'photo', units: 25, subscriberOnly: true },
+  { id: 'photo_50', meter: 'photo', units: 50, subscriberOnly: true },
   { id: 'chat_30', meter: 'chat', units: 30, subscriberOnly: true },
   { id: 'chat_100', meter: 'chat', units: 100, subscriberOnly: true },
 ] as const satisfies readonly {

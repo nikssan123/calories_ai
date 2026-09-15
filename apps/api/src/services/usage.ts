@@ -5,8 +5,10 @@ import type { ProviderId } from '../ai/providers/index.ts';
 import type { CostSource, Outcome, TurnKind } from '../ai/providers/types.ts';
 import { freeMeter, freeStage, limitsFor, meterFor, trialEndsAt } from './plans.ts';
 import { creditBalance, spendCredit } from './credits.ts';
+import { trialNeverEnds } from './trial.ts';
 import {
   CREDIT_METERS,
+  TRIAL,
   planLimitCode,
   type Allowance,
   type MeterName,
@@ -159,12 +161,15 @@ async function turnsSince(userId: string, kinds: TurnKind[], since: Date): Promi
  * moment by definition: the trial starts when the account is saved, and saving
  * is proving the address.
  */
-async function trialStartedAt(userId: string): Promise<Date | null> {
-  const row = await queryOne<{ started: Date | null }>(
-    'SELECT COALESCE(trial_started_at, email_verified_at) AS started FROM users WHERE id = $1',
+async function trialAccount(userId: string): Promise<{ started: Date | null; endless: boolean }> {
+  const row = await queryOne<{ started: Date | null; email: string | null }>(
+    'SELECT COALESCE(trial_started_at, email_verified_at) AS started, email FROM users WHERE id = $1',
     [userId],
   );
-  return row?.started ? new Date(row.started) : null;
+  return {
+    started: row?.started ? new Date(row.started) : null,
+    endless: trialNeverEnds(row?.email),
+  };
 }
 
 /**
@@ -202,14 +207,21 @@ export async function allowanceFor(
   let trial: TrialStage | null = null;
   let trialEnds: string | null = null;
   let since: Date | null = null;
+  let windowDays: number | null = period === 'month' ? 30 : null;
   if (plan === 'free' && !unmetered && (meter === 'chat' || meter === 'photo')) {
-    const started = await trialStartedAt(userId);
-    trial = freeStage(started, now);
-    ({ allowed, period } = freeMeter(trial, meter)!);
-    if (started) {
-      since = started;
-      trialEnds = trialEndsAt(started).toISOString();
+    const account = await trialAccount(userId);
+    if (account.endless) {
+      // A store reviewer: the trial's allowance over a rolling week, with no end.
+      trial = 'trial';
+      windowDays = TRIAL.days;
+    } else {
+      trial = freeStage(account.started, now);
+      if (account.started) {
+        since = account.started;
+        trialEnds = trialEndsAt(account.started).toISOString();
+      }
     }
+    ({ allowed, period } = freeMeter(trial, meter)!);
   }
   const road = { trial, trial_ends_at: trialEnds };
 
@@ -249,7 +261,7 @@ export async function allowanceFor(
   // before it are not charged against the week.
   const used = since
     ? await turnsSince(userId, kinds, since)
-    : await turnsInWindow(userId, kinds, period === 'month' ? 30 : null);
+    : await turnsInWindow(userId, kinds, windowDays);
   if (used < allowed || period === 'ever') {
     return { meter, allowed, unlimited: false, used, period, resets_at: null, credits, ...road };
   }
@@ -290,8 +302,11 @@ export class PlanLimitError extends Error {
   /** Which door the client opens — see `PLAN_LIMIT_CODES`. */
   readonly code: PlanLimitCode;
 
-  constructor(readonly allowance: Allowance) {
-    super(sentenceFor(allowance));
+  constructor(
+    readonly allowance: Allowance,
+    message = sentenceFor(allowance),
+  ) {
+    super(message);
     this.name = 'PlanLimitError';
     this.code = planLimitCode(allowance);
   }
@@ -334,7 +349,8 @@ function sentenceFor({ meter, allowed, period, trial }: Allowance): string {
    * here: a wall that advertises a bundle the server has stopped selling is a
    * dead end with a button on it.
    */
-  const more = meter === 'photo' ? ' You can add more without changing plan.' : '';
+  // Packs are for subscribers only, so Free's photo wall sells the plan instead.
+  const more = meter === 'photo' && trial === null ? ' You can add more without changing plan.' : '';
 
   if (trial === 'guest') {
     return `That is your ${allowed} guest ${noun}. Save your account to start a free 7-day trial.${open}`;
@@ -344,6 +360,27 @@ function sentenceFor({ meter, allowed, period, trial }: Allowance): string {
   return period === 'ever'
     ? `That is your ${allowed} free ${noun}.${open}${more}`
     : `That is all ${allowed} ${noun} for this month.${open}${more}`;
+}
+
+/**
+ * What every guest together may spend on the model in a day, in USD.
+ *
+ * A guest's own grant is small — four messages and a photo, about $0.36 — but a
+ * reinstall is a new guest, and a script is a lot of reinstalls. This is the
+ * ceiling on all of them at once: past it, a guest who still has messages left
+ * is asked to save the account instead, which is the same door the grant
+ * running out opens (GUEST-ACCOUNTS.md). Saved accounts are never counted.
+ */
+export const GUEST_DAILY_CAP_USD = 5;
+
+/** The last day's model spend by accounts that are still guests. */
+async function guestSpendToday(): Promise<number> {
+  const row = await queryOne<{ spent: string | null }>(
+    `SELECT sum(a.cost_usd) AS spent
+       FROM ai_usage a JOIN users u ON u.id = a.user_id
+      WHERE u.guest_since IS NOT NULL AND a.occurred_at > now() - interval '1 day'`,
+  );
+  return Number(row?.spent ?? 0);
 }
 
 /**
@@ -361,7 +398,15 @@ export async function requireAllowance(
   // `allowed` reads as "not on this plan" to the line below, and on this
   // account it means the opposite.
   if (allowance.unlimited) return allowance;
-  if (allowance.allowed !== null && allowance.used < allowance.allowed) return allowance;
+  if (allowance.allowed !== null && allowance.used < allowance.allowed) {
+    if (allowance.trial === 'guest' && (await guestSpendToday()) >= GUEST_DAILY_CAP_USD) {
+      throw new PlanLimitError(
+        allowance,
+        'Guest logs are paused for today. Save your account to start a free 7-day trial.',
+      );
+    }
+    return allowance;
+  }
 
   /*
    * The month's grant is gone. Bought scans are what stands between here and

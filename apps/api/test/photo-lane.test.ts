@@ -123,6 +123,17 @@ describe('POST /entries/photo', () => {
     }
   });
 
+  /**
+   * A photo sent while another is still being read waits its turn rather than
+   * reading the same unspent count — or a one-scan grant pays for several.
+   */
+  it('refuses a second photo while one is still being read', async () => {
+    await query(`UPDATE users SET turn_lock_until = now() + interval '60 seconds' WHERE id = $1`, [user.id]);
+    const response = await post({ photo_base64: PIXEL });
+    expect(response.statusCode).toBe(429);
+    expect(await query('SELECT id FROM photos WHERE user_id = $1', [user.id])).toHaveLength(0);
+  });
+
   it('wants a photo, and says nothing was read when the model logs nothing', async () => {
     expect((await post({})).statusCode).toBe(400);
     expect((await post({ photo_media_type: 'image/jpeg' })).statusCode).toBe(400);

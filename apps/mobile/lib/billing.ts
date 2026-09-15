@@ -393,9 +393,9 @@ export interface Bundle {
   /** How many units it adds. From `@ct/shared`, not from the store. */
   units: number;
   /**
-   * Whether this pack is only offered to somebody already paying. True on the
-   * message packs: Free gets ten messages a month, and a $3.99 refill on top of
-   * that is a cheaper product than Plus. See the note in `@ct/shared`.
+   * Whether this pack is only offered to somebody already paying. True on every
+   * pack: after the free trial a $3.99 refill would be a cheaper product than
+   * Plus. See the note in `@ct/shared`.
    */
   subscriberOnly: boolean;
   /** Localised and tax-inclusive where the store says so. */

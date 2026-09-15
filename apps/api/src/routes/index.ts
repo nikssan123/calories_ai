@@ -117,7 +117,7 @@ import {
 } from '../services/routines.ts';
 import { messageActions, refreshEntryCards, replaceActions } from '../services/chat.ts';
 import { recordSteps, stepsSummary } from '../services/metrics.ts';
-import { TurnInProgressError } from '../services/turn-lock.ts';
+import { TurnInProgressError, withTurnLock } from '../services/turn-lock.ts';
 import { ModelBusyError } from '../ai/token-bucket.ts';
 import { addDays, dateRange, inferMeal, localDateFor } from '../time.ts';
 import { stripDataUrl } from './body.ts';
@@ -536,43 +536,57 @@ export async function registerRoutes(app: FastifyInstance) {
     const authError = authErrorFor(laneFor((await getUser(userId)).email));
     if (authError) return reply.status(503).send({ error: authError });
 
-    let allowance;
+    /*
+     * Under the turn lock, allowance check included. The usage row is written
+     * after the vision call, so without it several photos sent at once all read
+     * the same unspent count and a one-scan grant pays for all of them.
+     */
     try {
-      allowance = await requireAllowance(userId, request.plan, 'photo', request.unmetered);
-    } catch (error) {
-      if (error instanceof PlanLimitError) {
-        return reply.status(402).send({ error: error.message, code: error.code, allowance: error.allowance });
-      }
-      throw error;
-    }
+      return await withTurnLock(userId, async () => {
+        let allowance;
+        try {
+          allowance = await requireAllowance(userId, request.plan, 'photo', request.unmetered);
+        } catch (error) {
+          if (error instanceof PlanLimitError) {
+            return reply.status(402).send({ error: error.message, code: error.code, allowance: error.allowance });
+          }
+          throw error;
+        }
 
-    const mediaType = parsed.data.photo_media_type;
-    let photo: Parameters<typeof logPhotoOnly>[1];
-    if (parsed.data.photo_key) {
-      const claimed = await claimPhoto(userId, parsed.data.photo_key, mediaType);
-      const url = claimed?.storageKey ? await presignPhotoRead(claimed.storageKey) : null;
-      if (!claimed || !url) {
-        return reply.status(400).send({ error: 'That photo upload could not be found.' });
-      }
-      photo = { mediaType, url, photoId: claimed.id };
-    } else {
-      const base64 = stripDataUrl(parsed.data.photo_base64!);
-      const saved = await savePhoto(userId, mediaType, base64);
-      photo = { mediaType, base64, photoId: saved.id };
-    }
+        const mediaType = parsed.data.photo_media_type;
+        let photo: Parameters<typeof logPhotoOnly>[1];
+        if (parsed.data.photo_key) {
+          const claimed = await claimPhoto(userId, parsed.data.photo_key, mediaType);
+          const url = claimed?.storageKey ? await presignPhotoRead(claimed.storageKey) : null;
+          if (!claimed || !url) {
+            return reply.status(400).send({ error: 'That photo upload could not be found.' });
+          }
+          photo = { mediaType, url, photoId: claimed.id };
+        } else {
+          const base64 = stripDataUrl(parsed.data.photo_base64!);
+          const saved = await savePhoto(userId, mediaType, base64);
+          photo = { mediaType, base64, photoId: saved.id };
+        }
 
-    try {
-      const turn = await logPhotoOnly(userId, photo);
-      return {
-        ...turn,
-        allowance: allowance.unlimited ? allowance : { ...allowance, used: allowance.used + 1 },
-      };
+        try {
+          const turn = await logPhotoOnly(userId, photo);
+          return {
+            ...turn,
+            allowance: allowance.unlimited ? allowance : { ...allowance, used: allowance.used + 1 },
+          };
+        } catch (error) {
+          if (error instanceof ModelBusyError) {
+            return reply.status(429).send({ error: error.message });
+          }
+          request.log.error({ err: error }, 'photo lane failed');
+          return reply.status(502).send({ error: (error as Error).message });
+        }
+      });
     } catch (error) {
-      if (error instanceof ModelBusyError) {
+      if (error instanceof TurnInProgressError) {
         return reply.status(429).send({ error: error.message });
       }
-      request.log.error({ err: error }, 'photo lane failed');
-      return reply.status(502).send({ error: (error as Error).message });
+      throw error;
     }
   });
 
