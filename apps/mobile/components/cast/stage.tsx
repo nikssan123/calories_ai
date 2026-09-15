@@ -227,10 +227,12 @@ export function release(name: CastName) {
 function landed(name: CastName, id: number) {
   const flight = flying[name];
   if (!flight || flight.id !== id) return;
-  flying[name] = null;
-  emit();
+  // Heard before the seat shows them, so a seat that lands its figure somewhere
+  // other than at rest (the card's peeker, popped up) has set that first.
   const [seat] = flight.to.split('|');
   landings.forEach((listener) => listener(seat!, name));
+  flying[name] = null;
+  emit();
 }
 
 /** Where `name` is sitting, or flying to. */
