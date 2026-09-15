@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import * as WebBrowser from 'expo-web-browser';
+import { ApiError } from '@ct/api-client';
 import { calculateTargets, formatNumber } from '@ct/shared';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { Glyph } from '@/components/Glyph';
@@ -64,6 +65,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
+  const [shortPassword, setShortPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [google, setGoogle] = useState(false);
   const [forgetting, setForgetting] = useState(false);
@@ -107,8 +109,25 @@ export default function LoginScreen() {
   const signup = mode === 'signup';
 
   async function submit() {
-    setBusy(true);
     setError(null);
+    /*
+     * Checked here, in words, rather than by a button that will not press.
+     * The button used to stay grey until the password reached eight characters
+     * and said nothing about why — and a six-character password is the one most
+     * people type first. The sign-up form is the last step of a paid install,
+     * and a dead button with no reason on it is where those installs ended.
+     */
+    if (!EMAIL_SHAPE.test(email.trim())) {
+      setError(tr('auth.invalidEmail'));
+      return;
+    }
+    if (signup && password.length < 8) {
+      // The rule is already written under the field; it turns red rather than
+      // being said a second time underneath itself.
+      setShortPassword(true);
+      return;
+    }
+    setBusy(true);
     // Sign-ups that carry a plan are the end of the first-run funnel; a sign-in,
     // or an account made without walking the questions, is not part of it.
     const fromWalk = signup && planWaiting;
@@ -139,10 +158,31 @@ export default function LoginScreen() {
       // the rest of the app renders from exists.
       await refresh();
     } catch (e) {
-      setError(messageOf(e, tr));
+      setError(authMessage(e));
     } finally {
       setBusy(false);
     }
+  }
+
+  /**
+   * The server's refusals, in the reader's language.
+   *
+   * The API answers in English sentences written for a reader, which is right
+   * for the web admin and wrong on a Bulgarian sign-up form — "Invalid email
+   * address" in red under a page of Cyrillic reads as the app breaking. The
+   * statuses on this screen are few and each means one thing, so they are
+   * mapped here; anything else falls through to `messageOf`.
+   */
+  function authMessage(e: unknown): string {
+    if (e instanceof ApiError) {
+      if (e.status === 429) return tr('auth.tooManyTries');
+      if (e.status === 409) return tr('auth.emailTaken');
+      if (e.status === 401) return tr('auth.wrongPassword');
+      if (e.status === 403) return /suspend/i.test(e.message) ? tr('auth.suspended') : tr('auth.signupsClosed');
+      // Zod's own wording: "Invalid email address", or a length rule that never names the field.
+      if (e.status === 400) return /email/i.test(e.message) ? tr('auth.invalidEmail') : tr('auth.passwordHint');
+    }
+    return messageOf(e, tr);
   }
 
   async function continueWithGoogle() {
@@ -159,7 +199,11 @@ export default function LoginScreen() {
       if (fromWalk) reachedStep('account');
       await refresh();
     } catch (e) {
-      setError(messageOf(e, tr));
+      if (e instanceof ApiError) {
+        setError(e.status === 403 ? tr('auth.suspended') : e.status === 429 ? tr('auth.tooManyTries') : tr('auth.googleFailed'));
+      } else {
+        setError(messageOf(e, tr));
+      }
     } finally {
       setGoogle(false);
     }
@@ -183,7 +227,7 @@ export default function LoginScreen() {
       await api.forgotPassword(address);
       setSent(tr('reset.linkSent'));
     } catch (e) {
-      setError(messageOf(e, tr));
+      setError(authMessage(e));
     } finally {
       setForgetting(false);
     }
@@ -201,11 +245,15 @@ export default function LoginScreen() {
       behavior="padding"
     >
       <Stage />
+      {/*
+        Held below the status bar rather than scrolling under it. With the
+        padding inside the scroll, the language pill slid up beneath the clock
+        and the battery the moment the form scrolled for the keyboard — a
+        control drawn over the system's own text.
+      */}
       <ScrollView
-        contentContainerStyle={[
-          styles.scroll,
-          { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 32 },
-        ]}
+        style={{ marginTop: insets.top }}
+        contentContainerStyle={[styles.scroll, { paddingTop: 32, paddingBottom: insets.bottom + 32 }]}
         keyboardShouldPersistTaps="handled"
       >
         {/*
@@ -294,7 +342,11 @@ export default function LoginScreen() {
           />
         </Field>
 
-        <Field label={tr('auth.password')}>
+        <Field
+          label={tr('auth.password')}
+          hint={signup ? tr('auth.passwordHint') : undefined}
+          hintAlarm={shortPassword}
+        >
           {/*
             The field and the control that reveals it, on one line.
 
@@ -307,7 +359,10 @@ export default function LoginScreen() {
           <View style={styles.passwordRow}>
             <TextInput
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(next) => {
+                setPassword(next);
+                if (next.length >= 8) setShortPassword(false);
+              }}
               secureTextEntry={!revealed}
               autoComplete={signup ? 'new-password' : 'current-password'}
               onSubmitEditing={() => void submit()}
@@ -348,7 +403,7 @@ export default function LoginScreen() {
 
         <GlowButton
           onPress={() => void submit()}
-          disabled={!email || password.length < 8}
+          disabled={!email || !password}
           busy={busy}
           style={styles.submit}
           label={signup ? tr('auth.createAccount') : tr('auth.signIn')}
@@ -478,7 +533,18 @@ function GoogleMark() {
  * screen that looks unfinished. The web spells this `AUTH_FIELD`; the shape is
  * the same one, built the way every raised surface is built here.
  */
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  hint,
+  hintAlarm = false,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  /** The hint in the error colour: what the field needs, and it does not have it yet. */
+  hintAlarm?: boolean;
+  children: React.ReactNode;
+}) {
   const colors = useColors();
   return (
     <View style={styles.field}>
@@ -495,9 +561,23 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       >
         {children}
       </Chunk>
+      {/* What the field needs, said before it is got wrong. */}
+      {hint && (
+        <Text
+          style={[
+            hintAlarm ? t.footnoteSemibold : t.footnote,
+            { color: hintAlarm ? colors.destructive : colors.mutedForeground },
+          ]}
+        >
+          {hint}
+        </Text>
+      )}
     </View>
   );
 }
+
+/** Enough of an address to be worth sending; the server has the final word. */
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const styles = StyleSheet.create({
   languageRow: { alignItems: 'flex-end', marginBottom: 20 },

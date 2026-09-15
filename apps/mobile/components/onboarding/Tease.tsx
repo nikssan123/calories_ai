@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing,
   FadeInUp,
@@ -44,6 +44,14 @@ export function JournalTease() {
   const type = useType();
   const reduced = useReducedMotion();
   const sky = useSky();
+  /*
+   * The phone is drawn at 232 × 400 and scaled to the screen it is on. At full
+   * size on anything shorter than a Pixel 8 — and in Bulgarian, where the three
+   * chips wrap to two rows — the last chip ended up under the Continue button.
+   * Scaled rather than re-laid-out, so the bubbles inside keep their places.
+   */
+  const { height: windowHeight } = useWindowDimensions();
+  const scale = Math.min(1, Math.max(0.7, (windowHeight * 0.4) / PHONE.height));
 
   const hover = useSharedValue(0);
   useEffect(() => {
@@ -55,6 +63,7 @@ export function JournalTease() {
   const tilt = useAnimatedStyle(() => ({
     transform: [
       { perspective: 1100 },
+      { scale },
       { rotateY: `${-16 + hover.value * 7}deg` },
       { rotateX: `${7 - hover.value * 3}deg` },
       { translateY: -hover.value * 8 },
@@ -66,6 +75,7 @@ export function JournalTease() {
 
   return (
     <View style={styles.tease}>
+      <View style={{ width: PHONE.width * scale, height: PHONE.height * scale, alignItems: 'center', justifyContent: 'center' }}>
       <Animated.View style={[styles.phone, tilt]}>
         <View style={[styles.screen, { backgroundColor: colors.background }]}>
           <Sky sky={sky} height={170} hazeTop={150} />
@@ -112,6 +122,7 @@ export function JournalTease() {
           </View>
         </View>
       </Animated.View>
+      </View>
 
       {/* Beside the phone, not on it: nothing here sits over a word. */}
       <View style={styles.chips}>
@@ -207,11 +218,13 @@ function ChatMark({ color }: { color: string }) {
   );
 }
 
+const PHONE = { width: 232, height: 400 };
+
 const styles = StyleSheet.create({
   tease: { alignItems: 'center', gap: 22, paddingTop: 6 },
   phone: {
-    width: 232,
-    height: 400,
+    width: PHONE.width,
+    height: PHONE.height,
     borderRadius: 38,
     padding: 7,
     backgroundColor: '#0c0b0a',

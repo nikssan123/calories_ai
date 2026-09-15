@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, ReduceMotion } from 'react-native-reanimated';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -195,6 +195,10 @@ export default function OnboardingScreen() {
   const [targetSkipped, setTargetSkipped] = useState(
     () => seed !== null && seed.goal !== 'maintain' && seed.target_weight_kg === null,
   );
+
+  /* The body step's boxes, so each can hand the keyboard on to the next. */
+  const inchesInput = useRef<TextInput>(null);
+  const weightInput = useRef<TextInput>(null);
 
   const [targets, setTargets] = useState<Targets | null>(null);
   /** The maintenance the plan was worked out from, for the trajectory. */
@@ -734,10 +738,37 @@ export default function OnboardingScreen() {
                 parts={
                   units === 'imperial'
                     ? [
-                        { key: 'ft', value: feet, unit: 'ft', onChangeText: setFeet, maxLength: 1 },
-                        { key: 'in', value: inches, unit: 'in', onChangeText: setInches, maxLength: 4 },
+                        {
+                          key: 'ft',
+                          value: feet,
+                          unit: 'ft',
+                          onChangeText: setFeet,
+                          maxLength: 1,
+                          returnKeyType: 'next',
+                          onSubmitEditing: () => inchesInput.current?.focus(),
+                        },
+                        {
+                          key: 'in',
+                          value: inches,
+                          unit: 'in',
+                          onChangeText: setInches,
+                          maxLength: 4,
+                          inputRef: inchesInput,
+                          returnKeyType: 'next',
+                          onSubmitEditing: () => weightInput.current?.focus(),
+                        },
                       ]
-                    : [{ key: 'cm', value: cm, unit: 'cm', onChangeText: setCm, maxLength: 5 }]
+                    : [
+                        {
+                          key: 'cm',
+                          value: cm,
+                          unit: 'cm',
+                          onChangeText: setCm,
+                          maxLength: 5,
+                          returnKeyType: 'next',
+                          onSubmitEditing: () => weightInput.current?.focus(),
+                        },
+                      ]
                 }
               />
 
@@ -755,6 +786,11 @@ export default function OnboardingScreen() {
                     unit: bodyWeightUnit(units),
                     onChangeText: setWeight,
                     maxLength: 5,
+                    inputRef: weightInput,
+                    returnKeyType: 'done',
+                    onSubmitEditing: () => {
+                      if (answered) forward();
+                    },
                   },
                 ]}
               />

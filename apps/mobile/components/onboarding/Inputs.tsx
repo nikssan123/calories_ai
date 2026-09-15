@@ -99,6 +99,16 @@ export function Measure({
     /** Feet are one digit; a weight in pounds is four including a decimal. */
     maxLength?: number;
     autoFocus?: boolean;
+    /**
+     * Where the keyboard's action key goes. The figures sit above a footer
+     * button that rises with the keyboard and hides whatever is below the
+     * field being typed in, so each box hands on to the next one itself —
+     * height to weight — and the last one moves the walk on, rather than
+     * leaving somebody to find a field the button is covering.
+     */
+    inputRef?: React.Ref<TextInput>;
+    returnKeyType?: 'next' | 'done';
+    onSubmitEditing?: () => void;
   }[];
   /** Said under the row when the figure is not usable yet. */
   focusHint?: string | null;
@@ -119,6 +129,10 @@ export function Measure({
               inputMode="decimal"
               maxLength={part.maxLength ?? 5}
               autoFocus={part.autoFocus}
+              ref={part.inputRef}
+              returnKeyType={part.returnKeyType}
+              onSubmitEditing={part.onSubmitEditing}
+              submitBehavior={part.returnKeyType === 'next' ? 'submit' : 'blurAndSubmit'}
               selectTextOnFocus
               placeholder="—"
               placeholderTextColor={withAlpha(colors.mutedForeground, 0.5)}
