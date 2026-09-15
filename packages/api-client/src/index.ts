@@ -78,6 +78,9 @@ import type {
   WeekSchedule,
   ReviewStats,
   SignupRequest,
+  ClaimRequest,
+  GoogleClaimStart,
+  GuestRequest,
   StepsSummary,
   SupportInbox,
   TablePage,
@@ -253,6 +256,26 @@ export function createApiClient({
 
     signup: (payload: SignupRequest) =>
       request<AuthStatus>('/auth/signup', { method: 'POST', body: JSON.stringify(payload) }),
+
+    /** A session for a phone with no account yet: the end of the first-run walk. */
+    guest: (payload: GuestRequest) =>
+      request<AuthStatus>('/auth/guest', { method: 'POST', body: JSON.stringify(payload) }),
+
+    /**
+     * Saving a guest's account with an address and a password. The address is
+     * unconfirmed until the six-digit code; `verifyEmailCode` saves it. A 409
+     * with `code: 'EMAIL_TAKEN'` means the address belongs to an account already.
+     */
+    claim: (payload: ClaimRequest) =>
+      request<AuthStatus>('/auth/claim', { method: 'POST', body: JSON.stringify(payload) }),
+
+    /**
+     * Saving a guest's account with Google: the URL to open in an auth session.
+     * A POST rather than `googleStartUrl`, because it has to carry the guest's
+     * session so the handshake can name the row to attach to.
+     */
+    googleClaimUrl: (payload: GoogleClaimStart) =>
+      request<{ url: string }>('/auth/google/claim', { method: 'POST', body: JSON.stringify(payload) }),
 
     /**
      * `intent: 'coach'` is the web's second door: it lets a non-admin in and

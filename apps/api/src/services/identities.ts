@@ -1,7 +1,14 @@
 import type { Locale } from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import { destroyAllSessions } from './auth.ts';
-import { clearPassword, createAccount, findUserByEmail, markEmailVerified } from './user.ts';
+import {
+  attachProvedAddress,
+  clearPassword,
+  createAccount,
+  findUserByEmail,
+  markEmailVerified,
+  releaseUnconfirmedClaim,
+} from './user.ts';
 
 /**
  * Turning "Google says this is Ada, at ada@example.com" into a row in `users`.
@@ -24,7 +31,7 @@ export interface ProviderIdentity {
  * They are not interchangeable — `created` is a new person, `adopted` took a
  * password away from somebody, and the caller needs to be able to tell.
  */
-export type IdentityOutcome = 'signed-in' | 'linked' | 'adopted' | 'created';
+export type IdentityOutcome = 'signed-in' | 'linked' | 'adopted' | 'created' | 'claimed';
 
 export type IdentityResult =
   | { ok: true; userId: string; outcome: IdentityOutcome }
@@ -62,6 +69,8 @@ export async function signInWithProvider(
   );
   if (known) return { ok: true, userId: known.user_id, outcome: 'signed-in' };
 
+  // A guest who typed this address and never confirmed it has no hold on it.
+  await releaseUnconfirmedClaim(identity.email);
   const existing = await findUserByEmail(identity.email);
   if (existing) {
     /*
@@ -119,6 +128,42 @@ export async function signInWithProvider(
  * who double-clicks the button sends two callbacks with two codes, and the
  * second one arriving must be a sign-in rather than a 500.
  */
+/**
+ * A guest saving its account with a provider (GUEST-ACCOUNTS.md).
+ *
+ * The identity goes onto the guest's own row, so the journal it has been keeping
+ * becomes the account's — unless the identity already belongs to somebody. Then
+ * this is a sign-in to that existing account, the same as it would be from the
+ * welcome screen, and the guest row is left where it is: nothing of a stranger's
+ * phone is poured into an account that already has a history. The app sees a
+ * different profile id come back and says so.
+ */
+export async function claimWithProvider(
+  provider: string,
+  identity: ProviderIdentity,
+  guestId: string,
+  options: { allowSignup: boolean; timezone: string; locale: Locale | null },
+): Promise<IdentityResult> {
+  const known = await queryOne<{ user_id: string }>(
+    `SELECT user_id FROM oauth_identities WHERE provider = $1 AND subject = $2`,
+    [provider, identity.subject],
+  );
+  if (known && known.user_id !== guestId) return signInWithProvider(provider, identity, options);
+
+  // Another guest's unconfirmed hold on the address goes; this guest's own does not.
+  await releaseUnconfirmedClaim(identity.email, guestId);
+  const existing = await findUserByEmail(identity.email);
+  if (existing && existing.id !== guestId) return signInWithProvider(provider, identity, options);
+
+  if (!(await attachProvedAddress(guestId, identity.email, identity.name))) {
+    // No longer a guest — saved already, or erased — so an ordinary sign-in.
+    return signInWithProvider(provider, identity, options);
+  }
+  await markEmailVerified(guestId, identity.email);
+  await link(provider, identity, guestId);
+  return { ok: true, userId: guestId, outcome: 'claimed' };
+}
+
 async function link(provider: string, identity: ProviderIdentity, userId: string): Promise<void> {
   await query(
     `INSERT INTO oauth_identities (provider, subject, user_id, email)

@@ -4,6 +4,7 @@ import { unmeteredFor } from '../ai/lane.ts';
 import { query, queryOne } from '../db.ts';
 import type { DayContext } from '../time.ts';
 import { hashPassword, verifyPassword } from './auth.ts';
+import { startTrial } from './trial.ts';
 
 export interface UserContext extends DayContext {
   userId: string;
@@ -349,10 +350,87 @@ function toRecipient(row: any): EmailRecipient {
  */
 export async function markEmailVerified(userId: string, email: string): Promise<boolean> {
   const row = await queryOne<{ id: string }>(
-    `UPDATE users SET email_verified_at = COALESCE(email_verified_at, now()), updated_at = now()
+    `UPDATE users SET email_verified_at = COALESCE(email_verified_at, now()),
+                      guest_since = NULL,
+                      updated_at = now()
       WHERE id = $1 AND lower(email) = lower($2)
       RETURNING id`,
     [userId, email],
+  );
+  if (!row) return false;
+  /*
+   * An identity proved is an account saved (GUEST-ACCOUNTS.md): a guest stops
+   * being one in the update above, and the seven-day trial starts here. Every
+   * door that proves an address comes through this function — the six-digit
+   * code, the link in the email, and Google — so the trial cannot be reached
+   * without one and cannot be missed with one. Idempotent: a second confirmation
+   * or a relink never hands out a second week.
+   */
+  await startTrial(userId);
+  return true;
+}
+
+/**
+ * Lets go of an address a guest typed and never confirmed.
+ *
+ * A claim is only a claim until the code: typing somebody else's address into
+ * "save my account" must not stop them signing up with it, and must not hand
+ * them the stranger's journal either. So whenever an address is about to be
+ * used — a sign-up, a Google sign-in, another claim — an unconfirmed guest's hold
+ * on it is released first. The guest keeps its row and its journal; it just no
+ * longer has that address on it.
+ */
+export async function releaseUnconfirmedClaim(email: string, exceptUserId: string | null = null): Promise<void> {
+  await query(
+    `UPDATE users SET email = NULL, password_hash = NULL, updated_at = now()
+      WHERE lower(email) = lower($1)
+        AND guest_since IS NOT NULL
+        AND email_verified_at IS NULL
+        AND ($2::uuid IS NULL OR id <> $2::uuid)`,
+    [email, exceptUserId],
+  );
+}
+
+/**
+ * Puts an address and a password on a guest row: "save my account".
+ *
+ * The row is unchanged otherwise, so everything logged as a guest stays where it
+ * is. It is still a guest afterwards — unconfirmed, on guest meters — until the
+ * code comes back through `markEmailVerified`. Returns false when the row is not
+ * a guest, which the route answers as a refusal.
+ */
+export async function claimAddress(
+  userId: string,
+  email: string,
+  password: string,
+  displayName: string | null,
+): Promise<boolean> {
+  const row = await queryOne<{ id: string }>(
+    `UPDATE users SET email = $2, password_hash = $3,
+                      display_name = COALESCE($4, display_name),
+                      email_verified_at = NULL,
+                      updated_at = now()
+      WHERE id = $1 AND guest_since IS NOT NULL
+      RETURNING id`,
+    [userId, email, await hashPassword(password), displayName],
+  );
+  return row !== null;
+}
+
+/**
+ * Puts a provider's address on a guest row, already proved. The caller links
+ * the identity; `markEmailVerified` then ends the guest and starts the trial.
+ */
+export async function attachProvedAddress(
+  userId: string,
+  email: string,
+  displayName: string | null,
+): Promise<boolean> {
+  const row = await queryOne<{ id: string }>(
+    `UPDATE users SET email = $2, display_name = COALESCE(display_name, $3), updated_at = now()
+      WHERE id = $1 AND guest_since IS NOT NULL
+      RETURNING id`,
+    [userId, email, displayName],
   );
   return row !== null;
 }

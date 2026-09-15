@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
+  ClaimRequest,
+  GoogleClaimStart,
   LoginRequest,
   type AuthIntent,
   EmailVerification,
@@ -39,16 +41,19 @@ import {
   type Handshake,
   type NativeHandshake,
 } from '../services/google.ts';
-import { signInWithProvider } from '../services/identities.ts';
+import { claimWithProvider, signInWithProvider } from '../services/identities.ts';
 import { consumeCode, consumeHandoff, consumeToken, issueHandoff } from '../services/tokens.ts';
 import {
   authenticate,
+  claimAddress,
   countAccounts,
   createAccount,
   createGuest,
   emailInUse,
+  findUserByEmail,
   getUser,
   markEmailVerified,
+  releaseUnconfirmedClaim,
   setPassword,
 } from '../services/user.ts';
 import { isAdmin, isDisabled } from '../services/admin.ts';
@@ -325,6 +330,82 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     };
   });
 
+  /**
+   * Saving a guest's account with an address and a password (GUEST-ACCOUNTS.md).
+   *
+   * The address goes on the guest's own row, so nothing logged so far moves.
+   * It is unconfirmed until the six-digit code, and until then the row stays a
+   * guest: on guest meters, and with no trial. `POST /auth/verify` is where the
+   * account is actually saved.
+   *
+   * An address that belongs to an account already is a 409 with `code`, so the
+   * app can offer to sign in to it instead rather than print a sentence.
+   */
+  app.post('/auth/claim', { config: { rateLimit: SIGNUP_LIMIT } }, async (request, reply) => {
+    if (request.userId === null) return reply.status(401).send({ error: 'Not signed in.' });
+    if (!request.guest) {
+      return reply.status(409).send({ error: 'This account is already saved.', code: 'NOT_GUEST' });
+    }
+    const parsed = ClaimRequest.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid details' });
+    }
+
+    const userId = request.userId;
+    await releaseUnconfirmedClaim(parsed.data.email, userId);
+    const holder = await findUserByEmail(parsed.data.email);
+    if (holder && holder.id !== userId) {
+      return reply.status(409).send({ error: 'That email is already registered.', code: 'EMAIL_TAKEN' });
+    }
+
+    await claimAddress(userId, parsed.data.email, parsed.data.password, parsed.data.display_name ?? null);
+    await sendVerificationEmail(userId, request.log);
+
+    return {
+      authenticated: true,
+      profile: await getUser(userId),
+      signup_allowed: await signupAllowed(isAppClient(request)),
+      has_accounts: true,
+      is_admin: false,
+      is_coach: false,
+      google_enabled: env.google !== null,
+    };
+  });
+
+  /**
+   * Saving a guest's account with Google: the URL to open, from a request that
+   * carries the guest's session.
+   *
+   * The ordinary native start is a page the browser opens with no session on it,
+   * so it cannot know whose row to attach to. This builds the same handshake with
+   * the guest's id inside the signed state; the callback reads it back and puts
+   * the Google identity on that row (`claimWithProvider`).
+   */
+  app.post('/auth/google/claim', { config: { rateLimit: OAUTH_LIMIT } }, async (request, reply) => {
+    const google = env.google;
+    if (!google) return reply.status(404).send({ error: NO_GOOGLE });
+    if (request.userId === null) return reply.status(401).send({ error: 'Not signed in.' });
+    if (!request.guest) {
+      return reply.status(409).send({ error: 'This account is already saved.', code: 'NOT_GUEST' });
+    }
+    const parsed = GoogleClaimStart.safeParse(request.body);
+    if (!parsed.success || !isAppRedirect(parsed.data.redirect)) {
+      return reply.status(400).send({ error: 'That is not an address this app signs in to.' });
+    }
+
+    const handshake = beginHandshake();
+    const native: NativeHandshake = {
+      verifier: handshake.verifier,
+      nonce: handshake.nonce,
+      timezone: parsed.data.timezone ?? '',
+      challenge: parsed.data.challenge,
+      redirect: parsed.data.redirect,
+      expires: Date.now() + HANDSHAKE_MINUTES * 60 * 1000,
+      guest: request.userId,
+    };
+    return { url: authorizeUrl(google, { ...handshake, state: packNativeState(google, native) }) };
+  });
+
   app.post('/auth/signup', { config: { rateLimit: SIGNUP_LIMIT } }, async (request, reply) => {
     const parsed = SignupRequest.safeParse(request.body);
     if (!parsed.success) {
@@ -347,6 +428,8 @@ export async function registerAuthRoutes(app: FastifyInstance) {
           : 'Accounts are created in the app. Install it and sign up there.',
       });
     }
+    // A guest's unconfirmed hold on the address does not stop its owner.
+    await releaseUnconfirmedClaim(parsed.data.email);
     if (await emailInUse(parsed.data.email)) {
       return reply.status(409).send({ error: 'That email is already registered.' });
     }
@@ -820,7 +903,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
         return fail(unverified ? 'google_unverified' : 'google');
       }
 
-      const result = await signInWithProvider(GOOGLE_PROVIDER, identity, {
+      const providerOptions = {
         /*
          * `native`, not `isAppClient` — the one place the two come apart.
          *
@@ -848,7 +931,11 @@ export async function registerAuthRoutes(app: FastifyInstance) {
          * setup.
          */
         locale: localeFromAcceptLanguage(request.headers['accept-language'] ?? null),
-      });
+      };
+      // A guest saving its account names its own row in the signed state.
+      const result = native?.guest
+        ? await claimWithProvider(GOOGLE_PROVIDER, identity, native.guest, providerOptions)
+        : await signInWithProvider(GOOGLE_PROVIDER, identity, providerOptions);
       if (!result.ok) return fail('closed');
 
       // After the account is resolved rather than before, for the reason the
@@ -892,7 +979,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const device = await rememberDevice(result.userId, request.headers['user-agent'], request.ip);
       // The same alert the password path sends, and suppressed on a brand-new
       // account for the same reason: the first device is not news.
-      if (device.isNew && result.outcome !== 'created') {
+      if (device.isNew && result.outcome !== 'created' && result.outcome !== 'claimed') {
         await sendNewSignInEmail(
           result.userId,
           { device: device.label, ip: request.ip, at: new Date() },

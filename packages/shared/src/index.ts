@@ -1968,6 +1968,28 @@ export const GuestRequest = z.object({
 export type GuestRequest = z.infer<typeof GuestRequest>;
 
 /**
+ * Saving a guest's account with an address and a password. The same row keeps
+ * everything it logged; the address is unconfirmed until the six-digit code, and
+ * the row stays a guest — on guest meters — until then.
+ */
+export const ClaimRequest = Credentials.extend({
+  display_name: z.string().max(80).nullable().optional(),
+});
+export type ClaimRequest = z.infer<typeof ClaimRequest>;
+
+/**
+ * Saving a guest's account with Google: where to send the browser. The same
+ * redirect and PKCE challenge a native sign-in sends, from a request that
+ * carries the guest's session, so the handshake can name the row to attach to.
+ */
+export const GoogleClaimStart = z.object({
+  redirect: z.string().min(1).max(400),
+  challenge: z.string().min(32).max(200),
+  timezone: z.string().max(60).optional(),
+});
+export type GoogleClaimStart = z.infer<typeof GoogleClaimStart>;
+
+/**
  * Asking for a reset link.
  *
  * The response is the same whether or not the address has an account, which is

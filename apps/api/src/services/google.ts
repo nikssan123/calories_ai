@@ -146,6 +146,12 @@ export interface NativeHandshake {
   redirect: string;
   /** Milliseconds since the epoch. Ten minutes, as the cookie has. */
   expires: number;
+  /**
+   * The guest row to attach this Google identity to, when the handshake was
+   * started by a guest saving its account. Inside the signed state, so it
+   * cannot be swapped for somebody else's row on the way through Google.
+   */
+  guest?: string;
 }
 
 /**
@@ -181,7 +187,7 @@ export function readNativeState(google: GoogleEnv, raw: string): NativeHandshake
 
   try {
     const parsed: unknown = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    const { verifier, nonce, timezone, challenge, redirect, expires } = (parsed ??
+    const { verifier, nonce, timezone, challenge, redirect, expires, guest } = (parsed ??
       {}) as Record<string, unknown>;
     if (
       typeof verifier !== 'string' ||
@@ -202,6 +208,7 @@ export function readNativeState(google: GoogleEnv, raw: string): NativeHandshake
       challenge,
       redirect,
       expires,
+      ...(typeof guest === 'string' ? { guest } : {}),
     };
   } catch {
     return null;
