@@ -440,14 +440,16 @@ export const en = {
   'save.titleGuestLimit': 'Your guest day is *used up*',
   'save.titlePurchase': 'Save your account *first*',
   /** TRIAL.days and messages per day from @ct/shared. */
-  'save.trialBody': (days: number, perDay: number) =>
-    `Save it — it’s free — and get a ${days}-day trial: ${perDay} ${w(perDay, { one: 'message', other: 'messages' })} a day and a photo scan. Everything you’ve logged stays.`,
+  /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
+  'save.trialBody': (days: number, messages: number) =>
+    `Save it — it’s free — and get a ${days}-day trial: ${messages} ${w(messages, { one: 'message', other: 'messages' })} over the ${days} days and a photo scan. Everything you’ve logged stays.`,
   'save.purchaseBody': 'So what you buy stays yours on a new phone. Everything you’ve logged comes with it.',
   'save.stillFree': 'Typing meals in and scanning barcodes stay free either way.',
   'save.saveButton': 'Save my account',
   'save.signInWarning': 'Signing in to it won’t move the meals on this phone.',
   'save.signInInstead': 'Sign in to that account',
   'save.changeEmail': 'Use a different email',
+  'save.codeStale': 'That code was for another address. Send a new one.',
   'save.doneTitle': 'Account *saved*',
   'save.doneBody': (days: number) => `Your ${days}-day trial has started. Everything you logged is still here.`,
   'save.switchedTitle': 'Signed *in*',
@@ -460,6 +462,7 @@ export const en = {
   'guest.erase': 'Erase this journal',
   'guest.eraseWarning': 'Everything logged on this phone will be deleted. This can’t be undone.',
   'guest.eraseConfirm': 'Erase everything',
+  'guest.startRefused': 'Too many new accounts from this connection right now. Sign in, or try again later.',
   'auth.showPassword': 'Show password',
   'auth.hidePassword': 'Hide password',
   'auth.nameOptional': 'Name (optional)',

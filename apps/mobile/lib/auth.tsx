@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import type { AuthStatus, Locale, Profile } from '@ct/shared';
 import { api } from '@/lib/api';
@@ -6,7 +6,7 @@ import { clearToken, currentToken, restoreToken, saveToken } from '@/lib/session
 import { forgetPush } from '@/lib/push';
 import { clearDaySnapshot } from '@/lib/snapshot';
 import { clearStepSync } from '@/lib/steps';
-import { watch } from '@/lib/outbox';
+import { setOwner, watch } from '@/lib/outbox';
 import { cacheProfile, cacheSession, cachedSession, forgetSession, forgetUser } from '@/lib/store';
 
 /**
@@ -111,8 +111,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [restoredOffline, setRestoredOffline] = useState(false);
 
   const refresh = useCallback(async () => {
+    /*
+     * The token this question was asked with. A `me()` that set out anonymous —
+     * the foreground listener fires one on every return while signed out, say
+     * back from a password manager — can land after a sign-in finished, and
+     * adopting its "not signed in" would put a person who just signed in back on
+     * the welcome screen. An answer about a token that is no longer the one in
+     * the keystore is about nobody, and is dropped.
+     */
+    const askedWith = currentToken();
     try {
       const next = await api.me();
+      if (currentToken() !== askedWith) return;
       setStatus(next);
       setRestoredOffline(false);
       // Keeping it is the effect below; forgetting it belongs here, because
@@ -121,6 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // its own — and leaving one on disk would outlive the token.
       if (!next.authenticated) void forgetSession();
     } catch {
+      if (currentToken() !== askedWith) return;
       /*
        * Unreachable server, not a rejected session — and now that distinction
        * is acted on rather than merely noted.
@@ -198,6 +209,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return watch();
   }, [status?.authenticated]);
 
+  /* The outbox drains only the signed-in account's own intents — see `setOwner`. */
+  const ownerId = status?.authenticated ? (status.profile?.id ?? null) : null;
+  useEffect(() => {
+    setOwner(ownerId);
+  }, [ownerId]);
+
   /*
    * The profile is cached for its `timezone` and `day_start_hour` — without
    * them the phone cannot work out which day a meal belongs to, and offline
@@ -215,7 +232,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!restoredOffline) void cacheSession(status);
   }, [status, restoredOffline]);
 
+  const statusRef = useRef(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
   const adoptSession = useCallback(async (next: AuthStatus) => {
+    /*
+     * A session for a different account than the one signed in — a guest whose
+     * "Save with Google" landed on an account that already existed. What this
+     * phone kept for the previous one goes first, as it does on sign-out, and
+     * while its token is still the current one: the push address is given up
+     * with the previous account's session, and the cached day and the step-sync
+     * clock stop describing somebody else.
+     */
+    const previous = statusRef.current?.authenticated ? statusRef.current.profile?.id : null;
+    if (previous && next.profile && next.profile.id !== previous) {
+      await forgetPush();
+      await clearDaySnapshot();
+      await clearStepSync();
+      void forgetUser(previous);
+    }
     if (next.token) await saveToken(next.token);
     // The token is stripped before it is put in React state: nothing rendering
     // a screen has any business reading it, and the keystore is now the copy

@@ -103,7 +103,9 @@ export default function LoginScreen() {
      * account" came to sign in. Only a launch that is neither falls back to
      * asking whether the server has any accounts.
      */
-    setMode(planWaiting ? 'signup' : signingIn ? 'signin' : hasAccounts ? 'signin' : 'signup');
+    // "I already have an account" wins over a plan waiting to be saved: it is what
+    // they just asked for, from the welcome screen or from a refused guest start.
+    setMode(signingIn ? 'signin' : planWaiting ? 'signup' : hasAccounts ? 'signin' : 'signup');
   }, [loading, hasAccounts, planWaiting, signingIn]);
 
   const signup = mode === 'signup';

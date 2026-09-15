@@ -69,6 +69,7 @@ import { Glossy } from '@/components/icons/Glossy';
 import { Segments } from '@/components/Segments';
 import { Sky, useSky } from '@/components/Sky';
 import { useSaveAccount } from '@/lib/save-account';
+import { discardFor } from '@/lib/outbox';
 
 /** §10: short setup. Enough to establish a starting target, nothing more. */
 
@@ -202,11 +203,14 @@ export default function SetupScreen() {
         setError(messageOf(e, tr));
       }
     })();
-    // Deliberately once, on mount, as before. `signedIn` is read for its value
-    // at that moment; a profile arriving later does not need to re-run a screen
-    // the reader may already be typing into.
+    // Once per account, not on every profile update. `signedIn` is read for its
+    // value at that moment; a profile arriving later does not need to re-run a
+    // screen the reader may already be typing into. But a different account —
+    // a guest whose save landed on one that already existed — or the same one
+    // stopping being a guest is a different screen, and editing the old copy
+    // would write the guest's answers over the real account.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [signedIn?.id, signedIn?.guest]);
 
   /*
    * The receipt leaves on its own, and takes the bar with it. Without the timer
@@ -522,9 +526,12 @@ export default function SetupScreen() {
 
         {profile.guest ? (
           <GuestAccount
-            awaitingCode={Boolean(profile.email && !profile.email_verified)}
-            email={profile.email}
-            onErased={() => void signOut()}
+            awaitingCode={Boolean(profile.pending_email)}
+            email={profile.pending_email}
+            onErased={() => {
+              void discardFor(profile.id);
+              void signOut();
+            }}
             onError={setError}
           />
         ) : (
@@ -1663,9 +1670,7 @@ function GuestAccount({
           {awaitingCode && email ? tr('guest.confirmRow')(email) : tr('guest.saveRow')}
         </Text>
       </Pressable>
-      {/* Only without an address: a claimed one has a password, and the danger zone below deletes it properly. */}
-      {!email &&
-        (!open ? (
+      {!open ? (
           <Pressable
             onPress={() => setOpen(true)}
             accessibilityRole="button"
@@ -1706,7 +1711,7 @@ function GuestAccount({
               </Pressable>
             </View>
           </View>
-        ))}
+        )}
     </InsetGroup>
   );
 }

@@ -278,14 +278,16 @@ export const es: Messages = {
   'save.title': 'Guarda tu *cuenta*',
   'save.titleGuestLimit': 'Tu día de invitado *se ha acabado*',
   'save.titlePurchase': 'Primero *guarda tu cuenta*',
-  'save.trialBody': (days: number, perDay: number) =>
-    `Guárdala —es gratis— y tendrás ${days} días de prueba: ${perDay} ${w(perDay, { one: 'mensaje', other: 'mensajes' })} al día y un escaneo de foto. Todo lo que has registrado se queda.`,
+  /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
+  'save.trialBody': (days: number, messages: number) =>
+    `Guárdala —es gratis— y tendrás ${days} días de prueba: ${messages} ${w(messages, { one: 'mensaje', other: 'mensajes' })} para todo ese tiempo y un escaneo de foto. Todo lo que has registrado se queda.`,
   'save.purchaseBody': 'Para que lo que compres siga siendo tuyo en un móvil nuevo. Todo lo registrado viene contigo.',
   'save.stillFree': 'Apuntar comidas a mano y escanear códigos de barras sigue siendo gratis igualmente.',
   'save.saveButton': 'Guardar mi cuenta',
   'save.signInWarning': 'Si entras en ella, las comidas de este móvil no se pasarán.',
   'save.signInInstead': 'Entrar en esa cuenta',
   'save.changeEmail': 'Usar otro correo',
+  'save.codeStale': 'Ese código era para otra dirección. Pide uno nuevo.',
   'save.doneTitle': 'Cuenta *guardada*',
   'save.doneBody': (days: number) => `Tus ${days} días de prueba han empezado. Todo lo que registraste sigue aquí.`,
   'save.switchedTitle': 'Has *entrado*',
@@ -298,6 +300,7 @@ export const es: Messages = {
   'guest.erase': 'Borrar este diario',
   'guest.eraseWarning': 'Se borrará todo lo registrado en este móvil. No se puede deshacer.',
   'guest.eraseConfirm': 'Borrar todo',
+  'guest.startRefused': 'Se han creado demasiadas cuentas nuevas desde esta conexión. Inicia sesión o inténtalo más tarde.',
   'auth.showPassword': 'Mostrar contraseña',
   'auth.hidePassword': 'Ocultar contraseña',
   'auth.nameOptional': 'Nombre (opcional)',

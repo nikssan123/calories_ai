@@ -65,7 +65,7 @@ export default function SaveAccountScreen() {
 
   /* The row this screen was opened for, so a different one coming back reads as a switch. */
   const guestId = useRef(profile?.id ?? null);
-  const awaitingCode = Boolean(profile?.guest && profile.email && !profile.email_verified);
+  const awaitingCode = Boolean(profile?.guest && profile.pending_email);
 
   /*
    * An account that is already saved lands on the done state rather than a form
@@ -77,7 +77,7 @@ export default function SaveAccountScreen() {
     alreadySaved ? 'done' : awaitingCode ? 'code' : 'form',
   );
   const [name, setName] = useState('');
-  const [email, setEmail] = useState(profile?.email ?? '');
+  const [email, setEmail] = useState(profile?.pending_email ?? '');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
@@ -93,7 +93,6 @@ export default function SaveAccountScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const perDay = Math.round(TRIAL.chat / TRIAL.days);
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
   function saved() {
@@ -163,7 +162,17 @@ export default function SaveAccountScreen() {
       await refresh();
       saved();
     } catch (e) {
-      setError(messageOf(e, tr));
+      const reason = e instanceof ApiError ? (e.body as { code?: string } | undefined)?.code : undefined;
+      if (reason === 'EMAIL_TAKEN') {
+        // Registered by somebody else since the code went out: back to the form,
+        // with the line that offers signing in to it.
+        setStep('form');
+        setTaken(true);
+      } else if (reason === 'CLAIM_CHANGED') {
+        setError(tr('save.codeStale'));
+      } else {
+        setError(messageOf(e, tr));
+      }
     } finally {
       setBusy(false);
     }
@@ -211,10 +220,10 @@ export default function SaveAccountScreen() {
       : step === 'switched'
         ? tr('save.switchedBody')
         : step === 'code'
-          ? tr('verify.sentTo')(profile?.email ?? email)
+          ? tr('verify.sentTo')(profile?.pending_email ?? email)
           : reason === 'purchase'
             ? tr('save.purchaseBody')
-            : tr('save.trialBody')(TRIAL.days, perDay);
+            : tr('save.trialBody')(TRIAL.days, TRIAL.chat);
 
   return (
     <KeyboardAvoidingView style={styles.flex} behavior="padding">

@@ -2,7 +2,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ActivityLevel, Goal, Locale, OnboardingState, Sex, UnitSystem } from '@ct/shared';
+import { ApiError } from '@ct/api-client';
 import { api } from '@/lib/api';
+import { currentToken } from '@/lib/session';
 import { reachedStep } from '@/lib/funnel';
 import { useAuth } from '@/lib/auth';
 import { preferredLocale } from '@/lib/i18n';
@@ -79,12 +81,36 @@ interface OnboardingValue {
   chooseSignIn: (signingIn: boolean) => void;
   /** Whether a draft is being written to a fresh account right now. */
   saving: boolean;
-  /** Starting the guest session failed — offline, most likely. The saving screen offers a retry. */
-  guestFailed: boolean;
+  /**
+   * Why starting the guest session failed, when it did. `offline` is worth a
+   * retry; `refused` is the server saying no — too many new accounts from this
+   * connection, or sign-ups closed — where a retry is the same answer again, so
+   * the saving screen offers signing in and changing the answers instead.
+   */
+  guestError: 'offline' | 'refused' | null;
   retryGuest: () => void;
 }
 
 const DRAFT_KEY = 'ct:onboarding-draft:v1';
+
+/** How long "Start logging" waits for the server before offering a retry. */
+const GUEST_TIMEOUT_MS = 20_000;
+
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timed out')), ms);
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 const OnboardingContext = createContext<OnboardingValue>({
   state: null,
@@ -100,14 +126,24 @@ const OnboardingContext = createContext<OnboardingValue>({
   signingIn: false,
   chooseSignIn: () => {},
   saving: false,
-  guestFailed: false,
+  guestError: null,
   retryGuest: () => {},
 });
 
 export const useOnboarding = (): OnboardingValue => useContext(OnboardingContext);
 
 export function OnboardingProvider({ children }: { children: React.ReactNode }) {
-  const { authenticated, emailVerified: verified, guest, loading, startGuest, adoptProfile } = useAuth();
+  const {
+    authenticated,
+    emailVerified: verified,
+    guest,
+    loading,
+    profile,
+    startGuest,
+    adoptProfile,
+    refresh: refreshAuth,
+  } = useAuth();
+  const profileId = profile?.id ?? null;
   /*
    * "Inside" for everything below: a proved address, or a guest. A guest is let
    * past the verification gate on the server, so its answers upload and its
@@ -120,7 +156,13 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [guestFailed, setGuestFailed] = useState(false);
+  const [guestError, setGuestError] = useState<'offline' | 'refused' | null>(null);
+  /*
+   * Set when a signed-in session ends, so the finished draft still in state for
+   * the rest of that render is not mistaken for a new walk to make a guest of.
+   * Cleared by the next `saveDraft`, which is the only way a new walk finishes.
+   */
+  const suppressGuest = useRef(false);
   const [guestAttempt, setGuestAttempt] = useState(0);
 
   useEffect(() => {
@@ -137,6 +179,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   }, []);
 
   const saveDraft = useCallback(async (next: OnboardingDraft) => {
+    suppressGuest.current = false;
     setDraft(next);
     try {
       await AsyncStorage.setItem(DRAFT_KEY, JSON.stringify(next));
@@ -265,6 +308,7 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     if (wasSignedIn.current) {
       wasSignedIn.current = false;
       uploadTried.current = false;
+      suppressGuest.current = true;
       void dropDraft();
     }
   }, [authenticated, dropDraft]);
@@ -285,7 +329,9 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     if (!draftLoaded) return;
     setSigningIn(false);
     void refresh();
-  }, [authenticated, emailVerified, draftLoaded, refresh]);
+    // `profileId` too: a guest's save can land on a different, existing account,
+    // and that account's setup state is not the guest's.
+  }, [authenticated, emailVerified, draftLoaded, refresh, profileId]);
 
   /*
    * A finished walk with no session becomes a guest (GUEST-ACCOUNTS.md).
@@ -298,18 +344,36 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   const startingGuest = useRef(false);
   useEffect(() => {
     if (loading || !draftLoaded || authenticated || signingIn || !draft?.completed_at) return;
-    if (startingGuest.current) return;
+    if (suppressGuest.current || startingGuest.current) return;
+    /*
+     * A token in the keystore with no session on screen is a launch that could
+     * not reach the server, not a phone without an account. Making a guest here
+     * would leave the real one stranded; the retry asks the server again instead.
+     */
+    if (currentToken()) {
+      setGuestError('offline');
+      return;
+    }
     startingGuest.current = true;
-    setGuestFailed(false);
-    void startGuest(draft.locale ?? preferredLocale())
+    setGuestError(null);
+    void withTimeout(startGuest(draft.locale ?? preferredLocale()), GUEST_TIMEOUT_MS)
       .then(() => reachedStep('guest'))
-      .catch(() => setGuestFailed(true))
+      .catch((error: unknown) => {
+        const refused = error instanceof ApiError && (error.status === 403 || error.status === 429);
+        setGuestError(refused ? 'refused' : 'offline');
+      })
       .finally(() => {
         startingGuest.current = false;
       });
   }, [loading, draftLoaded, authenticated, signingIn, draft?.completed_at, draft?.locale, startGuest, guestAttempt]);
 
-  const retryGuest = useCallback(() => setGuestAttempt((n) => n + 1), []);
+  const retryGuest = useCallback(() => {
+    if (currentToken()) {
+      void refreshAuth();
+      return;
+    }
+    setGuestAttempt((n) => n + 1);
+  }, [refreshAuth]);
 
   const value = useMemo<OnboardingValue>(
     () => ({
@@ -326,10 +390,10 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       signingIn,
       chooseSignIn: setSigningIn,
       saving,
-      guestFailed,
+      guestError,
       retryGuest,
     }),
-    [state, ready, refresh, draftLoaded, draft, saveDraft, dropDraft, signingIn, saving, guestFailed, retryGuest],
+    [state, ready, refresh, draftLoaded, draft, saveDraft, dropDraft, signingIn, saving, guestError, retryGuest],
   );
 
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;

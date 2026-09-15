@@ -381,14 +381,16 @@ export const uk: Messages = {
   'save.title': 'Збережи *акаунт*',
   'save.titleGuestLimit': 'Гостьовий день *закінчився*',
   'save.titlePurchase': 'Спершу *збережи акаунт*',
-  'save.trialBody': (days: number, perDay: number) =>
-    `Збережи його — це безкоштовно — і отримаєш пробний період на ${days} ${w(days, { one: 'день', few: 'дні', many: 'днів', other: 'дня' })}: ${perDay} ${w(perDay, { one: 'повідомлення', few: 'повідомлення', many: 'повідомлень', other: 'повідомлення' })} на день і одне сканування фото. Усе записане залишиться.`,
+  /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
+  'save.trialBody': (days: number, messages: number) =>
+    `Збережи його — це безкоштовно — і отримаєш пробний період на ${days} ${w(days, { one: 'день', few: 'дні', many: 'днів', other: 'дня' })}: ${messages} ${w(messages, { one: 'повідомлення', few: 'повідомлення', many: 'повідомлень', other: 'повідомлення' })} на цей час і одне сканування фото. Усе записане залишиться.`,
   'save.purchaseBody': 'Щоб куплене лишалося твоїм і на новому телефоні. Усе записане переїде разом із ним.',
   'save.stillFree': 'Ручний запис страв і сканування штрихкодів у будь-якому разі безкоштовні.',
   'save.saveButton': 'Зберегти акаунт',
   'save.signInWarning': 'Якщо увійдеш у нього, страви з цього телефона не перенесуться.',
   'save.signInInstead': 'Увійти в той акаунт',
   'save.changeEmail': 'Інша пошта',
+  'save.codeStale': 'Цей код був для іншої адреси. Надішли новий.',
   'save.doneTitle': 'Акаунт *збережено*',
   'save.doneBody': (days: number) =>
     `Твій пробний період на ${days} ${w(days, { one: 'день', few: 'дні', many: 'днів', other: 'дня' })} почався. Усе записане на місці.`,
@@ -402,6 +404,7 @@ export const uk: Messages = {
   'guest.erase': 'Стерти цей щоденник',
   'guest.eraseWarning': 'Усе записане на цьому телефоні буде видалено. Скасувати не можна.',
   'guest.eraseConfirm': 'Стерти все',
+  'guest.startRefused': 'Зараз із цього з’єднання створено забагато нових акаунтів. Увійди або спробуй пізніше.',
   'auth.showPassword': 'Показати пароль',
   'auth.hidePassword': 'Сховати пароль',
   'auth.nameOptional': 'Ім’я (необов’язково)',

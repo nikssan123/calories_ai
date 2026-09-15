@@ -277,14 +277,16 @@ export const bg: Messages = {
   'save.title': 'Запази *акаунта си*',
   'save.titleGuestLimit': 'Денят като гост *свърши*',
   'save.titlePurchase': 'Първо *запази акаунта*',
-  'save.trialBody': (days: number, perDay: number) =>
-    `Запази го — безплатно е — и получаваш ${days} ${w(days, { one: 'ден', other: 'дни' })} пробен период: по ${perDay} ${w(perDay, { one: 'съобщение', other: 'съобщения' })} на ден и едно сканиране на снимка. Всичко записано остава.`,
+  /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
+  'save.trialBody': (days: number, messages: number) =>
+    `Запази го — безплатно е — и получаваш ${days} ${w(days, { one: 'ден', other: 'дни' })} пробен период: ${messages} ${w(messages, { one: 'съобщение', other: 'съобщения' })} за тези дни и едно сканиране на снимка. Всичко записано остава.`,
   'save.purchaseBody': 'Така каквото купиш, остава твое и на нов телефон. Всичко записано идва с него.',
   'save.stillFree': 'Ръчното записване и сканирането на баркод остават безплатни така или иначе.',
   'save.saveButton': 'Запази акаунта',
   'save.signInWarning': 'Ако влезеш в него, храненията от този телефон няма да се прехвърлят.',
   'save.signInInstead': 'Влез в този акаунт',
   'save.changeEmail': 'Друг имейл',
+  'save.codeStale': 'Този код е за друг адрес. Изпрати нов.',
   'save.doneTitle': 'Акаунтът е *запазен*',
   'save.doneBody': (days: number) =>
     `Пробният ти период от ${days} ${w(days, { one: 'ден', other: 'дни' })} започна. Всичко записано е тук.`,
@@ -298,6 +300,7 @@ export const bg: Messages = {
   'guest.erase': 'Изтрий този дневник',
   'guest.eraseWarning': 'Всичко записано на този телефон ще бъде изтрито. Това не може да се върне.',
   'guest.eraseConfirm': 'Изтрий всичко',
+  'guest.startRefused': 'В момента от тази връзка са създадени твърде много нови акаунти. Влез в акаунта си или опитай по-късно.',
   'auth.showPassword': 'Покажи паролата',
   'auth.hidePassword': 'Скрий паролата',
   'auth.nameOptional': 'Име (по желание)',

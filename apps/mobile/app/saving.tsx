@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { GlowButton } from '@/components/GlowButton';
 import { useAuth } from '@/lib/auth';
 import { RingObject } from '@/components/RingObject';
@@ -23,19 +23,43 @@ export default function SavingScreen() {
   const colors = useColors();
   const type = useType();
   const tr = useT();
-  const { saving, planWaiting, guestFailed, retryGuest } = useOnboarding();
+  const { saving, planWaiting, guestError, retryGuest, draft, saveDraft, chooseSignIn } = useOnboarding();
   const { authenticated } = useAuth();
   /* The guest session for a finished walk is still being made (GUEST-ACCOUNTS.md). */
   const starting = !authenticated && planWaiting;
 
-  if (starting && guestFailed) {
+  /*
+   * The guest session could not be made. Offline is a retry. A refusal — too
+   * many new accounts from this connection, or sign-ups closed — is the same
+   * answer on every retry, so it offers the two ways out that do not need a new
+   * account: signing in to an existing one, and going back to the answers. Both
+   * are here for offline too, so nobody is ever held on a screen with one button
+   * that cannot work.
+   */
+  if (starting && guestError) {
     return (
       <View style={styles.flex}>
         <Stage />
         <View style={[styles.centre, column]} accessibilityLiveRegion="polite">
           <RingObject size={150} />
-          <Text style={[t.bodyBold, styles.centred, { color: colors.foreground }]}>{tr('common.offline')}</Text>
-          <GlowButton label={tr('ob.retry')} onPress={retryGuest} />
+          <Text style={[t.bodyBold, styles.centred, { color: colors.foreground }]}>
+            {guestError === 'refused' ? tr('guest.startRefused') : tr('common.offline')}
+          </Text>
+          {guestError === 'offline' && <GlowButton label={tr('ob.retry')} onPress={retryGuest} />}
+          <Pressable onPress={() => chooseSignIn(true)} accessibilityRole="button" hitSlop={8}>
+            <Text style={[t.footnoteSemibold, styles.link, { color: colors.foreground }]}>{tr('ob.haveAccount')}</Text>
+          </Pressable>
+          {draft && (
+            <Pressable
+              onPress={() => void saveDraft({ ...draft, completed_at: null })}
+              accessibilityRole="button"
+              hitSlop={8}
+            >
+              <Text style={[t.footnoteSemibold, styles.link, { color: colors.mutedForeground }]}>
+                {tr('auth.changeAnswers')}
+              </Text>
+            </Pressable>
+          )}
         </View>
       </View>
     );
@@ -61,4 +85,5 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   centre: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 28 },
   centred: { textAlign: 'center' },
+  link: { textAlign: 'center', marginTop: 8 },
 });

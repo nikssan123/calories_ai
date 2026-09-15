@@ -384,14 +384,16 @@ export const el: Messages = {
   'save.title': 'Αποθήκευσε τον *λογαριασμό σου*',
   'save.titleGuestLimit': 'Η μέρα επισκέπτη *τελείωσε*',
   'save.titlePurchase': 'Πρώτα *αποθήκευσε τον λογαριασμό*',
-  'save.trialBody': (days: number, perDay: number) =>
-    `Αποθήκευσέ τον — είναι δωρεάν — και παίρνεις δοκιμή ${days} ${w(days, { one: 'ημέρας', other: 'ημερών' })}: ${perDay} ${w(perDay, { one: 'μήνυμα', other: 'μηνύματα' })} την ημέρα και μία σάρωση φωτογραφίας. Ό,τι έχεις καταγράψει μένει.`,
+  /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
+  'save.trialBody': (days: number, messages: number) =>
+    `Αποθήκευσέ τον — είναι δωρεάν — και παίρνεις δοκιμή ${days} ${w(days, { one: 'ημέρας', other: 'ημερών' })}: ${messages} ${w(messages, { one: 'μήνυμα', other: 'μηνύματα' })} για όλο το διάστημα και μία σάρωση φωτογραφίας. Ό,τι έχεις καταγράψει μένει.`,
   'save.purchaseBody': 'Για να μένει δικό σου ό,τι αγοράζεις και σε νέο κινητό. Ό,τι έχεις καταγράψει έρχεται μαζί.',
   'save.stillFree': 'Η χειροκίνητη καταγραφή γευμάτων και η σάρωση barcode μένουν δωρεάν έτσι κι αλλιώς.',
   'save.saveButton': 'Αποθήκευση λογαριασμού',
   'save.signInWarning': 'Αν συνδεθείς σε αυτόν, τα γεύματα από αυτό το κινητό δεν θα μεταφερθούν.',
   'save.signInInstead': 'Σύνδεση σε εκείνον τον λογαριασμό',
   'save.changeEmail': 'Άλλο email',
+  'save.codeStale': 'Αυτός ο κωδικός ήταν για άλλη διεύθυνση. Στείλε νέο.',
   'save.doneTitle': 'Ο λογαριασμός *αποθηκεύτηκε*',
   'save.doneBody': (days: number) =>
     `Η δοκιμή ${days} ${w(days, { one: 'ημέρας', other: 'ημερών' })} ξεκίνησε. Ό,τι κατέγραψες είναι εδώ.`,
@@ -405,6 +407,7 @@ export const el: Messages = {
   'guest.erase': 'Διαγραφή αυτού του ημερολογίου',
   'guest.eraseWarning': 'Ό,τι έχει καταγραφεί σε αυτό το κινητό θα διαγραφεί. Δεν αναιρείται.',
   'guest.eraseConfirm': 'Διαγραφή όλων',
+  'guest.startRefused': 'Από αυτή τη σύνδεση δημιουργήθηκαν πολλοί νέοι λογαριασμοί μόλις τώρα. Συνδέσου ή δοκίμασε αργότερα.',
   'auth.showPassword': 'Εμφάνιση κωδικού',
   'auth.hidePassword': 'Απόκρυψη κωδικού',
   'auth.nameOptional': 'Όνομα (προαιρετικό)',

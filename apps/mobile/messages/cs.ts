@@ -397,14 +397,16 @@ export const cs: Messages = {
   'save.title': 'Ulož si *účet*',
   'save.titleGuestLimit': 'Den hosta je *vyčerpaný*',
   'save.titlePurchase': 'Nejdřív si *ulož účet*',
-  'save.trialBody': (days: number, perDay: number) =>
-    `Ulož si ho — je to zdarma — a získáš ${days}denní zkušební období: ${perDay} ${w(perDay, { one: 'zpráva', few: 'zprávy', many: 'zprávy', other: 'zpráv' })} denně a jedno skenování fotky. Všechno, co jsi zapsal, zůstane.`,
+  /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
+  'save.trialBody': (days: number, messages: number) =>
+    `Ulož si ho — je to zdarma — a získáš ${days}denní zkušební období: ${messages} ${w(messages, { one: 'zpráva', few: 'zprávy', many: 'zprávy', other: 'zpráv' })} na celou dobu a jedno skenování fotky. Všechno, co jsi zapsal, zůstane.`,
   'save.purchaseBody': 'Aby to, co koupíš, zůstalo tvoje i na novém telefonu. Všechno zapsané jde s tebou.',
   'save.stillFree': 'Ruční zápis jídel a skenování čárových kódů zůstávají zdarma tak jako tak.',
   'save.saveButton': 'Uložit účet',
   'save.signInWarning': 'Když se do něj přihlásíš, jídla z tohoto telefonu se nepřesunou.',
   'save.signInInstead': 'Přihlásit se do toho účtu',
   'save.changeEmail': 'Použít jiný e-mail',
+  'save.codeStale': 'Ten kód byl pro jinou adresu. Pošli nový.',
   'save.doneTitle': 'Účet *uložen*',
   'save.doneBody': (days: number) => `Tvoje ${days}denní zkušební období začalo. Všechno zapsané je tady.`,
   'save.switchedTitle': 'Jsi *přihlášen*',
@@ -417,6 +419,7 @@ export const cs: Messages = {
   'guest.erase': 'Smazat tento deník',
   'guest.eraseWarning': 'Všechno zapsané v tomto telefonu bude smazáno. Nejde to vrátit.',
   'guest.eraseConfirm': 'Smazat vše',
+  'guest.startRefused': 'Z tohoto připojení teď vzniklo příliš mnoho nových účtů. Přihlas se, nebo to zkus později.',
   'auth.showPassword': 'Zobrazit heslo',
   'auth.hidePassword': 'Skrýt heslo',
   'auth.nameOptional': 'Jméno (nepovinné)',

@@ -72,6 +72,28 @@ export function newId(): string {
 let queue: Intent[] | null = null;
 const listeners = new Set<(pending: Intent[]) => void>();
 
+/**
+ * Whose queue is being drained: the signed-in account, set by the auth provider.
+ *
+ * Every intent already carries the account that queued it, and `flush` sends
+ * only those. Without this the queue went out under whatever token was current,
+ * so meals a guest logged offline could land in the account signed in after it
+ * — the one it switched to from "Save your account", or the next person on the
+ * phone. An intent for somebody else waits for them to sign back in.
+ */
+let owner: string | null = null;
+
+export function setOwner(userId: string | null): void {
+  owner = userId;
+  if (userId) void flush();
+}
+
+/** Throws away one account's queued intents — for an account that no longer exists. */
+export async function discardFor(userId: string): Promise<void> {
+  const current = await load();
+  await persist(current.filter((intent) => intent.userId !== userId));
+}
+
 async function load(): Promise<Intent[]> {
   if (queue) return queue;
   try {
@@ -216,7 +238,8 @@ export async function flush(): Promise<void> {
 
   try {
     for (;;) {
-      const next = (await load())[0];
+      if (!owner) break;
+      const next = (await load()).find((intent) => intent.userId === owner);
       if (!next) break;
 
       try {

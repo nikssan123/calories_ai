@@ -389,14 +389,16 @@ export const hr: Messages = {
   'save.title': 'Spremi *račun*',
   'save.titleGuestLimit': 'Dan gosta je *potrošen*',
   'save.titlePurchase': 'Najprije *spremi račun*',
-  'save.trialBody': (days: number, perDay: number) =>
-    `Spremi ga — besplatno je — i dobivaš probno razdoblje od ${days} ${w(days, { one: 'dan', few: 'dana', other: 'dana' })}: ${perDay} ${w(perDay, { one: 'poruka', few: 'poruke', other: 'poruka' })} dnevno i jedno skeniranje fotografije. Sve što si upisao ostaje.`,
+  /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
+  'save.trialBody': (days: number, messages: number) =>
+    `Spremi ga — besplatno je — i dobivaš probno razdoblje od ${days} ${w(days, { one: 'dan', few: 'dana', other: 'dana' })}: ${messages} ${w(messages, { one: 'poruka', few: 'poruke', other: 'poruka' })} za to vrijeme i jedno skeniranje fotografije. Sve što si upisao ostaje.`,
   'save.purchaseBody': 'Da ono što kupiš ostane tvoje i na novom mobitelu. Sve što si upisao ide s tobom.',
   'save.stillFree': 'Ručno upisivanje obroka i skeniranje barkoda ostaju besplatni u svakom slučaju.',
   'save.saveButton': 'Spremi račun',
   'save.signInWarning': 'Ako se prijaviš u njega, obroci s ovog mobitela neće se prenijeti.',
   'save.signInInstead': 'Prijavi se u taj račun',
   'save.changeEmail': 'Druga e-pošta',
+  'save.codeStale': 'Taj je kôd bio za drugu adresu. Pošalji novi.',
   'save.doneTitle': 'Račun je *spremljen*',
   'save.doneBody': (days: number) =>
     `Tvoje probno razdoblje od ${days} ${w(days, { one: 'dan', few: 'dana', other: 'dana' })} je počelo. Sve što si upisao je tu.`,
@@ -410,6 +412,7 @@ export const hr: Messages = {
   'guest.erase': 'Izbriši ovaj dnevnik',
   'guest.eraseWarning': 'Sve upisano na ovom mobitelu bit će izbrisano. To se ne može poništiti.',
   'guest.eraseConfirm': 'Izbriši sve',
+  'guest.startRefused': 'S ove veze trenutačno je napravljeno previše novih računa. Prijavi se ili pokušaj kasnije.',
   'auth.showPassword': 'Prikaži lozinku',
   'auth.hidePassword': 'Sakrij lozinku',
   'auth.nameOptional': 'Ime (neobavezno)',

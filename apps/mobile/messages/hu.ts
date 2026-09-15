@@ -384,14 +384,16 @@ export const hu: Messages = {
   'save.title': 'Mentsd el a *fiókod*',
   'save.titleGuestLimit': 'A vendégnap *elfogyott*',
   'save.titlePurchase': 'Előbb *mentsd el a fiókod*',
-  'save.trialBody': (days: number, perDay: number) =>
-    `Mentsd el — ingyenes —, és kapsz egy ${days} napos próbaidőszakot: napi ${perDay} üzenet és egy fotós beolvasás. Minden, amit eddig rögzítettél, megmarad.`,
+  /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
+  'save.trialBody': (days: number, messages: number) =>
+    `Mentsd el — ingyenes —, és kapsz egy ${days} napos próbaidőszakot: ${messages} üzenet erre az időre és egy fotós beolvasás. Minden, amit eddig rögzítettél, megmarad.`,
   'save.purchaseBody': 'Így amit megveszel, új telefonon is a tiéd marad. Minden rögzített adat veled jön.',
   'save.stillFree': 'Az ételek kézi beírása és a vonalkódolvasás így is, úgy is ingyenes marad.',
   'save.saveButton': 'Fiók mentése',
   'save.signInWarning': 'Ha belépsz abba, az erről a telefonról rögzített étkezések nem kerülnek át.',
   'save.signInInstead': 'Belépés abba a fiókba',
   'save.changeEmail': 'Másik e-mail-cím',
+  'save.codeStale': 'Ez a kód egy másik címhez tartozott. Kérj újat.',
   'save.doneTitle': 'Fiók *elmentve*',
   'save.doneBody': (days: number) => `Elindult a ${days} napos próbaidőszakod. Minden rögzített adat itt van.`,
   'save.switchedTitle': 'Beléptél',
@@ -404,6 +406,7 @@ export const hu: Messages = {
   'guest.erase': 'Napló törlése',
   'guest.eraseWarning': 'Minden, amit ezen a telefonon rögzítettél, törlődik. Ez nem vonható vissza.',
   'guest.eraseConfirm': 'Minden törlése',
+  'guest.startRefused': 'Erről a kapcsolatról most túl sok új fiók jött létre. Lépj be, vagy próbáld később.',
   'auth.showPassword': 'Jelszó megjelenítése',
   'auth.hidePassword': 'Jelszó elrejtése',
   'auth.nameOptional': 'Név (nem kötelező)',

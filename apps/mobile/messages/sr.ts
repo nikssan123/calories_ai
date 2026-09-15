@@ -395,14 +395,16 @@ export const sr: Messages = {
   'save.title': 'Сачувај *налог*',
   'save.titleGuestLimit': 'Дан као гост је *потрошен*',
   'save.titlePurchase': 'Прво *сачувај налог*',
-  'save.trialBody': (days: number, perDay: number) =>
-    `Сачувај га — бесплатно је — и добијаш пробни период од ${days} ${w(days, { one: 'дан', few: 'дана', other: 'дана' })}: ${perDay} ${w(perDay, { one: 'порука', few: 'поруке', other: 'порука' })} дневно и једно скенирање фотографије. Све што си уписао остаје.`,
+  /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
+  'save.trialBody': (days: number, messages: number) =>
+    `Сачувај га — бесплатно је — и добијаш пробни период од ${days} ${w(days, { one: 'дан', few: 'дана', other: 'дана' })}: ${messages} ${w(messages, { one: 'порука', few: 'поруке', other: 'порука' })} за то време и једно скенирање фотографије. Све што си уписао остаје.`,
   'save.purchaseBody': 'Да оно што купиш остане твоје и на новом телефону. Све што си уписао иде са тобом.',
   'save.stillFree': 'Ручно уписивање оброка и скенирање бар-кода остају бесплатни у сваком случају.',
   'save.saveButton': 'Сачувај налог',
   'save.signInWarning': 'Ако се пријавиш на њега, оброци са овог телефона се неће пренети.',
   'save.signInInstead': 'Пријави се на тај налог',
   'save.changeEmail': 'Други имејл',
+  'save.codeStale': 'Тај код је био за другу адресу. Пошаљи нови.',
   'save.doneTitle': 'Налог је *сачуван*',
   'save.doneBody': (days: number) =>
     `Твој пробни период од ${days} ${w(days, { one: 'дан', few: 'дана', other: 'дана' })} је почео. Све што си уписао је ту.`,
@@ -416,6 +418,7 @@ export const sr: Messages = {
   'guest.erase': 'Обриши овај дневник',
   'guest.eraseWarning': 'Све уписано на овом телефону биће обрисано. Ово се не може опозвати.',
   'guest.eraseConfirm': 'Обриши све',
+  'guest.startRefused': 'Са ове везе је тренутно направљено превише нових налога. Пријави се или покушај касније.',
   'auth.showPassword': 'Прикажи лозинку',
   'auth.hidePassword': 'Сакриј лозинку',
   'auth.nameOptional': 'Име (необавезно)',

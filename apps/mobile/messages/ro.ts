@@ -392,14 +392,16 @@ export const ro: Messages = {
   'save.title': 'Salvează-ți *contul*',
   'save.titleGuestLimit': 'Ziua de oaspete *s-a terminat*',
   'save.titlePurchase': 'Mai întâi *salvează-ți contul*',
-  'save.trialBody': (days: number, perDay: number) =>
-    `Salvează-l — e gratuit — și primești o perioadă de probă de ${days} ${w(days, { one: 'zi', few: 'zile', other: 'de zile' })}: ${perDay} ${w(perDay, { one: 'mesaj', few: 'mesaje', other: 'de mesaje' })} pe zi și o scanare foto. Tot ce ai notat rămâne.`,
+  /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
+  'save.trialBody': (days: number, messages: number) =>
+    `Salvează-l — e gratuit — și primești o perioadă de probă de ${days} ${w(days, { one: 'zi', few: 'zile', other: 'de zile' })}: ${messages} ${w(messages, { one: 'mesaj', few: 'mesaje', other: 'de mesaje' })} în aceste zile și o scanare foto. Tot ce ai notat rămâne.`,
   'save.purchaseBody': 'Ca ce cumperi să rămână al tău și pe un telefon nou. Tot ce ai notat vine cu tine.',
   'save.stillFree': 'Notarea manuală a meselor și scanarea codurilor de bare rămân gratuite oricum.',
   'save.saveButton': 'Salvează contul',
   'save.signInWarning': 'Dacă te conectezi la el, mesele de pe acest telefon nu se mută.',
   'save.signInInstead': 'Conectează-te la acel cont',
   'save.changeEmail': 'Folosește alt e-mail',
+  'save.codeStale': 'Codul era pentru altă adresă. Trimite unul nou.',
   'save.doneTitle': 'Cont *salvat*',
   'save.doneBody': (days: number) =>
     `Perioada ta de probă de ${days} ${w(days, { one: 'zi', few: 'zile', other: 'de zile' })} a început. Tot ce ai notat e aici.`,
@@ -413,6 +415,7 @@ export const ro: Messages = {
   'guest.erase': 'Șterge acest jurnal',
   'guest.eraseWarning': 'Tot ce ai notat pe acest telefon va fi șters. Nu se poate anula.',
   'guest.eraseConfirm': 'Șterge tot',
+  'guest.startRefused': 'Prea multe conturi noi de pe această conexiune acum. Conectează-te sau încearcă mai târziu.',
   'auth.showPassword': 'Arată parola',
   'auth.hidePassword': 'Ascunde parola',
   'auth.nameOptional': 'Nume (opțional)',

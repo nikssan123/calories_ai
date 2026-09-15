@@ -277,14 +277,16 @@ export const de: Messages = {
   'save.title': 'Speicher dein *Konto*',
   'save.titleGuestLimit': 'Dein Gasttag ist *aufgebraucht*',
   'save.titlePurchase': 'Erst dein *Konto speichern*',
-  'save.trialBody': (days: number, perDay: number) =>
-    `Speicher es – kostenlos – und du bekommst ${days} Tage zum Testen: ${perDay} ${w(perDay, { one: 'Nachricht', other: 'Nachrichten' })} pro Tag und einen Foto-Scan. Alles, was du eingetragen hast, bleibt.`,
+  /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
+  'save.trialBody': (days: number, messages: number) =>
+    `Speicher es – kostenlos – und du bekommst ${days} Tage zum Testen: ${messages} ${w(messages, { one: 'Nachricht', other: 'Nachrichten' })} für die ganze Zeit und einen Foto-Scan. Alles, was du eingetragen hast, bleibt.`,
   'save.purchaseBody': 'Damit, was du kaufst, auch auf einem neuen Handy deins bleibt. Alles Eingetragene kommt mit.',
   'save.stillFree': 'Mahlzeiten von Hand eintragen und Barcodes scannen bleibt so oder so kostenlos.',
   'save.saveButton': 'Konto speichern',
   'save.signInWarning': 'Wenn du dich dort anmeldest, wandern die Mahlzeiten von diesem Handy nicht mit.',
   'save.signInInstead': 'Bei diesem Konto anmelden',
   'save.changeEmail': 'Andere E-Mail verwenden',
+  'save.codeStale': 'Der Code war für eine andere Adresse. Fordere einen neuen an.',
   'save.doneTitle': 'Konto *gespeichert*',
   'save.doneBody': (days: number) => `Deine ${days} Tage zum Testen haben begonnen. Alles Eingetragene ist noch da.`,
   'save.switchedTitle': '*Angemeldet*',
@@ -297,6 +299,7 @@ export const de: Messages = {
   'guest.erase': 'Dieses Tagebuch löschen',
   'guest.eraseWarning': 'Alles, was auf diesem Handy eingetragen ist, wird gelöscht. Das lässt sich nicht rückgängig machen.',
   'guest.eraseConfirm': 'Alles löschen',
+  'guest.startRefused': 'Über diese Verbindung wurden gerade zu viele neue Konten angelegt. Melde dich an oder versuch es später.',
   'auth.showPassword': 'Passwort anzeigen',
   'auth.hidePassword': 'Passwort verbergen',
   'auth.nameOptional': 'Name (optional)',

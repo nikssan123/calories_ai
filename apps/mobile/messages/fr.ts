@@ -286,14 +286,16 @@ export const fr: Messages = {
   'save.title': 'Enregistre ton *compte*',
   'save.titleGuestLimit': 'Ta journée d’invité est *terminée*',
   'save.titlePurchase': 'D’abord, *enregistre ton compte*',
-  'save.trialBody': (days: number, perDay: number) =>
-    `Enregistre-le — c’est gratuit — et profite de ${days} jours d’essai : ${perDay} ${w(perDay, { one: 'message', other: 'messages' })} par jour et un scan de photo. Tout ce que tu as noté reste.`,
+  /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
+  'save.trialBody': (days: number, messages: number) =>
+    `Enregistre-le — c’est gratuit — et profite de ${days} jours d’essai : ${messages} ${w(messages, { one: 'message', other: 'messages' })} sur toute la période et un scan de photo. Tout ce que tu as noté reste.`,
   'save.purchaseBody': 'Pour que ce que tu achètes reste à toi sur un nouveau téléphone. Tout ce que tu as noté suit.',
   'save.stillFree': 'Noter un repas à la main et scanner un code-barres restent gratuits dans tous les cas.',
   'save.saveButton': 'Enregistrer mon compte',
   'save.signInWarning': 'Si tu t’y connectes, les repas de ce téléphone ne seront pas transférés.',
   'save.signInInstead': 'Me connecter à ce compte',
   'save.changeEmail': 'Utiliser une autre adresse',
+  'save.codeStale': 'Ce code était pour une autre adresse. Demandes-en un nouveau.',
   'save.doneTitle': 'Compte *enregistré*',
   'save.doneBody': (days: number) => `Tes ${days} jours d’essai ont commencé. Tout ce que tu as noté est toujours là.`,
   'save.switchedTitle': 'Tu es *connecté*',
@@ -306,6 +308,7 @@ export const fr: Messages = {
   'guest.erase': 'Effacer ce journal',
   'guest.eraseWarning': 'Tout ce qui est noté sur ce téléphone sera supprimé. C’est irréversible.',
   'guest.eraseConfirm': 'Tout effacer',
+  'guest.startRefused': 'Trop de nouveaux comptes créés depuis cette connexion. Connecte-toi ou réessaie plus tard.',
   'auth.showPassword': 'Afficher le mot de passe',
   'auth.hidePassword': 'Masquer le mot de passe',
   'auth.nameOptional': 'Nom (facultatif)',

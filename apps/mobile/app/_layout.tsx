@@ -268,9 +268,11 @@ function Gate() {
    * fails in the only way that leaves no trace — the notification simply never
    * arrives.
    */
+  const accountId = useAuth().profile?.id ?? null;
   useEffect(() => {
     if (inside) void registerForPush();
-  }, [inside]);
+    // The account too: after a switch the address is registered to the new one.
+  }, [inside, accountId]);
 
   /*
    * And re-arm the alarms the reader set on this phone.
