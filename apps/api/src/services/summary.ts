@@ -54,9 +54,11 @@ export async function buildDaySummary(
     stepsContextFor(userId, localDate),
   ]);
 
+  const run = localDate === today ? await todayStreak(userId, today) : null;
   return rollUpDay({
     localDate,
-    streak: localDate === today ? await todayStreak(userId, today) : null,
+    streak: run?.streak ?? null,
+    earned: run?.earned,
     steps: steps.steps,
     stepsAverage: steps.average,
     foodEntries,
@@ -82,10 +84,10 @@ export async function buildDaySummary(
  * lunch arrives in the same response as the lunch, rather than at 20:00 in a
  * notification about something that happened five hours ago.
  */
-async function todayStreak(userId: string, today: string): Promise<Streak> {
+async function todayStreak(userId: string, today: string): Promise<{ streak: Streak; earned: Achievement[] }> {
   const history = await logHistory(userId);
-  await earnQuietly(userId, history, today);
-  return streaksOf(history, today).logging;
+  const earned = await earnQuietly(userId, history, today);
+  return { streak: streaksOf(history, today).logging, earned };
 }
 
 /**

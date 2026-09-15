@@ -1697,6 +1697,16 @@ export const DaySummary = z.object({
    * `stepsContextFor`.
    */
   steps_average: z.number().int().nullable().default(null),
+  /**
+   * Badges this very read earned, when it earned any.
+   *
+   * The badge pass already runs inside today's read (`buildDaySummary`), so a
+   * badge earned by logging lunch is known in the response that carries the
+   * lunch; this hands it to the client instead of dropping it, and the app shows
+   * where it went (CAST.md, fourth pass). Absent on every other read, and
+   * optional so an older server and a cached day both still parse.
+   */
+  earned: z.array(Achievement).optional(),
 });
 export type DaySummary = z.infer<typeof DaySummary>;
 

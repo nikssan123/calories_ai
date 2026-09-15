@@ -1,4 +1,5 @@
 import type {
+  Achievement,
   DayQuality,
   DaySummary,
   DietQuality,
@@ -460,6 +461,8 @@ export interface DayParts {
    * cell in March has no use for one.
    */
   streak?: Streak | null;
+  /** Badges the read that built this day just earned. See `DaySummary.earned`. */
+  earned?: Achievement[];
   /**
    * The phone's step count for this day, when there is one.
    *
@@ -491,6 +494,7 @@ export function rollUpDay({
   streak = null,
   steps = null,
   stepsAverage = null,
+  earned,
 }: DayParts): DaySummary {
   const consumed = sumNutrition(foodEntries);
   const burned_kcal = exerciseEntries.reduce((sum, e) => sum + e.kcal_burned, 0);
@@ -516,6 +520,7 @@ export function rollUpDay({
     streak,
     steps,
     steps_average: stepsAverage,
+    ...(earned && earned.length > 0 ? { earned } : {}),
   };
 }
 

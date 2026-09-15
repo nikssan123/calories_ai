@@ -71,6 +71,18 @@ describe('earning', () => {
     expect(await evaluate()).toEqual([]);
   });
 
+  /**
+   * The read that earns a badge says so, once, so the app can show where it
+   * went; every later read of the same day says nothing.
+   */
+  it("hands today's summary the badges that read earned, and only that read", async () => {
+    await logDays(7);
+    const first = await buildDaySummary(user.id, TODAY, TODAY);
+    expect(first.earned?.map((a) => a.key)).toContain('streak_7');
+    const again = await buildDaySummary(user.id, TODAY, TODAY);
+    expect(again.earned).toBeUndefined();
+  });
+
   it('writes one row per key however many times it is evaluated', async () => {
     await logDays(7);
     await Promise.all([evaluate(), evaluate(), evaluate()]);
