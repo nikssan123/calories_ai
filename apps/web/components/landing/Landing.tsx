@@ -808,9 +808,9 @@ function Features({ copy }: { copy: LandingCopy['features'] }) {
  * day up cost nothing to serve and are free forever. Reading a sentence or a
  * photograph is a model, and a model has a bill.
  *
- * **The grants are stated in the card rather than in a footnote.** Ten messages
- * a month, and a photo scan that does not come back at all, are both a surprise
- * if somebody finds them in week three. A limit you can read before signing up
+ * **The grants are stated in the card rather than in a footnote.** A week of
+ * trial and then no AI, and a photo scan that does not come back at all, are
+ * both a surprise if somebody finds them on day eight. A limit you can read before signing up
  * is a plan; the same limit discovered later is a bait.
  *
  * **The month is the price on the card; the year is a toggle above it.** The

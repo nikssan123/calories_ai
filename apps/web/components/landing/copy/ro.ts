@@ -198,7 +198,7 @@ export const ro: LandingCopy = {
         annualCadence: 'cât timp vrei',
         pitch: 'Tot jurnalul, chiar și în avion.',
         allowance: [
-          { figure: '10', unit: 'mesaje', period: 'pe lună' },
+          { figure: '28', unit: 'de mesaje', period: 'în 7 zile de probă' },
           { figure: '1', unit: 'scanare foto', period: 'de încercare' },
         ],
         points: [
@@ -248,10 +248,10 @@ export const ro: LandingCopy = {
       },
     ],
     notes: [
-      'Orice cont începe cu planul Free. Nu există nicio perioadă de probă pe care să nu uiți s-o anulezi.',
+      'Orice cont începe cu 7 zile de probă gratuită cu AI. Nu cerem card, deci nu ai nimic de anulat.',
       'Ce include planul se reîncarcă zi de zi, pe o perioadă mobilă de 30 de zile, deci nu aștepți nicio dată de resetare.',
       'Ai rămas fără scanări foto? Pachetele pornesc de la 4,09 € pentru zece, nu expiră niciodată și se folosesc doar după ce s-au terminat cele din luna respectivă.',
-      'Dacă nu mai plătești, revii la planul Free: jurnalul și istoricul rămân, cu 10 mesaje pe lună.',
+      'Dacă nu mai plătești, revii la planul Free: jurnalul, istoricul și mesele scrise de tine rămân.',
     ],
     currency: 'Prețuri în euro. Prețul exact pentru țara ta îl vezi în Google Play.',
   },

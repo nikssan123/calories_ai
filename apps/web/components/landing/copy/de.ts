@@ -194,7 +194,7 @@ export const de: LandingCopy = {
         annualCadence: 'so lange du willst',
         pitch: 'Das ganze Tagebuch, sogar im Flugzeug.',
         allowance: [
-          { figure: '10', unit: 'Nachrichten', period: 'im Monat' },
+          { figure: '28', unit: 'Nachrichten', period: 'in der 7-tägigen Testphase' },
           { figure: '1', unit: 'Foto-Scan', period: 'zum Testen' },
         ],
         points: [
@@ -244,10 +244,10 @@ export const de: LandingCopy = {
       },
     ],
     notes: [
-      'Jedes Konto startet mit Free. Es gibt keine Testphase, die du rechtzeitig kündigen musst.',
+      'Jedes Konto startet mit einer kostenlosen 7-tägigen Testphase der KI. Wir fragen nach keiner Karte, also musst du nichts kündigen.',
       'Kontingente füllen sich über rollierende 30 Tage Tag für Tag wieder auf — es gibt also keinen Stichtag, auf den du warten musst.',
       'Keine Foto-Scans mehr? Pakete gibt es ab 4,09 € für zehn Stück. Sie verfallen nie und werden erst genutzt, wenn die Scans des Monats aufgebraucht sind.',
-      'Hörst du auf zu zahlen, bist du wieder auf Free: Dein Tagebuch und dein Verlauf bleiben, mit 10 Nachrichten im Monat.',
+      'Hörst du auf zu zahlen, bist du wieder auf Free: Dein Tagebuch, dein Verlauf und das Eintippen von Mahlzeiten bleiben.',
     ],
     currency: 'Preise in Euro. Den genauen Preis für dein Land zeigt dir Google Play.',
   },

@@ -196,7 +196,7 @@ export const hr: LandingCopy = {
         annualCadence: 'dokle god želiš',
         pitch: 'Cijeli dnevnik, čak i u avionu.',
         allowance: [
-          { figure: '10', unit: 'poruka', period: 'mjesečno' },
+          { figure: '28', unit: 'poruka', period: 'u 7-dnevnoj probi' },
           { figure: '1', unit: 'fotografija', period: 'za probu' },
         ],
         points: [
@@ -246,10 +246,10 @@ export const hr: LandingCopy = {
       },
     ],
     notes: [
-      'Svaki račun počinje s paketom Free. Nema probnog razdoblja koje treba otkazati na vrijeme.',
+      'Svaki račun počinje besplatnom 7-dnevnom probom AI-ja. Ne tražimo karticu, pa nemaš što otkazivati.',
       'Ono što paket uključuje puni se dan po dan, kroz pomično razdoblje od 30 dana, pa nema datuma obnove koji treba čekati.',
       'Ponestalo ti je skeniranja fotografija? Dodatna se kupuju od 4,29 € za deset, ne istječu i koriste se tek kad potrošiš mjesečna.',
-      'Prestaneš li plaćati, vraćaš se na Free: dnevnik i povijest ostaju, uz 10 poruka mjesečno.',
+      'Prestaneš li plaćati, vraćaš se na Free: dnevnik, povijest i ručno upisivanje obroka ostaju.',
     ],
     currency: 'Cijene su u eurima. Točnu cijenu za tvoju zemlju vidiš u Google Playu.',
   },

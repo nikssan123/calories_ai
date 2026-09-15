@@ -199,7 +199,7 @@ export const fr: LandingCopy = {
         annualCadence: 'aussi longtemps que tu veux',
         pitch: 'Tout le journal, même en avion.',
         allowance: [
-          { figure: '10', unit: 'messages', period: 'par mois' },
+          { figure: '28', unit: 'messages', period: 'sur 7 jours d’essai' },
           { figure: '1', unit: 'scan de photo', period: 'pour essayer' },
         ],
         points: [
@@ -249,10 +249,10 @@ export const fr: LandingCopy = {
       },
     ],
     notes: [
-      'Tout compte démarre sur Free. Pas d’essai gratuit à penser à annuler.',
+      'Tout compte démarre avec 7 jours d’essai gratuit de l’IA. On ne te demande pas de carte, donc rien à penser à annuler.',
       'Les quotas se rechargent jour après jour sur 30 jours glissants : aucune date de remise à zéro à attendre.',
       'Plus de scans de photo ? Les packs démarrent à 4,09 € les dix, n’expirent jamais et ne servent qu’une fois ceux du mois épuisés.',
-      'Tu arrêtes de payer ? Tu repasses sur Free : ton journal et ton historique restent, avec 10 messages par mois.',
+      'Tu arrêtes de payer ? Tu repasses sur Free : ton journal, ton historique et la saisie de tes repas restent.',
     ],
     currency: 'Prix en euros. Google Play t’affiche le prix exact pour ton pays.',
   },

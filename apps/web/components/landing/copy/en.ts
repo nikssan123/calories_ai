@@ -203,7 +203,7 @@ export const en = {
         annualCadence: 'for as long as you want',
         pitch: 'The whole diary, even on a plane.',
         allowance: [
-          { figure: '10', unit: 'messages', period: 'a month' },
+          { figure: '28', unit: 'messages', period: 'in a 7-day trial' },
           { figure: '1', unit: 'photo scan', period: 'to try' },
         ],
         points: [
@@ -253,10 +253,10 @@ export const en = {
       },
     ],
     notes: [
-      'Every account starts on Free. There is no trial to remember to cancel.',
+      'Every account starts with a free 7-day trial of the AI. No card is asked for, so there is nothing to remember to cancel.',
       'Allowances refill a day at a time over a rolling 30 days, so there is no reset date to wait for.',
       'Out of photo scans? Packs start at $3.99 for ten, never expire, and are only used once the month’s are gone.',
-      'Stop paying and you are back on Free: your diary and history stay, with 10 messages a month.',
+      'Stop paying and you are back on Free: your diary, your history and typing meals in all stay.',
     ],
     currency: 'Prices in US dollars. Google Play charges you in your own currency.',
   },
