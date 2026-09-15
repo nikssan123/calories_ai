@@ -18,6 +18,15 @@ const BASE = {
 };
 
 describe('renderEmail', () => {
+  it('opens on the cast: three round faces in the macro colours, drawn from cells, not loaded', () => {
+    const email = renderEmail({ ...BASE, blocks: [{ kind: 'text', text: 'Hello.' }] });
+    for (const colour of ['#ffa51f', '#3b9eff', '#b06bff']) {
+      expect(email.html).toContain(`bgcolor="${colour}" style="width:16px;height:16px;background-color:${colour};border-radius:50%;`);
+    }
+    expect(email.html).not.toContain('<img');
+    expect(email.html).not.toContain('<svg');
+  });
+
   it('carries the subject into the title and the preheader into a hidden block', () => {
     const email = renderEmail({ ...BASE, blocks: [{ kind: 'text', text: 'Hello.' }] });
 

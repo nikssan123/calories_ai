@@ -460,20 +460,29 @@ function wordmark(): string {
 }
 
 /**
- * Three short bars in the macro colours, above the heading — the app's
- * protein/carbs/fat bar, reduced to a signature.
+ * The three dots above the heading, with faces: Ember, Skye and Plum, the
+ * app's cast (CAST.md), reduced to what a mail client can draw.
  *
  * The one place those colours appear, and it says nothing: it is the same on
  * a password reset as on a weekly review, so no reader can take it for a
- * figure. Each bar is a table cell with `bgcolor` as well as a background, for
- * the same reason the band has one, and a fixed height with no line box in it,
- * which is the only way to get a 4px-tall cell out of Outlook.
+ * figure. It used to be three short bars; the dots are the same colours, now
+ * with two eyes each, so an email looks like it came from the app it's about.
+ *
+ * Drawn the way `wordmark` draws the logo, from table cells: a round cell in
+ * the macro colour with `bgcolor` as well as a background, and two tiny ink
+ * cells inside it for eyes. No image, no SVG, no network. Outlook's Word engine
+ * ignores the radius and draws three small squares with eyes, which is still
+ * them.
  */
 function signature(): string {
-  const bar = (colour: string) =>
-    `<td width="16" height="4" bgcolor="${colour}" style="width:16px;height:4px;background-color:${colour};border-radius:2px;font-size:0;line-height:0;">&nbsp;</td>`;
-  const gap = '<td width="4" style="width:4px;font-size:0;line-height:0;">&nbsp;</td>';
-  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px;"><tr>${bar(PALETTE.protein)}${gap}${bar(PALETTE.carbs)}${gap}${bar(PALETTE.fat)}</tr></table>`;
+  const eye = `<td width="2" height="3" bgcolor="${PALETTE.ink}" style="width:2px;height:3px;background-color:${PALETTE.ink};border-radius:1px;font-size:0;line-height:0;">&nbsp;</td>`;
+  const between = '<td width="3" style="width:3px;font-size:0;line-height:0;">&nbsp;</td>';
+  const face = (colour: string) =>
+    `<td width="16" height="16" align="center" valign="middle" bgcolor="${colour}" style="width:16px;height:16px;background-color:${colour};border-radius:50%;font-size:0;line-height:0;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>${eye}${between}${eye}</tr></table>
+    </td>`;
+  const gap = '<td width="5" style="width:5px;font-size:0;line-height:0;">&nbsp;</td>';
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 16px;"><tr>${face(PALETTE.protein)}${gap}${face(PALETTE.carbs)}${gap}${face(PALETTE.fat)}</tr></table>`;
 }
 
 function htmlBlock(block: Block, m: EmailMessages): string {

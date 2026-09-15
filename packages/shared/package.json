@@ -11,7 +11,8 @@
     "./pending": "./src/pending.ts",
     "./food-emoji": "./src/food-emoji.ts",
     "./markdown": "./src/markdown.ts",
-    "./words": "./src/words.ts"
+    "./words": "./src/words.ts",
+    "./cast": "./src/cast.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

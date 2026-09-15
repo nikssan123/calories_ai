@@ -813,6 +813,53 @@
   }
 }
 
+/*
+ * The cast (components/Cast.tsx): the phone's motion, in CSS. Pivots are grid
+ * units against the view box, so `transform-box: view-box` everywhere. Loops
+ * are offset per figure by `--cast-delay`, so three side by side never breathe
+ * or blink together. Under reduced motion the rule below stops them after one
+ * frame, and the drawing stays.
+ */
+.cast-shadow {
+  fill: rgba(120, 80, 20, 0.16);
+}
+.dark .cast-shadow {
+  fill: rgba(0, 0, 0, 0.32);
+}
+.cast .cast-body {
+  transform-box: view-box;
+  transform-origin: 60px 107px;
+  animation: cast-breathe 1.8s ease-in-out var(--cast-delay, 0s) infinite alternate;
+}
+.cast .cast-eyes {
+  transform-box: view-box;
+  animation: cast-blink 5.2s linear var(--cast-delay, 0s) infinite;
+}
+.cast .cast-wave {
+  transform-box: view-box;
+  animation: cast-wave 0.65s ease-in-out infinite alternate;
+}
+.cast .cast-stir {
+  transform-box: view-box;
+  animation: cast-stir 0.8s ease-in-out infinite alternate;
+}
+@keyframes cast-breathe {
+  from { transform: scale(1, 1); }
+  to { transform: scale(1.018, 1.035); }
+}
+@keyframes cast-blink {
+  0%, 93%, 100% { transform: scaleY(1); }
+  96% { transform: scaleY(0.1); }
+}
+@keyframes cast-wave {
+  from { transform: rotate(-10deg); }
+  to { transform: rotate(16deg); }
+}
+@keyframes cast-stir {
+  from { transform: rotate(-8deg); }
+  to { transform: rotate(10deg); }
+}
+
 @layer base {
   /*
    * The spring is decoration, not information — every animated value is also

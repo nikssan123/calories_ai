@@ -24,6 +24,7 @@ import {
 import { LOCALES_BY_NAME, LOCALE_NAMES, formatNumber, matchLocale, type DayQuality, type Locale } from '@ct/shared';
 import { DietQuality } from '@/components/DietQuality';
 import { Logo } from '@/components/Logo';
+import { CastTrio } from '@/components/Cast';
 import { HeroDemo } from '@/components/landing/HeroDemo';
 import { Reveal } from '@/components/landing/Reveal';
 import { StoreLinks, STORE_HREF, APP_STORE_HREF } from '@/components/landing/StoreLinks';
@@ -502,6 +503,9 @@ function Hero({ copy, locale, start }: { copy: LandingCopy; locale: Locale; star
             and fading it in from zero opacity after hydration made the most
             important sentence on the site the last thing to appear. */}
         <div className="mx-auto max-w-3xl text-center">
+          {/* The logo's three dots, standing up and saying hello (CAST.md). The
+              same figures as the app, above the headline and never over it. */}
+          <CastTrio className="mb-4" size={64} />
           <h1 className="text-display text-balance">{copy.hero.title}</h1>
 
           <p className="text-lede text-muted-foreground mx-auto mt-6 max-w-xl text-pretty">
