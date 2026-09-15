@@ -341,6 +341,7 @@ export function Seat({
   mood = 'idle',
   land,
   entrance,
+  ground,
   style,
   children,
 }: {
@@ -354,6 +355,12 @@ export function Seat({
   land?: { x: number; y: number };
   /** How a character arrives here when a tab switch brings them. See the note at the top. */
   entrance?: Entrance;
+  /**
+   * What they cast on whatever they sit on — drawn under them, outside their own
+   * motion, and moving with the entrance: along the ground under a bound, lighter
+   * while they're in the air, gathering under a drop.
+   */
+  ground?: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
 }) {
@@ -513,6 +520,15 @@ export function Seat({
     };
   });
 
+  const grounded = useAnimatedStyle(() => {
+    const t = travel.value;
+    const air = t < 1 ? Math.abs(Math.sin(Math.PI * t * hops.value)) * (1 - 0.35 * t) : 0;
+    return {
+      opacity: (1 - air * 0.7) * (1 - drop.value) * (1 - rise.value) * faded.value,
+      transform: [{ translateX: offX.value * (1 - t) }, { scaleX: 1 - air * 0.35 }],
+    };
+  });
+
   return (
     <View
       ref={ref}
@@ -531,6 +547,11 @@ export function Seat({
         * breathing, blinking and fidgeting while nobody can see it.
         */}
       <View pointerEvents={here ? 'box-none' : 'none'} style={[styles.fill, { opacity: here ? 1 : 0 }]}>
+        {ground ? (
+          <Animated.View collapsable={false} pointerEvents="none" style={[StyleSheet.absoluteFill, grounded]}>
+            {ground}
+          </Animated.View>
+        ) : null}
         <Animated.View collapsable={false} pointerEvents="box-none" style={[styles.fill, { transformOrigin: 'bottom' }, landing]}>
           <SeatPresence.Provider value={here}>{children}</SeatPresence.Provider>
         </Animated.View>

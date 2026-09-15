@@ -104,11 +104,14 @@ export function CastShelf({
           const mood = moods?.[name] ?? 'sit';
           return (
             <View key={name} pointerEvents="box-none" style={styles.seat}>
-              {/* The same grounding as the journal's ledge: see `ContactShadow`. */}
-              <View pointerEvents="none" style={styles.shelfContactBox}>
-                <ContactShadow name={name} seat="day.shelf" style={styles.shelfContact} />
-              </View>
-              <Seat seat="day.shelf" name={name} screen="today" size={SITTER} entrance="drop">
+              <Seat
+                seat="day.shelf"
+                name={name}
+                screen="today"
+                size={SITTER}
+                entrance="drop"
+                ground={<ContactShadow style={styles.shelfContact} />}
+              >
                 <Character
                   name={name}
                   mood={mood}
@@ -193,38 +196,40 @@ export const CastLedge = memo(function CastLedge({
           const holding = birthday && name === 'skye' ? 'cake' : evening && name === 'plum' ? 'mug' : undefined;
           const mood: Mood = waiting ? 'hop' : sleepy ? 'sleepy' : holding ? 'hold' : 'sit';
           return (
-            <View key={name} pointerEvents="box-none" style={styles.ledgeSeat}>
-              {/*
-                * Where each sits on the field: a soft shadow over the field's top
-                * edge. Without it the edge — a bright line against the cream —
-                * ran straight into their bodies and read as them being cut off
-                * there. Under the figure, over the field; gone while they're away.
-                */}
-              <ContactShadow name={name} />
-              <Seat seat="journal.ledge" name={name} screen="index" size={LEDGE_SITTER} entrance="bound">
-                <Leaning lean={lean} name={name}>
-                  <Character
-                    name={name}
-                    mood={mood}
-                    prop={mood === 'hold' ? holding : undefined}
-                    sitting
-                    size={LEDGE_SITTER}
-                    delay={waiting ? STAGGER[name] : i * 380}
-                    // No breath at this size: a pixel, and still a loop apiece on the
-                    // screen people keep open. The bounce is the point, and a night
-                    // sleeper keeps its slow breath and Zs; a figure dozing because the
-                    // phone was left alone holds still, which is also the battery saver.
-                    loop={waiting || (sleepy && !asleep)}
-                    fidget={!waiting && !asleep}
-                    shadow={false}
-                    arrive={false}
-                    gaze={typing ? -1 : undefined}
-                    gazeUp={streaming && !waiting}
-                    cue={cues[name] ?? null}
-                  />
-                </Leaning>
-              </Seat>
-            </View>
+            <Seat
+              key={name}
+              seat="journal.ledge"
+              name={name}
+              screen="index"
+              size={LEDGE_SITTER}
+              entrance="bound"
+              // A soft shadow on the field's top edge. Without it the edge — a
+              // bright line against the cream — ran straight into their bodies
+              // and read as them being cut off there.
+              ground={<ContactShadow />}
+            >
+              <Leaning lean={lean} name={name}>
+                <Character
+                  name={name}
+                  mood={mood}
+                  prop={mood === 'hold' ? holding : undefined}
+                  sitting
+                  size={LEDGE_SITTER}
+                  delay={waiting ? STAGGER[name] : i * 380}
+                  // No breath at this size: a pixel, and still a loop apiece on the
+                  // screen people keep open. The bounce is the point, and a night
+                  // sleeper keeps its slow breath and Zs; a figure dozing because the
+                  // phone was left alone holds still, which is also the battery saver.
+                  loop={waiting || (sleepy && !asleep)}
+                  fidget={!waiting && !asleep}
+                  shadow={false}
+                  arrive={false}
+                  gaze={typing ? -1 : undefined}
+                  gazeUp={streaming && !waiting}
+                  cue={cues[name] ?? null}
+                />
+              </Leaning>
+            </Seat>
           );
         })}
       </View>
@@ -232,18 +237,9 @@ export const CastLedge = memo(function CastLedge({
   );
 });
 
-/** The shadow a ledge figure casts on the composer's edge, while it is sitting there. */
-function ContactShadow({
-  name,
-  seat = 'journal.ledge',
-  style,
-}: {
-  name: CastName;
-  seat?: string;
-  style?: StyleProp<ViewStyle>;
-}) {
+/** The shadow a sitting figure casts on the edge under it. A seat's `ground`. */
+function ContactShadow({ style }: { style?: StyleProp<ViewStyle> }) {
   const { scheme } = useTheme();
-  const here = useSeated(seat, name);
   const ink = scheme === 'dark' ? 'rgba(0, 0, 0, 0.6)' : 'rgba(110, 70, 30, 0.38)';
   return (
     <View
@@ -252,7 +248,6 @@ function ContactShadow({
         styles.contact,
         style,
         {
-          opacity: here ? 1 : 0,
           experimental_backgroundImage: `radial-gradient(closest-side, ${ink} 0%, rgba(0, 0, 0, 0) 100%)`,
         },
       ]}
@@ -592,9 +587,6 @@ const styles = StyleSheet.create({
   hands: { position: 'absolute', right: 22, top: -HANDS_H / 2 - 1, width: PEEK, height: HANDS_H },
   ledge: { height: LEDGE_SITTER - LEDGE_OVERHANG + 3, zIndex: 2 },
   ledgeRow: { position: 'absolute', bottom: -LEDGE_OVERHANG, flexDirection: 'row', gap: 2 },
-  ledgeSeat: { width: LEDGE_SITTER, height: LEDGE_SITTER },
-  // The shelf's seat is right-aligned in its column; this box sits exactly where the figure does.
-  shelfContactBox: { position: 'absolute', right: 10, top: 0, width: SITTER, height: SITTER },
   shelfContact: { left: -2, right: -2, bottom: -2, height: 14, borderRadius: 7 },
   // On the field just under its top edge (7pt above the bottom of the seat), where
   // the legs hang: a shadow on the surface they sit on, not a halo in the air.
