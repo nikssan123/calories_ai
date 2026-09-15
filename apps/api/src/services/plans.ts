@@ -1,11 +1,14 @@
 import {
+  GUEST,
   METERS,
   BUNDLES as BUNDLE_SIZES,
   PLANS,
+  TRIAL,
   type BundleId,
   type MeterName,
   type PlanName,
   type PlanTier,
+  type TrialStage,
 } from '@ct/shared';
 
 /**
@@ -48,15 +51,10 @@ import {
  * applies and is gone. A counter cannot tell those apart and a sentence has to,
  * so the distinction is carried rather than collapsed.
  *
- * `period: 'ever'` is a lifetime allowance with no reset. Exactly one meter on
- * one tier carries it — the free photo — for the reason `SUBSCRIPTIONS.md`
- * gives: one scan, ever, means every free user experiences the best thing the
- * app does exactly once and hits the wall while still impressed.
- *
- * It used to carry free chat as well, on the argument that a monthly grant is a
- * recurring bill. That is still true and it is now a bill this product chooses
- * to pay: a lifetime chat grant spends itself in week one and leaves an account
- * with nothing to convert *from* in week three. See `LIMITS.free`.
+ * `period: 'ever'` is a one-off grant with no reset. Free's two meters carry it,
+ * on all three of its stages — the guest's day, the trial's week — because
+ * neither comes back: when the trial ends the meter is withdrawn rather than
+ * refilled. See `LIMITS.free` and `freeMeter`.
  */
 export interface Meter {
   allowed: number | null;
@@ -111,10 +109,9 @@ export interface PlanLimits {
    * four turns; ten an hour is well clear of that and still catches a loop
    * before it costs a month.
    *
-   * Free's ten a month now sits at exactly the hourly figure, which is fine and
-   * is not a coincidence worth removing: the two ceilings are the same size but
-   * they are not the same window, so a loop still burns a month of allowance in
-   * an hour and then stops, rather than burning it in ninety seconds.
+   * Free's trial is 28 messages, so a loop on Free still spends a third of the
+   * trial before this stops it. Ten stays because it is sized to a real burst
+   * of logging, not to the grant.
    */
   chatTurnsPerHour: number;
   /** Manually triggered reviews; the scheduled one does not pass through here. */
@@ -325,8 +322,9 @@ export const PRICING: Record<Exclude<PlanName, 'free'>, { monthlyUsd: number; an
  * beat the tier above it would be a leak dressed as a feature.
  *
  * `subscriberOnly` in `@ct/shared` is the other half of holding that line, and
- * it is why there is no message pack on Free: ten a month plus a $3.99 refill
- * is a cheaper product than Plus, and it would be the one everybody bought.
+ * it is why there is no message pack on Free: a finished trial plus a $3.99
+ * refill is a cheaper product than Plus, and it would be the one everybody
+ * bought.
  */
 const BUNDLE_PRICES_USD: Record<BundleId, number> = {
   photo_10: 3.99,
@@ -350,54 +348,46 @@ export type { BundleId };
 
 const LIMITS: Record<PlanName, PlanLimits> = {
   /*
-   * Free — the offline logbook, and a taste of the model.
+   * Free — the offline logbook, and a week of the model.
    *
    * Unlimited and unmetered: manual entry, repeat, barcode, weight, Today,
    * History, Progress, the outbox. That is a complete food diary and it is
    * roughly what MyFitnessPal's free tier is, which makes it a real product
    * rather than a demo.
    *
-   * Metered: **10 journal turns a month**, and one photo, ever.
+   * The model is a road with three stops rather than an allowance, and
+   * `freeStage` says which one an account is on:
    *
-   * ---- The chat grant went monthly, and it is a recurring bill ---------------
+   *   guest   no saved account      4 messages + 1 photo, once
+   *   trial   seven days from save  28 messages + 1 photo, once
+   *   ended   after the seven days  none
    *
-   * This used to be 20 turns for all time, and the argument for that is still
-   * the correct *accounting* argument: a monthly grant is money spent every
-   * month on accounts that have already decided not to pay. At the measured
-   * $0.041 a turn, a free account that spends its ten is $0.41/month for as
-   * long as it exists, against a one-time $0.82 under the lifetime grant. It
-   * pays for itself against the old scheme in two months and then keeps going.
+   * The numbers are `GUEST` and `TRIAL` in `@ct/shared`, because the phone
+   * promises them before the server is asked. The table below holds the trial,
+   * since that is what `tiers()` shows as Free; the other two stops are drawn
+   * by `freeMeter`.
    *
-   * It is a deliberate trade rather than an oversight, and what is bought with
-   * it is the only thing the lifetime grant could not buy: **a free account
-   * that is still alive next month.** Twenty turns that never return is a demo
-   * with a cliff — spend it in week one, and every month after that the app is
-   * a diary with a dead button in it, which is nobody's upgrade decision
-   * because there is no longer a moment at which one gets made. Ten a month is
-   * a small, repeating taste of the thing being sold, and it puts the wall in
-   * front of somebody who is *currently* using the app, every month, which is
-   * the only place a paywall converts.
+   * ---- Why a week instead of ten a month --------------------------------------
    *
-   * Ten rather than twenty because the ceiling now recurs: it holds the steady
-   * state at $0.41/month, and 10/mo is still half again what the old grant gave
-   * per month to anybody who lasted longer than eight weeks.
+   * Ten a month kept a free account alive and it kept it alive *on the model*,
+   * which is the thing that costs money and the thing being sold. Nobody had to
+   * decide anything: ten turns stretched across a month is a working, if slow,
+   * AI diary, and a slow product that is free is a strong reason not to pay for
+   * the fast one. A week of four a day is the product at the pace somebody
+   * actually uses it, and then a decision.
    *
-   * The number is only survivable at all because of `OFFLINE.md` — see the
-   * header of this file. The wall stopped being an exit, so a spent free
-   * account still has a working food diary and comes back tomorrow.
+   * It is also a cheaper bill. The worst case is 28 x $0.041 + 2 x $0.151 =
+   * $1.45 for an account's lifetime — the guest day and the trial together —
+   * against $0.41 every month, forever, for every free account that stayed.
    *
-   * The photo stays **lifetime**. It is the sharpest wall in the product and
-   * the whole conversion argument: one scan, ever, means every free user sees
-   * the best thing the app does exactly once and hits the wall while still
-   * impressed. Giving it back monthly would be giving away the pitch.
-   *
-   * A monthly window is a rolling thirty days here rather than a calendar
-   * month — see `allowanceFor` — so the allowance returns a turn at a time and
-   * the wall can name a date instead of shrugging.
+   * The wall is still not an exit, for the reason at the head of this file:
+   * when the trial ends the diary keeps working, offline, with no model in it.
+   * The trial is counted from `trial_started_at`, so the guest's four do not
+   * come out of the trial's 28.
    */
   free: {
-    chat: { allowed: 10, period: 'month' },
-    photo: { allowed: 1, period: 'ever' },
+    chat: { allowed: TRIAL.chat, period: 'ever' },
+    photo: { allowed: TRIAL.photo, period: 'ever' },
     pantryScan: { allowed: null, period: 'month' },
     recipe: { allowed: null, period: 'month' },
     mealPlan: { allowed: null, period: 'month' },
@@ -616,6 +606,42 @@ export function limitsFor(plan: PlanName, unmetered = false): PlanLimits {
   // This runs on the hot path of every chat turn, and a plan column that somehow
   // holds something unexpected should cost someone a low ceiling, not a 500.
   return LIMITS[plan] ?? LIMITS.free;
+}
+
+/**
+ * Where a free account is on the road `LIMITS.free` describes.
+ *
+ * `startedAt` is when the account was saved and the week began; null is a
+ * guest. The week is a week of wall-clock time rather than seven local days —
+ * the same rolling arithmetic every other window in this file uses.
+ */
+export function freeStage(startedAt: Date | null, now = new Date()): TrialStage {
+  if (!startedAt) return 'guest';
+  return now.getTime() < trialEndsAt(startedAt).getTime() ? 'trial' : 'ended';
+}
+
+export function trialEndsAt(startedAt: Date): Date {
+  return new Date(startedAt.getTime() + TRIAL.days * 86_400_000);
+}
+
+/**
+ * Free's chat or photo meter at one stage. Null for the three kitchen meters,
+ * which the road does not touch — they are `null` on Free at every stage.
+ *
+ * `ended` is `allowed: null` rather than zero: the grant is not spent, it is
+ * gone, and every client already reads null as "shut the button, choose the
+ * words". The words come from `Allowance.trial`.
+ */
+export function freeMeter(stage: TrialStage, meter: MeterName): Meter | null {
+  if (meter !== 'chat' && meter !== 'photo') return null;
+  switch (stage) {
+    case 'guest':
+      return { allowed: GUEST[meter], period: 'ever' };
+    case 'trial':
+      return LIMITS.free[meter];
+    case 'ended':
+      return { allowed: null, period: 'ever' };
+  }
 }
 
 /** The meter one plan applies to a given dimension. */

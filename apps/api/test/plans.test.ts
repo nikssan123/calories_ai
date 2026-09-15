@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
 import { query } from '../src/db.ts';
-import { METERS, PLANS } from '@ct/shared';
-import { hasKitchen, limitsFor, meterFor, tiers } from '../src/services/plans.ts';
+import { GUEST, METERS, PLANS, TRIAL } from '@ct/shared';
+import { freeMeter, freeStage, hasKitchen, limitsFor, meterFor, tiers } from '../src/services/plans.ts';
+import { allowanceFor, PlanLimitError, requireAllowance } from '../src/services/usage.ts';
+import { startTrial } from '../src/services/trial.ts';
 import { accountGate, getUser } from '../src/services/user.ts';
 import { scriptAgent } from './helpers/agent-mock.ts';
 import { appFor, createUser, type TestUser } from './helpers/factories.ts';
@@ -41,23 +43,28 @@ const setPlan = (id: string, plan: string) =>
 
 describe('limitsFor', () => {
   /**
-   * The free tier's two grants run on different clocks, and the split is the
-   * load-bearing decision in the whole table.
-   *
-   * Chat is monthly, and that is knowingly a recurring bill: at a measured
-   * $0.041 a turn it is $0.41/month for as long as a free account exists,
-   * bought because a lifetime grant leaves nothing to convert *from* once it is
-   * spent. The photo stays lifetime because one scan, ever, is the conversion
-   * argument rather than a taste of one.
-   *
-   * Asserted together because the two are only defensible as a pair — a version
-   * of this file that quietly gave the photo back every month would be giving
-   * away the pitch, and one that put chat back on `ever` would be reinstating
-   * the cliff.
+   * Free's model is a road: a guest day, a week of trial, then nothing. The
+   * table holds the trial, because that is what `tiers()` shows as Free; the
+   * other two stops are drawn by `freeMeter`. All three are one-off grants.
    */
-  it('grants free chat monthly and the free photo once', () => {
-    expect(meterFor('free', 'chat')).toEqual({ allowed: 10, period: 'month' });
-    expect(meterFor('free', 'photo')).toEqual({ allowed: 1, period: 'ever' });
+  it('grants free chat and photo as a guest day, a trial week, then nothing', () => {
+    expect(meterFor('free', 'chat')).toEqual({ allowed: TRIAL.chat, period: 'ever' });
+    expect(meterFor('free', 'photo')).toEqual({ allowed: TRIAL.photo, period: 'ever' });
+
+    expect(freeMeter('guest', 'chat')).toEqual({ allowed: GUEST.chat, period: 'ever' });
+    expect(freeMeter('guest', 'photo')).toEqual({ allowed: GUEST.photo, period: 'ever' });
+    expect(freeMeter('trial', 'chat')).toEqual({ allowed: 28, period: 'ever' });
+    expect(freeMeter('ended', 'chat')).toEqual({ allowed: null, period: 'ever' });
+    expect(freeMeter('ended', 'photo')).toEqual({ allowed: null, period: 'ever' });
+    // The kitchen is not on the road at all.
+    expect(freeMeter('trial', 'recipe')).toBeNull();
+  });
+
+  it('puts an account on the road by when its trial started', () => {
+    const now = new Date('2026-09-20T12:00:00Z');
+    expect(freeStage(null, now)).toBe('guest');
+    expect(freeStage(new Date('2026-09-14T12:00:01Z'), now)).toBe('trial');
+    expect(freeStage(new Date('2026-09-13T12:00:00Z'), now)).toBe('ended');
   });
 
   /** The kitchen is a tier, not an allowance, below `coach`. */
@@ -88,8 +95,7 @@ describe('limitsFor', () => {
       expect(plus[key], key).toBeGreaterThanOrEqual(free[key]);
     }
     // The meters are the ones that are actually sold, and a paid month has to
-    // beat free's outright — otherwise the tier is not a tier. Chat is now a
-    // month on both sides, so the comparison is finally like for like.
+    // beat free's whole trial outright — otherwise the tier is not a tier.
     expect(meterFor('plus', 'chat').allowed!).toBeGreaterThan(
       meterFor('free', 'chat').allowed!,
     );
@@ -184,6 +190,7 @@ describe('resolving the plan', () => {
       disabled: false,
       verified: true,
       plan: 'plus',
+      guest: false,
       // Resolved from the address on the same row. False throughout the suite:
       // `helpers/setup.ts` sets a key, so nothing here runs on a subscription.
       // `unmetered.test.ts` is where the other answer is exercised.
@@ -427,21 +434,39 @@ describe('the journal meter', () => {
 
   /**
    * The wall has to name the thing that still works, because after `OFFLINE.md`
-   * there genuinely is one — and it has to keep naming it now that free chat is
-   * monthly. That sentence used to hang off `period === 'ever'`, which would
-   * have silently dropped it from the most-hit wall in the product.
+   * there genuinely is one. A spent trial sells the plan, so its code is the
+   * plain one — the save-account sheet is only for guests.
    */
-  it('refuses a spent free account with 402 and points at the free path', async () => {
+  it('refuses a spent trial with 402 and points at the free path', async () => {
     await spend('text_log', meterFor('free', 'chat').allowed!);
 
     const response = await chat();
     expect(response.statusCode).toBe(402);
     expect(response.json()).toMatchObject({
       error: expect.stringContaining('Typing a meal in is still unlimited'),
-      allowance: { meter: 'chat', period: 'month' },
+      code: 'PLAN_LIMIT',
+      allowance: { meter: 'chat', period: 'ever', trial: 'trial', resets_at: null },
     });
-    // Rolling, so it says when one comes back rather than naming a calendar date.
-    expect(response.json().allowance.resets_at).toEqual(expect.any(String));
+    expect(response.json().allowance.trial_ends_at).toEqual(expect.any(String));
+  });
+
+  /** A week is a week: on day eight the model is gone, whatever was left. */
+  it('refuses every free AI turn once the trial has ended', async () => {
+    await query(`UPDATE users SET trial_started_at = now() - interval '8 days' WHERE id = $1`, [
+      user.id,
+    ]);
+
+    const response = await chat();
+    expect(response.statusCode).toBe(402);
+    expect(response.json()).toMatchObject({
+      error: 'Your free trial has ended. Typing a meal in is still unlimited.',
+      code: 'TRIAL_ENDED',
+      allowance: { meter: 'chat', allowed: null, used: 0, trial: 'ended' },
+    });
+
+    const photo = await chat({ text: 'What is this?', photo_base64: 'iVBORw0KGgo=' });
+    expect(photo.statusCode).toBe(402);
+    expect(photo.json()).toMatchObject({ code: 'TRIAL_ENDED', allowance: { meter: 'photo' } });
   });
 
   /**
@@ -517,7 +542,7 @@ describe('the journal meter', () => {
       meter: 'chat',
       allowed,
       used: allowed - 1,
-      period: 'month',
+      period: 'ever',
     });
   });
 
@@ -551,7 +576,12 @@ describe('GET /entitlements', () => {
       'recipe',
       'meal_plan',
     ]);
-    expect(body.allowances[0]).toMatchObject({ allowed: 10, used: 0, period: 'month' });
+    expect(body.allowances[0]).toMatchObject({
+      allowed: TRIAL.chat,
+      used: 0,
+      period: 'ever',
+      trial: 'trial',
+    });
     // A locked meter, which the wall has to tell from a spent one.
     expect(body.allowances.find((a: { meter: string }) => a.meter === 'recipe')).toMatchObject({
       allowed: null,
@@ -620,5 +650,69 @@ describe('hasKitchen', () => {
       };
       expect(hasKitchen(plan)).toBe(on('recipe') || on('meal_plan'));
     }
+  });
+});
+
+/**
+ * The road below the routes, where a guest can be tested without the session
+ * gate: an account that has proved nothing yet, a trial started on save, and
+ * the week counted from that moment rather than from the row.
+ */
+describe('the free trial', () => {
+  const spendAt = (userId: string, kind: 'text_log' | 'photo_log', at: string) =>
+    query(
+      `INSERT INTO ai_usage (user_id, kind, occurred_at, cost_usd, provider, model)
+       VALUES ($1, $2, $3, 0.041, 'anthropic-api', 'claude-sonnet-5')`,
+      [userId, kind, at],
+    );
+
+  const asGuest = (id: string) =>
+    query('UPDATE users SET email_verified_at = NULL, trial_started_at = NULL WHERE id = $1', [id]);
+
+  it('gives a guest a day of the model and asks them to save the account', async () => {
+    await asGuest(user.id);
+    for (let i = 0; i < GUEST.chat; i++) await spendAt(user.id, 'text_log', new Date().toISOString());
+
+    const allowance = await allowanceFor(user.id, 'free', 'chat');
+    expect(allowance).toMatchObject({
+      allowed: GUEST.chat,
+      used: GUEST.chat,
+      trial: 'guest',
+      trial_ends_at: null,
+    });
+
+    const refusal = await requireAllowance(user.id, 'free', 'chat').catch((e: unknown) => e);
+    expect(refusal).toBeInstanceOf(PlanLimitError);
+    expect((refusal as PlanLimitError).code).toBe('GUEST_LIMIT');
+    expect((refusal as PlanLimitError).message).toContain('free 7-day trial');
+  });
+
+  it('does not charge the guest turns against the trial', async () => {
+    await asGuest(user.id);
+    for (let i = 0; i < GUEST.chat; i++) {
+      await spendAt(user.id, 'text_log', new Date(Date.now() - 60_000).toISOString());
+    }
+    await startTrial(user.id);
+
+    const allowance = await allowanceFor(user.id, 'free', 'chat');
+    expect(allowance).toMatchObject({ allowed: TRIAL.chat, used: 0, trial: 'trial' });
+  });
+
+  it('starts a trial once, however many times an account is saved', async () => {
+    await asGuest(user.id);
+    const first = await startTrial(user.id, new Date('2026-09-10T00:00:00Z'));
+    const second = await startTrial(user.id, new Date('2026-09-12T00:00:00Z'));
+    expect(second).toEqual(first);
+
+    const allowance = await allowanceFor(user.id, 'free', 'photo', false, new Date('2026-09-16T23:00:00Z'));
+    expect(allowance).toMatchObject({ trial: 'trial', trial_ends_at: '2026-09-17T00:00:00.000Z' });
+    const over = await allowanceFor(user.id, 'free', 'photo', false, new Date('2026-09-17T00:00:00Z'));
+    expect(over).toMatchObject({ trial: 'ended', allowed: null });
+  });
+
+  it('leaves paid plans off the road', async () => {
+    await query(`UPDATE users SET trial_started_at = now() - interval '30 days' WHERE id = $1`, [user.id]);
+    const allowance = await allowanceFor(user.id, 'plus', 'chat');
+    expect(allowance).toMatchObject({ allowed: meterFor('plus', 'chat').allowed, trial: null });
   });
 });

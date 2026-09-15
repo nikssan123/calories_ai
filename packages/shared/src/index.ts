@@ -141,6 +141,29 @@ export const MeterName = z.enum(METERS);
 export type MeterName = z.infer<typeof MeterName>;
 
 /**
+ * What the model is worth on Free, in the two grants it is given at all.
+ *
+ * A guest — no saved account yet — gets a day's worth: four messages and one
+ * photo, once. Saving the account starts the trial: seven days, and four
+ * messages a day for them, handed over as one lump of 28 rather than rationed
+ * per day, plus one photo. When the seven days are over Free has no model at
+ * all, and the diary is what is left — which is still the whole diary.
+ *
+ * Here rather than in `plans.ts` because the phone says these numbers before
+ * the server has been asked anything: the guest sheet promises the trial, and a
+ * promise typed separately from the ceiling is how the two drift apart.
+ */
+export const GUEST = { chat: 4, photo: 1 } as const;
+export const TRIAL = { days: 7, chat: 28, photo: 1 } as const;
+
+/**
+ * Where a free account is on that road. Null on every paid plan, and on the
+ * meters the road does not touch.
+ */
+export const TrialStage = z.enum(['guest', 'trial', 'ended']);
+export type TrialStage = z.infer<typeof TrialStage>;
+
+/**
  * The bundles — stock on a meter, bought outright — named here for the same
  * reason `METERS` is.
  *
@@ -172,12 +195,12 @@ export type MeterName = z.infer<typeof MeterName>;
  * True on the message packs and false on the photo ones, and it governs who is
  * *offered* a pack rather than who may spend one.
  *
- * Free gets ten messages a month. A free account that can buy thirty more for
- * the price of a coffee has no reason to ever subscribe, and the pack would
- * quietly become the cheapest tier in the product — so the wall on Free sells
- * the plan, and the message packs are drawn only for somebody already paying.
- * Photos have no such problem: Free gets one scan *ever*, so a pack there is a
- * genuine purchase rather than a subscription substitute.
+ * Free gets a seven-day trial and then no messages at all. A free account that
+ * can buy thirty for the price of a coffee has no reason to ever subscribe, and
+ * the pack would quietly become the cheapest tier in the product — so the wall
+ * on Free sells the plan, and the message packs are drawn only for somebody
+ * already paying. Photos have no such problem: Free gets one scan in its trial,
+ * so a pack there is a genuine purchase rather than a subscription substitute.
  *
  * It is deliberately not enforced at spend time. Credits do not expire, so a
  * subscriber who buys a hundred messages and later lapses still owns them, and
@@ -266,8 +289,34 @@ export const Allowance = z.object({
    * Defaulted so a client built against the older shape still parses.
    */
   credits: z.number().default(0),
+  /**
+   * Which grant a free account's chat or photo meter is — see `GUEST` and
+   * `TRIAL`. Null everywhere else.
+   *
+   * The wall needs it because the three refusals are three different offers:
+   * a guest is asked to save the account, a trial that is spent is asked to
+   * pay, and a trial that has ended is told so rather than "not on your plan".
+   * `period` stays `ever` on all three, which is what a 1.2 client reads as a
+   * one-off grant with no reset — true of each.
+   */
+  trial: TrialStage.nullable().default(null),
+  /** When the seven days run out. Set on `trial` and `ended`, null on `guest`. */
+  trial_ends_at: z.string().nullable().default(null),
 });
 export type Allowance = z.infer<typeof Allowance>;
+
+/**
+ * The `code` on a 402, so a client can pick the door without parsing prose.
+ * `GUEST_LIMIT` opens the save-account sheet; the other two open the plans.
+ */
+export const PLAN_LIMIT_CODES = ['GUEST_LIMIT', 'TRIAL_ENDED', 'PLAN_LIMIT'] as const;
+export type PlanLimitCode = (typeof PLAN_LIMIT_CODES)[number];
+
+export function planLimitCode(allowance: Pick<Allowance, 'trial'>): PlanLimitCode {
+  if (allowance.trial === 'guest') return 'GUEST_LIMIT';
+  if (allowance.trial === 'ended') return 'TRIAL_ENDED';
+  return 'PLAN_LIMIT';
+}
 
 /**
  * What one tier is worth, as the tier itself rather than as this account's

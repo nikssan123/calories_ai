@@ -227,7 +227,7 @@ export async function registerRoutes(app: FastifyInstance) {
       );
     } catch (error) {
       if (error instanceof PlanLimitError) {
-        await reply.status(402).send({ error: error.message, allowance: error.allowance });
+        await reply.status(402).send({ error: error.message, code: error.code, allowance: error.allowance });
         return null;
       }
       throw error;
@@ -541,7 +541,7 @@ export async function registerRoutes(app: FastifyInstance) {
       allowance = await requireAllowance(userId, request.plan, 'photo', request.unmetered);
     } catch (error) {
       if (error instanceof PlanLimitError) {
-        return reply.status(402).send({ error: error.message, allowance: error.allowance });
+        return reply.status(402).send({ error: error.message, code: error.code, allowance: error.allowance });
       }
       throw error;
     }

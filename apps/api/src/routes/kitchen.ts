@@ -95,7 +95,7 @@ const PhotoBody = z
  */
 function recipeFailure(error: unknown, reply: FastifyReply) {
   if (error instanceof PlanLimitError) {
-    return reply.status(402).send({ error: error.message, allowance: error.allowance });
+    return reply.status(402).send({ error: error.message, code: error.code, allowance: error.allowance });
   }
   if (error instanceof ModelBusyError) {
     return reply
@@ -184,7 +184,7 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
       await requireAllowance(request.userId!, request.plan, 'pantry_scan', request.unmetered);
     } catch (error) {
       if (error instanceof PlanLimitError) {
-        return reply.status(402).send({ error: error.message, allowance: error.allowance });
+        return reply.status(402).send({ error: error.message, code: error.code, allowance: error.allowance });
       }
       throw error;
     }

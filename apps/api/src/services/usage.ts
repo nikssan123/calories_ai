@@ -3,9 +3,17 @@ import { anthropicRate, openAiRate, priceUsage, round6 } from '../ai/pricing.ts'
 import { MODELS } from '../ai/client.ts';
 import type { ProviderId } from '../ai/providers/index.ts';
 import type { CostSource, Outcome, TurnKind } from '../ai/providers/types.ts';
-import { limitsFor, meterFor } from './plans.ts';
+import { freeMeter, freeStage, limitsFor, meterFor, trialEndsAt } from './plans.ts';
 import { creditBalance, spendCredit } from './credits.ts';
-import { CREDIT_METERS, type Allowance, type MeterName, type PlanName } from '@ct/shared';
+import {
+  CREDIT_METERS,
+  planLimitCode,
+  type Allowance,
+  type MeterName,
+  type PlanLimitCode,
+  type PlanName,
+  type TrialStage,
+} from '@ct/shared';
 
 /**
  * Recording and reading what the AI layer costs.
@@ -133,6 +141,32 @@ export async function turnsInWindow(
   return Number(row?.n ?? 0);
 }
 
+/** The same count from a moment rather than over a window — the trial's week. */
+async function turnsSince(userId: string, kinds: TurnKind[], since: Date): Promise<number> {
+  const row = await queryOne<{ n: string }>(
+    `SELECT count(*) AS n FROM ai_usage
+      WHERE user_id = $1 AND kind = ANY($2::text[]) AND occurred_at >= $3`,
+    [userId, kinds, since],
+  );
+  return Number(row?.n ?? 0);
+}
+
+/**
+ * When this account's trial began, or null for a guest.
+ *
+ * `email_verified_at` stands in for accounts that proved an address without
+ * `startTrial` having run — the sign-up paths that predate it. It is the same
+ * moment by definition: the trial starts when the account is saved, and saving
+ * is proving the address.
+ */
+async function trialStartedAt(userId: string): Promise<Date | null> {
+  const row = await queryOne<{ started: Date | null }>(
+    'SELECT COALESCE(trial_started_at, email_verified_at) AS started FROM users WHERE id = $1',
+    [userId],
+  );
+  return row?.started ? new Date(row.started) : null;
+}
+
 /**
  * What is left of one meter, for a screen that has to say so *before* the
  * button is pressed.
@@ -155,9 +189,29 @@ export async function allowanceFor(
   plan: PlanName,
   meter: MeterName,
   unmetered = false,
+  now = new Date(),
 ): Promise<Allowance> {
-  const { allowed, period, unlimited } = meterFor(plan, meter, unmetered);
+  let { allowed, period, unlimited } = meterFor(plan, meter, unmetered);
   const kinds = METER_KINDS[meter];
+
+  /*
+   * Free's chat and photo are a road rather than a table row — guest, a week
+   * of trial, then nothing — so the meter is redrawn for where this account is
+   * on it. `LIMITS.free` in `plans.ts` has the numbers and the argument.
+   */
+  let trial: TrialStage | null = null;
+  let trialEnds: string | null = null;
+  let since: Date | null = null;
+  if (plan === 'free' && !unmetered && (meter === 'chat' || meter === 'photo')) {
+    const started = await trialStartedAt(userId);
+    trial = freeStage(started, now);
+    ({ allowed, period } = freeMeter(trial, meter)!);
+    if (started) {
+      since = started;
+      trialEnds = trialEndsAt(started).toISOString();
+    }
+  }
+  const road = { trial, trial_ends_at: trialEnds };
 
   /*
    * Bought stock, which sits outside the plan entirely.
@@ -182,19 +236,22 @@ export async function allowanceFor(
    * simply never spent — `requireAllowance` returns above the line that would.
    */
   if (unlimited) {
-    return { meter, allowed: null, unlimited: true, used: 0, period, resets_at: null, credits };
+    return { meter, allowed: null, unlimited: true, used: 0, period, resets_at: null, credits, ...road };
   }
 
   // A meter the plan does not carry at all. No count is run: the answer does
   // not depend on it, and this is on the hot path.
   if (allowed === null) {
-    return { meter, allowed: null, unlimited: false, used: 0, period, resets_at: null, credits };
+    return { meter, allowed: null, unlimited: false, used: 0, period, resets_at: null, credits, ...road };
   }
 
-  const days = period === 'month' ? 30 : null;
-  const used = await turnsInWindow(userId, kinds, days);
+  // A trial counts from the day the account was saved, so the guest's turns
+  // before it are not charged against the week.
+  const used = since
+    ? await turnsSince(userId, kinds, since)
+    : await turnsInWindow(userId, kinds, period === 'month' ? 30 : null);
   if (used < allowed || period === 'ever') {
-    return { meter, allowed, unlimited: false, used, period, resets_at: null, credits };
+    return { meter, allowed, unlimited: false, used, period, resets_at: null, credits, ...road };
   }
 
   // Spent, and on a window that moves. When the oldest run still inside it
@@ -214,6 +271,7 @@ export async function allowanceFor(
     period,
     resets_at: row?.at ? new Date(new Date(row.at).getTime() + 30 * 86_400_000).toISOString() : null,
     credits,
+    ...road,
   };
 }
 
@@ -229,9 +287,13 @@ export async function allowanceFor(
  * paywall for one and a retry for the other.
  */
 export class PlanLimitError extends Error {
+  /** Which door the client opens — see `PLAN_LIMIT_CODES`. */
+  readonly code: PlanLimitCode;
+
   constructor(readonly allowance: Allowance) {
     super(sentenceFor(allowance));
     this.name = 'PlanLimitError';
+    this.code = planLimitCode(allowance);
   }
 }
 
@@ -243,7 +305,7 @@ export class PlanLimitError extends Error {
  * screen that earns the revenue — so the words live next to the accounting
  * rather than being assembled at four call sites.
  */
-function sentenceFor({ meter, allowed, period }: Allowance): string {
+function sentenceFor({ meter, allowed, period, trial }: Allowance): string {
   const thing: Record<MeterName, [string, string]> = {
     chat: ['message', 'messages'],
     photo: ['photo scan', 'photo scans'],
@@ -253,6 +315,15 @@ function sentenceFor({ meter, allowed, period }: Allowance): string {
   };
   const [one, many] = thing[meter];
 
+  /*
+   * The journal's door, said on every refusal of a chat meter — including the
+   * trial that has ended, which is the refusal it matters most on. Manual
+   * entry, repeat and barcode are what is left when the model is gone, and
+   * that is rule 2 in `plan-copy.ts`: never end on the refusal.
+   */
+  const open = meter === 'chat' ? ' Typing a meal in is still unlimited.' : '';
+
+  if (trial === 'ended') return `Your free trial has ended.${open}`;
   if (allowed === null) return `Your plan does not include ${many}.`;
   const noun = allowed === 1 ? one : many;
 
@@ -265,19 +336,10 @@ function sentenceFor({ meter, allowed, period }: Allowance): string {
    */
   const more = meter === 'photo' ? ' You can add more without changing plan.' : '';
 
-  /*
-   * The journal's door, and it is said on both periods rather than only on the
-   * lifetime one.
-   *
-   * It used to hang off `period === 'ever'`, which read as a sentence about
-   * chat because chat was the only lifetime grant with a fallback. It was
-   * really a sentence about the *meter*: manual entry, repeat and barcode are
-   * what is left when the model is gone, and that does not stop being true
-   * because the grant now comes back in thirty days. Free chat moving to a
-   * month would otherwise have silently deleted rule 2 in `plan-copy.ts` —
-   * never end on the refusal — from the most-hit wall in the product.
-   */
-  const open = meter === 'chat' ? ' Typing a meal in is still unlimited.' : '';
+  if (trial === 'guest') {
+    return `That is your ${allowed} guest ${noun}. Save your account to start a free 7-day trial.${open}`;
+  }
+  if (trial === 'trial') return `That is all ${allowed} ${noun} in your free trial.${open}${more}`;
 
   return period === 'ever'
     ? `That is your ${allowed} free ${noun}.${open}${more}`
