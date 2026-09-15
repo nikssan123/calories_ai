@@ -12,6 +12,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, Path, Polyline, Rect } from 'react-native-svg';
 import { Backdrop } from '@/components/Backdrop';
+import { Stage, stageFocus, useAnchor, useTabBounce } from '@/components/cast/stage';
+import { useAuth } from '@/lib/auth';
+import { cachedTemplates, markMomentShown, momentShown } from '@/lib/store';
 import { duration, ease, font, tint, useColors } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
@@ -39,16 +42,21 @@ import { useTrialEndedPaywall } from '@/lib/trial-paywall';
  * language in the settings two screens away.
  */
 /*
- * Today first, and the tab the app opens on (GLOW-UP.md). The journal led for as
- * long as logging was the whole product, but the screen the redesign is built
- * around — the sky, the ring, the day at a glance — is the one people open the
- * app to read, and logging is one tap to its right. The rest follow the mockup:
- * the places you act (Cook, Exercise) before the place you review (Progress),
- * and your own details last.
+ * The journal first, and the tab the app opens on (CAST.md, fourth pass).
+ *
+ * Today led for a while (GLOW-UP.md), on the argument that the sky and the ring
+ * are what people open the app to read. In use it said the opposite of the
+ * product: the store's first frame is "just say what you ate", Today's own empty
+ * state said "tell the journal what you ate", and a new account landed on a
+ * screen with no box to say it in. So the conversation is home again, and the
+ * day it adds up to is the tab beside it — Today, reached from the journal's
+ * ring as well as from here. The rest follow the mockup: the places you act
+ * (Cook, Exercise) before the place you review (Progress), and your own details
+ * last.
  */
 const TABS = [
-  { name: 'today', label: 'nav.today', icon: 'flame' },
   { name: 'index', label: 'nav.journal', icon: 'chat' },
+  { name: 'today', label: 'nav.today', icon: 'flame' },
   { name: 'cook', label: 'nav.cook', icon: 'chef' },
   { name: 'exercise', label: 'nav.exercise', icon: 'person' },
   { name: 'progress', label: 'nav.progress', icon: 'chart' },
@@ -56,7 +64,7 @@ const TABS = [
 ] as const satisfies readonly { name: string; label: StringKey; icon: string }[];
 
 /** Expo Router's way of saying which tab a cold start lands on. */
-export const unstable_settings = { initialRouteName: 'today' };
+export const unstable_settings = { initialRouteName: 'index' };
 
 /** Which tab was on show last, so an arriving tab knows which side it came from. */
 let lastFocused: number | null = null;
@@ -85,7 +93,7 @@ function TabScene({
   navigation,
   children,
 }: {
-  route: { key: string };
+  route: { key: string; name: string };
   navigation: {
     addListener: (event: 'focus' | 'blur', callback: () => void) => () => void;
     getState: () => { index: number; routes: { key: string }[] };
@@ -99,11 +107,17 @@ function TabScene({
 
   useEffect(() => {
     const indexOf = () => navigation.getState().routes.findIndex((r) => r.key === route.key);
-    if (navigation.isFocused()) lastFocused = indexOf();
+    if (navigation.isFocused()) {
+      lastFocused = indexOf();
+      stageFocus(route.name);
+    }
 
     const onFocus = navigation.addListener('focus', () => {
       const index = indexOf();
       const from = lastFocused;
+      // Before anything on the arriving screen claims the cast: the stage needs
+      // to know a tab was just left, and on which side, to play their entrance.
+      stageFocus(route.name, from === null ? 0 : Math.sign(from - index));
       lastFocused = index;
       if (reduced || from === null || from === index) {
         shown.value = 1;
@@ -121,7 +135,7 @@ function TabScene({
       onFocus();
       onBlur();
     };
-  }, [navigation, route.key, reduced, shown, side]);
+  }, [navigation, route.key, route.name, reduced, shown, side]);
 
   const gliding = useAnimatedStyle(() => ({
     opacity: shown.value,
@@ -147,7 +161,7 @@ export default function TabsLayout() {
         */}
       <Backdrop />
       <Tabs
-        initialRouteName="today"
+        initialRouteName="index"
         screenLayout={(props) => <TabScene {...props} />}
         screenOptions={{
           headerShown: false,
@@ -159,6 +173,8 @@ export default function TabsLayout() {
           <Tabs.Screen key={tab.name} name={tab.name} options={{ title: t(tab.label) }} />
         ))}
       </Tabs>
+      {/* The cast in flight between the journal and Today, over both. See `stage.tsx`. */}
+      <Stage />
     </View>
   );
 }
@@ -240,6 +256,34 @@ function TabBar({
   const leftEdge = useSharedValue(selected);
   const rightEdge = useSharedValue(selected);
   const previous = useRef(selected);
+
+  /*
+   * Once, for somebody who used the app when Today came first: the pill starts
+   * on Today and glides home to the journal, so the move is seen rather than
+   * discovered. "Used the app before" is a phone that already holds this
+   * account's log-again list, which only a visit to Today ever writes.
+   */
+  const userId = useAuth().profile?.id;
+  useEffect(() => {
+    if (!userId || reduced) return;
+    let cancelled = false;
+    void (async () => {
+      if ((await momentShown(userId, 'journal-first')) || (await cachedTemplates(userId)) === null) return;
+      await markMomentShown(userId, 'journal-first');
+      if (cancelled || previous.current !== 0) return;
+      leftEdge.value = 1;
+      rightEdge.value = 1;
+      setTimeout(() => {
+        if (previous.current !== 0) return;
+        leftEdge.value = withTiming(0, { duration: 240, easing: ease.out });
+        rightEdge.value = withTiming(0, { duration: duration.pop + 80, easing: ease.spring });
+      }, 700);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
   useEffect(() => {
     if (selected < 0) return;
     const from = previous.current;
@@ -421,6 +465,19 @@ function TabItem({ tab, active }: { tab: (typeof TABS)[number]; active: boolean 
   const kick = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
 
   /*
+   * Somewhere the cast can hop to — a new badge's holder landing on Progress —
+   * and the same kick a tap gives, when they do. See `visit` in `stage.tsx`.
+   */
+  const anchor = useAnchor(`tab.${tab.name}`);
+  useTabBounce(tab.name, () => {
+    if (reduced) return;
+    pop.value = withSequence(
+      withTiming(1.22, { duration: duration.quick / 2, easing: ease.pop }),
+      withTiming(1, { duration: duration.pop, easing: ease.spring }),
+    );
+  });
+
+  /*
    * The lit copy is mounted only while the tab is chosen, and fades in and out
    * as it mounts and unmounts. It used to be always mounted with an animated
    * opacity, and a re-render of the bar could put back an opacity the fade had
@@ -432,7 +489,11 @@ function TabItem({ tab, active }: { tab: (typeof TABS)[number]; active: boolean 
 
   return (
     <>
-      <Animated.View style={[styles.lozengeSlot, kick]}>
+      {/* The anchor is a plain view around the icon, never the animated icon itself:
+          a ref on that view made Reanimated do a frame's worth of work on every
+          frame, app-wide, for as long as the bar was mounted. */}
+      <View ref={anchor} collapsable={false} style={styles.anchorSlot}>
+      <Animated.View collapsable={false} style={[styles.lozengeSlot, kick]}>
         <TabIcon name={tab.icon} color={colors.mutedForeground} strokeWidth={2.1} />
         {active && (
           <Animated.View
@@ -445,6 +506,7 @@ function TabItem({ tab, active }: { tab: (typeof TABS)[number]; active: boolean 
           </Animated.View>
         )}
       </Animated.View>
+      </View>
       <View style={styles.labelSlot}>
         <Text
           numberOfLines={1}
@@ -570,6 +632,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   centred: { alignItems: 'center', justifyContent: 'center' },
+  anchorSlot: { width: '100%', alignItems: 'center' },
   labelSlot: { alignSelf: 'stretch' },
   label: {
     fontSize: 10,

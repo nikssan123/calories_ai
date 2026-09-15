@@ -80,5 +80,6 @@ export function companion(snapshot: DaySnapshot, now: Date = new Date()): { name
   const calendar = localDateFor(now, { ...context, dayStartHour: 0 });
   if (snapshot.dayStartHour > 0 && filed !== calendar) return { name: 'plum', mood: 'sleepy' };
   if (snapshot.consumed === 0) return { name: 'skye', mood: 'wave' };
-  return { name: 'ember', mood: 'idle' };
+  // Whoever caught the last meal in the journal, as in the app; Ember otherwise.
+  return { name: snapshot.lastCatch ?? 'ember', mood: 'idle' };
 }

@@ -39,7 +39,18 @@ import { Character } from '@/components/cast/Character';
  */
 const WORTH_DRAWING = 4;
 
-export function StreakChip({ streak }: { streak: Streak }) {
+export function StreakChip({
+  streak,
+  figure = true,
+}: {
+  streak: Streak;
+  /**
+   * Ember hoping beside the nudge. Off on Today, where Ember is already on the
+   * shelf a little below and does the hoping there — one of each on a screen
+   * (CAST.md, fourth pass).
+   */
+  figure?: boolean;
+}) {
   if (streak.state === 'none' || streak.current < WORTH_DRAWING) return null;
 
   /*
@@ -51,7 +62,7 @@ export function StreakChip({ streak }: { streak: Streak }) {
    */
   const atRisk = streak.state === 'at_risk';
 
-  return <Chip streak={streak} atRisk={atRisk} />;
+  return <Chip streak={streak} atRisk={atRisk} figure={figure} />;
 }
 
 /**
@@ -61,7 +72,7 @@ export function StreakChip({ streak }: { streak: Streak }) {
  * a slow flicker, drawn from its base — and still and dimmed while the run is
  * at risk. The dim flame says "log today to keep it" before the words do.
  */
-function Chip({ streak, atRisk }: { streak: Streak; atRisk: boolean }) {
+function Chip({ streak, atRisk, figure }: { streak: Streak; atRisk: boolean; figure: boolean }) {
   const colors = useColors();
   const tr = useT();
   const router = useRouter();
@@ -134,7 +145,7 @@ function Chip({ streak, atRisk }: { streak: Streak; atRisk: boolean }) {
         <View style={styles.row}>
           {/* Ember, hands clasped, hoping. About showing up today, never about
               the number (CAST.md). No poke: the whole chip is a button. */}
-          <Character name="ember" mood="hopeful" size={26} loop={false} shadow={false} poke={false} />
+          {figure && <Character name="ember" mood="hopeful" size={26} loop={false} shadow={false} poke={false} />}
           <Text style={[styles.nudge, { color: colors.mutedForeground }]}>{tr('streak.atRisk')}</Text>
         </View>
       )}

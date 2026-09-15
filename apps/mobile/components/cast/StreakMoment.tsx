@@ -1,16 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Modal, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useIsFocused } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Streak } from '@ct/shared';
 import { Confetti } from '@/components/Confetti';
-import { GlowButton } from '@/components/GlowButton';
 import { Serif } from '@/components/Serif';
 import { haptics } from '@/lib/haptics';
 import { useT, type StringKey } from '@/lib/i18n';
 import { markMomentShown, momentShown } from '@/lib/store';
-import { column, type as t, useColors, useTheme, useType } from '@/theme';
-import { Character } from './Character';
+import { type as t, useColors, useTheme, useType } from '@/theme';
 
 /**
  * Seven in a row, said out loud.
@@ -42,15 +39,22 @@ const WARMTH = {
   dark: 'radial-gradient(120% 70% at 50% 22%, rgba(255, 150, 60, 0.16) 0%, rgba(255, 150, 60, 0) 70%)',
 } as const;
 
-export function StreakMoment({
-  streak,
-  userId,
-}: {
-  streak: Streak | null | undefined;
-  userId: string | null | undefined;
-}) {
+/**
+ * The moment, asked for by the focused screen: the milestone to celebrate now,
+ * or null. Marks it shown as it hands it over, so it plays once per run per
+ * milestone on this phone.
+ *
+ * It used to open a modal over the screen. Now it happens where the cast
+ * already is (CAST.md, fourth pass): the three celebrate on the ledge or the
+ * shelf, confetti comes off the composer, and the words land in the journal as
+ * a card — so nothing covers the screen and nothing needs closing.
+ */
+export function useStreakMoment(
+  streak: Streak | null | undefined,
+  userId: string | null | undefined,
+): { days: Milestone; key: string } | null {
   const focused = useIsFocused();
-  const [open, setOpen] = useState<Milestone | null>(null);
+  const [open, setOpen] = useState<{ days: Milestone; key: string } | null>(null);
 
   const reached =
     streak && streak.state === 'alive' ? (MILESTONES.find((m) => m === streak.current) ?? null) : null;
@@ -63,9 +67,9 @@ export function StreakMoment({
       void (async () => {
         if (await momentShown(userId, moment)) return;
         if (cancelled) return;
-        setOpen(reached);
-        haptics.logged();
         await markMomentShown(userId, moment);
+        setOpen({ days: reached, key: moment });
+        haptics.logged();
       })();
     }, SETTLE_MS);
     return () => {
@@ -74,75 +78,52 @@ export function StreakMoment({
     };
   }, [moment, userId, focused, reached]);
 
-  return (
-    <Modal
-      visible={open !== null}
-      transparent
-      animationType="fade"
-      statusBarTranslucent
-      onRequestClose={() => setOpen(null)}
-    >
-      {open !== null && <Celebration days={open} onClose={() => setOpen(null)} />}
-    </Modal>
-  );
+  return open;
 }
 
-function Celebration({ days, onClose }: { days: Milestone; onClose: () => void }) {
+export type { Milestone };
+
+/** The words of the moment, as a card in the conversation or under Today's ring. */
+export function MomentCard({ days, compact = false }: { days: Milestone; compact?: boolean }) {
   const colors = useColors();
   const { scheme } = useTheme();
   const type = useType();
   const tr = useT();
-  const insets = useSafeAreaInsets();
-  const [burst, setBurst] = useState(0);
-
-  // Confetti ignores its first value (the state on arrival), so the burst is a
-  // change made just after the sheet has faded in.
-  useEffect(() => {
-    const timer = setTimeout(() => setBurst(1), 280);
-    return () => clearTimeout(timer);
-  }, []);
-
   return (
     <View
       style={[
-        styles.backdrop,
-        { backgroundColor: colors.background, experimental_backgroundImage: WARMTH[scheme] },
+        styles.card,
+        compact && styles.cardCompact,
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.hairline,
+          boxShadow: colors.shadow,
+          experimental_backgroundImage: WARMTH[scheme],
+        },
       ]}
     >
-      <View style={[column, styles.sheet, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 20 }]}>
-        <View style={styles.middle}>
-          <View style={styles.stage}>
-            <Character name="skye" mood="cheer" size={96} delay={140} />
-            <Character name="ember" mood="proud" size={144} style={styles.lead} />
-            <Character name="plum" mood="cheer" size={96} delay={460} />
-            <View style={styles.burst} pointerEvents="none">
-              <Confetti trigger={burst} />
-            </View>
-          </View>
+      <Text style={[t.eyebrow, { color: colors.proteinText }]}>{tr(`badge.streak_${days}` as StringKey)}</Text>
+      <Serif accessibilityRole="header" style={[type.hero, compact ? styles.figureCompact : styles.figure, { color: colors.foreground }]}>
+        {tr('streak.days')(days)}
+      </Serif>
+      <Text style={[t.body, { color: colors.mutedForeground }]}>{tr('cast.showedUp')}</Text>
+    </View>
+  );
+}
 
-          <Text style={[t.eyebrow, styles.centred, { color: colors.proteinText }]}>
-            {tr(`badge.streak_${days}` as StringKey)}
-          </Text>
-          <Serif accessibilityRole="header" style={[type.hero, styles.figure, styles.centred, { color: colors.foreground }]}>
-            {tr('streak.days')(days)}
-          </Serif>
-          <Text style={[t.body, styles.centred, { color: colors.mutedForeground }]}>{tr('cast.showedUp')}</Text>
-        </View>
-
-        <GlowButton label={tr('cast.keepGoing')} onPress={onClose} />
-      </View>
+/** Where the confetti bursts from: place it where the burst should come from. */
+export function MomentBurst({ trigger }: { trigger: string | null }) {
+  return (
+    <View style={styles.burst} pointerEvents="none">
+      <Confetti trigger={trigger} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1 },
-  sheet: { flex: 1, paddingHorizontal: 20, gap: 16 },
-  middle: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  stage: { flexDirection: 'row', alignItems: 'flex-end', marginBottom: 20 },
-  // Ember stands a step forward, so the three overlap a little like a group photo.
-  lead: { marginHorizontal: -18, zIndex: 1 },
-  burst: { position: 'absolute', left: 0, right: 0, top: 30, height: 1 },
-  figure: { fontSize: 52, lineHeight: 60 },
-  centred: { textAlign: 'center' },
+  card: { borderWidth: 1, borderRadius: 26, paddingHorizontal: 20, paddingVertical: 18, gap: 4 },
+  cardCompact: { paddingVertical: 14, alignItems: 'center' },
+  burst: { position: 'absolute', left: 0, right: 0, top: 0, height: 1 },
+  figure: { fontSize: 44, lineHeight: 52 },
+  figureCompact: { fontSize: 34, lineHeight: 40 },
 });

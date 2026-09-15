@@ -1,3 +1,5 @@
+import type { CastName } from '@ct/shared/cast';
+import { castMemory } from '@/lib/cast-memory';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { localDateFor, matchLocale, type DaySummary, type Locale, type Profile } from '@ct/shared';
@@ -80,6 +82,12 @@ export interface DaySnapshot {
    */
   timezone: string;
   dayStartHour: number;
+  /**
+   * Who caught the last meal in the journal, so the widget draws the same
+   * character that is peeking over that card in the app. Absent on a note from
+   * before this existed, and until anything has been caught this launch.
+   */
+  lastCatch?: CastName | null;
   /** When it was written, for deciding whether to trust it at all. */
   savedAt: string;
 }
@@ -117,6 +125,7 @@ function snapshotOf(day: DaySummary, locale: Locale, profile: Profile | null): D
      */
     timezone: profile?.timezone ?? deviceTimezone(),
     dayStartHour: profile?.day_start_hour ?? 0,
+    lastCatch: castMemory.lastCatch?.name ?? null,
     savedAt: new Date().toISOString(),
   };
 }

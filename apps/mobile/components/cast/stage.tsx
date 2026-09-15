@@ -1,0 +1,817 @@
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { Dimensions, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import Animated, {
+  Easing,
+  cancelAnimation,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { Character, GAIT, STAGGER, type CastName, type Mood } from './Character';
+import { SeatPresence } from './seatPresence';
+
+/**
+ * The stage: one cast, carried between the places they sit (CAST.md, fourth pass).
+ *
+ * Before this every figure was its own drawing, so nobody ever *got* anywhere —
+ * the typing trio vanished as the card landed and a different figure rose from
+ * behind it; switching tabs swapped one set of three for another. Now the
+ * screens that share the cast (the journal and Today) declare **seats**, each
+ * character is in at most one seat at a time, and moving a character from one
+ * seat to another flies it there over everything, in its own gait.
+ *
+ * **Why by hand.** Native shared-element transitions are blocked upstream
+ * (MOBILE-UX.md): react-native-screens has no support on this stack. So a seat
+ * measures itself in the window, the overlay in `TabsLayout` draws a stand-in
+ * that arcs from one rectangle to the other, and the seat's own figure comes
+ * back on landing. The destination is measured again part-way through the
+ * flight, because a screen gliding in or a list scrolling to its end moves it.
+ *
+ * **Between tabs, nothing flies** (tried first, and it read wrong: three
+ * figures sailing up over a page that is gliding in sideways). A tab switch is
+ * an *entrance* instead, played by the seat itself and chosen by the screen:
+ * - **Into the journal** they bound in from the side of the tab you came from,
+ *   hopping along the composer in their own gaits — Ember in quick little hops
+ *   and first, Skye in long floaty ones, Plum in heavy short ones last — and
+ *   whoever the newest meal belongs to pops up from behind its card.
+ * - **Into Today** they drop onto the shelf from just above it, and land.
+ * Flights are for moves within one screen: the ledge, the reply row, a card.
+ *
+ * Under Reduce Motion a character simply appears in its new seat.
+ */
+
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+interface SeatEntry {
+  screen: string;
+  measure: ((done: (rect: Rect | null) => void) => void) | null;
+  /** Where it was last seen, for a seat that unmounted before anybody left it. */
+  last: Rect | null;
+  /** Where a figure lands relative to the seat, when that is not the seat itself. */
+  land: { x: number; y: number };
+  mood: Mood;
+}
+
+interface Flight {
+  id: number;
+  from: string | null;
+  to: string;
+  /** Still measuring: the figure stays where it was until its stand-in is in place. */
+  pending: boolean;
+}
+
+const seats = new Map<string, SeatEntry>();
+const anchors = new Map<string, (done: (rect: Rect | null) => void) => void>();
+const occupancy: Record<CastName, string | null> = { ember: null, skye: null, plum: null };
+const flying: Record<CastName, Flight | null> = { ember: null, skye: null, plum: null };
+const listeners = new Set<() => void>();
+const landings = new Set<(seat: string, name: CastName) => void>();
+let flightIds = 0;
+let current: string | null = null;
+let previous: string | null = null;
+/** When the tab last changed, and which side the arriving tab's neighbour was on. */
+let switchedAt = 0;
+let cameFrom = 0;
+let reduced = false;
+
+export type Entrance = 'bound' | 'drop' | 'rise';
+
+/** A character arriving in a seat by entrance rather than by flight, until the seat plays it. */
+interface ArrivalFor {
+  key: string;
+  side: number;
+  at: number;
+}
+const arrivals: Partial<Record<CastName, ArrivalFor>> = {};
+/** How long after a tab switch a claim still counts as part of arriving. */
+const SWITCH_WINDOW_MS = 1500;
+
+interface Overlay {
+  fly: (name: CastName, from: Rect, to: Rect, mood: Mood, id: number, retarget: () => void, done?: () => void) => void;
+  spark: (from: Rect, to: Rect, colour: string, arrive: () => void) => void;
+  origin: () => { x: number; y: number };
+}
+let overlay: Overlay | null = null;
+
+const emit = () => listeners.forEach((listener) => listener());
+const subscribe = (listener: () => void) => {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+};
+
+const keyOf = (seat: string, name: CastName) => `${seat}|${name}`;
+
+export { castMemory } from '@/lib/cast-memory';
+
+/**
+ * The tab now on show, from `TabScene`'s focus listener. `side` is +1 when the
+ * tab just left is to the right of this one and -1 when it is to the left.
+ */
+export function stageFocus(screen: string, side = 0) {
+  if (screen === current) return;
+  previous = current;
+  current = screen;
+  if (previous !== null) {
+    switchedAt = Date.now();
+    cameFrom = side;
+  }
+}
+
+/**
+ * Where a seat is now. A seat mounted in the same commit as the claim that
+ * wants it has not been laid out yet and measures as nothing, so it is asked
+ * again for a few frames before its last known place is used instead.
+ */
+function measureSeat(entry: SeatEntry | undefined, done: (rect: Rect | null) => void, tries = 4) {
+  if (!entry) return done(null);
+  const measure = entry.measure;
+  if (!measure) return done(entry.last);
+  measure((rect) => {
+    if (rect) {
+      entry.last = rect;
+      return done(rect);
+    }
+    if (tries > 0 && entry.measure) {
+      requestAnimationFrame(() => measureSeat(entry, done, tries - 1));
+      return;
+    }
+    done(entry.last);
+  });
+}
+
+/**
+ * Sends `name` to `seat` on `screen`, the tab route asking. A no-op if they're
+ * already there; a flight within one screen; an entrance when the screen asking
+ * is not the one they were last on.
+ *
+ * The screen is passed rather than read from `stageFocus`, because a screen's
+ * own focus reaches its effects a moment before `TabScene`'s listener hears of
+ * it: the journal claims its seats while the stage still thinks Today is up.
+ */
+export function claim(name: CastName, seat: string, screen: string) {
+  const to = keyOf(seat, name);
+  if (occupancy[name] === to) return;
+  const from = occupancy[name];
+  occupancy[name] = to;
+
+  const fromEntry = from ? seats.get(from) : undefined;
+  const toEntry = seats.get(to);
+  const sameScreen = fromEntry !== undefined && toEntry !== undefined && fromEntry.screen === toEntry.screen;
+
+  if (reduced || !overlay || !sameScreen || !fromEntry.measure) {
+    flying[name] = null;
+    // Part of a tab switch — this screen is arriving, or has only just — so the
+    // seat plays its entrance when it has them. The journal is the first tab, so
+    // anybody arriving there comes from its right.
+    const switching = current !== null && (screen !== current || Date.now() - switchedAt < SWITCH_WINDOW_MS);
+    if (!reduced && from !== null && switching) {
+      arrivals[name] = { key: to, side: screen === 'index' ? 1 : cameFrom, at: Date.now() };
+    } else {
+      delete arrivals[name];
+    }
+    emit();
+    return;
+  }
+
+  const id = ++flightIds;
+  flying[name] = { id, from, to, pending: true };
+  emit();
+
+  measureSeat(fromEntry, (fromRect) => {
+    measureSeat(toEntry, (toRect) => {
+      if (flying[name]?.id !== id) return;
+      if (!fromRect || !toRect || !overlay) {
+        flying[name] = null;
+        emit();
+        return;
+      }
+      const origin = overlay.origin();
+      const local = (rect: Rect, land = { x: 0, y: 0 }): Rect => ({
+        x: rect.x - origin.x + land.x,
+        y: rect.y - origin.y + land.y,
+        w: rect.w,
+        h: rect.h,
+      });
+      const retarget = () =>
+        measureSeat(seats.get(to), (again) => {
+          if (again && overlay && flying[name]?.id === id) {
+            overlay.fly(name, local(fromRect), local(again, toEntry.land), toEntry.mood, -id, () => {});
+          }
+        });
+      overlay.fly(name, local(fromRect), local(toRect, toEntry.land), toEntry.mood, id, retarget);
+      // The stand-in is in place: now the seat it left can let go.
+      flying[name] = { id, from, to, pending: false };
+      emit();
+    });
+  });
+}
+
+/** Nobody sits anywhere: the journal's empty state, where the plate has them. */
+export function release(name: CastName) {
+  if (occupancy[name] === null) return;
+  occupancy[name] = null;
+  flying[name] = null;
+  emit();
+}
+
+function landed(name: CastName, id: number) {
+  const flight = flying[name];
+  if (!flight || flight.id !== id) return;
+  flying[name] = null;
+  emit();
+  const [seat] = flight.to.split('|');
+  landings.forEach((listener) => listener(seat!, name));
+}
+
+/** Where `name` is sitting, or flying to. */
+export function seatOf(name: CastName): string | null {
+  return occupancy[name]?.split('|')[0] ?? null;
+}
+
+/**
+ * A spark from one place to another — a meal's energy tossed into the ring.
+ * `arrive` runs when it gets there, or at once when it can't fly.
+ */
+export function spark(fromSeat: { seat: string; name: CastName }, anchor: string, colour: string, arrive: () => void) {
+  const entry = seats.get(keyOf(fromSeat.seat, fromSeat.name));
+  const target = anchors.get(anchor);
+  if (reduced || !overlay || !entry || !target) return arrive();
+  measureSeat(entry, (from) => {
+    target((to) => {
+      if (!from || !to || !overlay) return arrive();
+      const origin = overlay.origin();
+      overlay.spark(
+        { x: from.x - origin.x + from.w / 2, y: from.y - origin.y + from.h * 0.2, w: 0, h: 0 },
+        { x: to.x - origin.x + to.w / 2, y: to.y - origin.y + to.h / 2, w: 0, h: 0 },
+        colour,
+        arrive,
+      );
+    });
+  });
+}
+
+/**
+ * A round trip from wherever `name` sits to an anchor and back — Ember hopping
+ * down to the Progress tab to show where a new badge went. `arrive` runs at the
+ * far end; nothing moves under Reduce Motion, and `arrive` runs at once.
+ */
+export function visit(name: CastName, anchor: string, arrive: () => void) {
+  const key = occupancy[name];
+  const entry = key ? seats.get(key) : undefined;
+  const target = anchors.get(anchor);
+  if (reduced || !overlay || !key || !entry || !target || flying[name]) return arrive();
+  measureSeat(entry, (from) => {
+    target((to) => {
+      if (!from || !to || !overlay || flying[name]) return arrive();
+      const origin = overlay.origin();
+      const home: Rect = { x: from.x - origin.x, y: from.y - origin.y, w: from.w, h: from.h };
+      const perch: Rect = {
+        x: to.x - origin.x + to.w / 2 - from.w / 2,
+        y: to.y - origin.y - from.h * 0.72,
+        w: from.w,
+        h: from.h,
+      };
+      const out = ++flightIds;
+      flying[name] = { id: out, from: key, to: key, pending: false };
+      overlay.fly(name, home, perch, entry.mood, out, () => {}, () => {
+        arrive();
+        setTimeout(() => {
+          const back = ++flightIds;
+          if (flying[name]?.id !== out || !overlay) return;
+          flying[name] = { id: back, from: key, to: key, pending: false };
+          overlay.fly(name, perch, home, entry.mood, back, () => {});
+        }, 700);
+      });
+      emit();
+    });
+  });
+}
+
+const bouncers = new Set<(tab: string) => void>();
+/** Kicks a tab's icon, as a tap on it does. */
+export function bounceTab(tab: string) {
+  bouncers.forEach((listener) => listener(tab));
+}
+export function useTabBounce(tab: string, kick: () => void) {
+  const latest = useRef(kick);
+  latest.current = kick;
+  useEffect(() => {
+    const listener = (which: string) => which === tab && latest.current();
+    bouncers.add(listener);
+    return () => {
+      bouncers.delete(listener);
+    };
+  }, [tab]);
+}
+
+/** Told when a character lands in a seat. */
+export function useLanding(listener: (seat: string, name: CastName) => void) {
+  const latest = useRef(listener);
+  latest.current = listener;
+  useEffect(() => {
+    const relay = (seat: string, name: CastName) => latest.current(seat, name);
+    landings.add(relay);
+    return () => {
+      landings.delete(relay);
+    };
+  }, []);
+}
+
+/**
+ * A place one character can sit. Draws its children only while that character
+ * is here and not on the way, and lands them with a squash in their own gait.
+ */
+export function Seat({
+  seat,
+  name,
+  screen,
+  size,
+  mood = 'idle',
+  land,
+  entrance,
+  style,
+  children,
+}: {
+  seat: string;
+  name: CastName;
+  /** The tab route this seat lives on: `index` or `today`. */
+  screen: string;
+  size: number;
+  /** The pose the stand-in flies in. */
+  mood?: Mood;
+  land?: { x: number; y: number };
+  /** How a character arrives here when a tab switch brings them. See the note at the top. */
+  entrance?: Entrance;
+  style?: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+}) {
+  const key = keyOf(seat, name);
+  const ref = useRef<View>(null);
+  const here = useSyncExternalStore(subscribe, () => {
+    const flight = flying[name];
+    return flight ? flight.pending && flight.from === key : occupancy[name] === key;
+  });
+  const landX = land?.x ?? 0;
+  const landY = land?.y ?? 0;
+
+  useEffect(() => {
+    const entry: SeatEntry = {
+      screen,
+      last: seats.get(key)?.last ?? null,
+      land: { x: landX, y: landY },
+      mood,
+      measure: (done) => {
+        const view = ref.current;
+        if (!view) return done(null);
+        view.measureInWindow((x, y, w, h) => done(w > 0 ? { x, y, w, h } : null));
+      },
+    };
+    seats.set(key, entry);
+    return () => {
+      // Kept with its last position, so a figure can still leave from here.
+      entry.measure = null;
+    };
+  }, [key, screen, landX, landY, mood]);
+
+  /* The squash of arriving, on the frame the stand-in hands over — or the entrance, when a tab brought them. */
+  /*
+   * Where the figure starts its entrance, set *before* it is drawn: from the
+   * store's own notification when the claim lands on a mounted seat, and from
+   * the first render's values when the seat mounts with them already here (Today
+   * drawing its shelf once its day has loaded). Set in the effect instead, the
+   * figure was drawn seated for a frame and then vanished to make its entrance.
+   */
+  const waiting = (): ArrivalFor | null => {
+    const arrival = arrivals[name];
+    return entrance && !reduced && arrival && arrival.key === key ? arrival : null;
+  };
+  const start = useRef(waiting());
+  const startsAt = (arrival: ArrivalFor | null) => ({
+    travel: arrival && entrance === 'bound' ? 0 : 1,
+    offX: arrival && entrance === 'bound' ? (arrival.side || 1) * Dimensions.get('window').width : 0,
+    drop: arrival && entrance === 'drop' ? 1 : 0,
+    faded: arrival && entrance === 'drop' ? 0 : 1,
+    rise: arrival && entrance === 'rise' ? 1 : 0,
+  });
+  const initial = startsAt(start.current);
+  const squash = useSharedValue(0);
+  const travel = useSharedValue(initial.travel);
+  const offX = useSharedValue(initial.offX);
+  const hops = useSharedValue(0);
+  const drop = useSharedValue(initial.drop);
+  const rise = useSharedValue(initial.rise);
+  const faded = useSharedValue(initial.faded);
+  const lean = useSharedValue(0);
+  const wasHere = useRef(false);
+  const mounted = useRef(false);
+  const gait = GAIT[name];
+  const bound = BOUND[name];
+
+  useEffect(() => {
+    const prime = () => {
+      const arrival = waiting();
+      if (!arrival || occupancy[name] !== key || start.current === arrival) return;
+      start.current = arrival;
+      const at = startsAt(arrival);
+      travel.value = at.travel;
+      offX.value = at.offX;
+      drop.value = at.drop;
+      faded.value = at.faded;
+      rise.value = at.rise;
+    };
+    listeners.add(prime);
+    return () => {
+      listeners.delete(prime);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, entrance]);
+
+  useEffect(() => {
+    const arrived = here && !wasHere.current;
+    wasHere.current = here;
+    const first = !mounted.current;
+    mounted.current = true;
+    if (!arrived || reduced) return;
+    const arrival = arrivals[name];
+    const land = () => {
+      squash.value = withSequence(withTiming(1, { duration: 70 }), withSpring(0, gait.spring));
+    };
+    if (!entrance || !arrival || arrival.key !== key || Date.now() - arrival.at > 2500) {
+      // Arrived by flight: just the landing. Not for a seat that simply
+      // mounted with somebody in it, which is nobody arriving.
+      if (!first && (!arrival || arrival.key !== key)) land();
+      return;
+    }
+    delete arrivals[name];
+    const wait = STAGGER[name];
+
+    if (entrance === 'bound') {
+      // In from the edge of the side they came from, along the line they sit on.
+      const side = arrival.side === 0 ? 1 : arrival.side;
+      const width = Dimensions.get('window').width;
+      ref.current?.measureInWindow((x, _y, w) => {
+        const start = side > 0 ? width - x + 12 : -(x + w + 12);
+        const count = Math.max(2, Math.round(Math.abs(start) / bound.length));
+        offX.value = start;
+        hops.value = count;
+        lean.value = -side;
+        travel.value = withDelay(
+          wait,
+          withTiming(1, { duration: count * bound.ms, easing: Easing.bezier(0.3, 0.1, 0.45, 1) }, (finished) => {
+            if (finished) runOnJS(land)();
+          }),
+        );
+      });
+      return;
+    }
+
+    if (entrance === 'drop') {
+      // Down onto the edge from just above it: quickest for Ember, floatiest for Skye.
+      faded.value = withDelay(wait, withTiming(1, { duration: 120 }));
+      drop.value = withDelay(
+        wait,
+        withTiming(0, { duration: bound.fall, easing: name === 'skye' ? Easing.inOut(Easing.quad) : Easing.in(Easing.quad) }, (finished) => {
+          if (finished) runOnJS(land)();
+        }),
+      );
+      return;
+    }
+
+    // 'rise': up from behind whatever they sit behind, on their own spring.
+    rise.value = withDelay(wait + 260, withSpring(0, gait.spring));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [here]);
+
+  const landing = useAnimatedStyle(() => {
+    const t = travel.value;
+    const phase = t * hops.value;
+    const arc = Math.abs(Math.sin(Math.PI * phase));
+    const air = t < 1 ? arc * bound.height * (1 - 0.35 * t) : 0;
+    const contact = t < 1 ? 1 - Math.min(1, arc * 4) : 0;
+    const settle = squash.value + contact * 0.9;
+    return {
+      opacity: faded.value,
+      transform: [
+        { translateX: offX.value * (1 - t) },
+        { translateY: -air - drop.value * DROP_FROM + rise.value * size * 0.85 },
+        { rotate: `${t < 1 ? lean.value * arc * bound.tilt : 0}deg` },
+        { scaleX: 1 + settle * 0.1 },
+        { scaleY: 1 - settle * 0.14 },
+      ],
+    };
+  });
+
+  return (
+    <View
+      ref={ref}
+      collapsable={false}
+      pointerEvents="box-none"
+      onLayout={() => measureSeat(seats.get(key), () => {})}
+      style={[{ width: size, height: size }, style]}
+    >
+      {/*
+        * Always mounted, and hidden rather than removed while its character is
+        * elsewhere. Mounting a figure is the expensive part — every shape in it
+        * sends a layout event on its first draw, and on Android each of those
+        * makes Reanimated re-apply every animated view in the app — and a figure
+        * unmounted mid-animation leaves entries behind that fail on every later
+        * event. So a seat keeps its drawing, and `SeatPresence` tells it to stop
+        * breathing, blinking and fidgeting while nobody can see it.
+        */}
+      <View pointerEvents={here ? 'box-none' : 'none'} style={[styles.fill, { opacity: here ? 1 : 0 }]}>
+        <Animated.View collapsable={false} pointerEvents="box-none" style={[styles.fill, { transformOrigin: 'bottom' }, landing]}>
+          <SeatPresence.Provider value={here}>{children}</SeatPresence.Provider>
+        </Animated.View>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Each character's entrance, by gait: how long a hop along the ground is and
+ * how high and how quick, how much they lean into it, and how long a drop takes.
+ */
+const BOUND: Record<CastName, { length: number; height: number; ms: number; tilt: number; fall: number }> = {
+  ember: { length: 48, height: 15, ms: 150, tilt: 8, fall: 300 },
+  skye: { length: 84, height: 26, ms: 270, tilt: 5, fall: 480 },
+  plum: { length: 40, height: 8, ms: 230, tilt: 3, fall: 360 },
+};
+
+/** How far above the shelf a drop starts. */
+const DROP_FROM = 64;
+
+/** Whether `name` is sitting in `seat` right now, on show — what a seat itself draws from. */
+export function useSeated(seat: string, name: CastName): boolean {
+  const key = keyOf(seat, name);
+  return useSyncExternalStore(subscribe, () => {
+    const flight = flying[name];
+    return flight ? flight.pending && flight.from === key : occupancy[name] === key;
+  });
+}
+
+/** Somewhere a spark can land: the journal's ring. */
+export function useAnchor(id: string) {
+  const ref = useRef<View>(null);
+  useEffect(() => {
+    anchors.set(id, (done) => {
+      const view = ref.current;
+      if (!view) return done(null);
+      view.measureInWindow((x, y, w, h) => done(w > 0 ? { x, y, w, h } : null));
+    });
+    return () => {
+      anchors.delete(id);
+    };
+  }, [id]);
+  return ref;
+}
+
+/* ---- The overlay ----------------------------------------------------------- */
+
+/** The size stand-ins are drawn at and scaled from. */
+const BASE = 44;
+const NAMES: CastName[] = ['ember', 'skye', 'plum'];
+
+/**
+ * Drawn once, over the tabs. Holds a stand-in per character and one spark, and
+ * nothing at all while nobody is flying.
+ */
+export function Stage() {
+  const isReduced = useReducedMotion();
+  reduced = isReduced;
+  const ref = useRef<View>(null);
+  const origin = useRef({ x: 0, y: 0 });
+  const flyers = useRef<Partial<Record<CastName, FlyerHandle>>>({});
+  const sparkHandle = useRef<SparkHandle | null>(null);
+
+  useEffect(() => {
+    overlay = {
+      origin: () => origin.current,
+      fly: (name, from, to, mood, id, retarget, done) => flyers.current[name]?.fly(from, to, mood, id, retarget, done),
+      spark: (from, to, colour, arrive) => sparkHandle.current?.fly(from, to, colour, arrive),
+    };
+    return () => {
+      overlay = null;
+    };
+  }, []);
+
+  return (
+    <View
+      ref={ref}
+      collapsable={false}
+      pointerEvents="none"
+      style={StyleSheet.absoluteFill}
+      onLayout={() =>
+        ref.current?.measureInWindow((x, y) => {
+          origin.current = { x, y };
+        })
+      }
+    >
+      {NAMES.map((name) => (
+        <Flyer key={name} name={name} register={(handle) => (flyers.current[name] = handle)} />
+      ))}
+      <Spark register={(handle) => (sparkHandle.current = handle)} />
+    </View>
+  );
+}
+
+interface FlyerHandle {
+  fly: (from: Rect, to: Rect, mood: Mood, id: number, retarget: () => void, done?: () => void) => void;
+}
+
+function Flyer({ name, register }: { name: CastName; register: (handle: FlyerHandle) => void }) {
+  // Always mounted, so a flight never waits a render for its drawing.
+  const [pose, setPose] = useState<Mood>('idle');
+  const p = useSharedValue(0);
+  const shown = useSharedValue(0);
+  const fx = useSharedValue(0);
+  const fy = useSharedValue(0);
+  const fs = useSharedValue(1);
+  const tx = useSharedValue(0);
+  const ty = useSharedValue(0);
+  const ts = useSharedValue(1);
+  const gait = GAIT[name];
+  const lift = gait.flight.lift;
+
+  const hide = () => {
+    setTimeout(() => {
+      shown.value = 0;
+    }, 60);
+  };
+
+  useEffect(() => {
+    register({
+      fly: (from, to, mood, id, retarget, done) => {
+        if (done) finish.current.set(id, done);
+        if (id < 0) {
+          // A second measurement of where it is going, mid-flight.
+          const settle = { duration: 160, easing: Easing.out(Easing.quad) };
+          tx.value = withTiming(to.x, settle);
+          ty.value = withTiming(to.y, settle);
+          ts.value = withTiming(to.w / BASE, settle);
+          return;
+        }
+        cancelAnimation(p);
+        setPose(mood);
+        fx.value = from.x;
+        fy.value = from.y;
+        fs.value = from.w / BASE;
+        tx.value = to.x;
+        ty.value = to.y;
+        ts.value = to.w / BASE;
+        p.value = 0;
+        shown.value = 1;
+        const duration = gait.flight.duration;
+        p.value = withDelay(
+          gait.flight.delay,
+          withTiming(1, { duration, easing: Easing.bezier(0.42, 0, 0.3, 1) }, (finished) => {
+            if (finished) runOnJS(onArrive)(id);
+          }),
+        );
+        setTimeout(retarget, gait.flight.delay + duration * 0.55);
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /* A leg of a round trip ends in its own callback, and the stand-in stays up for the next. */
+  const finish = useRef(new Map<number, () => void>());
+  const onArrive = (id: number) => {
+    const done = finish.current.get(id);
+    if (done) {
+      finish.current.delete(id);
+      done();
+      return;
+    }
+    landed(name, id);
+    hide();
+  };
+
+  const style = useAnimatedStyle(() => {
+    const t = p.value;
+    const peak = Math.min(fy.value, ty.value) - lift;
+    const x = fx.value + (tx.value - fx.value) * t;
+    const y = (1 - t) * (1 - t) * fy.value + 2 * (1 - t) * t * peak + t * t * ty.value;
+    const s = fs.value + (ts.value - fs.value) * t;
+    const air = Math.sin(Math.PI * t);
+    return {
+      opacity: shown.value,
+      transform: [
+        { translateX: x },
+        { translateY: y },
+        { scale: s },
+        { scaleX: 1 - air * 0.05 },
+        { scaleY: 1 + air * 0.08 },
+      ],
+    };
+  });
+
+  return (
+    <Animated.View collapsable={false} style={[styles.flyer, { transformOrigin: [0, 0, 0] }, style]}>
+      <Character
+        name={name}
+        mood={pose}
+        sitting={false}
+        size={BASE}
+        shadow={false}
+        loop={false}
+        poke={false}
+        fidget={false}
+        arrive={false}
+        blink={false}
+      />
+    </Animated.View>
+  );
+}
+
+interface SparkHandle {
+  fly: (from: Rect, to: Rect, colour: string, arrive: () => void) => void;
+}
+
+const SPARK = 14;
+
+function Spark({ register }: { register: (handle: SparkHandle) => void }) {
+  const [colour, setColour] = useState('#ffffff');
+  const p = useSharedValue(0);
+  const shown = useSharedValue(0);
+  const from = useSharedValue({ x: 0, y: 0 });
+  const to = useSharedValue({ x: 0, y: 0 });
+  const arrival = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    register({
+      fly: (a, b, tint, arrive) => {
+        arrival.current = arrive;
+        setColour(tint);
+        from.value = { x: a.x, y: a.y };
+        to.value = { x: b.x, y: b.y };
+        cancelAnimation(p);
+        p.value = 0;
+        shown.value = 1;
+        p.value = withTiming(1, { duration: 640, easing: Easing.bezier(0.5, 0, 0.3, 1) }, (finished) => {
+          if (finished) runOnJS(arrived)();
+        });
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const arrived = () => {
+    shown.value = 0;
+    arrival.current();
+  };
+
+  const style = useAnimatedStyle(() => {
+    const t = p.value;
+    const a = from.value;
+    const b = to.value;
+    const peak = Math.min(a.y, b.y) - 70;
+    return {
+      opacity: shown.value * (t > 0.94 ? (1 - t) / 0.06 : 1),
+      transform: [
+        { translateX: a.x + (b.x - a.x) * t - SPARK / 2 },
+        { translateY: (1 - t) * (1 - t) * a.y + 2 * (1 - t) * t * peak + t * t * b.y - SPARK / 2 },
+        { scale: 1.15 - t * 0.45 },
+      ],
+    };
+  });
+
+  return (
+    <Animated.View
+      collapsable={false}
+      style={[
+        styles.spark,
+        {
+          backgroundColor: '#ffffff',
+          experimental_backgroundImage: `radial-gradient(circle, #ffffff 0%, ${colour} 60%)`,
+          boxShadow: `0px 0px 14px 4px ${colour}`,
+        },
+        style,
+      ]}
+    />
+  );
+}
+
+/** Claims for all three at once, for `screen`; each leaves on its own gait's delay. */
+export function claimAll(screen: string, seatFor: (name: CastName) => string | null) {
+  NAMES.forEach((name) => {
+    const seat = seatFor(name);
+    if (seat) claim(name, seat, screen);
+    else release(name);
+  });
+}
+
+const styles = StyleSheet.create({
+  fill: { flex: 1 },
+  flyer: { position: 'absolute', left: 0, top: 0, width: BASE, height: BASE },
+  spark: { position: 'absolute', left: 0, top: 0, width: SPARK, height: SPARK, borderRadius: SPARK / 2 },
+});

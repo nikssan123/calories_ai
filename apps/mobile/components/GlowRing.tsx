@@ -53,6 +53,7 @@ export function GlowRing({
   size = 208,
   strokeWidth = 16,
   onSky = true,
+  announce = true,
   style,
 }: {
   consumed: number;
@@ -62,6 +63,11 @@ export function GlowRing({
   day?: string;
   size?: number;
   strokeWidth?: number;
+  /**
+   * Whether a rise right now is news. Today turns it off while it re-reads itself
+   * on coming back into view, since what rose then was logged somewhere else.
+   */
+  announce?: boolean;
   /** Drawn over the sky, where the track is light, rather than on a card. */
   onSky?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -98,9 +104,13 @@ export function GlowRing({
    * the refetch returns it, and an undone delete puts back a meal already
    * celebrated. Measured against the peak, neither plays.
    *
-   * And only while the screen is on show. A meal logged in the journal raises
-   * this ring on a hidden tab; the moment waits and plays when Today is looked
-   * at, which is when there is somebody to see it.
+   * And only for a rise that happened while this ring was on show. A meal
+   * logged in the journal used to wait here and play when Today was next looked
+   * at — sparks gathering out of nowhere, a minute after the meal that caused
+   * them. The journal has its own catch now (CAST.md, fourth pass): the meal's
+   * character tosses a spark into the journal's ring on the spot. So a rise on a
+   * hidden tab moves the peak silently, and this plays for what is logged from
+   * Today itself — a repeat, a meal typed in by hand.
    */
   const focused = useIsFocused();
   const flash = useSharedValue(0);
@@ -122,8 +132,9 @@ export function GlowRing({
       }, 5000);
       return () => clearTimeout(settle);
     }
-    if (consumed === peak.current.consumed || !focused) return;
+    if (consumed === peak.current.consumed) return;
     peak.current = { day, consumed };
+    if (!focused || !announce) return;
     haptics.logged();
     if (reduced) return;
     setBurst((n) => n + 1);
@@ -131,6 +142,7 @@ export function GlowRing({
       withDelay(520, withTiming(1, { duration: 160, easing: Easing.out(Easing.quad) })),
       withTiming(0, { duration: 700, easing: Easing.in(Easing.quad) }),
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [consumed, day, focused, reduced, flash]);
 
   const flashing = useAnimatedStyle(() => ({

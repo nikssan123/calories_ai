@@ -102,4 +102,20 @@ export const haptics = {
    * that is busy.
    */
   captured: () => fire(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)),
+
+  /**
+   * A poke, felt the way each of the cast moves (CAST.md, fourth pass): Ember a
+   * quick double tick, Skye one soft tap, Plum a single heavy thud. Gaits for
+   * the hand as well as the eye.
+   */
+  poke: (name: 'ember' | 'skye' | 'plum') => {
+    if (name === 'ember') {
+      haptics.selected();
+      setTimeout(haptics.selected, 70);
+    } else if (name === 'skye') {
+      fire(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft));
+    } else {
+      fire(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy));
+    }
+  },
 };

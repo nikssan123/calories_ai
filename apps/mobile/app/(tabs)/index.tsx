@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AppState,
   Image,
   Keyboard,
   KeyboardAvoidingView,
@@ -12,7 +13,15 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated';
+import Animated, {
+  useAnimatedProps,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { useIsFocused, useRouter } from 'expo-router';
 import type {
   Allowance,
   ChatAction,
@@ -41,15 +50,21 @@ import { Markdown } from '@/components/Markdown';
 import { Material } from '@/components/Material';
 import { PressableChunk } from '@/components/Chunk';
 import { CastPlate } from '@/components/cast/Plate';
-import { CardPeek } from '@/components/cast/Presence';
-import { Character, Trio } from '@/components/cast/Character';
-import { useDayPart } from '@/components/cast/life';
-import { StreakMoment } from '@/components/cast/StreakMoment';
+import { CardPeek, CastLedge, dominant } from '@/components/cast/Presence';
+import type { CastName, Cue } from '@/components/cast/Character';
+import { bounceTab, claimAll, spark, useAnchor, visit } from '@/components/cast/stage';
+import { castMemory, holderOf, noteEarned, takeBadge } from '@/lib/cast-memory';
+import { glanceAt, lookAll, useDayPart } from '@/components/cast/life';
+import { castForDraft } from '@/lib/food-cast';
+import { markMomentShown, momentShown } from '@/lib/store';
 import { Serif } from '@/components/Serif';
+import { greetingFor } from '@/lib/greeting';
+import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
+import { MomentBurst, MomentCard, useStreakMoment, type Milestone } from '@/components/cast/StreakMoment';
 import { MeterChip, PencilGlyph, PlanWall } from '@/components/PlanWall';
 import { Skeleton } from '@/components/Skeleton';
 import { Sky, useSky } from '@/components/Sky';
-import Svg, { Circle, Defs, G, LinearGradient, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, G, LinearGradient, Path, Stop } from 'react-native-svg';
 import { useCountUp } from '@/hooks/useCountUp';
 import { useToast } from '@/components/Toast';
 import { api, planLimitOf } from '@/lib/api';
@@ -118,6 +133,11 @@ interface Bubble {
    * with their own sentence already in it.
    */
   wall?: { allowance: Allowance | null; message: string; text: string };
+  /**
+   * A streak milestone, said in the conversation rather than in a modal over it
+   * (CAST.md, fourth pass). Local: it lasts the session, like a wall.
+   */
+  moment?: Milestone;
 }
 
 /** Near enough to the end that a new message should still carry the view. */
@@ -186,14 +206,24 @@ export default function JournalScreen() {
   const save = useSaveAccount();
 
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
-  /** The row with the newest meal card on it, which gets one of the cast peeking over it. */
-  const newestFood = useMemo(() => {
+  /**
+   * The newest meal card, which one of the cast peeks over: the row it is in,
+   * the entry, and whoever the meal is mostly made of.
+   */
+  const newest = useMemo(() => {
     for (let i = bubbles.length - 1; i >= 0; i--) {
       const bubble = bubbles[i]!;
-      if (bubble.actions?.some((action) => action.card?.type === 'food' && !action.removed)) return bubble.key;
+      const actions = bubble.actions ?? [];
+      for (let j = actions.length - 1; j >= 0; j--) {
+        const card = actions[j]!.card;
+        if (card?.type === 'food' && !actions[j]!.removed && card.entry_id) {
+          return { row: bubble.key, entryId: card.entry_id, who: dominant(card) };
+        }
+      }
     }
     return null;
   }, [bubbles]);
+  const newestFood = newest?.row ?? null;
   const [day, setDay] = useState<DaySummary | null>(null);
 
   /*
@@ -214,6 +244,7 @@ export default function JournalScreen() {
   const commitDay = useCallback((next: DaySummary) => {
     if (consumed.current !== null && next.consumed.kcal !== consumed.current) haptics.logged();
     consumed.current = next.consumed.kcal;
+    noteEarned(next);
     setDay(next);
     // The home screen learns what the journal just learned. Safe here because
     // the journal is always today — see `today.tsx` for the case that is not.
@@ -221,6 +252,7 @@ export default function JournalScreen() {
     void writeDaySnapshot(next, locale, profile);
   }, [locale, profile]);
   const [busy, setBusy] = useState(false);
+
   /**
    * A turn is in flight. The same fact as `busy`, in the form the recovery
    * below needs it: that runs from an event rather than from a render, and must
@@ -250,6 +282,243 @@ export default function JournalScreen() {
    * forever, is a warning that fails at the only moment it was for.
    */
   const [dismissedCount, setDismissedCount] = useState(false);
+
+  /*
+   * The ring in the status bar, held back while a meal is on its way into it
+   * (CAST.md, fourth pass). The card lands, whoever it is mostly made of catches
+   * it and tosses a spark up into the ring — and the ring moves when the spark
+   * arrives, not a second before, so what caused it is on screen. A fallback
+   * lets go if the catch never comes (another tab, Reduce Motion, a card that
+   * scrolled away).
+   */
+  const [ringDay, setRingDay] = useState<DaySummary | null>(null);
+  const [ringFlash, setRingFlash] = useState(0);
+  const holdingRing = useRef(false);
+  const holdTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const releaseRing = useCallback((flash: boolean) => {
+    clearTimeout(holdTimer.current);
+    holdingRing.current = false;
+    setRingDay(dayRef.current);
+    if (flash) setRingFlash((n) => n + 1);
+  }, []);
+  const holdRing = useCallback(() => {
+    holdingRing.current = true;
+    clearTimeout(holdTimer.current);
+    holdTimer.current = setTimeout(() => releaseRing(false), 3600);
+  }, [releaseRing]);
+  useEffect(() => () => clearTimeout(holdTimer.current), []);
+  useEffect(() => {
+    if (!holdingRing.current) setRingDay(day);
+  }, [day]);
+
+  /* The carrier caught the card: the spark goes up, in its macro's colour. */
+  const onCatch = useCallback(
+    (who: CastName, entryId: string) => {
+      // The widget draws whoever caught the last meal (`castMemory`, set by the peek).
+      if (dayRef.current) void writeDaySnapshot(dayRef.current, locale, profile);
+      if (!holdingRing.current) return;
+      spark({ seat: `journal.peek:${entryId}`, name: who }, 'journal.ring', macroColour(colors, who), () =>
+        releaseRing(true),
+      );
+    },
+    [colors, releaseRing, locale, profile],
+  );
+
+  /*
+   * Where the three sit in the journal (CAST.md, fourth pass). Nowhere while the
+   * journal is empty — the plate has them. In the reply row while a turn is
+   * silent. Otherwise on the ledge above the composer, except whoever the newest
+   * meal is mostly made of, who is on that card. Asked for whenever any of that
+   * changes and whenever the journal comes back on screen; the stage flies them.
+   */
+  const focused = useIsFocused();
+  const typing = useKeyboardVisible();
+  const dayPart = useDayPart();
+  const night = dayPart === 'night';
+  const replying = bubbles.some((bubble) => bubble.pending && !bubble.content);
+  const empty = !loading && bubbles.length === 0;
+  useEffect(() => {
+    if (!focused) return;
+    claimAll('index', (name) => {
+      if (empty) return null;
+      // Loading the conversation: they bounce on the composer, as for a reply.
+      if (loading) return 'journal.ledge';
+      // A turn is out: all three wait on the ledge (bouncing while it is silent),
+      // the last carrier included, rather than staying on a card the reply is
+      // about to make old.
+      if (busy || replying) return 'journal.ledge';
+      if (newest && newest.who === name) return `journal.peek:${newest.entryId}`;
+      return 'journal.ledge';
+    });
+  }, [focused, loading, empty, replying, busy, newest?.who, newest?.entryId]);
+
+  /* ---- The ledge's small life (CAST.md, fourth pass) ---------------------- */
+
+  const reducedMotion = useReducedMotion();
+  const [cues, setCues] = useState<Partial<Record<CastName, Cue>>>({});
+  const cueFor = useCallback((name: CastName, next: Omit<Cue, 'key'>) => {
+    setCues((prev) => ({ ...prev, [name]: { ...next, key: Date.now() + Math.random() } }));
+  }, []);
+
+  /*
+   * Dozing off on the counter. Two minutes with nobody touching the journal and
+   * they nod off one by one, Plum first, holding still — which is also every
+   * loop on the screen stopping. A touch wakes them the other way round.
+   */
+  const lastTouch = useRef(Date.now());
+  const [dozing, setDozing] = useState<readonly CastName[]>(NOBODY);
+  const dozingRef = useRef(dozing);
+  dozingRef.current = dozing;
+  const touched = useCallback(() => {
+    lastTouch.current = Date.now();
+    const asleep = dozingRef.current;
+    if (asleep.length === 0) return;
+    setDozing(NOBODY);
+    [...asleep].reverse().forEach((name, i) => {
+      setTimeout(() => cueFor(name, { mood: 'yawn', ms: 1100 }), 120 + i * 260);
+    });
+  }, [cueFor]);
+  useEffect(() => {
+    if (!focused) return;
+    lastTouch.current = Date.now();
+    const timer = setInterval(() => {
+      if (sending.current) return;
+      const idle = Date.now() - lastTouch.current;
+      const count = idle > DOZE_AFTER_MS + 16_000 ? 3 : idle > DOZE_AFTER_MS + 8_000 ? 2 : idle > DOZE_AFTER_MS ? 1 : 0;
+      if (count > dozingRef.current.length) setDozing(DOZE_ORDER.slice(0, count));
+    }, 4000);
+    const back = AppState.addEventListener('change', (next) => {
+      if (next === 'active') touched();
+    });
+    return () => {
+      clearInterval(timer);
+      back.remove();
+    };
+  }, [focused, touched]);
+
+  /*
+   * Listening while a meal is typed. The newest food word perks up whoever it is
+   * mostly made of, and the other two look over. Debounced, once per word, and
+   * not more than every second and a half.
+   */
+  const draftTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const heard = useRef<{ word: string | null; at: number }>({ word: null, at: 0 });
+  useEffect(() => () => clearTimeout(draftTimer.current), []);
+  const onDraft = useCallback(
+    (text: string) => {
+      touched();
+      clearTimeout(draftTimer.current);
+      if (!text.trim()) {
+        heard.current.word = null;
+        return;
+      }
+      draftTimer.current = setTimeout(() => {
+        const match = castForDraft(text);
+        if (!match || match.word === heard.current.word || Date.now() - heard.current.at < 1500) return;
+        heard.current = { word: match.word, at: Date.now() };
+        cueFor(match.name, { mood: 'hopeful', ms: 900, hop: true });
+        glanceAt(match.name);
+      }, 250);
+    },
+    [cueFor, touched],
+  );
+
+  /* Waking up with you: the first open of the morning, once a day on this phone. */
+  useEffect(() => {
+    if (!focused || !profile?.id || !day || dayPart !== 'morning' || reducedMotion) return;
+    let cancelled = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const userId = profile.id;
+    const moment = `wake:${day.local_date}`;
+    void (async () => {
+      if (await momentShown(userId, moment)) return;
+      await markMomentShown(userId, moment);
+      if (cancelled) return;
+      timers.push(setTimeout(() => cueFor('plum', { mood: 'yawn', ms: 1300 }), 500));
+      timers.push(setTimeout(() => cueFor('ember', { mood: 'stretch', ms: 1100 }), 1100));
+      timers.push(setTimeout(() => cueFor('skye', { mood: 'wave', ms: 1600, hop: true }), 1700));
+    })();
+    return () => {
+      cancelled = true;
+      timers.forEach(clearTimeout);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focused, profile?.id, day?.local_date, dayPart, reducedMotion]);
+
+  /* A coach's comment arriving turns heads: all eyes up at it, once. */
+  const seenCoach = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (loading) return;
+    let last: string | null = null;
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      if (bubbles[i]!.role === 'coach') {
+        last = bubbles[i]!.key;
+        break;
+      }
+    }
+    if (seenCoach.current !== undefined && last && last !== seenCoach.current) lookAll('lookUp');
+    seenCoach.current = last;
+  }, [bubbles, loading]);
+
+  /*
+   * A streak milestone: the three celebrate on the ledge — Ember with the flame,
+   * the other two cheering — confetti comes off the composer, and the words land
+   * in the conversation. See `useStreakMoment`.
+   */
+  const moment = useStreakMoment(day?.streak, profile?.id);
+  useEffect(() => {
+    if (!moment) return;
+    cueFor('ember', { mood: 'proud', ms: 2600, hop: true });
+    const later = [
+      setTimeout(() => cueFor('skye', { mood: 'cheer', ms: 1600 }), 180),
+      setTimeout(() => cueFor('plum', { mood: 'cheer', ms: 1600 }), 360),
+    ];
+    pinned.current = true;
+    setBubbles((prev) =>
+      prev.some((bubble) => bubble.key === `local-${moment.key}`)
+        ? prev
+        : [...prev, { key: `local-${moment.key}`, role: 'assistant', content: '', moment: moment.days }],
+    );
+    return () => later.forEach(clearTimeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moment?.key]);
+
+  /*
+   * A badge just earned: its holder hops down to the Progress tab, the icon
+   * kicks, and they hop back — which is where badges live, said without a
+   * notice. After the catch and the spark, so the meal's moment comes first.
+   */
+  useEffect(() => {
+    if (!focused || castMemory.pendingBadges.length === 0) return;
+    const timer = setTimeout(() => {
+      const badge = takeBadge();
+      if (!badge) return;
+      visit(holderOf(badge), 'tab.progress', () => {
+        haptics.selected();
+        bounceTab('progress');
+      });
+    }, 2800);
+    return () => clearTimeout(timer);
+  }, [focused, day]);
+
+  /* Leaning against a scroll the reader is making, never one the app makes. */
+  const lean = useSharedValue(0);
+
+  const birthday = Boolean(
+    profile?.birth_date && day?.local_date && profile.birth_date.slice(5, 10) === day.local_date.slice(5, 10),
+  );
+  const ledgeState = useMemo(
+    () => ({
+      typing,
+      waiting: replying || loading,
+      streaming: busy && !replying,
+      night,
+      evening: dayPart === 'evening',
+      birthday,
+      dozing,
+    }),
+    [typing, replying, loading, busy, night, dayPart, birthday, dozing],
+  );
 
   const scroller = useRef<ScrollView>(null);
   /*
@@ -299,6 +568,7 @@ export default function JournalScreen() {
         if (cancelled) return;
         setBubbles(history.messages.map(toBubble));
         consumed.current = today.consumed.kcal;
+        noteEarned(today);
         setDay(today);
         void writeDaySnapshot(today, locale, profile);
       } catch {
@@ -459,11 +729,21 @@ export default function JournalScreen() {
       contentSize.height - contentOffset.y - layoutMeasurement.height < NEAR_BOTTOM_PX;
   }, []);
 
+  const lastScroll = useRef({ y: 0, t: 0 });
   const onScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      if (touching.current) measure(event);
+      if (!touching.current) return;
+      measure(event);
+      const y = event.nativeEvent.contentOffset.y;
+      const t = Date.now();
+      const dt = t - lastScroll.current.t;
+      if (dt > 0 && dt < 120) {
+        const velocity = (y - lastScroll.current.y) / dt;
+        lean.value = withSpring(Math.max(-1, Math.min(1, -velocity * 0.5)), { damping: 14, stiffness: 160 });
+      }
+      lastScroll.current = { y, t };
     },
-    [measure],
+    [measure, lean],
   );
 
   /*
@@ -480,8 +760,10 @@ export default function JournalScreen() {
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       measure(event);
       touching.current = false;
+      // Settles back upright on a looser spring, so the stop wobbles.
+      lean.value = withSpring(0, { damping: 6, stiffness: 80 });
     },
-    [measure],
+    [measure, lean],
   );
 
   /**
@@ -721,6 +1003,8 @@ export default function JournalScreen() {
             setBubbles((prev) => strike(prev, gone));
           }
         }
+        // A meal the cast is about to catch holds the ring for its spark.
+        if (result.actions.some((action) => action.kind === 'food_logged' && action.card?.type === 'food')) holdRing();
         commitDay(result.day);
         // What the turn just spent, so the count above the composer is right
         // without a request of its own. See `ChatResponse.allowance`.
@@ -823,6 +1107,7 @@ export default function JournalScreen() {
       adopt,
       refreshPlan,
       save,
+      holdRing,
     ],
   );
 
@@ -853,6 +1138,8 @@ export default function JournalScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.flex}
+      // Any touch counts as somebody being here: see the dozing, above.
+      onTouchStart={touched}
       /*
        * `padding` on both platforms, and no offset.
        *
@@ -866,7 +1153,7 @@ export default function JournalScreen() {
        */
       behavior="padding"
     >
-      <StatusBar day={day} loading={loading} />
+      <StatusBar day={ringDay} loading={loading} flash={ringFlash} />
 
       <ScrollView
         ref={scroller}
@@ -893,7 +1180,7 @@ export default function JournalScreen() {
                 that otherwise offers a new account a wall of text. The cast
                 peeks over the plate until the first thing is said. */}
             <View style={styles.emptyArt}>
-              <CastPlate width={200} />
+              <CastPlate width={200} entrance />
             </View>
             <Serif accessibilityRole="header" style={[t.hero, { color: colors.foreground }]}>
               {tr('journal.emptyTitle')}
@@ -932,9 +1219,17 @@ export default function JournalScreen() {
             timezone={profile?.timezone}
             onLogged={refreshDay}
             onLogManually={logManually}
+            onCatch={onCatch}
           />
         ))}
       </ScrollView>
+
+      {/* The three's home in the journal, laid out between the conversation and
+          the composer. Empty while the journal is (the plate has them). */}
+      <View style={styles.burstAnchor} pointerEvents="none">
+        <MomentBurst trigger={moment?.key ?? null} />
+      </View>
+      {!empty && <CastLedge state={ledgeState} cues={cues} lean={lean} right={LEDGE_RIGHT} />}
 
       {/*
         The count, and only once it is close — half the grant on a small one,
@@ -957,11 +1252,9 @@ export default function JournalScreen() {
         // status bar above told to re-read itself.
         onLogged={onScanned}
         disabled={busy}
+        onDraft={onDraft}
       />
 
-      {/* Most runs are kept from here rather than from Today, so the moment
-          has to be able to open here too. Only the focused tab ever opens it. */}
-      <StreakMoment streak={day?.streak} userId={profile?.id} />
     </KeyboardAvoidingView>
   );
 }
@@ -1118,23 +1411,47 @@ async function reconcile(
  * It is laid out above the conversation, not over it — nothing scrolls under
  * this band, so nothing in it ever sits on top of a message.
  */
-function StatusBar({ day, loading }: { day: DaySummary | null; loading: boolean }) {
+/**
+ * The top of home: a hello for the hour, and the day so far as a ring and a
+ * number — which is also the door to Today.
+ *
+ * The greeting came across from Today when the journal became the tab the app
+ * opens on (CAST.md, fourth pass), so the first screen still says hello. One
+ * quiet serif line, not the big one Today keeps: the conversation below is what
+ * this screen is for.
+ */
+function StatusBar({ day, loading, flash }: { day: DaySummary | null; loading: boolean; flash: number }) {
   const colors = useColors();
   const type = useType();
   const insets = useSafeAreaInsets();
   const tr = useT();
   const locale = useLocale();
   const sky = useSky();
+  const router = useRouter();
+  const { profile } = useAuth();
   const ink = sky.inkLight ? colors.skyInk : colors.foreground;
   const quiet = sky.inkLight ? colors.skyInk : colors.mutedForeground;
 
   return (
-    <View style={[styles.status, { paddingTop: insets.top + 8 }]}>
-      <Sky sky={sky} height={insets.top + 150} hazeTop={insets.top + 150} />
+    <View style={[styles.status, { paddingTop: insets.top + 6 }]}>
+      <Sky sky={sky} height={insets.top + 170} hazeTop={insets.top + 170} />
+      <Serif numberOfLines={1} style={[type.serifTitle, styles.hello, { color: ink }]}>
+        {greetingFor(tr, profile?.display_name ?? null)}
+      </Serif>
       {loading || !day ? (
         <Skeleton style={styles.statusSkeleton} />
       ) : (
-        <StatusLine day={day} ink={ink} quiet={quiet} type={type} tr={tr} locale={locale} />
+        <Pressable
+          onPress={() => {
+            haptics.selected();
+            router.navigate('/today');
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={tr('nav.today')}
+          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+        >
+          <StatusLine day={day} ink={ink} quiet={quiet} type={type} tr={tr} locale={locale} flash={flash} />
+        </Pressable>
       )}
     </View>
   );
@@ -1147,6 +1464,7 @@ function StatusLine({
   type,
   tr,
   locale,
+  flash,
 }: {
   day: DaySummary;
   ink: string;
@@ -1154,17 +1472,17 @@ function StatusLine({
   type: ReturnType<typeof useType>;
   tr: ReturnType<typeof useT>;
   locale: ReturnType<typeof useLocale>;
+  flash: number;
 }) {
   const colors = useColors();
   const { consumed, targets } = day;
   const remaining = targets.kcal - consumed.kcal;
   const over = remaining < 0;
   const shown = useCountUp(Math.abs(Math.round(remaining)), 900);
-  const night = useDayPart() === 'night';
 
   return (
     <View style={styles.statusRow}>
-      <MiniRing consumed={consumed.kcal} target={targets.kcal} />
+      <MiniRing consumed={consumed.kcal} target={targets.kcal} flash={flash} />
       <View style={styles.statusText}>
         <Text style={[type.serifFigure, styles.statusFigure, { color: ink }]} numberOfLines={1}>
           {formatNumber(Math.round(shown), locale)}
@@ -1187,10 +1505,18 @@ function StatusLine({
           )}
         </Text>
       </View>
-      {/* After dark, Plum keeps the journal company at the end of the line, in
-          room of its own rather than over the figures beside it (CAST.md). */}
-      {night && <Character name="plum" mood="sleepy" size={44} shadow={false} />}
+      {/* Where the line leads: Today. After dark Plum used to sleep here; it
+          sleeps on the ledge now, with the other two (CAST.md, fourth pass). */}
+      <ChevronGlyph color={quiet} />
     </View>
+  );
+}
+
+function ChevronGlyph({ color }: { color: string }) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24">
+      <Path d="M9 18l6-6-6-6" stroke={color} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" fill="none" opacity={0.7} />
+    </Svg>
   );
 }
 
@@ -1201,9 +1527,17 @@ const AnimatedArc = Animated.createAnimatedComponent(Circle);
  * the big one does — the only feedback on this screen that the number at the
  * top changed — and turns to ink past the target rather than to red.
  */
-function MiniRing({ consumed, target }: { consumed: number; target: number }) {
+function MiniRing({ consumed, target, flash }: { consumed: number; target: number; flash: number }) {
   const colors = useColors();
   const reduced = useReducedMotion();
+  /* Where the cast's spark lands, and the light it makes when it does. */
+  const anchor = useAnchor('journal.ring');
+  const glow = useSharedValue(0);
+  useEffect(() => {
+    if (flash === 0 || reduced) return;
+    glow.value = withSequence(withTiming(1, { duration: 140 }), withTiming(0, { duration: 700 }));
+  }, [flash, reduced, glow]);
+  const glowing = useAnimatedStyle(() => ({ opacity: glow.value, transform: [{ scale: 0.8 + glow.value * 0.55 }] }));
   const size = 46;
   const stroke = 6;
   const radius = (size - stroke) / 2;
@@ -1223,7 +1557,20 @@ function MiniRing({ consumed, target }: { consumed: number; target: number }) {
   }));
 
   return (
-    <View style={[styles.miniRing, { boxShadow: over ? undefined : `0px 6px 18px -8px ${colors.calories}` }]}>
+    <View
+      ref={anchor}
+      collapsable={false}
+      style={[styles.miniRing, { boxShadow: over ? undefined : `0px 6px 18px -8px ${colors.calories}` }]}
+    >
+      <Animated.View
+        collapsable={false}
+        pointerEvents="none"
+        style={[
+          styles.ringGlow,
+          { experimental_backgroundImage: `radial-gradient(circle, ${colors.calories} 0%, transparent 68%)` },
+          glowing,
+        ]}
+      />
       <Svg width={size} height={size}>
         <Defs>
           <LinearGradient id="mini" x1="0" y1="0" x2="1" y2="1">
@@ -1270,7 +1617,7 @@ function SentScan({ scan }: { scan: MessageScan }) {
         : null;
 
   return (
-    <View style={[styles.sentScan, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <View style={[styles.sentScan, { backgroundColor: colors.glassStrong, borderColor: colors.hairline, boxShadow: `inset 0px 1px 0px ${colors.glassEdge}` }]}>
       <BarcodeGlyph color={colors.mutedForeground} size={13} />
       <Text
         numberOfLines={1}
@@ -1292,11 +1639,14 @@ const Row = memo(function Row({
   peek,
   onLogged,
   onLogManually,
+  onCatch,
 }: {
   bubble: Bubble;
   today?: string;
   /** This row holds the newest food card, so one of the cast peeks over it. See `CardPeek`. */
   peek?: boolean;
+  /** The carrier caught this row's card. See `CardPeek`. */
+  onCatch?: (who: CastName, entryId: string) => void;
   /** For guessing which meal a manually typed entry belongs to. */
   timezone?: string;
   onLogged: () => void;
@@ -1312,7 +1662,7 @@ const Row = memo(function Row({
           {bubble.photoUrl && (
             <Image
               source={{ uri: bubble.photoUrl }}
-              style={[styles.photo, { borderColor: colors.border }]}
+              style={[styles.photo, { borderColor: colors.hairline }]}
               resizeMode="cover"
             />
           )}
@@ -1363,6 +1713,14 @@ const Row = memo(function Row({
     return (
       <View style={styles.assistantRow}>
         <CoachBubble content={bubble.content} />
+      </View>
+    );
+  }
+
+  if (bubble.moment) {
+    return (
+      <View style={styles.assistantRow}>
+        <MomentCard days={bubble.moment} />
       </View>
     );
   }
@@ -1458,6 +1816,8 @@ const Row = memo(function Row({
                 entryId={food.entry_id}
                 active={peek === true && i === lastFood}
                 landing={bubble.live === true && action.kind === 'food_logged'}
+                correcting={bubble.live === true && action.kind === 'food_updated'}
+                onCatch={onCatch}
               >
                 {card}
               </CardPeek>
@@ -1567,16 +1927,24 @@ function Waiting({ label }: { label: string | null }) {
 
   return (
     <View style={styles.waiting} accessibilityLabel={label ?? tr('journal.thinking')}>
-      <Trio size={TYPING_SIZE} fidget={false} poke={false} />
-      {label && (
-        <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{label}…</Text>
-      )}
+      {/* The three bounce on the composer for the wait (`CastLedge`); the row
+          says in words what is going on. */}
+      <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{label ?? tr('journal.thinking')}…</Text>
     </View>
   );
 }
 
-/** Small enough that the row is no taller than a line and its label. */
-const TYPING_SIZE = 26;
+/**
+ * Where the ledge's figures end, from the right edge: past the composer's
+ * send button and its gap, so they sit on the field itself. See `Composer`'s
+ * `bar` and `send` styles.
+ */
+const LEDGE_RIGHT = 12 + 40 + 8 + 10;
+
+/** How long the journal sits untouched before the first of them dozes off. */
+const DOZE_AFTER_MS = 120_000;
+const DOZE_ORDER: CastName[] = ['plum', 'skye', 'ember'];
+const NOBODY: readonly CastName[] = [];
 
 function ChatSkeleton() {
   return (
@@ -1590,6 +1958,11 @@ function ChatSkeleton() {
       </View>
     </View>
   );
+}
+
+/** A character's macro colour, for the spark it throws. */
+function macroColour(colors: ReturnType<typeof useColors>, who: CastName): string {
+  return who === 'ember' ? colors.protein : who === 'skye' ? colors.carbs : colors.fat;
 }
 
 /**
@@ -1615,6 +1988,9 @@ const styles = StyleSheet.create({
   statusText: { flex: 1, gap: 1 },
   statusFigure: { fontSize: 26, lineHeight: 30 },
   miniRing: { width: 46, height: 46, borderRadius: 23 },
+  burstAnchor: { height: 0, zIndex: 3 },
+  ringGlow: { position: 'absolute', left: -22, top: -22, width: 90, height: 90, borderRadius: 45 },
+  hello: { marginBottom: 6 },
   track: {
     height: 10,
     borderRadius: 999,

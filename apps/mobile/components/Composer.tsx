@@ -18,6 +18,8 @@ import { useSharedPhoto } from '@/lib/share';
 import { useUnits } from '@/lib/units';
 import { useDictation } from '@/lib/voice';
 import { useT, type StringKey } from '@/lib/i18n';
+import { onComposeRequest, takeCompose } from '@/lib/compose';
+import { useIsFocused } from 'expo-router';
 import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { messageOf } from '@/lib/errors';
@@ -74,6 +76,7 @@ export function Composer({
   onLogged,
   disabled,
   canAttachPhoto,
+  onDraft,
 }: {
   onSend: (payload: ComposerPayload) => void;
   /**
@@ -90,12 +93,31 @@ export function Composer({
    */
   onLogged: (message: ChatMessage) => void;
   disabled: boolean;
+  /** Every change to the sentence being typed, for the cast to listen to. Never a send. */
+  onDraft?: (text: string) => void;
 }) {
   const colors = useColors();
   const tr = useT();
   const toast = useToast();
   const [text, setText] = useState('');
   const [photo, setPhoto] = useState<PreparedPhoto | null>(null);
+
+  /*
+   * Today's "what have you eaten today?" strip, landing here with the keyboard up.
+   * Taken when this screen is focused — on the request itself if it already is,
+   * on arrival if the tab is still gliding in. See `lib/compose.ts`.
+   */
+  const field = useRef<TextInput>(null);
+  const focused = useIsFocused();
+  useEffect(() => {
+    const take = () => {
+      if (!focused || !takeCompose()) return;
+      // A frame for the tab's glide to start, or Android drops the focus.
+      setTimeout(() => field.current?.focus(), 120);
+    };
+    take();
+    return onComposeRequest(take);
+  }, [focused]);
   const [scanned, setScanned] = useState<Scan[]>([]);
   /** Which chip's amount is being set, if any. Index rather than barcode: see below. */
   const [amending, setAmending] = useState<number | null>(null);
@@ -388,9 +410,11 @@ export function Composer({
         </Pressable>
 
         <TextInput
+          ref={field}
           value={text}
           onChangeText={(next) => {
             setText(next);
+            onDraft?.(next);
             // Answering the complaint by typing is an answer. Keeping it on
             // screen while they do makes it an accusation.
             if (dictation.problem) dictation.dismiss();
@@ -695,7 +719,7 @@ function Choice({
       accessibilityRole="button"
       style={({ pressed }) => [
         styles.choice,
-        { borderTopColor: colors.border, opacity: pressed ? 0.6 : 1 },
+        { borderTopColor: colors.hairline, opacity: pressed ? 0.6 : 1 },
       ]}
     >
       {icon === 'camera' ? (

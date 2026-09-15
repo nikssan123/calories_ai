@@ -10,11 +10,11 @@ import { api, planLimitOf } from '@/lib/api';
 import { useEntitlements } from '@/lib/entitlements';
 import { TIER_NAMES } from '@/lib/plan-copy';
 import { useT } from '@/lib/i18n';
-import { font, type as t, useColors } from '@/theme';
+import { font, type as t, useColors, useType } from '@/theme';
 import { useRefreshOnReturn } from '@/hooks/useRefreshOnReturn';
 import { useLocale } from '@/lib/i18n';
 import { messageOf } from '@/lib/errors';
-import { CastIcon } from '@/components/cast/Presence';
+import { Glossy } from '@/components/icons/Glossy';
 
 /**
  * Last week, and what it did to the target.
@@ -96,7 +96,7 @@ export function WeeklyReview({ onError }: { onError: (message: string) => void }
   const change = review?.stats.adaptive ?? adaptive;
 
   return (
-    <InsetGroup title={review ? tr('review.lastWeek') : tr('review.title')} icon={<CastIcon name="plum" mood="hold" prop="mug" />}>
+    <InsetGroup title={review ? tr('review.lastWeek') : tr('review.title')} icon={<Glossy name="calendar" size={18} />}>
       {review ? (
         <View style={styles.body}>
           <Text style={[t.footnoteBold, { color: colors.mutedForeground }]}>
@@ -131,21 +131,22 @@ export function WeeklyReview({ onError }: { onError: (message: string) => void }
             disabled={writing}
             accessibilityRole="button"
             style={styles.writeWrap}
+            // A lit glass pill with the green on it, not an outlined chip.
             contentStyle={[
               styles.write,
-              { backgroundColor: colors.secondary, borderColor: colors.border },
+              { backgroundColor: colors.glassStrong, borderColor: colors.hairline },
             ]}
           >
             <Svg width={15} height={15} viewBox="0 0 24 24">
               <Path
                 d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"
-                stroke={colors.secondaryForeground}
+                stroke={colors.caloriesText}
                 strokeWidth={2.2}
                 strokeLinecap="round"
                 fill="none"
               />
             </Svg>
-            <Text style={[t.footnoteBold, { color: colors.secondaryForeground }]}>
+            <Text style={[t.footnoteBold, { color: colors.caloriesText }]}>
               {locked
                 ? tr('review.partOf')(upsell ? TIER_NAMES[upsell.plan] : 'Plus')
                 : writing
@@ -157,7 +158,7 @@ export function WeeklyReview({ onError }: { onError: (message: string) => void }
       )}
 
       {adaptive && !adaptive.eligible && (
-        <View style={[styles.waiting, { borderTopColor: colors.border, backgroundColor: colors.mutedWash }]}>
+        <View style={[styles.waiting, { borderTopColor: colors.hairline, backgroundColor: colors.mutedWash }]}>
           <Text style={[t.footnote, { color: colors.mutedForeground }]}>
             <Text style={{ fontFamily: font.extrabold, color: colors.foreground }}>
               {tr('review.currentTarget')(formatNumber(adaptive.current.kcal, locale))}
@@ -184,10 +185,20 @@ function TargetChange({
   tense: 'past' | 'future';
 }) {
   const colors = useColors();
+  const type = useType();
   const tr = useT();
   const locale = useLocale();
   return (
-    <View style={[styles.change, { backgroundColor: colors.muted, borderColor: colors.border }]}>
+    <View
+      style={[
+        styles.change,
+        {
+          backgroundColor: colors.mutedField,
+          borderColor: colors.hairline,
+          boxShadow: `inset 0px 1px 0px ${colors.glassEdge}`,
+        },
+      ]}
+    >
       <View style={styles.changeRow}>
         <Text style={[t.bodyBold, t.tnum, { color: colors.mutedForeground }]}>
           {formatNumber(proposal.current.kcal, locale)}
@@ -202,7 +213,7 @@ function TargetChange({
             fill="none"
           />
         </Svg>
-        <Text style={[t.bodyBold, t.tnum, { color: colors.caloriesText }]}>
+        <Text style={[type.serifFigure, styles.changeTo, t.tnum, { color: colors.caloriesText }]}>
           {tr('review.kcalUnit')(formatNumber(proposal.proposed.kcal, locale))}
         </Text>
       </View>
@@ -236,7 +247,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   waiting: { borderTopWidth: 1, paddingHorizontal: 16, paddingVertical: 12 },
-  change: { borderWidth: 1, borderRadius: 16, paddingHorizontal: 14, paddingVertical: 12 },
+  change: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 12 },
+  changeTo: { fontSize: 18, lineHeight: 24 },
   changeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   changeWhy: { marginTop: 6, lineHeight: 20 },
 });

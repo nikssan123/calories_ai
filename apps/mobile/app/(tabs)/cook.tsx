@@ -14,7 +14,7 @@ import { FridgeScan } from '@/components/kitchen/FridgeScan';
 import { daysSince, Pantry, STALE_DAYS } from '@/components/kitchen/Pantry';
 import { RecipeTile } from '@/components/kitchen/RecipeTile';
 import { LockedPanel } from '@/components/PlanWall';
-import { Sheet } from '@/components/Field';
+import { Sheet, wellStyle } from '@/components/Field';
 import { Skeleton } from '@/components/Skeleton';
 import { api, planLimitOf } from '@/lib/api';
 import { recipeImageUrl } from '@/lib/links';
@@ -23,7 +23,6 @@ import { font, type as t, useColors } from '@/theme';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
 import { useLocale, useT } from '@/lib/i18n';
 import { AppError, messageOf } from '@/lib/errors';
-import { Character } from '@/components/cast/Character';
 import { KitchenScene } from '@/components/cast/Scenes';
 import { Glossy } from '@/components/icons/Glossy';
 import { Segments } from '@/components/Segments';
@@ -383,7 +382,7 @@ export default function CookScreen() {
 
       {/* The kitchen they're in, at the hour it is (CAST.md): above the content,
           in its own slot, and gone once the page scrolls. */}
-      <KitchenScene />
+      <KitchenScene thinking={tab === 'ideas' && recipes.length === 0 && !thinking ? 'skye' : undefined} />
 
       <Sheet open={kitchenOpen} title={tr('cook.yourKitchen')} onClose={() => setKitchenOpen(false)}>
         {items && (
@@ -431,7 +430,7 @@ export default function CookScreen() {
           contentStyle={[
             styles.find,
             spent
-              ? { backgroundColor: colors.secondary, borderWidth: 1, borderColor: colors.border }
+              ? { backgroundColor: colors.glassStrong, borderWidth: 1, borderColor: colors.hairline, boxShadow: `inset 0px 1px 0px ${colors.glassEdge}` }
               : { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp },
           ]}
         >
@@ -483,8 +482,11 @@ export default function CookScreen() {
             style={({ pressed }) => [
               styles.way,
               {
-                backgroundColor: colors.card,
-                borderColor: colors.border,
+                // The glass pill its neighbours ("Scan your fridge", "Anything
+                // specific?") already are.
+                backgroundColor: colors.glassStrong,
+                borderColor: colors.glassEdge,
+                boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
                 opacity: spent || thinking ? 0.4 : pressed ? 0.6 : 1,
               },
             ]}
@@ -508,7 +510,12 @@ export default function CookScreen() {
             accessibilityRole="button"
             style={({ pressed }) => [
               styles.way,
-              { backgroundColor: colors.card, borderColor: colors.border, opacity: pressed ? 0.6 : 1 },
+              {
+                backgroundColor: colors.glassStrong,
+                borderColor: colors.glassEdge,
+                boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
+                opacity: pressed ? 0.6 : 1,
+              },
             ]}
           >
             <Svg width={13} height={13} viewBox="0 0 24 24">
@@ -536,7 +543,7 @@ export default function CookScreen() {
       */}
       <Sheet open={briefOpen} title={tr('cook.anythingSpecific')} onClose={() => setBriefOpen(false)}>
         <Brief value={brief} onChange={setBrief} />
-        <View style={[styles.sheetFoot, { borderTopColor: colors.border }]}>
+        <View style={[styles.sheetFoot, { borderTopColor: colors.hairline }]}>
           <PressableChunk
             radius={999}
             color={spent ? undefined : colors.caloriesDeep}
@@ -549,7 +556,7 @@ export default function CookScreen() {
             contentStyle={[
               styles.find,
               spent
-                ? { backgroundColor: colors.secondary, borderWidth: 1, borderColor: colors.border }
+                ? { backgroundColor: colors.glassStrong, borderWidth: 1, borderColor: colors.hairline, boxShadow: `inset 0px 1px 0px ${colors.glassEdge}` }
                 : { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp },
             ]}
           >
@@ -584,11 +591,7 @@ export default function CookScreen() {
             style={[
               t.body,
               styles.importInput,
-              {
-                backgroundColor: colors.mutedField,
-                borderColor: colors.border,
-                color: colors.foreground,
-              },
+              { ...wellStyle(colors), color: colors.foreground },
             ]}
           />
           <PressableChunk
@@ -657,9 +660,6 @@ export default function CookScreen() {
 
           {recipes.length === 0 ? (
             <View style={styles.empty}>
-              <View style={styles.mascot}>
-                <Character name="skye" mood="thinking" size={88} />
-              </View>
               {/* Which sentence depends on whether the button it names is on
                   the screen. Pointing somebody at "Find me something" on a plan
                   where that control has been replaced by a lock is the kind of
@@ -858,6 +858,5 @@ const styles = StyleSheet.create({
   aside: { paddingHorizontal: 4, lineHeight: 24 },
   tileSkeleton: { height: 288, borderRadius: 24 },
   empty: { alignItems: 'center', paddingVertical: 48 },
-  mascot: { marginBottom: 12 },
   centred: { textAlign: 'center' },
 });

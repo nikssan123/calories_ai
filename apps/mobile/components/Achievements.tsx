@@ -10,6 +10,7 @@ import { type as t, useColors } from '@/theme';
 import { Glossy } from '@/components/icons/Glossy';
 import { Medal } from '@/components/icons/Medal';
 import { Character, type CastName } from '@/components/cast/Character';
+import { holderOf } from '@/lib/cast-memory';
 
 /**
  * The badge wall, and the one row on Progress that leads to it.
@@ -111,6 +112,18 @@ export function AchievementWall({
   facts: AchievementFacts;
 }) {
   const earnedBy = new Map(earned.map((badge) => [badge.key, badge]));
+  /*
+   * Who holds a medal up, and on which row: each character on their newest
+   * recent badge only. Two streak badges in a fortnight used to put two Embers
+   * on the wall — one of each on a screen (CAST.md, fourth pass).
+   */
+  const held = new Map<CastName, AchievementKey>();
+  for (const badge of [...earned].sort((a, b) => b.earned_at.localeCompare(a.earned_at))) {
+    if (!recent(badge.earned_at)) continue;
+    const holder = holderOf(badge.key);
+    if (!held.has(holder)) held.set(holder, badge.key);
+  }
+  const holding = new Set(held.values());
 
   const tr = useT();
 
@@ -125,6 +138,7 @@ export function AchievementWall({
               first={index === 0}
               got={earnedBy.get(key)}
               facts={facts}
+              holds={holding.has(key)}
             />
           ))}
         </InsetGroup>
@@ -149,11 +163,14 @@ function BadgeRow({
   first,
   got,
   facts,
+  holds,
 }: {
   badgeKey: AchievementKey;
   first: boolean;
   got: Achievement | undefined;
   facts: AchievementFacts;
+  /** Its group's character holds the medal up at the end of the row. */
+  holds: boolean;
 }) {
   const colors = useColors();
   const locale = useLocale();
@@ -207,24 +224,12 @@ function BadgeRow({
 
       {/* Earned in the last fortnight: the group's character holds the medal up
           at the end of the row, in room of its own (CAST.md). */}
-      {got && recent(got.earned_at) && (
-        <Character name={HOLDER[GROUP_OF.get(badgeKey) ?? 'firsts']} mood="hold" prop="medal" size={46} loop={false} />
+      {got && holds && (
+        <Character name={holderOf(badgeKey)} mood="hold" prop="medal" size={46} loop={false} />
       )}
     </InsetRow>
   );
 }
-
-/** Who holds a medal up, by the group it belongs to. */
-const HOLDER: Record<AchievementGroupKey, CastName> = {
-  streaks: 'ember',
-  training: 'plum',
-  firsts: 'skye',
-  totals: 'skye',
-};
-
-const GROUP_OF = new Map<AchievementKey, AchievementGroupKey>(
-  ACHIEVEMENT_GROUPS.flatMap((group) => group.keys.map((key) => [key, group.key] as const)),
-);
 
 const FORTNIGHT = 14 * 24 * 60 * 60 * 1000;
 const recent = (earnedAt: string) => Date.now() - new Date(earnedAt).getTime() < FORTNIGHT;

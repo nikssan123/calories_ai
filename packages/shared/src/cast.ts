@@ -47,7 +47,7 @@ export type Mood =
   | 'surprised';
 
 /** What a hand can hold. Only drawn in the moods that hold something. */
-export type Prop = 'mug' | 'toast' | 'spoon' | 'bowl' | 'medal';
+export type Prop = 'mug' | 'toast' | 'spoon' | 'bowl' | 'medal' | 'cake';
 
 /**
  * What they wear for the time of year: a scarf in winter, a flower in spring, a
@@ -429,6 +429,16 @@ function propShapes(prop: Prop, hand: readonly [number, number]): Shape[] {
         { el: 'circle', cx: x, cy: y - 7, r: 7.5, fill: '#ffc83d' },
         { el: 'circle', cx: x, cy: y - 7, r: 4, fill: '#fff2a8' },
         { el: 'ellipse', cx: x - 2.5, cy: y - 10, rx: 2, ry: 1.2, fill: '#ffffff', opacity: 0.7 },
+      ];
+    case 'cake':
+      // A slice of birthday cake with one candle: the only day it turns up is theirs.
+      return [
+        { el: 'ellipse', cx: x, cy: y + 2, rx: 12, ry: 2.8, fill: '#ffffff', stroke: '#e3d6c4', width: 1 },
+        { el: 'rect', x: x - 9, y: y - 9, w: 18, h: 10, rx: 2.5, fill: '#f7c9a0' },
+        { el: 'rect', x: x - 9, y: y - 10, w: 18, h: 4, rx: 2, fill: '#fff4f8' },
+        { el: 'rect', x: x - 9, y: y - 4.5, w: 18, h: 1.8, rx: 0.9, fill: '#ff8fbe' },
+        { el: 'path', d: `M${x} ${y - 10}V${y - 17}`, stroke: '#8ec5ff', width: 2.2, round: true },
+        { el: 'ellipse', cx: x, cy: y - 20, rx: 1.8, ry: 2.8, fill: '#ffc83d' },
       ];
     case 'bowl':
       return [

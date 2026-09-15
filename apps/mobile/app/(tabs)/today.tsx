@@ -8,7 +8,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   runOnJS,
@@ -27,11 +27,14 @@ import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 import { Chunk } from '@/components/Chunk';
 import { DateStrip } from '@/components/DateStrip';
 import { GlowRing } from '@/components/GlowRing';
-import { Glossy } from '@/components/icons/Glossy';
-import { Character } from '@/components/cast/Character';
-import { CastPlate } from '@/components/cast/Plate';
-import { CastShelf, MealCast } from '@/components/cast/Presence';
-import { StreakMoment } from '@/components/cast/StreakMoment';
+import { Glossy, type GlossyName } from '@/components/icons/Glossy';
+import { CastShelf } from '@/components/cast/Presence';
+import { bounceTab, claimAll, visit } from '@/components/cast/stage';
+import { castMemory, holderOf, noteEarned, takeBadge } from '@/lib/cast-memory';
+import { requestCompose } from '@/lib/compose';
+import { MomentBurst, MomentCard, useStreakMoment } from '@/components/cast/StreakMoment';
+import { ReplayDrop, useReplay } from '@/components/ReplayDay';
+import type { CastName, Cue } from '@/components/cast/Character';
 import { Serif } from '@/components/Serif';
 import { Sky, useSky } from '@/components/Sky';
 import { greetingFor } from '@/lib/greeting';
@@ -74,6 +77,18 @@ import { messageOf } from '@/lib/errors';
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const MEAL_ORDER: Meal[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+const NO_ENTRIES: FoodEntry[] = [];
+/*
+ * Glossy icons again (CAST.md, fourth pass). Each meal held one of the cast for a
+ * release, which put Ember on the shelf, on breakfast and on the snack at once —
+ * three of one character is a sticker sheet, not somebody.
+ */
+const MEAL_ICON: Record<Meal, GlossyName> = {
+  breakfast: 'egg',
+  lunch: 'bowl',
+  dinner: 'fish',
+  snack: 'apple',
+};
 /** Message keys rather than words — resolved per render, see (tabs)/_layout.tsx. */
 const MEAL_LABEL: Record<Meal, StringKey> = {
   breakfast: 'meal.breakfast',
@@ -233,6 +248,7 @@ export default function TodayScreen() {
           return;
         }
         setLoaded((all) => ({ ...all, [summary.local_date]: summary }));
+        noteEarned(summary);
         setLive(fresh);
         setError(null);
         // Today is whatever the server says when asked without a date; it
@@ -360,9 +376,25 @@ export default function TodayScreen() {
    * the mount above has already fetched, and this fires on that same focus.
    */
   const left = useRef(false);
+  /*
+   * The three come to the shelf whenever Today is on show — flown over from the
+   * journal's ledge when that is where they were (CAST.md, fourth pass).
+   */
+  const focused = useIsFocused();
+  useEffect(() => {
+    if (focused) claimAll('today', () => 'day.shelf');
+  }, [focused]);
+  /*
+   * While Today re-reads itself on coming back, a higher total is a meal logged in
+   * the journal, which celebrated it there. The ring takes the new number quietly.
+   */
+  const quietUntil = useRef(0);
   useFocusEffect(
     useCallback(() => {
-      if (left.current) void load(shown.current);
+      if (left.current) {
+        quietUntil.current = Date.now() + 5000;
+        void load(shown.current);
+      }
       return () => {
         left.current = true;
       };
@@ -370,6 +402,51 @@ export default function TodayScreen() {
   );
 
   const isToday = day !== null && today !== null && day.local_date === today;
+
+  /*
+   * A streak milestone reached while Today is the screen on show: the shelf
+   * celebrates — Ember with the flame, the other two cheering — confetti comes off
+   * the card, and the words sit under the run's chip for the rest of the visit.
+   */
+  const moment = useStreakMoment(isToday ? day?.streak : null, profile?.id);
+
+  const { replay, start: startReplay } = useReplay(
+    day?.food_entries ?? NO_ENTRIES,
+    day?.consumed.kcal ?? 0,
+    locale,
+    profile?.timezone,
+  );
+  // Whoever each replayed meal is mostly made of hops where they sit.
+  useEffect(() => {
+    if (!replay.hop) return;
+    const { name, key } = replay.hop;
+    setShelfCues((prev) => ({ ...prev, [name]: { mood: 'cheer', ms: 600, hop: true, key: Date.now() + key } }));
+  }, [replay.hop?.key]);
+
+  /* A badge just earned: its holder hops from the shelf to the Progress tab and back. */
+  useEffect(() => {
+    if (!focused || castMemory.pendingBadges.length === 0) return;
+    const timer = setTimeout(() => {
+      const badge = takeBadge();
+      if (!badge) return;
+      visit(holderOf(badge), 'tab.progress', () => {
+        haptics.selected();
+        bounceTab('progress');
+      });
+    }, 1400);
+    return () => clearTimeout(timer);
+  }, [focused, day]);
+  const [shelfCues, setShelfCues] = useState<Partial<Record<CastName, Cue>>>({});
+  useEffect(() => {
+    if (!moment) return;
+    const at = Date.now();
+    setShelfCues({ ember: { mood: 'proud', ms: 2600, hop: true, key: at } });
+    const later = [
+      setTimeout(() => setShelfCues((prev) => ({ ...prev, skye: { mood: 'cheer', ms: 1600, key: at + 1 } })), 180),
+      setTimeout(() => setShelfCues((prev) => ({ ...prev, plum: { mood: 'cheer', ms: 1600, key: at + 2 } })), 360),
+    ];
+    return () => later.forEach(clearTimeout);
+  }, [moment?.key]);
 
   /*
    * The phone's own count, read on this screen because this is the screen that
@@ -985,13 +1062,22 @@ export default function TodayScreen() {
         <View style={styles.page}>
           <CoachBanner />
           <View style={styles.summary}>
-            <GlowRing
-              consumed={day.consumed.kcal}
-              target={day.targets.kcal}
-              burned={day.burned_kcal}
-              day={day.local_date}
-            />
-            <Total consumed={day.consumed.kcal} target={day.targets.kcal} />
+            {/* Hold the ring to replay the day. See `ReplayDay`. */}
+            <Pressable
+              onLongPress={isToday ? startReplay : undefined}
+              delayLongPress={380}
+              accessible={false}
+            >
+              <ReplayDrop current={replay.current} />
+              <GlowRing
+                consumed={replay.consumed}
+                target={day.targets.kcal}
+                burned={day.burned_kcal}
+                day={day.local_date}
+                announce={!replay.running && Date.now() > quietUntil.current}
+              />
+            </Pressable>
+            <Total consumed={replay.consumed} target={day.targets.kcal} />
             {day.burned_kcal > 0 && (
               <Text style={[t.footnoteSemibold, t.tnum, { color: colors.mutedForeground }]}>
                 {tr('rail.netAfterExercise')(formatNumber(day.net_kcal, locale))}
@@ -1000,12 +1086,24 @@ export default function TodayScreen() {
             {/* Null on every day but today — see `DaySummary.streak`. A run
                 counted against a Tuesday in March is not a thing anybody opened
                 the calendar to find out. */}
-            {day.streak && <StreakChip streak={day.streak} />}
+            {day.streak && <StreakChip streak={day.streak} figure={false} />}
+            {moment && isToday && <MomentCard days={moment.days} compact />}
           </View>
 
           {/* The three sit on the macro card, each over its own bar (CAST.md). The
               inset is the card's border and padding, and the gap is MacroBars'. */}
-          <CastShelf inset={15} gap={10}>
+          <CastShelf
+            inset={15}
+            gap={10}
+            moods={{
+              // Hoping, when the run needs something logged today; asleep after
+              // midnight, beside the note about where a 1am snack lands.
+              ember: isToday && day.streak?.state === 'at_risk' ? 'hopeful' : undefined,
+              plum: isToday && profile && beforeDayStart(profile) ? 'sleepy' : undefined,
+            }}
+            cues={shelfCues}
+          >
+            <MomentBurst trigger={moment?.key ?? null} />
             <Chunk contentStyle={[styles.macroCard, { backgroundColor: colors.card, borderColor: colors.hairline }]}>
               <MacroBars consumed={day.consumed} targets={day.targets} />
             </Chunk>
@@ -1035,7 +1133,6 @@ export default function TodayScreen() {
             */}
           {isToday && profile && beforeDayStart(profile) && (
             <View style={[styles.lateNote, { backgroundColor: tint(colors.fat, 0.1) }]}>
-              <Character name="plum" mood="sleepy" size={52} shadow={false} />
               <Text style={[t.footnoteSemibold, styles.lateText, { color: colors.foreground }]}>
                 {tr('setup.dayFooter')}
               </Text>
@@ -1044,7 +1141,6 @@ export default function TodayScreen() {
 
           {byMeal.length === 0 && day.exercise_entries.length === 0 && (
             <View style={styles.empty}>
-              <CastPlate width={170} />
               <Text style={[t.body, styles.centred, { color: colors.mutedForeground }]}>
                 {tr('today.nothingLogged')}
                 {'\n'}
@@ -1064,6 +1160,37 @@ export default function TodayScreen() {
             * reach is not one. The order still says which is which: this is a
             * line of muted text, and Repeat is a card of chunky Log buttons.
             */}
+          {/*
+            * The way into the journal, which is where meals are said (CAST.md,
+            * fourth pass). Drawn as the composer's own field so it reads as the
+            * same thing, one tab over; it opens the journal with the keyboard up.
+            * Laid out at the head of the log, never floating over it.
+            */}
+          {isToday && (
+            <Pressable
+              onPress={() => {
+                haptics.press();
+                requestCompose();
+                router.navigate('/');
+              }}
+              accessibilityRole="button"
+              style={({ pressed }) => [
+                styles.say,
+                {
+                  backgroundColor: colors.glassStrong,
+                  borderColor: colors.glassEdge,
+                  boxShadow: `${colors.shadow}, inset 0px 1px 0px ${colors.glassEdge}`,
+                  opacity: pressed ? 0.75 : 1,
+                },
+              ]}
+            >
+              <ChatMark color={colors.caloriesText} />
+              <Text numberOfLines={1} style={[t.body, styles.sayText, { color: colors.mutedForeground }]}>
+                {tr('journal.emptyTitle')}
+              </Text>
+            </Pressable>
+          )}
+
           {isToday &&
             (composing ? (
               <FoodEditor
@@ -1091,7 +1218,7 @@ export default function TodayScreen() {
             <InsetGroup
               key={meal}
               title={tr(MEAL_LABEL[meal])}
-              icon={<MealCast meal={meal} />}
+              icon={<Glossy name={MEAL_ICON[meal]} size={18} />}
               trailing={
                 <Text style={[t.footnoteBold, t.tnum, { color: colors.mutedForeground }]}>
                   {Math.round(entries.reduce((sum, e) => sum + e.kcal, 0))} kcal
@@ -1247,7 +1374,6 @@ export default function TodayScreen() {
         </Material>
       </Animated.View>
 
-      <StreakMoment streak={isToday ? day?.streak : null} userId={profile?.id} />
     </>
   );
 }
@@ -1548,6 +1674,16 @@ function ExerciseRow({
  * ------------------------------------------------------------------------- */
 
 /** `lucide-react`'s `calendar`, at the same 24-unit grid the web draws it on. */
+/** The journal tab's own mark, on the strip that leads there. */
+function ChatMark({ color }: { color: string }) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24">
+      <Path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke={color} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <Path d="M7 9h10M7 13h6" stroke={color} strokeWidth={2.2} strokeLinecap="round" fill="none" />
+    </Svg>
+  );
+}
+
 function CalendarMark({ color }: { color: string }) {
   const props = {
     stroke: color,
@@ -1689,7 +1825,9 @@ const styles = StyleSheet.create({
   loadingRing: { width: 176, height: 176, borderRadius: 88 },
   loadingBar: { height: 48, alignSelf: 'stretch', borderRadius: 16 },
   empty: { alignItems: 'center', paddingVertical: 32, gap: 12 },
-  lateNote: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 20, paddingVertical: 8, paddingLeft: 6, paddingRight: 14 },
+  lateNote: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 20, paddingVertical: 12, paddingHorizontal: 16 },
+  say: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, borderWidth: 1, borderRadius: 24, paddingHorizontal: 16 },
+  sayText: { flex: 1 },
   lateText: { flex: 1 },
   manual: { alignItems: 'center', paddingVertical: 12 },
   unsent: { opacity: 0.55 },

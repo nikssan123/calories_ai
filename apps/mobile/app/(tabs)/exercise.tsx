@@ -24,7 +24,6 @@ import { WorkoutCard } from '@/components/workout/WorkoutCard';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
 import { useLocale, useT } from '@/lib/i18n';
 import { messageOf } from '@/lib/errors';
-import { Character } from '@/components/cast/Character';
 import { ParkScene } from '@/components/cast/Scenes';
 import { Glossy } from '@/components/icons/Glossy';
 
@@ -148,9 +147,6 @@ export default function ExerciseScreen() {
       ) : summary.sessions === 0 ? (
         <InsetGroup>
           <View style={styles.empty}>
-            <View style={styles.mascot}>
-              <Character name="ember" mood="idle" size={88} />
-            </View>
             <Text style={[t.body, styles.centred, { color: colors.mutedForeground }]}>
               {tr('exercise.nothingLogged')(String(days))}
               {'\n'}
@@ -412,7 +408,6 @@ const styles = StyleSheet.create({
   aside: { flexShrink: 1 },
   chart: { marginTop: 16 },
   empty: { alignItems: 'center', paddingHorizontal: 16, paddingVertical: 48 },
-  mascot: { marginBottom: 12 },
   centred: { textAlign: 'center' },
   rowEmoji: { fontSize: 20, lineHeight: 24 },
   figure: { fontSize: 16, lineHeight: 24 },

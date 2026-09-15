@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   Easing,
@@ -31,7 +31,8 @@ import {
   type Prop,
   type Shape,
 } from './figure';
-import { useLife, useSeason, type Fidget } from './life';
+import { useLife, useSeason, type Actor, type Fidget } from './life';
+import { SeatPresence } from './seatPresence';
 
 /**
  * Ember, Skye and Plum — the logo's three dots, standing up (CAST.md).
@@ -65,22 +66,119 @@ import { useLife, useSeason, type Fidget } from './life';
  */
 export type { CastName, Mood, Prop } from './figure';
 
-/** The hop, as keyframes of a 1.5s loop: squash, rise, fall, squash, rest. */
-const HOP_T = [0, 0.1, 0.14, 0.17, 0.2, 0.24, 0.28, 0.31, 0.34, 0.36, 0.46, 1];
-const HOP_Y = [0, 0, -6, -10, -12.8, -14, -12.8, -10, -6, 0, 0, 0];
-const HOP_SX = [1, 1.07, 1.02, 0.99, 0.97, 0.96, 0.97, 0.99, 1.02, 1.06, 1, 1];
-const HOP_SY = [1, 0.9, 0.98, 1.02, 1.04, 1.05, 1.04, 1.02, 0.98, 0.92, 1, 1];
-const CHEER_T = [0, 0.18, 0.4, 0.6, 1];
-const CHEER_Y = [0, -7, 0, 0, 0];
-const CHEER_SX = [1, 0.98, 1.04, 1, 1];
-const CHEER_SY = [1, 1.04, 0.96, 1, 1];
+/**
+ * How each of them moves (CAST.md, fourth pass).
+ *
+ * They used to share one set of keyframes and differ only by a start delay, so
+ * in motion the three were one sprite in three colours. Now each has a gait you
+ * could pick out in silhouette:
+ * - **Ember** is quick and springy: a short, snappy hop with a hard squash at
+ *   both ends, and a stiff spring.
+ * - **Skye** is floaty: the longest hang at the top, a little sway on the way,
+ *   a soft landing that bounces once, and a loose spring.
+ * - **Plum** is heavy: gathers itself, barely leaves the ground, lands with the
+ *   deepest squash and wobbles it out.
+ *
+ * Keyframes are fractions of one loop; heights are in grid units. Everything
+ * that carries a figure from one place to another — a poke, a flight between
+ * seats (`stage.tsx`), a peek (`Presence.tsx`) — reads its timing from here, so
+ * a figure moves like itself wherever it is.
+ */
+export interface Gait {
+  hop: { t: number[]; y: number[]; sx: number[]; sy: number[]; r: number[]; duration: number; height: number };
+  cheer: { t: number[]; y: number[]; sx: number[]; sy: number[]; duration: number };
+  breathe: number;
+  sleep: number;
+  /** A poke or an arrival: the rise, the fall, and how high, in grid units. */
+  jump: { up: number; down: number; height: number };
+  spring: { damping: number; stiffness: number };
+  /** A trip between seats: how long, how high the arc, and how far behind Ember it leaves. */
+  flight: { duration: number; lift: number; delay: number };
+}
 
-const LOOPS: Record<Motion, { duration: number; reverse: boolean }> = {
-  breathe: { duration: 1800, reverse: true },
-  sleep: { duration: 2700, reverse: true },
-  hop: { duration: 1500, reverse: false },
-  cheer: { duration: 1100, reverse: false },
+export const GAIT: Record<CastName, Gait> = {
+  ember: {
+    hop: {
+      t: [0, 0.08, 0.13, 0.18, 0.22, 0.27, 0.31, 0.34, 0.4, 1],
+      y: [0, 0, -8, -12, -13, -12, -6, 0, 0, 0],
+      sx: [1, 1.1, 1.02, 0.98, 0.97, 0.98, 1.02, 1.1, 1, 1],
+      sy: [1, 0.86, 0.98, 1.03, 1.05, 1.03, 0.98, 0.88, 1, 1],
+      r: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      duration: 1100,
+      height: 13,
+    },
+    cheer: { t: [0, 0.16, 0.36, 0.55, 1], y: [0, -9, 0, 0, 0], sx: [1, 0.97, 1.07, 1, 1], sy: [1, 1.05, 0.93, 1, 1], duration: 950 },
+    breathe: 1500,
+    sleep: 2400,
+    jump: { up: 170, down: 260, height: 14 },
+    spring: { damping: 11, stiffness: 240 },
+    flight: { duration: 440, lift: 64, delay: 0 },
+  },
+  skye: {
+    hop: {
+      t: [0, 0.08, 0.16, 0.24, 0.32, 0.4, 0.48, 0.54, 0.6, 0.66, 1],
+      y: [0, 0, -10, -17, -20, -19, -12, 0, -2, 0, 0],
+      sx: [1, 1.05, 0.97, 0.96, 0.97, 0.98, 1, 1.05, 0.99, 1, 1],
+      sy: [1, 0.93, 1.04, 1.06, 1.04, 1.02, 1, 0.94, 1.01, 1, 1],
+      r: [0, 0, -5, -3, 4, 2, -2, 0, 0, 0, 0],
+      duration: 1750,
+      height: 20,
+    },
+    cheer: { t: [0, 0.22, 0.45, 0.6, 0.75, 1], y: [0, -12, -9, 0, -1.5, 0], sx: [1, 0.97, 0.98, 1.05, 1, 1], sy: [1, 1.05, 1.03, 0.95, 1, 1], duration: 1250 },
+    breathe: 2100,
+    sleep: 2900,
+    jump: { up: 260, down: 420, height: 18 },
+    spring: { damping: 9, stiffness: 150 },
+    flight: { duration: 600, lift: 96, delay: 70 },
+  },
+  plum: {
+    hop: {
+      t: [0, 0.12, 0.21, 0.29, 0.36, 0.41, 0.46, 0.51, 0.56, 0.62, 1],
+      y: [0, 0, 0, -6, -7, 0, 0, 0, 0, 0, 0],
+      sx: [1, 1, 1.15, 0.98, 0.97, 1.2, 0.93, 1.05, 0.99, 1, 1],
+      sy: [1, 1, 0.8, 1.04, 1.05, 0.76, 1.07, 0.96, 1.01, 1, 1],
+      r: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      duration: 2200,
+      height: 7,
+    },
+    cheer: { t: [0, 0.2, 0.4, 0.52, 0.64, 1], y: [0, -5, 0, 0, 0, 0], sx: [1, 0.98, 1.14, 0.94, 1.03, 1], sy: [1, 1.03, 0.82, 1.06, 0.98, 1], duration: 1300 },
+    breathe: 2600,
+    sleep: 3200,
+    jump: { up: 240, down: 380, height: 8 },
+    spring: { damping: 14, stiffness: 170 },
+    flight: { duration: 540, lift: 44, delay: 140 },
+  },
 };
+
+const loopFor = (gait: Gait, motion: Motion): { duration: number; reverse: boolean } => {
+  switch (motion) {
+    case 'breathe':
+      return { duration: gait.breathe, reverse: true };
+    case 'sleep':
+      return { duration: gait.sleep, reverse: true };
+    case 'hop':
+      return { duration: gait.hop.duration, reverse: false };
+    case 'cheer':
+      return { duration: gait.cheer.duration, reverse: false };
+  }
+};
+
+/** How far behind Ember each of them starts anything done together. */
+export const STAGGER: Record<CastName, number> = { ember: 0, skye: 90, plum: 180 };
+
+/**
+ * A passing mood asked for from outside — the shelf's figure cheering the meal
+ * it caught in the journal, say. A new `key` plays it again.
+ */
+export interface Cue {
+  mood: Mood;
+  ms: number;
+  key: number;
+  /** A hop in this figure's gait as the mood starts: perking up. */
+  hop?: boolean;
+  /** A small nod once the mood has passed: "got it". */
+  nod?: boolean;
+}
 
 export function Character({
   name,
@@ -93,6 +191,12 @@ export function Character({
   poke = true,
   fidget = true,
   dressed = true,
+  sitting = false,
+  gaze,
+  gazeUp = false,
+  cue,
+  arrive = true,
+  blink = true,
   onPoke,
   style,
 }: {
@@ -116,6 +220,28 @@ export function Character({
   fidget?: boolean;
   /** Wears what the season calls for. See `useSeason`. */
   dressed?: boolean;
+  /**
+   * On an edge with the legs over it, whatever the mood — Plum asleep on the
+   * shelf, Ember hoping on it. `mood="sit"` implies it.
+   */
+  sitting?: boolean;
+  /** Eyes held toward one side, -1 to 1, for as long as it is set: leaning in to the composer. */
+  gaze?: number;
+  /** Eyes up, for as long as it is set: watching a reply arrive above them. */
+  gazeUp?: boolean;
+  /** A passing mood asked for from outside. See `Cue`. */
+  cue?: Cue | null;
+  /**
+   * Lands with a hop of its own gait when its screen comes back into focus, so
+   * arriving on a tab reads as the three arriving too. Off for figures carried
+   * there by the stage, which land on their own.
+   */
+  arrive?: boolean;
+  /**
+   * Blinks on its own timer. Off for the stage's stand-ins, which are mounted
+   * all the time and invisible nearly all of it.
+   */
+  blink?: boolean;
   /** Told about a poke, for a parent that moves the figure too (the card peek). */
   onPoke?: () => void;
   style?: StyleProp<ViewStyle>;
@@ -124,15 +250,20 @@ export function Character({
   const shown = passing ?? mood;
   const season = useSeason();
   const accessory = dressed ? (season ?? undefined) : undefined;
+  const seated = mood === 'sit' || sitting;
   const d = useMemo(
-    () => drawing(name, shown, { prop, sit: mood === 'sit', accessory }),
-    [name, shown, prop, mood, accessory],
+    () => drawing(name, shown, { prop, sit: seated, accessory }),
+    [name, shown, prop, seated, accessory],
   );
+  const gait = GAIT[name];
+
   const { scheme } = useTheme();
   const reduced = useReducedMotion();
   const focused = useIsFocused();
   const id = useId().replace(/:/g, '');
-  const live = focused && !reduced;
+  // A seat's hidden copy is mounted but not on show: no loops, blinks or fidgets for it.
+  const present = useContext(SeatPresence);
+  const live = focused && !reduced && present;
   const looping = live && loop;
   const unit = size / GRID;
   /*
@@ -148,6 +279,7 @@ export function Character({
   const lookX = useSharedValue(0);
   const lookY = useSharedValue(0);
   const jump = useSharedValue(0);
+  const nod = useSharedValue(0);
 
   /*
    * `delay` staggers figures when they first appear. A passing mood that
@@ -167,7 +299,7 @@ export function Character({
       clock.value = 0;
       return;
     }
-    const cycle = LOOPS[motion];
+    const cycle = loopFor(gait, motion);
     const wait = staggered.current.clock ? 0 : delay;
     staggered.current.clock = true;
     clock.value = 0;
@@ -183,7 +315,7 @@ export function Character({
       ),
     );
     return () => cancelAnimation(clock);
-  }, [looping, motion, delay, clock]);
+  }, [looping, motion, delay, clock, gait]);
 
   useEffect(() => {
     if (!looping || (!fx && !swing)) {
@@ -214,7 +346,7 @@ export function Character({
    * of characters look like one sprite repeated.
    */
   useEffect(() => {
-    if (!live || !blinks) {
+    if (!live || !blinks || !blink) {
       lids.value = 1;
       return;
     }
@@ -227,7 +359,7 @@ export function Character({
     };
     next();
     return () => clearTimeout(timer);
-  }, [live, blinks, lids]);
+  }, [live, blinks, blink, lids]);
 
   /* ---- Passing moods, fidgets and pokes ---------------------------------- */
 
@@ -244,13 +376,53 @@ export function Character({
     passingTimer.current = setTimeout(() => setPassing(null), ms);
   };
 
-  const hop = () => {
+  const hop = (after = 0) => {
     if (reduced) return;
-    jump.value = withSequence(
-      withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) }),
-      withTiming(0, { duration: 300, easing: Easing.bounce }),
+    jump.value = withDelay(
+      after,
+      withSequence(
+        withTiming(1, { duration: gait.jump.up, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: gait.jump.down, easing: Easing.bounce }),
+      ),
     );
   };
+
+  /* A cue from outside plays like any passing mood, once per key. */
+  const cueKey = cue?.key;
+  useEffect(() => {
+    if (!cue || reduced) return;
+    pass(cue.mood, cue.ms);
+    if (cue.hop) hop();
+    if (cue.nod) {
+      // Down and up once, as the passing mood hands back: a nod is a squash, not a hop.
+      nod.value = withDelay(
+        cue.ms,
+        withSequence(withTiming(1, { duration: 140 }), withTiming(0, { duration: 220, easing: Easing.out(Easing.quad) })),
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cueKey]);
+
+  /* Eyes held to one side while `gaze` is set, up while `gazeUp` — and handed back when neither is. */
+  useEffect(() => {
+    if (!blinks || passing) return;
+    lookX.value = withTiming(gaze ?? 0, { duration: 260 });
+    lookY.value = withTiming(gazeUp ? -1 : 0, { duration: 260 });
+  }, [gaze, gazeUp, blinks, passing, lookX, lookY]);
+
+  /*
+   * Arriving on a tab: a landing hop in this figure's own gait, staggered so the
+   * three come down one after another. Not on the first focus, or every launch
+   * would open with a screen of figures bouncing at nobody.
+   */
+  const seenFocus = useRef(focused);
+  useEffect(() => {
+    const was = seenFocus.current;
+    seenFocus.current = focused;
+    if (!arrive || reduced || was || !focused) return;
+    hop(STAGGER[name] + 60);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focused]);
 
   const glance = (x: number, y: number) => {
     lookX.value = withSequence(withTiming(x, { duration: 220 }), withDelay(1200, withTiming(0, { duration: 260 })));
@@ -293,11 +465,25 @@ export function Character({
         return true;
     }
   };
-  const actor = useMemo(() => ({ fidget: (kind: Fidget) => act.current(kind) }), []);
+  /*
+   * Where it stands on screen, for the director to aim glances at. Measured on
+   * layout, not per frame: a figure that has scrolled a little is still on the
+   * same side of its neighbours.
+   */
+  const root = useRef<View>(null);
+  const centre = useRef<number | null>(null);
+  const place = () =>
+    root.current?.measureInWindow((x, _y, width) => {
+      centre.current = width > 0 ? x + width / 2 : null;
+    });
+  const actor = useMemo<Actor>(
+    () => ({ name, fidget: (kind: Fidget) => act.current(kind), x: () => centre.current }),
+    [name],
+  );
   useLife(live && fidget ? actor : null);
 
   const onPress = () => {
-    haptics.press();
+    haptics.poke(name);
     // A figure at ease giggles. One holding something, or in a moment of its
     // own, keeps its pose and just bounces.
     if (atEase) pass('giggle', 850);
@@ -307,16 +493,18 @@ export function Character({
 
   /* ---- Styles --------------------------------------------------------------- */
 
+  const { hop: hopKeys, cheer: cheerKeys, jump: jumpKeys } = gait;
   const bodyStyle = useAnimatedStyle(() => {
     const c = clock.value;
-    const lift = { translateY: -jump.value * 14 * unit };
+    const lift = { translateY: -jump.value * jumpKeys.height * unit + nod.value * 3 * unit };
     if (motion === 'hop') {
       return {
         transform: [
           lift,
-          { translateY: interpolate(c, HOP_T, HOP_Y) * unit },
-          { scaleX: interpolate(c, HOP_T, HOP_SX) },
-          { scaleY: interpolate(c, HOP_T, HOP_SY) },
+          { translateY: interpolate(c, hopKeys.t, hopKeys.y) * unit },
+          { rotate: `${interpolate(c, hopKeys.t, hopKeys.r)}deg` },
+          { scaleX: interpolate(c, hopKeys.t, hopKeys.sx) },
+          { scaleY: interpolate(c, hopKeys.t, hopKeys.sy) },
         ],
       };
     }
@@ -324,9 +512,9 @@ export function Character({
       return {
         transform: [
           lift,
-          { translateY: interpolate(c, CHEER_T, CHEER_Y) * unit },
-          { scaleX: interpolate(c, CHEER_T, CHEER_SX) },
-          { scaleY: interpolate(c, CHEER_T, CHEER_SY) },
+          { translateY: interpolate(c, cheerKeys.t, cheerKeys.y) * unit },
+          { scaleX: interpolate(c, cheerKeys.t, cheerKeys.sx) },
+          { scaleY: interpolate(c, cheerKeys.t, cheerKeys.sy) },
         ],
       };
     }
@@ -334,7 +522,7 @@ export function Character({
   });
 
   const shadowStyle = useAnimatedStyle(() => {
-    const hopLift = motion === 'hop' ? interpolate(clock.value, [0, 0.1, 0.24, 0.36, 1], [0, 0, 1, 0, 0]) : 0;
+    const hopLift = motion === 'hop' ? -interpolate(clock.value, hopKeys.t, hopKeys.y) / hopKeys.height : 0;
     const lift = Math.max(hopLift, jump.value);
     return { opacity: 1 - lift * 0.45, transform: [{ scale: 1 - lift * 0.28 }] };
   });
@@ -380,11 +568,11 @@ export function Character({
   const box = { width: size, height: size };
   const layer = [StyleSheet.absoluteFill, box];
   const svg = { width: size, height: size, viewBox: `0 0 ${GRID} ${GRID}` };
-  const sitting = d.legs.length > 0;
+  const hanging = d.legs.length > 0;
 
   const figure = (
     <>
-      {shadow && !sitting && (
+      {shadow && !hanging && (
         <Animated.View collapsable={false} style={[layer, { transformOrigin: at(60, 109) }, shadowStyle]}>
           <Svg {...svg}>
             <Ellipse
@@ -407,7 +595,7 @@ export function Character({
           </Animated.View>
         )}
 
-        {sitting && (
+        {hanging && (
           <Animated.View collapsable={false} style={[layer, { transformOrigin: at(...d.pivots.legs) }, legStyle]}>
             <Svg {...svg}>
               <Shapes shapes={d.legs} id={id} />
@@ -456,6 +644,8 @@ export function Character({
   if (!poke) {
     return (
       <View
+        ref={root}
+        onLayout={place}
         pointerEvents="none"
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
@@ -467,6 +657,8 @@ export function Character({
   }
   return (
     <Pressable
+      ref={root}
+      onLayout={place}
       onPress={onPress}
       hitSlop={6}
       accessible={false}

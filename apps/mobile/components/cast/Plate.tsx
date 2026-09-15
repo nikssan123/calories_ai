@@ -2,7 +2,9 @@ import { useId } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 import { useTheme } from '@/theme';
-import { Character } from './Character';
+import Animated, { FadeInUp } from 'react-native-reanimated';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { Character, GAIT, STAGGER } from './Character';
 
 /**
  * The empty plate, with the three looking over its rim.
@@ -23,7 +25,21 @@ const PLATE = {
   dark: { ramp: ['#ebe2d6', '#d3c5b3', '#a99784'], rim: '#bfb09c', shadow: 'rgba(0, 0, 0, 0.4)' },
 } as const;
 
-export function CastPlate({ width = W }: { width?: number }) {
+/**
+ * `entrance`: the three pop up behind the rim one after another, in their own
+ * gaits, rather than already standing there — the journal's empty state is the
+ * first thing after the plan reveal's cheer, so they arrive from it (CAST.md,
+ * fourth pass).
+ */
+export function CastPlate({ width = W, entrance = false }: { width?: number; entrance?: boolean }) {
+  const reduced = useReducedMotion();
+  const drop = (i: number, name: 'ember' | 'skye' | 'plum') =>
+    entrance && !reduced
+      ? FadeInUp.delay(350 + STAGGER[name] * 1.6)
+          .springify()
+          .damping(GAIT[name].spring.damping)
+          .stiffness(GAIT[name].spring.stiffness)
+      : undefined;
   const { scheme } = useTheme();
   const id = useId().replace(/:/g, '');
   const s = width / W;
@@ -36,9 +52,15 @@ export function CastPlate({ width = W }: { width?: number }) {
       importantForAccessibility="no-hide-descendants"
       style={{ width, height: H * s }}
     >
-      <Character name="ember" mood="idle" size={62 * s} shadow={false} style={[styles.at, { left: 34 * s, top: 18 * s }]} />
-      <Character name="skye" mood="wave" size={62 * s} shadow={false} delay={400} style={[styles.at, { left: 74 * s, top: 9 * s }]} />
-      <Character name="plum" mood="hopeful" size={62 * s} shadow={false} delay={900} style={[styles.at, { left: 114 * s, top: 19 * s }]} />
+      <Animated.View entering={drop(0, 'ember')} style={[styles.at, { left: 34 * s, top: 18 * s }]}>
+        <Character name="ember" mood="idle" size={62 * s} shadow={false} />
+      </Animated.View>
+      <Animated.View entering={drop(1, 'skye')} style={[styles.at, { left: 74 * s, top: 9 * s }]}>
+        <Character name="skye" mood="wave" size={62 * s} shadow={false} delay={400} />
+      </Animated.View>
+      <Animated.View entering={drop(2, 'plum')} style={[styles.at, { left: 114 * s, top: 19 * s }]}>
+        <Character name="plum" mood="hopeful" size={62 * s} shadow={false} delay={900} />
+      </Animated.View>
 
       <Svg width={width} height={H * s} viewBox={`0 0 ${W} ${H}`} style={StyleSheet.absoluteFill}>
         <Defs>

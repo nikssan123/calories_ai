@@ -206,7 +206,12 @@ function kitchenPalette(part: DayPart, dark: boolean) {
   };
 }
 
-export function KitchenScene({ style }: { style?: StyleProp<ViewStyle> }) {
+/**
+ * `thinking` puts that character's mind on it: while Cook has no ideas to show,
+ * Skye stops what it is doing in the kitchen and thinks, rather than a second
+ * Skye doing the thinking under the scene (CAST.md, fourth pass: one of each).
+ */
+export function KitchenScene({ style, thinking }: { style?: StyleProp<ViewStyle>; thinking?: CastName }) {
   const [width, onLayout] = useWidth();
   const colors = useColors();
   const { scheme } = useTheme();
@@ -297,7 +302,13 @@ export function KitchenScene({ style }: { style?: StyleProp<ViewStyle> }) {
               <Rect x={0} y={128} width={KW} height={8} rx={2} fill={pal.counter} />
             </Svg>
 
-            <Cast placed={KITCHEN_CAST[part]} scale={scale} ground={COUNTER} />
+            <Cast
+              placed={KITCHEN_CAST[part].map((figure) =>
+                figure.name === thinking ? { ...figure, mood: 'thinking', prop: undefined } : figure,
+              )}
+              scale={scale}
+              ground={COUNTER}
+            />
 
             {pot && (
               <>
