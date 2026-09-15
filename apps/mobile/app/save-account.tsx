@@ -67,7 +67,15 @@ export default function SaveAccountScreen() {
   const guestId = useRef(profile?.id ?? null);
   const awaitingCode = Boolean(profile?.guest && profile.email && !profile.email_verified);
 
-  const [step, setStep] = useState<'form' | 'code' | 'done' | 'switched'>(awaitingCode ? 'code' : 'form');
+  /*
+   * An account that is already saved lands on the done state rather than a form
+   * whose submit would be refused — a stale "Save your account" button left in
+   * the journal from before saving is the usual way here.
+   */
+  const alreadySaved = profile !== null && !profile.guest;
+  const [step, setStep] = useState<'form' | 'code' | 'done' | 'switched'>(
+    alreadySaved ? 'done' : awaitingCode ? 'code' : 'form',
+  );
   const [name, setName] = useState('');
   const [email, setEmail] = useState(profile?.email ?? '');
   const [password, setPassword] = useState('');
@@ -80,7 +88,9 @@ export default function SaveAccountScreen() {
   const [sent, setSent] = useState<string | null>(null);
 
   useEffect(() => {
-    reachedStep('save_prompt');
+    if (!alreadySaved) reachedStep('save_prompt');
+    // Once, for how the screen was opened.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const perDay = Math.round(TRIAL.chat / TRIAL.days);
