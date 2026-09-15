@@ -1097,6 +1097,8 @@ export const es: Messages = {
   'streak.weekMet': 'Esta semana cuenta',
   'streak.weekBar': (needed: number) => `${needed} días por semana mantienen la racha`,
   'streak.startTraining': 'Entrena tres días esta semana para empezar una racha',
+  'cast.showedUp': 'No te has saltado ni un solo día.',
+  'cast.keepGoing': 'Sigue así',
   'achievements.title': 'Logros',
   'achievements.count': (done: number, total: number) => `${done} de ${total}`,
   'achievements.earnedOn': (date: string) => `Conseguido el ${date}`,

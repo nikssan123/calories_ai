@@ -24,6 +24,7 @@ import { WorkoutCard } from '@/components/workout/WorkoutCard';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
 import { useLocale, useT } from '@/lib/i18n';
 import { messageOf } from '@/lib/errors';
+import { Character } from '@/components/cast/Character';
 import { Glossy } from '@/components/icons/Glossy';
 
 /**
@@ -143,7 +144,7 @@ export default function ExerciseScreen() {
         <InsetGroup>
           <View style={styles.empty}>
             <View style={styles.mascot}>
-              <Glossy name="steps" size={64} />
+              <Character name="ember" mood="idle" size={88} />
             </View>
             <Text style={[t.body, styles.centred, { color: colors.mutedForeground }]}>
               {tr('exercise.nothingLogged')(String(days))}

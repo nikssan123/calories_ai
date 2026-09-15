@@ -1260,6 +1260,8 @@ export const hr: Messages = {
   'streak.weekBar': (needed: number) =>
     `${n(needed, { one: 'dan', few: 'dana', other: 'dana' })} tjedno i niz traje`,
   'streak.startTraining': 'Treniraj tri dana ovaj tjedan i počni niz',
+  'cast.showedUp': 'Nijedan propušten dan.',
+  'cast.keepGoing': 'Samo naprijed',
   'achievements.title': 'Postignuća',
   'achievements.count': (done: number, total: number) => `${done} od ${total}`,
   'achievements.earnedOn': (date: string) => `Osvojeno ${date}`,

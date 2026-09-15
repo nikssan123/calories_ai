@@ -19,6 +19,7 @@ import {
 import { Glass } from '@/components/Glass';
 import { GlowButton } from '@/components/GlowButton';
 import { LanguagePicker } from '@/components/LanguagePicker';
+import { Trio } from '@/components/cast/Character';
 import { RingObject } from '@/components/RingObject';
 import { Serif } from '@/components/Serif';
 import { Advance, Rail, Step } from '@/components/onboarding/Chrome';
@@ -875,12 +876,16 @@ function Welcome({
     <View style={[styles.flex, { paddingTop: insets.top }]}>
       {/*
         * The arrival. The logo ring, in three dimensions, turning in the light
-        * with the macro dots in orbit; then the name; then the one sentence
-        * about what the next half-minute buys. See `RingObject`.
+        * with the macro dots in orbit; then the three dots again, standing
+        * under it and saying hello (CAST.md); then the name; then the one
+        * sentence about what the next half-minute buys. See `RingObject`.
         */}
       <View style={[styles.hero, column]}>
         <Animated.View entering={reduced ? undefined : FadeIn.duration(900)}>
-          <RingObject size={168} />
+          <RingObject size={152} />
+        </Animated.View>
+        <Animated.View entering={enter(120)} style={styles.cast}>
+          <Trio size={52} moods={['idle', 'wave', 'idle']} gap={2} />
         </Animated.View>
         <Animated.View entering={enter(250)} style={styles.wordmark}>
           <Serif style={[type.hero, styles.centred, { color: colors.foreground }]}>Day *So* Far</Serif>
@@ -1024,6 +1029,7 @@ const styles = StyleSheet.create({
   target: { paddingTop: 12 },
 
   hero: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 24 },
+  cast: { marginTop: -2, marginBottom: 14 },
   wordmark: { alignItems: 'center', gap: 2, marginTop: -6 },
   tagline: { letterSpacing: 3 },
   welcomeCopy: { alignItems: 'center', gap: 10, marginTop: 22 },

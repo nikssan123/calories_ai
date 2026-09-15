@@ -1224,6 +1224,8 @@ export const el: Messages = {
   'streak.weekMet': 'Αυτή η εβδομάδα μετράει',
   'streak.weekBar': (needed: number) => `${needed} μέρες την εβδομάδα κρατούν το σερί`,
   'streak.startTraining': 'Προπονήσου τρεις μέρες αυτή την εβδομάδα για να ξεκινήσεις σερί',
+  'cast.showedUp': 'Δεν έλειψες ούτε μία μέρα.',
+  'cast.keepGoing': 'Συνέχισε έτσι',
   'achievements.title': 'Επιτεύγματα',
   'achievements.count': (done: number, total: number) => `${done} από ${total}`,
   'achievements.earnedOn': (date: string) => `Ξεκλειδώθηκε: ${date}`,

@@ -1245,6 +1245,8 @@ export const ro: Messages = {
   'streak.weekMet': 'Săptămâna asta se pune',
   'streak.weekBar': (needed: number) => `${needed} zile pe săptămână țin seria`,
   'streak.startTraining': 'Antrenează-te trei zile săptămâna asta ca să începi o serie',
+  'cast.showedUp': 'N-ai ratat nicio zi.',
+  'cast.keepGoing': 'Continuă tot așa',
   'achievements.title': 'Realizări',
   'achievements.count': (done: number, total: number) => `${done} din ${total}`,
   'achievements.earnedOn': (date: string) => `Obținută pe ${date}`,

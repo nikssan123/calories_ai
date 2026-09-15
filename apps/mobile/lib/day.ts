@@ -35,6 +35,21 @@ export function localToday(profile: Profile): string {
 }
 
 /**
+ * Past midnight, and the day has not turned over yet.
+ *
+ * The hours when a snack lands on the evening before, which is exactly when
+ * somebody might wonder why it did. Asked through `localDateFor` twice rather
+ * than by reading the hour, so it can never disagree with the date the entry
+ * is actually filed under.
+ */
+export function beforeDayStart(profile: Profile, now: Date = new Date()): boolean {
+  if (profile.day_start_hour <= 0) return false;
+  const filed = localDateFor(now, { timezone: profile.timezone, dayStartHour: profile.day_start_hour });
+  const calendar = localDateFor(now, { timezone: profile.timezone, dayStartHour: 0 });
+  return filed !== calendar;
+}
+
+/**
  * Fetches, and falls back to what was last seen.
  *
  * A cached day is served *only* when the network genuinely could not answer —

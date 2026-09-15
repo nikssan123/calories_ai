@@ -1266,6 +1266,8 @@ export const sr: Messages = {
   'streak.weekBar': (needed: number) =>
     `Низ траје уз ${n(needed, { one: 'дан', few: 'дана', other: 'дана' })} седмично`,
   'streak.startTraining': 'Тренирај три дана ове седмице да започнеш низ',
+  'cast.showedUp': 'Ниједан пропуштен дан.',
+  'cast.keepGoing': 'Само напред',
   'achievements.title': 'Достигнућа',
   'achievements.count': (done: number, total: number) => `${done} од ${total}`,
   'achievements.earnedOn': (date: string) => `Освојено: ${date}`,

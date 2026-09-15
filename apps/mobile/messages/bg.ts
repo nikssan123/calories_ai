@@ -1095,6 +1095,8 @@ export const bg: Messages = {
   'streak.weekMet': 'Тази седмица се брои',
   'streak.weekBar': (needed: number) => `${needed} дни седмично поддържат серията`,
   'streak.startTraining': 'Тренирай три дни тази седмица, за да започнеш серия',
+  'cast.showedUp': 'Не пропусна нито един ден.',
+  'cast.keepGoing': 'Продължавай',
   'achievements.title': 'Постижения',
   'achievements.count': (done: number, total: number) => `${done} от ${total}`,
   'achievements.earnedOn': (date: string) => `Спечелено на ${date}`,

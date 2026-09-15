@@ -23,6 +23,7 @@ import { font, type as t, useColors } from '@/theme';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
 import { useLocale, useT } from '@/lib/i18n';
 import { AppError, messageOf } from '@/lib/errors';
+import { Character } from '@/components/cast/Character';
 import { Glossy } from '@/components/icons/Glossy';
 import { Segments } from '@/components/Segments';
 import { Sky, useSky } from '@/components/Sky';
@@ -652,7 +653,7 @@ export default function CookScreen() {
           {recipes.length === 0 ? (
             <View style={styles.empty}>
               <View style={styles.mascot}>
-                <Glossy name="chef" size={64} />
+                <Character name="skye" mood="thinking" size={88} />
               </View>
               {/* Which sentence depends on whether the button it names is on
                   the screen. Pointing somebody at "Find me something" on a plan

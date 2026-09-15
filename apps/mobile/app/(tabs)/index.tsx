@@ -12,16 +12,7 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, {
-  Easing,
-  useAnimatedProps,
-  useAnimatedStyle,
-  useSharedValue,
-  withDelay,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
+import Animated, { useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated';
 import type {
   Allowance,
   ChatAction,
@@ -48,7 +39,9 @@ import { FoodEditor } from '@/components/FoodEditor';
 import { Markdown } from '@/components/Markdown';
 import { Material } from '@/components/Material';
 import { PressableChunk } from '@/components/Chunk';
-import { Glossy } from '@/components/icons/Glossy';
+import { Trio } from '@/components/cast/Character';
+import { CastPlate } from '@/components/cast/Plate';
+import { StreakMoment } from '@/components/cast/StreakMoment';
 import { Serif } from '@/components/Serif';
 import { MeterChip, PencilGlyph, PlanWall } from '@/components/PlanWall';
 import { Skeleton } from '@/components/Skeleton';
@@ -856,9 +849,10 @@ export default function JournalScreen() {
         {!loading && bubbles.length === 0 && (
           <View style={styles.empty}>
             {/* The one screen in the app with room for an illustration, and the one
-                that otherwise offers a new account a wall of text. */}
+                that otherwise offers a new account a wall of text. The cast
+                peeks over the plate until the first thing is said. */}
             <View style={styles.emptyArt}>
-              <Glossy name="plate" size={72} />
+              <CastPlate width={200} />
             </View>
             <Serif accessibilityRole="header" style={[t.hero, { color: colors.foreground }]}>
               {tr('journal.emptyTitle')}
@@ -921,6 +915,10 @@ export default function JournalScreen() {
         onLogged={onScanned}
         disabled={busy}
       />
+
+      {/* Most runs are kept from here rather than from Today, so the moment
+          has to be able to open here too. Only the focused tab ever opens it. */}
+      <StreakMoment streak={day?.streak} userId={profile?.id} />
     </KeyboardAvoidingView>
   );
 }
@@ -1481,19 +1479,21 @@ function Wall({
  * while a tool is running, which is where the label comes from. Once text is
  * arriving it speaks for itself, and there is deliberately nothing decorating
  * it: text that is visibly growing already reads as live.
+ *
+ * The dots are the cast now (CAST.md): the logo's three, with bodies, hopping
+ * out of step. Still a bounce and not a sequence lighting up, and for the same
+ * reason — three things taking turns is a *progress* indicator, and the model
+ * has not said how long it will be. A hop says only that something is still
+ * happening. Under Reduce Motion they stand still and the label beside them
+ * says what is going on.
  */
 function Waiting({ label }: { label: string | null }) {
   const colors = useColors();
   const tr = useT();
-  const dots = [colors.protein, colors.carbs, colors.fat];
 
   return (
     <View style={styles.waiting} accessibilityLabel={label ?? tr('journal.thinking')}>
-      <View style={styles.dots}>
-        {dots.map((color, i) => (
-          <Dot key={color} color={color} index={i} />
-        ))}
-      </View>
+      <Trio size={TYPING_SIZE} />
       {label && (
         <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{label}…</Text>
       )}
@@ -1501,51 +1501,8 @@ function Waiting({ label }: { label: string | null }) {
   );
 }
 
-/**
- * One of the three, bouncing.
- *
- * `animate-bounce` rather than the fade an earlier version of this used, and
- * the difference is not decoration: three dots taking turns to light up is a
- * *progress* indicator, and there is no progress to report — the model has not
- * said how long it will be. A bounce says only that something is still
- * happening, which is the whole of what is known.
- *
- * Tailwind's keyframes, ported exactly: a quarter of its own height, and the
- * two halves carry different easings so the fall accelerates and the rise
- * settles. Reduced motion leaves the dots still rather than substituting
- * something quieter — the web resolves that with a blanket rule, so this does
- * too, and the label beside them still says what is going on.
- */
-function Dot({ color, index }: { color: string; index: number }) {
-  const reduced = useReducedMotion();
-  const y = useSharedValue(0);
-
-  useEffect(() => {
-    if (reduced) {
-      y.value = 0;
-      return;
-    }
-    y.value = -BOUNCE;
-    y.value = withDelay(
-      index * 140,
-      withRepeat(
-        withSequence(
-          withTiming(0, { duration: 500, easing: Easing.bezier(0.8, 0, 1, 1) }),
-          withTiming(-BOUNCE, { duration: 500, easing: Easing.bezier(0, 0, 0.2, 1) }),
-        ),
-        -1,
-        false,
-      ),
-    );
-  }, [index, reduced, y]);
-
-  const style = useAnimatedStyle(() => ({ transform: [{ translateY: y.value }] }));
-
-  return <Animated.View style={[styles.dot, { backgroundColor: color, boxShadow: `0px 0px 8px ${color}` }, style]} />;
-}
-
-/** `translateY(-25%)` of a 10px dot. */
-const BOUNCE = 2.5;
+/** Small enough that the row is no taller than a line and its label. */
+const TYPING_SIZE = 26;
 
 function ChatSkeleton() {
   return (
@@ -1645,9 +1602,7 @@ const styles = StyleSheet.create({
   assistantRow: { maxWidth: '92%', gap: 10 },
   actions: { gap: 6 },
   receipt: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },
-  waiting: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8 },
+  waiting: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 },
   steps: { gap: 4, paddingBottom: 2 },
-  dots: { flexDirection: 'row', gap: 8 },
-  dot: { width: 10, height: 10, borderRadius: 5 },
   skeleton: { gap: 20, paddingTop: 16 },
 });

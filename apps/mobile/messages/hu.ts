@@ -1225,6 +1225,8 @@ export const hu: Messages = {
   'streak.weekMet': 'Ez a hét beszámít',
   'streak.weekBar': (needed: number) => `Heti ${needed} nap tartja életben`,
   'streak.startTraining': 'Eddz három napot ezen a héten, és elindul egy széria',
+  'cast.showedUp': 'Egyetlen napot sem hagytál ki.',
+  'cast.keepGoing': 'Csak így tovább',
   'achievements.title': 'Eredmények',
   'achievements.count': (done: number, total: number) => `${done}/${total}`,
   'achievements.earnedOn': (date: string) => `Megszerezve: ${date}`,

@@ -26,6 +26,9 @@ import { Chunk } from '@/components/Chunk';
 import { DateStrip } from '@/components/DateStrip';
 import { GlowRing } from '@/components/GlowRing';
 import { Glossy, type GlossyName } from '@/components/icons/Glossy';
+import { Character } from '@/components/cast/Character';
+import { CastPlate } from '@/components/cast/Plate';
+import { StreakMoment } from '@/components/cast/StreakMoment';
 import { Serif } from '@/components/Serif';
 import { Sky, useSky } from '@/components/Sky';
 import { greetingFor } from '@/lib/greeting';
@@ -43,12 +46,12 @@ import { Skeleton } from '@/components/Skeleton';
 import { useToast } from '@/components/Toast';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { loadDay, localToday, pendingIds, withPending } from '@/lib/day';
+import { beforeDayStart, loadDay, localToday, pendingIds, withPending } from '@/lib/day';
 import { drop, enqueue, newId, onRejected } from '@/lib/outbox';
 import { maybeAskForReview } from '@/lib/review-prompt';
 import { useOutbox } from '@/hooks/useOutbox';
 import { useUnits } from '@/lib/units';
-import { duration, ease, font, type as t, useColors, useType, type Palette } from '@/theme';
+import { duration, ease, font, tint, type as t, useColors, useType, type Palette } from '@/theme';
 import { haptics } from '@/lib/haptics';
 import { entryRemoved } from '@/lib/removals';
 import { DeferToRows, removeAction, repeatAction, SwipeRow } from '@/components/SwipeRow';
@@ -809,9 +812,23 @@ export default function TodayScreen() {
             onOpenSettings={() => void openStepsSettings()}
           />
 
+          {/*
+            * After midnight and before the day turns over, which is when a snack
+            * lands on the evening before and somebody might wonder why. Plum
+            * keeps late hours. In its own row, never over the words.
+            */}
+          {isToday && profile && beforeDayStart(profile) && (
+            <View style={[styles.lateNote, { backgroundColor: tint(colors.fat, 0.1) }]}>
+              <Character name="plum" mood="sleepy" size={52} shadow={false} />
+              <Text style={[t.footnoteSemibold, styles.lateText, { color: colors.foreground }]}>
+                {tr('setup.dayFooter')}
+              </Text>
+            </View>
+          )}
+
           {byMeal.length === 0 && day.exercise_entries.length === 0 && (
             <View style={styles.empty}>
-              <Glossy name="plate" size={64} />
+              <CastPlate width={170} />
               <Text style={[t.body, styles.centred, { color: colors.mutedForeground }]}>
                 {tr('today.nothingLogged')}
                 {'\n'}
@@ -1007,6 +1024,8 @@ export default function TodayScreen() {
           <StepButton direction="forward" onPress={() => step(1)} disabled={isToday} />
         </Material>
       </Animated.View>
+
+      <StreakMoment streak={isToday ? day?.streak : null} userId={profile?.id} />
     </>
   );
 }
@@ -1446,7 +1465,9 @@ const styles = StyleSheet.create({
   loading: { alignItems: 'center', gap: 24, paddingHorizontal: 16, paddingVertical: 32 },
   loadingRing: { width: 176, height: 176, borderRadius: 88 },
   loadingBar: { height: 48, alignSelf: 'stretch', borderRadius: 16 },
-  empty: { alignItems: 'center', paddingVertical: 40, gap: 12 },
+  empty: { alignItems: 'center', paddingVertical: 32, gap: 12 },
+  lateNote: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 20, paddingVertical: 8, paddingLeft: 6, paddingRight: 14 },
+  lateText: { flex: 1 },
   manual: { alignItems: 'center', paddingVertical: 12 },
   unsent: { opacity: 0.55 },
   entry: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },

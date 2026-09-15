@@ -1270,6 +1270,8 @@ export const sk: Messages = {
   'streak.weekBar': (needed: number) =>
     `Na sériu treba ${n(needed, { one: 'deň', few: 'dni', many: 'dňa', other: 'dní' })} týždenne`,
   'streak.startTraining': 'Trénuj tento týždeň tri dni a začneš sériu',
+  'cast.showedUp': 'Ani jeden vynechaný deň.',
+  'cast.keepGoing': 'Len tak ďalej',
   'achievements.title': 'Úspechy',
   'achievements.count': (done: number, total: number) => `${done} z ${total}`,
   'achievements.earnedOn': (date: string) => `Získané ${date}`,

@@ -120,6 +120,22 @@ export async function cacheProfile(userId: string, profile: Profile): Promise<vo
   await write(userId, 'profile', profile);
 }
 
+// ---- Moments ---------------------------------------------------------------
+
+/**
+ * Whether a once-only moment has already been shown on this phone.
+ *
+ * Kept per account and per phone, and not on the server. Seeing a celebration
+ * again on a second device is harmless, and it is not worth a table.
+ */
+export async function momentShown(userId: string, moment: string): Promise<boolean> {
+  return (await read<boolean>(userId, `moment:${moment}`)) === true;
+}
+
+export async function markMomentShown(userId: string, moment: string): Promise<void> {
+  await write(userId, `moment:${moment}`, true);
+}
+
 // ---- The session -----------------------------------------------------------
 
 /**

@@ -1331,6 +1331,9 @@ export const en = {
   'streak.weekMet': 'This week counts',
   'streak.weekBar': (needed: number) => `${needed} days a week keeps it going`,
   'streak.startTraining': 'Train three days this week to start a streak',
+  /** The streak moment at 7, 30, 100 and 365 days. No count in it, so it never has to agree with one. */
+  'cast.showedUp': 'You showed up, every single day.',
+  'cast.keepGoing': 'Keep going',
   'achievements.title': 'Achievements',
   'achievements.count': (done: number, total: number) => `${done} of ${total}`,
   'achievements.earnedOn': (date: string) => `Earned ${date}`,

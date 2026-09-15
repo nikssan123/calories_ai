@@ -1245,6 +1245,8 @@ export const uk: Messages = {
   'streak.weekBar': (needed: number) =>
     `${needed} ${w(needed, { one: 'день', few: 'дні', many: 'днів', other: 'дня' })} на тиждень — і серія триває`,
   'streak.startTraining': 'Потренуйся три дні цього тижня, щоб почати серію',
+  'cast.showedUp': 'Жодного пропущеного дня.',
+  'cast.keepGoing': 'Так тримати',
   'achievements.title': 'Досягнення',
   'achievements.count': (done: number, total: number) => `${done} з ${total}`,
   'achievements.earnedOn': (date: string) => `Отримано ${date}`,
