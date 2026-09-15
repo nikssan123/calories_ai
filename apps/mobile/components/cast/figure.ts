@@ -41,13 +41,22 @@ export type Mood =
   | 'hold'
   | 'taste'
   /* At the pot, in the kitchen scene. */
-  | 'stir';
+  | 'stir'
+  /* A packet just read by the scanner. */
+  | 'surprised';
 
 /** What a hand can hold. Only drawn in the moods that hold something. */
-export type Prop = 'mug' | 'toast' | 'spoon' | 'bowl';
+export type Prop = 'mug' | 'toast' | 'spoon' | 'bowl' | 'medal';
+
+/**
+ * What they wear for the time of year: a scarf in winter, a flower in spring, a
+ * leaf in autumn, and nothing in summer. Small and in the same place on each of
+ * them, so it reads as the season rather than as a costume.
+ */
+export type Accessory = 'scarf' | 'flower' | 'leaf';
 
 export type Motion = 'breathe' | 'sleep' | 'hop' | 'cheer';
-export type Fx = 'bubbles' | 'zz' | 'sparkle' | 'flame' | 'confetti' | 'hearts' | 'steam';
+export type Fx = 'bubbles' | 'zz' | 'sparkle' | 'flame' | 'confetti' | 'hearts' | 'steam' | 'spark';
 
 export const GRID = 120;
 
@@ -136,6 +145,10 @@ interface Figure {
   cheek: number;
   sheen: readonly [cx: number, cy: number, rx: number, ry: number];
   crown: Ramp | null;
+  /** Where a scarf sits (its centre line) and how far it reaches either side. */
+  scarf: readonly [y: number, half: number];
+  /** Where a flower or a leaf is pinned on the head. */
+  pin: readonly [x: number, y: number];
 }
 
 const FIGURES: Record<CastName, Figure> = {
@@ -149,6 +162,8 @@ const FIGURES: Record<CastName, Figure> = {
     cheek: 20,
     sheen: [47, 55, 8, 4.5],
     crown: ['#fff2a8', '#ffb43d', '#ff7a3d'],
+    scarf: [90, 28],
+    pin: [37, 56],
   },
   skye: {
     ramp: ['#cbe8ff', '#3b9eff', '#2166c9'],
@@ -160,6 +175,8 @@ const FIGURES: Record<CastName, Figure> = {
     cheek: 20,
     sheen: [47, 57, 8, 4.5],
     crown: ['#c6f7dc', '#3ddc97', '#0f9a5a'],
+    scarf: [92, 27],
+    pin: [37, 56],
   },
   plum: {
     ramp: ['#ecdaff', '#b06bff', '#7b3bd8'],
@@ -171,12 +188,14 @@ const FIGURES: Record<CastName, Figure> = {
     cheek: 22,
     sheen: [48, 64, 6.5, 4],
     crown: null,
+    scarf: [95, 30],
+    pin: [44, 62],
   },
 };
 
-type Eyes = 'open' | 'up' | 'hope' | 'happy' | 'closed';
+type Eyes = 'open' | 'up' | 'hope' | 'happy' | 'closed' | 'wide';
 type Mouth = 'smile' | 'open' | 'flat' | 'small' | 'o' | 'yawn';
-type Pose = 'down' | 'up' | 'hip' | 'clasp' | 'chin' | 'wave' | 'flame' | 'rest' | 'hold' | 'stir';
+type Pose = 'down' | 'up' | 'hip' | 'clasp' | 'chin' | 'wave' | 'flame' | 'rest' | 'hold' | 'stir' | 'startle';
 
 const MOODS: Record<
   Mood,
@@ -197,6 +216,7 @@ const MOODS: Record<
   hold: { eyes: 'open', mouth: 'smile', arms: ['down', 'hold'], motion: 'breathe' },
   taste: { eyes: 'happy', mouth: 'o', arms: ['down', 'hold'], motion: 'breathe' },
   stir: { eyes: 'up', mouth: 'small', arms: ['down', 'stir'], motion: 'breathe' },
+  surprised: { eyes: 'wide', mouth: 'o', arms: ['startle', 'startle'], fx: 'spark', motion: 'breathe' },
 };
 
 const INK = '#2a1f18';
@@ -214,7 +234,7 @@ function arm(f: Figure, pose: Pose, side: 'L' | 'R'): Arm {
   if (pose === 'chin') return [GRID - sx, sy, GRID - sx - 2, fy + 20, 71, fy + 12];
   // Raised to the pot's rim, so the ladle it holds goes down into the pot.
   if (pose === 'stir') return [GRID - sx, sy, GRID - sx + 14, sy - 5, GRID - sx + 18, sy - 27];
-  const left: Record<'down' | 'up' | 'hip' | 'clasp' | 'rest' | 'hold', Arm> = {
+  const left: Record<'down' | 'up' | 'hip' | 'clasp' | 'rest' | 'hold' | 'startle', Arm> = {
     down: [sx, sy, sx - 8, sy + 7, sx - 6, sy + 15],
     up,
     hip: [sx, sy, sx - 10, sy + 2, sx - 3, sy + 11],
@@ -223,13 +243,15 @@ function arm(f: Figure, pose: Pose, side: 'L' | 'R'): Arm {
     rest: [sx, sy, sx - 6, sy + 9, sx + 2, sy + 14],
     // Forward and a little up, with something in the hand.
     hold: [sx, sy, sx - 10, sy - 2, sx - 12, sy - 12],
+    // Thrown out and up, for a surprise.
+    startle: [sx, sy - 2, sx - 12, sy - 8, sx - 14, sy - 19],
   };
   const a = left[pose];
   return side === 'R' ? mirror(a) : a;
 }
 
 const inFront = (pose: Pose) => pose === 'clasp' || pose === 'chin';
-const blinking = (eyes: Eyes) => eyes === 'open' || eyes === 'up' || eyes === 'hope';
+const blinking = (eyes: Eyes) => eyes === 'open' || eyes === 'up' || eyes === 'hope' || eyes === 'wide';
 
 function bodyShape(name: CastName): Shape {
   if (name === 'ember') return { el: 'circle', cx: 60, cy: 74, r: 32, fill: 'body' };
@@ -263,11 +285,12 @@ function eyeShapes(f: Figure, eyes: Eyes): Shape[] {
     return xs.map((x) => ({ el: 'path', d: `M${x - 4.5} ${y}Q${x} ${y + 4} ${x + 4.5} ${y}`, ...line }) as Shape);
   }
   const dx = eyes === 'up' ? 1.6 : 0;
-  const dy = eyes === 'up' ? -2 : 0;
+  const dy = eyes === 'up' ? -2 : eyes === 'wide' ? -1 : 0;
   const big = eyes === 'hope';
+  const wide = eyes === 'wide';
   return xs.flatMap((x): Shape[] => [
-    { el: 'ellipse', cx: x + dx, cy: y + dy, rx: big ? 3.9 : 3.6, ry: big ? 5.2 : 4.8, fill: INK },
-    { el: 'circle', cx: x + dx + 1.2, cy: y + dy - 1.9, r: big ? 1.6 : 1.3, fill: '#ffffff' },
+    { el: 'ellipse', cx: x + dx, cy: y + dy, rx: wide ? 4.4 : big ? 3.9 : 3.6, ry: wide ? 5.8 : big ? 5.2 : 4.8, fill: INK },
+    { el: 'circle', cx: x + dx + 1.3, cy: y + dy - 2.1, r: wide ? 1.8 : big ? 1.6 : 1.3, fill: '#ffffff' },
   ]);
 }
 
@@ -308,6 +331,12 @@ function mouthShapes(f: Figure, mouth: Mouth): Shape[] {
 
 function effectShapes(fx: Fx, hand: readonly [number, number]): Shape[] {
   switch (fx) {
+    case 'spark':
+      return [
+        { el: 'path', d: 'M20 32L27 38', stroke: '#f0a92a', width: 2.6, round: true },
+        { el: 'path', d: 'M11 47L20 48', stroke: '#f0a92a', width: 2.6, round: true },
+        { el: 'path', d: 'M33 20L36 28', stroke: '#f0a92a', width: 2.6, round: true },
+      ];
     case 'hearts':
       return [
         { el: 'path', d: 'M20 30c-3-4-9 0-5 5l5 5 5-5c4-5-2-9-5-5z', fill: '#ff6f91' },
@@ -393,6 +422,13 @@ function propShapes(prop: Prop, hand: readonly [number, number]): Shape[] {
         { el: 'path', d: `M${x} ${y + 3}L${x + 2} ${y - 8}`, stroke: '#aab2bd', width: 2.6, round: true },
         { el: 'ellipse', cx: x + 3, cy: y - 13, rx: 4.2, ry: 5.6, fill: '#dfe4ea', stroke: '#aab2bd', width: 1 },
       ];
+    case 'medal':
+      return [
+        { el: 'path', d: `M${x - 6} ${y - 24}L${x} ${y - 12}L${x + 6} ${y - 24}`, stroke: '#ff5fa2', width: 3.2, round: true },
+        { el: 'circle', cx: x, cy: y - 7, r: 7.5, fill: '#ffc83d' },
+        { el: 'circle', cx: x, cy: y - 7, r: 4, fill: '#fff2a8' },
+        { el: 'ellipse', cx: x - 2.5, cy: y - 10, rx: 2, ry: 1.2, fill: '#ffffff', opacity: 0.7 },
+      ];
     case 'bowl':
       return [
         {
@@ -406,6 +442,55 @@ function propShapes(prop: Prop, hand: readonly [number, number]): Shape[] {
         { el: 'circle', cx: x - 4, cy: y - 10, r: 2, fill: '#ff7a5c' },
         { el: 'circle', cx: x + 3, cy: y - 10.5, r: 1.8, fill: '#ffd36a' },
       ];
+  }
+}
+
+function accessoryShapes(f: Figure, accessory: Accessory): Shape[] {
+  switch (accessory) {
+    case 'scarf': {
+      const [y, half] = f.scarf;
+      return [
+        {
+          el: 'path',
+          d: `M${60 - half} ${y - 3}Q60 ${y + 6} ${60 + half} ${y - 3}L${60 + half - 1} ${y + 4}Q60 ${y + 13} ${60 - half + 1} ${y + 4}Z`,
+          fill: '#e8553f',
+        },
+        {
+          el: 'path',
+          d: `M${60 - half + 2} ${y}Q60 ${y + 8.5} ${60 + half - 2} ${y}`,
+          stroke: '#ffffff',
+          width: 1.4,
+          opacity: 0.55,
+        },
+        { el: 'path', d: `M${60 + 12} ${y + 5}l4 14l-7 1l-2 -13Z`, fill: '#d4452f' },
+      ];
+    }
+    case 'flower': {
+      const [x, y] = f.pin;
+      return [
+        ...[0, 72, 144, 216, 288].map(
+          (deg): Shape => ({
+            el: 'circle',
+            cx: x + Math.cos((deg * Math.PI) / 180) * 4,
+            cy: y + Math.sin((deg * Math.PI) / 180) * 4,
+            r: 3.2,
+            fill: '#ffd3e5',
+          }),
+        ),
+        { el: 'circle', cx: x, cy: y, r: 2.4, fill: '#ffc83d' },
+      ];
+    }
+    case 'leaf': {
+      const [x, y] = f.pin;
+      return [
+        {
+          el: 'path',
+          d: `M${x} ${y + 6}C${x - 8} ${y + 2} ${x - 8} ${y - 6} ${x} ${y - 9}C${x + 8} ${y - 6} ${x + 8} ${y + 2} ${x} ${y + 6}Z`,
+          fill: '#e8833a',
+        },
+        { el: 'path', d: `M${x} ${y + 8}L${x} ${y - 6}`, stroke: '#b85a1e', width: 1.2, round: true },
+      ];
+    }
   }
 }
 
@@ -435,6 +520,7 @@ export function drawing(
     prop?: Prop;
     /** Keep the legs over the edge while a passing mood plays on a sitting figure. */
     sit?: boolean;
+    accessory?: Accessory;
   } = {},
 ): Drawing {
   const f = FIGURES[name];
@@ -467,6 +553,7 @@ export function drawing(
     { el: 'ellipse', cx: f.sheen[0], cy: f.sheen[1], rx: f.sheen[2], ry: f.sheen[3], rotate: -28, fill: '#ffffff', opacity: 0.55 },
     { el: 'ellipse', cx: 60 - f.cheek, cy: f.fy + 9, rx: 5, ry: 3, fill: CHEEK, opacity: 0.38 },
     { el: 'ellipse', cx: 60 + f.cheek, cy: f.fy + 9, rx: 5, ry: 3, fill: CHEEK, opacity: 0.38 },
+    ...(options.accessory ? accessoryShapes(f, options.accessory) : []),
     ...(!blinking(m.eyes) ? eyeShapes(f, m.eyes) : []),
     ...(m.eyes === 'hope' ? browShapes(f) : []),
     ...mouthShapes(f, m.mouth),
@@ -499,7 +586,7 @@ export function drawing(
     pivots: {
       shoulder: [shoulder[0], shoulder[1]],
       eyes: [60, f.fy],
-      fx: effect === 'flame' ? hand : effect === 'sparkle' ? [97, 34] : [60, 60],
+      fx: effect === 'flame' ? hand : effect === 'sparkle' ? [97, 34] : effect === 'spark' ? [24, 34] : [60, 60],
       legs: [60, 100],
     },
   };

@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Svg, { Polyline } from 'react-native-svg';
-import type { Achievement, AchievementFacts, AchievementKey } from '@ct/shared';
+import type { Achievement, AchievementFacts, AchievementGroupKey, AchievementKey } from '@ct/shared';
 import { ACHIEVEMENT_GROUPS, ACHIEVEMENT_KEYS, achievementProgress, formatDay } from '@ct/shared';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
@@ -9,6 +9,7 @@ import { haptics } from '@/lib/haptics';
 import { type as t, useColors } from '@/theme';
 import { Glossy } from '@/components/icons/Glossy';
 import { Medal } from '@/components/icons/Medal';
+import { Character, type CastName } from '@/components/cast/Character';
 
 /**
  * The badge wall, and the one row on Progress that leads to it.
@@ -203,9 +204,30 @@ function BadgeRow({
           </View>
         )}
       </View>
+
+      {/* Earned in the last fortnight: the group's character holds the medal up
+          at the end of the row, in room of its own (CAST.md). */}
+      {got && recent(got.earned_at) && (
+        <Character name={HOLDER[GROUP_OF.get(badgeKey) ?? 'firsts']} mood="hold" prop="medal" size={46} loop={false} />
+      )}
     </InsetRow>
   );
 }
+
+/** Who holds a medal up, by the group it belongs to. */
+const HOLDER: Record<AchievementGroupKey, CastName> = {
+  streaks: 'ember',
+  training: 'plum',
+  firsts: 'skye',
+  totals: 'skye',
+};
+
+const GROUP_OF = new Map<AchievementKey, AchievementGroupKey>(
+  ACHIEVEMENT_GROUPS.flatMap((group) => group.keys.map((key) => [key, group.key] as const)),
+);
+
+const FORTNIGHT = 14 * 24 * 60 * 60 * 1000;
+const recent = (earnedAt: string) => Date.now() - new Date(earnedAt).getTime() < FORTNIGHT;
 
 function Chevron({ color }: { color: string }) {
   return (

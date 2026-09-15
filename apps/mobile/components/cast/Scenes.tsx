@@ -56,6 +56,8 @@ interface Placed {
   /** Left edge and side, in grid units. */
   x: number;
   size: number;
+  /** Where this one's feet are, when the ground isn't flat. Defaults to the scene's. */
+  ground?: number;
 }
 
 /** A box on the grid, scaled to the width the scene was laid out at. */
@@ -81,7 +83,7 @@ function Cast({ placed, scale, ground }: { placed: Placed[]; scale: number; grou
           style={{
             position: 'absolute',
             left: figure.x * scale,
-            top: (ground - figure.size) * scale,
+            top: ((figure.ground ?? ground) - figure.size) * scale,
           }}
         />
       ))}
@@ -440,6 +442,101 @@ export function ParkScene({ style }: { style?: StyleProp<ViewStyle> }) {
             </Svg>
 
             <Cast placed={PARK_CAST[part]} scale={scale} ground={PATH} />
+          </>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// ---- The hill ------------------------------------------------------------------
+
+const HW = 320;
+const HH = 150;
+
+/*
+ * A hill they're climbing, for Progress. It's scenery and not a chart: nobody's
+ * height on the path means anything, and it never moves with the numbers
+ * below it.
+ */
+const HILL_CAST: Record<DayPart, Placed[]> = {
+  morning: [
+    { name: 'skye', mood: 'wave', x: 16, size: 44, ground: 146 },
+    { name: 'ember', mood: 'hop', x: 118, size: 44, ground: 112 },
+    { name: 'plum', mood: 'idle', x: 206, size: 40, ground: 66 },
+  ],
+  afternoon: [
+    { name: 'plum', mood: 'idle', x: 18, size: 44, ground: 146 },
+    { name: 'skye', mood: 'idle', x: 120, size: 44, ground: 112 },
+    { name: 'ember', mood: 'cheer', x: 238, size: 42, ground: 52 },
+  ],
+  evening: [
+    { name: 'plum', mood: 'idle', x: 118, size: 42, ground: 112 },
+    { name: 'skye', mood: 'idle', x: 196, size: 40, ground: 74 },
+    { name: 'ember', mood: 'wave', x: 238, size: 42, ground: 52 },
+  ],
+  night: [{ name: 'plum', mood: 'sleepy', x: 236, size: 42, ground: 52 }],
+};
+
+function hillPalette(part: DayPart, dark: boolean) {
+  if (part === 'night') return { far: '#3b4466', hill: ['#46506a', '#2e3446'], path: '#5a607a', flag: '#c9a0c8' };
+  if (dark) return { far: '#2f4a48', hill: ['#35584a', '#2a3a33'], path: '#4b5a52', flag: '#ff8fbe' };
+  if (part === 'evening') return { far: '#c9a0a8', hill: ['#e3bf98', '#f3dcc0'], path: '#fff3e2', flag: '#ff5fa2' };
+  return { far: '#9fd6c4', hill: ['#9fdcb0', '#e9f2cf'], path: '#fff8ea', flag: '#ff5fa2' };
+}
+
+export function HillScene({ style }: { style?: StyleProp<ViewStyle> }) {
+  const [width, onLayout] = useWidth();
+  const colors = useColors();
+  const { scheme } = useTheme();
+  const sky = useSky();
+  const part = useDayPart();
+  const id = useId().replace(/:/g, '');
+  const scale = width / HW;
+  const pal = hillPalette(part, scheme === 'dark');
+
+  return (
+    <View
+      onLayout={onLayout}
+      pointerEvents="box-none"
+      style={[styles.scene, { height: width > 0 ? HH * scale : HH, boxShadow: colors.shadow }, style]}
+    >
+      <View pointerEvents="box-none" style={styles.clip}>
+        {width > 0 && (
+          <>
+            <Svg width={width} height={HH * scale} viewBox={`0 0 ${HW} ${HH}`} style={StyleSheet.absoluteFill}>
+              <Defs>
+                <LinearGradient id={`${id}-sky`} x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0" stopColor={sky.top} />
+                  <Stop offset="0.6" stopColor={sky.mid} />
+                  <Stop offset="1" stopColor={sky.low} />
+                </LinearGradient>
+                <LinearGradient id={`${id}-hill`} x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0" stopColor={pal.hill[0]} />
+                  <Stop offset="1" stopColor={pal.hill[1]} />
+                </LinearGradient>
+              </Defs>
+
+              <Rect width={HW} height={HH} fill={`url(#${id}-sky)`} />
+              {sky.inkLight && <Stars left={12} top={10} width={200} height={40} />}
+
+              <Path d="M0 110C60 96 110 100 160 106C210 112 260 94 320 98V150H0Z" fill={pal.far} opacity={0.7} />
+              <Path
+                d="M0 150V136C50 130 90 120 130 108C170 96 200 74 236 56C250 49 262 46 274 48C292 52 306 62 320 70V150Z"
+                fill={`url(#${id}-hill)`}
+              />
+              <Path
+                d="M14 146C58 136 100 122 138 110C176 98 206 76 240 58C252 52 262 50 270 50"
+                stroke={pal.path}
+                strokeWidth={6}
+                fill="none"
+                strokeLinecap="round"
+              />
+              <Path d="M276 48V22" stroke="#8a6a4a" strokeWidth={2} strokeLinecap="round" />
+              <Path d="M277 22L292 27L277 32Z" fill={pal.flag} />
+            </Svg>
+
+            <Cast placed={HILL_CAST[part]} scale={scale} ground={146} />
           </>
         )}
       </View>

@@ -15,6 +15,7 @@ import type { Streak } from '@ct/shared';
 import { useT } from '@/lib/i18n';
 import { haptics } from '@/lib/haptics';
 import { font, type as t, useColors } from '@/theme';
+import { Character } from '@/components/cast/Character';
 
 /**
  * The logging run, under the ring that earns it.
@@ -130,7 +131,12 @@ function Chip({ streak, atRisk }: { streak: Streak; atRisk: boolean }) {
         )}
       </View>
       {atRisk && (
-        <Text style={[styles.nudge, { color: colors.mutedForeground }]}>{tr('streak.atRisk')}</Text>
+        <View style={styles.row}>
+          {/* Ember, hands clasped, hoping. About showing up today, never about
+              the number (CAST.md). No poke: the whole chip is a button. */}
+          <Character name="ember" mood="hopeful" size={26} loop={false} shadow={false} poke={false} />
+          <Text style={[styles.nudge, { color: colors.mutedForeground }]}>{tr('streak.atRisk')}</Text>
+        </View>
       )}
     </Pressable>
   );

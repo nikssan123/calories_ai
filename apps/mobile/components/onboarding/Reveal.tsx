@@ -22,6 +22,7 @@ import { Figure } from '@/components/Figure';
 import { Glass } from '@/components/Glass';
 import { Glossy, type GlossyName } from '@/components/icons/Glossy';
 import { Serif } from '@/components/Serif';
+import { Trio } from '@/components/cast/Character';
 import { column, type as t, useColors, useType } from '@/theme';
 import { useLocale, useT } from '@/lib/i18n';
 import { haptics } from '@/lib/haptics';
@@ -302,6 +303,17 @@ export function Plan({
     return () => clearTimeout(timer);
   }, [reduced]);
 
+  /*
+   * The walk ends with the three of them (CAST.md): cheering when the plan
+   * lands, for having built it, then settling to a wave. What they cheer is the
+   * finished walk, never the number above them.
+   */
+  const [cheering, setCheering] = useState(true);
+  useEffect(() => {
+    const timer = setTimeout(() => setCheering(false), 3200);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <View style={styles.flex}>
       <Animated.View
@@ -351,7 +363,15 @@ export function Plan({
       </Animated.View>
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-        <View style={column}>{footer}</View>
+        <View style={column}>
+          <Trio
+            size={40}
+            moods={cheering ? ['cheer', 'cheer', 'cheer'] : ['idle', 'wave', 'idle']}
+            gap={4}
+            style={styles.trio}
+          />
+          {footer}
+        </View>
       </View>
     </View>
   );
@@ -535,4 +555,5 @@ const styles = StyleSheet.create({
 
   promise: { marginTop: 14, maxWidth: 320 },
   footer: { paddingHorizontal: 20, paddingTop: 8 },
+  trio: { alignSelf: 'center', marginBottom: 6 },
 });

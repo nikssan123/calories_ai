@@ -31,7 +31,7 @@ import {
   type Prop,
   type Shape,
 } from './figure';
-import { useLife, type Fidget } from './life';
+import { useLife, useSeason, type Fidget } from './life';
 
 /**
  * Ember, Skye and Plum — the logo's three dots, standing up (CAST.md).
@@ -92,6 +92,7 @@ export function Character({
   loop = true,
   poke = true,
   fidget = true,
+  dressed = true,
   onPoke,
   style,
 }: {
@@ -113,13 +114,20 @@ export function Character({
   poke?: boolean;
   /** Takes part in idle life. See `life.ts`. */
   fidget?: boolean;
+  /** Wears what the season calls for. See `useSeason`. */
+  dressed?: boolean;
   /** Told about a poke, for a parent that moves the figure too (the card peek). */
   onPoke?: () => void;
   style?: StyleProp<ViewStyle>;
 }) {
   const [passing, setPassing] = useState<Mood | null>(null);
   const shown = passing ?? mood;
-  const d = useMemo(() => drawing(name, shown, { prop, sit: mood === 'sit' }), [name, shown, prop, mood]);
+  const season = useSeason();
+  const accessory = dressed ? (season ?? undefined) : undefined;
+  const d = useMemo(
+    () => drawing(name, shown, { prop, sit: mood === 'sit', accessory }),
+    [name, shown, prop, mood, accessory],
+  );
   const { scheme } = useTheme();
   const reduced = useReducedMotion();
   const focused = useIsFocused();

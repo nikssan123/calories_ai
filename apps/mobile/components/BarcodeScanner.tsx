@@ -35,6 +35,7 @@ import { font, type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
 import { useLocale, useT } from '@/lib/i18n';
 import { messageOf } from '@/lib/errors';
+import { Character } from '@/components/cast/Character';
 
 /**
  * A packet, read off its barcode.
@@ -683,18 +684,23 @@ function Portion({
       {/* `handled` so that the first tap on "I ate this" logs, rather than
           being swallowed dismissing the keypad the weight was typed on. */}
       <ScrollView contentContainerStyle={styles.product} keyboardShouldPersistTaps="handled">
-        <View>
-          {product.brand && (
-            <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>{product.brand}</Text>
-          )}
-          <Text style={[styles.productName, { color: colors.foreground }]}>{product.name}</Text>
-          <Text style={[t.footnote, styles.basis, { color: colors.mutedForeground }]}>
-            {tr('barcode.perBasis')(
-              formatNumber(Math.round((product.kcal_100g * basis.grams) / 100), locale),
-              formatNumber(Math.round((product.protein_100g * basis.grams) / 100), locale),
-              basis.label,
+        <View style={styles.productHead}>
+          <View style={styles.flex}>
+            {product.brand && (
+              <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>{product.brand}</Text>
             )}
-          </Text>
+            <Text style={[styles.productName, { color: colors.foreground }]}>{product.name}</Text>
+            <Text style={[t.footnote, styles.basis, { color: colors.mutedForeground }]}>
+              {tr('barcode.perBasis')(
+                formatNumber(Math.round((product.kcal_100g * basis.grams) / 100), locale),
+                formatNumber(Math.round((product.protein_100g * basis.grams) / 100), locale),
+                basis.label,
+              )}
+            </Text>
+          </View>
+          {/* Skye, who reads the barcodes, surprised to have found it (CAST.md).
+              Beside the name in its own column, never over it. */}
+          <Character name="skye" mood="surprised" size={56} shadow={false} />
         </View>
 
         <View style={styles.modes}>
@@ -1173,6 +1179,7 @@ const styles = StyleSheet.create({
   permissionButton: { alignSelf: 'stretch', marginTop: 12 },
   centred: { textAlign: 'center' },
   product: { padding: 20, gap: 16 },
+  productHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   productName: { fontFamily: font.display, fontSize: 18, lineHeight: 24, marginTop: 4 },
   basis: { marginTop: 6 },
   modes: { flexDirection: 'row', gap: 8 },

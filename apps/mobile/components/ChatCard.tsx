@@ -368,14 +368,22 @@ function toExerciseCard(entry: ExerciseEntry): Extract<Card, { type: 'exercise' 
 function Land({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
   const reduced = useReducedMotion();
   const progress = useSharedValue(reduced ? 1 : 0);
+  /*
+   * Started once the card has been laid out, not on mount. Reanimated pushes
+   * opacity straight to the native view, and frames sent before that view
+   * exists are dropped: on a slow first render a card could finish its
+   * entrance before it was mounted, and stay at opacity 0.
+   */
+  const [laidOut, setLaidOut] = useState(false);
 
   useEffect(() => {
     if (reduced) {
       progress.value = 1;
       return;
     }
+    if (!laidOut) return;
     progress.value = withTiming(1, { duration: duration.spring, easing: ease.spring });
-  }, [reduced, progress]);
+  }, [reduced, laidOut, progress]);
 
   const animated = useAnimatedStyle(() => ({
     opacity: Math.min(1, progress.value / 0.6),
@@ -385,7 +393,15 @@ function Land({ children, style }: { children: React.ReactNode; style?: StylePro
     ],
   }));
 
-  return <Animated.View style={[style, animated]}>{children}</Animated.View>;
+  return (
+    <Animated.View
+      collapsable={false}
+      onLayout={laidOut ? undefined : () => setLaidOut(true)}
+      style={[style, animated]}
+    >
+      {children}
+    </Animated.View>
+  );
 }
 
 function Shell({ children }: { children: React.ReactNode }) {

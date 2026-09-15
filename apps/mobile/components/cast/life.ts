@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { dayPartAt, type DayPart } from '@/theme';
+import type { Accessory } from './figure';
 
 /**
  * Idle life: the small thing one of them does every few seconds.
@@ -89,4 +90,26 @@ export function useDayPart(): DayPart {
     return () => clearInterval(interval);
   }, []);
   return dayPartAt(now);
+}
+
+/**
+ * What they wear this time of year, read from the phone's month: a scarf from
+ * December to February, a flower from March to May, a leaf from September to
+ * November, and nothing over the summer.
+ *
+ * Northern-hemisphere seasons, because that's where every language the app
+ * speaks is spoken. Read once per mount, since the month doesn't change while
+ * anybody watches.
+ */
+export function seasonAt(date: Date): Accessory | null {
+  const month = date.getMonth();
+  if (month === 11 || month <= 1) return 'scarf';
+  if (month <= 4) return 'flower';
+  if (month >= 8) return 'leaf';
+  return null;
+}
+
+export function useSeason(): Accessory | null {
+  const [season] = useState(() => seasonAt(new Date()));
+  return season;
 }

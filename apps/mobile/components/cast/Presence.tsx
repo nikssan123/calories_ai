@@ -11,7 +11,7 @@ import type { Meal } from '@ct/shared';
 import { useIsFocused } from 'expo-router';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { haptics } from '@/lib/haptics';
-import { Character, type CastName, type Prop } from './Character';
+import { Character, type CastName, type Mood, type Prop } from './Character';
 
 /**
  * The cast where people actually look, not only at the edges of the app.
@@ -81,18 +81,52 @@ const MEAL_CAST: Record<Meal, { name: CastName; prop: Prop }> = {
  */
 export function MealCast({ meal }: { meal: Meal }) {
   const { name, prop } = MEAL_CAST[meal];
+  return <CastIcon name={name} mood="hold" prop={prop} />;
+}
+
+/**
+ * One of them in a section header's icon slot, at the glossy icon's scale.
+ *
+ * Pulled into the header by its margins so the header keeps its height, and
+ * without a breathing loop, since a breath at this size is invisible and still
+ * costs a loop. It still blinks, fidgets and answers a poke.
+ */
+export function CastIcon({ name, mood, prop }: { name: CastName; mood: Mood; prop?: Prop }) {
+  return <Character name={name} mood={mood} prop={prop} size={34} loop={false} shadow={false} style={styles.icon} />;
+}
+
+/**
+ * A figure looking over the top edge of a translucent card: an onboarding
+ * option once it's picked.
+ *
+ * A glass card lets through whatever is behind it, so the figure can't simply
+ * stand behind the card the way `CardPeek` does. It stands in a box that ends
+ * exactly at the card's top edge and clips everything below it instead. Picking
+ * the option springs it up into view, and unpicking sinks it back out of sight.
+ */
+export function EdgePeek({ shown, name = 'skye' }: { shown: boolean; name?: CastName }) {
+  const reduced = useReducedMotion();
+  const up = useSharedValue(shown ? 1 : 0);
+
+  useEffect(() => {
+    up.value = reduced ? (shown ? 1 : 0) : withSpring(shown ? 1 : 0, { damping: 12, stiffness: 190 });
+  }, [shown, reduced, up]);
+
+  const rise = useAnimatedStyle(() => ({
+    transform: [{ translateY: (1 - up.value) * EDGE_PEEK }],
+  }));
+
   return (
-    <Character
-      name={name}
-      mood="hold"
-      prop={prop}
-      size={34}
-      loop={false}
-      shadow={false}
-      style={styles.icon}
-    />
+    <View pointerEvents="none" style={styles.edge}>
+      <Animated.View collapsable={false} style={rise}>
+        <Character name={name} mood={shown ? 'wave' : 'idle'} size={EDGE_PEEK} shadow={false} poke={false} fidget={shown} />
+      </Animated.View>
+    </View>
   );
 }
+
+/** The side of an `EdgePeek` figure, and so the height of the box it's clipped to. */
+const EDGE_PEEK = 34;
 
 /** Whoever the meal is mostly made of, by calories. Never by the day's total. */
 function dominant(card: { protein_g: number; carbs_g: number; fat_g: number }): CastName {
@@ -237,6 +271,9 @@ const styles = StyleSheet.create({
   shelf: { position: 'absolute', top: 0, flexDirection: 'row' },
   seat: { flex: 1, alignItems: 'flex-end', paddingRight: 10 },
   icon: { marginVertical: -10, marginLeft: -6, marginRight: -4 },
+  // Its bottom is the card's top edge. The figure's feet sit a little below its
+  // box, so the clip lands at the waist and it reads as looking over the top.
+  edge: { position: 'absolute', right: 20, top: -EDGE_PEEK * 0.72, width: EDGE_PEEK, height: EDGE_PEEK * 0.72, overflow: 'hidden' },
   peekRow: { marginTop: PEEK_ROOM },
   peek: { position: 'absolute', right: 22, top: PEEK_TOP },
 });

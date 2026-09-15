@@ -4,6 +4,7 @@ import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg'
 import { PressableChunk } from '@/components/Chunk';
 import { haptics } from '@/lib/haptics';
 import { type as t, useColors, withAlpha } from '@/theme';
+import { EdgePeek } from '@/components/cast/Presence';
 
 /**
  * One answer, as an object you press.
@@ -44,40 +45,45 @@ export function OptionCard({
   const colors = useColors();
 
   return (
-    <PressableChunk
-      depth={selected ? 6 : 3}
-      radius={22}
-      color={selected ? colors.calories : undefined}
-      haptic={false}
-      onPress={() => {
-        haptics.selected();
-        onPress();
-      }}
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      accessibilityLabel={hint ? `${label}. ${hint}` : label}
-      contentStyle={[
-        styles.face,
-        {
-          backgroundColor: selected ? colors.glassStrong : colors.glass,
-          borderColor: selected ? withAlpha(colors.primary, 0.7) : colors.glassEdge,
-          borderWidth: 1.5,
-        },
-      ]}
-    >
-      {icon && <View style={styles.icon}>{icon}</View>}
+    <View>
+      {/* Picked: Skye looks over the top of the card and waves. It answers the
+          choice, never what the choice is (CAST.md). */}
+      <EdgePeek shown={selected} />
+      <PressableChunk
+        depth={selected ? 6 : 3}
+        radius={22}
+        color={selected ? colors.calories : undefined}
+        haptic={false}
+        onPress={() => {
+          haptics.selected();
+          onPress();
+        }}
+        accessibilityRole="radio"
+        accessibilityState={{ selected }}
+        accessibilityLabel={hint ? `${label}. ${hint}` : label}
+        contentStyle={[
+          styles.face,
+          {
+            backgroundColor: selected ? colors.glassStrong : colors.glass,
+            borderColor: selected ? withAlpha(colors.primary, 0.7) : colors.glassEdge,
+            borderWidth: 1.5,
+          },
+        ]}
+      >
+        {icon && <View style={styles.icon}>{icon}</View>}
 
-      <View style={styles.text}>
-        <Text style={[t.bodyBold, styles.label, { color: colors.foreground }]}>{label}</Text>
-        {hint && (
-          <Text style={[t.footnote, { color: colors.mutedForeground }]} numberOfLines={2}>
-            {hint}
-          </Text>
-        )}
-      </View>
+        <View style={styles.text}>
+          <Text style={[t.bodyBold, styles.label, { color: colors.foreground }]}>{label}</Text>
+          {hint && (
+            <Text style={[t.footnote, { color: colors.mutedForeground }]} numberOfLines={2}>
+              {hint}
+            </Text>
+          )}
+        </View>
 
-      <Tick on={selected} />
-    </PressableChunk>
+        <Tick on={selected} />
+      </PressableChunk>
+    </View>
   );
 }
 
