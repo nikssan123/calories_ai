@@ -68,6 +68,7 @@ import { messageOf } from '@/lib/errors';
 import { Glossy } from '@/components/icons/Glossy';
 import { Segments } from '@/components/Segments';
 import { Sky, useSky } from '@/components/Sky';
+import { useSaveAccount } from '@/lib/save-account';
 
 /** §10: short setup. Enough to establish a starting target, nothing more. */
 
@@ -519,6 +520,14 @@ export default function SetupScreen() {
 
         <CoachSettings />
 
+        {profile.guest ? (
+          <GuestAccount
+            awaitingCode={Boolean(profile.email && !profile.email_verified)}
+            email={profile.email}
+            onErased={() => void signOut()}
+            onError={setError}
+          />
+        ) : (
         <InsetGroup title={tr('setup.account')}>
           <InsetRow first>
             <Text style={[t.body, styles.label, { color: colors.foreground }]}>{tr('setup.signedInAs')}</Text>
@@ -534,6 +543,7 @@ export default function SetupScreen() {
             <Text style={[t.body, { color: colors.destructive }]}>{tr('nav.signOut')}</Text>
           </Pressable>
         </InsetGroup>
+        )}
 
         {/* The store listings link to both documents, and the review that checks
             them expects to find them in the app too. Opened in the system browser
@@ -1586,6 +1596,105 @@ function AchievementsLink() {
           </Svg>
         </InsetRow>
       </Pressable>
+    </InsetGroup>
+  );
+}
+
+
+/**
+ * The account block for a guest (GUEST-ACCOUNTS.md).
+ *
+ * A guest has no address to show and nothing to sign in with again, so the
+ * ordinary block — "Signed in as", then Sign out — would be a label with a dash
+ * and a button that silently destroys the journal. Instead: the one thing worth
+ * doing, saving the account, and an honest way out that says what it costs.
+ * Erasing is the guest's account deletion, which both stores require to be
+ * reachable in the app.
+ */
+function GuestAccount({
+  awaitingCode,
+  email,
+  onErased,
+  onError,
+}: {
+  /** An address was claimed and its code has not come back yet. */
+  awaitingCode: boolean;
+  email: string | null;
+  onErased: () => void;
+  onError: (message: string) => void;
+}) {
+  const colors = useColors();
+  const tr = useT();
+  const save = useSaveAccount();
+  const [open, setOpen] = useState(false);
+  const [erasing, setErasing] = useState(false);
+
+  async function erase() {
+    setErasing(true);
+    try {
+      await api.deleteAccount({ erase_guest: true });
+      onErased();
+    } catch (e) {
+      onError(messageOf(e, tr));
+      setErasing(false);
+    }
+  }
+
+  return (
+    <InsetGroup title={tr('setup.account')} footer={tr('guest.notSaved')}>
+      <Pressable
+        onPress={() => save.open('you')}
+        accessibilityRole="button"
+        style={({ pressed }) => [styles.rowButton, { opacity: pressed ? 0.6 : 1 }]}
+      >
+        <Text style={[t.bodyBold, { color: colors.caloriesText }]}>
+          {awaitingCode && email ? tr('guest.confirmRow')(email) : tr('guest.saveRow')}
+        </Text>
+      </Pressable>
+      {/* Only without an address: a claimed one has a password, and the danger zone below deletes it properly. */}
+      {!email &&
+        (!open ? (
+          <Pressable
+            onPress={() => setOpen(true)}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.rowButton, { opacity: pressed ? 0.6 : 1 }]}
+          >
+            <Text style={[t.body, { color: colors.destructive }]}>{tr('guest.erase')}</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.danger}>
+            <Text style={[t.footnote, styles.hint, { color: colors.mutedForeground }]}>{tr('guest.eraseWarning')}</Text>
+            <View style={styles.dangerButtons}>
+              <PressableChunk
+                depth={0}
+                radius={16}
+                onPress={() => void erase()}
+                disabled={erasing}
+                accessibilityRole="button"
+                style={styles.flex}
+                contentStyle={[
+                  styles.dangerButton,
+                  {
+                    backgroundColor: withAlpha(colors.destructive, 0.12),
+                    borderColor: withAlpha(colors.destructive, 0.25),
+                  },
+                ]}
+              >
+                <Text style={[t.bodyBold, { color: colors.destructive }]}>
+                  {erasing ? tr('setup.deleting') : tr('guest.eraseConfirm')}
+                </Text>
+              </PressableChunk>
+              <Pressable
+                onPress={() => setOpen(false)}
+                disabled={erasing}
+                accessibilityRole="button"
+                style={({ pressed }) => [styles.cancel, { opacity: pressed ? 0.6 : 1 }]}
+              >
+                <Text style={[t.body, { color: colors.mutedForeground }]}>{tr('common.cancel')}</Text>
+              </Pressable>
+            </View>
+          </View>
+        ))}
     </InsetGroup>
   );
 }

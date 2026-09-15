@@ -22,11 +22,13 @@ const LABEL: Record<FunnelStep, string> = {
   target: 'Q5 · Goal weight',
   activity: 'Q6 · Activity',
   plan: 'Saw their plan',
-  save: 'Tapped Save my plan',
+  save: 'Tapped Start (Save my plan before 1.3)',
+  guest: 'Guest session made',
+  save_prompt: 'Saw “Save your account”',
   signup_email: 'Submitted email sign-up',
   signup_google: 'Tapped Continue with Google',
   account: 'Account created',
-  in_app: 'Plan saved, in the app',
+  in_app: 'Plan uploaded, in the app',
   existing: 'Tapped “I already have an account”',
 };
 
@@ -35,7 +37,22 @@ const LABEL: Record<FunnelStep, string> = {
  * steps, and "existing" leaves the walk on the first screen, so those three are
  * listed apart instead of being read as drops.
  */
-const LINE: FunnelStep[] = ['welcome', 'start', 'goal', 'sex', 'birth', 'body', 'target', 'activity', 'plan', 'save', 'account', 'in_app'];
+const LINE: FunnelStep[] = [
+  'welcome',
+  'start',
+  'goal',
+  'sex',
+  'birth',
+  'body',
+  'target',
+  'activity',
+  'plan',
+  'save',
+  'guest',
+  'in_app',
+  'save_prompt',
+  'account',
+];
 const BESIDE: FunnelStep[] = ['signup_email', 'signup_google', 'existing'];
 
 /**

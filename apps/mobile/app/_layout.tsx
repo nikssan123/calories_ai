@@ -191,7 +191,7 @@ function Themed() {
  * fresh account in against the real server, which is the only place it shows.
  */
 function Gate() {
-  const { authenticated, emailVerified, loading } = useAuth();
+  const { authenticated, emailVerified, guest, loading } = useAuth();
   const {
     ready: setupResolved,
     needsSetup,
@@ -221,13 +221,27 @@ function Gate() {
   const welcoming = !authenticated && !planWaiting && !signingIn;
 
   /*
+   * Inside the app: a proved address, or a guest (GUEST-ACCOUNTS.md). A guest
+   * has nothing to verify and is let through the same way the server lets it
+   * through; the verification screen is only for an ordinary sign-up that has
+   * not entered its code.
+   */
+  const inside = authenticated && (emailVerified || guest);
+
+  /*
+   * A finished walk with no session yet: the guest session is being made (or
+   * failed, offline, and is waiting for a retry). The saving screen covers it.
+   */
+  const startingGuest = !authenticated && planWaiting && !signingIn;
+
+  /*
    * Nothing is routed until the draft is off the disk. The first screen of a
    * relaunch mid-walk is the onboarding screen, and it takes its answers from
    * the draft as initial state — mounted a frame before the draft arrived, it
    * would start blank and never look again. The splash covers the wait.
    */
   const settled =
-    !loading && draftLoaded && (!authenticated || !emailVerified || setupResolved);
+    !loading && draftLoaded && (!authenticated || !(emailVerified || guest) || setupResolved);
 
   useEffect(() => {
     /*
@@ -255,8 +269,8 @@ function Gate() {
    * arrives.
    */
   useEffect(() => {
-    if (authenticated && emailVerified) void registerForPush();
-  }, [authenticated, emailVerified]);
+    if (inside) void registerForPush();
+  }, [inside]);
 
   /*
    * And re-arm the alarms the reader set on this phone.
@@ -321,7 +335,7 @@ function Gate() {
         * component that has not mounted yet — and it is a real race, not just a
         * warning: the tab bar gets a frame before the redirect lands.
         */}
-      <Stack.Protected guard={authenticated && !emailVerified}>
+      <Stack.Protected guard={authenticated && !emailVerified && !guest}>
         <Stack.Screen name="verify" />
       </Stack.Protected>
 
@@ -335,16 +349,16 @@ function Gate() {
         * nothing behind this to swipe back to — the wizard's own rail carries
         * the way back through the questions.
         */}
-      <Stack.Protected guard={(authenticated && emailVerified && needsSetup) || welcoming}>
+      <Stack.Protected guard={(inside && needsSetup) || welcoming}>
         <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
       </Stack.Protected>
 
       {/* The plan a new account arrived with, being written to it. See above. */}
-      <Stack.Protected guard={authenticated && emailVerified && !setupResolved}>
+      <Stack.Protected guard={(inside && !setupResolved) || startingGuest}>
         <Stack.Screen name="saving" options={{ animation: 'fade', gestureEnabled: false }} />
       </Stack.Protected>
 
-      <Stack.Protected guard={authenticated && emailVerified && setupResolved && !needsSetup}>
+      <Stack.Protected guard={inside && setupResolved && !needsSetup}>
         <Stack.Screen name="(tabs)" />
         {/*
           * History sits outside the tabs, as it does on the web: it is reached
@@ -379,8 +393,10 @@ function Gate() {
             second slide-from-bottom on a screen that is already at the bottom
             reads as a bounce. */}
         <Stack.Screen name="purchased" options={{ animation: 'fade', gestureEnabled: false }} />
+        {/* Saving a guest's account (GUEST-ACCOUNTS.md): the paywall's entrance, for the same kind of decision. */}
+        <Stack.Screen name="save-account" options={{ animation: 'slide_from_bottom' }} />
       </Stack.Protected>
-      <Stack.Protected guard={!authenticated && !welcoming}>
+      <Stack.Protected guard={!authenticated && !welcoming && !startingGuest}>
         <Stack.Screen name="login" options={{ animation: 'fade' }} />
       </Stack.Protected>
     </Stack>

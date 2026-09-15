@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
-import type { AuthStatus, Profile } from '@ct/shared';
+import type { AuthStatus, Locale, Profile } from '@ct/shared';
 import { api } from '@/lib/api';
 import { clearToken, currentToken, restoreToken, saveToken } from '@/lib/session';
 import { forgetPush } from '@/lib/push';
@@ -64,9 +64,17 @@ interface AuthValue {
    * the API answers 403 to everything outside `/auth/` until it is true.
    */
   emailVerified: boolean;
+  /**
+   * A guest (GUEST-ACCOUNTS.md): signed in, no identity proved yet. Let past
+   * the verification screen — there may be nothing to verify — and offered
+   * "Save your account" instead.
+   */
+  guest: boolean;
   /** Resolved once at launch; screens render only after it is false. */
   loading: boolean;
   refresh: () => Promise<void>;
+  /** Starts a guest session: the end of the first-run walk. Throws when offline. */
+  startGuest: (locale: Locale) => Promise<void>;
   /** Adopt a profile the app already has in hand, rather than re-fetching it. */
   adoptProfile: (profile: Profile) => void;
   /** Both halves of arriving: store the token, then adopt the status it came with. */
@@ -81,8 +89,10 @@ const AuthContext = createContext<AuthValue>({
   hasAccounts: false,
   googleEnabled: false,
   emailVerified: false,
+  guest: false,
   loading: true,
   refresh: async () => {},
+  startGuest: async () => {},
   adoptProfile: () => {},
   adoptSession: async () => {},
   signOut: async () => {},
@@ -217,6 +227,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRestoredOffline(false);
   }, []);
 
+  const startGuest = useCallback(
+    async (locale: Locale) => {
+      const next = await api.guest({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, locale });
+      await adoptSession(next);
+    },
+    [adoptSession],
+  );
+
   const adoptProfile = useCallback((profile: Profile) => {
     setStatus((prev) => (prev ? { ...prev, profile } : prev));
   }, []);
@@ -289,13 +307,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       hasAccounts: status?.has_accounts ?? false,
       googleEnabled: status?.google_enabled ?? false,
       emailVerified: status?.profile?.email_verified ?? false,
+      guest: status?.profile?.guest ?? false,
       loading,
       refresh,
+      startGuest,
       adoptProfile,
       adoptSession,
       signOut,
     }),
-    [status, loading, refresh, adoptProfile, adoptSession, signOut],
+    [status, loading, refresh, startGuest, adoptProfile, adoptSession, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

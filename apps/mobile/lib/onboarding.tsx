@@ -79,6 +79,9 @@ interface OnboardingValue {
   chooseSignIn: (signingIn: boolean) => void;
   /** Whether a draft is being written to a fresh account right now. */
   saving: boolean;
+  /** Starting the guest session failed — offline, most likely. The saving screen offers a retry. */
+  guestFailed: boolean;
+  retryGuest: () => void;
 }
 
 const DRAFT_KEY = 'ct:onboarding-draft:v1';
@@ -97,18 +100,28 @@ const OnboardingContext = createContext<OnboardingValue>({
   signingIn: false,
   chooseSignIn: () => {},
   saving: false,
+  guestFailed: false,
+  retryGuest: () => {},
 });
 
 export const useOnboarding = (): OnboardingValue => useContext(OnboardingContext);
 
 export function OnboardingProvider({ children }: { children: React.ReactNode }) {
-  const { authenticated, emailVerified, adoptProfile } = useAuth();
+  const { authenticated, emailVerified: verified, guest, loading, startGuest, adoptProfile } = useAuth();
+  /*
+   * "Inside" for everything below: a proved address, or a guest. A guest is let
+   * past the verification gate on the server, so its answers upload and its
+   * setup state is read exactly as a confirmed account's are.
+   */
+  const emailVerified = verified || guest;
   const [state, setState] = useState<OnboardingState | null>(null);
   const [ready, setReady] = useState(false);
   const [draft, setDraft] = useState<OnboardingDraft | null>(null);
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [guestFailed, setGuestFailed] = useState(false);
+  const [guestAttempt, setGuestAttempt] = useState(0);
 
   useEffect(() => {
     void (async () => {
@@ -274,6 +287,30 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     void refresh();
   }, [authenticated, emailVerified, draftLoaded, refresh]);
 
+  /*
+   * A finished walk with no session becomes a guest (GUEST-ACCOUNTS.md).
+   *
+   * "Start my day" on the plan marks the draft finished; this is what turns that
+   * into a session — no form, no address — and the effect above then uploads the
+   * answers to the new row exactly as it does for an account signed in the old
+   * way. Somebody who chose "I already have an account" is left to sign in.
+   */
+  const startingGuest = useRef(false);
+  useEffect(() => {
+    if (loading || !draftLoaded || authenticated || signingIn || !draft?.completed_at) return;
+    if (startingGuest.current) return;
+    startingGuest.current = true;
+    setGuestFailed(false);
+    void startGuest(draft.locale ?? preferredLocale())
+      .then(() => reachedStep('guest'))
+      .catch(() => setGuestFailed(true))
+      .finally(() => {
+        startingGuest.current = false;
+      });
+  }, [loading, draftLoaded, authenticated, signingIn, draft?.completed_at, draft?.locale, startGuest, guestAttempt]);
+
+  const retryGuest = useCallback(() => setGuestAttempt((n) => n + 1), []);
+
   const value = useMemo<OnboardingValue>(
     () => ({
       state,
@@ -289,8 +326,10 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       signingIn,
       chooseSignIn: setSigningIn,
       saving,
+      guestFailed,
+      retryGuest,
     }),
-    [state, ready, refresh, draftLoaded, draft, saveDraft, dropDraft, signingIn, saving],
+    [state, ready, refresh, draftLoaded, draft, saveDraft, dropDraft, signingIn, saving, guestFailed, retryGuest],
   );
 
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;

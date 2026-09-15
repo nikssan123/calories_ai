@@ -104,6 +104,31 @@ export async function signInWithGoogle(): Promise<AuthStatus | null> {
    * On iOS that is a guarantee no other app can intercept, which is most of why
    * a custom scheme is safe to end a sign-in on.
    */
+  return completeGoogle(url, redirect, verifier);
+}
+
+/**
+ * Saving a guest's account with Google (GUEST-ACCOUNTS.md).
+ *
+ * The same handshake as `signInWithGoogle`, started differently: the URL comes
+ * from a POST that carries the guest's session, so the server can put the guest's
+ * id inside the signed state and attach the Google identity to this phone's own
+ * row. Everything logged so far stays. If that Google account already belongs to
+ * an account here, the session that comes back is for that account instead — the
+ * caller compares profile ids and says so.
+ */
+export async function saveWithGoogle(): Promise<AuthStatus | null> {
+  const verifier = makeVerifier();
+  const redirect = Linking.createURL('auth/google');
+  const { url } = await api.googleClaimUrl({
+    redirect,
+    challenge: await challengeFor(verifier),
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  });
+  return completeGoogle(url, redirect, verifier);
+}
+
+async function completeGoogle(url: string, redirect: string, verifier: string): Promise<AuthStatus | null> {
   const result = await WebBrowser.openAuthSessionAsync(url, redirect);
   if (result.type !== 'success') return null;
 

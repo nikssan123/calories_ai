@@ -3820,6 +3820,11 @@ export type AdminOverview = z.infer<typeof AdminOverview>;
  * `target` only exists for a goal that is not "maintain", so it reads low by
  * design. `existing` is off the main line: somebody who tapped "I already have
  * an account" on the welcome screen.
+ *
+ * Since guest accounts (GUEST-ACCOUNTS.md) the walk ends in the app: `save` is
+ * "Start my day", `guest` the session that made, `in_app` the plan landing on
+ * it, `save_prompt` the save-your-account screen being shown for any reason,
+ * and `account` an identity proved on the guest row.
  */
 export const FUNNEL_STEPS = [
   'welcome',
@@ -3832,10 +3837,12 @@ export const FUNNEL_STEPS = [
   'activity',
   'plan',
   'save',
+  'guest',
+  'in_app',
+  'save_prompt',
   'signup_email',
   'signup_google',
   'account',
-  'in_app',
   'existing',
 ] as const;
 export const FunnelStep = z.enum(FUNNEL_STEPS);

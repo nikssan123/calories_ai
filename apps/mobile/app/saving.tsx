@@ -1,4 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { GlowButton } from '@/components/GlowButton';
+import { useAuth } from '@/lib/auth';
 import { RingObject } from '@/components/RingObject';
 import { Serif } from '@/components/Serif';
 import { Stage } from '@/components/onboarding/Stage';
@@ -21,7 +23,23 @@ export default function SavingScreen() {
   const colors = useColors();
   const type = useType();
   const tr = useT();
-  const { saving } = useOnboarding();
+  const { saving, planWaiting, guestFailed, retryGuest } = useOnboarding();
+  const { authenticated } = useAuth();
+  /* The guest session for a finished walk is still being made (GUEST-ACCOUNTS.md). */
+  const starting = !authenticated && planWaiting;
+
+  if (starting && guestFailed) {
+    return (
+      <View style={styles.flex}>
+        <Stage />
+        <View style={[styles.centre, column]} accessibilityLiveRegion="polite">
+          <RingObject size={150} />
+          <Text style={[t.bodyBold, styles.centred, { color: colors.foreground }]}>{tr('common.offline')}</Text>
+          <GlowButton label={tr('ob.retry')} onPress={retryGuest} />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.flex}>
@@ -29,9 +47,9 @@ export default function SavingScreen() {
       <View style={[styles.centre, column]} accessibilityLiveRegion="polite">
         <RingObject size={150} />
         <Serif style={[type.hero, styles.centred, { color: colors.foreground }]}>
-          {saving ? tr('saving.title') : tr('saving.welcomeBack')}
+          {saving || starting ? tr('saving.title') : tr('saving.welcomeBack')}
         </Serif>
-        {saving && (
+        {(saving || starting) && (
           <Text style={[t.body, styles.centred, { color: colors.mutedForeground }]}>{tr('saving.body')}</Text>
         )}
       </View>

@@ -483,9 +483,9 @@ export default function OnboardingScreen() {
   }, [guest, weightKg, sex, birthDate, heightCm, goal, activity, units, targetWeight, targetSkipped, locale, profile?.locale, adoptProfile, saveDraft, dropDraft]);
 
   /**
-   * "Save my plan", for somebody with no account. Marking the draft finished is
-   * the whole action: the gate sees a plan waiting and brings up sign-up, and
-   * the provider writes the draft to the account once there is one.
+   * "Start logging", for somebody with no session. Marking the draft finished is
+   * the whole action: the provider makes a guest session for it, uploads the
+   * draft to that row, and the gate opens the app.
    */
   const savePlan = useCallback(async () => {
     if (!draft) return;
@@ -574,13 +574,15 @@ export default function OnboardingScreen() {
           targets={targets}
           projection={projection}
           footer={
+            /*
+             * Straight into the app (GUEST-ACCOUNTS.md). This used to be "Save my
+             * plan" over a line about making an account, and the form behind it
+             * is where paid installs stopped. Now the button starts the day: the
+             * draft is marked finished, a guest session is made for it, and the
+             * account is offered later, when it is worth something.
+             */
             guest ? (
-              <View style={styles.saveFoot}>
-                <Text style={[t.footnote, styles.centred, { color: colors.mutedForeground }]}>
-                  {tr('ob.planSaveHint')}
-                </Text>
-                <GlowButton label={tr('ob.planSave')} onPress={() => void savePlan()} />
-              </View>
+              <GlowButton label={tr('ob.planStart')} onPress={() => void savePlan()} />
             ) : (
               <Advance label={tr('ob.planStart')} onPress={() => void finish()} />
             )
@@ -1038,7 +1040,6 @@ const styles = StyleSheet.create({
   language: { gap: 8 },
   languageControl: { alignSelf: 'stretch' },
   haveAccount: { alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 16 },
-  saveFoot: { gap: 10 },
 
   retry: { alignSelf: 'stretch' },
 });
