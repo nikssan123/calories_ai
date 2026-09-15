@@ -395,7 +395,7 @@ export const hr: Messages = {
   'save.purchaseBody': 'Da ono što kupiš ostane tvoje i na novom mobitelu. Sve što si upisao ide s tobom.',
   'save.stillFree': 'Ručno upisivanje obroka i skeniranje barkoda ostaju besplatni u svakom slučaju.',
   'save.saveButton': 'Spremi račun',
-  'save.signInWarning': 'Ako se prijaviš u njega, obroci s ovog mobitela neće se prenijeti.',
+  'save.signInWarning': 'Ako se prijaviš u njega, obroci s ovog mobitela idu s tobom.',
   'save.signInInstead': 'Prijavi se u taj račun',
   'save.changeEmail': 'Druga e-pošta',
   'save.codeStale': 'Taj je kôd bio za drugu adresu. Pošalji novi.',
@@ -403,7 +403,7 @@ export const hr: Messages = {
   'save.doneBody': (days: number) =>
     `Tvoje probno razdoblje od ${days} ${w(days, { one: 'dan', few: 'dana', other: 'dana' })} je počelo. Sve što si upisao je tu.`,
   'save.switchedTitle': 'Prijavljen *si*',
-  'save.switchedBody': 'Za taj Google račun ovdje već postoji račun, pa si prijavljen u njega. Obroci s ovog mobitela nisu preneseni.',
+  'save.switchedBody': 'Za taj Google račun ovdje već postoji račun, pa si prijavljen u njega — a obroci s ovog mobitela sada su u njemu.',
   'save.continue': 'Nastavi',
   'save.later': 'Ne sada',
   'guest.notSaved': 'Još nije spremljen: dnevnik je samo na ovom mobitelu dok ne spremiš račun.',

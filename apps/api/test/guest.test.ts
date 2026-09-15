@@ -5,6 +5,7 @@ import { env } from '../src/env.ts';
 import { isAdmin } from '../src/services/admin.ts';
 import { createSession } from '../src/services/auth.ts';
 import { challengeFor } from '../src/services/google.ts';
+import { absorbGuest } from '../src/services/guest-merge.ts';
 import { issueHandoff } from '../src/services/tokens.ts';
 import { claimWithProvider, signInWithProvider } from '../src/services/identities.ts';
 import { emailTo, lastEmail, mailbox } from './helpers/email.ts';
@@ -435,5 +436,150 @@ describe('saving with Google happens in the guest’s own request', () => {
       IDENTITY.subject,
     ]);
     expect(linked?.n).toBe(0);
+  });
+});
+
+describe('a guest whose save lands on an existing account brings its journal', () => {
+  async function seedGuest(id: string) {
+    await query(
+      `INSERT INTO food_entries (user_id, eaten_at, local_date, meal, description)
+       VALUES ($1, now(), CURRENT_DATE, 'lunch', 'Guest lunch')`,
+      [id],
+    );
+    await query(
+      `INSERT INTO weight_entries (user_id, weight_kg, local_date, measured_at) VALUES
+         ($1, 81, CURRENT_DATE, now()), ($1, 82, CURRENT_DATE - 1, now() - interval '1 day')`,
+      [id],
+    );
+    await query(`INSERT INTO routines (user_id, name, category) VALUES ($1, 'Push day', 'strength'), ($1, 'Legs', 'strength')`, [
+      id,
+    ]);
+    await query(
+      `INSERT INTO ai_usage (user_id, provider, kind, model, cost_usd) VALUES ($1, 'test', 'text_log', 'test', 0.04)`,
+      [id],
+    );
+  }
+
+  it('moves meals, weigh-ins and routines, keeps the account’s copy where both have one, and removes the guest', async () => {
+    const { json } = await startGuest();
+    const guestId = json.profile.id;
+    await seedGuest(guestId);
+    const owner = await createUser({ email: 'owner@example.com' });
+    await query(
+      `INSERT INTO weight_entries (user_id, weight_kg, local_date, measured_at) VALUES ($1, 70, CURRENT_DATE, now())`,
+      [owner.id],
+    );
+    await query(`INSERT INTO routines (user_id, name, category) VALUES ($1, 'push day', 'strength')`, [owner.id]);
+
+    const summary = await absorbGuest(guestId, owner.id);
+    expect(summary).toMatchObject({ food_entries: 1, weight_entries: 1 });
+
+    const meals = await queryOne<{ n: number }>('SELECT count(*)::int AS n FROM food_entries WHERE user_id = $1', [owner.id]);
+    expect(meals?.n).toBe(1);
+    const today = await queryOne<{ weight_kg: string }>(
+      'SELECT weight_kg FROM weight_entries WHERE user_id = $1 AND local_date = CURRENT_DATE',
+      [owner.id],
+    );
+    expect(Number(today?.weight_kg)).toBe(70);
+    const weights = await queryOne<{ n: number }>('SELECT count(*)::int AS n FROM weight_entries WHERE user_id = $1', [owner.id]);
+    expect(weights?.n).toBe(2);
+    const routines = await query<{ name: string }>('SELECT name FROM routines WHERE user_id = $1 ORDER BY name', [owner.id]);
+    expect(routines.map((r) => r.name)).toEqual(['Legs', 'push day']);
+
+    expect(await queryOne('SELECT id FROM users WHERE id = $1', [guestId])).toBeNull();
+    // The guest's turns keep their cost but count against nobody's allowance.
+    const usage = await queryOne<{ user_id: string | null }>(`SELECT user_id FROM ai_usage WHERE provider = 'test'`);
+    expect(usage?.user_id).toBeNull();
+  });
+
+  it('refuses to absorb an account that is not a guest', async () => {
+    const owner = await createUser({ email: 'owner@example.com' });
+    const other = await createUser({ email: 'other@example.com' });
+    expect(await absorbGuest(other.id, owner.id)).toBeNull();
+    expect(await queryOne('SELECT id FROM users WHERE id = $1', [other.id])).not.toBeNull();
+  });
+
+  it('happens in the Google exchange when that Google account already had an account', async () => {
+    const owner = await createUser({ email: 'owner@gmail.com' });
+    await query(
+      `INSERT INTO oauth_identities (provider, subject, user_id, email) VALUES ('google', '110000000000000000088', $1, 'owner@gmail.com')`,
+      [owner.id],
+    );
+    const { json, auth } = await startGuest();
+    await seedGuest(json.profile.id);
+    const verifier = 'w'.repeat(64);
+    const { token: code } = await issueHandoff(json.profile.id, 'owner@gmail.com', challengeFor(verifier), {
+      kind: 'guest_claim',
+      provider: 'google',
+      subject: '110000000000000000088',
+      name: 'Owner',
+      timezone: 'Europe/Sofia',
+      locale: 'en',
+    });
+
+    const exchange = await app.inject({
+      method: 'POST',
+      url: '/auth/google/exchange',
+      headers: { ...AS_APP, ...auth },
+      payload: { code, verifier },
+    });
+    expect(exchange.statusCode).toBe(200);
+    expect(exchange.json().profile.id).toBe(owner.id);
+    const meals = await queryOne<{ n: number }>('SELECT count(*)::int AS n FROM food_entries WHERE user_id = $1', [owner.id]);
+    expect(meals?.n).toBe(1);
+    expect(await queryOne('SELECT id FROM users WHERE id = $1', [json.profile.id])).toBeNull();
+  });
+
+  it('happens through /auth/absorb-guest after signing in with a password, given the guest’s token', async () => {
+    const { json, token: guestToken } = await startGuest();
+    await seedGuest(json.profile.id);
+    const owner = await createUser({ email: 'owner@example.com' });
+    const { token } = await createSession(owner.id);
+    const asOwner = { authorization: `Bearer ${token}` };
+
+    const absorbed = await app.inject({
+      method: 'POST',
+      url: '/auth/absorb-guest',
+      headers: asOwner,
+      payload: { guest_token: guestToken },
+    });
+    expect(absorbed.statusCode).toBe(200);
+    expect(absorbed.json()).toMatchObject({ food_entries: 1 });
+
+    // Spent: the guest and its session are gone.
+    const again = await app.inject({
+      method: 'POST',
+      url: '/auth/absorb-guest',
+      headers: asOwner,
+      payload: { guest_token: guestToken },
+    });
+    expect(again.statusCode).toBe(404);
+  });
+
+  it('will not take a real account’s token as a guest’s', async () => {
+    const owner = await createUser({ email: 'owner@example.com' });
+    const victim = await createUser({ email: 'victim@example.com' });
+    const { token } = await createSession(owner.id);
+    const { token: victimToken } = await createSession(victim.id);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/absorb-guest',
+      headers: { authorization: `Bearer ${token}` },
+      payload: { guest_token: victimToken },
+    });
+    expect(response.statusCode).toBe(404);
+    expect(await queryOne('SELECT id FROM users WHERE id = $1', [victim.id])).not.toBeNull();
+  });
+
+  it('is not for a guest to call', async () => {
+    const { auth } = await startGuest();
+    const { token: otherGuest } = await startGuest();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/absorb-guest',
+      headers: auth,
+      payload: { guest_token: otherGuest },
+    });
+    expect(response.statusCode).toBe(401);
   });
 });

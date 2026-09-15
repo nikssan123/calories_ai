@@ -398,7 +398,7 @@ export const ro: Messages = {
   'save.purchaseBody': 'Ca ce cumperi să rămână al tău și pe un telefon nou. Tot ce ai notat vine cu tine.',
   'save.stillFree': 'Notarea manuală a meselor și scanarea codurilor de bare rămân gratuite oricum.',
   'save.saveButton': 'Salvează contul',
-  'save.signInWarning': 'Dacă te conectezi la el, mesele de pe acest telefon nu se mută.',
+  'save.signInWarning': 'Dacă te conectezi la el, mesele de pe acest telefon vin cu tine.',
   'save.signInInstead': 'Conectează-te la acel cont',
   'save.changeEmail': 'Folosește alt e-mail',
   'save.codeStale': 'Codul era pentru altă adresă. Trimite unul nou.',
@@ -406,7 +406,7 @@ export const ro: Messages = {
   'save.doneBody': (days: number) =>
     `Perioada ta de probă de ${days} ${w(days, { one: 'zi', few: 'zile', other: 'de zile' })} a început. Tot ce ai notat e aici.`,
   'save.switchedTitle': 'Te-ai *conectat*',
-  'save.switchedBody': 'Acel cont Google avea deja un cont aici, așa că te-ai conectat la el. Mesele de pe acest telefon nu au fost mutate.',
+  'save.switchedBody': 'Acel cont Google avea deja un cont aici, așa că te-ai conectat la el — iar mesele de pe acest telefon sunt acum în el.',
   'save.continue': 'Continuă',
   'save.later': 'Nu acum',
   'guest.notSaved': 'Încă nesalvat: jurnalul e doar pe acest telefon până îți salvezi contul.',

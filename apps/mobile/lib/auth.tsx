@@ -79,7 +79,12 @@ interface AuthValue {
   adoptProfile: (profile: Profile) => void;
   /** Both halves of arriving: store the token, then adopt the status it came with. */
   adoptSession: (status: AuthStatus) => Promise<void>;
-  signOut: () => Promise<void>;
+  /**
+   * `keepServerSession` leaves this session valid on the server while the phone
+   * forgets it — only for a guest handing its journal to the account signed in
+   * to next (`lib/guest-merge.ts`), whose token is the proof of ownership.
+   */
+  signOut: (options?: { keepServerSession?: boolean }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthValue>({
@@ -278,7 +283,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signedInAs = status?.profile?.id ?? null;
 
-  const signOut = useCallback(async () => {
+  const signOut = useCallback(async (options?: { keepServerSession?: boolean }) => {
     /*
      * Before the session goes, because giving the address up is an authenticated
      * call. A push token belongs to the *device* rather than the account, so one
@@ -309,7 +314,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
      */
     let next = SIGNED_OUT;
     try {
-      next = await api.logout();
+      if (options?.keepServerSession) {
+        // Asked rather than logged out: the server-side session has to survive.
+        const current = await api.me();
+        next = { ...current, authenticated: false, profile: null, is_admin: false, is_coach: false };
+      } else {
+        next = await api.logout();
+      }
     } catch {
       /* revoking the row is a courtesy; dropping the token is the point */
     }

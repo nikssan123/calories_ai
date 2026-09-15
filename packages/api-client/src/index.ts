@@ -78,6 +78,7 @@ import type {
   WeekSchedule,
   ReviewStats,
   SignupRequest,
+  AbsorbGuestRequest,
   ClaimRequest,
   GoogleClaimStart,
   GuestRequest,
@@ -274,6 +275,18 @@ export function createApiClient({
      * A POST rather than `googleStartUrl`, because it has to carry the guest's
      * session so the handshake can name the row to attach to.
      */
+    /**
+     * Brings a guest's journal into the account this session belongs to. The
+     * guest's own token, kept by the app when it chose to sign in to an existing
+     * account instead of saving the guest, is the proof. 404 when there is
+     * nothing to bring — the guest is gone, or was never a guest.
+     */
+    absorbGuest: (payload: AbsorbGuestRequest) =>
+      request<{ food_entries: number; exercise_entries: number; weight_entries: number; photos: number }>(
+        '/auth/absorb-guest',
+        { method: 'POST', body: JSON.stringify(payload) },
+      ),
+
     googleClaimUrl: (payload: GoogleClaimStart) =>
       request<{ url: string }>('/auth/google/claim', { method: 'POST', body: JSON.stringify(payload) }),
 

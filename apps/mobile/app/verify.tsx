@@ -16,6 +16,7 @@ import { Serif } from '@/components/Serif';
 import { Stage } from '@/components/onboarding/Stage';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { mergeKeptGuest } from '@/lib/guest-merge';
 import { font, useColors, useType } from '@/theme';
 import { useT } from '@/lib/i18n';
 import { messageOf } from '@/lib/errors';
@@ -54,6 +55,8 @@ export default function VerifyScreen() {
       // The gate is server-side, so the only thing that opens the app is the
       // session's own view of itself. Re-read it rather than assuming.
       await refresh();
+      // A guest that stepped aside for a new sign-up brings its journal once the address is proved.
+      if (await mergeKeptGuest()) await refresh();
     } catch (e) {
       setError(messageOf(e, tr));
     } finally {

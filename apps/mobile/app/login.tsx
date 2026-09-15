@@ -24,6 +24,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { reachedStep } from '@/lib/funnel';
 import { signInWithGoogle } from '@/lib/google';
+import { mergeKeptGuest } from '@/lib/guest-merge';
 import { GoogleMark } from '@/components/GoogleMark';
 import { PRIVACY_URL, TERMS_URL } from '@/lib/links';
 import { font, type as t, useColors, useType } from '@/theme';
@@ -159,6 +160,8 @@ export default function LoginScreen() {
       // …and the status is re-read, because signup answers before the profile
       // the rest of the app renders from exists.
       await refresh();
+      // A guest that stepped aside for this account brings its journal with it.
+      if (await mergeKeptGuest()) await refresh();
     } catch (e) {
       setError(authMessage(e));
     } finally {
@@ -200,6 +203,7 @@ export default function LoginScreen() {
       await adoptSession(status);
       if (fromWalk) reachedStep('account');
       await refresh();
+      if (await mergeKeptGuest()) await refresh();
     } catch (e) {
       if (e instanceof ApiError) {
         setError(e.status === 403 ? tr('auth.suspended') : e.status === 429 ? tr('auth.tooManyTries') : tr('auth.googleFailed'));

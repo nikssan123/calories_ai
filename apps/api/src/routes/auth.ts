@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
+  AbsorbGuestRequest,
   ClaimRequest,
   GoogleClaimStart,
   LoginRequest,
@@ -26,6 +27,7 @@ import {
   createSession,
   destroyAllSessions,
   destroySession,
+  resolveSession,
   SESSION_COOKIE,
 } from '../services/auth.ts';
 import { rememberDevice } from '../services/devices.ts';
@@ -43,6 +45,7 @@ import {
   type NativeHandshake,
 } from '../services/google.ts';
 import { claimWithProvider, signInWithProvider } from '../services/identities.ts';
+import { absorbGuest } from '../services/guest-merge.ts';
 import {
   consumeCode,
   consumeHandoff,
@@ -449,6 +452,28 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       guest: request.userId,
     };
     return { url: authorizeUrl(google, { ...handshake, state: packNativeState(google, native) }) };
+  });
+
+  /**
+   * A guest's journal into the account just signed in to (GUEST-ACCOUNTS.md).
+   *
+   * The Google save does this on its own, in the exchange. This is the other
+   * door: a guest whose address already had an account chose "Sign in to that
+   * account instead", signed in with a password, and the app hands over the
+   * guest's session token it kept. That token is the proof the journal belongs
+   * to whoever is asking; the session on this request says where it goes.
+   */
+  app.post('/auth/absorb-guest', { config: { rateLimit: TOKEN_LIMIT } }, async (request, reply) => {
+    if (request.userId === null || request.guest || !request.emailVerified) {
+      return reply.status(401).send({ error: 'Not signed in.' });
+    }
+    const parsed = AbsorbGuestRequest.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid details' });
+
+    const guestId = await resolveSession(parsed.data.guest_token);
+    const summary = guestId ? await absorbGuest(guestId, request.userId) : null;
+    if (!summary) return reply.status(404).send({ error: 'Nothing to bring across.' });
+    return summary;
   });
 
   app.post('/auth/signup', { config: { rateLimit: SIGNUP_LIMIT } }, async (request, reply) => {
@@ -1185,6 +1210,9 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       if (!result.ok) return reply.status(403).send({ error: 'Sign-ups are closed on this server.' });
       userId = result.userId;
       if (result.outcome !== 'claimed') {
+        // That Google account already had an account here: the guest's journal
+        // goes into it, and the guest row with it.
+        await absorbGuest(handoff.userId, userId);
         const device = await rememberDevice(userId, request.headers['user-agent'], request.ip);
         if (device.isNew) {
           await sendNewSignInEmail(userId, { device: device.label, ip: request.ip, at: new Date() }, request.log);

@@ -25,6 +25,8 @@ import { useAuth } from '@/lib/auth';
 import { messageOf } from '@/lib/errors';
 import { reachedStep } from '@/lib/funnel';
 import { saveWithGoogle } from '@/lib/google';
+import { keepGuestForMerge } from '@/lib/guest-merge';
+import { currentToken } from '@/lib/session';
 import { useT } from '@/lib/i18n';
 import { useOnboarding } from '@/lib/onboarding';
 import type { SaveReason } from '@/lib/save-account';
@@ -197,8 +199,11 @@ export default function SaveAccountScreen() {
    * the guest row, which is what the line above the button says.
    */
   async function signInInstead() {
+    // The guest's token, so the account signed in to next can take its journal.
+    const token = currentToken();
+    if (token) await keepGuestForMerge(token);
     chooseSignIn(true);
-    await signOut();
+    await signOut({ keepServerSession: true });
   }
 
   const title =

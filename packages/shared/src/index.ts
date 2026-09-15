@@ -1996,6 +1996,16 @@ export const GoogleClaimStart = z.object({
 export type GoogleClaimStart = z.infer<typeof GoogleClaimStart>;
 
 /**
+ * Bringing a guest's journal into the account just signed in to: the guest
+ * chose "Sign in to that account instead" because its address already had one.
+ * The guest's own session token is the proof that the journal is theirs to move.
+ */
+export const AbsorbGuestRequest = z.object({
+  guest_token: z.string().min(20).max(200),
+});
+export type AbsorbGuestRequest = z.infer<typeof AbsorbGuestRequest>;
+
+/**
  * Asking for a reset link.
  *
  * The response is the same whether or not the address has an account, which is
