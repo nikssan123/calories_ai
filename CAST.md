@@ -28,6 +28,36 @@ Mockups: https://claude.ai/artifact/N26P3aEFAHJQGXHGhp52wr
      - Plum asleep after midnight.
      - Ember the rest of the day.
 
+## The living cast (second pass)
+The first pass left them at the edges: once somebody logged anything, they were gone. Mockups: https://claude.ai/artifact/MuxMDgnrCZyAQ2NMphSRYv
+
+- **Idle life** (`components/cast/life.ts`).
+  - One app-wide timer. Every 2.8–5.5s it picks one focused figure to glance, stretch, wave, yawn or hop.
+  - Only figures at ease (`idle`, `sit`) take over their whole pose. Figures holding something, or in the middle of a moment, only glance or hop.
+  - Nothing registers under Reduce Motion.
+- **Pokes.** A tap gives a jump and a light haptic. A figure at ease also giggles. Figures are never announced to screen readers.
+- **Presence on Today** (`Presence.tsx`).
+  - The three sit on the macro card, each above its own bar. Their mood never follows the bar.
+  - Each meal section's icon becomes one of them holding the meal.
+- **Reactions in the journal.** `CardPeek` wraps every meal card, but only the newest is active.
+  - Whoever the meal is mostly made of (by calories) peeks over it.
+  - They pop up and cheer once when the card lands live.
+  - A meal is caught once per session, so deleting a newer one never cheers.
+  - There's no pop or buzz if the journal isn't focused.
+- **After dark,** Plum sleeps at the end of the journal's status line.
+- **Scenes** (`Scenes.tsx`). A kitchen under Cook's title and a park path under Exercise's, lit by `useSky()` for the hour:
+  - Morning: a coffee at the window.
+  - Afternoon and evening: somebody at the pot.
+  - Night: the lamp on and Plum asleep.
+
+### Two traps worth knowing
+- **Every animated layer is `collapsable={false}`.**
+  - Fabric flattened some of them away. Reanimated's sync-props path then logged a warning with a full stack trace every frame, on every build, not only debug: about 200 a second on Today, which caused an ANR on the emulator.
+  - Check with `adb logcat | grep -c "W Reanimated: Caused by"`. At rest it should read 0.
+- **Keep animation hooks out of wrappers that most cards don't use.**
+  - When every meal card's wrapper held its own `useAnimatedStyle`, cards stopped showing. `ChatCard`'s `Land` entrance left them at opacity 0.
+  - `CardPeek` is a plain view, and only the active card mounts the animated `Peeker`.
+
 ## Not now
 - **Direction B scenes** (drawn landscapes). Only if the cast reads too young.
 - **"Surprised" on the barcode sheet.**

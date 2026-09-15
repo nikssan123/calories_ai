@@ -24,6 +24,7 @@ import { useScrollToTop } from '@/hooks/useScrollToTop';
 import { useLocale, useT } from '@/lib/i18n';
 import { AppError, messageOf } from '@/lib/errors';
 import { Character } from '@/components/cast/Character';
+import { KitchenScene } from '@/components/cast/Scenes';
 import { Glossy } from '@/components/icons/Glossy';
 import { Segments } from '@/components/Segments';
 import { Sky, useSky } from '@/components/Sky';
@@ -379,6 +380,10 @@ export default function CookScreen() {
           </Chunk>
         )}
       </View>
+
+      {/* The kitchen they're in, at the hour it is (CAST.md): above the content,
+          in its own slot, and gone once the page scrolls. */}
+      <KitchenScene />
 
       <Sheet open={kitchenOpen} title={tr('cook.yourKitchen')} onClose={() => setKitchenOpen(false)}>
         {items && (

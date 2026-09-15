@@ -22,10 +22,32 @@ export type CastName = 'ember' | 'skye' | 'plum';
  * under, or for anything a number came to (CAST.md): a mood that is not in
  * this union cannot be drawn.
  */
-export type Mood = 'idle' | 'hop' | 'wave' | 'thinking' | 'cheer' | 'proud' | 'hopeful' | 'sleepy';
+export type Mood =
+  | 'idle'
+  | 'hop'
+  | 'wave'
+  | 'thinking'
+  | 'cheer'
+  | 'proud'
+  | 'hopeful'
+  | 'sleepy'
+  /* The small things they do between moods (see `life.ts`), and a poke. */
+  | 'stretch'
+  | 'yawn'
+  | 'giggle'
+  /* On an edge, legs over it: the macro card on Today. */
+  | 'sit'
+  /* Something in the right hand. What, is `Prop`. */
+  | 'hold'
+  | 'taste'
+  /* At the pot, in the kitchen scene. */
+  | 'stir';
+
+/** What a hand can hold. Only drawn in the moods that hold something. */
+export type Prop = 'mug' | 'toast' | 'spoon' | 'bowl';
 
 export type Motion = 'breathe' | 'sleep' | 'hop' | 'cheer';
-export type Fx = 'bubbles' | 'zz' | 'sparkle' | 'flame' | 'confetti';
+export type Fx = 'bubbles' | 'zz' | 'sparkle' | 'flame' | 'confetti' | 'hearts' | 'steam';
 
 export const GRID = 120;
 
@@ -51,6 +73,8 @@ export type Shape =
       fill: string | Gradient;
       opacity?: number;
       rotate?: number;
+      stroke?: string;
+      width?: number;
     }
   | { el: 'circle'; cx: number; cy: number; r: number; fill: string | Gradient; opacity?: number }
   | {
@@ -62,6 +86,8 @@ export type Shape =
       rx: number;
       fill: string;
       rotate?: number;
+      stroke?: string;
+      width?: number;
     }
   /** Translated to (x, y) and scaled — how the flame is held in a hand. */
   | { el: 'group'; x: number; y: number; scale: number; children: Shape[] };
@@ -73,10 +99,15 @@ export interface Gradients {
 
 export interface Drawing {
   gradients: Gradients;
-  /** Everything that moves only with the body. Drawn over `wave`. */
+  /** Everything that moves only with the body. Drawn over `swing`. */
   body: Shape[];
-  /** The waving arm, behind the body, turning about `pivots.shoulder`. */
-  wave: Shape[];
+  /**
+   * An arm that moves on its own, behind the body, turning about
+   * `pivots.shoulder`: the waving one, or the one stirring with a ladle in it.
+   */
+  swing: { kind: 'wave' | 'stir'; shapes: Shape[] } | null;
+  /** Legs hanging over an edge, swinging about `pivots.legs`. Empty unless sitting. */
+  legs: Shape[];
   /** Eyes that blink, scaled about the eye line. Empty when the eyes are closed or smiling. */
   eyes: Shape[];
   /** The effect beside them, pulsing about `pivots.fx`. */
@@ -87,6 +118,7 @@ export interface Drawing {
     shoulder: readonly [number, number];
     eyes: readonly [number, number];
     fx: readonly [number, number];
+    legs: readonly [number, number];
   };
 }
 
@@ -143,10 +175,13 @@ const FIGURES: Record<CastName, Figure> = {
 };
 
 type Eyes = 'open' | 'up' | 'hope' | 'happy' | 'closed';
-type Mouth = 'smile' | 'open' | 'flat' | 'small' | 'o';
-type Pose = 'down' | 'up' | 'hip' | 'clasp' | 'chin' | 'wave' | 'flame';
+type Mouth = 'smile' | 'open' | 'flat' | 'small' | 'o' | 'yawn';
+type Pose = 'down' | 'up' | 'hip' | 'clasp' | 'chin' | 'wave' | 'flame' | 'rest' | 'hold' | 'stir';
 
-const MOODS: Record<Mood, { eyes: Eyes; mouth: Mouth; arms: readonly [Pose, Pose]; fx?: Fx; motion: Motion }> = {
+const MOODS: Record<
+  Mood,
+  { eyes: Eyes; mouth: Mouth; arms: readonly [Pose, Pose]; fx?: Fx; motion: Motion; sit?: boolean }
+> = {
   idle: { eyes: 'open', mouth: 'smile', arms: ['down', 'down'], motion: 'breathe' },
   hop: { eyes: 'open', mouth: 'smile', arms: ['down', 'down'], motion: 'hop' },
   wave: { eyes: 'open', mouth: 'open', arms: ['down', 'wave'], motion: 'breathe' },
@@ -155,6 +190,13 @@ const MOODS: Record<Mood, { eyes: Eyes; mouth: Mouth; arms: readonly [Pose, Pose
   proud: { eyes: 'happy', mouth: 'smile', arms: ['hip', 'flame'], fx: 'flame', motion: 'breathe' },
   hopeful: { eyes: 'hope', mouth: 'small', arms: ['clasp', 'clasp'], fx: 'sparkle', motion: 'breathe' },
   sleepy: { eyes: 'closed', mouth: 'o', arms: ['down', 'down'], fx: 'zz', motion: 'sleep' },
+  stretch: { eyes: 'closed', mouth: 'o', arms: ['up', 'up'], motion: 'breathe' },
+  yawn: { eyes: 'closed', mouth: 'yawn', arms: ['down', 'down'], motion: 'breathe' },
+  giggle: { eyes: 'happy', mouth: 'open', arms: ['up', 'up'], fx: 'hearts', motion: 'cheer' },
+  sit: { eyes: 'open', mouth: 'smile', arms: ['rest', 'rest'], motion: 'breathe', sit: true },
+  hold: { eyes: 'open', mouth: 'smile', arms: ['down', 'hold'], motion: 'breathe' },
+  taste: { eyes: 'happy', mouth: 'o', arms: ['down', 'hold'], motion: 'breathe' },
+  stir: { eyes: 'up', mouth: 'small', arms: ['down', 'stir'], motion: 'breathe' },
 };
 
 const INK = '#2a1f18';
@@ -170,11 +212,17 @@ function arm(f: Figure, pose: Pose, side: 'L' | 'R'): Arm {
   const up: Arm = [sx + 1, sy - 6, sx - 11, sy - 16, sx - 9, sy - 30];
   if (pose === 'wave' || pose === 'flame') return mirror(up);
   if (pose === 'chin') return [GRID - sx, sy, GRID - sx - 2, fy + 20, 71, fy + 12];
-  const left: Record<'down' | 'up' | 'hip' | 'clasp', Arm> = {
+  // Raised to the pot's rim, so the ladle it holds goes down into the pot.
+  if (pose === 'stir') return [GRID - sx, sy, GRID - sx + 14, sy - 5, GRID - sx + 18, sy - 27];
+  const left: Record<'down' | 'up' | 'hip' | 'clasp' | 'rest' | 'hold', Arm> = {
     down: [sx, sy, sx - 8, sy + 7, sx - 6, sy + 15],
     up,
     hip: [sx, sy, sx - 10, sy + 2, sx - 3, sy + 11],
     clasp: [sx, sy, sx + 6, sy + 13, 55, sy + 10],
+    // Hands in the lap, for sitting.
+    rest: [sx, sy, sx - 6, sy + 9, sx + 2, sy + 14],
+    // Forward and a little up, with something in the hand.
+    hold: [sx, sy, sx - 10, sy - 2, sx - 12, sy - 12],
   };
   const a = left[pose];
   return side === 'R' ? mirror(a) : a;
@@ -244,6 +292,11 @@ function mouthShapes(f: Figure, mouth: Mouth): Shape[] {
       ];
     case 'o':
       return [{ el: 'ellipse', cx: 60, cy: y + 9, rx: 2, ry: 2.4, fill: INK }];
+    case 'yawn':
+      return [
+        { el: 'ellipse', cx: 60, cy: y + 10, rx: 3.6, ry: 5, fill: INK },
+        { el: 'ellipse', cx: 60, cy: y + 13, rx: 2, ry: 1.2, fill: '#ff7a8a' },
+      ];
     case 'flat':
       return [{ el: 'path', d: `M56.5 ${y + 10}Q60.5 ${y + 9} 64 ${y + 10.5}`, ...line }];
     case 'small':
@@ -255,6 +308,19 @@ function mouthShapes(f: Figure, mouth: Mouth): Shape[] {
 
 function effectShapes(fx: Fx, hand: readonly [number, number]): Shape[] {
   switch (fx) {
+    case 'hearts':
+      return [
+        { el: 'path', d: 'M20 30c-3-4-9 0-5 5l5 5 5-5c4-5-2-9-5-5z', fill: '#ff6f91' },
+        { el: 'path', d: 'M100 24c-2.4-3.2-7 0-4 4l4 4 4-4c3-4-1.6-7.2-4-4z', fill: '#ff6f91' },
+      ];
+    case 'steam': {
+      // Off a mug held at `hand`.
+      const [x, y] = hand;
+      return [
+        { el: 'path', d: `M${x - 3} ${y - 16}c-2 -3 2 -5 0 -8`, stroke: '#c9b8a4', width: 1.6, round: true },
+        { el: 'path', d: `M${x + 2} ${y - 16}c-2 -3 2 -5 0 -8`, stroke: '#c9b8a4', width: 1.6, round: true },
+      ];
+    }
     case 'bubbles':
       return [
         { el: 'circle', cx: 90, cy: 44, r: 2.2, fill: '#c2ae96' },
@@ -298,6 +364,60 @@ function effectShapes(fx: Fx, hand: readonly [number, number]): Shape[] {
   }
 }
 
+function propShapes(prop: Prop, hand: readonly [number, number]): Shape[] {
+  const [x, y] = hand;
+  switch (prop) {
+    case 'mug':
+      return [
+        { el: 'path', d: `M${x + 6} ${y - 9}q5 0 5 4t-5 4`, stroke: '#e3d6c4', width: 2, round: true },
+        { el: 'rect', x: x - 7, y: y - 13, w: 13, h: 14, rx: 3, fill: '#fffaf2', stroke: '#e3d6c4', width: 1.2 },
+        { el: 'rect', x: x - 6, y: y - 11, w: 11, h: 3, rx: 1.5, fill: '#b07a4a' },
+      ];
+    case 'toast':
+      return [
+        {
+          el: 'path',
+          d: `M${x - 9} ${y + 3}V${y - 8}Q${x - 10} ${y - 15} ${x - 4} ${y - 15}Q${x} ${y - 18} ${x + 4} ${y - 15}Q${x + 10} ${y - 15} ${x + 9} ${y - 8}V${y + 3}Z`,
+          fill: '#f0bf72',
+          stroke: '#c8883e',
+          width: 1.4,
+        },
+        {
+          el: 'path',
+          d: `M${x - 6} ${y + 1}V${y - 7}Q${x - 6} ${y - 12} ${x - 2} ${y - 12}Q${x} ${y - 14} ${x + 2} ${y - 12}Q${x + 6} ${y - 12} ${x + 6} ${y - 7}V${y + 1}Z`,
+          fill: '#ffe2ad',
+        },
+      ];
+    case 'spoon':
+      return [
+        { el: 'path', d: `M${x} ${y + 3}L${x + 2} ${y - 8}`, stroke: '#aab2bd', width: 2.6, round: true },
+        { el: 'ellipse', cx: x + 3, cy: y - 13, rx: 4.2, ry: 5.6, fill: '#dfe4ea', stroke: '#aab2bd', width: 1 },
+      ];
+    case 'bowl':
+      return [
+        {
+          el: 'path',
+          d: `M${x - 11} ${y - 8}H${x + 11}Q${x + 10} ${y + 4} ${x} ${y + 4}Q${x - 10} ${y + 4} ${x - 11} ${y - 8}Z`,
+          fill: '#ffffff',
+          stroke: '#e3d6c4',
+          width: 1.2,
+        },
+        { el: 'ellipse', cx: x, cy: y - 8, rx: 10, ry: 2.6, fill: '#9fd46b' },
+        { el: 'circle', cx: x - 4, cy: y - 10, r: 2, fill: '#ff7a5c' },
+        { el: 'circle', cx: x + 3, cy: y - 10.5, r: 1.8, fill: '#ffd36a' },
+      ];
+  }
+}
+
+/** The ladle in a stirring hand, reaching down into the pot. */
+function ladleShapes(hand: readonly [number, number]): Shape[] {
+  const [x, y] = hand;
+  return [
+    { el: 'path', d: `M${x} ${y}L${x + 6} ${y + 28}`, stroke: '#aab2bd', width: 2.8, round: true },
+    { el: 'ellipse', cx: x + 7, cy: y + 31, rx: 5, ry: 3, fill: '#dfe4ea', stroke: '#aab2bd', width: 1 },
+  ];
+}
+
 /** The flame's ramp, bottom to top. Shared because both renderers need it and neither owns it. */
 export const FLAME_RAMP = ['#ff5fa2', '#ffa51f', '#ffe27a'] as const;
 export const FLAME_STOPS = [0, 0.45, 1] as const;
@@ -308,22 +428,40 @@ export const CROWN_STOPS = [0, 0.5, 1] as const;
 
 export const isGradient = (fill: string): fill is Gradient => fill === 'body' || fill === 'crown' || fill === 'flame';
 
-export function drawing(name: CastName, mood: Mood): Drawing {
+export function drawing(
+  name: CastName,
+  mood: Mood,
+  options: {
+    prop?: Prop;
+    /** Keep the legs over the edge while a passing mood plays on a sitting figure. */
+    sit?: boolean;
+  } = {},
+): Drawing {
   const f = FIGURES[name];
   const m = MOODS[mood];
   const [left, right] = m.arms;
+  const sitting = Boolean(m.sit || options.sit);
   const stroke = { stroke: f.deep, width: 7.5, round: true };
   const limb = (pose: Pose, side: 'L' | 'R'): Shape => ({ el: 'path', d: q(arm(f, pose, side)), ...stroke });
+  const moving = right === 'wave' || right === 'stir';
 
   const flameHand = arm(f, 'flame', 'R');
   const hand = [flameHand[4], flameHand[5] - 2] as const;
-  const shoulder = arm(f, 'wave', 'R');
+  const holdArm = arm(f, 'hold', 'R');
+  const holding = [holdArm[4], holdArm[5]] as const;
+  const stirArm = arm(f, 'stir', 'R');
+  const shoulder = arm(f, right === 'stir' ? 'stir' : 'wave', 'R');
+  const effect: Fx | null = m.fx ?? (right === 'hold' && options.prop === 'mug' ? 'steam' : null);
 
   const body: Shape[] = [
     ...(!inFront(left) ? [limb(left, 'L')] : []),
-    ...(!inFront(right) && right !== 'wave' ? [limb(right, 'R')] : []),
-    { el: 'ellipse', cx: 49, cy: 105, rx: 7.5, ry: 4, fill: f.deep },
-    { el: 'ellipse', cx: 71, cy: 105, rx: 7.5, ry: 4, fill: f.deep },
+    ...(!inFront(right) && !moving ? [limb(right, 'R')] : []),
+    ...(sitting
+      ? []
+      : ([
+          { el: 'ellipse', cx: 49, cy: 105, rx: 7.5, ry: 4, fill: f.deep },
+          { el: 'ellipse', cx: 71, cy: 105, rx: 7.5, ry: 4, fill: f.deep },
+        ] as Shape[])),
     ...crownShapes(name),
     bodyShape(name),
     { el: 'ellipse', cx: f.sheen[0], cy: f.sheen[1], rx: f.sheen[2], ry: f.sheen[3], rotate: -28, fill: '#ffffff', opacity: 0.55 },
@@ -334,20 +472,35 @@ export function drawing(name: CastName, mood: Mood): Drawing {
     ...mouthShapes(f, m.mouth),
     ...(inFront(left) ? [limb(left, 'L')] : []),
     ...(inFront(right) ? [limb(right, 'R')] : []),
+    ...(right === 'hold' && options.prop ? propShapes(options.prop, holding) : []),
   ];
+
+  const legs: Shape[] = sitting
+    ? [
+        { el: 'path', d: 'M50 100L47 114', stroke: f.deep, width: 6.5, round: true },
+        { el: 'path', d: 'M70 100L73 114', stroke: f.deep, width: 6.5, round: true },
+      ]
+    : [];
 
   return {
     gradients: { body: f.ramp, crown: f.crown },
     body,
-    wave: right === 'wave' ? [limb('wave', 'R')] : [],
+    swing:
+      right === 'wave'
+        ? { kind: 'wave', shapes: [limb('wave', 'R')] }
+        : right === 'stir'
+          ? { kind: 'stir', shapes: [limb('stir', 'R'), ...ladleShapes([stirArm[4], stirArm[5]])] }
+          : null,
+    legs,
     eyes: blinking(m.eyes) ? eyeShapes(f, m.eyes) : [],
-    fx: m.fx ? effectShapes(m.fx, hand) : [],
+    fx: effect ? effectShapes(effect, effect === 'steam' ? holding : hand) : [],
     motion: m.motion,
-    effect: m.fx ?? null,
+    effect,
     pivots: {
       shoulder: [shoulder[0], shoulder[1]],
       eyes: [60, f.fy],
-      fx: m.fx === 'flame' ? hand : m.fx === 'sparkle' ? [97, 34] : [60, 60],
+      fx: effect === 'flame' ? hand : effect === 'sparkle' ? [97, 34] : [60, 60],
+      legs: [60, 100],
     },
   };
 }
@@ -373,7 +526,8 @@ function shapeString(shape: Shape, prefix: string): string {
     case 'ellipse': {
       const rotate = shape.rotate ? ` transform="rotate(${shape.rotate} ${num(shape.cx)} ${num(shape.cy)})"` : '';
       const opacity = shape.opacity !== undefined ? ` opacity="${shape.opacity}"` : '';
-      return `<ellipse cx="${num(shape.cx)}" cy="${num(shape.cy)}" rx="${shape.rx}" ry="${shape.ry}" fill="${paint(shape.fill, prefix)}"${rotate}${opacity}/>`;
+      const stroke = shape.stroke ? ` stroke="${shape.stroke}" stroke-width="${shape.width ?? 1}"` : '';
+      return `<ellipse cx="${num(shape.cx)}" cy="${num(shape.cy)}" rx="${shape.rx}" ry="${shape.ry}" fill="${paint(shape.fill, prefix)}"${rotate}${opacity}${stroke}/>`;
     }
     case 'circle': {
       const opacity = shape.opacity !== undefined ? ` opacity="${shape.opacity}"` : '';
@@ -383,7 +537,8 @@ function shapeString(shape: Shape, prefix: string): string {
       const rotate = shape.rotate
         ? ` transform="rotate(${shape.rotate} ${num(shape.x + shape.w / 2)} ${num(shape.y + shape.h / 2)})"`
         : '';
-      return `<rect x="${shape.x}" y="${shape.y}" width="${shape.w}" height="${shape.h}" rx="${shape.rx}" fill="${shape.fill}"${rotate}/>`;
+      const stroke = shape.stroke ? ` stroke="${shape.stroke}" stroke-width="${shape.width ?? 1}"` : '';
+      return `<rect x="${shape.x}" y="${shape.y}" width="${shape.w}" height="${shape.h}" rx="${shape.rx}" fill="${shape.fill}"${rotate}${stroke}/>`;
     }
     case 'group':
       return `<g transform="translate(${num(shape.x)} ${num(shape.y)}) scale(${shape.scale})">${shape.children
@@ -403,14 +558,21 @@ function stops(ramp: readonly string[], offsets: readonly number[] = [0, 0.5, 1]
  * `prefix` keeps gradient ids apart when several figures share one document,
  * which in SVG they otherwise would: ids are global to the file.
  */
-export function figureMarkup(name: CastName, mood: Mood, prefix: string): { defs: string; shapes: string } {
-  const d = drawing(name, mood);
+export function figureMarkup(
+  name: CastName,
+  mood: Mood,
+  prefix: string,
+  prop?: Prop,
+): { defs: string; shapes: string } {
+  const d = drawing(name, mood, { prop });
   const defs = [
     `<radialGradient id="${prefix}body" cx="0.36" cy="0.3" r="0.8">${stops(d.gradients.body, BODY_STOPS)}</radialGradient>`,
     d.gradients.crown ? `<linearGradient id="${prefix}crown" x1="0" y1="0" x2="0" y2="1">${stops(d.gradients.crown)}</linearGradient>` : '',
     d.effect === 'flame' ? `<linearGradient id="${prefix}flame" x1="0" y1="1" x2="0" y2="0">${stops(FLAME_RAMP, FLAME_STOPS)}</linearGradient>` : '',
   ].join('');
-  // At rest the waving arm is behind the body, like every other arm.
-  const shapes = [...d.wave, ...d.body, ...d.eyes, ...d.fx].map((shape) => shapeString(shape, prefix)).join('');
+  // At rest a moving arm is behind the body, like every other arm, and legs hang below it.
+  const shapes = [...(d.swing?.shapes ?? []), ...d.legs, ...d.body, ...d.eyes, ...d.fx]
+    .map((shape) => shapeString(shape, prefix))
+    .join('');
   return { defs, shapes };
 }

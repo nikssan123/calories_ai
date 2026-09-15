@@ -25,9 +25,10 @@ import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 import { Chunk } from '@/components/Chunk';
 import { DateStrip } from '@/components/DateStrip';
 import { GlowRing } from '@/components/GlowRing';
-import { Glossy, type GlossyName } from '@/components/icons/Glossy';
+import { Glossy } from '@/components/icons/Glossy';
 import { Character } from '@/components/cast/Character';
 import { CastPlate } from '@/components/cast/Plate';
+import { CastShelf, MealCast } from '@/components/cast/Presence';
 import { StreakMoment } from '@/components/cast/StreakMoment';
 import { Serif } from '@/components/Serif';
 import { Sky, useSky } from '@/components/Sky';
@@ -77,17 +78,6 @@ const MEAL_LABEL: Record<Meal, StringKey> = {
   lunch: 'meal.lunch',
   dinner: 'meal.dinner',
   snack: 'meal.snack',
-};
-
-/**
- * The section headings get a picture too, so the day skims as a menu. The app's
- * own glossy icons rather than emoji, which every phone drew differently.
- */
-const MEAL_ICON: Record<Meal, GlossyName> = {
-  breakfast: 'egg',
-  lunch: 'bowl',
-  dinner: 'fish',
-  snack: 'apple',
 };
 
 export default function TodayScreen() {
@@ -791,9 +781,13 @@ export default function TodayScreen() {
             {day.streak && <StreakChip streak={day.streak} />}
           </View>
 
-          <Chunk contentStyle={[styles.macroCard, { backgroundColor: colors.card, borderColor: colors.hairline }]}>
-            <MacroBars consumed={day.consumed} targets={day.targets} />
-          </Chunk>
+          {/* The three sit on the macro card, each over its own bar (CAST.md). The
+              inset is the card's border and padding, and the gap is MacroBars'. */}
+          <CastShelf inset={15} gap={10}>
+            <Chunk contentStyle={[styles.macroCard, { backgroundColor: colors.card, borderColor: colors.hairline }]}>
+              <MacroBars consumed={day.consumed} targets={day.targets} />
+            </Chunk>
+          </CastShelf>
 
           {/* `logged` so a day with nothing in it keeps its own empty state
               rather than gaining a second one — see `DietQuality`. */}
@@ -875,7 +869,7 @@ export default function TodayScreen() {
             <InsetGroup
               key={meal}
               title={tr(MEAL_LABEL[meal])}
-              icon={<Glossy name={MEAL_ICON[meal]} size={18} />}
+              icon={<MealCast meal={meal} />}
               trailing={
                 <Text style={[t.footnoteBold, t.tnum, { color: colors.mutedForeground }]}>
                   {Math.round(entries.reduce((sum, e) => sum + e.kcal, 0))} kcal

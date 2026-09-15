@@ -25,6 +25,7 @@ import { useScrollToTop } from '@/hooks/useScrollToTop';
 import { useLocale, useT } from '@/lib/i18n';
 import { messageOf } from '@/lib/errors';
 import { Character } from '@/components/cast/Character';
+import { ParkScene } from '@/components/cast/Scenes';
 import { Glossy } from '@/components/icons/Glossy';
 
 /**
@@ -117,6 +118,10 @@ export default function ExerciseScreen() {
           onChange={(next) => setDays(Number(next))}
         />
       </View>
+
+      {/* A path in the park, at the hour it is (CAST.md). Its own slot above the
+          workouts, never behind a word. */}
+      <ParkScene />
 
       {/* Saved workouts and the week, above the history: this is the half of
           the screen you come here to *act* on, and the history below is the

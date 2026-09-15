@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Image,
   Keyboard,
@@ -40,8 +40,10 @@ import { FoodEditor } from '@/components/FoodEditor';
 import { Markdown } from '@/components/Markdown';
 import { Material } from '@/components/Material';
 import { PressableChunk } from '@/components/Chunk';
-import { Trio } from '@/components/cast/Character';
 import { CastPlate } from '@/components/cast/Plate';
+import { CardPeek } from '@/components/cast/Presence';
+import { Character, Trio } from '@/components/cast/Character';
+import { useDayPart } from '@/components/cast/life';
 import { StreakMoment } from '@/components/cast/StreakMoment';
 import { Serif } from '@/components/Serif';
 import { MeterChip, PencilGlyph, PlanWall } from '@/components/PlanWall';
@@ -184,6 +186,14 @@ export default function JournalScreen() {
   const save = useSaveAccount();
 
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
+  /** The row with the newest meal card on it, which gets one of the cast peeking over it. */
+  const newestFood = useMemo(() => {
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      const bubble = bubbles[i]!;
+      if (bubble.actions?.some((action) => action.card?.type === 'food' && !action.removed)) return bubble.key;
+    }
+    return null;
+  }, [bubbles]);
   const [day, setDay] = useState<DaySummary | null>(null);
 
   /*
@@ -915,6 +925,7 @@ export default function JournalScreen() {
 
         {bubbles.map((bubble) => (
           <Row
+            peek={bubble.key === newestFood}
             key={bubble.key}
             bubble={bubble}
             today={day?.local_date}
@@ -1149,6 +1160,7 @@ function StatusLine({
   const remaining = targets.kcal - consumed.kcal;
   const over = remaining < 0;
   const shown = useCountUp(Math.abs(Math.round(remaining)), 900);
+  const night = useDayPart() === 'night';
 
   return (
     <View style={styles.statusRow}>
@@ -1175,6 +1187,9 @@ function StatusLine({
           )}
         </Text>
       </View>
+      {/* After dark, Plum keeps the journal company at the end of the line, in
+          room of its own rather than over the figures beside it (CAST.md). */}
+      {night && <Character name="plum" mood="sleepy" size={44} shadow={false} />}
     </View>
   );
 }
@@ -1274,11 +1289,14 @@ const Row = memo(function Row({
   bubble,
   today,
   timezone,
+  peek,
   onLogged,
   onLogManually,
 }: {
   bubble: Bubble;
   today?: string;
+  /** This row holds the newest food card, so one of the cast peeks over it. See `CardPeek`. */
+  peek?: boolean;
   /** For guessing which meal a manually typed entry belongs to. */
   timezone?: string;
   onLogged: () => void;
@@ -1366,6 +1384,11 @@ const Row = memo(function Row({
    * fold it. Every other card in the app sits under its reply.
    */
   const review = bubble.actions?.find((action) => action.card?.type === 'review');
+  /** The last meal card in this row: the one the peek belongs to, when the row has it. */
+  const lastFood = (bubble.actions ?? []).reduce(
+    (last, action, i) => (action.card?.type === 'food' && !action.removed ? i : last),
+    -1,
+  );
 
   return (
     <View style={styles.assistantRow}>
@@ -1400,27 +1423,46 @@ const Row = memo(function Row({
 
       {bubble.actions && bubble.actions.length > 0 && (
         <View style={styles.actions}>
-          {bubble.actions.map((action, i) => (
-            <ChatActionCard
-              key={`${action.entry_id ?? action.kind}-${i}`}
-              action={action}
-              // The two action kinds that are a correction rather than a new
-              // fact, and the only thing that tells them apart on screen from a
-              // fresh log — both arrive as a card with a number on it.
-              touched={
-                bubble.live === true &&
-                (action.kind === 'food_updated' || action.kind === 'exercise_updated')
-              }
-              // The workout card posts its own answer and the server rewrites
-              // this message's card into a receipt — so it has to know which
-              // message it is sitting on.
-              messageId={bubble.key}
-              today={today}
-              onLogged={onLogged}
-              // Only the review card reads this; see the note above.
-              text={bubble.content}
-            />
-          ))}
+          {bubble.actions.map((action, i) => {
+            const card = (
+              <ChatActionCard
+                key={`${action.entry_id ?? action.kind}-${i}`}
+                action={action}
+                // The two action kinds that are a correction rather than a new
+                // fact, and the only thing that tells them apart on screen from a
+                // fresh log — both arrive as a card with a number on it.
+                touched={
+                  bubble.live === true &&
+                  (action.kind === 'food_updated' || action.kind === 'exercise_updated')
+                }
+                // The workout card posts its own answer and the server rewrites
+                // this message's card into a receipt — so it has to know which
+                // message it is sitting on.
+                messageId={bubble.key}
+                today={today}
+                onLogged={onLogged}
+                // Only the review card reads this; see the note above.
+                text={bubble.content}
+              />
+            );
+            // Every meal card is wrapped the same way, so the tree doesn't change
+            // shape when the peek moves on to a newer one. Only the last meal in
+            // the newest row is active. See `CardPeek`.
+            // Removed meals stay wrapped too, just never active, so striking one out doesn't remount it.
+            const food = action.card?.type === 'food' ? action.card : null;
+            if (!food) return card;
+            return (
+              <CardPeek
+                key={`${action.entry_id ?? action.kind}-${i}`}
+                card={food}
+                entryId={food.entry_id}
+                active={peek === true && i === lastFood}
+                landing={bubble.live === true && action.kind === 'food_logged'}
+              >
+                {card}
+              </CardPeek>
+            );
+          })}
         </View>
       )}
     </View>
@@ -1525,7 +1567,7 @@ function Waiting({ label }: { label: string | null }) {
 
   return (
     <View style={styles.waiting} accessibilityLabel={label ?? tr('journal.thinking')}>
-      <Trio size={TYPING_SIZE} />
+      <Trio size={TYPING_SIZE} fidget={false} poke={false} />
       {label && (
         <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{label}…</Text>
       )}

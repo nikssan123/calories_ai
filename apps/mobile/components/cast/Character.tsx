@@ -1,5 +1,5 @@
-import { useEffect, useId, useMemo } from 'react';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -14,6 +14,7 @@ import Animated, {
 import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { useIsFocused } from 'expo-router';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
+import { haptics } from '@/lib/haptics';
 import { useTheme } from '@/theme';
 import {
   BODY_STOPS,
@@ -27,8 +28,10 @@ import {
   type Gradients,
   type Mood,
   type Motion,
+  type Prop,
   type Shape,
 } from './figure';
+import { useLife, type Fidget } from './life';
 
 /**
  * Ember, Skye and Plum — the logo's three dots, standing up (CAST.md).
@@ -53,10 +56,14 @@ import {
  * the character holds its pose: the picture is kept and only the loop goes,
  * because a still drawing is not "less" of anything.
  *
+ * **Between moods** (the living-cast layer): they glance about, stretch and
+ * yawn now and then (`life.ts`), and a tap gets a jump, a giggle and a haptic.
+ * A passing mood plays over the one they were given and hands it back.
+ *
  * Decorative throughout. Every place one appears already says in words what it
  * is about, so the whole figure is hidden from screen readers.
  */
-export type { CastName, Mood } from './figure';
+export type { CastName, Mood, Prop } from './figure';
 
 /** The hop, as keyframes of a 1.5s loop: squash, rise, fall, squash, rest. */
 const HOP_T = [0, 0.1, 0.14, 0.17, 0.2, 0.24, 0.28, 0.31, 0.34, 0.36, 0.46, 1];
@@ -78,25 +85,47 @@ const LOOPS: Record<Motion, { duration: number; reverse: boolean }> = {
 export function Character({
   name,
   mood = 'idle',
+  prop,
   size = 96,
   delay = 0,
   shadow = true,
+  loop = true,
+  poke = true,
+  fidget = true,
+  onPoke,
   style,
 }: {
   name: CastName;
   mood?: Mood;
+  /** What the right hand holds, in `hold` and `taste`. */
+  prop?: Prop;
   size?: number;
   /** Milliseconds before the loop starts — how three figures stay out of step. */
   delay?: number;
   shadow?: boolean;
+  /**
+   * Whether the body breathes. Off for the icon-sized ones, where a breath is
+   * too small to see and would still cost a loop apiece; they keep blinking,
+   * fidgeting and answering a poke.
+   */
+  loop?: boolean;
+  /** A tap gets a jump, a giggle and a haptic. */
+  poke?: boolean;
+  /** Takes part in idle life. See `life.ts`. */
+  fidget?: boolean;
+  /** Told about a poke, for a parent that moves the figure too (the card peek). */
+  onPoke?: () => void;
   style?: StyleProp<ViewStyle>;
 }) {
-  const d = useMemo(() => drawing(name, mood), [name, mood]);
+  const [passing, setPassing] = useState<Mood | null>(null);
+  const shown = passing ?? mood;
+  const d = useMemo(() => drawing(name, shown, { prop, sit: mood === 'sit' }), [name, shown, prop, mood]);
   const { scheme } = useTheme();
   const reduced = useReducedMotion();
   const focused = useIsFocused();
   const id = useId().replace(/:/g, '');
   const live = focused && !reduced;
+  const looping = live && loop;
   const unit = size / GRID;
   /*
    * A pivot on the grid, in points. RN's string form of `transformOrigin` only
@@ -108,46 +137,60 @@ export function Character({
   const clock = useSharedValue(0);
   const pulse = useSharedValue(0);
   const lids = useSharedValue(1);
+  const lookX = useSharedValue(0);
+  const lookY = useSharedValue(0);
+  const jump = useSharedValue(0);
+
+  /*
+   * `delay` staggers figures when they first appear. A passing mood that
+   * changes the loop restarts it straight away, or a poke on the last figure in
+   * a row would be over before its bounce began.
+   */
+  const staggered = useRef({ clock: false, pulse: false });
 
   const motion = d.motion;
   const fx = d.effect;
-  const waving = d.wave.length > 0;
+  const swing = d.swing?.kind ?? null;
   const blinks = d.eyes.length > 0;
 
   useEffect(() => {
-    if (!live) {
+    if (!looping) {
       cancelAnimation(clock);
       clock.value = 0;
       return;
     }
-    const loop = LOOPS[motion];
+    const cycle = LOOPS[motion];
+    const wait = staggered.current.clock ? 0 : delay;
+    staggered.current.clock = true;
     clock.value = 0;
     clock.value = withDelay(
-      delay,
+      wait,
       withRepeat(
         withTiming(1, {
-          duration: loop.duration,
-          easing: loop.reverse ? Easing.inOut(Easing.sin) : Easing.linear,
+          duration: cycle.duration,
+          easing: cycle.reverse ? Easing.inOut(Easing.sin) : Easing.linear,
         }),
         -1,
-        loop.reverse,
+        cycle.reverse,
       ),
     );
     return () => cancelAnimation(clock);
-  }, [live, motion, delay, clock]);
+  }, [looping, motion, delay, clock]);
 
   useEffect(() => {
-    if (!live || (!fx && !waving)) {
+    if (!looping || (!fx && !swing)) {
       cancelAnimation(pulse);
-      pulse.value = fx === 'zz' ? 0.3 : 1;
+      pulse.value = fx === 'zz' || fx === 'steam' ? 0.3 : 1;
       return;
     }
-    // The drifting Zs rise and fade in one direction; everything else sways.
-    const once = fx === 'zz';
-    const duration = waving ? 650 : fx === 'flame' ? 420 : once ? 3200 : 1100;
+    // Drifting Zs and steam rise and fade in one direction; everything else sways.
+    const once = fx === 'zz' || fx === 'steam';
+    const duration = swing === 'wave' ? 650 : swing === 'stir' ? 800 : fx === 'flame' ? 420 : once ? 3200 : 1100;
+    const wait = staggered.current.pulse ? 0 : delay;
+    staggered.current.pulse = true;
     pulse.value = 0;
     pulse.value = withDelay(
-      delay,
+      wait,
       withRepeat(
         withTiming(1, { duration, easing: once ? Easing.linear : Easing.inOut(Easing.sin) }),
         -1,
@@ -155,7 +198,7 @@ export function Character({
       ),
     );
     return () => cancelAnimation(pulse);
-  }, [live, fx, waving, delay, pulse]);
+  }, [looping, fx, swing, delay, pulse]);
 
   /*
    * Blinks on a timer rather than a loop, so that three figures side by side
@@ -178,11 +221,91 @@ export function Character({
     return () => clearTimeout(timer);
   }, [live, blinks, lids]);
 
+  /* ---- Passing moods, fidgets and pokes ---------------------------------- */
+
+  const passingTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(passingTimer.current), []);
+
+  const pass = (next: Mood, ms: number) => {
+    clearTimeout(passingTimer.current);
+    cancelAnimation(lookX);
+    cancelAnimation(lookY);
+    lookX.value = 0;
+    lookY.value = 0;
+    setPassing(next);
+    passingTimer.current = setTimeout(() => setPassing(null), ms);
+  };
+
+  const hop = () => {
+    if (reduced) return;
+    jump.value = withSequence(
+      withTiming(1, { duration: 200, easing: Easing.out(Easing.quad) }),
+      withTiming(0, { duration: 300, easing: Easing.bounce }),
+    );
+  };
+
+  const glance = (x: number, y: number) => {
+    lookX.value = withSequence(withTiming(x, { duration: 220 }), withDelay(1200, withTiming(0, { duration: 260 })));
+    lookY.value = withSequence(withTiming(y, { duration: 220 }), withDelay(1200, withTiming(0, { duration: 260 })));
+  };
+
+  /*
+   * Only a figure at ease takes over its whole pose for a fidget. One holding
+   * something would drop it for a second, and one in the middle of a moment
+   * (a cheer, the streak flame, thinking) would have that moment interrupted.
+   * Those still glance about, and the ones with free feet still hop.
+   */
+  const atEase = mood === 'idle' || mood === 'sit';
+  const canHop = mood === 'idle' || mood === 'hold' || mood === 'wave';
+  const act = useRef<(kind: Fidget) => boolean>(() => false);
+  act.current = (kind) => {
+    if (passing) return false;
+    switch (kind) {
+      case 'lookLeft':
+      case 'lookRight':
+      case 'lookUp':
+        if (!blinks) return false;
+        glance(kind === 'lookLeft' ? -1 : kind === 'lookRight' ? 1 : 0.4, kind === 'lookUp' ? -1 : 0);
+        return true;
+      case 'stretch':
+        if (!atEase) return false;
+        pass('stretch', 1100);
+        return true;
+      case 'wave':
+        if (!atEase) return false;
+        pass('wave', 1600);
+        return true;
+      case 'yawn':
+        if (!atEase) return false;
+        pass('yawn', 1300);
+        return true;
+      case 'hop':
+        if (!canHop) return false;
+        hop();
+        return true;
+    }
+  };
+  const actor = useMemo(() => ({ fidget: (kind: Fidget) => act.current(kind) }), []);
+  useLife(live && fidget ? actor : null);
+
+  const onPress = () => {
+    haptics.press();
+    // A figure at ease giggles. One holding something, or in a moment of its
+    // own, keeps its pose and just bounces.
+    if (atEase) pass('giggle', 850);
+    hop();
+    onPoke?.();
+  };
+
+  /* ---- Styles --------------------------------------------------------------- */
+
   const bodyStyle = useAnimatedStyle(() => {
     const c = clock.value;
+    const lift = { translateY: -jump.value * 14 * unit };
     if (motion === 'hop') {
       return {
         transform: [
+          lift,
           { translateY: interpolate(c, HOP_T, HOP_Y) * unit },
           { scaleX: interpolate(c, HOP_T, HOP_SX) },
           { scaleY: interpolate(c, HOP_T, HOP_SY) },
@@ -192,25 +315,36 @@ export function Character({
     if (motion === 'cheer') {
       return {
         transform: [
+          lift,
           { translateY: interpolate(c, CHEER_T, CHEER_Y) * unit },
           { scaleX: interpolate(c, CHEER_T, CHEER_SX) },
           { scaleY: interpolate(c, CHEER_T, CHEER_SY) },
         ],
       };
     }
-    return { transform: [{ scaleX: 1 + c * 0.018 }, { scaleY: 1 + c * 0.035 }] };
+    return { transform: [lift, { scaleX: 1 + c * 0.018 }, { scaleY: 1 + c * 0.035 }] };
   });
 
   const shadowStyle = useAnimatedStyle(() => {
-    if (motion !== 'hop') return { opacity: 1, transform: [{ scale: 1 }] };
-    const lift = interpolate(clock.value, [0, 0.1, 0.24, 0.36, 1], [0, 0, 1, 0, 0]);
+    const hopLift = motion === 'hop' ? interpolate(clock.value, [0, 0.1, 0.24, 0.36, 1], [0, 0, 1, 0, 0]) : 0;
+    const lift = Math.max(hopLift, jump.value);
     return { opacity: 1 - lift * 0.45, transform: [{ scale: 1 - lift * 0.28 }] };
   });
 
-  const eyeStyle = useAnimatedStyle(() => ({ transform: [{ scaleY: lids.value }] }));
+  const eyeStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: lookX.value * 2.6 * unit },
+      { translateY: lookY.value * 2.2 * unit },
+      { scaleY: lids.value },
+    ],
+  }));
 
-  const armStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${-10 + pulse.value * 26}deg` }],
+  const swingStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: swing === 'stir' ? `${-8 + pulse.value * 18}deg` : `${-10 + pulse.value * 26}deg` }],
+  }));
+
+  const legStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${-7 + clock.value * 15}deg` }],
   }));
 
   const fxStyle = useAnimatedStyle(() => {
@@ -220,6 +354,11 @@ export function Character({
         return {
           opacity: interpolate(p, [0, 0.3, 1], [0, 1, 0]),
           transform: [{ translateX: p * 3 * unit }, { translateY: (4 - p * 10) * unit }],
+        };
+      case 'steam':
+        return {
+          opacity: interpolate(p, [0, 0.4, 1], [0, 0.9, 0]),
+          transform: [{ translateX: 0 }, { translateY: (3 - p * 9) * unit }],
         };
       case 'flame':
         return { opacity: 1, transform: [{ scaleX: 1 - p * 0.08 }, { scaleY: 1 + p * 0.1 }] };
@@ -233,16 +372,12 @@ export function Character({
   const box = { width: size, height: size };
   const layer = [StyleSheet.absoluteFill, box];
   const svg = { width: size, height: size, viewBox: `0 0 ${GRID} ${GRID}` };
+  const sitting = d.legs.length > 0;
 
-  return (
-    <View
-      pointerEvents="none"
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-      style={[box, style]}
-    >
-      {shadow && (
-        <Animated.View style={[layer, { transformOrigin: at(60, 109) }, shadowStyle]}>
+  const figure = (
+    <>
+      {shadow && !sitting && (
+        <Animated.View collapsable={false} style={[layer, { transformOrigin: at(60, 109) }, shadowStyle]}>
           <Svg {...svg}>
             <Ellipse
               cx={60}
@@ -255,11 +390,19 @@ export function Character({
         </Animated.View>
       )}
 
-      <Animated.View style={[layer, { transformOrigin: at(60, 107) }, bodyStyle]}>
-        {waving && (
-          <Animated.View style={[layer, { transformOrigin: at(...d.pivots.shoulder) }, armStyle]}>
+      <Animated.View collapsable={false} style={[layer, { transformOrigin: at(60, 107) }, bodyStyle]}>
+        {d.swing && (
+          <Animated.View collapsable={false} style={[layer, { transformOrigin: at(...d.pivots.shoulder) }, swingStyle]}>
             <Svg {...svg}>
-              <Shapes shapes={d.wave} id={id} />
+              <Shapes shapes={d.swing.shapes} id={id} />
+            </Svg>
+          </Animated.View>
+        )}
+
+        {sitting && (
+          <Animated.View collapsable={false} style={[layer, { transformOrigin: at(...d.pivots.legs) }, legStyle]}>
+            <Svg {...svg}>
+              <Shapes shapes={d.legs} id={id} />
             </Svg>
           </Animated.View>
         )}
@@ -270,7 +413,7 @@ export function Character({
         </Svg>
 
         {blinks && (
-          <Animated.View style={[layer, { transformOrigin: at(...d.pivots.eyes) }, eyeStyle]}>
+          <Animated.View collapsable={false} style={[layer, { transformOrigin: at(...d.pivots.eyes) }, eyeStyle]}>
             <Svg {...svg}>
               <Shapes shapes={d.eyes} id={id} />
             </Svg>
@@ -278,7 +421,7 @@ export function Character({
         )}
 
         {fx && (
-          <Animated.View style={[layer, { transformOrigin: at(...d.pivots.fx) }, fxStyle]}>
+          <Animated.View collapsable={false} style={[layer, { transformOrigin: at(...d.pivots.fx) }, fxStyle]}>
             <Svg {...svg}>
               {fx === 'flame' && (
                 <Defs>
@@ -294,7 +437,42 @@ export function Character({
           </Animated.View>
         )}
       </Animated.View>
-    </View>
+    </>
+  );
+
+  /*
+   * A poke is a bonus, not a control: it is not announced to a screen reader,
+   * and every figure stays hidden from one, because every place a figure
+   * appears already says in words what it is about.
+   */
+  if (!poke) {
+    return (
+      <View
+        pointerEvents="none"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={[box, style]}
+      >
+        {figure}
+      </View>
+    );
+  }
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={6}
+      accessible={false}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={[box, style]}
+    >
+      {/* The drawing takes no touches of its own: react-native-svg hit-tests its
+          painted shapes on Android and would swallow the press before it
+          reached the Pressable. */}
+      <View pointerEvents="none" style={layer}>
+        {figure}
+      </View>
+    </Pressable>
   );
 }
 
@@ -352,6 +530,8 @@ function ShapeElement({ shape, id }: { shape: Shape; id: string }) {
           ry={shape.ry}
           fill={paint(shape.fill)}
           opacity={shape.opacity}
+          stroke={shape.stroke}
+          strokeWidth={shape.width}
           rotation={shape.rotate}
           origin={shape.rotate ? `${shape.cx}, ${shape.cy}` : undefined}
         />
@@ -367,6 +547,8 @@ function ShapeElement({ shape, id }: { shape: Shape; id: string }) {
           height={shape.h}
           rx={shape.rx}
           fill={shape.fill}
+          stroke={shape.stroke}
+          strokeWidth={shape.width}
           rotation={shape.rotate}
           origin={shape.rotate ? `${shape.x + shape.w / 2}, ${shape.y + shape.h / 2}` : undefined}
         />
@@ -391,23 +573,27 @@ export function Trio({
   size,
   moods = ['hop', 'hop', 'hop'],
   gap = 0,
+  fidget = true,
+  poke = true,
   style,
 }: {
   size: number;
   moods?: readonly [Mood, Mood, Mood];
   gap?: number;
+  fidget?: boolean;
+  poke?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
   return (
     <View
-      pointerEvents="none"
+      pointerEvents="box-none"
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       style={[styles.trio, { gap }, style]}
     >
-      <Character name="ember" mood={moods[0]} size={size} delay={0} />
-      <Character name="skye" mood={moods[1]} size={size} delay={180} />
-      <Character name="plum" mood={moods[2]} size={size} delay={360} />
+      <Character name="ember" mood={moods[0]} size={size} delay={0} fidget={fidget} poke={poke} />
+      <Character name="skye" mood={moods[1]} size={size} delay={180} fidget={fidget} poke={poke} />
+      <Character name="plum" mood={moods[2]} size={size} delay={360} fidget={fidget} poke={poke} />
     </View>
   );
 }
