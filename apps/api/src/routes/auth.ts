@@ -12,6 +12,7 @@ import {
   SESSION_TRANSPORT_HEADER,
   SignupRequest,
   localeFromAcceptLanguage,
+  type Locale,
 } from '@ct/shared';
 import { env } from '../env.ts';
 import {
@@ -42,10 +43,19 @@ import {
   type NativeHandshake,
 } from '../services/google.ts';
 import { claimWithProvider, signInWithProvider } from '../services/identities.ts';
-import { consumeCode, consumeHandoff, consumeToken, issueHandoff } from '../services/tokens.ts';
+import {
+  consumeCode,
+  consumeHandoff,
+  consumeToken,
+  issueHandoff,
+  peekToken,
+  recentCodesTo,
+} from '../services/tokens.ts';
 import {
   authenticate,
   claimAddress,
+  confirmPendingAddress,
+  isEmailTaken,
   countAccounts,
   createAccount,
   createGuest,
@@ -53,7 +63,6 @@ import {
   findUserByEmail,
   getUser,
   markEmailVerified,
-  releaseUnconfirmedClaim,
   setPassword,
 } from '../services/user.ts';
 import { isAdmin, isDisabled } from '../services/admin.ts';
@@ -66,6 +75,36 @@ import { ensureCoachAccount, isCoach } from '../services/coach.ts';
  */
 const LOGIN_LIMIT = { max: 10, timeWindow: '15 minutes' };
 const SIGNUP_LIMIT = { max: 5, timeWindow: '1 hour' };
+
+/** Confirmation codes one address may be sent in an hour, across every account and guest. */
+const CODES_PER_ADDRESS_PER_HOUR = 3;
+
+/**
+ * What a Google handoff carries when a guest is saving its account. The identity
+ * the callback saw, held until the guest's own request attaches it; see the
+ * callback and `/auth/google/exchange`.
+ */
+interface GuestClaimPayload {
+  kind: 'guest_claim';
+  provider: string;
+  subject: string;
+  name: string | null;
+  timezone: string;
+  locale: Locale | null;
+}
+
+function readGuestClaim(payload: Record<string, unknown> | null | undefined): GuestClaimPayload | null {
+  if (!payload || payload.kind !== 'guest_claim') return null;
+  if (typeof payload.provider !== 'string' || typeof payload.subject !== 'string') return null;
+  return {
+    kind: 'guest_claim',
+    provider: payload.provider,
+    subject: payload.subject,
+    name: typeof payload.name === 'string' ? payload.name : null,
+    timezone: typeof payload.timezone === 'string' ? payload.timezone : '',
+    locale: typeof payload.locale === 'string' ? (payload.locale as Locale) : null,
+  };
+}
 
 /**
  * New guests per address. A guest is free to make and each one carries a small
@@ -352,10 +391,16 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     }
 
     const userId = request.userId;
-    await releaseUnconfirmedClaim(parsed.data.email, userId);
-    const holder = await findUserByEmail(parsed.data.email);
-    if (holder && holder.id !== userId) {
+    if (await findUserByEmail(parsed.data.email)) {
       return reply.status(409).send({ error: 'That email is already registered.', code: 'EMAIL_TAKEN' });
+    }
+    /*
+     * One address, a few codes an hour, whoever is asking. Anything can type an
+     * address into a guest, and without this a stranger's inbox is one loop away
+     * from a flood of confirmation codes it never asked for.
+     */
+    if ((await recentCodesTo(parsed.data.email)) >= CODES_PER_ADDRESS_PER_HOUR) {
+      return reply.status(429).send({ error: 'Too many codes sent to that address. Try again later.' });
     }
 
     await claimAddress(userId, parsed.data.email, parsed.data.password, parsed.data.display_name ?? null);
@@ -428,8 +473,6 @@ export async function registerAuthRoutes(app: FastifyInstance) {
           : 'Accounts are created in the app. Install it and sign up there.',
       });
     }
-    // A guest's unconfirmed hold on the address does not stop its owner.
-    await releaseUnconfirmedClaim(parsed.data.email);
     if (await emailInUse(parsed.data.email)) {
       return reply.status(409).send({ error: 'That email is already registered.' });
     }
@@ -450,13 +493,20 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     const locale =
       parsed.data.locale ?? localeFromAcceptLanguage(request.headers['accept-language'] ?? null);
 
-    const userId = await createAccount(
-      parsed.data.email,
-      parsed.data.password,
-      parsed.data.display_name ?? null,
-      parsed.data.timezone ?? '',
-      locale,
-    );
+    let userId: string;
+    try {
+      userId = await createAccount(
+        parsed.data.email,
+        parsed.data.password,
+        parsed.data.display_name ?? null,
+        parsed.data.timezone ?? '',
+        locale,
+      );
+    } catch (error) {
+      // Registered by a concurrent request between the check above and the insert.
+      if (isEmailTaken(error)) return reply.status(409).send({ error: 'That email is already registered.' });
+      throw error;
+    }
     // In the same breath as the account, so there is no window in which a
     // coach sign-up exists as an ordinary account the web would then refuse.
     if (wantsCoach) await ensureCoachAccount(userId);
@@ -695,11 +745,47 @@ export async function registerAuthRoutes(app: FastifyInstance) {
         );
       }
 
-      await markEmailVerified(request.userId, result.email);
+      /*
+       * A guest's code saves its account: the pending address becomes the
+       * account's. Anyone else's confirms the address already on the row. Both
+       * can find the address gone — registered by somebody else since the code
+       * went out, or changed on the account — and say so rather than printing
+       * "confirmed" over an account that is not.
+       */
+      if (request.guest) {
+        const outcome = await confirmPendingAddress(request.userId, result.email);
+        if (outcome === 'taken') {
+          return reply
+            .status(409)
+            .send({ error: 'That email is already registered.', code: 'EMAIL_TAKEN' });
+        }
+        if (outcome === 'not_pending') {
+          return reply
+            .status(409)
+            .send({ error: 'That code was for a different address. Ask for a new one.', code: 'CLAIM_CHANGED' });
+        }
+      } else if (!(await markEmailVerified(request.userId, result.email))) {
+        return reply
+          .status(409)
+          .send({ error: 'That code was for a different address. Ask for a new one.', code: 'CLAIM_CHANGED' });
+      }
       return { ok: true as const, message: 'Your email address is confirmed.' };
     }
 
     // The link path, which needs no session — it is opened wherever it is opened.
+    /*
+     * A guest's address is only ever confirmed by the code, in the app. The link
+     * opens in any browser with no session behind it, and a guest who typed the
+     * wrong address would otherwise be confirming it for whoever reads that
+     * inbox. Checked before the token is spent, so the code still works.
+     */
+    const owner = await peekToken(parsed.data.token, 'email_verification');
+    if (owner && (await getUser(owner)).guest) {
+      return reply
+        .status(403)
+        .send({ error: 'Open Day So Far and enter the six-digit code from the email.', code: 'USE_CODE' });
+    }
+
     const claim = await consumeToken(parsed.data.token, 'email_verification');
     if (!claim) {
       return reply
@@ -721,6 +807,11 @@ export async function registerAuthRoutes(app: FastifyInstance) {
    */
   app.post('/auth/verify/resend', { config: { rateLimit: EMAIL_LIMIT } }, async (request, reply) => {
     if (request.userId === null) return reply.status(401).send({ error: 'Not signed in.' });
+
+    const pending = (await getUser(request.userId)).pending_email;
+    if (pending && (await recentCodesTo(pending)) >= CODES_PER_ADDRESS_PER_HOUR) {
+      return reply.status(429).send({ error: 'Too many codes sent to that address. Try again later.' });
+    }
 
     const result = await sendVerificationEmail(request.userId, request.log);
 
@@ -932,10 +1023,33 @@ export async function registerAuthRoutes(app: FastifyInstance) {
          */
         locale: localeFromAcceptLanguage(request.headers['accept-language'] ?? null),
       };
-      // A guest saving its account names its own row in the signed state.
-      const result = native?.guest
-        ? await claimWithProvider(GOOGLE_PROVIDER, identity, native.guest, providerOptions)
-        : await signInWithProvider(GOOGLE_PROVIDER, identity, providerOptions);
+      /*
+       * A guest saving its account: nothing is attached here.
+       *
+       * This request comes from whichever browser opened the consent screen,
+       * and a Google URL is a thing that can be sent to somebody else. If the
+       * identity were put on the guest's row now, the guest who started the
+       * handshake could hand the link to a stranger and collect their Google
+       * account the moment they tapped Allow. So the identity rides in the
+       * handoff instead, and `/auth/google/exchange` attaches it — only for a
+       * request carrying this guest's own session and the verifier this guest's
+       * app kept, which a stranger's phone has neither of.
+       */
+      if (native?.guest) {
+        const payload: GuestClaimPayload = {
+          kind: 'guest_claim',
+          provider: GOOGLE_PROVIDER,
+          subject: identity.subject,
+          name: identity.name,
+          timezone: handshake.timezone,
+          locale: providerOptions.locale,
+        };
+        const { token: handoff } = await issueHandoff(native.guest, identity.email, native.challenge, { ...payload });
+        const separator = native.redirect.includes('?') ? '&' : '?';
+        return reply.redirect(`${native.redirect}${separator}code=${encodeURIComponent(handoff)}`);
+      }
+
+      const result = await signInWithProvider(GOOGLE_PROVIDER, identity, providerOptions);
       if (!result.ok) return fail('closed');
 
       // After the account is resolved rather than before, for the reason the
@@ -979,7 +1093,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       const device = await rememberDevice(result.userId, request.headers['user-agent'], request.ip);
       // The same alert the password path sends, and suppressed on a brand-new
       // account for the same reason: the first device is not news.
-      if (device.isNew && result.outcome !== 'created' && result.outcome !== 'claimed') {
+      if (device.isNew && result.outcome !== 'created') {
         await sendNewSignInEmail(
           result.userId,
           { device: device.label, ip: request.ip, at: new Date() },
@@ -1050,13 +1164,41 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       return reply.status(401).send({ error: 'That sign-in expired. Try again.' });
     }
 
+    /*
+     * A guest saving its account with Google: the identity is attached now, by
+     * the guest's own request — see the callback for why not earlier. Answered
+     * with the session of whichever account the identity lands on: the guest's
+     * own row, or an account that already owned that Google identity or address.
+     */
+    let userId = handoff.userId;
+    const claim = readGuestClaim(handoff.payload);
+    if (claim) {
+      if (request.userId !== handoff.userId || !request.guest) {
+        return reply.status(401).send({ error: 'That sign-in expired. Try again.' });
+      }
+      const result = await claimWithProvider(
+        claim.provider,
+        { subject: claim.subject, email: handoff.email, name: claim.name },
+        handoff.userId,
+        { allowSignup: await signupAllowed(true), timezone: claim.timezone, locale: claim.locale },
+      );
+      if (!result.ok) return reply.status(403).send({ error: 'Sign-ups are closed on this server.' });
+      userId = result.userId;
+      if (result.outcome !== 'claimed') {
+        const device = await rememberDevice(userId, request.headers['user-agent'], request.ip);
+        if (device.isNew) {
+          await sendNewSignInEmail(userId, { device: device.label, ip: request.ip, at: new Date() }, request.log);
+        }
+      }
+    }
+
     // Re-checked here rather than trusted from the callback: a minute has
     // passed, and this is the request that actually hands out the session.
-    if (await isDisabled(handoff.userId)) {
+    if (await isDisabled(userId)) {
       return reply.status(403).send({ error: 'This account has been suspended.' });
     }
 
-    const { token, expiresAt } = await createSession(handoff.userId);
+    const { token, expiresAt } = await createSession(userId);
     // Set as well as returned. Pointless for the app, which has no cookie jar
     // and asked for a bearer token — but this endpoint is not the app's private
     // property, and a caller that did not ask to carry its own token should get
@@ -1067,11 +1209,11 @@ export async function registerAuthRoutes(app: FastifyInstance) {
     // still tell a new account from a returning one.
     return {
       authenticated: true,
-      profile: await getUser(handoff.userId),
+      profile: await getUser(userId),
       signup_allowed: false,
       has_accounts: true,
-      is_admin: await isAdmin(handoff.userId),
-      is_coach: await isCoach(handoff.userId),
+      is_admin: await isAdmin(userId),
+      is_coach: await isCoach(userId),
       google_enabled: true,
       token: tokenForBody(request, token),
     };

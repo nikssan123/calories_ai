@@ -302,6 +302,21 @@ export async function accountGate(userId: string): Promise<AccountGate> {
   };
 }
 
+/**
+ * Where the confirmation code goes: the account's address, or a guest's pending
+ * one. The only lookup that reads `pending_email` — everything else that mails a
+ * person uses `getEmailRecipient`, which never sees an address nobody proved.
+ */
+export async function getVerificationRecipient(userId: string): Promise<EmailRecipient | null> {
+  const row = await queryOne<any>(
+    `SELECT id, COALESCE(email, pending_email) AS email, display_name, timezone, units, locale,
+            email_verified_at, notify_weekly_review, notify_nudges, notify_milestones, notify_daily_recap
+       FROM users WHERE id = $1 AND (email IS NOT NULL OR pending_email IS NOT NULL)`,
+    [userId],
+  );
+  return row ? toRecipient(row) : null;
+}
+
 export async function getEmailRecipient(userId: string): Promise<EmailRecipient | null> {
   const row = await queryOne<any>(
     `SELECT id, email, display_name, timezone, units, locale, email_verified_at,
@@ -370,34 +385,21 @@ export async function markEmailVerified(userId: string, email: string): Promise<
   return true;
 }
 
-/**
- * Lets go of an address a guest typed and never confirmed.
- *
- * A claim is only a claim until the code: typing somebody else's address into
- * "save my account" must not stop them signing up with it, and must not hand
- * them the stranger's journal either. So whenever an address is about to be
- * used — a sign-up, a Google sign-in, another claim — an unconfirmed guest's hold
- * on it is released first. The guest keeps its row and its journal; it just no
- * longer has that address on it.
- */
-export async function releaseUnconfirmedClaim(email: string, exceptUserId: string | null = null): Promise<void> {
-  await query(
-    `UPDATE users SET email = NULL, password_hash = NULL, updated_at = now()
-      WHERE lower(email) = lower($1)
-        AND guest_since IS NOT NULL
-        AND email_verified_at IS NULL
-        AND ($2::uuid IS NULL OR id <> $2::uuid)`,
-    [email, exceptUserId],
-  );
+/** Postgres's unique_violation: the address was taken between the check and the write. */
+export function isEmailTaken(error: unknown): boolean {
+  return (error as { code?: string } | null)?.code === '23505';
 }
 
 /**
- * Puts an address and a password on a guest row: "save my account".
+ * "Save my account" with an address and a password (GUEST-ACCOUNTS.md).
  *
- * The row is unchanged otherwise, so everything logged as a guest stays where it
- * is. It is still a guest afterwards — unconfirmed, on guest meters — until the
- * code comes back through `markEmailVerified`. Returns false when the row is not
- * a guest, which the route answers as a refusal.
+ * The address is *pending*: it sits in `pending_email`, not `email`, until the
+ * six-digit code comes back through this guest's own session. Nothing else in
+ * the server — the reset flow, the admin allowlist, the subscription lane, the
+ * alerts and receipts — reads `pending_email`, so an address a guest merely typed
+ * grants nothing and reaches nothing but the one confirmation code. The password
+ * goes on the row now; with no `email` it cannot be used to sign in until the
+ * address is proved. Returns false when the row is not a guest.
  */
 export async function claimAddress(
   userId: string,
@@ -406,11 +408,10 @@ export async function claimAddress(
   displayName: string | null,
 ): Promise<boolean> {
   const row = await queryOne<{ id: string }>(
-    `UPDATE users SET email = $2, password_hash = $3,
+    `UPDATE users SET pending_email = $2, password_hash = $3,
                       display_name = COALESCE($4, display_name),
-                      email_verified_at = NULL,
                       updated_at = now()
-      WHERE id = $1 AND guest_since IS NOT NULL
+      WHERE id = $1 AND guest_since IS NOT NULL AND email IS NULL
       RETURNING id`,
     [userId, email, await hashPassword(password), displayName],
   );
@@ -418,8 +419,43 @@ export async function claimAddress(
 }
 
 /**
- * Puts a provider's address on a guest row, already proved. The caller links
- * the identity; `markEmailVerified` then ends the guest and starts the trial.
+ * The code came back: the pending address becomes the account's.
+ *
+ * Only for the address that was pending, only on a guest, and only called from a
+ * request carrying that guest's session. Clears the guest and starts the trial
+ * the same way `markEmailVerified` does. `taken` when somebody else registered
+ * the address since it was typed — the unique index is the final word, so a race
+ * with a sign-up lands here rather than as a 500.
+ */
+export async function confirmPendingAddress(
+  userId: string,
+  email: string,
+): Promise<'confirmed' | 'taken' | 'not_pending'> {
+  let row: { id: string } | null;
+  try {
+    row = await queryOne<{ id: string }>(
+      `UPDATE users SET email = pending_email, pending_email = NULL,
+                        email_verified_at = now(), guest_since = NULL, updated_at = now()
+        WHERE id = $1 AND guest_since IS NOT NULL AND email IS NULL
+          AND lower(pending_email) = lower($2)
+        RETURNING id`,
+      [userId, email],
+    );
+  } catch (error) {
+    if (isEmailTaken(error)) return 'taken';
+    throw error;
+  }
+  if (!row) return 'not_pending';
+  await startTrial(userId);
+  return 'confirmed';
+}
+
+/**
+ * Puts a provider's address on a guest row, already proved by the provider. The
+ * caller links the identity; `markEmailVerified` then ends the guest and starts
+ * the trial. A password typed for a pending claim is removed, as the adopt path
+ * in `signInWithProvider` removes an unproved one: the account signs in with the
+ * provider now, and can grow a password through the reset flow.
  */
 export async function attachProvedAddress(
   userId: string,
@@ -427,8 +463,9 @@ export async function attachProvedAddress(
   displayName: string | null,
 ): Promise<boolean> {
   const row = await queryOne<{ id: string }>(
-    `UPDATE users SET email = $2, display_name = COALESCE(display_name, $3), updated_at = now()
-      WHERE id = $1 AND guest_since IS NOT NULL
+    `UPDATE users SET email = $2, pending_email = NULL, password_hash = NULL,
+                      display_name = COALESCE(display_name, $3), updated_at = now()
+      WHERE id = $1 AND guest_since IS NOT NULL AND email IS NULL
       RETURNING id`,
     [userId, email, displayName],
   );
@@ -481,6 +518,7 @@ function toProfile(row: any): Profile {
     id: row.id,
     email: row.email ?? null,
     guest: row.guest_since != null,
+    pending_email: row.pending_email ?? null,
     email_verified: row.email_verified_at !== null,
     // The fact, never the hash: this is the shape that leaves the server.
     has_password: row.password_hash !== null && row.password_hash !== undefined,

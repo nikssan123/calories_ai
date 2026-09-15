@@ -2,9 +2,12 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { query, queryOne } from '../src/db.ts';
 import { env } from '../src/env.ts';
+import { isAdmin } from '../src/services/admin.ts';
 import { createSession } from '../src/services/auth.ts';
+import { challengeFor } from '../src/services/google.ts';
+import { issueHandoff } from '../src/services/tokens.ts';
 import { claimWithProvider, signInWithProvider } from '../src/services/identities.ts';
-import { lastEmail } from './helpers/email.ts';
+import { emailTo, lastEmail, mailbox } from './helpers/email.ts';
 import { anonymousApp, codeFromEmail, createUser } from './helpers/factories.ts';
 
 /**
@@ -173,7 +176,8 @@ describe('saving a guest with an address', () => {
 
     const claim = await app.inject({ method: 'POST', url: '/auth/claim', headers: auth, payload: CLAIM });
     expect(claim.statusCode).toBe(200);
-    expect(claim.json().profile).toMatchObject({ id, guest: true, email: CLAIM.email, email_verified: false });
+    // Pending, not the account's address: nothing else on the server can see it yet.
+    expect(claim.json().profile).toMatchObject({ id, guest: true, email: null, pending_email: CLAIM.email });
     expect((await trialOf(id))?.trial_started_at).toBeNull();
 
     const code = codeFromEmail(lastEmail()!.text);
@@ -188,7 +192,7 @@ describe('saving a guest with an address', () => {
     expect(meals?.n).toBe(1);
 
     const me = await app.inject({ method: 'GET', url: '/auth/me', headers: auth });
-    expect(me.json().profile).toMatchObject({ id, guest: false, email_verified: true });
+    expect(me.json().profile).toMatchObject({ id, guest: false, email: CLAIM.email, pending_email: null, email_verified: true });
   });
 
   it('says so, with a code, when the address already has an account', async () => {
@@ -289,5 +293,147 @@ describe('saving a guest with Google', () => {
     } finally {
       env.google = null;
     }
+  });
+});
+
+describe('a pending address grants nothing', () => {
+  const CLAIM = { email: 'typo@example.com', password: 'long enough password' };
+
+  it('cannot be reset into by whoever reads that inbox', async () => {
+    const { auth } = await startGuest();
+    await app.inject({ method: 'POST', url: '/auth/claim', headers: auth, payload: CLAIM });
+    const before = mailbox().length;
+
+    const forgot = await app.inject({ method: 'POST', url: '/auth/password/forgot', payload: { email: CLAIM.email } });
+    expect(forgot.statusCode).toBe(200);
+    expect(mailbox().length).toBe(before);
+    const tokens = await queryOne<{ n: number }>(
+      `SELECT count(*)::int AS n FROM auth_tokens WHERE purpose = 'password_reset'`,
+    );
+    expect(tokens?.n).toBe(0);
+  });
+
+  it('is not confirmed by the emailed link, only by the code in the guest’s session', async () => {
+    const { json, auth } = await startGuest();
+    await app.inject({ method: 'POST', url: '/auth/claim', headers: auth, payload: CLAIM });
+    const text = emailTo(CLAIM.email)!.text;
+    const token = decodeURIComponent(/verify\?token=([^\s]+)/.exec(text)![1]!);
+
+    const link = await app.inject({ method: 'POST', url: '/auth/verify', payload: { token } });
+    expect(link.statusCode).toBe(403);
+    expect(link.json().code).toBe('USE_CODE');
+
+    const code = codeFromEmail(text);
+    const confirmed = await app.inject({ method: 'POST', url: '/auth/verify', headers: auth, payload: { code } });
+    expect(confirmed.statusCode).toBe(200);
+    const row = await queryOne<any>('SELECT email, guest_since FROM users WHERE id = $1', [json.profile.id]);
+    expect(row).toMatchObject({ email: CLAIM.email, guest_since: null });
+  });
+
+  it('says so when the address was registered by somebody else before the code came back', async () => {
+    const { json, auth } = await startGuest();
+    await app.inject({ method: 'POST', url: '/auth/claim', headers: auth, payload: CLAIM });
+    const code = codeFromEmail(lastEmail()!.text);
+    await createUser({ email: CLAIM.email });
+
+    const verify = await app.inject({ method: 'POST', url: '/auth/verify', headers: auth, payload: { code } });
+    expect(verify.statusCode).toBe(409);
+    expect(verify.json().code).toBe('EMAIL_TAKEN');
+    const row = await queryOne<any>('SELECT email, guest_since FROM users WHERE id = $1', [json.profile.id]);
+    expect(row.email).toBeNull();
+    expect(row.guest_since).not.toBeNull();
+  });
+
+  it('never makes a guest an admin', async () => {
+    const { json, auth } = await startGuest();
+    await app.inject({ method: 'POST', url: '/auth/claim', headers: auth, payload: CLAIM });
+    expect(await isAdmin(json.profile.id)).toBe(false);
+  });
+
+  it('can be erased without a password while the address is still pending', async () => {
+    const { json, auth } = await startGuest();
+    await app.inject({ method: 'POST', url: '/auth/claim', headers: auth, payload: CLAIM });
+    const erase = await app.inject({ method: 'DELETE', url: '/account', headers: auth, payload: { erase_guest: true } });
+    expect(erase.statusCode).toBe(200);
+    expect(await queryOne('SELECT id FROM users WHERE id = $1', [json.profile.id])).toBeNull();
+  });
+
+  it('mails one address only a few codes an hour, however many guests type it', async () => {
+    const statuses: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      const { auth } = await startGuest();
+      const claim = await app.inject({ method: 'POST', url: '/auth/claim', headers: auth, payload: { ...CLAIM } });
+      statuses.push(claim.statusCode);
+    }
+    expect(statuses).toEqual([200, 200, 200, 429]);
+  });
+});
+
+describe('guest creation is limited by address, not by session', () => {
+  it('does not start a fresh bucket for a request carrying the previous guest’s token', async () => {
+    let token: string | null = null;
+    const statuses: number[] = [];
+    for (let i = 0; i < 11; i++) {
+      const response: Awaited<ReturnType<typeof app.inject>> = await app.inject({
+        method: 'POST',
+        url: '/auth/guest',
+        headers: { ...AS_APP, ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        payload: {},
+      });
+      statuses.push(response.statusCode);
+      if (response.statusCode === 200) token = response.json().token;
+    }
+    expect(statuses.slice(0, 10).every((code) => code === 200)).toBe(true);
+    expect(statuses[10]).toBe(429);
+  });
+});
+
+describe('saving with Google happens in the guest’s own request', () => {
+  const VERIFIER = 'v'.repeat(64);
+  const IDENTITY = { subject: '110000000000000000077', email: 'owner@gmail.com', name: 'Owner' };
+
+  async function handoffFor(guestId: string) {
+    const payload = {
+      kind: 'guest_claim',
+      provider: 'google',
+      subject: IDENTITY.subject,
+      name: IDENTITY.name,
+      timezone: 'Europe/Sofia',
+      locale: 'bg',
+    };
+    const { token } = await issueHandoff(guestId, IDENTITY.email, challengeFor(VERIFIER), payload);
+    return token;
+  }
+
+  it('attaches the identity when the exchange carries the guest’s session', async () => {
+    const { json, auth } = await startGuest();
+    const code = await handoffFor(json.profile.id);
+    const exchange = await app.inject({
+      method: 'POST',
+      url: '/auth/google/exchange',
+      headers: { ...AS_APP, ...auth },
+      payload: { code, verifier: VERIFIER },
+    });
+    expect(exchange.statusCode).toBe(200);
+    expect(exchange.json().profile).toMatchObject({ id: json.profile.id, guest: false, email: IDENTITY.email });
+  });
+
+  it('attaches nothing for a request without that guest’s session', async () => {
+    const { json } = await startGuest();
+    const code = await handoffFor(json.profile.id);
+    const exchange = await app.inject({
+      method: 'POST',
+      url: '/auth/google/exchange',
+      headers: AS_APP,
+      payload: { code, verifier: VERIFIER },
+    });
+    expect(exchange.statusCode).toBe(401);
+    const row = await queryOne<any>('SELECT email, guest_since FROM users WHERE id = $1', [json.profile.id]);
+    expect(row.email).toBeNull();
+    expect(row.guest_since).not.toBeNull();
+    const linked = await queryOne<{ n: number }>('SELECT count(*)::int AS n FROM oauth_identities WHERE subject = $1', [
+      IDENTITY.subject,
+    ]);
+    expect(linked?.n).toBe(0);
   });
 });

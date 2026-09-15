@@ -6,8 +6,8 @@ import {
   clearPassword,
   createAccount,
   findUserByEmail,
+  isEmailTaken,
   markEmailVerified,
-  releaseUnconfirmedClaim,
 } from './user.ts';
 
 /**
@@ -69,8 +69,6 @@ export async function signInWithProvider(
   );
   if (known) return { ok: true, userId: known.user_id, outcome: 'signed-in' };
 
-  // A guest who typed this address and never confirmed it has no hold on it.
-  await releaseUnconfirmedClaim(identity.email);
   const existing = await findUserByEmail(identity.email);
   if (existing) {
     /*
@@ -150,12 +148,18 @@ export async function claimWithProvider(
   );
   if (known && known.user_id !== guestId) return signInWithProvider(provider, identity, options);
 
-  // Another guest's unconfirmed hold on the address goes; this guest's own does not.
-  await releaseUnconfirmedClaim(identity.email, guestId);
   const existing = await findUserByEmail(identity.email);
   if (existing && existing.id !== guestId) return signInWithProvider(provider, identity, options);
 
-  if (!(await attachProvedAddress(guestId, identity.email, identity.name))) {
+  let attached: boolean;
+  try {
+    attached = await attachProvedAddress(guestId, identity.email, identity.name);
+  } catch (error) {
+    // Registered by somebody else between the lookup and the write.
+    if (isEmailTaken(error)) return signInWithProvider(provider, identity, options);
+    throw error;
+  }
+  if (!attached) {
     // No longer a guest — saved already, or erased — so an ordinary sign-in.
     return signInWithProvider(provider, identity, options);
   }

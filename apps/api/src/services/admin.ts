@@ -30,18 +30,19 @@ import { objectStore } from './storage.ts';
  * leave a third one behind.
  */
 export async function isAdmin(userId: string): Promise<boolean> {
-  const user = await queryOne<{ email: string | null }>(
-    'SELECT email FROM users WHERE id = $1',
+  const user = await queryOne<{ email: string | null; guest_since: string | null }>(
+    'SELECT email, guest_since FROM users WHERE id = $1',
     [userId],
   );
-  if (!user?.email) return false;
+  // A guest is never an admin, whatever address it is carrying.
+  if (!user?.email || user.guest_since) return false;
 
   if (env.adminEmails.length > 0) {
     return env.adminEmails.includes(user.email.toLowerCase());
   }
 
   const first = await queryOne<{ id: string }>(
-    `SELECT id FROM users WHERE email IS NOT NULL ORDER BY created_at ASC, id ASC LIMIT 1`,
+    `SELECT id FROM users WHERE email IS NOT NULL AND guest_since IS NULL ORDER BY created_at ASC, id ASC LIMIT 1`,
   );
   return first?.id === userId;
 }

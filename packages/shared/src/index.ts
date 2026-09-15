@@ -1714,6 +1714,12 @@ export const Profile = z.object({
    */
   guest: z.boolean().default(false),
   /**
+   * The address a guest typed to save its account, before the code proves it.
+   * Deliberately not `email`: nothing on the server treats a pending address as
+   * who the account is. Null once confirmed, and for every other account.
+   */
+  pending_email: z.string().nullable().default(null),
+  /**
    * Whether the address has been proved. Nothing is gated on it — the app works
    * either way — but a password reset can only ever reach a mailbox someone can
    * actually open, so the setup screen offers to send the link again.

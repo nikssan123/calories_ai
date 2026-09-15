@@ -9,7 +9,7 @@ import {
 import { proseLocale } from '../ai/language.ts';
 import { env } from '../env.ts';
 import { issueToken, issueVerification, TOKEN_TTL_MINUTES } from '../services/tokens.ts';
-import { findRecipientByEmail, getEmailRecipient } from '../services/user.ts';
+import { findRecipientByEmail, getEmailRecipient, getVerificationRecipient } from '../services/user.ts';
 import { emailMessages } from './messages.ts';
 import { sendEmail, type SendResult } from './send.ts';
 import * as templates from './templates.ts';
@@ -55,7 +55,8 @@ export async function sendVerificationEmail(
   userId: string,
   logger?: FastifyBaseLogger,
 ): Promise<SendResult> {
-  const recipient = await getEmailRecipient(userId);
+  // The pending address counts here, and only here: it is what the code is for.
+  const recipient = await getVerificationRecipient(userId);
   if (!recipient) return SKIPPED('no address');
   if (recipient.verified) return SKIPPED('already verified');
 

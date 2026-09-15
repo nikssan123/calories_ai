@@ -130,7 +130,14 @@ export async function buildApp(
     global: false,
     // A signed-in user is the real subject; fall back to IP for anonymous hits
     // so a login flood cannot be spread across a single shared account.
-    keyGenerator: (request: FastifyRequest) => request.userId ?? request.ip,
+    //
+    // Except under `/auth/`, which is always keyed by address. Those limits guard
+    // things a session is free to mint — a guest costs one request — so keying
+    // them by account let a loop hand each call the previous call's token and
+    // start a fresh bucket every time: unlimited guests, and unlimited password
+    // guesses from behind a guest session.
+    keyGenerator: (request: FastifyRequest) =>
+      request.url.startsWith('/auth/') ? request.ip : (request.userId ?? request.ip),
     addHeaders: { 'retry-after': true, 'x-ratelimit-limit': true, 'x-ratelimit-remaining': true },
     ...(redis ? { redis } : {}),
     /*

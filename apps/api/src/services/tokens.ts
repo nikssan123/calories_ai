@@ -89,6 +89,38 @@ export interface ConsumedToken {
   userId: string;
   /** The address the link was sent to, which is what a verification proves. */
   email: string;
+  /** What an OAuth handoff carries beyond the account and address, when anything. */
+  payload?: Record<string, unknown> | null;
+}
+
+/**
+ * Who a live, unexpired token belongs to, without spending it. For a route that
+ * has to refuse some owners before the token is used up.
+ */
+export async function peekToken(token: string, purpose: TokenPurpose): Promise<string | null> {
+  const row = await queryOne<{ user_id: string }>(
+    `SELECT user_id FROM auth_tokens
+      WHERE token_hash = $1 AND purpose = $2 AND used_at IS NULL AND expires_at > now()`,
+    [hashToken(token), purpose],
+  );
+  return row?.user_id ?? null;
+}
+
+/**
+ * Verification codes sent to one address in the last hour, whoever asked.
+ *
+ * The per-account and per-address rate limits cannot see this: an address can be
+ * typed into any number of guests, and each would mail it a code. Counted off
+ * the tokens themselves so it holds across replicas and restarts.
+ */
+export async function recentCodesTo(email: string): Promise<number> {
+  const row = await queryOne<{ n: number }>(
+    `SELECT count(*)::int AS n FROM auth_tokens
+      WHERE purpose = 'email_verification' AND lower(email) = lower($1)
+        AND created_at > now() - interval '1 hour'`,
+    [email],
+  );
+  return row?.n ?? 0;
 }
 
 /**
@@ -241,6 +273,8 @@ export async function issueHandoff(
   userId: string,
   email: string,
   challenge: string,
+  /** Carried to the exchange untouched — see `GuestClaimPayload` in routes/auth.ts. */
+  payload: Record<string, unknown> | null = null,
 ): Promise<IssuedToken> {
   const token = randomBytes(TOKEN_BYTES).toString('base64url');
   const expiresAt = new Date(Date.now() + TOKEN_TTL_MINUTES.oauth_handoff * 60 * 1000);
@@ -249,9 +283,9 @@ export async function issueHandoff(
   // waiting in an inbox to be found later — it dies in two minutes — and two
   // sign-ins started on two devices at once are two people's business.
   await query(
-    `INSERT INTO auth_tokens (user_id, purpose, token_hash, code_hash, email, expires_at)
-     VALUES ($1,'oauth_handoff',$2,$3,$4,$5)`,
-    [userId, hashToken(token), challenge, email, expiresAt.toISOString()],
+    `INSERT INTO auth_tokens (user_id, purpose, token_hash, code_hash, email, expires_at, payload)
+     VALUES ($1,'oauth_handoff',$2,$3,$4,$5,$6)`,
+    [userId, hashToken(token), challenge, email, expiresAt.toISOString(), payload ? JSON.stringify(payload) : null],
   );
 
   return { token, expiresAt };
@@ -273,14 +307,14 @@ export async function consumeHandoff(
   code: string,
   challenge: string,
 ): Promise<ConsumedToken | null> {
-  const row = await queryOne<{ user_id: string; email: string }>(
+  const row = await queryOne<{ user_id: string; email: string; payload: Record<string, unknown> | null }>(
     `UPDATE auth_tokens SET used_at = now()
       WHERE token_hash = $1 AND purpose = 'oauth_handoff' AND code_hash = $2
         AND used_at IS NULL AND expires_at > now()
-      RETURNING user_id, email`,
+      RETURNING user_id, email, payload`,
     [hashToken(code), challenge],
   );
-  return row ? { userId: row.user_id, email: row.email } : null;
+  return row ? { userId: row.user_id, email: row.email, payload: row.payload } : null;
 }
 
 export async function purgeExpiredTokens(): Promise<void> {
