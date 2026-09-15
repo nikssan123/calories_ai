@@ -78,6 +78,12 @@ The first pass left them at the edges: once somebody logged anything, they were 
 - **Emails:** the signature's three bars are three round faces built from table cells, with nothing loaded, like the logo.
 - **iOS widget:** the empty state and gallery preview show three faces built from Circle and Capsule.
 - **Fix:** a journal card's `Land` entrance now starts on layout, not on mount.
+- **You:** a porch scene under the title (`PorchScene`).
+  - morning: Skye waves from the door, Ember has a coffee
+  - afternoon: Ember hops in the garden, Plum sits on the bench
+  - evening: all three sit on the porch edge
+  - night: the lamp is on and Plum is asleep
+- **Journal:** no scene. The empty state is the only room for one, only a new account sees it, and the plate already does that job.
 
 ## Not now
 - **Direction B scenes** (drawn landscapes). Only if the cast reads too young.

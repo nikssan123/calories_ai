@@ -68,6 +68,7 @@ import { messageOf } from '@/lib/errors';
 import { Glossy } from '@/components/icons/Glossy';
 import { Segments } from '@/components/Segments';
 import { Sky, useSky } from '@/components/Sky';
+import { PorchScene } from '@/components/cast/Scenes';
 import { useSaveAccount } from '@/lib/save-account';
 import { discardFor } from '@/lib/outbox';
 
@@ -360,6 +361,8 @@ export default function SetupScreen() {
             {tr('setup.subtitle')}
           </Text>
         </View>
+
+        <PorchScene />
 
         {day && <TargetCard day={day} />}
 

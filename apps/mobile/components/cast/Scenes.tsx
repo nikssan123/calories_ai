@@ -32,9 +32,9 @@ import { useDayPart } from './life';
  * Somewhere for them to be, at the hour it is.
  *
  * One small scene under a tab's title. Cook gets a kitchen, Exercise a path in
- * a park. The light is the sky from `sky.ts` for this hour, the same keyframes as
- * Today's header, so a kitchen window at dusk is the colour dusk is up there.
- * There's no sun and no moon in it either.
+ * a park, Progress a hill and You a porch. The light is the sky from `sky.ts`
+ * for this hour, the same keyframes as Today's header, so a kitchen window at
+ * dusk is the colour dusk is up there. There's no sun and no moon in it either.
  *
  * Who's there and what they're doing follows the part of the day. Morning is a
  * coffee at the window, the middle of the day is somebody at the pot, and late
@@ -537,6 +537,194 @@ export function HillScene({ style }: { style?: StyleProp<ViewStyle> }) {
             </Svg>
 
             <Cast placed={HILL_CAST[part]} scale={scale} ground={146} />
+          </>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// ---- The porch -----------------------------------------------------------------
+
+const RW = 320;
+const RH = 150;
+/** The porch boards, where anybody standing on the porch stands. */
+const PORCH = 128;
+
+/**
+ * A sitting figure's feet hang below its seat, so it's placed by where it sits:
+ * the seat is 34/44 of the way down its box, as on the macro card (`CastShelf`).
+ */
+const seated = (seat: number, size: number) => seat + (size * 10) / 44;
+
+/*
+ * The front of their house, for You. The page is about the person, so the scene
+ * is somewhere to come home to: somebody at the door in the morning, the three
+ * of them on the porch edge in the evening, the lamp on at night. Nothing on it
+ * follows a setting or a target below it.
+ */
+const PORCH_CAST: Record<DayPart, Placed[]> = {
+  morning: [
+    { name: 'skye', mood: 'wave', x: 146, size: 50, ground: PORCH },
+    { name: 'ember', mood: 'hold', prop: 'mug', x: 262, size: 52, ground: PORCH },
+  ],
+  afternoon: [
+    { name: 'ember', mood: 'hop', x: 12, size: 52 },
+    { name: 'skye', mood: 'idle', x: 146, size: 50, ground: PORCH },
+    { name: 'plum', mood: 'sit', x: 270, size: 46, ground: seated(108, 46) },
+  ],
+  evening: [
+    { name: 'ember', mood: 'sit', x: 94, size: 46, ground: seated(PORCH, 46) },
+    { name: 'skye', mood: 'sit', x: 136, size: 46, ground: seated(PORCH, 46) },
+    { name: 'plum', mood: 'sit', x: 178, size: 44, ground: seated(PORCH, 44) },
+  ],
+  night: [{ name: 'plum', mood: 'sleepy', x: 266, size: 50, ground: PORCH }],
+};
+
+function porchPalette(part: DayPart, dark: boolean) {
+  const lit = part === 'evening' || part === 'night';
+  if (part === 'night' || dark) {
+    return {
+      wall: ['#4a4262', '#3b3553'],
+      eave: '#352f48',
+      trim: '#6c6488',
+      door: '#8a5a78',
+      boards: '#7a5f6e',
+      front: '#5e4858',
+      grass: part === 'night' ? '#46506a' : '#35584a',
+      stripes: ['#8a5a78', '#5a5070'],
+      bench: '#6e5360',
+      iron: '#2a2540',
+      mailbox: '#5a7aa8',
+      glass: lit ? '#ffd98a' : '#5a6a7a',
+      lantern: part === 'night' ? '#ffd98a' : '#8a7f9a',
+    };
+  }
+  const walls: Record<Exclude<DayPart, 'night'>, [string, string]> = {
+    morning: ['#ffeedd', '#fadfc2'],
+    afternoon: ['#fff1e0', '#fbe3c8'],
+    evening: ['#f7dcc0', '#eec7a3'],
+  };
+  return {
+    wall: walls[part],
+    eave: '#c98f5a',
+    trim: '#ffffff',
+    door: '#ff8a6a',
+    boards: '#ecc594',
+    front: '#d9a570',
+    grass: part === 'evening' ? '#d9b48f' : '#a9e0b6',
+    stripes: ['#ff8a8a', '#fff4ea'],
+    bench: '#9b6b43',
+    iron: '#6b5a4a',
+    mailbox: '#5aa9e6',
+    glass: lit ? '#ffd98a' : '#dff3f0',
+    lantern: '#fff3d6',
+  };
+}
+
+const FLOWERS = ['#ff8fbe', '#ffd166', '#b9a3ff'];
+
+export function PorchScene({ style }: { style?: StyleProp<ViewStyle> }) {
+  const [width, onLayout] = useWidth();
+  const colors = useColors();
+  const { scheme } = useTheme();
+  const sky = useSky();
+  const part = useDayPart();
+  const id = useId().replace(/:/g, '');
+  const scale = width / RW;
+  const pal = porchPalette(part, scheme === 'dark');
+  const lit = part === 'evening' || part === 'night';
+
+  return (
+    <View
+      onLayout={onLayout}
+      pointerEvents="box-none"
+      style={[styles.scene, { height: width > 0 ? RH * scale : RH, boxShadow: colors.shadow }, style]}
+    >
+      <View pointerEvents="box-none" style={styles.clip}>
+        {width > 0 && (
+          <>
+            <Svg width={width} height={RH * scale} viewBox={`0 0 ${RW} ${RH}`} style={StyleSheet.absoluteFill}>
+              <Defs>
+                <LinearGradient id={`${id}-sky`} x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0" stopColor={sky.top} />
+                  <Stop offset="0.6" stopColor={sky.mid} />
+                  <Stop offset="1" stopColor={sky.low} />
+                </LinearGradient>
+                <LinearGradient id={`${id}-wall`} x1="0" y1="0" x2="0" y2="1">
+                  <Stop offset="0" stopColor={pal.wall[0]} />
+                  <Stop offset="1" stopColor={pal.wall[1]} />
+                </LinearGradient>
+                <RadialGradient id={`${id}-glow`} cx="0.5" cy="0.5" r="0.5">
+                  <Stop offset="0" stopColor="#ffd98a" stopOpacity={0.75} />
+                  <Stop offset="1" stopColor="#ffd98a" stopOpacity={0} />
+                </RadialGradient>
+              </Defs>
+
+              <Rect width={RW} height={RH} fill={`url(#${id}-sky)`} />
+              {sky.inkLight && <Stars left={8} top={8} width={70} height={60} />}
+
+              {/* The garden: a few flowers and the mailbox, with nothing written on it. */}
+              <Path d="M0 118C30 108 70 110 100 116V150H0Z" fill={pal.grass} />
+              {FLOWERS.map((flower, i) => (
+                <G key={flower}>
+                  <Path d={`M${10 + i * 12} 136V${124 - i * 2}`} stroke="#3fbf7f" strokeWidth={2} />
+                  <Circle cx={10 + i * 12} cy={122 - i * 2} r={4} fill={flower} />
+                </G>
+              ))}
+              <Rect x={74} y={104} width={5} height={40} rx={2} fill="#9b6b43" />
+              <Rect x={62} y={92} width={28} height={16} rx={8} fill={pal.mailbox} />
+              <Rect x={88} y={86} width={3} height={12} rx={1} fill="#ff5fa2" />
+
+              {/* The house front. */}
+              <Rect x={92} y={22} width={228} height={110} fill={`url(#${id}-wall)`} />
+              <Rect x={84} y={13} width={240} height={11} rx={3} fill={pal.eave} />
+
+              {lit && <Circle cx={144} cy={69} r={44} fill={`url(#${id}-glow)`} opacity={0.55} />}
+              <Rect x={116} y={46} width={56} height={44} rx={8} fill={pal.glass} />
+              <Rect x={116} y={46} width={56} height={44} rx={8} fill="none" stroke={pal.trim} strokeWidth={5} />
+              <Path d="M144 46V90M116 68H172" stroke={pal.trim} strokeWidth={3} />
+              <Rect x={110} y={89} width={68} height={5} rx={2} fill={pal.boards} />
+
+              {/* The awning over the door, scalloped. */}
+              {Array.from({ length: 6 }, (_, i) => {
+                const x = 196 + i * 11.4;
+                const fill = pal.stripes[i % 2];
+                return (
+                  <G key={i}>
+                    <Rect x={x} y={28} width={11.4} height={9} fill={fill} />
+                    <Circle cx={x + 5.7} cy={37} r={5.7} fill={fill} />
+                  </G>
+                );
+              })}
+              <Path d="M208 128V66a22 22 0 0 1 44 0V128Z" fill={pal.door} />
+              <Path d="M208 128V66a22 22 0 0 1 44 0V128" fill="none" stroke={pal.trim} strokeWidth={4} />
+              <Circle cx={230} cy={68} r={8} fill={pal.glass} opacity={0.9} />
+              <Circle cx={245} cy={98} r={2.6} fill="#ffd98a" />
+
+              {/* The porch lamp, on after dark. */}
+              {part === 'night' && <Circle cx={267} cy={64} r={48} fill={`url(#${id}-glow)`} />}
+              <Rect x={255} y={44} width={4} height={12} rx={2} fill={pal.iron} />
+              <Path d="M259 48H267.5V52" stroke={pal.iron} strokeWidth={2} fill="none" />
+              <Path d="M260 57H275L267.5 51Z" fill={pal.iron} />
+              <Rect x={262} y={56} width={11} height={15} rx={3} fill={pal.lantern} />
+
+              {/* The bench. */}
+              <Rect x={272} y={88} width={42} height={4} rx={2} fill={pal.bench} />
+              <Rect x={275} y={92} width={3} height={14} fill={pal.bench} />
+              <Rect x={308} y={92} width={3} height={14} fill={pal.bench} />
+              <Rect x={268} y={105} width={48} height={5} rx={2} fill={pal.bench} />
+              <Rect x={272} y={110} width={3} height={18} fill={pal.bench} />
+              <Rect x={309} y={110} width={3} height={18} fill={pal.bench} />
+
+              {/* The porch and its steps. */}
+              <Rect x={88} y={126} width={232} height={8} fill={pal.boards} />
+              <Rect x={88} y={134} width={232} height={16} fill={pal.front} />
+              <Rect x={196} y={136} width={68} height={6} rx={1} fill={pal.boards} />
+              <Rect x={190} y={143} width={80} height={7} rx={1} fill={pal.boards} />
+            </Svg>
+
+            <Cast placed={PORCH_CAST[part]} scale={scale} ground={146} />
           </>
         )}
       </View>
