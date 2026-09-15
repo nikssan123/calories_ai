@@ -3,6 +3,7 @@
   python store/tools/publish-listings.py            # stage, validate, change nothing
   python store/tools/publish-listings.py --commit   # ...and commit, which sends them for review
   python store/tools/publish-listings.py --only el-GR,hr,sr --commit   # just those three
+  python store/tools/publish-listings.py --commit --hold   # commit, but wait in the Console for "Send for review"
 
 What it writes:
 
@@ -25,6 +26,10 @@ one deletes the first (see the play-edits-are-exclusive note).
 Committing is not a quiet save. Managed publishing is off, so a commit puts the
 listings straight into review, and if a review is already running it cancels and
 restarts that one. Use --only to keep a re-push small.
+
+`--hold` commits with `changesNotSentForReview`, so the listings join the
+Console's *Changes not yet sent for review* instead, and nothing goes to Google
+until somebody presses *Send changes for review* there.
 """
 import json, sys, warnings, pathlib
 warnings.filterwarnings('ignore')
@@ -37,6 +42,7 @@ M = str(REPO / 'apps' / 'mobile') + '/'
 BASE = 'https://androidpublisher.googleapis.com/androidpublisher/v3/applications/com.daysofar.app'
 UP = 'https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/com.daysofar.app'
 COMMIT = '--commit' in sys.argv
+HOLD = '--hold' in sys.argv
 LOCALISED = ['bg', 'ro', 'uk', 'sr', 'hr', 'cs-CZ', 'sk', 'hu-HU', 'el-GR', 'de-DE', 'es-ES', 'fr-FR']
 ALL_CODES = ['en-GB'] + LOCALISED
 CODES = list(ALL_CODES)
@@ -91,10 +97,11 @@ try:
     print('validate', v.status_code, '' if v.ok else v.text[:300])
     v.raise_for_status()
     if COMMIT:
-        c = s.post(f'{BASE}/edits/{edit}:commit')
+        c = s.post(f'{BASE}/edits/{edit}:commit', params={'changesNotSentForReview': 'true'} if HOLD else None)
         print('commit', c.status_code, '' if c.ok else c.text[:300])
         c.raise_for_status()
-        print('committed — listing changes are with Google')
+        print('committed — waiting in the Console to be sent for review' if HOLD
+              else 'committed — listing changes are with Google')
     else:
         s.delete(f'{BASE}/edits/{edit}')
         print('dry run — edit deleted, nothing changed')

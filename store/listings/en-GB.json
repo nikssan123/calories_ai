@@ -1,7 +1,7 @@
 {
   "language": "en-GB",
   "_note": "The default listing's screenshot captions and seed strings. Its title and descriptions are edited in Play Console and live in PLAY_LISTING.md, so they are not here.",
-  "releaseNotes": "Signing up is clearer. The password rule is shown before you type, and if something needs fixing the app says what, in your language.\n\nOn the height and weight question the keyboard now takes you from one field to the next, so nothing hides behind the button.\n\nSmall layout fixes for smaller screens.",
+  "releaseNotes": "The three dots from the logo have come to life. They sit on your macro card, pop up to catch each meal you log, and turn up in the kitchen, the park, on the hill and on the porch, at whatever hour it is where you are.\n\nYou can now start using the app straight away and save your account later.\n\nPlus smaller fixes throughout.",
   "captions": [
     {
       "headline": "Just say\nwhat you ate",
