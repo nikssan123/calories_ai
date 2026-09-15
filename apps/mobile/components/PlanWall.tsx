@@ -8,6 +8,7 @@ import { meterLocked, meterRemaining } from '@ct/shared';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { useEntitlements } from '@/lib/entitlements';
 import { useSaveAccount } from '@/lib/save-account';
+import { useAuth } from '@/lib/auth';
 import { remainingLine, TIER_NAMES, tierFor, wallBody, wallTitle } from '@/lib/plan-copy';
 import { duration, ease, type as t, useColors, withAlpha, type Palette } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -54,11 +55,14 @@ export function PlanWall({
   const router = useRouter();
   const { plan, tiers } = useEntitlements();
   const save = useSaveAccount();
+  const auth = useAuth();
   /*
    * A guest's wall offers the account, not a plan: saving it is what starts the
-   * free week, and a guest cannot buy anything yet (GUEST-ACCOUNTS.md).
+   * free week, and a guest cannot buy anything yet (GUEST-ACCOUNTS.md). Read
+   * off the session as well as the allowance, because the wall stays in the
+   * transcript after the account is saved and must stop offering it then.
    */
-  const guest = allowance?.trial === 'guest';
+  const guest = allowance?.trial === 'guest' && auth.guest;
 
   const title = allowance ? wallTitle(allowance, tr, locale) : (message ?? tr('plans.spent'));
   const body = allowance ? wallBody(allowance, tr, locale) : undefined;

@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useIsFocused, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   cancelAnimation,
+  type SharedValue,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle, Defs, G, Path, RadialGradient, Stop } from 'react-native-svg';
 import type { CreditMeter, PlanName } from '@ct/shared';
 import { untilWords } from '@ct/shared/words';
 import { Chunk, PressableChunk } from '@/components/Chunk';
@@ -427,11 +428,16 @@ export default function UpgradeScreen() {
 
       {/*
         The cast, saying hello above the headline rather than the logo breathing
-        there. Its own row, never over a word, and the only moving group on the
-        page — the light behind is too slow to count as one (CAST.md).
+        there, standing in a light of their own. Their own row, never over a
+        word (CAST.md).
       */}
-      <Trio size={72} gap={4} moods={['idle', 'wave', 'hopeful']} style={styles.cast} />
-      <Serif accessibilityRole="header" style={[type.hero, styles.centred, { color: colors.foreground }]}>
+      <CastStage>
+        <Trio size={72} gap={4} moods={['idle', 'wave', 'hopeful']} />
+      </CastStage>
+      <Serif
+        accessibilityRole="header"
+        style={[type.hero, styles.centred, styles.headline, { color: colors.foreground }]}
+      >
         {trialOver ? tr('plans.trialOverTitle') : tr('plans.keepItGoing')}
       </Serif>
       <Text style={[t.body, styles.lede, styles.centred, { color: colors.mutedForeground }]}>
@@ -811,6 +817,202 @@ function PaywallLight() {
 }
 
 /**
+ * Where the cast stands: a warm bloom breathing behind them, a slow turn of
+ * light, and a few motes in their own three colours drifting past.
+ *
+ * All of it is behind the figures and inside their row, so nothing moves over
+ * a word. Loops run on the UI thread, stop when the paywall is covered, and
+ * hold still under Reduce Motion — the light is still there, just not moving.
+ */
+const STAGE_HEIGHT = 150;
+const RAYS = 14;
+const RAY_BOX = 300;
+/** The rays lie flat, like light on a floor, so they stay in the cast's row. */
+const RAY_TILT = 0.5;
+
+/** Motes around the trio: offset from the centre, size, colour, and how they drift. */
+const MOTES = [
+  { dx: -128, top: 74, size: 10, tint: 'protein', beats: 1, phase: 0, rise: 7 },
+  { dx: 124, top: 60, size: 8, tint: 'carbs', beats: 1, phase: 0.35, rise: 6 },
+  { dx: -84, top: 20, size: 6, tint: 'fat', beats: 2, phase: 0.6, rise: 5 },
+  { dx: 90, top: 16, size: 7, tint: 'protein', beats: 2, phase: 0.15, rise: 5 },
+  { dx: -150, top: 124, size: 5, tint: 'carbs', beats: 1, phase: 0.8, rise: 4 },
+  { dx: 152, top: 114, size: 6, tint: 'fat', beats: 3, phase: 0.45, rise: 4 },
+] as const;
+
+/** Four-pointed glints that twinkle rather than drift. */
+const GLINTS = [
+  { dx: -44, top: 4, size: 13, beats: 2, phase: 0.1 },
+  { dx: 56, top: 34, size: 10, beats: 3, phase: 0.55 },
+  { dx: 138, top: 20, size: 9, beats: 2, phase: 0.8 },
+] as const;
+
+function CastStage({ children }: { children: React.ReactNode }) {
+  const { scheme, colors } = useTheme();
+  const reduced = useReducedMotion();
+  const focused = useIsFocused();
+  const live = focused && !reduced;
+  const dark = scheme === 'dark';
+
+  const breath = useSharedValue(0.5);
+  const turn = useSharedValue(0);
+  const clock = useSharedValue(0);
+  useEffect(() => {
+    if (!live) return;
+    breath.value = withRepeat(withTiming(1, { duration: 3200, easing: Easing.inOut(Easing.sin) }), -1, true);
+    // Both loops restart from zero: a repeat runs from wherever it began, so one
+    // resumed mid-turn would snap back to that point on every lap.
+    turn.value = 0;
+    turn.value = withRepeat(withTiming(1, { duration: 60000, easing: Easing.linear }), -1, false);
+    // One clock for every mote, read at whole multiples so each loop is seamless.
+    clock.value = 0;
+    clock.value = withRepeat(withTiming(1, { duration: 9000, easing: Easing.linear }), -1, false);
+    return () => {
+      cancelAnimation(breath);
+      cancelAnimation(turn);
+      cancelAnimation(clock);
+    };
+  }, [live, breath, turn, clock]);
+
+  const bloom = useAnimatedStyle(() => ({
+    transform: [{ scale: 0.92 + breath.value * 0.14 }],
+    opacity: 0.7 + breath.value * 0.3,
+  }));
+  // Scale after the turn, so each ray sweeps an ellipse rather than tilting.
+  const rays = useAnimatedStyle(() => ({
+    transform: [{ scaleY: RAY_TILT }, { rotate: `${turn.value * 360}deg` }],
+  }));
+
+  const glow = dark ? 0.2 : 0.34;
+  const rayColour = dark ? 'rgba(255,196,120,0.07)' : 'rgba(255,176,64,0.16)';
+
+  return (
+    <View style={styles.stage}>
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <Animated.View style={[styles.rays, rays]}>
+          <Svg width={RAY_BOX} height={RAY_BOX} viewBox={`0 0 ${RAY_BOX} ${RAY_BOX}`}>
+            <Defs>
+              <RadialGradient id="stageRays" cx="50%" cy="50%" r="50%">
+                <Stop offset="0.1" stopColor={rayColour} stopOpacity={1} />
+                <Stop offset="0.85" stopColor={rayColour} stopOpacity={0} />
+              </RadialGradient>
+            </Defs>
+            <G fill="url(#stageRays)">
+              {Array.from({ length: RAYS }, (_, i) => {
+                const c = RAY_BOX / 2;
+                const a = (i / RAYS) * Math.PI * 2;
+                const w = Math.PI / RAYS / 2.2;
+                const r = c;
+                const x1 = c + Math.cos(a - w) * r;
+                const y1 = c + Math.sin(a - w) * r;
+                const x2 = c + Math.cos(a + w) * r;
+                const y2 = c + Math.sin(a + w) * r;
+                return <Path key={i} d={`M${c} ${c} L${x1} ${y1} L${x2} ${y2} Z`} />;
+              })}
+            </G>
+          </Svg>
+        </Animated.View>
+        <Animated.View
+          style={[
+            styles.stageBloom,
+            {
+              experimental_backgroundImage: `radial-gradient(circle, ${withAlpha(colors.logoRamp, glow)} 0%, ${withAlpha(colors.protein, glow * 0.45)} 42%, rgba(255,190,110,0) 70%)`,
+            },
+            bloom,
+          ]}
+        />
+        {MOTES.map((mote, i) => (
+          <Mote key={`m${i}`} clock={clock} colour={colors[mote.tint]} {...mote} />
+        ))}
+        {GLINTS.map((glint, i) => (
+          <Glint key={`g${i}`} clock={clock} colour={dark ? '#fff1d6' : '#ffffff'} {...glint} />
+        ))}
+      </View>
+      {children}
+    </View>
+  );
+}
+
+function Mote({
+  clock,
+  colour,
+  dx,
+  top,
+  size,
+  beats,
+  phase,
+  rise,
+}: {
+  clock: SharedValue<number>;
+  colour: string;
+  dx: number;
+  top: number;
+  size: number;
+  beats: number;
+  phase: number;
+  rise: number;
+}) {
+  const style = useAnimatedStyle(() => {
+    const t = (clock.value * beats + phase) * Math.PI * 2;
+    return {
+      transform: [{ translateY: Math.sin(t) * rise }, { translateX: Math.cos(t * 0.5) * rise * 0.4 }],
+      opacity: 0.55 + Math.sin(t + 1.2) * 0.35,
+    };
+  });
+  return (
+    <Animated.View
+      style={[
+        styles.mote,
+        {
+          top,
+          marginLeft: dx - size / 2,
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: colour,
+          boxShadow: `0px 0px ${size}px ${withAlpha(colour, 0.7)}`,
+        },
+        style,
+      ]}
+    />
+  );
+}
+
+function Glint({
+  clock,
+  colour,
+  dx,
+  top,
+  size,
+  beats,
+  phase,
+}: {
+  clock: SharedValue<number>;
+  colour: string;
+  dx: number;
+  top: number;
+  size: number;
+  beats: number;
+  phase: number;
+}) {
+  const style = useAnimatedStyle(() => {
+    const wave = (Math.sin((clock.value * beats + phase) * Math.PI * 2) + 1) / 2;
+    return { opacity: 0.15 + wave * 0.85, transform: [{ scale: 0.55 + wave * 0.45 }] };
+  });
+  const h = size / 2;
+  return (
+    <Animated.View style={[styles.mote, { top, marginLeft: dx - h, width: size, height: size }, style]}>
+      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <Path
+          d={`M${h} 0 Q${h * 1.12} ${h * 0.88} ${size} ${h} Q${h * 1.12} ${h * 1.12} ${h} ${size} Q${h * 0.88} ${h * 1.12} 0 ${h} Q${h * 0.88} ${h * 0.88} ${h} 0 Z`}
+          fill={colour}
+        />
+      </Svg>
+    </Animated.View>
+  );
+}
+
+/**
  * The frame around the armed tier: a band of the logo's ramp, turning slowly.
  *
  * React Native draws linear and radial gradients but not a conic one, so the
@@ -1051,7 +1253,38 @@ const styles = StyleSheet.create({
   centred: { textAlign: 'center' },
   page: { paddingHorizontal: 20, gap: 14 },
   mist: { position: 'absolute', width: 440, height: 440, borderRadius: 220 },
-  cast: { alignSelf: 'center', marginTop: -4, marginBottom: 2 },
+  stage: {
+    alignSelf: 'stretch',
+    height: STAGE_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: -12,
+  },
+  rays: {
+    position: 'absolute',
+    left: '50%',
+    top: STAGE_HEIGHT - 40 - RAY_BOX / 2,
+    marginLeft: -RAY_BOX / 2,
+    width: RAY_BOX,
+    height: RAY_BOX,
+  },
+  stageBloom: {
+    position: 'absolute',
+    left: '50%',
+    top: STAGE_HEIGHT - 40 - 120,
+    marginLeft: -120,
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+  },
+  mote: { position: 'absolute', left: '50%' },
+  /*
+   * Room under the last line for a descender. Android sets the line box
+   * shorter than Fraunces' own ascent plus descent at this leading and trims
+   * the difference from both ends, which took the tail off the "g" in "Keep it
+   * going." One line of the serif's own height gives it back.
+   */
+  headline: Platform.OS === 'android' ? { lineHeight: Math.round(38 * 1.24) } : {},
   sweep: { position: 'absolute', left: '-50%', top: '-120%', width: '200%', height: '340%' },
   armed: { margin: 2 },
   tierTitle: { fontSize: 24, lineHeight: 28 },
