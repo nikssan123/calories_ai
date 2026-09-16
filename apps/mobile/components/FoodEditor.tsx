@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import {
   type EnergyAdjustment,
@@ -12,6 +12,7 @@ import {
 import { foodEmoji } from '@ct/shared/food-emoji';
 import { Chunk, PressableChunk } from '@/components/Chunk';
 import { chipStyle, chipTextColor, wellStyle } from '@/components/Field';
+import { Skeleton } from '@/components/Skeleton';
 import { api } from '@/lib/api';
 import { type as t, useColors } from '@/theme';
 import { haptics } from '@/lib/haptics';
@@ -120,6 +121,13 @@ export function FoodEditor({
   const colors = useColors();
   const tr = useT();
   const locale = useLocale();
+  /*
+   * Past about 1.2× the four figure cells stop fitting on one line whatever
+   * width they are given, so they go two to a line instead. Read from the
+   * window rather than `PixelRatio.getFontScale()` so a reader who changes the
+   * setting while the form is open sees it re-lay itself.
+   */
+  const stacked = useWindowDimensions().fontScale > 1.2;
   const creating = entryId === null;
   const [entry, setEntry] = useState<FoodEntry | null>(null);
   const [description, setDescription] = useState(creating ? (initialDescription ?? '') : '');
@@ -225,10 +233,43 @@ export function FoodEditor({
     );
   }
 
+  /*
+   * The form's own shape, while the entry is fetched.
+   *
+   * A single "Loading…" line used to stand here, which made opening a card a
+   * three-step collapse: the receipt went, a box one line tall took its place,
+   * and then the full form pushed the conversation back down. The wait is one
+   * request and usually invisible, but on a slow connection it was the ugliest
+   * moment in the app. Drawn at the form's size, the card simply opens.
+   */
   if (entry === null && !creating) {
     return (
       <Chunk contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.hairline }]}>
-        <Text style={[t.footnote, { color: colors.mutedForeground }]}>{tr('common.loading')}</Text>
+        <View style={styles.head}>
+          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+            {tr('editor.fixWhatsWrong')}
+          </Text>
+        </View>
+        <View style={[styles.title, { borderBottomColor: colors.hairline }]}>
+          <Skeleton style={styles.loadingTitle} />
+        </View>
+        <Skeleton style={styles.loadingSplit} />
+        <View style={styles.meals}>
+          {MEALS.map(({ key }) => (
+            <Skeleton key={key} style={styles.loadingMeal} />
+          ))}
+        </View>
+        <View style={[styles.item, { borderTopColor: colors.hairline }]}>
+          <Skeleton style={styles.loadingField} />
+          <View style={styles.numbers}>
+            {['kcal', 'p', 'c', 'f'].map((key) => (
+              <Skeleton
+                key={key}
+                style={[styles.loadingCell, key === 'kcal' && styles.cellWide]}
+              />
+            ))}
+          </View>
+        </View>
       </Chunk>
     );
   }
@@ -378,12 +419,13 @@ export function FoodEditor({
           </View>
 
           {/* The macros wear the card's colours, so the row of cells reads as
-              the row of figures it will be saved back into. */}
-          <View style={styles.numbers}>
-            <Cell value={item.kcal} onChange={(kcal) => patch(i, { kcal })} label={tr('editor.itemCalories')(String(i + 1))} unit="kcal" />
-            <Cell value={item.protein} onChange={(protein) => patch(i, { protein })} label={tr('editor.itemProtein')(String(i + 1))} unit={tr('macro.proteinInitial')} tint={colors.proteinText} />
-            <Cell value={item.carbs} onChange={(carbs) => patch(i, { carbs })} label={tr('editor.itemCarbs')(String(i + 1))} unit={tr('macro.carbsInitial')} tint={colors.carbsText} />
-            <Cell value={item.fat} onChange={(fat) => patch(i, { fat })} label={tr('editor.itemFat')(String(i + 1))} unit={tr('macro.fatInitial')} tint={colors.fatText} />
+              the row of figures it will be saved back into. Two to a line on
+              large system text — see `Cell`. */}
+          <View style={[styles.numbers, stacked && styles.numbersStacked]}>
+            <Cell value={item.kcal} onChange={(kcal) => patch(i, { kcal })} label={tr('editor.itemCalories')(String(i + 1))} unit="kcal" wide half={stacked} />
+            <Cell value={item.protein} onChange={(protein) => patch(i, { protein })} label={tr('editor.itemProtein')(String(i + 1))} unit={tr('macro.proteinInitial')} tint={colors.proteinText} half={stacked} />
+            <Cell value={item.carbs} onChange={(carbs) => patch(i, { carbs })} label={tr('editor.itemCarbs')(String(i + 1))} unit={tr('macro.carbsInitial')} tint={colors.carbsText} half={stacked} />
+            <Cell value={item.fat} onChange={(fat) => patch(i, { fat })} label={tr('editor.itemFat')(String(i + 1))} unit={tr('macro.fatInitial')} tint={colors.fatText} half={stacked} />
           </View>
         </View>
       ))}
@@ -467,12 +509,36 @@ function Quiet({ label, onPress, plus }: { label: string; onPress: () => void; p
   );
 }
 
+/**
+ * One typed figure with its unit beside it.
+ *
+ * The four cells are not the same width, and that is the whole point. Split
+ * evenly, the calorie box got the same room as a protein box while carrying a
+ * unit three times as long — on a 375pt phone that left about 22pt for the
+ * number, which is two digits: a four-figure meal was typed into a box that
+ * could not show it, and the figure people came here to check was the one
+ * scrolled out of sight. `wide` gives that cell half as much again, which fits
+ * "1,250 kcal" on the narrowest phone the app runs on and still leaves the
+ * macro cells four digits they will never need.
+ *
+ * And within a cell the number wins: the unit is what shrinks, because a
+ * clipped "kca" still says calories while a clipped "125" is a lie.
+ *
+ * `half` is what happens when none of that is enough. A reader on large system
+ * text has every glyph here scaled up while the card stays the width of a
+ * phone, and four cells on one line stop fitting at about 1.2× however they are
+ * divided — so past that they go two to a line instead, which gives each of
+ * them twice the room. Widening the type and then clipping the number it
+ * widened is the one outcome worth any amount of layout to avoid.
+ */
 function Cell({
   value,
   onChange,
   label,
   unit,
   tint,
+  wide,
+  half,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -480,11 +546,15 @@ function Cell({
   unit: string;
   /** The macro's text cut, so P, C and F read as the card's own colours. */
   tint?: string;
+  /** Sized for a four-figure number and a four-letter unit. The calories. */
+  wide?: boolean;
+  /** Two to a line rather than four, for large system text. */
+  half?: boolean;
 }) {
   const colors = useColors();
   return (
     <View
-      style={[styles.cell, wellStyle(colors)]}
+      style={[styles.cell, wide && !half && styles.cellWide, half && styles.cellHalf, wellStyle(colors)]}
     >
       <TextInput
         value={value}
@@ -496,7 +566,12 @@ function Cell({
         keyboardType="decimal-pad"
         style={[t.footnote, styles.cellInput, { color: colors.foreground }]}
       />
-      <Text style={[t.footnoteBold, { color: tint ?? colors.mutedForeground }]}>{unit}</Text>
+      <Text
+        numberOfLines={1}
+        style={[t.footnoteBold, styles.cellUnit, { color: tint ?? colors.mutedForeground }]}
+      >
+        {unit}
+      </Text>
     </View>
   );
 }
@@ -597,6 +672,8 @@ const styles = StyleSheet.create({
   name: { flex: 1.6 },
   quantity: { flex: 1 },
   numbers: { flexDirection: 'row', gap: 6 },
+  // Two to a line, for large system text. See `Cell`.
+  numbersStacked: { flexWrap: 'wrap' },
   cell: {
     flex: 1,
     flexDirection: 'row',
@@ -607,7 +684,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 6,
   },
-  cellInput: { flex: 1, padding: 0, minWidth: 20 },
+  // Half again on the calorie cell. See `Cell`.
+  cellWide: { flex: 1.5 },
+  // Two per line: `48%` rather than half, so the 6pt gap has somewhere to come from.
+  cellHalf: { flexGrow: 1, flexBasis: '48%' },
+  // Four digits, always: the number is never the thing that gives way.
+  cellInput: { flex: 1, padding: 0, minWidth: 32 },
+  cellUnit: { flexShrink: 1 },
+  // The form's shape while the entry is on its way. See the loading branch.
+  loadingTitle: { flex: 1, height: 20, borderRadius: 10, marginVertical: 4 },
+  loadingSplit: { height: 10, borderRadius: 999 },
+  loadingMeal: { flex: 1, height: 30, borderRadius: 999 },
+  loadingField: { height: 36, borderRadius: 12 },
+  loadingCell: { flex: 1, height: 30, borderRadius: 12 },
   quiet: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   foot: {
     flexDirection: 'row',

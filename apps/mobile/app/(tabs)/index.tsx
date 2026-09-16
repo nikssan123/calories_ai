@@ -51,7 +51,7 @@ import { Material } from '@/components/Material';
 import { PressableChunk } from '@/components/Chunk';
 import { CastPlate } from '@/components/cast/Plate';
 import { CardPeek, CastLedge, dominant } from '@/components/cast/Presence';
-import type { CastName, Cue } from '@/components/cast/Character';
+import { Trio, type CastName, type Cue } from '@/components/cast/Character';
 import { bounceTab, claimAll, spark, useAnchor, visit } from '@/components/cast/stage';
 import { castMemory, holderOf, noteEarned, takeBadge } from '@/lib/cast-memory';
 import { glanceAt, lookAll, useDayPart } from '@/components/cast/life';
@@ -1803,6 +1803,9 @@ const Row = memo(function Row({
               <ChatActionCard
                 key={`${action.entry_id ?? action.kind}-${i}`}
                 action={action}
+                // A turn that drew three cards lands them in the order it wrote
+                // them, rather than all at once. See `LandOrder`.
+                index={i}
                 // The two action kinds that are a correction rather than a new
                 // fact, and the only thing that tells them apart on screen from a
                 // fresh log — both arrive as a card with a number on it.
@@ -1932,12 +1935,23 @@ function Wall({
  * arriving it speaks for itself, and there is deliberately nothing decorating
  * it: text that is visibly growing already reads as live.
  *
- * The dots are the cast now (CAST.md): the logo's three, with bodies, hopping
- * out of step. Still a bounce and not a sequence lighting up, and for the same
- * reason — three things taking turns is a *progress* indicator, and the model
- * has not said how long it will be. A hop says only that something is still
- * happening. Under Reduce Motion they stand still and the label beside them
- * says what is going on.
+ * The dots are the cast (CAST.md): the logo's three, with bodies, hopping out of
+ * step. Still a bounce and not a sequence lighting up, and for the same reason —
+ * three things taking turns is a *progress* indicator, and the model has not
+ * said how long it will be. A hop says only that something is still happening.
+ * Under Reduce Motion they stand still and the label beside them says what is
+ * going on.
+ *
+ * They were taken out of this row once, on the grounds that the same three are
+ * already bouncing on the composer (`CastLedge`) and drawing them twice was
+ * drawing them twice. That was wrong, and it is worth writing down why: the
+ * ledge is *ambient*, thirty points tall, half-hidden behind the send button and
+ * sitting over a field somebody is looking away from the moment they hit send.
+ * The eye goes to the end of the conversation, where the reply is going to
+ * appear — and it found a line of static grey text there. The wait stopped
+ * reading as the app working and started reading as the app stuck. So the three
+ * are here as well as there: a typing indicator has to be where the typing will
+ * be.
  */
 function Waiting({ label }: { label: string | null }) {
   const colors = useColors();
@@ -1945,12 +1959,18 @@ function Waiting({ label }: { label: string | null }) {
 
   return (
     <View style={styles.waiting} accessibilityLabel={label ?? tr('journal.thinking')}>
-      {/* The three bounce on the composer for the wait (`CastLedge`); the row
-          says in words what is going on. */}
+      <Trio size={TYPING_SIZE} fidget={false} poke={false} />
       <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{label ?? tr('journal.thinking')}…</Text>
     </View>
   );
 }
+
+/**
+ * The three in the conversation, a little smaller than the ones on the ledge:
+ * this row sits at the weight of a caption and a figure the height of a card
+ * would read as a card arriving.
+ */
+const TYPING_SIZE = 26;
 
 /**
  * Where the ledge's figures end, from the right edge: past the composer's

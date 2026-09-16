@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import {
   Pressable,
@@ -11,6 +11,9 @@ import {
 } from 'react-native';
 import Svg, { Line, Path } from 'react-native-svg';
 import Animated, {
+  FadeIn,
+  FadeOut,
+  LinearTransition,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -50,6 +53,7 @@ import { wellStyle } from '@/components/Field';
  */
 export function ChatActionCard({
   action,
+  index,
   messageId,
   today,
   touched,
@@ -57,6 +61,11 @@ export function ChatActionCard({
   text,
 }: {
   action: ChatAction;
+  /**
+   * Where this card comes in its turn, so a turn with several lands them one
+   * after another rather than as one sliding block. See `LandOrder`.
+   */
+  index?: number;
   /** The message this card sits on — the workout card answers onto it. */
   messageId?: string;
   /**
@@ -82,6 +91,29 @@ export function ChatActionCard({
    * swallows it, because the reply in that case is six hundred words and the
    * card exists precisely so nobody has to scroll them — see `ReviewCard`.
    */
+  text?: string;
+}) {
+  return (
+    <LandOrder.Provider value={index ?? 0}>
+      <Landed action={action} messageId={messageId} today={today} touched={touched} onLogged={onLogged} text={text} />
+    </LandOrder.Provider>
+  );
+}
+
+/** The card itself, under whichever wrapper its state calls for. */
+function Landed({
+  action,
+  messageId,
+  today,
+  touched,
+  onLogged,
+  text,
+}: {
+  action: ChatAction;
+  messageId?: string;
+  today?: string;
+  touched?: boolean;
+  onLogged?: () => void;
   text?: string;
 }) {
   if (!action.card) return <Chip action={action} />;
@@ -359,6 +391,30 @@ function toExerciseCard(entry: ExerciseEntry): Extract<Card, { type: 'exercise' 
 }
 
 /**
+ * Where this card sits in its turn's stack, so a turn that drew several lands
+ * them one at a time.
+ *
+ * A turn can answer with two or three cards at once — a meal and a workout, two
+ * meals off one sentence — and they all mount in the same commit. Animated
+ * together they did not read as cards arriving at all: three boxes sliding the
+ * same fourteen points in lockstep is one *panel* moving, and the spring's
+ * overshoot made the whole group wobble as a unit. Offset, the same animation
+ * reads the way it was written — each card dropping onto the one before it.
+ *
+ * Carried in context rather than threaded through `CardBody` because `Land` is
+ * three levels down and wrapped differently by every card type; the alternative
+ * was a `delay` prop on a dozen components that only one of them reads.
+ */
+const LandOrder = createContext(0);
+
+/**
+ * The gap between two cards landing. The cast hops 180ms apart and the dots
+ * before them did too; this is shorter because a card is a bigger object and
+ * three of them a third of a second apart is a queue, not a flourish.
+ */
+const LAND_STAGGER = 110;
+
+/**
  * The entrance. `animate-land`: down, in, and one bounce.
  *
  * The overshoot is the easing's, not a second keyframe — `--ease-spring` passes
@@ -368,6 +424,7 @@ function toExerciseCard(entry: ExerciseEntry): Extract<Card, { type: 'exercise' 
  */
 function Land({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
   const reduced = useReducedMotion();
+  const order = useContext(LandOrder);
   const progress = useSharedValue(reduced ? 1 : 0);
   /*
    * Started once the card has been laid out, not on mount. Reanimated pushes
@@ -383,8 +440,13 @@ function Land({ children, style }: { children: React.ReactNode; style?: StylePro
       return;
     }
     if (!laidOut) return;
-    progress.value = withTiming(1, { duration: duration.spring, easing: ease.spring });
-  }, [reduced, laidOut, progress]);
+    // Held at 0 — and so invisible — for its turn, rather than starting late
+    // from halfway.
+    progress.value = withDelay(
+      order * LAND_STAGGER,
+      withTiming(1, { duration: duration.spring, easing: ease.spring }),
+    );
+  }, [reduced, laidOut, order, progress]);
 
   const animated = useAnimatedStyle(() => ({
     opacity: Math.min(1, progress.value / 0.6),
@@ -448,22 +510,76 @@ function FoodCard({
   const [edited, setEdited] = useState<Extract<Card, { type: 'food' }> | null>(null);
   const [editing, setEditing] = useState(false);
 
-  if (editing) {
-    return (
-      <FoodEditor
-        entryId={card.entry_id}
-        onSaved={(entry) => {
-          setEdited(mergeFood(edited ?? card, entry));
-          setEditing(false);
-          onLogged?.();
-        }}
-        onCancel={() => setEditing(false)}
-      />
-    );
-  }
-
-  return <FoodReceipt card={edited ?? card} today={today} onEdit={() => setEditing(true)} />;
+  return (
+    <CardSwap
+      open={editing}
+      editor={
+        <FoodEditor
+          entryId={card.entry_id}
+          onSaved={(entry) => {
+            setEdited(mergeFood(edited ?? card, entry));
+            setEditing(false);
+            onLogged?.();
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      }
+      receipt={<FoodReceipt card={edited ?? card} today={today} onEdit={() => setEditing(true)} />}
+    />
+  );
 }
+
+/**
+ * A card turning into the form that edits it, and back.
+ *
+ * It used to be a bare `if`: the receipt unmounted, whatever the form shows
+ * first appeared in the hole it left, and then the form itself pushed the
+ * conversation down. Three different shapes in about as many frames, none of
+ * them moving — which is what "it just pops there" is. Here the card fades
+ * across and the row's height eases between the two, so tapping Edit reads as
+ * the receipt opening rather than as the app redrawing.
+ *
+ * The animation is attached only from the first swap onwards, and that guard is
+ * the part worth keeping. A card's *arrival* is not a swap: left unguarded, a
+ * fresh card would fade in here at the same moment `Land` was dropping it, and
+ * two entrances on one object look worse than none. `first` is read during
+ * render rather than in an effect so the very first tap is animated too — by
+ * the time an effect ran, the swap it was meant to cover would be over.
+ */
+function CardSwap({
+  open,
+  editor,
+  receipt,
+}: {
+  open: boolean;
+  editor: React.ReactNode;
+  receipt: React.ReactNode;
+}) {
+  const reduced = useReducedMotion();
+  const first = useRef(open);
+  const [swapped, setSwapped] = useState(false);
+  if (!swapped && open !== first.current) setSwapped(true);
+
+  const moves = swapped && !reduced;
+  const fade = moves ? { entering: FadeIn.duration(220), exiting: FadeOut.duration(120) } : {};
+
+  return (
+    <Animated.View collapsable={false} layout={moves ? SWAP : undefined}>
+      <Animated.View collapsable={false} key={open ? 'editor' : 'receipt'} {...fade}>
+        {open ? editor : receipt}
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
+/**
+ * The height change when a card turns into the form that edits it.
+ *
+ * Softer than `ease.spring`: this is a box growing to make room, not a figure
+ * reporting a number, and an overshoot here would make the conversation below
+ * it bounce.
+ */
+const SWAP = LinearTransition.duration(260).easing(ease.out);
 
 /**
  * The corrected entry, drawn back onto the card it came from.
@@ -856,42 +972,40 @@ function ExerciseCard({
     shown.duration_min !== null ? `${Math.round(shown.duration_min)} min` : null,
   ].filter(Boolean);
 
-  if (editing) {
-    return (
-      <>
-        <WorkoutCard
-          editing={{
-            id: shown.entry_id,
-            category: shown.category,
-            duration_min: shown.duration_min,
-            sets: shown.sets,
-          }}
-          onLogged={(entry) => {
-            setEdited(toExerciseCard(entry));
-            setEditing(false);
-            onLogged?.();
-          }}
-          onError={setError}
-        />
-        <Pressable
-          onPress={() => {
-            setEditing(false);
-            setError(null);
-          }}
-          accessibilityRole="button"
-          hitSlop={8}
-          style={({ pressed }) => [styles.editRow, { opacity: pressed ? 0.6 : 1 }]}
-        >
-          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('common.cancel')}</Text>
-        </Pressable>
-        {error && (
-          <Text style={[t.footnoteSemibold, { color: colors.destructive }]}>{error}</Text>
-        )}
-      </>
-    );
-  }
+  const form = (
+    <>
+      <WorkoutCard
+        editing={{
+          id: shown.entry_id,
+          category: shown.category,
+          duration_min: shown.duration_min,
+          sets: shown.sets,
+        }}
+        onLogged={(entry) => {
+          setEdited(toExerciseCard(entry));
+          setEditing(false);
+          onLogged?.();
+        }}
+        onError={setError}
+      />
+      <Pressable
+        onPress={() => {
+          setEditing(false);
+          setError(null);
+        }}
+        accessibilityRole="button"
+        hitSlop={8}
+        style={({ pressed }) => [styles.editRow, { opacity: pressed ? 0.6 : 1 }]}
+      >
+        <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('common.cancel')}</Text>
+      </Pressable>
+      {error && (
+        <Text style={[t.footnoteSemibold, { color: colors.destructive }]}>{error}</Text>
+      )}
+    </>
+  );
 
-  return (
+  const receipt = (
     <Shell>
       <View style={styles.headRow}>
         <View style={styles.headBody}>
@@ -949,6 +1063,9 @@ function ExerciseCard({
       )}
     </Shell>
   );
+
+  // The same swap the meal card makes, for the same reason. See `CardSwap`.
+  return <CardSwap open={editing} editor={form} receipt={receipt} />;
 }
 
 /**

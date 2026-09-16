@@ -310,8 +310,12 @@ export function FoodEditor({
           </div>
 
           {/* The macros wear the card's colours, so the row of cells reads as
-              the row of figures it will be saved back into. */}
-          <div className="grid grid-cols-4 gap-1.5">
+              the row of figures it will be saved back into.
+
+              Not four equal columns: the calorie box carries a four-letter unit
+              and a four-figure number, and split evenly with the macros it was
+              too narrow to show what had been typed into it. */}
+          <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr] gap-1.5">
             <Cell
               value={item.kcal}
               onChange={(v) => patch(i, { kcal: v })}
@@ -416,10 +420,12 @@ function Cell({
         aria-label={label}
         inputMode="decimal"
         placeholder="—"
-        className="text-footnote w-full min-w-0 bg-transparent outline-none"
+        className="text-footnote w-full min-w-[2rem] bg-transparent outline-none"
       />
+      {/* The unit yields, never the number: a clipped "kca" still says calories,
+          a clipped "125" does not say 1,250. */}
       <span
-        className="text-footnote text-muted-foreground shrink-0 font-bold"
+        className="text-footnote text-muted-foreground min-w-0 truncate font-bold"
         style={tint ? { color: tint } : undefined}
       >
         {unit}

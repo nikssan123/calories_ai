@@ -11,7 +11,7 @@ import Animated, {
 import { useIsFocused } from 'expo-router';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { haptics } from '@/lib/haptics';
-import { Character, GAIT, STAGGER, type CastName, type Cue, type Mood } from './Character';
+import { Character, GAIT, type CastName, type Cue, type Mood } from './Character';
 import { castMemory, Seat, useLanding, useSeated } from './stage';
 import { useTheme } from '@/theme';
 import Svg, { Ellipse, G } from 'react-native-svg';
@@ -165,12 +165,24 @@ const LEAN: Record<CastName, number> = { ember: 10, skye: 15, plum: 4 };
  * The journal's home seat: the three sitting on the composer, over the right
  * end of the field, where the conversation ends and the next sentence starts
  * (CAST.md, fourth pass). What they do there, in order of precedence:
- * - **bounce** while a turn is out and silent — they are the typing indicator;
  * - **doze** once the phone has been left alone a while, Plum first;
  * - **sleep** after dark (Plum, who keeps late hours);
  * - **hold** a slice of cake on a birthday (Skye) or a mug after dinner (Plum);
  * - otherwise **sit**, leaning in toward the field while somebody types and
  *   looking up while a reply arrives.
+ *
+ * What they no longer do here is bounce for a turn in flight. There is one cast
+ * of three, and it is in one place at a time: while a turn is out they are the
+ * typing indicator at the end of the conversation, where the reply is about to
+ * appear, and this seat is empty. Drawing both at once put six figures on a
+ * phone screen and made the three on the composer read as a second, redundant
+ * cast rather than as the same one.
+ *
+ * So they duck: down behind the field's top edge and out, and back up when the
+ * first word lands. Faded rather than unmounted, because the seat carries
+ * flights and dozing timers that a remount would restart — and because a figure
+ * that vanishes is a glitch where one that drops out of sight has gone
+ * somewhere.
  *
  * `cues` play passing moods on top — perking up at a word being typed, the
  * morning stretch. `lean` tilts each of them against a scroll, on their own spring.
@@ -187,14 +199,31 @@ export const CastLedge = memo(function CastLedge({
   right: number;
 }) {
   const { typing, waiting, streaming, night, evening, birthday, dozing } = state;
+  const reduced = useReducedMotion();
+  const away = useSharedValue(waiting ? 1 : 0);
+  useEffect(() => {
+    away.value = reduced
+      ? waiting
+        ? 1
+        : 0
+      : withTiming(waiting ? 1 : 0, { duration: 240, easing: Easing.inOut(Easing.quad) });
+  }, [waiting, reduced, away]);
+  const duck = useAnimatedStyle(() => ({
+    opacity: 1 - away.value,
+    transform: [{ translateY: away.value * LEDGE_SITTER }],
+  }));
+
   return (
     <View pointerEvents="box-none" style={styles.ledge}>
-      <View pointerEvents="box-none" style={[styles.ledgeRow, { right }]}>
+      <Animated.View collapsable={false} pointerEvents="box-none" style={[styles.ledgeRow, { right }, duck]}>
         {NAMES.map((name, i) => {
           const asleep = dozing.includes(name);
           const sleepy = asleep || (night && name === 'plum');
           const holding = birthday && name === 'skye' ? 'cake' : evening && name === 'plum' ? 'mug' : undefined;
-          const mood: Mood = waiting ? 'hop' : sleepy ? 'sleepy' : holding ? 'hold' : 'sit';
+          // No 'hop' here any more: the bounce for a turn in flight belongs to
+          // the three at the end of the conversation. These are on their way out
+          // while `waiting` holds, so they leave sitting.
+          const mood: Mood = sleepy ? 'sleepy' : holding ? 'hold' : 'sit';
           return (
             <Seat
               key={name}
@@ -215,12 +244,13 @@ export const CastLedge = memo(function CastLedge({
                   prop={mood === 'hold' ? holding : undefined}
                   sitting
                   size={LEDGE_SITTER}
-                  delay={waiting ? STAGGER[name] : i * 380}
+                  delay={i * 380}
                   // No breath at this size: a pixel, and still a loop apiece on the
-                  // screen people keep open. The bounce is the point, and a night
-                  // sleeper keeps its slow breath and Zs; a figure dozing because the
-                  // phone was left alone holds still, which is also the battery saver.
-                  loop={waiting || (sleepy && !asleep)}
+                  // screen people keep open. A night sleeper keeps its slow breath
+                  // and Zs; a figure dozing because the phone was left alone holds
+                  // still, which is also the battery saver. Nothing loops here for
+                  // a turn in flight — they are ducked out of sight for that.
+                  loop={!waiting && sleepy && !asleep}
                   fidget={!waiting && !asleep}
                   shadow={false}
                   arrive={false}
@@ -232,7 +262,7 @@ export const CastLedge = memo(function CastLedge({
             </Seat>
           );
         })}
-      </View>
+      </Animated.View>
     </View>
   );
 });
