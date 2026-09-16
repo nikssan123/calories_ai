@@ -51,8 +51,8 @@ import { Material } from '@/components/Material';
 import { PressableChunk } from '@/components/Chunk';
 import { CastPlate } from '@/components/cast/Plate';
 import { CardPeek, CastLedge, dominant } from '@/components/cast/Presence';
-import { Trio, type CastName, type Cue } from '@/components/cast/Character';
-import { bounceTab, claimAll, spark, useAnchor, visit } from '@/components/cast/stage';
+import { Character, STAGGER, type CastName, type Cue } from '@/components/cast/Character';
+import { bounceTab, claimAll, Seat, spark, useAnchor, visit } from '@/components/cast/stage';
 import { castMemory, holderOf, noteEarned, takeBadge } from '@/lib/cast-memory';
 import { glanceAt, lookAll, useDayPart } from '@/components/cast/life';
 import { castForDraft } from '@/lib/food-cast';
@@ -342,16 +342,24 @@ export default function JournalScreen() {
     if (!focused) return;
     claimAll('index', (name) => {
       if (empty) return null;
-      // Loading the conversation: they bounce on the composer, as for a reply.
+      // Loading the conversation: they sit on the composer, where a relaunch
+      // finds them. There is no waiting row to fly to yet.
       if (loading) return 'journal.ledge';
-      // A turn is out: all three wait on the ledge (bouncing while it is silent),
-      // the last carrier included, rather than staying on a card the reply is
-      // about to make old.
-      if (busy || replying) return 'journal.ledge';
+      /*
+       * A turn is out and silent: all three gather at the end of the
+       * conversation, where the reply is about to appear — the last carrier
+       * included, rather than staying on a card the reply is about to make old.
+       * They *fly* there, which is the whole reason this is a seat and not a
+       * drawing: the reader follows the same three up from the field instead of
+       * watching one set vanish and another appear. See `Waiting`.
+       */
+      if (replying) return THINKING_SEAT;
+      // The reply has begun. Whoever the newest meal is mostly made of goes on
+      // to its card, straight from the waiting row; the other two drop home.
       if (newest && newest.who === name) return `journal.peek:${newest.entryId}`;
       return 'journal.ledge';
     });
-  }, [focused, loading, empty, replying, busy, newest?.who, newest?.entryId]);
+  }, [focused, loading, empty, replying, newest?.who, newest?.entryId]);
 
   /* ---- The ledge's small life (CAST.md, fourth pass) ---------------------- */
 
@@ -1944,14 +1952,19 @@ function Wall({
  *
  * They were taken out of this row once, on the grounds that the same three are
  * already bouncing on the composer (`CastLedge`) and drawing them twice was
- * drawing them twice. That was wrong, and it is worth writing down why: the
- * ledge is *ambient*, thirty points tall, half-hidden behind the send button and
- * sitting over a field somebody is looking away from the moment they hit send.
- * The eye goes to the end of the conversation, where the reply is going to
- * appear — and it found a line of static grey text there. The wait stopped
- * reading as the app working and started reading as the app stuck. So the three
- * are here as well as there: a typing indicator has to be where the typing will
- * be.
+ * drawing them twice. Half right: drawing them twice was indeed wrong, but the
+ * answer was to move them rather than to leave them on the composer. The ledge
+ * is *ambient* — thirty points tall, half-hidden behind the send button, over a
+ * field somebody looks away from the moment they hit send — while the eye goes
+ * to the end of the conversation, where the reply is about to appear, and found
+ * a line of static grey text there. The wait stopped reading as the app working
+ * and started reading as the app stuck.
+ *
+ * So these are seats, not drawings. The same three figures fly up here from the
+ * composer when a turn goes out and fly back when it lands — or on to the card,
+ * if the turn drew one. That is the whole point of the stage: there is one cast
+ * of three and it travels, so a reader follows the same characters from the
+ * field to the answer instead of watching one set vanish and another appear.
  */
 function Waiting({ label }: { label: string | null }) {
   const colors = useColors();
@@ -1959,7 +1972,24 @@ function Waiting({ label }: { label: string | null }) {
 
   return (
     <View style={styles.waiting} accessibilityLabel={label ?? tr('journal.thinking')}>
-      <Trio size={TYPING_SIZE} fidget={false} poke={false} />
+      <View style={styles.thinkingRow}>
+        {CAST.map((name, i) => (
+          <Seat key={name} seat={THINKING_SEAT} name={name} screen="index" size={TYPING_SIZE}>
+            <Character
+              name={name}
+              mood="hop"
+              size={TYPING_SIZE}
+              // The typing indicator's own stagger, so three hops read as
+              // somebody thinking rather than one thing bouncing three times.
+              delay={STAGGER[name] ?? i * 180}
+              loop
+              fidget={false}
+              poke={false}
+              shadow={false}
+            />
+          </Seat>
+        ))}
+      </View>
       <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{label ?? tr('journal.thinking')}…</Text>
     </View>
   );
@@ -1972,6 +2002,9 @@ function Waiting({ label }: { label: string | null }) {
  */
 const TYPING_SIZE = 26;
 
+/** Where the three wait out a turn. A seat, so they arrive under their own power. */
+const THINKING_SEAT = 'journal.thinking';
+
 /**
  * Where the ledge's figures end, from the right edge: past the composer's
  * send button and its gap, so they sit on the field itself. See `Composer`'s
@@ -1982,6 +2015,8 @@ const LEDGE_RIGHT = 12 + 40 + 8 + 10;
 /** How long the journal sits untouched before the first of them dozes off. */
 const DOZE_AFTER_MS = 120_000;
 const DOZE_ORDER: CastName[] = ['plum', 'skye', 'ember'];
+/** The three, in the order they sit and hop. */
+const CAST: CastName[] = ['ember', 'skye', 'plum'];
 const NOBODY: readonly CastName[] = [];
 
 function ChatSkeleton() {
@@ -2091,6 +2126,8 @@ const styles = StyleSheet.create({
   actions: { gap: 6 },
   receipt: { borderWidth: 1, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },
   waiting: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 },
+  // The seats the three fly into while a turn is out. See `Waiting`.
+  thinkingRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
   steps: { gap: 4, paddingBottom: 2 },
   skeleton: { gap: 20, paddingTop: 16 },
 });

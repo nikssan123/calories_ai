@@ -178,11 +178,11 @@ const LEAN: Record<CastName, number> = { ember: 10, skye: 15, plum: 4 };
  * phone screen and made the three on the composer read as a second, redundant
  * cast rather than as the same one.
  *
- * So they duck: down behind the field's top edge and out, and back up when the
- * first word lands. Faded rather than unmounted, because the seat carries
- * flights and dozing timers that a remount would restart — and because a figure
- * that vanishes is a glitch where one that drops out of sight has gone
- * somewhere.
+ * Emptying it is the journal's job, not this component's — it releases them
+ * from every seat for the duration (`claimAll`), and an unoccupied `Seat` draws
+ * nothing. Fading the row out from in here instead looked like a bug and was
+ * one: the journal was still *flying* them to this seat at the same moment, so
+ * a figure would swoop in and wink out.
  *
  * `cues` play passing moods on top — perking up at a word being typed, the
  * morning stretch. `lean` tilts each of them against a scroll, on their own spring.
@@ -199,23 +199,10 @@ export const CastLedge = memo(function CastLedge({
   right: number;
 }) {
   const { typing, waiting, streaming, night, evening, birthday, dozing } = state;
-  const reduced = useReducedMotion();
-  const away = useSharedValue(waiting ? 1 : 0);
-  useEffect(() => {
-    away.value = reduced
-      ? waiting
-        ? 1
-        : 0
-      : withTiming(waiting ? 1 : 0, { duration: 240, easing: Easing.inOut(Easing.quad) });
-  }, [waiting, reduced, away]);
-  const duck = useAnimatedStyle(() => ({
-    opacity: 1 - away.value,
-    transform: [{ translateY: away.value * LEDGE_SITTER }],
-  }));
 
   return (
     <View pointerEvents="box-none" style={styles.ledge}>
-      <Animated.View collapsable={false} pointerEvents="box-none" style={[styles.ledgeRow, { right }, duck]}>
+      <View pointerEvents="box-none" style={[styles.ledgeRow, { right }]}>
         {NAMES.map((name, i) => {
           const asleep = dozing.includes(name);
           const sleepy = asleep || (night && name === 'plum');
@@ -262,7 +249,7 @@ export const CastLedge = memo(function CastLedge({
             </Seat>
           );
         })}
-      </Animated.View>
+      </View>
     </View>
   );
 });
