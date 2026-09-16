@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
   FadeOut,
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withSequence,
@@ -136,6 +137,35 @@ function TabScene({
       onBlur();
     };
   }, [navigation, route.key, route.name, reduced, shown, side]);
+
+  /*
+   * Coming back from another app, the scene is whatever the navigator says it
+   * is — asserted, not animated to.
+   *
+   * Whether a tab is on show lives in a shared value here, and the only things
+   * that ever write it are the two listeners above. That makes it a fact with
+   * no owner: nothing re-renders it back into place, so a write that is lost
+   * across a trip to the background is lost for good. And one is — the glide is
+   * a `withTiming` from 0, and a switch made in the last moments before the app
+   * went away comes back with the timing gone and the scene still on the 0 it
+   * started from. What the reader sees is the tab bar lit on the tab they came
+   * from and a page with nothing on it, until they tap something and the focus
+   * listener runs again.
+   *
+   * Tested the same way the blur is, on the tab navigator's own index rather
+   * than `isFocused()`: a tab under a pushed screen — History, the paywall — is
+   * blurred but still the tab that is up, and hiding it here would blank the
+   * page the back gesture reveals.
+   */
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next !== 'active') return;
+      const state = navigation.getState();
+      cancelAnimation(shown);
+      shown.value = state.routes[state.index]?.key === route.key ? 1 : 0;
+    });
+    return () => subscription.remove();
+  }, [navigation, route.key, shown]);
 
   const gliding = useAnimatedStyle(() => ({
     opacity: shown.value,
@@ -303,6 +333,26 @@ function TabBar({
       rightEdge.value = withTiming(selected, follow);
     }
   }, [selected, leftEdge, rightEdge, reduced]);
+
+  /*
+   * And the pill, for the same reason the scene above needs it: its two edges
+   * are a shared value written once per selection, so a travel interrupted by
+   * the app going away never arrives, and the bar comes back lit on the tab
+   * before this one with no event due to correct it. Snapped rather than
+   * re-animated — a pill that slides on its own on the way back in reads as the
+   * app having changed tab while nobody was looking.
+   */
+  useEffect(() => {
+    if (selected < 0) return;
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next !== 'active') return;
+      cancelAnimation(leftEdge);
+      cancelAnimation(rightEdge);
+      leftEdge.value = selected;
+      rightEdge.value = selected;
+    });
+    return () => subscription.remove();
+  }, [selected, leftEdge, rightEdge]);
 
   const sliding = useAnimatedStyle(() => {
     const left = Math.min(leftEdge.value, rightEdge.value);
