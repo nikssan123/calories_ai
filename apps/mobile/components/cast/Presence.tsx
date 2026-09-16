@@ -235,8 +235,9 @@ export const CastLedge = memo(function CastLedge({
                   // No breath at this size: a pixel, and still a loop apiece on the
                   // screen people keep open. A night sleeper keeps its slow breath
                   // and Zs; a figure dozing because the phone was left alone holds
-                  // still, which is also the battery saver. Nothing loops here for
-                  // a turn in flight — they are ducked out of sight for that.
+                  // still, which is also the battery saver. Nothing loops here
+                  // for a turn in flight — this seat is empty for that, and the
+                  // three are hopping in the waiting row instead.
                   loop={!waiting && sleepy && !asleep}
                   fidget={!waiting && !asleep}
                   shadow={false}
