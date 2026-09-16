@@ -267,36 +267,40 @@ function QualityTrack({
       </View>
 
       <View style={styles.figureRow}>
-        {value === null ? (
-          blank ? (
-            <>
-              <Text style={[t.figure, styles.figure, { color: colors.mutedForeground }]}>—</Text>
-              <Text style={[t.footnoteSemibold, t.tnum, { color: colors.mutedForeground }]}>
-                /{formatNumber(target.value, locale)}
-                {row.unit}
-              </Text>
-            </>
-          ) : (
-            <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-              {tr('quality.notEstimated')}
-            </Text>
-          )
+        {value === null && !blank ? (
+          <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+            {tr('quality.notEstimated')}
+          </Text>
         ) : (
-          <>
+          /*
+            One text run, not two sibling views — the same fix as MacroBars, for
+            the same reason. Measured apart, the target was laid out against the
+            figure beside it and given a hair less width than it asked for, which
+            cropped the last glyph off every cell: "/30" for "/30g", "/2,300m"
+            for "/2,300mg". A single run is measured once, as a line.
+          */
+          <Text
+            numberOfLines={1}
+            style={[t.footnoteSemibold, t.tnum, { color: colors.mutedForeground }]}
+          >
             <Text
               style={[
                 t.figure,
                 styles.figure,
-                { color: marked && floor ? colors.caloriesText : colors.foreground },
+                {
+                  color:
+                    value === null
+                      ? colors.mutedForeground
+                      : marked && floor
+                        ? colors.caloriesText
+                        : colors.foreground,
+                },
               ]}
             >
-              {formatNumber(Math.round(value), locale)}
+              {value === null ? '—' : formatNumber(Math.round(value), locale)}
             </Text>
-            <Text style={[t.footnoteSemibold, t.tnum, { color: colors.mutedForeground }]}>
-              /{formatNumber(target.value, locale)}
-              {row.unit}
-            </Text>
-          </>
+            {` /${formatNumber(target.value, locale)}${row.unit}`}
+          </Text>
         )}
       </View>
 
@@ -323,7 +327,7 @@ const styles = StyleSheet.create({
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   emoji: { fontSize: 11, lineHeight: 13 },
   label: { flexShrink: 1 },
-  figureRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
+  figureRow: { flexDirection: 'row', alignItems: 'baseline' },
   // `leading-none`, less the amount RN would clip off the top. See MacroBars.
   figure: { fontSize: 13, lineHeight: 17 },
   bar: { height: 6, borderRadius: 999, overflow: 'hidden' },
