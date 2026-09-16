@@ -11,6 +11,7 @@ import { haptics } from '@/lib/haptics';
 import { type as t, useColors, withAlpha } from '@/theme';
 import { useLocale, useT } from '@/lib/i18n';
 import { Confetti } from '@/components/Confetti';
+import { Trio } from '@/components/cast/Character';
 import { ScreenGround, ScreenHeader } from '@/components/ScreenHeader';
 
 /**
@@ -124,7 +125,18 @@ export default function PurchasedScreen() {
         back={false}
         inset={20}
         skyHeight={380}
-        top={<View style={styles.markRoom}><Mark landed={landed} /></View>}
+        top={
+          <View style={styles.markRoom}>
+            <Mark landed={landed} />
+            {/* The confetti used to come off the mark with nobody under it,
+                while the wall one screen back draws all three. */}
+            {landed && (
+              <View pointerEvents="box-none" style={styles.cheering}>
+                <Trio size={54} moods={['cheer', 'cheer', 'cheer']} />
+              </View>
+            )}
+          </View>
+        }
         title={
           landed && bought
             ? (tr('plans.youreOnPlan')(TIER_NAMES[bought]) as string)
@@ -278,7 +290,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  markRoom: { paddingTop: 28, paddingBottom: 6 },
+  markRoom: { paddingTop: 28, paddingBottom: 6, alignItems: 'center' },
+  // Under the mark, in room of its own: nothing over the words.
+  cheering: { marginTop: 6 },
   card: { padding: 16, borderWidth: 1, borderRadius: 20, gap: 12 },
   lines: { gap: 10 },
   line: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },

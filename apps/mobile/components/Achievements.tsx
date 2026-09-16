@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Svg, { Polyline } from 'react-native-svg';
@@ -9,7 +10,7 @@ import { haptics } from '@/lib/haptics';
 import { type as t, useColors } from '@/theme';
 import { Glossy } from '@/components/icons/Glossy';
 import { Medal } from '@/components/icons/Medal';
-import { Character, type CastName } from '@/components/cast/Character';
+import { Character, type CastName, type Cue } from '@/components/cast/Character';
 import { holderOf } from '@/lib/cast-memory';
 
 /**
@@ -176,6 +177,17 @@ function BadgeRow({
   const locale = useLocale();
   const tr = useT();
 
+  /*
+   * The medal goes up once, a beat after the wall is drawn — movement only, so
+   * the hand keeps the medal in it (CAST.md, fifth pass).
+   */
+  const [raise, setRaise] = useState<Cue | null>(null);
+  useEffect(() => {
+    if (!holds) return;
+    const timer = setTimeout(() => setRaise({ ms: 300, hop: true, key: Date.now() }), 420);
+    return () => clearTimeout(timer);
+  }, [holds]);
+
   const toward = got ? null : achievementProgress(badgeKey, facts);
 
   return (
@@ -225,7 +237,17 @@ function BadgeRow({
       {/* Earned in the last fortnight: the group's character holds the medal up
           at the end of the row, in room of its own (CAST.md). */}
       {got && holds && (
-        <Character name={holderOf(badgeKey)} mood="hold" prop="medal" size={46} loop={false} />
+        <Character
+          name={holderOf(badgeKey)}
+          mood="hold"
+          prop="medal"
+          size={46}
+          loop={false}
+          // Raised once as the wall opens, a beat after it is drawn: a medal
+          // held out is worth more than a medal held. Movement only, so the
+          // hand keeps the medal in it.
+          cue={raise}
+        />
       )}
     </InsetRow>
   );

@@ -28,7 +28,7 @@ import { Chunk } from '@/components/Chunk';
 import { DateStrip } from '@/components/DateStrip';
 import { GlowRing } from '@/components/GlowRing';
 import { Glossy, type GlossyName } from '@/components/icons/Glossy';
-import { CastShelf } from '@/components/cast/Presence';
+import { CastShelf, dominant } from '@/components/cast/Presence';
 import { bounceTab, claimAll, visit } from '@/components/cast/stage';
 import { castMemory, holderOf, noteEarned, takeBadge } from '@/lib/cast-memory';
 import { requestCompose } from '@/lib/compose';
@@ -404,6 +404,7 @@ export default function TodayScreen() {
 
   const isToday = day !== null && today !== null && day.local_date === today;
 
+
   /*
    * A streak milestone reached while Today is the screen on show: the shelf
    * celebrates — Ember with the flame, the other two cheering — confetti comes off
@@ -438,6 +439,31 @@ export default function TodayScreen() {
     return () => clearTimeout(timer);
   }, [focused, day]);
   const [shelfCues, setShelfCues] = useState<Partial<Record<CastName, Cue>>>({});
+  /** One of them answers something on this screen. */
+  const shelfCue = useCallback((name: CastName, cue: Omit<Cue, 'key'>) => {
+    setShelfCues((prev) => ({ ...prev, [name]: { ...cue, key: Date.now() + Math.random() } }));
+  }, []);
+  /** All three, one after another in their own order. */
+  const shelfAll = useCallback(
+    (cue: Omit<Cue, 'key'>) => {
+      (['ember', 'skye', 'plum'] as const).forEach((name, i) => {
+        setTimeout(() => shelfCue(name, cue), i * 90);
+      });
+    },
+    [shelfCue],
+  );
+  /*
+   * The day turning over under an open screen. Everything resets to zero on its
+   * own; without this it happens in silence, and Plum is the one who notices the
+   * hour (CAST.md, fifth pass).
+   */
+  const lastDay = useRef(today);
+  useEffect(() => {
+    const was = lastDay.current;
+    lastDay.current = today;
+    if (!was || !today || was === today || !focused) return;
+    shelfCue('plum', { mood: 'yawn', ms: 1300 });
+  }, [today, focused, shelfCue]);
   useEffect(() => {
     if (!moment) return;
     const at = Date.now();
@@ -908,6 +934,12 @@ export default function TodayScreen() {
       queuedAt: new Date().toISOString(),
     });
     haptics.logged();
+    // Whoever that meal is mostly made of takes it, as in the journal.
+    shelfCue(dominant({ protein_g: entry.protein_g, carbs_g: entry.carbs_g, fat_g: entry.fat_g }), {
+      mood: 'cheer',
+      ms: 1200,
+      hop: true,
+    });
     toast.success(tr('toast.logged')(entry.description, formatNumber(Math.round(entry.kcal), locale)));
     go(null);
     void load(null);
@@ -971,6 +1003,8 @@ export default function TodayScreen() {
           refreshing={refreshing}
           tintColor={colors.mutedForeground}
           onRefresh={() => {
+            // The sky stretches and they duck under it, then spring back.
+            shelfAll({ ms: 260, duck: 0.8 });
             setRefreshing(true);
             void load(date).finally(() => setRefreshing(false));
           }}
@@ -1171,6 +1205,9 @@ export default function TodayScreen() {
             <Pressable
               onPress={() => {
                 haptics.press();
+                // Off to the journal, and they hop off the shelf as it opens:
+                // the handover is the one thing the strip has to say.
+                shelfAll({ ms: 300, hop: true });
                 requestCompose();
                 router.navigate('/');
               }}

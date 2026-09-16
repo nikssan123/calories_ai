@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import Animated, { FadeInDown, FadeOut, LinearTransition } from 'react-native-reanimated';
 import Svg, { Path } from 'react-native-svg';
 import type { ExerciseTracks, UnitSystem } from '@ct/shared';
 import { distanceUnit, loadStep, loadUnit } from '@ct/shared';
@@ -243,7 +244,17 @@ export function SetEditor({
       {mode === 'grid' && (
         <>
           {exercise.sets.map((set, i) => (
-            <View key={i} style={styles.setRow}>
+            /* A set arriving and leaving is the one moment in the editor worth
+               animating: tapping "another set" used to make a row appear with no
+               motion at all, which read as a redraw. */
+            <Animated.View
+              key={i}
+              collapsable={false}
+              entering={FadeInDown.springify().damping(18).stiffness(180)}
+              exiting={FadeOut.duration(140)}
+              layout={LinearTransition.springify().damping(20).stiffness(200)}
+              style={styles.setRow}
+            >
               <Text style={[t.footnote, styles.setNumber, { color: colors.mutedForeground }]}>
                 {i + 1}
               </Text>
@@ -282,7 +293,7 @@ export function SetEditor({
                   unit={tr('workout.min')}
                 />
               )}
-            </View>
+            </Animated.View>
           ))}
 
           <View style={styles.gridFoot}>

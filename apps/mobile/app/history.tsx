@@ -9,7 +9,7 @@ import { InsetGroup } from '@/components/InsetGroup';
 import { Chevron, GlassPill, ScreenGround, ScreenHeader } from '@/components/ScreenHeader';
 import { Skeleton } from '@/components/Skeleton';
 import { Glossy } from '@/components/icons/Glossy';
-import { Character } from '@/components/cast/Character';
+import { Character, type Cue } from '@/components/cast/Character';
 import { api } from '@/lib/api';
 import { haptics } from '@/lib/haptics';
 import { useUnits } from '@/lib/units';
@@ -54,6 +54,17 @@ export default function HistoryScreen() {
   // Month cursor as a first-of-month ISO date, so all arithmetic is on dates
   // rather than on a Date object in some ambient timezone.
   const [month, setMonth] = useState<string | null>(null);
+  /*
+   * Plum sits on the month bar. Paging the month used to swap the grid under it
+   * while it sat perfectly still; now it hops as the month moves (CAST.md, fifth
+   * pass).
+   */
+  const [sitterCue, setSitterCue] = useState<Cue | null>(null);
+  const pageMonth = (by: number) => {
+    haptics.selected();
+    setSitterCue({ ms: 320, hop: true, key: Date.now() });
+    setMonth((m) => (m ? shiftMonth(m, by) : m));
+  };
   const [today, setToday] = useState<string | null>(null);
   const [calendar, setCalendar] = useState<Calendar | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -131,10 +142,7 @@ export default function HistoryScreen() {
                     icon={<Chevron direction="back" color={colors.foreground} />}
                     accessibilityLabel={tr('history.previousMonth')}
                     onSky={false}
-                    onPress={() => {
-                      haptics.selected();
-                      setMonth((m) => (m ? shiftMonth(m, -1) : m));
-                    }}
+                    onPress={() => pageMonth(-1)}
                   />
                   <View style={{ opacity: atLatest ? 0.35 : 1 }} pointerEvents={atLatest ? 'none' : 'auto'}>
                     <GlassPill
@@ -142,10 +150,7 @@ export default function HistoryScreen() {
                       icon={<Chevron direction="forward" color={colors.foreground} />}
                       accessibilityLabel={tr('history.nextMonth')}
                       onSky={false}
-                      onPress={() => {
-                        haptics.selected();
-                        setMonth((m) => (m ? shiftMonth(m, 1) : m));
-                      }}
+                      onPress={() => pageMonth(1)}
                     />
                   </View>
                 </View>
@@ -185,7 +190,7 @@ export default function HistoryScreen() {
                 <Legend />
               </Chunk>
               <View pointerEvents="box-none" style={styles.sitter}>
-                <Character name="plum" mood="sit" size={SITTER} />
+                <Character name="plum" mood="sit" size={SITTER} cue={sitterCue} />
               </View>
             </View>
 

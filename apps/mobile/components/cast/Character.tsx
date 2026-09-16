@@ -230,13 +230,16 @@ export const STAGGER: Record<CastName, number> = { ember: 0, skye: 90, plum: 180
  * it caught in the journal, say. A new `key` plays it again.
  */
 export interface Cue {
-  mood: Mood;
+  /** Left out for a cue that is only a movement: a hop, a duck, a nod. */
+  mood?: Mood;
   ms: number;
   key: number;
   /** A hop in this figure's gait as the mood starts: perking up. */
   hop?: boolean;
   /** A small nod once the mood has passed: "got it". */
   nod?: boolean;
+  /** Ducks this deep and springs back: the screen moved under them. */
+  duck?: number;
 }
 
 export function Character({
@@ -454,8 +457,14 @@ export function Character({
   const cueKey = cue?.key;
   useEffect(() => {
     if (!cue || reduced) return;
-    pass(cue.mood, cue.ms);
+    if (cue.mood) pass(cue.mood, cue.ms);
     if (cue.hop) hop();
+    if (cue.duck) {
+      press.value = withSequence(
+        withTiming(cue.duck, { duration: 130, easing: Easing.out(Easing.quad) }),
+        withSpring(0, { damping: 6, stiffness: 180 }),
+      );
+    }
     if (cue.nod) {
       // Down and up once, as the passing mood hands back: a nod is a squash, not a hop.
       nod.value = withDelay(

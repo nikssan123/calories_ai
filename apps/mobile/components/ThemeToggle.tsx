@@ -20,7 +20,7 @@ const OPTIONS: Array<{ value: ThemePreference; label: StringKey }> = [
  * segmented control would make one of three equal choices look like the
  * recommended one.
  */
-export function ThemeToggle() {
+export function ThemeToggle({ onChange }: { onChange?: () => void }) {
   const colors = useColors();
   const tr = useT();
   const { preference, setPreference } = useThemePreference();
@@ -62,7 +62,10 @@ export function ThemeToggle() {
         return (
           <Pressable
             key={value}
-            onPress={() => setPreference(value)}
+            onPress={() => {
+              setPreference(value);
+              onChange?.();
+            }}
             accessibilityRole="radio"
             accessibilityState={{ checked: active }}
             style={styles.slot}

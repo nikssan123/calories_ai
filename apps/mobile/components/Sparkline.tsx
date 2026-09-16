@@ -6,10 +6,12 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Circle, Defs, Line, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import type { TrendPoint } from '@ct/shared';
 import { useColors } from '@/theme';
 import { useT } from '@/lib/i18n';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 /**
  * The one chart in the product. The cards the agent draws mid-conversation
@@ -263,6 +265,22 @@ export function Sparkline({
   const scrubbing = readout !== undefined;
   const drawn = (width * height) / VIEW;
 
+  /*
+   * The chart draws itself once, left to right, the first time it has a width
+   * (CAST.md, fifth pass). It used to appear finished, which on a screen of
+   * measurements read as a picture rather than as something that had just been
+   * worked out. Once per mount, and never under Reduce Motion.
+   */
+  const reduced = useReducedMotion();
+  const reveal = useSharedValue(0);
+  const swept = useRef(false);
+  useEffect(() => {
+    if (width <= 0 || swept.current) return;
+    swept.current = true;
+    reveal.value = reduced ? 1 : withTiming(1, { duration: 620, easing: Easing.out(Easing.cubic) });
+  }, [width, reduced, reveal]);
+  const sweep = useAnimatedStyle(() => ({ width: reveal.value * width }));
+
   return (
     <View
       style={style}
@@ -277,16 +295,18 @@ export function Sparkline({
       onResponderTerminate={() => setHeld(null)}
     >
       {width > 0 && (
-        <Svg width={width} height={drawn} viewBox={`0 0 ${VIEW} ${height}`}>
-          <Defs>
-            <LinearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={stroke} stopOpacity={variant === 'bars' ? 1 : 0.22} />
-              <Stop offset="1" stopColor={stroke} stopOpacity={variant === 'bars' ? 0.45 : 0} />
-            </LinearGradient>
-          </Defs>
-          {targetLine}
-          {body}
-        </Svg>
+        <Animated.View collapsable={false} pointerEvents="none" style={[styles.sweep, sweep]}>
+          <Svg width={width} height={drawn} viewBox={`0 0 ${VIEW} ${height}`}>
+            <Defs>
+              <LinearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor={stroke} stopOpacity={variant === 'bars' ? 1 : 0.22} />
+                <Stop offset="1" stopColor={stroke} stopOpacity={variant === 'bars' ? 0.45 : 0} />
+              </LinearGradient>
+            </Defs>
+            {targetLine}
+            {body}
+          </Svg>
+        </Animated.View>
       )}
       {active !== null && readout && (
         <Readout position={anchor(active)} width={width} place={place}>
@@ -411,6 +431,8 @@ function Bars({
 }
 
 const styles = StyleSheet.create({
+  // Clips the drawing while it sweeps in; the chart itself is full width.
+  sweep: { overflow: 'hidden' },
   readout: {
     position: 'absolute',
     borderWidth: 1,

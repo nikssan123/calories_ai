@@ -68,7 +68,7 @@ import { messageOf } from '@/lib/errors';
 import { Glossy } from '@/components/icons/Glossy';
 import { Segments } from '@/components/Segments';
 import { Sky, useSky } from '@/components/Sky';
-import { PorchScene } from '@/components/cast/Scenes';
+import { PorchScene, type SceneCue } from '@/components/cast/Scenes';
 import { useSaveAccount } from '@/lib/save-account';
 import { discardFor } from '@/lib/outbox';
 
@@ -126,6 +126,8 @@ export default function SetupScreen() {
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** What the porch has just been told: a language picked, the light changed. */
+  const [porch, setPorch] = useState<SceneCue | null>(null);
   /*
    * Kept apart from `error`, which belongs to whatever part of the screen
    * raised it — a profile that would not load, a deletion that failed. This one
@@ -362,7 +364,7 @@ export default function SetupScreen() {
           </Text>
         </View>
 
-        <PorchScene />
+        <PorchScene cue={porch} />
 
         {day && <TargetCard day={day} />}
 
@@ -404,6 +406,9 @@ export default function SetupScreen() {
             <LanguagePicker
               value={locale}
               onChange={(next) => {
+                // The porch says hello in the new language, which is the one
+                // place a language change shows itself straight away.
+                setPorch({ who: 'skye', mood: 'wave', ms: 1600, hop: true, key: Date.now() });
                 /*
                  * Two writes, deliberately. The profile is the durable answer
                  * and the one the server writes emails from; the stored
@@ -515,7 +520,12 @@ export default function SetupScreen() {
 
         <InsetGroup title={tr('setup.appearance')} footer={tr('setup.appearanceFooter')}>
           <View style={styles.appearance}>
-            <ThemeToggle />
+            {/* Whoever is on the porch looks up at the light being changed. */}
+            <ThemeToggle
+              onChange={() =>
+                setPorch({ who: 'ember', mood: 'thinking', ms: 900, key: Date.now() })
+              }
+            />
           </View>
         </InsetGroup>
 
