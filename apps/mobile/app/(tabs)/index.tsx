@@ -415,9 +415,9 @@ export default function JournalScreen() {
       }
       draftTimer.current = setTimeout(() => {
         const match = castForDraft(text);
-        if (!match || match.word === heard.current.word || Date.now() - heard.current.at < 1500) return;
+        if (!match || match.word === heard.current.word || Date.now() - heard.current.at < 1100) return;
         heard.current = { word: match.word, at: Date.now() };
-        cueFor(match.name, { mood: 'hopeful', ms: 900, hop: true });
+        cueFor(match.name, { mood: 'hopeful', ms: 1400, hop: true });
         glanceAt(match.name);
       }, 250);
     },
@@ -740,7 +740,9 @@ export default function JournalScreen() {
       const dt = t - lastScroll.current.t;
       if (dt > 0 && dt < 120) {
         const velocity = (y - lastScroll.current.y) / dt;
-        lean.value = withSpring(Math.max(-1, Math.min(1, -velocity * 0.5)), { damping: 14, stiffness: 160 });
+        // A hand's ordinary scroll is around half a point per millisecond; at the
+        // old half-weight that tilted them a degree or two, which nobody saw.
+        lean.value = withSpring(Math.max(-1, Math.min(1, -velocity * 1.15)), { damping: 14, stiffness: 160 });
       }
       lastScroll.current = { y, t };
     },
@@ -1214,6 +1216,8 @@ export default function JournalScreen() {
         {bubbles.map((bubble) => (
           <Row
             peek={bubble.key === newestFood}
+            // The ledge's life reaches whoever is up on this card instead.
+            cue={bubble.key === newestFood && newest ? (cues[newest.who] ?? null) : null}
             key={bubble.key}
             bubble={bubble}
             today={day?.local_date}
@@ -1647,6 +1651,7 @@ const Row = memo(function Row({
   today,
   timezone,
   peek,
+  cue,
   onLogged,
   onLogManually,
   onCatch,
@@ -1655,6 +1660,8 @@ const Row = memo(function Row({
   today?: string;
   /** This row holds the newest food card, so one of the cast peeks over it. See `CardPeek`. */
   peek?: boolean;
+  /** For the figure on that card: the screen's cue, since it is not on the ledge. */
+  cue?: Cue | null;
   /** The carrier caught this row's card. See `CardPeek`. */
   onCatch?: (who: CastName, entryId: string) => void;
   /** For guessing which meal a manually typed entry belongs to. */
@@ -1827,6 +1834,7 @@ const Row = memo(function Row({
                 active={peek === true && i === lastFood}
                 landing={bubble.live === true && action.kind === 'food_logged'}
                 correcting={bubble.live === true && action.kind === 'food_updated'}
+                cue={cue ?? null}
                 onCatch={onCatch}
               >
                 {card}

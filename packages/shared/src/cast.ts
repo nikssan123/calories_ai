@@ -44,7 +44,9 @@ export type Mood =
   /* At the pot, in the kitchen scene. */
   | 'stir'
   /* A packet just read by the scanner. */
-  | 'surprised';
+  | 'surprised'
+  /* Just back from the park path: hands on hips, eyes shut, breathing hard. */
+  | 'puffed';
 
 /** What a hand can hold. Only drawn in the moods that hold something. */
 export type Prop = 'mug' | 'toast' | 'spoon' | 'bowl' | 'medal' | 'cake';
@@ -56,7 +58,7 @@ export type Prop = 'mug' | 'toast' | 'spoon' | 'bowl' | 'medal' | 'cake';
  */
 export type Accessory = 'scarf' | 'flower' | 'leaf';
 
-export type Motion = 'breathe' | 'sleep' | 'hop' | 'cheer';
+export type Motion = 'breathe' | 'sleep' | 'hop' | 'cheer' | 'pant';
 export type Fx = 'bubbles' | 'zz' | 'sparkle' | 'flame' | 'confetti' | 'hearts' | 'steam' | 'spark';
 
 export const GRID = 120;
@@ -218,6 +220,7 @@ const MOODS: Record<
   taste: { eyes: 'happy', mouth: 'o', arms: ['down', 'hold'], motion: 'breathe' },
   stir: { eyes: 'up', mouth: 'small', arms: ['down', 'stir'], motion: 'breathe' },
   surprised: { eyes: 'wide', mouth: 'o', arms: ['startle', 'startle'], fx: 'spark', motion: 'breathe' },
+  puffed: { eyes: 'closed', mouth: 'o', arms: ['hip', 'hip'], motion: 'pant' },
 };
 
 const INK = '#2a1f18';

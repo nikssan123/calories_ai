@@ -23,7 +23,7 @@ import { font, type as t, useColors } from '@/theme';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
 import { useLocale, useT } from '@/lib/i18n';
 import { AppError, messageOf } from '@/lib/errors';
-import { KitchenScene } from '@/components/cast/Scenes';
+import { KitchenScene, type SceneCue } from '@/components/cast/Scenes';
 import { Glossy } from '@/components/icons/Glossy';
 import { Segments } from '@/components/Segments';
 import { Sky, useSky } from '@/components/Sky';
@@ -77,6 +77,15 @@ export default function CookScreen() {
   const [importText, setImportText] = useState('');
   const [importing, setImporting] = useState(false);
   const [thinking, setThinking] = useState(false);
+  /*
+   * What the kitchen has just been told (CAST.md, fifth pass). The photo coming
+   * back startles whoever is at the pot; a recipe arriving gets tasted. One at a
+   * time, and nothing is replayed on a re-render.
+   */
+  const [kitchen, setKitchen] = useState<SceneCue | null>(null);
+  const reacts = useCallback((cue: Omit<SceneCue, 'key'>) => {
+    setKitchen({ ...cue, key: Date.now() });
+  }, []);
   const [thinkingNote, setThinkingNote] = useState('');
   const [allowance, setAllowance] = useState<Allowance | null>(null);
   /*
@@ -268,6 +277,7 @@ export default function CookScreen() {
    * being written.
    */
   async function cookFromPhoto(found: string[]) {
+    reacts({ who: 'skye', mood: 'surprised', ms: 1000 });
     await suggest(found, true);
   }
 
@@ -278,6 +288,7 @@ export default function CookScreen() {
       const [recipe] = recipes;
       if (!recipe) throw new AppError("I couldn't read that as a recipe.");
       setRecipes((prev) => [recipe, ...prev]);
+      reacts({ who: 'plum', mood: 'taste', prop: 'spoon', ms: 1400 });
       setMessage('');
       setTab('ideas');
       setImportText('');
@@ -324,6 +335,7 @@ export default function CookScreen() {
         focus: focus?.length ? focus : undefined,
       });
       setRecipes(result.recipes);
+      reacts({ who: 'plum', mood: 'taste', prop: 'spoon', ms: 1400 });
       setMessage(result.message);
       setAllowance(result.allowance);
       adopt(result.allowance);
@@ -382,7 +394,11 @@ export default function CookScreen() {
 
       {/* The kitchen they're in, at the hour it is (CAST.md): above the content,
           in its own slot, and gone once the page scrolls. */}
-      <KitchenScene thinking={tab === 'ideas' && recipes.length === 0 && !thinking ? 'skye' : undefined} />
+      <KitchenScene
+        thinking={tab === 'ideas' && recipes.length === 0 && !thinking ? 'skye' : undefined}
+        busy={thinking}
+        cue={kitchen}
+      />
 
       <Sheet open={kitchenOpen} title={tr('cook.yourKitchen')} onClose={() => setKitchenOpen(false)}>
         {items && (

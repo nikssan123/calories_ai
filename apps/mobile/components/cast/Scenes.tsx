@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   Easing,
@@ -7,6 +7,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
+  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 import Svg, {
@@ -25,7 +26,7 @@ import type { DayPart } from '@/theme';
 import { useColors, useTheme } from '@/theme';
 import { useSky } from '@/components/Sky';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
-import { Character, type CastName, type Mood, type Prop } from './Character';
+import { Character, type CastName, type Cue, type Mood, type Prop } from './Character';
 import { useDayPart } from './life';
 
 /**
@@ -60,6 +61,31 @@ interface Placed {
   ground?: number;
 }
 
+/**
+ * A scene's answer to something that just happened on its tab (CAST.md, fifth
+ * pass) — the fridge photo came back, a workout was logged, a badge landed.
+ *
+ * Whoever it names reacts if they are in the scene at this hour, and nobody
+ * does if they are not: a scene keeps one of each, so an answer from Ember at
+ * two in the morning is an answer nobody is there to give. Passed with a new
+ * `key` each time, like any cue.
+ */
+export interface SceneCue {
+  who: CastName;
+  mood?: Mood;
+  /** Put in the hand for as long as the cue lasts. */
+  prop?: Prop;
+  ms?: number;
+  hop?: boolean;
+  /** Runs the length of the scene and comes back, then arrives out of breath. */
+  run?: boolean;
+  key: number;
+}
+
+/** Out along the path and back, and how long it is out of breath afterwards. */
+const RUN_MS = 2600;
+const PUFF_MS = 1500;
+
 /** A box on the grid, scaled to the width the scene was laid out at. */
 function useWidth() {
   const [width, setWidth] = useState(0);
@@ -69,25 +95,127 @@ function useWidth() {
   ] as const;
 }
 
-function Cast({ placed, scale, ground }: { placed: Placed[]; scale: number; ground: number }) {
+function Cast({
+  placed,
+  scale,
+  ground,
+  cue,
+  span,
+}: {
+  placed: Placed[];
+  scale: number;
+  ground: number;
+  /** What just happened on this tab, for whoever in here answers it. */
+  cue?: SceneCue | null;
+  /** The scene's width in grid units, for a figure that runs across it. */
+  span: number;
+}) {
   return (
     <>
       {placed.map((figure, i) => (
-        <Character
+        <Standing
           key={`${figure.name}-${figure.mood}`}
-          name={figure.name}
-          mood={figure.mood}
-          prop={figure.prop}
-          size={figure.size * scale}
+          figure={figure}
+          scale={scale}
+          ground={ground}
           delay={i * 500}
-          style={{
-            position: 'absolute',
-            left: figure.x * scale,
-            top: ((figure.ground ?? ground) - figure.size) * scale,
-          }}
+          cue={cue && cue.who === figure.name ? cue : null}
+          span={span}
         />
       ))}
     </>
+  );
+}
+
+/**
+ * One figure on the grid, and its answer when the scene is given one.
+ *
+ * A run is the only thing here that moves a figure off its mark: it hops (the
+ * pose already loops) while a translation carries it out along the path and
+ * back, and it arrives `puffed`. Everything else is an ordinary cue.
+ */
+function Standing({
+  figure,
+  scale,
+  ground,
+  delay,
+  cue,
+  span,
+}: {
+  figure: Placed;
+  scale: number;
+  ground: number;
+  delay: number;
+  cue: SceneCue | null;
+  span: number;
+}) {
+  const reduced = useReducedMotion();
+  const travel = useSharedValue(0);
+  const [playing, setPlaying] = useState<{ cue: Cue; prop?: Prop } | null>(null);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const key = cue?.key;
+  useEffect(() => {
+    if (!cue) return;
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+    const stop = (ms: number) => timers.current.push(setTimeout(() => setPlaying(null), ms));
+    if (cue.run) {
+      setPlaying({ cue: { mood: cue.mood ?? 'hop', ms: RUN_MS, key: cue.key } });
+      if (!reduced) {
+        const far = (span - figure.x - figure.size - 4) * scale;
+        travel.value = withSequence(
+          withTiming(far, { duration: RUN_MS / 2, easing: Easing.inOut(Easing.quad) }),
+          withTiming(0, { duration: RUN_MS / 2, easing: Easing.inOut(Easing.quad) }),
+        );
+      }
+      timers.current.push(
+        setTimeout(() => {
+          setPlaying({ cue: { mood: 'puffed', ms: PUFF_MS, key: cue.key + 1 } });
+          stop(PUFF_MS);
+        }, RUN_MS),
+      );
+      return;
+    }
+    const ms = cue.ms ?? 900;
+    setPlaying({ cue: { mood: cue.mood ?? 'idle', ms, key: cue.key, hop: cue.hop }, prop: cue.prop });
+    stop(ms);
+    // Once per cue.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  useEffect(
+    () => () => {
+      timers.current.forEach(clearTimeout);
+      cancelAnimation(travel);
+    },
+    [travel],
+  );
+
+  const running = useAnimatedStyle(() => ({ transform: [{ translateX: travel.value }] }));
+
+  return (
+    <Animated.View
+      collapsable={false}
+      pointerEvents="box-none"
+      style={[
+        {
+          position: 'absolute',
+          left: figure.x * scale,
+          top: ((figure.ground ?? ground) - figure.size) * scale,
+        },
+        running,
+      ]}
+    >
+      <Character
+        name={figure.name}
+        mood={figure.mood}
+        prop={playing?.prop ?? figure.prop}
+        size={figure.size * scale}
+        delay={delay}
+        cue={playing?.cue ?? null}
+      />
+    </Animated.View>
   );
 }
 
@@ -163,6 +291,18 @@ const KH = 170;
 /** Where a figure's box ends, so its shadow falls on the counter top. */
 const COUNTER = 140;
 
+/**
+ * While something is cooking the kitchen takes its afternoon places, whatever
+ * the hour: that arrangement is the one built around the pot, and the hour is
+ * still in the light. Asking for a recipe at one in the morning is somebody up
+ * late cooking, which is the truth of it.
+ */
+const COOKING: Placed[] = [
+  { name: 'ember', mood: 'hold', prop: 'bowl', x: 14, size: 58 },
+  { name: 'skye', mood: 'stir', x: 96, size: 60 },
+  { name: 'plum', mood: 'idle', x: 236, size: 54 },
+];
+
 const KITCHEN_CAST: Record<DayPart, Placed[]> = {
   morning: [
     { name: 'skye', mood: 'idle', x: 22, size: 58 },
@@ -211,7 +351,22 @@ function kitchenPalette(part: DayPart, dark: boolean) {
  * Skye stops what it is doing in the kitchen and thinks, rather than a second
  * Skye doing the thinking under the scene (CAST.md, fourth pass: one of each).
  */
-export function KitchenScene({ style, thinking }: { style?: StyleProp<ViewStyle>; thinking?: CastName }) {
+export function KitchenScene({
+  style,
+  thinking,
+  busy = false,
+  cue,
+}: {
+  style?: StyleProp<ViewStyle>;
+  thinking?: CastName;
+  /**
+   * A recipe is being written. Whoever is at the pot stirs while it is, at
+   * whatever hour it is — the wait is the one moment the kitchen is about
+   * something, and a still kitchen through it says nothing is happening.
+   */
+  busy?: boolean;
+  cue?: SceneCue | null;
+}) {
   const [width, onLayout] = useWidth();
   const colors = useColors();
   const { scheme } = useTheme();
@@ -221,7 +376,8 @@ export function KitchenScene({ style, thinking }: { style?: StyleProp<ViewStyle>
   const scale = width / KW;
   const pal = kitchenPalette(part, scheme === 'dark');
   const lamp = part === 'night';
-  const pot = part === 'afternoon' || part === 'evening';
+  // Something on the hob whenever there is something to stir, whatever the hour.
+  const pot = part === 'afternoon' || part === 'evening' || busy;
 
   return (
     <View
@@ -303,11 +459,15 @@ export function KitchenScene({ style, thinking }: { style?: StyleProp<ViewStyle>
             </Svg>
 
             <Cast
-              placed={KITCHEN_CAST[part].map((figure) =>
-                figure.name === thinking ? { ...figure, mood: 'thinking', prop: undefined } : figure,
+              placed={(busy ? COOKING : KITCHEN_CAST[part]).map((figure) =>
+                !busy && figure.name === thinking
+                  ? { ...figure, mood: 'thinking', prop: undefined }
+                  : figure,
               )}
               scale={scale}
               ground={COUNTER}
+              cue={cue}
+              span={KW}
             />
 
             {pot && (
@@ -392,7 +552,7 @@ function parkPalette(part: DayPart, dark: boolean) {
   };
 }
 
-export function ParkScene({ style }: { style?: StyleProp<ViewStyle> }) {
+export function ParkScene({ style, cue }: { style?: StyleProp<ViewStyle>; cue?: SceneCue | null }) {
   const [width, onLayout] = useWidth();
   const colors = useColors();
   const { scheme } = useTheme();
@@ -452,7 +612,7 @@ export function ParkScene({ style }: { style?: StyleProp<ViewStyle> }) {
               />
             </Svg>
 
-            <Cast placed={PARK_CAST[part]} scale={scale} ground={PATH} />
+            <Cast placed={PARK_CAST[part]} scale={scale} ground={PATH} cue={cue} span={PW} />
           </>
         )}
       </View>
@@ -496,7 +656,7 @@ function hillPalette(part: DayPart, dark: boolean) {
   return { far: '#9fd6c4', hill: ['#9fdcb0', '#e9f2cf'], path: '#fff8ea', flag: '#ff5fa2' };
 }
 
-export function HillScene({ style }: { style?: StyleProp<ViewStyle> }) {
+export function HillScene({ style, cue }: { style?: StyleProp<ViewStyle>; cue?: SceneCue | null }) {
   const [width, onLayout] = useWidth();
   const colors = useColors();
   const { scheme } = useTheme();
@@ -547,7 +707,7 @@ export function HillScene({ style }: { style?: StyleProp<ViewStyle> }) {
               <Path d="M277 22L292 27L277 32Z" fill={pal.flag} />
             </Svg>
 
-            <Cast placed={HILL_CAST[part]} scale={scale} ground={146} />
+            <Cast placed={HILL_CAST[part]} scale={scale} ground={146} cue={cue} span={HW} />
           </>
         )}
       </View>
@@ -635,7 +795,7 @@ function porchPalette(part: DayPart, dark: boolean) {
 
 const FLOWERS = ['#ff8fbe', '#ffd166', '#b9a3ff'];
 
-export function PorchScene({ style }: { style?: StyleProp<ViewStyle> }) {
+export function PorchScene({ style, cue }: { style?: StyleProp<ViewStyle>; cue?: SceneCue | null }) {
   const [width, onLayout] = useWidth();
   const colors = useColors();
   const { scheme } = useTheme();
@@ -735,7 +895,7 @@ export function PorchScene({ style }: { style?: StyleProp<ViewStyle> }) {
               <Rect x={190} y={143} width={80} height={7} rx={1} fill={pal.boards} />
             </Svg>
 
-            <Cast placed={PORCH_CAST[part]} scale={scale} ground={146} />
+            <Cast placed={PORCH_CAST[part]} scale={scale} ground={146} cue={cue} span={RW} />
           </>
         )}
       </View>

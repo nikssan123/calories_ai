@@ -210,6 +210,9 @@ const loopFor = (gait: Gait, motion: Motion): { duration: number; reverse: boole
   switch (motion) {
     case 'breathe':
       return { duration: gait.breathe, reverse: true };
+    // Out of breath: the same squeeze as a breath, three times as fast.
+    case 'pant':
+      return { duration: 520, reverse: true };
     case 'sleep':
       return { duration: gait.sleep, reverse: true };
     case 'hop':

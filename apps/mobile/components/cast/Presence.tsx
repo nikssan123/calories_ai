@@ -156,7 +156,7 @@ export interface LedgeState {
 }
 
 /** How far each leans against a scroll: Skye sways, Plum barely moves. */
-const LEAN: Record<CastName, number> = { ember: 7, skye: 11, plum: 3 };
+const LEAN: Record<CastName, number> = { ember: 10, skye: 15, plum: 4 };
 
 /**
  * Memoised: the journal re-renders on every word of a streamed reply, and three
@@ -358,6 +358,7 @@ export function CardPeek({
   active,
   landing,
   correcting,
+  cue,
   onCatch,
   children,
 }: {
@@ -371,6 +372,12 @@ export function CardPeek({
    * for having got it wrong.
    */
   correcting?: boolean;
+  /**
+   * A cue for whoever is on this card — the journal's ledge life reaching the
+   * one of them who is up here instead. Without it a food word perking up the
+   * carrier perked up an empty seat.
+   */
+  cue?: Cue | null;
   /** The carrier has caught this card and is cheering it. */
   onCatch?: (who: CastName, entryId: string) => void;
   children: React.ReactNode;
@@ -388,6 +395,7 @@ export function CardPeek({
           entryId={entryId}
           landing={landing}
           correcting={correcting ?? false}
+          outside={cue ?? null}
           onCatch={onCatch}
           riseOut={rise}
         />
@@ -452,6 +460,7 @@ function Peeker({
   entryId,
   landing,
   correcting,
+  outside,
   onCatch,
   riseOut,
 }: {
@@ -459,6 +468,8 @@ function Peeker({
   entryId: string;
   landing: boolean;
   correcting: boolean;
+  /** A cue from the screen, for the figure that happens to be up here. */
+  outside: Cue | null;
   onCatch?: (who: CastName, entryId: string) => void;
   /** Handed the rise, so the hands in front of the card move with the figure behind it. */
   riseOut: React.MutableRefObject<SharedValue<number> | null>;
@@ -476,6 +487,14 @@ function Peeker({
   const reduced = useReducedMotion();
   const focused = useIsFocused();
   const who = dominant(card);
+  /* The screen's own cue, played here unless this figure is in a moment of its own. */
+  const outsideKey = outside?.key;
+  useEffect(() => {
+    if (!outside || nodding.current) return;
+    setCue(outside);
+    // Once per cue.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outsideKey]);
   const seat = `journal.peek:${entryId}`;
   const catching = useRef(landing && !CAUGHT.has(entryId));
   // 0 = peeking, -1 = popped up over it.

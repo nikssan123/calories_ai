@@ -24,7 +24,7 @@ import { WorkoutCard } from '@/components/workout/WorkoutCard';
 import { useScrollToTop } from '@/hooks/useScrollToTop';
 import { useLocale, useT } from '@/lib/i18n';
 import { messageOf } from '@/lib/errors';
-import { ParkScene } from '@/components/cast/Scenes';
+import { ParkScene, type SceneCue } from '@/components/cast/Scenes';
 import { Glossy } from '@/components/icons/Glossy';
 
 /**
@@ -54,6 +54,12 @@ export default function ExerciseScreen() {
   const [error, setError] = useState<string | null>(null);
   /** The session open in the card that logged it, being corrected in place. */
   const [editing, setEditing] = useState<string | null>(null);
+  /*
+   * A logged session sends Ember out along the path and back, and it arrives out
+   * of breath. Nothing else on this tab answers a workout, and the park is the
+   * one thing here that can (CAST.md, fifth pass).
+   */
+  const [park, setPark] = useState<SceneCue | null>(null);
 
   /* The series carries a date and a number per day; the sessions that made
      that number sit in a flat list beside it. Index them once, so pointing at
@@ -120,12 +126,17 @@ export default function ExerciseScreen() {
 
       {/* A path in the park, at the hour it is (CAST.md). Its own slot above the
           workouts, never behind a word. */}
-      <ParkScene />
+      <ParkScene cue={park} />
 
       {/* Saved workouts and the week, above the history: this is the half of
           the screen you come here to *act* on, and the history below is the
           half you come to read. */}
-      <Workouts onLogged={() => void load(days)} />
+      <Workouts
+        onLogged={() => {
+          setPark({ who: 'ember', run: true, key: Date.now() });
+          void load(days);
+        }}
+      />
 
       {/* Above the log and outside the empty-state branch on purpose. A week
           with nothing in it yet is exactly when somebody needs to see what the
