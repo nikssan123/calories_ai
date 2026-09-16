@@ -273,14 +273,31 @@ function QualityTrack({
           </Text>
         ) : (
           /*
-            One text run, not two sibling views — the same fix as MacroBars, for
-            the same reason. Measured apart, the target was laid out against the
-            figure beside it and given a hair less width than it asked for, which
-            cropped the last glyph off every cell: "/30" for "/30g", "/2,300m"
-            for "/2,300mg". A single run is measured once, as a line.
+            One run that shrinks, rather than two siblings that get cut.
+
+            The cell is 46% of the panel and the figure row is the widest thing
+            in it, so the moment the reader turns iOS text size up the row is
+            wider than the cell and the overflow is clipped at its right edge —
+            which eats the unit's last glyph first: "/31" for "/31g", "/2,300m"
+            for "/2,300mg", in all four cells at once. Reproduced on an iPhone
+            at the accessibility sizes; at the default size it fits and nothing
+            shows.
+
+            Two halves to the fix and both are needed. One text run, because
+            `adjustsFontSizeToFit` measures a Text, and two siblings shrink
+            against their own widths rather than against the line they share —
+            which is also the arrangement MacroBars has a note against. And the
+            fitting itself, because `numberOfLines` alone answers an overflow
+            with an ellipsis, which is the same news as the crop.
+
+            `minimumFontScale` matches MacroBars' label: past about 0.7 the
+            figure is too small to read at a glance, and a row that has shrunk
+            that far is better off letting the glyph go.
           */
           <Text
             numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.72}
             style={[t.footnoteSemibold, t.tnum, { color: colors.mutedForeground }]}
           >
             <Text
