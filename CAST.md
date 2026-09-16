@@ -49,6 +49,7 @@ The first pass left them at the edges: once somebody logged anything, they were 
   - Morning: a coffee at the window.
   - Afternoon and evening: somebody at the pot.
   - Night: the lamp on and Plum asleep.
+  - **Dark is the lamp off in the room, not a later hour.** A scene's window shows the light theme's sky for the hour with the light taken out of it (`sceneSkyAt`, `dim`), and every wall, hill and lawn is that hour's own colour dimmed. Night's colours, and the stars, are for the hours that are actually night — they used to be for the whole of dark, so a kitchen at one in the afternoon was purple, lamplit and under a starfield.
 
 ### Two traps worth knowing
 - **Every animated layer is `collapsable={false}`.**

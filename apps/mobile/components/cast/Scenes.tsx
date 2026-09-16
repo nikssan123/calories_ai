@@ -23,8 +23,8 @@ import Svg, {
 } from 'react-native-svg';
 import { useIsFocused } from 'expo-router';
 import type { DayPart } from '@/theme';
-import { useColors, useTheme } from '@/theme';
-import { useSky } from '@/components/Sky';
+import { dim, useColors, useTheme } from '@/theme';
+import { useSceneSky } from '@/components/Sky';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { Character, type CastName, type Cue, type Mood, type Prop } from './Character';
 import { useDayPart } from './life';
@@ -40,6 +40,12 @@ import { useDayPart } from './life';
  * Who's there and what they're doing follows the part of the day. Morning is a
  * coffee at the window, the middle of the day is somebody at the pot, and late
  * at night the lamp is on and Plum is asleep on the counter.
+ *
+ * Dark mode is the lamp off in the room, not a different hour: the sky through
+ * the window is the hour's own sky turned down, and so is every wall, hill and
+ * lawn (`dim`). Night's own colours, and the lamp, stay for the hours that are
+ * actually night — otherwise a scene at one in the afternoon read as one in the
+ * morning in both themes.
  *
  * Laid out on a fixed grid and scaled to the width it's given. The figures are
  * real `Character`s placed on that grid, so they fidget and answer a poke like
@@ -336,13 +342,31 @@ const KITCHEN_CAST: Record<DayPart, Placed[]> = {
   night: [{ name: 'plum', mood: 'sleepy', x: 132, size: 56 }],
 };
 
+/*
+ * How much light dark takes out of each kind of surface. A wall or a lawn is a
+ * big flat field and can lose the most; paint and leaves keep more of theirs,
+ * or the scene goes to mud; night's own colours are already dark and only lose
+ * their edge.
+ */
+const WALL_DOWN = 0.6;
+const GROUND_DOWN = 0.58;
+const TRIM_DOWN = 0.62;
+const LEAF_DOWN = 0.45;
+const NIGHT_DOWN = 0.3;
+
+/**
+ * Dark takes the hour's own kitchen and turns the lights down on it. A wall is
+ * a big flat field, so it goes furthest down; the jars lose a little of their
+ * glare rather than their colour.
+ */
 function kitchenPalette(part: DayPart, dark: boolean) {
-  if (part === 'night' || dark) {
+  const d = (hex: string, amount = WALL_DOWN) => (dark ? dim(hex, amount) : hex);
+  if (part === 'night') {
     return {
-      wall: ['#4a4262', '#3b3553'],
-      counter: '#7a5f6e',
-      front: '#5e4858',
-      frame: '#6c6488',
+      wall: [d('#4a4262', NIGHT_DOWN), d('#3b3553', NIGHT_DOWN)],
+      counter: d('#7a5f6e', NIGHT_DOWN),
+      front: d('#5e4858', NIGHT_DOWN),
+      frame: d('#6c6488', NIGHT_DOWN),
       jars: 0.7,
     };
   }
@@ -352,11 +376,11 @@ function kitchenPalette(part: DayPart, dark: boolean) {
     evening: ['#f7dcc0', '#eec7a3'],
   };
   return {
-    wall: walls[part],
-    counter: '#ecc594',
-    front: '#d9a570',
-    frame: '#ffffff',
-    jars: 1,
+    wall: [d(walls[part][0]), d(walls[part][1])],
+    counter: d('#ecc594', TRIM_DOWN),
+    front: d('#d9a570'),
+    frame: d('#ffffff', TRIM_DOWN),
+    jars: dark ? 0.82 : 1,
   };
 }
 
@@ -384,7 +408,7 @@ export function KitchenScene({
   const [width, onLayout] = useWidth();
   const colors = useColors();
   const { scheme } = useTheme();
-  const sky = useSky();
+  const sky = useSceneSky();
   const part = useDayPart();
   const id = useId().replace(/:/g, '');
   const scale = width / KW;
@@ -428,7 +452,7 @@ export function KitchenScene({
 
               {/* The window, lit by the hour's own sky. */}
               <Rect x={214} y={18} width={94} height={76} rx={12} fill={`url(#${id}-sky)`} />
-              {sky.inkLight && <Stars left={224} top={26} width={76} height={50} />}
+              {sky.starlit && <Stars left={224} top={26} width={76} height={50} />}
               <Rect
                 x={214}
                 y={18}
@@ -441,7 +465,7 @@ export function KitchenScene({
               />
               <Path d="M261 18V94M214 56H308" stroke={pal.frame} strokeWidth={4} />
               <Rect x={208} y={92} width={106} height={7} rx={3} fill={pal.front} />
-              <G x={292} y={78}>
+              <G x={292} y={78} opacity={pal.jars}>
                 <Path d="M-7 14H7L5 2H-5Z" fill="#e87b54" />
                 <Path d="M0 2C-6 -4 -8 -10 -3 -12C0 -8 0 -4 0 2Z" fill="#3fbf7f" />
                 <Path d="M0 2C5 -6 9 -9 11 -6C8 -2 4 0 0 2Z" fill="#5fd394" />
@@ -533,36 +557,32 @@ const PARK_CAST: Record<DayPart, Placed[]> = {
 };
 
 function parkPalette(part: DayPart, dark: boolean) {
+  const d = (hex: string, amount = GROUND_DOWN) => (dark ? dim(hex, amount) : hex);
   if (part === 'night')
     return {
-      far: '#3b4466',
-      mid: '#46506a',
-      near: '#2e3446',
-      path: '#5a607a',
-      leaf: ['#4f7a68', '#2f5446'],
-    };
-  if (dark)
-    return {
-      far: '#2f4a48',
-      mid: '#35584a',
-      near: '#2a3a33',
-      path: '#4b5a52',
-      leaf: ['#4fa07a', '#2d6a4e'],
+      far: d('#3b4466', NIGHT_DOWN),
+      mid: d('#46506a', NIGHT_DOWN),
+      near: d('#2e3446', NIGHT_DOWN),
+      path: d('#5a607a', NIGHT_DOWN),
+      leaf: [d('#4f7a68', NIGHT_DOWN), d('#2f5446', NIGHT_DOWN)],
+      trunk: d('#9b6b43', NIGHT_DOWN),
     };
   if (part === 'evening')
     return {
-      far: '#c9a0a8',
-      mid: '#d9b48f',
-      near: '#f3dcc0',
-      path: '#fff3e2',
-      leaf: ['#8fc98a', '#4f9a5e'],
+      far: d('#c9a0a8'),
+      mid: d('#d9b48f'),
+      near: d('#f3dcc0'),
+      path: d('#fff3e2', TRIM_DOWN),
+      leaf: [d('#8fc98a', LEAF_DOWN), d('#4f9a5e', LEAF_DOWN)],
+      trunk: d('#9b6b43', LEAF_DOWN),
     };
   return {
-    far: '#9fd6c4',
-    mid: '#a9e0b6',
-    near: '#e9f2cf',
-    path: '#fff8ea',
-    leaf: ['#9ff0b8', '#3fbf7f'],
+    far: d('#9fd6c4'),
+    mid: d('#a9e0b6'),
+    near: d('#e9f2cf'),
+    path: d('#fff8ea', TRIM_DOWN),
+    leaf: [d('#9ff0b8', LEAF_DOWN), d('#3fbf7f', LEAF_DOWN)],
+    trunk: d('#9b6b43', LEAF_DOWN),
   };
 }
 
@@ -570,7 +590,7 @@ export function ParkScene({ style, cue }: { style?: StyleProp<ViewStyle>; cue?: 
   const [width, onLayout] = useWidth();
   const colors = useColors();
   const { scheme } = useTheme();
-  const sky = useSky();
+  const sky = useSceneSky();
   const part = useDayPart();
   const id = useId().replace(/:/g, '');
   const scale = width / PW;
@@ -604,13 +624,13 @@ export function ParkScene({ style, cue }: { style?: StyleProp<ViewStyle>; cue?: 
               </Defs>
 
               <Rect width={PW} height={PH} fill={`url(#${id}-sky)`} />
-              {sky.inkLight && <Stars left={12} top={10} width={296} height={50} />}
+              {sky.starlit && <Stars left={12} top={10} width={296} height={50} />}
 
               <Path d="M0 84C50 64 100 68 150 78C204 90 250 60 320 70V150H0Z" fill={pal.far} opacity={0.85} />
               <Path d="M0 108C70 88 140 92 210 104C260 112 290 98 320 102V150H0Z" fill={pal.mid} />
 
               <G x={262} y={58}>
-                <Rect x={-3} y={26} width={6} height={42} rx={3} fill="#9b6b43" />
+                <Rect x={-3} y={26} width={6} height={42} rx={3} fill={pal.trunk} />
                 <Circle cx={0} cy={20} r={24} fill={`url(#${id}-tree)`} />
                 <Circle cx={-17} cy={32} r={13} fill={`url(#${id}-tree)`} />
                 <Circle cx={16} cy={34} r={12} fill={`url(#${id}-tree)`} />
@@ -664,17 +684,34 @@ const HILL_CAST: Record<DayPart, Placed[]> = {
 };
 
 function hillPalette(part: DayPart, dark: boolean) {
-  if (part === 'night') return { far: '#3b4466', hill: ['#46506a', '#2e3446'], path: '#5a607a', flag: '#c9a0c8' };
-  if (dark) return { far: '#2f4a48', hill: ['#35584a', '#2a3a33'], path: '#4b5a52', flag: '#ff8fbe' };
-  if (part === 'evening') return { far: '#c9a0a8', hill: ['#e3bf98', '#f3dcc0'], path: '#fff3e2', flag: '#ff5fa2' };
-  return { far: '#9fd6c4', hill: ['#9fdcb0', '#e9f2cf'], path: '#fff8ea', flag: '#ff5fa2' };
+  const d = (hex: string, amount = GROUND_DOWN) => (dark ? dim(hex, amount) : hex);
+  if (part === 'night')
+    return {
+      far: d('#3b4466', NIGHT_DOWN),
+      hill: [d('#46506a', NIGHT_DOWN), d('#2e3446', NIGHT_DOWN)],
+      path: d('#5a607a', NIGHT_DOWN),
+      flag: d('#c9a0c8', LEAF_DOWN),
+    };
+  if (part === 'evening')
+    return {
+      far: d('#c9a0a8'),
+      hill: [d('#e3bf98'), d('#f3dcc0')],
+      path: d('#fff3e2', TRIM_DOWN),
+      flag: d('#ff5fa2', LEAF_DOWN),
+    };
+  return {
+    far: d('#9fd6c4'),
+    hill: [d('#9fdcb0'), d('#e9f2cf')],
+    path: d('#fff8ea', TRIM_DOWN),
+    flag: d('#ff5fa2', LEAF_DOWN),
+  };
 }
 
 export function HillScene({ style, cue }: { style?: StyleProp<ViewStyle>; cue?: SceneCue | null }) {
   const [width, onLayout] = useWidth();
   const colors = useColors();
   const { scheme } = useTheme();
-  const sky = useSky();
+  const sky = useSceneSky();
   const part = useDayPart();
   const id = useId().replace(/:/g, '');
   const scale = width / HW;
@@ -703,7 +740,7 @@ export function HillScene({ style, cue }: { style?: StyleProp<ViewStyle>; cue?: 
               </Defs>
 
               <Rect width={HW} height={HH} fill={`url(#${id}-sky)`} />
-              {sky.inkLight && <Stars left={12} top={10} width={200} height={40} />}
+              {sky.starlit && <Stars left={12} top={10} width={200} height={40} />}
 
               <Path d="M0 110C60 96 110 100 160 106C210 112 260 94 320 98V150H0Z" fill={pal.far} opacity={0.7} />
               <Path
@@ -768,21 +805,24 @@ const PORCH_CAST: Record<DayPart, Placed[]> = {
 
 function porchPalette(part: DayPart, dark: boolean) {
   const lit = part === 'evening' || part === 'night';
-  if (part === 'night' || dark) {
+  const d = (hex: string, amount = WALL_DOWN) => (dark ? dim(hex, amount) : hex);
+  if (part === 'night') {
     return {
-      wall: ['#4a4262', '#3b3553'],
-      eave: '#352f48',
-      trim: '#6c6488',
-      door: '#8a5a78',
-      boards: '#7a5f6e',
-      front: '#5e4858',
-      grass: part === 'night' ? '#46506a' : '#35584a',
-      stripes: ['#8a5a78', '#5a5070'],
-      bench: '#6e5360',
-      iron: '#2a2540',
-      mailbox: '#5a7aa8',
-      glass: lit ? '#ffd98a' : '#5a6a7a',
-      lantern: part === 'night' ? '#ffd98a' : '#8a7f9a',
+      wall: [d('#4a4262', NIGHT_DOWN), d('#3b3553', NIGHT_DOWN)],
+      eave: d('#352f48', NIGHT_DOWN),
+      trim: d('#6c6488', NIGHT_DOWN),
+      door: d('#8a5a78', NIGHT_DOWN),
+      boards: d('#7a5f6e', NIGHT_DOWN),
+      front: d('#5e4858', NIGHT_DOWN),
+      grass: d('#46506a', NIGHT_DOWN),
+      stripes: [d('#8a5a78', NIGHT_DOWN), d('#5a5070', NIGHT_DOWN)],
+      bench: d('#6e5360', NIGHT_DOWN),
+      iron: d('#2a2540', NIGHT_DOWN),
+      mailbox: d('#5a7aa8', NIGHT_DOWN),
+      // The lamp and the window are the light in this scene, so they keep it.
+      glass: '#ffd98a',
+      lantern: '#ffd98a',
+      bloom: 0.8,
     };
   }
   const walls: Record<Exclude<DayPart, 'night'>, [string, string]> = {
@@ -791,19 +831,20 @@ function porchPalette(part: DayPart, dark: boolean) {
     evening: ['#f7dcc0', '#eec7a3'],
   };
   return {
-    wall: walls[part],
-    eave: '#c98f5a',
-    trim: '#ffffff',
-    door: '#ff8a6a',
-    boards: '#ecc594',
-    front: '#d9a570',
-    grass: part === 'evening' ? '#d9b48f' : '#a9e0b6',
-    stripes: ['#ff8a8a', '#fff4ea'],
-    bench: '#9b6b43',
-    iron: '#6b5a4a',
-    mailbox: '#5aa9e6',
-    glass: lit ? '#ffd98a' : '#dff3f0',
-    lantern: '#fff3d6',
+    wall: [d(walls[part][0]), d(walls[part][1])],
+    eave: d('#c98f5a'),
+    trim: d('#ffffff', TRIM_DOWN),
+    door: d('#ff8a6a', LEAF_DOWN),
+    boards: d('#ecc594', TRIM_DOWN),
+    front: d('#d9a570'),
+    grass: d(part === 'evening' ? '#d9b48f' : '#a9e0b6', GROUND_DOWN),
+    stripes: [d('#ff8a8a', LEAF_DOWN), d('#fff4ea', TRIM_DOWN)],
+    bench: d('#9b6b43', LEAF_DOWN),
+    iron: d('#6b5a4a', LEAF_DOWN),
+    mailbox: d('#5aa9e6', LEAF_DOWN),
+    glass: lit ? '#ffd98a' : d('#dff3f0', TRIM_DOWN),
+    lantern: d('#fff3d6', TRIM_DOWN),
+    bloom: dark ? 0.82 : 1,
   };
 }
 
@@ -813,7 +854,7 @@ export function PorchScene({ style, cue }: { style?: StyleProp<ViewStyle>; cue?:
   const [width, onLayout] = useWidth();
   const colors = useColors();
   const { scheme } = useTheme();
-  const sky = useSky();
+  const sky = useSceneSky();
   const part = useDayPart();
   const id = useId().replace(/:/g, '');
   const scale = width / RW;
@@ -847,12 +888,12 @@ export function PorchScene({ style, cue }: { style?: StyleProp<ViewStyle>; cue?:
               </Defs>
 
               <Rect width={RW} height={RH} fill={`url(#${id}-sky)`} />
-              {sky.inkLight && <Stars left={8} top={8} width={70} height={60} />}
+              {sky.starlit && <Stars left={8} top={8} width={70} height={60} />}
 
               {/* The garden: a few flowers and the mailbox, with nothing written on it. */}
               <Path d="M0 118C30 108 70 110 100 116V150H0Z" fill={pal.grass} />
               {FLOWERS.map((flower, i) => (
-                <G key={flower}>
+                <G key={flower} opacity={pal.bloom}>
                   <Path d={`M${10 + i * 12} 136V${124 - i * 2}`} stroke="#3fbf7f" strokeWidth={2} />
                   <Circle cx={10 + i * 12} cy={122 - i * 2} r={4} fill={flower} />
                 </G>

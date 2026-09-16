@@ -1,23 +1,35 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { skyAt, useTheme, type Sky as SkyColours } from '@/theme';
+import { sceneSkyAt, skyAt, useTheme, type SceneSky, type Sky as SkyColours } from '@/theme';
+
+/** The sky of the hour, as a hook. */
+export function useSky(): SkyColours {
+  return skyAt(useMinute(), useTheme().scheme);
+}
 
 /**
- * The sky of the hour, as a hook: re-read once a minute, never per frame.
+ * The same hour, read for a scene's window rather than for the page behind it:
+ * the weather outside, which dark dims rather than replaces (`sceneSkyAt`).
+ */
+export function useSceneSky(): SceneSky {
+  return sceneSkyAt(useMinute(), useTheme().scheme);
+}
+
+/**
+ * The clock both of those read: once a minute, never per frame.
  *
  * A minute is the resolution anybody could notice a sky change at, and it keeps
  * the whole effect to one state update a minute rather than an animation
  * running for as long as Today is open — which, on the screen people leave open
  * on the kitchen counter, is a long time.
  */
-export function useSky(): SkyColours {
-  const { scheme } = useTheme();
+function useMinute(): Date {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60_000);
     return () => clearInterval(timer);
   }, []);
-  return skyAt(now, scheme);
+  return now;
 }
 
 /**

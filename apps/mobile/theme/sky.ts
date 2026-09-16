@@ -1,3 +1,4 @@
+import { dim } from './colors';
 import type { Scheme } from './index';
 
 /**
@@ -17,6 +18,9 @@ import type { Scheme } from './index';
  *
  * Dark is a setting and not an hour, so it has its own set: every hour again,
  * dimmed, and resolving into the dark ground rather than into cream.
+ *
+ * That second set is the *page's* light, which has to end in the page. The sky
+ * a scene shows through a window is a different question — see `sceneSkyAt`.
  */
 export interface Sky {
   /** The top of the header. */
@@ -57,14 +61,18 @@ const DARK: Key[] = [
   [24, '#0f1330', '#1a1d3c', '#1f1a22', 'rgba(120, 140, 255, 0.16)'],
 ];
 
-export function skyAt(date: Date, scheme: Scheme): Sky {
+/** The two keys this hour falls between, and how far between them it is. */
+function around(date: Date, keys: Key[]): [Key, Key, number] {
   const hour = date.getHours() + date.getMinutes() / 60;
-  const keys = scheme === 'dark' ? DARK : LIGHT;
   let i = 0;
   while (i < keys.length - 2 && keys[i + 1]![0] <= hour) i++;
   const a = keys[i]!;
   const b = keys[i + 1]!;
-  const t = Math.min(1, Math.max(0, (hour - a[0]) / (b[0] - a[0])));
+  return [a, b, Math.min(1, Math.max(0, (hour - a[0]) / (b[0] - a[0])))];
+}
+
+export function skyAt(date: Date, scheme: Scheme): Sky {
+  const [a, b, t] = around(date, scheme === 'dark' ? DARK : LIGHT);
   const top = mixHex(a[1], b[1], t);
   return {
     top,
@@ -78,6 +86,53 @@ export function skyAt(date: Date, scheme: Scheme): Sky {
      * forty minutes every evening.
      */
     inkLight: luminance(top) < 0.2,
+  };
+}
+
+/**
+ * The sky a scene shows through its window, which is not the sky over a header.
+ *
+ * The header's sky is the page's own light: in dark it is dim at every hour and
+ * has to end in the ground it is painted on. A scene's sky is a rectangle in a
+ * frame — it is the weather outside, and outside is the same hour whichever
+ * theme the phone is set to. So a scene always reads the light theme's keys and
+ * dark turns the lights down on them: midday stays a midday sky a few stops
+ * deeper, rather than borrowing the small hours' indigo, which is what made
+ * every dark-mode scene look like the middle of the night.
+ */
+export interface SceneSky {
+  top: string;
+  mid: string;
+  low: string;
+  /** Whether it is actually dark out at this hour, so a scene can put stars in it. */
+  starlit: boolean;
+}
+
+/**
+ * How much light dark takes out of each band, top to bottom.
+ *
+ * Not one figure for all three: the low band is a pale cream at every daylight
+ * hour, and dimmed as gently as the top it turned into a brown murk across the
+ * middle of the park. Taking most of it away instead leaves the colour in the
+ * sky, where the hour is, and puts the land below it in shadow.
+ */
+const LIGHTS_DOWN = [0.45, 0.58, 0.72];
+
+export function sceneSkyAt(date: Date, scheme: Scheme): SceneSky {
+  const [a, b, t] = around(date, LIGHT);
+  const top = mixHex(a[1], b[1], t);
+  const down = (hex: string, band: number) => (scheme === 'dark' ? dim(hex, LIGHTS_DOWN[band]!) : hex);
+  return {
+    top: down(top, 0),
+    mid: down(mixHex(a[2], b[2], t), 1),
+    low: down(mixHex(a[3], b[3], t), 2),
+    /*
+     * Measured on the light keys either way, like `inkLight` and for the same
+     * reason — but on the *hour's* sky rather than the theme's, because dark is
+     * not an hour. Stars over a scene at one in the afternoon were the loudest
+     * part of the bug.
+     */
+    starlit: luminance(top) < 0.2,
   };
 }
 

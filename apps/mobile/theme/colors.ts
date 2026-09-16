@@ -238,3 +238,28 @@ export function tint(color: string, alpha: number): string {
   if (!channels || channels.length < 3) return color;
   return `rgba(${channels[0]}, ${channels[1]}, ${channels[2]}, ${alpha})`;
 }
+
+/**
+ * A colour with less light falling on it: `amount` of the light taken away.
+ *
+ * For illustration — the scenes — where dark is the same room with the lamp
+ * turned down and not a different hour. A kitchen wall at midday is the midday
+ * wall, dimmed, so the scene still says which part of the day it is; swapping
+ * in night's colours instead is what made every dark-mode scene read as two in
+ * the morning.
+ *
+ * A multiply rather than a mix toward the ground, because a mix toward one
+ * colour walks everything to grey — the lawns and the leaves went with it — and
+ * a scene that has lost its greens has stopped being a place. The light taken
+ * away is very slightly warm, so a white frame dims to the warm grey this
+ * theme's dark is made of rather than to a neutral one.
+ */
+const LAMP = [1, 0.93, 0.88];
+
+export function dim(hex: string, amount: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `#${[16, 8, 0]
+    .map((shift, i) => Math.round(((n >> shift) & 255) * (1 - amount) * LAMP[i]!))
+    .map((v) => v.toString(16).padStart(2, '0'))
+    .join('')}`;
+}
