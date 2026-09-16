@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
+  runOnJS,
+  type SharedValue,
   useAnimatedProps,
   useAnimatedStyle,
   useSharedValue,
@@ -50,6 +52,7 @@ import { Markdown } from '@/components/Markdown';
 import { Material } from '@/components/Material';
 import { PressableChunk } from '@/components/Chunk';
 import { CastPlate } from '@/components/cast/Plate';
+import { SillScene, SILL_HEIGHT } from '@/components/cast/Sill';
 import { CardPeek, CastLedge, dominant } from '@/components/cast/Presence';
 import { Character, STAGGER, type CastName, type Cue } from '@/components/cast/Character';
 import { bounceTab, claimAll, Seat, spark, useAnchor, visit } from '@/components/cast/stage';
@@ -76,7 +79,7 @@ import { useSaveAccount } from '@/lib/save-account';
 import { enqueue, newId } from '@/lib/outbox';
 import { useOutbox } from '@/hooks/useOutbox';
 import { useRefreshOnReturn } from '@/hooks/useRefreshOnReturn';
-import { duration, ease, font, type as t, useColors, useType } from '@/theme';
+import { duration, ease, font, tint, type as t, useColors, useType, type Sky as SkyColours } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { haptics } from '@/lib/haptics';
 import { onEntryRemoved } from '@/lib/removals';
@@ -140,6 +143,13 @@ interface Bubble {
    */
   moment?: Milestone;
 }
+
+/**
+ * Far enough back through the conversation to be reading it rather than
+ * fidgeting with it — which is when the sill gets out of the way. A band's
+ * worth, so the rubber-band at the bottom never triggers it.
+ */
+const SCENE_RETIRE_PX = 96;
 
 /** Near enough to the end that a new message should still carry the view. */
 const NEAR_BOTTOM_PX = 64;
@@ -563,6 +573,71 @@ export default function JournalScreen() {
     dayRef.current = day;
   }, [day]);
 
+  /*
+   * The sill under the status row, and the scroll that closes it.
+   *
+   * Shown while nothing has been eaten today — `consumed.kcal === 0`, not an
+   * empty conversation. `listMessages` has no date filter, so the journal is
+   * one transcript running across days and `bubbles.length === 0` only ever
+   * means a brand-new account. The band at zero is a different thing: it is
+   * every morning, on top of yesterday's conversation, and that is the screen
+   * the ring used to read as a hole on.
+   *
+   * Which is also why it has to get out of the way. Someone opening the app to
+   * read back over yesterday did not ask for a window box, so the first real
+   * scroll into the history sends the two of them ducking behind the plank and
+   * takes the band back to its ordinary height.
+   */
+  const [scene, setScene] = useState(false);
+  const sceneOpen = useSharedValue(1);
+  /** Whether it is on screen and has not begun leaving. */
+  const sceneHere = useRef(false);
+  /** The day it was last sent away on, so it stays away until tomorrow. */
+  const sceneSpent = useRef<string | null>(null);
+  /** Its exit finished under a finger; the collapse waits for the finger. */
+  const scenePending = useRef(false);
+  /** The last offset the scroller reported, for the collapse to correct by. */
+  const offset = useRef(0);
+
+  useEffect(() => {
+    const show = day !== null && day.consumed.kcal === 0 && sceneSpent.current !== day.local_date;
+    if (show === sceneHere.current) return;
+    sceneHere.current = show;
+    sceneOpen.value = 1;
+    setScene(show);
+  }, [day, sceneOpen]);
+
+  /*
+   * Taking the band back down is a layout change, and the reader is mid-scroll
+   * when it happens — so the conversation is nudged by exactly what the band
+   * gave up, and stays where their eye left it. `pinned` is false by now (they
+   * scrolled back, that is the whole trigger), so `stickToBottom` has no say.
+   */
+  const collapseScene = useCallback(() => {
+    const y = offset.current;
+    setScene(false);
+    requestAnimationFrame(() => {
+      scroller.current?.scrollTo({ y: Math.max(0, y - SILL_HEIGHT), animated: false });
+    });
+  }, []);
+
+  const afterExit = useCallback(() => {
+    if (touching.current) {
+      scenePending.current = true;
+      return;
+    }
+    collapseScene();
+  }, [collapseScene]);
+
+  const retireScene = useCallback(() => {
+    if (!sceneHere.current) return;
+    sceneHere.current = false;
+    sceneSpent.current = dayRef.current?.local_date ?? null;
+    sceneOpen.value = withTiming(0, { duration: duration.pop, easing: ease.out }, (done) => {
+      if (done) runOnJS(afterExit)();
+    });
+  }, [sceneOpen, afterExit]);
+
   /** Lets `send` see the messages it started from without depending on them. */
   const bubblesRef = useRef<Bubble[]>([]);
   useEffect(() => {
@@ -732,11 +807,17 @@ export default function JournalScreen() {
     [refreshDay],
   );
 
-  const measure = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    pinned.current =
-      contentSize.height - contentOffset.y - layoutMeasurement.height < NEAR_BOTTOM_PX;
-  }, []);
+  const measure = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+      offset.current = contentOffset.y;
+      const back = contentSize.height - contentOffset.y - layoutMeasurement.height;
+      pinned.current = back < NEAR_BOTTOM_PX;
+      // A band's worth of scroll, so a nudge or a rubber-band does not count.
+      if (back > SCENE_RETIRE_PX) retireScene();
+    },
+    [retireScene],
+  );
 
   const lastScroll = useRef({ y: 0, t: 0 });
   const onScroll = useCallback(
@@ -773,8 +854,12 @@ export default function JournalScreen() {
       touching.current = false;
       // Settles back upright on a looser spring, so the stop wobbles.
       lean.value = withSpring(0, { damping: 6, stiffness: 80 });
+      if (scenePending.current) {
+        scenePending.current = false;
+        collapseScene();
+      }
     },
-    [measure, lean],
+    [measure, lean, collapseScene],
   );
 
   /**
@@ -1164,7 +1249,7 @@ export default function JournalScreen() {
        */
       behavior="padding"
     >
-      <StatusBar day={ringDay} loading={loading} flash={ringFlash} />
+      <StatusBar day={ringDay} loading={loading} flash={ringFlash} scene={scene} sceneOpen={sceneOpen} />
 
       <ScrollView
         ref={scroller}
@@ -1442,7 +1527,21 @@ async function reconcile(
  * quiet serif line, not the big one Today keeps: the conversation below is what
  * this screen is for.
  */
-function StatusBar({ day, loading, flash }: { day: DaySummary | null; loading: boolean; flash: number }) {
+function StatusBar({
+  day,
+  loading,
+  flash,
+  scene,
+  sceneOpen,
+}: {
+  day: DaySummary | null;
+  loading: boolean;
+  flash: number;
+  /** Whether the sill is laid out under the status row. See `SillScene`. */
+  scene: boolean;
+  /** 1 while it is there, 0 once it has left. The journal drives it. */
+  sceneOpen: SharedValue<number>;
+}) {
   const colors = useColors();
   const type = useType();
   const insets = useSafeAreaInsets();
@@ -1454,8 +1553,24 @@ function StatusBar({ day, loading, flash }: { day: DaySummary | null; loading: b
   const ink = sky.inkLight ? colors.skyInk : colors.foreground;
   const quiet = sky.inkLight ? colors.skyInk : colors.mutedForeground;
 
+  /*
+   * The scene leaves by sliding up behind the status row, inside a box that
+   * keeps its height — so nothing in the conversation below moves while it
+   * plays. The height goes when the journal takes `scene` away, which it does
+   * once this has finished; see `afterExit` there.
+   */
+  const leaving = useAnimatedStyle(() => ({
+    transform: [{ translateY: -SILL_HEIGHT * (1 - sceneOpen.value) }],
+  }));
+
   return (
     <View style={[styles.status, { paddingTop: insets.top + 6 }]}>
+      {/*
+        The sky's own height is unchanged whether the sill is there or not: at
+        `insets.top + 170` its gradient reaches transparent exactly where the
+        plank's front face begins, so the view out of the window stops at the
+        ledge without any of this having to be interpolated.
+      */}
       <Sky sky={sky} height={insets.top + 170} hazeTop={insets.top + 170} />
       <Serif numberOfLines={1} style={[type.serifTitle, styles.hello, { color: ink }]}>
         {greetingFor(tr, profile?.display_name ?? null)}
@@ -1472,8 +1587,15 @@ function StatusBar({ day, loading, flash }: { day: DaySummary | null; loading: b
           accessibilityLabel={tr('nav.today')}
           style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
         >
-          <StatusLine day={day} ink={ink} quiet={quiet} type={type} tr={tr} locale={locale} flash={flash} />
+          <StatusLine day={day} ink={ink} quiet={quiet} type={type} tr={tr} locale={locale} flash={flash} sky={sky} />
         </Pressable>
+      )}
+      {scene && (
+        <View style={styles.sceneBand} pointerEvents="box-none">
+          <Animated.View collapsable={false} pointerEvents="box-none" style={leaving}>
+            <SillScene open={sceneOpen} />
+          </Animated.View>
+        </View>
       )}
     </View>
   );
@@ -1487,6 +1609,7 @@ function StatusLine({
   tr,
   locale,
   flash,
+  sky,
 }: {
   day: DaySummary;
   ink: string;
@@ -1495,6 +1618,8 @@ function StatusLine({
   tr: ReturnType<typeof useT>;
   locale: ReturnType<typeof useLocale>;
   flash: number;
+  /** The hour, which decides whether the coin is warm or dark. See `MiniRing`. */
+  sky: SkyColours;
 }) {
   const colors = useColors();
   const { consumed, targets } = day;
@@ -1504,7 +1629,7 @@ function StatusLine({
 
   return (
     <View style={styles.statusRow}>
-      <MiniRing consumed={consumed.kcal} target={targets.kcal} flash={flash} />
+      <MiniRing consumed={consumed.kcal} target={targets.kcal} flash={flash} sky={sky} />
       <View style={styles.statusText}>
         <Text style={[type.serifFigure, styles.statusFigure, { color: ink }]} numberOfLines={1}>
           {formatNumber(Math.round(shown), locale)}
@@ -1549,7 +1674,7 @@ const AnimatedArc = Animated.createAnimatedComponent(Circle);
  * the big one does — the only feedback on this screen that the number at the
  * top changed — and turns to ink past the target rather than to red.
  */
-function MiniRing({ consumed, target, flash }: { consumed: number; target: number; flash: number }) {
+function MiniRing({ consumed, target, flash, sky }: { consumed: number; target: number; flash: number; sky: SkyColours }) {
   const colors = useColors();
   const reduced = useReducedMotion();
   /* Where the cast's spark lands, and the light it makes when it does. */
@@ -1561,11 +1686,21 @@ function MiniRing({ consumed, target, flash }: { consumed: number; target: numbe
   }, [flash, reduced, glow]);
   const glowing = useAnimatedStyle(() => ({ opacity: glow.value, transform: [{ scale: 0.8 + glow.value * 0.55 }] }));
   const size = 46;
-  const stroke = 6;
-  const radius = (size - stroke) / 2;
+  const stroke = 5.5;
+  /*
+   * The coin, and the ring drawn on it. `cy` is a touch above centre so the
+   * ledge below has somewhere to sit inside the same 46pt box — everything
+   * else in the app gets its depth from a solid offset shadow, and this used
+   * to be the one surface that did not.
+   */
+  const coin = 21;
+  const cy = 22;
+  const radius = 17.5;
   const circumference = 2 * Math.PI * radius;
   const ratio = Math.min(1, Math.max(0, consumed / Math.max(1, target)));
   const over = consumed > target;
+  /* Nothing eaten yet. The arc is not merely short here — it is not drawn. */
+  const unspent = ratio === 0;
   const arc = useSharedValue(circumference * ratio);
 
   useEffect(() => {
@@ -1578,11 +1713,31 @@ function MiniRing({ consumed, target, flash }: { consumed: number; target: numbe
     strokeDasharray: [Math.max(0, Math.min(circumference, arc.value)), circumference],
   }));
 
+  /*
+   * A dark sky wants a dark coin.
+   *
+   * The old track was `glassStrong`, which in dark is rgba(40, 32, 27, 0.88)
+   * against a 9am sky of #173d52 — a ring *darker* than the thing it sits on,
+   * which is the literal recipe for a hole punched through. Elevation in dark
+   * is light rather than shadow (see `shadow` in colors.ts), so after dark the
+   * coin is the hour's own sky lifted a little, with a lit rim. In daylight it
+   * is the page's warm ground, which reads as an object on the blue.
+   *
+   * Keyed on `inkLight` rather than on the scheme, because the light theme has
+   * a night too and a cream disc on indigo reads as a moon — and CAST.md is
+   * clear that the ring is the only object allowed in this sky.
+   */
+  const face = sky.inkLight ? tint(sky.top, 0.66) : tint(colors.background, 0.94);
+  const rim = sky.inkLight ? tint(colors.skyInk, 0.34) : undefined;
+  /* The day's budget before any of it is spent, not an empty groove. */
+  const budget = tint(colors.calories, sky.inkLight ? 0.24 : 0.2);
+
   return (
     <View
       ref={anchor}
       collapsable={false}
-      style={[styles.miniRing, { boxShadow: over ? undefined : `0px 6px 18px -8px ${colors.calories}` }]}
+      // Nothing is lit until something has been eaten, so nothing glows.
+      style={[styles.miniRing, { boxShadow: over || unspent ? undefined : `0px 6px 18px -8px ${colors.calories}` }]}
     >
       <Animated.View
         collapsable={false}
@@ -1600,11 +1755,15 @@ function MiniRing({ consumed, target, flash }: { consumed: number; target: numbe
             <Stop offset="1" stopColor={colors.logoRamp} />
           </LinearGradient>
         </Defs>
-        <Circle cx={size / 2} cy={size / 2} r={radius} stroke={colors.glassStrong} strokeWidth={stroke} fill="none" />
-        <G rotation={-90} originX={size / 2} originY={size / 2}>
+        <Circle cx={size / 2} cy={cy + 2.6} r={coin} fill={tint(colors.chunk, sky.inkLight ? 0.5 : 0.13)} />
+        <Circle cx={size / 2} cy={cy} r={coin} fill={face} stroke={rim} strokeWidth={rim ? 1.4 : 0} />
+        <Circle cx={size / 2} cy={cy} r={radius} stroke={budget} strokeWidth={stroke} fill="none" />
+        {/* Where the day starts, and where the arc will grow from. */}
+        {unspent && <Circle cx={size / 2} cy={cy - radius} r={2.4} fill={colors.calories} />}
+        <G rotation={-90} originX={size / 2} originY={cy}>
           <AnimatedArc
             cx={size / 2}
-            cy={size / 2}
+            cy={cy}
             r={radius}
             stroke={over ? colors.foreground : 'url(#mini)'}
             strokeWidth={stroke}
@@ -2064,6 +2223,13 @@ const styles = StyleSheet.create({
   burstAnchor: { height: 0, zIndex: 3 },
   ringGlow: { position: 'absolute', left: -22, top: -22, width: 90, height: 90, borderRadius: 45 },
   hello: { marginBottom: 6 },
+  /*
+   * The sill reaches both edges and finishes flush with the foot of the band,
+   * so it cancels the padding `status` puts around everything else. 12 above
+   * it, and the 12 below is the band's own — see SILL_HEIGHT for the rest of
+   * the arithmetic.
+   */
+  sceneBand: { marginTop: 12, marginHorizontal: -16, marginBottom: -12, height: SILL_HEIGHT, overflow: 'hidden' },
   track: {
     height: 10,
     borderRadius: 999,
