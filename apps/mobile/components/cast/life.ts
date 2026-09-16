@@ -135,6 +135,19 @@ export function glanceAt(name: CastName) {
   if (x !== null && x !== undefined) glanceToward(x, name);
 }
 
+/**
+ * Somebody has just been poked. The others look over, and Skye copies Ember —
+ * it tries the same hop a beat later, and overshoots, because its gait is
+ * floatier. Plum's pokes are its own business: nobody answers those.
+ */
+export function poked(name: CastName) {
+  if (name === 'plum') return;
+  glanceAt(name);
+  if (name !== 'ember') return;
+  const skye = [...actors].find((actor) => actor.name === 'skye');
+  if (skye) later(300, () => actors.has(skye) && skye.fidget('hop'));
+}
+
 /** Everyone on screen does the same small thing: all eyes up at a new arrival. */
 export function lookAll(kind: Fidget) {
   for (const actor of actors) {

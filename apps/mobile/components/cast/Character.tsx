@@ -9,6 +9,7 @@ import Animated, {
   withDelay,
   withRepeat,
   withSequence,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
@@ -31,7 +32,7 @@ import {
   type Prop,
   type Shape,
 } from './figure';
-import { useLife, useSeason, type Actor, type Fidget } from './life';
+import { poked, useLife, useSeason, type Actor, type Fidget } from './life';
 import { SeatPresence } from './seatPresence';
 
 /**
@@ -149,6 +150,61 @@ export const GAIT: Record<CastName, Gait> = {
     flight: { duration: 540, lift: 44, delay: 140 },
   },
 };
+
+/**
+ * What a tap gets, per character (CAST.md, fifth pass).
+ *
+ * Every figure used to answer a poke the same way — hearts, arms up, a hop in
+ * its own gait — so three characters shared one expression between them and the
+ * only difference was in the thumb. Each now has three rungs: the first answer,
+ * a louder one if the taps keep coming, and something else again for a finger
+ * that stays down. The poses are the ones already drawn.
+ */
+interface Poke {
+  /** The pose it takes, and for how long. Only a figure at ease takes one. */
+  mood?: Mood;
+  ms?: number;
+  /** Jumps: how many, how far apart, how high, and how much shorter each is. */
+  jumps?: number;
+  gap?: number;
+  lift?: number;
+  decay?: number;
+  /** A squash instead of a jump, and how deep. Held while the finger is down. */
+  squash?: number;
+  /** Eyes closed for this long. */
+  shut?: number;
+  /** Turns its back and comes round again. */
+  flip?: boolean;
+  /** Tilts toward the finger, in degrees, until it is let go. */
+  tilt?: number;
+  /** Blinks twice. */
+  blinks?: boolean;
+}
+
+export const POKE: Record<CastName, { first: Poke; again: Poke; hold: Poke }> = {
+  // It flares, then it is too much fire, then it leans on you.
+  ember: {
+    first: { mood: 'proud', ms: 640, jumps: 2, gap: 150 },
+    again: { mood: 'proud', ms: 1060, jumps: 3, gap: 140, decay: 0.55 },
+    hold: { mood: 'proud', tilt: 9 },
+  },
+  // Floats further than it meant to, hiccups bubbles, tips its sprout at you.
+  skye: {
+    first: { mood: 'hopeful', ms: 840, jumps: 1, lift: 1.55 },
+    again: { mood: 'thinking', ms: 780, jumps: 1, lift: 0.4 },
+    hold: { tilt: 13, blinks: true },
+  },
+  // Unimpressed, then annoyed, and it answers pressure with pressure.
+  plum: {
+    first: { squash: 1, shut: 460 },
+    again: { mood: 'sleepy', ms: 1500, flip: true },
+    hold: { squash: 0.78 },
+  },
+};
+
+/** A second tap inside this climbs a rung; the loud rung then rests for `POKE_REST_MS`. */
+const POKE_WINDOW_MS = 1200;
+const POKE_REST_MS = 6000;
 
 const loopFor = (gait: Gait, motion: Motion): { duration: number; reverse: boolean } => {
   switch (motion) {
@@ -280,6 +336,10 @@ export function Character({
   const lookY = useSharedValue(0);
   const jump = useSharedValue(0);
   const nod = useSharedValue(0);
+  /* A tap's own three: squashed under a finger, tilted toward one, turned away. */
+  const press = useSharedValue(0);
+  const tilt = useSharedValue(0);
+  const facing = useSharedValue(0);
 
   /*
    * `delay` staggers figures when they first appear. A passing mood that
@@ -376,13 +436,13 @@ export function Character({
     passingTimer.current = setTimeout(() => setPassing(null), ms);
   };
 
-  const hop = (after = 0) => {
+  const hop = (after = 0, lift = 1) => {
     if (reduced) return;
     jump.value = withDelay(
       after,
       withSequence(
-        withTiming(1, { duration: gait.jump.up, easing: Easing.out(Easing.quad) }),
-        withTiming(0, { duration: gait.jump.down, easing: Easing.bounce }),
+        withTiming(lift, { duration: gait.jump.up * lift, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: gait.jump.down * lift, easing: Easing.bounce }),
       ),
     );
   };
@@ -437,6 +497,12 @@ export function Character({
    */
   const atEase = mood === 'idle' || mood === 'sit';
   const canHop = mood === 'idle' || mood === 'hold' || mood === 'wave';
+  /*
+   * A poke is answered more readily than a fidget is offered: an ambient wave or
+   * a bounce gives up its pose for one, because the tap was aimed at this figure
+   * and a wave is not a moment. A held prop or a moment of its own still wins.
+   */
+  const takesPose = atEase || mood === 'wave' || mood === 'hop';
   const act = useRef<(kind: Fidget) => boolean>(() => false);
   act.current = (kind) => {
     if (passing) return false;
@@ -482,13 +548,112 @@ export function Character({
   );
   useLife(live && fidget ? actor : null);
 
+  /*
+   * A poke, played from `POKE`. Only a figure at ease takes over its pose for
+   * one; one holding something, or in a moment of its own, keeps the pose and
+   * answers with the movement alone.
+   */
+  const pokeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(pokeTimer.current), []);
+
+  const play = (p: Poke) => {
+    if (p.mood && takesPose) pass(p.mood, p.ms ?? 700);
+    if (reduced) return;
+    for (let i = 0; i < (p.jumps ?? 0); i++) {
+      hop(i * (p.gap ?? 140), (p.lift ?? 1) * (p.decay ? p.decay ** i : 1));
+    }
+    if (p.squash !== undefined) {
+      press.value = withSequence(
+        withTiming(p.squash, { duration: 110, easing: Easing.out(Easing.quad) }),
+        withSpring(0, { damping: 5.5, stiffness: 200 }),
+      );
+    }
+    if (p.shut) {
+      lids.value = withSequence(
+        withTiming(0.1, { duration: 70 }),
+        withDelay(p.shut, withTiming(1, { duration: 120 })),
+      );
+    }
+    if (p.blinks) {
+      lids.value = withSequence(
+        withTiming(0.1, { duration: 60 }),
+        withTiming(1, { duration: 70 }),
+        withDelay(90, withTiming(0.1, { duration: 60 })),
+        withTiming(1, { duration: 70 }),
+      );
+    }
+    if (p.flip) {
+      // Turned away, and quickly: a flat drawing mirroring passes through no
+      // width at all, so the turn is short and rides a small hop, which is what
+      // makes it read as hopping round rather than as a figure squeezed flat.
+      const turn = (to: number) => {
+        facing.value = withTiming(to, { duration: 160, easing: Easing.inOut(Easing.quad) });
+        hop(0, 0.45);
+      };
+      turn(1);
+      clearTimeout(pokeTimer.current);
+      pokeTimer.current = setTimeout(() => turn(0), Math.max(500, (p.ms ?? 1200) - 240));
+    }
+  };
+
+  /*
+   * A finger that stays down is a different question from a tap, so it gets a
+   * different answer: Ember leans into it, Skye tips its sprout, Plum sinks and
+   * stays sunk until it is let go.
+   */
+  const held = useRef(false);
+  const holdTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(holdTimer.current), []);
+
+  const holdOn = (side: number) => {
+    const p = POKE[name].hold;
+    held.current = true;
+    if (p.mood && takesPose) pass(p.mood, 20_000);
+    if (p.blinks) {
+      lids.value = withSequence(
+        withTiming(0.1, { duration: 60 }),
+        withTiming(1, { duration: 70 }),
+        withDelay(90, withTiming(0.1, { duration: 60 })),
+        withTiming(1, { duration: 70 }),
+      );
+    }
+    if (reduced) return;
+    if (p.squash !== undefined) {
+      press.value = withTiming(p.squash, { duration: 240, easing: Easing.out(Easing.quad) });
+    }
+    if (p.tilt) tilt.value = withSpring(p.tilt * side, gait.spring);
+  };
+
+  const holdOff = () => {
+    if (!held.current) return;
+    clearTimeout(passingTimer.current);
+    setPassing(null);
+    press.value = withSpring(0, { damping: 7, stiffness: 150 });
+    tilt.value = withSpring(0, { damping: 5, stiffness: 110 });
+  };
+
+  const taps = useRef({ at: 0, loud: 0 });
   const onPress = () => {
+    // The hold has already answered; releasing it is not a second question.
+    if (held.current) {
+      held.current = false;
+      return;
+    }
     haptics.poke(name);
-    // A figure at ease giggles. One holding something, or in a moment of its
-    // own, keeps its pose and just bounces.
-    if (atEase) pass('giggle', 850);
-    hop();
     onPoke?.();
+    const now = Date.now();
+    const table = POKE[name];
+    if (now - taps.current.at > POKE_WINDOW_MS) {
+      play(table.first);
+    } else if (now - taps.current.loud > POKE_REST_MS) {
+      taps.current.loud = now;
+      play(table.again);
+    } else {
+      // Rung two is resting: the finger still gets an answer, a quiet one.
+      hop();
+    }
+    taps.current.at = now;
+    poked(name);
   };
 
   /* ---- Styles --------------------------------------------------------------- */
@@ -497,12 +662,24 @@ export function Character({
   const bodyStyle = useAnimatedStyle(() => {
     const c = clock.value;
     const lift = { translateY: -jump.value * jumpKeys.height * unit + nod.value * 3 * unit };
+    /*
+     * A tap's own three, on top of whatever the mood is doing: pressed down
+     * under a finger, tilted toward it, and turned away (`facing` at 1 is a
+     * mirror, and the half-way frames are the figure edge-on).
+     */
+    const lean = { rotate: `${tilt.value}deg` };
+    const squash = [
+      { scaleX: (1 + press.value * 0.17) * (1 - facing.value * 2) },
+      { scaleY: 1 - press.value * 0.2 },
+    ];
     if (motion === 'hop') {
       return {
         transform: [
           lift,
           { translateY: interpolate(c, hopKeys.t, hopKeys.y) * unit },
+          lean,
           { rotate: `${interpolate(c, hopKeys.t, hopKeys.r)}deg` },
+          ...squash,
           { scaleX: interpolate(c, hopKeys.t, hopKeys.sx) },
           { scaleY: interpolate(c, hopKeys.t, hopKeys.sy) },
         ],
@@ -513,12 +690,16 @@ export function Character({
         transform: [
           lift,
           { translateY: interpolate(c, cheerKeys.t, cheerKeys.y) * unit },
+          lean,
+          ...squash,
           { scaleX: interpolate(c, cheerKeys.t, cheerKeys.sx) },
           { scaleY: interpolate(c, cheerKeys.t, cheerKeys.sy) },
         ],
       };
     }
-    return { transform: [lift, { scaleX: 1 + c * 0.018 }, { scaleY: 1 + c * 0.035 }] };
+    return {
+      transform: [lift, lean, ...squash, { scaleX: 1 + c * 0.018 }, { scaleY: 1 + c * 0.035 }],
+    };
   });
 
   const shadowStyle = useAnimatedStyle(() => {
@@ -660,6 +841,15 @@ export function Character({
       ref={root}
       onLayout={place}
       onPress={onPress}
+      onPressIn={(event) => {
+        const side = event.nativeEvent.locationX > size / 2 ? 1 : -1;
+        clearTimeout(holdTimer.current);
+        holdTimer.current = setTimeout(() => holdOn(side), 260);
+      }}
+      onPressOut={() => {
+        clearTimeout(holdTimer.current);
+        holdOff();
+      }}
       hitSlop={6}
       accessible={false}
       accessibilityElementsHidden
