@@ -1281,11 +1281,11 @@ export const hr: Messages = {
   'spent.everGrant': (count: number, noun: string) => `Iskorišteno je sve besplatno: ${count} ${noun}`,
   'spent.monthly': (count: number, noun: string) =>
     `Iskorišteno je sve za ovaj mjesec: ${count} ${noun}`,
-  // ---- The free trial: a week, then the diary. See `TRIAL` in @ct/shared.
+  // ---- The free trial: a few days, then the diary. See `TRIAL` in @ct/shared.
   'wall.trialGrant': (count: number, noun: string) => `Besplatna proba je potrošena: ${count} ${noun}`,
   'wall.trialEnded': 'Tvoja besplatna proba je završila',
   'spent.trial': (count: number, noun: string) => `Iskorišteno je sve iz probe: ${count} ${noun}`,
-  'plans.trialOverTitle': 'Tvoj besplatni tjedan je završio.',
+  'plans.trialOverTitle': 'Tvoja besplatna proba je završila.',
   'plans.trialOverBody': 'Sve što utipkaš ostaje besplatno, zauvijek. Paket vraća dijelove koji razmišljaju.',
   'plans.onTrial': (when: string) =>
     `Tvoja besplatna proba završava ${when}. Sve što utipkaš ostaje besplatno — plaćaju se dijelovi koji razmišljaju.`,

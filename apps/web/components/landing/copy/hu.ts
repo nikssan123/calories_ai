@@ -194,7 +194,7 @@ export const hu: LandingCopy = {
         annualCadence: 'ameddig csak szeretnéd',
         pitch: 'A teljes napló, akár a repülőn is.',
         allowance: [
-          { figure: '28', unit: 'üzenet', period: '7 napos próbaidőszakban' },
+          { figure: '9', unit: 'üzenet', period: '3 napos próbaidőszakban' },
           { figure: '1', unit: 'fotóelemzés', period: 'kipróbálásra' },
         ],
         points: [
@@ -244,7 +244,7 @@ export const hu: LandingCopy = {
       },
     ],
     notes: [
-      'Minden fiók 7 napos ingyenes AI-próbaidőszakkal indul. Nem kérünk kártyát, így nincs mit lemondanod.',
+      'Minden fiók 3 napos ingyenes AI-próbaidőszakkal indul. Nem kérünk kártyát, így nincs mit lemondanod.',
       'A keret egy gördülő 30 napos időszakban, naponként töltődik vissza, így nincs fordulónap, amire várnod kellene.',
       'Elfogytak a fotóelemzéseid? Tíz darab már 4,09 € áron megvehető, sosem jár le, és csak a havi keret után kezd fogyni.',
       'Ha nem fizetsz tovább, visszakerülsz a Free csomagra: a naplód, az előzményeid és a kézi beírás megmaradnak.',

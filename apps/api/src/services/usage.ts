@@ -9,12 +9,15 @@ import { trialNeverEnds } from './trial.ts';
 import {
   CREDIT_METERS,
   TRIAL,
+  TRIAL_LEGACY,
   planLimitCode,
+  trialTerms,
   type Allowance,
   type MeterName,
   type PlanLimitCode,
   type PlanName,
   type TrialStage,
+  type TrialTerms,
 } from '@ct/shared';
 
 /**
@@ -154,20 +157,30 @@ async function turnsSince(userId: string, kinds: TurnKind[], since: Date): Promi
 }
 
 /**
- * When this account's trial began, or null for a guest.
+ * When this account's trial began and what it was sold as, or null for a guest.
  *
  * `email_verified_at` stands in for accounts that proved an address without
  * `startTrial` having run — the sign-up paths that predate it. It is the same
  * moment by definition: the trial starts when the account is saved, and saving
  * is proving the address.
+ *
+ * `trial_terms` is how long that trial runs and how much is in it. Null on a row
+ * whose trial has not started, which `trialTerms` reads as today's — migration
+ * `059` stamped every trial that was already running, including the ones that
+ * only have a confirmation date, so an unstamped row here has genuinely not
+ * started one.
  */
-async function trialAccount(userId: string): Promise<{ started: Date | null; endless: boolean }> {
-  const row = await queryOne<{ started: Date | null; email: string | null }>(
-    'SELECT COALESCE(trial_started_at, email_verified_at) AS started, email FROM users WHERE id = $1',
+async function trialAccount(
+  userId: string,
+): Promise<{ started: Date | null; terms: TrialTerms; endless: boolean }> {
+  const row = await queryOne<{ started: Date | null; terms: unknown; email: string | null }>(
+    `SELECT COALESCE(trial_started_at, email_verified_at) AS started, trial_terms AS terms, email
+       FROM users WHERE id = $1`,
     [userId],
   );
   return {
     started: row?.started ? new Date(row.started) : null,
+    terms: trialTerms(row?.terms),
     endless: trialNeverEnds(row?.email),
   };
 }
@@ -200,28 +213,43 @@ export async function allowanceFor(
   const kinds = METER_KINDS[meter];
 
   /*
-   * Free's chat and photo are a road rather than a table row — guest, a week
-   * of trial, then nothing — so the meter is redrawn for where this account is
-   * on it. `LIMITS.free` in `plans.ts` has the numbers and the argument.
+   * Free's chat and photo are a road rather than a table row — guest, a few
+   * days of trial, then nothing — so the meter is redrawn for where this
+   * account is on it. `LIMITS.free` in `plans.ts` has the numbers and the
+   * argument, and `users.trial_terms` carries the one case where they are not
+   * today's: a trial that started before the week was shortened keeps the week.
+   * That is why the account's own terms are handed to `freeMeter` and
+   * `freeStage` rather than the stage alone.
    */
   let trial: TrialStage | null = null;
   let trialEnds: string | null = null;
   let since: Date | null = null;
+  let terms: TrialTerms = TRIAL;
   let windowDays: number | null = period === 'month' ? 30 : null;
   if (plan === 'free' && !unmetered && (meter === 'chat' || meter === 'photo')) {
     const account = await trialAccount(userId);
     if (account.endless) {
-      // A store reviewer: the trial's allowance over a rolling week, with no end.
+      /*
+       * A store reviewer: the trial's allowance over a rolling window, with no
+       * end. Deliberately the *old* allowance — 28 over seven days rather than
+       * 9 over three. A reviewer works through the app in one sitting and a
+       * refusal halfway is a rejection, and the whole reason this branch exists
+       * is that the journal must still answer on every later review. Stated here
+       * rather than read off the row, because a reviewer account created next
+       * year would be stamped with today's terms and must not inherit them.
+       */
       trial = 'trial';
-      windowDays = TRIAL.days;
+      terms = TRIAL_LEGACY;
+      windowDays = TRIAL_LEGACY.days;
     } else {
-      trial = freeStage(account.started, now);
+      terms = account.terms;
+      trial = freeStage(account.started, now, terms);
       if (account.started) {
         since = account.started;
-        trialEnds = trialEndsAt(account.started).toISOString();
+        trialEnds = trialEndsAt(account.started, terms).toISOString();
       }
     }
-    ({ allowed, period } = freeMeter(trial, meter)!);
+    ({ allowed, period } = freeMeter(trial, meter, terms)!);
   }
   const road = { trial, trial_ends_at: trialEnds };
 
@@ -353,7 +381,7 @@ function sentenceFor({ meter, allowed, period, trial }: Allowance): string {
   const more = meter === 'photo' && trial === null ? ' You can add more without changing plan.' : '';
 
   if (trial === 'guest') {
-    return `That is your ${allowed} guest ${noun}. Save your account to start a free 7-day trial.${open}`;
+    return `That is your ${allowed} guest ${noun}. Save your account to start a free ${TRIAL.days}-day trial.${open}`;
   }
   if (trial === 'trial') return `That is all ${allowed} ${noun} in your free trial.${open}${more}`;
 
@@ -402,7 +430,7 @@ export async function requireAllowance(
     if (allowance.trial === 'guest' && (await guestSpendToday()) >= GUEST_DAILY_CAP_USD) {
       throw new PlanLimitError(
         allowance,
-        'Guest logs are paused for today. Save your account to start a free 7-day trial.',
+        `Guest logs are paused for today. Save your account to start a free ${TRIAL.days}-day trial.`,
       );
     }
     return allowance;

@@ -1,8 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { query } from '../src/db.ts';
-import { GUEST, METERS, PLANS, TRIAL } from '@ct/shared';
-import { freeMeter, freeStage, hasKitchen, limitsFor, meterFor, tiers } from '../src/services/plans.ts';
+import { query, queryOne } from '../src/db.ts';
+import { GUEST, METERS, PLANS, TRIAL, TRIAL_LEGACY } from '@ct/shared';
+import {
+  freeMeter,
+  freeStage,
+  hasKitchen,
+  limitsFor,
+  meterFor,
+  tiers,
+  trialEndsAt,
+} from '../src/services/plans.ts';
 import {
   allowanceFor,
   GUEST_DAILY_CAP_USD,
@@ -48,28 +56,60 @@ const setPlan = (id: string, plan: string) =>
 
 describe('limitsFor', () => {
   /**
-   * Free's model is a road: a guest day, a week of trial, then nothing. The
+   * Free's model is a road: a guest day, a few days of trial, then nothing. The
    * table holds the trial, because that is what `tiers()` shows as Free; the
    * other two stops are drawn by `freeMeter`. All three are one-off grants.
    */
-  it('grants free chat and photo as a guest day, a trial week, then nothing', () => {
+  it('grants free chat and photo as a guest day, a trial, then nothing', () => {
     expect(meterFor('free', 'chat')).toEqual({ allowed: TRIAL.chat, period: 'ever' });
     expect(meterFor('free', 'photo')).toEqual({ allowed: TRIAL.photo, period: 'ever' });
 
     expect(freeMeter('guest', 'chat')).toEqual({ allowed: GUEST.chat, period: 'ever' });
     expect(freeMeter('guest', 'photo')).toEqual({ allowed: GUEST.photo, period: 'ever' });
-    expect(freeMeter('trial', 'chat')).toEqual({ allowed: 28, period: 'ever' });
+    expect(freeMeter('trial', 'chat')).toEqual({ allowed: TRIAL.chat, period: 'ever' });
     expect(freeMeter('ended', 'chat')).toEqual({ allowed: null, period: 'ever' });
     expect(freeMeter('ended', 'photo')).toEqual({ allowed: null, period: 'ever' });
     // The kitchen is not on the road at all.
     expect(freeMeter('trial', 'recipe')).toBeNull();
   });
 
+  /**
+   * The trial was cut from seven days and 28 messages to three and 9. An
+   * account stamped with the old terms keeps them — both the grant and the
+   * length, which have to move together or the wall and the countdown disagree.
+   * See `TRIAL_LEGACY`.
+   */
+  it('runs a trial on the terms the account was sold', () => {
+    const started = new Date('2026-09-10T00:00:00Z');
+
+    expect(freeMeter('trial', 'chat', TRIAL_LEGACY)).toEqual({
+      allowed: TRIAL_LEGACY.chat,
+      period: 'ever',
+    });
+    expect(freeMeter('trial', 'chat', TRIAL)).toEqual({ allowed: TRIAL.chat, period: 'ever' });
+    expect(freeMeter('trial', 'photo', TRIAL_LEGACY)).toEqual({
+      allowed: TRIAL_LEGACY.photo,
+      period: 'ever',
+    });
+
+    expect(trialEndsAt(started, TRIAL_LEGACY).getTime() - started.getTime()).toBe(
+      TRIAL_LEGACY.days * 86_400_000,
+    );
+    expect(trialEndsAt(started, TRIAL).getTime() - started.getTime()).toBe(TRIAL.days * 86_400_000);
+
+    // An ended trial is withdrawn on either terms, and the kitchen is on neither.
+    expect(freeMeter('ended', 'chat', TRIAL_LEGACY)).toEqual({ allowed: null, period: 'ever' });
+    expect(freeMeter('trial', 'recipe', TRIAL_LEGACY)).toBeNull();
+  });
+
   it('puts an account on the road by when its trial started', () => {
     const now = new Date('2026-09-20T12:00:00Z');
     expect(freeStage(null, now)).toBe('guest');
-    expect(freeStage(new Date('2026-09-14T12:00:01Z'), now)).toBe('trial');
-    expect(freeStage(new Date('2026-09-13T12:00:00Z'), now)).toBe('ended');
+    expect(freeStage(new Date('2026-09-17T12:00:01Z'), now)).toBe('trial');
+    expect(freeStage(new Date('2026-09-17T12:00:00Z'), now)).toBe('ended');
+    // Same start, old terms: day six of seven, so it is still running.
+    expect(freeStage(new Date('2026-09-14T12:00:01Z'), now, TRIAL_LEGACY)).toBe('trial');
+    expect(freeStage(new Date('2026-09-14T12:00:01Z'), now, TRIAL)).toBe('ended');
   });
 
   /** The kitchen is a tier, not an allowance, below `coach`. */
@@ -455,7 +495,7 @@ describe('the journal meter', () => {
     expect(response.json().allowance.trial_ends_at).toEqual(expect.any(String));
   });
 
-  /** A week is a week: on day eight the model is gone, whatever was left. */
+  /** The clock is the clock: past the last day the model is gone, whatever was left. */
   it('refuses every free AI turn once the trial has ended', async () => {
     await query(`UPDATE users SET trial_started_at = now() - interval '8 days' WHERE id = $1`, [
       user.id,
@@ -689,7 +729,7 @@ describe('the free trial', () => {
     const refusal = await requireAllowance(user.id, 'free', 'chat').catch((e: unknown) => e);
     expect(refusal).toBeInstanceOf(PlanLimitError);
     expect((refusal as PlanLimitError).code).toBe('GUEST_LIMIT');
-    expect((refusal as PlanLimitError).message).toContain('free 7-day trial');
+    expect((refusal as PlanLimitError).message).toContain(`free ${TRIAL.days}-day trial`);
   });
 
   it('pauses guests who still have logs left once all guests have spent the day’s cap', async () => {
@@ -720,16 +760,72 @@ describe('the free trial', () => {
 
   it('starts a trial once, however many times an account is saved', async () => {
     await asGuest(user.id);
-    const first = await startTrial(user.id, new Date('2026-09-10T00:00:00Z'));
-    const second = await startTrial(user.id, new Date('2026-09-12T00:00:00Z'));
+    // Both dates are after the cutover, so this is the three-day trial.
+    const first = await startTrial(user.id, new Date('2026-09-20T00:00:00Z'));
+    const second = await startTrial(user.id, new Date('2026-09-22T00:00:00Z'));
     expect(second).toEqual(first);
 
-    const allowance = await allowanceFor(user.id, 'free', 'photo', false, new Date('2026-09-16T23:00:00Z'));
-    expect(allowance).toMatchObject({ trial: 'trial', trial_ends_at: '2026-09-17T00:00:00.000Z' });
-    const over = await allowanceFor(user.id, 'free', 'photo', false, new Date('2026-09-17T00:00:00Z'));
+    const allowance = await allowanceFor(user.id, 'free', 'photo', false, new Date('2026-09-22T23:00:00Z'));
+    expect(allowance).toMatchObject({ trial: 'trial', trial_ends_at: '2026-09-23T00:00:00.000Z' });
+    const over = await allowanceFor(user.id, 'free', 'photo', false, new Date('2026-09-23T00:00:00Z'));
     expect(over).toMatchObject({ trial: 'ended', allowed: null });
   });
 
+  /**
+   * The grandfather clause, end to end: a row stamped with the old terms — which
+   * is what migration `059` did to every trial that was already running — gets
+   * the week and the 28, not the three days and the 9.
+   */
+  it('keeps an account stamped with the seven-day trial on it', async () => {
+    await asGuest(user.id);
+    const started = new Date('2026-09-10T00:00:00Z');
+    await startTrial(user.id, started);
+    await query('UPDATE users SET trial_terms = $2::jsonb WHERE id = $1', [
+      user.id,
+      JSON.stringify(TRIAL_LEGACY),
+    ]);
+
+    const day5 = new Date(started.getTime() + 5 * 86_400_000);
+    expect(await allowanceFor(user.id, 'free', 'chat', false, day5)).toMatchObject({
+      trial: 'trial',
+      allowed: TRIAL_LEGACY.chat,
+      trial_ends_at: new Date(started.getTime() + TRIAL_LEGACY.days * 86_400_000).toISOString(),
+    });
+
+    const day8 = new Date(started.getTime() + 8 * 86_400_000);
+    expect(await allowanceFor(user.id, 'free', 'chat', false, day8)).toMatchObject({
+      trial: 'ended',
+      allowed: null,
+    });
+  });
+
+  /** And the stamp is what `startTrial` writes, once, with the start date. */
+  it('stamps the trial with the terms it was sold on, and never restamps', async () => {
+    await asGuest(user.id);
+    await startTrial(user.id, new Date('2026-09-20T00:00:00Z'));
+    const stamped = await queryOne<{ trial_terms: unknown }>(
+      'SELECT trial_terms FROM users WHERE id = $1',
+      [user.id],
+    );
+    expect(stamped?.trial_terms).toEqual({ ...TRIAL });
+
+    // A relink or a retried callback must not re-sell the trial on new terms.
+    await query('UPDATE users SET trial_terms = $2::jsonb WHERE id = $1', [
+      user.id,
+      JSON.stringify(TRIAL_LEGACY),
+    ]);
+    await startTrial(user.id, new Date('2026-09-22T00:00:00Z'));
+    const again = await queryOne<{ trial_terms: unknown }>(
+      'SELECT trial_terms FROM users WHERE id = $1',
+      [user.id],
+    );
+    expect(again?.trial_terms).toEqual({ ...TRIAL_LEGACY });
+  });
+
+  /**
+   * The reviewers keep the old and larger allowance on purpose — a review that
+   * hits a wall halfway through is a rejection. See `allowanceFor`.
+   */
   it('never ends the trial for a store reviewer, and counts a rolling week', async () => {
     await query(
       `UPDATE users SET email = 'appreview@daysofar.com', trial_started_at = now() - interval '60 days'
@@ -743,7 +839,7 @@ describe('the free trial', () => {
     expect(allowance).toMatchObject({
       trial: 'trial',
       trial_ends_at: null,
-      allowed: TRIAL.chat,
+      allowed: TRIAL_LEGACY.chat,
       used: 1,
     });
   });

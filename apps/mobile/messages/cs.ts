@@ -1279,11 +1279,11 @@ export const cs: Messages = {
     `Vyčerpáno: ${count} ${noun} zdarma`,
   'spent.monthly': (count: number, noun: string) =>
     `Vyčerpáno: ${count} ${noun} na tento měsíc`,
-  // ---- The free trial: a week, then the diary. See `TRIAL` in @ct/shared.
+  // ---- The free trial: a few days, then the diary. See `TRIAL` in @ct/shared.
   'wall.trialGrant': (count: number, noun: string) => `Vyčerpáno: ${count} ${noun} ze zkušební doby zdarma`,
   'wall.trialEnded': 'Zkušební doba zdarma skončila',
   'spent.trial': (count: number, noun: string) => `Vyčerpáno: ${count} ${noun} ze zkušební doby`,
-  'plans.trialOverTitle': 'Tvůj týden zdarma skončil.',
+  'plans.trialOverTitle': 'Tvoje zkušební období zdarma skončilo.',
   'plans.trialOverBody': 'Všechno, co zapíšeš ručně, zůstává navždy zdarma. Tarif vrátí části, které přemýšlejí.',
   'plans.onTrial': (when: string) =>
     `Zkušební doba zdarma skončí ${when}. Všechno, co zapíšeš ručně, zůstává zdarma – tohle platí za části, které přemýšlejí.`,

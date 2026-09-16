@@ -80,25 +80,42 @@ Unlimited and unmetered: manual entry, repeat-a-meal, barcode, weight,
 Today/History/Progress, the outbox. That is a complete food diary, roughly what
 MyFitnessPal's free tier is, and it costs nothing to serve.
 
-The model is a road with three stops, not a monthly grant (2026-09-15):
+The model is a road with three stops, not a monthly grant (2026-09-16):
 
 | stop | when | chat | photo |
 |---|---|---:|---:|
 | guest | no saved account yet | 4 | 1 |
-| trial | 7 days from saving the account | 28 | 1 |
-| ended | after day 7 | none | none |
+| trial | 3 days from saving the account | 9 | 1 |
+| ended | after day 3 | none | none |
 
 All three are one-off grants (`period: 'ever'`); the trial counts from
-`users.trial_started_at`, so the guest's four do not come out of the trial's 28.
+`users.trial_started_at`, so the guest's four do not come out of the trial's 9.
 The numbers are `GUEST` and `TRIAL` in `@ct/shared`; the logic is `freeStage` and
 `freeMeter` in `plans.ts`.
 
-**Why a week instead of ten a month.** Ten a month kept a free account alive *on the
-model* — a slow AI diary for nothing, which is a strong reason never to pay for the
-fast one. A week at four a day is the product at the pace somebody actually uses it,
-then a decision. It is also the cheaper bill: the worst case is about $1.45 for an
-account's whole life (guest day plus trial), against $0.41 every month, for ever, for
-every free account that stayed.
+**Why three days and not a month, or a week.** Ten a month kept a free account alive
+*on the model* — a slow AI diary for nothing, which is a strong reason never to pay
+for the fast one. So it became a trial: the product at the pace somebody actually
+uses it, then a decision.
+
+A week was too much of it. The meals a person eats repeat, and repeat is free — by
+day five the ones that matter are already in the diary and loggable for nothing for
+ever, so the decision at the end of the week was an easy no. Three days at three is
+long enough to log real meals and watch the ring move, and it ends while the model is
+still the thing doing the work. It is also the cheaper bill: about $0.67 for an
+account's whole life (guest day plus trial), against $1.45 on the week and $0.41
+every month, for ever, on the old ten-a-month.
+
+**Trials already running keep the week** — `TRIAL_LEGACY` and `trialTerms` in
+`@ct/shared`, chosen by `users.trial_started_at` against `TRIAL_SHORTENED_AT`
+(2026-09-17, which must be at or after the deploy). Not generosity: `save.trialBody` on the phone reads `TRIAL` out of the
+bundle, not off the server, so every already-installed copy is still promising "a
+7-day trial: 28 messages" on the sheet that starts one. Cutting those accounts to 9
+would be the app promising one thing and the server refusing at the fourth message,
+which reads as a bug and gets reported as one. The branch can go once the last
+pre-cutover trial has run out — seven days after the cutover. The store reviewers
+(`services/trial.ts`) keep the old allowance permanently, for the reason that branch
+exists at all: a review that hits a wall halfway is a rejection.
 
 **The paywall opens once by itself** when the trial ends — the first time the tabs are
 in front of that account on that phone (`lib/trial-paywall.ts`) — and its close
@@ -345,8 +362,8 @@ refactor.
    back later", for a feature that never comes back). Every entitlement refusal is
    **402**; throttles stay 429.
 2. ~~The lifetime photo counter.~~ **Done** — `period: 'ever'`, on the free photo.
-   Free chat moved to `period: 'month'` afterwards, then to the seven-day trial;
-   see §"Free".
+   Free chat moved to `period: 'month'` afterwards, then to the seven-day trial,
+   then to the three-day one; see §"Free".
 3. **Stripe.** Checkout, the webhook, and the column write. Annual as the default
    selection. Sell on the web where the post-Epic link-out window allows it; keep IAP
    at 15% as the convenient path. The store half is done — RevenueCat's webhook in

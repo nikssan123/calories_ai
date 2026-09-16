@@ -9,6 +9,7 @@ import {
   type PlanName,
   type PlanTier,
   type TrialStage,
+  type TrialTerms,
 } from '@ct/shared';
 
 /**
@@ -52,7 +53,7 @@ import {
  * so the distinction is carried rather than collapsed.
  *
  * `period: 'ever'` is a one-off grant with no reset. Free's two meters carry it,
- * on all three of its stages — the guest's day, the trial's week — because
+ * on all three of its stages — the guest's day, the trial's three — because
  * neither comes back: when the trial ends the meter is withdrawn rather than
  * refilled. See `LIMITS.free` and `freeMeter`.
  */
@@ -109,9 +110,11 @@ export interface PlanLimits {
    * four turns; ten an hour is well clear of that and still catches a loop
    * before it costs a month.
    *
-   * Free's trial is 28 messages, so a loop on Free still spends a third of the
-   * trial before this stops it. Ten stays because it is sized to a real burst
-   * of logging, not to the grant.
+   * Free's trial is 9 messages, so on Free the meter now gets there first and
+   * this never fires — which is the meter doing the limiter's job, not the
+   * limiter being wrong. It is sized to a real burst of logging rather than to
+   * any one grant, and the grants it guards are the paid ones, where a month of
+   * 90 or 180 is far enough above ten an hour for a loop to be expensive.
    */
   chatTurnsPerHour: number;
   /** Manually triggered reviews; the scheduled one does not pass through here. */
@@ -359,31 +362,44 @@ const LIMITS: Record<PlanName, PlanLimits> = {
    * `freeStage` says which one an account is on:
    *
    *   guest   no saved account      4 messages + 1 photo, once
-   *   trial   seven days from save  28 messages + 1 photo, once
-   *   ended   after the seven days  none
+   *   trial   three days from save  9 messages + 1 photo, once
+   *   ended   after the three days  none
    *
    * The numbers are `GUEST` and `TRIAL` in `@ct/shared`, because the phone
    * promises them before the server is asked. The table below holds the trial,
    * since that is what `tiers()` shows as Free; the other two stops are drawn
    * by `freeMeter`.
    *
-   * ---- Why a week instead of ten a month --------------------------------------
+   * ---- Why three days rather than a month, or a week --------------------------
    *
    * Ten a month kept a free account alive and it kept it alive *on the model*,
    * which is the thing that costs money and the thing being sold. Nobody had to
    * decide anything: ten turns stretched across a month is a working, if slow,
    * AI diary, and a slow product that is free is a strong reason not to pay for
-   * the fast one. A week of four a day is the product at the pace somebody
+   * the fast one. So it became a trial: the product at the pace somebody
    * actually uses it, and then a decision.
    *
-   * It is also a cheaper bill. The worst case is 28 x $0.041 + 2 x $0.151 =
-   * $1.45 for an account's lifetime — the guest day and the trial together —
-   * against $0.41 every month, forever, for every free account that stayed.
+   * A week was too much of it. The meals a person eats repeat, and repeat is
+   * free — by day five the ones that matter are in the diary and can be logged
+   * for nothing forever, so the decision at the end of the week was an easy no.
+   * Three days of three is long enough to log real meals and watch the ring
+   * move, and it ends while the model is still the thing doing the work.
+   *
+   * It is also a cheaper bill. The worst case is 9 x $0.041 + 2 x $0.151 =
+   * $0.67 for an account's lifetime — the guest day and the trial together —
+   * against $1.45 on the week, and $0.41 every month forever on the old
+   * ten-a-month.
    *
    * The wall is still not an exit, for the reason at the head of this file:
    * when the trial ends the diary keeps working, offline, with no model in it.
    * The trial is counted from `trial_started_at`, so the guest's four do not
-   * come out of the trial's 28.
+   * come out of the trial's 9.
+   *
+   * Accounts whose trial started on the old terms keep the week and the 28,
+   * carried on `users.trial_terms` — see `TRIAL_LEGACY` in `@ct/shared` for why
+   * that is a correctness matter and not a kindness. The table below is today's
+   * terms, since that is what `tiers()` advertises to somebody who has not
+   * started one yet.
    */
   free: {
     chat: { allowed: TRIAL.chat, period: 'ever' },
@@ -611,17 +627,30 @@ export function limitsFor(plan: PlanName, unmetered = false): PlanLimits {
 /**
  * Where a free account is on the road `LIMITS.free` describes.
  *
- * `startedAt` is when the account was saved and the week began; null is a
- * guest. The week is a week of wall-clock time rather than seven local days —
- * the same rolling arithmetic every other window in this file uses.
+ * `startedAt` is when the account was saved and the trial began; null is a
+ * guest. It is wall-clock time rather than local days — the same rolling
+ * arithmetic every other window in this file uses. `terms` are the account's
+ * own, because how long the trial runs is part of what it was sold as.
  */
-export function freeStage(startedAt: Date | null, now = new Date()): TrialStage {
+export function freeStage(
+  startedAt: Date | null,
+  now = new Date(),
+  terms: TrialTerms = TRIAL,
+): TrialStage {
   if (!startedAt) return 'guest';
-  return now.getTime() < trialEndsAt(startedAt).getTime() ? 'trial' : 'ended';
+  return now.getTime() < trialEndsAt(startedAt, terms).getTime() ? 'trial' : 'ended';
 }
 
-export function trialEndsAt(startedAt: Date): Date {
-  return new Date(startedAt.getTime() + TRIAL.days * 86_400_000);
+/**
+ * When this account's trial runs out.
+ *
+ * `terms` are the account's own — `users.trial_terms`, through `trialTerms` —
+ * rather than `TRIAL`, so a trial that began on the week still gets the week.
+ * Defaulted to today's for the callers that are asking about a trial nobody has
+ * started yet.
+ */
+export function trialEndsAt(startedAt: Date, terms: TrialTerms = TRIAL): Date {
+  return new Date(startedAt.getTime() + terms.days * 86_400_000);
 }
 
 /**
@@ -631,14 +660,24 @@ export function trialEndsAt(startedAt: Date): Date {
  * `ended` is `allowed: null` rather than zero: the grant is not spent, it is
  * gone, and every client already reads null as "shut the button, choose the
  * words". The words come from `Allowance.trial`.
+ *
+ * `terms` are this account's own, and they are what decides how big the trial's
+ * grant is: an account stamped with the seven-day terms keeps 28. Defaulted to
+ * today's, because the guest and ended stages do not depend on them and because
+ * `tiers()` asks for the trial's row with nobody in particular in mind — which
+ * correctly advertises what a new account would get.
  */
-export function freeMeter(stage: TrialStage, meter: MeterName): Meter | null {
+export function freeMeter(
+  stage: TrialStage,
+  meter: MeterName,
+  terms: TrialTerms = TRIAL,
+): Meter | null {
   if (meter !== 'chat' && meter !== 'photo') return null;
   switch (stage) {
     case 'guest':
       return { allowed: GUEST[meter], period: 'ever' };
     case 'trial':
-      return LIMITS.free[meter];
+      return { allowed: terms[meter], period: 'ever' };
     case 'ended':
       return { allowed: null, period: 'ever' };
   }

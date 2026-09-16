@@ -196,7 +196,7 @@ export const cs: LandingCopy = {
         annualCadence: 'jak dlouho budeš chtít',
         pitch: 'Celý deník, klidně i v letadle.',
         allowance: [
-          { figure: '28', unit: 'zpráv', period: 've 7denní zkušební době' },
+          { figure: '9', unit: 'zpráv', period: 've 3denní zkušební době' },
           { figure: '1', unit: 'sken fotky', period: 'na vyzkoušení' },
         ],
         points: [
@@ -246,7 +246,7 @@ export const cs: LandingCopy = {
       },
     ],
     notes: [
-      'Každý účet začíná 7denní zkušební dobou s AI zdarma. Nechceme kartu, takže nemáš co hlídat a rušit.',
+      'Každý účet začíná 3denní zkušební dobou s AI zdarma. Nechceme kartu, takže nemáš co hlídat a rušit.',
       'Limity se doplňují den po dni v klouzavém 30denním okně, takže nečekáš na žádné datum obnovení.',
       'Došly skeny fotek? Balíčky začínají na 4,09\u00a0€ za deset, nikdy nepropadají a čerpají se, až když dojdou ty měsíční.',
       'Přestaneš platit a jsi zpátky na Free: deník, historie i ruční zápis zůstanou.',

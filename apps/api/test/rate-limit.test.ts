@@ -34,13 +34,26 @@ async function hit(times: number, inject: () => Promise<{ statusCode: number }>)
  * The journal's burst guard, which is no longer the journal's *allowance*.
  *
  * Since the plan rework the number sold is a meter counted off the cost ledger;
- * what is left here is the loop guard, and it sits deliberately below the meter
- * so that it can still fire. These tests read it from the table rather than
- * hardcoding it, because it is now a number that moves with pricing.
+ * what is left here is the loop guard. Read from the table rather than
+ * hardcoded, because it is a number that moves with pricing.
+ *
+ * ---- Why these run on `plus` and not on `free` --------------------------------
+ *
+ * The guard only fires where the meter is above it, and since the trial was cut
+ * to 9 messages Free's is not: a free account is refused with 402 on its tenth
+ * turn, one short of the guard's ten an hour. That is the meter doing the
+ * guard's job and it is the correct outcome — a loop on Free costs 9 turns and
+ * then the road ends — but it means Free can no longer demonstrate the thing
+ * under test here. The paid tiers can: a month of 90 or 180 sits far above
+ * twenty an hour, which is exactly the shape the guard exists for.
  */
-const BURST = limitsFor('free').chatTurnsPerHour;
+const BURST = limitsFor('plus').chatTurnsPerHour;
 
 describe('POST /chat', () => {
+  beforeEach(async () => {
+    await query('UPDATE users SET plan = $1 WHERE id = $2', ['plus', user.id]);
+  });
+
   it('allows a normal session and then throttles', async () => {
     scriptAgent();
     const codes = await hit(BURST + 2, () => {
@@ -131,6 +144,7 @@ describe('POST /chat', () => {
       await app.inject({ method: 'POST', url: '/chat', headers: { cookie }, payload: { text: 'x' } });
     }
 
+    // The second account is left on Free: one turn is well inside its trial.
     const second = await createUser();
     const { app: secondApp, cookie: secondCookie } = await appFor(second);
     try {

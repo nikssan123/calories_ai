@@ -195,7 +195,7 @@ export const es: LandingCopy = {
         annualCadence: 'mientras quieras',
         pitch: 'El diario completo, incluso en un avión.',
         allowance: [
-          { figure: '28', unit: 'mensajes', period: 'en 7 días de prueba' },
+          { figure: '9', unit: 'mensajes', period: 'en 3 días de prueba' },
           { figure: '1', unit: 'escaneo de foto', period: 'para probar' },
         ],
         points: [
@@ -245,7 +245,7 @@ export const es: LandingCopy = {
       },
     ],
     notes: [
-      'Todas las cuentas empiezan con 7 días de prueba gratis de la IA. No pedimos tarjeta, así que no hay nada que cancelar.',
+      'Todas las cuentas empiezan con 3 días de prueba gratis de la IA. No pedimos tarjeta, así que no hay nada que cancelar.',
       'Tu cupo se recarga día a día en una ventana móvil de 30 días, así que no hay ninguna fecha de reinicio que esperar.',
       '¿Sin escaneos de foto? Los packs empiezan en 4,09 € por diez, no caducan y solo se usan cuando se acaban los del mes.',
       'Si dejas de pagar, vuelves a Free: tu diario, tu historial y apuntar comidas a mano se quedan.',

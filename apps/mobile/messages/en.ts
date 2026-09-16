@@ -440,7 +440,6 @@ export const en = {
   'save.title': 'Save your *account*',
   'save.titleGuestLimit': 'Your guest day is *used up*',
   'save.titlePurchase': 'Save your account *first*',
-  /** TRIAL.days and messages per day from @ct/shared. */
   /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
   'save.trialBody': (days: number, messages: number) =>
     `Save it — it’s free — and get a ${days}-day trial: ${messages} ${w(messages, { one: 'message', other: 'messages' })} over the ${days} days and a photo scan. Everything you’ve logged stays.`,
@@ -1352,12 +1351,12 @@ export const en = {
     `Your ${count} free ${noun} ${count === 1 ? 'is' : 'are'} spent`,
   'spent.monthly': (count: number, noun: string) =>
     `This month’s ${count} ${noun} ${count === 1 ? 'is' : 'are'} spent`,
-  // ---- The free trial: a week, then the diary. See `TRIAL` in @ct/shared.
+  // ---- The free trial: a few days, then the diary. See `TRIAL` in @ct/shared.
   'wall.trialGrant': (count: number, noun: string) => `That’s all ${count} ${noun} in your free trial`,
   'wall.trialEnded': 'Your free trial has ended',
   'spent.trial': (count: number, noun: string) =>
     `Your trial’s ${count} ${noun} ${count === 1 ? 'is' : 'are'} spent`,
-  'plans.trialOverTitle': 'Your free week is up.',
+  'plans.trialOverTitle': 'Your free trial is up.',
   'plans.trialOverBody': 'Everything you type in stays free, for good. A plan brings back the parts that think.',
   'plans.onTrial': (when: string) =>
     `Your free trial ends ${when}. Everything you type in stays free — these buy the parts that think.`,

@@ -144,17 +144,86 @@ export type MeterName = z.infer<typeof MeterName>;
  * What the model is worth on Free, in the two grants it is given at all.
  *
  * A guest — no saved account yet — gets a day's worth: four messages and one
- * photo, once. Saving the account starts the trial: seven days, and four
- * messages a day for them, handed over as one lump of 28 rather than rationed
- * per day, plus one photo. When the seven days are over Free has no model at
+ * photo, once. Saving the account starts the trial: three days, and three
+ * messages a day for them, handed over as one lump of 9 rather than rationed
+ * per day, plus one photo. When the three days are over Free has no model at
  * all, and the diary is what is left — which is still the whole diary.
  *
  * Here rather than in `plans.ts` because the phone says these numbers before
  * the server has been asked anything: the guest sheet promises the trial, and a
  * promise typed separately from the ceiling is how the two drift apart.
+ *
+ * ---- Why it used to be a week, and why it is not ------------------------------
+ *
+ * Seven days and 28 messages was sized to be the product at the pace somebody
+ * actually uses it, and it is — which turned out to be the problem. A week of
+ * four a day is long enough to *finish* with the AI: the meals a person eats
+ * repeat, and by day five the ones that matter are already in the diary and
+ * repeatable for nothing. The trial stopped being a taste of the thing and
+ * became a small free version of it, and the decision at the end was an easy
+ * no. Three days of three is still enough to log a few real meals and watch
+ * the ring move, and it ends while the model is still doing the work.
+ *
+ * It is also less than a third of the bill: 9 x $0.041 + $0.151 against 28 x
+ * $0.041 + $0.151, per account that never pays.
  */
 export const GUEST = { chat: 4, photo: 1 } as const;
-export const TRIAL = { days: 7, chat: 28, photo: 1 } as const;
+export const TRIAL = { days: 3, chat: 9, photo: 1 } as const;
+
+/**
+ * What the trial was before it was shortened.
+ *
+ * An account that was already given seven days and 28 messages keeps them. Not
+ * out of generosity: the phone that made the promise has the old numbers
+ * compiled into it — `save.trialBody` reads `TRIAL` from this file, not off the
+ * server — so every already-installed copy of the app is still saying "a 7-day
+ * trial: 28 messages" on the sheet that starts one. Cutting those accounts to 9
+ * would be the app promising one thing and the server refusing at the fourth
+ * message, which is indistinguishable from a bug and gets reported as one.
+ *
+ * ---- Why the terms are stored rather than inferred from a date ----------------
+ *
+ * The obvious shape is a cutover instant: started before it, keep the week. It
+ * cannot be made correct, because the instant has to be *the deploy*, and the
+ * deploy is not a date anybody knows when the constant is written. Set it
+ * earlier than the deploy and the accounts saved in between get the exact bug
+ * above; set it later and the change quietly does nothing until it passes —
+ * including in the test suite, which is how the wrong one gets noticed.
+ *
+ * So the terms an account was sold are written onto the account when its trial
+ * starts (`users.trial_terms`, migration `059`), and `059` stamps this on every
+ * trial that was already running. Nothing compares a date to anything, there is
+ * no window in which the promise and the ceiling disagree, and an account keeps
+ * what it was promised even after this constant is eventually deleted.
+ */
+export const TRIAL_LEGACY = { days: 7, chat: 28, photo: 1 } as const;
+
+/**
+ * One account's trial terms, as they are stored on the row.
+ *
+ * Validated rather than cast because it arrives as JSONB, which is to say as
+ * `unknown` with a good reputation.
+ */
+export const TrialTerms = z.object({
+  days: z.number().int().positive(),
+  chat: z.number().int().nonnegative(),
+  photo: z.number().int().nonnegative(),
+});
+export type TrialTerms = z.infer<typeof TrialTerms>;
+
+/**
+ * The terms one account's trial runs on.
+ *
+ * `stored` is `users.trial_terms`. Null is today's terms, not the old ones:
+ * after `059` every trial that had already started carries a stamp, so an
+ * unstamped row is one whose trial starts from here — a guest who has not saved
+ * yet, or an account confirmed through a path that has not called `startTrial`
+ * at the moment this is asked.
+ */
+export function trialTerms(stored: unknown): TrialTerms {
+  const parsed = TrialTerms.safeParse(stored);
+  return parsed.success ? parsed.data : TRIAL;
+}
 
 /**
  * Where a free account is on that road. Null on every paid plan, and on the
@@ -195,7 +264,7 @@ export type TrialStage = z.infer<typeof TrialStage>;
  * True on every pack, and it governs who is *offered* one rather than who may
  * spend one.
  *
- * Free gets a seven-day trial and then no AI at all. A free account that can
+ * Free gets a three-day trial and then no AI at all. A free account that can
  * buy thirty messages or ten photo scans for the price of a coffee has no reason
  * to ever subscribe, and the pack would quietly become the cheapest tier in the
  * product — so the wall on Free sells the plan, and packs are drawn only for
@@ -300,7 +369,7 @@ export const Allowance = z.object({
    * one-off grant with no reset — true of each.
    */
   trial: TrialStage.nullable().default(null),
-  /** When the seven days run out. Set on `trial` and `ended`, null on `guest`. */
+  /** When the trial runs out. Set on `trial` and `ended`, null on `guest`. */
   trial_ends_at: z.string().nullable().default(null),
 });
 export type Allowance = z.infer<typeof Allowance>;
@@ -1719,7 +1788,7 @@ export const Profile = z.object({
    * True for a row made on first launch with no address, and still true once an
    * address is claimed but not confirmed. It turns false when an identity is
    * proved — a confirmed address, Google or Apple — which is also the moment the
-   * seven-day trial starts. The app reads it to offer "Save your account" and to
+   * free trial starts. The app reads it to offer "Save your account" and to
    * warn that signing out erases a journal nobody else can get back.
    */
   guest: z.boolean().default(false),

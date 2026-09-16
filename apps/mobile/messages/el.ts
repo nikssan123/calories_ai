@@ -1246,11 +1246,11 @@ export const el: Messages = {
 
   'spent.everGrant': (count: number, noun: string) => `Χρησιμοποίησες ${count} από ${count} δωρεάν ${noun}`,
   'spent.monthly': (count: number, noun: string) => `Χρησιμοποίησες ${count} από ${count} ${noun} αυτόν τον μήνα`,
-  // ---- The free trial: a week, then the diary. See `TRIAL` in @ct/shared.
+  // ---- The free trial: a few days, then the diary. See `TRIAL` in @ct/shared.
   'wall.trialGrant': (count: number, noun: string) => `Έφτασες το όριο της δωρεάν δοκιμής: ${count} ${noun}`,
   'wall.trialEnded': 'Η δωρεάν δοκιμή σου τελείωσε',
   'spent.trial': (count: number, noun: string) => `Χρησιμοποίησες ${count} από ${count} ${noun} της δοκιμής`,
-  'plans.trialOverTitle': 'Η δωρεάν εβδομάδα σου τελείωσε.',
+  'plans.trialOverTitle': 'Η δωρεάν δοκιμή σου τελείωσε.',
   'plans.trialOverBody': 'Ό,τι πληκτρολογείς μένει δωρεάν για πάντα. Ένα πλάνο φέρνει πίσω τα κομμάτια που σκέφτονται.',
   'plans.onTrial': (when: string) =>
     `Η δωρεάν δοκιμή σου λήγει ${when}. Ό,τι πληκτρολογείς μένει δωρεάν — αυτά αγοράζουν τα κομμάτια που σκέφτονται.`,

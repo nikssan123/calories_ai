@@ -58,7 +58,7 @@ export function PlanWall({
   const auth = useAuth();
   /*
    * A guest's wall offers the account, not a plan: saving it is what starts the
-   * free week, and a guest cannot buy anything yet (GUEST-ACCOUNTS.md). Read
+   * free trial, and a guest cannot buy anything yet (GUEST-ACCOUNTS.md). Read
    * off the session as well as the allowance, because the wall stays in the
    * transcript after the account is saved and must stop offering it then.
    */

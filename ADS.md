@@ -117,7 +117,7 @@ COMPOSE_CROP_RAW=340 COMPOSE_TARGET=ad-portrait COMPOSE_CARD=wide node store/too
 - **No superlatives the app can't prove.** No "best", "#1" or "most accurate".
   `COMPETITION.md` says outright that no app in this category is accurate.
 - **"Free" goes only on what is free for good.** On Free, sentence logging is a guest day
-  plus a 7-day, 28-message trial (`plans.ts`). So *kostenlos* / *gratuit* sits only on the
+  plus a 3-day, 9-message trial (`plans.ts`). So *kostenlos* / *gratuit* sits only on the
   barcode scanner, macros and the offline diary. Never write "log by sentence for free".
 - **No "!" in headlines.** That's Google's editorial rule, and the checker enforces it.
 - **No photo scanning in the copy.** Free gets one photo, ever, so an ad built on
