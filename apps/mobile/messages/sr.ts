@@ -295,6 +295,7 @@ export const sr: Messages = {
   'ob.bodyWeight': 'Тежина',
   'ob.bodyHeightOff': 'Та висина не изгледа добро — провери јединице.',
   'ob.bodyWeightOff': 'Та тежина не изгледа добро — провери јединице.',
+  'ob.bodyMissing': 'Унеси висину и тежину да наставиш.',
 
   'ob.skip': 'Прескочи за сада',
   // The reader's voice; "нисам сигуран/сигурна" is gendered.

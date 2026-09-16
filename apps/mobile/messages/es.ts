@@ -182,6 +182,7 @@ export const es: Messages = {
   'ob.bodyWeight': 'Peso',
   'ob.bodyHeightOff': 'Esa altura no cuadra — revisa las unidades.',
   'ob.bodyWeightOff': 'Ese peso no cuadra — revisa las unidades.',
+  'ob.bodyMissing': 'Añade tu altura y tu peso para continuar.',
 
   'ob.skip': 'Saltar por ahora',
   'ob.activitySkip': 'No lo sé — asume moderado',

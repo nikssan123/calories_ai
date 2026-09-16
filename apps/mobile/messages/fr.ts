@@ -189,6 +189,7 @@ export const fr: Messages = {
   'ob.bodyWeight': 'Poids',
   'ob.bodyHeightOff': 'Cette taille paraît fausse — vérifie les unités.',
   'ob.bodyWeightOff': 'Ce poids paraît faux — vérifie les unités.',
+  'ob.bodyMissing': 'Indique ta taille et ton poids pour continuer.',
 
   'ob.skip': 'Passer pour l’instant',
   'ob.activitySkip': 'Je ne sais pas — pars sur modéré',

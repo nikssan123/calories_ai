@@ -284,6 +284,7 @@ export const uk: Messages = {
   'ob.bodyWeight': 'Вага',
   'ob.bodyHeightOff': 'Такий зріст виглядає дивно — перевір одиниці.',
   'ob.bodyWeightOff': 'Така вага виглядає дивно — перевір одиниці.',
+  'ob.bodyMissing': 'Вкажи зріст і вагу, щоб продовжити.',
 
   'ob.skip': 'Поки пропустити',
   'ob.activitySkip': 'Не знаю — хай буде помірна',

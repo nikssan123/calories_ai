@@ -16,7 +16,7 @@ export function Glyph({
   color,
   size = 15,
 }: {
-  icon: 'trash' | 'repeat' | 'pencil' | 'eye' | 'eye-off';
+  icon: 'trash' | 'repeat' | 'pencil' | 'eye' | 'eye-off' | 'chevron-left';
   color: string;
   size?: number;
 }) {
@@ -29,6 +29,9 @@ export function Glyph({
   };
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24">
+      {/* The walk's own back chevron, so the way out of the sign-in form is the
+          mark people just pressed four times to get through the questions. */}
+      {icon === 'chevron-left' && <Path d="M15 18l-6-6 6-6" {...props} />}
       {icon === 'trash' && (
         <Path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" {...props} />
       )}

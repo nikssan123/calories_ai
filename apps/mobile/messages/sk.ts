@@ -292,6 +292,7 @@ export const sk: Messages = {
   'ob.bodyWeight': 'Váha',
   'ob.bodyHeightOff': 'Táto výška nevyzerá správne – skontroluj jednotky.',
   'ob.bodyWeightOff': 'Táto váha nevyzerá správne – skontroluj jednotky.',
+  'ob.bodyMissing': 'Zadaj výšku a váhu, aby si mohol pokračovať.',
 
   'ob.skip': 'Zatiaľ preskočiť',
   // Agrees with "aktivita": the answer it writes is `activity.moderate`, "Stredná".

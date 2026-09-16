@@ -273,7 +273,31 @@ export default function LoginScreen() {
           * glance that confirms it — and it is the only picker that reaches
           * the confirmation email.
           */}
-        <View style={styles.languageRow}>
+        <View style={[styles.languageRow, signingIn && styles.topRow]}>
+          {/*
+           * The way back out of "I already have an account".
+           *
+           * Eight of the first twenty-seven installs tapped that on the welcome
+           * screen, against fourteen accounts in existence — so most of them
+           * have nothing to sign in with, and the only exit used to be a line
+           * of small text under the password field, below the fold. A chevron
+           * where the walk keeps its own back button costs nothing to find.
+           */}
+          {signingIn && (
+            <Pressable
+              onPress={() => {
+                setError(null);
+                chooseSignIn(false);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={tr('ob.back')}
+              hitSlop={12}
+              style={({ pressed }) => [styles.back, { opacity: pressed ? 0.5 : 1 }]}
+            >
+              <Glyph icon="chevron-left" color={colors.mutedForeground} size={18} />
+              <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{tr('ob.back')}</Text>
+            </Pressable>
+          )}
           <LanguagePicker value={locale} onChange={setPreferredLocale} />
         </View>
 
@@ -562,6 +586,9 @@ const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const styles = StyleSheet.create({
   languageRow: { alignItems: 'flex-end', marginBottom: 20 },
+  // With a back button in it the row has two ends, so it becomes a row.
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  back: { flexDirection: 'row', alignItems: 'center', gap: 2, marginLeft: -4 },
   flex: { flex: 1 },
   scroll: {
     flexGrow: 1,

@@ -181,6 +181,7 @@ export const de: Messages = {
   'ob.bodyWeight': 'Gewicht',
   'ob.bodyHeightOff': 'Diese Größe sieht falsch aus — prüf die Einheiten.',
   'ob.bodyWeightOff': 'Dieses Gewicht sieht falsch aus — prüf die Einheiten.',
+  'ob.bodyMissing': 'Trag Größe und Gewicht ein, um weiterzugehen.',
 
   'ob.skip': 'Erstmal überspringen',
   'ob.activitySkip': 'Weiß nicht — nimm moderat an',

@@ -3847,6 +3847,12 @@ export type AdminOverview = z.infer<typeof AdminOverview>;
  * design. `existing` is off the main line: somebody who tapped "I already have
  * an account" on the welcome screen.
  *
+ * The two teases are screens the app talks on rather than asks on, and they
+ * were the one gap in this list until 2026-09-16 — when the funnel showed
+ * thirteen installs reaching `body` and two reaching `activity`, with
+ * `teaseDay` sitting unmeasured between them. A blind spot is where a cliff
+ * hides, so they are counted like everything else; the rail still ignores them.
+ *
  * Since guest accounts (GUEST-ACCOUNTS.md) the walk ends in the app: `save` is
  * "Start my day", `guest` the session that made, `in_app` the plan landing on
  * it, `save_prompt` the save-your-account screen being shown for any reason,
@@ -3857,8 +3863,10 @@ export const FUNNEL_STEPS = [
   'start',
   'goal',
   'sex',
+  'teaseJournal',
   'birth',
   'body',
+  'teaseDay',
   'target',
   'activity',
   'plan',

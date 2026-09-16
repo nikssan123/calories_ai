@@ -287,6 +287,7 @@ export const hu: Messages = {
   'ob.bodyWeight': 'Testsúly',
   'ob.bodyHeightOff': 'Ez a magasság furcsának tűnik – nézd meg a mértékegységet.',
   'ob.bodyWeightOff': 'Ez a testsúly furcsának tűnik – nézd meg a mértékegységet.',
+  'ob.bodyMissing': 'Add meg a magasságod és a testsúlyod a folytatáshoz.',
 
   'ob.skip': 'Most kihagyom',
   'ob.activitySkip': 'Nem tudom – legyen mérsékelt',

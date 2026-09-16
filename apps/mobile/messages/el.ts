@@ -287,6 +287,7 @@ export const el: Messages = {
   'ob.bodyWeight': 'Βάρος',
   'ob.bodyHeightOff': 'Αυτό το ύψος δεν φαίνεται σωστό — έλεγξε τις μονάδες.',
   'ob.bodyWeightOff': 'Αυτό το βάρος δεν φαίνεται σωστό — έλεγξε τις μονάδες.',
+  'ob.bodyMissing': 'Συμπλήρωσε ύψος και βάρος για να συνεχίσεις.',
 
   'ob.skip': 'Παράλειψη προς το παρόν',
   // Not «Δεν είμαι σίγουρος», which genders the reader.

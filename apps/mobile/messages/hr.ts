@@ -289,6 +289,7 @@ export const hr: Messages = {
   'ob.bodyWeight': 'Težina',
   'ob.bodyHeightOff': 'Ta visina ne izgleda točno — provjeri mjerne jedinice.',
   'ob.bodyWeightOff': 'Ta težina ne izgleda točno — provjeri mjerne jedinice.',
+  'ob.bodyMissing': 'Unesi visinu i težinu da nastaviš.',
 
   'ob.skip': 'Preskoči zasad',
   // "Nisam siguran/sigurna" would gender the reader.

@@ -317,6 +317,7 @@ export const en = {
   'ob.bodyWeight': 'Weight',
   'ob.bodyHeightOff': 'That height looks off — check the units.',
   'ob.bodyWeightOff': 'That weight looks off — check the units.',
+  'ob.bodyMissing': 'Add your height and weight to continue.',
 
   /**
    * The two skips, and they read differently on purpose.

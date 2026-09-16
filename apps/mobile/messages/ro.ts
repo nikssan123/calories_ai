@@ -293,6 +293,7 @@ export const ro: Messages = {
   'ob.bodyWeight': 'Greutate',
   'ob.bodyHeightOff': 'Înălțimea pare greșită — verifică unitățile.',
   'ob.bodyWeightOff': 'Greutatea pare greșită — verifică unitățile.',
+  'ob.bodyMissing': 'Adaugă înălțimea și greutatea ca să continui.',
 
   'ob.skip': 'Sari peste deocamdată',
   // „Nu sunt sigur(ă)” would agree with the reader; „nu știu sigur” does not.

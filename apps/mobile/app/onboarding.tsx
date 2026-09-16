@@ -95,6 +95,17 @@ type Phase = 'welcome' | 'questions' | 'building' | 'plan';
 
 /** Sanity rails, not medical ones. They only exist to catch a slipped unit. */
 const HEIGHT_CM = { min: 100, max: 250 };
+
+/**
+ * A height typed in metres, which is how most of Europe writes one: 1,78.
+ *
+ * `decimal` already reads the comma, so that arrives as 1.78 — a number below
+ * `HEIGHT_CM.min` that used to leave Continue grey. Nobody is 1.78 cm tall and
+ * nobody is 178 m tall, so the two ranges cannot overlap and reading anything
+ * inside this one as metres is safe. It is not a conversion the screen
+ * announces: the box still says cm, and somebody who types 178 is unaffected.
+ */
+const HEIGHT_M = { min: 1, max: 2.5 };
 const WEIGHT_KG = { min: 30, max: 350 };
 const AGE = { min: 13, max: 100 };
 
@@ -210,7 +221,7 @@ export default function OnboardingScreen() {
   /* Android's date dialog, open. It opens itself the first time the step shows. */
   const [picking, setPicking] = useState(birthDate === null);
 
-  const heightCm = units === 'imperial' ? imperialHeight(feet, inches) : decimal(cm);
+  const heightCm = units === 'imperial' ? imperialHeight(feet, inches) : metricHeight(cm);
   const weightKg = useMemo(() => {
     const entered = decimal(weight);
     return entered === null ? null : bodyWeightToKg(entered, units);
@@ -259,9 +270,15 @@ export default function OnboardingScreen() {
   useEffect(() => {
     if (!guest) return;
     if (phase === 'welcome') reachedStep('welcome');
-    else if (phase === 'questions' && !teasing) reachedStep(step);
+    /*
+     * Teases are counted under their own names rather than the question behind
+     * them. They are the only screens the walk used to pass through silently,
+     * which made the gap between two questions the one place a drop could hide
+     * — and on 2026-09-16 that is exactly where one was hiding.
+     */
+    else if (phase === 'questions') reachedStep(teasing ? (current as TeaseId) : step);
     else if (phase === 'plan') reachedStep('plan');
-  }, [guest, phase, teasing, step]);
+  }, [guest, phase, teasing, step, current]);
 
   /*
    * A goal weight nobody has moved yet, proposed from the weight they just gave.
@@ -297,12 +314,28 @@ export default function OnboardingScreen() {
 
   const age = birthDate === null ? null : ageFrom(birthDate);
 
+  /** Whether the body step has been written in at all, in whichever units it is wearing. */
+  const bodyTyped = [cm, feet, inches, weight].some((box) => box.trim() !== '');
+
   /** What is wrong with this step's answer, or null if nothing is. */
   const blocker = ((): string | null => {
     if (step === 'birth') {
       if (age === null) return null;
       if (age < AGE.min) return tr('ob.birthTooYoung');
       if (age > AGE.max) return tr('ob.birthImplausible');
+    }
+    /*
+     * The only screen in the walk where an answer is typed, and the only one
+     * whose Continue could go grey without saying why: a value out of range
+     * names itself under its own box, but a box left empty — or holding
+     * something no number could be read out of — said nothing at all. On
+     * 2026-09-16 the funnel lost 85% of installs here.
+     *
+     * Only once something has been typed. Arriving at two empty boxes and being
+     * told they are empty is nagging, not helping.
+     */
+    if (step === 'body' && bodyTyped && (heightCm === null || weightKg === null)) {
+      return tr('ob.bodyMissing');
     }
     if (step === 'target' && weightKg !== null && targetWeight !== null) {
       if (goal === 'lose' && targetWeight >= weightKg) return tr('ob.targetMustBeLower');
@@ -996,6 +1029,13 @@ function GoalGlyph({ goal, color }: { goal: Goal; color: string }) {
 function decimal(text: string): number | null {
   const value = Number(text.replace(',', '.').trim());
   return text.trim() === '' || Number.isNaN(value) ? null : value;
+}
+
+/** The centimetres box, read in centimetres — or in metres when that is plainly what was typed. */
+function metricHeight(text: string): number | null {
+  const value = decimal(text);
+  if (value === null) return null;
+  return value >= HEIGHT_M.min && value <= HEIGHT_M.max ? Math.round(value * 100) : value;
 }
 
 function imperialHeight(feet: string, inches: string): number | null {

@@ -299,6 +299,7 @@ export const cs: Messages = {
   'ob.bodyWeight': 'Váha',
   'ob.bodyHeightOff': 'Tahle výška nevypadá správně – zkontroluj jednotky.',
   'ob.bodyWeightOff': 'Tahle váha nevypadá správně – zkontroluj jednotky.',
+  'ob.bodyMissing': 'Zadej výšku a váhu, abys mohl pokračovat.',
 
   'ob.skip': 'Teď přeskočit',
   // "Nejsem si jistý" is gendered; "Nevím" is what people say.
