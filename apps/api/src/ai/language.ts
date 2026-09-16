@@ -388,6 +388,11 @@ function identify(sample: string): Detection {
     return code === null ? { kind: 'unnamed' } : { kind: 'named', code };
   }
 
+  // Latin letters are not evidence of a Latin-script language — see
+  // `readLatinBulgarian`. Words again, and before franc for the same reason:
+  // the trigrams of Bulgarian spelled this way are a neighbour's trigrams.
+  if (readLatinBulgarian(sample)) return { kind: 'named', code: 'bul' };
+
   const detected = franc(sample, { only: CANDIDATES });
   if (detected !== 'und') return { kind: 'named', code: detected };
 
@@ -477,6 +482,106 @@ const BULGARIAN_WORDS = word(
     'тези|като|може|трябва|беше|бяха|малко|повече|нещо|така|седмица|' +
     'седмицата|целта|дните',
 );
+
+/**
+ * Whether a sample is Bulgarian typed in Latin letters.
+ *
+ * Bulgarians write Bulgarian on a Latin keyboard constantly — шльокавица — and
+ * nothing above can see it. `readCyrillic` never runs, because there is no
+ * Cyrillic; franc then reads the trigrams of a Slavic language spelled the way
+ * a neighbouring one spells itself, and answers with the neighbour. Measured on
+ * the three messages one account sent on 2026-09-16: "Kafe nimidavat da piita"
+ * came back Croatian, "hapçta mnogo piya" Swahili, and "Leka veçer çaoo"
+ * **Turkish** — which is on the Haiku list, so believing that one would have put
+ * the language this file was written to keep off Haiku onto Haiku.
+ *
+ * Nothing downstream rescues it either. The name reaches a prompt on every turn
+ * that carries no sentence of its own — a captionless photo, Monday's review, a
+ * nudge, a recipe — so the account above was one photo away from a review
+ * written in Croatian, and `proseLocale` reads the same detector, which is what
+ * would have drawn the email around it in Serbian.
+ *
+ * So this is words, like `readCyrillic` and for the same reason: the letters do
+ * not separate these languages and the vocabulary does. Every entry is a word
+ * Bulgarian has and its neighbours do not — "shte" against "će", "nyama"
+ * against "nema", "utre" against "sutra", "hlyab" against "hleb" — plus the
+ * definite forms, which settle it outright: "kaloriite" and "hranata" are not
+ * spellings of a Serbo-Croatian word, they are a postposed article that
+ * language does not have.
+ *
+ * Deliberately absent: everything the neighbours share. "mnogo", "samo", "ako",
+ * "dobre", "beshe" and "imam" are Bulgarian and Serbian both; "kolko" and
+ * "kalorii" are Bulgarian and Slovak both, and those two together were enough
+ * to name a Slovak meal log Bulgarian while this was being written. A marker
+ * that has to be argued for is not a marker.
+ *
+ * Two distinct markers rather than one, because one is what a transliterated
+ * neighbour produces on its own: "zashto" is how some people spell Serbian
+ * "zašto", and by itself it is evidence of nothing. Two means the alternative
+ * is a sentence in another language that happens to contain two words that
+ * language does not have. What the threshold costs is that a short turn — "Leka
+ * veçer çaoo" — names nothing alone, which is what the window in `detect` is
+ * already for: it is read with the turns behind it, and at fifteen characters
+ * it is too short to veto them.
+ *
+ * Macedonian in Latin letters is the one this cannot separate, since it shares
+ * most of what is here. It is rare — Macedonian is written in Cyrillic, where
+ * `readCyrillic` settles it by letters of its own — and both languages escalate
+ * either way, so what is at stake is the name and not the model.
+ */
+function readLatinBulgarian(sample: string): boolean {
+  const hits = foldTurkishLetters(sample).match(LATIN_BULGARIAN_WORDS);
+  if (hits === null) return false;
+
+  // Distinct, so that a sample repeating one word is still the one word it is.
+  return new Set(hits.map((hit) => hit.toLowerCase())).size >= LATIN_BULGARIAN_MARKERS;
+}
+
+/** How many of the words below it takes to name the language. See above. */
+const LATIN_BULGARIAN_MARKERS = 2;
+
+/**
+ * Words Bulgarian has that the languages it would otherwise be read as do not,
+ * in the spellings people actually type them in.
+ *
+ * Several appear more than once because шльокавица has no orthography: я is
+ * "ya", "ia" or "q" depending on who is typing, and all three are here for the
+ * words where all three turn up. The food is not decoration — a journal is
+ * mostly food, and "hlyab", "sirene" and "pileshko" are the words that will be
+ * in it long before a function word is.
+ */
+const LATIN_BULGARIAN_WORDS = word(
+  // Function words and verbs.
+  'shte|nyama|niama|nyamam|niamam|tryabva|triabva|trqbva|iskam|iskash|kakvo|' +
+    'zashto|zashtoto|oshte|nishto|neshto|vsichko|poveche|malko|sega|veche|' +
+    'nali|kato|moga|sum|byaha|bqha|edin|edna|edno|koyato|koito|koeto|dokato|' +
+    'predi|vav|vuv|sas|sus|kude|chuvstvam|zdravey|zdrasti|blagodarya|molya|' +
+    'leka|nosht|dneska|utre|vchera|fchera|sutrinta|sutrin|ostavat|piya|' +
+    // Food, and the words a log puts around it.
+    'yayca|yaytsa|iaica|qyca|hlyab|hliab|hlqb|mlyako|mliako|mlqko|sirene|' +
+    'kashkaval|pileshko|svinsko|teleshko|oriz|kartofi|domati|krastavitsi|' +
+    'banitsa|banica|zelenchutsi|zelenchuci|obyad|obqd|vecherya|vecheria|' +
+    'zakuska|yadene|qdene|yadoh|qdoh|gladen|teglo|otslabvam|trenirovka|' +
+    'hapche|hapcheta|tova|tozi|tazi|tezi|' +
+    // The postposed article, which no neighbour here has.
+    'kaloriite|hranata|sedmicata|sedmitsata|tegloto|denya|denyat|vecherta|' +
+    'celta|tselta',
+);
+
+/**
+ * ç and ş back to the digraphs the list above is written in.
+ *
+ * A Turkish keyboard is an ordinary way to type Bulgarian in Bulgaria, and it
+ * spells ч and ш with the letters Turkish uses for them — the account this was
+ * written for sent "veçer" and "çaoo". Only those two letters, and only in this
+ * direction: folding Croatian's č and š the same way would spell Croatian words
+ * the way this list spells Bulgarian ones, which is the failure it exists to
+ * prevent. Romanian's ş passes through and comes out as "shi" and "shase",
+ * which are not on the list and were never going to be.
+ */
+function foldTurkishLetters(sample: string): string {
+  return sample.replace(/ç/giu, 'ch').replace(/ş/giu, 'sh');
+}
 
 /**
  * The recent conversation as one string for the detector.

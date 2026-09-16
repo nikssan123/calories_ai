@@ -162,6 +162,88 @@ describe('writing in a different language from the app', () => {
 });
 
 /*
+ * Bulgarian typed on a Latin keyboard — шльокавица — which is a large share of
+ * how Bulgarians write to anything, and which franc cannot see at all.
+ *
+ * The samples in the first two cases are the messages one account actually sent
+ * on 2026-09-16, ç and all. Before `readLatinBulgarian` they came back Croatian,
+ * Swahili and Turkish; the last of those is the one that mattered, because
+ * Turkish is on the Haiku list.
+ */
+describe('Bulgarian written in Latin letters', () => {
+  it('reads the conversation that prompted this', () => {
+    // Newest-first, as the resolver builds it.
+    const window = ['Leka veçer çaoo', 'hapçta mnogo piya', 'Kafe nimidavat da piita'];
+    expect(replyLanguage(window, 'en')).toEqual({ name: 'Bulgarian', haiku: false });
+  });
+
+  it('does not let a short goodbye read as Turkish and drop to Haiku', () => {
+    // On its own franc names this Turkish, which is on the Haiku list. It is
+    // under the veto length, so the window decides it and the window is right.
+    expect(replyLanguage(['Leka veçer çaoo', 'Kafe nimidavat da piita'], 'en').haiku).toBe(false);
+  });
+
+  it.each([
+    ['a meal log', ['dve yayca i filiya hlyab za zakuska']],
+    ['a question about the day', ['kolko mi ostavat dneska do celta']],
+    ['lunch', ['pileshko s oriz za obyad, iskam da smetna kaloriite']],
+    ['a plan', ['shte yam po-malko dneska, tryabva da otslabvam']],
+    ['a Turkish keyboard', ['veçerya: sirene i domati, nishto poveçe']],
+  ])('names Bulgarian on %s', (_what, samples) => {
+    expect(replyLanguage(samples, 'en')).toEqual({ name: 'Bulgarian', haiku: false });
+  });
+
+  /*
+   * The half that has to hold, and the reason the list is words the neighbours
+   * do not have rather than the digraphs they share. A wrong name here is worse
+   * than the wrong name it replaced: Romanian and Turkish would also start
+   * paying for a model they do not need.
+   */
+  /*
+   * The neighbours, spelled the way somebody types them without diacritics —
+   * which is the shape this list could plausibly have stolen, since it is the
+   * shape Bulgarian arrives in.
+   *
+   * What is asserted is that none of them is named Bulgarian, not what each one
+   * is named instead. franc reads diacritic-less Croatian as Bosnian and
+   * diacritic-less Czech as Slovak, both long before this file was touched and
+   * both harmless: `LOCALE_CODES` already reads Bosnian as Croatian, and Slovak
+   * escalates exactly as Czech-without-diacritics did.
+   */
+  it.each([
+    ['Croatian', 'dva jaja i kriska kruha s maslacem, koliko mi je kalorija ostalo danas'],
+    ['Serbian in Latin letters', 'shta da jedem danas, mnogo sam gladan i nemam vishe kalorija'],
+    ['Slovak', 'dve vajcia a krajec chleba s maslom, kolko kalorii mi dnes ostalo'],
+    ['Czech', 'dve vejce a krajic chleba s maslem, kolik kalorii mi dnes zbyva'],
+    ['Macedonian in Latin letters', 'dve jajca i parce leb so puter, kolku kalorii mi ostanaa denes'],
+  ])('leaves %s alone', (_what, sample) => {
+    expect(replyLanguage([sample], 'en').name).not.toBe('Bulgarian');
+  });
+
+  /*
+   * The languages Haiku writes cleanly are the ones a false positive would
+   * actually cost something: a wrong name, and a model they do not need.
+   */
+  it.each([
+    ['Romanian', 'doua oua si o felie de paine cu unt, cate calorii mai am azi'],
+    ['Romanian typed with a Turkish ş', 'două ouă şi o felie de pâine cu unt, şase sute de calorii'],
+    ['Turkish', 'iki yumurta ve tereyağlı bir dilim ekmek, bugün kaç kalorim kaldı'],
+    ['Polish', 'dwa jajka i kromka chleba z maslem, ile kalorii mi jeszcze zostalo'],
+  ])('does not put %s on the expensive model for it', (_what, sample) => {
+    expect(replyLanguage([sample], 'en').haiku).toBe(true);
+  });
+
+  /*
+   * One marker is what a transliterated neighbour produces by itself — "zashto"
+   * is a way people spell Serbian "zašto" — so one is not enough to name a
+   * language on.
+   */
+  it('does not name Bulgarian on a single word it shares with a neighbour', () => {
+    expect(replyLanguage(['zashto nemam vishe kalorija danas'], 'en').name).not.toBe('Bulgarian');
+  });
+});
+
+/*
  * The fallback, and only the fallback: the stored locale answers for the turns
  * with nothing written in front of them — a captionless photo, a barcode
  * scanned into an empty box, Monday's review, a nudge.
