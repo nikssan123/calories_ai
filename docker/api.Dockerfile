@@ -18,6 +18,10 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json      apps/api/
 COPY packages/shared/package.json      packages/shared/
 COPY packages/api-client/package.json  packages/api-client/
+# The root manifest declares a patched dependency (the mobile app's Reanimated
+# fix), and pnpm hashes the patch file during install even when the filtered
+# project does not use it. Without this the install dies with ENOENT.
+COPY patches/ patches/
 
 # --frozen-lockfile so a drifted lockfile fails the build instead of silently
 # resolving different versions than were tested.
