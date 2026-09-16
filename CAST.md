@@ -129,6 +129,50 @@ Ideas: https://claude.ai/artifact/UyVwiZMSFpQyQmi9TeSR8k
 - **The widget draws whoever caught the last meal** (`DaySnapshot.lastCatch`, `lib/cast-memory.ts`).
 - **The empty journal's plate**: the three pop up behind the rim one after another, as the hand-off from the plan reveal.
 
+## Fifth pass: a tap that is theirs, and the tabs outside the journal
+Ideas: https://claude.ai/artifact/22UVeJJPgo8L65ciWt7Zys
+
+- **A poke is answered by whoever you poked** (`POKE` in `Character.tsx`). Every
+  figure used to giggle, hearts and all, with the only difference in the thumb.
+  Three rungs each now — the first answer, a louder one if the taps keep coming,
+  and a held finger:
+  - Ember flares (`proud`, the flame, a doubled bounce) → too much fire (three
+    shortening hops) → leans into the finger and stays there.
+  - Skye floats further than it meant to (`hopeful`, a sparkle) → hiccups
+    bubbles (`thinking`) → tips its sprout at you and blinks twice.
+  - Plum squashes flat with its eyes shut → turns its back with a zz → sinks
+    under a hold and springs back slowly.
+  - A second tap inside 1.2s climbs a rung; the loud rung then rests 6s. A poke
+    takes over an ambient wave or bounce, never a held prop or a moment.
+  - The turn away is 160ms and rides a small hop: a flat drawing mirroring
+    passes through no width at all.
+  - `poked` in `life.ts`: the others look over, and Skye copies Ember a beat
+    later. Plum's pokes are its own business.
+- **Scenes answer their tab** (`SceneCue` in `Scenes.tsx`). Whoever it names
+  reacts if they are in the scene at that hour, and nobody does if they are not.
+  - Cook: while a recipe is being written the kitchen takes its afternoon places
+    at any hour and whoever is at the pot stirs over steam; the fridge photo
+    coming back startles Skye; a recipe that lands gets tasted.
+  - Exercise: a logged session runs Ember out along the path and back, and it
+    arrives `puffed` — a new mood from poses already drawn, over a new `pant`
+    motion (a breath three times as fast).
+- **The fourth pass's two quietest things, louder.** A food word heard while
+  typing had nowhere to play when it named whoever was up on the newest card, so
+  a card's peeker takes the screen's cues too; and the lean against a scroll was
+  weighted at half the reader's velocity, which nobody saw.
+- **Today, and the pushed screens.** The strip hands over with a hop; a pull to
+  refresh ducks them; a meal logged again is taken by whoever it is made of; the
+  day turning over makes Plum yawn. Plum hops as History's month pages, the
+  badge wall raises its newest medal, the porch answers a language picked and
+  the light changed, and a finished purchase gets the three under its confetti.
+- **A cue can be movement alone** (`Cue.mood` optional, plus `duck`), so a
+  figure can answer without dropping what it is holding.
+- **Not the cast.** The sparkline draws itself once, left to right, the first
+  time it has a width; a set arriving in or leaving the workout editor animates.
+- **R8 is on** (`expo-build-properties`), which is what Play's app-optimisation
+  warning wanted: obfuscation was at 2% against a 25% threshold. Keeps for the
+  widget receivers, the widget library and RevenueCat's models.
+
 ## Performance: what made it lag, and the rules now
 Measured on an emulator with the host GPU (the default AVD here renders on SwiftShader, whose frame times mean nothing) against a build of the previous commit, with `dumpsys gfxinfo framestats`.
 

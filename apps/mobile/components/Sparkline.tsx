@@ -266,10 +266,11 @@ export function Sparkline({
   const drawn = (width * height) / VIEW;
 
   /*
-   * The chart draws itself once, left to right, the first time it has a width
-   * (CAST.md, fifth pass). It used to appear finished, which on a screen of
-   * measurements read as a picture rather than as something that had just been
-   * worked out. Once per mount, and never under Reduce Motion.
+   * The chart arrives once, the first time it has a width (CAST.md, fifth
+   * pass): it used to appear finished, which on a screen of measurements read
+   * as a picture rather than as something just worked out. Opacity and a rise,
+   * not a width — a chart that animates its own width makes the layout run on
+   * every frame of it, and there can be five of these on Progress.
    */
   const reduced = useReducedMotion();
   const reveal = useSharedValue(0);
@@ -277,9 +278,12 @@ export function Sparkline({
   useEffect(() => {
     if (width <= 0 || swept.current) return;
     swept.current = true;
-    reveal.value = reduced ? 1 : withTiming(1, { duration: 620, easing: Easing.out(Easing.cubic) });
+    reveal.value = reduced ? 1 : withTiming(1, { duration: 420, easing: Easing.out(Easing.cubic) });
   }, [width, reduced, reveal]);
-  const sweep = useAnimatedStyle(() => ({ width: reveal.value * width }));
+  const sweep = useAnimatedStyle(() => ({
+    opacity: reveal.value,
+    transform: [{ translateY: (1 - reveal.value) * 5 }],
+  }));
 
   return (
     <View
@@ -295,7 +299,7 @@ export function Sparkline({
       onResponderTerminate={() => setHeld(null)}
     >
       {width > 0 && (
-        <Animated.View collapsable={false} pointerEvents="none" style={[styles.sweep, sweep]}>
+        <Animated.View collapsable={false} pointerEvents="none" style={sweep}>
           <Svg width={width} height={drawn} viewBox={`0 0 ${VIEW} ${height}`}>
             <Defs>
               <LinearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
@@ -431,8 +435,6 @@ function Bars({
 }
 
 const styles = StyleSheet.create({
-  // Clips the drawing while it sweeps in; the chart itself is full width.
-  sweep: { overflow: 'hidden' },
   readout: {
     position: 'absolute',
     borderWidth: 1,

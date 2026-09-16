@@ -82,6 +82,12 @@ export interface SceneCue {
   key: number;
 }
 
+/**
+ * The poses that are just standing there: no loop for these. Everything else
+ * either holds something that moves or is a moment of its own.
+ */
+const STILL = new Set<Mood>(['idle', 'sit']);
+
 /** Out along the path and back, and how long it is out of breath afterwards. */
 const RUN_MS = 2600;
 const PUFF_MS = 1500;
@@ -214,6 +220,14 @@ function Standing({
         size={figure.size * scale}
         delay={delay}
         cue={playing?.cue ?? null}
+        /*
+         * Standing about doesn't breathe. A breath at this size is a pixel, and
+         * four scenes' worth of them is four loops running behind every tab —
+         * the same reason the journal's ledge stopped (CAST.md, performance).
+         * A pose that *is* movement keeps its loop: the pot, the Zs, the steam,
+         * a wave. Blinks, fidgets and cues are untouched either way.
+         */
+        loop={STILL.has(playing?.cue?.mood ?? figure.mood) === false}
       />
     </Animated.View>
   );

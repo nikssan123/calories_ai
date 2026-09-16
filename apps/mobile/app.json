@@ -98,7 +98,10 @@
         "expo-build-properties",
         {
           "android": {
-            "minSdkVersion": 26
+            "minSdkVersion": 26,
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraProguardRules": "-keep class com.daysofar.app.widget.** { *; }\n-keep class com.reactnativeandroidwidget.** { *; }\n-keep class com.revenuecat.purchases.** { *; }\n-keepattributes Signature,InnerClasses,EnclosingMethod\n"
           }
         }
       ],
