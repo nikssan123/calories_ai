@@ -33,6 +33,7 @@ import { bounceTab, claimAll, visit } from '@/components/cast/stage';
 import { castMemory, holderOf, noteEarned, takeBadge } from '@/lib/cast-memory';
 import { requestCompose } from '@/lib/compose';
 import { MomentBurst, MomentCard, useStreakMoment } from '@/components/cast/StreakMoment';
+import { ReminderInvite } from '@/components/ReminderInvite';
 import { ReplayDrop, useReplay } from '@/components/ReplayDay';
 import type { CastName, Cue } from '@/components/cast/Character';
 import { Serif } from '@/components/Serif';
@@ -1373,6 +1374,14 @@ export default function TodayScreen() {
           <StepButton direction="forward" onPress={() => step(1)} disabled={onToday} />
         </Material>
       </Animated.View>
+
+      {/*
+        * The daily reminder, offered on the day a run reaches three rather than
+        * left in the settings tab. `isToday` for the same reason the rating ask
+        * carries it — a run is a claim about now, and stepping back through the
+        * calendar should not be able to trigger anything at all.
+        */}
+      <ReminderInvite day={isToday ? day : null} quiet={waiting > 0} />
 
     </>
   );

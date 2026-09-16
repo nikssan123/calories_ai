@@ -61,6 +61,7 @@ import { Serif } from '@/components/Serif';
 import { greetingFor } from '@/lib/greeting';
 import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
 import { MomentBurst, MomentCard, useStreakMoment, type Milestone } from '@/components/cast/StreakMoment';
+import { ReminderInvite } from '@/components/ReminderInvite';
 import { MeterChip, PencilGlyph, PlanWall } from '@/components/PlanWall';
 import { Skeleton } from '@/components/Skeleton';
 import { Sky, useSky } from '@/components/Sky';
@@ -1254,6 +1255,15 @@ export default function JournalScreen() {
         disabled={busy}
         onDraft={onDraft}
       />
+
+      {/*
+        * The daily reminder, offered the first time a meal lands here rather
+        * than left in the settings tab for somebody to find. Held off while a
+        * turn is in flight or the queue still has meals in it: an ask made
+        * over the top of the app visibly working is an interruption, and the
+        * cue is not spent by waiting. See `lib/reminder-invite.ts`.
+        */}
+      <ReminderInvite day={day} quiet={busy || queued > 0} />
 
     </KeyboardAvoidingView>
   );

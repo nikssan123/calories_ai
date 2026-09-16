@@ -1066,6 +1066,21 @@ export const es: Messages = {
   'setup.on': 'El',
   'setup.weighInDay': 'Día de pesarse',
   'setup.weighInTime': 'Hora de pesarse',
+
+  /* The invite: the daily reminder, offered where it is earned rather than
+     left in this tab to be found. See `lib/reminder-invite.ts`. */
+  'invite.firstTitle': 'Ya tienes la primera.',
+  'invite.firstBody':
+    'Lo difícil es acordarse, no escribirlo. Tu teléfono puede preguntarte una vez al día, a la hora que elijas.',
+  'invite.streakTitle': 'Tres días seguidos.',
+  'invite.streakBody':
+    'Una racha que vale la pena mantener. Un aviso al día, a la hora que elijas, para que ninguna noche se quede sin anotar.',
+  'invite.everyDayAt': 'Cada día a las',
+  'invite.remindMe': 'Recuérdamelo',
+  'invite.notNow': 'Ahora no',
+  'invite.fromThisPhone':
+    'Desde este teléfono, no desde nosotros. Puedes cambiarlo o desactivarlo cuando quieras en «Perfil».',
+  'invite.set': (time: string) => `Listo: cada día a las ${time}.`,
   'setup.deleting': 'Borrando…',
   'setup.deleteEverything': 'Borrarlo todo',
   'setup.deleteWarningBefore': 'Esto borra cada comida, foto, peso y conversación de',

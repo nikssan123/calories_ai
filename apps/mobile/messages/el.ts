@@ -1176,6 +1176,21 @@ export const el: Messages = {
   'setup.on': 'Μέρα',
   'setup.weighInDay': 'Μέρα ζυγίσματος',
   'setup.weighInTime': 'Ώρα ζυγίσματος',
+
+  /* The invite: the daily reminder, offered where it is earned rather than
+     left in this tab to be found. See `lib/reminder-invite.ts`. */
+  'invite.firstTitle': 'Το πρώτο καταγράφηκε.',
+  'invite.firstBody':
+    'Το δύσκολο είναι να το θυμάσαι, όχι να το γράψεις. Το τηλέφωνό σου μπορεί να σε ρωτάει μία φορά την ημέρα, την ώρα που θα διαλέξεις.',
+  'invite.streakTitle': 'Τρεις μέρες στη σειρά.',
+  'invite.streakBody':
+    'Σερί που αξίζει να κρατηθεί. Μία υπενθύμιση την ημέρα, την ώρα που διαλέγεις, ώστε να μη μείνει καμία βραδιά χωρίς καταγραφή.',
+  'invite.everyDayAt': 'Κάθε μέρα στις',
+  'invite.remindMe': 'Υπενθύμισέ μου',
+  'invite.notNow': 'Όχι τώρα',
+  'invite.fromThisPhone':
+    'Από αυτό το τηλέφωνο, όχι από εμάς. Μπορείς να το αλλάξεις ή να το κλείσεις όποτε θέλεις στο «Προφίλ».',
+  'invite.set': (time: string) => `Έτοιμο — κάθε μέρα στις ${time}.`,
   'setup.deleting': 'Διαγραφή…',
   'setup.deleteEverything': 'Διαγραφή όλων',
   'setup.deleteWarningBefore': 'Αυτό σβήνει κάθε γεύμα, φωτογραφία, βάρος και συζήτηση στο',

@@ -1194,6 +1194,21 @@ export const ro: Messages = {
   'setup.on': 'Ziua',
   'setup.weighInDay': 'Ziua cântăririi',
   'setup.weighInTime': 'Ora cântăririi',
+
+  /* The invite: the daily reminder, offered where it is earned rather than
+     left in this tab to be found. See `lib/reminder-invite.ts`. */
+  'invite.firstTitle': 'Prima masă e notată.',
+  'invite.firstBody':
+    'Greu e să-ți amintești, nu să scrii. Telefonul te poate întreba o dată pe zi, la ora pe care o alegi.',
+  'invite.streakTitle': 'Trei zile la rând.',
+  'invite.streakBody':
+    'O serie care merită ținută. Un memento pe zi, la ora pe care o alegi, ca să nu rămână nicio seară nenotată.',
+  'invite.everyDayAt': 'În fiecare zi la',
+  'invite.remindMe': 'Amintește-mi',
+  'invite.notNow': 'Nu acum',
+  'invite.fromThisPhone':
+    'De pe telefonul tău, nu de la noi. Poți schimba sau opri asta oricând din „Profil”.',
+  'invite.set': (time: string) => `Gata — în fiecare zi la ${time}.`,
   'setup.deleting': 'Se șterge…',
   'setup.deleteEverything': 'Șterge tot',
   'setup.deleteWarningBefore': 'Asta șterge fiecare masă, poză, greutate și conversație din contul',

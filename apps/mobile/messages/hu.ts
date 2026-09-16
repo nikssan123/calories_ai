@@ -1178,6 +1178,21 @@ export const hu: Messages = {
   'setup.on': 'Nap',
   'setup.weighInDay': 'Mérés napja',
   'setup.weighInTime': 'Mérés időpontja',
+
+  /* The invite: the daily reminder, offered where it is earned rather than
+     left in this tab to be found. See `lib/reminder-invite.ts`. */
+  'invite.firstTitle': 'Az első megvan.',
+  'invite.firstBody':
+    'A nehéz az, hogy eszedbe jusson, nem az, hogy beírd. A telefonod naponta egyszer rákérdezhet, az általad választott időben.',
+  'invite.streakTitle': 'Három nap egymás után.',
+  'invite.streakBody':
+    'Ezt a sorozatot érdemes tartani. Napi egy emlékeztető, az általad választott időben, hogy egyetlen este se maradjon ki.',
+  'invite.everyDayAt': 'Minden nap',
+  'invite.remindMe': 'Emlékeztess',
+  'invite.notNow': 'Most nem',
+  'invite.fromThisPhone':
+    'Erről a telefonról, nem tőlünk. Bármikor módosíthatod vagy kikapcsolhatod a „Profil” alatt.',
+  'invite.set': (time: string) => `Kész — minden nap ${time}.`,
   'setup.deleting': 'Törlés…',
   'setup.deleteEverything': 'Minden törlése',
   // The address follows in bold: "… ami ehhez tartozik: [cím], minden eszközön …".

@@ -1065,6 +1065,21 @@ export const bg: Messages = {
   'setup.on': 'В',
   'setup.weighInDay': 'Ден за претегляне',
   'setup.weighInTime': 'Час за претегляне',
+
+  /* The invite: the daily reminder, offered where it is earned rather than
+     left in this tab to be found. See `lib/reminder-invite.ts`. */
+  'invite.firstTitle': 'Първото е записано.',
+  'invite.firstBody':
+    'Трудното е да се сетиш, а не да го напишеш. Телефонът ти може да те пита веднъж на ден, в час по твой избор.',
+  'invite.streakTitle': 'Три дни подред.',
+  'invite.streakBody':
+    'Такава серия си заслужава да се пази. Едно побутване на ден, в час по твой избор, за да не остане вечер незаписана.',
+  'invite.everyDayAt': 'Всеки ден в',
+  'invite.remindMe': 'Напомняй ми',
+  'invite.notNow': 'Не сега',
+  'invite.fromThisPhone':
+    'От този телефон, не от нас. Можеш да го смениш или изключиш по всяко време в „Профил“.',
+  'invite.set': (time: string) => `Готово — всеки ден в ${time}.`,
   'setup.deleting': 'Изтривам…',
   'setup.deleteEverything': 'Изтрий всичко',
   'setup.deleteWarningBefore': 'Това изтрива всяко хранене, снимка, тегло и разговор на',

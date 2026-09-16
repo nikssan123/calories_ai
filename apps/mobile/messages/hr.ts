@@ -1201,6 +1201,21 @@ export const hr: Messages = {
   'setup.on': 'Dan',
   'setup.weighInDay': 'Dan vaganja',
   'setup.weighInTime': 'Vrijeme vaganja',
+
+  /* The invite: the daily reminder, offered where it is earned rather than
+     left in this tab to be found. See `lib/reminder-invite.ts`. */
+  'invite.firstTitle': 'Prvi je upisan.',
+  'invite.firstBody':
+    'Najteže je sjetiti se, a ne upisati. Telefon te može pitati jednom dnevno, u vrijeme koje sam odabereš.',
+  'invite.streakTitle': 'Tri dana zaredom.',
+  'invite.streakBody':
+    'Niz koji vrijedi održati. Jedan podsjetnik dnevno, u vrijeme koje odabereš, da nijedna večer ne prođe neupisana.',
+  'invite.everyDayAt': 'Svaki dan u',
+  'invite.remindMe': 'Podsjeti me',
+  'invite.notNow': 'Ne sada',
+  'invite.fromThisPhone':
+    'S ovog telefona, ne od nas. Možeš to promijeniti ili isključiti bilo kad u „Profilu”.',
+  'invite.set': (time: string) => `Gotovo — svaki dan u ${time}.`,
   'setup.deleting': 'Brisanje…',
   'setup.deleteEverything': 'Izbriši sve',
   'setup.deleteWarningBefore': 'Ovo briše svaki obrok, fotografiju, težinu i razgovor na računu',

@@ -1187,6 +1187,21 @@ export const uk: Messages = {
   'setup.on': 'День',
   'setup.weighInDay': 'День зважування',
   'setup.weighInTime': 'Час зважування',
+
+  /* The invite: the daily reminder, offered where it is earned rather than
+     left in this tab to be found. See `lib/reminder-invite.ts`. */
+  'invite.firstTitle': 'Перше записано.',
+  'invite.firstBody':
+    'Найважче — згадати, а не записати. Телефон може нагадувати раз на день, о годині, яку обереш.',
+  'invite.streakTitle': 'Три дні поспіль.',
+  'invite.streakBody':
+    'Таку серію варто втримати. Одне нагадування на день, о годині на твій вибір, щоб жоден вечір не лишився незаписаним.',
+  'invite.everyDayAt': 'Щодня о',
+  'invite.remindMe': 'Нагадуй мені',
+  'invite.notNow': 'Не зараз',
+  'invite.fromThisPhone':
+    'З цього телефона, не від нас. Змінити чи вимкнути можна будь-коли у «Профілі».',
+  'invite.set': (time: string) => `Готово — щодня о ${time}.`,
   'setup.deleting': 'Видаляю…',
   'setup.deleteEverything': 'Видалити все',
   'setup.deleteWarningBefore': 'Буде стерто всі прийоми їжі, фото, записи ваги й розмови в акаунті',

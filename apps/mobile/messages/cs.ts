@@ -1205,6 +1205,21 @@ export const cs: Messages = {
   'setup.on': 'Den',
   'setup.weighInDay': 'Den vážení',
   'setup.weighInTime': 'Čas vážení',
+
+  /* The invite: the daily reminder, offered where it is earned rather than
+     left in this tab to be found. See `lib/reminder-invite.ts`. */
+  'invite.firstTitle': 'První je zapsané.',
+  'invite.firstBody':
+    'Nejtěžší je vzpomenout si, ne to napsat. Telefon se tě může jednou denně zeptat, v čase, který si vybereš.',
+  'invite.streakTitle': 'Tři dny po sobě.',
+  'invite.streakBody':
+    'Série, kterou stojí za to udržet. Jedno připomenutí denně, v čase, který si vybereš, aby žádný večer tiše nezapadl.',
+  'invite.everyDayAt': 'Každý den v',
+  'invite.remindMe': 'Připomeň mi to',
+  'invite.notNow': 'Teď ne',
+  'invite.fromThisPhone':
+    'Z tohoto telefonu, ne od nás. Můžeš to kdykoli změnit nebo vypnout v „Profilu“.',
+  'invite.set': (time: string) => `Hotovo — každý den v ${time}.`,
   'setup.deleting': 'Mažu…',
   'setup.deleteEverything': 'Smazat všechno',
   'setup.deleteWarningBefore': 'Tímto se smažou všechna jídla, fotky, váhy a konverzace účtu',

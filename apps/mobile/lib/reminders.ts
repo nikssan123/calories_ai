@@ -268,3 +268,58 @@ async function save(settings: ReminderSettings): Promise<void> {
     // the OS by the time this runs.
   }
 }
+
+/**
+ * Whether the daily reminder could be switched on right now, or whether the
+ * answer has already been decided somewhere this app cannot reach.
+ *
+ * Three states rather than a boolean, because the invite in
+ * `components/ReminderInvite.tsx` has to know the difference between "not yet"
+ * and "no" — the same distinction `ensurePermission` makes, read from outside.
+ * Offering somebody a switch whose permission is spent is a question with a
+ * button that cannot work: they tap it, the OS resolves instantly to denied,
+ * and nothing happens with no explanation on screen. `blocked` is the state
+ * where the honest move is to say nothing at all.
+ *
+ * Read-only, and it raises nothing. `canAskAgain` is a property of the record
+ * the OS already holds, not a request for a dialog.
+ */
+export type RemindersStanding = 'granted' | 'askable' | 'blocked';
+
+export async function remindersStanding(): Promise<RemindersStanding> {
+  try {
+    const existing = await Notifications.getPermissionsAsync();
+    if (existing.granted) return 'granted';
+    return existing.canAskAgain ? 'askable' : 'blocked';
+  } catch {
+    /*
+     * No notification service to ask — a simulator, a build with the module
+     * stripped. Blocked rather than askable, because the failure this protects
+     * against is an invite that opens onto a dialog which never arrives.
+     */
+    return 'blocked';
+  }
+}
+
+/**
+ * Whether this phone has ever had a reminder preference written to it.
+ *
+ * The one signal that separates somebody who has never met these switches from
+ * somebody who has — including somebody who turned the daily reminder on for a
+ * fortnight and then deliberately turned it off. Both read as `enabled: false`
+ * in `loadReminders`, and only one of them should ever be asked again.
+ *
+ * `applyReminders` is the only writer, and it only writes after a tap, so a
+ * true here always stands for a decision somebody made rather than for
+ * something the app did on their behalf at launch.
+ */
+export async function remindersTouched(): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(STORAGE_KEY)) !== null;
+  } catch {
+    // Storage unreadable. Treated as touched: the cost of being wrong that way
+    // is a reminder nobody was offered, and the other way is a prompt over a
+    // setting they may have already answered.
+    return true;
+  }
+}

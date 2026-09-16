@@ -1213,6 +1213,21 @@ export const sr: Messages = {
   'setup.on': 'Дан',
   'setup.weighInDay': 'Дан мерења',
   'setup.weighInTime': 'Време мерења',
+
+  /* The invite: the daily reminder, offered where it is earned rather than
+     left in this tab to be found. See `lib/reminder-invite.ts`. */
+  'invite.firstTitle': 'Прво је уписано.',
+  'invite.firstBody':
+    'Најтеже је сетити се, а не уписати. Телефон може да те пита једном дневно, у време које сам изабереш.',
+  'invite.streakTitle': 'Три дана заредом.',
+  'invite.streakBody':
+    'Низ који вреди одржати. Једно подсећање дневно, у време које изабереш, да ниједно вече не прође неуписано.',
+  'invite.everyDayAt': 'Сваког дана у',
+  'invite.remindMe': 'Подсећај ме',
+  'invite.notNow': 'Не сада',
+  'invite.fromThisPhone':
+    'Са овог телефона, не од нас. Можеш то да промениш или искључиш било кад у „Профилу“.',
+  'invite.set': (time: string) => `Готово — сваког дана у ${time}.`,
   'setup.deleting': 'Брисање…',
   'setup.deleteEverything': 'Обриши све',
   'setup.deleteWarningBefore': 'Ово брише сваки оброк, фотографију, тежину и разговор на налогу',

@@ -1278,6 +1278,21 @@ export const en = {
   'setup.on': 'On',
   'setup.weighInDay': 'Weigh-in day',
   'setup.weighInTime': 'Weigh-in time',
+
+  /* The invite: the daily reminder, offered where it is earned rather than
+     left in this tab to be found. See `lib/reminder-invite.ts`. */
+  'invite.firstTitle': 'That’s one logged.',
+  'invite.firstBody':
+    'The hard part is remembering, not the typing. Your phone can ask you once a day, at an hour you pick.',
+  'invite.streakTitle': 'Three days in a row.',
+  'invite.streakBody':
+    'A run worth keeping. One nudge a day, at an hour you pick, so an evening never quietly goes unlogged.',
+  'invite.everyDayAt': 'Every day at',
+  'invite.remindMe': 'Remind me',
+  'invite.notNow': 'Not now',
+  'invite.fromThisPhone':
+    'From this phone, not from us. Change it or switch it off any time under You.',
+  'invite.set': (time: string) => `Set for ${time}, every day.`,
   'setup.deleting': 'Deleting…',
   'setup.deleteEverything': 'Delete everything',
   'setup.deleteWarningBefore': 'This erases every meal, photo, weight and conversation on',
