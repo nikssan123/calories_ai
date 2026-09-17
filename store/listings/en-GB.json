@@ -1,7 +1,7 @@
 {
   "language": "en-GB",
   "_note": "The default listing's screenshot captions and seed strings. Its title and descriptions are edited in Play Console and live in PLAY_LISTING.md, so they are not here.",
-  "releaseNotes": "The free trial is now three days, with nine messages and a photo scan.\n\nEverything you type in stays free and unlimited, as it always has been: meals written in a sentence, repeating yesterday's dinner, barcodes, your weight, your history and your trends.",
+  "releaseNotes": "The meal editor holds the whole calorie number again — four digits and all — and the diet quality figures keep their units at larger text sizes.\n\nIn the journal, cards land one after another instead of as one panel, and Edit opens in place. The three of them fly up to wait while your entry is read, then hand the card to whoever your meal is mostly made of.\n\nA day with nothing in it yet shows a coin instead of an empty ring.",
   "captions": [
     {
       "headline": "Just say\nwhat you ate",
