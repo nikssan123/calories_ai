@@ -51,13 +51,17 @@ The first pass left them at the edges: once somebody logged anything, they were 
   - Night: the lamp on and Plum asleep.
   - **Dark is the lamp off in the room, not a later hour.** A scene's window shows the light theme's sky for the hour with the light taken out of it (`sceneSkyAt`, `dim`), and every wall, hill and lawn is that hour's own colour dimmed. Night's colours, and the stars, are for the hours that are actually night — they used to be for the whole of dark, so a kitchen at one in the afternoon was purple, lamplit and under a starfield.
 
-### Two traps worth knowing
+### Three traps worth knowing
 - **Every animated layer is `collapsable={false}`.**
   - Fabric flattened some of them away. Reanimated's sync-props path then logged a warning with a full stack trace every frame, on every build, not only debug: about 200 a second on Today, which caused an ANR on the emulator.
   - Check with `adb logcat | grep -c "W Reanimated: Caused by"`. At rest it should read 0.
 - **Keep animation hooks out of wrappers that most cards don't use.**
   - When every meal card's wrapper held its own `useAnimatedStyle`, cards stopped showing. `ChatCard`'s `Land` entrance left them at opacity 0.
   - `CardPeek` is a plain view, and only the active card mounts the animated `Peeker`.
+- **An arrival is two halves, keyed on different things.** `Seat.prime()` runs on every `emit()` and only puts the figure *off-stage*, ready to come in; the half that flies it back is an effect keyed on `here`.
+  - So anything that stages an arrival without moving `here` — a re-claim of a seat the figure never left — primes them out of the scene and leaves them there. The cast simply disappears.
+  - That is what made returning to the journal from Cook a dead cut for so long: only the journal and Today call `claimAll`, so the stage still had everyone on the composer and `claim` took its `occupancy === to` no-op. Opening that gate alone is *not* the fix; `prime` has to wake the landing effect too (`primed`).
+  - Cook hides it best of all: its kitchen draws its own figures in `Scenes.tsx`, so they look like they travelled when nothing moved. A screen that should hold the cast needs seats and a `claimAll` — never a drawing.
 
 ## Third pass: the app's own moments, the season, the site
 - **Streak at risk:** Ember, hands clasped, beside "Log today to keep it" (`StreakChip`).
