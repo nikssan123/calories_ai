@@ -215,6 +215,30 @@ export interface ReplyLanguage {
   name: string | null;
   /** Whether the cheap model writes this language well enough to be let near it. */
   haiku: boolean;
+  /**
+   * Whether the name came from the stored locale rather than from anything they
+   * wrote.
+   *
+   * The caller decides whether to put the name in a prompt, and the two sources
+   * do not earn that equally. A name off the text is a trigram guess competing
+   * with a model that is reading the same words and reading them better, so it
+   * stays out of the prompt — that is what `detect` requiring the window and
+   * the newest message to agree is already protecting, and naming a language
+   * over the top of the model's own reading would spend it on the one case it
+   * cannot help with.
+   *
+   * A name off the locale is the opposite. It is reached only when there was no
+   * evidence anywhere in the recent conversation — franc saw nothing, the
+   * letter rules saw nothing — so there is nothing for the model to read
+   * either, and what is left is an answer somebody actually gave: onboarding
+   * wrote the column, or the client is drawing the whole app in it. That is not
+   * a guess competing with a better reader. It is the only reader there is.
+   *
+   * Set on the fallback whether or not it produced a name, because English
+   * produces null for the reason in `name` above and the distinction the caller
+   * needs is about where the answer came from, not whether it was worth saying.
+   */
+  fromLocale: boolean;
 }
 
 /**
@@ -229,7 +253,12 @@ export interface ReplyLanguage {
  * `locale` is the fallback and only the fallback. It is read when the samples
  * say nothing at all, which is the common case for everything generated without
  * a user sentence in front of it: the weekly review, a nudge, a captionless
- * photo, a barcode scanned into an empty box.
+ * photo, a barcode scanned into an empty box. It also covers the case that
+ * looks like a sentence and is not one — "3 yaourts" is seven letters once the
+ * digits come off, which is under franc's minimum and comes back `und`.
+ *
+ * Which of the two answered is on `fromLocale`, because the caller does not
+ * treat them alike: see the field.
  *
  * The two failure directions are not equally bad, so this leans one way on
  * purpose. Escalating a language Haiku could have handled costs about two and a
@@ -241,16 +270,24 @@ export function replyLanguage(samples: string[], locale: Locale): ReplyLanguage 
   const detected = detect(samples);
 
   if (detected.kind === 'named') {
-    return { name: nameFor(detected.code), haiku: HAIKU_LANGUAGES.has(detected.code) };
+    return {
+      name: nameFor(detected.code),
+      haiku: HAIKU_LANGUAGES.has(detected.code),
+      fromLocale: false,
+    };
   }
 
   // Something is there and it is not a language we can name. Say nothing and
   // spend the capable model, which is the pair of choices that degrades best:
   // the model reads their sentence and answers it in kind, and it is a model
   // that can.
-  if (detected.kind === 'unnamed') return { name: null, haiku: false };
+  if (detected.kind === 'unnamed') return { name: null, haiku: false, fromLocale: false };
 
-  return { name: nameFor(FRANC_CODES[locale]), haiku: HAIKU_LANGUAGES.has(FRANC_CODES[locale]) };
+  return {
+    name: nameFor(FRANC_CODES[locale]),
+    haiku: HAIKU_LANGUAGES.has(FRANC_CODES[locale]),
+    fromLocale: true,
+  };
 }
 
 function nameFor(code: string): string | null {

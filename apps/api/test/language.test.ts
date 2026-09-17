@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LOCALES, LOCALE_ENGLISH_NAMES, type Locale } from '@ct/shared';
-import { proseLocale, replyLanguage } from '../src/ai/language.ts';
+import { proseLocale, replyLanguage, type ReplyLanguage } from '../src/ai/language.ts';
 import { MODELS, TEXT_LOG_UNSUPPORTED_LANGUAGE } from '../src/ai/client.ts';
 
 /**
@@ -119,14 +119,14 @@ describe('writing in a different language from the app', () => {
   const english = ['two eggs and a slice of toast', 'how much protein have I had?'];
 
   it('answers an English-drawn app in the language of the conversation', () => {
-    expect(replyLanguage(bulgarian, 'en')).toEqual({ name: 'Bulgarian', haiku: false });
+    expect(replyLanguage(bulgarian, 'en')).toEqual({ name: 'Bulgarian', haiku: false, fromLocale: false });
   });
 
   it('answers a Bulgarian-drawn app in English when that is what they write', () => {
     // The other direction, and the one the old code got wrong the other way
     // round: a `bg` locale used to force a Bulgarian brief over an English
     // conversation, and pay for the capable model to write it.
-    expect(replyLanguage(english, 'bg')).toEqual({ name: null, haiku: true });
+    expect(replyLanguage(english, 'bg')).toEqual({ name: null, haiku: true, fromLocale: false });
   });
 
   it('stops naming the old language when somebody switches mid-conversation', () => {
@@ -139,6 +139,7 @@ describe('writing in a different language from the app', () => {
     expect(replyLanguage([...english, ...bulgarian], 'bg')).toEqual({
       name: null,
       haiku: false,
+      fromLocale: false,
     });
   });
 
@@ -174,7 +175,7 @@ describe('Bulgarian written in Latin letters', () => {
   it('reads the conversation that prompted this', () => {
     // Newest-first, as the resolver builds it.
     const window = ['Leka veçer çaoo', 'hapçta mnogo piya', 'Kafe nimidavat da piita'];
-    expect(replyLanguage(window, 'en')).toEqual({ name: 'Bulgarian', haiku: false });
+    expect(replyLanguage(window, 'en')).toEqual({ name: 'Bulgarian', haiku: false, fromLocale: false });
   });
 
   it('does not let a short goodbye read as Turkish and drop to Haiku', () => {
@@ -190,7 +191,7 @@ describe('Bulgarian written in Latin letters', () => {
     ['a plan', ['shte yam po-malko dneska, tryabva da otslabvam']],
     ['a Turkish keyboard', ['veçerya: sirene i domati, nishto poveçe']],
   ])('names Bulgarian on %s', (_what, samples) => {
-    expect(replyLanguage(samples, 'en')).toEqual({ name: 'Bulgarian', haiku: false });
+    expect(replyLanguage(samples, 'en')).toEqual({ name: 'Bulgarian', haiku: false, fromLocale: false });
   });
 
   /*
@@ -281,12 +282,71 @@ describe('the language being written, when nothing has been', () => {
    * who happened to type last.
    */
   it('agrees with what the detector says about the same language', () => {
-    expect(replyLanguage(['две яйца и филия хляб с масло'], 'en')).toEqual(
-      replyLanguage([], 'bg'),
+    // Name and model only. The two paths differ on `fromLocale` by definition —
+    // that field is which path answered — and what has to match is the answer.
+    const answer = ({ name, haiku }: ReplyLanguage) => ({ name, haiku });
+
+    expect(answer(replyLanguage(['две яйца и филия хляб с масло'], 'en'))).toEqual(
+      answer(replyLanguage([], 'bg')),
     );
-    expect(replyLanguage(['zwei Eier und eine Scheibe Brot mit Butter'], 'en')).toEqual(
-      replyLanguage([], 'de'),
+    expect(answer(replyLanguage(['zwei Eier und eine Scheibe Brot mit Butter'], 'en'))).toEqual(
+      answer(replyLanguage([], 'de')),
     );
+  });
+
+  it('marks the fallback as the fallback', () => {
+    for (const locale of LOCALES) expect(replyLanguage([], locale).fromLocale).toBe(true);
+  });
+});
+
+/*
+ * The turn that is not empty and carries no language anyway.
+ *
+ * The first French account this app had opened with "3 yaourts" on 2026-09-17
+ * and was answered "Logged." — in English, under a French interface, as the
+ * first thing it ever said to them. Nothing here was wrong: the digits come off
+ * in `buildSample`, "yaourts" is seven letters, franc's minimum is ten, so the
+ * sample came back `und` and the stored locale answered French exactly as it
+ * should have. The name was then discarded downstream because the turn had text
+ * in it — see the `named` gate in `ai/run.ts`, which is what actually changed.
+ *
+ * These cases pin the half this file owns: a log this short resolves off the
+ * locale, and says so.
+ */
+describe('a log too short to carry a language', () => {
+  it.each([
+    ['the log that prompted this', '3 yaourts', 'fr' as Locale, 'French'],
+    ['one word and a number', '2 oeufs', 'fr' as Locale, 'French'],
+    ['a brand nobody can detect', 'Skyr 150g', 'de' as Locale, 'German'],
+  ])('answers %s from the stored locale', (_what, text, locale, expected) => {
+    expect(replyLanguage([text], locale)).toEqual({
+      name: expected,
+      haiku: true,
+      fromLocale: true,
+    });
+  });
+
+  it('still says nothing for an English account', () => {
+    // The fallback ran and resolved English, which is the one language that
+    // earns no brief. `fromLocale` is about which path answered, not about
+    // whether the answer was worth saying.
+    expect(replyLanguage(['3 yoghurts'], 'en')).toEqual({
+      name: null,
+      haiku: true,
+      fromLocale: true,
+    });
+  });
+
+  it('lets the conversation behind it win once there is one', () => {
+    // The same short log with French sentences behind it is detected, not
+    // guessed — and the flag says so, which is what keeps the brief out of a
+    // turn the model can read for itself.
+    const window = ['3 yaourts', 'deux oeufs et une tranche de pain avec du beurre'];
+    expect(replyLanguage(window, 'fr')).toEqual({
+      name: 'French',
+      haiku: true,
+      fromLocale: false,
+    });
   });
 });
 
@@ -305,7 +365,7 @@ describe('a language we could not name', () => {
   const undecided = ['пилешко филе с ориз и зеленчуци'];
 
   it('says nothing and escalates', () => {
-    expect(replyLanguage(undecided, 'en')).toEqual({ name: null, haiku: false });
+    expect(replyLanguage(undecided, 'en')).toEqual({ name: null, haiku: false, fromLocale: false });
   });
 
   it('does not let the stored locale answer over the top of it', () => {

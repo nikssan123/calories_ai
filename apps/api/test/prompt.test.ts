@@ -196,8 +196,42 @@ describe('STABLE_SYSTEM_PROMPT', () => {
   });
 
   it('keeps warmth from turning into length', () => {
-    expect(STABLE_SYSTEM_PROMPT).toMatch(/Warmth lives in the wording, not in extra length/);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/Warmth lives in the wording, not in the length/);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/Being glad is a tone, not a word count/);
     expect(STABLE_SYSTEM_PROMPT).toMatch(/not a licence to pad/);
+  });
+
+  /*
+   * The voice was raised to match the app it is written into — Ember, Skye and
+   * Plum hop about the screen the reply lands on, and a receipt printer reads
+   * wrong under them. Raising warmth is exactly the edit that drifts into the
+   * approval register, so these pin the two ends of it: what the gladness is
+   * allowed to be about, and what it is never allowed to become.
+   */
+  it('takes its register from the cast', () => {
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/Ember, Skye and Plum/);
+    // CAST.md's first drawing rule, carried into the writing. It is the same
+    // promise as "encourage the person, never judge the food" and it is the
+    // reason the characters have no mood for being over.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(
+      /react to somebody showing up, never to the number they showed up with/i,
+    );
+  });
+
+  it('names what the warmth may attach to', () => {
+    // The door left open once grading the plate is shut. Without these the
+    // model has a ban and nowhere to put the warmth, which is how it ends up
+    // back on the food.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/What the warmth attaches to/);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/Coming back/);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/the gap goes unmentioned/);
+  });
+
+  it('keeps supportive from turning into babyish or relentless', () => {
+    // Two failure modes of a raised register. Adults are doing something hard
+    // here, and a compliment on every turn is a tic rather than warmth.
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/Warm is not the same as babyish/);
+    expect(STABLE_SYSTEM_PROMPT).toMatch(/becomes the app's tic/);
   });
 
   /**

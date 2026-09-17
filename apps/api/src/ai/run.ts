@@ -275,7 +275,7 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
   const language = await resolveLanguage(input, history, speaking);
 
   /*
-   * The language is *named* only when this turn carries no sentence of its own.
+   * The language is *named* only when nobody better is reading the turn.
    *
    * With a sentence in front of it the model is the better detector, and by a
    * distance — franc is reading meal logs through trigrams and calls Slovene
@@ -286,11 +286,26 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
    * thing this was built for, which was never the language being wrong so much
    * as it being translated into rather than written in.
    *
-   * What is left is the turn with nothing to read: a photo sent with no
-   * caption, a barcode scanned into an empty box. There the name is not a
-   * second opinion, it is the only one there is.
+   * That argument is about a turn the model *can* read, and the gate used to
+   * assume any turn with text in it was one. It is not. The first French
+   * account this app ever had opened with "3 yaourts" on 2026-09-17 and was
+   * answered "Logged." — seven letters once the digits come off, which is under
+   * franc's minimum and therefore also under what a model can be expected to
+   * commit to. `replyLanguage` had already resolved it to French off the stored
+   * locale and this line threw the answer away, because the turn was not empty.
+   *
+   * So the test is `fromLocale` rather than emptiness. That flag is set only
+   * when nothing in the recent conversation carried a language at all — which
+   * is the same silence a captionless photo arrives in, whether or not a couple
+   * of words came with it. In that silence the stored locale is not a second
+   * opinion competing with the model's reading; it is somebody's actual answer,
+   * and it is the only reading there is.
+   *
+   * The turns where franc *did* name something still say nothing, which is the
+   * half worth keeping: a near-miss like Slovene-as-Polish never reaches a
+   * prompt, and the model goes on reading the sentence for itself.
    */
-  const named = input.text.trim().length === 0 ? language.name : null;
+  const named = input.text.trim().length === 0 || language.fromLocale ? language.name : null;
 
   /*
    * The turn as the model sees it: where the day stands, then what they said.

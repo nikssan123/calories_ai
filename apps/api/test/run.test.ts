@@ -538,6 +538,46 @@ describe('runTurn', () => {
     });
 
     /*
+     * The turn that has text in it and still has nothing for the model to read.
+     *
+     * "3 yaourts" was the first thing the first French account ever said to this
+     * app, on 2026-09-17, and it came back "Logged." — English, under a French
+     * interface, as a first impression. The gate was emptiness, and two words
+     * are not empty; what they are is seven letters after the digits come off,
+     * which is under franc's minimum and under anything a model will commit to.
+     * `replyLanguage` had already answered French off the stored locale.
+     */
+    it('names the language when the turn is too short to carry one', async () => {
+      const call = await turnAs({ locale: 'fr' }, null, '3 yaourts');
+      expect(userTurnOf(call)).toContain('Language: write to this person in French');
+    });
+
+    it('still says nothing when a short turn is on an English account', async () => {
+      // The fallback ran and answered English, which earns no brief either way.
+      const call = await turnAs({ locale: 'en' }, null, '3 yoghurts');
+      expect(userTurnOf(call)).not.toContain('Language:');
+    });
+
+    it('leaves a short turn alone once the conversation has named itself', async () => {
+      // The same two words with a French sentence behind them are detected
+      // rather than assumed, and a detected language stays out of the prompt —
+      // the model is reading the thread for itself and reads it better.
+      const account = await createUser({ locale: 'fr' });
+      const profile = await getUser(account.id);
+      scriptAgent({ text: 'Et voilà.' }, { text: 'Et voilà.' });
+
+      await runTurn({
+        userId: account.id,
+        ctx: account.ctx,
+        profile,
+        text: 'deux oeufs et une tranche de pain avec du beurre',
+      });
+      await runTurn({ userId: account.id, ctx: account.ctx, profile, text: '3 yaourts' });
+
+      expect(userTurnOf(agentCalls.at(-1)!)).not.toContain('Language:');
+    });
+
+    /*
      * The trap in doing this at all. A guess off a device is not an answer, and
      * nothing may let it become one — the column stays null until somebody says
      * otherwise, which is what keeps the question askable.
