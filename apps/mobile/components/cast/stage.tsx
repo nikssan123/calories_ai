@@ -150,9 +150,24 @@ function measureSeat(entry: SeatEntry | undefined, done: (rect: Rect | null) => 
 }
 
 /**
- * Sends `name` to `seat` on `screen`, the tab route asking. A no-op if they're
- * already there; a flight within one screen; an entrance when the screen asking
- * is not the one they were last on.
+ * Sends `name` to `seat` on `screen`, the tab route asking. A flight within one
+ * screen; an entrance when the screen asking is not the one they were last on;
+ * and a no-op if they are already sitting there and no tab is arriving.
+ *
+ * That last clause used to be unconditional, and it quietly cost the app its
+ * best small moment. Only the journal and Today claim seats — Cook, Exercise,
+ * Progress and You never call `claimAll` — so while a reader is on one of those
+ * the stage still has all three on the journal's composer. Coming back re-claimed
+ * the seat they already held, hit the no-op, and the journal snapped into place
+ * fully formed. Cook hides it especially well: its kitchen draws its own figures
+ * (`Scenes.tsx`), so they look like they went there when the stage never moved
+ * them.
+ *
+ * `arriving` is what opens the door, and it is deliberately narrower than
+ * `switching`: it means *this* call is the first claim of a tab switch, made
+ * while the stage still thinks the old tab is up. A second claim a moment later
+ * — the journal re-claiming when a card lands — has `current` caught up by then,
+ * so it takes the no-op and nobody enters a seat twice.
  *
  * The screen is passed rather than read from `stageFocus`, because a screen's
  * own focus reaches its effects a moment before `TabScene`'s listener hears of
@@ -160,7 +175,9 @@ function measureSeat(entry: SeatEntry | undefined, done: (rect: Rect | null) => 
  */
 export function claim(name: CastName, seat: string, screen: string) {
   const to = keyOf(seat, name);
-  if (occupancy[name] === to) return;
+  // This screen is the one arriving: the stage has not caught up with the tab yet.
+  const arriving = current !== null && screen !== current;
+  if (occupancy[name] === to && !arriving) return;
   const from = occupancy[name];
   occupancy[name] = to;
 
@@ -168,12 +185,14 @@ export function claim(name: CastName, seat: string, screen: string) {
   const toEntry = seats.get(to);
   const sameScreen = fromEntry !== undefined && toEntry !== undefined && fromEntry.screen === toEntry.screen;
 
-  if (reduced || !overlay || !sameScreen || !fromEntry.measure) {
+  // `from === to` is a re-claim on a tab switch. There is no distance to fly, so
+  // it takes the entrance path rather than a flight to its own seat.
+  if (reduced || !overlay || from === to || !sameScreen || !fromEntry.measure) {
     flying[name] = null;
     // Part of a tab switch — this screen is arriving, or has only just — so the
     // seat plays its entrance when it has them. The journal is the first tab, so
     // anybody arriving there comes from its right.
-    const switching = current !== null && (screen !== current || Date.now() - switchedAt < SWITCH_WINDOW_MS);
+    const switching = arriving || (current !== null && Date.now() - switchedAt < SWITCH_WINDOW_MS);
     if (!reduced && from !== null && switching) {
       arrivals[name] = { key: to, side: screen === 'index' ? 1 : cameFrom, at: Date.now() };
     } else {
@@ -405,6 +424,11 @@ export function Seat({
     return entrance && !reduced && arrival && arrival.key === key ? arrival : null;
   };
   const start = useRef(waiting());
+  /*
+   * Bumped by `prime` when it stages a figure for an entrance, so the landing
+   * effect below re-runs even when `here` has not moved. See both.
+   */
+  const [primed, setPrimed] = useState(0);
   const startsAt = (arrival: ArrivalFor | null) => ({
     travel: arrival && entrance === 'bound' ? 0 : 1,
     offX: arrival && entrance === 'bound' ? (arrival.side || 1) * Dimensions.get('window').width : 0,
@@ -437,6 +461,14 @@ export function Seat({
       drop.value = at.drop;
       faded.value = at.faded;
       rise.value = at.rise;
+      /*
+       * Wake the effect below. This half only puts the figure *off-stage* ready
+       * to come in; the half that flies it back is an effect keyed on `here`,
+       * and a re-claim of a seat somebody is already sitting in never moves
+       * `here`. Without this bump they were primed out of the scene and left
+       * there — the cast simply gone from the journal.
+       */
+      setPrimed((n) => n + 1);
     };
     listeners.add(prime);
     return () => {
@@ -450,15 +482,23 @@ export function Seat({
     wasHere.current = here;
     const first = !mounted.current;
     mounted.current = true;
-    if (!arrived || reduced) return;
     const arrival = arrivals[name];
+    /*
+     * A re-claim on a tab switch: `here` never moved, because they never left
+     * this seat — but `prime` has just set them off-stage for an entrance, so
+     * they have to be flown back in or they stay there.
+     */
+    const replay = here && !arrived && arrival !== undefined && arrival.key === key;
+    if ((!arrived && !replay) || reduced) return;
     const land = () => {
       squash.value = withSequence(withTiming(1, { duration: 70 }), withSpring(0, gait.spring));
     };
     if (!entrance || !arrival || arrival.key !== key || Date.now() - arrival.at > 2500) {
       // Arrived by flight: just the landing. Not for a seat that simply
-      // mounted with somebody in it, which is nobody arriving.
-      if (!first && (!arrival || arrival.key !== key)) land();
+      // mounted with somebody in it, which is nobody arriving — and not on a
+      // `primed` re-run, where the entrance below has already been played and
+      // the arrival cleared.
+      if (arrived && !first && (!arrival || arrival.key !== key)) land();
       return;
     }
     delete arrivals[name];
@@ -499,7 +539,7 @@ export function Seat({
     // 'rise': up from behind whatever they sit behind, on their own spring.
     rise.value = withDelay(wait + 260, withSpring(0, gait.spring));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [here]);
+  }, [here, primed]);
 
   const landing = useAnimatedStyle(() => {
     const t = travel.value;
