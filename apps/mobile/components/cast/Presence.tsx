@@ -402,9 +402,12 @@ export function CardPeek({
 }) {
   // A plain view either way, so the card inside is never remounted. Everything
   // that animates lives in `Peeker` and `PeekHands`, which only the active card
-  // mounts. The ref is how the hands, drawn after the card, move with the figure
-  // drawn before it: it holds no animation of its own.
+  // mounts. The refs are how the hands, drawn after the card, move with the
+  // figure drawn before it: they hold no animation of their own. `rise` is the
+  // pop-up over the card; `offstage` is the seat's own entrance, which the hands
+  // have to wait out or they hold on to the card with nobody behind it.
   const rise = useRef<SharedValue<number> | null>(null);
+  const offstage = useRef<SharedValue<number> | null>(null);
   return (
     <View style={active ? styles.peekRow : null}>
       {active && (
@@ -416,10 +419,13 @@ export function CardPeek({
           outside={cue ?? null}
           onCatch={onCatch}
           riseOut={rise}
+          offstageOut={offstage}
         />
       )}
       {children}
-      {active && <PeekHands who={dominant(card)} seat={`journal.peek:${entryId}`} riseRef={rise} />}
+      {active && (
+        <PeekHands who={dominant(card)} seat={`journal.peek:${entryId}`} riseRef={rise} offstageRef={offstage} />
+      )}
     </View>
   );
 }
@@ -432,24 +438,33 @@ export function CardPeek({
  * across its middle that read as a clipping mistake. With them it reads as
  * somebody holding on and looking over the top. They lift away as the figure
  * pops up to cheer, and are not drawn while the carrier is anywhere else.
+ *
+ * "Anywhere else" includes still arriving. The seat is occupied from the moment
+ * the journal claims it, but a tab switch stows the figure behind the card first
+ * and springs it up a beat later — and these are in *front* of the card, so they
+ * were drawn holding on to it a third of a second before anybody was there. They
+ * come up out of the card's edge with the figure instead.
  */
 function PeekHands({
   who,
   seat,
   riseRef,
+  offstageRef,
 }: {
   who: CastName;
   seat: string;
   riseRef: React.MutableRefObject<SharedValue<number> | null>;
+  offstageRef: React.MutableRefObject<SharedValue<number> | null>;
 }) {
   const here = useSeated(seat, who);
   const still = useSharedValue(0);
   // Read here rather than passed as a value: `Peeker`, the sibling before this one,
-  // has set it by the time this renders.
+  // has set both by the time this renders.
   const source = riseRef.current ?? still;
+  const entering = offstageRef.current ?? still;
   const hold = useAnimatedStyle(() => ({
-    opacity: Math.max(0, Math.min(1, 1 + source.value / 0.35)),
-    transform: [{ translateY: source.value * POPPED }],
+    opacity: Math.max(0, Math.min(1, 1 + source.value / 0.35)) * Math.max(0, 1 - entering.value * 2.2),
+    transform: [{ translateY: source.value * POPPED + entering.value * HANDS_H * 1.6 }],
   }));
   const { gradients } = drawing(who, 'idle');
   const [light, mid, dark] = gradients.body;
@@ -481,6 +496,7 @@ function Peeker({
   outside,
   onCatch,
   riseOut,
+  offstageOut,
 }: {
   card: { protein_g: number; carbs_g: number; fat_g: number } & { kcal?: number };
   entryId: string;
@@ -491,6 +507,8 @@ function Peeker({
   onCatch?: (who: CastName, entryId: string) => void;
   /** Handed the rise, so the hands in front of the card move with the figure behind it. */
   riseOut: React.MutableRefObject<SharedValue<number> | null>;
+  /** Handed the seat's entrance, so the hands wait for a figure that is still arriving. */
+  offstageOut: React.MutableRefObject<SharedValue<number> | null>;
 }) {
   // A correction is acknowledged once per new figure it lands on.
   const fix = `${entryId}:${card.kcal ?? ''}:${card.protein_g}:${card.carbs_g}:${card.fat_g}`;
@@ -595,7 +613,15 @@ function Peeker({
 
   return (
     <View pointerEvents="box-none" style={styles.peek}>
-      <Seat seat={seat} name={who} screen="index" size={PEEK} land={{ x: 0, y: -POPPED }} entrance="rise">
+      <Seat
+        seat={seat}
+        name={who}
+        screen="index"
+        size={PEEK}
+        land={{ x: 0, y: -POPPED }}
+        entrance="rise"
+        offstage={offstageOut}
+      >
         <Animated.View collapsable={false} pointerEvents="box-none" style={lift}>
           <Character
             name={who}

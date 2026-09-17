@@ -178,6 +178,37 @@ Ideas: https://claude.ai/artifact/22UVeJJPgo8L65ciWt7Zys
   warning wanted: obfuscation was at 2% against a 25% threshold. Keeps for the
   widget receivers, the widget library and RevenueCat's models.
 
+## The first open: two halves of an arrival, again
+
+Both of these are the journal's newest card, and both were reported as one bug.
+
+- **A flight needs a destination that has stopped moving.** A claim is made in
+  the commit that causes it, and on a cold start that commit is forty messages
+  arriving at once, with the list still at the top of them: the peek seat
+  measured at y=1612 on an 800pt screen — twice the height of the phone, below
+  everything — because `scrollToEnd` had not landed yet. The stand-in set off
+  for there, and the mid-flight retarget then hauled it the whole way back. A
+  figure crossing the screen and snapping onto the card is what the reader saw
+  on every launch with a meal in the day.
+  - So `settledSeat` asks the destination again, every frame, until it is on
+    screen and in the same place twice running, and the seat they are leaving is
+    measured only then — the stand-in has to set off from where the figure is in
+    *that* frame, not where it was before the list scrolled. Nothing shows
+    meanwhile: the flight is still `pending`, so the old seat is still drawing
+    them. A seat that never settles is not somewhere to fly to, and the figure is
+    simply put there.
+  - The retarget is a correction now, never a jump: a destination that has gone
+    off screen mid-flight is left where it was aimed.
+- **The hands are part of the figure and must not arrive before it.** `PeekHands`
+  is drawn in *front* of the card, where the rest of the carrier is behind it,
+  and it was shown on `useSeated` alone. But a seat is occupied from the moment
+  the journal claims it, while a tab switch stows the figure behind the card and
+  springs it up a beat later (`STAGGER` + 260ms) — so two paws held the card's
+  edge for a third of a second with nobody behind them. `Seat` now hands its
+  entrance out (`offstage`, assigned in render because `prime` stages the figure
+  on the notification, before anything draws), and the hands come up out of the
+  edge with it.
+
 ## Performance: what made it lag, and the rules now
 Measured on an emulator with the host GPU (the default AVD here renders on SwiftShader, whose frame times mean nothing) against a build of the previous commit, with `dumpsys gfxinfo framestats`.
 

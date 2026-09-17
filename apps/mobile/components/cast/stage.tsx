@@ -10,6 +10,7 @@ import Animated, {
   withSequence,
   withSpring,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { Character, GAIT, STAGGER, type CastName, type Mood } from './Character';
@@ -149,6 +150,50 @@ function measureSeat(entry: SeatEntry | undefined, done: (rect: Rect | null) => 
   });
 }
 
+/** Whether a seat is somewhere the reader can see. Nothing flies to a place off screen. */
+function onScreen(rect: Rect) {
+  const middle = rect.y + rect.h / 2;
+  return middle > 0 && middle < Dimensions.get('window').height;
+}
+
+/**
+ * Where a seat is going to be, rather than where it happens to be this frame:
+ * what a flight has to have before it sets off.
+ *
+ * A flight is claimed in the commit that makes it, and its destination can still
+ * be in motion — a seat that mounted in that same commit has not been laid out,
+ * and one inside the conversation is wherever the list is scrolled, which on a
+ * cold start is the top of forty messages, a whole history above where
+ * `scrollToEnd` is about to put it. Measured there, the flight sets off for a
+ * place that is gone by the time it arrives and the mid-flight retarget hauls
+ * the figure back across the screen. That is what threw whoever was on the
+ * newest card from one end of the journal to the other on the first open.
+ *
+ * So the destination has to measure on screen and in the same place two frames
+ * running. A seat that will not settle in that time is flown to where it was
+ * last seen if that is on screen at all, and otherwise is not somewhere to fly
+ * to: the figure is simply put there.
+ */
+function settledSeat(
+  entry: SeatEntry | undefined,
+  done: (rect: Rect | null) => void,
+  tries = 12,
+  before: Rect | null = null,
+) {
+  const measure = entry?.measure;
+  if (!entry || !measure) return done(null);
+  measure((rect) => {
+    if (rect) entry.last = rect;
+    const still = rect !== null && before !== null && rect.x === before.x && rect.y === before.y;
+    if (rect && still && onScreen(rect)) return done(rect);
+    if (tries > 0 && entry.measure) {
+      requestAnimationFrame(() => settledSeat(entry, done, tries - 1, rect));
+      return;
+    }
+    done(rect && onScreen(rect) ? rect : null);
+  });
+}
+
 /**
  * Sends `name` to `seat` on `screen`, the tab route asking. A flight within one
  * screen; an entrance when the screen asking is not the one they were last on;
@@ -206,8 +251,16 @@ export function claim(name: CastName, seat: string, screen: string) {
   flying[name] = { id, from, to, pending: true };
   emit();
 
-  measureSeat(fromEntry, (fromRect) => {
-    measureSeat(toEntry, (toRect) => {
+  /*
+   * The destination first, and the seat they are leaving only once it has
+   * settled: waiting for the list to stop moving can take a few frames, and the
+   * stand-in has to set off from where the figure is in *that* frame, not from
+   * where it was before the scroll. Nothing is visible meanwhile — the flight is
+   * still `pending`, so the seat they are leaving is still drawing them.
+   */
+  settledSeat(toEntry, (toRect) => {
+    if (flying[name]?.id !== id) return;
+    measureSeat(fromEntry, (fromRect) => {
       if (flying[name]?.id !== id) return;
       if (!fromRect || !toRect || !overlay) {
         flying[name] = null;
@@ -221,9 +274,12 @@ export function claim(name: CastName, seat: string, screen: string) {
         w: rect.w,
         h: rect.h,
       });
+      // A correction for a destination that drifted, never a jump: a seat that
+      // has gone off screen mid-flight (the list scrolled away under it) is left
+      // where it was aimed rather than dragged after.
       const retarget = () =>
         measureSeat(seats.get(to), (again) => {
-          if (again && overlay && flying[name]?.id === id) {
+          if (again && onScreen(again) && overlay && flying[name]?.id === id) {
             overlay.fly(name, local(fromRect), local(again, toEntry.land), toEntry.mood, -id, () => {});
           }
         });
@@ -360,6 +416,7 @@ export function Seat({
   mood = 'idle',
   land,
   entrance,
+  offstage,
   ground,
   style,
   children,
@@ -374,6 +431,14 @@ export function Seat({
   land?: { x: number; y: number };
   /** How a character arrives here when a tab switch brings them. See the note at the top. */
   entrance?: Entrance;
+  /**
+   * Handed how far out of the scene the figure still is — 1 while a `rise`
+   * entrance has it stowed behind whatever it sits behind, 0 once it is in its
+   * seat. For anything drawn *outside* the seat that belongs to the figure and
+   * must not turn up before it: the hands over a card's top edge, which are in
+   * front of the card where the rest of them is behind it.
+   */
+  offstage?: React.MutableRefObject<SharedValue<number> | null>;
   /**
    * What they cast on whatever they sit on — drawn under them, outside their own
    * motion, and moving with the entrance: along the ground under a bound, lighter
@@ -443,6 +508,10 @@ export function Seat({
   const hops = useSharedValue(0);
   const drop = useSharedValue(initial.drop);
   const rise = useSharedValue(initial.rise);
+  // In render rather than in an effect: `prime` stages a figure off stage on the
+  // notification, before anything draws, and whatever is waiting on this has to
+  // read the new value on that same frame or it flashes up without them.
+  if (offstage) offstage.current = rise;
   const faded = useSharedValue(initial.faded);
   const lean = useSharedValue(0);
   const wasHere = useRef(false);
