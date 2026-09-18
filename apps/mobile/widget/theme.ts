@@ -34,12 +34,25 @@ export interface WidgetPalette {
   border: ColorProp;
   burn: ColorProp;
   /*
-   * The ledge under the ring's track. Split into a colour and an opacity
-   * because the app spells it `rgba()` and androidsvg is an SVG 1.1 renderer,
-   * where transparency is `stroke-opacity` and a colour is six hex digits.
+   * How much of the accent the ring's track is made of.
+   *
+   * A number rather than a colour because the app spells this `rgba()` and
+   * androidsvg is an SVG 1.1 renderer, where transparency is `stroke-opacity`
+   * and a colour is six hex digits — and because SwiftUI on the iOS face takes
+   * the same split.
+   *
+   * The track is the day's budget, not a neutral band, and there is no ledge
+   * under it any more. A ledge here was `#000000` at 0.88, and on a dark widget
+   * that is a hole — on the one surface in the app where what shows through a
+   * hole is somebody's wallpaper.
+   *
+   * It is painted from `track`, not from `calories`, because dark wants the
+   * deep green nearly solid: a whisper of mint over ink composites to a slate,
+   * and a washed-out ring is what this replaced. See `ringTrack` in the app's
+   * own palette, which makes the same call.
    */
-  ledge: HexColor;
-  ledgeOpacity: number;
+  track: HexColor;
+  trackOpacity: number;
   /** The shadow a figure from the cast stands on, split the same way as the ledge. */
   shadow: HexColor;
   shadowOpacity: number;
@@ -54,8 +67,8 @@ export const LIGHT: WidgetPalette = {
   muted: '#f3e8d9',
   border: '#eadcc9',
   burn: '#c13a7a',
-  ledge: '#31261e',
-  ledgeOpacity: 0.14,
+  track: '#12b76a',
+  trackOpacity: 0.2,
   shadow: '#784f14',
   shadowOpacity: 0.16,
 };
@@ -69,8 +82,8 @@ export const DARK: WidgetPalette = {
   muted: '#322822',
   border: '#4d3d33',
   burn: '#ff8fbe',
-  ledge: '#000000',
-  ledgeOpacity: 0.88,
+  track: '#17945f',
+  trackOpacity: 0.62,
   shadow: '#000000',
   shadowOpacity: 0.32,
 };

@@ -240,6 +240,52 @@ export function tint(color: string, alpha: number): string {
 }
 
 /**
+ * The ring's track: the day's budget before any of it is spent.
+ *
+ * One definition for all four rings — the hero on Today, the journal header's
+ * coin, the day rail's and the web's — because four call sites drifting apart
+ * is how a track ends up a different green on every screen.
+ *
+ * Deep and nearly opaque on dark rather than the accent at a whisper. A whisper
+ * is an instruction to show mostly the ground, and the ground here is a plum
+ * evening sky: the mint at 0.24 over it composites to about #2f4f56, which is a
+ * slate, not a green. Chroma has to come from the colour rather than survive
+ * the blend, so dark takes `caloriesDeep` — already a dark green — at a weight
+ * where the sky tints it instead of bleaching it.
+ *
+ * Light keeps the whisper. Cream is a pale ground, so a fifth of the accent
+ * over it stays recognisably the accent.
+ */
+export function ringTrack(colors: Palette, scheme: 'light' | 'dark'): string {
+  return scheme === 'dark' ? tint(colors.caloriesDeep, 0.62) : tint(colors.calories, 0.2);
+}
+
+/**
+ * Two colours, walked between — alpha included.
+ *
+ * `tint` re-alphas one colour; this moves from one to another, which is what a
+ * value that follows the hour needs rather than a pair of values it chooses
+ * between. Takes either spelling on either side, because the palette holds
+ * both, and always answers in `rgba` so the alpha it worked out survives.
+ */
+export function blend(from: string, to: string, t: number): string {
+  const a = parts(from);
+  const b = parts(to);
+  const at = (i: number) => a[i]! + (b[i]! - a[i]!) * t;
+  return `rgba(${Math.round(at(0))}, ${Math.round(at(1))}, ${Math.round(at(2))}, ${at(3).toFixed(3)})`;
+}
+
+/** A colour as four numbers, whichever way the palette spelled it. */
+function parts(color: string): [number, number, number, number] {
+  if (color.startsWith('#')) {
+    const n = parseInt(color.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255, 1];
+  }
+  const c = color.match(/[\d.]+/g)?.map(Number) ?? [0, 0, 0, 0];
+  return [c[0] ?? 0, c[1] ?? 0, c[2] ?? 0, c[3] ?? 1];
+}
+
+/**
  * A colour with less light falling on it: `amount` of the light taken away.
  *
  * For illustration — the scenes — where dark is the same room with the lamp

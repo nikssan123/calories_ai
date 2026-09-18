@@ -4,16 +4,24 @@
  * A widget is drawn by the launcher out of `RemoteViews`, which has no canvas
  * and no React — so this is the one place in the app where the ring is built by
  * concatenating strings rather than by rendering components. The geometry is
- * lifted from `CalorieRing` rather than re-derived: same depth ratio, same
- * radius, same rotation, so the thing on the home screen is recognisably the
- * thing inside the app rather than a second drawing of the same idea.
+ * lifted from `CalorieRing` rather than re-derived: same radius, same rotation,
+ * so the thing on the home screen is recognisably the thing inside the app
+ * rather than a second drawing of the same idea.
  *
- * That now includes the two things the first copy left out, both of which are
- * the reason the app's dial looks like an object rather than a stroke: the
- * ledge — the track again, pushed down by its own depth, in the shadow tone
- * every card uses — and the ramp across the arc, so a full day is visibly a
- * richer green at its end than at its start. They cost two more circles and a
- * gradient, and androidsvg draws all of it.
+ * The track is the day's budget rather than a neutral band, so a day nobody has
+ * logged to yet reads as a remainder and not as a gap in the home screen. It used to sit on a ledge: the track again, pushed down
+ * by its own depth, in the shadow tone every card used. In dark that tone is
+ * `#000000` at 0.88, and a near-black crescent under a faint band is a hole
+ * punched through the widget — behind which is the user's wallpaper. Depth
+ * after dark is light, so the ledge has gone.
+ *
+ * What the app's ring puts there instead is a lit rim, and this does not have
+ * one: the iOS face is laid out in SwiftUI (`ios/Face.tsx`) and cannot stroke a
+ * gradient, and two home-screen widgets that disagree with each other would be
+ * worse than one that is a shade plainer than the screen inside the app.
+ *
+ * The ramp across the arc stays, so a full day is visibly a richer green at its
+ * end than at its start.
  *
  * No animation, and nothing to switch off for reduced motion. A widget is
  * repainted at whatever moment the launcher decides; there is no arrival to
@@ -25,13 +33,12 @@ export interface Ring {
   target: number;
   size: number;
   strokeWidth: number;
-  track: string;
   fill: string;
   /** The far end of the arc's ramp — `logoRamp` in the app's palette. */
   ramp: string;
-  /** The ledge's tone, and how much of it to let through. */
-  ledge: string;
-  ledgeOpacity: number;
+  /** The track, and how much of it to let through. See `WidgetPalette`. */
+  track: string;
+  trackOpacity: number;
   /** Over target turns the arc to ink rather than to red — see `CalorieRing`. */
   over: string;
 }
@@ -41,16 +48,15 @@ export function ringSvg({
   target,
   size,
   strokeWidth,
-  track,
   fill,
   ramp,
-  ledge,
-  ledgeOpacity,
+  track,
+  trackOpacity,
   over,
 }: Ring): string {
-  // `CalorieRing`'s own arithmetic, verbatim.
-  const depth = Math.max(3, Math.round(strokeWidth * 0.22));
-  const radius = (size - strokeWidth - depth) / 2;
+  // `CalorieRing`'s own arithmetic, verbatim — which no longer reserves a drop
+  // for the ledge, so the dial is its box less half a stroke either side.
+  const radius = (size - strokeWidth) / 2;
   const centre = size / 2;
   const circumference = 2 * Math.PI * radius;
   const ratio = target > 0 ? consumed / target : 0;
@@ -70,8 +76,7 @@ export function ringSvg({
     `<defs><linearGradient id="arc" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${size}" y2="${size}">`,
     `<stop offset="0" stop-color="${fill}" /><stop offset="1" stop-color="${ramp}" />`,
     `</linearGradient></defs>`,
-    circle(centre + depth, ledge, ` stroke-opacity="${ledgeOpacity}"`),
-    circle(centre, track),
+    circle(centre, track, ` stroke-opacity="${trackOpacity}"`),
     dash > 0
       ? circle(
           centre,

@@ -10,11 +10,16 @@ import { INSCRIBED, figureFace, fitFontSize, formatNumber } from '@ct/shared';
  *
  * Three deliberate choices here:
  *
- * The ring has a ledge. A second track, offset four pixels down in the same
- * shadow colour every card uses, turns a flat annulus into something with a
- * bottom edge — the ring reads as a physical dial sitting on the page rather
- * than a stroke drawn on it. It is the single change that does most of the work
- * on this screen, and it costs one extra circle.
+ * The ring has a body. The track is the day's budget — the accent at a whisper
+ * — rather than a neutral band, so an untouched day reads as a remainder and
+ * not as a gap; and its two edges carry a lit rim, the circular spelling of the
+ * `inset 0 1px 0` every surface in the app wears, which turns a flat annulus
+ * into a torus lit from above.
+ *
+ * This was a ledge: a second track offset down in `--chunk`. In dark that token
+ * is rgba(0, 0, 0, 0.88), and a near-black crescent under a track at 8% white is
+ * a hole punched through the card rather than a dial sitting on it. Depth after
+ * dark is light, not shadow.
  *
  * The ring springs and the number does not. A shape that overshoots reads as
  * energy; a *number* that overshoots reads as a bug — 450 briefly showing 438
@@ -90,12 +95,14 @@ export function CalorieRing({
 }) {
   const t = useT();
   const locale = useLocale();
-  const gradient = `ring-${useId().replace(/:/g, '')}`;
-  // The ledge, scaled with the stroke so a small ring in the day rail does not
-  // wear a shadow half as thick as its own track.
-  const depth = Math.max(3, Math.round(strokeWidth * 0.22));
-  const radius = (size - strokeWidth - depth) / 2;
+  const uid = useId().replace(/:/g, '');
+  const gradient = `ring-${uid}`;
+  const radius = (size - strokeWidth) / 2;
   const centre = size / 2;
+  // A proportion of the band, not a fixed pixel: 1.5 is the hairline it should
+  // be at the default 22, and on the day rail's thin ring it would be a quarter
+  // of the track.
+  const hair = Math.max(0.8, Math.min(1.5, strokeWidth * 0.09));
   const circumference = 2 * Math.PI * radius;
   const ratio = target > 0 ? consumed / target : 0;
   const dash = circumference * Math.min(1, Math.max(0, ratio));
@@ -110,7 +117,7 @@ export function CalorieRing({
   // under it and push it up into the narrower part. The last digit lands on the
   // arc. Measured against the largest square the circle holds instead, which is
   // the one bound that does not care how many lines go underneath.
-  const clear = size - 2 * strokeWidth - depth;
+  const clear = size - 2 * strokeWidth;
   const figure = fitFontSize({
     text: formatNumber(Math.round(Math.abs(remaining)), locale),
     face: figureFace(locale),
@@ -143,24 +150,51 @@ export function CalorieRing({
             <stop offset="0" stopColor="var(--calories)" />
             <stop offset="1" stopColor="var(--logo-ramp)" />
           </linearGradient>
+          {/* The rim. Vertical in user space, and the ring never rotates, so the
+              light stays where light is however much of the arc is drawn — and
+              on dark it is lit with the logo's mint rather than with white,
+              which would spend the band's own chroma. */}
+          <linearGradient id={`rim-out-${uid}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="var(--ring-glint)" stopOpacity="var(--ring-rim-lit)" />
+            <stop offset="0.45" stopColor="var(--ring-glint)" stopOpacity="0" />
+            <stop offset="0.6" stopColor="#000000" stopOpacity="0" />
+            <stop offset="1" stopColor="#000000" stopOpacity="var(--ring-rim-shade)" />
+          </linearGradient>
+          <linearGradient id={`rim-in-${uid}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#000000" stopOpacity="var(--ring-rim-shade)" />
+            <stop offset="0.5" stopColor="#000000" stopOpacity="0" />
+            <stop offset="0.62" stopColor="var(--ring-glint)" stopOpacity="0" />
+            <stop offset="1" stopColor="var(--ring-glint)" stopOpacity="var(--ring-rim-lit)" />
+          </linearGradient>
         </defs>
 
-        {/* The ledge: the track again, pushed down by its own depth. */}
-        <circle
-          cx={centre}
-          cy={centre + depth}
-          r={radius}
-          fill="none"
-          strokeWidth={strokeWidth}
-          stroke="var(--chunk)"
-        />
+        {/* The day's budget before any of it is spent, not an empty groove. */}
         <circle
           cx={centre}
           cy={centre}
           r={radius}
           fill="none"
           strokeWidth={strokeWidth}
-          className="stroke-muted"
+          stroke="var(--ring-track)"
+        />
+        {/* Over the track and under the arc: the arc is the lit thing here, and
+            a highlight drawn on top of it would only dull the green. */}
+        <circle
+          cx={centre}
+          cy={centre}
+          r={radius + strokeWidth / 2 - hair / 2}
+          fill="none"
+          strokeWidth={hair}
+          stroke={`url(#rim-out-${uid})`}
+        />
+        <circle
+          cx={centre}
+          cy={centre}
+          r={radius - strokeWidth / 2 + hair / 2}
+          fill="none"
+          strokeWidth={hair}
+          stroke={`url(#rim-in-${uid})`}
+          opacity={0.55}
         />
 
         <g transform={`rotate(-90 ${centre} ${centre})`}>

@@ -16,7 +16,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { formatNumber } from '@ct/shared';
 import { Figure } from '@/components/Figure';
-import { duration, ease, type as t, useColors, useTheme } from '@/theme';
+import { RingRim } from '@/components/RingRim';
+import { duration, ease, ringTrack, type as t, useColors, useTheme } from '@/theme';
 import { useLocale, useT } from '@/lib/i18n';
 import { haptics } from '@/lib/haptics';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -30,6 +31,10 @@ import { useCountUp } from '@/hooks/useCountUp';
  * and the number does not, over target turns the arc to ink rather than to red
  * — and three things are added, each doing one job:
  *
+ * - **A body.** The track is the day's budget in green rather than a neutral
+ *   band, and its two edges carry the app's lit rim (`RingRim`) — so the part of
+ *   the day you have not eaten is a remainder rather than a hole, and the ring
+ *   is an object at nought per cent as much as at ninety.
  * - **Its own light.** A wider, faint copy of the arc under the arc is the bloom,
  *   and the haze the header draws behind it is centred here. The ring is the
  *   light source of the screen, which is what lets the sky above it be
@@ -52,7 +57,6 @@ export function GlowRing({
   day,
   size = 208,
   strokeWidth = 16,
-  onSky = true,
   announce = true,
   style,
 }: {
@@ -68,8 +72,6 @@ export function GlowRing({
    * on coming back into view, since what rose then was logged somewhere else.
    */
   announce?: boolean;
-  /** Drawn over the sky, where the track is light, rather than on a card. */
-  onSky?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
   const tr = useT();
@@ -168,11 +170,21 @@ export function GlowRing({
     return () => cancelAnimation(turn);
   }, [reduced, focused, turn]);
 
-  const track = onSky
-    ? scheme === 'dark'
-      ? 'rgba(255, 255, 255, 0.10)'
-      : 'rgba(255, 255, 255, 0.45)'
-    : colors.hairline;
+  /*
+   * The day's budget, not an empty groove.
+   *
+   * This was a neutral band — white at a tenth on the sky, the hairline on a
+   * card — and a neutral band is the one thing on this screen that is not lit.
+   * At the start of a day that made the ring read as an absence: a gap in the
+   * sky where an object should be. In the accent at a whisper it reads as what
+   * it is, which is all of the day still there to spend, and the arc then
+   * covers it rather than filling a void.
+   *
+   * One value for both grounds. The track used to differ on the sky and on a
+   * card, which is why `onSky` existed; this sits on either, and it is the same
+   * `ringTrack` the journal's ring and the web's draw.
+   */
+  const track = ringTrack(colors, scheme);
   /*
    * The figure fills the clear middle and no more. Measured in digit slots —
    * `<Figure>` gives every digit the widest digit's width — against the largest
@@ -210,6 +222,9 @@ export function GlowRing({
           </LinearGradient>
         </Defs>
         <Circle cx={centre} cy={centre} r={radius} fill="none" strokeWidth={strokeWidth} stroke={track} />
+        {/* Over the track and under the arc: the arc is the lit thing here, and
+            a highlight drawn on top of it would only dull the green. */}
+        <RingRim id={`${gradient}-rim`} cx={centre} cy={centre} r={radius} strokeWidth={strokeWidth} />
         <G rotation={-90} originX={centre} originY={centre}>
           {/* The bloom: the arc again, wider and faint. */}
           {!over && dash > 0 && (

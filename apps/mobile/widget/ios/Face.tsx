@@ -93,7 +93,8 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
    * The dial, at whatever size it was given.
    *
    * `CalorieRing`'s geometry, and `ring.ts`'s arithmetic verbatim: the same
-   * depth ratio, the same radius, the same start at twelve o'clock. What
+   * radius, the same track — the day's budget rather than a neutral band — and
+   * the same start at twelve o'clock, with no ledge under any of it. What
    * differs is only how an arc gets drawn without a path to draw it on.
    *
    * SwiftUI has no `Circle().trim()` here — widget UI is limited to what
@@ -113,11 +114,10 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
   const dial = () => {
     const { box, stroke, portion, over } = props;
     // `ring.ts`'s own arithmetic, verbatim.
-    const depth = Math.max(3, Math.round(stroke * 0.22));
-    const radius = (box - stroke - depth) / 2;
+    const radius = (box - stroke) / 2;
     /* `strokeBorder` insets by half its width, so a ring of this radius wants a
-     * frame of `2r + stroke` — which is the box less the ledge's drop. */
-    const ringBox = box - depth;
+     * frame of `2r + stroke` — which, with no ledge to drop into, is the box. */
+    const ringBox = box;
 
     const arc = [];
     if (portion > 0) {
@@ -155,25 +155,23 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
      * `strokeBorder` is a modifier on content, and the content here exists only
      * to give it a frame to inscribe itself in.
      */
-    const ring = (colour: string, drop: number, fade: number) => (
+    const ring = (colour: string, fade: number) => (
       <Circle
         modifiers={[
           frame({ width: ringBox, height: ringBox }),
           opacity(0),
           strokeBorder({ shape: 'circle', color: colour, style: { lineWidth: stroke } }),
-          /* The ledge is a tone and a fraction rather than one colour, the same
-           * split `theme.ts` makes for it: the app spells it `rgba()`, and
+          /* A tone and a fraction rather than one colour, the same split
+           * `theme.ts` makes for the track: the app spells it `rgba()`, and
            * neither an SVG 1.1 renderer nor this one takes that. */
           opacity(fade),
-          offset({ y: drop }),
         ]}
       />
     );
 
     return (
       <ZStack modifiers={[frame({ width: box, height: box })]}>
-        {ring(paint.ledge, depth, paint.ledgeOpacity)}
-        {ring(paint.muted, 0, 1)}
+        {ring(paint.track, paint.trackOpacity)}
         {arc}
         <VStack spacing={0} modifiers={[frame({ width: box, height: box })]}>
           {props.figure > 0 && (

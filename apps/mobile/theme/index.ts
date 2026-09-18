@@ -4,7 +4,7 @@ import { typeFor } from './typography';
 import { useLocale } from '@/lib/i18n';
 
 export type { Palette } from './colors';
-export { dark, dim, light, tint, withAlpha } from './colors';
+export { blend, dark, dim, light, ringTrack, tint, withAlpha } from './colors';
 export { DISPLAY_LEADING, displayFacesFor, font, MONO, SERIF_LEADING, serifFacesFor, type, typeFor } from './typography';
 export { dayPartAt, sceneSkyAt, skyAt, type DayPart, type SceneSky, type Sky } from './sky';
 export { CHUNK_DEPTH, duration, ease, RADIUS } from './motion';

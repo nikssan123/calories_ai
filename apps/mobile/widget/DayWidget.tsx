@@ -212,11 +212,10 @@ function Card({
             target: snapshot.target,
             size: layout.box,
             strokeWidth: layout.stroke,
-            track: colors.muted,
             fill: colors.calories,
             ramp: colors.ramp,
-            ledge: colors.ledge,
-            ledgeOpacity: colors.ledgeOpacity,
+            track: colors.track,
+            trackOpacity: colors.trackOpacity,
             over: colors.foreground,
           })}
           style={{ height: layout.box, width: layout.box }}

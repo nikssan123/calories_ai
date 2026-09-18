@@ -98,8 +98,8 @@ export interface Paint {
   ramp: string;
   muted: string;
   burn: string;
-  ledge: string;
-  ledgeOpacity: number;
+  track: string;
+  trackOpacity: number;
 }
 
 const paintOf = (palette: WidgetPalette): Paint => ({
@@ -110,8 +110,8 @@ const paintOf = (palette: WidgetPalette): Paint => ({
   ramp: palette.ramp as string,
   muted: palette.muted as string,
   burn: palette.burn as string,
-  ledge: palette.ledge,
-  ledgeOpacity: palette.ledgeOpacity,
+  track: palette.track,
+  trackOpacity: palette.trackOpacity,
 });
 
 /**
