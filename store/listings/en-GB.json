@@ -1,7 +1,7 @@
 {
   "language": "en-GB",
   "_note": "The default listing's screenshot captions and seed strings. Its title and descriptions are edited in Play Console and live in PLAY_LISTING.md, so they are not here.",
-  "releaseNotes": "The meal editor holds the whole calorie number again — four digits and all — and the diet quality figures keep their units at larger text sizes.\n\nIn the journal, cards land one after another instead of as one panel, and Edit opens in place. The three of them fly up to wait while your entry is read, then hand the card to whoever your meal is mostly made of.\n\nA day with nothing in it yet shows a coin instead of an empty ring.",
+  "releaseNotes": "The calorie ring is an object again. After dark its edge catches the light instead of reading as a hole in the screen, and the part you haven't eaten yet shows what is left of the day rather than a plain grey band. The home-screen widget too.\n\nAnd the three of them make the whole journey now: up while your entry is read, then down onto the card — instead of turning up already sitting on it.",
   "captions": [
     {
       "headline": "Just say\nwhat you ate",
