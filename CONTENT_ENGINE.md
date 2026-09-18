@@ -197,6 +197,57 @@ like a stock-footage ad; comparison callouts naming competitors by name.
 
 ---
 
+## 5b. Instagram stills: the cast is the format
+
+Written 2026-09-18, after looking at what the field actually posts.
+
+| Account | What the grid is |
+|---|---|
+| **Cal AI** | Creator video, real plates, a white caption hook burned into frame 1. Three pinned 3D phone mockups ("Scan / Track / Improve"). Almost no graphic design. |
+| **MacroFactor** | White science cards: condensed uppercase headline, a diagram, wordmark at the foot. Authoritative and cold. |
+| **Lifesum** | Editorial. Big sans headline with one accent colour on cream or a photo, a paragraph of body copy *inside* the image, carousels. |
+| **Yazio** | Memes. Cut-out food on paper grounds, "which potato is joining your dinner?", "would u rather, 600 kcal", stick figures, before/after UGC. |
+| **Duolingo** | The mascot, and nothing else. Flat colour, one line, no logo, and fake app screens as jokes. The character *is* the brand asset. |
+
+Four of those five need either a creator budget, a photo licence, or a
+photographer. The fifth is the one this app can already do — the cast exists,
+is drawn from geometry rather than bought from a library, and is tied to the
+three macros, so a character in a post is the product explaining itself rather
+than decoration. **Duolingo's format, Yazio's playfulness, and a mechanic
+neither of them has.**
+
+### The generator
+
+    pnpm cards:cast                      # every post, 1080x1350, to content/out/cast/
+    pnpm cards:cast -- --size story      # 1080x1920
+    pnpm cards:cast -- --only journal    # one layout
+
+Deck: `content/copy/cast-posts.ts`. Code: `scripts/content/cast-cards.ts`.
+Four layouts:
+
+- **solo** — one of them, big, one line over their head. Ink, cream or their
+  own colour as the ground, so the grid has a rhythm.
+- **trio** — all three, for "who are these".
+- **journal** — the signature: a typed sentence in a bubble, the food card it
+  became, and whoever the meal is mostly made of cheering over its top edge.
+  Nobody else in the category can draw this, because nobody else has the cast.
+- **guess** — a meal, the three of them, and a question with a right answer.
+
+Two things it is strict about, and both are `CAST.md`'s rules rather than this
+file's: who carries a meal is decided by the meal's own macros (the same three
+lines as `dominant()` in `Presence.tsx` — a post that gives a meal to the wrong
+character contradicts the app), and a figure with its arms up gets no paws on
+the card's rim, because the app's own hands lift away as the carrier pops up.
+
+**Why it draws in two passes.** The figures go through librsvg (via `sharp`),
+which is the only rasteriser here that can take the cast's paths. Text does
+not: fontconfig on this machine has no config file at all, so librsvg resolves
+every family — Baloo, Nunito, Fraunces — to a Helvetica fallback, silently.
+ffmpeg's `drawtext` takes a font *file* straight to FreeType, which is why
+`cards.mjs` has always used it. So sharp draws the scene and ffmpeg writes on
+it, and the script reads `cmap`/`hhea`/`hmtx` itself to know how wide a line
+will be before it asks for a bubble to wrap around it.
+
 ## 6. The assembly line (Mac, no GPU needed)
 
 The actual growth mechanic is **one capture × many hooks**. Record the
