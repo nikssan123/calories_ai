@@ -173,25 +173,57 @@ function onScreen(rect: Rect) {
  * running. A seat that will not settle in that time is flown to where it was
  * last seen if that is on screen at all, and otherwise is not somewhere to fly
  * to: the figure is simply put there.
+ *
+ * `first` is where it was on the frame the claim was made, handed back with the
+ * answer. The difference between the two is how far the list moved while this
+ * was waiting, which is the only measurement of that scroll anybody here gets —
+ * see the frozen seat in `claim`.
  */
 function settledSeat(
   entry: SeatEntry | undefined,
-  done: (rect: Rect | null) => void,
+  done: (rect: Rect | null, first: Rect | null) => void,
   tries = 12,
   before: Rect | null = null,
+  first: Rect | null = null,
 ) {
   const measure = entry?.measure;
-  if (!entry || !measure) return done(null);
+  if (!entry || !measure) return done(null, first);
   measure((rect) => {
     if (rect) entry.last = rect;
+    const seen = first ?? rect;
     const still = rect !== null && before !== null && rect.x === before.x && rect.y === before.y;
-    if (rect && still && onScreen(rect)) return done(rect);
+    if (rect && still && onScreen(rect)) return done(rect, seen);
     if (tries > 0 && entry.measure) {
-      requestAnimationFrame(() => settledSeat(entry, done, tries - 1, rect));
+      requestAnimationFrame(() => settledSeat(entry, done, tries - 1, rect, seen));
       return;
     }
-    done(rect && onScreen(rect) ? rect : null);
+    done(rect && onScreen(rect) ? rect : null, seen);
   });
+}
+
+/**
+ * Whether a figure can still set off from this seat.
+ *
+ * A mounted seat can always be asked where it is. An unmounted one cannot, but
+ * it is not automatically a dead end: it keeps the last place it was seen, and
+ * if that is somewhere the reader was looking then the figure was there a frame
+ * ago and can leave from there. **This is the whole of the journal's worst
+ * moment.** The three wait out a turn in `journal.thinking`, which lives inside
+ * the pending reply — so the instant the first word of the reply arrives that
+ * row unmounts, and it unmounts in the *same commit* as the claim that sends
+ * them on to the card and back to the ledge. React runs every unmount effect in
+ * a commit before any of its mount effects, so by the time `claimAll` is asked,
+ * the seat they are standing in has already given up its `measure`. Requiring
+ * one meant no flight was ever possible out of the waiting row: the carrier
+ * stopped being somewhere and started being somewhere else, and the other two
+ * blinked back onto the composer. What the reader saw was a figure that had not
+ * arrived on the card so much as appeared on it — with its paws already on the
+ * rim, since a seat that is simply occupied draws the whole figure at rest, and
+ * nothing to watch until it popped up to cheer a second and a half later.
+ */
+function canLeave(entry: SeatEntry | undefined): entry is SeatEntry {
+  if (!entry) return false;
+  return entry.measure !== null || (entry.last !== null && onScreen(entry.last));
 }
 
 /**
@@ -232,7 +264,7 @@ export function claim(name: CastName, seat: string, screen: string) {
 
   // `from === to` is a re-claim on a tab switch. There is no distance to fly, so
   // it takes the entrance path rather than a flight to its own seat.
-  if (reduced || !overlay || from === to || !sameScreen || !fromEntry.measure) {
+  if (reduced || !overlay || from === to || !sameScreen || !canLeave(fromEntry)) {
     flying[name] = null;
     // Part of a tab switch — this screen is arriving, or has only just — so the
     // seat plays its entrance when it has them. The journal is the first tab, so
@@ -249,6 +281,13 @@ export function claim(name: CastName, seat: string, screen: string) {
 
   const id = ++flightIds;
   flying[name] = { id, from, to, pending: true };
+  /*
+   * Whether the seat they are leaving can still be asked where it is. A seat
+   * that has already gone answers with the last place it was seen, and that
+   * answer is frozen at whatever the list was scrolled to when it went — see
+   * the correction below.
+   */
+  const frozen = fromEntry.measure === null;
   emit();
 
   /*
@@ -256,12 +295,39 @@ export function claim(name: CastName, seat: string, screen: string) {
    * settled: waiting for the list to stop moving can take a few frames, and the
    * stand-in has to set off from where the figure is in *that* frame, not from
    * where it was before the scroll. Nothing is visible meanwhile — the flight is
-   * still `pending`, so the seat they are leaving is still drawing them.
+   * still `pending`, so the seat they are leaving is still drawing them, unless
+   * it is `frozen`, in which case nobody is: those few frames are the price of
+   * aiming properly, and they are the ones right after a row disappeared anyway.
+   *
+   * A frozen seat was given half the patience at first, on the grounds that the
+   * wait is the one thing costing something here. Measured on the emulator, it
+   * cost a flight instead: a destination inside the conversation while the
+   * reply is landing needs most of those twelve frames to hold still twice, and
+   * at six the carrier fell through to being *placed* on its card — the exact
+   * thing this was fixing. Twelve for everybody. Two hundred milliseconds of
+   * nobody on screen is cheaper than a teleport, and it is only ever spent in
+   * the frames right after the row they were standing in disappeared.
    */
-  settledSeat(toEntry, (toRect) => {
+  settledSeat(toEntry, (toRect, firstSeen) => {
     if (flying[name]?.id !== id) return;
-    measureSeat(fromEntry, (fromRect) => {
+    measureSeat(fromEntry, (measured) => {
       if (flying[name]?.id !== id) return;
+      /*
+       * A frozen seat cannot follow the list. Both seats are in the same
+       * scrolling column, so how far the destination moved between the claim
+       * and settling is how far out of date the frozen rectangle now is —
+       * usually the height of the row that just replaced the waiting one, and
+       * on a turn that lands its card in the same commit, the height of the
+       * card. Uncorrected, the carrier sets off from a place the conversation
+       * has already carried away. Only trusted while it lands somewhere the
+       * reader can see; a correction that throws it off screen is worse than
+       * the staleness it was fixing.
+       */
+      const drifted =
+        frozen && measured && toRect && firstSeen
+          ? { ...measured, x: measured.x + (toRect.x - firstSeen.x), y: measured.y + (toRect.y - firstSeen.y) }
+          : null;
+      const fromRect = drifted && onScreen(drifted) ? drifted : measured;
       if (!fromRect || !toRect || !overlay) {
         flying[name] = null;
         emit();
