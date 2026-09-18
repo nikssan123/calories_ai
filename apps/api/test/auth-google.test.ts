@@ -765,6 +765,61 @@ describe('the native flow', () => {
 
     expect(response.statusCode).toBe(403);
   });
+
+  /*
+   * The app cannot tell a sign-up from a sign-in on this path by itself — one
+   * button does both, and the difference is decided against an identity the
+   * phone never sees. So the exchange says which happened, and the first-run
+   * funnel's `account` step is counted off it; see `created` on `AuthStatus`.
+   */
+  it('says an account was created when the sign-in made one', async () => {
+    const code = await codeFromSignIn();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/google/exchange',
+      headers: { 'x-session-transport': 'bearer' },
+      payload: { code, verifier: VERIFIER },
+    });
+
+    expect(response.json().created).toBe(true);
+  });
+
+  it('says nothing was created when a known account signed back in', async () => {
+    // The same Google identity, twice. The second visit is a sign-in.
+    const first = await codeFromSignIn();
+    await app.inject({
+      method: 'POST',
+      url: '/auth/google/exchange',
+      headers: { 'x-session-transport': 'bearer' },
+      payload: { code: first, verifier: VERIFIER },
+    });
+
+    const again = await codeFromSignIn();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/google/exchange',
+      headers: { 'x-session-transport': 'bearer' },
+      payload: { code: again, verifier: VERIFIER },
+    });
+
+    expect(response.json().authenticated).toBe(true);
+    expect(response.json().created).toBe(false);
+  });
+
+  it('says nothing was created when the address already had an account', async () => {
+    await createUser({ email: 'ada@example.com' });
+    const code = await codeFromSignIn();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/auth/google/exchange',
+      headers: { 'x-session-transport': 'bearer' },
+      payload: { code, verifier: VERIFIER },
+    });
+
+    expect(response.json().created).toBe(false);
+  });
 });
 
 describe('the sign-in alert', () => {

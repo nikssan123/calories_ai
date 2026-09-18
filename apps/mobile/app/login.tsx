@@ -135,10 +135,17 @@ export default function LoginScreen() {
       return;
     }
     setBusy(true);
-    // Sign-ups that carry a plan are the end of the first-run funnel; a sign-in,
-    // or an account made without walking the questions, is not part of it.
-    const fromWalk = signup && planWaiting;
-    if (fromWalk) reachedStep('signup_email');
+    /*
+     * The first-run funnel (`lib/funnel.ts`). This used to fire only for a
+     * sign-up that carried a finished plan — the end of the walk — on the
+     * reasoning that an account made any other way was not part of the funnel.
+     * It is: an install that leaves with an account got where the funnel is
+     * measuring to, and gating on the plan meant every sign-up that came in
+     * through "I already have an account" was counted nowhere at all. The step
+     * is sent at most once per install, so a screen somebody visits twice is
+     * still one install that reached it.
+     */
+    if (signup) reachedStep('signup_email');
     try {
       const status = signup
         ? await api.signup({
@@ -160,7 +167,9 @@ export default function LoginScreen() {
       // The token arrives in this response and nowhere else, so it is stored
       // before anything else can fire a request without it.
       await adoptSession(status);
-      if (fromWalk) reachedStep('account');
+      // The server's word for it rather than `signup`, so the two paths into
+      // this screen count the same thing. See `created` on `AuthStatus`.
+      if (status.created) reachedStep('account');
       // …and the status is re-read, because signup answers before the profile
       // the rest of the app renders from exists.
       await refresh();
@@ -197,15 +206,19 @@ export default function LoginScreen() {
   async function continueWithGoogle() {
     setGoogle(true);
     setError(null);
-    const fromWalk = planWaiting;
-    if (fromWalk) reachedStep('signup_google');
+    /*
+     * The tap, not the outcome — this button is sign-in and sign-up both, and
+     * which one it turns out to be is not known until the exchange comes back.
+     * That is what `created` below is for.
+     */
+    reachedStep('signup_google');
     try {
       const status = await signInWithGoogle();
       // Null is "they closed it", which is a decision rather than a failure and
       // gets no message at all.
       if (!status) return;
       await adoptSession(status);
-      if (fromWalk) reachedStep('account');
+      if (status.created) reachedStep('account');
       await refresh();
       if (await mergeKeptGuest()) await refresh();
     } catch (e) {

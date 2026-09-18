@@ -70,6 +70,16 @@ describe('POST /auth/signup', () => {
     expect(cookie).toContain('SameSite=Lax');
   });
 
+  /*
+   * What the app counts the first-run funnel's `account` step off. The password
+   * form knows it is a sign-up without being told, but the Google button beside
+   * it does not — so both read the same field rather than each guessing.
+   */
+  it('says an account was created', async () => {
+    const response = await app.inject({ method: 'POST', url: '/auth/signup', payload: CREDENTIALS });
+    expect(response.json().created).toBe(true);
+  });
+
   it('stores a hash, never the password', async () => {
     await app.inject({ method: 'POST', url: '/auth/signup', payload: CREDENTIALS });
     const rows = await query<{ password_hash: string }>('SELECT password_hash FROM users');
@@ -138,6 +148,13 @@ describe('POST /auth/login', () => {
     const response = await app.inject({ method: 'POST', url: '/auth/login', payload: CREDENTIALS });
     expect(response.statusCode).toBe(200);
     expect(sessionCookie(response)).toBeDefined();
+  });
+
+  it('does not say an account was created when one is merely signed into', async () => {
+    const response = await app.inject({ method: 'POST', url: '/auth/login', payload: CREDENTIALS });
+    // Absent rather than false on this route: `AuthStatus` defaults it, and the
+    // app reads it as the falsy value it is either way.
+    expect(response.json().created ?? false).toBe(false);
   });
 
   it('is case-insensitive about the email', async () => {

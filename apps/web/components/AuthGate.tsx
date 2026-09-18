@@ -107,6 +107,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         is_admin: false,
         is_coach: false,
         google_enabled: false,
+        // A browser that could not be told who it is has not just signed up.
+        created: false,
       });
     } finally {
       setLoading(false);
@@ -142,6 +144,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
         is_admin: false,
         is_coach: false,
         google_enabled: false,
+        // A browser that could not be told who it is has not just signed up.
+        created: false,
       });
     }
     // Out through the front door, not the side one: `/` is the landing page to

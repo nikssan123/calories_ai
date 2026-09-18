@@ -2004,6 +2004,20 @@ export const AuthStatus = z.object({
    */
   google_enabled: z.boolean(),
   /**
+   * Whether this response is the one that brought the account into existence,
+   * as opposed to letting somebody back into one they already had.
+   *
+   * The client cannot work this out for itself on the Google path — the same
+   * button is sign-in and sign-up, and which one happened is decided inside
+   * `signInWithProvider` against an identity the app never sees. Without this
+   * the app has to guess, and the guess it was making was "did a plan come
+   * with it", which counted a real sign-up as nothing at all whenever somebody
+   * arrived through "I already have an account".
+   *
+   * Defaulted, so an older client still parses a status from a newer server.
+   */
+  created: z.boolean().default(false),
+  /**
    * The raw session token, returned by signup and login only to a client that
    * asked for it with SESSION_TRANSPORT_HEADER. Absent everywhere else — the
    * browser's copy stays in the httpOnly cookie and is never readable here.
@@ -3925,7 +3939,17 @@ export type AdminOverview = z.infer<typeof AdminOverview>;
  * Since guest accounts (GUEST-ACCOUNTS.md) the walk ends in the app: `save` is
  * "Start my day", `guest` the session that made, `in_app` the plan landing on
  * it, `save_prompt` the save-your-account screen being shown for any reason,
- * and `account` an identity proved on the guest row.
+ * and `account` an account coming into existence.
+ *
+ * `account` means that and nothing narrower, which it did not until 2026-09-18.
+ * It used to fire only for a sign-up that carried a finished plan, on the
+ * reasoning that an account made without walking the questions was not part of
+ * the first-run funnel. What that actually did was hide the sign-ups: somebody
+ * who taps "I already have an account" on the welcome screen, signs in with
+ * Google and has no account yet gets one made for them — and every one of those
+ * went uncounted, which is why this step read zero for the whole of its first
+ * four days while accounts were being created. A new install that leaves with
+ * an account reached the end of the walk whichever door it went through.
  */
 export const FUNNEL_STEPS = [
   'welcome',

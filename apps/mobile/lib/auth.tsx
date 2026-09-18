@@ -43,6 +43,8 @@ const SIGNED_OUT: AuthStatus = {
   is_admin: false,
   is_coach: false,
   google_enabled: false,
+  // A guess about an unreachable server never made an account.
+  created: false,
 };
 
 interface AuthValue {

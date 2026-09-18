@@ -96,6 +96,18 @@ interface GuestClaimPayload {
   locale: Locale | null;
 }
 
+/**
+ * Whether the handoff being spent made the account, as the callback saw it.
+ *
+ * The callback is the last place that knows — `signInWithProvider` returns the
+ * outcome there and the exchange, a minute later, sees only a user id that
+ * looks the same either way. It rides along so the app can count a sign-up as
+ * a sign-up; see `created` on `AuthStatus`.
+ */
+function readCreated(payload: Record<string, unknown> | null | undefined): boolean {
+  return payload?.created === true;
+}
+
 function readGuestClaim(payload: Record<string, unknown> | null | undefined): GuestClaimPayload | null {
   if (!payload || payload.kind !== 'guest_claim') return null;
   if (typeof payload.provider !== 'string' || typeof payload.subject !== 'string') return null;
@@ -417,6 +429,8 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       is_admin: false,
       is_coach: false,
       google_enabled: env.google !== null,
+      // A guest that now has an address is an account that did not exist before.
+      created: true,
     };
   });
 
@@ -556,6 +570,8 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       is_admin: await isAdmin(userId),
       is_coach: wantsCoach,
       google_enabled: env.google !== null,
+      // This route has exactly one outcome, and it is this one.
+      created: true,
       token: tokenForBody(request, token),
     };
   });
@@ -1139,6 +1155,8 @@ export async function registerAuthRoutes(app: FastifyInstance) {
           result.userId,
           identity.email,
           native.challenge,
+          // The one fact about this sign-in the exchange cannot work out again.
+          { created: result.outcome === 'created' },
         );
         const separator = native.redirect.includes('?') ? '&' : '?';
         return reply.redirect(`${native.redirect}${separator}code=${encodeURIComponent(handoff)}`);
@@ -1196,6 +1214,13 @@ export async function registerAuthRoutes(app: FastifyInstance) {
      * own row, or an account that already owned that Google identity or address.
      */
     let userId = handoff.userId;
+    /*
+     * Whether an account came into existence in the course of this sign-in.
+     * Two different questions behind one word: on the plain path the callback
+     * already answered it and sent the answer along, and on the guest path it
+     * is answered below by where the identity lands.
+     */
+    let created = readCreated(handoff.payload);
     const claim = readGuestClaim(handoff.payload);
     if (claim) {
       if (request.userId !== handoff.userId || !request.guest) {
@@ -1209,6 +1234,13 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       );
       if (!result.ok) return reply.status(403).send({ error: 'Sign-ups are closed on this server.' });
       userId = result.userId;
+      /*
+       * "Claimed" is the identity landing on the guest's own row, which is the
+       * moment that guest stops being one — an account where a minute ago there
+       * was a session. Anything else means the Google account already had one
+       * here, and the guest is being absorbed into something that existed.
+       */
+      created = result.outcome === 'claimed';
       if (result.outcome !== 'claimed') {
         // That Google account already had an account here: the guest's journal
         // goes into it, and the guest row with it.
@@ -1243,6 +1275,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
       is_admin: await isAdmin(userId),
       is_coach: await isCoach(userId),
       google_enabled: true,
+      created,
       token: tokenForBody(request, token),
     };
   });

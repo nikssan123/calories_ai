@@ -151,7 +151,7 @@ export function FunnelPanel() {
 
       <InsetGroup
         title="Step by step"
-        footer="Each install is counted once per step. The two teases are screens the app talks on, counted since 2026-09-16 because the walk used to pass through them unmeasured. Q5 is only asked when the goal is not “stay where I am”, so it reads low by design and the step after it is measured against Q4."
+        footer="Each install is counted once per step. The two teases are screens the app talks on, counted since 2026-09-16 because the walk used to pass through them unmeasured. Q5 is only asked when the goal is not “stay where I am”, so it reads low by design and the step after it is measured against Q4. “Account created” counts any account a new install leaves with, by either route — through the walk, or straight off the sign-in screen — which is why it is measured against openers and not against the row above it; before 2026-09-18 it only counted the first of those and read zero while accounts were being made."
       >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -168,8 +168,16 @@ export function FunnelPanel() {
             <tbody>
               {LINE.map((step, i) => {
                 const row = count(step);
-                // Skip the optional question when measuring the one after it.
-                const previousStep = i === 0 ? null : LINE[i - 1] === 'target' ? 'body' : LINE[i - 1]!;
+                /*
+                 * Skip the optional question when measuring the one after it,
+                 * and measure the account against nothing at all: it is the one
+                 * row with two ways in — the guest walk above it, and the
+                 * sign-in screen, which reaches it from `existing` without
+                 * touching a single step in between. Against the row above it,
+                 * a healthy day reads as more than a hundred per cent.
+                 */
+                const previousStep =
+                  i === 0 || step === 'account' ? null : LINE[i - 1] === 'target' ? 'body' : LINE[i - 1]!;
                 const previous = previousStep ? count(previousStep).reached : null;
                 const lost = previous !== null && previous > 0 && row.reached / previous < 0.5;
                 return (
