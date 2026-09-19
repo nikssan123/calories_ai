@@ -36,6 +36,10 @@ isn't real, so the number is fiction, and for a nutrition app that is the
 one credibility hit you cannot take. Generated imagery is for texture and
 branding. Real or licensed photos carry the numbers.
 
+**§10 changes what the hero asset is for**, not this rule. The recipe library's
+photographs are real and its numbers are USDA's, so they carry numbers exactly
+as this table allows. Nothing below §10 relaxes the sentence in bold above.
+
 ---
 
 ## 1. Architecture
@@ -168,7 +172,9 @@ Load → 4x-UltraSharp ESRGAN → Save. For rescuing low-res source stills.
 
 ## 5. Content formats, ranked
 
-Ranked by expected return for a solo dev with no audience.
+Ranked by expected return for a solo dev with no audience. This ranking assumes
+content built from the app's own screens; for the library-driven formats that
+need neither a screen recording nor a camera, see §10.
 
 ### 1. "Scan my grocery haul" — the hero format
 Screen recording of the multi-packet barcode basket scan. Fast cuts, counter
@@ -327,3 +333,230 @@ Business accounts can only use royalty-free "Commercial Sounds". Trending audio
 is a major distribution input on TikTok, so that trade is heavily negative at
 your stage. Stay on a personal/Creator account and put the link in the bio text
 if you need one.
+
+---
+
+## 10. The library is the content engine
+
+Everything above §10 makes content *about the app*. This section is the
+correction, and it changes what gets posted rather than how it gets made.
+
+### The pivot
+
+**Posts sell meal logging as an idea. Not the app, and not from its screens.**
+
+Read `content/hooks/hooks.txt`, `content/copy/cards.txt` and
+`content/copy/scripts.md` end to end and every asset has the same subject: the
+software. That is fine content for somebody comparing trackers, and nobody on
+TikTok is comparing trackers. `content/copy/posts.md` already makes this
+argument — it parks the language post because it "only lands for somebody who
+has already decided to track their food, and none of the people this content
+has to reach has decided that yet." That test was applied to one post. It
+condemns the whole library, this section included if it ever drifts back.
+
+So: food, numbers and habits are the subject. The app is what you find in the
+bio, not what you watch.
+
+### The asset that was already here
+
+`apps/api/data/library-recipes.json` — 99 dishes, seeded by `pnpm setup`, and
+until now used only by `/cook/library`. Every row carries what a post needs:
+
+| Field | Use |
+|---|---|
+| `title`, `image_path` | the photo, in `apps/web/public/recipes/`, 800px wide |
+| `kcal` | the number the post is built around |
+| `protein_g`, `carbs_g`, `fat_g` | the macro split — and the cast, see below |
+| `serving_size`, `portions` | portion-reality content |
+| `food_groups` | what a balanced plate is |
+| `rating`, `rating_count` | ordering, and "the internet's favourite X" angles |
+| `source_url` | a `.gov` citation under every claim |
+
+The text and the photographs are USDA MyPlate Kitchen, a work of the US
+government and **public domain** — the one source in §0's table with no licence
+to clear and no attribution burden.
+
+### Why this satisfies §0 rather than dodging it
+
+§0's rule is that a calorie number may never sit on a generated food image,
+because the food is fake so the number is fiction. Here the photograph is real,
+the number is USDA's, and the post can link to the page it came from. This is
+the rare nutrition claim that is fully defensible — most of the category is
+publishing estimates it cannot source.
+
+The photographs are a mix: some are studio work (`avocado-breakfast-bruschetta`),
+some are plainly somebody's kitchen (`2-step-chicken`). Do not filter for the
+studio ones. §0's whole argument is that this audience rejects food that looks
+fake, and the unstyled photographs are the ones that read as real.
+
+### The cast is the macro split
+
+Ember is protein, Skye is carbs, Plum is fat (CAST.md). Every row carries
+`protein_g`, `carbs_g` and `fat_g`. So the three figures can show a real dish's
+split, driven by the row, using poses that already exist — no new rig work, and
+none of the walk cycles the cast cannot do (`legs` is empty unless sitting;
+there is one independent arm; a turn is a mirror).
+
+A post is a function of a JSON row. That is the whole mechanic.
+
+### The five formats
+
+1. **Guess the calories.** §5 already ranks this third and already specifies
+   "real photos only". The photographs and the numbers were both in the repo;
+   nothing connected them.
+2. **"Same calories. Completely different day."** Already a line in
+   `cards.txt`. The pairs can be *found* — match two rows on `kcal`, take the
+   widest gap in macro split, let the cast draw the difference.
+3. **Protein per 100 kcal**, ranked across all 99.
+4. **Serving-size reality** — `serving_size` against `portions`.
+5. **What a balanced plate is** — `food_groups`.
+
+All five are about food and numbers. The app appears in none of them.
+
+### What to build
+
+A generator beside `scripts/content/cards.mjs`, same output contract, driven by
+data instead of a text file: read `library-recipes.json`, composite photograph +
+number + cast into 1080×1920, write to `content/out/`.
+
+`cards.mjs` is the precedent for the rendering; `@ct/shared/cast` is the
+geometry, already free of React and React Native so a script can import it.
+
+### Limits, stated so nobody is surprised
+
+- **99 is finite.** Across five formats that is a few hundred posts — months at
+  3–5/day — and then it needs Pexels, or a camera.
+- **800px** is small for a 1080×1920 canvas. Put the photograph in a band
+  rather than full-bleed, or run `W4 upscale.json` on the 4080, which finally
+  gives that workflow a job.
+- **USDA's number is per USDA's serving**, not per anybody's plate. Say the
+  serving or say nothing; do not imply it is what someone ate.
+- **These are American institutional recipes** and the corpus this app was
+  written against is Bulgarian. Watch whether that shows in the numbers.
+
+### Ruled out, so it is not relitigated
+
+- **Scheduling tools (Buffer and the rest).** §7 stands, and there is now a
+  second reason: neither the TikTok Content Posting API nor the Instagram Graph
+  API can attach a trending sound, so anything auto-published loses the audio
+  library — the same trade §9 refuses for a TikTok Business account. Post video
+  by hand. A scheduler is worth having only for the analytics pull into
+  `posted.csv`, and for formats where audio is irrelevant.
+- **AI-generated humans.** Rejected in favour of the cast: the cast is
+  consistent by construction, already appears inside the product, and never
+  invites the "this is AI" comment §0 is about.
+- **Cast-led narrative video.** The rig is sticker-tier — six eye states, six
+  mouth states, one swinging arm, front-facing only. It can carry a 2–5s loop
+  or a reaction over real capture. It cannot carry a 15s story, and extending
+  it to do so is an animation project, not a render harness.
+
+### The poster builder, and where it stopped
+
+`scripts/content/post.mts` renders a finished post: a generated gradient from
+`content/gen/`, one cast figure drawn from `packages/shared/src/cast.ts`, and
+type in the app's own two faces. `npx tsx scripts/content/post.mts`, with
+`--size post|story|square` and `--only <concept>`.
+
+Headless Chrome rasterises it. That is not a preference: `sharp` is not
+installed and ffmpeg reads neither SVG nor a webfont, so Chrome is the only
+thing on the render box that can do both.
+
+**Nunito is now vendored** beside Baloo2 in `apps/mobile/assets/fonts` (400,
+600, 700; SIL OFL, the same licence Baloo2 ships under). It is the face
+`apps/web/app/layout.tsx` already names, so this adds no new brand decision —
+it only makes the pairing available outside the app.
+
+Four things were got wrong first, and each is a rule in the file's header now:
+
+- **A lineup is not a composition.** Three figures at 25% of the frame, centred,
+  evenly spaced and labelled underneath is a slide. One figure at 55–75%,
+  cropped by an edge, with the type ranged left into the space it leaves, is a
+  poster.
+- **A mood needs its scene.** `stir` draws the ladle and not the pot, because it
+  was written for the kitchen in `Scenes.tsx`. On a bare gradient it reads as
+  waving a spoon at nothing.
+- **One face at one weight is the amateur tell**, ahead of any layout mistake.
+  Baloo2 800 for the headline, Nunito 600 for everything else.
+- **A 6% ellipse is not a shadow.** The figure needs a halo of its own macro
+  colour and a blurred contact shadow, or it floats on the wash like a sticker.
+
+**Nine templates, not one.** The first pass had a single shape — figure in a
+bottom corner, type top left, gradient behind — and nine of those in a feed
+read as one post. The builder now holds nine layouts that fail differently from
+each other, and a `POSTS` entry is copy poured into one of them:
+
+| | Template | Character | What it is for |
+|---|---|---|---|
+| 01 | `statement` | none | one claim on a flooded field; reads at thumbnail size |
+| 02 | `typed-day` | none | a day as a document, mono timestamps, no numbers |
+| 03 | `macro-bar` | none | the app's own macro bar as the whole image |
+| 04 | `glyph` | as punctuation | a figure set inline as the full stop |
+| 05 | `pair` | as a unit | two figures standing in for two macro profiles |
+| 06 | `carousel` | as a cue | frame 1 of 5, with the swipe affordance drawn |
+| 07 | `crop` | leads | cropped off two edges; only the prop and part of a face |
+| 08 | `split` | leads | dark half for type, lit half for the figure |
+| 09 | `staged` | leads | under half the frame, in its own pool of light |
+
+Three carry no character at all. That is deliberate: it is what makes the cast
+mean something on the six posts where it does appear.
+
+Two things each layout had to be taught, because the copy depends on them:
+**a crop cannot lose the subject of its own sentence** (the toast in 07 is what
+the headline is about, and a held prop reaches to about 0.93 of the figure's
+box, so the placement has to be prop-aware or the square crops it off), and
+**the wordmark takes whichever corner the figure and its prop are not reaching
+into**.
+
+**Three sizes off one set of coordinates.** `--size post|story|square`. The
+composition lives in a *stage* rather than the frame: on story the stage stays
+the 4:5 composition, centred, while the ground fills the whole 9:16 — which
+puts every element inside Instagram's safe area by construction instead of by a
+table of insets. Square reflows, so figures are sized as a share of the stage
+height and capped against the frame width; without the cap a tall frame grows a
+figure until it runs out of the sides, and without the height share a square
+frame keeps a figure sized for a taller one and swallows the type.
+
+**The signature is the app icon**, `store/icon-512.png` — the jade ring with
+the three macro dots the cast came out of (CAST.md), so the mark and the
+characters read as one family. It is set as a rounded tile because its ground
+is cream rather than transparent, which works on a light field or a dark one.
+
+`IBM Plex Mono` joins Baloo2 and Nunito in `apps/mobile/assets/fonts` (400/500,
+SIL OFL) — a utility face for timestamps and labels, which 02, 05 and 06 are
+built on. Three roles, not three brands: display, text, utility.
+
+**Where it stops.** The remaining gap is art direction rather than code, and
+that was a deliberate call rather than a limit of the tool. Three things are
+open:
+
+1. **The grounds are CSS fields.** Pass `ground` on an entry to lay a ComfyUI
+   render under one instead — 09 already does. The richer direction is the
+   `Scenes.tsx` environments, the kitchen and the park path and the porch, each
+   already lit by hour, so a character stands somewhere rather than on a wash.
+2. **Baloo2 stays.** A high-contrast serif or a tight grotesque would read more
+   premium, and the store ads do use a serif; keeping Baloo2 is a decision to
+   match the app rather than out-dress it. Do not reopen it casually — it is
+   the face `cards.mjs`, the store cards and the app all share.
+3. **The cast is cute by construction.** Blush, dot eyes, a smile. Framing can
+   make it serious; it cannot make it austere, and that ceiling is not a craft
+   problem to solve.
+
+A designer picking this up needs `CAST.md` for the character rules, this
+section for the composition ones, and the knowledge that the figures are
+geometry rather than artwork: they are drawn from `figureMarkup()` at any size,
+in any of eighteen moods, and must never be redrawn by hand or regenerated by a
+model.
+
+### content/social/ — the one committed payload
+
+`content/out/` is ignored because renders are reproducible (§6). `content/social/`
+is the exception, and it exists for one reason: **Buffer's API has no upload
+endpoint.** Its schema offers `createPost`, `editPost` and `createIdea` and
+nothing for media, so every asset has to be a URL Buffer's own servers can
+fetch. This repository is public, so a committed file is reachable at
+`raw.githubusercontent.com/<owner>/<repo>/<branch>/content/social/<file>` the
+moment it is pushed, and that is the shortest path from a local render to a
+scheduled post.
+
+Only the 4:5 feed renders live here. Story and square stay in `content/out/`
+until something needs a URL for them too.
