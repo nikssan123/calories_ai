@@ -560,3 +560,43 @@ scheduled post.
 
 Only the 4:5 feed renders live here. Story and square stay in `content/out/`
 until something needs a URL for them too.
+
+### The reel builder
+
+`scripts/content/reel.mts` renders a promotional film the same way the posters
+are made — from the cast's own geometry, a frame at a time.
+`npx tsx scripts/content/reel.mts`, with `--fps` and `--out`.
+
+The first film is `02-typed-day` in motion: a day arriving one sentence at a
+time, each closed by whichever character the meal is mostly made of, standing
+in as the full stop. It is the one idea off the layout board that works only
+because the mascots *are* the macros, so the punctuation carries information
+rather than decoration.
+
+**Why not a video model.** ComfyUI has Wan 2.2 TI2V and it is the wrong tool
+here: the cast is exact geometry and a diffusion model would redraw it as its
+own guess at a cute blob. Every frame of this is the same `figureMarkup()` the
+phone, the widget and the site draw. Keep Wan for grounds and texture (§10),
+never for the characters.
+
+**What the rig can and cannot do.** `legs` is empty unless sitting and there is
+one independent arm, so there are no walk cycles in here — only scale, hop,
+squash and type. That is not a limitation being worked around; it is the
+vocabulary the drawing actually supports, and the film is built inside it.
+
+**How it runs.** Each frame is a deterministic HTML document — the pose is
+computed for frame N rather than left to a CSS animation — screenshotted by
+headless Chrome and assembled by ffmpeg. Chrome start-up dominates, so a
+~8-second film is a few minutes of wall clock.
+
+**Frames go in the OS temp dir, not `content/out/`.** They lived in the output
+tree first, and because that tree cannot always be cleared, a stale Chrome
+profile survived between runs; every launch then died on the profile lock with
+exit status 21 and no stderr, which the loop reported as "0 frames rendered"
+rather than as the real fault. Only the finished mp4 belongs in `content/out/`,
+and the renderer now prints the exit status instead of counting to zero
+quietly.
+
+**One timing rule, learned the hard way.** At 1.5s a beat, an in and out of
+0.4s each leaves under half a second at full opacity and the film reads as a
+flicker rather than a sentence. The transitions are deliberately quick.
