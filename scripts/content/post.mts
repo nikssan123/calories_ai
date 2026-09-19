@@ -67,6 +67,25 @@ if (!SIZES[SIZE]) {
 }
 const { w: W, h: H } = SIZES[SIZE]
 
+/**
+ * The composition is laid out in a stage, which is the frame everywhere except
+ * story. A 9:16 story is mostly chrome — the top and bottom ~250px sit under
+ * Instagram's own UI — so there the stage stays the 4:5 composition, centred,
+ * while the ground fills the whole frame. That puts every element inside the
+ * safe area by construction instead of by a table of insets, and it means one
+ * set of coordinates renders all three sizes.
+ */
+const STAGE_H = SIZE === 'story' ? 1350 : H
+const STAGE_TOP = Math.round((H - STAGE_H) / 2)
+
+/**
+ * A figure's box, as a share of the stage height but capped against the frame
+ * width. Without the cap a tall frame grows the figure until it runs out of
+ * the sides; without the height share a square frame keeps a figure sized for
+ * a taller one and swallows the type.
+ */
+const figBox = (hFrac: number, wFrac: number) => Math.round(Math.min(STAGE_H * hFrac, W * wFrac))
+
 const FONTS = {
   display: 'apps/mobile/assets/fonts/Baloo2_800ExtraBold.ttf',
   text400: 'apps/mobile/assets/fonts/Nunito_400.woff2',
@@ -197,9 +216,17 @@ function fig(name: CastName, mood: Mood, prefix: string, prop?: Prop): string {
   return `<svg viewBox="0 0 ${GRID} ${GRID}" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>${f.defs}</defs>${f.shapes}</svg>`
 }
 
-/** The signature: the real mark, never the product name typed out. */
+/**
+ * The signature: the real app icon, never the product name typed out and never
+ * a coloured square standing in for it. store/icon-512.png is the jade ring
+ * with the three macro dots inside — the drawing the cast came out of
+ * (CAST.md), so the mark and the characters are visibly one family. Its ground
+ * is cream rather than transparent, so it is set as a rounded tile and reads as
+ * the app icon on a light field or a dark one.
+ */
+const ICON = 'store/icon-512.png'
 function mark(pos: string, colour: string): string {
-  return `<div class="mark" style="${pos};color:${colour}"><i></i><span>Day So Far</span></div>`
+  return `<div class="mark" style="${pos};color:${colour}"><img src="${url(ICON)}" alt=""><span>Day So Far</span></div>`
 }
 
 /**
@@ -210,6 +237,25 @@ function grounding(name: CastName, left: number, bottom: number, size: number, d
   const halo = `left:${Math.round(left - size * 0.14)}px;bottom:${Math.round(bottom - size * 0.1)}px;width:${Math.round(size * 1.28)}px;height:${Math.round(size * 1.28)}px;background:radial-gradient(circle at 50% 50%,${HALO[name]}${dark ? '3d' : '2b'} 0%,transparent 62%)`
   const shade = `left:${Math.round(left + size * 0.19)}px;bottom:${Math.round(bottom + size * 0.055)}px;width:${Math.round(size * 0.62)}px;height:${Math.round(size * 0.1)}px;background:${dark ? 'rgba(0,0,0,.42)' : 'rgba(27,26,21,.16)'};filter:blur(${Math.round(size * 0.035)}px)`
   return `<span class="halo" style="${halo}"></span><span class="shade" style="${shade}"></span>`
+}
+
+/** A grounded figure: its halo, its contact shadow and the drawing, placed. */
+function figure(
+  name: CastName,
+  mood: Mood,
+  prefix: string,
+  size: number,
+  left: number,
+  /** How far past the stage's foot it sinks, as a share of its own box. */
+  sink: number,
+  dark: boolean,
+  prop?: Prop,
+): string {
+  const bottom = Math.round(-size * sink)
+  return (
+    grounding(name, left, bottom, size, dark) +
+    `<span class="fig" style="left:${left}px;bottom:${bottom}px;width:${size}px;height:${size}px">${fig(name, mood, prefix, prop)}</span>`
+  )
 }
 
 const FIELDS: Record<string, string> = {
@@ -275,7 +321,7 @@ function render(p: Post): { field: string; body: string } {
             )
             .join('') +
           `</div>` +
-          `<div class="mark" style="position:static;color:rgba(247,239,230,.5)"><i></i><span>Day So Far</span></div>` +
+          `<div class="mark" style="position:static;color:rgba(247,239,230,.5)"><img src="${url(ICON)}" alt=""><span>Day So Far</span></div>` +
           `</div>`,
       }
 
@@ -312,7 +358,8 @@ function render(p: Post): { field: string; body: string } {
           mark('bottom:70px;left:86px', 'rgba(27,26,21,.4)'),
       }
 
-    case 'carousel':
+    case 'carousel': {
+      const size = figBox(0.448, 0.56)
       return {
         field: FIELDS.warm,
         body:
@@ -320,36 +367,42 @@ function render(p: Post): { field: string; body: string } {
           `<div class="m500" style="font-size:29px;letter-spacing:.14em;color:${JADE};text-transform:uppercase">${p.num}</div>` +
           `<h1 class="d" style="margin-top:43px;font-size:104px;line-height:1.01;color:${INK}">${p.headline}</h1>` +
           `</div>` +
-          grounding(p.name, 640, -130, 605, false) +
-          `<span class="fig" style="left:640px;bottom:-130px;width:605px;height:605px">${fig(p.name, p.mood, p.key)}</span>` +
+          figure(p.name, p.mood, p.key, size, W - Math.round(size * 0.728), 0.215, false) +
           `<div class="swipe"><span class="dots"><b></b><b></b><b></b><b></b><b></b></span><span>Swipe</span></div>` +
           mark('top:86px;right:86px', 'rgba(27,26,21,.45)'),
       }
+    }
 
-    case 'crop':
+    case 'crop': {
       // Far enough left that the held prop stays in frame. The headline names
       // it, and cropping the subject of the sentence out is the one crop this
       // layout cannot make.
+      const size = figBox(0.768, 0.96)
+      // A held prop reaches to about 0.93 of the box, so a figure placed for a
+      // bare silhouette crops it off — at square worst of all, where the box
+      // shrinks but the prop keeps its share of it. Give the prop the room and
+      // let the crop happen on the figure's own edge instead.
+      const bias = p.prop ? 0.945 : 0.852
       return {
         field: FIELDS.warm,
         body:
-          grounding(p.name, 196, -151, 1037, false) +
-          `<span class="fig" style="left:196px;bottom:-151px;width:1037px;height:1037px">${fig(p.name, p.mood, p.key, p.prop)}</span>` +
+          figure(p.name, p.mood, p.key, size, W - Math.round(size * bias), 0.146, false, p.prop) +
           `<div class="tag" style="top:86px;left:86px;max-width:600px">` +
           `<h1 class="d" style="font-size:104px;line-height:1;color:${INK}">${p.headline}</h1></div>` +
           mark('bottom:76px;left:86px', 'rgba(27,26,21,.55)'),
       }
+    }
 
     case 'split': {
-      const half = Math.round(H / 2)
+      const half = Math.round(STAGE_H / 2)
+      const size = figBox(0.448, 0.56)
       return {
         field: FIELDS.paper,
         body:
           `<div class="half-a" style="height:${half}px">` +
           `<h1 class="d" style="font-size:93px;line-height:1.02;color:${CREAM}">${p.headline}</h1></div>` +
-          `<div class="half-b" style="top:${half}px;height:${H - half}px">` +
-          grounding(p.name, Math.round(W / 2 - 605 / 2), -86, 605, false) +
-          `<span class="fig" style="left:${Math.round(W / 2 - 605 / 2)}px;bottom:-86px;width:605px;height:605px">${fig(p.name, p.mood, p.key, p.prop)}</span>` +
+          `<div class="half-b" style="top:${half}px;height:${STAGE_H - half}px">` +
+          figure(p.name, p.mood, p.key, size, Math.round(W / 2 - size / 2), 0.142, false, p.prop) +
           `</div>` +
           // Left, not right: the figure is centred in the lower half and its
           // held prop reaches into the right corner.
@@ -357,19 +410,20 @@ function render(p: Post): { field: string; body: string } {
       }
     }
 
-    case 'staged':
+    case 'staged': {
+      const size = figBox(0.368, 0.46)
       return {
         field: FIELDS.night,
         body:
           `<span class="glow"></span>` +
-          grounding(p.name, 518, -65, 497, true) +
-          `<span class="fig" style="left:518px;bottom:-65px;width:497px;height:497px">${fig(p.name, p.mood, p.key)}</span>` +
+          figure(p.name, p.mood, p.key, size, W - Math.round(size * 1.13), 0.131, true) +
           `<div class="tag" style="top:86px;left:86px;max-width:648px">` +
           `<h1 class="d" style="font-size:89px;line-height:1.02;color:${CREAM}">${p.headline}</h1>` +
           `<div class="t" style="font-weight:600;font-size:37px;line-height:1.4;color:rgba(247,239,230,.66);margin-top:43px;max-width:22ch">${p.sub}</div>` +
           `</div>` +
           mark('bottom:76px;left:86px', 'rgba(247,239,230,.55)'),
       }
+    }
   }
 }
 
@@ -391,6 +445,9 @@ ${faces}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:${W}px;height:${H}px;overflow:hidden}
 body{position:relative;background:${field};${ground}-webkit-font-smoothing:antialiased}
+/* The ground fills the frame; the composition lives in the stage. On story the
+   two differ, which is what keeps every element out of Instagram's chrome. */
+.stage{position:absolute;left:0;top:${STAGE_TOP}px;width:${W}px;height:${STAGE_H}px}
 .d{font-family:'D',sans-serif;font-weight:800;letter-spacing:-.026em}
 .t{font-family:'T',sans-serif}
 .m400{font-family:'M',monospace;font-weight:400}
@@ -408,7 +465,7 @@ body{position:relative;background:${field};${ground}-webkit-font-smoothing:antia
 .glyph svg{width:100%;height:100%;overflow:visible}
 .two{margin-top:auto;display:grid;grid-template-columns:1fr 1fr;gap:43px;align-items:end}
 .cell{text-align:center}
-.cell .h{height:330px}
+.cell .h{height:${Math.round(STAGE_H * 0.244)}px}
 .cell .h svg{width:100%;height:100%;overflow:visible}
 .fig{position:absolute;display:block}
 .fig svg{width:100%;height:100%;overflow:visible;display:block}
@@ -423,9 +480,9 @@ body{position:relative;background:${field};${ground}-webkit-font-smoothing:antia
 .dots b{width:19px;height:19px;border-radius:50%;background:#cabfae;display:block}
 .dots b:first-child{background:${JADE}}
 .mark{position:absolute;display:flex;align-items:center;gap:24px;font-family:'T',sans-serif;font-weight:700}
-.mark i{width:48px;height:48px;border-radius:13px;display:block;background:linear-gradient(140deg,#3ddc97,#0f9a5a);flex:none}
+.mark img{width:62px;height:62px;border-radius:16px;display:block;flex:none}
 .mark span{font-size:28px;letter-spacing:.01em}
-</style></head><body>${body}</body></html>`
+</style></head><body><div class="stage">${body}</div></body></html>`
 }
 
 /* ── run ────────────────────────────────────────────────────────────── */

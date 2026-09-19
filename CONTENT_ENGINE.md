@@ -502,8 +502,24 @@ mean something on the six posts where it does appear.
 
 Two things each layout had to be taught, because the copy depends on them:
 **a crop cannot lose the subject of its own sentence** (the toast in 07 is what
-the headline is about), and **the wordmark takes whichever corner the figure
-and its prop are not reaching into**.
+the headline is about, and a held prop reaches to about 0.93 of the figure's
+box, so the placement has to be prop-aware or the square crops it off), and
+**the wordmark takes whichever corner the figure and its prop are not reaching
+into**.
+
+**Three sizes off one set of coordinates.** `--size post|story|square`. The
+composition lives in a *stage* rather than the frame: on story the stage stays
+the 4:5 composition, centred, while the ground fills the whole 9:16 — which
+puts every element inside Instagram's safe area by construction instead of by a
+table of insets. Square reflows, so figures are sized as a share of the stage
+height and capped against the frame width; without the cap a tall frame grows a
+figure until it runs out of the sides, and without the height share a square
+frame keeps a figure sized for a taller one and swallows the type.
+
+**The signature is the app icon**, `store/icon-512.png` — the jade ring with
+the three macro dots the cast came out of (CAST.md), so the mark and the
+characters read as one family. It is set as a rounded tile because its ground
+is cream rather than transparent, which works on a light field or a dark one.
 
 `IBM Plex Mono` joins Baloo2 and Nunito in `apps/mobile/assets/fonts` (400/500,
 SIL OFL) — a utility face for timestamps and labels, which 02, 05 and 06 are
