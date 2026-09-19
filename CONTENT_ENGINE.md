@@ -600,3 +600,57 @@ quietly.
 **One timing rule, learned the hard way.** At 1.5s a beat, an in and out of
 0.4s each leaves under half a second at full opacity and the film reads as a
 flicker rather than a sentence. The transitions are deliberately quick.
+
+### Ground and music
+
+`--ground content/gen/<clip>` lays a ComfyUI render under the type. Frames then
+render on transparency (Chrome needs `--default-background-color=00000000`) and
+ffmpeg loops, crops and composites. **Tried once and not kept:** Wan read
+"billowing plumes" literally and produced hard orange streaks with a visible
+waterline, hanging exactly where the headline sits. Softened enough to stop
+fighting the type it is indistinguishable from the CSS field it replaced. A
+typographic film wants a quiet ground, and CSS gives that for free — save the
+generated motion for posts where the ground *is* the image.
+
+`--music <file>` replaces the synthesised bed, and **the music sets the film's
+length**: the closing card absorbs whatever is left after the sentences, so the
+picture ends exactly when the track does. It refuses a track too short to leave
+a sensible close.
+
+That rule exists because of the failure it prevents. Cutting the picture to a
+fixed length and looping a track into it chopped the music at an arbitrary
+point — and the first track tried builds to its loudest in its final second and
+opens with 0.3s of silence, so each loop slammed a peak into a gap. Lap a short
+track to length first and hand over the result:
+
+```
+ffmpeg -i t.mp3 -i t.mp3 -filter_complex \
+  "[0:a]atrim=start=0.3,asetpts=PTS-STARTPTS[a];\
+   [1:a]atrim=start=0.3,asetpts=PTS-STARTPTS[b];\
+   [a][b]acrossfade=d=0.9:c1=tri:c2=tri[o]" -map "[o]" bed.wav
+```
+
+**Licensing, and what it costs.** `content/music/` is ignored, so tracks live
+only on the machine that rendered — the credit has to live here. Of 180 Free
+Music Archive candidates, **three** were usable: FMA is overwhelmingly `BY-NC-*`
+(non-commercial, wrong for a brand) and `BY-ND` (no derivatives, which forbids
+even trimming to length). Verify every track against its own page; the search
+filter is not trustworthy. FMA also gates downloads behind a login, while its
+stream endpoint serves the file openly.
+
+| Track | Artist | Licence | Length | Credit required |
+|---|---|---|---|---|
+| Chill | American Darlings (S.A.D.) | CC BY 4.0 | 0:08 | yes |
+| Freezing but warm | Meydän | CC BY 4.0 | 4:09 | yes |
+| Auto Ran Star Tropic | Piano & Elektron | CC0 | 0:15 | no |
+
+A CC BY track without its credit is an unlicensed use. Wherever a cut using
+*Chill* is posted, the caption carries:
+
+```
+Music: "Chill" by American Darlings (S.A.D.), CC BY 4.0
+```
+
+Pixabay and Uppbeat have better catalogues and cleaner terms, and both refuse
+scripted requests (403 and 429) while working normally in a browser — so a
+human picking a track there beats anything this script can reach.
