@@ -36,6 +36,10 @@ isn't real, so the number is fiction, and for a nutrition app that is the
 one credibility hit you cannot take. Generated imagery is for texture and
 branding. Real or licensed photos carry the numbers.
 
+**§10 changes what the hero asset is for**, not this rule. The recipe library's
+photographs are real and its numbers are USDA's, so they carry numbers exactly
+as this table allows. Nothing below §10 relaxes the sentence in bold above.
+
 ---
 
 ## 1. Architecture
@@ -168,7 +172,9 @@ Load → 4x-UltraSharp ESRGAN → Save. For rescuing low-res source stills.
 
 ## 5. Content formats, ranked
 
-Ranked by expected return for a solo dev with no audience.
+Ranked by expected return for a solo dev with no audience. This ranking assumes
+content built from the app's own screens; for the library-driven formats that
+need neither a screen recording nor a camera, see §10.
 
 ### 1. "Scan my grocery haul" — the hero format
 Screen recording of the multi-packet barcode basket scan. Fast cuts, counter
@@ -327,3 +333,119 @@ Business accounts can only use royalty-free "Commercial Sounds". Trending audio
 is a major distribution input on TikTok, so that trade is heavily negative at
 your stage. Stay on a personal/Creator account and put the link in the bio text
 if you need one.
+
+---
+
+## 10. The library is the content engine
+
+Everything above §10 makes content *about the app*. This section is the
+correction, and it changes what gets posted rather than how it gets made.
+
+### The pivot
+
+**Posts sell meal logging as an idea. Not the app, and not from its screens.**
+
+Read `content/hooks/hooks.txt`, `content/copy/cards.txt` and
+`content/copy/scripts.md` end to end and every asset has the same subject: the
+software. That is fine content for somebody comparing trackers, and nobody on
+TikTok is comparing trackers. `content/copy/posts.md` already makes this
+argument — it parks the language post because it "only lands for somebody who
+has already decided to track their food, and none of the people this content
+has to reach has decided that yet." That test was applied to one post. It
+condemns the whole library, this section included if it ever drifts back.
+
+So: food, numbers and habits are the subject. The app is what you find in the
+bio, not what you watch.
+
+### The asset that was already here
+
+`apps/api/data/library-recipes.json` — 99 dishes, seeded by `pnpm setup`, and
+until now used only by `/cook/library`. Every row carries what a post needs:
+
+| Field | Use |
+|---|---|
+| `title`, `image_path` | the photo, in `apps/web/public/recipes/`, 800px wide |
+| `kcal` | the number the post is built around |
+| `protein_g`, `carbs_g`, `fat_g` | the macro split — and the cast, see below |
+| `serving_size`, `portions` | portion-reality content |
+| `food_groups` | what a balanced plate is |
+| `rating`, `rating_count` | ordering, and "the internet's favourite X" angles |
+| `source_url` | a `.gov` citation under every claim |
+
+The text and the photographs are USDA MyPlate Kitchen, a work of the US
+government and **public domain** — the one source in §0's table with no licence
+to clear and no attribution burden.
+
+### Why this satisfies §0 rather than dodging it
+
+§0's rule is that a calorie number may never sit on a generated food image,
+because the food is fake so the number is fiction. Here the photograph is real,
+the number is USDA's, and the post can link to the page it came from. This is
+the rare nutrition claim that is fully defensible — most of the category is
+publishing estimates it cannot source.
+
+The photographs are a mix: some are studio work (`avocado-breakfast-bruschetta`),
+some are plainly somebody's kitchen (`2-step-chicken`). Do not filter for the
+studio ones. §0's whole argument is that this audience rejects food that looks
+fake, and the unstyled photographs are the ones that read as real.
+
+### The cast is the macro split
+
+Ember is protein, Skye is carbs, Plum is fat (CAST.md). Every row carries
+`protein_g`, `carbs_g` and `fat_g`. So the three figures can show a real dish's
+split, driven by the row, using poses that already exist — no new rig work, and
+none of the walk cycles the cast cannot do (`legs` is empty unless sitting;
+there is one independent arm; a turn is a mirror).
+
+A post is a function of a JSON row. That is the whole mechanic.
+
+### The five formats
+
+1. **Guess the calories.** §5 already ranks this third and already specifies
+   "real photos only". The photographs and the numbers were both in the repo;
+   nothing connected them.
+2. **"Same calories. Completely different day."** Already a line in
+   `cards.txt`. The pairs can be *found* — match two rows on `kcal`, take the
+   widest gap in macro split, let the cast draw the difference.
+3. **Protein per 100 kcal**, ranked across all 99.
+4. **Serving-size reality** — `serving_size` against `portions`.
+5. **What a balanced plate is** — `food_groups`.
+
+All five are about food and numbers. The app appears in none of them.
+
+### What to build
+
+A generator beside `scripts/content/cards.mjs`, same output contract, driven by
+data instead of a text file: read `library-recipes.json`, composite photograph +
+number + cast into 1080×1920, write to `content/out/`.
+
+`cards.mjs` is the precedent for the rendering; `@ct/shared/cast` is the
+geometry, already free of React and React Native so a script can import it.
+
+### Limits, stated so nobody is surprised
+
+- **99 is finite.** Across five formats that is a few hundred posts — months at
+  3–5/day — and then it needs Pexels, or a camera.
+- **800px** is small for a 1080×1920 canvas. Put the photograph in a band
+  rather than full-bleed, or run `W4 upscale.json` on the 4080, which finally
+  gives that workflow a job.
+- **USDA's number is per USDA's serving**, not per anybody's plate. Say the
+  serving or say nothing; do not imply it is what someone ate.
+- **These are American institutional recipes** and the corpus this app was
+  written against is Bulgarian. Watch whether that shows in the numbers.
+
+### Ruled out, so it is not relitigated
+
+- **Scheduling tools (Buffer and the rest).** §7 stands, and there is now a
+  second reason: neither the TikTok Content Posting API nor the Instagram Graph
+  API can attach a trending sound, so anything auto-published loses the audio
+  library — the same trade §9 refuses for a TikTok Business account. Post video
+  by hand. A scheduler is worth having only for the analytics pull into
+  `posted.csv`, and for formats where audio is irrelevant.
+- **AI-generated humans.** Rejected in favour of the cast: the cast is
+  consistent by construction, already appears inside the product, and never
+  invites the "this is AI" comment §0 is about.
+- **Cast-led narrative video.** The rig is sticker-tier — six eye states, six
+  mouth states, one swinging arm, front-facing only. It can carry a 2–5s loop
+  or a reaction over real capture. It cannot carry a 15s story, and extending
+  it to do so is an animation project, not a render harness.
