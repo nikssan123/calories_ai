@@ -480,14 +480,43 @@ Four things were got wrong first, and each is a rule in the file's header now:
 - **A 6% ellipse is not a shadow.** The figure needs a halo of its own macro
   colour and a blurred contact shadow, or it floats on the wash like a sticker.
 
+**Nine templates, not one.** The first pass had a single shape — figure in a
+bottom corner, type top left, gradient behind — and nine of those in a feed
+read as one post. The builder now holds nine layouts that fail differently from
+each other, and a `POSTS` entry is copy poured into one of them:
+
+| | Template | Character | What it is for |
+|---|---|---|---|
+| 01 | `statement` | none | one claim on a flooded field; reads at thumbnail size |
+| 02 | `typed-day` | none | a day as a document, mono timestamps, no numbers |
+| 03 | `macro-bar` | none | the app's own macro bar as the whole image |
+| 04 | `glyph` | as punctuation | a figure set inline as the full stop |
+| 05 | `pair` | as a unit | two figures standing in for two macro profiles |
+| 06 | `carousel` | as a cue | frame 1 of 5, with the swipe affordance drawn |
+| 07 | `crop` | leads | cropped off two edges; only the prop and part of a face |
+| 08 | `split` | leads | dark half for type, lit half for the figure |
+| 09 | `staged` | leads | under half the frame, in its own pool of light |
+
+Three carry no character at all. That is deliberate: it is what makes the cast
+mean something on the six posts where it does appear.
+
+Two things each layout had to be taught, because the copy depends on them:
+**a crop cannot lose the subject of its own sentence** (the toast in 07 is what
+the headline is about), and **the wordmark takes whichever corner the figure
+and its prop are not reaching into**.
+
+`IBM Plex Mono` joins Baloo2 and Nunito in `apps/mobile/assets/fonts` (400/500,
+SIL OFL) — a utility face for timestamps and labels, which 02, 05 and 06 are
+built on. Three roles, not three brands: display, text, utility.
+
 **Where it stops.** The remaining gap is art direction rather than code, and
 that was a deliberate call rather than a limit of the tool. Three things are
-open, in the order they matter:
+open:
 
-1. **It is one template.** Figure in a bottom corner, type top left, gradient
-   behind, dead space in the middle. Variety needs the `Scenes.tsx`
-   environments — the kitchen, the park path, the porch, the hill, each already
-   lit by hour — so a character stands somewhere instead of on a wash.
+1. **The grounds are CSS fields.** Pass `ground` on an entry to lay a ComfyUI
+   render under one instead — 09 already does. The richer direction is the
+   `Scenes.tsx` environments, the kitchen and the park path and the porch, each
+   already lit by hour, so a character stands somewhere rather than on a wash.
 2. **Baloo2 stays.** A high-contrast serif or a tight grotesque would read more
    premium, and the store ads do use a serif; keeping Baloo2 is a decision to
    match the app rather than out-dress it. Do not reopen it casually — it is
