@@ -90,15 +90,22 @@ export default function SaveAccountScreen() {
   const [sent, setSent] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!alreadySaved) reachedStep('save_prompt');
+    if (!alreadySaved) reachedStep('save_prompt', reason);
     // Once, for how the screen was opened.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
+  /*
+   * The account step carries the prompt that got it, which is what makes the
+   * pair of counts a conversion rather than two totals: the wall that spends a
+   * guest's logs is the rung the guest allowance is tuned against, and it is
+   * only legible next to the three softer asks. The same step off the sign-in
+   * screen (`login.tsx`) carries none — no prompt asked for that one.
+   */
   function saved() {
-    reachedStep('account');
+    reachedStep('account', reason);
     setStep('done');
   }
 

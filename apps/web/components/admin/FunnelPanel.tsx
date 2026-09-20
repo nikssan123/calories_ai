@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import type { AdminFunnel, FunnelStep } from '@ct/shared';
+import { SAVE_REASONS, type AdminFunnel, type FunnelStep, type SaveReason } from '@ct/shared';
 import { api } from '@/lib/api';
 import { InsetGroup } from '@/components/InsetGroup';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -59,6 +59,20 @@ const LINE: FunnelStep[] = [
 ];
 const BESIDE: FunnelStep[] = ['signup_email', 'signup_google', 'existing'];
 
+/** The ladder in GUEST-ACCOUNTS.md, in the order it is meant to be climbed. */
+const REASON_LABEL: Record<SaveReason, string> = {
+  first_log: 'After their first meal',
+  you: 'The You tab',
+  guest_limit: 'Guest logs used up',
+  purchase: 'Tapped a purchase',
+};
+const REASON_HINT: Record<SaveReason, string> = {
+  first_log: 'Soft — the inline card under the first AI reply',
+  you: 'Soft — they went looking for it',
+  guest_limit: 'Hard — the wall the guest allowance is built around',
+  purchase: 'Hard — a subscription has to belong to an account',
+};
+
 /**
  * Where new installs stop before they have an account.
  *
@@ -96,6 +110,8 @@ export function FunnelPanel() {
   }
 
   const count = (step: FunnelStep) => funnel.steps.find((s) => s.step === step)!;
+  const byReason = (step: 'save_prompt' | 'account', reason: SaveReason) =>
+    funnel.reasons.find((r) => r.step === step && r.reason === reason)?.reached ?? 0;
   const top = count('welcome').reached;
   const versions = [...new Set(funnel.versions.map((v) => v.app_version))];
 
@@ -189,6 +205,43 @@ export function FunnelPanel() {
                     <td className="px-3 py-2 text-right">{top ? percent(row.reached / top) : '—'}</td>
                     <td className={`px-4 py-2 text-right ${lost ? 'font-bold text-[var(--fat-text)]' : ''}`}>
                       {previous ? percent(row.reached / previous) : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </InsetGroup>
+
+      <InsetGroup
+        title="Which prompt asked"
+        footer="The save-your-account screen is opened from four places, and only the first two rows are the guest wall doing its job — the rest are controls to read it against. “Saved” is an account made on that screen, so it will not add up to “Account created” above: that row also counts sign-ups straight off the sign-in screen, which no prompt asked for. A prompt that is not built yet reads as a row of zeros — the soft ask after the first meal is one of those today."
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-muted-foreground text-left text-xs">
+                <th className="px-4 py-2 font-semibold">Prompt</th>
+                <th className="px-3 py-2 text-right font-semibold">Shown</th>
+                <th className="px-3 py-2 text-right font-semibold">Saved</th>
+                <th className="px-4 py-2 text-right font-semibold">Converted</th>
+              </tr>
+            </thead>
+            <tbody>
+              {SAVE_REASONS.map((reason) => {
+                const shown = byReason('save_prompt', reason);
+                const saved = byReason('account', reason);
+                return (
+                  <tr key={reason} className="border-hairline border-t">
+                    <td className="px-4 py-2">
+                      <div className="font-medium">{REASON_LABEL[reason]}</div>
+                      <div className="text-muted-foreground text-xs">{REASON_HINT[reason]}</div>
+                    </td>
+                    <td className="text-figure px-3 py-2 text-right">{shown}</td>
+                    <td className="text-figure px-3 py-2 text-right">{saved}</td>
+                    <td className={`px-4 py-2 text-right ${shown > 0 && saved === 0 ? 'font-bold text-[var(--fat-text)]' : ''}`}>
+                      {shown ? percent(saved / shown) : '—'}
                     </td>
                   </tr>
                 );

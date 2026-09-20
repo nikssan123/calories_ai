@@ -3941,6 +3941,12 @@ export type AdminOverview = z.infer<typeof AdminOverview>;
  * it, `save_prompt` the save-your-account screen being shown for any reason,
  * and `account` an account coming into existence.
  *
+ * `save_prompt` and `account` also carry *which* prompt asked — `reason`, below
+ * — since 2026-09-20, when a guest spent all four of their logs, was shown the
+ * screen and closed it, and the funnel could say only `save_prompt 1` with no
+ * way to tell the wall from a tap on the You tab. The wall is the lever the
+ * guest allowance is built around, so it is the one that has to be legible.
+ *
  * `account` means that and nothing narrower, which it did not until 2026-09-18.
  * It used to fire only for a sign-up that carried a finished plan, on the
  * reasoning that an account made without walking the questions was not part of
@@ -3975,15 +3981,47 @@ export const FUNNEL_STEPS = [
 export const FunnelStep = z.enum(FUNNEL_STEPS);
 export type FunnelStep = z.infer<typeof FunnelStep>;
 
-export const FunnelPing = z.object({
-  step: FunnelStep,
-  platform: z.enum(['ios', 'android']),
-  /** The store version, e.g. "1.2.1" — so a changed screen can be read against the one before it. */
-  app_version: z
-    .string()
-    .regex(/^\d+(\.\d+){0,3}$/)
-    .max(20),
-});
+/**
+ * Why the save-your-account screen was opened — the rung of the ladder in
+ * GUEST-ACCOUNTS.md that did the asking.
+ *
+ * It is the app's own vocabulary (`useSaveAccount`, and the screen's `reason`
+ * param) and it lives here because the funnel carries it: "save the account"
+ * is one row on a chart until you can see which prompt produced it, and the
+ * guest-limit wall is the lever the whole guest design turns on. The other
+ * three are the controls it has to be read against.
+ */
+export const SAVE_REASONS = ['guest_limit', 'purchase', 'you', 'first_log'] as const;
+export const SaveReason = z.enum(SAVE_REASONS);
+export type SaveReason = z.infer<typeof SaveReason>;
+
+/** The two steps a reason belongs to: the screen being shown, and it working. */
+export const REASONED_STEPS = ['save_prompt', 'account'] as const;
+
+export const FunnelPing = z
+  .object({
+    step: FunnelStep,
+    platform: z.enum(['ios', 'android']),
+    /** The store version, e.g. "1.2.1" — so a changed screen can be read against the one before it. */
+    app_version: z
+      .string()
+      .regex(/^\d+(\.\d+){0,3}$/)
+      .max(20),
+    /**
+     * Which prompt asked, on the two steps that have one. Absent everywhere
+     * else, and absent on an `account` that came in off the sign-in screen
+     * rather than through the save sheet — that door has no prompt behind it.
+     *
+     * It is still a count and not a record: four values shared by every install
+     * that reaches the screen, which says which rung of the ladder works and
+     * cannot say whose phone it was.
+     */
+    reason: SaveReason.optional(),
+  })
+  .refine(
+    (ping) => ping.reason === undefined || (REASONED_STEPS as readonly string[]).includes(ping.step),
+    { message: 'Only save_prompt and account carry a reason', path: ['reason'] },
+  );
 export type FunnelPing = z.infer<typeof FunnelPing>;
 
 export const AdminFunnel = z.object({
@@ -4001,6 +4039,18 @@ export const AdminFunnel = z.object({
     z.object({
       app_version: z.string(),
       step: FunnelStep,
+      reached: z.number().int(),
+    }),
+  ),
+  /**
+   * `save_prompt` and `account` split by which prompt asked — the one number
+   * that says whether the guest wall converts, and the reason the plain pair of
+   * totals above could not.
+   */
+  reasons: z.array(
+    z.object({
+      step: z.enum(REASONED_STEPS),
+      reason: SaveReason,
       reached: z.number().int(),
     }),
   ),

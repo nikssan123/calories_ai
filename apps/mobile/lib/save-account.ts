@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useRouter } from 'expo-router';
+import type { SaveReason } from '@ct/shared';
 
 /**
  * Why the save-your-account screen was opened (GUEST-ACCOUNTS.md). It decides
@@ -9,8 +10,12 @@ import { useRouter } from 'expo-router';
  * - `purchase` — a guest tapped buy; what is bought should belong to an account.
  * - `you` — the "Save your account" row on the You tab.
  * - `first_log` — a soft ask after the first meal.
+ *
+ * `SAVE_REASONS` in `@ct/shared` is the list itself, because the funnel carries
+ * it to the server: which rung of the ladder did the asking is the number the
+ * guest design is read by.
  */
-export type SaveReason = 'guest_limit' | 'purchase' | 'you' | 'first_log';
+export type { SaveReason };
 
 /** Opens the save-your-account screen. */
 export function useSaveAccount() {

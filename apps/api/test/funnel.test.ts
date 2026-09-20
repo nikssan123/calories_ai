@@ -49,7 +49,60 @@ describe('POST /funnel', () => {
       `SELECT column_name FROM information_schema.columns
         WHERE table_name = 'onboarding_funnel' ORDER BY column_name`,
     );
-    expect(columns.map((c) => c.column_name)).toEqual(['app_version', 'day', 'platform', 'reached', 'step']);
+    expect(columns.map((c) => c.column_name)).toEqual([
+      'app_version',
+      'day',
+      'platform',
+      'reached',
+      'reason',
+      'step',
+    ]);
+  });
+
+  /*
+   * Which prompt asked (GUEST-ACCOUNTS.md's ladder). It is four shared words
+   * rather than anything about a phone, and it keeps its own count: the wall a
+   * spent guest hits and a tap on the You tab are the same step and different
+   * questions.
+   */
+  it('counts the save prompt separately by the prompt that opened it', async () => {
+    await ping({ step: 'save_prompt', platform: 'android', app_version: '1.5.4', reason: 'guest_limit' });
+    await ping({ step: 'save_prompt', platform: 'android', app_version: '1.5.4', reason: 'guest_limit' });
+    await ping({ step: 'save_prompt', platform: 'android', app_version: '1.5.4', reason: 'you' });
+    await ping({ step: 'account', platform: 'android', app_version: '1.5.4', reason: 'guest_limit' });
+    // The same step from the sign-in screen, where no prompt asked.
+    await ping({ step: 'account', platform: 'android', app_version: '1.5.4' });
+
+    const rows = await query<{ step: string; reason: string | null; reached: number }>(
+      `SELECT step, reason, reached FROM onboarding_funnel ORDER BY step, reason NULLS FIRST`,
+    );
+    expect(rows).toEqual([
+      { step: 'account', reason: null, reached: 1 },
+      { step: 'account', reason: 'guest_limit', reached: 1 },
+      { step: 'save_prompt', reason: 'guest_limit', reached: 2 },
+      { step: 'save_prompt', reason: 'you', reached: 1 },
+    ]);
+  });
+
+  /** A reason nobody asked for would be a word on a row that cannot be read. */
+  it('refuses a reason it does not know, or one on a step that has no prompt', async () => {
+    expect(
+      (await ping({ step: 'save_prompt', platform: 'ios', app_version: '1.5.4', reason: 'curiosity' })).statusCode,
+    ).toBe(400);
+    expect(
+      (await ping({ step: 'welcome', platform: 'ios', app_version: '1.5.4', reason: 'guest_limit' })).statusCode,
+    ).toBe(400);
+    const [row] = await query<{ n: number }>(`SELECT count(*)::int AS n FROM onboarding_funnel`);
+    expect(row!.n).toBe(0);
+  });
+
+  /** The step still counts once per install per day, reason or no reason. */
+  it('keeps one row per key, and nulls do not multiply it', async () => {
+    await ping({ step: 'welcome', platform: 'ios', app_version: '1.5.4' });
+    await ping({ step: 'welcome', platform: 'ios', app_version: '1.5.4' });
+    await ping({ step: 'welcome', platform: 'ios', app_version: '1.5.4' });
+    const rows = await query<{ reached: number }>(`SELECT reached FROM onboarding_funnel`);
+    expect(rows).toEqual([{ reached: 3 }]);
   });
 
   it('refuses a step it does not know, and extra fields do not get through', async () => {
@@ -85,6 +138,28 @@ describe('the admin read', () => {
 
     const week = await readFunnel(7);
     expect(week.steps[0]!.reached).toBe(7);
+  });
+
+  it('splits the save prompt and the account by which prompt asked, zeros included', async () => {
+    await ping({ step: 'save_prompt', platform: 'android', app_version: '1.5.4', reason: 'guest_limit' });
+    await ping({ step: 'save_prompt', platform: 'ios', app_version: '1.5.4', reason: 'guest_limit' });
+    await ping({ step: 'account', platform: 'ios', app_version: '1.5.4', reason: 'guest_limit' });
+    await ping({ step: 'save_prompt', platform: 'ios', app_version: '1.5.4', reason: 'purchase' });
+    await ping({ step: 'account', platform: 'android', app_version: '1.5.4' });
+
+    const today = await readFunnel(1);
+    const at = (step: string, reason: string) =>
+      today.reasons.find((r) => r.step === step && r.reason === reason)!.reached;
+    expect(at('save_prompt', 'guest_limit')).toBe(2);
+    expect(at('account', 'guest_limit')).toBe(1);
+    expect(at('save_prompt', 'purchase')).toBe(1);
+    expect(at('account', 'purchase')).toBe(0);
+    // A rung nobody has built yet is a row of zeros, not a missing row.
+    expect(at('save_prompt', 'first_log')).toBe(0);
+    expect(today.reasons).toHaveLength(8);
+    // The step totals are unchanged by the split: the reasonless account counts too.
+    expect(today.steps.find((s) => s.step === 'account')!.reached).toBe(2);
+    expect(today.steps.find((s) => s.step === 'save_prompt')!.reached).toBe(3);
   });
 
   it('counts accounts made in the same window', async () => {
