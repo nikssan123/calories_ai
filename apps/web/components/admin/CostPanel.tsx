@@ -135,7 +135,7 @@ export function CostPanel() {
             title="If it were a product"
             footer="Mean spend per active user, multiplied out. Assumes new users behave like current ones — which for a tracker used by its own author is the assumption most likely to be wrong."
           >
-            <div className="divide-hairline grid grid-cols-3 divide-x">
+            <div className="divide-hairline grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
               {economics.projection.map((tier) => (
                 <Stat
                   key={tier.users}
@@ -349,7 +349,7 @@ function DailySummary({ days }: { days: CostReport['by_day'] }) {
   const perActiveDay = activeDays ? spent / activeDays : 0;
 
   return (
-    <div className="divide-hairline grid grid-cols-3 divide-x">
+    <div className="divide-hairline grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
       <Stat
         label="Per active day"
         value={usd(perActiveDay)}
