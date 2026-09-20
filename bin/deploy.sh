@@ -40,6 +40,13 @@
 #     together and there is no window where new code serves an old schema. That
 #     also means a rollback past a migration is NOT automatic — see the warning
 #     printed at the end.
+#   * Recreating the API kills whatever it was in the middle of. A chat turn is
+#     twenty seconds of model call that writes to the food log through tools as it
+#     goes and commits the reply at the very end, so a turn cut halfway can leave
+#     the meal logged and the answer lost — the one failure here that a person
+#     actually sees. So the deploy waits for turns in flight to finish before it
+#     recreates anything: see `wait_for_idle` in the remote half, and
+#     `stop_grace_period` on the api service, which is the other half of it.
 
 set -euo pipefail
 
@@ -52,6 +59,11 @@ REF=""
 PUSH=0
 BUILD_MODE="auto"      # auto | always | never
 PULL_BASE=0
+# How long to wait for chat turns in flight to finish before recreating.
+# 120s is TURN_LEASE_SECONDS in apps/api/src/services/turn-lock.ts: one lease
+# length, so a lease left behind by a killed process expires inside the window
+# rather than blocking the deploy on a turn that is not running any more.
+DRAIN=120
 DRY=0
 MOBILE=0
 MOBILE_ONLY=0
@@ -76,6 +88,8 @@ Options:
   --ref REF          commit/branch to deploy (default: origin/main)
   --push             push the current branch to origin before deploying
   --build MODE       auto (rebuild only what changed) | always | never
+  --drain SECONDS    wait this long for chat turns in flight to finish (default 120)
+  --no-drain         recreate immediately, cutting any turn mid-answer
   --pull             also pull fresh base images when building
   --dry-run          report the plan, change nothing
   -h, --help         this text
@@ -91,6 +105,8 @@ while [[ $# -gt 0 ]]; do
         --build) BUILD_MODE="$2"; shift 2 ;;
         --pull)  PULL_BASE=1; shift ;;
         --dry-run) DRY=1; shift ;;
+        --drain) DRAIN="$2"; shift 2 ;;
+        --no-drain) DRAIN=0; shift ;;
         --local) MOBILE_LOCAL=1; shift ;;
         --ios) MOBILE_PLATFORM="ios"; shift ;;
         --submit) SUBMIT=1; shift ;;
@@ -113,6 +129,8 @@ done
 case "$BUILD_MODE" in auto|always|never) ;; *)
     echo "--build must be auto, always or never" >&2; exit 64 ;;
 esac
+
+[[ "$DRAIN" =~ ^[0-9]+$ ]] || { echo "--drain takes whole seconds" >&2; exit 64; }
 
 if [[ -z "$HOST" && $MOBILE_ONLY -eq 0 ]]; then
     echo "No target host. Set DEPLOY_SSH_HOST or pass --host user@host." >&2
@@ -612,14 +630,14 @@ ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" true 2>/dev/null \
 say "deploying to $HOST:$PATH_REMOTE"
 echo
 
-REMOTE_ARGS="$(printf '%q ' "$PATH_REMOTE" "$TARGET" "$BUILD_MODE" "$PULL_BASE" "$DRY")"
+REMOTE_ARGS="$(printf '%q ' "$PATH_REMOTE" "$TARGET" "$BUILD_MODE" "$PULL_BASE" "$DRY" "$DRAIN")"
 
 ssh -o BatchMode=yes "$HOST" \
     "T=\$(mktemp /tmp/ct-deploy.XXXXXX) && cat >\"\$T\" && \
      bash \"\$T\" $REMOTE_ARGS; rc=\$?; rm -f \"\$T\"; exit \$rc" <<'REMOTE'
 set -euo pipefail
 
-REPO="$1"; TARGET="$2"; BUILD_MODE="$3"; PULL_BASE="$4"; DRY="$5"
+REPO="$1"; TARGET="$2"; BUILD_MODE="$3"; PULL_BASE="$4"; DRY="$5"; DRAIN="$6"
 COMPOSE="docker compose -f docker-compose.prod.yml"
 
 say()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
@@ -745,6 +763,69 @@ if (( ${#SERVICES[@]} )); then
     BUILD_ARGS=()
     (( PULL_BASE )) && BUILD_ARGS+=(--pull)
     run $COMPOSE build "${BUILD_ARGS[@]}" "${SERVICES[@]}"
+fi
+
+# ---- 3b. let whoever is mid-answer finish --------------------------------------
+#
+# `up -d` recreates the API, and recreating it kills the turn it was running.
+# That is not a dropped request that retries: a turn writes to the food log
+# through its tools as it goes and commits the reply at the very end, so half a
+# turn can leave lunch logged and no answer — and the person is watching the
+# screen while it happens.
+#
+# What tells us is already in the database. `withTurnLock` takes a lease on
+# `users.turn_lock_until` for the length of a turn (apps/api/src/services/
+# turn-lock.ts), held in Postgres rather than in the process precisely so it is
+# true across replicas. Counting live leases is therefore "how many people are
+# mid-answer right now", needs no endpoint, no request to the API, and nothing
+# in the hot path.
+#
+# Two honest limits. It over-reports: a process killed mid-turn leaves its lease
+# behind for up to TURN_LEASE_SECONDS, so a stale lease reads as busy — which is
+# the safe direction, and the default window is one lease long so it expires
+# while we wait rather than blocking. And it counts *turns*, not people: someone
+# reading their journal or logging a weight is not in here, because neither is
+# something a restart can cut in half.
+wait_for_idle() {
+    (( DRAIN == 0 )) && { warn "--no-drain: recreating without waiting for turns in flight"; return 0; }
+    $COMPOSE ps --status running --services 2>/dev/null | grep -qx db || return 0
+
+    local sql='SELECT count(*) FROM users WHERE turn_lock_until > now()'
+    local busy elapsed=0
+
+    busy="$($COMPOSE exec -T db psql -U "${POSTGRES_USER:-ct}" -d "${POSTGRES_DB:-calorytracker}" \
+              -qtAc "$sql" 2>/dev/null | tr -d '[:space:]')"
+    # An unreadable count is not a reason to refuse to deploy — it is a reason to
+    # say so and carry on, because the alternative is a script that cannot ship a
+    # fix while the thing it queries is broken.
+    [[ "$busy" =~ ^[0-9]+$ ]] || { warn "could not read turns in flight — recreating anyway"; return 0; }
+    (( busy == 0 )) && { say "no turns in flight"; return 0; }
+
+    say "$busy turn(s) in flight — waiting up to ${DRAIN}s for them to finish"
+    while (( busy > 0 && elapsed < DRAIN )); do
+        sleep 5
+        elapsed=$(( elapsed + 5 ))
+        busy="$($COMPOSE exec -T db psql -U "${POSTGRES_USER:-ct}" -d "${POSTGRES_DB:-calorytracker}" \
+                  -qtAc "$sql" 2>/dev/null | tr -d '[:space:]')"
+        [[ "$busy" =~ ^[0-9]+$ ]] || break
+        (( busy > 0 )) && printf '       %ss: still %s\n' "$elapsed" "$busy"
+    done
+
+    if [[ "$busy" =~ ^[0-9]+$ ]] && (( busy > 0 )); then
+        die "$busy turn(s) still in flight after ${DRAIN}s — nothing was recreated.
+      The images are built and the repo is at ${TARGET:0:8}; re-running picks up
+      where this left off and will be quick. To go ahead and cut them off:
+        bin/deploy.sh --ref ${TARGET:0:8} --no-drain"
+    fi
+    say "idle — recreating"
+}
+
+# Only worth waiting when something is actually going to be recreated. `up -d` on
+# an unchanged stack touches nothing, so there is nobody to protect from it.
+if [[ "$DRY" == 1 ]]; then
+    (( DRAIN > 0 )) && echo "       would wait up to ${DRAIN}s for turns in flight to finish"
+elif [[ -n "$CHANGED" ]] || (( ${#SERVICES[@]} )); then
+    wait_for_idle
 fi
 
 # up -d is a no-op for containers whose image and config are unchanged, which is
