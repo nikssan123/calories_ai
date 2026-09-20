@@ -181,7 +181,7 @@ export function FunnelPanel() {
                 const previous = previousStep ? count(previousStep).reached : null;
                 const lost = previous !== null && previous > 0 && row.reached / previous < 0.5;
                 return (
-                  <tr key={step} className="border-border border-t">
+                  <tr key={step} className="border-hairline border-t">
                     <td className="px-4 py-2 font-medium">{LABEL[step]}</td>
                     <td className="text-figure px-3 py-2 text-right">{row.reached}</td>
                     <td className="text-muted-foreground px-3 py-2 text-right">{row.ios}</td>
@@ -199,7 +199,7 @@ export function FunnelPanel() {
       </InsetGroup>
 
       <InsetGroup title="Beside the line">
-        <div className="divide-border divide-y">
+        <div className="divide-hairline divide-y">
           {BESIDE.map((step) => (
             <div key={step} className="flex items-center justify-between px-4 py-2 text-sm">
               <span className="font-medium">{LABEL[step]}</span>
@@ -225,7 +225,7 @@ export function FunnelPanel() {
               </thead>
               <tbody>
                 {LINE.map((step) => (
-                  <tr key={step} className="border-border border-t">
+                  <tr key={step} className="border-hairline border-t">
                     <td className="px-4 py-2 font-medium">{LABEL[step]}</td>
                     {versions.map((v) => (
                       <td key={v} className="text-figure px-3 py-2 text-right">

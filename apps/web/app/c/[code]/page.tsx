@@ -33,7 +33,7 @@ export default function InvitePage() {
         <h1 className="text-large-title">{t('invite.title')}</h1>
         <p className="text-body text-muted-foreground mt-2">{t('invite.body')}</p>
 
-        <div className="bg-card border-border chunk mt-8 rounded-2xl border-2 p-5 text-center">
+        <div className="bg-card border-hairline chunk mt-8 rounded-2xl border p-5 text-center">
           <p className="text-eyebrow text-muted-foreground">{t('invite.yourCode')}</p>
           <p className="tnum mt-1 font-[family-name:var(--font-display)] text-[34px] font-extrabold tracking-[0.12em]">
             {shown || '—'}

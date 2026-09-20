@@ -40,15 +40,15 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          'bg-card border-border chunk fixed top-1/2 left-1/2 z-50 w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2',
-          'max-h-[calc(100dvh-4rem)] overflow-y-auto rounded-[var(--radius)] border-2 outline-none',
+          'bg-card border-hairline chunk fixed top-1/2 left-1/2 z-50 w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2',
+          'max-h-[calc(100dvh-4rem)] overflow-y-auto rounded-[var(--radius)] border outline-none',
           'duration-150 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95',
           'data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95',
           className,
         )}
         {...props}
       >
-        <div className="border-border flex items-start justify-between gap-3 border-b-2 px-4 py-3">
+        <div className="border-hairline flex items-start justify-between gap-3 border-b px-4 py-3">
           <div className="min-w-0">
             <DialogPrimitive.Title className="text-body font-semibold">
               {title}

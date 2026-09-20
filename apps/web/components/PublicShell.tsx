@@ -52,7 +52,7 @@ export function PublicShell({
     <div className="bg-background flex min-h-screen flex-col">
       <DocumentScroll />
 
-      <header className="border-border sticky top-0 z-10 border-b-2 backdrop-blur-sm">
+      <header className="border-hairline sticky top-0 z-10 border-b backdrop-blur-sm">
         <div className={`mx-auto flex w-full ${width} items-center gap-3 px-5 py-3 sm:px-6`}>
           <Link href="/" className="flex shrink-0 items-center gap-2">
             <Logo size={24} />
@@ -83,7 +83,7 @@ export function PublicShell({
         </div>
       </main>
 
-      <footer className="border-border mt-8 border-t-2">
+      <footer className="border-hairline mt-8 border-t">
         <div className={`mx-auto w-full ${width} px-5 py-8 sm:px-6`}>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
             <Link href="/" className="flex items-center gap-2">

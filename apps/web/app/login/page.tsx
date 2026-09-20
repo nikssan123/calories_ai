@@ -232,7 +232,7 @@ export default function LoginPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoComplete="name"
-                className="bg-card border-border chunk h-12 rounded-[1.125rem] border-2 text-body"
+                className="bg-card border-hairline chunk h-12 rounded-[1.125rem] border text-body"
               />
             </div>
           )}
@@ -248,7 +248,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="email"
-              className="bg-card border-border chunk h-12 rounded-[1.125rem] border-2 text-body"
+              className="bg-card border-hairline chunk h-12 rounded-[1.125rem] border text-body"
             />
           </div>
 
@@ -264,7 +264,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-              className="bg-card border-border chunk h-12 rounded-[1.125rem] border-2 text-body"
+              className="bg-card border-hairline chunk h-12 rounded-[1.125rem] border text-body"
             />
             {mode === 'signup' ? (
               <p className="text-footnote text-muted-foreground">{t('auth.passwordHint')}</p>

@@ -281,8 +281,8 @@ function TablePicker({
   );
 
   return (
-    <div className="bg-card border-border chunk w-full shrink-0 overflow-hidden rounded-2xl border-2 lg:w-64">
-      <div className="border-border relative border-b-2">
+    <div className="bg-card border-hairline chunk w-full shrink-0 overflow-hidden rounded-2xl border lg:w-64">
+      <div className="border-hairline relative border-b">
         <Search
           size={15}
           className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 -translate-y-1/2"
@@ -307,7 +307,7 @@ function TablePicker({
           if (rows.length === 0) return null;
           return (
             <div key={group}>
-              <p className="text-eyebrow text-muted-foreground bg-muted/50 px-3 py-1.5">{group}</p>
+              <p className="text-eyebrow text-muted-foreground bg-muted-field px-3 py-1.5">{group}</p>
               {rows.map((table) => (
                 <button
                   key={table.name}
@@ -435,7 +435,7 @@ function Toolbar({
         value={userId ?? ''}
         onChange={(event) => onUserId(event.target.value || null)}
         aria-label="Filter to one account"
-        className="border-input bg-card h-9 max-w-[13rem] rounded-lg border-2 px-2 text-[0.9rem]"
+        className="field border-hairline h-9 max-w-[13rem] rounded-lg border px-2 text-[0.9rem]"
       >
         <option value="">Every account</option>
         {accounts.map((account) => (
@@ -449,7 +449,7 @@ function Toolbar({
         value={limit}
         onChange={(event) => onLimit(Number(event.target.value))}
         aria-label="Rows per page"
-        className="border-input bg-card tnum h-9 rounded-lg border-2 px-2 text-[0.9rem]"
+        className="field border-hairline tnum h-9 rounded-lg border px-2 text-[0.9rem]"
       >
         {PAGE_SIZES.map((size) => (
           <option key={size} value={size}>
@@ -494,7 +494,7 @@ function ColumnToggles({
   onAll: () => void;
 }) {
   return (
-    <div className="bg-card border-border flex flex-wrap items-center gap-1.5 rounded-2xl border-2 p-3">
+    <div className="bg-card border-hairline flex flex-wrap items-center gap-1.5 rounded-2xl border p-3">
       {fields.map((field) => {
         const off = hidden.includes(field.name);
         return (
@@ -555,7 +555,7 @@ function Grid({
 }) {
   if (page.rows.length === 0) {
     return (
-      <div className="bg-card border-border chunk rounded-2xl border-2 px-4 py-10 text-center">
+      <div className="bg-card border-hairline chunk rounded-2xl border px-4 py-10 text-center">
         <p className="text-body font-medium">
           {page.q || page.user_id ? 'Nothing matches that filter.' : 'This table is empty.'}
         </p>
@@ -569,12 +569,12 @@ function Grid({
   }
 
   return (
-    <div className="bg-card border-border chunk overflow-hidden rounded-2xl border-2">
+    <div className="bg-card border-hairline chunk overflow-hidden rounded-2xl border">
       <div className="max-h-[34rem] overflow-auto">
         <table className="w-full min-w-max border-collapse text-left">
           <thead className="sticky top-0 z-20">
             <tr>
-              <th className="bg-card border-border text-eyebrow text-muted-foreground sticky left-0 z-10 border-b-2 px-3 py-2 text-right">
+              <th className="bg-card border-hairline text-eyebrow text-muted-foreground sticky left-0 z-10 border-b px-3 py-2 text-right">
                 #
               </th>
               {fields.map((field) => {
@@ -582,7 +582,7 @@ function Grid({
                 return (
                   <th
                     key={field.name}
-                    className="bg-card border-border border-b-2 px-3 py-1.5 align-bottom whitespace-nowrap"
+                    className="bg-card border-hairline border-b px-3 py-1.5 align-bottom whitespace-nowrap"
                   >
                     <button
                       type="button"
@@ -612,7 +612,7 @@ function Grid({
               })}
             </tr>
           </thead>
-          <tbody className="divide-border divide-y-2">
+          <tbody className="divide-hairline divide-y">
             {page.rows.map((row, index) => (
               <tr
                 key={rowKey(page, row, index)}

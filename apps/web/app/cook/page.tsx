@@ -369,7 +369,7 @@ export default function CookPage() {
               type="button"
               onClick={() => setKitchenOpen((v) => !v)}
               aria-expanded={kitchenOpen}
-              className="bg-card border-border chunk-sm text-footnote hover:bg-muted/60 flex items-center gap-2 rounded-full border-2 px-3.5 py-2 font-semibold transition-colors"
+              className="bg-card border-hairline chunk-sm text-footnote hover:bg-muted-field flex items-center gap-2 rounded-full border px-3.5 py-2 font-semibold transition-colors"
             >
               <span aria-hidden>🧺</span>
               {fresh.length === 0 ? t('cook.kitchenEmpty') : t('cook.things')(fresh.length)}
@@ -488,7 +488,7 @@ export default function CookPage() {
             description={t('cook.anythingSpecificDesc')}
           >
             <Brief value={brief} onChange={setBrief} />
-            <div className="border-border border-t-2 p-3">
+            <div className="border-hairline border-t p-3">
               <Button
                 onClick={() => {
                   setBriefOpen(false);
@@ -517,7 +517,7 @@ export default function CookPage() {
               const next = values[0];
               if (next === 'ideas' || next === 'library') setTab(next);
             }}
-            className="bg-card border-border chunk-sm rounded-full border-2 p-1"
+            className="bg-card border-hairline chunk-sm rounded-full border p-1"
           >
             <ToggleGroupItem
               value="ideas"
@@ -541,7 +541,7 @@ export default function CookPage() {
               value={librarySearch}
               onChange={(e) => setLibrarySearch(e.target.value)}
               placeholder={t('cook.searchLibrary')}
-              className="bg-card border-border h-10 w-full rounded-full border-2 px-4 text-body sm:w-64"
+              className="bg-card border-hairline h-10 w-full rounded-full border px-4 text-body sm:w-64"
             />
           )}
         </div>

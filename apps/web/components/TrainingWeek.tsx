@@ -38,8 +38,8 @@ export function TrainingWeek({
           return (
             <li key={weekday} className="flex flex-col items-center gap-1">
               <span
-                className={`block size-4.5 rounded-full border-2 ${
-                  done ? 'bg-exercise border-exercise' : 'bg-muted/60 border-border'
+                className={`block size-4.5 rounded-full border ${
+                  done ? 'bg-exercise border-exercise' : 'bg-muted-field border-hairline'
                 }`}
               />
               <span className="text-muted-foreground text-[11px] leading-[14px] font-semibold">

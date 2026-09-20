@@ -109,7 +109,7 @@ export function Full({ value, field }: { value: unknown; field: TableField }) {
   }
   if (isBlock(value, field)) {
     return (
-      <pre className="bg-muted/60 text-foreground max-h-80 overflow-auto rounded-lg px-3 py-2 font-mono text-[12px] leading-relaxed whitespace-pre-wrap">
+      <pre className="bg-muted-field text-foreground max-h-80 overflow-auto rounded-lg px-3 py-2 font-mono text-[12px] leading-relaxed whitespace-pre-wrap">
         {full(value, field)}
       </pre>
     );

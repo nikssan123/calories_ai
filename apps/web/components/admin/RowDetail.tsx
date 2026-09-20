@@ -37,7 +37,7 @@ export function RowDetail({
           description={rowLabel(page.fields, row) ?? `${page.fields.length} columns`}
           className="max-w-2xl"
         >
-          <div className="divide-border divide-y-2">
+          <div className="divide-hairline divide-y">
             {page.fields.map((field) => (
               <div key={field.name} className="px-4 py-3">
                 <div className="mb-1 flex items-center gap-2">
@@ -77,7 +77,7 @@ export function RowDetail({
             ))}
           </div>
 
-          <div className="border-border flex items-center justify-between gap-3 border-t-2 px-4 py-3">
+          <div className="border-hairline flex items-center justify-between gap-3 border-t px-4 py-3">
             <p className="text-footnote text-muted-foreground">
               {page.redacted.length > 0
                 ? `Withheld: ${page.redacted.join(', ')}`

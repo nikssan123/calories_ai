@@ -8,6 +8,7 @@ import { distanceUnit, formatDay, formatDistance, formatNumber, toDistance } fro
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
+import { Glossy } from '@/components/icons/Glossy';
 import { TrainingWeek } from '@/components/TrainingWeek';
 import { Sparkline } from '@/components/Sparkline';
 import { Button } from '@/components/ui/button';
@@ -87,7 +88,7 @@ export default function ExercisePage() {
               const next = Number(values[0]);
               if (Number.isFinite(next)) setDays(next);
             }}
-            className="bg-card border-border chunk-sm rounded-full border-2 p-1"
+            className="bg-card border-hairline chunk-sm rounded-full border p-1"
           >
             {WINDOWS.map((w) => (
               <ToggleGroupItem
@@ -144,7 +145,7 @@ export default function ExercisePage() {
              untruncated line. That floor was pushing the phone layout wider
              than the screen and turning on sideways scrolling. */
           <div className="grid grid-cols-1 gap-7 lg:grid-cols-2 lg:items-start">
-            <InsetGroup title={t('exercise.consistencyTitle')}>
+            <InsetGroup title={t('exercise.consistencyTitle')} icon={<Glossy name="repeat" size={18} />}>
               <div className="px-4 pt-4 pb-3">
                 <div className="flex items-baseline gap-2">
                   <span className="text-figure text-large-title">{summary.active_days}</span>
@@ -172,7 +173,7 @@ export default function ExercisePage() {
                 />
               </div>
 
-              <div className="divide-border grid grid-cols-3 divide-x-2">
+              <div className="divide-hairline grid grid-cols-3 divide-x">
                 <Stat
                   label={t('exercise.burned')}
                   value={formatNumber(summary.total_kcal, locale)}
@@ -201,6 +202,7 @@ export default function ExercisePage() {
 
             <InsetGroup
               title={t('exercise.sessionsTitle')}
+              icon={<Glossy name="steps" size={18} />}
               footer={t('exercise.burnNote')(units === 'imperial' ? '4.5 miles' : '7km')}
             >
               {summary.entries.map((entry) =>

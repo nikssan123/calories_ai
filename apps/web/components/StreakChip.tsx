@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import type { Streak } from '@ct/shared';
+import { Glossy } from '@/components/icons/Glossy';
 import { useT } from '@/lib/i18n';
 
 /**
@@ -27,10 +28,15 @@ export function StreakChip({ streak, className = '' }: { streak: Streak; classNa
   return (
     <Link
       href="/achievements"
-      className={`hover:bg-muted/60 flex flex-col items-center gap-0.5 rounded-full px-2 py-0.5 transition-colors ${className}`}
+      className={`hover:bg-muted-field flex flex-col items-center gap-0.5 rounded-full px-2 py-0.5 transition-colors ${className}`}
     >
       <p className="flex items-center gap-1.5">
-        <span aria-hidden>{atRisk ? '🕯️' : '🔥'}</span>
+        {/* Dimmed rather than swapped for a candle: at risk is the same
+            streak with less life in it, and a different picture reads as a
+            different thing being measured. */}
+        <span aria-hidden className={atRisk ? 'opacity-45' : undefined}>
+          <Glossy name="streak" size={18} />
+        </span>
         {/* `streak.days` goes through `plural()`, which already puts the
             locale-formatted count in front of the noun. */}
         <span className="tnum text-foreground text-footnote font-extrabold">

@@ -12,11 +12,13 @@
  *
  * Four rules hold the whole system together:
  *
- *   1. Nothing here is a hairline. Cards carry a 2px outline and sit on a solid
- *      ledge of shadow — `chunk` below — so every surface has an edge you could
- *      pick up. That single decision is most of what separates this from a
- *      dashboard: thin strokes and floating rectangles read as instrumentation,
- *      chunky ones read as objects.
+ *   1. Depth is light, not an edge. Every surface carries a long warm shadow
+ *      held inside its own footprint and a one-pixel lit line along its top —
+ *      `chunk` below — so it reads as a thing the page is lighting rather than
+ *      a rectangle floating over it. This used to be a 2px tan outline on a
+ *      solid brown ledge, and the glow-up (GLOW-UP.md) swapped it; what carries
+ *      over unchanged is that a surface must always be an object. Thin strokes
+ *      and flat panes read as instrumentation.
  *
  *   2. Colour is loud, and it is loud in one direction. The macros are candy —
  *      mango, sky, grape, bubblegum — and the accent is a bright grass green.
@@ -27,9 +29,9 @@
  *
  *   3. Things move like they have weight. One spring with real overshoot for
  *      anything reporting a number, one pop for anything you touched, and a
- *      press that actually sinks the button into its own shadow. Motion is the
- *      cheapest playfulness there is and the easiest to overdo, so it is
- *      rationed to those three.
+ *      press where the surface gives under the thumb and its shadow draws in.
+ *      Motion is the cheapest playfulness there is and the easiest to overdo,
+ *      so it is rationed to those three.
  *
  *   4. Going over target is still not an alarm. The ring turns to ink, not to
  *      red — the signal is unmissable but it is not a telling-off.
@@ -60,15 +62,31 @@
   --primary: #12b76a;
   --primary-foreground: #31261e;
 
-  --secondary: #f5ebdd;
+  /*
+   * Wells, not tan slabs. Since the glow-up the fill behind a field, a chip or
+   * a track is a faint warm tint of the ink rather than an opaque beige, so it
+   * sits *into* whatever surface it is on — a white card, a glass one, the
+   * sky — instead of pasting a second colour of card on top of it.
+   */
+  --secondary: rgba(120, 90, 50, 0.07);
   --secondary-foreground: #31261e;
 
-  --muted: #f3e8d9;
+  --muted: rgba(120, 90, 50, 0.08);
   /* Secondary text. Clearly a step below --foreground, and still 4.9:1 on the
      cream ground and 5.4:1 on a white card. */
   --muted-foreground: #77685b;
 
-  --accent: #f5ebdd;
+  /*
+   * The two places the old tan survives, because they were never a tint of the
+   * ink: the wash under an expanded entry, and a text field sunk into a card
+   * one step darker than it. They were spelled `bg-muted/40` and `bg-muted/60`
+   * while `--muted` was opaque; now that it carries an alpha of its own, an
+   * alpha modifier on top of it would compound into nothing.
+   */
+  --muted-wash: rgba(243, 232, 217, 0.4);
+  --muted-field: rgba(243, 232, 217, 0.6);
+
+  --accent: rgba(120, 90, 50, 0.07);
   --accent-foreground: #31261e;
 
   /* Delete affordances only — never the over-target state. */
@@ -76,9 +94,11 @@
   --destructive-foreground: #ffffff;
 
   /*
-   * Solid warm tan rather than tinted ink. At 2px an alpha border turns grey
-   * and drags the whole page cold, which is exactly the "tech" look this
-   * palette is running from.
+   * Fields, and only fields, since the glow-up — a surface's edge is now the
+   * lit line `chunk` draws, and a divider inside one is `--hairline`. Solid
+   * warm tan rather than tinted ink: an alpha border at this weight turns grey
+   * and drags the whole page cold, which is the "tech" look this palette runs
+   * from.
    */
   --border: #eadcc9;
   --input: #e0cfb8;
@@ -91,7 +111,7 @@
    */
   --calories: #12b76a; /* grass — fills, arcs, bars, solid buttons */
   --calories-text: #07804f; /* 5.0:1 on white, 4.7:1 on cream */
-  --calories-deep: #0a7a48; /* the ledge under a green button */
+  --calories-deep: #0a7a48; /* the deep end of a green ramp */
 
   --protein: #ffa51f; /* mango */
   --protein-text: #a85a08;
@@ -118,12 +138,69 @@
   --material: rgba(255, 246, 236, 0.85);
 
   /*
-   * The ledge. A solid offset shadow — no blur — is what makes a surface read
-   * as a physical slab rather than a floating pane, and what gives a button
-   * somewhere to sink to when it is pressed. Kept as alpha so one value works
-   * over cream, over white, and over a photo.
+   * What used to be the ledge, and is now only the tint of a surface's shadow.
+   * See the `chunk` utility for why the slab went. Kept as alpha so one value
+   * works over cream, over white, and over a photo.
    */
   --chunk: rgba(49, 38, 30, 0.14);
+
+  /*
+   * That tint, at the weight a shadow is actually cast — and the same thing in
+   * the accent, for a surface that glows in its own colour rather than in the
+   * warm brown every neutral one casts. Spelled with the alpha baked in rather
+   * than mixed at use: `color-mix(…, transparent N%)` is premultiplied, so
+   * mixing a colour that already carries an alpha only makes it fainter.
+   */
+  --chunk-glow: rgba(49, 38, 30, 0.34);
+  --glow-primary: rgba(18, 183, 106, 0.5);
+
+  /*
+   * ---------------------------------------------------------------------
+   * Light, rather than edges.
+   *
+   * Everything below arrived with the glow-up (GLOW-UP.md, "depth"), which
+   * shipped in the app a fortnight before it reached here; these values are
+   * `apps/mobile/theme/colors.ts` read back, and the two files have to move
+   * together or the store screenshots stop matching the site again.
+   * ---------------------------------------------------------------------
+   */
+
+  /* A surface that lets the ground through: the sky, the washes, the mist. */
+  --glass: rgba(255, 255, 255, 0.62);
+  /* The same surface where the words on it have to win over what is behind. */
+  --glass-strong: rgba(255, 255, 255, 0.84);
+  /* The one-pixel lit edge along the top of every surface in the app. */
+  --glass-edge: rgba(255, 255, 255, 0.95);
+  /* A divider inside a surface. Quieter than --border, which still outlines
+     fields — a control somebody has to find and type into keeps its edge. */
+  --hairline: rgba(49, 38, 30, 0.08);
+
+  /*
+   * The resting shadow under a surface.
+   *
+   * Warm, long and faint: a brown shadow rather than a grey one, because a
+   * neutral shadow on cream reads as dirt. The negative spread keeps it inside
+   * the surface's own footprint, so a column of cards does not merge into one
+   * smudge the way a plain blur would.
+   */
+  --shadow: 0px 14px 30px -18px rgba(120, 80, 20, 0.42);
+
+  /* The ambient washes behind a whole screen. Three soft gradients, no object
+     in any of them — see --sky-* for the one place the app draws an hour. */
+  --ambient:
+    radial-gradient(120% 60% at 0% 0%, rgba(35, 211, 176, 0.13) 0%, rgba(35, 211, 176, 0) 60%),
+    radial-gradient(110% 55% at 100% 8%, rgba(255, 178, 80, 0.2) 0%, rgba(255, 178, 80, 0) 62%),
+    radial-gradient(120% 50% at 50% 100%, rgba(255, 150, 120, 0.1) 0%, rgba(255, 150, 120, 0) 70%);
+
+  /* The ink for words set directly on a sky that has gone dark. */
+  --sky-ink: #f6efe4;
+
+  /*
+   * The logo's ramp, for anything filled with the primary. Always laid over a
+   * solid `--primary` background, which stays the fallback for anything that
+   * cannot draw a gradient.
+   */
+  --primary-ramp: linear-gradient(135deg, #12b76a 0%, #23d3b0 100%);
 
   /*
    * The ring's own depth, which is no longer a ledge.
@@ -172,21 +249,24 @@
   --primary: #3ddc97;
   --primary-foreground: #1a1512;
 
-  --secondary: #322822;
+  --secondary: rgba(255, 255, 255, 0.07);
   --secondary-foreground: #f7efe6;
 
-  --muted: #322822;
+  --muted: rgba(255, 255, 255, 0.08);
   --muted-foreground: #a79a8d;
 
-  --accent: #322822;
+  --muted-wash: rgba(50, 40, 34, 0.4);
+  --muted-field: rgba(50, 40, 34, 0.6);
+
+  --accent: rgba(255, 255, 255, 0.07);
   --accent-foreground: #f7efe6;
 
   --destructive: #ff6a5c;
   --destructive-foreground: #1a1512;
 
   /* Lifted well clear of --card. On paper an outline can be a tint of the ink
-     it sits on; on a dark ground it has to be lighter than the surface or the
-     2px edge that carries this whole system simply is not there. */
+     it sits on; on a dark ground a field's edge has to be lighter than the
+     surface or it simply is not there. */
   --border: #4d3d33;
   --input: #5c4a3e;
   --ring: rgba(61, 220, 151, 0.55);
@@ -214,10 +294,28 @@
 
   --material: rgba(36, 29, 25, 0.85);
 
-  /* Opaque black. The ledge works by being darker than everything around it,
-     and on a #1a1512 ground half-black is only a few percent darker — the slabs
-     read as flat until this is pushed most of the way down. */
+  /* Still nearly black, though it is now only a shadow's tint: on a #1a1512
+     ground a half-black shadow is a few percent darker than the page and does
+     not separate a surface from it at all. */
   --chunk: rgba(0, 0, 0, 0.88);
+  --chunk-glow: rgba(0, 0, 0, 0.7);
+  --glow-primary: rgba(61, 220, 151, 0.55);
+
+  --glass: rgba(48, 38, 32, 0.62);
+  --glass-strong: rgba(40, 32, 27, 0.88);
+  --glass-edge: rgba(255, 255, 255, 0.09);
+  --hairline: rgba(255, 255, 255, 0.07);
+
+  /* A shadow barely registers on a ground this dark, so here the lit top edge
+     does the separating and this only has to stop a surface looking pasted on. */
+  --shadow: 0px 16px 32px -16px rgba(0, 0, 0, 0.75);
+
+  --ambient:
+    radial-gradient(120% 60% at 0% 0%, rgba(46, 230, 196, 0.08) 0%, rgba(46, 230, 196, 0) 60%),
+    radial-gradient(110% 55% at 100% 8%, rgba(255, 170, 70, 0.07) 0%, rgba(255, 170, 70, 0) 62%);
+
+  --sky-ink: #f6efe4;
+  --primary-ramp: linear-gradient(135deg, #3ddc97 0%, #2ee6c4 100%);
 
   --ring-track: color-mix(in oklch, var(--calories-deep), transparent 38%);
   --ring-glint: var(--logo-ramp);
@@ -239,11 +337,13 @@
     --popover-foreground: #f7efe6;
     --primary: #3ddc97;
     --primary-foreground: #1a1512;
-    --secondary: #322822;
+    --secondary: rgba(255, 255, 255, 0.07);
     --secondary-foreground: #f7efe6;
-    --muted: #322822;
+    --muted: rgba(255, 255, 255, 0.08);
     --muted-foreground: #a79a8d;
-    --accent: #322822;
+    --muted-wash: rgba(50, 40, 34, 0.4);
+    --muted-field: rgba(50, 40, 34, 0.6);
+    --accent: rgba(255, 255, 255, 0.07);
     --accent-foreground: #f7efe6;
     --destructive: #ff6a5c;
     --destructive-foreground: #1a1512;
@@ -265,6 +365,18 @@
     --logo-ramp: #2ee6c4;
     --material: rgba(36, 29, 25, 0.85);
     --chunk: rgba(0, 0, 0, 0.88);
+    --chunk-glow: rgba(0, 0, 0, 0.7);
+    --glow-primary: rgba(61, 220, 151, 0.55);
+    --glass: rgba(48, 38, 32, 0.62);
+    --glass-strong: rgba(40, 32, 27, 0.88);
+    --glass-edge: rgba(255, 255, 255, 0.09);
+    --hairline: rgba(255, 255, 255, 0.07);
+    --shadow: 0px 16px 32px -16px rgba(0, 0, 0, 0.75);
+    --ambient:
+      radial-gradient(120% 60% at 0% 0%, rgba(46, 230, 196, 0.08) 0%, rgba(46, 230, 196, 0) 60%),
+      radial-gradient(110% 55% at 100% 8%, rgba(255, 170, 70, 0.07) 0%, rgba(255, 170, 70, 0) 62%);
+    --sky-ink: #f6efe4;
+    --primary-ramp: linear-gradient(135deg, #3ddc97 0%, #2ee6c4 100%);
     --ring-track: color-mix(in oklch, var(--calories-deep), transparent 38%);
     --ring-glint: var(--logo-ramp);
     --ring-rim-lit: 0.3;
@@ -292,6 +404,8 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-muted-wash: var(--muted-wash);
+  --color-muted-field: var(--muted-field);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
@@ -299,6 +413,11 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-hairline: var(--hairline);
+  --color-glass: var(--glass);
+  --color-glass-strong: var(--glass-strong);
+  --color-glass-edge: var(--glass-edge);
+  --color-sky-ink: var(--sky-ink);
 
   --color-calories: var(--calories);
   --color-calories-text: var(--calories-text);
@@ -359,6 +478,18 @@
    */
   --font-display-cyrillic:
     var(--font-nunito), ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+
+  /*
+   * The editorial serif, for the sentences that matter — headlines, greetings,
+   * the question a screen is asking. See `app/layout.tsx` for which faces and
+   * why, and `apps/mobile/theme/typography.ts` for the twin of this decision.
+   *
+   * Georgia behind it rather than a generic `serif`: it is on every platform
+   * this app runs on, it is the nearest thing to Fraunces in a system stack,
+   * and a failed font load should not drop a headline into Times.
+   */
+  --font-serif: var(--font-fraunces), Georgia, 'Times New Roman', serif;
+  --font-serif-cyrillic: var(--font-literata), Georgia, 'Times New Roman', serif;
 }
 
 /*
@@ -384,14 +515,31 @@
   --font-display: var(--font-display-cyrillic);
 }
 
-:lang(bg) h1,
-:lang(bg) h2,
+/*
+ * The serif swaps on one more language than the display face does.
+ *
+ * Greek is absent from the list above because neither rounded face draws it and
+ * there is nothing to swap *to*. The serif is the opposite case: Literata has
+ * Greek, so a Greek headline has a real face waiting for it, and leaving it out
+ * would send the largest words on the page through the fallback for no reason.
+ */
+:root:lang(bg),
+:root:lang(uk),
+:root:lang(sr),
+:root:lang(el) {
+  --font-serif: var(--font-serif-cyrillic);
+}
+
+/*
+ * The weight moves with the face — but only where the face is still a rounded
+ * one. Baloo at 800 and Nunito at 800 are not the same colour on the page:
+ * Nunito's counters are more open, so it reads lighter at a given weight and
+ * needs the extra step to carry a figure. Headings are no longer in either
+ * face — Literata stands in for Fraunces at the same regular weight — so this
+ * is now about figures alone.
+ */
 :lang(bg) .text-figure,
-:lang(uk) h1,
-:lang(uk) h2,
 :lang(uk) .text-figure,
-:lang(sr) h1,
-:lang(sr) h2,
 :lang(sr) .text-figure {
   font-weight: 900;
 }
@@ -410,8 +558,21 @@
     overscroll-behavior-y: none;
   }
 
+  /*
+   * The ground, and the light falling on it.
+   *
+   * Three very soft radial washes over the cream — teal from the top left,
+   * apricot from the top right, a blush along the bottom — fixed to the
+   * viewport rather than to the document, so they are atmosphere the page moves
+   * through instead of a pattern that scrolls away on the first flick. There is
+   * no object in any of them; the only thing in this app that gives off light
+   * is the ring.
+   */
   body {
-    background: var(--background);
+    background-color: var(--background);
+    background-image: var(--ambient);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
     color: var(--foreground);
     font-family: var(--font-sans);
     /*
@@ -430,14 +591,13 @@
     overflow: hidden;
   }
 
-  /* Headings are set in the display face and set heavy. Rounded type at 800
-     is chunky rather than shouty — the weight is doing what a thick outline
-     does elsewhere in the system. */
+  /* Headings are set in the serif, at regular. See the type scale below for
+     why the weight is not doing any of the work any more. */
   h1,
   h2 {
-    font-family: var(--font-display);
-    font-weight: 800;
-    letter-spacing: -0.01em;
+    font-family: var(--font-serif);
+    font-weight: 400;
+    letter-spacing: -0.012em;
   }
 
   /*
@@ -509,83 +669,289 @@
 
 /*
  * ---------------------------------------------------------------------------
- * The ledge.
+ * A surface, lit.
  *
- * `chunk` draws a solid, unblurred offset shadow under a surface. `chunk-press`
- * adds the half of it that matters: on press the element travels exactly the
- * depth of its own shadow and the shadow goes to zero, so the thing lands flush
- * with the page instead of sliding around on top of it. Depth and colour are
- * custom properties, so a green button can sit on a dark green ledge and a card
- * on a tan one without either needing its own utility.
+ * `chunk` was the ledge: a solid, zero-blur slab offset under every surface,
+ * which made each card an object you could pick up — and made the whole app
+ * read as a stack of identical boxes on a flat sheet. The glow-up replaced it
+ * with light (GLOW-UP.md, "depth"): a long warm shadow held inside the
+ * surface's own footprint, and a one-pixel lit edge along its top.
+ *
+ * The API is the ledge's, unchanged, so the call sites did not have to learn
+ * anything. `--chunk-depth` still scales it, only now depth varies the way
+ * light does rather than by a fixed four pixels of brown; and `--chunk-color`,
+ * which used to be the slab under a green button, is now the tint of its glow,
+ * which keeps the thing you are meant to press the brightest object on screen.
+ *
+ * The three numbers are `Chunk.tsx`'s `light()`, which is where they were
+ * tuned: offset 2.5× the depth, blur 5.5×, and a negative spread of 3× that
+ * holds the shadow inside the footprint so a column of cards does not merge
+ * into one smudge.
  * ---------------------------------------------------------------------------
  */
 /*
  * Tailwind composes rings out of box-shadow, so a utility that sets box-shadow
  * outright would silently delete every focus ring it lands on. Each of these
- * re-declares the ring slots ahead of its own ledge; the fallbacks cover the
+ * re-declares the ring slots ahead of its own shadow; the fallbacks cover the
  * case where Tailwind has not registered the properties at all.
  */
 @utility chunk {
   box-shadow:
     var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
     var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000),
-    0 var(--chunk-depth, 4px) 0 0 var(--chunk-color, var(--chunk));
+    0 calc(var(--chunk-depth, 4px) * 2.5) calc(var(--chunk-depth, 4px) * 5.5)
+      calc(var(--chunk-depth, 4px) * -3) var(--chunk-color, var(--chunk-glow)),
+    inset 0 1px 0 0 var(--glass-edge);
 }
 
 @utility chunk-sm {
   box-shadow:
     var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
     var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000),
-    0 var(--chunk-depth, 2px) 0 0 var(--chunk-color, var(--chunk));
+    0 calc(var(--chunk-depth, 2px) * 2.5) calc(var(--chunk-depth, 2px) * 5.5)
+      calc(var(--chunk-depth, 2px) * -3) var(--chunk-color, var(--chunk-glow)),
+    inset 0 1px 0 0 var(--glass-edge);
 }
 
+/*
+ * The press used to travel the surface down into its own ledge. With no ledge
+ * there is nothing to travel into, so it settles instead: the surface gives a
+ * few percent under the thumb and its shadow draws in, which is what something
+ * lit from above does when it is pushed towards the thing it is lit against.
+ */
 @utility chunk-press {
   box-shadow:
     var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
     var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000),
-    0 var(--chunk-depth, 4px) 0 0 var(--chunk-color, var(--chunk));
+    0 calc(var(--chunk-depth, 4px) * 2.5) calc(var(--chunk-depth, 4px) * 5.5)
+      calc(var(--chunk-depth, 4px) * -3) var(--chunk-color, var(--chunk-glow)),
+    inset 0 1px 0 0 var(--glass-edge);
   transition:
     transform var(--dur-quick) var(--ease-out),
     box-shadow var(--dur-quick) var(--ease-out),
     background-color var(--dur-quick) var(--ease-out);
 
   &:active:not(:disabled):not([data-disabled]) {
-    transform: translateY(var(--chunk-depth, 4px));
+    transform: scale(0.97) translateY(1.5px);
     box-shadow:
       var(--tw-inset-shadow, 0 0 #0000), var(--tw-inset-ring-shadow, 0 0 #0000),
       var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000),
-      0 0 0 0 var(--chunk-color, var(--chunk));
+      0 calc(var(--chunk-depth, 4px) * 0.8) calc(var(--chunk-depth, 4px) * 1.8)
+        calc(var(--chunk-depth, 4px) * -1) var(--chunk-color, var(--chunk-glow)),
+      inset 0 1px 0 0 var(--glass-edge);
   }
 }
 
-/* Reserves the travel so a pressable control does not shift its neighbours. */
+/*
+ * Kept for the call sites that held the ledge's travel open, and inert: a
+ * shadow overhangs no neighbour, so there is nothing left to reserve. Same
+ * bargain as `reserve` on the app's `<Chunk>`.
+ */
 @utility chunk-slot {
-  margin-bottom: var(--chunk-depth, 4px);
+  margin-bottom: 0;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Glass, fields and wells. `Glass.tsx` and `Field.tsx`, spelled for the web.
+ * ---------------------------------------------------------------------------
+ */
+
+/*
+ * A surface that lets the light behind it through.
+ *
+ * `chunk` is an opaque card that happens to be lit; this is the thing it is
+ * named after, for the few places where there is something worth seeing through
+ * it — the sky over Today, the washes behind the landing's sections. Over a
+ * plain backdrop it is only a paler card, so it is not used there.
+ *
+ * No backdrop blur. A real one is the expensive half of glass, and over a sky
+ * made of three soft gradients there is nothing sharp for it to soften; the
+ * translucency and the lit edge carry the effect for the price of a background.
+ */
+/*
+ * Each of these sets a fill and a shadow and stops there: the edge stays a
+ * `border` utility at the call site, because a field's border-color is the one
+ * thing that has to change on focus and a shorthand here would be fighting
+ * `focus:border-ring` for who declared it last.
+ */
+@utility glass {
+  background-color: var(--glass);
+  box-shadow: var(--shadow), inset 0 1px 0 0 var(--glass-edge);
+}
+
+/* The same surface where the words on it have to win over what is behind. */
+@utility glass-strong {
+  background-color: var(--glass-strong);
+  box-shadow: var(--shadow), inset 0 1px 0 0 var(--glass-edge);
+}
+
+/*
+ * A field has to look like a field. Lit glass, the composer's own field in
+ * miniature: a pale surface with the page's warm shadow under it and the lit
+ * top edge every surface has, rather than a brown outline around a tinted well.
+ */
+@utility field {
+  background-color: var(--glass-strong);
+  box-shadow: var(--shadow), inset 0 1px 0 0 var(--glass-edge);
+}
+
+/*
+ * A small input inside a dense form — an item's grams, a search box in a list.
+ * A soft well rather than a lifted pill: eight shadows in a grid of numbers is
+ * a grid of shadows, and a well reads as "type here" without one.
+ */
+@utility well {
+  background-color: var(--muted-field);
+  box-shadow: inset 0 1px 0 0 var(--glass-edge);
+}
+
+/* The washes behind a whole screen. Painted on the element's own background so
+   a section can carry them without a fixed layer behind the document. */
+@utility ambient {
+  background-image: var(--ambient);
+}
+
+/*
+ * The sentence somebody sent.
+ *
+ * The one place in the conversation that is filled rather than lit from
+ * behind, and since the glow-up it is filled with the logo's own ramp — green
+ * running into jade — with a glow in the same colour under it. It is the
+ * warmest object in the column, which is the point: everything else there was
+ * written by the app, and this is the bit the reader said.
+ *
+ * A utility rather than a class string, because the journal, the landing's
+ * sample conversation and the hero demo all draw it, and three copies of a
+ * gradient is how two of them end up a different green.
+ */
+/*
+ * The one button a page is for.
+ *
+ * Green running into jade — the logo's own ramp — with a sheen that crosses it
+ * once every few seconds. It is the brightest object on any page it appears on,
+ * which is its entire job: everything around it is glass, so there is never a
+ * second candidate for where the cursor goes. Pair it with `chunk-press` for
+ * the glow and the give; this only supplies the fill and the sheen, so the two
+ * are not fighting over `box-shadow`.
+ *
+ * The label stays in the dark ink the rest of the app puts on green. White on
+ * this green is under 3:1, and the button that matters most is not the place to
+ * trade legibility for a look.
+ */
+@utility glow-button {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--primary);
+  background-image: var(--primary-ramp);
+  color: var(--primary-foreground);
+
+  /* The sheen carries no information, so there is no end state worth jumping
+     to; under reduced motion the base rule collapses it and it comes to rest
+     off the far edge, which is where it spends most of its life anyway. */
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.45) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    animation: sheen 3.7s var(--ease-out) infinite;
+    pointer-events: none;
+  }
+}
+
+@keyframes sheen {
+  0%,
+  64% {
+    transform: skewX(-20deg) translateX(-160%);
+  }
+  100% {
+    transform: skewX(-20deg) translateX(160%);
+  }
+}
+
+@utility bubble-sent {
+  background-color: var(--primary);
+  background-image: var(--primary-ramp);
+  color: var(--primary-foreground);
+  box-shadow:
+    0 10px 22px -12px var(--calories),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.45);
 }
 
 /*
  * ---------------------------------------------------------------------------
  * Type scale.
  *
- * Everything is a step heavier and a shade larger than the equivalent in a
+ * The body is a step heavier and a shade larger than the equivalent in a
  * grotesque, because rounded faces carry less ink at the same nominal weight.
+ *
+ * Titles are the exception, and since the glow-up they are not rounded at all.
+ * They were Baloo at 800, which is what made every screen open by shouting; set
+ * in the serif at regular weight the same words read as the app speaking
+ * (GLOW-UP.md, "editorial type"). Weight is deliberately left at 400 — it is
+ * the thing that would turn a moment back into a heading.
+ *
+ * Figures stay in the display face. That split is the whole point: the app
+ * talks in the serif and counts in Baloo, and a number set in a serif at 800
+ * is neither.
  * ---------------------------------------------------------------------------
  */
 
 @utility text-large-title {
-  font-family: var(--font-display);
+  font-family: var(--font-serif);
   font-size: 2.25rem; /* 36px */
-  line-height: 2.5rem;
-  font-weight: 800;
-  letter-spacing: -0.015em;
+  line-height: 1.14;
+  font-weight: 400;
+  letter-spacing: -0.017em;
 }
 
 @utility text-title-2 {
-  font-family: var(--font-display);
+  font-family: var(--font-serif);
   font-size: 1.4375rem; /* 23px */
-  line-height: 1.75rem;
-  font-weight: 800;
+  line-height: 1.2;
+  font-weight: 400;
+  letter-spacing: -0.0125em;
+}
+
+/*
+ * The serif's own three sizes, for the places that are a sentence rather than a
+ * label: a screen's opening line, a greeting, the question on an onboarding
+ * card. `apps/mobile/theme/typography.ts` calls them the same three names.
+ */
+@utility text-hero {
+  font-family: var(--font-serif);
+  font-size: 2.375rem; /* 38px */
+  line-height: 1.14;
+  font-weight: 400;
+  letter-spacing: -0.016em;
+}
+
+@utility text-greeting {
+  font-family: var(--font-serif);
+  font-size: 1.875rem; /* 30px */
+  line-height: 1.14;
+  font-weight: 400;
   letter-spacing: -0.01em;
+}
+
+@utility text-serif-title {
+  font-family: var(--font-serif);
+  font-size: 1.375rem; /* 22px */
+  line-height: 1.18;
+  font-weight: 400;
+  letter-spacing: -0.009em;
+}
+
+/* The one stressed word a serif line leans on. */
+@utility text-serif-italic {
+  font-family: var(--font-serif);
+  font-weight: 300;
+  font-style: italic;
 }
 
 /* The app's default reading size. Named rather than spelled `text-body` at
@@ -676,19 +1042,19 @@
  * hold a 375px phone and a 27" display without a breakpoint jump in the middle.
  */
 @utility text-display {
-  font-family: var(--font-display);
+  font-family: var(--font-serif);
   font-size: clamp(2.75rem, 7.5vw, 4.75rem);
-  line-height: 1.02;
-  font-weight: 800;
-  letter-spacing: -0.025em;
+  line-height: 1.06;
+  font-weight: 400;
+  letter-spacing: -0.02em;
 }
 
 @utility text-section-title {
-  font-family: var(--font-display);
+  font-family: var(--font-serif);
   font-size: clamp(1.875rem, 4.2vw, 2.75rem);
-  line-height: 1.1;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  line-height: 1.12;
+  font-weight: 400;
+  letter-spacing: -0.015em;
 }
 
 /* Body copy that sits under display type: one step up from the app's 16px. */
@@ -701,14 +1067,14 @@
 
 /*
  * Toasts. Sonner draws its own element, so the only way to bring it into the
- * system is to reach for its data attribute — a 1px bordered card sliding in
- * over a page of outlined slabs is the sort of small inconsistency that reads
- * as a bug rather than as a style.
+ * system is to reach for its data attribute — a flat card sliding in over a
+ * page of lit ones is the sort of small inconsistency that reads as a bug
+ * rather than as a style.
  */
 @layer base {
   [data-sonner-toast] {
-    border-width: 2px !important;
-    box-shadow: 0 5px 0 0 var(--chunk) !important;
+    border: 1px solid var(--glass-edge) !important;
+    box-shadow: var(--shadow), inset 0 1px 0 0 var(--glass-edge) !important;
     font-weight: 600;
   }
 }

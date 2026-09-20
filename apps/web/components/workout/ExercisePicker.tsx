@@ -122,7 +122,7 @@ export function ExercisePicker({
                 className={`text-footnote rounded-full px-3 py-1.5 transition-colors ${
                   on
                     ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted/60 hover:bg-muted text-muted-foreground'
+                    : 'bg-muted-field hover:bg-muted text-muted-foreground'
                 }`}
               >
                 {muscleLabel(key)}
@@ -157,7 +157,7 @@ export function ExercisePicker({
             onDefine?.(typed);
             setQuery('');
           }}
-          className="text-footnote hover:bg-muted/60 flex items-center gap-1.5 rounded-full border border-dashed px-3 py-1.5"
+          className="text-footnote hover:bg-muted-field flex items-center gap-1.5 rounded-full border border-dashed px-3 py-1.5"
         >
           <Plus size={13} />
           {t('workout.addNamed')(typed)}
@@ -195,7 +195,7 @@ function Chip({
     <button
       type="button"
       onClick={() => onPick(type)}
-      className={`bg-muted/60 hover:bg-muted text-footnote flex items-center gap-1.5 rounded-full py-1.5 pr-3 pl-2.5 ${
+      className={`bg-muted-field hover:bg-muted text-footnote flex items-center gap-1.5 rounded-full py-1.5 pr-3 pl-2.5 ${
         known ? 'ring-primary ring-1' : ''
       }`}
     >

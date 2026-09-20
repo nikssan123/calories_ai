@@ -42,7 +42,7 @@ export function Sidebar() {
   if (pathname === '/login') return null;
 
   return (
-    <aside className="border-border hidden w-64 shrink-0 flex-col border-r-2 lg:flex">
+    <aside className="border-hairline hidden w-64 shrink-0 flex-col border-r lg:flex">
       <div className="px-5 pt-6 pb-4">
         <div className="flex items-center gap-2.5">
           <Logo size={30} />
@@ -63,9 +63,9 @@ export function Sidebar() {
                   href={href}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'flex items-center gap-3 rounded-2xl border-2 px-3 py-2 text-body transition-colors',
+                    'flex items-center gap-3 rounded-2xl border px-3 py-2 text-body transition-colors',
                     active
-                      ? 'chunk border-border bg-card text-foreground font-extrabold [--chunk-depth:3px]'
+                      ? 'chunk border-hairline bg-card text-foreground font-extrabold [--chunk-depth:3px]'
                       : 'text-muted-foreground hover:bg-card/70 hover:text-foreground border-transparent font-bold',
                   )}
                 >
@@ -84,15 +84,15 @@ export function Sidebar() {
         {/* Kept out of TABS: admin is not a peer of the four product screens,
             and most accounts never see it. */}
         {isAdmin && (
-          <ul className="border-border mt-3 space-y-0.5 border-t-2 pt-3">
+          <ul className="border-hairline mt-3 space-y-0.5 border-t pt-3">
             <li>
               <Link
                 href="/admin"
                 aria-current={pathname === '/admin' ? 'page' : undefined}
                 className={cn(
-                  'flex items-center gap-3 rounded-2xl border-2 px-3 py-2 text-body transition-colors',
+                  'flex items-center gap-3 rounded-2xl border px-3 py-2 text-body transition-colors',
                   pathname === '/admin'
-                    ? 'chunk border-border bg-card text-foreground font-extrabold [--chunk-depth:3px]'
+                    ? 'chunk border-hairline bg-card text-foreground font-extrabold [--chunk-depth:3px]'
                     : 'text-muted-foreground hover:bg-card/70 hover:text-foreground border-transparent font-bold',
                 )}
               >

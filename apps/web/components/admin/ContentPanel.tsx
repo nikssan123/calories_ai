@@ -432,7 +432,7 @@ export function ContentPanel() {
                   key={locale}
                   title={job.errors[locale] ?? undefined}
                   className={cn(
-                    'text-footnote inline-flex h-6 min-w-[2.5rem] items-center justify-center rounded-full border-2 px-2 font-semibold uppercase',
+                    'text-footnote inline-flex h-6 min-w-[2.5rem] items-center justify-center rounded-full border px-2 font-semibold uppercase',
                     job.done.includes(locale) &&
                       'border-transparent bg-[var(--protein-text)] text-white',
                     job.failed.includes(locale) && 'border-destructive text-destructive',
@@ -440,7 +440,7 @@ export function ContentPanel() {
                     !job.done.includes(locale) &&
                       !job.failed.includes(locale) &&
                       job.current !== locale &&
-                      'border-border text-muted-foreground',
+                      'border-hairline text-muted-foreground',
                   )}
                 >
                   {locale}
@@ -511,14 +511,14 @@ export function ContentPanel() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Subject, in English — an internal label"
-              className="bg-card border-border h-10 w-full rounded-[var(--radius)] border-2 px-3 text-sm"
+              className="bg-card border-hairline h-10 w-full rounded-[var(--radius)] border px-3 text-sm"
             />
             <textarea
               value={brief}
               onChange={(e) => setBrief(e.target.value)}
               rows={5}
               placeholder="The brief. What to cover, what angle, what to avoid. Every language gets this same brief and then chooses its own query from it."
-              className="bg-card border-border w-full rounded-[var(--radius)] border-2 p-3 text-sm"
+              className="bg-card border-hairline w-full rounded-[var(--radius)] border p-3 text-sm"
             />
             <div className="flex justify-end gap-2">
               <Button
@@ -666,15 +666,15 @@ export function ContentPanel() {
                     <span
                       key={locale}
                       className={cn(
-                        'text-footnote inline-flex h-8 items-center rounded-full border-2 font-semibold uppercase',
+                        'text-footnote inline-flex h-8 items-center rounded-full border font-semibold uppercase',
                         isPicked && 'ring-foreground ring-2 ring-offset-1',
-                        !post && 'border-border text-muted-foreground',
+                        !post && 'border-hairline text-muted-foreground',
                         post?.status === 'draft' &&
                           'border-[var(--calories-text)] text-[var(--calories-text)]',
                         post?.status === 'published' &&
                           'border-transparent bg-[var(--protein-text)] text-white',
                         post?.status === 'binned' &&
-                          'border-border text-muted-foreground line-through',
+                          'border-hairline text-muted-foreground line-through',
                       )}
                     >
                       <button

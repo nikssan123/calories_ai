@@ -60,7 +60,7 @@ export default function AdminPage() {
           </p>
         </div>
 
-        <div className="bg-card border-border chunk-sm flex gap-1 rounded-full border-2 p-1">
+        <div className="bg-card border-hairline chunk-sm flex gap-1 rounded-full border p-1">
           {TABS.map((entry) => (
             <button
               key={entry.id}

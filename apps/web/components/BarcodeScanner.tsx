@@ -423,7 +423,7 @@ export function BarcodeScanner({
               />
             ) : (
               <div className="p-4">
-                <div className="bg-muted border-border relative aspect-[4/3] overflow-hidden rounded-[var(--radius)] border-2">
+                <div className="bg-muted border-hairline relative aspect-[4/3] overflow-hidden rounded-[var(--radius)] border">
                   <video
                     ref={videoRef}
                     playsInline
@@ -454,7 +454,7 @@ export function BarcodeScanner({
                       at what is outlined, and a barcode filling the middle
                       third decodes several frames sooner than one in a corner. */}
                   {!cameraFailed && stage.at === 'scanning' && (
-                    <div className="pointer-events-none absolute inset-x-8 top-1/2 h-24 -translate-y-1/2 rounded-xl border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
+                    <div className="pointer-events-none absolute inset-x-8 top-1/2 h-24 -translate-y-1/2 rounded-xl border border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
                   )}
                 </div>
 
@@ -480,7 +480,7 @@ export function BarcodeScanner({
                   makes the second visible.
                 */}
                 {attaching && (
-                  <div className="border-border mt-3 flex items-center justify-between gap-3 border-t-2 pt-3">
+                  <div className="border-hairline mt-3 flex items-center justify-between gap-3 border-t pt-3">
                     <p className="text-footnote text-muted-foreground min-w-0 truncate font-semibold">
                       {attachedCount === 0
                         ? t('barcode.nothingAddedYet')
@@ -1010,7 +1010,7 @@ function Stepper({
         <p className="text-body">{t('recipe.howMuch')}</p>
         {note && <p className="text-footnote text-muted-foreground mt-0.5">{note}</p>}
       </div>
-      <div className="bg-muted border-border flex shrink-0 items-center rounded-full border-2">
+      <div className="bg-muted border-hairline flex shrink-0 items-center rounded-full border">
         <button
           type="button"
           onClick={() => move(-(step ?? 1))}
@@ -1031,7 +1031,7 @@ function Stepper({
             sitting between two buttons reads as the stepper's readout — the
             same lesson every other field in the app already carries.
           */
-          <span className="border-input bg-card focus-within:border-ring flex h-8 w-[5.5rem] items-center justify-center gap-1 rounded-full border-2 px-2">
+          <span className="field border-hairline focus-within:border-ring flex h-8 w-[5.5rem] items-center justify-center gap-1 rounded-full border px-2">
             <input
               // Not `type="number"`: its spinners are a second, worse stepper
               // beside this one, and a scroll wheel over a focused one changes

@@ -150,7 +150,7 @@ export function Pantry({
           }}
           placeholder={t('pantry.addPlaceholder')}
           aria-label={t('pantry.addToList')}
-          className="bg-muted/60 border-border h-11 min-w-0 flex-1 rounded-full border-2 px-4 text-body"
+          className="bg-muted-field border-hairline h-11 min-w-0 flex-1 rounded-full border px-4 text-body"
         />
         <Button
           variant="secondary"
@@ -179,7 +179,7 @@ export function Pantry({
         have already vouched for.
       */}
       {stale.length > 0 && (
-        <section className="border-border bg-muted/40 rounded-2xl border-2 p-3">
+        <section className="border-hairline bg-muted-wash rounded-2xl border p-3">
           <h3 className="text-eyebrow mb-2 text-[var(--fat-text)]">
             {t('pantry.stillThere')(stale.length)}
           </h3>
@@ -295,7 +295,7 @@ function Chip({
   return (
     <span
       className={cn(
-        'border-border text-footnote flex max-w-full items-center gap-1 rounded-full border-2 py-1 pr-1 pl-3 font-semibold',
+        'border-hairline text-footnote flex max-w-full items-center gap-1 rounded-full border py-1 pr-1 pl-3 font-semibold',
         muted ? 'bg-muted' : 'bg-secondary',
       )}
     >

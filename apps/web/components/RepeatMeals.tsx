@@ -67,7 +67,7 @@ export function RepeatMeals({ onLogged }: { onLogged: () => void }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t('repeat.search')}
-          className="bg-muted/60 border-border h-10 rounded-full border-2 px-4 text-body"
+          className="bg-muted-field border-hairline h-10 rounded-full border px-4 text-body"
         />
       </div>
 

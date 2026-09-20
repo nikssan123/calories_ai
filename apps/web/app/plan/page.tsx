@@ -159,7 +159,7 @@ export default function PlanPage() {
                   ))}
                 </InsetGroup>
               ) : (
-                <div className="bg-card border-border chunk rounded-[var(--radius)] border-2 px-6 py-10 text-center">
+                <div className="bg-card border-hairline chunk rounded-[var(--radius)] border px-6 py-10 text-center">
                   <span aria-hidden className="animate-bob mb-3 block text-[40px] leading-none">
                     🗓️
                   </span>
@@ -211,7 +211,7 @@ export default function PlanPage() {
                     value={wants}
                     onChange={(e) => setWants(e.target.value)}
                     placeholder={t('plan.wantsPlaceholder')}
-                    className="bg-muted/60 border-border h-11 rounded-full border-2 px-4 text-body"
+                    className="bg-muted-field border-hairline h-11 rounded-full border px-4 text-body"
                   />
                 </div>
 
@@ -248,10 +248,10 @@ export default function PlanPage() {
                         aria-pressed={servings === n}
                         aria-label={t('plan.people')(n)}
                         className={cn(
-                          'size-9 rounded-full border-2 text-[13px] font-bold transition-colors',
+                          'size-9 rounded-full border text-[13px] font-bold transition-colors',
                           servings === n
                             ? 'bg-primary text-primary-foreground border-transparent'
-                            : 'border-border text-muted-foreground',
+                            : 'border-hairline text-muted-foreground',
                         )}
                       >
                         {n}
@@ -294,10 +294,10 @@ export default function PlanPage() {
                         aria-pressed={minutes === m}
                         aria-label={m === null ? t('plan.anyLength') : t('plan.minutesLabel')(String(m))}
                         className={cn(
-                          'h-9 rounded-full border-2 px-3 text-[13px] font-bold transition-colors',
+                          'h-9 rounded-full border px-3 text-[13px] font-bold transition-colors',
                           minutes === m
                             ? 'bg-primary text-primary-foreground border-transparent'
-                            : 'border-border text-muted-foreground',
+                            : 'border-hairline text-muted-foreground',
                         )}
                       >
                         {m === null ? t('plan.any') : t('plan.minutesShort')(String(m))}
@@ -536,7 +536,7 @@ function Shopping({
               if (e.key === 'Enter') void write();
             }}
             placeholder={t('shopping.placeholder')}
-            className="bg-muted/60 border-border h-11 rounded-xl border-2 px-3 text-body"
+            className="bg-muted-field border-hairline h-11 rounded-xl border px-3 text-body"
           />
           <Button
             variant="secondary"
@@ -577,10 +577,10 @@ function Shopping({
                       : t('shopping.tickOff')(item.name)
                   }
                   className={cn(
-                    'flex size-[22px] shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+                    'flex size-[22px] shrink-0 items-center justify-center rounded-full border transition-colors',
                     item.bought
                       ? 'bg-primary text-primary-foreground border-transparent'
-                      : 'border-border text-transparent',
+                      : 'border-hairline text-transparent',
                   )}
                 >
                   <Check size={13} strokeWidth={3} />

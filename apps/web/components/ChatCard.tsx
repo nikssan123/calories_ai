@@ -107,7 +107,7 @@ function Removed({ children }: { children: React.ReactNode }) {
 /** Actions with nothing to draw — a deletion — stay a line of text. */
 function Chip({ action }: { action: ChatAction }) {
   return (
-    <div className="bg-card border-border chunk animate-land flex items-center gap-2 rounded-full border-2 px-3.5 py-1.5 [--chunk-depth:2px]">
+    <div className="bg-card border-hairline chunk animate-land flex items-center gap-2 rounded-full border px-3.5 py-1.5 [--chunk-depth:2px]">
       <span
         className="size-2 shrink-0 rounded-full"
         style={{
@@ -305,7 +305,7 @@ function Shell({ children, className }: { children: React.ReactNode; className?:
   return (
     <div
       className={cn(
-        'bg-card border-border chunk animate-land rounded-[var(--radius)] border-2 px-4 py-3.5',
+        'bg-card border-hairline chunk animate-land rounded-[var(--radius)] border px-4 py-3.5',
         className,
       )}
     >
@@ -444,7 +444,7 @@ function FoodReceipt({
       </div>
 
       {total > 0 && (
-        <div className="bg-muted border-border mt-3 flex h-2.5 gap-px overflow-hidden rounded-full border">
+        <div className="bg-muted border-hairline mt-3 flex h-2.5 gap-px overflow-hidden rounded-full border">
           {energy.map((value, i) => (
             <div
               key={macros[i]!.label}
@@ -536,7 +536,7 @@ function DayProgress({
   const last = bands.length - 1;
 
   return (
-    <div className="border-border/70 mt-3 border-t-2 border-dashed pt-2.5">
+    <div className="border-hairline/70 mt-3 border-t border-dashed pt-2.5">
       <div
         role="img"
         aria-label={t('chat.dayProgressLabel')(
@@ -551,7 +551,7 @@ function DayProgress({
         // A hairline of track between the bands, exactly as the macro bar
         // above separates its three — it is what makes the day so far and this
         // meal read as two things rather than one two-tone one.
-        className="bg-muted border-border relative flex h-3 gap-px overflow-hidden rounded-full border"
+        className="bg-muted border-hairline relative flex h-3 gap-px overflow-hidden rounded-full border"
       >
         {bands.map((band, i) => (
           <div
@@ -1038,7 +1038,7 @@ function DayCard({ card }: { card: Extract<Card, { type: 'day' }> }) {
         </span>
       </div>
 
-      <div className="bg-muted border-border mt-2.5 h-2.5 overflow-hidden rounded-full border">
+      <div className="bg-muted border-hairline mt-2.5 h-2.5 overflow-hidden rounded-full border">
         <div
           className="h-full rounded-full"
           style={{
@@ -1141,12 +1141,12 @@ function ReviewCard({
                 : t('chat.kcalTitle')(formatNumber(day.kcal, locale))
             }
             className={cn(
-              'text-footnote flex h-[30px] flex-1 items-center justify-center rounded-[9px] border-2 font-bold',
+              'text-footnote flex h-[30px] flex-1 items-center justify-center rounded-[9px] border font-bold',
               day.hit
                 ? 'border-transparent'
                 : day.kcal !== null
                   ? 'bg-muted border-transparent'
-                  : 'text-muted-foreground border-border',
+                  : 'text-muted-foreground border-hairline',
             )}
             style={
               day.hit
@@ -1196,7 +1196,7 @@ function ReviewCard({
       </div>
 
       {card.target_change && (
-        <div className="bg-muted border-border mt-3.5 rounded-2xl border-2 px-3.5 py-3">
+        <div className="bg-muted border-hairline mt-3.5 rounded-2xl border px-3.5 py-3">
           <div className="tnum text-body flex items-center gap-2 font-bold">
             <span className="text-muted-foreground">
               {formatNumber(card.target_change.from_kcal, locale)}
@@ -1213,7 +1213,7 @@ function ReviewCard({
       )}
 
       {shown.length > 0 && (
-        <div className="border-border mt-3.5 flex flex-col gap-2.5 border-t-2 pt-3">
+        <div className="border-hairline mt-3.5 flex flex-col gap-2.5 border-t pt-3">
           {shown.map((paragraph, index) => (
             <p key={index} className="text-body leading-relaxed">
               {paragraph}

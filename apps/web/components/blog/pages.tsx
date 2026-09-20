@@ -191,7 +191,7 @@ export async function BlogPost({ locale, slug }: { locale: Locale; slug: string 
           * once and without a banner. It is the only place on the page that
           * asks for anything.
           */}
-        <aside className="border-border bg-card mt-14 rounded-[var(--radius)] border-2 p-5">
+        <aside className="border-hairline bg-card mt-14 rounded-[var(--radius)] border p-5">
           <p className="text-body font-semibold">Day So Far</p>
           <p className="text-footnote text-muted-foreground mt-1">{t('recipe.logItWithApp')}</p>
           <div className="mt-4">
@@ -209,7 +209,7 @@ export async function BlogPost({ locale, slug }: { locale: Locale; slug: string 
            * because a reader who wants the Bulgarian one is looking for
            * "Български", not for "Bulgarian".
            */
-          <nav className="border-border mt-10 border-t-2 pt-6">
+          <nav className="border-hairline mt-10 border-t pt-6">
             <h2 className="text-footnote text-muted-foreground font-semibold">{t('blog.alsoIn')}</h2>
             <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
               {others.map((alt) => (

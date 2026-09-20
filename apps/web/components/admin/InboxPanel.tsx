@@ -124,7 +124,7 @@ export function InboxPanel() {
                 </button>
 
                 {expanded && (
-                  <div className="border-border space-y-3 border-t-2 px-4 py-3.5">
+                  <div className="border-hairline space-y-3 border-t px-4 py-3.5">
                     <dl className="text-[13px]">
                       <Row label="From">
                         {email.from_name ? `${email.from_name} <${email.from_email}>` : email.from_email}
@@ -141,7 +141,7 @@ export function InboxPanel() {
                         The body could not be fetched: {email.body_error}
                       </p>
                     ) : (
-                      <pre className="bg-muted border-border max-h-96 overflow-auto rounded-2xl border-2 p-3 text-[13px] leading-relaxed whitespace-pre-wrap">
+                      <pre className="bg-muted border-hairline max-h-96 overflow-auto rounded-2xl border p-3 text-[13px] leading-relaxed whitespace-pre-wrap">
                         {email.text_body ?? htmlToText(email.html_body) ?? '(empty message)'}
                       </pre>
                     )}

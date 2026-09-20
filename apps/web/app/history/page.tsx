@@ -104,7 +104,7 @@ export default function HistoryPage() {
           <Skeleton className="h-80 w-full rounded-2xl" />
         ) : (
           <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start lg:gap-8">
-            <div className="bg-card border-border chunk rounded-[var(--radius)] border-2 p-3 sm:p-4">
+            <div className="bg-card border-hairline chunk rounded-[var(--radius)] border p-3 sm:p-4">
               <div className="text-footnote text-muted-foreground mb-1 grid grid-cols-7 gap-1.5">
                 {WEEKDAYS.map((label, i) => (
                   <div key={i} className="py-1 text-center font-bold">
@@ -176,7 +176,7 @@ export default function HistoryPage() {
               </InsetGroup>
 
               <InsetGroup title={t('history.thisMonthTitle')(t('history.thisMonth'))}>
-                <div className="divide-border grid grid-cols-3 divide-x-2">
+                <div className="divide-hairline grid grid-cols-3 divide-x">
                   <Stat label={t('history.logged')} value={`${logged.length}`} unit={t('history.days')} />
                   <Stat
                     label={t('history.avgIntake')}
@@ -308,7 +308,7 @@ function DayHoverCard({
       className={cn(
         'pointer-events-none absolute left-1/2 z-30 w-max max-w-[13rem] -translate-x-1/2',
         placeAbove ? 'bottom-full mb-2' : 'top-full mt-2',
-        'bg-popover text-popover-foreground border-border chunk rounded-2xl border-2 px-3.5 py-2.5',
+        'bg-popover text-popover-foreground border-hairline chunk rounded-2xl border px-3.5 py-2.5',
         'origin-center scale-95 opacity-0 transition-[opacity,transform]',
         'duration-[var(--dur-quick)] ease-[var(--ease-spring)]',
         'group-hover:scale-100 group-hover:opacity-100',

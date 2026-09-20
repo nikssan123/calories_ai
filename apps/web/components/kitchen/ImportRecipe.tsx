@@ -91,7 +91,7 @@ export function ImportRecipe({
               placeholder={t('import.placeholder')}
               rows={9}
               autoFocus
-              className="bg-muted/60 border-border resize-none rounded-2xl border-2 text-body"
+              className="bg-muted-field border-hairline resize-none rounded-2xl border text-body"
             />
             <Button
               onClick={() => void submit()}

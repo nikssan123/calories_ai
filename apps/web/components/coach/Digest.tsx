@@ -61,7 +61,7 @@ export function Digest() {
 
         <aside className="space-y-2">
           <p className="text-eyebrow text-muted-foreground px-1.5">Mondays</p>
-          <div className="bg-card border-border chunk divide-border divide-y-2 overflow-hidden rounded-2xl border-2">
+          <div className="bg-card border-hairline chunk divide-hairline divide-y overflow-hidden rounded-2xl border">
             <HistoryRow active={selected === 'preview'} onClick={() => setSelected('preview')} title="This week, as it stands" hint="preview" />
             {history.map((digest) => (
               <HistoryRow
@@ -88,7 +88,7 @@ function HistoryRow({ active, onClick, title, hint }: { active: boolean; onClick
       type="button"
       onClick={onClick}
       aria-current={active ? 'true' : undefined}
-      className={cn('block w-full px-4 py-3 text-left transition-colors', active ? 'bg-muted' : 'hover:bg-muted/60')}
+      className={cn('block w-full px-4 py-3 text-left transition-colors', active ? 'bg-muted' : 'hover:bg-muted-field')}
     >
       <span className="block text-[14px] font-extrabold">{title}</span>
       <span className="text-muted-foreground block text-[12px]">{hint}</span>
@@ -117,8 +117,8 @@ function Email({
   const first = name?.trim().split(/\s+/)[0];
 
   return (
-    <div className="bg-card border-border chunk max-w-2xl overflow-hidden rounded-2xl border-2">
-      <div className="border-border grid gap-1 border-b-2 px-5 py-4 text-[13px]">
+    <div className="bg-card border-hairline chunk max-w-2xl overflow-hidden rounded-2xl border">
+      <div className="border-hairline grid gap-1 border-b px-5 py-4 text-[13px]">
         <p><span className="text-muted-foreground inline-block w-16 font-extrabold">From</span> Day So Far Coach</p>
         <p><span className="text-muted-foreground inline-block w-16 font-extrabold">To</span> {email ?? '—'}</p>
         <p><span className="text-muted-foreground inline-block w-16 font-extrabold">Subject</span> {subject}</p>

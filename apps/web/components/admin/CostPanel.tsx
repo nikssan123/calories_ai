@@ -135,7 +135,7 @@ export function CostPanel() {
             title="If it were a product"
             footer="Mean spend per active user, multiplied out. Assumes new users behave like current ones — which for a tracker used by its own author is the assumption most likely to be wrong."
           >
-            <div className="divide-border grid grid-cols-3 divide-x-2">
+            <div className="divide-hairline grid grid-cols-3 divide-x">
               {economics.projection.map((tier) => (
                 <Stat
                   key={tier.users}
@@ -177,7 +177,7 @@ export function CostPanel() {
             title="Tokens"
             footer="Cache reads bill at a tenth of the input rate and writes at 1.25x, so they are tracked apart — folding them into input would misprice a turn by more than the turn costs."
           >
-            <div className="divide-border grid grid-cols-2 divide-x-2 lg:grid-cols-4">
+            <div className="divide-hairline grid grid-cols-2 divide-x lg:grid-cols-4">
               <Stat label="Input" value={compactNumber(totals.input_tokens)} />
               <Stat label="Output" value={compactNumber(totals.output_tokens)} />
               <Stat label="Cache read" value={compactNumber(totals.cache_read_tokens)} />
@@ -349,7 +349,7 @@ function DailySummary({ days }: { days: CostReport['by_day'] }) {
   const perActiveDay = activeDays ? spent / activeDays : 0;
 
   return (
-    <div className="divide-border grid grid-cols-3 divide-x-2">
+    <div className="divide-hairline grid grid-cols-3 divide-x">
       <Stat
         label="Per active day"
         value={usd(perActiveDay)}

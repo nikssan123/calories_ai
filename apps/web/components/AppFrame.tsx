@@ -75,7 +75,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   return (
     <div className="bg-background h-shell flex w-full overflow-hidden">
       <Sidebar />
-      <div className="border-border mx-auto flex h-full w-full max-w-lg min-w-0 flex-col overflow-hidden sm:border-x lg:mx-0 lg:max-w-none lg:border-x-0">
+      <div className="border-hairline mx-auto flex h-full w-full max-w-lg min-w-0 flex-col overflow-hidden sm:border-x lg:mx-0 lg:max-w-none lg:border-x-0">
         {children}
         <Nav />
       </div>

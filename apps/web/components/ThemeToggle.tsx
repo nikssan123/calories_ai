@@ -24,7 +24,7 @@ export function ThemeToggle({ className }: { className?: string }) {
     <div
       role="radiogroup"
       aria-label={t('theme.label')}
-      className={cn('bg-muted border-border grid grid-cols-3 gap-1 rounded-full border-2 p-1', className)}
+      className={cn('bg-muted border-hairline grid grid-cols-3 gap-1 rounded-full border p-1', className)}
     >
       {OPTIONS.map(({ value, label, Icon }) => {
         const active = theme === value;
@@ -40,7 +40,7 @@ export function ThemeToggle({ className }: { className?: string }) {
               'transition-[background-color,color,transform] duration-[var(--dur-quick)]',
               'focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none active:scale-95',
               active
-                ? 'bg-card text-foreground border-border chunk-sm border-2'
+                ? 'bg-card text-foreground border-hairline chunk-sm border'
                 : 'text-muted-foreground hover:text-foreground',
             )}
           >

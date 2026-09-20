@@ -22,6 +22,8 @@ Mockups: https://claude.ai/code/artifact/aed99166-bb22-4b1d-88fc-f1100da93e8f
 
 The tokens are ported from `apps/web/app/globals.css`. Retheme both places together, or the app and the site will drift apart.
 
+They did drift apart: the app shipped this on 2026-09-04 and the web followed on 2026-09-20, a fortnight during which the landing page advertised the interface we used to have. `WEB-GLOW-UP.md` is that catch-up, and it is also the map back — every value in `theme/colors.ts` now has a twin in `globals.css`, so the next change to either is a change to both.
+
 ## Onboarding before account creation
 Today `Gate()` in `apps/mobile/app/_layout.tsx` runs authenticated → emailVerified → needsSetup → onboarding. `lib/onboarding.tsx` calls `api.onboarding()`, which needs a session.
 

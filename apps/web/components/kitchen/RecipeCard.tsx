@@ -82,7 +82,7 @@ export function RecipeCard({
   }
 
   return (
-    <article className="bg-card overflow-hidden rounded-[var(--radius)] border-border chunk border-2">
+    <article className="bg-card overflow-hidden rounded-[var(--radius)] border-hairline chunk border">
       <div className="px-4 pt-3.5 pb-3">
         <div className="flex items-start justify-between gap-3">
           <h3 className="font-[family-name:var(--font-display)] text-[18px] leading-snug font-extrabold">{recipe.title}</h3>
@@ -144,7 +144,7 @@ export function RecipeCard({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="border-border text-footnote text-muted-foreground hover:text-foreground flex w-full items-center justify-between border-t-2 px-4 py-2.5"
+        className="border-hairline text-footnote text-muted-foreground hover:text-foreground flex w-full items-center justify-between border-t px-4 py-2.5"
         aria-expanded={open}
       >
         {open ? t('recipe.hideMethod') : t('recipe.howToMakeIt')(t('recipe.steps')(recipe.steps.length))}
@@ -152,7 +152,7 @@ export function RecipeCard({
       </button>
 
       {open && (
-        <div className="border-border space-y-3 border-t-2 px-4 py-3.5">
+        <div className="border-hairline space-y-3 border-t px-4 py-3.5">
           <div>
             <p className="text-eyebrow text-muted-foreground">
               {t('recipe.ingredientsMakes')(formatNumber(recipe.portions, locale))}
@@ -185,7 +185,7 @@ export function RecipeCard({
         </div>
       )}
 
-      <div className="border-border space-y-3 border-t-2 p-3">
+      <div className="border-hairline space-y-3 border-t p-3">
         <Servings value={servings} onChange={setServings} unit={t('recipe.portion')} />
         <Button onClick={() => void cook()} disabled={cooking} className="h-11 w-full rounded-full">
           {cooking

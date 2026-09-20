@@ -325,7 +325,7 @@ function Readout({
     >
       <div
         className={cn(
-          'bg-card border-border chunk-sm absolute w-max max-w-[70%] rounded-xl border-2 px-2.5 py-1.5',
+          'bg-card border-hairline chunk-sm absolute w-max max-w-[70%] rounded-xl border px-2.5 py-1.5',
           place === 'top' ? 'top-0' : 'bottom-0',
         )}
         style={{ left: `${pct}%`, transform: `translateX(-${shift}%)` }}

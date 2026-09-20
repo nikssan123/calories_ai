@@ -2,6 +2,7 @@
 
 import type { DayQuality } from '@ct/shared';
 import { QUALITY_COVERAGE_FLOOR, formatNumber } from '@ct/shared';
+import { Glossy } from '@/components/icons/Glossy';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
@@ -53,7 +54,12 @@ export function DietQuality({
   return (
     <section className={cn('space-y-2', className)}>
       <header className="flex items-baseline justify-between gap-3 px-1.5">
-        <h2 className="text-eyebrow text-muted-foreground">{t('quality.title')}</h2>
+        <h2 className="text-eyebrow text-muted-foreground flex items-center gap-1.5">
+          <span className="translate-y-[0.5px]">
+            <Glossy name="avocado" size={18} />
+          </span>
+          {t('quality.title')}
+        </h2>
         {partial && (
           <span className="text-footnote text-muted-foreground font-semibold">
             {t('quality.partlyMeasured')}
@@ -66,7 +72,7 @@ export function DietQuality({
           'grid grid-cols-2 gap-x-5 gap-y-4',
           flush
             ? 'px-1.5'
-            : 'bg-card border-border chunk rounded-[var(--radius)] border-2 px-4 py-4',
+            : 'bg-card border-hairline chunk rounded-[var(--radius)] border px-4 py-4',
         )}
       >
         {ROWS.map((row) => (
@@ -146,7 +152,10 @@ function QualityTrack({
         )}
       </div>
 
-      <div className="bg-muted border-border h-1.5 overflow-hidden rounded-full border">
+      {/* Flatter than the macro capsules and with no gloss on it, deliberately:
+          these four are the reading under the three, and a second row of lit
+          bars would put them on the same footing. */}
+      <div className="bg-muted-field h-1.5 overflow-hidden rounded-full">
         <div
           className="h-full rounded-full"
           style={{

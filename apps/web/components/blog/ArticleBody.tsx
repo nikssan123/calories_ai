@@ -71,7 +71,7 @@ function BlockView({ block }: { block: Block }) {
 
     case 'quote':
       return (
-        <blockquote className="border-border text-muted-foreground border-l-4 pl-4 italic">
+        <blockquote className="border-hairline text-muted-foreground border-l-4 pl-4 italic">
           {block.children.map(renderBlock)}
         </blockquote>
       );
@@ -94,7 +94,7 @@ function BlockView({ block }: { block: Block }) {
                 {block.head.map((cell, i) => (
                   <th
                     key={i}
-                    className="border-border border-b-2 px-3 py-2 text-left font-bold"
+                    className="border-hairline border-b px-3 py-2 text-left font-bold"
                     style={{ textAlign: block.align[i] ?? 'left' }}
                   >
                     {inline(cell)}
@@ -108,7 +108,7 @@ function BlockView({ block }: { block: Block }) {
                   {row.map((cell, c) => (
                     <td
                       key={c}
-                      className="border-border border-b px-3 py-2"
+                      className="border-hairline border-b px-3 py-2"
                       style={{ textAlign: block.align[c] ?? 'left' }}
                     >
                       {inline(cell)}
@@ -122,7 +122,7 @@ function BlockView({ block }: { block: Block }) {
       );
 
     case 'rule':
-      return <hr className="border-border my-8 border-t-2" />;
+      return <hr className="border-hairline my-8 border-t" />;
   }
 }
 

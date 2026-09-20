@@ -80,7 +80,7 @@ export function DietRules({
               'rounded-full px-3 py-1.5 text-footnote transition-colors',
               profile.diet === diet
                 ? 'bg-muted text-foreground ring-1 ring-[var(--calories-text)]'
-                : 'bg-muted/40 text-muted-foreground',
+                : 'bg-muted-wash text-muted-foreground',
             )}
           >
             {t(LABEL_KEYS[diet])}
@@ -88,7 +88,7 @@ export function DietRules({
         ))}
       </div>
 
-      <div className="border-border border-t-2 p-3">
+      <div className="border-hairline border-t p-3">
         <div className="flex items-center gap-2">
           <Input
             value={draft}
@@ -97,14 +97,14 @@ export function DietRules({
               if (e.key === 'Enter') addAvoid();
             }}
             placeholder={t('diet.avoidPlaceholder')}
-            className="bg-muted/60 border-border h-11 rounded-full border-2 px-4 text-body"
+            className="bg-muted-field border-hairline h-11 rounded-full border px-4 text-body"
           />
           <button
             type="button"
             onClick={addAvoid}
             disabled={!draft.trim()}
             aria-label={t('common.add')}
-            className="bg-muted border-border text-muted-foreground hover:text-foreground flex size-11 shrink-0 items-center justify-center rounded-full border-2 disabled:opacity-40"
+            className="bg-muted border-hairline text-muted-foreground hover:text-foreground flex size-11 shrink-0 items-center justify-center rounded-full border disabled:opacity-40"
           >
             <Plus size={18} />
           </button>
@@ -118,7 +118,7 @@ export function DietRules({
                 type="button"
                 onClick={() => void save({ avoids: profile.avoids.filter((a) => a !== item) })}
                 aria-label={t('diet.stopAvoiding')(item)}
-                className="bg-muted border-border hover:bg-secondary text-footnote flex items-center gap-1.5 rounded-full border-2 py-1 pr-2 pl-3 font-semibold"
+                className="bg-muted border-hairline hover:bg-secondary text-footnote flex items-center gap-1.5 rounded-full border py-1 pr-2 pl-3 font-semibold"
               >
                 {item}
                 <X size={12} className="text-muted-foreground" />

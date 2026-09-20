@@ -149,7 +149,7 @@ export function ClientWeek({ clientId }: { clientId: string }) {
                 {week.client.scope.meals ? 'Nothing logged this day.' : 'Meals are not shared.'}
               </p>
             ) : (
-              <ol className="divide-border divide-y-2">
+              <ol className="divide-hairline divide-y">
                 {day.food_entries.map((entry) => (
                   <MealRow key={entry.id} entry={entry} photoUrl={week.photo_urls[entry.photo_id ?? '']} timezone={week.client.timezone} />
                 ))}
@@ -207,7 +207,7 @@ function WeekStrip({
   return (
     <div className="relative grid grid-cols-7 gap-2.5" style={{ height: H + 52 }}>
       <div
-        className="border-foreground/45 pointer-events-none absolute right-0 left-0 border-t-2 border-dashed"
+        className="border-foreground/45 pointer-events-none absolute right-0 left-0 border-t border-dashed"
         style={{ bottom: 52 + Math.round((target / scale) * H) }}
       >
         <span className="text-muted-foreground absolute -top-5 right-0 text-[11px] font-extrabold">
@@ -226,7 +226,7 @@ function WeekStrip({
             type="button"
             onClick={() => onSelect(day.local_date)}
             aria-pressed={active}
-            className={cn('group flex h-full flex-col justify-end rounded-xl outline-none', active && 'bg-muted/60')}
+            className={cn('group flex h-full flex-col justify-end rounded-xl outline-none', active && 'bg-muted-field')}
             title={`${day.local_date}: ${Math.round(day.consumed.kcal)} kcal, ${Math.round(day.consumed.protein_g)} g protein`}
           >
             {logged ? (
@@ -236,7 +236,7 @@ function WeekStrip({
                 <span style={{ height: px(f), background: 'var(--fat)' }} />
               </span>
             ) : (
-              <span className="border-input h-7 rounded-lg border-2 border-dashed" />
+              <span className="border-hairline h-7 rounded-lg border border-dashed" />
             )}
             <span className="mt-2 text-center text-[12px] leading-tight">
               <span className={cn('tnum block font-extrabold', active && 'text-[var(--calories-text)]')}>
@@ -493,7 +493,7 @@ function NotesCard({ week }: { week: CoachClientWeek }) {
 
 function Card({ title, trailing, children }: { title: string; trailing?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="bg-card border-border chunk rounded-2xl border-2 px-5 py-4">
+    <section className="bg-card border-hairline chunk rounded-2xl border px-5 py-4">
       <header className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-title-2 text-[17px]">{title}</h2>
         {trailing}

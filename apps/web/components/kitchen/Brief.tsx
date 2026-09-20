@@ -79,12 +79,12 @@ export function BriefToggle({
     <button
       type="button"
       onClick={onClick}
-      className="text-footnote text-muted-foreground hover:text-foreground hover:bg-muted/60 flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 font-medium transition-colors"
+      className="text-footnote text-muted-foreground hover:text-foreground hover:bg-muted-field flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 font-medium transition-colors"
     >
       <SlidersHorizontal size={13} />
       {t('cook.anythingSpecific')}
       {active > 0 && (
-        <span className="bg-secondary border-border rounded-full border px-1.5 text-[11px] font-bold">
+        <span className="bg-secondary border-hairline rounded-full border px-1.5 text-[11px] font-bold">
           {active}
         </span>
       )}
@@ -126,7 +126,7 @@ export function Brief({
               onChange={(e) => set({ wants: e.target.value || undefined })}
               placeholder={t('brief.wantsPlaceholder')}
               maxLength={300}
-              className="bg-muted/60 border-border h-11 rounded-xl border-2 px-3 text-body"
+              className="bg-muted-field border-hairline h-11 rounded-xl border px-3 text-body"
             />
           </div>
 
@@ -214,7 +214,7 @@ function Chip({
         'rounded-full px-3 py-1.5 text-footnote capitalize transition-colors',
         on
           ? 'bg-muted text-foreground ring-1 ring-[var(--calories-text)]'
-          : 'bg-muted/40 text-muted-foreground',
+          : 'bg-muted-wash text-muted-foreground',
       )}
     >
       {children}
@@ -246,7 +246,7 @@ function Number({
             onChange(n === null || globalThis.Number.isNaN(n) ? null : n);
           }}
           placeholder="—"
-          className="bg-muted/60 border-border h-11 rounded-full border-2 pr-12 pl-4 text-body"
+          className="bg-muted-field border-hairline h-11 rounded-full border pr-12 pl-4 text-body"
         />
         <span className="text-footnote text-muted-foreground absolute top-1/2 right-3 -translate-y-1/2">
           {suffix}
