@@ -103,6 +103,15 @@ export function PublicShell({
               <Link href="/accuracy" className="hover:text-foreground">
                 {t('site.accuracy')}
               </Link>
+              {/*
+                * Support is in the sitemap and indexable and had, until now,
+                * zero inbound links from any of the 223 pages — reachable only
+                * from inside the signed-in app, which is the one audience that
+                * does not need to find it by search.
+                */}
+              <Link href="/support" className="hover:text-foreground">
+                {t('site.support')}
+              </Link>
               <Link href="/privacy" className="hover:text-foreground">
                 {t('auth.privacyPolicy')}
               </Link>

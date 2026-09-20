@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Loader2, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -162,6 +163,32 @@ export function RecipeClient({ recipe: initial }: { recipe: PublicLibraryRecipe 
               {t('recipe.logItWithApp')}
             </p>
             <StoreLinks />
+            {/*
+              * Somewhere to go next.
+              *
+              * These ninety-nine pages had exactly two links each — the back
+              * link and the Play Store — and were reachable only from
+              * /cook/library. That is ninety-nine leaves hanging off one branch
+              * with nothing tying them to the rest of the site: a reader who
+              * lands on a recipe from a search result can reach the app or go
+              * back, and nothing else, and a crawler is told these pages relate
+              * to nothing. Four links, on the half of the page a visitor sees
+              * rather than a cook.
+              */}
+            <nav className="border-hairline text-footnote text-muted-foreground mt-2 flex flex-wrap gap-x-4 gap-y-2 border-t pt-3">
+              <Link href="/cook/library" className="hover:text-foreground underline underline-offset-2">
+                {t('recipe.allRecipes')}
+              </Link>
+              <Link href="/blog" className="hover:text-foreground underline underline-offset-2">
+                {t('blog.title')}
+              </Link>
+              <Link href="/how-it-works" className="hover:text-foreground underline underline-offset-2">
+                {t('site.howItWorks')}
+              </Link>
+              <Link href="/accuracy" className="hover:text-foreground underline underline-offset-2">
+                {t('site.accuracy')}
+              </Link>
+            </nav>
           </div>
         ) : (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">

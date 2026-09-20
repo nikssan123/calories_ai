@@ -5,11 +5,12 @@ import { ORIGIN } from '@/lib/seo';
  * Schema.org JSON-LD, built from data the app already holds.
  *
  * One rule runs through all of it: a property is emitted only when there is a
- * real value behind it. Google treats structured data that disagrees with the
- * page as a reason to distrust the page, and an invented `aggregateRating` is
- * the specific version of that which earns a manual action — so `rating` is
- * emitted only alongside the `rating_count` the source published, and the whole
- * block is dropped when either is missing.
+ * real value behind it, *and* the page shows the same thing. The second half is
+ * the one that had to be learned. An invented `aggregateRating` earns a manual
+ * action, which this file guarded against from the start — but so does a
+ * truthful one that belongs to another site's readers and appears nowhere on the
+ * page, which is what the recipe block shipped ninety-nine times. See the note
+ * in `recipeSchema`.
  */
 
 /** Serialisable JSON-LD, for `dangerouslySetInnerHTML`. */
@@ -163,17 +164,74 @@ export function recipeSchema(recipe: PublicLibraryRecipe, path: string) {
     },
     author: { '@type': 'Organization', name: recipe.source },
     ...(recipe.source_url ? { citation: recipe.source_url } : {}),
-    // Both halves or neither — see the note at the top of this file.
-    ...(recipe.rating !== null && recipe.rating_count !== null && recipe.rating_count > 0
-      ? {
-          aggregateRating: {
-            '@type': 'AggregateRating',
-            ratingValue: String(recipe.rating),
-            ratingCount: String(recipe.rating_count),
-          },
-        }
-      : {}),
+    /*
+     * No `aggregateRating`, and `recipe.rating` / `recipe.rating_count` are
+     * deliberately left unread.
+     *
+     * They are real numbers, which is what made this look safe: each is the
+     * rating myplate.gov's own readers gave that recipe, carried across with the
+     * rest of the row. But Google's review-snippet policy is not about whether a
+     * rating is invented — it is about whose rating it is and whether the page
+     * shows it. "The aggregateRating must reflect the experiences of users on
+     * your website", and this site has no review mechanism at all: strip the
+     * scripts from any of the ninety-nine pages and neither the value nor the
+     * count appears anywhere in the visible text. Ninety-nine pages claiming
+     * stars they never display, for reviews left on somebody else's site, is the
+     * shape of a structured-data manual action.
+     *
+     * So it goes, rather than being replaced with something plausible. The stars
+     * come back if this site ever collects its own — or if the source's rating is
+     * one day rendered on the page and attributed to it, which would make the
+     * claim true and is the other legitimate way out.
+     */
     isPartOf: { '@id': `${ORIGIN}/#website` },
+  };
+}
+
+/**
+ * A fixed page: what kind of page it is, when it last changed, and the trail to
+ * it.
+ *
+ * The six document pages — `/about`, `/accuracy`, `/how-it-works`, `/support`,
+ * `/privacy`, `/terms` — carried nothing but the sitewide `Organization` and
+ * `WebSite` nodes: no page-level type at all, and no breadcrumb, while the
+ * recipes and every blog post had one. The `updated` date is the same string the
+ * page already prints under its heading, so the markup and the visible text
+ * cannot drift.
+ *
+ * `@type` is passed in because these are not all the same kind of thing:
+ * `AboutPage` for `/about`, `ContactPage` for `/support`, `WebPage` for the rest.
+ * Google does nothing special with any of them; a crawler building an entity
+ * graph does.
+ */
+export function documentSchema({
+  type = 'WebPage',
+  name,
+  path,
+  description,
+  updated,
+}: {
+  type?: 'WebPage' | 'AboutPage' | 'ContactPage';
+  name: string;
+  path: string;
+  description: string;
+  updated: string;
+}) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': type,
+    '@id': absolute(path),
+    url: absolute(path),
+    name,
+    description,
+    dateModified: updated,
+    inLanguage: 'en',
+    isPartOf: { '@id': `${ORIGIN}/#website` },
+    publisher: { '@id': `${ORIGIN}/#organization` },
+    breadcrumb: breadcrumbSchema([
+      { name: 'Day So Far', path: '/' },
+      { name, path },
+    ]),
   };
 }
 

@@ -12,6 +12,13 @@ const config: NextConfig = {
   // pnpm workspaces symlink into the repo root, so tracing has to start there
   // or the standalone build misses @ct/shared and @ct/api-client.
   outputFileTracingRoot: path.join(here, '../..'),
+  /*
+   * Don't announce the framework and its major version on every response.
+   *
+   * `x-powered-by: Next.js` is free reconnaissance — it tells anyone scanning
+   * which CVE list to read. Nothing in the stack reads the header.
+   */
+  poweredByHeader: false,
 };
 
 export default config;

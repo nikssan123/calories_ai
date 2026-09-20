@@ -1,5 +1,20 @@
+import { LOCALES } from '@ct/shared';
 import { publicLibrary } from '@/lib/public-api';
+import { blogIndexPath } from '@/lib/blog';
 import { ORIGIN } from '@/lib/seo';
+
+/**
+ * The blog's thirteen addresses, so an agent reading this file can reach the
+ * language it wants rather than only the English index.
+ *
+ * This file listed five pages: Home, Recipes, Support, Privacy, Terms. It
+ * omitted the ninety-one blog posts — which are the only content here shaped
+ * like the questions an answer engine gets asked — along with /accuracy and
+ * /how-it-works, which are the two pages that say anything checkable about the
+ * product. llms.txt is meant to be the high-signal index; as shipped it pointed
+ * at the boilerplate and hid the evidence.
+ */
+const LOCALE_LIST = LOCALES.map((locale) => `${ORIGIN}${blogIndexPath(locale)}`).join(', ');
 
 /*
  * Rendered on demand, with the upstream call cached for an hour.
@@ -58,6 +73,10 @@ ${ORIGIN}, published by FornaxElit.
 ## Pages
 
 - [Home](${ORIGIN}/): what it does, how the logging works, pricing
+- [How it works](${ORIGIN}/how-it-works): what reads the sentence, where the nutrition figures come from (USDA FoodData Central, Open Food Facts), and how the daily target is calibrated against weight trend rather than a formula
+- [Accuracy](${ORIGIN}/accuracy): measured error rates by logging method against weighed ground truth — 30 plates from the Nutrition5k research dataset, each estimated three times in four configurations, with the mean absolute percentage error published per configuration and the things not yet measured named as such
+- [About](${ORIGIN}/about): who builds and pays for it, what is claimed and what is not
+- [Blog](${ORIGIN}/blog): articles on calorie counting — estimating a homemade dish, whether to eat back exercise calories, finding real maintenance intake, logging after a gap, and why a tracked deficit can still not move the scale. Published in thirteen languages, each written for that language's own search rather than translated: ${LOCALE_LIST}
 - [Recipes](${ORIGIN}/cook/library): ${recipes.length} public-domain recipes from USDA MyPlate Kitchen, each with ingredients, method and measured per-serving nutrition
 - [Support](${ORIGIN}/support): cancelling, refunds, restoring a purchase, deleting an account
 - [Privacy](${ORIGIN}/privacy): what is recorded, who it reaches, how long it is kept

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { publicLibrary } from '@/lib/public-api';
 import { breadcrumbSchema, jsonLd } from '@/lib/schema';
-import { ORIGIN } from '@/lib/seo';
+import { OG_IMAGE, ORIGIN, clampDescription, withBrand } from '@/lib/seo';
 import { PublicShell } from '@/components/PublicShell';
 
 /*
@@ -28,10 +28,17 @@ const DESCRIPTION =
   'Every recipe in the Day So Far starter library — ingredients, method, and measured calories and macros per serving. Public-domain recipes from USDA MyPlate Kitchen.';
 
 export const metadata: Metadata = {
-  title: 'Recipes — Day So Far',
-  description: DESCRIPTION,
+  title: withBrand('Recipes with calories and macros per serving'),
+  description: clampDescription(DESCRIPTION),
   alternates: { canonical: '/cook/library' },
-  openGraph: { title: 'Recipes — Day So Far', description: DESCRIPTION, url: '/cook/library' },
+  openGraph: {
+    title: 'Recipes with calories and macros per serving',
+    description: clampDescription(DESCRIPTION),
+    url: '/cook/library',
+    // Without this the file-based card is dropped, because declaring an
+    // `openGraph` object at all suppresses it. See OG_IMAGE in lib/seo.ts.
+    images: [OG_IMAGE],
+  },
 };
 
 export default async function LibraryIndexPage() {

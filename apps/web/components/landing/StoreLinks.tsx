@@ -89,7 +89,10 @@ export function StoreLinks({
             href={localized(href, locale)}
             target="_blank"
             rel="noreferrer"
-            className="hover:text-foreground inline-flex items-center gap-1.5 transition-colors"
+            /* `-my-2 py-2` gives the row a 40px hit area without moving it:
+               the label itself renders 24px tall, and this is one of the two
+               links on the site that actually leads to a download. */
+            className="hover:text-foreground -my-2 inline-flex items-center gap-1.5 py-2 transition-colors"
           >
             {face}
           </a>

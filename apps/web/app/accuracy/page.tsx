@@ -1,15 +1,22 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { OG_IMAGE, withBrand } from '@/lib/seo';
+import { DocumentSchema } from '@/components/legal/DocumentSchema';
 import { Clause, LegalPage, List, Out, P, Row, Rows, Sub } from '@/components/legal/LegalPage';
 
 const DESCRIPTION =
   'How accurate Day So Far is, measured rather than asserted: error rates by logging method against weighed ground truth, the bias in photo estimates, and what has not been measured yet.';
 
 export const metadata: Metadata = {
-  title: 'Accuracy — Day So Far',
+  title: withBrand('How accurate is AI calorie counting? The measured error'),
   description: DESCRIPTION,
   alternates: { canonical: '/accuracy' },
-  openGraph: { title: 'Accuracy — Day So Far', description: DESCRIPTION, url: '/accuracy' },
+  openGraph: {
+    title: 'How accurate is AI calorie counting?',
+    description: DESCRIPTION,
+    url: '/accuracy',
+    images: [OG_IMAGE],
+  },
 };
 
 /**
@@ -25,7 +32,15 @@ export const metadata: Metadata = {
  */
 export default function AccuracyPage() {
   return (
-    <LegalPage
+    <>
+      <DocumentSchema
+        type="WebPage"
+        name="Accuracy"
+        path="/accuracy"
+        description={DESCRIPTION}
+        updated="2026-09-12"
+      />
+      <LegalPage
       title="Accuracy"
       summary="Every number this app gives you is an estimate, and the estimates carry real error. Here is how much, measured against food that was weighed on a scale — including the result that is worst, and the parts that have not been measured properly yet."
       updated="2026-09-12"
@@ -148,6 +163,7 @@ export default function AccuracyPage() {
           <Link href="/terms">terms</Link>.
         </P>
       </Clause>
-    </LegalPage>
+      </LegalPage>
+    </>
   );
 }

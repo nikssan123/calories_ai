@@ -61,6 +61,9 @@ export function LegalPage({
 
         <footer className="border-hairline text-muted-foreground mt-16 flex flex-col gap-3 border-t pt-8 text-sm sm:flex-row sm:items-center sm:justify-between">
           <nav className="flex items-center gap-6">
+            <Link href="/support" className="hover:text-foreground transition-colors">
+              Support
+            </Link>
             <Link href="/privacy" className="hover:text-foreground transition-colors">
               Privacy
             </Link>

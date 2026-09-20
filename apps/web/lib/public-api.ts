@@ -89,12 +89,19 @@ export async function publicPost(locale: Locale, slug: string): Promise<PublicPo
   return get<PublicPost>(`/public/posts/${locale}/${encodeURIComponent(slug)}`);
 }
 
-/** Every published post in every language, for the sitemap. */
+/**
+ * Every published post in every language, for the sitemap.
+ *
+ * `topic_id` is the cluster key: one topic is one subject with one post per
+ * language, which is precisely what an hreflang group is. The reader-facing
+ * endpoint hands each post its own `alternates`; the sitemap needs all of them
+ * at once and groups these rows instead.
+ */
 export async function publicPostSitemap(): Promise<
-  { locale: Locale; slug: string; updated_at: string }[]
+  { topic_id: string; locale: Locale; slug: string; updated_at: string }[]
 > {
-  const body = await get<{ posts: { locale: Locale; slug: string; updated_at: string }[] }>(
-    '/public/posts',
-  );
+  const body = await get<{
+    posts: { topic_id: string; locale: Locale; slug: string; updated_at: string }[];
+  }>('/public/posts');
   return body?.posts ?? [];
 }

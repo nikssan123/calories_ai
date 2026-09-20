@@ -45,6 +45,28 @@ export function isBlogPath(pathname: string): boolean {
 }
 
 /**
+ * The `alternates.languages` map for the blog *index*, in all thirteen.
+ *
+ * Computed from the locale list rather than from the posts, and that is the
+ * point: this map is built inside `generateMetadata`, and a version that had to
+ * await the post list would make the metadata genuinely async — which is how
+ * Next decides to stream `<title>` into the body instead of the head. The whole
+ * reason the index pages kept their metadata in `<head>` while the post pages
+ * lost theirs is that nothing here waits on anything. Keep it that way.
+ *
+ * Every index is a real 200 in every language, so no member of this cluster is a
+ * claim about a page that does not exist. A language with no posts yet renders
+ * `blog.empty` — thin, which is why sitemap.ts declines to *advertise* it, but
+ * not absent, and a cluster naming it is still telling the truth.
+ */
+export function blogIndexHreflang(): Record<string, string> {
+  const languages: Record<string, string> = {};
+  for (const locale of LOCALES) languages[locale] = blogIndexPath(locale);
+  languages['x-default'] = blogIndexPath(DEFAULT_LOCALE);
+  return languages;
+}
+
+/**
  * The `alternates.languages` map for one post.
  *
  * `x-default` points at English when English exists, and otherwise at whatever

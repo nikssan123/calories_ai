@@ -139,8 +139,19 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  // The composer is fixed to the bottom; stop iOS zooming the page on focus.
-  maximumScale: 1,
+  /*
+   * No `maximumScale`.
+   *
+   * It was here to stop iOS zooming the page when the composer takes focus, and
+   * it did — by disabling pinch-zoom for everyone, on every page, including the
+   * blog and the recipe library. That is a WCAG 1.4.4 failure and it was being
+   * paid sitewide to fix one input on one screen.
+   *
+   * The zoom-on-focus it was guarding against only happens when the focused
+   * field's text is under 16px, so the fix belongs on the field: keep the
+   * composer's font-size at 16px or more and iOS leaves the viewport alone. If
+   * the zoom ever comes back, that is the thing to check — not this line.
+   */
   // Chrome shrinks the layout viewport for the keyboard rather than painting it
   // over the page. iOS ignores this — see <KeyboardInset>.
   interactiveWidget: 'resizes-content',
