@@ -746,11 +746,19 @@ compiler happens to flush it.
 
 ### Not done, and why
 
-- **The 14 index pages** (`/blog`, the 12 `/{locale}/blog`, `/cook/library`) keep
-  `force-dynamic` and stay uncacheable. The `generateStaticParams` trick needs a
-  dynamic segment; these have none, so `revalidate` there would prerender them at
-  build time in a container with no API — the original bug. 204 uncacheable pages
-  down to 14.
+- **`/blog` and `/cook/library`** keep `force-dynamic`, stay uncacheable, and stream
+  their metadata. The `generateStaticParams` trick needs a dynamic segment and these
+  two have none, so `revalidate` would prerender them at build time in a container
+  with no API — the original bug. 204 uncacheable pages down to 2.
+
+  The 12 `/{locale}/blog` indexes *do* have a segment (`[locale]`) and got the same
+  fix in a follow-up. That was worth doing for a reason the first pass missed:
+  metadata placement on a streamed route is **a race, not a property**. Measured on
+  production, `/de/blog` served its title inside `<head>` on one request and in the
+  body on the next. It is also why this audit's own crawl reported all 13 indexes
+  correct and `/cook/library` broken — that table was a snapshot of a coin flip. Any
+  page still on `force-dynamic` should be read as "streams its metadata", whatever a
+  single fetch happens to show.
 - **`<html lang>`** is still `en` on all 223. Next allows one root layout and it
   cannot see the route's locale; fixing it properly means splitting `app/` into route
   groups with two root layouts, which is a large move for a signal Google says it
