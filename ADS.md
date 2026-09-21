@@ -95,8 +95,37 @@ Five headlines (≤ 30) and five descriptions (≤ 90) per language are in
 | `03-today-square.png` | 1200×1200 | 〃 (ring only) | 〃 |
 | `03-today-portrait.png` | 1200×1500 | 〃 (week strip and ring) | 〃 |
 
-There's no video. If a campaign has none, Google may build one from the images. A
-screen recording in each language is the obvious next asset (`CONTENT_ENGINE.md` §0).
+### Video
+
+**FR and BG each carry one video as of 2026-09-21; DE and US still have none.** An App
+campaign takes video only from YouTube — the asset picker offers a YouTube URL or the
+asset library, never a file upload — so both cuts live on a brand channel created for
+this: **Day So Far, `@daysofarapp`** (`UCC1na4h9_l16HMhIpgHIgfg`, under the same
+`nikssan123@gmail.com`). Both are **Unlisted**, which is all a video asset needs, and
+both were auto-classified as Shorts, being 15 s and vertical.
+
+| Campaign | File | YouTube | Ad group |
+|---|---|---|---|
+| `Day So Far - FR - Installs` | `content/ads/ad-fr.mp4` | [`KWp3NxGwSWc`](https://www.youtube.com/watch?v=KWp3NxGwSWc) | `206971469184` |
+| `Day So Far - BG - Installs` (paused) | `content/ads/ad-bg.mp4` | [`zufuZ8TF5qA`](https://www.youtube.com/watch?v=zufuZ8TF5qA) | `201052750478` |
+
+Both are 1080×1920, 15.0 s, 60 fps, H.264 + AAC, and Google reads them as Vertical (9:16).
+Adding the video moved **ad strength from Poor to Average** on both; Google now asks for a
+landscape and a square cut to reach Excellent, which is the next asset to make, not a new
+film — `scripts/content/ad.mts` renders the same fifteen seconds at another aspect.
+
+The scripts are `content/copy/ad-fr.md` and `content/copy/ad-bg.md`. **The middle nine
+seconds of each are still rendered rather than captured** (`ad-fr.md` §2), which
+`CONTENT_ENGINE.md` §0 says the hero asset must not be — shooting turns 1 and 2 on a real
+account and swapping the capture in is the one thing left.
+
+**Google flags the AI question.** The video picker warns that some regions require ads
+using assets created or edited with AI to be labelled. The B-roll under the hook and the
+close is generated (`scripts/content/broll.py`), so this is a real declaration to make
+before the FR video has run long, not a generic notice.
+
+The DE and US campaigns have no video. Where a campaign has none, Google may build one
+from the images instead.
 
 To remake the images, start from the three raw captures `store/tools/capture-shots.sh`
 takes per language. Then run:
