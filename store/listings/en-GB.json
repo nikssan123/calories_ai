@@ -1,7 +1,7 @@
 {
   "language": "en-GB",
   "_note": "The default listing's screenshot captions and seed strings. Its title and descriptions are edited in Play Console and live in PLAY_LISTING.md, so they are not here.",
-  "releaseNotes": "Building your plan goes more smoothly. On the height and weight question both boxes now stay in view while you type — the weight one used to slip behind the keyboard — and the button underneath says plainly when it isn't ready yet, instead of looking like it is.\n\nSetup opens in centimetres and kilograms wherever you are, and a heading no longer clips the tail of a letter on its last line.",
+  "releaseNotes": "Small fixes and polish throughout, and a steadier first week for new accounts.",
   "captions": [
     {
       "headline": "Just say\nwhat you ate",
