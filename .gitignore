@@ -68,4 +68,7 @@ content/raw/*
 content/gen/*
 content/stock/*
 content/music/*
+# The faces ad.mts sets type in (Fraunces, Literata, full Nunito), fetched rather
+# than vendored: they come from @expo-google-fonts/*, and ad.mts says how.
+content/fonts/*
 !content/*/.gitkeep
