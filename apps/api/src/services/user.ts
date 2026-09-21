@@ -317,6 +317,46 @@ export async function getVerificationRecipient(userId: string): Promise<EmailRec
   return row ? toRecipient(row) : null;
 }
 
+/**
+ * What a *phone* needs to know about somebody, which is less than an inbox does.
+ *
+ * `getEmailRecipient` is keyed on having an address, because everything it was
+ * written for puts one in a To: header. A push has no To: header — it has a
+ * device token — so asking for an address first is asking the wrong question,
+ * and it is the question that made every guest unreachable: the alert pass
+ * read its preferences through it and skipped anybody who answered null.
+ *
+ * Deliberately narrow rather than a nullable-email variant of the recipient.
+ * The four fields below are everything the alert pass decides from, and a
+ * shape that cannot carry an address cannot be handed to a mailer by mistake.
+ *
+ * It does check `disabled_at`, which `getEmailRecipient` does not and which is
+ * a real change for the pass that swapped to this one: a deactivated account
+ * with an address used to be considered. Nothing should push to an account on
+ * its way out, and no other gate in that pass was catching it.
+ */
+export interface NotifyRecipient {
+  units: UnitSystem;
+  locale: Locale;
+  notifyMilestones: boolean;
+  notifyDailyRecap: boolean;
+}
+
+export async function getNotifyRecipient(userId: string): Promise<NotifyRecipient | null> {
+  const row = await queryOne<any>(
+    `SELECT units, locale, notify_milestones, notify_daily_recap
+       FROM users WHERE id = $1 AND disabled_at IS NULL`,
+    [userId],
+  );
+  if (!row) return null;
+  return {
+    units: unitsOf(row),
+    locale: localeOf(row),
+    notifyMilestones: row.notify_milestones,
+    notifyDailyRecap: row.notify_daily_recap,
+  };
+}
+
 export async function getEmailRecipient(userId: string): Promise<EmailRecipient | null> {
   const row = await queryOne<any>(
     `SELECT id, email, display_name, timezone, units, locale, email_verified_at,
@@ -561,12 +601,35 @@ export interface ActiveUser {
 }
 
 const ACTIVE_USER_COLUMNS = 'id, timezone, day_start_hour, plan, email';
-const ACTIVE_USER_WHERE = 'email IS NOT NULL AND is_setup_complete = TRUE';
+/*
+ * Somebody who finished setup, and who is somebody.
+ *
+ * It used to read `email IS NOT NULL AND is_setup_complete = TRUE`, and the
+ * address was doing two jobs. One was real and is kept below: a row with
+ * neither an address nor a guest marker is the pre-account placeholder, and it
+ * has no owner to write anything for. The other was an accident of history —
+ * when it was written, having an address was the same thing as being a person.
+ *
+ * Guest accounts (GUEST-ACCOUNTS.md) ended that, and nothing here noticed. A
+ * guest is a finished, owned, logging account that has not been asked for an
+ * address yet, and every one of them was dropped by this line, silently, from
+ * every scheduled pass in the file. That is the whole of paid acquisition:
+ * an install from the French or German campaigns walks setup and lands as a
+ * guest, so the app's answer to "somebody stopped logging" could not reach the
+ * only people it was happening to.
+ *
+ * `guest_since` says the thing the address was standing in for. Nothing
+ * downstream loses a guard: the review and the nudge read `plan` before they
+ * spend a model, and both of their senders still need an address of their own
+ * before anything reaches an inbox.
+ */
+const ACTIVE_USER_WHERE =
+  'is_setup_complete = TRUE AND (email IS NOT NULL OR guest_since IS NOT NULL)';
 
 /**
- * Accounts the weekly scheduler should consider: real (email-bearing) users who
- * have finished setup. The pre-account placeholder row is excluded — it has no
- * owner to write a review for.
+ * Accounts the scheduler should consider: anyone who has finished setup and
+ * belongs to somebody, with or without an address. The pre-account placeholder
+ * row is excluded — it has neither.
  */
 export async function listActiveUsers(): Promise<ActiveUser[]> {
   /*

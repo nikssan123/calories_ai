@@ -76,6 +76,29 @@ const GOAL_WEIGH_IN_WINDOW_DAYS = 14;
 /** How far ahead a lapsing subscription is worth mentioning. */
 export const EXPIRY_WARNING_DAYS = 3;
 
+/**
+ * Below this many logged days, a silence is a start that did not take.
+ *
+ * The same line `nudges.ts` draws with `MIN_PRIOR_LOGGED_DAYS`, read from the
+ * other side. Above it a gap is a lapse and `dormant` has it; below it there
+ * is no habit to have lapsed from, and that is this. The two cannot both fire
+ * for the same person on the same day, which is not a coincidence — it is the
+ * one number they share.
+ */
+export const QUIET_START_LOGGED_DAYS = 5;
+
+/**
+ * The gap that makes a quiet start worth a word, in days.
+ *
+ * Two, not one: somebody who logged yesterday and not yet today is having an
+ * ordinary day, and an app that speaks up about it is the app people mean when
+ * they say they turned notifications off. Seven at the other end for the
+ * reason `DORMANT_UNTIL_DAYS` exists — past a week this was a decision, and
+ * chasing a decision is how you make it a firm one.
+ */
+const QUIET_START_AFTER_DAYS = 2;
+const QUIET_START_UNTIL_DAYS = 7;
+
 /** Calories either side of target that count as having hit it. */
 const RECAP_ON_TARGET_KCAL = 50;
 
@@ -156,6 +179,30 @@ export async function dueAlert({
 
       const streak = await dueStreak(userId, today, prefs.locale);
       if (streak) return streak;
+    }
+  }
+
+  /*
+   * After the celebrations, and outside their preference gate.
+   *
+   * Outside because `notifyMilestones` is labelled "Streaks and goals" on the
+   * You screen and is the Android channel of the same name, and this is
+   * neither — filing it there would be asking somebody to switch off their
+   * streaks to stop hearing about a week they never had. It consults no
+   * preference at all, on the precedent `plan_expiring` sets: both are sent at
+   * most once for a given fact, neither is a channel anybody subscribes to,
+   * and both still need a device token, which needs a permission the reader
+   * granted in so many words.
+   *
+   * After, because on the vanishing chance somebody with four logged days has
+   * also just hit their goal weight, that is the better sentence. The two
+   * cannot collide any other way: seven days of logging is the smallest
+   * streak, and this only speaks to people with fewer than five.
+   */
+  if (hour >= MILESTONE_HOUR) {
+    if (await withinInterruptionBudget(userId, today, 1)) {
+      const quiet = await dueQuietStart(userId, today, prefs.locale);
+      if (quiet) return quiet;
     }
   }
 
@@ -330,6 +377,87 @@ async function dueRecap(userId: string, today: string, locale: Locale): Promise<
     subject: today,
     title: m['alert.recapTitle'](num(kcal), num(targets.kcal)),
     body: `${line} ${m['alert.recapProtein'](num(protein), num(Math.round(targets.protein_g)))}`,
+  };
+}
+
+/**
+ * A log that stopped before it was a habit.
+ *
+ * The population this exists for is the whole of the app's paid acquisition:
+ * an install walks the setup, logs a meal, and is never seen again. Nothing in
+ * the product said anything to them. The `dormant` nudge refuses them on
+ * purpose — it measures a gap against a habit and they have none — and it is
+ * priced into a tier they are not on, so even the refusal was academic.
+ *
+ * Three facts have to hold, and the last one is what keeps this honest:
+ *
+ * - They logged something. An install that never logged is a different problem
+ *   and a message about their log would be about nothing.
+ * - The silence is between two days and a week old.
+ * - Fewer than `QUIET_START_LOGGED_DAYS` days carry a log, *ever* — not in a
+ *   window. Somebody who logged for a month last spring has a habit and a
+ *   history, and this is not the sentence for them however long the silence.
+ *
+ * Said once in a lifetime, and by construction rather than by promise: the
+ * subject is a constant, so the unique index on `(user_id, kind, subject)`
+ * refuses the second one. That matters more here than for any other alert —
+ * everything else on this list is keyed to an event that can honestly recur,
+ * and "you have not got going" said twice is an app arguing with somebody
+ * about their own life.
+ */
+async function dueQuietStart(
+  userId: string,
+  today: string,
+  locale: Locale,
+): Promise<DueAlert | null> {
+  /*
+   * The gap first, and on its own, because it is free and it is what almost
+   * everybody fails on. `food_entries_day` is `(user_id, local_date)`, so the
+   * newest date is the end of this account's slice of the index; the count
+   * below is a walk. Somebody who logged today, and somebody who left in
+   * March, are both answered here without reading their log.
+   */
+  const latest = await queryOne<{ last: string | null }>(
+    'SELECT max(local_date) AS last FROM food_entries WHERE user_id = $1',
+    [userId],
+  );
+  const last = latest?.last ? String(latest.last).slice(0, 10) : null;
+  if (last === null) return null;
+
+  const gap = Math.round(
+    (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${last}T00:00:00Z`)) / 86_400_000,
+  );
+  if (gap < QUIET_START_AFTER_DAYS || gap > QUIET_START_UNTIL_DAYS) return null;
+
+  /*
+   * And the history counted no further than the answer needs.
+   *
+   * The question is "fewer than five days, ever", which does not need the
+   * total — five distinct dates is already a no. Without the inner limit this
+   * is a scan of every meal somebody has ever logged, run every evening, to
+   * establish a fact about their first week that stopped being interesting
+   * years ago.
+   */
+  const counted = await queryOne<{ days: string }>(
+    `SELECT count(*) AS days FROM (
+       SELECT DISTINCT local_date FROM food_entries WHERE user_id = $1 LIMIT $2
+     ) AS capped`,
+    [userId, QUIET_START_LOGGED_DAYS],
+  );
+  if (Number(counted?.days ?? 0) >= QUIET_START_LOGGED_DAYS) return null;
+
+  const m = emailMessages(locale);
+  return {
+    kind: 'quiet_start',
+    /*
+     * A constant, which is the whole of "once ever". Every other kind keys on
+     * the thing that happened — the run's first day, the target, the expiry
+     * instant — because those recur and each occurrence deserves its own
+     * sentence. This one does not recur: there is exactly one first few days.
+     */
+    subject: 'first',
+    title: m['alert.quietStartTitle'],
+    body: m['alert.quietStartBody'],
   };
 }
 

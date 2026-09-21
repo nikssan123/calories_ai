@@ -274,6 +274,128 @@ describe('a plan about to lapse', () => {
   });
 });
 
+/**
+ * The install that logged one meal and was never seen again.
+ *
+ * Which is not a corner case — on the six days of the French campaign read on
+ * 2026-09-22 it was most of what paid acquisition produced. Everything the app
+ * had to say to them was unreachable: `dormant` refuses anybody without five
+ * logged days behind the gap, and it is priced into a tier they are not on.
+ */
+describe('a start that did not take', () => {
+  it('speaks to a log that stopped in its first few days', async () => {
+    await addMeal(user, { date: addDays(TODAY, -3), kcal: 600 });
+
+    const alert = await due(EVENING);
+
+    expect(alert).toMatchObject({ kind: 'quiet_start' });
+  });
+
+  /*
+   * The line `nudges.ts` draws with `MIN_PRIOR_LOGGED_DAYS`, read from this
+   * side. Five logged days is a habit, and a habit that stops is a lapse —
+   * `dormant`'s business, in a sentence written for it.
+   */
+  it('leaves a gap in an established log to the dormant nudge', async () => {
+    for (let i = 0; i < 5; i++) {
+      await addMeal(user, { date: addDays(TODAY, -(3 + i)), kcal: 600 });
+    }
+    expect(await due(EVENING)).toBeNull();
+  });
+
+  it('says nothing to somebody who logged yesterday', async () => {
+    // One quiet day is an ordinary day, not a start going cold.
+    await addMeal(user, { date: addDays(TODAY, -1), kcal: 600 });
+    expect(await due(EVENING)).toBeNull();
+  });
+
+  it('says nothing to an install that never logged at all', async () => {
+    // A message about their log would be a message about nothing, and there is
+    // no address, no history and no meal to refer to.
+    expect(await due(EVENING)).toBeNull();
+  });
+
+  it('lets somebody who has been gone a fortnight be', async () => {
+    await addMeal(user, { date: addDays(TODAY, -14), kcal: 600 });
+    expect(await due(EVENING)).toBeNull();
+  });
+
+  /*
+   * The one that matters most, and the only alert with a constant subject.
+   * "You have not got going" is a sentence that is fine once and an argument
+   * the second time.
+   */
+  it('says it once in a lifetime, not once a week', async () => {
+    await addMeal(user, { date: addDays(TODAY, -3), kcal: 600 });
+    const first = await due(EVENING);
+    await saveAlert(user.id, first!, TODAY);
+
+    // A fortnight later, still barely logged, still quiet — and still nothing.
+    const later = '2026-04-02';
+    await addMeal(user, { date: addDays(later, -3), kcal: 600 });
+    const again = await dueAlert({
+      userId: user.id,
+      prefs: PREFS,
+      now: new Date('2026-04-02T18:30:00Z'),
+      hour: MILESTONE_HOUR,
+      today: later,
+    });
+    expect(again).toMatchObject({ kind: 'quiet_start' });
+    expect(await saveAlert(user.id, again!, later)).toBeNull();
+    expect((await listAlerts(user.id)).filter((a) => a.kind === 'quiet_start')).toHaveLength(1);
+  });
+
+  /*
+   * `notifyMilestones` is "Streaks and goals" on the You screen and the Android
+   * channel of the same name. Filing this under it would mean switching off
+   * your streaks to stop hearing about a week you never had.
+   */
+  it('is not filed under streaks and goals', async () => {
+    await addMeal(user, { date: addDays(TODAY, -3), kcal: 600 });
+
+    const alert = await due(EVENING, { ...PREFS, notifyMilestones: false });
+
+    expect(alert).toMatchObject({ kind: 'quiet_start' });
+  });
+
+  it('waits for the evening', async () => {
+    await addMeal(user, { date: addDays(TODAY, -3), kcal: 600 });
+    expect(await due(MORNING)).toBeNull();
+  });
+});
+
+/**
+ * The predicate that made all of the above unreachable anyway.
+ *
+ * Every scheduled pass read `email IS NOT NULL AND is_setup_complete = TRUE`,
+ * to keep the pre-account placeholder row out. Guest accounts turned that into
+ * a filter on the whole of paid acquisition: a guest is a finished, logging
+ * account that has simply not been asked for an address.
+ */
+describe('a guest', () => {
+  it('is considered by the pass and reached on their phone', async () => {
+    const guest = await createUser({
+      plan: 'free',
+      email: null,
+      password_hash: null,
+      email_verified_at: null,
+      guest_since: new Date().toISOString(),
+    });
+    await setUserTargets(guest, '2026-01-01', { kcal: 2200, protein_g: 160 });
+    await addMeal(guest, { date: addDays(TODAY, -3), kcal: 600 });
+    await registerPushToken(guest.id, { token: 'ExponentPushToken[guest]', platform: 'android' });
+    const fetchImpl = pushOk();
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const result = await runDueAlerts(EVENING);
+
+    expect(result.generated).toContain(guest.id);
+    expect(fetchImpl).toHaveBeenCalled();
+    expect((await listAlerts(guest.id)).map((a) => a.kind)).toContain('quiet_start');
+    vi.unstubAllGlobals();
+  });
+});
+
 describe('the shared frequency budget', () => {
   /*
    * The promise the switches make is "at most one a week", and it is a promise

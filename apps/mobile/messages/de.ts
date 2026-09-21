@@ -1079,7 +1079,7 @@ export const de: Messages = {
   'invite.remindMe': 'Erinner mich',
   'invite.notNow': 'Jetzt nicht',
   'invite.fromThisPhone':
-    'Von diesem Handy, nicht von uns. Du kannst das jederzeit unter „Profil“ ändern oder ausschalten.',
+    'Die Erinnerung läuft auf diesem Handy und lässt sich unter „Profil“ jederzeit ändern oder ausschalten. Wird dein Tagebuch in den ersten Tagen still, schreiben wir einmal.',
   'invite.set': (time: string) => `Eingestellt auf ${time}, jeden Tag.`,
   'setup.deleting': 'Lösche…',
   'setup.deleteEverything': 'Alles löschen',

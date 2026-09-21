@@ -1219,7 +1219,7 @@ export const cs: Messages = {
   'invite.remindMe': 'Připomeň mi to',
   'invite.notNow': 'Teď ne',
   'invite.fromThisPhone':
-    'Z tohoto telefonu, ne od nás. Můžeš to kdykoli změnit nebo vypnout v „Profilu“.',
+    'Připomínka běží z tohoto telefonu a kdykoli ji změníš nebo vypneš v „Profilu“. Pokud tvůj deník v prvních dnech ztichne, ozveme se jednou.',
   'invite.set': (time: string) => `Hotovo — každý den v ${time}.`,
   'setup.deleting': 'Mažu…',
   'setup.deleteEverything': 'Smazat všechno',

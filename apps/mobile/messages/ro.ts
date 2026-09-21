@@ -1208,7 +1208,7 @@ export const ro: Messages = {
   'invite.remindMe': 'Amintește-mi',
   'invite.notNow': 'Nu acum',
   'invite.fromThisPhone':
-    'De pe telefonul tău, nu de la noi. Poți schimba sau opri asta oricând din „Profil”.',
+    'Memento-ul pornește de pe telefonul tău și îl poți schimba sau opri din „Profil”. Dacă jurnalul tău se oprește în primele zile, îți scriem o dată.',
   'invite.set': (time: string) => `Gata — în fiecare zi la ${time}.`,
   'setup.deleting': 'Se șterge…',
   'setup.deleteEverything': 'Șterge tot',

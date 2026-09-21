@@ -1215,7 +1215,7 @@ export const hr: Messages = {
   'invite.remindMe': 'Podsjeti me',
   'invite.notNow': 'Ne sada',
   'invite.fromThisPhone':
-    'S ovog telefona, ne od nas. Možeš to promijeniti ili isključiti bilo kad u „Profilu”.',
+    'Podsjetnik ide s ovog telefona i možeš ga promijeniti ili isključiti u „Profilu”. Ako ti dnevnik utihne prvih dana, javit ćemo se jednom.',
   'invite.set': (time: string) => `Gotovo — svaki dan u ${time}.`,
   'setup.deleting': 'Brisanje…',
   'setup.deleteEverything': 'Izbriši sve',

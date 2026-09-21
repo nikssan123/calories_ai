@@ -141,6 +141,10 @@ const ALERT_ROUTES: Record<AlertKind, string> = {
   goal_reached: '/progress',
   daily_recap: '/',
   plan_expiring: '/upgrade',
+  // The journal, where the meal it is asking for gets typed. Landing somebody
+  // on the progress screen would show them the empty chart that is the reason
+  // they were written to.
+  quiet_start: '/',
 };
 
 /**
@@ -156,6 +160,10 @@ const ALERT_CHANNELS: Record<AlertKind, string> = {
   goal_reached: 'milestones',
   daily_recap: 'recap',
   plan_expiring: 'account',
+  // "Reviews and nudges", which is what this is in the reader's terms — not a
+  // celebration, whatever the code calls it. It is also the only channel a
+  // free account can otherwise receive nothing on, so it is not a busy one.
+  quiet_start: 'default',
 };
 
 /**

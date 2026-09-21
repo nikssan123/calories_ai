@@ -1080,7 +1080,7 @@ export const es: Messages = {
   'invite.remindMe': 'Recuérdamelo',
   'invite.notNow': 'Ahora no',
   'invite.fromThisPhone':
-    'Desde este teléfono, no desde nosotros. Puedes cambiarlo o desactivarlo cuando quieras en «Perfil».',
+    'El recordatorio funciona desde este teléfono y puedes cambiarlo o desactivarlo en «Perfil». Si tu registro se queda en silencio los primeros días, te escribiremos una vez.',
   'invite.set': (time: string) => `Listo: cada día a las ${time}.`,
   'setup.deleting': 'Borrando…',
   'setup.deleteEverything': 'Borrarlo todo',

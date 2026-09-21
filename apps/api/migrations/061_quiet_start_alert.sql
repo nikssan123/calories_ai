@@ -1,0 +1,33 @@
+-- The one thing the app never said to the people it was losing.
+--
+-- 037 argued that a free account hears nothing and gave it this table to hear
+-- from. It named four kinds and each of them is a reward: a streak, a goal, a
+-- recap of a day that had something in it, a subscription to renew. Every one
+-- of them is a sentence for somebody already using the app.
+--
+-- Nothing on the list was for the person who logged one meal and stopped. That
+-- is not a corner: read on 2026-09-22, six days of the French install campaign
+-- produced fourteen accounts, of which the ones old enough to judge had logged
+-- once and never come back. The app's answer to a log going quiet is the
+-- `dormant` nudge, and it refuses them twice over — `MIN_PRIOR_LOGGED_DAYS`
+-- wants five logged days behind the gap before it will call it a lapse, and
+-- `nudgesPerWeek` is zero on the tier all of them are on. `nudges.ts` says so
+-- in as many words where it refuses: "they have not lapsed; they have not
+-- started, and that is a different message this feature is not the place for."
+--
+-- This is that message, and it belongs here rather than there for the reason
+-- 037 gives about every other kind: there is nothing to word. A person with
+-- one meal in their log has no numbers to write prose about, and the useful
+-- thing to say to them — a few days is all it takes, and there is nothing owed
+-- for the ones missed — is the same sentence for everybody. So it costs no
+-- turn, reads no plan, and reaches the tier that a model-written nudge cannot.
+--
+-- Its subject is the constant 'first', which makes `alerts_once` say something
+-- stronger here than anywhere else in the table. Every other kind keys on the
+-- event, because streaks and goals and expiries recur and each deserves its
+-- own sentence. There is exactly one first few days, so this is said once in
+-- the life of an account or not at all — "you have not got going" is fine once
+-- and an argument the second time.
+ALTER TABLE alerts DROP CONSTRAINT alerts_kind_check;
+ALTER TABLE alerts ADD CONSTRAINT alerts_kind_check
+  CHECK (kind IN ('streak','goal_reached','daily_recap','plan_expiring','quiet_start'));

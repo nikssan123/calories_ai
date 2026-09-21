@@ -10,6 +10,7 @@ import { haptics } from '@/lib/haptics';
 import { useT } from '@/lib/i18n';
 import { claimCue, STREAK_DAYS, type ReminderCue } from '@/lib/reminder-invite';
 import { applyReminders, DEFAULT_REMINDERS, loadReminders } from '@/lib/reminders';
+import { registerForPush } from '@/lib/push';
 import { type as t, useColors } from '@/theme';
 
 /**
@@ -132,6 +133,21 @@ export function ReminderInvite({
       { ...stored, log: { enabled: true, hour, minute } },
       { requestPermissions: true },
     );
+    /*
+     * The same session, not the next launch.
+     *
+     * `_layout` registers this phone for push on every launch where the
+     * permission is already granted, which was enough while everybody who
+     * granted it came back. It is not enough for the one person the `alerts`
+     * table's `quiet_start` exists for: they log a meal, say yes here, and
+     * never open the app again — so the token that would have carried the
+     * server's one message was minted on a launch that never happened.
+     *
+     * No dialog of its own. The OS has just answered the only question there
+     * was, and `registerForPush` asks for nothing when the answer is already
+     * yes; a refusal leaves `applied.log.enabled` false and this alone.
+     */
+    if (applied.log.enabled) void registerForPush();
     setBusy(false);
     close();
     /*

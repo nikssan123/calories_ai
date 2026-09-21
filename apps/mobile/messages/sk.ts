@@ -1222,7 +1222,7 @@ export const sk: Messages = {
   'invite.remindMe': 'Pripomeň mi to',
   'invite.notNow': 'Teraz nie',
   'invite.fromThisPhone':
-    'Z tohto telefónu, nie od nás. Kedykoľvek to môžeš zmeniť alebo vypnúť v „Profile“.',
+    'Pripomienka beží z tohto telefónu a kedykoľvek ju zmeníš alebo vypneš v „Profile“. Ak ti denník v prvých dňoch stíchne, ozveme sa raz.',
   'invite.set': (time: string) => `Hotovo — každý deň o ${time}.`,
   'setup.deleting': 'Maže sa…',
   'setup.deleteEverything': 'Vymazať všetko',

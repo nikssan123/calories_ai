@@ -1291,7 +1291,7 @@ export const en = {
   'invite.remindMe': 'Remind me',
   'invite.notNow': 'Not now',
   'invite.fromThisPhone':
-    'From this phone, not from us. Change it or switch it off any time under You.',
+    'The reminder runs on this phone, and is yours to change or switch off under You. If your log goes quiet in the first few days, we will write once.',
   'invite.set': (time: string) => `Set for ${time}, every day.`,
   'setup.deleting': 'Deleting…',
   'setup.deleteEverything': 'Delete everything',

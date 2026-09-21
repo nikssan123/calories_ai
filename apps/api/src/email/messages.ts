@@ -134,6 +134,19 @@ const en = {
   'alert.recapUnder': (kcal: string) => `${kcal} kcal to spare.`,
   'alert.recapOver': (kcal: string) => `${kcal} kcal over.`,
   'alert.recapProtein': (got: string, target: string) => `Protein ${got}g of ${target}g.`,
+  /*
+   * Said once, ever, to somebody whose log stopped in its first few days.
+   *
+   * Every word of it is chosen against the obvious version. No count of days
+   * missed, because a number is a reproach. No streak, because there is none
+   * and there was never going to be. No "get back on track", because there
+   * was no track. What it says is the one thing that is both true and useful:
+   * the app has too little to work with yet, and the fix is one meal today
+   * rather than anything owed for yesterday.
+   */
+  'alert.quietStartTitle': 'Nothing to catch up on',
+  'alert.quietStartBody':
+    'Your log went quiet early on. A few days is all it takes before the numbers start saying something back — and today is as good a day as any for one meal.',
 
   // ---- The chrome the layout draws round every message ---------------------
   //
@@ -334,6 +347,9 @@ const bg: EmailMessages = {
   'alert.recapUnder': (kcal) => `Остават ти ${kcal} kcal.`,
   'alert.recapOver': (kcal) => `${kcal} kcal над целта.`,
   'alert.recapProtein': (got, target) => `Протеин ${got}g от ${target}g.`,
+  'alert.quietStartTitle': 'Няма какво да наваксваш',
+  'alert.quietStartBody':
+    'Дневникът ти утихна още в началото. Няколко дни стигат, за да започнат числата да ти казват нещо — а днес е чудесен ден да запишеш едно ястие.',
 
   'layout.tagline': 'Day So Far — дневникът за калории, с който си говориш.',
   'layout.pasteLink': 'Или пусни този адрес в браузъра си:',
@@ -484,6 +500,9 @@ const de: EmailMessages = {
   'alert.recapUnder': (kcal) => `${kcal} kcal übrig.`,
   'alert.recapOver': (kcal) => `${kcal} kcal darüber.`,
   'alert.recapProtein': (got, target) => `Protein ${got}g von ${target}g.`,
+  'alert.quietStartTitle': 'Nichts nachzuholen',
+  'alert.quietStartBody':
+    'Dein Tagebuch ist früh still geworden. Ein paar Tage reichen, bis die Zahlen anfangen dir etwas zu sagen — und heute ist ein so guter Tag wie jeder andere für eine Mahlzeit.',
 
   'layout.tagline': 'Day So Far — das Kalorientagebuch zum Reden.',
   'layout.pasteLink': 'Oder kopiere das hier in deinen Browser:',
@@ -636,6 +655,9 @@ const es: EmailMessages = {
   'alert.recapUnder': (kcal) => `Te sobran ${kcal} kcal.`,
   'alert.recapOver': (kcal) => `${kcal} kcal de más.`,
   'alert.recapProtein': (got, target) => `Proteína ${got}g de ${target}g.`,
+  'alert.quietStartTitle': 'No hay nada que recuperar',
+  'alert.quietStartBody':
+    'Tu registro se quedó en silencio muy pronto. Bastan unos pocos días para que los números empiecen a decirte algo, y hoy es tan buen día como cualquiera para anotar una comida.',
 
   'layout.tagline': 'Day So Far — el diario de calorías con el que hablas.',
   'layout.pasteLink': 'O pega esto en tu navegador:',
@@ -791,6 +813,9 @@ const fr: EmailMessages = {
   'alert.recapUnder': (kcal) => `Il te reste ${kcal} kcal.`,
   'alert.recapOver': (kcal) => `${kcal} kcal de trop.`,
   'alert.recapProtein': (got, target) => `Protéines ${got}g sur ${target}g.`,
+  'alert.quietStartTitle': 'Rien à rattraper',
+  'alert.quietStartBody':
+    'Ton journal s’est arrêté très tôt. Quelques jours suffisent pour que les chiffres commencent à te dire quelque chose — et aujourd’hui est un jour comme un autre pour noter un repas.',
 
   'layout.tagline': 'Day So Far — le journal de calories à qui tu parles.',
   'layout.pasteLink': 'Ou colle ceci dans ton navigateur :',
@@ -947,6 +972,9 @@ const ro: EmailMessages = {
   'alert.recapUnder': (kcal) => `Îți mai rămân ${kcal} kcal.`,
   'alert.recapOver': (kcal) => `${kcal} kcal peste țintă.`,
   'alert.recapProtein': (got, target) => `Proteine: ${got}g din ${target}g.`,
+  'alert.quietStartTitle': 'Nu ai nimic de recuperat',
+  'alert.quietStartBody':
+    'Jurnalul tău s-a oprit foarte devreme. Câteva zile sunt de ajuns ca cifrele să înceapă să îți spună ceva — iar azi e o zi la fel de bună ca oricare alta pentru o masă.',
 
   'layout.tagline': 'Day So Far — jurnalul de calorii cu care vorbești.',
   'layout.pasteLink': 'Sau copiază asta în browser:',
@@ -1121,6 +1149,9 @@ const uk: EmailMessages = {
   'alert.recapUnder': (kcal) => `Ще ${kcal} kcal у запасі.`,
   'alert.recapOver': (kcal) => `${kcal} kcal понад норму.`,
   'alert.recapProtein': (got, target) => `Білок: ${got}g з ${target}g.`,
+  'alert.quietStartTitle': 'Наздоганяти нічого',
+  'alert.quietStartBody':
+    'Твій щоденник затих на самому початку. Кількох днів досить, щоб числа почали щось тобі говорити — а сьогодні не гірший день, ніж будь-який інший, щоб записати один прийом їжі.',
 
   'layout.tagline': 'Day So Far — щоденник калорій, з яким просто говориш.',
   'layout.pasteLink': 'Або встав це посилання в браузер:',
@@ -1277,6 +1308,9 @@ const sr: EmailMessages = {
   'alert.recapUnder': (kcal) => `Преостаје ${kcal} kcal.`,
   'alert.recapOver': (kcal) => `${kcal} kcal преко циља.`,
   'alert.recapProtein': (got, target) => `Протеини ${got}g од ${target}g.`,
+  'alert.quietStartTitle': 'Нема шта да се надокнађује',
+  'alert.quietStartBody':
+    'Твој дневник је утихнуо врло рано. Довољно је неколико дана да бројеви почну нешто да ти говоре — а данас је дан као и сваки други да упишеш један оброк.',
 
   'layout.tagline': 'Day So Far — дневник калорија са којим разговараш.',
   'layout.pasteLink': 'Или налепи ову адресу у прегледач:',
@@ -1444,6 +1478,9 @@ const hr: EmailMessages = {
   'alert.recapUnder': (kcal) => `Preostalo je ${kcal} kcal.`,
   'alert.recapOver': (kcal) => `${kcal} kcal preko cilja.`,
   'alert.recapProtein': (got, target) => `Proteini ${got} g od ${target} g.`,
+  'alert.quietStartTitle': 'Nemaš što nadoknađivati',
+  'alert.quietStartBody':
+    'Tvoj je dnevnik utihnuo vrlo rano. Dovoljno je nekoliko dana da brojke počnu nešto govoriti — a danas je dan kao i svaki drugi da upišeš jedan obrok.',
 
   'layout.tagline': 'Day So Far — dnevnik kalorija s kojim razgovaraš.',
   'layout.pasteLink': 'Ili zalijepi ovo u preglednik:',
@@ -1625,6 +1662,9 @@ const cs: EmailMessages = {
   'alert.recapUnder': (kcal) => `V rezervě ${kcal} kcal.`,
   'alert.recapOver': (kcal) => `${kcal} kcal nad cílem.`,
   'alert.recapProtein': (got, target) => `Bílkoviny ${got}g z ${target}g.`,
+  'alert.quietStartTitle': 'Není co dohánět',
+  'alert.quietStartBody':
+    'Tvůj deník ztichl hned na začátku. Stačí pár dní, než ti čísla začnou něco říkat — a dnešek je stejně dobrý den jako kterýkoli jiný na jedno jídlo.',
 
   'layout.tagline': 'Day So Far – kalorický deník, se kterým si povídáš.',
   'layout.pasteLink': 'Nebo tohle vlož do prohlížeče:',
@@ -1783,6 +1823,9 @@ const hu: EmailMessages = {
   'alert.recapUnder': (kcal) => `Még ${kcal} kcal belefér.`,
   'alert.recapOver': (kcal) => `${kcal} kcal a célon felül.`,
   'alert.recapProtein': (got, target) => `Fehérje: ${got}g / ${target}g.`,
+  'alert.quietStartTitle': 'Nincs mit behozni',
+  'alert.quietStartBody':
+    'A naplód nagyon korán elcsendesedett. Pár nap is elég ahhoz, hogy a számok mondani kezdjenek valamit — és a mai nap ugyanolyan jó egy étkezéshez, mint bármelyik másik.',
 
   'layout.tagline': 'Day So Far – a kalórianapló, amivel beszélgetsz.',
   'layout.pasteLink': 'Vagy másold be ezt a böngésződbe:',
@@ -1935,6 +1978,9 @@ const el: EmailMessages = {
   'alert.recapUnder': (kcal) => `Περισσεύουν ${kcal} kcal.`,
   'alert.recapOver': (kcal) => `${kcal} kcal παραπάνω.`,
   'alert.recapProtein': (got, target) => `Πρωτεΐνη ${got}g από ${target}g.`,
+  'alert.quietStartTitle': 'Δεν έχεις τίποτα να προλάβεις',
+  'alert.quietStartBody':
+    'Το ημερολόγιό σου σώπασε πολύ νωρίς. Λίγες μέρες αρκούν για να αρχίσουν οι αριθμοί να σου λένε κάτι — και το σήμερα είναι εξίσου καλή μέρα με κάθε άλλη για ένα γεύμα.',
 
   'layout.tagline': 'Day So Far — το ημερολόγιο θερμίδων που του μιλάς.',
   'layout.pasteLink': 'Ή επικόλλησε αυτό στο πρόγραμμα περιήγησής σου:',
@@ -2099,6 +2145,9 @@ const sk: EmailMessages = {
   'alert.recapUnder': (kcal) => `Ešte ${kcal} kcal v rezerve.`,
   'alert.recapOver': (kcal) => `${kcal} kcal navyše.`,
   'alert.recapProtein': (got, target) => `Bielkoviny ${got} g z ${target} g.`,
+  'alert.quietStartTitle': 'Nie je čo dobiehať',
+  'alert.quietStartBody':
+    'Tvoj denník stíchol hneď na začiatku. Stačí pár dní, kým ti čísla začnú niečo hovoriť — a dnešok je rovnako dobrý deň na jedno jedlo ako ktorýkoľvek iný.',
 
   'layout.tagline': 'Day So Far – kalorický denník, s ktorým sa rozprávaš.',
   'layout.pasteLink': 'Alebo toto vlož do prehliadača:',

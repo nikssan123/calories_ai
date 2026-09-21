@@ -1192,7 +1192,7 @@ export const hu: Messages = {
   'invite.remindMe': 'Emlékeztess',
   'invite.notNow': 'Most nem',
   'invite.fromThisPhone':
-    'Erről a telefonról, nem tőlünk. Bármikor módosíthatod vagy kikapcsolhatod a „Profil” alatt.',
+    'Az emlékeztető erről a telefonról fut, és a „Profil” alatt bármikor módosíthatod vagy kikapcsolhatod. Ha a naplód az első napokban elcsendesedik, egyszer írunk.',
   'invite.set': (time: string) => `Kész — minden nap ${time}.`,
   'setup.deleting': 'Törlés…',
   'setup.deleteEverything': 'Minden törlése',

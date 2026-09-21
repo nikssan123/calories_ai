@@ -1088,7 +1088,7 @@ export const fr: Messages = {
   'invite.remindMe': 'Rappelle-moi',
   'invite.notNow': 'Pas maintenant',
   'invite.fromThisPhone':
-    'Depuis ton téléphone, pas depuis chez nous. Tu peux le modifier ou le désactiver à tout moment dans « Profil ».',
+    'Le rappel vient de ton téléphone et tu peux le modifier ou le désactiver dans « Profil ». Si ton journal s’arrête dans les premiers jours, on t’écrira une fois.',
   'invite.set': (time: string) => `C’est réglé : tous les jours à ${time}.`,
   'setup.deleting': 'Suppression…',
   'setup.deleteEverything': 'Tout supprimer',

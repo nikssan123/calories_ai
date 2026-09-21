@@ -38,7 +38,7 @@ import { dueNudge, NUDGE_HOUR } from './services/nudges.ts';
 import { reviewForWeek, reviewWeekFor } from './services/reviews.ts';
 import {
   activeTimezones,
-  getEmailRecipient,
+  getNotifyRecipient,
   listActiveUsers,
   listActiveUsersIn,
   type ActiveUser,
@@ -513,10 +513,17 @@ async function alertPass(now: Date, logger?: FastifyBaseLogger): Promise<TickRes
        * The recipient, for the two preferences and the units a weight is
        * written in. Read here and passed down rather than looked up inside
        * `dueAlert`, because it is also the row that says whether there is an
-       * account to speak to at all — the placeholder row has no address, and
-       * neither does an account mid-deletion.
+       * account to speak to at all.
+       *
+       * `getNotifyRecipient`, not `getEmailRecipient`, and the difference is
+       * the whole reach of this pass. The mail lookup is keyed on having an
+       * address, so every guest answered null and was skipped here before a
+       * single check ran — which meant the one pass in this file that speaks
+       * to a free account could not speak to the accounts paid acquisition
+       * actually produces. An alert goes to a device token and never to an
+       * inbox, so an address was never the right question.
        */
-      const recipient = await getEmailRecipient(user.id);
+      const recipient = await getNotifyRecipient(user.id);
       if (!recipient) {
         result.skipped += 1;
         return;

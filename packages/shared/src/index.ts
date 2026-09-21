@@ -3511,6 +3511,18 @@ export const ALERT_KINDS = [
   'daily_recap',
   /** A paid plan lapses in a few days and nothing has renewed it. */
   'plan_expiring',
+  /**
+   * Logged a meal, then went quiet before the habit was one.
+   *
+   * The counterpart to the `dormant` nudge, and deliberately not that: a lapse
+   * is measured against a habit, and this is the person who never got one.
+   * `nudges.ts` says so out loud where it refuses them — "they have not
+   * lapsed; they have not started, and that is a different message this
+   * feature is not the place for". This is that message, and it is an alert
+   * rather than a nudge because everybody it is for is on the free tier, where
+   * `nudgesPerWeek` is zero by design.
+   */
+  'quiet_start',
 ] as const;
 export const AlertKind = z.enum(ALERT_KINDS);
 export type AlertKind = z.infer<typeof AlertKind>;
