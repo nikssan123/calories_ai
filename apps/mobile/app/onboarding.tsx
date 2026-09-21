@@ -113,6 +113,15 @@ const AGE = { min: 13, max: 100 };
 /** What the goal weight is allowed to be, either side of where they are. */
 const GOAL_SPAN = 0.4;
 
+/**
+ * How long the body step waits before putting the caret in its first box.
+ *
+ * Longer than `TRAVEL` in `Chrome.tsx`, so the keyboard rises after the step
+ * has finished sliding across rather than against it — the two animations run
+ * for the same quarter-second otherwise and Android lands the cards short.
+ */
+const FOCUS_AFTER_MS = 320;
+
 const ACTIVITY_HINTS: Record<ActivityLevel, StringKey> = {
   sedentary: 'setup.activitySedentary',
   light: 'setup.activityLight',
@@ -213,6 +222,7 @@ export default function OnboardingScreen() {
   );
 
   /* The body step's boxes, so each can hand the keyboard on to the next. */
+  const heightInput = useRef<TextInput>(null);
   const inchesInput = useRef<TextInput>(null);
   const weightInput = useRef<TextInput>(null);
 
@@ -320,6 +330,35 @@ export default function OnboardingScreen() {
 
   /** Whether the body step has been written in at all, in whichever units it is wearing. */
   const bodyTyped = [cm, feet, inches, weight].some((box) => box.trim() !== '');
+
+  /*
+   * The body step opens with the keyboard up and the caret in the height box.
+   *
+   * It is the only question in the walk that is typed rather than tapped, and
+   * arriving at it there was nothing on screen saying so: two cards each
+   * holding a grey dash, no caret anywhere, and a dead Continue that by design
+   * says nothing until something has been typed (below). Every other question
+   * is a card you press. Half of everybody who reached this one left without
+   * entering a character.
+   *
+   * Focusing it answers the screen's only question before it is asked — the
+   * keyboard is up, the first box is live, and `compact` has already given the
+   * header's height to the two cards, so both are on screen from the first
+   * frame rather than after a tap.
+   *
+   * Only while it is still blank. Coming back to it from the goal weight with
+   * two figures already in place is a review, not a question, and `selectText-
+   * OnFocus` would put a whole height under the next digit typed.
+   */
+  useEffect(() => {
+    if (phase !== 'questions' || teasing || step !== 'body' || bodyTyped) return;
+    const timer = setTimeout(() => heightInput.current?.focus(), FOCUS_AFTER_MS);
+    return () => clearTimeout(timer);
+    // `bodyTyped` is read to decide whether to focus at all, and deliberately
+    // not watched: it flips on the first keystroke, and re-running then would
+    // cancel a timer that has already fired and schedule nothing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, teasing, step]);
 
   /** What is wrong with this step's answer, or null if nothing is. */
   const blocker = ((): string | null => {
@@ -785,6 +824,7 @@ export default function OnboardingScreen() {
                           unit: 'ft',
                           onChangeText: setFeet,
                           maxLength: 1,
+                          inputRef: heightInput,
                           returnKeyType: 'next',
                           onSubmitEditing: () => inchesInput.current?.focus(),
                         },
@@ -806,6 +846,7 @@ export default function OnboardingScreen() {
                           unit: 'cm',
                           onChangeText: setCm,
                           maxLength: 5,
+                          inputRef: heightInput,
                           returnKeyType: 'next',
                           onSubmitEditing: () => weightInput.current?.focus(),
                         },
@@ -909,8 +950,18 @@ function Welcome({
   const locale = useLocale();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
+  /*
+   * The arrival is staggered, and it used to take a second and a half to
+   * finish. The ring faded for 900ms, then the cast, the wordmark and the
+   * sentence each for 700 more behind delays that ran out to 800 — so the
+   * screen a paid install lands on spent most of its first two seconds
+   * assembling itself, and the sentence saying what the next half-minute buys
+   * was the last thing to arrive. A third of installs never pressed anything
+   * here. The same stagger, at two thirds of the time, still reads as an
+   * arrival and is done in under a second.
+   */
   const enter = (delay: number) =>
-    reduced ? undefined : FadeInDown.delay(delay).duration(700).reduceMotion(ReduceMotion.System);
+    reduced ? undefined : FadeInDown.delay(delay).duration(460).reduceMotion(ReduceMotion.System);
 
   return (
     <View style={[styles.flex, { paddingTop: insets.top }]}>
@@ -921,19 +972,19 @@ function Welcome({
         * sentence about what the next half-minute buys. See `RingObject`.
         */}
       <View style={[styles.hero, column]}>
-        <Animated.View entering={reduced ? undefined : FadeIn.duration(900)}>
+        <Animated.View entering={reduced ? undefined : FadeIn.duration(560)}>
           <RingObject size={152} />
         </Animated.View>
-        <Animated.View entering={enter(120)} style={styles.cast}>
+        <Animated.View entering={enter(90)} style={styles.cast}>
           <Trio size={52} moods={['idle', 'wave', 'idle']} gap={2} />
         </Animated.View>
-        <Animated.View entering={enter(250)} style={styles.wordmark}>
+        <Animated.View entering={enter(170)} style={styles.wordmark}>
           <Serif style={[type.hero, styles.centred, { color: colors.foreground }]}>Day *So* Far</Serif>
           <Text style={[t.eyebrow, styles.tagline, { color: colors.mutedForeground }]}>
             {tr('ob.wordmarkTagline')}
           </Text>
         </Animated.View>
-        <Animated.View entering={enter(550)} style={styles.welcomeCopy}>
+        <Animated.View entering={enter(330)} style={styles.welcomeCopy}>
           <Serif style={[type.greeting, styles.centred, { color: colors.foreground }]}>{tr('ob.welcomeTitle')}</Serif>
           <Text style={[t.body, styles.centred, styles.welcomeBody, { color: colors.mutedForeground }]}>
             {tr('ob.welcomeBody')}
@@ -941,7 +992,19 @@ function Welcome({
         </Animated.View>
       </View>
 
-      <Animated.View entering={enter(800)} style={[styles.welcomeFoot, column, { paddingBottom: insets.bottom + 18 }]}>
+      {/*
+        * The footer does not take part in the arrival.
+        *
+        * Everything above it is the app introducing itself and can afford to
+        * assemble; this is the only thing on the screen anybody can press, and
+        * it was the last to appear — invisible for 800ms and still moving at
+        * 1.5s, on the screen where a third of paid installs stopped. A
+        * Reanimated entrance animates opacity, not hit-testing, so the button
+        * was live the whole time it could not be seen: somebody who tapped
+        * where they expected it *did* start the walk, and everybody who waited
+        * to be shown a button waited. It is on screen from the first frame now.
+        */}
+      <View style={[styles.welcomeFoot, column, { paddingBottom: insets.bottom + 18 }]}>
         <View style={styles.language}>
           <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
             {tr('setup.language')}
@@ -962,7 +1025,7 @@ function Welcome({
             <Text style={[t.bodySemibold, { color: colors.foreground }]}>{tr('ob.haveAccount')}</Text>
           </Pressable>
         )}
-      </Animated.View>
+      </View>
     </View>
   );
 }

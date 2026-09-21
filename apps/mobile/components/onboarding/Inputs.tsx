@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { Chunk, PressableChunk } from '@/components/Chunk';
@@ -77,6 +78,31 @@ export function Segmented<T extends string>({
   );
 }
 
+/** One figure of a measurement: what is in the box, and what it is measured in. */
+export interface MeasurePart {
+  key: string;
+  value: string;
+  unit: string;
+  onChangeText: (next: string) => void;
+  /** Feet are one digit; a weight in pounds is four including a decimal. */
+  maxLength?: number;
+  /**
+   * Where the keyboard's action key goes. The figures sit above a footer
+   * button that rises with the keyboard and hides whatever is below the field
+   * being typed in, so each box hands on to the next one itself — height to
+   * weight — and the last one moves the walk on, rather than leaving somebody
+   * to find a field the button is covering.
+   *
+   * Android honours both on the decimal pad, as a tab glyph and a tick in the
+   * bottom-right key. Neither says what it does, though, which is the half of
+   * this the rule under the box is for: the hand-off is a shortcut for anybody
+   * who finds it, never the way through.
+   */
+  inputRef?: React.Ref<TextInput>;
+  returnKeyType?: 'next' | 'done';
+  onSubmitEditing?: () => void;
+}
+
 /**
  * A measurement: what it is, the figure, and the unit it is in.
  *
@@ -91,25 +117,7 @@ export function Measure({
   focusHint,
 }: {
   label: string;
-  parts: {
-    key: string;
-    value: string;
-    unit: string;
-    onChangeText: (next: string) => void;
-    /** Feet are one digit; a weight in pounds is four including a decimal. */
-    maxLength?: number;
-    autoFocus?: boolean;
-    /**
-     * Where the keyboard's action key goes. The figures sit above a footer
-     * button that rises with the keyboard and hides whatever is below the
-     * field being typed in, so each box hands on to the next one itself —
-     * height to weight — and the last one moves the walk on, rather than
-     * leaving somebody to find a field the button is covering.
-     */
-    inputRef?: React.Ref<TextInput>;
-    returnKeyType?: 'next' | 'done';
-    onSubmitEditing?: () => void;
-  }[];
+  parts: MeasurePart[];
   /** Said under the row when the figure is not usable yet. */
   focusHint?: string | null;
 }) {
@@ -121,28 +129,7 @@ export function Measure({
 
       <View style={styles.measureRow}>
         {parts.map((part) => (
-          <View key={part.key} style={styles.measurePart}>
-            <TextInput
-              value={part.value}
-              onChangeText={part.onChangeText}
-              keyboardType="decimal-pad"
-              inputMode="decimal"
-              maxLength={part.maxLength ?? 5}
-              autoFocus={part.autoFocus}
-              ref={part.inputRef}
-              returnKeyType={part.returnKeyType}
-              onSubmitEditing={part.onSubmitEditing}
-              submitBehavior={part.returnKeyType === 'next' ? 'submit' : 'blurAndSubmit'}
-              selectTextOnFocus
-              placeholder="—"
-              placeholderTextColor={withAlpha(colors.mutedForeground, 0.5)}
-              accessibilityLabel={`${label} ${part.unit}`}
-              style={[styles.figure, { color: colors.foreground }]}
-            />
-            <Text style={[t.bodySemibold, styles.unit, { color: colors.mutedForeground }]}>
-              {part.unit}
-            </Text>
-          </View>
+          <Figure key={part.key} part={part} label={label} />
         ))}
       </View>
 
@@ -150,6 +137,71 @@ export function Measure({
         <Text style={[t.footnote, { color: colors.destructive }]}>{focusHint}</Text>
       )}
     </Chunk>
+  );
+}
+
+/**
+ * One box of a measurement, and the rule under it that says it is one.
+ *
+ * The rule is the whole reason this is a component rather than three lines
+ * inside the map. Empty, these boxes were a grey em-dash beside a unit — which
+ * is exactly how this app draws a figure it is *telling* you: the goal weight
+ * on the very next screen is the same serif at the same size, nudged with two
+ * buttons and never typed into. So the one question in the walk that asks to be
+ * written in looked like a question that had already answered itself. Nothing
+ * on the screen carried a caret, the keyboard never came up, and the funnel
+ * lost half of everybody who reached it — more than the other five questions
+ * lost between them.
+ *
+ * Underlined, an empty box is a blank to fill in, which is a thing anybody who
+ * has seen a form already knows how to read. The rule goes once there is a
+ * figure on it and comes back in the accent under the caret, so it only ever
+ * says the one thing it is there to say.
+ */
+function Figure({ part, label }: { part: MeasurePart; label: string }) {
+  const colors = useColors();
+  const [focused, setFocused] = useState(false);
+  const empty = part.value.trim() === '';
+
+  return (
+    <View style={styles.measurePart}>
+      <TextInput
+        value={part.value}
+        onChangeText={part.onChangeText}
+        keyboardType="decimal-pad"
+        inputMode="decimal"
+        maxLength={part.maxLength ?? 5}
+        ref={part.inputRef}
+        returnKeyType={part.returnKeyType}
+        onSubmitEditing={part.onSubmitEditing}
+        submitBehavior={part.returnKeyType === 'next' ? 'submit' : 'blurAndSubmit'}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        selectTextOnFocus
+        placeholder="—"
+        placeholderTextColor={withAlpha(colors.mutedForeground, 0.5)}
+        accessibilityLabel={`${label} ${part.unit}`}
+        style={[
+          styles.figure,
+          {
+            color: colors.foreground,
+            /*
+             * The border is always two points and only sometimes coloured. One
+             * that came and went would move the text baseline the unit beside
+             * it is aligned to, every time a box was touched.
+             */
+            borderBottomColor: focused
+              ? colors.primary
+              : empty
+                ? withAlpha(colors.mutedForeground, 0.45)
+                : 'transparent',
+          },
+        ]}
+      />
+      <Text style={[t.bodySemibold, styles.unit, { color: colors.mutedForeground }]}>
+        {part.unit}
+      </Text>
+    </View>
   );
 }
 
@@ -278,6 +330,8 @@ const styles = StyleSheet.create({
     letterSpacing: -0.6,
     minWidth: 72,
     padding: 0,
+    /* The blank to fill in. `Figure` colours it; the width never changes. */
+    borderBottomWidth: 2,
   },
   unit: { paddingBottom: 4 },
 
