@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -70,6 +70,12 @@ export const unstable_settings = { initialRouteName: 'index' };
 /** Which tab was on show last, so an arriving tab knows which side it came from. */
 let lastFocused: number | null = null;
 
+/** How long the arriving tab takes to glide in. */
+const GLIDE_MS = 320;
+
+/** And how long the lozenge's slower edge takes to gather itself up under it. */
+const TRAVEL_MS = duration.pop + 80;
+
 /**
  * The tab transition: a short glide and a fade, run by Reanimated.
  *
@@ -103,8 +109,39 @@ function TabScene({
   children: React.ReactNode;
 }) {
   const reduced = useReducedMotion();
-  const shown = useSharedValue(1);
+  /*
+   * How far into its entrance the arriving scene is — decoration, and the only
+   * thing that reads it is the 320ms the entrance lasts. See `current` below
+   * for why that narrowing is the whole fix.
+   */
+  const glide = useSharedValue(1);
   const side = useSharedValue(0);
+
+  /** Whether this scene is the tab the navigator says is up. */
+  const isUp = useCallback(() => {
+    const state = navigation.getState();
+    return state.routes[state.index]?.key === route.key;
+  }, [navigation, route.key]);
+
+  /*
+   * Whether the page is drawn, and whether it is mid-entrance — both React's.
+   *
+   * This was one shared value: 0 on blur, and a `withTiming` back up to 1 on
+   * focus. The commit that first fixed the blank page after a trip to another
+   * app named the problem exactly — a shared value nothing re-renders is a fact
+   * with no owner — and then answered it with one more write, asserted when the
+   * app came to the front. One more write is still a write, and Android after a
+   * night in the background found a way to lose that one too: the tab bar lit
+   * on a tab, the page under it blank, until any tap put it right.
+   *
+   * So the resting state is not a write any more. `current` is what the
+   * navigator says, kept by the same two listeners that were already here and
+   * reconciled by every render; `glide` is consulted only while `entering`, and
+   * `entering` ends on a clock. A write lost anywhere in Reanimated can now
+   * cost an animation and never a page.
+   */
+  const [current, setCurrent] = useState(isUp);
+  const [entering, setEntering] = useState(false);
 
   useEffect(() => {
     const indexOf = () => navigation.getState().routes.findIndex((r) => r.key === route.key);
@@ -120,60 +157,73 @@ function TabScene({
       // to know a tab was just left, and on which side, to play their entrance.
       stageFocus(route.name, from === null ? 0 : Math.sign(from - index));
       lastFocused = index;
-      if (reduced || from === null || from === index) {
-        shown.value = 1;
-        return;
-      }
+      setCurrent(true);
+      if (reduced || from === null || from === index) return;
       side.value = Math.sign(index - from);
-      shown.value = 0;
-      shown.value = withTiming(1, { duration: 320, easing: ease.out });
+      glide.value = 0;
+      glide.value = withTiming(1, { duration: GLIDE_MS, easing: ease.out });
+      // Batched with the line above it, so the first frame that draws this
+      // scene is already the one reading the glide — never a finished page for
+      // a frame and then the start of its own entrance.
+      setEntering(true);
     });
+    /*
+     * Tested on the tab navigator's own index rather than `isFocused()`: a tab
+     * under a pushed screen — History, the paywall — is blurred but still the
+     * tab that is up, and hiding it here would blank the page the back gesture
+     * reveals.
+     */
     const onBlur = navigation.addListener('blur', () => {
-      const state = navigation.getState();
-      if (state.routes[state.index]?.key !== route.key) shown.value = 0;
+      if (!isUp()) setCurrent(false);
     });
     return () => {
       onFocus();
       onBlur();
     };
-  }, [navigation, route.key, route.name, reduced, shown, side]);
+  }, [navigation, route.key, route.name, reduced, glide, side, isUp]);
 
   /*
-   * Coming back from another app, the scene is whatever the navigator says it
-   * is — asserted, not animated to.
+   * The entrance ends on a timer rather than on the animation's own callback.
    *
-   * Whether a tab is on show lives in a shared value here, and the only things
-   * that ever write it are the two listeners above. That makes it a fact with
-   * no owner: nothing re-renders it back into place, so a write that is lost
-   * across a trip to the background is lost for good. And one is — the glide is
-   * a `withTiming` from 0, and a switch made in the last moments before the app
-   * went away comes back with the timing gone and the scene still on the 0 it
-   * started from. What the reader sees is the tab bar lit on the tab they came
-   * from and a page with nothing on it, until they tap something and the focus
-   * listener runs again.
-   *
-   * Tested the same way the blur is, on the tab navigator's own index rather
-   * than `isFocused()`: a tab under a pushed screen — History, the paywall — is
-   * blurred but still the tab that is up, and hiding it here would blank the
-   * page the back gesture reveals.
+   * A JS timer is the one thing in this file that cannot be dropped by the UI
+   * runtime: RN holds timers while the app is away and fires the overdue ones
+   * on the way back in, so a glide interrupted by a trip to another app is over
+   * — and the page drawn — the moment the app is picked up, whatever became of
+   * the animation that was in flight.
+   */
+  useEffect(() => {
+    if (!entering) return;
+    const settle = setTimeout(() => setEntering(false), GLIDE_MS + 120);
+    return () => clearTimeout(settle);
+  }, [entering]);
+
+  /*
+   * And on the way in, without waiting for that timer: coming back from another
+   * app, the scene is whatever the navigator says it is — asserted, not
+   * animated to, because a page that fades itself in as you arrive reads as the
+   * app having changed tab while nobody was looking.
    */
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (next) => {
       if (next !== 'active') return;
-      const state = navigation.getState();
-      cancelAnimation(shown);
-      shown.value = state.routes[state.index]?.key === route.key ? 1 : 0;
+      cancelAnimation(glide);
+      glide.value = 1;
+      setCurrent(isUp());
+      setEntering(false);
     });
     return () => subscription.remove();
-  }, [navigation, route.key, shown]);
+  }, [glide, isUp]);
 
-  const gliding = useAnimatedStyle(() => ({
-    opacity: shown.value,
-    transform: [
-      { translateX: (1 - shown.value) * 28 * side.value },
-      { scale: 0.985 + shown.value * 0.015 },
-    ],
-  }));
+  const gliding = useAnimatedStyle(() => {
+    const t = entering ? glide.value : current ? 1 : 0;
+    return {
+      opacity: t,
+      transform: [{ translateX: (1 - t) * 28 * side.value }, { scale: 0.985 + t * 0.015 }],
+    };
+    // Spelled out rather than left to the plugin's collection: the two things
+    // this worklet reads from React are the only reason it can draw the page at
+    // all, and a style that failed to notice them changing is a blank tab.
+  }, [entering, current]);
 
   return <Animated.View style={[styles.fill, gliding]}>{children}</Animated.View>;
 }
@@ -288,6 +338,19 @@ function TabBar({
   const previous = useRef(selected);
 
   /*
+   * Until when the edges are worth reading — the same shape the scene's
+   * `entering` takes above, and for the same reason. Where the pill rests is
+   * `selected`, which React re-renders; the two edges only say how it got
+   * there, and only for as long as the clock below says a travel is on.
+   */
+  const [travelUntil, setTravelUntil] = useState(0);
+  useEffect(() => {
+    if (travelUntil === 0) return;
+    const settle = setTimeout(() => setTravelUntil(0), Math.max(0, travelUntil - Date.now()));
+    return () => clearTimeout(settle);
+  }, [travelUntil]);
+
+  /*
    * Once, for somebody who used the app when Today came first: the pill starts
    * on Today and glides home to the journal, so the move is seen rather than
    * discovered. "Used the app before" is a phone that already holds this
@@ -303,6 +366,8 @@ function TabBar({
       if (cancelled || previous.current !== 0) return;
       leftEdge.value = 1;
       rightEdge.value = 1;
+      // The park on Today, the beat, and the glide home — all of it is a travel.
+      setTravelUntil(Date.now() + 700 + TRAVEL_MS + 120);
       setTimeout(() => {
         if (previous.current !== 0) return;
         leftEdge.value = withTiming(0, { duration: 240, easing: ease.out });
@@ -321,10 +386,12 @@ function TabBar({
     if (reduced || from < 0) {
       leftEdge.value = selected;
       rightEdge.value = selected;
+      setTravelUntil(0);
       return;
     }
     const lead = { duration: 240, easing: ease.out };
-    const follow = { duration: duration.pop + 80, easing: ease.spring };
+    const follow = { duration: TRAVEL_MS, easing: ease.spring };
+    setTravelUntil(Date.now() + TRAVEL_MS + 120);
     if (selected > from) {
       rightEdge.value = withTiming(selected, lead);
       leftEdge.value = withTiming(selected, follow);
@@ -335,12 +402,10 @@ function TabBar({
   }, [selected, leftEdge, rightEdge, reduced]);
 
   /*
-   * And the pill, for the same reason the scene above needs it: its two edges
-   * are a shared value written once per selection, so a travel interrupted by
-   * the app going away never arrives, and the bar comes back lit on the tab
-   * before this one with no event due to correct it. Snapped rather than
-   * re-animated — a pill that slides on its own on the way back in reads as the
-   * app having changed tab while nobody was looking.
+   * And the travel is called off on the way in, rather than left to its clock:
+   * a pill that slides on its own as you arrive reads as the app having changed
+   * tab while nobody was looking. The edges are put where the selection is so
+   * the next travel starts from somewhere true.
    */
   useEffect(() => {
     if (selected < 0) return;
@@ -350,18 +415,23 @@ function TabBar({
       cancelAnimation(rightEdge);
       leftEdge.value = selected;
       rightEdge.value = selected;
+      setTravelUntil(0);
     });
     return () => subscription.remove();
   }, [selected, leftEdge, rightEdge]);
 
   const sliding = useAnimatedStyle(() => {
-    const left = Math.min(leftEdge.value, rightEdge.value);
-    const right = Math.max(leftEdge.value, rightEdge.value);
+    const a = travelUntil === 0 ? selected : leftEdge.value;
+    const b = travelUntil === 0 ? selected : rightEdge.value;
+    const left = Math.min(a, b);
+    const right = Math.max(a, b);
     return {
       width: (right - left) * columnWidth + lozengeWidth,
       transform: [{ translateX: left * columnWidth + (columnWidth - lozengeWidth) / 2 }],
     };
-  });
+    // Spelled out for the same reason the scene's is: what this worklet reads
+    // from React is the only thing that puts the pill under the right tab.
+  }, [travelUntil, selected, columnWidth, lozengeWidth]);
 
   /*
    * Out of the way while typing. The bar is behind the keyboard regardless, but
