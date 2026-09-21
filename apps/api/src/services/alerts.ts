@@ -4,6 +4,7 @@ import { emailMessages } from '../email/messages.ts';
 import { query, queryOne } from '../db.ts';
 import { addDays } from '../time.ts';
 import { withinInterruptionBudget } from './interruptions.ts';
+import { countPushTokens } from './push-tokens.ts';
 import { loggingStreak } from './streaks.ts';
 import { dailyTotals } from './summary.ts';
 import { targetsForDate } from './targets.ts';
@@ -445,6 +446,21 @@ async function dueQuietStart(
     [userId, QUIET_START_LOGGED_DAYS],
   );
   if (Number(counted?.days ?? 0) >= QUIET_START_LOGGED_DAYS) return null;
+
+  /*
+   * And a phone to say it to, which is this file's own rule applied to the one
+   * kind that cannot survive breaking it.
+   *
+   * The header says nothing that will not be sent is ever written down, and
+   * gives the reason: a row costs the reader something. For every other kind
+   * what it costs is that week's one interruption, and the event comes round
+   * again. Here it costs the whole feature. The subject is a constant, so a
+   * row written on the evening somebody had no device registered is the only
+   * `quiet_start` that account will ever have — and the account this exists
+   * for is precisely the one whose token may not exist yet, because it is
+   * minted on a launch they have not made.
+   */
+  if ((await countPushTokens(userId)) === 0) return null;
 
   const m = emailMessages(locale);
   return {

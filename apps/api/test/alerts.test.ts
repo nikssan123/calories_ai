@@ -283,12 +283,44 @@ describe('a plan about to lapse', () => {
  * logged days behind the gap, and it is priced into a tier they are not on.
  */
 describe('a start that did not take', () => {
+  /*
+   * A device, in every case below. This is the one kind that checks for one
+   * before it is written down, because its subject is a constant: a row
+   * written on an evening with no token registered is the only `quiet_start`
+   * that account will ever get, and nobody would hear it. Asserted on its own
+   * further down rather than left as a property of the fixture.
+   */
+  beforeEach(async () => {
+    await registerPushToken(user.id, { token: 'ExponentPushToken[quiet]', platform: 'android' });
+  });
+
   it('speaks to a log that stopped in its first few days', async () => {
     await addMeal(user, { date: addDays(TODAY, -3), kcal: 600 });
 
     const alert = await due(EVENING);
 
     expect(alert).toMatchObject({ kind: 'quiet_start' });
+  });
+
+  /*
+   * The whole feature, spent on nobody. `alerts.ts` already refuses to write
+   * down anything it will not send; for every other kind breaking that costs
+   * a week's interruption, and here it costs the only chance there is.
+   */
+  it('is not spent on an account with no phone registered', async () => {
+    const silent = await createUser({ plan: 'free' });
+    await setUserTargets(silent, '2026-01-01', { kcal: 2200, protein_g: 160 });
+    await addMeal(silent, { date: addDays(TODAY, -3), kcal: 600 });
+
+    const alert = await dueAlert({
+      userId: silent.id,
+      prefs: PREFS,
+      now: EVENING,
+      hour: MILESTONE_HOUR,
+      today: TODAY,
+    });
+
+    expect(alert).toBeNull();
   });
 
   /*
