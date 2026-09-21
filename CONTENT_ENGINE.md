@@ -702,6 +702,37 @@ A CC BY track without its credit is an unlicensed use. Wherever a cut using
 Music: "Chill" by American Darlings (S.A.D.), CC BY 4.0
 ```
 
-Pixabay and Uppbeat have better catalogues and cleaner terms, and both refuse
-scripted requests (403 and 429) while working normally in a browser — so a
-human picking a track there beats anything this script can reach.
+Pixabay and Uppbeat have better catalogues and cleaner terms. They refuse
+*scripted* requests — `fetch`/`curl` get 403 and 429 — but that is a block on
+the client, not on the catalogue: **Playwright driving the installed Chrome
+(`channel: 'chrome'`) loads Pixabay normally and returns 200.** The browsers
+Playwright downloads for itself may be a version behind what npm installs, so
+point it at the system Chrome rather than running `playwright install`.
+
+The Pixabay Content License is the reason to bother: commercial use with **no
+attribution required**, where every usable FMA track is CC BY and has to carry
+its credit wherever the cut is posted.
+
+**Search order matters more than the query.** `?order=trending` surfaces an SEO
+farm — one uploader, titles in the shape *"Ambient - Ambient Music"*, all of it
+generic. Browse `/music/search/genre/<genre>/` instead, drop titles matching
+`/^(.+?) - \1 Music$/`, and cap the list at two tracks per uploader.
+
+**Pick by measurement, since nobody in this pipeline can hear.** Download a
+handful and compare spectral centroid (lower is warmer), crest factor in dB
+(higher means it still breathes; stock ambient is usually squashed), and the
+RMS envelope's variance over a 15s window (lower is steadier under a voice or
+a text card). That is how *Cozy Ambience* was chosen for the install ads — 331 Hz
+against 520–572 for its rivals. It is not a substitute for listening to the
+shortlist, and the shortlist is what should be handed over.
+
+| Track | Artist | Licence | Length | Credit required |
+|---|---|---|---|---|
+| Cozy Ambience | leberch (Pixabay) | Pixabay Content | 1:54 | **no** |
+| Documentary Calm | leberch (Pixabay) | Pixabay Content | 2:50 | **no** |
+
+The files stay out of git with the rest of `content/music/`: the Pixabay
+licence forbids redistributing a track on its own. `ad.mts` expects Cozy
+Ambience at `content/music/pixabay-leberch-cozy-ambience.mp3` —
+<https://pixabay.com/music/ambient-cozy-ambience-603940/>; the runner-up is
+<https://pixabay.com/music/ambient-documentary-calm-603945/>.
