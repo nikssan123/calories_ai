@@ -1,11 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { DocumentSchema } from '@/components/legal/DocumentSchema';
 import { Clause, LegalPage, List, Out, P, Row, Rows, Sub } from '@/components/legal/LegalPage';
+
+const DESCRIPTION =
+  'What Day So Far records about you, who it is sent to, how long it is kept, and how to get rid of it.';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy — Day So Far',
-  description:
-    'What Day So Far records about you, who it is sent to, how long it is kept, and how to get rid of it.',
+  description: DESCRIPTION,
   alternates: { canonical: '/privacy' },
 };
 
@@ -20,7 +23,15 @@ export const metadata: Metadata = {
  */
 export default function PrivacyPage() {
   return (
-    <LegalPage
+    <>
+      <DocumentSchema
+        type="WebPage"
+        name="Privacy Policy"
+        path="/privacy"
+        description={DESCRIPTION}
+        updated="2026-09-14"
+      />
+      <LegalPage
       title="Privacy Policy"
       summary="You tell this app what you ate. That is health information, and it is treated as such: it is not sold, not used for advertising, not analysed for anyone but you, and it leaves the server only where the feature you asked for cannot work otherwise."
       updated="2026-09-14"
@@ -364,6 +375,7 @@ export default function PrivacyPage() {
           See also the <Link href="/terms" className="font-extrabold underline decoration-2 underline-offset-2">Terms of Service</Link>.
         </P>
       </Clause>
-    </LegalPage>
+      </LegalPage>
+    </>
   );
 }

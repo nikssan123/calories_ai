@@ -10,10 +10,12 @@ import { formatBodyWeight, formatDay, formatDistance, formatMass, formatNumber }
 import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { CalorieRing } from '@/components/CalorieRing';
+import { Haze, Sky, useSky } from '@/components/Sky';
 import { StreakChip } from '@/components/StreakChip';
 import { MacroBars } from '@/components/MacroBars';
 import { DietQuality } from '@/components/DietQuality';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
+import { Glossy, type GlossyName } from '@/components/icons/Glossy';
 import { RepeatMeals } from '@/components/RepeatMeals';
 import { FoodEditor } from '@/components/FoodEditor';
 import { groupSets } from '@/components/ChatCard';
@@ -22,25 +24,33 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exerciseEmoji, foodEmoji } from '@ct/shared/food-emoji';
 import { useLocale, useT, type MessageKey } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 
 /** The `?date=` the calendar links here with. Anything else is ignored. */
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const MEAL_ORDER: Meal[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 /** Message keys rather than words — resolved per render, see Nav.tsx. */
-const MEAL_LABEL: Record<Meal, MessageKey> = {
+const MEAL_LABEL = {
   breakfast: 'meal.breakfast',
   lunch: 'meal.lunch',
   dinner: 'meal.dinner',
   snack: 'meal.snack',
-};
+} as const satisfies Record<Meal, MessageKey>;
 
-/** The section headings get a picture too, so the day skims as a menu. */
-const MEAL_EMOJI: Record<Meal, string> = {
-  breakfast: '🌅',
-  lunch: '🥪',
-  dinner: '🌙',
-  snack: '🍪',
+/**
+ * The section headings get a picture too, so the day skims as a menu.
+ *
+ * Food rather than clocks — an egg, a bowl, a fish, an apple — because the
+ * glossy set draws things and a sunrise is a time. It also keeps the four
+ * headings four different objects: three of one character is a sticker sheet,
+ * not a menu.
+ */
+const MEAL_ICON: Record<Meal, GlossyName> = {
+  breakfast: 'egg',
+  lunch: 'bowl',
+  dinner: 'fish',
+  snack: 'apple',
 };
 
 /**
@@ -70,6 +80,7 @@ function TodayView() {
   const units = useUnits();
   const locale = useLocale();
   const t = useT();
+  const sky = useSky();
 
   const [day, setDay] = useState<DaySummary | null>(null);
   /*
@@ -196,8 +207,14 @@ function TodayView() {
   })).filter((group) => group.entries.length > 0);
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto pb-8">
-      <header className="mx-auto flex w-full max-w-5xl items-center justify-between px-2 pt-6 pb-1 lg:px-6">
+    <div className="relative min-h-0 flex-1 overflow-y-auto pb-8">
+      {/* The hour, behind the top of the day. The app's first screen is the one
+          thing in the product that should visibly know what time it is — the
+          name is a time of day — and this is the whole of how it says so: no
+          sun, no moon, because the ring is the only object in this sky. */}
+      <Sky sky={sky} />
+
+      <header className="relative mx-auto flex w-full max-w-5xl items-center justify-between px-2 pt-6 pb-1 lg:px-6">
         <Button
           variant="ghost"
           size="icon"
@@ -217,14 +234,27 @@ function TodayView() {
             The mark rides the second line rather than the heading, because
             "Wednesday 23 September" already spends every pixel a phone has
             between the two chevrons. */}
+        {/* Glass rather than a card, because it is sitting on the sky: an
+            opaque white slab up there is a hole punched in the evening. The ink
+            flips with the sky underneath it — measured rather than assumed per
+            hour, see `skyAt` — so the heading is readable at every hour instead
+            of unreadable for the forty minutes either side of dusk. */}
         <Link
           href="/history"
-          className="border-border bg-card hover:bg-muted/60 active:bg-muted/60 rounded-2xl border-2 px-2.5 py-1 text-center transition-colors"
+          className={cn(
+            'glass border-glass-edge rounded-2xl border px-2.5 py-1 text-center transition-colors',
+            sky.inkLight && 'text-sky-ink',
+          )}
         >
           <h1 className="text-title-2">
             {isToday ? t('today.title') : day ? formatDay(day.local_date, locale) : ''}
           </h1>
-          <p className="text-footnote text-muted-foreground flex items-center justify-center gap-1.5 font-semibold">
+          <p
+            className={cn(
+              'text-footnote flex items-center justify-center gap-1.5 font-semibold',
+              sky.inkLight ? 'opacity-85' : 'text-muted-foreground',
+            )}
+          >
             <CalendarDays size={13} strokeWidth={2.4} className="shrink-0" />
             {isToday && day ? formatDay(day.local_date, locale) : t('today.viewCalendar')}
           </p>
@@ -250,11 +280,16 @@ function TodayView() {
         <div className="mx-auto w-full max-w-5xl px-4 pt-4 lg:grid lg:grid-cols-[300px_1fr] lg:items-start lg:gap-10 lg:px-6">
           <div className="space-y-7 lg:sticky lg:top-4">
           <div className="flex flex-col items-center">
-            <CalorieRing
-              consumed={day.consumed.kcal}
-              target={day.targets.kcal}
-              burned={day.burned_kcal}
-            />
+            {/* Pinned to the ring rather than to the sky, so it stays under the
+                ring on a phone and in the left column on a wide screen. */}
+            <div className="relative isolate">
+              <Haze sky={sky} />
+              <CalorieRing
+                consumed={day.consumed.kcal}
+                target={day.targets.kcal}
+                burned={day.burned_kcal}
+              />
+            </div>
             <p className="tnum text-muted-foreground mt-5 text-body font-medium">
               <span className="text-foreground font-extrabold">
                 {formatNumber(Math.round(day.consumed.kcal), locale)}
@@ -292,7 +327,8 @@ function TodayView() {
           {byMeal.map(({ meal, entries }) => (
             <InsetGroup
               key={meal}
-              title={`${MEAL_EMOJI[meal]}  ${t(MEAL_LABEL[meal])}`}
+              title={t(MEAL_LABEL[meal])}
+              icon={<Glossy name={MEAL_ICON[meal]} size={18} />}
               trailing={
                 <span className="tnum text-footnote text-muted-foreground font-bold">
                   {Math.round(entries.reduce((sum, e) => sum + e.kcal, 0))} kcal
@@ -312,7 +348,8 @@ function TodayView() {
 
           {day.exercise_entries.length > 0 && (
             <InsetGroup
-              title={`🏃  ${t('today.exercise')}`}
+              title={t('today.exercise')}
+              icon={<Glossy name="steps" size={18} />}
               trailing={
                 <span className="tnum text-footnote font-bold text-[var(--exercise-text)]">
                   −{day.burned_kcal} kcal
@@ -342,7 +379,11 @@ function TodayView() {
             * reason on `DaySummary.steps`.
             */}
           {day.steps !== null && day.steps > 0 && (
-            <InsetGroup title={t('today.stepsTitle')} footer={t('today.stepsFooter')}>
+            <InsetGroup
+              title={t('today.stepsTitle')}
+              icon={<Glossy name="steps" size={18} />}
+              footer={t('today.stepsFooter')}
+            >
               <InsetRow>
                 <span className="text-figure text-title-2">{t('today.steps')(day.steps)}</span>
               </InsetRow>
@@ -417,7 +458,7 @@ function EntryRow({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="active:bg-muted/60 flex w-full items-center gap-3 px-4 py-3 text-left transition-colors"
+        className="active:bg-muted-field flex w-full items-center gap-3 px-4 py-3 text-left transition-colors"
       >
         <span aria-hidden className="shrink-0 text-[20px] leading-none">
           {foodEmoji(entry.description, entry.meal)}
@@ -437,7 +478,7 @@ function EntryRow({
       </button>
 
       {open && (
-        <div className="bg-muted/40 space-y-2 px-4 py-3">
+        <div className="bg-muted-wash space-y-2 px-4 py-3">
           <ul className="space-y-1.5">
             {entry.items.map((item) => (
               <li key={item.id} className="text-footnote flex justify-between gap-3 font-medium">
@@ -568,7 +609,7 @@ function ExerciseRow({
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
-            className="active:bg-muted/60 -mx-4 -my-3 flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition-colors"
+            className="active:bg-muted-field -mx-4 -my-3 flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left transition-colors"
           >
             {line}
           </button>
@@ -587,7 +628,7 @@ function ExerciseRow({
       </div>
 
       {open && (
-        <div className="bg-muted/40 space-y-2 px-4 py-3">
+        <div className="bg-muted-wash space-y-2 px-4 py-3">
           <ul className="space-y-1.5">
             {groupSets(entry.sets, units, t).map((group) => (
               <li key={group.name} className="text-footnote flex justify-between gap-3 font-medium">

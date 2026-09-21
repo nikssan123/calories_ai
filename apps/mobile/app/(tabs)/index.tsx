@@ -64,6 +64,7 @@ import { MomentBurst, MomentCard, useStreakMoment, type Milestone } from '@/comp
 import { ReminderInvite } from '@/components/ReminderInvite';
 import { MeterChip, PencilGlyph, PlanWall } from '@/components/PlanWall';
 import { Skeleton } from '@/components/Skeleton';
+import { RingRim } from '@/components/RingRim';
 import { Sky, useSky } from '@/components/Sky';
 import Svg, { Circle, Defs, G, LinearGradient, Path, Stop } from 'react-native-svg';
 import { useCountUp } from '@/hooks/useCountUp';
@@ -76,7 +77,7 @@ import { useSaveAccount } from '@/lib/save-account';
 import { enqueue, newId } from '@/lib/outbox';
 import { useOutbox } from '@/hooks/useOutbox';
 import { useRefreshOnReturn } from '@/hooks/useRefreshOnReturn';
-import { duration, ease, font, tint, type as t, useColors, useType, type Sky as SkyColours } from '@/theme';
+import { blend, duration, ease, font, ringTrack, tint, type as t, useColors, useTheme, useType, type Sky as SkyColours } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { haptics } from '@/lib/haptics';
 import { onEntryRemoved } from '@/lib/removals';
@@ -1553,7 +1554,7 @@ const AnimatedArc = Animated.createAnimatedComponent(Circle);
  * top changed — and turns to ink past the target rather than to red.
  */
 function MiniRing({ consumed, target, flash, sky }: { consumed: number; target: number; flash: number; sky: SkyColours }) {
-  const colors = useColors();
+  const { scheme, colors } = useTheme();
   const reduced = useReducedMotion();
   /* Where the cast's spark lands, and the light it makes when it does. */
   const anchor = useAnchor('journal.ring');
@@ -1566,10 +1567,11 @@ function MiniRing({ consumed, target, flash, sky }: { consumed: number; target: 
   const size = 46;
   const stroke = 5.5;
   /*
-   * The coin, and the ring drawn on it. `cy` is a touch above centre so the
-   * ledge below has somewhere to sit inside the same 46pt box — everything
-   * else in the app gets its depth from a solid offset shadow, and this used
-   * to be the one surface that did not.
+   * The coin, and the ring drawn on it.
+   *
+   * `cy` sits a touch above centre and the coin stops short of the box, which
+   * is what leaves the shadow below it — see `face` — somewhere to fall without
+   * being clipped by the edge of the drawing.
    */
   const coin = 21;
   const cy = 22;
@@ -1592,7 +1594,7 @@ function MiniRing({ consumed, target, flash, sky }: { consumed: number; target: 
   }));
 
   /*
-   * A dark sky wants a dark coin.
+   * A dark sky wants a dark coin, and dusk wants the two hours in between.
    *
    * The old track was `glassStrong`, which in dark is rgba(40, 32, 27, 0.88)
    * against a 9am sky of #173d52 — a ring *darker* than the thing it sits on,
@@ -1601,14 +1603,37 @@ function MiniRing({ consumed, target, flash, sky }: { consumed: number; target: 
    * coin is the hour's own sky lifted a little, with a lit rim. In daylight it
    * is the page's warm ground, which reads as an object on the blue.
    *
-   * Keyed on `inkLight` rather than on the scheme, because the light theme has
-   * a night too and a cream disc on indigo reads as a moon — and CAST.md is
-   * clear that the ring is the only object allowed in this sky.
+   * What it did *not* have was a way between the two. Both ends were chosen off
+   * `inkLight`, a boolean, so the coin changed costume the minute the sky's
+   * luminance crossed 0.2 — in the light theme that lands somewhere between six
+   * and seven in the evening, and one minute's repaint took the whole ring from
+   * cream to indigo. `sky.night` is the same measurement as a ramp, and this is
+   * the only ring in the app that reads it: the journal header is where the
+   * hour is the subject. Everything else takes the ends.
+   *
+   * The dark end is also, at last, actually lifted. It was `sky.top` at two
+   * thirds — but `top` is the *darkest* band of the sky and the ring hangs level
+   * with `mid`, so the coin came out darker than the thing it was drawn on and
+   * the hole simply moved: out from under the ring and into the middle of it.
+   * It is the sky at the ring's own height, lifted — and lifted a tenth of the
+   * way rather than a sixth, because the thing doing the lifting is cream and
+   * cream in quantity is how a night sky turns into a grey disc.
+   *
+   * The daylight end is unchanged: the page's warm ground on the blue. A cream
+   * disc on indigo reads as a moon, and CAST.md is clear that the ring is the
+   * only object allowed in this sky.
    */
-  const face = sky.inkLight ? tint(sky.top, 0.66) : tint(colors.background, 0.94);
-  const rim = sky.inkLight ? tint(colors.skyInk, 0.34) : undefined;
+  const face = blend(tint(colors.background, 0.94), blend(sky.mid, colors.skyInk, 0.1), sky.night);
+  /*
+   * The coin's own edge, which is what the ledge became. It arrives with the
+   * dark, because that is when a surface stops being separated by the shadow
+   * under it and starts being separated by the light along its top. Quiet: at a
+   * third it was a grey hoop drawn round the ring, which is the loudest thing
+   * on a header whose subject is the number beside it.
+   */
+  const rim = tint(colors.skyInk, 0.18 * sky.night);
   /* The day's budget before any of it is spent, not an empty groove. */
-  const budget = tint(colors.calories, sky.inkLight ? 0.24 : 0.2);
+  const budget = ringTrack(colors, scheme);
 
   return (
     <View
@@ -1633,9 +1658,22 @@ function MiniRing({ consumed, target, flash, sky }: { consumed: number; target: 
             <Stop offset="1" stopColor={colors.logoRamp} />
           </LinearGradient>
         </Defs>
-        <Circle cx={size / 2} cy={cy + 2.6} r={coin} fill={tint(colors.chunk, sky.inkLight ? 0.5 : 0.13)} />
-        <Circle cx={size / 2} cy={cy} r={coin} fill={face} stroke={rim} strokeWidth={rim ? 1.4 : 0} />
+        {/*
+          Where the ledge used to be: a black disc pushed 2.6pt down, at half of
+          `chunk` — rgba(0, 0, 0, 0.44) under a coin that is itself translucent,
+          which after dark showed through as a crescent of nothing. It is a
+          shadow of the sky's own low band now, and it fades out as the lit rim
+          above comes up, so the coin is never lifted by both at once.
+        */}
+        <Circle
+          cx={size / 2}
+          cy={cy + 2.2}
+          r={coin}
+          fill={blend(tint(colors.chunk, 0.13), tint(sky.low, 0), sky.night)}
+        />
+        <Circle cx={size / 2} cy={cy} r={coin} fill={face} stroke={rim} strokeWidth={1.4} />
         <Circle cx={size / 2} cy={cy} r={radius} stroke={budget} strokeWidth={stroke} fill="none" />
+        <RingRim id="mini-rim" cx={size / 2} cy={cy} r={radius} strokeWidth={stroke} />
         {/* Where the day starts, and where the arc will grow from. */}
         {unspent && <Circle cx={size / 2} cy={cy - radius} r={2.4} fill={colors.calories} />}
         <G rotation={-90} originX={size / 2} originY={cy}>

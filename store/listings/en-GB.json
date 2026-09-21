@@ -1,7 +1,7 @@
 {
   "language": "en-GB",
   "_note": "The default listing's screenshot captions and seed strings. Its title and descriptions are edited in Play Console and live in PLAY_LISTING.md, so they are not here.",
-  "releaseNotes": "The meal editor holds the whole calorie number again — four digits and all — and the diet quality figures keep their units at larger text sizes.\n\nIn the journal, cards land one after another instead of as one panel, and Edit opens in place. The three of them fly up to wait while your entry is read, then hand the card to whoever your meal is mostly made of.\n\nA day with nothing in it yet shows a coin instead of an empty ring.",
+  "releaseNotes": "Building your plan goes more smoothly. On the height and weight question both boxes now stay in view while you type — the weight one used to slip behind the keyboard — and the button underneath says plainly when it isn't ready yet, instead of looking like it is.\n\nSetup opens in centimetres and kilograms wherever you are, and a heading no longer clips the tail of a letter on its last line.",
   "captions": [
     {
       "headline": "Just say\nwhat you ate",

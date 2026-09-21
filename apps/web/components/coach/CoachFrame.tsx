@@ -70,7 +70,7 @@ export function CoachFrame({ children }: { children: React.ReactNode }) {
      * `main` as the one scrolling region is what the global rule expects.
      */
     <div className="bg-background h-shell flex w-full overflow-hidden">
-      <aside className="border-border hidden w-64 shrink-0 flex-col overflow-y-auto border-r-2 lg:flex">
+      <aside className="border-hairline hidden w-64 shrink-0 flex-col overflow-y-auto border-r lg:flex">
         <div className="px-5 pt-6 pb-4">
           <Link href="/coach" className="flex items-center gap-2.5">
             <Logo size={30} />
@@ -94,9 +94,9 @@ export function CoachFrame({ children }: { children: React.ReactNode }) {
                   href={href}
                   aria-current={active(href) ? 'page' : undefined}
                   className={cn(
-                    'flex items-center gap-3 rounded-2xl border-2 px-3 py-2 text-body transition-colors',
+                    'flex items-center gap-3 rounded-2xl border px-3 py-2 text-body transition-colors',
                     active(href)
-                      ? 'chunk border-border bg-card text-foreground font-extrabold [--chunk-depth:3px]'
+                      ? 'chunk border-hairline bg-card text-foreground font-extrabold [--chunk-depth:3px]'
                       : 'text-muted-foreground hover:bg-card/70 hover:text-foreground border-transparent font-bold',
                   )}
                 >
@@ -125,7 +125,7 @@ export function CoachFrame({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-border flex items-center gap-3 border-b-2 px-4 py-3 lg:hidden">
+        <header className="border-hairline flex items-center gap-3 border-b px-4 py-3 lg:hidden">
           <Link href="/coach" className="flex items-center gap-2">
             <Logo size={26} />
             <span className="text-title-2 text-[17px]">Coach</span>

@@ -1,11 +1,15 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { withBrand } from '@/lib/seo';
+import { DocumentSchema } from '@/components/legal/DocumentSchema';
 import { Clause, LegalPage, List, Out, P, Row, Rows } from '@/components/legal/LegalPage';
 
+const DESCRIPTION =
+  'How to get help with Day So Far: where to write, what to include, and the answers to the things people ask most.';
+
 export const metadata: Metadata = {
-  title: 'Support — Day So Far',
-  description:
-    'How to get help with Day So Far: where to write, what to include, and the answers to the things people ask most.',
+  title: withBrand('Help with billing, refunds and your account'),
+  description: DESCRIPTION,
   alternates: { canonical: '/support' },
 };
 
@@ -26,7 +30,15 @@ export const metadata: Metadata = {
  */
 export default function SupportPage() {
   return (
-    <LegalPage
+    <>
+      <DocumentSchema
+        type="ContactPage"
+        name="Support"
+        path="/support"
+        description={DESCRIPTION}
+        updated="2026-09-01"
+      />
+      <LegalPage
       title="Support"
       summary="Write to support@daysofar.com and a person reads it. Most things people write about are below, with the answer rather than a ticket number."
       updated="2026-09-01"
@@ -111,6 +123,7 @@ export default function SupportPage() {
           reports are the main thing that improves it.
         </P>
       </Clause>
-    </LegalPage>
+      </LegalPage>
+    </>
   );
 }

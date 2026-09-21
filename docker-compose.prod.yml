@@ -332,6 +332,25 @@ services:
       web:
         aliases: [calorytracker-api]
 
+    # How long Docker waits for this container to stop before SIGKILL.
+    #
+    # The default is ten seconds and a chat turn is about twenty, so every deploy
+    # was killing any turn that had been running for more than ten — which is
+    # most of them. `src/index.ts` handles SIGTERM and closes Fastify, and Fastify
+    # waits for in-flight requests before the process exits, so the drain was
+    # written and then cut off halfway by the clock.
+    #
+    # 120s is TURN_LEASE_SECONDS from apps/api/src/services/turn-lock.ts: the
+    # longest a turn is allowed to hold its lease, so the longest one can legally
+    # still be running. It is a cap and not a wait — the container exits as soon
+    # as it has drained, which is normally immediate — so the cost of the larger
+    # number is paid only when there is genuinely someone mid-answer.
+    #
+    # bin/deploy.sh does the other half: it waits for live turn leases to clear
+    # before recreating anything, so this grace period is the backstop for a turn
+    # that starts in the gap rather than the primary mechanism.
+    stop_grace_period: 120s
+
     # Claude Code can spike well past its usual footprint. Without a cap an
     # unlucky spike gets a neighbouring project's container OOM-killed instead.
     #

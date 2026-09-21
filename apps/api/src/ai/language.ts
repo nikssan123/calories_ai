@@ -1,4 +1,4 @@
-import { franc } from 'franc';
+import { francAll } from 'franc';
 import type { Locale } from '@ct/shared';
 
 /**
@@ -25,9 +25,29 @@ import type { Locale } from '@ct/shared';
  *
  * So the conversation decides, and the stored locale is the fallback for when
  * there is no conversation to read — a captionless photo on a fresh session, a
- * review generated from a stats blob, a nudge generated from a pattern.
+ * review generated from a stats blob, a nudge generated from a pattern. It is
+ * also the fallback for a conversation too short to read, which is a larger
+ * share of a journal than it sounds: see `confidentIn`.
  *
  * ---
+ *
+ * **A name is only worth having if it reaches the prompt.** It used to be
+ * thrown away by the caller whenever the detector had named it off their own
+ * text, on the theory that a model reading the sentence beats trigrams reading
+ * it — and the theory is right about detection and wrong about what happens
+ * next. Measured on 2026-09-20, the day three of this app's four French
+ * accounts were answered in English: one meal log, Haiku 4.5, the real prompt,
+ * 12 runs each.
+ *
+ *   - 121 letters of plain French, no brief — **4/12** replies in French.
+ *   - The same turn with the language named — **12/12**.
+ *   - "Deux œufs, une tartine et un café", no brief — 8/12; named — 12/12.
+ *
+ * The model does read the sentence. It then writes English anyway, because
+ * everything else in front of it — the system prompt, the day context, the
+ * examples — is English, and a four-word food log is a thin vote against all
+ * of that. So a name we are sure of goes in, and the standing rule in the
+ * stable prompt is what carries the turns where we are not sure.
  *
  * **Why the model changes at all.** `text_log` runs on Haiku 4.5 because it is
  * ~70% of turns and the job — turning "two eggs and toast" into items with
@@ -208,9 +228,10 @@ export interface ReplyLanguage {
    * what the model does unprompted, and a line confirming it is tokens spent on
    * every turn to buy a behaviour that was already there — the same reason
    * `unitsBrief` says nothing about metric. The other is a language the
-   * detector could see but could not name, where the stable prompt's standing
-   * rule ("reply in the language they wrote to you in") is a better instruction
-   * than a guessed one, because it is reading the same words the model is.
+   * detector could see but could not name, and that the stored locale could
+   * not answer for either, where the stable prompt's standing rule ("reply in
+   * the language they wrote to you in") is a better instruction than a guessed
+   * one, because it is reading the same words the model is.
    */
   name: string | null;
   /** Whether the cheap model writes this language well enough to be let near it. */
@@ -219,24 +240,21 @@ export interface ReplyLanguage {
    * Whether the name came from the stored locale rather than from anything they
    * wrote.
    *
-   * The caller decides whether to put the name in a prompt, and the two sources
-   * do not earn that equally. A name off the text is a trigram guess competing
-   * with a model that is reading the same words and reading them better, so it
-   * stays out of the prompt — that is what `detect` requiring the window and
-   * the newest message to agree is already protecting, and naming a language
-   * over the top of the model's own reading would spend it on the one case it
-   * cannot help with.
+   * Every name here is meant for a prompt — the caller no longer picks between
+   * the two sources, because this function no longer hands it a name it should
+   * not use. What used to be that decision is `confidentIn`: a reading the
+   * detector cannot stand behind is not returned as a weaker name, it is not
+   * returned at all, and the locale answers in its place.
    *
-   * A name off the locale is the opposite. It is reached only when there was no
-   * evidence anywhere in the recent conversation — franc saw nothing, the
-   * letter rules saw nothing — so there is nothing for the model to read
-   * either, and what is left is an answer somebody actually gave: onboarding
-   * wrote the column, or the client is drawing the whole app in it. That is not
-   * a guess competing with a better reader. It is the only reader there is.
+   * So what is left for this flag to say is where the answer came from, which
+   * the caller wants for a different reason than it used to: the locale is a
+   * fact about the account and holds for the next turn as much as this one,
+   * while a reading off the text is about this conversation. It is what
+   * distinguishes "they told us" from "we read it", and the tests assert on it.
    *
    * Set on the fallback whether or not it produced a name, because English
-   * produces null for the reason in `name` above and the distinction the caller
-   * needs is about where the answer came from, not whether it was worth saying.
+   * produces null for the reason in `name` above and the distinction is about
+   * where the answer came from, not whether it was worth saying.
    */
   fromLocale: boolean;
 }
@@ -250,15 +268,16 @@ export interface ReplyLanguage {
  * self-confirming, since a turn that wrongly answered a Bulgarian message in
  * English would then look like an English conversation forever.
  *
- * `locale` is the fallback and only the fallback. It is read when the samples
- * say nothing at all, which is the common case for everything generated without
- * a user sentence in front of it: the weekly review, a nudge, a captionless
- * photo, a barcode scanned into an empty box. It also covers the case that
- * looks like a sentence and is not one — "3 yaourts" is seven letters once the
- * digits come off, which is under franc's minimum and comes back `und`.
+ * `locale` is the fallback, and it answers whenever the writing does not. That
+ * is the samples saying nothing at all, which is everything generated without
+ * a user sentence in front of it — the weekly review, a nudge, a captionless
+ * photo, a barcode scanned into an empty box. It is also the sentence too
+ * short to read: "3 yaourts" is seven letters once the digits come off and
+ * comes back `und`, and "1 café lait sirop d agave" is twenty-three and comes
+ * back Tagalog, which is the same amount of evidence wearing a name. See
+ * `confidentIn` for where that line is drawn.
  *
- * Which of the two answered is on `fromLocale`, because the caller does not
- * treat them alike: see the field.
+ * Which of the two answered is on `fromLocale`.
  *
  * The two failure directions are not equally bad, so this leans one way on
  * purpose. Escalating a language Haiku could have handled costs about two and a
@@ -269,7 +288,7 @@ export interface ReplyLanguage {
 export function replyLanguage(samples: string[], locale: Locale): ReplyLanguage {
   const detected = detect(samples);
 
-  if (detected.kind === 'named') {
+  if (detected.kind === 'named' && detected.confident) {
     return {
       name: nameFor(detected.code),
       haiku: HAIKU_LANGUAGES.has(detected.code),
@@ -281,11 +300,42 @@ export function replyLanguage(samples: string[], locale: Locale): ReplyLanguage 
   // spend the capable model, which is the pair of choices that degrades best:
   // the model reads their sentence and answers it in kind, and it is a model
   // that can.
+  //
+  // Deliberately not answered from the locale, unlike the shaky reading below.
+  // This is the case where the two sources are most likely to be about
+  // different things — a sentence in a language nobody has named yet, or
+  // somebody switching mid-conversation, which is `detect`'s veto arriving
+  // here — and naming the app's language over the top of a sentence in another
+  // one is the mistake the whole file exists to undo.
   if (detected.kind === 'unnamed') return { name: null, haiku: false, fromLocale: false };
 
+  const fallback = FRANC_CODES[locale];
+
+  /*
+   * Nothing was written that carries a language, or too little of it was.
+   *
+   * The two used to be separate and are one answer: what the column says. A
+   * reading the detector cannot stand behind is not evidence of anything, and
+   * putting it up against the answer somebody gave in onboarding is how a
+   * French account logging "1 café lait sirop d agave" came to be filed as
+   * Tagalog on 2026-09-20 — 23 letters, none of them a function word, and
+   * every language in the table is a plausible trigram match for a plate of
+   * nouns.
+   *
+   * The model still follows the shaky reading even though the name does not.
+   * They are different questions once the two sources disagree: the name is
+   * what to write and the column is the better witness to it, while the model
+   * is a floor under what *might* have been written, and a language Haiku
+   * cannot spell is a reason to escalate whether or not we believe the guess
+   * that found it. So both have to be clean for a turn to stay cheap, which
+   * costs about two and a half cents when the guess was wrong and keeps the
+   * failure this file exists for off the cheap model when it was right.
+   */
   return {
-    name: nameFor(FRANC_CODES[locale]),
-    haiku: HAIKU_LANGUAGES.has(FRANC_CODES[locale]),
+    name: nameFor(fallback),
+    haiku:
+      HAIKU_LANGUAGES.has(fallback) &&
+      (detected.kind === 'none' || HAIKU_LANGUAGES.has(detected.code)),
     fromLocale: true,
   };
 }
@@ -356,8 +406,16 @@ const LOCALE_CODES: Record<string, Locale> = {
 };
 
 type Detection =
-  /** A language, named. */
-  | { kind: 'named'; code: string }
+  /**
+   * A language, named.
+   *
+   * `confident` is whether the name is fit to be put in a prompt as an
+   * instruction — see `confidentIn`. A name without it still decides the
+   * model, because a language Haiku cannot spell is a reason to escalate
+   * however shaky the reading that found it; what it does not decide is the
+   * sentence, which `replyLanguage` answers from the stored locale instead.
+   */
+  | { kind: 'named'; code: string; confident: boolean }
   /** Prose we could not put a name to — see `ReplyLanguage.name`. */
   | { kind: 'unnamed' }
   /** Nothing to go on, so nothing was decided. The caller's fallback applies. */
@@ -420,18 +478,30 @@ function identify(sample: string): Detection {
   if (sample.length === 0) return { kind: 'none' };
 
   // Cyrillic is settled before franc rather than by it — see `readCyrillic`.
+  // Confident when it answers at all: these rules are letters and whole words
+  // that one language has and the others do not, which is why they run in
+  // front of the trigrams rather than behind them. Where they are unsure they
+  // say so by returning null.
   if (CYRILLIC.test(sample)) {
     const code = readCyrillic(sample);
-    return code === null ? { kind: 'unnamed' } : { kind: 'named', code };
+    return code === null ? { kind: 'unnamed' } : { kind: 'named', code, confident: true };
   }
 
   // Latin letters are not evidence of a Latin-script language — see
   // `readLatinBulgarian`. Words again, and before franc for the same reason:
   // the trigrams of Bulgarian spelled this way are a neighbour's trigrams.
-  if (readLatinBulgarian(sample)) return { kind: 'named', code: 'bul' };
+  // Confident for the same reason as above, and it already takes two markers
+  // no neighbour has before it will answer.
+  if (readLatinBulgarian(sample)) return { kind: 'named', code: 'bul', confident: true };
 
-  const detected = franc(sample, { only: CANDIDATES });
-  if (detected !== 'und') return { kind: 'named', code: detected };
+  // francAll ranks every candidate and scores the winner 1, so the runner-up
+  // is how close anything else came. It returns a single `und` row when the
+  // sample is too short for any of them.
+  const [best, runnerUp] = francAll(sample, { only: CANDIDATES });
+  if (best !== undefined && best[0] !== 'und') {
+    const code = best[0];
+    return { kind: 'named', code, confident: confidentIn(sample, code, runnerUp?.[1] ?? 0) };
+  }
 
   // Undetermined: too short for trigrams to mean anything. Plain ASCII is
   // English, or close enough to it that the stored locale is a safe fallback —
@@ -439,6 +509,65 @@ function identify(sample: string): Detection {
   // name, and naming it is the whole basis for the tables above.
   return /[^\x00-\x7F]/.test(sample) ? { kind: 'unnamed' } : { kind: 'none' };
 }
+
+/**
+ * Whether franc's answer is solid enough to be handed to a model as an
+ * instruction.
+ *
+ * Not the same question as whether it is right. What is kept out is a name
+ * stated with enough authority to talk over a model that would otherwise have
+ * read the sentence for itself: "write to this person in Polish" above a
+ * Slovene meal log is the bug at the top of this file again, with the
+ * detector's guess standing where the locale column used to.
+ *
+ * Two things say a reading is thin, and both were measured over the sentences
+ * in `test/language.test.ts` — every language's meal log, its follow-up
+ * question, and the two together, 80 readings in all.
+ *
+ * **How much was written.** Below about thirty-five letters franc is a coin
+ * toss on a food log: "quante calorie mi restano oggi?" reads as Portuguese,
+ * "il me reste combien de calories" as Galician, "dve jajci in rezina kruha z
+ * maslom" as Polish. At 36 and up every reading in the corpus is either right
+ * or one of the near-neighbours the runner-up rule below catches.
+ *
+ * **Whether anything else came close.** The 36-letter floor is a Latin-script
+ * number and would silently exclude the scripts franc is *best* at — thirty
+ * characters of Japanese is a paragraph, and nothing else in the table is
+ * written in kana. So an unopposed reading is confident at any length, where
+ * unopposed means the second-place language scored at or under half. The same
+ * rule read the other way is what rejects the pairs that share nearly every
+ * trigram: Croatian against Bosnian at 0.997, Slovene against Serbian at
+ * 0.999, Indonesian against Malay at 0.973. Those are not readings, they are
+ * ties, and at that distance the loser is as good a guess as the winner.
+ *
+ * Together they name 43 of the 80 and get one wrong, which is the Finnish
+ * clause below.
+ */
+function confidentIn(sample: string, code: string, runnerUp: number): boolean {
+  // Estonian reads as Finnish and is not close enough to anything for the
+  // rules above to notice: 65 letters, and the runner-up is Hungarian at 0.88.
+  // Letters settle it as they do for Cyrillic — õ is an ordinary Estonian
+  // letter and Finnish is not written with it at all, so a Finnish reading of
+  // a sample containing one is not a reading to put in a prompt. Left as a
+  // refusal rather than a rename: Estonian escalates either way, so what is at
+  // stake is the name, and the locale answers it better than this would.
+  if (code === 'fin' && ESTONIAN_LETTER.test(sample)) return false;
+
+  if (runnerUp > CONFUSABLE) return false;
+  return sample.length >= CONFIDENT_LETTERS || runnerUp <= UNOPPOSED;
+}
+
+/** Letters of conversation before a trigram reading is worth naming. */
+const CONFIDENT_LETTERS = 36;
+
+/** A runner-up this close is a tie, not a second place. */
+const CONFUSABLE = 0.95;
+
+/** A runner-up this far back leaves the reading standing on its own. */
+const UNOPPOSED = 0.5;
+
+/** Estonian has õ; Finnish, the language it is read as, does not. */
+const ESTONIAN_LETTER = /õ/iu;
 
 const CYRILLIC = /\p{Script=Cyrillic}/u;
 

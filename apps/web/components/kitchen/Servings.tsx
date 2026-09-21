@@ -47,7 +47,7 @@ export function Servings({
         </p>
       </div>
 
-      <div className="bg-muted border-border flex shrink-0 items-center rounded-full border-2">
+      <div className="bg-muted border-hairline flex shrink-0 items-center rounded-full border">
         <button
           type="button"
           onClick={() => step(-SERVING_STEP)}

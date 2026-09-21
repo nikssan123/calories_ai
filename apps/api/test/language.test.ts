@@ -351,6 +351,121 @@ describe('a log too short to carry a language', () => {
 });
 
 /*
+ * The turns that were answered in English on 2026-09-20.
+ *
+ * Four French accounts, one message each, three of them answered in English —
+ * and by then nothing upstream of the prompt was wrong about any of them. The
+ * language resolved to French every time; what threw it away was the gate in
+ * `ai/run.ts`, which said a name off somebody's own text was the one thing not
+ * worth telling the model, because the model was reading the same text and
+ * reading it better.
+ *
+ * It is. It writes English anyway — 8 times in 12 on the first of these, with
+ * 121 letters of unambiguous French in front of it — because the prompt around
+ * the sentence is English and a food log is a thin vote against it. Named, the
+ * same turn came back French 12 times in 12.
+ *
+ * These are the real messages, and what is pinned is that each one arrives
+ * with a name on it. Which source answered differs and is the point of the
+ * three cases: one was read, one was too short to read, and one was read as
+ * Tagalog.
+ */
+describe('the French accounts this was written for', () => {
+  const LONG =
+    '2 petits pains grillés au froment, 5 grammes de beurre, 10 grammes de confiture de prunes, une cc de miel, 50 centilitre de lait écrémé';
+
+  it('names a sentence long enough to be read, whatever the app is drawn in', () => {
+    // The one that matters most: the column says English — the migration's
+    // default — and the writing says French, so this is the feature at the top
+    // of `ai/language.ts` working and then being told.
+    for (const locale of ['fr', 'en'] as const) {
+      expect(replyLanguage([LONG], locale)).toEqual({
+        name: 'French',
+        haiku: true,
+        fromLocale: false,
+      });
+    }
+  });
+
+  it('answers a sentence too short to read from the stored locale', () => {
+    // "Deux œufs, une tartine et un café" is 32 letters, and franc is a coin
+    // toss under about 35 of them — it reads the Italian meal log in this file
+    // as Portuguese at 30. So the column answers, and says so.
+    expect(replyLanguage(['Deux œufs, une tartine et un café'], 'fr')).toEqual({
+      name: 'French',
+      haiku: true,
+      fromLocale: true,
+    });
+  });
+
+  it('does not let a plate of nouns outrank the answer they gave', () => {
+    // "1 café lait sirop d agave" reads as Tagalog: 23 letters, not one of them
+    // a function word, and every language in the table is a plausible trigram
+    // match for a list of foods. The name comes off the column instead — and
+    // the model does not, because a reading we are not believing is still a
+    // reason not to trust the cheap model with it.
+    expect(replyLanguage(['1 café lait sirop d agave'], 'fr')).toEqual({
+      name: 'French',
+      haiku: false,
+      fromLocale: true,
+    });
+  });
+
+  it('still says nothing when neither source knows', () => {
+    // The same two turns on an English-drawn account. There is nothing to read
+    // and nothing stored worth saying, which is the one case the standing rule
+    // in the stable prompt is left to carry alone.
+    expect(replyLanguage(['Deux œufs, une tartine et un café'], 'en').name).toBeNull();
+    expect(replyLanguage(['1 café lait sirop d agave'], 'en').name).toBeNull();
+  });
+});
+
+/*
+ * When a reading is solid enough to be handed to a model as an instruction.
+ *
+ * The bar is not "is it right" — it is whether being wrong here would override
+ * a model that had it right, which is the same shape as the bug at the top of
+ * this file with franc's guess in the locale column's place. See `confidentIn`.
+ */
+describe('how sure the detector has to be', () => {
+  it('names a language nobody else came close to, however short', () => {
+    // A 36-letter floor is a Latin-script number, and fifteen characters of
+    // Japanese is a paragraph. Nothing else in the table is written in kana, so
+    // there is no runner-up to be wrong about.
+    expect(replyLanguage(['卵二個とバターを塗ったパン一枚'], 'en').name).toBe('Japanese');
+    expect(replyLanguage(['계란 두 개랑 버터 바른 빵 한 조각'], 'en').name).toBe('Korean');
+  });
+
+  it('names an ordinary sentence in a language the app does not ship in', () => {
+    expect(replyLanguage(['due uova e una fetta di pane con burro'], 'en').name).toBe('Italian');
+  });
+
+  it('names nothing when two languages tie', () => {
+    // Croatian scores 1.000 as Bosnian with Serbian at 0.997 behind it. That is
+    // not a reading, it is a tie, and the loser is as good a guess as the
+    // winner — so the column answers, and on an English-drawn account it has
+    // nothing to say. The model escalates on the reading regardless.
+    const croatian = ['dva jaja i kriška kruha s maslacem', 'koliko mi je kalorija ostalo danas?'];
+    expect(replyLanguage(croatian, 'en')).toEqual({ name: null, haiku: false, fromLocale: true });
+    expect(replyLanguage(croatian, 'hr')).toEqual({
+      name: 'Croatian',
+      haiku: false,
+      fromLocale: true,
+    });
+  });
+
+  it('does not tell an Estonian speaker to write Finnish', () => {
+    // The one reading the two rules above get wrong: Estonian comes back as
+    // Finnish at 65 letters with Hungarian a distant second, so neither length
+    // nor the runner-up catches it. õ does — it is an ordinary Estonian letter
+    // and Finnish is not written with it at all.
+    const estonian = ['kaks muna ja viil leiba võiga', 'mitu kalorit mul täna veel alles on?'];
+    expect(replyLanguage(estonian, 'en').name).toBeNull();
+    expect(replyLanguage(estonian, 'en').haiku).toBe(false);
+  });
+});
+
+/*
  * Prose we can see but cannot name. Both halves of the answer are deliberate:
  * say nothing, because the standing rule in the stable prompt is reading the
  * same sentence the model is and is a better instruction than a guess, and

@@ -109,7 +109,7 @@ export function RecipeReader({
             onClick={onToggleSave}
             aria-pressed={saved}
             aria-label={saved ? t('recipe.unsaveThis') : t('recipe.saveThis')}
-            className="bg-card border-border chunk-sm text-footnote inline-flex h-9 items-center gap-1.5 rounded-full border-2 px-3.5 font-semibold"
+            className="bg-card border-hairline chunk-sm text-footnote inline-flex h-9 items-center gap-1.5 rounded-full border px-3.5 font-semibold"
           >
             <Bookmark
               size={14}
@@ -131,12 +131,12 @@ export function RecipeReader({
         */}
         <div className="grid gap-4 lg:grid-cols-5 lg:items-start">
           {photo ? (
-            <div className="bg-muted border-border chunk aspect-[4/3] overflow-hidden rounded-[var(--radius)] border-2 lg:col-span-2">
+            <div className="bg-muted border-hairline chunk aspect-[4/3] overflow-hidden rounded-[var(--radius)] border lg:col-span-2">
               <img src={photo} alt={title} className="h-full w-full object-cover" />
             </div>
           ) : (
             emoji && (
-              <div className="bg-muted/60 border-border chunk flex aspect-[4/3] items-center justify-center rounded-[var(--radius)] border-2 lg:col-span-2">
+              <div className="bg-muted-field border-hairline chunk flex aspect-[4/3] items-center justify-center rounded-[var(--radius)] border lg:col-span-2">
                 <span aria-hidden className="text-[96px] leading-none opacity-90">
                   {emoji}
                 </span>
@@ -169,7 +169,7 @@ export function RecipeReader({
             </div>
 
             {/* What it costs, at the size the decision deserves. */}
-            <div className="bg-card border-border chunk mt-4 flex flex-wrap items-end gap-x-6 gap-y-3 rounded-[var(--radius)] border-2 px-4 py-3.5">
+            <div className="bg-card border-hairline chunk mt-4 flex flex-wrap items-end gap-x-6 gap-y-3 rounded-[var(--radius)] border px-4 py-3.5">
               <div>
                 <p className="text-figure text-[34px] leading-none">{Math.round(kcal)}</p>
                 <p className="text-footnote text-muted-foreground mt-1">kcal{' · '}{servingLabel}</p>
@@ -195,7 +195,7 @@ export function RecipeReader({
               the thing a cook looks back at mid-step is the list. */}
           <section className="lg:sticky lg:top-2 lg:col-span-2">
             <h2 className="text-eyebrow text-muted-foreground px-1">{t('recipe.ingredients')}</h2>
-            <ul className="bg-card border-border divide-border chunk mt-2 divide-y-2 overflow-hidden rounded-[var(--radius)] border-2">
+            <ul className="bg-card border-hairline divide-hairline chunk mt-2 divide-y overflow-hidden rounded-[var(--radius)] border">
               {ingredients.map((item, index) => (
                 <li
                   key={index}
@@ -229,13 +229,13 @@ export function RecipeReader({
               {steps.map((step, index) => (
                 <li
                   key={index}
-                  className="bg-card border-border chunk flex gap-3.5 rounded-[var(--radius)] border-2 px-4 py-3.5"
+                  className="bg-card border-hairline chunk flex gap-3.5 rounded-[var(--radius)] border px-4 py-3.5"
                 >
                   {/* Numbered as an object rather than a superscript: this is
                       the thing you look back at the page to find again. */}
                   <span
                     aria-hidden
-                    className="bg-muted text-figure border-border flex size-8 shrink-0 items-center justify-center rounded-full border-2 text-[15px]"
+                    className="bg-muted text-figure border-hairline flex size-8 shrink-0 items-center justify-center rounded-full border text-[15px]"
                   >
                     {index + 1}
                   </span>
@@ -247,7 +247,7 @@ export function RecipeReader({
         </div>
 
         {footnote && (
-          <p className="text-footnote text-muted-foreground border-border mt-6 border-t-2 pt-4">
+          <p className="text-footnote text-muted-foreground border-hairline mt-6 border-t pt-4">
             {footnote}
           </p>
         )}
@@ -255,7 +255,7 @@ export function RecipeReader({
 
       {/* Pinned, because the decision to log is made at the end of the method
           and the method is longer than a screen. */}
-      <div className="material border-border sticky bottom-0 z-20 border-t-2">
+      <div className="material border-hairline sticky bottom-0 z-20 border-t">
         <div className="mx-auto w-full max-w-5xl px-4 py-3 lg:px-6">{actions}</div>
       </div>
     </div>

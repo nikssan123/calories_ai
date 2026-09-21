@@ -19,6 +19,7 @@ import { api } from '@/lib/api';
 import { useUnits } from '@/lib/units';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
+import { Glossy } from '@/components/icons/Glossy';
 import { Sparkline } from '@/components/Sparkline';
 import { AchievementsRow } from '@/components/Achievements';
 import { TrainingWeek } from '@/components/TrainingWeek';
@@ -104,7 +105,7 @@ export default function ProgressPage() {
             const next = Number(values[0]);
             if (Number.isFinite(next)) setDays(next);
           }}
-          className="bg-card border-border chunk-sm rounded-full border-2 p-1"
+          className="bg-card border-hairline chunk-sm rounded-full border p-1"
         >
           {WINDOWS.map((w) => (
             <ToggleGroupItem
@@ -132,7 +133,11 @@ export default function ProgressPage() {
           <AchievementsRow earned={progress.achievements} className="lg:col-span-2" />
 
           {/* §12: lead with the trend, not any individual day. */}
-          <InsetGroup title={t('progress.weightTitle')} className="lg:row-span-2">
+          <InsetGroup
+            title={t('progress.weightTitle')}
+            icon={<Glossy name="weight" size={18} />}
+            className="lg:row-span-2"
+          >
             <div className="px-4 pt-4 pb-2">
               {progress.weight.current_kg === null ? (
                 <p className="text-muted-foreground py-2 text-body font-medium">
@@ -183,7 +188,7 @@ export default function ProgressPage() {
               )}
             </div>
 
-            <div className="divide-border grid grid-cols-3 divide-x-2">
+            <div className="divide-hairline grid grid-cols-3 divide-x">
               <Stat
                 label={t('progress.avg7d')}
                 value={
@@ -222,7 +227,7 @@ export default function ProgressPage() {
                 onChange={(e) => setWeightInput(e.target.value)}
                 onWheel={(e) => e.currentTarget.blur()}
                 placeholder={t('progress.logTodaysWeight')(bodyWeightUnit(units))}
-                className="bg-muted/60 border-border h-11 rounded-full border-2 px-4 text-body"
+                className="bg-muted-field border-hairline h-11 rounded-full border px-4 text-body"
               />
               <Button
                 type="submit"
@@ -234,7 +239,7 @@ export default function ProgressPage() {
             </form>
           </InsetGroup>
 
-          <InsetGroup title={t('progress.caloriesTitle')}>
+          <InsetGroup title={t('progress.caloriesTitle')} icon={<Glossy name="streak" size={18} />}>
             <div className="px-4 pt-4 pb-3">
               <div className="flex items-baseline gap-2">
                 <span className="text-figure text-large-title">
@@ -255,7 +260,7 @@ export default function ProgressPage() {
             </div>
           </InsetGroup>
 
-          <InsetGroup title={t('progress.proteinTitle')}>
+          <InsetGroup title={t('progress.proteinTitle')} icon={<Glossy name="protein" size={18} />}>
             <InsetRow className="py-4">
               <div className="flex-1">
                 <div className="flex items-baseline gap-2">
@@ -285,6 +290,7 @@ export default function ProgressPage() {
           {progress.quality.days_measured > 0 && (
             <InsetGroup
               title={t('progress.qualityTitle')}
+              icon={<Glossy name="avocado" size={18} />}
               footer={
                 progress.quality.coverage < QUALITY_COVERAGE_FLOOR
                   ? t('progress.qualityFooter')(
@@ -314,7 +320,7 @@ export default function ProgressPage() {
                       'text-footnote rounded-full px-3 py-1.5 transition-colors',
                       nutrient === n.key
                         ? 'bg-muted text-foreground ring-1 ring-[var(--calories-text)]'
-                        : 'bg-muted/40 text-muted-foreground hover:text-foreground',
+                        : 'bg-muted-wash text-muted-foreground hover:text-foreground',
                     )}
                   >
                     {t(n.label)}
@@ -324,7 +330,7 @@ export default function ProgressPage() {
 
               <QualityChart quality={progress.quality} nutrient={nutrient} />
 
-              <div className="divide-border grid grid-cols-3 divide-x-2">
+              <div className="divide-hairline grid grid-cols-3 divide-x">
                 {NUTRIENTS.filter((n) => n.key !== nutrient).map((n) => {
                   const value = progress.quality.average[n.key];
                   return (
@@ -343,9 +349,10 @@ export default function ProgressPage() {
           {/* Exercise has its own tab now; this is the pointer, not the data. */}
           <InsetGroup
             title={t('progress.exerciseTitle')}
+            icon={<Glossy name="steps" size={18} />}
             footer={t('progress.exerciseFooter')}
           >
-            <Link href="/exercise" className="block transition-colors active:bg-muted/60">
+            <Link href="/exercise" className="block transition-colors active:bg-muted-field">
               <InsetRow className="py-4">
                 <div className="flex-1">
                   <div className="flex items-baseline gap-2">

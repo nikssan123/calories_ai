@@ -25,7 +25,7 @@ export function DataTable({
       <div className="overflow-x-auto">
         <table className="w-full min-w-max border-collapse text-left">
           <thead>
-            <tr className="border-border border-b-2">
+            <tr className="border-hairline border-b">
               {columns.map((column) => (
                 <th
                   key={column}
@@ -36,7 +36,7 @@ export function DataTable({
               ))}
             </tr>
           </thead>
-          <tbody className="divide-border divide-y-2">{children}</tbody>
+          <tbody className="divide-hairline divide-y">{children}</tbody>
         </table>
       </div>
       {isEmpty && (

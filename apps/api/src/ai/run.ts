@@ -275,37 +275,31 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
   const language = await resolveLanguage(input, history, speaking);
 
   /*
-   * The language is *named* only when nobody better is reading the turn.
+   * Every language we have a name for is named, and there is no gate left here.
    *
-   * With a sentence in front of it the model is the better detector, and by a
-   * distance — franc is reading meal logs through trigrams and calls Slovene
-   * Polish and Estonian Finnish on a short one, while the model is reading the
-   * actual words. A brief naming the wrong language would override a rule that
-   * had it right, so on those turns the standing instruction in
-   * `STABLE_SYSTEM_PROMPT` carries it alone — including the part that fixes the
-   * thing this was built for, which was never the language being wrong so much
-   * as it being translated into rather than written in.
+   * There were two, and both were the same theory: with a sentence in front of
+   * it the model reads the language better than trigrams do, so a brief naming
+   * one could only override a rule that already had it right. The first gate
+   * was emptiness, which answered "3 yaourts" in English on 2026-09-17 because
+   * two words are not empty. The second was `fromLocale`, and it answered
+   * three of this app's four French accounts in English on 2026-09-20,
+   * including 121 letters of unambiguous French.
    *
-   * That argument is about a turn the model *can* read, and the gate used to
-   * assume any turn with text in it was one. It is not. The first French
-   * account this app ever had opened with "3 yaourts" on 2026-09-17 and was
-   * answered "Logged." — seven letters once the digits come off, which is under
-   * franc's minimum and therefore also under what a model can be expected to
-   * commit to. `replyLanguage` had already resolved it to French off the stored
-   * locale and this line threw the answer away, because the turn was not empty.
+   * What the theory misses is that reading the language and writing in it are
+   * different acts. The model does read the sentence — and then writes English
+   * anyway 8 times in 12, because the system prompt, the day context and every
+   * example in front of it are English and a food log is a thin vote against
+   * all of that. Named, the same turn comes back in French 12 times in 12. The
+   * measurement is in `ai/language.ts`.
    *
-   * So the test is `fromLocale` rather than emptiness. That flag is set only
-   * when nothing in the recent conversation carried a language at all — which
-   * is the same silence a captionless photo arrives in, whether or not a couple
-   * of words came with it. In that silence the stored locale is not a second
-   * opinion competing with the model's reading; it is somebody's actual answer,
-   * and it is the only reading there is.
-   *
-   * The turns where franc *did* name something still say nothing, which is the
-   * half worth keeping: a near-miss like Slovene-as-Polish never reaches a
-   * prompt, and the model goes on reading the sentence for itself.
+   * The half of the theory that was right lives in `confidentIn` now, which is
+   * where it belongs: a reading franc cannot stand behind is not handed over
+   * as a weaker name for this line to filter, it is not handed over at all,
+   * and the stored locale answers in its place. So by the time a name reaches
+   * here it is either something they wrote clearly enough to be read or
+   * something they told us, and both are worth saying.
    */
-  const named = input.text.trim().length === 0 || language.fromLocale ? language.name : null;
+  const named = language.name;
 
   /*
    * The turn as the model sees it: where the day stands, then what they said.

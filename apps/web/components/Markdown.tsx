@@ -81,14 +81,14 @@ function BlockView({ block }: { block: Block }) {
 
     case 'quote':
       return (
-        <blockquote className="border-border text-muted-foreground space-y-2 border-l-2 pl-3">
+        <blockquote className="border-hairline text-muted-foreground space-y-2 border-l pl-3">
           {renderBlocks(block.children)}
         </blockquote>
       );
 
     case 'code':
       return (
-        <pre className="bg-muted border-border overflow-x-auto rounded-[var(--radius)] border-2 p-3">
+        <pre className="bg-muted border-hairline overflow-x-auto rounded-[var(--radius)] border p-3">
           <code className="text-footnote font-mono">{block.text}</code>
         </pre>
       );
@@ -97,7 +97,7 @@ function BlockView({ block }: { block: Block }) {
       return <TableView block={block} />;
 
     case 'rule':
-      return <hr className="border-border border-t-2" />;
+      return <hr className="border-hairline border-t" />;
   }
 }
 
@@ -124,10 +124,10 @@ function ItemBody({ blocks }: { blocks: Block[] }) {
  */
 function TableView({ block }: { block: Extract<Block, { kind: 'table' }> }) {
   return (
-    <div className="border-border overflow-x-auto rounded-[var(--radius)] border-2">
+    <div className="border-hairline overflow-x-auto rounded-[var(--radius)] border">
       <table className="text-footnote w-full border-collapse">
         <thead>
-          <tr className="border-border bg-muted border-b-2">
+          <tr className="border-hairline bg-muted border-b">
             {block.head.map((cell, i) => (
               <th key={i} className={cn('px-2.5 py-1.5 font-extrabold', column(block.align[i]))}>
                 {renderInline(cell)}
@@ -137,7 +137,7 @@ function TableView({ block }: { block: Extract<Block, { kind: 'table' }> }) {
         </thead>
         <tbody>
           {block.rows.map((row, r) => (
-            <tr key={r} className="border-border/60 border-b last:border-0">
+            <tr key={r} className="border-hairline/60 border-b last:border-0">
               {block.head.map((_, c) => (
                 <td key={c} className={cn('tnum px-2.5 py-1.5 font-medium', column(block.align[c]))}>
                   {renderInline(row[c] ?? [])}
@@ -184,7 +184,7 @@ function renderInline(nodes: Inline[]): ReactNode {
         return (
           <code
             key={i}
-            className="bg-muted border-border rounded-md border px-1 py-0.5 font-mono text-[0.875em]"
+            className="bg-muted border-hairline rounded-md border px-1 py-0.5 font-mono text-[0.875em]"
           >
             {node.text}
           </code>

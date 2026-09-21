@@ -71,12 +71,22 @@ export const serifFacesFor = (locale: Locale) =>
 /**
  * The serif's floor, in the same sense as `DISPLAY_LEADING`.
  *
- * Fraunces' descender is 0.255em and its caps 0.70em, so a figure alone would
- * survive at 1em — but a capital with a caron or an acute on top of it does
- * not, and Czech, Hungarian and Romanian headings put one on the first line
- * constantly. Literata is taller on both counts and gets its own.
+ * Read off the font files rather than estimated. Fraunces is 2000 units per em
+ * with a typo ascender of 1956 and a descender of −510, so a line box has to be
+ * **1.233em** to hold one: 0.978 above the baseline and 0.255 below it.
+ *
+ * This was 1.14, which came from adding the descender to the *cap* height
+ * (0.70em) rather than to the ascender. Caps and a descender do fit in 1.14em;
+ * an ascender and a descender do not, and Android clips what overflows. It only
+ * showed on the **last line** of a heading — earlier lines have the next line's
+ * box to spill into — so "Your height and weight" lost the tail of its g while
+ * "Your height and" above it was untouched. Seen on the onboarding body screen
+ * at a system text size of 1.15, which is what made 0.093em wide enough to
+ * notice; it was being cut at every size.
+ *
+ * Literata is taller on both counts and gets its own, which was already clear.
  */
-export const SERIF_LEADING = { fraunces: 1.14, literata: 1.24 } as const;
+export const SERIF_LEADING = { fraunces: 1.24, literata: 1.24 } as const;
 
 /**
  * The display face, per script.

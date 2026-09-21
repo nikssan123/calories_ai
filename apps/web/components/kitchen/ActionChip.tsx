@@ -26,7 +26,7 @@ export const chipClass = cn(
   // Not `pointer-events-none`: the `disabled` attribute already stops the
   // click, and killing hover as well would suppress the title that explains
   // why it is off.
-  'hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent',
+  'hover:bg-muted-field disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent',
 );
 
 export function ActionChip({

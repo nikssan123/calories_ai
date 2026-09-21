@@ -69,11 +69,10 @@ export function RingWidget({
             target: snapshot.target,
             size: box,
             strokeWidth: stroke,
-            track: colors.muted,
             fill: colors.calories,
             ramp: colors.ramp,
-            ledge: colors.ledge,
-            ledgeOpacity: colors.ledgeOpacity,
+            track: colors.track,
+            trackOpacity: colors.trackOpacity,
             over: colors.foreground,
           })}
           style={{ height: box, width: box }}

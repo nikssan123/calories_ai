@@ -212,7 +212,7 @@ export function FridgeScan({
           {scanning ? <Loader2 size={17} className="animate-spin" /> : <Camera size={17} />}
         </Button>
       ) : (
-        <div className="border-border border-t-2 px-4 py-3">
+        <div className="border-hairline border-t px-4 py-3">
           <Button
             variant="secondary"
             disabled={scanning}
@@ -249,7 +249,7 @@ export function FridgeScan({
                       // survives the theme.
                       on
                         ? 'bg-muted text-foreground ring-1 ring-[var(--calories-text)]'
-                        : 'bg-muted/40 text-muted-foreground line-through opacity-70',
+                        : 'bg-muted-wash text-muted-foreground line-through opacity-70',
                     )}
                   >
                     {on ? <Check size={13} /> : <X size={13} />}
@@ -274,7 +274,7 @@ export function FridgeScan({
               height, and the pair used to collapse to the height of their own
               text — two 24px slivers on exactly the phone this is used from.
             */}
-            <div className="border-border flex flex-col gap-2 border-t-2 p-3 sm:flex-row">
+            <div className="border-hairline flex flex-col gap-2 border-t p-3 sm:flex-row">
               <Button
                 onClick={() => void commit('stock')}
                 disabled={busy}

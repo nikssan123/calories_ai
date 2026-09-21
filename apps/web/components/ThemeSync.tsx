@@ -87,6 +87,34 @@ export function useTheme(): {
 }
 
 /**
+ * Which palette is actually on screen, "system" already resolved.
+ *
+ * The preference above is what somebody chose; this is what they are looking
+ * at, which is what anything drawing in colours the stylesheet cannot reach
+ * needs — the sky over Today is three hand-mixed gradients and has to know
+ * whether it is painting the light theme's evening or the dark one's.
+ *
+ * Starts light on the server and during the first client render, for the same
+ * reason `useTheme` starts at "system": reading `matchMedia` while rendering
+ * would make the markup depend on the machine and mismatch what was sent. The
+ * sky is drawn by an effect either way, so nobody sees the light one first.
+ */
+export function useScheme(): 'light' | 'dark' {
+  const { theme } = useTheme();
+  const [systemDark, setSystemDark] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    setSystemDark(media.matches);
+    const onChange = (event: MediaQueryListEvent) => setSystemDark(event.matches);
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
+
+  return theme === 'system' ? (systemDark ? 'dark' : 'light') : theme;
+}
+
+/**
  * Keeps the document in step with the OS while the preference is "system".
  * First paint is handled by THEME_INIT_SCRIPT; this only maintains it.
  */

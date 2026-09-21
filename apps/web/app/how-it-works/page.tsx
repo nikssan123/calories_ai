@@ -1,15 +1,22 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { OG_IMAGE, withBrand } from '@/lib/seo';
+import { DocumentSchema } from '@/components/legal/DocumentSchema';
 import { Clause, LegalPage, List, Out, P, Row, Rows, Sub } from '@/components/legal/LegalPage';
 
 const DESCRIPTION =
   'How Day So Far turns a sentence into a calorie count: what reads your words, where the nutrition figures come from, and how the daily target learns what you actually burn.';
 
 export const metadata: Metadata = {
-  title: 'How it works — Day So Far',
+  title: withBrand('How Day So Far counts calories from a sentence'),
   description: DESCRIPTION,
   alternates: { canonical: '/how-it-works' },
-  openGraph: { title: 'How it works — Day So Far', description: DESCRIPTION, url: '/how-it-works' },
+  openGraph: {
+    title: 'How Day So Far counts calories from a sentence',
+    description: DESCRIPTION,
+    url: '/how-it-works',
+    images: [OG_IMAGE],
+  },
 };
 
 /**
@@ -23,7 +30,15 @@ export const metadata: Metadata = {
  */
 export default function HowItWorksPage() {
   return (
-    <LegalPage
+    <>
+      <DocumentSchema
+        type="WebPage"
+        name="How it works"
+        path="/how-it-works"
+        description={DESCRIPTION}
+        updated="2026-09-12"
+      />
+      <LegalPage
       title="How it works"
       summary="You write a sentence; a language model decides what you meant and looks the nutrition up; the day adds itself up. The target you are adding up towards then corrects itself against the scale. This page says exactly how each of those happens."
       updated="2026-09-12"
@@ -164,6 +179,7 @@ export default function HowItWorksPage() {
           method, including the ones that do not look good.
         </P>
       </Clause>
-    </LegalPage>
+      </LegalPage>
+    </>
   );
 }

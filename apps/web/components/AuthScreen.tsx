@@ -44,5 +44,5 @@ export function AuthScreen({
  * removed; in a system where every other surface has an edge, a borderless
  * field is the one thing on the page that looks unfinished.
  */
-export const AUTH_FIELD = 'bg-card border-border chunk h-12 rounded-[1.125rem] border-2 text-body';
+export const AUTH_FIELD = 'bg-card border-hairline chunk h-12 rounded-[1.125rem] border text-body';
 export const AUTH_BUTTON = 'h-12 w-full rounded-2xl text-base font-extrabold';

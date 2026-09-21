@@ -24,7 +24,7 @@ export function DayRail({ day }: { day: DaySummary | null }) {
   const t = useT();
   const locale = useLocale();
   return (
-    <aside className="border-border hidden w-80 shrink-0 flex-col overflow-y-auto border-l-2 px-5 py-6 xl:flex">
+    <aside className="border-hairline hidden w-80 shrink-0 flex-col overflow-y-auto border-l px-5 py-6 xl:flex">
       {!day ? (
         <div className="flex flex-col items-center gap-6">
           <Skeleton className="size-40 rounded-full" />

@@ -275,14 +275,23 @@ export async function publicPost(locale: Locale, slug: string): Promise<PublicPo
 
 /** Every published post in every language. The sitemap's query. */
 export async function publicSitemap(): Promise<
-  { locale: Locale; slug: string; updated_at: string }[]
+  { topic_id: string; locale: Locale; slug: string; updated_at: string }[]
 > {
+  /*
+   * `topic_id` rides along so the sitemap can rebuild the hreflang clusters.
+   *
+   * The reader-facing endpoint carries `alternates` per post, but the sitemap
+   * needs every cluster at once and cannot make ninety-one calls to get them.
+   * The topic is what the cluster *is* — one subject, one post per language —
+   * so grouping the rows by it costs nothing here and saves a second query.
+   */
   const rows = await query<any>(
-    `SELECT locale, slug, updated_at FROM content_posts
+    `SELECT topic_id, locale, slug, updated_at FROM content_posts
       WHERE status = 'published'
       ORDER BY locale, published_at DESC`,
   );
   return rows.map((row) => ({
+    topic_id: String(row.topic_id),
     locale: row.locale as Locale,
     slug: row.slug,
     updated_at: new Date(row.updated_at).toISOString(),

@@ -190,9 +190,11 @@ export function HeroDemo({ className, copy, locale }: { className?: string; copy
       role="img"
       aria-label={copy.caption}
       className={cn(
-        'bg-card border-border overflow-hidden rounded-[2rem] border-2',
-        'shadow-[0_10px_0_0_var(--chunk),0_50px_100px_-45px_rgb(0_0_0/0.35)]',
-        'dark:shadow-[0_10px_0_0_var(--chunk),0_50px_100px_-45px_rgb(0_0_0/0.9)]',
+        // The app's own surface, one size up: `chunk` at a depth no card in the
+        // product uses, because this is not a card on the page — it is the
+        // product held up in front of it, and it should sit the furthest off
+        // the paper of anything here.
+        'bg-card border-glass-edge chunk [--chunk-depth:9px] overflow-hidden rounded-[2rem] border',
         className,
       )}
     >
@@ -278,7 +280,7 @@ function useTypewriter(text: string) {
 function UserBubble({ children }: { children: React.ReactNode }) {
   return (
     <div className="animate-in fade-in-0 slide-in-from-bottom-2 flex justify-end duration-500 ease-out">
-      <p className="bg-primary text-primary-foreground chunk [--chunk-color:var(--calories-deep)] [--chunk-depth:3px] max-w-[85%] rounded-[1.375rem] rounded-br-lg px-4 py-2.5 text-body leading-relaxed font-semibold">
+      <p className="bubble-sent max-w-[85%] rounded-[1.375rem] rounded-br-lg px-4 py-2.5 text-body leading-relaxed font-semibold">
         {children}
       </p>
     </div>
@@ -293,14 +295,15 @@ function Assistant({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** The journal's own wait, three macro dots — see the note in <Bubble>. */
 function Thinking() {
   return (
-    <div className="flex gap-1.5 py-1.5">
-      {[0, 1, 2].map((i) => (
+    <div className="flex gap-2 py-2">
+      {['var(--protein)', 'var(--carbs)', 'var(--fat)'].map((color, i) => (
         <span
-          key={i}
-          className="bg-muted-foreground/60 size-2.5 animate-bounce rounded-full"
-          style={{ animationDelay: `${i * 140}ms`, animationDuration: '1s' }}
+          key={color}
+          className="size-2.5 animate-bounce rounded-full"
+          style={{ background: color, animationDelay: `${i * 140}ms`, animationDuration: '1s' }}
         />
       ))}
     </div>
@@ -310,7 +313,7 @@ function Thinking() {
 /** The composer, with its keyboard held by someone else. */
 function FakeComposer({ draft, placeholder }: { draft: string; placeholder: string }) {
   return (
-    <div className="border-border bg-card chunk flex items-end gap-2 rounded-[1.75rem] border-2 px-2.5 py-2">
+    <div className="border-hairline bg-card chunk flex items-end gap-2 rounded-[1.75rem] border px-2.5 py-2">
       <span className="text-muted-foreground flex size-9 shrink-0 items-center justify-center">
         <Camera size={22} strokeWidth={1.9} />
       </span>
@@ -326,7 +329,7 @@ function FakeComposer({ draft, placeholder }: { draft: string; placeholder: stri
       </p>
       <span
         className={cn(
-          'bg-primary text-primary-foreground chunk [--chunk-color:var(--calories-deep)] [--chunk-depth:3px] flex size-10 shrink-0 items-center justify-center rounded-full transition-opacity duration-300',
+          'bg-primary text-primary-foreground chunk [--chunk-color:var(--glow-primary)] flex size-10 shrink-0 items-center justify-center rounded-full transition-opacity duration-300',
           draft ? 'opacity-100' : 'opacity-30',
         )}
       >
@@ -342,7 +345,7 @@ function StatusStrip({ consumed, locale, className }: { consumed: number; locale
   const pct = Math.min(100, (consumed / TARGETS.kcal) * 100);
 
   return (
-    <header className={cn('border-border shrink-0 border-b-2 px-4 py-2.5', className)}>
+    <header className={cn('border-hairline shrink-0 border-b px-4 py-2.5', className)}>
       <div className="flex items-baseline justify-between">
         <p className="text-figure text-body">
           {formatNumber(consumed, locale)}
@@ -355,12 +358,15 @@ function StatusStrip({ consumed, locale, className }: { consumed: number; locale
           {t('journal.left')(formatNumber(TARGETS.kcal - consumed, locale))}
         </p>
       </div>
-      <div className="bg-muted border-border mt-2 h-2.5 overflow-hidden rounded-full border">
+      <div className="bg-hairline mt-2 h-3 overflow-hidden rounded-full">
         <div
           className="h-full rounded-full"
           style={{
             width: `${pct}%`,
-            background: 'var(--calories)',
+            backgroundColor: 'var(--calories)',
+            backgroundImage:
+              'linear-gradient(180deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0) 55%)',
+            boxShadow: '0 2px 5px -2px var(--calories)',
             transition: 'width var(--dur-spring) var(--ease-spring)',
           }}
         />
@@ -388,7 +394,7 @@ function DayRail({
 }) {
   const t = useT();
   return (
-    <aside className="border-border hidden flex-col border-l-2 px-5 py-6 lg:flex">
+    <aside className="border-hairline hidden flex-col border-l px-5 py-6 lg:flex">
       <div className="flex flex-col items-center">
         <CalorieRing consumed={consumed.kcal} target={TARGETS.kcal} size={132} strokeWidth={11} />
         <p className="tnum text-muted-foreground mt-3 text-sm">

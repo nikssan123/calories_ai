@@ -432,7 +432,7 @@ export function WorkoutCard({
                 // chosen, or naming the sport is a second click for no reason.
                 setDetail(c.key !== 'strength');
               }}
-              className="bg-muted/60 hover:bg-muted flex flex-col items-center gap-1 rounded-xl px-1 py-2.5"
+              className="bg-muted-field hover:bg-muted flex flex-col items-center gap-1 rounded-xl px-1 py-2.5"
             >
               <span className="text-xl" aria-hidden>
                 {c.emoji}
@@ -576,7 +576,7 @@ export function WorkoutCard({
                     onClick={() => openRoutine(routine)}
                     aria-pressed={on}
                     className={`text-footnote flex items-center gap-1.5 rounded-full py-1.5 pr-3 pl-2.5 transition-colors ${
-                      on ? 'bg-primary text-primary-foreground' : 'bg-muted/60 hover:bg-muted'
+                      on ? 'bg-primary text-primary-foreground' : 'bg-muted-field hover:bg-muted'
                     }`}
                   >
                     <span aria-hidden>{routine.emoji}</span>
@@ -646,7 +646,7 @@ export function WorkoutCard({
               {t('workout.saveThisAs')(suggestedName)}
             </button>
           ) : (
-            <div className="bg-muted/40 flex items-center gap-2 rounded-xl p-2.5">
+            <div className="bg-muted-wash flex items-center gap-2 rounded-xl p-2.5">
               <Bookmark size={14} className="text-muted-foreground shrink-0" />
               <Input
                 value={saveAs}
@@ -695,7 +695,7 @@ function Shell({
 }) {
   const t = useT();
   return (
-    <div className="bg-card animate-land overflow-hidden rounded-[var(--radius)] shadow-[0_1px_2px_rgba(23,22,20,0.05)]">
+    <div className="bg-card border-hairline chunk animate-land overflow-hidden rounded-[var(--radius)] border">
       <div className="px-4 pt-3.5 pb-2.5">
         <p className="text-body font-medium">
           {editing ? t('workout.fixWhatsWrong') : (heard ?? t('workout.whatDidYouDo'))}
@@ -754,7 +754,7 @@ function ExerciseRow({
     setSets(draft.sets.map((s) => ({ ...s, [key]: value })));
 
   return (
-    <div className="bg-muted/40 space-y-2 rounded-xl p-2.5">
+    <div className="bg-muted-wash space-y-2 rounded-xl p-2.5">
       <div className="flex items-center gap-2">
         {draft.muscles.length > 0 ? (
           <BodyFigure muscles={draft.muscles} size={18} />
@@ -988,7 +988,7 @@ function Stepper({
           type="button"
           onClick={() => onStep(-stepBy)}
           aria-label={t('workout.lessNamed')(caption)}
-          className="text-muted-foreground hover:text-foreground hover:bg-muted/60 grid size-6 shrink-0 place-items-center rounded"
+          className="text-muted-foreground hover:text-foreground hover:bg-muted-field grid size-6 shrink-0 place-items-center rounded"
         >
           <Minus size={13} />
         </button>
@@ -1005,7 +1005,7 @@ function Stepper({
           type="button"
           onClick={() => onStep(stepBy)}
           aria-label={t('workout.moreNamed')(caption)}
-          className="text-muted-foreground hover:text-foreground hover:bg-muted/60 grid size-6 shrink-0 place-items-center rounded"
+          className="text-muted-foreground hover:text-foreground hover:bg-muted-field grid size-6 shrink-0 place-items-center rounded"
         >
           <Plus size={13} />
         </button>
@@ -1049,7 +1049,7 @@ function Duration({
             className={`text-footnote flex-1 rounded-full py-2 tabular-nums transition-colors ${
               minutes === value
                 ? 'bg-primary text-primary-foreground'
-                : 'bg-muted/60 hover:bg-muted'
+                : 'bg-muted-field hover:bg-muted'
             }`}
           >
             {sessionDurationLabel(value)}
@@ -1060,7 +1060,7 @@ function Duration({
           onClick={() => setTyping((was) => !was)}
           aria-pressed={typing || offScale}
           className={`text-footnote flex-1 rounded-full py-2 transition-colors ${
-            offScale ? 'bg-primary text-primary-foreground' : 'bg-muted/60 hover:bg-muted'
+            offScale ? 'bg-primary text-primary-foreground' : 'bg-muted-field hover:bg-muted'
           }`}
         >
           {t('workout.otherLength')}

@@ -104,7 +104,7 @@ export function Roster() {
             <select
               value={sort}
               onChange={(event) => setSort(event.target.value as Sort)}
-              className="bg-card border-input rounded-lg border-2 px-2 py-1 text-[13px] font-bold"
+              className="field border-hairline rounded-lg border px-2 py-1 text-[13px] font-bold"
             >
               <option value="attention">Needs attention</option>
               <option value="logged">Days logged</option>
@@ -150,7 +150,7 @@ export function Roster() {
       )}
 
       {roster.clients.length === 0 ? (
-        <div className="bg-card border-border chunk rounded-2xl border-2 px-6 py-12 text-center">
+        <div className="bg-card border-hairline chunk rounded-2xl border px-6 py-12 text-center">
           <p className="text-title-2">Nobody on the roster yet</p>
           <p className="text-body text-muted-foreground mx-auto mt-2 max-w-md">
             Send a client a code. They accept it inside the app they already have, and their week
@@ -169,7 +169,7 @@ export function Roster() {
           </div>
 
           <DataTable
-            className="border-border chunk hidden border-2 lg:block"
+            className="border-hairline chunk hidden border lg:block"
             columns={['Client', 'Last week', 'Logged', 'Protein', 'Calories', 'Weight, 4 wks', 'Flags', 'Last log']}
           >
             {rows.map((row) => {
@@ -189,7 +189,7 @@ export function Roster() {
                     }
                   }}
                   className={cn(
-                    'hover:bg-muted/60 focus-visible:bg-muted/60 cursor-pointer outline-none transition-colors',
+                    'hover:bg-muted-field focus-visible:bg-muted-field cursor-pointer outline-none transition-colors',
                     severity === 2 && 'shadow-[inset_4px_0_0_var(--destructive)]',
                     severity === 1 && 'shadow-[inset_4px_0_0_var(--protein)]',
                   )}
@@ -296,7 +296,7 @@ function ClientCard({ row, onOpen }: { row: CoachRosterRow; onOpen: () => void }
     <button
       type="button"
       onClick={onOpen}
-      className="bg-card border-border chunk block w-full space-y-3 rounded-[var(--radius)] border-2 p-4 text-left"
+      className="bg-card border-hairline chunk block w-full space-y-3 rounded-[var(--radius)] border p-4 text-left"
     >
       <span className="flex items-center gap-3">
         <Avatar name={row.client.display_name} />

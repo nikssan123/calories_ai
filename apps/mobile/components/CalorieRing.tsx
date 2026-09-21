@@ -8,7 +8,8 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { DISPLAY_LEADING, duration, ease, useColors, useType } from '@/theme';
+import { RingRim } from '@/components/RingRim';
+import { DISPLAY_LEADING, duration, ease, ringTrack, useColors, useTheme, useType } from '@/theme';
 import { INSCRIBED, figureFace, fitFontSize, formatNumber } from '@ct/shared';
 import { useLocale, useT } from '@/lib/i18n';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -18,10 +19,13 @@ import { useCountUp } from '@/hooks/useCountUp';
  * The day, as one fat shape. Ported from `apps/web/components/CalorieRing.tsx`,
  * where the three choices it makes are argued at length. In short:
  *
- * The ring has a ledge — a second track offset down in the same shadow colour
- * every card uses, so it reads as a dial sitting on the page rather than a
- * stroke drawn on it. One extra circle, and the single change that does most of
- * the work on this screen.
+ * The ring has a body. The track is the day's budget in green at a whisper
+ * rather than a neutral band, and its two edges carry the app's lit rim
+ * (`RingRim`), so an untouched day reads as a remainder rather than as a gap.
+ * This was a ledge — a second track offset down in the shadow colour every card
+ * used — until the glow-up swapped every slab in the app for light: in dark
+ * `chunk` is rgba(0, 0, 0, 0.88), and a slab that dark under a faint track is a
+ * hole punched through rather than a dial sitting on the page.
  *
  * The ring springs and the number does not. A shape that overshoots reads as
  * energy; a *number* that overshoots reads as a bug — 450 briefly showing 438
@@ -52,14 +56,11 @@ export function CalorieRing({
   const t = useType();
   const tr = useT();
   const locale = useLocale();
-  const colors = useColors();
+  const { scheme, colors } = useTheme();
   const reduced = useReducedMotion();
   const gradient = `ring-${useId().replace(/:/g, '')}`;
 
-  // The ledge, scaled with the stroke so a small ring in the day rail does not
-  // wear a shadow half as thick as its own track.
-  const depth = Math.max(3, Math.round(strokeWidth * 0.22));
-  const radius = (size - strokeWidth - depth) / 2;
+  const radius = (size - strokeWidth) / 2;
   const centre = size / 2;
   const circumference = 2 * Math.PI * radius;
   const ratio = target > 0 ? consumed / target : 0;
@@ -80,7 +81,7 @@ export function CalorieRing({
    * which is the one bound that does not depend on how many lines end up under
    * the figure or how far up they push it. Short totals still get the full 46.
    */
-  const clear = size - 2 * strokeWidth - depth;
+  const clear = size - 2 * strokeWidth;
   const figure = fitFontSize({
     text: formatNumber(Math.round(Math.abs(remaining)), locale),
     face: figureFace(locale),
@@ -138,23 +139,16 @@ export function CalorieRing({
           </LinearGradient>
         </Defs>
 
-        {/* The ledge: the track again, pushed down by its own depth. */}
-        <Circle
-          cx={centre}
-          cy={centre + depth}
-          r={radius}
-          fill="none"
-          strokeWidth={strokeWidth}
-          stroke={colors.chunk}
-        />
+        {/* The day's budget before any of it is spent, not an empty groove. */}
         <Circle
           cx={centre}
           cy={centre}
           r={radius}
           fill="none"
           strokeWidth={strokeWidth}
-          stroke={colors.muted}
+          stroke={ringTrack(colors, scheme)}
         />
+        <RingRim id={`${gradient}-rim`} cx={centre} cy={centre} r={radius} strokeWidth={strokeWidth} />
 
         <G rotation={-90} originX={centre} originY={centre}>
           <AnimatedCircle

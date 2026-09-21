@@ -372,7 +372,7 @@ export function Journal() {
                   key={prompt}
                   type="button"
                   onClick={() => void send({ text: prompt })}
-                  className="bg-card border-border chunk-press text-secondary-foreground rounded-full border-2 px-4 py-2 text-sm font-bold [--chunk-depth:3px]"
+                  className="bg-card border-hairline chunk-press text-secondary-foreground rounded-full border px-4 py-2 text-sm font-bold [--chunk-depth:3px]"
                 >
                   {prompt}
                 </button>
@@ -555,7 +555,7 @@ function SentScan({ scan }: { scan: MessageScan }) {
         : null;
 
   return (
-    <span className="border-border bg-card text-footnote flex max-w-full items-center gap-2 rounded-full border-2 px-3 py-1">
+    <span className="border-hairline bg-card text-footnote flex max-w-full items-center gap-2 rounded-full border px-3 py-1">
       <ScanBarcode size={13} className="text-muted-foreground shrink-0" />
       <span className="truncate font-semibold">
         {name}
@@ -609,7 +609,7 @@ function StatusBar({ day, loading }: { day: DaySummary | null; loading: boolean 
   const locale = useLocale();
   if (loading || !day) {
     return (
-      <header className="material border-border shrink-0 border-b-2 px-4 py-3 xl:hidden">
+      <header className="material border-hairline shrink-0 border-b px-4 py-3 xl:hidden">
         <Skeleton className="h-4 w-40" />
       </header>
     );
@@ -621,7 +621,7 @@ function StatusBar({ day, loading }: { day: DaySummary | null; loading: boolean 
   const over = remaining < 0;
 
   return (
-    <header className="material border-border shrink-0 border-b-2 px-4 py-2.5 xl:hidden">
+    <header className="material border-hairline shrink-0 border-b px-4 py-2.5 xl:hidden">
       <div className="flex items-baseline justify-between">
         <p className="text-figure text-body">
           {formatNumber(Math.round(consumed.kcal), locale)}
@@ -637,7 +637,7 @@ function StatusBar({ day, loading }: { day: DaySummary | null; loading: boolean 
             : t('journal.left')(formatNumber(remaining, locale))}
         </p>
       </div>
-      <div className="bg-muted border-border mt-2 h-2.5 overflow-hidden rounded-full border">
+      <div className="bg-muted border-hairline mt-2 h-2.5 overflow-hidden rounded-full border">
         <div
           className="h-full rounded-full"
           style={{
@@ -692,11 +692,11 @@ const Bubble = memo(function Bubble({
             <img
               src={bubble.photoUrl}
               alt={t('journal.loggedMeal')}
-              className="border-border chunk max-h-72 rounded-2xl border-2 object-cover"
+              className="border-hairline chunk max-h-72 rounded-2xl border object-cover"
             />
           )}
           {bubble.content && (
-            <p className="bg-primary text-primary-foreground chunk [--chunk-color:var(--calories-deep)] [--chunk-depth:3px] rounded-[1.375rem] rounded-br-lg px-4 py-2.5 text-body leading-relaxed font-semibold">
+            <p className="bubble-sent rounded-[1.375rem] rounded-br-lg px-4 py-2.5 text-body leading-relaxed font-semibold">
               {bubble.content}
             </p>
           )}

@@ -471,11 +471,18 @@ describe('runTurn', () => {
    * older than it to 'en' besides, so for those rows the column is the
    * migration's default rather than anybody's answer.
    *
-   * So the naming only happens where the model has nothing to read. With a
-   * sentence in front of it the model identifies the language better than the
-   * detector does, and the standing rule in `STABLE_SYSTEM_PROMPT` is what
-   * carries it; a brief naming a language over the top of that could only make
-   * it worse, and did.
+   * What the naming turns on is whether we are sure, not whether the model has
+   * something to read. It used to be the second of those, on the theory that a
+   * model reading the sentence beats a detector reading its trigrams — and the
+   * theory is right about reading and wrong about writing. On 2026-09-20 it
+   * answered three of this app's four French accounts in English, 121 letters
+   * of plain French among them: the model reads the sentence and then follows
+   * the English prompt around it anyway, 8 times in 12. Named, that same turn
+   * came back in French 12 times in 12.
+   *
+   * So a name that survives `confidentIn` is said, and the standing rule in
+   * `STABLE_SYSTEM_PROMPT` is left the turns where the detector could not
+   * stand behind an answer and the stored locale had none to give either.
    */
   describe('the language a turn is answered in', () => {
     async function turnAs(
@@ -490,11 +497,12 @@ describe('runTurn', () => {
       return agentCalls.at(-1)!;
     }
 
-    it('does not name a language over a sentence the model can read', async () => {
+    it('names the language of the sentence, not the one the app is drawn in', async () => {
       // German app, Bulgarian sentence. This used to say "write in German" and
       // the reply came back in German, which is the bug: they wrote Bulgarian.
-      const call = await turnAs({ locale: 'de' }, 'bg');
-      expect(userTurnOf(call)).not.toContain('Language:');
+      const turn = userTurnOf(await turnAs({ locale: 'de' }, 'bg'));
+      expect(turn).toContain('Language: write to this person in Bulgarian');
+      expect(turn).not.toContain('German');
     });
 
     it('names the language when the turn carries no sentence at all', async () => {
@@ -558,10 +566,11 @@ describe('runTurn', () => {
       expect(userTurnOf(call)).not.toContain('Language:');
     });
 
-    it('leaves a short turn alone once the conversation has named itself', async () => {
-      // The same two words with a French sentence behind them are detected
-      // rather than assumed, and a detected language stays out of the prompt —
-      // the model is reading the thread for itself and reads it better.
+    it('names a short turn off the conversation behind it', async () => {
+      // The same two words with a French sentence behind them are read rather
+      // than assumed — and are named either way. Which of the two answered is
+      // worth keeping apart (see `fromLocale`), but it is not what decides
+      // whether the turn is told anything.
       const account = await createUser({ locale: 'fr' });
       const profile = await getUser(account.id);
       scriptAgent({ text: 'Et voilà.' }, { text: 'Et voilà.' });
@@ -574,7 +583,7 @@ describe('runTurn', () => {
       });
       await runTurn({ userId: account.id, ctx: account.ctx, profile, text: '3 yaourts' });
 
-      expect(userTurnOf(agentCalls.at(-1)!)).not.toContain('Language:');
+      expect(userTurnOf(agentCalls.at(-1)!)).toContain('Language: write to this person in French');
     });
 
     /*

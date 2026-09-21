@@ -20,10 +20,13 @@
     "build": "pnpm -r build",
     "seed": "pnpm --filter @ct/api seed",
     "seed:library": "pnpm --filter @ct/api seed:library",
-    "db:reset": "bash scripts/db-reset.sh"
+    "db:reset": "bash scripts/db-reset.sh",
+    "cards:cast": "tsx scripts/content/cast-cards.ts"
   },
   "devDependencies": {
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "sharp": "^0.34.5",
+    "tsx": "^4.23.12"
   },
   "engines": {
     "node": ">=22"

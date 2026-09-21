@@ -1,11 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { DocumentSchema } from '@/components/legal/DocumentSchema';
 import { Clause, LegalPage, List, Out, P } from '@/components/legal/LegalPage';
+
+const DESCRIPTION =
+  'The agreement for using Day So Far: what it is, what it is not, what is expected of an account, and what is not promised.';
 
 export const metadata: Metadata = {
   title: 'Terms of Service — Day So Far',
-  description:
-    'The agreement for using Day So Far: what it is, what it is not, what is expected of an account, and what is not promised.',
+  description: DESCRIPTION,
   alternates: { canonical: '/terms' },
 };
 
@@ -20,7 +23,15 @@ export const metadata: Metadata = {
  */
 export default function TermsPage() {
   return (
-    <LegalPage
+    <>
+      <DocumentSchema
+        type="WebPage"
+        name="Terms of Service"
+        path="/terms"
+        description={DESCRIPTION}
+        updated="2026-08-23"
+      />
+      <LegalPage
       title="Terms of Service"
       summary="Day So Far is a food journal that estimates. It is not a doctor, not a dietitian, and not a medical device, and the numbers it produces are approximations of what you described — useful for a trend, wrong for a diagnosis."
       updated="2026-08-23"
@@ -222,6 +233,7 @@ export default function TermsPage() {
           Questions: <Out href="mailto:support@daysofar.com">support@daysofar.com</Out>.
         </P>
       </Clause>
-    </LegalPage>
+      </LegalPage>
+    </>
   );
 }

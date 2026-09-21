@@ -88,7 +88,7 @@ export function DotStrip({ days }: { days: { local_date: string; logged: boolean
             title={day.local_date}
             className={cn(
               'block size-2.5 rounded-full',
-              day.logged ? 'bg-[var(--calories)]' : 'border-input border-2 bg-transparent',
+              day.logged ? 'bg-[var(--calories)]' : 'border-hairline border bg-transparent',
             )}
           />
         ))}
@@ -195,10 +195,10 @@ export function Notice({ tone, children }: { tone: 'info' | 'warn'; children: Re
   return (
     <p
       className={cn(
-        'rounded-2xl border-2 px-4 py-3 text-[14px] font-medium',
+        'rounded-2xl border px-4 py-3 text-[14px] font-medium',
         tone === 'warn'
           ? 'border-[color-mix(in_oklch,var(--protein),transparent_50%)] bg-[color-mix(in_oklch,var(--protein),transparent_88%)]'
-          : 'border-border bg-card',
+          : 'border-hairline bg-card',
       )}
     >
       {children}

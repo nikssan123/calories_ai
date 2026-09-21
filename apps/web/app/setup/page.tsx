@@ -57,7 +57,7 @@ import { cn } from '@/lib/utils';
  * has to look like a field. This is the quietest treatment that still does.
  */
 const FIELD =
-  'h-10 rounded-full border-2 border-border bg-muted px-3.5 text-body font-semibold shadow-none ' +
+  'h-10 rounded-full border border-hairline bg-muted px-3.5 text-body font-semibold shadow-none ' +
   'transition-colors duration-[var(--dur-quick)] hover:bg-secondary';
 
 /** Inputs keep their own focus ring; wrappers get it via focus-within. */
@@ -236,7 +236,7 @@ export default function SetupPage() {
         </div>
 
         {day && (
-          <div className="bg-card border-border chunk rounded-[var(--radius)] border-2 p-5 text-center">
+          <div className="bg-card border-hairline chunk rounded-[var(--radius)] border p-5 text-center">
             <p className="text-eyebrow text-muted-foreground">{t('setup.dailyTarget')}</p>
             <p className="text-figure mt-1.5 text-[2.75rem] leading-none">
               {formatNumber(day.targets.kcal, locale)}
@@ -430,10 +430,10 @@ export default function SetupPage() {
                   type="button"
                   onClick={() => patch('goal', goal)}
                   className={cn(
-                    'chunk-press rounded-2xl border-2 py-2.5 text-sm font-bold [--chunk-depth:3px]',
+                    'chunk-press rounded-2xl border py-2.5 text-sm font-bold [--chunk-depth:3px]',
                     active
-                      ? 'bg-primary text-primary-foreground border-transparent [--chunk-color:var(--calories-deep)]'
-                      : 'bg-muted text-muted-foreground border-border hover:text-foreground',
+                      ? 'bg-primary text-primary-foreground border-transparent [--chunk-color:var(--glow-primary)]'
+                      : 'bg-muted text-muted-foreground border-hairline hover:text-foreground',
                   )}
                 >
                   {t(GOAL_LABELS[goal])}
@@ -624,7 +624,7 @@ function SaveBar({
     : t('setup.saved');
 
   return (
-    <div className="material border-border animate-in fade-in slide-in-from-bottom-4 z-20 border-t-2">
+    <div className="material border-hairline animate-in fade-in slide-in-from-bottom-4 z-20 border-t">
       <div className="mx-auto flex w-full max-w-4xl items-center gap-3 px-4 py-3 lg:px-6">
         {/* Announced, because for a screen-reader the arrival of the bar is the
             only thing that happened when the field changed. */}
@@ -869,7 +869,7 @@ function DeleteAccount({ email, hasPassword }: { email: string | null; hasPasswo
 
 function MacroChip({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <span className="bg-muted border-border flex items-center gap-1.5 rounded-full border-2 px-2.5 py-1">
+    <span className="bg-muted border-hairline flex items-center gap-1.5 rounded-full border px-2.5 py-1">
       <span className="size-2.5 rounded-full" style={{ background: color }} />
       <span className="text-muted-foreground font-semibold">{label}</span>
       <span className="text-figure">{value}g</span>

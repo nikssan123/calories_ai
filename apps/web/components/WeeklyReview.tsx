@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import type { AdaptiveProposal, Locale, WeeklyReview as Review } from '@ct/shared';
 import { api } from '@/lib/api';
 import { InsetGroup } from '@/components/InsetGroup';
+import { Glossy } from '@/components/icons/Glossy';
 import { Button } from '@/components/ui/button';
 import { useLocale, useT } from '@/lib/i18n';
 
@@ -58,7 +59,10 @@ export function WeeklyReview() {
   const change = review?.stats.adaptive ?? adaptive;
 
   return (
-    <InsetGroup title={review ? t('review.lastWeek') : t('review.title')}>
+    <InsetGroup
+      title={review ? t('review.lastWeek') : t('review.title')}
+      icon={<Glossy name="calendar" size={18} />}
+    >
       {review ? (
         <div className="space-y-3 px-4 py-4">
           <p className="text-footnote text-muted-foreground font-bold">
@@ -84,7 +88,7 @@ export function WeeklyReview() {
       )}
 
       {adaptive && !adaptive.eligible && (
-        <div className="border-border bg-muted/40 border-t-2 px-4 py-3">
+        <div className="border-hairline bg-muted-wash border-t px-4 py-3">
           <p className="text-footnote text-muted-foreground font-medium">
             <span className="text-foreground font-extrabold">
               {t('review.currentTarget')(formatNumber(adaptive.current.kcal, locale))}
@@ -109,7 +113,7 @@ function TargetChange({
   const t = useT();
   const locale = useLocale();
   return (
-    <div className="bg-muted border-border rounded-2xl border-2 px-3.5 py-3">
+    <div className="bg-muted border-hairline rounded-2xl border px-3.5 py-3">
       <div className="tnum flex items-center gap-2 text-body font-bold">
         <span className="text-muted-foreground">{formatNumber(proposal.current.kcal, locale)}</span>
         <ArrowRight size={14} className="text-muted-foreground" />

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Baloo_2, Nunito } from 'next/font/google';
+import { Baloo_2, Fraunces, Literata, Nunito } from 'next/font/google';
 import './globals.css';
 import { AppFrame } from '@/components/AppFrame';
 import { AuthGate } from '@/components/AuthGate';
@@ -10,8 +10,9 @@ import { KeyboardInset } from '@/components/KeyboardInset';
 import { jsonLd, organizationSchema } from '@/lib/schema';
 
 /*
- * Two rounded faces, loaded as variables and referenced from --font-sans and
- * --font-display in globals.css.
+ * The two rounded faces, loaded as variables and referenced from --font-sans
+ * and --font-display in globals.css. The two serifs below them are the newer
+ * half of the arrangement; see `--font-serif`.
  *
  * Nunito reads at 13px without turning to mush, which the app needs because
  * half of it is small print under a number. Baloo is there for the shouting —
@@ -48,6 +49,46 @@ const baloo = Baloo_2({
   variable: '--font-baloo',
   display: 'swap',
   weight: ['600', '700', '800'],
+});
+
+/*
+ * The editorial serif — the sentences that matter.
+ *
+ * Nunito and Baloo are what make this app friendly and they stay for every
+ * control, every label and every row. What they cannot do is sound like a
+ * moment: a headline, a greeting, a question somebody is being asked about
+ * their body. Set in the rounded face those read as more UI; set in a soft warm
+ * serif they read as the app speaking (GLOW-UP.md, "editorial type"). The
+ * mobile twin is `SERIF_FACES` in `apps/mobile/theme/typography.ts` — the two
+ * tables have to name the same faces or the site and the app stop rhyming.
+ *
+ * Regular and medium, plus a light italic for the one stressed word a headline
+ * leans on. No 800: weight is what would turn it back into a heading, and the
+ * size and the face are meant to carry the moment on their own.
+ */
+const fraunces = Fraunces({
+  subsets: ['latin'],
+  variable: '--font-fraunces',
+  display: 'swap',
+  weight: ['300', '400', '500'],
+  style: ['normal', 'italic'],
+});
+
+/*
+ * And the same register for the scripts Fraunces cannot draw.
+ *
+ * Fraunces has no Cyrillic and no Greek, so a Bulgarian headline set in it
+ * would fall back per glyph to whatever the OS offers — on the largest words on
+ * the page. Literata is the nearest serif that has both and was drawn for
+ * reading on screens. Same bargain as Nunito standing in for Baloo, and the
+ * `:lang()` swap that picks between them lives in globals.css.
+ */
+const literata = Literata({
+  subsets: ['latin', 'cyrillic', 'greek'],
+  variable: '--font-literata',
+  display: 'swap',
+  weight: ['300', '400', '500'],
+  style: ['normal', 'italic'],
 });
 
 /**
@@ -98,8 +139,19 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  // The composer is fixed to the bottom; stop iOS zooming the page on focus.
-  maximumScale: 1,
+  /*
+   * No `maximumScale`.
+   *
+   * It was here to stop iOS zooming the page when the composer takes focus, and
+   * it did — by disabling pinch-zoom for everyone, on every page, including the
+   * blog and the recipe library. That is a WCAG 1.4.4 failure and it was being
+   * paid sitewide to fix one input on one screen.
+   *
+   * The zoom-on-focus it was guarding against only happens when the focused
+   * field's text is under 16px, so the fix belongs on the field: keep the
+   * composer's font-size at 16px or more and iOS leaves the viewport alone. If
+   * the zoom ever comes back, that is the thing to check — not this line.
+   */
   // Chrome shrinks the layout viewport for the keyboard rather than painting it
   // over the page. iOS ignores this — see <KeyboardInset>.
   interactiveWidget: 'resizes-content',
@@ -116,7 +168,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       * display face, and a value that depended on the request would have to
       * vary the cached page to say so.
       */
-    <html lang="en" className={`${nunito.variable} ${baloo.variable}`} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${nunito.variable} ${baloo.variable} ${fraunces.variable} ${literata.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: LOCALE_INIT_SCRIPT }} />

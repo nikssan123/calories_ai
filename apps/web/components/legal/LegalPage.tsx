@@ -33,7 +33,7 @@ export function LegalPage({
   return (
     <div className="bg-background text-foreground min-h-dvh">
       <DocumentScroll />
-      <header className="material border-border sticky top-0 z-40 border-b-2">
+      <header className="material border-hairline sticky top-0 z-40 border-b">
         <div className="mx-auto flex h-16 w-full max-w-3xl items-center gap-4 px-6">
           <Link href="/" className="flex items-center gap-2.5">
             <Logo size={26} />
@@ -57,10 +57,13 @@ export function LegalPage({
           Last updated {longDate(updated)}
         </p>
 
-        <div className="border-border mt-10 border-t-2 pt-2">{children}</div>
+        <div className="border-hairline mt-10 border-t pt-2">{children}</div>
 
-        <footer className="border-border text-muted-foreground mt-16 flex flex-col gap-3 border-t-2 pt-8 text-sm sm:flex-row sm:items-center sm:justify-between">
+        <footer className="border-hairline text-muted-foreground mt-16 flex flex-col gap-3 border-t pt-8 text-sm sm:flex-row sm:items-center sm:justify-between">
           <nav className="flex items-center gap-6">
+            <Link href="/support" className="hover:text-foreground transition-colors">
+              Support
+            </Link>
             <Link href="/privacy" className="hover:text-foreground transition-colors">
               Privacy
             </Link>
@@ -150,7 +153,7 @@ export function List({ children }: { children: React.ReactNode }) {
  */
 export function Rows({ children }: { children: React.ReactNode }) {
   return (
-    <div className="bg-card border-border divide-border chunk divide-y-2 overflow-hidden rounded-[var(--radius)] border-2">
+    <div className="bg-card border-hairline divide-hairline chunk divide-y overflow-hidden rounded-[var(--radius)] border">
       {children}
     </div>
   );

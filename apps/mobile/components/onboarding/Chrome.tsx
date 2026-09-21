@@ -144,6 +144,7 @@ export function Step({
   footer,
   children,
   contentStyle,
+  compact = false,
 }: {
   title: string;
   body?: string;
@@ -152,6 +153,17 @@ export function Step({
   footer?: React.ReactNode;
   children?: React.ReactNode;
   contentStyle?: StyleProp<ViewStyle>;
+  /**
+   * Give the header's height back to the controls.
+   *
+   * Only the body step has a keyboard, and with one up there is room for about
+   * one of its two cards: the weight box was pushed off the bottom entirely
+   * while the hint under the dead Continue asked for a weight, and the walk lost
+   * 60% of everyone who got this far. The title block is the part that can go —
+   * the question has already been read by the time somebody is typing an answer
+   * to it, and it comes back the moment the keyboard does.
+   */
+  compact?: boolean;
 }) {
   const type = useType();
   const colors = useColors();
@@ -205,11 +217,15 @@ export function Step({
                 */}
               <Serif
                 accessibilityRole="header"
-                style={[type.hero, styles.title, { color: colors.foreground }]}
+                style={[
+                  compact ? type.title2 : type.hero,
+                  compact ? styles.titleCompact : styles.title,
+                  { color: colors.foreground },
+                ]}
               >
                 {title}
               </Serif>
-              {body && (
+              {body && !compact && (
                 <Text style={[t.body, styles.body, { color: colors.mutedForeground }]}>{body}</Text>
               )}
               {children}
@@ -296,6 +312,7 @@ const styles = StyleSheet.create({
 
   scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 28 },
   title: { marginBottom: 10, marginTop: 8 },
+  titleCompact: { marginBottom: 14, marginTop: 4 },
   body: { marginBottom: 26, maxWidth: 360 },
 
   footer: { paddingHorizontal: 20, paddingTop: 8 },

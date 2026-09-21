@@ -52,7 +52,7 @@ export function AchievementsRow({ earned, className }: { earned: Achievement[]; 
 
   return (
     <InsetGroup title={t('achievements.title')} className={className}>
-      <Link href="/achievements" className="active:bg-muted/60 block transition-colors">
+      <Link href="/achievements" className="active:bg-muted-field block transition-colors">
         <InsetRow className="py-4">
           <div className="flex flex-1 flex-wrap items-center gap-1">
             {ACHIEVEMENT_KEYS.map((key) => (

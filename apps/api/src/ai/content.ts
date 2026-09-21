@@ -85,9 +85,47 @@ above, because these are claims about somebody else:
   and reads like one.
 - Where something may have changed, say so and tell the reader to check.
 
+FIXED NUMBERS
+Some figures are the same fact in every language and must not be re-derived per
+article. Use these exactly:
+- The energy in a kilogram of body fat is about 7,700 kcal. Not 7,000, not
+  3,500 per pound rounded back up. Where an article converts a surplus or a
+  deficit into weight, this is the number.
+- A kilogram is 2.2 pounds. A pound of fat is therefore about 3,500 kcal.
+
+LINKS
+- The only site you may link to is daysofar.com. Its paths are /, /how-it-works,
+  /accuracy, /about, /blog, /cook/library, /support, /privacy, /terms. No other
+  domain, and no other path on this one.
+- Do not construct a URL from the product's name. There is no daysofar.app, no
+  .io and no .co.
+- If a sentence wants a source you cannot link, write the sentence without it.
+
 FORMAT
 Markdown. No H1 — the page renders the title itself. Start at "##".
 No front matter, no code fences around the whole thing, no images.`;
+
+/*
+ * Why "FIXED NUMBERS" is in the prompt at all.
+ *
+ * Each locale's article is written from that locale's own search results rather
+ * than translated, which is the whole point — and it means thirteen independent
+ * writers reaching for the same physical constant and rounding it differently.
+ * They did: thirty published pages say a kilogram of fat is 7,700 kcal and
+ * fourteen say 7,000, including every German one, while /how-it-works — the
+ * page that documents the app's own arithmetic — says 7,700. Same fact, two
+ * numbers, forty-four pages, and no way for a reader comparing two languages to
+ * conclude anything but that nobody checked.
+ *
+ * 7,700 is the value the app itself uses: `KCAL_PER_KG` in
+ * services/adaptive.ts. Kept as a literal here rather than imported so the AI
+ * layer does not pull in the service graph for one number — if that constant
+ * ever changes, this prompt changes with it.
+ *
+ * "LINKS" is the same kind of guard for the same kind of failure. One Spanish
+ * post linked to `https://daysofar.app`, a domain that does not resolve: the
+ * model knew the product's name and invented an address from it.
+ */
 
 function taskPrompt(topic: ContentTopic, locale: Locale, claimed: string[]): string {
   const language = LOCALE_ENGLISH_NAMES[locale];

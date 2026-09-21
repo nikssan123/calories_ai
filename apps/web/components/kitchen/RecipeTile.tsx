@@ -85,7 +85,7 @@ export function RecipeTile({
   return (
     <article
       className={cn(
-        'bg-card border-border chunk group relative flex flex-col overflow-hidden rounded-[var(--radius)] border-2',
+        'bg-card border-hairline chunk group relative flex flex-col overflow-hidden rounded-[var(--radius)] border',
         'transition-transform duration-150 hover:-translate-y-0.5 focus-within:-translate-y-0.5',
       )}
     >
@@ -102,7 +102,7 @@ export function RecipeTile({
         /* The honest stand-in. A flat band with one big glyph reads as a label,
            not as a photograph nobody took — and it keeps both tabs on the same
            grid rhythm, which a photo-less card of a different height would not. */
-        <div className="bg-muted/60 border-border flex aspect-[16/10] w-full items-center justify-center border-b-2">
+        <div className="bg-muted-field border-hairline flex aspect-[16/10] w-full items-center justify-center border-b">
           <span aria-hidden className="text-[44px] leading-none opacity-90">
             {emoji ?? '🍳'}
           </span>
@@ -179,7 +179,7 @@ export function RecipeTile({
         aria-label={saved ? t('recipe.unsaveNamed')(title) : t('recipe.saveNamed')(title)}
         className={cn(
           'absolute top-2.5 right-2.5 z-20 flex size-9 items-center justify-center rounded-full',
-          photo ? 'material backdrop-blur' : 'bg-card border-border border-2',
+          photo ? 'material backdrop-blur' : 'bg-card border-hairline border',
         )}
       >
         <Bookmark

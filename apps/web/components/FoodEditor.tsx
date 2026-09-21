@@ -233,7 +233,7 @@ export function FoodEditor({
       {/* The receipt's head, made editable: the same picture, the same line of
           bold text. Ruled underneath rather than boxed, so the title reads as
           the card's name and the boxes below it are the data being corrected. */}
-      <div className="border-border focus-within:border-ring flex items-center gap-2.5 border-b-2 pb-1.5 transition-colors">
+      <div className="border-hairline focus-within:border-ring flex items-center gap-2.5 border-b pb-1.5 transition-colors">
         <span aria-hidden className="shrink-0 text-[22px] leading-none">
           {foodEmoji(description, meal)}
         </span>
@@ -247,7 +247,7 @@ export function FoodEditor({
       </div>
 
       {split > 0 && (
-        <div className="bg-muted border-border flex h-2.5 gap-px overflow-hidden rounded-full border">
+        <div className="bg-muted border-hairline flex h-2.5 gap-px overflow-hidden rounded-full border">
           {energy.map((band) => (
             <div key={band.key} style={{ width: `${(band.kcal / split) * 100}%`, background: band.fill }} />
           ))}
@@ -276,7 +276,7 @@ export function FoodEditor({
       </div>
 
       {items.map((item, i) => (
-        <div key={i} className="border-border space-y-1.5 border-t pt-2.5">
+        <div key={i} className="border-hairline space-y-1.5 border-t pt-2.5">
           {/* Name and portion on one line, the way the receipt writes them:
               "chicken 180g". They were two full-width boxes stacked, which made
               a two-item meal eight boxes tall before a number was typed. */}
@@ -367,7 +367,7 @@ export function FoodEditor({
         </div>
       )}
 
-      <div className="border-border flex items-center justify-between border-t pt-2.5">
+      <div className="border-hairline flex items-center justify-between border-t pt-2.5">
         <button
           type="button"
           onClick={onCancel}
@@ -391,7 +391,7 @@ function grams(items: DraftItem[], key: 'protein' | 'carbs' | 'fat'): number {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="bg-card border-border chunk animate-land space-y-2.5 rounded-[var(--radius)] border-2 px-4 py-3.5">
+    <div className="bg-card border-hairline chunk animate-land space-y-2.5 rounded-[var(--radius)] border px-4 py-3.5">
       {children}
     </div>
   );
@@ -412,7 +412,7 @@ function Cell({
   tint?: string;
 }) {
   return (
-    <div className="bg-muted border-input focus-within:border-ring flex items-center gap-1 rounded-xl border-2 px-2 py-1.5 transition-colors">
+    <div className="well border-hairline focus-within:border-ring flex items-center gap-1 rounded-xl border px-2 py-1.5 transition-colors">
       <input
         value={value}
         // A half-typed "12." has to survive until they finish.

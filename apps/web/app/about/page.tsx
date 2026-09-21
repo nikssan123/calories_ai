@@ -1,15 +1,22 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { OG_IMAGE, withBrand } from '@/lib/seo';
+import { DocumentSchema } from '@/components/legal/DocumentSchema';
 import { Clause, LegalPage, List, Out, P } from '@/components/legal/LegalPage';
 
 const DESCRIPTION =
   'Who builds Day So Far, why it exists, and how a one-person app is run: the person responsible, what is measured, and what is not claimed.';
 
 export const metadata: Metadata = {
-  title: 'About — Day So Far',
+  title: withBrand('Who builds Day So Far'),
   description: DESCRIPTION,
   alternates: { canonical: '/about' },
-  openGraph: { title: 'About — Day So Far', description: DESCRIPTION, url: '/about' },
+  openGraph: {
+    title: 'Who builds Day So Far',
+    description: DESCRIPTION,
+    url: '/about',
+    images: [OG_IMAGE],
+  },
 };
 
 /**
@@ -22,7 +29,15 @@ export const metadata: Metadata = {
  */
 export default function AboutPage() {
   return (
-    <LegalPage
+    <>
+      <DocumentSchema
+        type="AboutPage"
+        name="About"
+        path="/about"
+        description={DESCRIPTION}
+        updated="2026-09-12"
+      />
+      <LegalPage
       title="About"
       summary="Day So Far is built and run by one person. This page says who, why the app works the way it does, and what is and is not being claimed for it."
       updated="2026-09-12"
@@ -100,6 +115,7 @@ export default function AboutPage() {
           does, and their operator is the controller, not me.
         </P>
       </Clause>
-    </LegalPage>
+      </LegalPage>
+    </>
   );
 }

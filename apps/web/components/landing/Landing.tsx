@@ -264,23 +264,27 @@ function Lede({ children, className }: { children: React.ReactNode; className?: 
 /** A card on the grouped background: the one surface every illustration sits on. */
 function Card({ className, children }: { className?: string; children: React.ReactNode }) {
   return (
-    <div className={cn('bg-card border-border chunk rounded-[var(--radius)] border-2', className)}>
+    <div className={cn('bg-card border-hairline chunk rounded-[var(--radius)] border', className)}>
       {children}
     </div>
   );
 }
 
 /**
- * The pill. Monochrome on purpose: `--primary` inverts cleanly between themes,
- * and keeping the buttons colourless leaves the accent meaning "calories" wherever
- * it appears on the page.
+ * The pill.
+ *
+ * The primary one is the app's own hero button — the logo's ramp, a glow in the
+ * same green, and a sheen crossing it every few seconds. There is exactly one
+ * thing on this page anybody is being asked to do, and it should be the
+ * brightest object on the screen; the secondary is glass, which is what makes
+ * that legible rather than merely louder.
  */
 function pill(variant: 'primary' | 'secondary', className?: string) {
   return cn(
-    'chunk-press inline-flex items-center justify-center gap-1.5 rounded-full border-2 font-extrabold whitespace-nowrap',
+    'chunk-press inline-flex items-center justify-center gap-1.5 rounded-full border font-extrabold whitespace-nowrap',
     variant === 'primary'
-      ? 'bg-primary text-primary-foreground border-transparent [--chunk-color:var(--calories-deep)] hover:bg-[color-mix(in_oklch,var(--primary),#fff_12%)]'
-      : 'border-border bg-card text-foreground hover:bg-muted',
+      ? 'glow-button border-transparent [--chunk-color:var(--glow-primary)] [--chunk-depth:6px]'
+      : 'border-hairline bg-card text-foreground hover:bg-muted',
     className,
   );
 }
@@ -302,7 +306,7 @@ function IconDisc({ Icon }: { Icon: typeof Camera }) {
     selling point rather than the fine print. */
 function Points({ items, className }: { items: readonly string[]; className?: string }) {
   return (
-    <ul className={cn('divide-border divide-y-2', className)}>
+    <ul className={cn('divide-hairline divide-y', className)}>
       {items.map((item) => (
         <li key={item} className="text-muted-foreground py-3 text-body leading-relaxed font-medium">
           {item}
@@ -361,7 +365,7 @@ function LanguageSuggestion({
   };
 
   return (
-    <div lang={offer} className="bg-muted border-border border-b-2 px-6">
+    <div lang={offer} className="bg-muted border-hairline border-b px-6">
       <div className="mx-auto flex h-11 w-full max-w-6xl items-center gap-3 text-sm font-semibold">
         <Globe size={16} className="text-muted-foreground shrink-0" aria-hidden />
         <a href={landingPath(offer)} hrefLang={offer} className="min-w-0 truncate underline-offset-2 hover:underline">
@@ -392,7 +396,7 @@ function Header({ copy, locale, start }: { copy: LandingCopy; locale: Locale; st
   ];
 
   return (
-    <header className="material border-border sticky top-0 z-40 border-b-2">
+    <header className="material border-hairline sticky top-0 z-40 border-b">
       {/* Tighter on a phone: "Преузми апликацију" is eighteen characters,
           and at 360px the mark, the globe and that button have to share one
           row without the button wrapping. */}
@@ -587,7 +591,7 @@ function Corrections({ copy, locale }: { copy: LandingCopy['corrections']; local
           <Card className="px-5 py-4">
             <p className="text-eyebrow text-muted-foreground">{copy.cardLabel}</p>
 
-            <ul className="divide-border mt-2 divide-y-2">
+            <ul className="divide-hairline mt-2 divide-y">
               {rows.map((item) => (
                 <li key={item.name} className="grid grid-cols-[1fr_auto_4.5rem] items-baseline gap-3 py-3">
                   <span className="truncate text-body font-semibold">{item.name}</span>
@@ -612,7 +616,7 @@ function Corrections({ copy, locale }: { copy: LandingCopy['corrections']; local
               ))}
             </ul>
 
-            <div className="border-border flex items-baseline justify-between border-t-2 pt-3">
+            <div className="border-hairline flex items-baseline justify-between border-t pt-3">
               <span className="text-body font-bold">{copy.total}</span>
               <span className="tnum text-body">
                 <s className="text-muted-foreground">{formatNumber(before, locale)}</s>{' '}
@@ -650,7 +654,7 @@ function HomeCooking({ copy }: { copy: LandingCopy['homeCooking'] }) {
         {copy.examples.map((example, i) => (
           <li key={example}>
             <Reveal delay={i * 70}>
-              <p className="bg-primary text-primary-foreground chunk [--chunk-color:var(--calories-deep)] [--chunk-depth:3px] rounded-[1.375rem] rounded-br-lg px-4 py-2.5 text-body leading-relaxed font-semibold">
+              <p className="bubble-sent rounded-[1.375rem] rounded-br-lg px-4 py-2.5 text-body leading-relaxed font-semibold">
                 {example}
               </p>
             </Reveal>
@@ -739,7 +743,7 @@ function AdaptiveTarget({ copy, locale }: { copy: LandingCopy['target']; locale:
             <p className="text-body leading-relaxed">{copy.reviewIntake}</p>
             <p className="text-body leading-relaxed">{copy.reviewChange}</p>
 
-            <div className="bg-muted border-border mt-auto rounded-2xl border-2 px-3.5 py-3">
+            <div className="bg-muted border-hairline mt-auto rounded-2xl border px-3.5 py-3">
               <div className="tnum flex items-center gap-2 text-body font-bold">
                 <span className="text-muted-foreground">{formatNumber(2290, locale)}</span>
                 <ArrowRight size={14} className="text-muted-foreground" />
@@ -848,7 +852,7 @@ function Pricing({ copy, start }: { copy: LandingCopy['pricing']; start: Cta }) 
         <div
           role="radiogroup"
           aria-label={copy.period}
-          className="border-border bg-card mt-9 inline-flex rounded-full border-2 p-1"
+          className="border-hairline bg-card mt-9 inline-flex rounded-full border p-1"
         >
           {[
             { label: copy.monthly, on: false },
@@ -888,8 +892,8 @@ function Pricing({ copy, start }: { copy: LandingCopy['pricing']; start: Cta }) 
             <Reveal key={plan.name} delay={i * 80} className="h-full">
               <div
                 className={cn(
-                  'chunk bg-card flex h-full flex-col rounded-[var(--radius)] border-2 px-6 py-7',
-                  featured ? 'border-[var(--calories)]' : 'border-border',
+                  'chunk bg-card flex h-full flex-col rounded-[var(--radius)] border px-6 py-7',
+                  featured ? 'border-[var(--calories)]' : 'border-hairline',
                 )}
               >
                 <div className="flex items-baseline gap-2.5">
@@ -918,7 +922,7 @@ function Pricing({ copy, start }: { copy: LandingCopy['pricing']; start: Cta }) 
                 {/* `flex-col-reverse` puts the figure above its label while
                     leaving <dt> ahead of <dd> in the DOM, the order a
                     description list has to be read in. */}
-                <dl className="border-border mt-5 grid grid-cols-2 gap-4 border-y-2 py-5">
+                <dl className="border-hairline mt-5 grid grid-cols-2 gap-4 border-y py-5">
                   {plan.allowance.map(({ figure, unit, period }) => (
                     <div key={unit} className="flex flex-col-reverse">
                       <dt className="text-footnote text-muted-foreground mt-1.5 leading-snug">
@@ -995,7 +999,7 @@ function Faq({ copy }: { copy: LandingCopy['faq'] }) {
         </Reveal>
 
         <Reveal delay={60}>
-          <div className="divide-border border-border mt-10 divide-y-2 border-y-2">
+          <div className="divide-hairline border-hairline mt-10 divide-y border-y">
             {copy.items.map(({ q, a }, i) => {
               const link = FAQ_LINKS[i];
               return (
@@ -1106,7 +1110,7 @@ function Footer({ copy, locale }: { copy: LandingCopy['footer']; locale: Locale 
   ];
 
   return (
-    <footer className="border-border border-t-2 px-6 py-10">
+    <footer className="border-hairline border-t px-6 py-10">
       <div className="mx-auto w-full max-w-5xl">
         <div className="flex flex-col items-center gap-5 sm:flex-row sm:justify-between">
           <div className="flex items-center gap-2.5">
@@ -1129,7 +1133,7 @@ function Footer({ copy, locale }: { copy: LandingCopy['footer']; locale: Locale 
             header's menu — and for the reader who scrolled past it. */}
         <nav
           aria-label={copy.languages}
-          className="border-border text-muted-foreground mt-8 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 border-t-2 pt-6 text-sm sm:justify-start"
+          className="border-hairline text-muted-foreground mt-8 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 border-t pt-6 text-sm sm:justify-start"
         >
           <Globe size={15} aria-hidden className="shrink-0" />
           {LOCALES_BY_NAME.map((option) => (

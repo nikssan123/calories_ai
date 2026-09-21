@@ -35,6 +35,7 @@ import { setPreferredLocale, useLocale, useT, type StringKey } from '@/lib/i18n'
 import { reachedStep } from '@/lib/funnel';
 import { useOnboarding } from '@/lib/onboarding';
 import { column, type as t, useColors, useType } from '@/theme';
+import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 
 /**
@@ -129,24 +130,21 @@ const ACTIVITY_LABELS: Record<ActivityLevel, StringKey> = {
 };
 
 /**
- * Which units to open on.
+ * Which units to open on: metric, always.
  *
- * A guess from the device's region, and only ever a guess — the toggle is on
- * the same screen and the answer is one tap away. It is worth making because
- * the alternative is showing an American a height in centimetres on the one
- * screen where a wrong-looking number reads as the app not knowing what it is
- * doing. Three countries, which is genuinely the whole list.
+ * This used to guess from the device's region and open on feet and pounds for
+ * a US, Liberian or Burmese phone. The guess was wrong for the people actually
+ * arriving: the ads run in France and Germany and deliberately target English
+ * as well, so an expat whose phone is set to US English — or anyone who simply
+ * keeps their phone in English — was handed two boxes and imperial units on
+ * the screen that already loses more people than any other in the walk.
+ *
+ * The toggle is on the same screen and the answer is one tap away, so the cost
+ * of opening on the wrong one is a tap; the cost of guessing was a worse first
+ * impression for most of the traffic. Metric is also the one box rather than
+ * two, which is the shorter road to a filled-in screen.
  */
-const IMPERIAL_REGIONS = new Set(['US', 'LR', 'MM']);
-
-function guessUnits(): UnitSystem {
-  try {
-    const region = new Intl.Locale(Intl.DateTimeFormat().resolvedOptions().locale).region;
-    return region && IMPERIAL_REGIONS.has(region) ? 'imperial' : 'metric';
-  } catch {
-    return 'metric';
-  }
-}
+const DEFAULT_UNITS: UnitSystem = 'metric';
 
 export default function OnboardingScreen() {
   const colors = useColors();
@@ -155,6 +153,12 @@ export default function OnboardingScreen() {
   const locale = useLocale();
   const { authenticated, profile, adoptProfile } = useAuth();
   const { refresh: refreshOnboarding, draft, saveDraft, dropDraft, chooseSignIn } = useOnboarding();
+  /*
+   * The body step is the only one with a keyboard, and with one up the header
+   * was leaving room for one of its two cards. `compact` on the step gives that
+   * height back for as long as somebody is typing — see `Step`.
+   */
+  const typing = useKeyboardVisible();
   /* No session: answers go to the draft and the plan is worked out here. */
   const guest = !authenticated;
   /*
@@ -176,7 +180,7 @@ export default function OnboardingScreen() {
   const [activity, setActivity] = useState<ActivityLevel | null>(
     seed?.activity_level ?? profile?.activity_level ?? null,
   );
-  const [units, setUnits] = useState<UnitSystem>(seed?.units ?? profile?.units ?? guessUnits());
+  const [units, setUnits] = useState<UnitSystem>(seed?.units ?? profile?.units ?? DEFAULT_UNITS);
 
   /*
    * Height and weight are held as the strings that are actually in the boxes,
@@ -633,6 +637,7 @@ export default function OnboardingScreen() {
       <Step
         id={current}
         direction={direction}
+        compact={typing}
         title={teasing ? tr(current === 'teaseJournal' ? 'ob.teaseJournalTitle' : 'ob.teaseDayTitle') : titleFor(step, tr)}
         body={teasing ? tr(current === 'teaseJournal' ? 'ob.teaseJournalBody' : 'ob.teaseDayBody') : bodyFor(step, tr)}
         footer={

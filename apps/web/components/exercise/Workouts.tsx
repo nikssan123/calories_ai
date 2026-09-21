@@ -8,6 +8,7 @@ import { WEEK_ORDER, weekdayName } from '@ct/shared';
 import { useLocale, useT } from '@/lib/i18n';
 import { api } from '@/lib/api';
 import { InsetGroup, InsetRow } from '@/components/InsetGroup';
+import { Glossy } from '@/components/icons/Glossy';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { WorkoutCard } from '@/components/workout/WorkoutCard';
@@ -149,6 +150,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
 
       <InsetGroup
         title={t('workouts.savedTitle')}
+        icon={<Glossy name="dumbbell" size={18} />}
         trailing={
           <button
             type="button"
@@ -241,6 +243,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
       {!failed && routines !== null && routines.length > 0 && (
         <InsetGroup
           title={t('workouts.weekTitle')}
+          icon={<Glossy name="calendar" size={18} />}
           footer={t('workouts.weekFooter')}
         >
           {WEEK_ORDER.map((weekday) => {
@@ -255,7 +258,7 @@ export function Workouts({ onLogged }: { onLogged: () => void }) {
                   value={day?.source === 'declared' ? (day.routine_id ?? '') : ''}
                   onChange={(e) => void setDay(weekday, e.target.value || null)}
                   aria-label={t('workouts.workoutFor')(weekdayName(weekday, locale))}
-                  className="bg-muted/60 text-footnote min-w-0 flex-1 rounded-lg px-2.5 py-2 font-medium"
+                  className="bg-muted-field text-footnote min-w-0 flex-1 rounded-lg px-2.5 py-2 font-medium"
                 >
                   <option value="">
                     {learned
@@ -351,7 +354,10 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
   const picked = new Set(chosen.map((c) => c.typeId));
 
   return (
-    <InsetGroup title={routine ? t('workouts.editTitle') : t('workouts.buildTitle')}>
+    <InsetGroup
+      title={routine ? t('workouts.editTitle') : t('workouts.buildTitle')}
+      icon={<Glossy name="dumbbell" size={18} />}
+    >
       <div className="space-y-3 p-3">
         <div className="flex gap-2">
           <Input
@@ -370,7 +376,7 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
         </div>
 
         {chosen.map((exercise, i) => (
-          <div key={`${exercise.typeId ?? exercise.name}-${i}`} className="bg-muted/40 flex items-center gap-2 rounded-xl p-2.5">
+          <div key={`${exercise.typeId ?? exercise.name}-${i}`} className="bg-muted-wash flex items-center gap-2 rounded-xl p-2.5">
             <span className="text-footnote min-w-0 flex-1 truncate font-medium">
               {exercise.name}
             </span>
@@ -427,7 +433,7 @@ function RoutineEditor({ routine, onDone }: { routine: Routine | null; onDone: (
                   onClick={() =>
                     setChosen((prev) => [...prev, { name: type.name, typeId: type.id, sets: 3 }])
                   }
-                  className="bg-muted/60 hover:bg-muted text-footnote flex items-center gap-1.5 rounded-full py-1.5 pr-3 pl-2.5"
+                  className="bg-muted-field hover:bg-muted text-footnote flex items-center gap-1.5 rounded-full py-1.5 pr-3 pl-2.5"
                 >
                   <span aria-hidden>{type.emoji}</span>
                   {type.name}

@@ -79,7 +79,7 @@ export function OverviewPanel() {
       </StatGrid>
 
       <InsetGroup title="Rows">
-        <div className="divide-border grid grid-cols-2 divide-x-2 divide-y-2 lg:grid-cols-3">
+        <div className="divide-hairline grid grid-cols-2 divide-x divide-y lg:grid-cols-3">
           <Stat label="Food entries" value={compactNumber(data.food_entries)} />
           <Stat label="Exercise" value={compactNumber(data.exercise_entries)} />
           <Stat label="Weigh-ins" value={compactNumber(data.weight_entries)} />

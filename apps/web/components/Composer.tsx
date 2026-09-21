@@ -208,11 +208,11 @@ export function Composer({
       className={cn(
         // Phone: a translucent bar welded to the bottom edge of the screen, with
         // the conversation scrolling under its blur.
-        'border-border max-lg:material px-3 py-2.5 max-lg:border-t-2',
+        'border-hairline max-lg:material px-3 py-2.5 max-lg:border-t',
         // Desktop: nothing is welded to anything. The bar floated in the middle
         // of the window trailing a hairline off into empty space, so from `lg`
         // up it stops pretending to be chrome and becomes a card of its own.
-        'lg:bg-card lg:border-border lg:focus-within:border-ring lg:chunk lg:rounded-[1.75rem] lg:border-2 lg:px-2.5 lg:py-2 lg:transition-colors',
+        'lg:bg-card lg:border-hairline lg:focus-within:border-ring lg:chunk lg:rounded-[1.75rem] lg:border lg:px-2.5 lg:py-2 lg:transition-colors',
       )}
     >
       {photo && (
@@ -221,13 +221,13 @@ export function Composer({
           <img
             src={photo.dataUrl}
             alt={t('composer.selectedMeal')}
-            className="border-border chunk h-20 w-20 rounded-2xl border-2 object-cover"
+            className="border-hairline chunk h-20 w-20 rounded-2xl border object-cover"
           />
           <button
             type="button"
             aria-label={t('composer.removePhoto')}
             onClick={() => setPhoto(null)}
-            className="bg-foreground text-background border-card absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full border-2"
+            className="bg-foreground text-background border-card absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full border"
           >
             <X size={13} strokeWidth={3.2} />
           </button>
@@ -379,7 +379,7 @@ export function Composer({
           placeholder={t('composer.placeholder')}
           disabled={disabled}
           className={cn(
-            'border-input bg-card placeholder:text-muted-foreground focus:border-ring max-h-33 min-h-10 flex-1 resize-none rounded-[1.25rem] border-2 px-4 py-[0.5rem] text-base leading-6 font-medium outline-none disabled:opacity-60',
+            'field border-hairline placeholder:text-muted-foreground focus:border-ring max-h-33 min-h-10 flex-1 resize-none rounded-[1.25rem] border px-4 py-[0.5rem] text-base leading-6 font-medium outline-none disabled:opacity-60',
             // A bordered field inside the bordered desktop card is one box too
             // many; there, the card itself is the field and takes the focus ring.
             'lg:border-transparent lg:bg-transparent lg:px-1 lg:focus:border-transparent',
@@ -487,7 +487,7 @@ function Chip({
   const amount = amountLabel(scan, units);
 
   return (
-    <div className="border-input bg-card flex max-w-full items-center gap-2 rounded-full border-2 py-[0.3125rem] pr-1.5 pl-3">
+    <div className="field border-hairline flex max-w-full items-center gap-2 rounded-full border py-[0.3125rem] pr-1.5 pl-3">
       <button
         type="button"
         onClick={onPress}

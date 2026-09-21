@@ -209,6 +209,42 @@ Both of these are the journal's newest card, and both were reported as one bug.
   on the notification, before anything draws), and the hands come up out of the
   edge with it.
 
+## The waiting row leaves too: a seat that is already gone
+
+The fourth trap of the same family, and the one that made the best moment in
+the app read as a glitch.
+
+The three wait out a turn in `journal.thinking`, which lives *inside* the
+pending reply. So the instant the first word arrives that row unmounts — and it
+unmounts in the same commit as the claim that sends the carrier on to the card
+and the other two home to the ledge. React runs every unmount effect in a commit
+before any of its mount effects, so by the time `claimAll` is asked, the seat
+they are standing in has already dropped its `measure`, and `claim` required one
+before it would fly anybody anywhere.
+
+So nothing ever flew out of the waiting row. The carrier stopped being in one
+place and started being in another, and what the reader saw was a figure that
+had not arrived on the card so much as appeared on it — with its paws already on
+the rim, because a seat that is merely occupied draws the whole figure at rest,
+hands and all — and then nothing to watch until it popped up to cheer a second
+and a half later. Reported, correctly, as "the jump into the card is too sudden
+to follow, and the paws are there before the character".
+
+- **An unmounted seat is still somewhere to leave from** (`canLeave`). It keeps
+  the last place it was seen; if that is on screen, the figure was there a frame
+  ago and can set off from there.
+- **A frozen rectangle does not follow the list.** It is stuck at whatever the
+  conversation was scrolled to when the seat went, while `scrollToEnd` moves
+  everything under it. Both seats are in the same column, so the distance the
+  *destination* travels while `settledSeat` waits is exactly how stale the
+  frozen one is, and it is the only measurement of that scroll available here.
+  `settledSeat` hands its first sighting back with its answer for that. The
+  correction is dropped if it would put the start off screen.
+- **A frozen seat gets half the patience** (6 tries, not 12). Waiting is free
+  when the old seat is still drawing the figure; here it is the only thing
+  drawing them, so a destination that will not hold still is flown to where it
+  last was and corrected in the air instead.
+
 ## Performance: what made it lag, and the rules now
 Measured on an emulator with the host GPU (the default AVD here renders on SwiftShader, whose frame times mean nothing) against a build of the previous commit, with `dumpsys gfxinfo framestats`.
 

@@ -63,7 +63,7 @@ export const en = {
   'today.exercise': 'Exercise',
   'today.roughEstimate': 'rough estimate',
   'today.exerciseFooter': 'Shown separately from your target — exercise burn is a rough estimate.',
-  'today.stepsTitle': '👟  Steps',
+  'today.stepsTitle': 'Steps',
   'today.steps': (count: number) => n(count, { one: 'step', other: 'steps' }),
   'today.stepsFooter': 'Counted by your phone. Steps sharpen your target — they are never added to it.',
   'today.changeHint': 'To change this, say so in the journal — “there was more rice”.',
@@ -463,6 +463,7 @@ export const en = {
   'recipe.logItWithApp': 'Log this in the app, and the day adds itself up.',
   'recipe.allRecipes': 'All recipes',
   'blog.title': 'Blog',
+  'blog.indexTitle': 'Calories and portions',
   'blog.description': 'Writing about calories, portions and what a food estimate can and cannot tell you.',
   'blog.empty': 'Nothing published here yet.',
   'blog.alsoIn': 'Also in',
@@ -470,6 +471,7 @@ export const en = {
   'site.getTheApp': 'Get the app',
   'site.howItWorks': 'How it works',
   'site.accuracy': 'Accuracy',
+  'site.support': 'Support',
   'recipe.iAteThisPlain': (kcal: string) => `I ate this · ${kcal}`,
   'recipe.youdNeed': (things: string) => `You’d need ${things}`,
   'recipe.fromLibrary': 'From the library',
@@ -514,7 +516,7 @@ export const en = {
   'progress.title': 'Progress',
   'progress.daysWindow': (count: number) => `${count} days`,
   'progress.daysShort': (count: number) => `${count}d`,
-  'progress.weightTitle': '⚖️  Weight',
+  'progress.weightTitle': 'Weight',
   'progress.noWeighIns': 'No weigh-ins yet. Log one below, or just tell the journal.',
   'progress.weightChart': 'Weight chart',
   'progress.noWeighIn': 'No weigh-in',
@@ -525,9 +527,9 @@ export const en = {
   'progress.toTarget': 'To target',
   'progress.logTodaysWeight': (unit: string) => `Log today’s weight (${unit})`,
   'progress.weightLogged': (weight: string) => `Logged ${weight}`,
-  'progress.caloriesTitle': '🔥  Calories',
+  'progress.caloriesTitle': 'Calories',
   'progress.avgDayTarget': (target: string) => `avg/day · target ${target}`,
-  'progress.proteinTitle': '💪  Protein',
+  'progress.proteinTitle': 'Protein',
   /**
    * Split around the emphasised count, which is bold in place. The middle is
    * its own key so a language can put the two numbers together its own way.
@@ -535,12 +537,12 @@ export const en = {
   'progress.hitTargetBefore': 'Hit the target on',
   'progress.ofDays': (hit: string, logged: string) => `${hit} of ${logged}`,
   'progress.hitTargetAfter': 'logged days.',
-  'progress.qualityTitle': '🥦  Diet quality',
+  'progress.qualityTitle': 'Diet quality',
   'progress.days': (count: number) => n(count, { one: 'day', other: 'days' }),
   'progress.qualityFooter': (days: string, percent: string) =>
     `Averaged over ${days} — ${percent}% of what you logged carries these figures.`,
   'progress.chartNutrient': (label: string) => `Chart ${label}`,
-  'progress.exerciseTitle': '🏃  Exercise',
+  'progress.exerciseTitle': 'Exercise',
   'progress.exerciseFooter':
     'Ask the journal anything about this data — “why haven’t I lost weight this week?”',
   'progress.sessionsOver': (kcal: string, days: string) =>
@@ -555,14 +557,14 @@ export const en = {
   'exercise.nothingLogged': (days: string) => `Nothing logged in the last ${days} days.`,
   /** `example` is a distance in this person's own units — "5km", "3 mile". */
   'exercise.tellTheJournal': (example: string) => `Tell the journal — “went for a ${example} run”.`,
-  'exercise.consistencyTitle': '🔁  Consistency',
+  'exercise.consistencyTitle': 'Consistency',
   'exercise.activeOf': (days: string, sessions: string) => `active of ${days} days · ${sessions}`,
   'exercise.sessionsCount': (count: number) => n(count, { one: 'session', other: 'sessions' }),
   'exercise.burnedPerDay': 'Calories burned per day',
   'exercise.burned': 'Burned',
   'exercise.distance': 'Distance',
   'exercise.time': 'Time',
-  'exercise.sessionsTitle': '🏃  Sessions',
+  'exercise.sessionsTitle': 'Sessions',
   'exercise.burnNote': (example: string) =>
     `Burn is an estimate and is never netted off your calorie target. Correct one in the journal — “that run was closer to ${example}”.`,
   'exercise.minutes': (minutes: string) => `${minutes} min`,
@@ -572,7 +574,7 @@ export const en = {
   // ---- Saved workouts -----------------------------------------------------
   'workouts.logTitle': '🏋️  Log a workout',
   'workouts.logAction': 'Log a workout',
-  'workouts.savedTitle': '🏋️  Saved workouts',
+  'workouts.savedTitle': 'Saved workouts',
   'workouts.buildOne': 'Build one',
   'workouts.reuseHint': 'One tap fills the whole card in, with the weights you used last time.',
   'workouts.whereSessionsGo':
@@ -585,15 +587,15 @@ export const en = {
   'workouts.doneTimes': (times: string) => ` · done ${times}×`,
   'workouts.editNamed': (name: string) => `Edit ${name}`,
   'workouts.deleteNamed': (name: string) => `Delete ${name}`,
-  'workouts.weekTitle': '🗓️  Your week',
+  'workouts.weekTitle': 'Your week',
   'workouts.weekFooter':
     'Days you set are fixed. Days you leave open follow whatever you actually keep doing.',
   'workouts.workoutFor': (day: string) => `Workout for ${day}`,
   'workouts.usually': (workout: string) => `${workout} — usually`,
   'workouts.youSetThis': 'you set this',
   'workouts.learned': 'learned',
-  'workouts.editTitle': '✏️  Edit workout',
-  'workouts.buildTitle': '🏋️  Build a workout',
+  'workouts.editTitle': 'Edit workout',
+  'workouts.buildTitle': 'Build a workout',
   'workouts.icon': 'Icon',
   'workouts.namePlaceholder': 'Push, Chest day, Legs A…',
   'workouts.nameLabel': 'Workout name',
@@ -893,8 +895,8 @@ export const en = {
   'workout.minutesLabel': 'Minutes',
 
   // ---- The weekly review --------------------------------------------------
-  'review.lastWeek': '📅  Last week',
-  'review.title': '📅  Weekly review',
+  'review.lastWeek': 'Last week',
+  'review.title': 'Weekly review',
   'review.pitch':
     'Every Monday morning you’ll get a short read on how the week went — what the numbers actually showed, and whether your target needs to move. No lectures, just the picture.',
   'review.writing': 'Writing…',
@@ -903,7 +905,7 @@ export const en = {
   'review.willApply': 'Next review will apply this. ',
   'review.kcalUnit': (kcal: string) => `${kcal} kcal`,
 
-  'quality.title': '🥦\u00a0\u00a0Diet quality',
+  'quality.title': 'Diet quality',
   'quality.partlyMeasured': 'partly measured',
   'quality.notEstimated': 'not estimated',
   'quality.partialCoverage': (percent: string) =>

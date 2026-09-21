@@ -50,7 +50,7 @@ export function StatGrid({
   return (
     <div
       className={cn(
-        'bg-card divide-border border-border chunk grid divide-x-2 divide-y-2 overflow-hidden rounded-2xl border-2',
+        'bg-card divide-hairline border-hairline chunk grid divide-x divide-y overflow-hidden rounded-2xl border',
         columns === 2 && 'grid-cols-2',
         columns === 3 && 'grid-cols-2 sm:grid-cols-3',
         columns === 4 && 'grid-cols-2 lg:grid-cols-4',

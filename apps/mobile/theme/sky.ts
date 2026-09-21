@@ -33,6 +33,17 @@ export interface Sky {
   haze: string;
   /** Whether the top is dark enough that words on it need light ink. */
   inkLight: boolean;
+  /**
+   * How far into the night this sky is: 0 in full daylight, 1 after dark.
+   *
+   * `inkLight` without the cliff. Ink has to flip — a letter is either readable
+   * on this ground or it is not, and a half-lit one is just a bad letter. An
+   * *object* has no such excuse, and the coin in the journal header used to
+   * change its whole palette the minute luminance crossed 0.2: at dusk it
+   * swapped costume between one minute's render and the next. Same
+   * measurement, read as a ramp, so the hour arrives instead of happening.
+   */
+  night: number;
 }
 
 type Key = [hour: number, top: string, mid: string, low: string, haze: string];
@@ -86,7 +97,24 @@ export function skyAt(date: Date, scheme: Scheme): Sky {
      * forty minutes every evening.
      */
     inkLight: luminance(top) < 0.2,
+    night: nightness(luminance(top)),
   };
+}
+
+/**
+ * Full daylight at or above this, full night at or below the next one, and a
+ * smoothstep between. The window is the two hours either side of dusk, which is
+ * where the light theme's sky actually turns over; dark's skies are below the
+ * floor at every hour, so on dark this is simply 1 and nothing has to special-
+ * case the scheme.
+ */
+const DAYLIGHT = 0.34;
+const NIGHTFALL = 0.1;
+
+function nightness(lum: number): number {
+  const t = Math.min(1, Math.max(0, (DAYLIGHT - lum) / (DAYLIGHT - NIGHTFALL)));
+  /* Smoothstep, so the ends ease rather than arriving on a corner. */
+  return t * t * (3 - 2 * t);
 }
 
 /**

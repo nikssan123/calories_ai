@@ -337,7 +337,7 @@ function AccountCard({
   return (
     <div
       className={cn(
-        'bg-card border-border chunk space-y-3 rounded-[var(--radius)] border-2 p-4',
+        'bg-card border-hairline chunk space-y-3 rounded-[var(--radius)] border p-4',
         suspended && 'opacity-60',
         busy && 'opacity-50',
       )}

@@ -60,7 +60,10 @@ export default function AdminPage() {
           </p>
         </div>
 
-        <div className="bg-card border-border chunk-sm flex gap-1 rounded-full border-2 p-1">
+        {/* Seven labels do not divide a phone into seven readable buttons, so on
+            a narrow screen the strip scrolls sideways at a legible size instead
+            of squeezing. From `sm` up there is room to share it out evenly. */}
+        <div className="bg-card border-hairline chunk-sm flex gap-1 overflow-x-auto rounded-full border p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {TABS.map((entry) => (
             <button
               key={entry.id}
@@ -68,7 +71,7 @@ export default function AdminPage() {
               onClick={() => setTab(entry.id)}
               aria-current={tab === entry.id ? 'page' : undefined}
               className={cn(
-                'flex-1 rounded-full px-3 py-1.5 text-[14px] font-bold transition-colors',
+                'rounded-full px-4 py-2 text-[14px] font-bold whitespace-nowrap transition-colors max-sm:shrink-0 sm:flex-1 sm:px-3 sm:py-1.5',
                 tab === entry.id
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:text-foreground',

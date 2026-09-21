@@ -77,19 +77,47 @@ export function GlowButton({
     <PressableChunk
       onPress={onPress}
       disabled={disabled || busy}
-      color={colors.calories}
-      depth={6}
+      color={disabled ? colors.glassEdge : colors.calories}
+      depth={disabled ? 2 : 6}
       radius={20}
       accessibilityRole="button"
       accessibilityState={{ disabled: disabled || busy, busy }}
       accessibilityHint={accessibilityHint}
-      style={[{ opacity: disabled ? 0.45 : 1 }, style]}
+      style={style}
       contentStyle={[
         styles.face,
-        {
-          backgroundColor: colors.primary,
-          experimental_backgroundImage: `linear-gradient(135deg, ${colors.calories} 0%, ${colors.logoRamp} 100%)`,
-        },
+        /*
+         * Disabled drops the green rather than dimming it.
+         *
+         * It used to be the same gradient at 0.45 opacity, which on a dark
+         * screen is still a bright green button — on the onboarding body step
+         * people typed a height, tapped the brightest object in front of them
+         * and nothing happened, with the field they had actually missed pushed
+         * off the bottom by the keyboard. A dead button has to read as dead:
+         * glass, like everything else on the screen that is not the way on.
+         */
+        /*
+         * Both branches carry a gradient, and the dead one is two stops of the
+         * same colour rather than no gradient at all. Dropping the property on
+         * one branch and setting it on the other hands the native view an empty
+         * shader the first time the button goes live — `LinearGradient
+         * .nativeCreate` throws `IllegalArgumentException` from inside
+         * `drawBackground`, which takes the whole app down on the tap that
+         * answers the first question.
+         */
+        disabled
+          ? {
+              backgroundColor: colors.glassStrong,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: colors.glassEdge,
+              experimental_backgroundImage: `linear-gradient(135deg, ${colors.glassStrong} 0%, ${colors.glassStrong} 100%)`,
+            }
+          : {
+              backgroundColor: colors.primary,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: 'transparent',
+              experimental_backgroundImage: `linear-gradient(135deg, ${colors.calories} 0%, ${colors.logoRamp} 100%)`,
+            },
       ]}
     >
       <View
@@ -113,7 +141,14 @@ export function GlowButton({
       {busy ? (
         <ActivityIndicator color={colors.primaryForeground} />
       ) : (
-        <Text style={[t.bodyBold, styles.label, { color: colors.primaryForeground }]} numberOfLines={1}>
+        <Text
+          style={[
+            t.bodyBold,
+            styles.label,
+            { color: disabled ? colors.mutedForeground : colors.primaryForeground },
+          ]}
+          numberOfLines={1}
+        >
           {label}
         </Text>
       )}
