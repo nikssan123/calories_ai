@@ -217,6 +217,93 @@ on its own.
 Apple wants $800 for 2TB; a Thunderbolt SSD is a tenth of that and nothing here needs
 the internal bus.
 
+## Which model, and how it compares to what we run now
+
+Surveyed 2026-09-22. The frontier of open weights is out of reach and not interesting
+here — Kimi K3 is 2.8T parameters, DeepSeek V4.1-Flash 552B, Qwen3.8-2.4T-A95B. None of
+them fit in 64GB at any quantisation, and none of them are what this product needs.
+
+What fits is a 27B, and three of them are worth naming.
+
+**Qwen3.8-27B.** Dense 27B on the Qwen3.5 architecture, 256K context, **with a vision
+tower** — one model for the journal and the plate, which is the configuration this
+document has been sizing memory for. MLX builds exist at 4/6/8-bit (8-bit is ~29GB on
+disk, 4-bit ~17GB), and an independent quantisation sweep reports 4-bit holding up
+while the very low bit widths collapse. Artificial Analysis puts it at 52 on their
+intelligence index — level with GLM-5.2 and DeepSeek V4 Flash, and ahead of every open
+model between 40B and 150B. Against Claude it splits: it takes 5 of 12 text rows and 4
+of 6 vision rows off Opus 4.6 Max, and loses GPQA-Diamond, Terminal-Bench, NL2Repo and
+HLE outright.
+
+**BgGPT 3.0, 27B.** INSAIT's Bulgarian-first series, released March 2026 on Gemma 3 in
+4B/12B/27B, with vision and 131k context. The 27B **outperforms Qwen 3 235B on
+Bulgarian** and beats every Gemma and both Qwen 3 models on Bulgarian and English. Its
+vision numbers improve on stock Gemma 3 on both MMMU and the Bulgarian EXAMS-V without
+any multimodal training — they appended the original vision tower to the adapted
+language model.
+
+**TUCAN, 2.6B/9B/27B.** BgGPT fine-tuned for *function calling in Bulgarian*, with an
+840-case Bulgarian tool-call benchmark and a CLI evaluation framework. It reports
++22.4pp tool-call accuracy at 2.6B and +15.4pp at 9B over the BgGPT baselines, while
+holding its Bulgarian scores. The paper also finds the general-purpose baselines
+(Qwen2.5, Qwen3, Llama-3.1, Gemma) competitive on function-calling *format* but weaker
+on Bulgarian knowledge.
+
+That last pair is the finding that matters, and it is not the one this document went
+looking for. **The best case for local inference here is not "something cheaper than
+Haiku". It is that 77% of production text logs escalate to Sonnet for Bulgarian, and
+there exists a 27B that beats a 235B at Bulgarian and a fine-tune of it built
+specifically to call tools in Bulgarian.** The single largest line on the bill is the
+one path where an open model has a real chance of being *better* than what we pay for
+today, rather than merely adequate.
+
+### Against the current line-up, honestly
+
+| Path | Runs on now | Local candidate | Expectation |
+|---|---|---|---|
+| `text_log`, the 24 clean languages | Haiku 4.5 | Qwen3.8-27B | Likely at or above. Haiku is a small fast model; this is a 27B at the top of its weight class. |
+| `text_log`, Bulgarian + the 9 others | Sonnet 5 — **77% of turns** | BgGPT 3.0 27B / TUCAN 27B | The one path where local could beat the API. Test it first. |
+| `photo_log` | Sonnet 5 | Qwen3.8-27B vision | Unknown, and the bar is low — Sonnet reads a weighed plate at 66% kcal MAPE. Decided by the 30-plate suite, not by a leaderboard. |
+| `pantry_scan` | Sonnet 5 | Qwen3.8-27B vision | Probably fine. Enumeration, and the user confirms the list. |
+| `recipe`, `meal_plan` | Sonnet 5 / Opus 5 | — | Keep. An allergy violation is the worst output this product can produce. |
+| `review`, `content` | Opus 5 | — | Keep. Long-form prose is where a 27B is furthest behind, and it is the writing a stranger judges the site by. |
+
+### The constraint is decode speed, not memory
+
+This corrects the memory sizing two sections up, and it is the more useful number.
+
+Published M5 Max figures are 100–120 tok/s on a *dense* 8B at 4-bit. Decode reads the
+weights once per token, so extrapolating by weight size — these are estimates from one
+published measurement, not benchmarks:
+
+| Model | 4-bit weights | Estimated decode |
+|---|---|---|
+| BgGPT 4B | ~2.5GB | ~180–200 tok/s |
+| TUCAN 9B | ~5.5GB | ~85–100 tok/s |
+| BgGPT 12B | ~7GB | ~65–80 tok/s |
+| Qwen3.8-27B | ~17GB | ~25–30 tok/s |
+| Qwen3.8-27B at 8-bit | ~29GB | ~15–18 tok/s |
+
+`SCALING.md` budgets ~600 output tokens a turn. At 27 tok/s that is twenty-odd seconds
+on the one turn somebody watches a spinner through, and `ai/client.ts` already records
+dropping `effort` on `photo_log` over *one* second of latency. So a dense 27B is too
+slow for `text_log` on this box, and the honest configuration is two models rather than
+one:
+
+- **`text_log` on a 9–12B** — TUCAN 9B or BgGPT 12B — where 600 tokens is six to nine
+  seconds and the Bulgarian is the point.
+- **`photo_log` and `pantry_scan` on the 27B**, where a slower turn is already expected
+  and the vision tower is what is being bought.
+
+Both resident at once is ~24GB of weights plus KV. **That fits the $2,499 36GB Mac
+Studio**, which makes the $700 step to 64GB insurance for 8-bit quants and a larger VL
+model rather than a requirement. Buy the 64GB if the photo suite is going to be run
+properly; the 36GB is defensible if it is not.
+
+One knock-on: a 9B writing the journal makes `SCALING.md` §Stage 5 more urgent, not
+less. Collapsing the 2–3 call tool loop into one call removes two round trips from a
+turn that is now decode-bound rather than API-bound.
+
 ## The software, and why the objection I raised is gone
 
 The second draft of this document said the cost case rested on vLLM's shared prefix
@@ -347,10 +434,15 @@ Three suites, in order of what they would kill:
 
 1. **Bulgarian, 12 runs.** The protocol in `ai/language.ts` — one meal log and one
    four-sentence answer, with and without the language named. 12/12 clean, or the
-   candidate is out, because this is 77% of the bill. Worth checking whether a
-   Bulgarian-tuned open model (INSAIT's BgGPT line, built on Gemma) beats a general
-   one here, and worth being suspicious of its tool calling if it does. Then the other
-   nine languages `ai/language.ts` lists as broken on Haiku.
+   candidate is out, because this is 77% of the bill. Then the other nine languages
+   `ai/language.ts` lists as broken on Haiku.
+
+   **Part of this suite already exists and is public.** TUCAN ships
+   `Tucan-BG-Eval-v1.0` — 840 cases of Bulgarian tool-calling with a CLI evaluation
+   framework — which is suite 1 and suite 2 crossed, on the exact axis that decides
+   this, written by people whose day job is Bulgarian NLP. Run theirs before writing
+   ours, and keep ours for the part theirs cannot know about: our 37 tools and our
+   prompt.
 2. **Tool calling, the real prefix.** All 37 tools, a hundred journal turns, counting
    malformed calls, wrong-tool calls and JSON-as-string. Quantisation degrades this
    first and it degrades quietly.
@@ -374,6 +466,11 @@ this.
   off `ai_usage`, and a local lane makes those ceilings protect a margin that is no
   longer there. That is a pricing decision, not a technical one, and it should not be
   made accidentally by an env var.
+- **Is the Sonnet rate card still right?** `pricing.ts` bills Sonnet 5 at $3/$15 and
+  records that the $2/$10 introductory rate did not apply to the measured turns. Public
+  rate cards now quote $2/$10. If that is the current standing rate, a third comes off
+  the largest line in the table with no work at all — and every break-even figure in
+  this document moves against the box. Check an invoice before trusting either number.
 - **Who is on call for the box?** If the product's inference is in a flat in Sofia, the
   product's uptime is that flat's power and uplink. The LiteLLM fallback is the answer
   and it needs to exist before the box serves a single real turn, not after the first
