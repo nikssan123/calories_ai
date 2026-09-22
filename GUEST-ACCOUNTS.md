@@ -4,7 +4,14 @@ Status: **shipped** in 1.3.0. Written as a proposal on 2026-09-15; steps 1-3 of 
 order of work below are live, and the numbers in it have moved since — the guest
 grant is **3 messages + 1 photo** (`GUEST` in `@ct/shared`, cut from 5 then 4
 because nobody was reaching the end of it) and the trial is **3 days, 9 messages**
-(`TRIAL`, cut from a week). The merge the table below calls v2 is live too
+(`TRIAL`, cut from a week). Since 2026-09-22 those are **meals logged, not
+sentences sent**: a turn that writes nothing into the journal — a greeting, a
+question, a photograph with no food in it — is recorded in the cost ledger and
+counted by no meter. The free ones are **earned, not granted** (`FREE_TURNS`):
+two to begin with, and one more for each turn that actually logged something, so
+a guest who never logs gets two answers and then pays a unit per message like
+before. The guest who prompted it spent a third of their three on "Здрасти" and
+met the wall a meal early; `063_ai_usage_metered.sql` has that walk in full. The merge the table below calls v2 is live too
 (`services/guest-merge.ts`); **Sign in with Apple — step 4, and the 4.8 fix —
 is the one thing here still not built.**
 Read the ladder and the risks as current; read the counts here as the argument

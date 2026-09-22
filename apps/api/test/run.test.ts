@@ -9,7 +9,14 @@ import { savePhoto } from '../src/services/photos.ts';
 import { agentCalls, scriptAgent, systemPromptOf, userTurnOf } from './helpers/agent-mock.ts';
 import { MAX_SESSION_MESSAGES, MODELS } from '../src/ai/client.ts';
 import type { StreamEvent } from '../src/ai/providers/types.ts';
-import { addMeal, addWeight, createUser, setUserTargets, type TestUser } from './helpers/factories.ts';
+import {
+  addMeal,
+  addWeight,
+  createUser,
+  ROOMY_ALLOWANCE,
+  setUserTargets,
+  type TestUser,
+} from './helpers/factories.ts';
 
 /**
  * One journal turn. The model is scripted; what is under test is everything
@@ -27,7 +34,7 @@ beforeEach(async () => {
 
 async function turn(text = 'two eggs and toast') {
   const profile = await getUser(user.id);
-  return runTurn({ userId: user.id, ctx: user.ctx, profile, text });
+  return runTurn({ userId: user.id, ctx: user.ctx, profile, text, allowance: ROOMY_ALLOWANCE });
 }
 
 /**
@@ -267,7 +274,7 @@ describe('runTurn', () => {
     const events: StreamEvent[] = [];
     const profile = await getUser(user.id);
     const response = await runTurn(
-      { userId: user.id, ctx: user.ctx, profile, text: 'again' },
+      { userId: user.id, ctx: user.ctx, profile, text: 'again', allowance: ROOMY_ALLOWANCE },
       (e) => events.push(e),
     );
 
@@ -493,7 +500,7 @@ describe('runTurn', () => {
       const account = await createUser(overrides);
       const profile = await getUser(account.id);
       scriptAgent({ text: 'Добре.' });
-      await runTurn({ userId: account.id, ctx: account.ctx, profile, text, spokenLocale });
+      await runTurn({ userId: account.id, ctx: account.ctx, profile, text, spokenLocale, allowance: ROOMY_ALLOWANCE });
       return agentCalls.at(-1)!;
     }
 
@@ -513,6 +520,7 @@ describe('runTurn', () => {
       const photo = await savePhoto(account.id, 'image/png', 'AAAA');
       scriptAgent({ text: 'Добре.' });
       await runTurn({
+        allowance: ROOMY_ALLOWANCE,
         userId: account.id,
         ctx: account.ctx,
         profile,
@@ -529,6 +537,7 @@ describe('runTurn', () => {
       const photo = await savePhoto(account.id, 'image/png', 'AAAA');
       scriptAgent({ text: 'Добре.' });
       await runTurn({
+        allowance: ROOMY_ALLOWANCE,
         userId: account.id,
         ctx: account.ctx,
         profile,
@@ -576,12 +585,13 @@ describe('runTurn', () => {
       scriptAgent({ text: 'Et voilà.' }, { text: 'Et voilà.' });
 
       await runTurn({
+        allowance: ROOMY_ALLOWANCE,
         userId: account.id,
         ctx: account.ctx,
         profile,
         text: 'deux oeufs et une tranche de pain avec du beurre',
       });
-      await runTurn({ userId: account.id, ctx: account.ctx, profile, text: '3 yaourts' });
+      await runTurn({ userId: account.id, ctx: account.ctx, profile, text: '3 yaourts', allowance: ROOMY_ALLOWANCE });
 
       expect(userTurnOf(agentCalls.at(-1)!)).toContain('Language: write to this person in French');
     });
@@ -596,6 +606,7 @@ describe('runTurn', () => {
       const profile = await getUser(account.id);
       scriptAgent({ text: 'Записано.' });
       await runTurn({
+        allowance: ROOMY_ALLOWANCE,
         userId: account.id,
         ctx: account.ctx,
         profile,
@@ -663,6 +674,7 @@ describe('runTurn', () => {
     scriptAgent({ text: 'Looks like ~700 kcal.' });
     const profile = await getUser(user.id);
     const response = await runTurn({
+      allowance: ROOMY_ALLOWANCE,
       userId: user.id,
       ctx: user.ctx,
       profile,
@@ -694,6 +706,7 @@ describe('runTurn', () => {
     scriptAgent({ text: 'Looks like ~700 kcal.' });
     const profile = await getUser(user.id);
     const response = await runTurn({
+      allowance: ROOMY_ALLOWANCE,
       userId: user.id,
       ctx: user.ctx,
       profile,
@@ -717,6 +730,7 @@ describe('runTurn', () => {
     scriptAgent({ text: 'Logged.' });
     const profile = await getUser(user.id);
     const response = await runTurn({
+      allowance: ROOMY_ALLOWANCE,
       userId: user.id,
       ctx: user.ctx,
       profile,
@@ -831,7 +845,7 @@ describe('routing a turn by its language', () => {
     await addWeight(bulgarian, '2026-03-01', 85);
     const profile = await getUser(bulgarian.id);
     scriptAgent({ text: 'Добре.' });
-    await runTurn({ userId: bulgarian.id, ctx: bulgarian.ctx, profile, text: 'ok' });
+    await runTurn({ userId: bulgarian.id, ctx: bulgarian.ctx, profile, text: 'ok', allowance: ROOMY_ALLOWANCE });
 
     expect(agentCalls[0]!.options.model).toBe('claude-sonnet-5');
   });
@@ -841,7 +855,7 @@ describe('routing a turn by its language', () => {
     await addWeight(german, '2026-03-01', 85);
     const profile = await getUser(german.id);
     scriptAgent({ text: 'Notiert.' });
-    await runTurn({ userId: german.id, ctx: german.ctx, profile, text: 'two eggs and toast' });
+    await runTurn({ userId: german.id, ctx: german.ctx, profile, text: 'two eggs and toast', allowance: ROOMY_ALLOWANCE });
 
     expect(agentCalls[0]!.options.model).toBe('claude-haiku-4-5');
   });
@@ -860,6 +874,7 @@ describe('routing a turn by its language', () => {
     const photo = await savePhoto(user.id, 'image/png', 'AAAA');
     const profile = await getUser(user.id);
     await runTurn({
+      allowance: ROOMY_ALLOWANCE,
       userId: user.id,
       ctx: user.ctx,
       profile,
@@ -889,6 +904,7 @@ describe('packets scanned into the message', () => {
   async function scannedTurn(text: string, scanned: unknown[], misses = 0) {
     const profile = await getUser(user.id);
     return runTurn({
+      allowance: ROOMY_ALLOWANCE,
       userId: user.id,
       ctx: user.ctx,
       profile,

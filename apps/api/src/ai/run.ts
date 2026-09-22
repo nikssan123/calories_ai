@@ -1,4 +1,4 @@
-import type { ChatAction, ChatResponse, Locale, Profile } from '@ct/shared';
+import type { Allowance, ChatAction, ChatResponse, Locale, Profile } from '@ct/shared';
 import { isDeletion, localeOf, unitsOf } from '@ct/shared';
 import { queryOne, query as sql } from '../db.ts';
 import type { DayContext } from '../time.ts';
@@ -15,7 +15,7 @@ import { listNotes } from '../services/notes.ts';
 import { buildDaySummary } from '../services/summary.ts';
 import { latestReview } from '../services/reviews.ts';
 import { getUser } from '../services/user.ts';
-import { recordUsage } from '../services/usage.ts';
+import { recordUsage, spend, spendsGrant } from '../services/usage.ts';
 import { hasKitchen } from '../services/plans.ts';
 import { withTurnLock } from '../services/turn-lock.ts';
 import { checkWellbeing } from '../services/wellbeing.ts';
@@ -48,6 +48,20 @@ export interface RunTurnInput {
   ctx: DayContext;
   profile: Profile;
   text: string;
+  /**
+   * What the gate found before it permitted this turn, so the reply can say
+   * what is left without asking a second time.
+   *
+   * Carried in rather than added to on the way out, because whether the turn
+   * spends a unit is not known until it has run — a turn that logs nothing does
+   * not — and the route that used to do the arithmetic has no way to tell. See
+   * `spend`, which is the only place the turn is added.
+   *
+   * Required rather than optional: both callers hold one, and a turn that
+   * quietly reported no allowance would put the journal's "three left" line
+   * back to guessing.
+   */
+  allowance: Allowance;
   photo?: ({ id: string } & PhotoSource) | null;
   /**
    * The language the client says it is drawing the app in, for an account whose
@@ -373,9 +387,35 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
     outcome = await drive(provider, request, null, emit);
   }
 
-  // Before the error check: a turn that spent tokens and then failed is exactly
-  // the turn the cost report must not lose.
-  await recordUsage({ userId: input.userId, kind: request.kind, outcome, provider: provider.id });
+  /*
+   * Before the error check: a turn that spent tokens and then failed is exactly
+   * the turn the cost report must not lose.
+   *
+   * Whether the *grant* loses one is a narrower question, and `spendsGrant`
+   * answers it from what the tools did: this turn changed the journal, or it
+   * did not and is free until the budget earned by the ones that did runs out.
+   * Asked here rather than in the route because `actions` is the evidence and
+   * it does not leave this function intact — `shown` below drops the
+   * retractions, and a log-then-delete is still a turn that worked.
+   */
+  const changed = actions.length > 0;
+  const metered = await spendsGrant(input.userId, {
+    changed,
+    failed: Boolean(outcome.error),
+    unlimited: input.allowance.unlimited,
+  });
+  await recordUsage({
+    userId: input.userId,
+    kind: request.kind,
+    outcome,
+    provider: provider.id,
+    metered,
+    // Only on a turn that got far enough to have a journal fact about it. A
+    // failed one has an empty `actions` for the reason it has an empty
+    // everything, and recording that as "logged nothing" would let an outage
+    // look like a room full of people saying hello.
+    changed: outcome.error ? undefined : changed,
+  });
 
   if (outcome.error) throw new Error(outcome.error);
   if (!outcome.text) outcome.text = 'Logged.';
@@ -446,6 +486,7 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
     actions: shown,
     day: updatedDay,
     profile: updatedProfile,
+    allowance: spend(input.allowance, metered),
   };
 }
 

@@ -180,7 +180,7 @@ export async function registerRoutes(app: FastifyInstance) {
   async function prepareTurn(
     request: FastifyRequest,
     reply: FastifyReply,
-  ): Promise<{ input: RunTurnInput; allowance: Allowance } | null> {
+  ): Promise<RunTurnInput | null> {
     const parsed = ChatRequest.safeParse(request.body);
     if (!parsed.success) {
       await reply.status(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid request' });
@@ -323,39 +323,35 @@ export async function registerRoutes(app: FastifyInstance) {
     const scanned = settled.filter((entry) => entry !== null);
 
     /*
-     * The allowance rides back out with the reply, and it is the *post*-turn
-     * number: `requireAllowance` counted what had been spent before this turn
-     * was permitted, and this turn is about to be spent. Adding one here rather
-     * than counting again after the fact is not a shortcut — the ledger row is
-     * written inside `runTurn`, so a second count would race it and could
-     * truthfully report a turn that has already happened as not having.
+     * The allowance goes *into* the turn rather than out alongside it.
      *
-     * Except on an unmetered account, where nothing was counted in the first
-     * place: incrementing there would start a tally against a ceiling that does
-     * not exist, and `/entitlements` would go on answering zero.
+     * It used to be incremented here, on the reasoning that the gate had just
+     * counted what was spent before this turn and this turn was about to be
+     * spent. The second half of that stopped being true when a turn that
+     * changes nothing stopped spending a unit: from out here the increment is a
+     * guess, and on a greeting it is the wrong one. `runTurn` knows what the
+     * tools did and adds the turn there — see `spend`.
      */
     return {
-      input: {
-        userId,
-        ctx,
-        profile,
-        text: parsed.data.text,
-        photo,
-        scanned,
-        scannedMisses: settled.length - scanned.length,
-        /*
-         * What the app is drawing itself in, for this turn to be answered in
-         * when the profile has no preference of its own. Carried as the guess
-         * it is — see `ChatRequest.locale` for why it is never stored, and
-         * `runTurn` for where the stored answer takes precedence over it.
-         *
-         * The body first and the header behind it: this route asked for the
-         * value by name before every request carried one, and a client that
-         * still sends it is being more specific than its own header, not less.
-         */
-        spokenLocale: parsed.data.locale ?? request.spokenLocale,
-      },
-      allowance: allowance.unlimited ? allowance : { ...allowance, used: allowance.used + 1 },
+      userId,
+      ctx,
+      profile,
+      allowance,
+      text: parsed.data.text,
+      photo,
+      scanned,
+      scannedMisses: settled.length - scanned.length,
+      /*
+       * What the app is drawing itself in, for this turn to be answered in
+       * when the profile has no preference of its own. Carried as the guess
+       * it is — see `ChatRequest.locale` for why it is never stored, and
+       * `runTurn` for where the stored answer takes precedence over it.
+       *
+       * The body first and the header behind it: this route asked for the
+       * value by name before every request carried one, and a client that
+       * still sends it is being more specific than its own header, not less.
+       */
+      spokenLocale: parsed.data.locale ?? request.spokenLocale,
     };
   }
 
@@ -385,7 +381,7 @@ export async function registerRoutes(app: FastifyInstance) {
     if (!prepared) return reply;
 
     try {
-      return { ...(await runTurn(prepared.input)), allowance: prepared.allowance };
+      return await runTurn(prepared);
     } catch (error) {
       // Not a failure, and not logged as one: they have a turn in flight and
       // pressed send again. A fast, honest rejection is the right answer for a
@@ -452,8 +448,7 @@ export async function registerRoutes(app: FastifyInstance) {
     const stream = openEventStream(request, reply);
 
     try {
-      const turn = await runTurn(prepared.input, (event) => stream.send(event));
-      const response = { ...turn, allowance: prepared.allowance };
+      const response = await runTurn(prepared, (event) => stream.send(event));
       stream.send({ type: 'done', response });
       return stream.close();
     } catch (error) {
@@ -573,11 +568,10 @@ export async function registerRoutes(app: FastifyInstance) {
         }
 
         try {
-          const turn = await logPhotoOnly(userId, photo, request.spokenLocale);
-          return {
-            ...turn,
-            allowance: allowance.unlimited ? allowance : { ...allowance, used: allowance.used + 1 },
-          };
+          // The allowance goes in rather than being incremented out here, for
+          // the reason `prepareTurn` gives: a photograph with no food in it
+          // does not spend the scan, and only the lane knows that.
+          return await logPhotoOnly(userId, photo, request.spokenLocale, allowance);
         } catch (error) {
           if (error instanceof ModelBusyError) {
             return reply.status(429).send({ error: error.message });

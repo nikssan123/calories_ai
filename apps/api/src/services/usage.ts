@@ -8,6 +8,7 @@ import { creditBalance, spendCredit } from './credits.ts';
 import { trialNeverEnds } from './trial.ts';
 import {
   CREDIT_METERS,
+  FREE_TURNS,
   TRIAL,
   TRIAL_LEGACY,
   planLimitCode,
@@ -49,6 +50,26 @@ export interface RecordUsageInput {
    * a compile error now, instead of a plausible-looking row.
    */
   provider: ProviderId;
+  /**
+   * Whether this turn counts against the account's grant.
+   *
+   * Defaulted rather than required, and the opposite way round to `provider`:
+   * every caller here but the two journal lanes is a turn nobody asked for in
+   * a sentence — a review, a nudge, a recipe, a fridge scan — and each of those
+   * either has no grant behind it or has one that its own route already
+   * decided. `true` is what the table did before this field existed and what
+   * all of them still mean.
+   */
+  metered?: boolean;
+  /**
+   * Whether a tool wrote anything into the journal this turn.
+   *
+   * A different question from `metered` and stored separately, because it is
+   * what *earns* the next free turn — see `spendsGrant`. Left undefined by the
+   * callers with no journal behind them, where it lands as null rather than as
+   * a false that would read like a journal turn which logged nothing.
+   */
+  changed?: boolean;
 }
 
 /**
@@ -66,7 +87,8 @@ export interface RecordUsageInput {
 export async function turnsInLastDay(userId: string, kind: TurnKind): Promise<number> {
   const row = await queryOne<{ n: string }>(
     `SELECT count(*) AS n FROM ai_usage
-      WHERE user_id = $1 AND kind = $2 AND occurred_at > now() - interval '1 day'`,
+      WHERE user_id = $1 AND metered AND kind = $2
+        AND occurred_at > now() - interval '1 day'`,
     [userId, kind],
   );
   return Number(row?.n ?? 0);
@@ -94,7 +116,8 @@ export async function oldestTurnInLastDay(
 ): Promise<Date | null> {
   const row = await queryOne<{ at: Date | null }>(
     `SELECT min(occurred_at) AS at FROM ai_usage
-      WHERE user_id = $1 AND kind = $2 AND occurred_at > now() - interval '1 day'`,
+      WHERE user_id = $1 AND metered AND kind = $2
+        AND occurred_at > now() - interval '1 day'`,
     [userId, kind],
   );
   return row?.at ? new Date(row.at) : null;
@@ -128,6 +151,12 @@ const METER_KINDS: Record<MeterName, TurnKind[]> = {
  * free tier is built out of those, so this is not an edge case — it is the
  * common path for the majority of accounts.
  *
+ * `metered` is on this query and on every other one that measures a grant, and
+ * on none of the cost reports below. A grant is sold as meals logged rather
+ * than as sentences sent, so a turn that wrote nothing into the journal is
+ * recorded in full and counted by nobody — see `spendsGrant` for the rule and
+ * `063_ai_usage_metered.sql` for the guest it was written for.
+ *
  * The index added in `034` is what makes the monthly form affordable: it runs
  * *before* the turn rather than after, so unlike the cost rollups it is latency
  * somebody is standing there waiting for.
@@ -139,7 +168,7 @@ export async function turnsInWindow(
 ): Promise<number> {
   const row = await queryOne<{ n: string }>(
     `SELECT count(*) AS n FROM ai_usage
-      WHERE user_id = $1 AND kind = ANY($2::text[])
+      WHERE user_id = $1 AND metered AND kind = ANY($2::text[])
         AND ($3::int IS NULL OR occurred_at > now() - ($3 || ' days')::interval)`,
     [userId, kinds, days],
   );
@@ -150,7 +179,7 @@ export async function turnsInWindow(
 async function turnsSince(userId: string, kinds: TurnKind[], since: Date): Promise<number> {
   const row = await queryOne<{ n: string }>(
     `SELECT count(*) AS n FROM ai_usage
-      WHERE user_id = $1 AND kind = ANY($2::text[]) AND occurred_at >= $3`,
+      WHERE user_id = $1 AND metered AND kind = ANY($2::text[]) AND occurred_at >= $3`,
     [userId, kinds, since],
   );
   return Number(row?.n ?? 0);
@@ -299,7 +328,7 @@ export async function allowanceFor(
   // "resets on the 1st" would not be.
   const row = await queryOne<{ at: Date | null }>(
     `SELECT min(occurred_at) AS at FROM ai_usage
-      WHERE user_id = $1 AND kind = ANY($2::text[])
+      WHERE user_id = $1 AND metered AND kind = ANY($2::text[])
         AND occurred_at > now() - interval '30 days'`,
     [userId, kinds],
   );
@@ -443,11 +472,11 @@ export async function requireAllowance(
    *
    * That looks harsh and it is the consistent choice: a failed turn already
    * counts against the monthly meter, because `recordUsage` writes a row for
-   * every turn including the ones that failed and `turnsInWindow` counts rows
-   * rather than successes. Spending a credit only on success would make the
-   * two halves of the same allowance behave differently — bought stock
-   * quietly more forgiving than granted units — which is the sort of difference
-   * nobody can predict from the outside and everybody notices once.
+   * every turn including the ones that failed and `spendsGrant` keeps those
+   * rows metered. Spending a credit only on success would make the two halves
+   * of the same allowance behave differently — bought stock quietly more
+   * forgiving than granted units — which is the sort of difference nobody can
+   * predict from the outside and everybody notices once.
    *
    * `spendCredit` re-checks the balance inside its own statement, so two turns
    * racing for the last credit cannot both win. A false return is the wall, not
@@ -468,10 +497,100 @@ export async function requireAllowance(
   throw new PlanLimitError(allowance);
 }
 
+/**
+ * Whether the turn that just ran spends one of the account's units.
+ *
+ * The grant is sold as meals logged. A turn that called no tool wrote nothing
+ * into the journal — a greeting, a question about yesterday answered from the
+ * day context, a sentence the model could not make a meal out of — and taking a
+ * unit for it charges somebody for the app being conversational. On 2026-09-22
+ * that cost a guest a third of their grant on "Здрасти" and put the wall a meal
+ * early; `063_ai_usage_metered.sql` has that walk in full.
+ *
+ * Four clauses, in the order they are cheap:
+ *
+ * `unlimited` first, and it is the only one that answers `true` for a reason
+ * that is not about the grant: there is no grant. Nothing is counted on those
+ * accounts, so the flag is decoration — and asking the database to help decide
+ * the value of a column nobody will read is pure latency on the lane that
+ * exists to be fast.
+ *
+ * `failed` next, because a turn that burned tokens and then errored stays
+ * metered. That is not an oversight carried forward — it is the choice `006`
+ * and the credit branch above both rest on, and the alternative is a meter that
+ * a broken provider silently switches off.
+ *
+ * `changed` after it, which is the ordinary path and costs no query at all: the
+ * turn touched the journal, so it is what the unit was sold for.
+ *
+ * Only then the budget, so the count runs on the minority of turns that stand
+ * to be free — about one in seven of the deployment's text turns — and never on
+ * a photo that logged a plate.
+ *
+ * ---- The budget is earned, and that is the whole anti-abuse argument ---------
+ *
+ * `FREE_TURNS.starter` free turns to begin with, and one more for every turn
+ * that actually logged something. The flat version of this does not survive
+ * contact: a guest row is made by the phone on first launch, so a daily
+ * allowance is really an allowance per reinstall, and somebody willing to
+ * automate that has a free model.
+ *
+ * Earning is counted off `changed_journal` rather than off `metered`, and the
+ * difference is the exploit. A chatter turn charged because the budget ran out
+ * is metered and logged nothing; if *that* earned the next free turn, hello and
+ * hello would alternate for as long as the grant lasted and every guest would
+ * cost twice what they used to. So only the turns that wrote something buy the
+ * next free one, which bounds the whole thing at `starter` plus the grant —
+ * a ceiling nobody had to pick, because earning one costs a unit.
+ *
+ * One budget across both journal lanes rather than one each, for the same
+ * reason: it is not a grant, it is the bound on how much a stranger can spend
+ * saying hello, and a stranger with two ways of saying it is the same stranger.
+ *
+ * Nothing filters on `ok`. A failed turn takes the second clause and is
+ * recorded metered with no journal fact on it, so it can neither spend the
+ * budget nor earn it — a spell of failures leaves both counts where they were.
+ */
+export async function spendsGrant(
+  userId: string,
+  { changed, failed, unlimited }: { changed: boolean; failed: boolean; unlimited: boolean },
+): Promise<boolean> {
+  if (unlimited || failed || changed) return true;
+  const row = await queryOne<{ spent: string; earned: string }>(
+    `SELECT count(*) FILTER (WHERE NOT metered)     AS spent,
+            count(*) FILTER (WHERE changed_journal) AS earned
+       FROM ai_usage
+      WHERE user_id = $1 AND occurred_at > now() - interval '1 day'`,
+    [userId],
+  );
+  const budget = FREE_TURNS.starter + FREE_TURNS.perLogged * Number(row?.earned ?? 0);
+  return Number(row?.spent ?? 0) >= budget;
+}
+
+/**
+ * The allowance as it stands *after* a turn, for the reply to carry back.
+ *
+ * The gate counted what had been spent before the turn was permitted, so the
+ * number it returned is one behind by the time there is anything to send. This
+ * adds the turn rather than counting again, for the reason the route gives at
+ * length: the ledger row is written inside the turn, and a second count would
+ * race it and could truthfully report a turn that has already happened as not
+ * having.
+ *
+ * Nothing is added on an unmetered account, where no count was run in the first
+ * place, or on a turn that did not spend a unit — which is the whole point of
+ * the flag, and the one number the client would otherwise draw wrong for a
+ * turn until the next reply corrected it.
+ */
+export function spend(allowance: Allowance, metered: boolean): Allowance {
+  return allowance.unlimited || !metered ? allowance : { ...allowance, used: allowance.used + 1 };
+}
+
 export async function turnsInLastWeek(userId: string, kind: TurnKind): Promise<number> {
   const row = await queryOne<{ n: string }>(
     `SELECT count(*) AS n FROM ai_usage
-      WHERE user_id = $1 AND kind = $2 AND occurred_at > now() - interval '7 days'`,
+      WHERE user_id = $1 AND metered AND kind = $2
+        AND occurred_at > now() - interval '7 days'`,
     [userId, kind],
   );
   return Number(row?.n ?? 0);
@@ -506,8 +625,9 @@ export async function recordUsage(input: RecordUsageInput): Promise<void> {
       `INSERT INTO ai_usage (
          user_id, provider, kind, model,
          input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
-         cost_usd, cost_source, duration_ms, num_turns, ok, error, breakdown
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+         cost_usd, cost_source, duration_ms, num_turns, ok, error, breakdown,
+         metered, changed_journal
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
       [
         input.userId,
         input.provider,
@@ -524,6 +644,8 @@ export async function recordUsage(input: RecordUsageInput): Promise<void> {
         !outcome.error,
         outcome.error ?? null,
         usage.byModel ? JSON.stringify(usage.byModel) : null,
+        input.metered ?? true,
+        input.changed ?? null,
       ],
     );
   } catch {

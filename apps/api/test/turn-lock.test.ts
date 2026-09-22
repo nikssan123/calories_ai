@@ -8,7 +8,13 @@ import {
   withTurnLock,
 } from '../src/services/turn-lock.ts';
 import { scriptAgent } from './helpers/agent-mock.ts';
-import { addWeight, createUser, setUserTargets, type TestUser } from './helpers/factories.ts';
+import {
+  addWeight,
+  createUser,
+  ROOMY_ALLOWANCE,
+  setUserTargets,
+  type TestUser,
+} from './helpers/factories.ts';
 
 /**
  * One turn at a time per account.
@@ -132,7 +138,7 @@ describe('withTurnLock', () => {
 describe('a turn taking the lease', () => {
   async function turn(text: string) {
     const profile = await getUser(user.id);
-    return runTurn({ userId: user.id, ctx: user.ctx, profile, text });
+    return runTurn({ userId: user.id, ctx: user.ctx, profile, text, allowance: ROOMY_ALLOWANCE });
   }
 
   it('holds it for the length of the turn and releases it after', async () => {

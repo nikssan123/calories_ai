@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { query } from '../src/db.ts';
 import {
   costByDay,
@@ -9,8 +9,11 @@ import {
   estimateCost,
   recentUsage,
   recordUsage,
+  spend,
+  spendsGrant,
   type RecordUsageInput,
 } from '../src/services/usage.ts';
+import { FREE_TURNS } from '@ct/shared';
 import { MODELS } from '../src/ai/client.ts';
 import type { TurnKind } from '../src/ai/providers/types.ts';
 
@@ -23,7 +26,13 @@ const record = (input: Omit<RecordUsageInput, 'provider'>) =>
 import { runTurn } from '../src/ai/run.ts';
 import { getUser } from '../src/services/user.ts';
 import { scriptAgent } from './helpers/agent-mock.ts';
-import { addWeight, createUser, setUserTargets, type TestUser } from './helpers/factories.ts';
+import {
+  addWeight,
+  createUser,
+  ROOMY_ALLOWANCE,
+  setUserTargets,
+  type TestUser,
+} from './helpers/factories.ts';
 
 /**
  * Cost accounting.
@@ -231,11 +240,206 @@ describe('a real turn', () => {
   it('records itself through runTurn', async () => {
     scriptAgent({ text: 'Logged.' });
     const profile = await getUser(user.id);
-    await runTurn({ userId: user.id, ctx: user.ctx, profile, text: 'two eggs' });
+    await runTurn({ userId: user.id, ctx: user.ctx, profile, text: 'two eggs', allowance: ROOMY_ALLOWANCE });
 
     const [row] = await rows();
     expect(row).toMatchObject({ user_id: user.id, kind: 'text_log', ok: true });
     expect(Number(row.input_tokens)).toBeGreaterThan(0);
+  });
+
+  /**
+   * The greeting. A guest typed "Здрасти" on 2026-09-22, was greeted back, and
+   * met the wall a meal early because hello had taken a third of a grant of
+   * three — see `063_ai_usage_metered.sql`. The row is still written in full;
+   * it is simply not one of the three.
+   */
+  it('is recorded but not counted when it wrote nothing into the journal', async () => {
+    scriptAgent({ text: 'Здрасти! Как я караш — какво хапна днес?' });
+    const profile = await getUser(user.id);
+    const turn = await runTurn({
+      userId: user.id,
+      ctx: user.ctx,
+      profile,
+      text: 'Здрасти',
+      allowance: ROOMY_ALLOWANCE,
+    });
+
+    const [row] = await rows();
+    expect(row).toMatchObject({ kind: 'text_log', ok: true, metered: false, changed_journal: false });
+    expect(Number(row.input_tokens)).toBeGreaterThan(0);
+    // And the reply says so: the number the journal draws has not moved.
+    expect(turn.allowance).toMatchObject({ used: ROOMY_ALLOWANCE.used });
+  });
+
+  it('counts the turn that logged the meal, and says so on the reply', async () => {
+    const tools = await import('../src/ai/tools.ts');
+    const spy = vi.spyOn(tools, 'buildNutritionServer');
+    scriptAgent({
+      text: 'Готово, две яйца влязоха.',
+      act: async () => {
+        const built = spy.mock.results.at(-1)!.value as ReturnType<typeof tools.buildNutritionServer>;
+        const logFood = built.tools.find((t) => t.name === 'log_food')!;
+        await logFood.handler(
+          {
+            description: 'Two eggs',
+            meal: null,
+            when: null,
+            note: null,
+            confidence: 'high',
+            items: [
+              {
+                name: 'Eggs',
+                quantity_g: 100,
+                quantity_desc: null,
+                kcal: 150,
+                protein_g: 13,
+                carbs_g: 1,
+                fat_g: 11,
+                fiber_g: null,
+                sodium_mg: null,
+                sat_fat_g: null,
+                sugar_g: null,
+              },
+            ],
+          } as never,
+          {},
+        );
+      },
+    });
+
+    const profile = await getUser(user.id);
+    const turn = await runTurn({
+      userId: user.id,
+      ctx: user.ctx,
+      profile,
+      text: 'Яйца',
+      allowance: ROOMY_ALLOWANCE,
+    });
+
+    const [row] = await rows();
+    expect(row).toMatchObject({ metered: true, changed_journal: true });
+    expect(turn.allowance).toMatchObject({ used: ROOMY_ALLOWANCE.used + 1 });
+  });
+});
+
+/**
+ * The rule itself, away from the model.
+ *
+ * A grant is sold as meals logged, so a turn that changed nothing does not
+ * spend one — earned rather than granted, because a flat allowance of free
+ * turns is a free model with a greeting for a password.
+ */
+describe('what spends a grant', () => {
+  const chatter = () => spendsGrant(user.id, { changed: false, failed: false, unlimited: false });
+  /** A turn that said something and logged nothing, as the lanes record one. */
+  const idleRow = () =>
+    record({ userId: user.id, kind: 'text_log', outcome: OUTCOME, metered: false, changed: false });
+  /** The same turn once the budget has gone: charged, and still logging nothing. */
+  const chargedIdleRow = () =>
+    record({ userId: user.id, kind: 'text_log', outcome: OUTCOME, metered: true, changed: false });
+  const loggedRow = () =>
+    record({ userId: user.id, kind: 'text_log', outcome: OUTCOME, metered: true, changed: true });
+
+  it('does not charge a turn that changed nothing', async () => {
+    expect(await chatter()).toBe(false);
+  });
+
+  it('charges a turn that touched the journal', async () => {
+    expect(await spendsGrant(user.id, { changed: true, failed: false, unlimited: false })).toBe(true);
+  });
+
+  /* A meter a broken provider can switch off is not a meter. */
+  it('charges a turn that burned tokens and then failed', async () => {
+    expect(await spendsGrant(user.id, { changed: false, failed: true, unlimited: false })).toBe(true);
+  });
+
+  /* Nothing is counted on those accounts, so the flag is decoration. */
+  it('asks nothing of an account with no ceiling', async () => {
+    for (let i = 0; i < FREE_TURNS.starter; i++) await idleRow();
+    expect(await spendsGrant(user.id, { changed: false, failed: false, unlimited: true })).toBe(true);
+  });
+
+  it('charges chatter once the starter is gone', async () => {
+    for (let i = 0; i < FREE_TURNS.starter; i++) await idleRow();
+    expect(await chatter()).toBe(true);
+  });
+
+  it('buys another free turn with a turn that logged something', async () => {
+    for (let i = 0; i < FREE_TURNS.starter; i++) await idleRow();
+    await loggedRow();
+    expect(await chatter()).toBe(false);
+  });
+
+  /**
+   * The exploit the two columns exist for.
+   *
+   * A chatter turn charged because the budget ran out is metered and logged
+   * nothing. If being metered were what earned the next free turn, hello and
+   * hello would alternate for as long as the grant lasted and every guest would
+   * cost twice what they used to. Only a turn that wrote something buys one.
+   */
+  it('is not earned back by the chatter it just charged for', async () => {
+    for (let i = 0; i < FREE_TURNS.starter; i++) await idleRow();
+    for (let i = 0; i < 5; i++) {
+      expect(await chatter()).toBe(true);
+      await chargedIdleRow();
+    }
+  });
+
+  it('is one budget across both journal lanes, not one each', async () => {
+    for (let i = 0; i < FREE_TURNS.starter; i++) {
+      await record({ userId: user.id, kind: 'photo_log', outcome: OUTCOME, metered: false, changed: false });
+    }
+    expect(await chatter()).toBe(true);
+  });
+
+  /**
+   * A review, a nudge, a recipe and a fridge scan write rows here and none of
+   * them logs a meal. They carry no journal fact at all, so they cannot buy a
+   * free turn on the journal's behalf.
+   */
+  it('is not earned by a turn with no journal behind it', async () => {
+    for (let i = 0; i < FREE_TURNS.starter; i++) await idleRow();
+    await record({ userId: user.id, kind: 'review', outcome: OUTCOME });
+    expect(await chatter()).toBe(true);
+  });
+
+  /* Rolling, like every other window here: no cliff, and no date to remember. */
+  it('lets yesterday’s chatter age out of the window', async () => {
+    for (let i = 0; i < FREE_TURNS.starter; i++) await idleRow();
+    await query(
+      `UPDATE ai_usage SET occurred_at = now() - interval '25 hours' WHERE user_id = $1`,
+      [user.id],
+    );
+    expect(await chatter()).toBe(false);
+  });
+
+  it('is another account’s business, not this one’s', async () => {
+    const other = await createUser();
+    for (let i = 0; i < FREE_TURNS.starter; i++) {
+      await record({ userId: other.id, kind: 'text_log', outcome: OUTCOME, metered: false, changed: false });
+    }
+    expect(await chatter()).toBe(false);
+  });
+});
+
+describe('the allowance a reply carries', () => {
+  it('adds the turn when it was charged for', () => {
+    expect(spend(ROOMY_ALLOWANCE, true).used).toBe(ROOMY_ALLOWANCE.used + 1);
+  });
+
+  it('leaves it alone when it was not', () => {
+    expect(spend(ROOMY_ALLOWANCE, false).used).toBe(ROOMY_ALLOWANCE.used);
+  });
+
+  /*
+   * Nothing was counted in the first place on an unmetered account, so adding
+   * one here would start a tally against a ceiling that does not exist and
+   * `/entitlements` would go on answering zero.
+   */
+  it('never starts a tally on an account that has no ceiling', () => {
+    const free = { ...ROOMY_ALLOWANCE, unlimited: true, allowed: null };
+    expect(spend(free, true)).toEqual(free);
   });
 });
 

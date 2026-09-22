@@ -3,7 +3,13 @@ import { queryOne } from '../src/db.ts';
 import { MAX_SESSION_MESSAGES, MODELS } from '../src/ai/client.ts';
 import { HISTORY_CHUNK, HISTORY_KEEP, runTurn } from '../src/ai/run.ts';
 import { getUser } from '../src/services/user.ts';
-import { addWeight, createUser, setUserTargets, type TestUser } from './helpers/factories.ts';
+import {
+  addWeight,
+  createUser,
+  ROOMY_ALLOWANCE,
+  setUserTargets,
+  type TestUser,
+} from './helpers/factories.ts';
 
 /**
  * A whole journal turn on the direct Messages API provider, tools and all.
@@ -79,7 +85,7 @@ const said = (m: any): string =>
 
 async function turn(text = 'two eggs and toast') {
   const profile = await getUser(user.id);
-  return runTurn({ userId: user.id, ctx: user.ctx, profile, text });
+  return runTurn({ userId: user.id, ctx: user.ctx, profile, text, allowance: ROOMY_ALLOWANCE });
 }
 
 /** Backdates a prior turn so the next one lands on a different logging day. */

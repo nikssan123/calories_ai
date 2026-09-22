@@ -145,6 +145,15 @@ describe('POST /entries/photo', () => {
     expect(response.json().message.content).toBe('Nothing on the plate could be read.');
     expect(response.json().actions).toEqual([]);
     expect(await query('SELECT id FROM food_entries WHERE user_id = $1', [user.id])).toHaveLength(0);
+
+    /*
+     * And it did not cost them the scan. On a guest that is the only one they
+     * have, and taking it for a photograph the lane could find no food in is
+     * the same mistake the greeting was — see `063_ai_usage_metered.sql`.
+     */
+    const [usage] = await query<any>('SELECT metered FROM ai_usage WHERE user_id = $1', [user.id]);
+    expect(usage.metered).toBe(false);
+    expect(response.json().allowance).toMatchObject({ meter: 'photo', used: 0 });
   });
 
   /**
@@ -232,7 +241,12 @@ describe('POST /entries/photo', () => {
     scriptAgent({ throws: 'model fell over' });
     const response = await post({ photo_base64: PIXEL });
     expect(response.statusCode).toBe(502);
-    expect(await query('SELECT id FROM ai_usage WHERE user_id = $1', [user.id])).toHaveLength(1);
+    // Counted against the meter too, and not mistaken for a free turn: a
+    // failure logs nothing either, and a meter a broken provider can switch
+    // off is not a meter.
+    const usage = await query<any>('SELECT metered FROM ai_usage WHERE user_id = $1', [user.id]);
+    expect(usage).toHaveLength(1);
+    expect(usage[0]!.metered).toBe(true);
     expect(await query('SELECT id FROM chat_messages WHERE user_id = $1', [user.id])).toHaveLength(0);
   });
 });

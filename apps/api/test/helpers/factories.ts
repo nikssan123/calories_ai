@@ -9,9 +9,29 @@ import {
 } from '../../src/services/log.ts';
 import { setTargets } from '../../src/services/targets.ts';
 import type { DayContext } from '../../src/time.ts';
-import type { Confidence, EntrySource, Meal, Targets } from '@ct/shared';
+import type { Allowance, Confidence, EntrySource, Meal, Targets } from '@ct/shared';
 
 export const DEFAULT_CTX: DayContext = { timezone: 'Europe/Sofia', dayStartHour: 4 };
+
+/**
+ * A chat grant with plenty left in it, for the turns these tests run.
+ *
+ * `runTurn` is handed the gate's answer so the reply can say what is left, and
+ * almost nothing in this suite is about the meter — this is the shape those
+ * turns need without standing a plan up around them. The tests that *are* about
+ * metering build their own and assert on what comes back.
+ */
+export const ROOMY_ALLOWANCE: Allowance = {
+  meter: 'chat',
+  allowed: 100,
+  used: 0,
+  period: 'month',
+  resets_at: null,
+  unlimited: false,
+  credits: 0,
+  trial: null,
+  trial_ends_at: null,
+};
 
 export interface TestUser {
   id: string;

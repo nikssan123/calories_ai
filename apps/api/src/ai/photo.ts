@@ -1,7 +1,7 @@
-import type { ChatResponse, Locale } from '@ct/shared';
+import type { Allowance, ChatResponse, Locale } from '@ct/shared';
 import { insertMessage, recentUserTexts } from '../services/chat.ts';
 import { buildDaySummary } from '../services/summary.ts';
-import { recordUsage } from '../services/usage.ts';
+import { recordUsage, spend, spendsGrant } from '../services/usage.ts';
 import { getUser, getUserContext } from '../services/user.ts';
 import { localDateFor } from '../time.ts';
 import { LANGUAGE_LOOKBACK, replyLanguage, speakingLocale } from './language.ts';
@@ -53,7 +53,14 @@ export async function logPhotoOnly(
    * What the client is drawing itself in, for an account with no preference of
    * its own. A guess, stored nowhere: see `SPOKEN_LOCALE_HEADER`.
    */
-  spokenLocale: Locale | null = null,
+  spokenLocale: Locale | null,
+  /**
+   * What the route's gate found before it permitted this scan. Handed back on
+   * the reply with the turn added, or not added — a photograph the lane could
+   * find no food in does not spend the scan, which on a guest is the only one
+   * they have.
+   */
+  allowance: Allowance,
 ): Promise<ChatResponse> {
   const { userId: id, units, ...ctx } = await getUserContext(userId);
   // Read before the language rather than after it: the column on this row is
@@ -110,12 +117,32 @@ export async function logPhotoOnly(
   };
 
   const outcome = await provider.run(request, null);
-  // Before the error check, so a turn that spent tokens and failed still
-  // counts against the meter it was sold under.
-  await recordUsage({ userId: id, kind: 'photo_log', outcome, provider: provider.id });
+  const actions = toolContext.actions;
+  /*
+   * Before the error check, so a turn that spent tokens and failed still counts
+   * against the meter it was sold under.
+   *
+   * A turn that succeeded and read no food off the plate is the other case, and
+   * the opposite answer: the sentence below already admits there was nothing to
+   * log, and charging a scan for it takes a guest's only one for a photograph
+   * of a cat. `spendsGrant` decides both.
+   */
+  const changed = actions.length > 0;
+  const metered = await spendsGrant(id, {
+    changed,
+    failed: Boolean(outcome.error),
+    unlimited: allowance.unlimited,
+  });
+  await recordUsage({
+    userId: id,
+    kind: 'photo_log',
+    outcome,
+    provider: provider.id,
+    metered,
+    changed: outcome.error ? undefined : changed,
+  });
   if (outcome.error) throw new Error(outcome.error);
 
-  const actions = toolContext.actions;
   const text = outcome.text?.trim() || (actions.length > 0 ? 'Logged.' : 'Nothing on the plate could be read.');
 
   /*
@@ -149,5 +176,6 @@ export async function logPhotoOnly(
     actions,
     day,
     profile: updatedProfile,
+    allowance: spend(allowance, metered),
   };
 }

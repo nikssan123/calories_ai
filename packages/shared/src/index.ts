@@ -186,6 +186,46 @@ export const GUEST = { chat: 3, photo: 1 } as const;
 export const TRIAL = { days: 3, chat: 9, photo: 1 } as const;
 
 /**
+ * How many turns may change nothing and still be free.
+ *
+ * A grant is sold as meals logged, not as sentences sent. `GUEST` above is the
+ * smallest number that still lets a guest log a breakfast, correct it and log a
+ * lunch — and that argument only holds if all three turns go on food. On
+ * 2026-09-22 a guest spent a third of theirs on "Здрасти", met the wall a meal
+ * early, and left; see `063_ai_usage_metered.sql` for the whole of that walk.
+ * So a turn that writes nothing into the journal does not spend the grant.
+ *
+ * ---- Why it is earned rather than granted ------------------------------------
+ *
+ * Because a flat allowance of free turns is a free model with a greeting for a
+ * password. Per account it would be per *install*: a guest row is created by
+ * the phone on first launch, so a reinstall is a fresh allowance, and anybody
+ * willing to automate that has an unmetered journal. `GUEST_DAILY_CAP_USD` is
+ * the only thing behind it and it is a ceiling across every guest at once, so
+ * one script would spend it and every real guest in the world would be asked to
+ * save their account instead.
+ *
+ * `starter` is therefore small and flat, and everything past it is bought with
+ * a turn that actually logged something. Somebody who never logs gets two
+ * answers and then pays a unit for every message, which is barely more than the
+ * grant on its own; somebody logging their meals is never charged for talking
+ * about them. Nobody had to choose the ceiling — it is `starter` plus the
+ * grant, because earning a free turn costs a unit of the grant.
+ *
+ * ---- Why two ------------------------------------------------------------------
+ *
+ * It is the length of the opening nobody should be charged for: a greeting
+ * answered, and one question about what the app can do. Of the 94 user-days on
+ * the deployment in the sixty days to 2026-09-22, 59 had no journal-less turn
+ * at all and the rest are covered by two plus the meals those days logged.
+ *
+ * The window is a rolling day rather than a calendar one, for the reason the
+ * meters give at length: there is no billing period to anchor to, and a rolling
+ * window has no cliff.
+ */
+export const FREE_TURNS = { starter: 2, perLogged: 1 } as const;
+
+/**
  * What the trial was before it was shortened.
  *
  * An account that was already given seven days and 28 messages keeps them. Not

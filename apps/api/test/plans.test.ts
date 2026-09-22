@@ -456,8 +456,53 @@ describe('per-plan ceilings', () => {
  * spent. An entitlement checked after the money is gone is not an entitlement.
  */
 describe('the journal meter', () => {
-  const chat = (payload: Record<string, unknown> = { text: 'Two eggs' }) => {
-    scriptAgent({ text: 'Logged.' });
+  /**
+   * A scripted turn that actually logs the meal, which is what every count in
+   * here means by a turn.
+   *
+   * The tool call is load-bearing since `spendsGrant`: a turn that writes
+   * nothing into the journal does not spend a unit, so a bare "Logged." with no
+   * tool behind it would be a free turn wearing a meal's clothes, and every
+   * figure below would come out one short.
+   */
+  async function scriptMeal() {
+    const tools = await import('../src/ai/tools.ts');
+    const spy = vi.spyOn(tools, 'buildNutritionServer');
+    scriptAgent({
+      text: 'Logged.',
+      act: async () => {
+        const built = spy.mock.results.at(-1)!.value as ReturnType<typeof tools.buildNutritionServer>;
+        await built.tools.find((t) => t.name === 'log_food')!.handler(
+          {
+            description: 'Two eggs',
+            meal: null,
+            when: null,
+            note: null,
+            confidence: 'high',
+            items: [
+              {
+                name: 'Eggs',
+                quantity_g: 100,
+                quantity_desc: '2',
+                kcal: 150,
+                protein_g: 13,
+                carbs_g: 1,
+                fat_g: 11,
+                fiber_g: null,
+                sodium_mg: null,
+                sat_fat_g: null,
+                sugar_g: null,
+              },
+            ],
+          } as never,
+          {},
+        );
+      },
+    });
+  }
+
+  const chat = async (payload: Record<string, unknown> = { text: 'Two eggs' }) => {
+    await scriptMeal();
     return app.inject({ method: 'POST', url: '/chat', headers: { cookie }, payload });
   };
 
@@ -589,6 +634,27 @@ describe('the journal meter', () => {
       used: allowed - 1,
       period: 'ever',
     });
+  });
+
+  /**
+   * And the turn that logged nothing does not move it.
+   *
+   * The greeting from `063_ai_usage_metered.sql`, through the route the guest
+   * met it on: the reply is an ordinary 200 with an ordinary answer, the ledger
+   * has the row and its cost, and the number the journal draws has not budged.
+   */
+  it('leaves the number alone on a turn that logged nothing', async () => {
+    scriptAgent({ text: 'Здрасти! Какво хапна днес?' });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/chat',
+      headers: { cookie },
+      payload: { text: 'Здрасти' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().allowance).toMatchObject({ meter: 'chat', used: 0 });
+    expect(await query('SELECT id FROM ai_usage WHERE user_id = $1', [user.id])).toHaveLength(1);
   });
 
   /** A photo turn spends the photo meter, and says so rather than the chat one. */
@@ -745,6 +811,32 @@ describe('the free trial', () => {
     expect(refusal).toBeInstanceOf(PlanLimitError);
     expect((refusal as PlanLimitError).code).toBe('GUEST_LIMIT');
     expect((refusal as PlanLimitError).allowance).toMatchObject({ used: 0, allowed: GUEST.photo });
+  });
+
+  /**
+   * The other half of `063_ai_usage_metered.sql`: the greeting is in the ledger
+   * with its cost on it, and the grant has not noticed. Read through
+   * `allowanceFor` rather than asserted on the row, because the meter is the
+   * thing that was wrong — the row was always right.
+   */
+  it('leaves the guest their three when a turn logged nothing', async () => {
+    await asGuest(user.id);
+    await query(
+      `INSERT INTO ai_usage (user_id, kind, occurred_at, cost_usd, provider, model, metered)
+       VALUES ($1, 'text_log', now(), 0.104, 'anthropic-api', 'claude-haiku-4-5-20251001', FALSE)`,
+      [user.id],
+    );
+
+    expect(await allowanceFor(user.id, 'free', 'chat')).toMatchObject({
+      allowed: GUEST.chat,
+      used: 0,
+      trial: 'guest',
+    });
+    // The cost is still counted where cost is counted.
+    const [ledger] = await query<{ n: string }>('SELECT count(*) AS n FROM ai_usage WHERE user_id = $1', [
+      user.id,
+    ]);
+    expect(Number(ledger!.n)).toBe(1);
   });
 
   it('does not charge the guest turns against the trial', async () => {

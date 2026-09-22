@@ -7,7 +7,14 @@ import { suggestRecipes } from '../src/ai/recipes.ts';
 import { runTurn } from '../src/ai/run.ts';
 import { getUser } from '../src/services/user.ts';
 import { agentCalls, scriptAgent } from './helpers/agent-mock.ts';
-import { addMeal, addWeight, createUser, setUserTargets, type TestUser } from './helpers/factories.ts';
+import {
+  addMeal,
+  addWeight,
+  createUser,
+  ROOMY_ALLOWANCE,
+  setUserTargets,
+  type TestUser,
+} from './helpers/factories.ts';
 
 /**
  * Model routing by turn kind.
@@ -30,7 +37,7 @@ beforeEach(async () => {
 
 async function turn(text: string, photo?: { id: string; mediaType: string; base64: string }) {
   const profile = await getUser(user.id);
-  return runTurn({ userId: user.id, ctx: user.ctx, profile, text, photo });
+  return runTurn({ userId: user.id, ctx: user.ctx, profile, text, photo, allowance: ROOMY_ALLOWANCE });
 }
 
 const modelOf = (index = 0) => agentCalls[index]!.options.model as string;
