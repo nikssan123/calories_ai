@@ -406,10 +406,141 @@ revenue to apply them to.
 **At five accounts, buying anything loses money.** The 4080 is free and should be used;
 everything else waits for a number.
 
+## The other lane: OpenRouter and the Kimi line
+
+Priced 2026-09-22. This is not a local-inference question at all — it is the cheaper
+thing to try first, because it is an env var rather than a purchase, and
+`providers/openai.ts` already speaks the dialect OpenRouter serves.
+
+### The rate cards, and the first surprise
+
+| | in $/M | out $/M |
+|---|---|---|
+| Haiku 4.5 | 1.00 | 5.00 |
+| **Sonnet 5** | **2.00** | **10.00** |
+| Opus 5 | 5.00 | 25.00 |
+| Kimi K2.6 | 0.395 | 2.202 |
+| Kimi K2.5 | 0.45 | 2.25 |
+| Kimi K3 | 2.80 | 14.00 |
+
+OpenRouter adds no per-token markup — it passes the provider's rate through and charges
+5.5% on credit purchases instead (8% on the Business tier, 5% on crypto).
+
+**Sonnet 5 is $2/$10, not the $3/$15 in `pricing.ts`.** The September increase was
+cancelled. 77% of production text logs run on Sonnet, so the rate card in this
+repository overstates the largest line on the bill by half, and correcting it is a
+one-line change that saves more than some of the work below.
+
+**And Kimi K3 is not a cost play.** At OpenRouter's listed $2.80/$14 it is *more
+expensive per token than Sonnet 5*, and priced against how Sonnet is actually billed
+here — with the cache discount — it is **four times** the cost. The Kimi line saves
+money at K2.6 and K2.5, not at the flagship. That is the opposite of the assumption
+the question was asked under, and it is the single most useful thing in this section.
+
+### What it costs on the same turn
+
+Priced on the one exactly-documented composition in `plans.ts` — 12,234 cache-write,
+46,975 cache-read, 447 output tokens, which is 59,209 gross input:
+
+| | as billed today (5m cache) | flat, no cache |
+|---|---|---|
+| Sonnet 5 | $0.0445 | $0.1229 |
+| Haiku 4.5 | $0.0222 | $0.0614 |
+| Opus 5 | $0.1111 | $0.3072 |
+| Kimi K2.6 | — | **$0.0244** |
+| Kimi K3 | — | $0.1720 |
+
+Kimi K2.6 paying *flat* for every token, plus OpenRouter's 5.5%, is **$0.0257** — still
+**42% under** Sonnet 5 *with* its cache discount, and 77% under Opus 5. Kimi's own
+cache read ($0.075/M) would take it further, but nothing below assumes it.
+
+### The bill, one active account at 115 turns a month
+
+Mix modelled from the product; the measured per-kind costs are `plans.ts`'s.
+
+| kind | turns | today ($3/$15) | Sonnet repriced ($2/$10) | Kimi K2.6 |
+|---|---|---|---|---|
+| `text_log` | 80 | $3.28 | $2.44 | $1.41 |
+| `photo_log` | 15 | $2.27 | $1.51 | $0.87 |
+| `recipe` | 6 | $1.02 | $0.68 | $0.39 |
+| `meal_plan` | 3 | $1.89 | $1.89 | $0.44 |
+| `nudge` | 4 | $0.10 | $0.07 | $0.04 |
+| `review` | 4 | $0.10 | $0.10 | $0.02 |
+| `pantry_scan` | 3 | $0.12 | $0.08 | $0.05 |
+| **total** | **115** | **$8.77** | **$6.76** | **$3.22** |
+
+**Fixing the rate card saves 23% and costs one line. Kimi K2.6 saves a further 52%.
+Together, 63%.** Set against Plus at $9.99, that is the difference between a ~55% gross
+margin and something closer to 80%.
+
+Two things that table does not say. It assumes Kimi pays flat for tokens that Claude
+discounts, so it is pessimistic about Kimi. And it moves *every* kind at once, which
+nothing below recommends.
+
+### Quality, which is where this gets decided
+
+| | Kimi K2.6 / K2.5 | Kimi K3 | What we run |
+|---|---|---|---|
+| Vision | Yes — K2.5 is natively multimodal, ~15T mixed visual/text tokens | Yes, text+image+video, **#1 on Multimodal & Grounded** | Sonnet 5 |
+| Tool calling | Function calling, structured output, prompt caching | 40+ built-in tools | — |
+| Intelligence index | — | 57 (3rd overall, behind Fable 5 at 60 and GPT-5.5 Sol at 59) | — |
+| **Hallucination rate** | **39%** | **51%** | — |
+| Bulgarian / the 34 languages | **No public evidence** | **No public evidence** | measured, in `ai/language.ts` |
+
+Three things follow.
+
+**The hallucination number is disqualifying until measured, and it is worse on the
+flagship.** Artificial Analysis has K3 at a 51% hallucination rate on AA-Omniscience,
+up from K2.6's 39% — the metric counts how often a model invents a confident answer
+instead of abstaining. K3 got more accurate *and* more willing to bluff. A calorie
+count is exactly the output where bluffing is the expensive failure, and
+`CONTENT_ENGINE.md` already states the rule this product lives by: never put a number
+on something that is not real, because for a nutrition app that is the one credibility
+hit you cannot take. A model that abstains less is the wrong trade here even when it
+scores higher.
+
+**There is no public evidence on Bulgarian, or on any of the 34.** The multilingual
+figures that surface for Kimi are SWE-bench Multilingual, which is *programming*
+languages, and reading it as natural-language coverage is a trap worth naming. The
+language suite in `ai/language.ts` — 12 runs, with and without the language named — is
+the only thing that answers this, and it is the same suite the local-model section
+needs. **Run it once, against both candidates.**
+
+**Vision is the most promising row and the bar is low.** Sonnet reads a weighed plate at
+66% kcal MAPE. K3 leads the multimodal category and K2.5 was pretrained on mixed
+visual/text tokens. The 30 Nutrition5k plates decide it, and this is the path where a
+cheaper model most plausibly matches what we pay for.
+
+### The blocker that outranks all of it
+
+`apps/web/app/privacy/page.tsx` names Anthropic as a sub-processor, links their privacy
+policy, and says in as many words that chat contents cross the Atlantic under the
+Standard Contractual Clauses in Anthropic's data processing addendum. The page is
+written in the first person by the data controller for EU users.
+
+This product processes meal photographs, weights and health goals — GDPR Article 9
+special-category data. Adding an inference lane means naming a new sub-processor,
+having a signed DPA with them, and having a transfer mechanism. On OpenRouter:
+
+- Signed DPAs are **enterprise-tier**. A pay-as-you-go account does not get one.
+- A request can be routed to any of several third-party providers, so "who processed
+  this turn" is a property of the routing rather than of the contract, unless it is
+  pinned. OpenRouter does support pinning, `zdr: true` to restrict to zero-retention
+  endpoints, and routing for data residency — but these are settings somebody has to
+  set and keep set.
+
+So the order here is not price first. **It is: get the DPA and pin the providers, or do
+not send a single production turn.** Verifying that is cheaper than the migration and it
+can make the migration impossible, which is the right thing to learn first.
+
 ## The order to do this in
 
-Cheapest first, and the first three are worth more than the hardware:
+Cheapest first, and the first four are worth more than the hardware:
 
+0. **Correct the rate card.** Sonnet 5 is $2/$10, `pricing.ts` bills $3/$15, and 77% of
+   text logs are Sonnet. 23% off the bill for one line, and every projection in this
+   document is drawn against the wrong number until it is changed. Check an invoice,
+   then change it.
 1. **`SCALING.md` §Stage 5 — collapse the tool loop.** One `messages.create` with
    structured outputs in place of a 2–3 call loop on 70% of turns. Cuts input per turn
    by roughly two thirds and cuts the 12,234-token cache write with it. Costs nothing,
@@ -424,8 +555,14 @@ Cheapest first, and the first three are worth more than the hardware:
 4. **Then Tier 0**, as an experiment, on the 4080 — and an hour of a rented A100 to
    re-run the same suites at 30B, because that is the class the purchase would be for
    and the 4080 cannot hold it.
-5. **Then Tier 1**, if and only if the suites passed and the headcount crossed the
-   break-even. Both conditions, not either.
+5. **Then Kimi K2.6 on OpenRouter**, if the DPA question comes back answerable — an
+   env var against a provider this repository already supports, no capex, and 52% off
+   what is left after item 0. The same suites decide it as decide the local box, which
+   is the argument for running them once rather than twice.
+6. **Then Tier 1**, if and only if the suites passed and the headcount crossed the
+   break-even. Both conditions, not either. Note that item 5, if it lands, roughly
+   halves the bill the box is amortised against and therefore doubles the account count
+   at which it pays back.
 
 ## What Tier 0 looks like, concretely
 
