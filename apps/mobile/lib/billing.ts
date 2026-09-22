@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import * as Linking from 'expo-linking';
 import Constants from 'expo-constants';
@@ -165,6 +166,33 @@ export interface Buyable {
   perMonth: string | null;
   /** The raw figure, for comparing a year against twelve months. */
   amount: number;
+  /**
+   * The introductory offer this person is actually eligible for, or null.
+   *
+   * Null covers three different things and deliberately does not distinguish
+   * them, because the wall does the same thing in all three: no offer is
+   * configured on this SKU, the store has not said yet, or this account has
+   * already used its one. The last is the reason eligibility is checked at all
+   * rather than read straight off `product.introPrice` — on iOS the field is a
+   * property of the *product*, not of the person, so a reinstaller who already
+   * spent their intro week would be shown "€2 for the first week" on the card
+   * and charged the full price by the sheet a tap later. That is the one
+   * mistake a paywall is never forgiven.
+   */
+  intro: IntroOffer | null;
+}
+
+/** An introductory price, in the only terms the wall has to say out loud. */
+export interface IntroOffer {
+  /** Localised and tax-inclusive where the store says so: "€2.00". */
+  price: string;
+  /** The raw figure, for picking the cheapest way in. Never displayed. */
+  amount: number;
+  /** How long it lasts: `{ unit: 'WEEK', count: 1 }` for a first week. */
+  unit: 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
+  count: number;
+  /** How many of those periods are discounted. One, for everything we sell. */
+  cycles: number;
 }
 
 /**
@@ -223,6 +251,59 @@ function planOf(pkg: PurchasesPackage): Exclude<PlanName, 'free'> | null {
  * "no offering configured yet". The wall handles an empty list as its own
  * state, which is the same state a keyless build is in.
  */
+/**
+ * Which of these products this person may still have an introductory price on.
+ *
+ * Asked of the store rather than inferred, because the answer is about the
+ * *account* and not the product: an intro offer is once per store account per
+ * subscription group, so the same SKU is €2 for a new customer and full price
+ * for somebody who took the week in March.
+ *
+ * `UNKNOWN` is treated as eligible. The two ways to be wrong are not
+ * symmetrical — promising €2 to somebody the store will charge €9.99 is a
+ * broken promise, while hiding a €2 offer from somebody entitled to it is only
+ * a missed sale — so this would be the wrong default, except that the sheet is
+ * still authoritative and `UNKNOWN` is overwhelmingly "StoreKit has not
+ * answered yet" rather than "ineligible". On Android the whole question is
+ * moot: Play only lists offers the account can take, so the answer is always
+ * `NO_INTRO_OFFER_EXISTS` or the offer is simply absent, and `introOf` reads
+ * what Play already filtered.
+ */
+async function introEligibility(packages: PurchasesPackage[]): Promise<Set<string>> {
+  const all = new Set(packages.map((pkg) => pkg.product.identifier));
+  const Purchases = purchases();
+  if (!Purchases || Platform.OS !== 'ios' || all.size === 0) return all;
+  try {
+    const answers = await Purchases.checkTrialOrIntroductoryPriceEligibility([...all]);
+    const no = new Set<string>();
+    for (const [id, answer] of Object.entries(answers)) {
+      // 1 is INTRO_ELIGIBILITY_STATUS_INELIGIBLE. Compared by value rather than
+      // by importing the enum, which is a runtime import into a file that is
+      // deliberately loadable on a build with no store at all.
+      if (answer.status === 1) no.add(id);
+    }
+    return new Set([...all].filter((id) => !no.has(id)));
+  } catch {
+    // The store did not answer. The sheet is still the authority on price.
+    return all;
+  }
+}
+
+/** The store's introductory price for a product, in our own vocabulary. */
+function introOf(product: PurchasesStoreProduct): IntroOffer | null {
+  const intro = product.introPrice;
+  if (!intro) return null;
+  const unit = intro.periodUnit;
+  if (unit !== 'DAY' && unit !== 'WEEK' && unit !== 'MONTH' && unit !== 'YEAR') return null;
+  return {
+    price: intro.priceString,
+    amount: intro.price,
+    unit,
+    count: intro.periodNumberOfUnits,
+    cycles: intro.cycles,
+  };
+}
+
 export async function buyables(): Promise<Buyable[]> {
   const Purchases = purchases();
   if (!API_KEY || !Purchases || configuredFor === null) return [];
@@ -234,15 +315,20 @@ export async function buyables(): Promise<Buyable[]> {
   }
   if (!offering) return [];
 
+  const sellable = offering.availablePackages.filter((pkg) => planOf(pkg) !== null);
+  const eligible = await introEligibility(sellable);
+
   const found: Buyable[] = [];
-  for (const pkg of offering.availablePackages) {
-    const plan = planOf(pkg);
-    if (!plan) continue;
+  for (const pkg of sellable) {
+    const plan = planOf(pkg)!;
     const { price, pricePerYear, priceString, pricePerMonthString } = pkg.product;
     /*
      * Within 1% of its own yearly figure means this charge *is* the year. The
      * tolerance is there because a store may round the derived figure; it does
      * not need to be tighter, since the alternative period is twelve times away.
+     *
+     * An introductory price does not disturb this: `product.price` stays the
+     * renewal price on both stores, and only `introPrice` carries the discount.
      */
     const annual = pricePerYear !== null && Math.abs(pricePerYear - price) < price * 0.01;
     found.push({
@@ -252,6 +338,7 @@ export async function buyables(): Promise<Buyable[]> {
       price: priceString,
       perMonth: pricePerMonthString,
       amount: price,
+      intro: eligible.has(pkg.product.identifier) ? introOf(pkg.product) : null,
     });
   }
 
@@ -283,6 +370,59 @@ export class PurchaseCancelled extends Error {
  * only question is what to say, and "it will appear in a moment" is true where
  * "that failed" is not.
  */
+/**
+ * The same list, fetched at most once, for the screens that are not the paywall.
+ *
+ * `PlanWall` is a card in the journal transcript and there can be several of
+ * them on screen, so each one calling the store would be a round trip per
+ * refusal. The store's answer is stable for as long as it matters here — prices
+ * and eligibility change when somebody buys, and `forgetOffers` is called on
+ * exactly those paths.
+ *
+ * The cache holds the promise rather than the value so that simultaneous first
+ * callers share one request instead of racing three.
+ */
+let offersOnce: Promise<Buyable[]> | null = null;
+
+export function loadOffersOnce(): Promise<Buyable[]> {
+  offersOnce ??= buyables().catch(() => {
+    // A failed load must not be cached as an empty list forever.
+    offersOnce = null;
+    return [];
+  });
+  return offersOnce;
+}
+
+/** Anything that can change what the store would say. */
+export function forgetOffers(): void {
+  offersOnce = null;
+}
+
+/**
+ * The cheapest way in that carries an introductory price, or null.
+ *
+ * Null is the ordinary answer on most builds — no offer configured, no store,
+ * or this person has already used theirs — and every caller draws nothing in
+ * that case rather than a placeholder. Cheapest by the intro figure and not by
+ * the renewal, because the intro is the number the door says out loud.
+ */
+export function useIntroWayIn(): Buyable | null {
+  const [found, setFound] = useState<Buyable | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void loadOffersOnce().then((offers) => {
+      if (!alive) return;
+      const withIntro = offers.filter((offer) => offer.intro !== null);
+      withIntro.sort((a, b) => a.intro!.amount - b.intro!.amount);
+      setFound(withIntro[0] ?? null);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return found;
+}
+
 export async function purchase(
   buyable: Buyable,
   confirm: () => Promise<PlanName>,
@@ -297,6 +437,9 @@ export async function purchase(
       (error as { message?: string }).message ?? 'The store could not complete that purchase.',
     );
   }
+  // What the store would say has just changed: this person is no longer
+  // eligible for the introductory price they were being shown.
+  forgetOffers();
   return awaitPlan(confirm, buyable.plan);
 }
 

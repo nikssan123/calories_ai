@@ -305,6 +305,8 @@ export const fr: Messages = {
   'save.later': 'Pas maintenant',
   'guest.notSaved': 'Pas encore enregistré : le journal n’existe que sur ce téléphone tant que tu n’as pas enregistré ton compte.',
   'guest.saveRow': 'Enregistrer mon compte',
+  'guest.saveDoor': (days) => `Enregistrer mon compte — ${days} ${w(days, { one: 'jour', other: 'jours' })} de plus, gratuits`,
+  'guest.tryDoor': (price, duration) => `Tout essayer — ${price} pendant ${duration}`,
   'guest.confirmRow': (email: string) => `Saisis le code envoyé à ${email}`,
   'guest.erase': 'Effacer ce journal',
   'guest.eraseWarning': 'Tout ce qui est noté sur ce téléphone sera supprimé. C’est irréversible.',
@@ -1022,6 +1024,12 @@ export const fr: Messages = {
   'plans.noStore': 'Ce build n’atteint pas le store, il n’y a donc encore rien à acheter d’ici.',
   'plans.restoreNote': 'Relit ce compte du store et remet tout ce que tu as déjà acheté. Ça ne te refacture jamais.',
   'plans.manage': 'Gérer ou annuler l’abonnement',
+  'plans.introFor': (duration) => `pendant ${duration}`,
+  'plans.introThen': (price, period) => `puis ${price} ${period}`,
+  'plans.smallPrintIntro': (intro, duration, price, period) =>
+    `${intro} couvre ${duration}. Ensuite c’est ${price} ${period} via le store, et ça se renouvelle jusqu’à ce que tu l’arrêtes. Annule quand tu veux — y compris pendant la première période — depuis ton compte du store.`,
+  'plans.guestNote':
+    'Ton journal ne vit que sur ce téléphone tant que tu n’as pas enregistré de compte. Tu pourras le faire juste après le paiement.',
   'plans.smallPrint': (billing) => `${billing} via le store, et ça se renouvelle jusqu’à ce que tu l’arrêtes. Annule quand tu veux depuis ton compte du store — tu gardes ce que tu as payé jusqu’à la fin de la période.`,
   'plans.pendingLong': 'Le store a ton paiement et le forfait est encore en route. Il se débloquera tout seul — il n’y a rien à repayer.',
   'plans.pendingShort': 'Le store a ton paiement. Ton forfait se débloque dans un instant.',
@@ -1030,6 +1038,9 @@ export const fr: Messages = {
   'plans.backToJournal': 'Retour au journal',
   'plans.youreOnPlan': (plan) => `Tu es sur ${plan}.`,
   'plans.paymentReceived': 'Paiement reçu.',
+  'purchased.saveTitle': 'Enregistre ton compte',
+  'purchased.saveBody':
+    'Ton forfait est à l’abri : le store le garde et « Restaurer » le récupère sur n’importe quel téléphone. C’est ton journal qui n’existe qu’ici. Enregistre ton compte et il te suit.',
   'plans.manageOnStore': 'Gère-le ou annule-le quand tu veux dans Abonnements sur le store.',
   'plans.youreOn': 'Tu es sur',
   'plans.photoScans': 'Scans de photo',

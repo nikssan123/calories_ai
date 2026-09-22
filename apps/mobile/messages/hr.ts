@@ -409,6 +409,8 @@ export const hr: Messages = {
   'save.later': 'Ne sada',
   'guest.notSaved': 'Još nije spremljen: dnevnik je samo na ovom mobitelu dok ne spremiš račun.',
   'guest.saveRow': 'Spremi račun',
+  'guest.saveDoor': (days: number) => `Spremi račun — još ${days} ${w(days, { one: 'dan', few: 'dana', other: 'dana' })}, besplatno`,
+  'guest.tryDoor': (price: string, duration: string) => `Isprobaj sve — ${price} na ${duration}`,
   'guest.confirmRow': (email: string) => `Upiši kôd poslan na ${email}`,
   'guest.erase': 'Izbriši ovaj dnevnik',
   'guest.eraseWarning': 'Sve upisano na ovom mobitelu bit će izbrisano. To se ne može poništiti.',
@@ -1142,6 +1144,12 @@ export const hr: Messages = {
   'plans.restoreNote':
     'Ponovno čita ovaj račun trgovine i vraća sve što je već kupljeno. Ništa se ne naplaćuje ponovno.',
   'plans.manage': 'Upravljaj pretplatom ili je otkaži',
+  'plans.introFor': (duration: string) => `na ${duration}`,
+  'plans.introThen': (price: string, period: string) => `zatim ${price} ${period}`,
+  'plans.smallPrintIntro': (intro: string, duration: string, price: string, period: string) =>
+    `${intro} vrijedi ${duration}. Nakon toga je ${price} ${period} putem trgovine, a pretplata se obnavlja dok je ne otkažeš. Otkaži bilo kad — i tijekom prvog razdoblja — u računu trgovine.`,
+  'plans.guestNote':
+    'Tvoj dnevnik živi samo na ovom telefonu dok ne spremiš račun. To možeš odmah nakon plaćanja.',
   'plans.smallPrint': (billing: string) =>
     `${billing} putem trgovine, a pretplata se obnavlja dok je ne otkažeš. Otkaži bilo kad u računu trgovine — plaćeno ostaje tvoje do kraja razdoblja.`,
   'plans.pendingLong':
@@ -1152,6 +1160,9 @@ export const hr: Messages = {
   'plans.backToJournal': 'Natrag u dnevnik',
   'plans.youreOnPlan': (plan: string) => `Koristiš ${plan}.`,
   'plans.paymentReceived': 'Uplata je primljena.',
+  'purchased.saveTitle': 'Spremi svoj račun',
+  'purchased.saveBody':
+    'Pretplata ti je sigurna — čuva je trgovina i „Vrati kupnju“ je vraća na bilo koji telefon. Samo dnevnik postoji isključivo ovdje. Spremi račun i ide s tobom.',
   'plans.manageOnStore': 'Upravljaj ili otkaži bilo kad u Pretplatama u trgovini.',
   'plans.youreOn': 'Koristiš',
   'plans.photoScans': 'Skeniranja fotografija',

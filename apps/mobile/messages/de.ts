@@ -296,6 +296,8 @@ export const de: Messages = {
   'save.later': 'Nicht jetzt',
   'guest.notSaved': 'Noch nicht gespeichert: Das Tagebuch liegt nur auf diesem Handy, bis du dein Konto speicherst.',
   'guest.saveRow': 'Konto speichern',
+  'guest.saveDoor': (days) => `Konto speichern — ${days} ${w(days, { one: 'Tag', other: 'Tage' })} mehr, kostenlos`,
+  'guest.tryDoor': (price, duration) => `Alles ausprobieren — ${price} für ${duration}`,
   'guest.confirmRow': (email: string) => `Code eingeben, der an ${email} ging`,
   'guest.erase': 'Dieses Tagebuch löschen',
   'guest.eraseWarning': 'Alles, was auf diesem Handy eingetragen ist, wird gelöscht. Das lässt sich nicht rückgängig machen.',
@@ -1013,6 +1015,12 @@ export const de: Messages = {
   'plans.noStore': 'Dieser Build erreicht den Store nicht, hier gibt es also noch nichts zu kaufen.',
   'plans.restoreNote': 'Liest dieses Store-Konto neu und stellt alles wieder her, was du schon gekauft hast. Es berechnet dir nie etwas erneut.',
   'plans.manage': 'Abo verwalten oder kündigen',
+  'plans.introFor': (duration) => `für ${duration}`,
+  'plans.introThen': (price, period) => `danach ${price} ${period}`,
+  'plans.smallPrintIntro': (intro, duration, price, period) =>
+    `${intro} gilt für ${duration}. Danach sind es ${price} ${period} über den Store, und es verlängert sich, bis du es stoppst. Jederzeit kündbar — auch im ersten Zeitraum — über dein Store-Konto.`,
+  'plans.guestNote':
+    'Dein Tagebuch liegt nur auf diesem Telefon, solange du kein Konto gespeichert hast. Das kannst du direkt nach der Zahlung tun.',
   'plans.smallPrint': (billing) => `${billing} über den Store, und es verlängert sich, bis du es stoppst. Jederzeit über dein Store-Konto kündbar — was du bezahlt hast, behältst du bis zum Ende der Laufzeit.`,
   'plans.pendingLong': 'Der Store hat deine Zahlung und der Plan ist noch unterwegs. Er schaltet sich von selbst frei — es ist nichts noch mal zu bezahlen.',
   'plans.pendingShort': 'Der Store hat deine Zahlung. Dein Plan schaltet gleich frei.',
@@ -1021,6 +1029,9 @@ export const de: Messages = {
   'plans.backToJournal': 'Zurück zum Journal',
   'plans.youreOnPlan': (plan) => `Du bist auf ${plan}.`,
   'plans.paymentReceived': 'Zahlung erhalten.',
+  'purchased.saveTitle': 'Speichere dein Konto',
+  'purchased.saveBody':
+    'Dein Plan ist sicher — der Store hält ihn, und „Wiederherstellen“ holt ihn auf jedes Telefon zurück. Nur dein Tagebuch gibt es ausschließlich hier. Speichere dein Konto, dann kommt es mit.',
   'plans.manageOnStore': 'Jederzeit unter „Abos“ im Store verwalten oder kündigen.',
   'plans.youreOn': 'Du bist auf',
   'plans.photoScans': 'Fotoscans',

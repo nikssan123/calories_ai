@@ -297,6 +297,8 @@ export const es: Messages = {
   'save.later': 'Ahora no',
   'guest.notSaved': 'Aún sin guardar: el diario solo está en este móvil hasta que guardes tu cuenta.',
   'guest.saveRow': 'Guardar mi cuenta',
+  'guest.saveDoor': (days) => `Guardar mi cuenta — ${days} ${w(days, { one: 'día', other: 'días' })} más, gratis`,
+  'guest.tryDoor': (price, duration) => `Probarlo todo — ${price} durante ${duration}`,
   'guest.confirmRow': (email: string) => `Introduce el código enviado a ${email}`,
   'guest.erase': 'Borrar este diario',
   'guest.eraseWarning': 'Se borrará todo lo registrado en este móvil. No se puede deshacer.',
@@ -1014,6 +1016,12 @@ export const es: Messages = {
   'plans.noStore': 'Esta versión no llega a la tienda, así que todavía no hay nada que comprar desde aquí.',
   'plans.restoreNote': 'Vuelve a leer esta cuenta de la tienda y repone todo lo que ya hayas comprado. Nunca te cobra otra vez.',
   'plans.manage': 'Gestionar o cancelar la suscripción',
+  'plans.introFor': (duration) => `durante ${duration}`,
+  'plans.introThen': (price, period) => `luego ${price} ${period}`,
+  'plans.smallPrintIntro': (intro, duration, price, period) =>
+    `${intro} cubre ${duration}. Después son ${price} ${period} a través de la tienda, y se renueva hasta que lo pares. Cancela cuando quieras — también durante el primer periodo — desde tu cuenta de la tienda.`,
+  'plans.guestNote':
+    'Tu diario vive solo en este teléfono mientras no guardes una cuenta. Puedes hacerlo justo después de pagar.',
   'plans.smallPrint': (billing) => `${billing} a través de la tienda, y se renueva hasta que lo pares. Cancela cuando quieras desde tu cuenta de la tienda — conservas lo que has pagado hasta que acabe el periodo.`,
   'plans.pendingLong': 'La tienda tiene tu pago y el plan todavía está de camino. Se desbloqueará solo — no hay nada que volver a pagar.',
   'plans.pendingShort': 'La tienda tiene tu pago. Tu plan se desbloquea en un momento.',
@@ -1022,6 +1030,9 @@ export const es: Messages = {
   'plans.backToJournal': 'Volver al diario',
   'plans.youreOnPlan': (plan) => `Estás en ${plan}.`,
   'plans.paymentReceived': 'Pago recibido.',
+  'purchased.saveTitle': 'Guarda tu cuenta',
+  'purchased.saveBody':
+    'Tu plan está a salvo: lo guarda la tienda y «Restaurar» lo recupera en cualquier teléfono. Lo que solo existe aquí es tu diario. Guarda tu cuenta y se viene contigo.',
   'plans.manageOnStore': 'Gestiónalo o cancélalo cuando quieras en Suscripciones de la tienda.',
   'plans.youreOn': 'Estás en',
   'plans.photoScans': 'Escaneos de foto',

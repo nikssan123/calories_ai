@@ -3,13 +3,14 @@ import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import type { Allowance, MeterName } from '@ct/shared';
+import { TRIAL, type Allowance, type MeterName } from '@ct/shared';
 import { meterLocked, meterRemaining } from '@ct/shared';
 import { Chunk, PressableChunk } from '@/components/Chunk';
+import { useIntroWayIn } from '@/lib/billing';
 import { useEntitlements } from '@/lib/entitlements';
 import { useSaveAccount } from '@/lib/save-account';
 import { useAuth } from '@/lib/auth';
-import { remainingLine, TIER_NAMES, tierFor, wallBody, wallTitle } from '@/lib/plan-copy';
+import { introDuration, remainingLine, TIER_NAMES, tierFor, wallBody, wallTitle } from '@/lib/plan-copy';
 import { duration, ease, type as t, useColors, withAlpha, type Palette } from '@/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useLocale, useT } from '@/lib/i18n';
@@ -56,6 +57,7 @@ export function PlanWall({
   const { plan, tiers } = useEntitlements();
   const save = useSaveAccount();
   const auth = useAuth();
+  const introDoor = useIntroWayIn();
   /*
    * A guest's wall offers the account, not a plan: saving it is what starts the
    * free trial, and a guest cannot buy anything yet (GUEST-ACCOUNTS.md). Read
@@ -121,6 +123,11 @@ export function PlanWall({
             </PressableChunk>
           )}
 
+          {/*
+            The free door, named for what it gives rather than for what it is.
+            "Save your account" describes the form; the three days are the
+            reason, and the reason is what a wall has to lead with.
+          */}
           {guest && (
             <PressableChunk
               depth={3}
@@ -132,7 +139,39 @@ export function PlanWall({
                 { backgroundColor: colors.glassStrong, borderWidth: 1, borderColor: colors.hairline },
               ]}
             >
-              <Text style={[t.bodySemibold, { color: colors.foreground }]}>{tr('guest.saveRow')}</Text>
+              <Text style={[t.bodySemibold, { color: colors.foreground }]}>
+                {tr('guest.saveDoor')(TRIAL.days)}
+              </Text>
+            </PressableChunk>
+          )}
+
+          {/*
+            The paid door, which a guest now also gets.
+            
+            It is drawn only when the store has an introductory price for this
+            person — the whole point of it is the small number, and "Try it all
+            for €99.99 a year" is not an easier yes than the free door above it,
+            it is a worse one. Without an intro the guest's wall is what it was:
+            the free way out, and the account.
+            
+            Ordered last on purpose. `plans.ts` sizes the free tier on the
+            argument that the wall stopped being an exit, and a wall that puts a
+            checkout above the two free doors puts the exit straight back.
+          */}
+          {guest && introDoor && (
+            <PressableChunk
+              depth={3}
+              radius={999}
+              onPress={() => router.push({ pathname: '/upgrade', params: { plan: introDoor.plan } })}
+              accessibilityRole="button"
+              contentStyle={[
+                styles.button,
+                { backgroundColor: colors.glassStrong, borderWidth: 1, borderColor: colors.hairline },
+              ]}
+            >
+              <Text style={[t.bodySemibold, { color: colors.foreground }]}>
+                {tr('guest.tryDoor')(introDoor.intro!.price, introDuration(introDoor.intro!, locale))}
+              </Text>
             </PressableChunk>
           )}
 

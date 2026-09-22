@@ -23,7 +23,6 @@ import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useToast } from '@/components/Toast';
 import { useEntitlements } from '@/lib/entitlements';
 import { useAuth } from '@/lib/auth';
-import { useSaveAccount } from '@/lib/save-account';
 import { api } from '@/lib/api';
 import {
   billingAvailable,
@@ -36,6 +35,7 @@ import {
   restore,
   type Buyable,
   type Bundle,
+  type IntroOffer,
 } from '@/lib/billing';
 import {
   ALWAYS_FREE,
@@ -43,6 +43,7 @@ import {
   TIER_NAMES,
   TIER_PITCHES,
   tierLines,
+  introDuration,
 } from '@/lib/plan-copy';
 import { haptics } from '@/lib/haptics';
 import { PRIVACY_URL, TERMS_URL } from '@/lib/links';
@@ -171,7 +172,6 @@ export default function UpgradeScreen() {
   const toast = useToast();
   const navigation = useNavigation();
   const { guest } = useAuth();
-  const save = useSaveAccount();
   const reduced = useReducedMotion();
   const { plan, tiers, allowances, refresh } = useEntitlements();
   /*
@@ -284,13 +284,25 @@ export default function UpgradeScreen() {
   })();
 
   async function buy() {
-    // What is bought belongs to an account, so a guest saves one first and
-    // comes back here to buy (GUEST-ACCOUNTS.md). Ahead of the offer check, so
-    // it holds even before the store has answered.
-    if (guest) {
-      save.open('purchase');
-      return;
-    }
+    /*
+     * A guest may buy, and is asked to save the account *after* the charge
+     * rather than before it (`app/purchased.tsx`).
+     *
+     * This used to bounce into the save sheet first, on the argument that what
+     * is bought belongs to an account. The argument was right about the
+     * destination and wrong about the order: every install the ads produce is a
+     * guest, so a form in front of the money meant the paywall was shown only to
+     * people who had already done the thing the paywall was meant to lead to.
+     * Nothing technical required the form — RevenueCat binds on `users.id`
+     * (`services/billing.ts`), and a guest row has one — so the wall came down
+     * and the ask moved to the moment they are most invested: just paid.
+     *
+     * What is genuinely at risk without an account is the *journal*, not the
+     * subscription: the store holds the purchase and `restore` brings it back on
+     * a new install, while the guest's meals live behind a token in this phone's
+     * keystore. So the card says that in one line before the sheet opens, and
+     * `purchased.tsx` asks properly afterwards.
+     */
     const offer = chosen ? offerFor(chosen) : null;
     if (!offer || busy) return;
     setBusy(true);
@@ -321,12 +333,16 @@ export default function UpgradeScreen() {
 
   async function restorePurchase() {
     if (busy) return;
-    // A restore binds the store account's purchases to whoever is signed in, and
-    // a guest row is one erase away from gone — save it first, as for a purchase.
-    if (guest) {
-      save.open('purchase');
-      return;
-    }
+    /*
+     * A guest restores too, and this one is not a preference.
+     *
+     * Once a guest can buy, a guest can reinstall — and then the store holds a
+     * live subscription while the phone holds a brand new guest row with no
+     * entitlement on it. Restore is the only road back, so blocking it here
+     * would mean selling somebody a plan and then showing them a paywall for it.
+     * RevenueCat reports the move as a TRANSFER, which `services/billing.ts`
+     * already handles.
+     */
     setBusy(true);
     try {
       const found = await restore(refresh);
@@ -367,10 +383,7 @@ export default function UpgradeScreen() {
    */
   async function buyPack(pack: Bundle) {
     if (buying) return;
-    if (guest) {
-      save.open('purchase');
-      return;
-    }
+    // As `buy`: a guest may buy, and is asked for the account afterwards.
     setBuying(pack.id);
     try {
       const landed = await purchaseBundle(pack, async () => {
@@ -529,6 +542,7 @@ export default function UpgradeScreen() {
             price={offerFor(tier.plan)?.price ?? null}
             perMonth={offerFor(tier.plan)?.perMonth ?? null}
             period={offerFor(tier.plan)?.period ?? null}
+            intro={offerFor(tier.plan)?.intro ?? null}
             current={tier.plan === plan}
             selected={tier.plan === chosen}
             onPress={() => {
@@ -743,12 +757,29 @@ export default function UpgradeScreen() {
           be described here as billed once a year — which is the one sentence on
           this screen that has to be literally true.
         */}
-        {tr('plans.smallPrint')(
-          (offer?.period ?? period) === 'year'
-            ? tr('plans.billedYearly')
-            : tr('plans.billedMonthly'),
-        )}
+        {offer?.intro
+          ? /* The intro replaces the ordinary sentence rather than joining it:
+               two paragraphs of terms is how the one that matters gets skipped. */
+            tr('plans.smallPrintIntro')(
+              offer.intro.price,
+              introDuration(offer.intro, locale),
+              offer.price,
+              offer.period === 'year' ? tr('plans.aYear') : tr('plans.aMonth'),
+            )
+          : tr('plans.smallPrint')(
+              (offer?.period ?? period) === 'year'
+                ? tr('plans.billedYearly')
+                : tr('plans.billedMonthly'),
+            )}
       </Text>
+
+      {/* Said before the sheet opens, not only after the charge: one line, and
+          the fuller ask waits for `app/purchased.tsx`. */}
+      {guest && (
+        <Text style={[t.footnote, styles.smallPrint, { color: colors.mutedForeground }]}>
+          {tr('plans.guestNote')}
+        </Text>
+      )}
 
       {/*
         Both documents, on the screen that sells the subscription rather than
@@ -1085,6 +1116,7 @@ function TierCard({
   price,
   perMonth,
   period,
+  intro,
   current,
   selected,
   onPress,
@@ -1098,6 +1130,13 @@ function TierCard({
   perMonth: string | null;
   /** What `price` buys, so the sub-line cannot claim the wrong billing cycle. */
   period: 'month' | 'year' | null;
+  /**
+   * The introductory price this person is eligible for, when the store offers
+   * one. It takes the headline figure and pushes the renewal price into the
+   * line beneath, which is both the clearer reading and the required one: the
+   * stores want the intro price, its length and what it becomes shown together.
+   */
+  intro: IntroOffer | null;
   current: boolean;
   selected: boolean;
   onPress: () => void;
@@ -1105,6 +1144,7 @@ function TierCard({
   const colors = useColors();
   const type = useType();
   const tr = useT();
+  const locale = useLocale();
 
   return (
     <Pressable onPress={onPress} accessibilityRole="radio" accessibilityState={{ selected }}>
@@ -1142,9 +1182,15 @@ function TierCard({
           ) : (
             price && (
               <View style={styles.price}>
-                <Text style={[type.serifFigure, styles.priceFigure, { color: colors.foreground }]}>{price}</Text>
+                <Text style={[type.serifFigure, styles.priceFigure, { color: colors.foreground }]}>
+                  {intro ? intro.price : price}
+                </Text>
                 <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-                  {period === 'year' ? tr('plans.aYear') : tr('plans.aMonth')}
+                  {intro
+                    ? tr('plans.introFor')(introDuration(intro, locale))
+                    : period === 'year'
+                      ? tr('plans.aYear')
+                      : tr('plans.aMonth')}
                 </Text>
               </View>
             )
@@ -1152,6 +1198,13 @@ function TierCard({
         </View>
 
         <Text style={[t.footnote, { color: colors.mutedForeground }]}>{pitch}</Text>
+
+        {/* What the intro becomes. Never further from the figure than this. */}
+        {intro && price && (
+          <Text style={[t.footnoteBold, { color: colors.foreground }]}>
+            {tr('plans.introThen')(price, period === 'year' ? tr('plans.aYear') : tr('plans.aMonth'))}
+          </Text>
+        )}
 
         <View style={[styles.rule, { backgroundColor: colors.hairline }]} />
 

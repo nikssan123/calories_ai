@@ -458,6 +458,16 @@ export const en = {
   'save.later': 'Not now',
   'guest.notSaved': 'Not saved yet: this journal lives only on this phone until you save your account.',
   'guest.saveRow': 'Save your account',
+  /*
+   * The two doors on a spent guest's wall.
+   *
+   * Both are named for what they give rather than for what they are: "Save your
+   * account" describes a form, and the three days are the reason anybody would
+   * fill one in. The paid door leads with the small number, which is the only
+   * thing that makes it an easier decision than the free one beside it.
+   */
+  'guest.saveDoor': (days: number) => `Save my account — ${days} more days, free`,
+  'guest.tryDoor': (price: string, duration: string) => `Try it all — ${price} for ${duration}`,
   'guest.confirmRow': (email: string) => `Enter the code sent to ${email}`,
   'guest.erase': 'Erase this journal',
   'guest.eraseWarning': 'Everything logged on this phone will be deleted. This can’t be undone.',
@@ -1218,6 +1228,24 @@ export const en = {
   'plans.restoreNote':
     'Re-reads this store account and puts back anything you have already bought. It never charges you again.',
   'plans.manage': 'Manage or cancel subscription',
+  /*
+   * An introductory price, in the three places it has to appear.
+   *
+   * The stores both require the same three facts together — what the intro
+   * costs, how long it lasts, and what it becomes — and that is also simply the
+   * honest way to say it. `introFor` sits under the figure, `introThen` under
+   * the pitch, and `smallPrintIntro` replaces the ordinary small print.
+   *
+   * `duration` comes from `introDuration` in `lib/plan-copy.ts` and is already
+   * localised and pluralised by ICU: "1 week", "3 days".
+   */
+  'plans.introFor': (duration: string) => `for ${duration}`,
+  'plans.introThen': (price: string, period: string) => `then ${price} ${period}`,
+  'plans.smallPrintIntro': (intro: string, duration: string, price: string, period: string) =>
+    `${intro} covers your first ${duration}. After that it’s ${price} ${period}, charged through the store until you stop it. Cancel any time — including during the first ${duration} — from your store account.`,
+  /** Shown on the paywall to a guest, before the store sheet rather than after. */
+  'plans.guestNote':
+    'Your meals live on this phone until you save your account. You can do that right after paying.',
   'plans.smallPrint': (billing: string) =>
     `${billing} through the store, and it renews until you stop it. Cancel any time from your store account — you keep what you paid for until the period ends.`,
   'plans.pendingLong':
@@ -1228,6 +1256,18 @@ export const en = {
   'plans.backToJournal': 'Back to the journal',
   'plans.youreOnPlan': (plan: string) => `You’re on ${plan}.`,
   'plans.paymentReceived': 'Payment received.',
+  /*
+   * The account, asked for after the money rather than before it.
+   *
+   * Two sentences, and the second one is the point: what is at risk without an
+   * account is the journal, not the subscription. Saying so plainly is both
+   * more honest and a better reason than "create an account" — and it never
+   * mentions a token, a keystore or a device id, because none of those are
+   * things the reader has to know to make the decision.
+   */
+  'purchased.saveTitle': 'Save your account',
+  'purchased.saveBody':
+    'Your plan is safe — the store keeps it, and Restore brings it back on any phone. Your meals are the part that lives only here. Save your account and they come with you.',
   'plans.manageOnStore': 'Manage or cancel it any time in Subscriptions on the store.',
   'plans.youreOn': 'You’re on',
   'plans.photoScans': 'Photo scans',

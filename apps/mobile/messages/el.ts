@@ -404,6 +404,8 @@ export const el: Messages = {
   'save.later': 'Όχι τώρα',
   'guest.notSaved': 'Δεν έχει αποθηκευτεί ακόμα: το ημερολόγιο υπάρχει μόνο σε αυτό το κινητό μέχρι να αποθηκεύσεις τον λογαριασμό σου.',
   'guest.saveRow': 'Αποθήκευση λογαριασμού',
+  'guest.saveDoor': (days: number) => `Αποθήκευση λογαριασμού — ${days} ${w(days, { one: 'ημέρα', other: 'ημέρες' })} ακόμη, δωρεάν`,
+  'guest.tryDoor': (price: string, duration: string) => `Δοκίμασε τα πάντα — ${price} για ${duration}`,
   'guest.confirmRow': (email: string) => `Βάλε τον κωδικό που στάλθηκε στο ${email}`,
   'guest.erase': 'Διαγραφή αυτού του ημερολογίου',
   'guest.eraseWarning': 'Ό,τι έχει καταγραφεί σε αυτό το κινητό θα διαγραφεί. Δεν αναιρείται.',
@@ -1114,6 +1116,12 @@ export const el: Messages = {
   'plans.restoreNote':
     'Ξαναδιαβάζει αυτόν τον λογαριασμό καταστήματος και επαναφέρει ό,τι έχεις ήδη αγοράσει. Δεν σε χρεώνει ποτέ ξανά.',
   'plans.manage': 'Διαχείριση ή ακύρωση συνδρομής',
+  'plans.introFor': (duration: string) => `για ${duration}`,
+  'plans.introThen': (price: string, period: string) => `μετά ${price} ${period}`,
+  'plans.smallPrintIntro': (intro: string, duration: string, price: string, period: string) =>
+    `${intro} ισχύει για ${duration}. Μετά είναι ${price} ${period} μέσω του καταστήματος και ανανεώνεται μέχρι να το σταματήσεις. Ακύρωσε όποτε θέλεις — και μέσα στην πρώτη περίοδο — από τον λογαριασμό σου στο κατάστημα.`,
+  'plans.guestNote':
+    'Το ημερολόγιό σου μένει μόνο σε αυτό το τηλέφωνο όσο δεν έχεις αποθηκεύσει λογαριασμό. Μπορείς να το κάνεις αμέσως μετά την πληρωμή.',
   'plans.smallPrint': (billing: string) =>
     `${billing} μέσω του καταστήματος, και η συνδρομή ανανεώνεται μέχρι να τη σταματήσεις. Ακύρωσέ την όποτε θέλεις από τον λογαριασμό σου στο κατάστημα — κρατάς ό,τι πλήρωσες μέχρι να λήξει η περίοδος.`,
   'plans.pendingLong':
@@ -1124,6 +1132,9 @@ export const el: Messages = {
   'plans.backToJournal': 'Πίσω στο ημερολόγιο',
   'plans.youreOnPlan': (plan: string) => `Είσαι στο ${plan}.`,
   'plans.paymentReceived': 'Η πληρωμή ελήφθη.',
+  'purchased.saveTitle': 'Αποθήκευσε τον λογαριασμό σου',
+  'purchased.saveBody':
+    'Η συνδρομή σου είναι ασφαλής — το κατάστημα την κρατά και η «Επαναφορά» τη φέρνει πίσω σε οποιοδήποτε τηλέφωνο. Μόνο το ημερολόγιό σου υπάρχει αποκλειστικά εδώ. Αποθήκευσε τον λογαριασμό σου και θα έρθει μαζί σου.',
   'plans.manageOnStore': 'Διαχειρίσου ή ακύρωσέ την όποτε θέλεις από τις Συνδρομές στο κατάστημα.',
   'plans.youreOn': 'Είσαι στο',
   'plans.photoScans': 'Σαρώσεις φωτογραφιών',

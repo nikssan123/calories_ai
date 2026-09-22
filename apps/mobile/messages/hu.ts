@@ -403,6 +403,8 @@ export const hu: Messages = {
   'save.later': 'Most nem',
   'guest.notSaved': 'Még nincs mentve: a napló csak ezen a telefonon van, amíg el nem mented a fiókod.',
   'guest.saveRow': 'Fiók mentése',
+  'guest.saveDoor': (days: number) => `Fiók mentése — még ${days} ${w(days, { one: 'nap', other: 'nap' })}, ingyen`,
+  'guest.tryDoor': (price: string, duration: string) => `Próbálj ki mindent — ${price} ${duration}re`,
   'guest.confirmRow': (email: string) => `Írd be a(z) ${email} címre küldött kódot`,
   'guest.erase': 'Napló törlése',
   'guest.eraseWarning': 'Minden, amit ezen a telefonon rögzítettél, törlődik. Ez nem vonható vissza.',
@@ -1119,6 +1121,12 @@ export const hu: Messages = {
   'plans.restoreNote':
     'Újraolvassa ezt az áruházfiókot, és visszaállít mindent, amit már megvettél. Soha nem terhel meg újra.',
   'plans.manage': 'Előfizetés kezelése vagy lemondása',
+  'plans.introFor': (duration: string) => `${duration}re`,
+  'plans.introThen': (price: string, period: string) => `utána ${price} ${period}`,
+  'plans.smallPrintIntro': (intro: string, duration: string, price: string, period: string) =>
+    `${intro} az első időszakra szól: ${duration}. Utána ${price} ${period} az áruházon keresztül, és megújul, amíg le nem mondod. Bármikor lemondhatod – az első időszak alatt is – az áruházfiókodban.`,
+  'plans.guestNote':
+    'A naplód csak ezen a telefonon él, amíg nem mentesz fiókot. Ezt rögtön a fizetés után megteheted.',
   'plans.smallPrint': (billing: string) =>
     `${billing} az áruházon keresztül, és megújul, amíg le nem mondod. Bármikor lemondhatod az áruházfiókodban – amiért fizettél, az az időszak végéig megmarad.`,
   'plans.pendingLong':
@@ -1129,6 +1137,9 @@ export const hu: Messages = {
   'plans.backToJournal': 'Vissza a naplóhoz',
   'plans.youreOnPlan': (plan: string) => `${plan} csomagon vagy.`,
   'plans.paymentReceived': 'A fizetés megérkezett.',
+  'purchased.saveTitle': 'Mentsd el a fiókodat',
+  'purchased.saveBody':
+    'A csomagod biztonságban van – az áruház őrzi, és a „Visszaállítás” bármelyik telefonra visszahozza. Csak a naplód létezik kizárólag itt. Mentsd el a fiókodat, és veled jön.',
   'plans.manageOnStore': 'Bármikor kezelheted vagy lemondhatod az áruház Előfizetések menüjében.',
   'plans.youreOn': 'Jelenlegi csomag',
   'plans.photoScans': 'Fotóelemzések',

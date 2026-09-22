@@ -401,6 +401,8 @@ export const uk: Messages = {
   'save.later': 'Не зараз',
   'guest.notSaved': 'Ще не збережено: щоденник є лише на цьому телефоні, доки не збережеш акаунт.',
   'guest.saveRow': 'Зберегти акаунт',
+  'guest.saveDoor': (days: number) => `Зберегти акаунт — ще ${days} ${w(days, { one: 'день', few: 'дні', other: 'днів' })}, безкоштовно`,
+  'guest.tryDoor': (price: string, duration: string) => `Спробувати все — ${price} на ${duration}`,
   'guest.confirmRow': (email: string) => `Введи код, надісланий на ${email}`,
   'guest.erase': 'Стерти цей щоденник',
   'guest.eraseWarning': 'Усе записане на цьому телефоні буде видалено. Скасувати не можна.',
@@ -1127,6 +1129,12 @@ export const uk: Messages = {
   'plans.restoreNote':
     'Перечитує цей акаунт магазину й повертає все, що вже куплено. Повторно гроші не списуються.',
   'plans.manage': 'Керувати підпискою або скасувати',
+  'plans.introFor': (duration: string) => `на ${duration}`,
+  'plans.introThen': (price: string, period: string) => `потім ${price} ${period}`,
+  'plans.smallPrintIntro': (intro: string, duration: string, price: string, period: string) =>
+    `${intro} діє ${duration}. Далі це ${price} ${period} через магазин, і підписка поновлюється, доки ти її не скасуєш. Скасувати можна будь-коли — зокрема протягом першого періоду — в акаунті магазину.`,
+  'plans.guestNote':
+    'Твій щоденник живе лише в цьому телефоні, доки ти не збережеш акаунт. Це можна зробити одразу після оплати.',
   'plans.smallPrint': (billing: string) =>
     `${billing} через магазин; підписка поновлюється, доки ти її не скасуєш. Скасувати можна будь-коли в акаунті магазину — оплачене лишається доступним до кінця періоду.`,
   'plans.pendingLong':
@@ -1137,6 +1145,9 @@ export const uk: Messages = {
   'plans.backToJournal': 'Назад до щоденника',
   'plans.youreOnPlan': (plan: string) => `У тебе ${plan}.`,
   'plans.paymentReceived': 'Оплату отримано.',
+  'purchased.saveTitle': 'Збережи свій акаунт',
+  'purchased.saveBody':
+    'Твій план у безпеці — його тримає магазин, а «Відновити покупку» повертає його на будь-який телефон. Лише щоденник існує тільки тут. Збережи акаунт — і він піде з тобою.',
   'plans.manageOnStore': 'Керувати чи скасувати можна будь-коли в розділі «Підписки» магазину.',
   'plans.youreOn': 'У тебе',
   'plans.photoScans': 'Сканування фото',

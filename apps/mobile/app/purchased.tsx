@@ -5,7 +5,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 import type { PlanName } from '@ct/shared';
 import { Chunk, PressableChunk } from '@/components/Chunk';
+import { useAuth } from '@/lib/auth';
 import { useEntitlements } from '@/lib/entitlements';
+import { useSaveAccount } from '@/lib/save-account';
 import { carriesFrom, TIER_NAMES, TIER_PITCHES, tierLines } from '@/lib/plan-copy';
 import { haptics } from '@/lib/haptics';
 import { type as t, useColors, withAlpha } from '@/theme';
@@ -44,6 +46,8 @@ export default function PurchasedScreen() {
   const tr = useT();
   const locale = useLocale();
   const router = useRouter();
+  const { guest } = useAuth();
+  const save = useSaveAccount();
   const insets = useSafeAreaInsets();
   const { plan, tiers, refresh } = useEntitlements();
 
@@ -179,6 +183,51 @@ export default function PurchasedScreen() {
               ));
             })()}
           </View>
+        </Chunk>
+      )}
+
+      {/*
+        The account, asked for here and not before the money.
+        
+        A guest can buy (see `buy()` in `app/upgrade.tsx`), so this is the first
+        moment the ask is both fair and answerable: they have just paid, the
+        thing they bought is working, and the sentence is about protecting what
+        they now own rather than about us needing an address.
+        
+        What it says is the literal truth and no more of it. The subscription is
+        safe either way — the store holds it and Restore brings it back — and it
+        is the *journal* that lives behind a token on this one phone. So the copy
+        promises nothing about accounts, mentions no keystore, and says the one
+        thing that changes what they should do: uninstall this and the meals are
+        gone.
+      */}
+      {guest && (
+        <Chunk
+          color={colors.calories}
+          depth={5}
+          contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.hairline }]}
+        >
+          <Text style={[t.title2, { color: colors.foreground }]}>{tr('purchased.saveTitle')}</Text>
+          <Text style={[t.footnote, { color: colors.mutedForeground }]}>
+            {tr('purchased.saveBody')}
+          </Text>
+          <PressableChunk
+            depth={3}
+            radius={999}
+            onPress={() => {
+              haptics.selected();
+              save.open('purchase');
+            }}
+            accessibilityRole="button"
+            contentStyle={[
+              styles.cta,
+              { backgroundColor: colors.glassStrong, borderWidth: 1, borderColor: colors.hairline },
+            ]}
+          >
+            <Text style={[t.bodySemibold, { color: colors.foreground }]}>
+              {tr('save.saveButton')}
+            </Text>
+          </PressableChunk>
         </Chunk>
       )}
 

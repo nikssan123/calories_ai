@@ -409,6 +409,8 @@ export const sk: Messages = {
   'save.later': 'Teraz nie',
   'guest.notSaved': 'Zatiaľ neuložené: denník je len v tomto telefóne, kým si neuložíš účet.',
   'guest.saveRow': 'Uložiť účet',
+  'guest.saveDoor': (days: number) => `Uložiť účet — ${days} ${w(days, { one: 'deň', few: 'dni', other: 'dní' })} navyše, zadarmo`,
+  'guest.tryDoor': (price: string, duration: string) => `Vyskúšaj všetko — ${price} na ${duration}`,
   'guest.confirmRow': (email: string) => `Zadaj kód poslaný na ${email}`,
   'guest.erase': 'Vymazať tento denník',
   'guest.eraseWarning': 'Všetko zapísané v tomto telefóne bude vymazané. Nedá sa to vrátiť.',
@@ -1146,6 +1148,12 @@ export const sk: Messages = {
   'plans.restoreNote':
     'Znova načíta tento účet v obchode a vráti všetko, čo je na ňom už zakúpené. Nikdy ti nič nestiahne druhýkrát.',
   'plans.manage': 'Spravovať alebo zrušiť predplatné',
+  'plans.introFor': (duration: string) => `na ${duration}`,
+  'plans.introThen': (price: string, period: string) => `potom ${price} ${period}`,
+  'plans.smallPrintIntro': (intro: string, duration: string, price: string, period: string) =>
+    `${intro} platí ${duration}. Potom je to ${price} ${period} cez obchod a predplatné sa obnovuje, kým ho nezrušíš. Zrušiť ho môžeš kedykoľvek – aj počas prvého obdobia – vo svojom účte v obchode.`,
+  'plans.guestNote':
+    'Tvoj denník žije len v tomto telefóne, kým si neuložíš účet. Môžeš to urobiť hneď po zaplatení.',
   'plans.smallPrint': (billing: string) =>
     `${billing} cez obchod a predplatné sa obnovuje, kým ho nezrušíš. Zrušiť ho môžeš kedykoľvek vo svojom účte v obchode – zaplatené obdobie ti zostane až do konca.`,
   'plans.pendingLong':
@@ -1156,6 +1164,9 @@ export const sk: Messages = {
   'plans.backToJournal': 'Späť do denníka',
   'plans.youreOnPlan': (plan: string) => `Máš plán ${plan}.`,
   'plans.paymentReceived': 'Platba prijatá.',
+  'purchased.saveTitle': 'Ulož si účet',
+  'purchased.saveBody':
+    'Predplatné je v bezpečí — drží ho obchod a „Obnoviť nákup“ ho vráti na akomkoľvek telefóne. Len tvoj denník existuje výlučne tu. Ulož si účet a pôjde s tebou.',
   'plans.manageOnStore': 'Spravovať alebo zrušiť ho môžeš kedykoľvek v časti Predplatné v obchode.',
   // A row label with the plan name beside it.
   'plans.youreOn': 'Tvoj plán',

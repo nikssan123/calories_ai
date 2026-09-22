@@ -1,6 +1,7 @@
 import type { Allowance, Locale, MeterName, PlanName, PlanTier } from '@ct/shared';
 import { meterLocked } from '@ct/shared';
 import { listWords, untilWords } from '@ct/shared/words';
+import type { IntroOffer } from '@/lib/billing';
 import type { MessageKey, StringKey, useT } from '@/lib/i18n';
 
 /**
@@ -274,4 +275,28 @@ export function remainingLine(allowance: Allowance, left: number, t: T): string 
 /** Locale-aware, because `toUpperCase()` is not the same map everywhere. */
 function capitalise(word: string, locale: Locale): string {
   return word.charAt(0).toLocaleUpperCase(locale) + word.slice(1);
+}
+
+/**
+ * "1 week", "3 days" — the length of an introductory price, in the reader's
+ * language.
+ *
+ * Through `Intl` rather than the catalogue, which is the same bargain the rest
+ * of this app strikes with units: a thirteen-language table of every count of
+ * every period would be fifty-odd entries that ICU already holds, and gets the
+ * Slavic plural categories right without anybody having to think about them.
+ * `lib/i18n.ts` explains why full ICU is available here.
+ *
+ * Falls back to the bare pair rather than throwing, because a paywall that
+ * renders nothing is worse than one that says "1 week" in English.
+ */
+export function introDuration(intro: IntroOffer, locale: string): string {
+  const unit = { DAY: 'day', WEEK: 'week', MONTH: 'month', YEAR: 'year' }[intro.unit];
+  try {
+    return new Intl.NumberFormat(locale, { style: 'unit', unit, unitDisplay: 'long' }).format(
+      intro.count,
+    );
+  } catch {
+    return `${intro.count} ${unit}${intro.count === 1 ? '' : 's'}`;
+  }
 }

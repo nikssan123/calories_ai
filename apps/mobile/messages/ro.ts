@@ -412,6 +412,8 @@ export const ro: Messages = {
   'save.later': 'Nu acum',
   'guest.notSaved': 'Încă nesalvat: jurnalul e doar pe acest telefon până îți salvezi contul.',
   'guest.saveRow': 'Salvează-ți contul',
+  'guest.saveDoor': (days: number) => `Salvează contul — încă ${days} ${w(days, { one: 'zi', few: 'zile', other: 'de zile' })}, gratuit`,
+  'guest.tryDoor': (price: string, duration: string) => `Încearcă tot — ${price} pentru ${duration}`,
   'guest.confirmRow': (email: string) => `Introdu codul trimis la ${email}`,
   'guest.erase': 'Șterge acest jurnal',
   'guest.eraseWarning': 'Tot ce ai notat pe acest telefon va fi șters. Nu se poate anula.',
@@ -1132,6 +1134,12 @@ export const ro: Messages = {
   'plans.restoreNote':
     'Recitește contul de magazin și pune la loc tot ce ai cumpărat deja. Nu te taxează niciodată a doua oară.',
   'plans.manage': 'Gestionează sau anulează abonamentul',
+  'plans.introFor': (duration: string) => `pentru ${duration}`,
+  'plans.introThen': (price: string, period: string) => `apoi ${price} ${period}`,
+  'plans.smallPrintIntro': (intro: string, duration: string, price: string, period: string) =>
+    `${intro} acoperă ${duration}. După aceea este ${price} ${period} prin magazin, iar abonamentul se reînnoiește până îl oprești. Îl poți anula oricând — inclusiv în prima perioadă — din contul de magazin.`,
+  'plans.guestNote':
+    'Jurnalul tău trăiește doar pe telefonul acesta cât timp nu ți-ai salvat un cont. Poți face asta imediat după plată.',
   'plans.smallPrint': (billing: string) =>
     `${billing} prin magazin; abonamentul se reînnoiește până îl oprești. Îl poți anula oricând din contul de magazin — păstrezi ce ai plătit până la sfârșitul perioadei.`,
   'plans.pendingLong':
@@ -1142,6 +1150,9 @@ export const ro: Messages = {
   'plans.backToJournal': 'Înapoi la jurnal',
   'plans.youreOnPlan': (plan: string) => `Ai planul ${plan}.`,
   'plans.paymentReceived': 'Plata a fost primită.',
+  'purchased.saveTitle': 'Salvează-ți contul',
+  'purchased.saveBody':
+    'Abonamentul e în siguranță — îl ține magazinul, iar „Restaurează” îl aduce înapoi pe orice telefon. Doar jurnalul tău există numai aici. Salvează-ți contul și vine cu tine.',
   'plans.manageOnStore': 'Îl poți gestiona sau anula oricând din Abonamente, în magazin.',
   // A row label beside the tier's name.
   'plans.youreOn': 'Planul tău',

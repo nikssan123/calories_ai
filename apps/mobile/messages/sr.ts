@@ -415,6 +415,8 @@ export const sr: Messages = {
   'save.later': 'Не сада',
   'guest.notSaved': 'Још није сачуван: дневник је само на овом телефону док не сачуваш налог.',
   'guest.saveRow': 'Сачувај налог',
+  'guest.saveDoor': (days: number) => `Сачувај налог — још ${days} ${w(days, { one: 'дан', few: 'дана', other: 'дана' })}, бесплатно`,
+  'guest.tryDoor': (price: string, duration: string) => `Испробај све — ${price} на ${duration}`,
   'guest.confirmRow': (email: string) => `Унеси код послат на ${email}`,
   'guest.erase': 'Обриши овај дневник',
   'guest.eraseWarning': 'Све уписано на овом телефону биће обрисано. Ово се не може опозвати.',
@@ -1152,6 +1154,12 @@ export const sr: Messages = {
     'Поново проверава овај налог продавнице и враћа све што је већ купљено. Никад не наплаћује поново.',
   'plans.manage': 'Управљај претплатом или је откажи',
   // "оно што си платио" is gendered; «плаћено важи» says the same.
+  'plans.introFor': (duration: string) => `на ${duration}`,
+  'plans.introThen': (price: string, period: string) => `затим ${price} ${period}`,
+  'plans.smallPrintIntro': (intro: string, duration: string, price: string, period: string) =>
+    `${intro} важи ${duration}. После тога је ${price} ${period} преко продавнице и обнавља се док не откажеш. Откажи кад год хоћеш — и током првог периода — у налогу продавнице.`,
+  'plans.guestNote':
+    'Твој дневник постоји само на овом телефону док не сачуваш налог. То можеш одмах после плаћања.',
   'plans.smallPrint': (billing: string) =>
     `${billing} преко продавнице и обнавља се док не откажеш. Откажи кад год хоћеш у налогу продавнице — плаћено важи до краја периода.`,
   'plans.pendingLong':
@@ -1162,6 +1170,9 @@ export const sr: Messages = {
   'plans.backToJournal': 'Назад у дневник',
   'plans.youreOnPlan': (plan: string) => `Користиш ${plan}.`,
   'plans.paymentReceived': 'Уплата је примљена.',
+  'purchased.saveTitle': 'Сачувај свој налог',
+  'purchased.saveBody':
+    'Претплата ти је сигурна — чува је продавница, а „Врати куповину“ је враћа на било који телефон. Само дневник постоји искључиво овде. Сачувај налог и иде с тобом.',
   'plans.manageOnStore': 'Управљај претплатом или је откажи кад год хоћеш, у одељку „Претплате“ у продавници.',
   'plans.youreOn': 'Користиш',
   'plans.photoScans': 'Скенирања фотографија',
