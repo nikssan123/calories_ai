@@ -1,7 +1,7 @@
 {
   "language": "en-GB",
   "_note": "The default listing's screenshot captions and seed strings. Its title and descriptions are edited in Play Console and live in PLAY_LISTING.md, so they are not here.",
-  "releaseNotes": "A photo logged with no caption now answers in your own language rather than English. You can also start a subscription without making an account first — save one whenever you like.",
+  "releaseNotes": "Your first meal now comes with a quiet offer to save the journal, instead of a sign-up form turning up later. And when the free messages run out, nothing is thrown over the conversation: the card lands where the reply would have been, says what saving your account gives you, and leaves typing meals in free either way.",
   "captions": [
     {
       "headline": "Just say\nwhat you ate",
