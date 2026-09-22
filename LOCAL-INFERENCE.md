@@ -29,8 +29,10 @@ requirement a candidate model either meets or does not:
 
 The ratio at the bottom of that table is the one that picks the hardware: **~24,000
 tokens read for ~600 written, or 40:1.** This is a prefill-bound workload, not a
-generation-bound one, and that single fact rules out most of the cheap "big memory"
-options further down.
+generation-bound one, so prefill throughput is what to shop for and memory bandwidth is
+the second question rather than the first. It is not, on its own, enough to rule out
+the unified-memory options — see Tier 1b, where it turned out to rule out less than
+the first draft of this document claimed.
 
 The other shape worth naming is that the two vision kinds and the long-form kinds are
 not the same problem as the journal. `ai/client.ts` already routes eight turn kinds
@@ -155,14 +157,56 @@ configuration where more than the journal moves off the API. It is also several 
 the annual API bill at any headcount this product has seen, so it is a tier to arrive
 at from Tier 1 running out of room, never to start at.
 
+### Tier 1b — a Mac mini, M5 Pro class, 64GB
+
+**The first revision of this document dismissed unified memory and that was too
+blunt.** It is recorded rather than deleted because the reasoning was half right and
+the half that was wrong is the interesting half.
+
+The argument was that unified-memory boxes trade compute for capacity, which is the
+wrong trade at 24k in for 600 out. That was a fair description of the M4 generation.
+It is a worse description of the M5 one: the M5 GPU puts a matrix unit — a Neural
+Accelerator — in every core, and prefill is exactly the thing matrix units do. The
+weakness the first draft priced against is the weakness Apple spent that generation
+fixing, so the blanket version of the claim does not survive.
+
+Two things then decide it instead, and they point opposite ways.
+
+**For it: an MoE turns the bandwidth problem off.** Memory bandwidth caps *decode*, and
+decode reads only the active parameters. A 30B-A3B class model reads ~3B of them per
+token, which on a ~300GB/s part is a comfortable three figures of tokens a second — not
+a compromise, a good result. And 64GB holds that model *and* a vision model resident
+together, which the 16GB 4080 cannot do at all and a 32GB 5090 does only just. On
+capacity per euro this beats Tier 1 outright, at a tenth of the idle power, silently,
+in something the size of a book.
+
+**Against it: the cost argument was never really about the model.** It was vLLM's
+automatic prefix caching keeping the 6k prefix resident for free, and vLLM does not run
+on Metal. llama.cpp and MLX both cache prompts, but per slot and by hand, not as a
+radix tree shared across every concurrent account — and a shared prefix across accounts
+is precisely the property being bought. Metal's batching is also much weaker than
+CUDA's: fine at ten concurrent turns, not at a hundred. Vision support in `mlx-vlm` and
+`llama.cpp` is patchier than vLLM's, and `photo_log` is one of the two kinds worth
+moving.
+
+So the honest shape is conditional. If the 30B-A3B class passes the language and
+tool-calling suites and the 14B class does not, a 64GB Mac mini is probably the better
+buy than a 5090 at this product's scale — cheaper, silent, and large enough to hold
+both models. If the 14B class passes, Tier 0 already answers it and nothing needs
+buying. Either way the experiment comes first, and the experiment runs on hardware
+already in the building.
+
+One caveat that is not about the chip: a Mac mini has no ECC, no out-of-band
+management and no redundant power. At this scale that is an acceptable risk *given* the
+LiteLLM fallback, and an unacceptable one without it.
+
 ### What not to buy, and why
 
-**Unified-memory boxes — Mac Studio, DGX Spark, Strix Halo.** They are the obvious
-suggestion (128GB–512GB for the price of a GPU) and they are the wrong shape for *this*
-workload. They trade compute for capacity, which is the right trade for generating long
-answers and the wrong one for reading 24k tokens to write 600. A €9,000 Mac Studio
-would lose to a €3,500 5090 on a 40:1 prefill ratio. If the ratio ever inverts — if
-`meal_plan` and `content` became the volume — revisit this, and only then.
+**The very large unified-memory boxes — a 512GB Mac Studio, DGX Spark, Strix Halo.**
+The MoE argument above rescues the small end of this category, not the top of it. Those
+configurations are sized to hold a 200B-plus model, this product has no use for one,
+and the money buys capacity rather than the prefill and concurrency that a public API
+in front of many accounts actually consumes.
 
 **Datacentre silicon.** An A100 or H100 is priced for people whose alternative is a
 larger API bill than this product will have for years.
