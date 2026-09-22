@@ -383,11 +383,12 @@ export const el: Messages = {
   'auth.suspended': 'Αυτός ο λογαριασμός έχει ανασταλεί.',
   'auth.tooManyTries': 'Πάρα πολλές προσπάθειες. Περίμενε λίγα λεπτά και δοκίμασε ξανά.',
   'save.title': 'Αποθήκευσε τον *λογαριασμό σου*',
-  'save.titleGuestLimit': 'Η μέρα επισκέπτη *τελείωσε*',
+  'save.titleGuestLimit': 'Συνέχισε — αποθήκευσε τον *λογαριασμό*',
   'save.titlePurchase': 'Πρώτα *αποθήκευσε τον λογαριασμό*',
+  'save.titleFirstLog': 'Κράτα αυτό που μόλις *κατέγραψες*',
   /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
   'save.trialBody': (days: number, messages: number) =>
-    `Αποθήκευσέ τον — είναι δωρεάν — και παίρνεις δοκιμή ${days} ${w(days, { one: 'ημέρας', other: 'ημερών' })}: ${messages} ${w(messages, { one: 'μήνυμα', other: 'μηνύματα' })} για όλο το διάστημα και μία σάρωση φωτογραφίας. Ό,τι έχεις καταγράψει μένει.`,
+    `Είναι δωρεάν. Παίρνεις ${messages} ${w(messages, { one: 'ακόμη μήνυμα', other: 'ακόμη μηνύματα' })} και μία σάρωση φωτογραφίας για ${days} ${w(days, { one: 'ημέρα', other: 'ημέρες' })}, και ό,τι έχεις καταγράψει μένει.`,
   'save.purchaseBody': 'Για να μένει δικό σου ό,τι αγοράζεις και σε νέο κινητό. Ό,τι έχεις καταγράψει έρχεται μαζί.',
   'save.stillFree': 'Η χειροκίνητη καταγραφή γευμάτων και η σάρωση barcode μένουν δωρεάν έτσι κι αλλιώς.',
   'save.saveButton': 'Αποθήκευση λογαριασμού',
@@ -404,8 +405,11 @@ export const el: Messages = {
   'save.later': 'Όχι τώρα',
   'guest.notSaved': 'Δεν έχει αποθηκευτεί ακόμα: το ημερολόγιο υπάρχει μόνο σε αυτό το κινητό μέχρι να αποθηκεύσεις τον λογαριασμό σου.',
   'guest.saveRow': 'Αποθήκευση λογαριασμού',
-  'guest.saveDoor': (days: number) => `Αποθήκευση λογαριασμού — ${days} ${w(days, { one: 'ημέρα', other: 'ημέρες' })} ακόμη, δωρεάν`,
+  'guest.saveDoor': 'Αποθήκευση λογαριασμού',
   'guest.tryDoor': (price: string, duration: string) => `Δοκίμασε τα πάντα — ${price} για ${duration}`,
+  'saveAsk.title': 'Καταγράφηκε — μόνο σε αυτό το κινητό',
+  'saveAsk.body': 'Ζει μόνο σε αυτό το κινητό. Η αποθήκευση είναι δωρεάν.',
+  'saveAsk.door': 'Αποθήκευση λογαριασμού',
   'guest.confirmRow': (email: string) => `Βάλε τον κωδικό που στάλθηκε στο ${email}`,
   'guest.erase': 'Διαγραφή αυτού του ημερολογίου',
   'guest.eraseWarning': 'Ό,τι έχει καταγραφεί σε αυτό το κινητό θα διαγραφεί. Δεν αναιρείται.',
@@ -1225,6 +1229,12 @@ export const el: Messages = {
   'tier.pitchCoach': 'Και η κουζίνα: μαγείρεμα από το ψυγείο σου, οργάνωση της εβδομάδας.',
 
   // `plural` arrives capitalised (see `wallTitle`), so it opens the sentence.
+  'wall.eyebrowUsed': (count: number, noun: string) => `${count} από ${count} ${noun}`,
+  'wall.eyebrowLocked': 'Δεν είναι στο πλάνο σου',
+  'wall.eyebrowTrialOver': 'Η δοκιμή τελείωσε',
+  'wall.eyebrowSpent': 'Εξαντλήθηκαν',
+  'wall.guestTitle': (count: number, noun: string) => `Τα επόμενα ${count} ${noun} σου είναι δωρεάν`,
+  'wall.guestBody': 'Είναι δωρεάν, και ό,τι έχεις καταγράψει μένει.',
   'wall.notOnPlan': (plural: string) => `${plural} δεν περιλαμβάνονται στο πακέτο σου`,
   'wall.freeGrant': (count: number, noun: string) => `Έφτασες το όριο: ${count} δωρεάν ${noun}`,
   'wall.monthlyGrant': (count: number, noun: string) => `Έφτασες το όριο του μήνα: ${count} ${noun}`,
@@ -1238,6 +1248,7 @@ export const el: Messages = {
   'wall.bodyMealPlan':
     'Η εβδομάδα που οργάνωσες τελευταία είναι ακόμα εκεί, και μπορείς ακόμα να μαγειρεύεις από μια αποθηκευμένη συνταγή.',
   'wall.remaining': (count: number, noun: string) => `${count === 1 ? 'Απομένει' : 'Απομένουν'} ${count} ${noun}`,
+  'wall.noneLeft': 'Δεν απομένουν',
   // Not «μόνος μου», which genders the reader.
   'wall.logMyself': 'Θα το γράψω εγώ',
   'wall.loggedByHand': 'Καταγράφηκε με το χέρι — αυτός ο δρόμος είναι πάντα ανοιχτός και δεν μετράει ποτέ στο όριο.',

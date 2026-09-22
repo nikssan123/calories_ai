@@ -224,7 +224,9 @@ export default function SaveAccountScreen() {
             ? tr('save.titleGuestLimit')
             : reason === 'purchase'
               ? tr('save.titlePurchase')
-              : tr('save.title');
+              : reason === 'first_log'
+                ? tr('save.titleFirstLog')
+                : tr('save.title');
 
   const blurb =
     step === 'done'

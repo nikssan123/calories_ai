@@ -73,7 +73,6 @@ import { api, planLimitOf } from '@/lib/api';
 import { uploadPhotoFile } from '@/lib/image';
 import { useAuth } from '@/lib/auth';
 import { useEntitlements } from '@/lib/entitlements';
-import { useSaveAccount } from '@/lib/save-account';
 import { enqueue, newId } from '@/lib/outbox';
 import { useOutbox } from '@/hooks/useOutbox';
 import { useRefreshOnReturn } from '@/hooks/useRefreshOnReturn';
@@ -85,6 +84,7 @@ import { writeDaySnapshot } from '@/lib/snapshot';
 import { useLocale, useT, type StringKey } from '@/lib/i18n';
 import { useUnits } from '@/lib/units';
 import { CoachBubble } from '@/components/CoachBubble';
+import { SaveAsk } from '@/components/SaveAsk';
 
 /** Optimistic rows carry a local id until the server assigns the real one. */
 interface Bubble {
@@ -140,10 +140,21 @@ interface Bubble {
    * (CAST.md, fourth pass). Local: it lasts the session, like a wall.
    */
   moment?: Milestone;
+  /**
+   * The soft ask after a guest's first meal — see `SaveAsk`.
+   *
+   * Local like the two above, and unlike them it can be taken back: the × drops
+   * the row, and `momentShown` keeps it from ever being built again.
+   */
+  saveAsk?: boolean;
 }
 
 /** Near enough to the end that a new message should still carry the view. */
 const NEAR_BOTTOM_PX = 64;
+
+/** The once-per-install latch for the first-log ask, and the row it builds. */
+const SAVE_ASK = 'save-ask:first-log';
+const SAVE_ASK_KEY = `local-${SAVE_ASK}`;
 
 /**
  * How long to wait before asking a second time about a turn that died at the
@@ -205,7 +216,6 @@ export default function JournalScreen() {
   const tr = useT();
   const toast = useToast();
   const { adopt, refresh: refreshPlan, allowances } = useEntitlements();
-  const save = useSaveAccount();
 
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   /**
@@ -492,6 +502,49 @@ export default function JournalScreen() {
     return () => later.forEach(clearTimeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moment?.key]);
+
+  /*
+   * A guest's first meal: the soft ask, once, in the conversation.
+   *
+   * Keyed off the day rather than off the turn that logged it, because a meal
+   * arrives by four different roads — a chat turn, a photo, the manual form on
+   * a wall, the outbox draining after a tunnel — and the ask belongs to the
+   * first entry existing, not to whichever road brought it. `food_entries` is
+   * the day's own list, so every road lands here and none of them has to know.
+   *
+   * Once per install, marked before it is built: `momentShown` is the same
+   * latch the wake and the streak use. Marking first means a phone killed in
+   * the next millisecond loses the ask rather than showing it twice, which is
+   * the right way round — this is the card that must never read as nagging.
+   *
+   * Held until `loading` is false because the history lands in one `setBubbles`
+   * that replaces the list; appending before it would put the card in the
+   * transcript and then throw it away.
+   */
+  const dismissSaveAsk = useCallback(
+    () => setBubbles((prev) => prev.filter((bubble) => bubble.key !== SAVE_ASK_KEY)),
+    [],
+  );
+
+  const askedSave = useRef(false);
+  useEffect(() => {
+    if (loading || !guest || !profile?.id || !day || day.food_entries.length === 0) return;
+    if (askedSave.current) return;
+    askedSave.current = true;
+    const userId = profile.id;
+    void (async () => {
+      if (await momentShown(userId, SAVE_ASK)) return;
+      await markMomentShown(userId, SAVE_ASK);
+      // Pinned, or the card lands below the fold of a transcript somebody is
+      // already reading the top of — which is the same as not showing it.
+      pinned.current = true;
+      setBubbles((prev) =>
+        prev.some((bubble) => bubble.key === SAVE_ASK_KEY)
+          ? prev
+          : [...prev, { key: SAVE_ASK_KEY, role: 'assistant', content: '', saveAsk: true }],
+      );
+    })();
+  }, [loading, guest, profile?.id, day?.food_entries.length]);
 
   /*
    * A badge just earned: its holder hops down to the Progress tab, the icon
@@ -864,6 +917,54 @@ export default function JournalScreen() {
   const send = useCallback(
     async (payload: ComposerPayload) => {
       const localKey = `local-${Date.now()}`;
+
+      /*
+       * A spent grant is answered here, without a request.
+       *
+       * The server refuses this turn at `requireAllowance`, before a token of
+       * it reaches a model, so nothing was ever being *billed* for a message
+       * sent past the wall. What was being spent is a round trip and a couple
+       * of seconds of somebody watching a pending bubble to be told no — and,
+       * on a phone in a tunnel, a refusal that arrives as a dropped connection
+       * instead of as a wall.
+       *
+       * The camera has asked this question locally since the photo meter got
+       * its own guard, and for the same reason: a limit the app already knows
+       * about should not have to be discovered from the far end of the network.
+       * `allowances` comes from `/entitlements`, so the answer is as fresh as
+       * the last refresh; anything unknown — still loading, offline, a meter
+       * carrying bought credits — falls through and lets the server decide,
+       * which is the branch that must never get this wrong.
+       */
+      /*
+       * Which meter this turn spends, asked exactly the way the server asks it
+       * — `wantsPhoto` in `routes/index.ts` is the presence of a photograph,
+       * nothing else. `photoOnly` is the wrong question and getting it wrong is
+       * a refusal the server would not have made: it is false for a photo with
+       * a caption under it, which is still a photo turn, so keying on it would
+       * bounce a picture off a spent *chat* meter while the photo meter had
+       * room. Only a turn carrying no photograph is answered here.
+       */
+      const chat = allowances?.chat;
+      const carriesPhoto = Boolean(payload.photoOnly || payload.photoBase64 || payload.photoPreview);
+      if (!carriesPhoto && chat && meterSpent(chat) && chat.credits === 0) {
+        pinned.current = true;
+        setBubbles((prev) => [
+          ...prev,
+          // The scanned packets ride along too, or a refused barcode turn loses
+          // the chips that say which packets were read.
+          { key: localKey, role: 'user', content: payload.text, scanned: payload.scannedPreview },
+          {
+            key: `${localKey}-wall`,
+            role: 'assistant',
+            content: '',
+            // Their own sentence rides along, so the manual form opens with it.
+            wall: { allowance: chat, message: '', text: payload.text },
+          },
+        ]);
+        return;
+      }
+
       // Ids the server had already given us. Anything outside this set
       // afterwards arrived during this turn, which is clock-free evidence that
       // it landed.
@@ -1058,9 +1159,21 @@ export default function JournalScreen() {
                 : b,
             ),
           );
-          // A guest's day is spent: the answer is saving the account, which
-          // starts the trial. The wall stays in the transcript behind it.
-          if (limit.allowance?.trial === 'guest') save.open('guest_limit');
+          /*
+           * A spent guest used to have the save sheet thrown over the top of
+           * this, on the reasoning that saving is the answer and the wall could
+           * wait behind it. Watching it happen on a real guest account settles
+           * the argument the other way: what arrives, one beat after a meal was
+           * refused, is a full screen headed "Your guest day is used up" with a
+           * name, an email and a password on it — a sign-up form, unasked, from
+           * an app they have been using for four minutes. It is the most likely
+           * place in the whole product to lose somebody, and the card it covers
+           * is the thing that actually makes the case.
+           *
+           * So the wall is the answer now, and the sheet is what the door on it
+           * opens. Nothing is dismissed and nothing is covered — the same rule
+           * every other card in this conversation keeps.
+           */
           return;
         }
 
@@ -1118,8 +1231,8 @@ export default function JournalScreen() {
       commitDay,
       adopt,
       refreshPlan,
-      save,
       holdRing,
+      allowances,
     ],
   );
 
@@ -1143,9 +1256,9 @@ export default function JournalScreen() {
         wall: { allowance: photo, message: '', text: '' },
       },
     ]);
-    if (photo.trial === 'guest' && guest) save.open('guest_limit');
+    // No sheet over the top of it, for the reason the chat wall gives above.
     return false;
-  }, [allowances, guest, save]);
+  }, [allowances]);
 
   return (
     <KeyboardAvoidingView
@@ -1234,6 +1347,7 @@ export default function JournalScreen() {
             onLogged={refreshDay}
             onLogManually={logManually}
             onCatch={onCatch}
+            onDismissSaveAsk={dismissSaveAsk}
           />
         ))}
       </ScrollView>
@@ -1738,6 +1852,7 @@ const Row = memo(function Row({
   onLogged,
   onLogManually,
   onCatch,
+  onDismissSaveAsk,
 }: {
   bubble: Bubble;
   today?: string;
@@ -1751,6 +1866,8 @@ const Row = memo(function Row({
   timezone?: string;
   onLogged: () => void;
   onLogManually: (draft: { description: string; meal: Meal; items: FoodItemInput[] }) => void;
+  /** Takes the first-log ask back out of the transcript. See `SaveAsk`. */
+  onDismissSaveAsk: () => void;
 }) {
   const colors = useColors();
   const tr = useT();
@@ -1821,6 +1938,14 @@ const Row = memo(function Row({
     return (
       <View style={styles.assistantRow}>
         <MomentCard days={bubble.moment} />
+      </View>
+    );
+  }
+
+  if (bubble.saveAsk) {
+    return (
+      <View style={styles.assistantRow}>
+        <SaveAsk onDismiss={onDismissSaveAsk} />
       </View>
     );
   }

@@ -396,11 +396,12 @@ export const cs: Messages = {
   'auth.suspended': 'Tento účet byl pozastaven.',
   'auth.tooManyTries': 'Příliš mnoho pokusů. Počkej pár minut a zkus to znovu.',
   'save.title': 'Ulož si *účet*',
-  'save.titleGuestLimit': 'Den hosta je *vyčerpaný*',
+  'save.titleGuestLimit': 'Pokračuj — ulož si *účet*',
   'save.titlePurchase': 'Nejdřív si *ulož účet*',
+  'save.titleFirstLog': 'Nech si, co jsi právě *zapsal*',
   /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
   'save.trialBody': (days: number, messages: number) =>
-    `Ulož si ho — je to zdarma — a získáš ${days}denní zkušební období: ${messages} ${w(messages, { one: 'zpráva', few: 'zprávy', many: 'zprávy', other: 'zpráv' })} na celou dobu a jedno skenování fotky. Všechno, co jsi zapsal, zůstane.`,
+    `Je to zdarma. Dostaneš ještě ${messages} ${w(messages, { one: 'zprávu', few: 'zprávy', many: 'zprávy', other: 'zpráv' })} a jedno skenování fotky na ${days} ${w(days, { one: 'den', few: 'dny', many: 'dne', other: 'dní' })} a všechno zapsané zůstane.`,
   'save.purchaseBody': 'Aby to, co koupíš, zůstalo tvoje i na novém telefonu. Všechno zapsané jde s tebou.',
   'save.stillFree': 'Ruční zápis jídel a skenování čárových kódů zůstávají zdarma tak jako tak.',
   'save.saveButton': 'Uložit účet',
@@ -416,8 +417,11 @@ export const cs: Messages = {
   'save.later': 'Teď ne',
   'guest.notSaved': 'Zatím neuloženo: deník je jen v tomto telefonu, dokud si neuložíš účet.',
   'guest.saveRow': 'Uložit účet',
-  'guest.saveDoor': (days: number) => `Uložit účet — ${days} ${w(days, { one: 'den', few: 'dny', other: 'dní' })} navíc, zdarma`,
+  'guest.saveDoor': 'Uložit účet',
   'guest.tryDoor': (price: string, duration: string) => `Vyzkoušet všechno — ${price} na ${duration}`,
+  'saveAsk.title': 'Zapsáno — jen v tomhle telefonu',
+  'saveAsk.body': 'Žije jen v tomhle telefonu. Uložit si ho je zdarma.',
+  'saveAsk.door': 'Uložit můj účet',
   'guest.confirmRow': (email: string) => `Zadej kód poslaný na ${email}`,
   'guest.erase': 'Smazat tento deník',
   'guest.eraseWarning': 'Všechno zapsané v tomto telefonu bude smazáno. Nejde to vrátit.',
@@ -1253,6 +1257,12 @@ export const cs: Messages = {
   'tier.pitchPlus': 'Deník každý den a k tomu týdenní ohlédnutí.',
   'tier.pitchCoach': 'A k tomu kuchyně: vař z lednice, plánuj týden.',
 
+  'wall.eyebrowUsed': (count: number, noun: string) => `${count} z ${count} ${noun}`,
+  'wall.eyebrowLocked': 'Není ve tvém tarifu',
+  'wall.eyebrowTrialOver': 'Zkušební období skončilo',
+  'wall.eyebrowSpent': 'Vyčerpáno',
+  'wall.guestTitle': (count: number, noun: string) => `Dalších ${count} ${noun} máš zdarma`,
+  'wall.guestBody': 'Je to zdarma a všechno zapsané zůstane.',
   'wall.notOnPlan': (plural: string) => `${plural} nejsou v tvém tarifu`,
   'wall.freeGrant': (count: number, noun: string) => `Vyčerpáno: ${count} ${noun} zdarma`,
   'wall.monthlyGrant': (count: number, noun: string) => `Tento měsíc vyčerpáno: ${count} ${noun}`,
@@ -1268,6 +1278,7 @@ export const cs: Messages = {
   // The verb agrees with the count: "Zbývají 3 zprávy", "Zbývá 5 zpráv".
   'wall.remaining': (count: number, noun: string) =>
     `${count >= 2 && count <= 4 ? 'Zbývají' : 'Zbývá'} ${count} ${noun}`,
+  'wall.noneLeft': 'Nic nezbývá',
   // The reader's own words; "Zapíšu si to sám" is gendered, so the button
   // keeps the infinitive.
   'wall.logMyself': 'Zapsat ručně',

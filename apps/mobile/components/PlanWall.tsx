@@ -1,18 +1,26 @@
-import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { TRIAL, type Allowance, type MeterName } from '@ct/shared';
 import { meterLocked, meterRemaining } from '@ct/shared';
 import { Chunk, PressableChunk } from '@/components/Chunk';
+import { Character } from '@/components/cast/Character';
+import { Serif } from '@/components/Serif';
+import { Land } from '@/components/Land';
 import { useIntroWayIn } from '@/lib/billing';
 import { useEntitlements } from '@/lib/entitlements';
 import { useSaveAccount } from '@/lib/save-account';
 import { useAuth } from '@/lib/auth';
-import { introDuration, remainingLine, TIER_NAMES, tierFor, wallBody, wallTitle } from '@/lib/plan-copy';
-import { duration, ease, type as t, useColors, withAlpha, type Palette } from '@/theme';
-import { useReducedMotion } from '@/hooks/useReducedMotion';
+import {
+  introDuration,
+  remainingLine,
+  TIER_NAMES,
+  tierFor,
+  wallBody,
+  wallEyebrow,
+  wallTitle,
+} from '@/lib/plan-copy';
+import { type as t, useColors, useType, withAlpha, type Palette } from '@/theme';
 import { useLocale, useT } from '@/lib/i18n';
 
 /**
@@ -51,6 +59,7 @@ export function PlanWall({
   style?: StyleProp<ViewStyle>;
 }) {
   const colors = useColors();
+  const type = useType();
   const tr = useT();
   const locale = useLocale();
   const router = useRouter();
@@ -66,8 +75,21 @@ export function PlanWall({
    */
   const guest = allowance?.trial === 'guest' && auth.guest;
 
-  const title = allowance ? wallTitle(allowance, tr, locale) : (message ?? tr('plans.spent'));
-  const body = allowance ? wallBody(allowance, tr, locale) : undefined;
+  const title = allowance ? wallTitle(allowance, tr, locale, guest) : (message ?? tr('plans.spent'));
+  const body = allowance ? wallBody(allowance, tr, locale, guest) : undefined;
+
+  /*
+   * How much of the grant is gone, as a fraction, or null when there is no
+   * grant to draw. Null covers the two states that are not a count at all: a
+   * meter this plan does not carry, and a 402 that arrived without an
+   * allowance. `used` can run past `allowed` — a turn that spent two — so it
+   * is clamped rather than trusted to be a proportion.
+   */
+  const spent =
+    allowance && allowance.allowed !== null && allowance.allowed > 0
+      ? Math.min(1, allowance.used / allowance.allowed)
+      : null;
+  const eyebrow = allowance ? wallEyebrow(allowance, tr) : tr('wall.eyebrowSpent');
   /*
    * Which tier answers this. Without an allowance — a 402 from something that
    * does not send one — it falls back to the cheapest tier above the one they
@@ -98,108 +120,189 @@ export function PlanWall({
         depth={5}
         contentStyle={[styles.card, { backgroundColor: colors.card, borderColor: colors.hairline }]}
       >
-        <View style={styles.head}>
-          <Badge colors={colors} />
-          <Text style={[t.title2, styles.title, { color: colors.foreground }]}>{title}</Text>
+        <View style={styles.top}>
+          {/*
+            Ember, hopeful, in a column of her own — never over the words
+            (CAST.md). Hopeful and not sorry: running a grant out is the plan
+            working, and a figure pulling a face at it would teach people the
+            app is broken, which is the same argument the green makes above.
+          */}
+          <Character name="ember" mood="hopeful" size={56} loop={false} />
+
+          <View style={styles.words}>
+            {/*
+              The count, drawn rather than said.
+
+              It used to be the headline — "That's all 3 messages this month" —
+              which spent the card's one serif line restating a number the
+              reader had just watched run out. A bar says it faster and without
+              a verb, which leaves the headline to be about what happens next.
+              On a meter with no count behind it — a locked feature, a trial
+              that ended — there is nothing to draw and the label stands alone.
+            */}
+            <View style={styles.meterRow}>
+              {spent !== null && (
+                <View style={[styles.track, { backgroundColor: withAlpha(colors.calories, 0.16) }]}>
+                  <View
+                    style={[
+                      styles.fill,
+                      {
+                        width: `${Math.round(spent * 100)}%`,
+                        backgroundColor: colors.primary,
+                        experimental_backgroundImage: colors.primaryRamp,
+                      },
+                    ]}
+                  />
+                </View>
+              )}
+              <Text style={[t.eyebrow, styles.eyebrow, { color: colors.caloriesText }]}>{eyebrow}</Text>
+            </View>
+
+            <Serif accessibilityRole="header" style={[type.serifTitle, { color: colors.foreground }]}>
+              {title}
+            </Serif>
+            {body && <Text style={[t.footnote, { color: colors.mutedForeground }]}>{body}</Text>}
+          </View>
         </View>
 
-        {body && (
-          <Text style={[t.body, { color: colors.mutedForeground }]}>{body}</Text>
-        )}
-
         <View style={styles.actions}>
-          {onLogManually && (
-            <PressableChunk
-              color={colors.calories}
-              radius={999}
-              onPress={onLogManually}
-              accessibilityRole="button"
-              contentStyle={[styles.button, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]}
-            >
-              <PencilGlyph color={colors.primaryForeground} />
-              <Text style={[t.bodyBold, { color: colors.primaryForeground }]}>
-                {tr('wall.logMyself')}
-              </Text>
-            </PressableChunk>
+          {/*
+            The doors, in the order they are worth taking.
+
+            The rule this file has always kept is that a wall must never be a
+            checkout with no way past it — `plans.ts` sizes the free tier on the
+            argument that the wall stopped being an exit, and a card whose only
+            button is a price puts the exit straight back. That rule is about
+            *money*, and it used to be enforced by always making the free door
+            the solid one. On a guest that was the wrong reading: saving an
+            account costs nothing either, so promoting it promotes a free thing,
+            and the door that had been solid — typing the meal in yourself —
+            stays on the card beside it rather than disappearing.
+
+            Side by side rather than stacked: two full-width pills one above the
+            other was a form, and it was most of the card's height.
+          */}
+          {guest ? (
+            <Door solid label={tr('guest.saveDoor')} colors={colors} onPress={() => save.open('guest_limit')} />
+          ) : (
+            onLogManually && (
+              <Door
+                solid
+                colors={colors}
+                label={tr('wall.logMyself')}
+                glyph={<PencilGlyph color={colors.primaryForeground} />}
+                onPress={onLogManually}
+              />
+            )
           )}
 
-          {/*
-            The free door, named for what it gives rather than for what it is.
-            "Save your account" describes the form; the three days are the
-            reason, and the reason is what a wall has to lead with.
-          */}
-          {guest && (
-            <PressableChunk
-              depth={3}
-              radius={999}
-              onPress={() => save.open('guest_limit')}
-              accessibilityRole="button"
-              contentStyle={[
-                styles.button,
-                { backgroundColor: colors.glassStrong, borderWidth: 1, borderColor: colors.hairline },
-              ]}
-            >
-              <Text style={[t.bodySemibold, { color: colors.foreground }]}>
-                {tr('guest.saveDoor')(TRIAL.days)}
-              </Text>
-            </PressableChunk>
-          )}
-
-          {/*
-            The paid door, which a guest now also gets.
-            
-            It is drawn only when the store has an introductory price for this
-            person — the whole point of it is the small number, and "Try it all
-            for €99.99 a year" is not an easier yes than the free door above it,
-            it is a worse one. Without an intro the guest's wall is what it was:
-            the free way out, and the account.
-            
-            Ordered last on purpose. `plans.ts` sizes the free tier on the
-            argument that the wall stopped being an exit, and a wall that puts a
-            checkout above the two free doors puts the exit straight back.
-          */}
-          {guest && introDoor && (
-            <PressableChunk
-              depth={3}
-              radius={999}
-              onPress={() => router.push({ pathname: '/upgrade', params: { plan: introDoor.plan } })}
-              accessibilityRole="button"
-              contentStyle={[
-                styles.button,
-                { backgroundColor: colors.glassStrong, borderWidth: 1, borderColor: colors.hairline },
-              ]}
-            >
-              <Text style={[t.bodySemibold, { color: colors.foreground }]}>
-                {tr('guest.tryDoor')(introDoor.intro!.price, introDuration(introDoor.intro!, locale))}
-              </Text>
-            </PressableChunk>
-          )}
+          {guest && onLogManually && <Quiet label={tr('wall.logMyself')} colors={colors} onPress={onLogManually} />}
 
           {next && !guest && (
-            <PressableChunk
-              depth={3}
-              radius={999}
+            <Quiet
+              colors={colors}
               /* The tier the button names, carried to the wall so it opens on
                  the one it just offered. Without it the paywall picks its own
                  default — the cheapest tier above the current plan — and a
                  kitchen that asks for Coach lands on Plus preselected. */
               onPress={() => router.push({ pathname: '/upgrade', params: { plan: next } })}
-              accessibilityRole="button"
-              contentStyle={[
-                styles.button,
-                { backgroundColor: colors.glassStrong, borderWidth: 1, borderColor: colors.hairline },
-              ]}
-            >
-              <Text style={[t.bodySemibold, { color: colors.foreground }]}>
-                {/* Names the tier, because "Upgrade" does not say what for and
-                    the tier that answers this meter is not always the top one. */}
-                {tr('plans.seeWhatAdds')(TIER_NAMES[next])}
-              </Text>
-            </PressableChunk>
+              /* Names the tier, because "Upgrade" does not say what for and the
+                 tier that answers this meter is not always the top one. */
+              label={tr('plans.seeWhatAdds')(TIER_NAMES[next])}
+            />
           )}
         </View>
+
+        {/*
+          The paid door on a guest's wall, and the only one that is a price.
+
+          Drawn only when the store has an introductory price for this person —
+          the whole point of it is the small number, and "Try it all for €99.99
+          a year" is not an easier yes than the free doors above it, it is a
+          worse one.
+
+          It spent a while as a grey line of footnote under the buttons, on the
+          reasoning that nothing paid should outrank something free. That read
+          as small print: the one door on the card with a price on it was also
+          the only one that did not look like a control. A door can be second
+          without being hidden — it is a button like the others, on its own row
+          beneath them, wearing the outline rather than the fill. The ordering
+          still says what it said; it just no longer whispers.
+        */}
+        {guest && introDoor && (
+          <View style={styles.introRow}>
+            <Door
+              colors={colors}
+              label={tr('guest.tryDoor')(introDoor.intro!.price, introDuration(introDoor.intro!, locale))}
+              onPress={() => router.push({ pathname: '/upgrade', params: { plan: introDoor.plan } })}
+            />
+          </View>
+        )}
       </Chunk>
     </Land>
+  );
+}
+
+/** The quiet door: a word beside the solid one, not a second pill under it. */
+function Quiet({ label, onPress, colors }: { label: string; onPress: () => void; colors: Palette }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      hitSlop={10}
+      style={({ pressed }) => [styles.quiet, { opacity: pressed ? 0.45 : 1 }]}
+    >
+      <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+/**
+ * One door. Solid is the one to take; the rest are the same shape, quieter.
+ *
+ * Three identical filled pills stacked was what a guest's wall used to be, and
+ * a stack of identical buttons is a form rather than a card: nothing in it says
+ * which one the card is for. Same height, same radius, two weights of surface.
+ */
+function Door({
+  label,
+  onPress,
+  colors,
+  solid = false,
+  glyph,
+}: {
+  label: string;
+  onPress: () => void;
+  colors: Palette;
+  solid?: boolean;
+  glyph?: React.ReactNode;
+}) {
+  return (
+    <PressableChunk
+      color={solid ? colors.calories : undefined}
+      depth={solid ? undefined : 3}
+      radius={999}
+      onPress={onPress}
+      accessibilityRole="button"
+      style={styles.grow}
+      contentStyle={[
+        styles.button,
+        solid
+          ? { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }
+          : { backgroundColor: colors.glassStrong, borderWidth: 1, borderColor: colors.hairline },
+      ]}
+    >
+      {glyph}
+      <Text
+        style={[
+          solid ? t.bodyBold : t.bodySemibold,
+          styles.doorLabel,
+          { color: solid ? colors.primaryForeground : colors.foreground },
+        ]}
+      >
+        {label}
+      </Text>
+    </PressableChunk>
   );
 }
 
@@ -226,6 +329,7 @@ export function LockedPanel({
   style?: StyleProp<ViewStyle>;
 }) {
   const colors = useColors();
+  const type = useType();
   const tr = useT();
   const locale = useLocale();
   const router = useRouter();
@@ -339,7 +443,15 @@ export function MeterChip({
   // `allowed` is non-null past `meterLocked`, and the credits a meter may carry
   // are deliberately not in the threshold: they are stock rather than the
   // grant, and the chip is counting down the thing that runs out.
-  if (left === 0 || left > showFrom(allowance.allowed ?? 0)) return null;
+  if (left > showFrom(allowance.allowed ?? 0)) return null;
+  /*
+   * Zero with bought stock behind it is not "none left", it is the grant
+   * running out in front of scans this person paid for — and `meterRemaining`
+   * counts only the grant, by design. Saying none to somebody holding ten
+   * credits is the one way this chip can be actively wrong, so it holds its
+   * tongue and lets the wall, which does read credits, speak if it ever comes.
+   */
+  if (left === 0 && allowance.credits > 0) return null;
 
   return (
     <View style={[styles.chipRow, style]}>
@@ -352,7 +464,18 @@ export function MeterChip({
       >
         <View style={[styles.chipDot, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]} />
         <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
-          {remainingLine(allowance, left, tr)}
+          {/*
+            Zero is a count too, and it used to be the one count this hid.
+
+            The chip stopped at "1 message left", the last one got spent, and
+            then it simply went — so the state between spending the grant and
+            finding out was a composer that looked exactly like a working one.
+            The argument for hiding it was that the wall carries the news, and
+            that was true while the wall arrived the moment anything was typed;
+            it is a beat too late for somebody deciding whether to type at all.
+            It says the number either way now, and the last of them is zero.
+          */}
+          {left === 0 ? tr('wall.noneLeft') : remainingLine(allowance, left, tr)}
         </Text>
       </Pressable>
       {onDismiss && (
@@ -433,48 +556,49 @@ export function PencilGlyph({ color, size = 16 }: { color: string; size?: number
   );
 }
 
-/**
- * The same arrival every card in the conversation uses.
- *
- * Copied from `ChatCard`'s `Land` rather than shared out of it, because the two
- * are the same three lines and lifting them into a component would put a
- * dependency between the wall and the card gallery for a `withTiming`. If a
- * third caller appears, that is the moment to move it.
- */
-function Land({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
-  const reduced = useReducedMotion();
-  const progress = useSharedValue(reduced ? 1 : 0);
-
-  useEffect(() => {
-    if (reduced) {
-      progress.value = 1;
-      return;
-    }
-    progress.value = withTiming(1, { duration: duration.spring, easing: ease.spring });
-  }, [reduced, progress]);
-
-  const animated = useAnimatedStyle(() => ({
-    opacity: Math.min(1, progress.value / 0.6),
-    transform: [
-      { translateY: -14 * (1 - progress.value) },
-      { scale: 0.94 + 0.06 * progress.value },
-    ],
-  }));
-
-  return <Animated.View style={[style, animated]}>{children}</Animated.View>;
-}
-
 const styles = StyleSheet.create({
-  card: { borderWidth: 1, borderRadius: 24, paddingHorizontal: 16, paddingVertical: 16, gap: 10 },
+  card: { borderWidth: 1, borderRadius: 22, paddingHorizontal: 14, paddingVertical: 14, gap: 12 },
+  top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  words: { flex: 1, gap: 2 },
+  grow: { flexGrow: 1, flexShrink: 1, flexBasis: 180 },
+  quiet: { paddingVertical: 10, paddingHorizontal: 10 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   // `flexShrink` rather than `flex: 1`: the title wraps to as many lines as it
   // needs beside a badge that never shrinks.
   title: { flexShrink: 1 },
   badge: { width: 30, height: 30, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
-  actions: { gap: 10, marginTop: 4 },
+  meterRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 1 },
+  // A short bar, not a full-width one: this is a label's worth of information
+  // sitting beside a label, and a bar across the whole card would read as
+  // progress towards something rather than as a grant running out.
+  track: { width: 40, height: 4, borderRadius: 999, overflow: 'hidden' },
+  // Wraps inside the row rather than running off the card: "3 of 3 messages
+  // used" is three words in English and five in Bulgarian, and at an
+  // accessibility text size even the English one reaches the edge.
+  eyebrow: { flexShrink: 1 },
+  fill: { height: '100%', borderRadius: 999 },
+  introRow: { marginTop: 2 },
+  // A label in a row container does not wrap on its own — it overflows and is
+  // clipped, which is how "€1.99 for 1 week" lost its last word. `flexShrink`
+  // hands it back the width it is allowed to wrap inside; the pill's
+  // `minHeight` then grows to fit the second line.
+  doorLabel: { flexShrink: 1, textAlign: 'center' },
+  // Wraps rather than crushes: at an accessibility text size the quiet door
+  // drops to its own line instead of squeezing the pill to nothing.
+  actions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   loneAction: { marginTop: 4 },
+  /*
+   * `minHeight`, not `height`: a label that wraps has to grow the pill rather
+   * than spill out of it. Every door here is a sentence in thirteen languages
+   * — German's is half again as long as English's — and at an accessibility
+   * text size even the short ones run to two lines. A fixed height clips the
+   * second one, which reads as a cut-off word rather than as a layout that ran
+   * out of room. See the note in `theme/typography.ts` about text sizes.
+   */
   button: {
-    height: 46,
+    minHeight: 44,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
     borderRadius: 999,
     flexDirection: 'row',
     alignItems: 'center',

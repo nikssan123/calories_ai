@@ -383,11 +383,12 @@ export const hu: Messages = {
   'auth.suspended': 'Ezt a fiókot felfüggesztették.',
   'auth.tooManyTries': 'Túl sok próbálkozás. Várj pár percet, és próbáld újra.',
   'save.title': 'Mentsd el a *fiókod*',
-  'save.titleGuestLimit': 'A vendégnap *elfogyott*',
+  'save.titleGuestLimit': 'Folytasd — mentsd el a *fiókod*',
   'save.titlePurchase': 'Előbb *mentsd el a fiókod*',
+  'save.titleFirstLog': 'Tartsd meg, amit az imént *rögzítettél*',
   /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
   'save.trialBody': (days: number, messages: number) =>
-    `Mentsd el — ingyenes —, és kapsz egy ${days} napos próbaidőszakot: ${messages} üzenet erre az időre és egy fotós beolvasás. Minden, amit eddig rögzítettél, megmarad.`,
+    `Ingyenes. Kapsz még ${messages} üzenetet és egy fotós beolvasást ${days} napra, és minden rögzített adat megmarad.`,
   'save.purchaseBody': 'Így amit megveszel, új telefonon is a tiéd marad. Minden rögzített adat veled jön.',
   'save.stillFree': 'Az ételek kézi beírása és a vonalkódolvasás így is, úgy is ingyenes marad.',
   'save.saveButton': 'Fiók mentése',
@@ -403,8 +404,11 @@ export const hu: Messages = {
   'save.later': 'Most nem',
   'guest.notSaved': 'Még nincs mentve: a napló csak ezen a telefonon van, amíg el nem mented a fiókod.',
   'guest.saveRow': 'Fiók mentése',
-  'guest.saveDoor': (days: number) => `Fiók mentése — még ${days} ${w(days, { one: 'nap', other: 'nap' })}, ingyen`,
+  'guest.saveDoor': 'Fiók mentése',
   'guest.tryDoor': (price: string, duration: string) => `Próbálj ki mindent — ${price} ${duration}re`,
+  'saveAsk.title': 'Rögzítve — csak ezen a telefonon',
+  'saveAsk.body': 'Csak ezen a telefonon él. A mentés ingyenes.',
+  'saveAsk.door': 'Fiók mentése',
   'guest.confirmRow': (email: string) => `Írd be a(z) ${email} címre küldött kódot`,
   'guest.erase': 'Napló törlése',
   'guest.eraseWarning': 'Minden, amit ezen a telefonon rögzítettél, törlődik. Ez nem vonható vissza.',
@@ -1225,6 +1229,12 @@ export const hu: Messages = {
 
   // The noun arrives capitalised and alone, and no article can go in front of
   // it, so it opens the line as a label.
+  'wall.eyebrowUsed': (count: number, noun: string) => `${count} / ${count} ${noun}`,
+  'wall.eyebrowLocked': 'Nincs a csomagodban',
+  'wall.eyebrowTrialOver': 'A próbaidő lejárt',
+  'wall.eyebrowSpent': 'Mind elfogyott',
+  'wall.guestTitle': (count: number, noun: string) => `A következő ${count} ${noun} ingyenes`,
+  'wall.guestBody': 'Ingyenes, és minden rögzített adat megmarad.',
   'wall.notOnPlan': (plural: string) => `${plural}: nem része a csomagodnak`,
   'wall.freeGrant': (count: number, noun: string) => `Ennyi volt: ${count} ingyenes ${noun}`,
   'wall.monthlyGrant': (count: number, noun: string) => `Ebben a hónapban ennyi volt: ${count} ${noun}`,
@@ -1238,6 +1248,7 @@ export const hu: Messages = {
   'wall.bodyMealPlan':
     'A legutóbb megtervezett heted megvan, és mentett receptből továbbra is főzhetsz.',
   'wall.remaining': (count: number, noun: string) => `${count} ${noun} maradt`,
+  'wall.noneLeft': 'Nincs több',
   'wall.logMyself': 'Ezt beírom magam',
   'wall.loggedByHand': 'Kézzel rögzítve – ez az út mindig nyitva áll, és sosem fogy a keretből.',
 

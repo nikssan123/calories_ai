@@ -1,5 +1,5 @@
 import type { Allowance, Locale, MeterName, PlanName, PlanTier } from '@ct/shared';
-import { meterLocked } from '@ct/shared';
+import { meterLocked, TRIAL } from '@ct/shared';
 import { listWords, untilWords } from '@ct/shared/words';
 import type { IntroOffer } from '@/lib/billing';
 import type { MessageKey, StringKey, useT } from '@/lib/i18n';
@@ -98,13 +98,40 @@ export function tierFor(meter: MeterName, tiers: PlanTier[], current: PlanName):
 }
 
 /**
- * The headline: what just happened, with the number in it.
+ * The state, as a label: three or four words over the headline.
  *
- * Second person and past tense, because that is what it is — a thing they have
- * finished using, not a thing the app is refusing to do. The distinction is the
- * whole difference between a paywall and an error dialog.
+ * This is where the *count* went. It used to be the headline — "That's all 3
+ * messages this month" — and that spent the one serif line on the card saying
+ * a number the reader had just watched run out, in a sentence about the past.
+ * A bar and a label say it in a glance and without a verb, which is what frees
+ * the headline to be about what happens next. See `PlanWall`.
  */
-export function wallTitle(allowance: Allowance, t: T, locale: Locale): string {
+export function wallEyebrow(allowance: Allowance, t: T): string {
+  if (allowance.trial === 'ended') return t('wall.eyebrowTrialOver');
+  if (meterLocked(allowance)) return t('wall.eyebrowLocked');
+  const count = allowance.allowed ?? 0;
+  return t('wall.eyebrowUsed')(count, meterNoun(allowance.meter, count, t));
+}
+
+/**
+ * The headline: what happens next, now that the count is drawn above it.
+ *
+ * For everyone but a guest this is still what it was — second person, past
+ * tense, a thing they have finished using rather than a thing the app is
+ * refusing to do, which is the whole difference between a paywall and an error
+ * dialog.
+ *
+ * A guest gets a different sentence, and the reason is in the funnel: the
+ * generic one is a statement of the app's bookkeeping, it never mentions the
+ * account, and in three weeks of store installs it converted nobody. The
+ * server has always had the guest sentence — `sentenceFor` in `usage.ts` writes
+ * "Save your account to start a free trial" — and the client has always thrown
+ * it away, because `message` is only read when no allowance came back at all.
+ * So the offer is said here, where it is actually drawn, and in messages as
+ * well as days: a guest who will not open the app tomorrow cannot be sold three
+ * days.
+ */
+export function wallTitle(allowance: Allowance, t: T, locale: Locale, guest = false): string {
   const { meter, allowed, period } = allowance;
   // Free's road — see `GUEST` and `TRIAL` in `@ct/shared`. An ended trial is a
   // locked meter to every button, and it is still not "not on your plan": it
@@ -113,6 +140,19 @@ export function wallTitle(allowance: Allowance, t: T, locale: Locale): string {
   if (meterLocked(allowance)) {
     // Two, so every language picks its plural category rather than English's.
     return t('wall.notOnPlan')(capitalise(meterNoun(meter, 2, t), locale));
+  }
+  if (guest) {
+    /*
+     * What the trial hands this particular meter, named. The title used to say
+     * "Your next 9 are free" — nine of what, on a card whose own eyebrow is the
+     * only place the noun appears — and it hardcoded the chat grant, so the
+     * photo wall offered a guest nine of something it does not sell them. Both
+     * come off the meter now: a guest can only ever reach this branch on chat
+     * or photo, because `freeMeter` gives the other three no guest grant at all
+     * and a locked meter is answered above.
+     */
+    const grant = meter === 'photo' ? TRIAL.photo : TRIAL.chat;
+    return t('wall.guestTitle')(grant, meterNoun(meter, grant, t));
   }
   const count = allowed ?? 0;
   const noun = meterNoun(meter, count, t);
@@ -139,7 +179,11 @@ const BODY_KEYS = {
   meal_plan: 'wall.bodyMealPlan',
 } as const satisfies Record<MeterName, StringKey>;
 
-export function wallBody(allowance: Allowance, t: T, locale: Locale): string {
+export function wallBody(allowance: Allowance, t: T, locale: Locale, guest = false): string {
+  // A guest's body carries what saving keeps and what stays free either way;
+  // the journal's own door is in that sentence, so the meter's line would
+  // repeat it. Nothing comes back for a guest, so there is no date to add.
+  if (guest) return t('wall.guestBody');
   const back = allowance.resets_at
     ? t('wall.comeBack')(untilWords(allowance.resets_at, locale))
     : '';

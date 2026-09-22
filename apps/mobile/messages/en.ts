@@ -438,11 +438,24 @@ export const en = {
   'auth.suspended': 'This account has been suspended.',
   'auth.tooManyTries': 'Too many tries. Wait a few minutes and try again.',
   'save.title': 'Save your *account*',
-  'save.titleGuestLimit': 'Your guest day is *used up*',
+  /*
+   * The wall's rung. Reached by tapping the door on the wall card now, rather
+   * than by the sheet being thrown over the top of it — so it is a sentence
+   * said to somebody who has already decided to look, and it leads with what
+   * they get rather than with what they have run out of. "Your guest day is
+   * used up" was wrong twice: nothing about it was a day, and announcing the
+   * loss to somebody who just tapped *Save my account* argues against the thing
+   * they are already doing.
+   */
+  'save.titleGuestLimit': 'Keep going — save your *account*',
   'save.titlePurchase': 'Save your account *first*',
+  /* The first-log rung — see `SaveAsk`. The sheet is reached from a card that
+     has already made the argument, so the headline names what is at stake
+     rather than repeating it. */
+  'save.titleFirstLog': 'Keep what you just *logged*',
   /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
   'save.trialBody': (days: number, messages: number) =>
-    `Save it — it’s free — and get a ${days}-day trial: ${messages} ${w(messages, { one: 'message', other: 'messages' })} over the ${days} days and a photo scan. Everything you’ve logged stays.`,
+    `It’s free. You get ${messages} more ${w(messages, { one: 'message', other: 'messages' })} and a photo scan over ${days} days, and everything you’ve logged stays.`,
   'save.purchaseBody': 'So what you buy stays yours on a new phone. Everything you’ve logged comes with it.',
   'save.stillFree': 'Typing meals in and scanning barcodes stay free either way.',
   'save.saveButton': 'Save my account',
@@ -461,13 +474,28 @@ export const en = {
   /*
    * The two doors on a spent guest's wall.
    *
-   * Both are named for what they give rather than for what they are: "Save your
-   * account" describes a form, and the three days are the reason anybody would
-   * fill one in. The paid door leads with the small number, which is the only
-   * thing that makes it an easier decision than the free one beside it.
+   * Both are named for what they give rather than for what they are — "Save
+   * your account" describes a form, not a reason. The free door leads with the
+   * *messages*, not the days: three weeks of store installs produced 21 guests
+   * and not one second-day return, so a door selling three days is selling
+   * tomorrow to people who are only ever here today. The nine arrive the moment
+   * the account is saved. The paid door leads with the small number, which is
+   * the only thing that makes it an easier decision than the free one above it.
    */
-  'guest.saveDoor': (days: number) => `Save my account — ${days} more days, free`,
+  'guest.saveDoor': 'Save my account',
   'guest.tryDoor': (price: string, duration: string) => `Try it all — ${price} for ${duration}`,
+  /*
+   * The soft ask after a guest's first meal — see `SaveAsk`.
+   *
+   * It leads with where the journal lives, because that is the true thing about
+   * a guest account and it is the only argument available at a moment when
+   * nothing has been refused. The trial is the sweetener under it, named in
+   * messages rather than only in days: a guest who will not be here tomorrow —
+   * and three weeks of installs say most will not — cannot be sold three days.
+   */
+  'saveAsk.title': 'Your first meal is in',
+  'saveAsk.body': 'It lives on this phone only. Saving is free.',
+  'saveAsk.door': 'Save my account',
   'guest.confirmRow': (email: string) => `Enter the code sent to ${email}`,
   'guest.erase': 'Erase this journal',
   'guest.eraseWarning': 'Everything logged on this phone will be deleted. This can’t be undone.',
@@ -1358,6 +1386,21 @@ export const en = {
   'tier.pitchPlus': 'The journal every day, and a weekly read on it.',
   'tier.pitchCoach': 'The kitchen too: cook from your fridge, plan the week.',
 
+  /*
+   * The eyebrow: the count, as a label over the headline rather than as the
+   * headline. See `wallEyebrow`.
+   */
+  'wall.eyebrowUsed': (count: number, noun: string) => `${count} of ${count} ${noun} used`,
+  'wall.eyebrowLocked': 'Not on your plan',
+  'wall.eyebrowTrialOver': 'Trial over',
+  'wall.eyebrowSpent': 'All used',
+  /*
+   * A guest's wall says the offer, not the bookkeeping — the generic line below
+   * never mentions the account, and it converted nobody. See `wallTitle`.
+   */
+  'wall.guestTitle': (count: number, noun: string) =>
+    count === 1 ? `Your next ${noun} is free` : `Your next ${count} ${noun} are free`,
+  'wall.guestBody': 'It’s free, and everything you’ve logged stays.',
   'wall.notOnPlan': (plural: string) => `${plural} aren’t on your plan`,
   'wall.freeGrant': (count: number, noun: string) => `That’s your ${count} free ${noun}`,
   'wall.monthlyGrant': (count: number, noun: string) => `That’s all ${count} ${noun} this month`,
@@ -1371,6 +1414,7 @@ export const en = {
   'wall.bodyMealPlan':
     'The week you last planned is still there, and you can still cook from a saved recipe.',
   'wall.remaining': (count: number, noun: string) => `${count} ${noun} left`,
+  'wall.noneLeft': 'None left',
   'wall.logMyself': 'Log this one myself',
   'wall.loggedByHand': 'Logged by hand — that way is always open, and never counts against anything.',
 

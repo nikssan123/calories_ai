@@ -380,11 +380,12 @@ export const uk: Messages = {
   'auth.suspended': 'Цей акаунт призупинено.',
   'auth.tooManyTries': 'Забагато спроб. Зачекай кілька хвилин і спробуй ще раз.',
   'save.title': 'Збережи *акаунт*',
-  'save.titleGuestLimit': 'Гостьовий день *закінчився*',
+  'save.titleGuestLimit': 'Далі — збережи *акаунт*',
   'save.titlePurchase': 'Спершу *збережи акаунт*',
+  'save.titleFirstLog': 'Залиш собі те, що щойно *записав*',
   /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
   'save.trialBody': (days: number, messages: number) =>
-    `Збережи його — це безкоштовно — і отримаєш пробний період на ${days} ${w(days, { one: 'день', few: 'дні', many: 'днів', other: 'дня' })}: ${messages} ${w(messages, { one: 'повідомлення', few: 'повідомлення', many: 'повідомлень', other: 'повідомлення' })} на цей час і одне сканування фото. Усе записане залишиться.`,
+    `Це безкоштовно. Отримаєш ще ${messages} ${w(messages, { one: 'повідомлення', few: 'повідомлення', other: 'повідомлень' })} і одне сканування фото на ${days} ${w(days, { one: 'день', few: 'дні', other: 'днів' })}, а все записане залишиться.`,
   'save.purchaseBody': 'Щоб куплене лишалося твоїм і на новому телефоні. Усе записане переїде разом із ним.',
   'save.stillFree': 'Ручний запис страв і сканування штрихкодів у будь-якому разі безкоштовні.',
   'save.saveButton': 'Зберегти акаунт',
@@ -401,8 +402,11 @@ export const uk: Messages = {
   'save.later': 'Не зараз',
   'guest.notSaved': 'Ще не збережено: щоденник є лише на цьому телефоні, доки не збережеш акаунт.',
   'guest.saveRow': 'Зберегти акаунт',
-  'guest.saveDoor': (days: number) => `Зберегти акаунт — ще ${days} ${w(days, { one: 'день', few: 'дні', other: 'днів' })}, безкоштовно`,
+  'guest.saveDoor': 'Зберегти акаунт',
   'guest.tryDoor': (price: string, duration: string) => `Спробувати все — ${price} на ${duration}`,
+  'saveAsk.title': 'Записано — лише на цьому телефоні',
+  'saveAsk.body': 'Живе лише на цьому телефоні. Зберегти — безкоштовно.',
+  'saveAsk.door': 'Зберегти акаунт',
   'guest.confirmRow': (email: string) => `Введи код, надісланий на ${email}`,
   'guest.erase': 'Стерти цей щоденник',
   'guest.eraseWarning': 'Усе записане на цьому телефоні буде видалено. Скасувати не можна.',
@@ -1244,6 +1248,12 @@ export const uk: Messages = {
   'tier.pitchPlus': 'Щоденник щодня і тижневий огляд до нього.',
   'tier.pitchCoach': 'А ще кухня: готуй із того, що в холодильнику, і плануй тиждень.',
 
+  'wall.eyebrowUsed': (count: number, noun: string) => `${count} з ${count} ${noun}`,
+  'wall.eyebrowLocked': 'Немає у твоєму плані',
+  'wall.eyebrowTrialOver': 'Пробний період завершився',
+  'wall.eyebrowSpent': 'Усе використано',
+  'wall.guestTitle': (count: number, noun: string) => `Наступні ${count} ${noun} безкоштовні`,
+  'wall.guestBody': 'Це безкоштовно, і все записане залишиться.',
   'wall.notOnPlan': (plural: string) => `${plural} не входять у твій тариф`,
   'wall.freeGrant': (count: number, noun: string) => `Безкоштовний ліміт вичерпано: ${count} ${noun}`,
   'wall.monthlyGrant': (count: number, noun: string) => `Ліміт цього місяця вичерпано: ${count} ${noun}`,
@@ -1257,6 +1267,7 @@ export const uk: Messages = {
   'wall.bodyMealPlan':
     'Останній план на тиждень нікуди не зник, і готувати за збереженим рецептом теж можна.',
   'wall.remaining': (count: number, noun: string) => `Лишилося: ${count} ${noun}`,
+  'wall.noneLeft': 'Не залишилось',
   'wall.logMyself': 'Записати це вручну',
   'wall.loggedByHand': 'Записано вручну — цей шлях завжди відкритий і ніколи не зараховується до лімітів.',
 

@@ -389,11 +389,12 @@ export const sk: Messages = {
   'auth.suspended': 'Tento účet bol pozastavený.',
   'auth.tooManyTries': 'Príliš veľa pokusov. Počkaj pár minút a skús to znova.',
   'save.title': 'Ulož si *účet*',
-  'save.titleGuestLimit': 'Deň hosťa je *vyčerpaný*',
+  'save.titleGuestLimit': 'Pokračuj — ulož si *účet*',
   'save.titlePurchase': 'Najprv si *ulož účet*',
+  'save.titleFirstLog': 'Nechaj si, čo si práve *zapísal*',
   /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
   'save.trialBody': (days: number, messages: number) =>
-    `Ulož si ho — je to zadarmo — a získaš ${days}-dňové skúšobné obdobie: ${messages} ${w(messages, { one: 'správa', few: 'správy', many: 'správy', other: 'správ' })} na celé obdobie a jedno skenovanie fotky. Všetko, čo si zapísal, zostane.`,
+    `Je to zadarmo. Dostaneš ešte ${messages} ${w(messages, { one: 'správu', few: 'správy', many: 'správy', other: 'správ' })} a jedno skenovanie fotky na ${days} ${w(days, { one: 'deň', few: 'dni', other: 'dní' })} a všetko zapísané zostane.`,
   'save.purchaseBody': 'Aby to, čo kúpiš, zostalo tvoje aj na novom telefóne. Všetko zapísané ide s tebou.',
   'save.stillFree': 'Ručný zápis jedál a skenovanie čiarových kódov zostávajú zadarmo tak či tak.',
   'save.saveButton': 'Uložiť účet',
@@ -409,8 +410,11 @@ export const sk: Messages = {
   'save.later': 'Teraz nie',
   'guest.notSaved': 'Zatiaľ neuložené: denník je len v tomto telefóne, kým si neuložíš účet.',
   'guest.saveRow': 'Uložiť účet',
-  'guest.saveDoor': (days: number) => `Uložiť účet — ${days} ${w(days, { one: 'deň', few: 'dni', other: 'dní' })} navyše, zadarmo`,
+  'guest.saveDoor': 'Uložiť účet',
   'guest.tryDoor': (price: string, duration: string) => `Vyskúšaj všetko — ${price} na ${duration}`,
+  'saveAsk.title': 'Zapísané — len v tomto telefóne',
+  'saveAsk.body': 'Žije len v tomto telefóne. Uložiť si ho je zadarmo.',
+  'saveAsk.door': 'Uložiť môj účet',
   'guest.confirmRow': (email: string) => `Zadaj kód poslaný na ${email}`,
   'guest.erase': 'Vymazať tento denník',
   'guest.eraseWarning': 'Všetko zapísané v tomto telefóne bude vymazané. Nedá sa to vrátiť.',
@@ -1262,6 +1266,12 @@ export const sk: Messages = {
   'tier.pitchPlus': 'Denník každý deň a raz týždenne jeho zhodnotenie.',
   'tier.pitchCoach': 'Aj kuchyňa: var z toho, čo máš v chladničke, a plánuj týždeň.',
 
+  'wall.eyebrowUsed': (count: number, noun: string) => `${count} z ${count} ${noun}`,
+  'wall.eyebrowLocked': 'Nie je v tvojom pláne',
+  'wall.eyebrowTrialOver': 'Skúšobné obdobie skončilo',
+  'wall.eyebrowSpent': 'Všetko vyčerpané',
+  'wall.guestTitle': (count: number, noun: string) => `Ďalších ${count} ${noun} máš zadarmo`,
+  'wall.guestBody': 'Je to zadarmo a všetko zapísané zostane.',
   'wall.notOnPlan': (plural: string) => `${plural} nie sú súčasťou tvojho plánu`,
   // The subject is the allowance ("balík"), so the verb never has to agree
   // with a count it cannot see.
@@ -1278,6 +1288,7 @@ export const sk: Messages = {
     'Naposledy naplánovaný týždeň tam stále je a variť môžeš aj z uloženého receptu.',
   'wall.remaining': (count: number, noun: string) =>
     `${w(count, { one: 'Zostáva', few: 'Zostávajú', many: 'Zostáva', other: 'Zostáva' })} ${count} ${noun}`,
+  'wall.noneLeft': 'Nič nezostáva',
   // The reader speaking, in the first-person future, which carries no gender.
   'wall.logMyself': 'Zapíšem to ručne',
   'wall.loggedByHand': 'Zapísané ručne – táto cesta je vždy otvorená a nikdy sa do ničoho neráta.',

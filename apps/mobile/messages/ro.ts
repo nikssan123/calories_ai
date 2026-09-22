@@ -391,11 +391,12 @@ export const ro: Messages = {
   'auth.suspended': 'Acest cont a fost suspendat.',
   'auth.tooManyTries': 'Prea multe încercări. Așteaptă câteva minute și încearcă din nou.',
   'save.title': 'Salvează-ți *contul*',
-  'save.titleGuestLimit': 'Ziua de oaspete *s-a terminat*',
+  'save.titleGuestLimit': 'Continuă — salvează-ți *contul*',
   'save.titlePurchase': 'Mai întâi *salvează-ți contul*',
+  'save.titleFirstLog': 'Păstrează ce tocmai ai *notat*',
   /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
   'save.trialBody': (days: number, messages: number) =>
-    `Salvează-l — e gratuit — și primești o perioadă de probă de ${days} ${w(days, { one: 'zi', few: 'zile', other: 'de zile' })}: ${messages} ${w(messages, { one: 'mesaj', few: 'mesaje', other: 'de mesaje' })} în aceste zile și o scanare foto. Tot ce ai notat rămâne.`,
+    `E gratuit. Primești încă ${messages} ${w(messages, { one: 'mesaj', few: 'mesaje', other: 'de mesaje' })} și o scanare foto timp de ${days} ${w(days, { one: 'zi', few: 'zile', other: 'de zile' })}, iar tot ce ai notat rămâne.`,
   'save.purchaseBody': 'Ca ce cumperi să rămână al tău și pe un telefon nou. Tot ce ai notat vine cu tine.',
   'save.stillFree': 'Notarea manuală a meselor și scanarea codurilor de bare rămân gratuite oricum.',
   'save.saveButton': 'Salvează contul',
@@ -412,8 +413,11 @@ export const ro: Messages = {
   'save.later': 'Nu acum',
   'guest.notSaved': 'Încă nesalvat: jurnalul e doar pe acest telefon până îți salvezi contul.',
   'guest.saveRow': 'Salvează-ți contul',
-  'guest.saveDoor': (days: number) => `Salvează contul — încă ${days} ${w(days, { one: 'zi', few: 'zile', other: 'de zile' })}, gratuit`,
+  'guest.saveDoor': 'Salvează contul',
   'guest.tryDoor': (price: string, duration: string) => `Încearcă tot — ${price} pentru ${duration}`,
+  'saveAsk.title': 'Notat — doar pe telefonul ăsta',
+  'saveAsk.body': 'Trăiește doar pe telefonul ăsta. Salvarea e gratuită.',
+  'saveAsk.door': 'Salvează-mi contul',
   'guest.confirmRow': (email: string) => `Introdu codul trimis la ${email}`,
   'guest.erase': 'Șterge acest jurnal',
   'guest.eraseWarning': 'Tot ce ai notat pe acest telefon va fi șters. Nu se poate anula.',
@@ -1246,6 +1250,12 @@ export const ro: Messages = {
   'tier.pitchPlus': 'Jurnalul în fiecare zi și un bilanț pe săptămână.',
   'tier.pitchCoach': 'Și bucătăria: gătești din frigider, planifici săptămâna.',
 
+  'wall.eyebrowUsed': (count: number, noun: string) => `${count} din ${count} ${noun}`,
+  'wall.eyebrowLocked': 'Nu e în planul tău',
+  'wall.eyebrowTrialOver': 'Perioada de probă s-a încheiat',
+  'wall.eyebrowSpent': 'Totul consumat',
+  'wall.guestTitle': (count: number, noun: string) => `Următoarele ${count} ${noun} sunt gratis`,
+  'wall.guestBody': 'E gratuit, și tot ce ai notat rămâne.',
   'wall.notOnPlan': (plural: string) => `${plural} nu sunt incluse în planul tău`,
   'wall.freeGrant': (count: number, noun: string) => `Atât a fost gratis: ${count} ${noun}`,
   'wall.monthlyGrant': (count: number, noun: string) => `Atât a fost luna asta: ${count} ${noun}`,
@@ -1259,6 +1269,7 @@ export const ro: Messages = {
   'wall.bodyMealPlan':
     'Săptămâna pe care ai planificat-o ultima dată e tot acolo și poți găti în continuare dintr-o rețetă salvată.',
   'wall.remaining': (count: number, noun: string) => `mai ai ${count} ${noun}`,
+  'wall.noneLeft': 'Nu mai sunt',
   // „Notez eu”, not „Notez singur(ă)”, which would agree with the reader.
   'wall.logMyself': 'Notez eu masa asta',
   'wall.loggedByHand': 'Notat manual — varianta asta e mereu la îndemână și nu se contorizează niciodată.',

@@ -394,11 +394,12 @@ export const sr: Messages = {
   'auth.suspended': 'Овај налог је суспендован.',
   'auth.tooManyTries': 'Превише покушаја. Сачекај неколико минута и покушај поново.',
   'save.title': 'Сачувај *налог*',
-  'save.titleGuestLimit': 'Дан као гост је *потрошен*',
+  'save.titleGuestLimit': 'Настави — сачувај *налог*',
   'save.titlePurchase': 'Прво *сачувај налог*',
+  'save.titleFirstLog': 'Сачувај оно што си управо *уписао*',
   /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
   'save.trialBody': (days: number, messages: number) =>
-    `Сачувај га — бесплатно је — и добијаш пробни период од ${days} ${w(days, { one: 'дан', few: 'дана', other: 'дана' })}: ${messages} ${w(messages, { one: 'порука', few: 'поруке', other: 'порука' })} за то време и једно скенирање фотографије. Све што си уписао остаје.`,
+    `Бесплатно је. Добијаш још ${messages} ${w(messages, { one: 'поруку', few: 'поруке', other: 'порука' })} и једно скенирање фотографије током ${days} ${w(days, { one: 'дан', few: 'дана', other: 'дана' })}, а све уписано остаје.`,
   'save.purchaseBody': 'Да оно што купиш остане твоје и на новом телефону. Све што си уписао иде са тобом.',
   'save.stillFree': 'Ручно уписивање оброка и скенирање бар-кода остају бесплатни у сваком случају.',
   'save.saveButton': 'Сачувај налог',
@@ -415,8 +416,11 @@ export const sr: Messages = {
   'save.later': 'Не сада',
   'guest.notSaved': 'Још није сачуван: дневник је само на овом телефону док не сачуваш налог.',
   'guest.saveRow': 'Сачувај налог',
-  'guest.saveDoor': (days: number) => `Сачувај налог — још ${days} ${w(days, { one: 'дан', few: 'дана', other: 'дана' })}, бесплатно`,
+  'guest.saveDoor': 'Сачувај налог',
   'guest.tryDoor': (price: string, duration: string) => `Испробај све — ${price} на ${duration}`,
+  'saveAsk.title': 'Уписано — само на овом телефону',
+  'saveAsk.body': 'Живи само на овом телефону. Чување је бесплатно.',
+  'saveAsk.door': 'Сачувај мој налог',
   'guest.confirmRow': (email: string) => `Унеси код послат на ${email}`,
   'guest.erase': 'Обриши овај дневник',
   'guest.eraseWarning': 'Све уписано на овом телефону биће обрисано. Ово се не може опозвати.',
@@ -1266,6 +1270,12 @@ export const sr: Messages = {
   'tier.pitchPlus': 'Дневник сваког дана и седмични осврт на њега.',
   'tier.pitchCoach': 'И кухиња: кувај од онога што је у фрижидеру, планирај седмицу.',
 
+  'wall.eyebrowUsed': (count: number, noun: string) => `${count} од ${count} ${noun}`,
+  'wall.eyebrowLocked': 'Није у твом плану',
+  'wall.eyebrowTrialOver': 'Пробни период је истекао',
+  'wall.eyebrowSpent': 'Све потрошено',
+  'wall.guestTitle': (count: number, noun: string) => `Следећих ${count} ${noun} имаш бесплатно`,
+  'wall.guestBody': 'Бесплатно је, и све уписано остаје.',
   'wall.notOnPlan': (plural: string) => `${plural} нема у твом пакету`,
   'wall.freeGrant': (count: number, noun: string) => `То је била бесплатна проба: ${count} ${noun}`,
   'wall.monthlyGrant': (count: number, noun: string) => `То је све за овај месец: ${count} ${noun}`,
@@ -1279,6 +1289,7 @@ export const sr: Messages = {
   'wall.bodyMealPlan':
     'Последња испланирана седмица је још ту, а и даље можеш да куваш по сачуваном рецепту.',
   'wall.remaining': (count: number, noun: string) => `Још ${count} ${noun}`,
+  'wall.noneLeft': 'Нема више',
   // The reader's own voice; «сам» would be gendered.
   'wall.logMyself': 'Упиши ово ручно',
   'wall.loggedByHand': 'Уписано ручно — тај пут је увек отворен и никад се не рачуна.',

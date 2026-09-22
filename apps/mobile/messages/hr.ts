@@ -388,11 +388,12 @@ export const hr: Messages = {
   'auth.suspended': 'Ovaj je račun suspendiran.',
   'auth.tooManyTries': 'Previše pokušaja. Pričekaj nekoliko minuta i pokušaj ponovno.',
   'save.title': 'Spremi *račun*',
-  'save.titleGuestLimit': 'Dan gosta je *potrošen*',
+  'save.titleGuestLimit': 'Nastavi — spremi *račun*',
   'save.titlePurchase': 'Najprije *spremi račun*',
+  'save.titleFirstLog': 'Zadrži ono što si upravo *upisao*',
   /** TRIAL.days and TRIAL.chat from @ct/shared: the messages are granted for the whole trial, not per day. */
   'save.trialBody': (days: number, messages: number) =>
-    `Spremi ga — besplatno je — i dobivaš probno razdoblje od ${days} ${w(days, { one: 'dan', few: 'dana', other: 'dana' })}: ${messages} ${w(messages, { one: 'poruka', few: 'poruke', other: 'poruka' })} za to vrijeme i jedno skeniranje fotografije. Sve što si upisao ostaje.`,
+    `Besplatno je. Dobivaš još ${messages} ${w(messages, { one: 'poruku', few: 'poruke', other: 'poruka' })} i jedno skeniranje fotografije kroz ${days} ${w(days, { one: 'dan', few: 'dana', other: 'dana' })}, a sve upisano ostaje.`,
   'save.purchaseBody': 'Da ono što kupiš ostane tvoje i na novom mobitelu. Sve što si upisao ide s tobom.',
   'save.stillFree': 'Ručno upisivanje obroka i skeniranje barkoda ostaju besplatni u svakom slučaju.',
   'save.saveButton': 'Spremi račun',
@@ -409,8 +410,11 @@ export const hr: Messages = {
   'save.later': 'Ne sada',
   'guest.notSaved': 'Još nije spremljen: dnevnik je samo na ovom mobitelu dok ne spremiš račun.',
   'guest.saveRow': 'Spremi račun',
-  'guest.saveDoor': (days: number) => `Spremi račun — još ${days} ${w(days, { one: 'dan', few: 'dana', other: 'dana' })}, besplatno`,
+  'guest.saveDoor': 'Spremi račun',
   'guest.tryDoor': (price: string, duration: string) => `Isprobaj sve — ${price} na ${duration}`,
+  'saveAsk.title': 'Upisano — samo na ovom mobitelu',
+  'saveAsk.body': 'Živi samo na ovom mobitelu. Spremanje je besplatno.',
+  'saveAsk.door': 'Spremi moj račun',
   'guest.confirmRow': (email: string) => `Upiši kôd poslan na ${email}`,
   'guest.erase': 'Izbriši ovaj dnevnik',
   'guest.eraseWarning': 'Sve upisano na ovom mobitelu bit će izbrisano. To se ne može poništiti.',
@@ -1254,6 +1258,12 @@ export const hr: Messages = {
   // Gets the capitalised `few` form ("Recepta"); a nominative plural subject
   // would need "Recepti", so the sentence is built on «nema» + genitive and
   // lowercases the word it is handed.
+  'wall.eyebrowUsed': (count: number, noun: string) => `${count} od ${count} ${noun}`,
+  'wall.eyebrowLocked': 'Nije u tvom planu',
+  'wall.eyebrowTrialOver': 'Probno razdoblje gotovo',
+  'wall.eyebrowSpent': 'Sve potrošeno',
+  'wall.guestTitle': (count: number, noun: string) => `Sljedećih ${count} ${noun} imaš besplatno`,
+  'wall.guestBody': 'Besplatno je, i sve upisano ostaje.',
   'wall.notOnPlan': (plural: string) => `U tvom paketu nema ${String(plural).toLocaleLowerCase('hr')}`,
   // No adjective beside `noun`: "besplatne/besplatnih" would have to agree with
   // a noun whose gender this sentence does not know. After a colon the counted
@@ -1270,6 +1280,7 @@ export const hr: Messages = {
   'wall.bodyMealPlan':
     'Zadnji isplanirani tjedan i dalje je tu, a još uvijek možeš kuhati iz spremljenog recepta.',
   'wall.remaining': (count: number, noun: string) => `Još ${count} ${noun}`,
+  'wall.noneLeft': 'Nema više',
   // "Upisat ću sam/sama" is gendered; «ručno» is not.
   'wall.logMyself': 'Ovo ću upisati ručno',
   'wall.loggedByHand': 'Upisano ručno — taj je put uvijek otvoren i nikad ništa ne troši.',
