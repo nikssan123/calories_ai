@@ -249,20 +249,68 @@ holding its Bulgarian scores. The paper also finds the general-purpose baselines
 (Qwen2.5, Qwen3, Llama-3.1, Gemma) competitive on function-calling *format* but weaker
 on Bulgarian knowledge.
 
-That last pair is the finding that matters, and it is not the one this document went
-looking for. **The best case for local inference here is not "something cheaper than
-Haiku". It is that 77% of production text logs escalate to Sonnet for Bulgarian, and
-there exists a 27B that beats a 235B at Bulgarian and a fine-tune of it built
-specifically to call tools in Bulgarian.** The single largest line on the bill is the
-one path where an open model has a real chance of being *better* than what we pay for
-today, rather than merely adequate.
+**TildeOpen-30b.** A 30B foundational model trained on 34 European languages — the 24
+official EU ones plus Ukrainian, Norwegian, Icelandic, Turkish and the Balkans — under
+CC-BY-4.0, reported to beat the open-weight field on exactly the Baltic, Finno-Ugric and
+Slavic languages that `ai/language.ts` lists as broken. It is a **base** model: the
+instruction-tuned versions are described as in preparation, and there is no tool-calling
+story. Not a candidate today. Worth a calendar reminder, because its language set and
+our broken list are close to the same list.
+
+### The multinational correction
+
+An earlier revision of this section ended by calling the Bulgarian result the finding
+that mattered: 77% of production text logs escalate to Sonnet for Bulgarian, and there
+is a 27B that beats a 235B at Bulgarian with a tool-calling fine-tune on top. **That
+argument does not survive the product being multinational, and it should not.**
+
+Three reasons, in ascending order of how much they cost:
+
+1. **A specialist covers one language of 34.** `LANGUAGE_NAMES` is the requirement, and
+   most of what is in it has no BgGPT of its own. Nothing in the routing forbids a
+   specialist lane — `ai/language.ts` already routes per language and would take another
+   branch without complaint — but a lane per language is not a strategy, it is a lane
+   for Bulgarian.
+2. **The mechanism that would make it scale does not exist on this box.** One base model
+   plus a small adapter per language, swapped per request, is how this is done properly;
+   LoRAX and vLLM's multi-LoRA serving do it on CUDA. MLX trains LoRAs but has no
+   established multi-adapter serving, so on Apple silicon the adapter-per-language
+   architecture is not available today. This is one of the few places where the CUDA tax
+   would buy something real.
+3. **The 77% is a two-account sample.** `plans.ts` says so plainly — both accounts
+   logging in production write Bulgarian — and the same file warns that early users are
+   the most expensive users. Sizing a three-thousand-dollar purchase on the language mix
+   of two people is quoting a table instead of running the query, which is the error
+   this repository keeps catching itself in.
+
+**So going multinational raises the bar on the single hardest axis for a small model**,
+and it is the axis with the least public benchmark coverage — the multilingual
+leaderboards themselves note that low-resource languages are largely untested. That is
+a reason to be slower about this, not faster.
+
+What survives, and it is still worth something: the local model's job stops being
+"replace Haiku" and becomes **"raise the floor so fewer turns escalate at all."** Haiku
+4.5 breaks on 10 of the 34 languages, and those failures are corpus-size failures at a
+small parameter count — Russian and Greek are fine and Croatian is not. A dense 27B
+trained on 36T tokens across 119 languages has more room than Haiku does, and every
+language it clears that Haiku does not is a turn that stops paying the Sonnet
+surcharge. That is a larger prize than the Haiku tokens, it applies in every market
+rather than one, and it is measurable with the protocol `ai/language.ts` already
+describes.
+
+It also sharpens the model choice against the decode table below. Multilingual breadth
+is what a 27B has and a 9–12B does not, so the multinational product wants the 27B on
+`text_log` — at 25–30 tok/s, which is too slow until §Stage 5 cuts the output. **The
+free optimisation is now a prerequisite for the purchase rather than an alternative to
+it.**
 
 ### Against the current line-up, honestly
 
 | Path | Runs on now | Local candidate | Expectation |
 |---|---|---|---|
 | `text_log`, the 24 clean languages | Haiku 4.5 | Qwen3.8-27B | Likely at or above. Haiku is a small fast model; this is a 27B at the top of its weight class. |
-| `text_log`, Bulgarian + the 9 others | Sonnet 5 — **77% of turns** | BgGPT 3.0 27B / TUCAN 27B | The one path where local could beat the API. Test it first. |
+| `text_log`, the 10 Haiku breaks on | Sonnet 5 — **77% of turns today** | Qwen3.8-27B | **The prize, and the risk.** Every one of the ten it clears stops escalating, in every market. Every one it fails still escalates, and the local box saved nothing on it. Measured per language, not assumed. |
+| `text_log`, Bulgarian specifically | Sonnet 5 | BgGPT 3.0 27B / TUCAN | A second lane, if Bulgarian stays a real market. Not a strategy on its own — see the multinational correction above. |
 | `photo_log` | Sonnet 5 | Qwen3.8-27B vision | Unknown, and the bar is low — Sonnet reads a weighed plate at 66% kcal MAPE. Decided by the 30-plate suite, not by a leaderboard. |
 | `pantry_scan` | Sonnet 5 | Qwen3.8-27B vision | Probably fine. Enumeration, and the user confirms the list. |
 | `recipe`, `meal_plan` | Sonnet 5 / Opus 5 | — | Keep. An allergy violation is the worst output this product can produce. |
@@ -432,17 +480,21 @@ table instead of running the query.
 
 Three suites, in order of what they would kill:
 
-1. **Bulgarian, 12 runs.** The protocol in `ai/language.ts` — one meal log and one
-   four-sentence answer, with and without the language named. 12/12 clean, or the
-   candidate is out, because this is 77% of the bill. Then the other nine languages
-   `ai/language.ts` lists as broken on Haiku.
+1. **All 34 languages, 12 runs each.** The protocol in `ai/language.ts` — one meal log
+   and one four-sentence answer, with and without the language named. Not a pass/fail
+   for the candidate: **a count.** The output is a new `LANGUAGE_CLEAN` list for the
+   local model, and the number that matters is how many of the ten Haiku breaks on it
+   clears, because each of those is a turn that stops paying the Sonnet surcharge in
+   every market rather than one.
 
-   **Part of this suite already exists and is public.** TUCAN ships
-   `Tucan-BG-Eval-v1.0` — 840 cases of Bulgarian tool-calling with a CLI evaluation
-   framework — which is suite 1 and suite 2 crossed, on the exact axis that decides
-   this, written by people whose day job is Bulgarian NLP. Run theirs before writing
-   ours, and keep ours for the part theirs cannot know about: our 37 tools and our
-   prompt.
+   408 model calls twice over is an afternoon on a rented GPU and it is the single
+   most decision-relevant thing in this document. Bulgarian gets tested as one of the
+   34, not ahead of them.
+
+   **Part of it already exists and is public.** TUCAN ships `Tucan-BG-Eval-v1.0` — 840
+   cases of Bulgarian tool-calling with a CLI evaluation framework — which is suite 1
+   and suite 2 crossed for one language, written by people whose day job is Bulgarian
+   NLP. Worth running for the methodology even if Bulgarian stops being the headline.
 2. **Tool calling, the real prefix.** All 37 tools, a hundred journal turns, counting
    malformed calls, wrong-tool calls and JSON-as-string. Quantisation degrades this
    first and it degrades quietly.
