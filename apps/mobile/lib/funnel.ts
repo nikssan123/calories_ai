@@ -3,6 +3,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import type { FunnelStep, SaveReason } from '@ct/shared';
 import { API_BASE_URL } from '@/lib/api';
+import { deviceLocale } from '@/messages';
 
 /**
  * Tells the server a new install reached a screen of the first-run walk.
@@ -13,12 +14,20 @@ import { API_BASE_URL } from '@/lib/api';
  * The steps are `FUNNEL_STEPS` in `@ct/shared`.
  *
  * What makes it a count rather than tracking is what is *not* sent. No install
- * id, no device id, no account: the body is the step, the platform, the version
- * and — on the two steps about the save-your-account screen — which prompt
- * opened it, and nothing else. Each step goes at most once per install — the
- * phone remembers which it has sent — which is what lets the server's plain
- * per-day count stand for "installs that got this far" without being able to
- * tell one install from another.
+ * id, no device id, no account: the body is the step, the platform, the version,
+ * the language, whether this build came from a store, and — on the two steps
+ * about the save-your-account screen — which prompt opened it, and nothing else.
+ * Each step goes at most once per install — the phone remembers which it has
+ * sent — which is what lets the server's plain per-day count stand for "installs
+ * that got this far" without being able to tell one install from another.
+ *
+ * The language is the phone's rather than the profile's, and read from
+ * `@/messages` rather than `lib/i18n`, which would pull the auth store into this
+ * file — see the note below about never being handed a session. For a first-run
+ * walk the two are the same value anyway: `preferredLocale()` starts as
+ * `deviceLocale()` and only diverges once somebody changes it in Settings, which
+ * a new install has not done yet. Thirteen shared words, never a country: see
+ * `FunnelPing` in `@ct/shared` for why the blur is the right trade here.
  *
  * A bare `fetch` rather than the `api` client, on purpose: the client attaches
  * the session token whenever there is one, and a ping sent with a token is a
@@ -61,6 +70,20 @@ function loadSent(): Promise<Set<SentKey>> {
 }
 
 /**
+ * Whether this copy of the app came from a store.
+ *
+ * `__DEV__` catches anything under Metro; `EXPO_PUBLIC_INTERNAL` is set by the
+ * development, simulator and preview profiles in `eas.json` and by nothing else,
+ * so a production build cannot carry it and a local build cannot forget it. Read
+ * once at module load because neither can change while the app is running, and
+ * because `process.env` is inlined at build time rather than looked up.
+ *
+ * It does not catch a production build on one of our own phones. Nothing could,
+ * short of an identifier, which is the one thing this file may not send.
+ */
+const INTERNAL = __DEV__ || process.env.EXPO_PUBLIC_INTERNAL === '1';
+
+/**
  * `reason` belongs to `save_prompt` and `account` and is refused anywhere else
  * — the server's `FunnelPing` says so, and a ping it refuses is a step that
  * never counts. Which prompt asked is the point of it: see GUEST-ACCOUNTS.md.
@@ -79,7 +102,14 @@ export function reachedStep(step: FunnelStep, reason?: SaveReason): void {
       const response = await fetch(`${API_BASE_URL}/funnel`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ step, platform, app_version: version, ...(reason ? { reason } : {}) }),
+        body: JSON.stringify({
+          step,
+          platform,
+          app_version: version,
+          locale: deviceLocale(),
+          ...(INTERNAL ? { internal: true } : {}),
+          ...(reason ? { reason } : {}),
+        }),
       });
       if (!response.ok) return;
       done.add(key);

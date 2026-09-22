@@ -1,6 +1,14 @@
 # Guest accounts: use the app first, save the account later
 
-Status: proposal, 2026-09-15. Nothing here is built yet.
+Status: **shipped** in 1.3.0. Written as a proposal on 2026-09-15; steps 1-3 of the
+order of work below are live, and the numbers in it have moved since — the guest
+grant is **3 messages + 1 photo** (`GUEST` in `@ct/shared`, cut from 5 then 4
+because nobody was reaching the end of it) and the trial is **3 days, 9 messages**
+(`TRIAL`, cut from a week). The merge the table below calls v2 is live too
+(`services/guest-merge.ts`); **Sign in with Apple — step 4, and the 4.8 fix —
+is the one thing here still not built.**
+Read the ladder and the risks as current; read the counts here as the argument
+that produced them, not as what is deployed.
 
 ## Why
 

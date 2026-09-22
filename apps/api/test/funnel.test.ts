@@ -52,10 +52,56 @@ describe('POST /funnel', () => {
     expect(columns.map((c) => c.column_name)).toEqual([
       'app_version',
       'day',
+      'internal',
+      'locale',
       'platform',
       'reached',
       'reason',
       'step',
+    ]);
+  });
+
+  /*
+   * The language, which is what makes a cliff attributable to the campaign that
+   * bought it. Thirteen shared words and never a country — see `FunnelPing`.
+   */
+  it('counts a step per language, and folds a missing one rather than splitting it', async () => {
+    await ping({ step: 'goal', platform: 'android', app_version: '1.5.5', locale: 'bg' });
+    await ping({ step: 'goal', platform: 'android', app_version: '1.5.5', locale: 'bg' });
+    await ping({ step: 'goal', platform: 'android', app_version: '1.5.5', locale: 'fr' });
+    // A phone on a build from before the funnel carried one.
+    await ping({ step: 'goal', platform: 'android', app_version: '1.5.4' });
+    await ping({ step: 'goal', platform: 'android', app_version: '1.5.4' });
+
+    const rows = await query<{ locale: string | null; reached: number }>(
+      `SELECT locale, reached FROM onboarding_funnel ORDER BY locale NULLS FIRST`,
+    );
+    expect(rows).toEqual([
+      { locale: null, reached: 2 },
+      { locale: 'bg', reached: 2 },
+      { locale: 'fr', reached: 1 },
+    ]);
+  });
+
+  it('refuses a language that is not one of ours', async () => {
+    expect(
+      (await ping({ step: 'goal', platform: 'ios', app_version: '1.5.5', locale: 'jp' })).statusCode,
+    ).toBe(400);
+    const [row] = await query<{ n: number }>(`SELECT count(*)::int AS n FROM onboarding_funnel`);
+    expect(row!.n).toBe(0);
+  });
+
+  /** A ping that does not mention it is a store build: the safe direction. */
+  it('marks our own builds and defaults everything else to real', async () => {
+    await ping({ step: 'welcome', platform: 'android', app_version: '1.5.5', internal: true });
+    await ping({ step: 'welcome', platform: 'android', app_version: '1.5.5' });
+
+    const rows = await query<{ internal: boolean; reached: number }>(
+      `SELECT internal, reached FROM onboarding_funnel ORDER BY internal`,
+    );
+    expect(rows).toEqual([
+      { internal: false, reached: 1 },
+      { internal: true, reached: 1 },
     ]);
   });
 
@@ -162,9 +208,53 @@ describe('the admin read', () => {
     expect(today.steps.find((s) => s.step === 'save_prompt')!.reached).toBe(3);
   });
 
-  it('counts accounts made in the same window', async () => {
+  it('groups the walk by language, zeros and all, so a campaign can be read out of the blend', async () => {
+    await ping({ step: 'welcome', platform: 'android', app_version: '1.5.5', locale: 'bg' });
+    await ping({ step: 'goal', platform: 'android', app_version: '1.5.5', locale: 'bg' });
+    await ping({ step: 'welcome', platform: 'android', app_version: '1.5.5', locale: 'fr' });
+    await ping({ step: 'welcome', platform: 'ios', app_version: '1.5.4' });
+
+    const today = await readFunnel(1);
+    const at = (locale: string | null, step: string) =>
+      today.locales.find((l) => l.locale === locale && l.step === step)?.reached ?? 0;
+    expect(at('bg', 'welcome')).toBe(1);
+    expect(at('bg', 'goal')).toBe(1);
+    expect(at('fr', 'welcome')).toBe(1);
+    expect(at('fr', 'goal')).toBe(0);
+    expect(at(null, 'welcome')).toBe(1);
+    // The totals are the blend the split came out of.
+    expect(today.steps.find((s) => s.step === 'welcome')!.reached).toBe(3);
+  });
+
+  /*
+   * The whole point of the flag: a morning spent driving the walk on a simulator
+   * used to read as installs that opened the app and left.
+   */
+  it('leaves our own builds out of every count, and says how many it left out', async () => {
+    await ping({ step: 'welcome', platform: 'android', app_version: '1.5.5', locale: 'bg' });
+    await ping({ step: 'welcome', platform: 'android', app_version: '1.5.5', locale: 'bg', internal: true });
+    await ping({ step: 'goal', platform: 'android', app_version: '1.5.5', locale: 'bg', internal: true });
+    await ping({ step: 'save_prompt', platform: 'android', app_version: '1.5.5', reason: 'guest_limit', internal: true });
+
+    const today = await readFunnel(1);
+    expect(today.steps.find((s) => s.step === 'welcome')!.reached).toBe(1);
+    expect(today.steps.find((s) => s.step === 'goal')!.reached).toBe(0);
+    expect(today.locales.find((l) => l.locale === 'bg' && l.step === 'goal')).toBeUndefined();
+    expect(today.versions.find((v) => v.step === 'goal')).toBeUndefined();
+    expect(today.reasons.find((r) => r.step === 'save_prompt' && r.reason === 'guest_limit')!.reached).toBe(0);
+    expect(today.internal_pings).toBe(3);
+  });
+
+  /*
+   * Guests are accounts. This number counted `email IS NOT NULL` and so read
+   * zero through a week in which the ads made twenty of them.
+   */
+  it('counts every account made in the same window, and the subset that saved an address', async () => {
     await createUser({ email: 'new@example.com' });
-    expect((await readFunnel(1)).accounts_created).toBe(1);
+    await createUser({ email: null, password_hash: null, guest_since: new Date().toISOString() });
+    const today = await readFunnel(1);
+    expect(today.accounts_created).toBe(2);
+    expect(today.accounts_saved).toBe(1);
   });
 
   it('is admin-only', async () => {

@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { SAVE_REASONS, type AdminFunnel, type FunnelStep, type SaveReason } from '@ct/shared';
+import {
+  LOCALE_NAMES_IN,
+  SAVE_REASONS,
+  type AdminFunnel,
+  type FunnelStep,
+  type Locale,
+  type SaveReason,
+} from '@ct/shared';
 import { api } from '@/lib/api';
 import { InsetGroup } from '@/components/InsetGroup';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -114,6 +121,17 @@ export function FunnelPanel() {
     funnel.reasons.find((r) => r.step === step && r.reason === reason)?.reached ?? 0;
   const top = count('welcome').reached;
   const versions = [...new Set(funnel.versions.map((v) => v.app_version))];
+  /*
+   * Every language that reached any step, widest first, so the column that
+   * matters is the one you read before scrolling. `null` — a phone on a build
+   * from before the funnel carried a language — keeps a column of its own rather
+   * than being folded into one of the real ones.
+   */
+  const locales = [...new Set(funnel.locales.map((l) => l.locale))].sort((a, b) => {
+    const total = (locale: Locale | null) =>
+      funnel.locales.filter((l) => l.locale === locale).reduce((sum, l) => sum + l.reached, 0);
+    return total(b) - total(a);
+  });
 
   return (
     <div className="space-y-7">
@@ -122,6 +140,10 @@ export function FunnelPanel() {
           <h2 className="text-title-2">First-run funnel</h2>
           <p className="text-footnote text-muted-foreground mt-0.5">
             New installs, before an account — {days === 1 ? 'today' : `the last ${days} days`}.
+            {/* Reported rather than silently dropped: a flag that works and a flag
+                that never fires look like the same numbers otherwise. */}
+            {funnel.internal_pings > 0 &&
+              ` ${funnel.internal_pings} pings from our own builds are not counted.`}
           </p>
         </div>
         <ToggleGroup
@@ -161,7 +183,7 @@ export function FunnelPanel() {
         <Stat
           label="All new accounts"
           value={funnel.accounts_created}
-          hint="From the database, any route in"
+          hint={`From the database, any route in — ${funnel.accounts_saved} saved an address`}
         />
       </StatGrid>
 
@@ -261,6 +283,40 @@ export function FunnelPanel() {
           ))}
         </div>
       </InsetGroup>
+
+      {locales.length > 0 && (
+        <InsetGroup
+          title="By language"
+          footer="The campaigns are one per country, so a total across languages is a blend of whichever of them were enabled — and a cliff in one of them reads exactly like a cliff in the other. A language is not a country: DE and FR both target English speakers on purpose, so “en” is a mix. Pings from builds older than 2026-09-22 have no language and are grouped under “—”."
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-muted-foreground text-left text-xs">
+                  <th className="px-4 py-2 font-semibold">Step</th>
+                  {locales.map((l) => (
+                    <th key={l ?? '?'} className="px-3 py-2 text-right font-semibold">
+                      {l ? (LOCALE_NAMES_IN.en[l] ?? l) : '—'}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {LINE.map((step) => (
+                  <tr key={step} className="border-hairline border-t">
+                    <td className="px-4 py-2 font-medium">{LABEL[step]}</td>
+                    {locales.map((l) => (
+                      <td key={l ?? '?'} className="text-figure px-3 py-2 text-right">
+                        {funnel.locales.find((r) => r.locale === l && r.step === step)?.reached ?? 0}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </InsetGroup>
+      )}
 
       {versions.length > 1 && (
         <InsetGroup title="By app version" footer="The walk changes between releases; a total across versions hides which one lost people.">

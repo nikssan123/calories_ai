@@ -143,7 +143,7 @@ export type MeterName = z.infer<typeof MeterName>;
 /**
  * What the model is worth on Free, in the two grants it is given at all.
  *
- * A guest — no saved account yet — gets a day's worth: four messages and one
+ * A guest — no saved account yet — gets a day's worth: three messages and one
  * photo, once. Saving the account starts the trial: three days, and three
  * messages a day for them, handed over as one lump of 9 rather than rationed
  * per day, plus one photo. When the three days are over Free has no model at
@@ -166,8 +166,23 @@ export type MeterName = z.infer<typeof MeterName>;
  *
  * It is also less than a third of the bill: 9 x $0.041 + $0.151 against 28 x
  * $0.041 + $0.151, per account that never pays.
+ *
+ * ---- Why the guest's grant is three and not four -----------------------------
+ *
+ * Because at four nobody ever reached the end of it. Of the twenty installs the
+ * BG and FR campaigns produced between 2026-09-16 and 2026-09-22, one guest
+ * spent all four and the median guest spent one; the `guest_limit` rung of the
+ * ladder — the wall the whole guest design turns on, and the only rung that has
+ * ever converted anybody — was shown once in a week. A grant nobody finishes is
+ * not generosity, it is a conversion moment that never happens, and the messages
+ * it holds back are being paid for either way.
+ *
+ * Three is not a cost decision. It is the smallest number that still lets a
+ * guest log a breakfast, correct it, and log a lunch — which is the sequence the
+ * first-log-to-second-log step actually needs — while putting the wall inside
+ * the first session rather than past the end of it.
  */
-export const GUEST = { chat: 4, photo: 1 } as const;
+export const GUEST = { chat: 3, photo: 1 } as const;
 export const TRIAL = { days: 3, chat: 9, photo: 1 } as const;
 
 /**
@@ -4029,6 +4044,32 @@ export const FunnelPing = z
      * cannot say whose phone it was.
      */
     reason: SaveReason.optional(),
+    /**
+     * The language the walk was drawn in — the phone's, and the same list the
+     * account it may become will be stored with.
+     *
+     * The campaigns are one per country (ADS.md), so without this the funnel is
+     * a blend of whichever of them were enabled that day and a cliff cannot be
+     * attributed to the traffic that caused it. Optional because a phone on an
+     * older build does not send it, and a null locale is a real answer — "from
+     * before this was measured" — rather than a missing one.
+     *
+     * A language is not a country and this does not pretend otherwise: DE and
+     * FR both target English speakers on purpose, so an `en` row is a mix. It is
+     * still the sharpest cut available to a route that must stay anonymous.
+     */
+    locale: Locale.optional(),
+    /**
+     * Set by builds that were never in a store — development, simulator and
+     * preview, plus anything running under Metro.
+     *
+     * Trusted from the client exactly as far as it needs to be: it can only ever
+     * *remove* a row from the admin read, so the worst a forged `true` does is
+     * hide a ping, and the worst a forged `false` does is what every ping
+     * already does. A store build cannot set it (`eas.json` puts the variable on
+     * the other three profiles only), which is the direction that matters.
+     */
+    internal: z.boolean().optional(),
   })
   .refine(
     (ping) => ping.reason === undefined || (REASONED_STEPS as readonly string[]).includes(ping.step),
@@ -4066,8 +4107,37 @@ export const AdminFunnel = z.object({
       reached: z.number().int(),
     }),
   ),
-  /** Accounts made in the same window, from `users` — the server's own count, not the phone's. */
+  /**
+   * Per language, for the same reason as per version: the campaigns are one per
+   * country, so a total across locales hides which country's installs stopped.
+   * `null` is a ping from a build older than migration 062.
+   */
+  locales: z.array(
+    z.object({
+      locale: Locale.nullable(),
+      step: FunnelStep,
+      reached: z.number().int(),
+    }),
+  ),
+  /**
+   * Accounts made in the same window, from `users` — the server's own count,
+   * not the phone's.
+   *
+   * Every account, guests included, which it did not used to be: it counted
+   * `email IS NOT NULL` and so read **zero** through a week in which the ads
+   * produced twenty accounts, because every install the ads pay for lands as a
+   * guest. That is the same silent exclusion the scheduled passes had, and the
+   * same fix: ask about the row, not about the address.
+   */
   accounts_created: z.number().int(),
+  /** Of those, the ones that saved an address — the subset the old number meant. */
+  accounts_saved: z.number().int(),
+  /**
+   * Pings dropped from everything above because they came from a build that was
+   * never in a store. Reported rather than silently discarded: a flag that is
+   * working and a flag that is not both look like zeros otherwise.
+   */
+  internal_pings: z.number().int(),
 });
 export type AdminFunnel = z.infer<typeof AdminFunnel>;
 

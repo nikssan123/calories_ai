@@ -8,12 +8,16 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
+        "EXPO_PUBLIC_INTERNAL": "1",
         "EXPO_PUBLIC_REVENUECAT_ANDROID_KEY": "goog_pkTRtlOHQdxQVrNgaSoayjXQRNL",
         "EXPO_PUBLIC_REVENUECAT_IOS_KEY": "appl_QWsvSECDQWwOIoHaxngeKlbujEf"
       }
     },
     "simulator": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_INTERNAL": "1"
+      },
       "ios": {
         "simulator": true
       }
@@ -24,6 +28,7 @@
         "buildType": "apk"
       },
       "env": {
+        "EXPO_PUBLIC_INTERNAL": "1",
         "EXPO_PUBLIC_REVENUECAT_ANDROID_KEY": "goog_pkTRtlOHQdxQVrNgaSoayjXQRNL",
         "EXPO_PUBLIC_REVENUECAT_IOS_KEY": "appl_QWsvSECDQWwOIoHaxngeKlbujEf"
       }
