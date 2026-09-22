@@ -1,7 +1,7 @@
 {
   "language": "en-GB",
   "_note": "The default listing's screenshot captions and seed strings. Its title and descriptions are edited in Play Console and live in PLAY_LISTING.md, so they are not here.",
-  "releaseNotes": "Small fixes and polish throughout, and a steadier first week for new accounts.",
+  "releaseNotes": "A photo logged with no caption now answers in your own language rather than English. You can also start a subscription without making an account first — save one whenever you like.",
   "captions": [
     {
       "headline": "Just say\nwhat you ate",
