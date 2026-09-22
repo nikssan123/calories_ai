@@ -102,7 +102,7 @@ import type {
   SuggestedTopic,
   TopicWithPosts,
 } from '@ct/shared';
-import { SESSION_TRANSPORT_HEADER } from '@ct/shared';
+import { SESSION_TRANSPORT_HEADER, SPOKEN_LOCALE_HEADER } from '@ct/shared';
 
 /**
  * Transport-only client. Uses nothing but `fetch`, so the same file works in
@@ -186,6 +186,16 @@ export interface ApiClientOptions {
    * store it — for React Native, in the device keystore.
    */
   sessionTransport?: 'cookie' | 'bearer';
+  /**
+   * What language this client is drawing itself in, sent with every request.
+   * See `SPOKEN_LOCALE_HEADER` — it answers for an account whose column is
+   * still null, and is stored nowhere.
+   *
+   * A function is read on every request, for the same reason `token` is: the
+   * client is built once at module load and somebody can change the language
+   * afterwards.
+   */
+  locale?: Locale | null | (() => Locale | null | undefined);
   fetchImpl?: typeof fetch;
 }
 
@@ -193,6 +203,7 @@ export function createApiClient({
   baseUrl,
   token,
   sessionTransport = 'cookie',
+  locale,
   fetchImpl,
 }: ApiClientOptions) {
   const rawFetch = fetchImpl ?? globalThis.fetch;
@@ -214,6 +225,7 @@ export function createApiClient({
   };
   const root = baseUrl.replace(/\/$/, '');
   const currentToken = () => (typeof token === 'function' ? token() : token);
+  const currentLocale = () => (typeof locale === 'function' ? locale() : locale);
 
   /**
    * The credentials and content type every call carries, built once so the
@@ -231,6 +243,11 @@ export function createApiClient({
     // Sent on every request rather than only on the two that answer with a
     // token, so the server never has to care which endpoint is being called.
     if (sessionTransport === 'bearer') headers.set(SESSION_TRANSPORT_HEADER, 'bearer');
+
+    // Every request rather than the four that use it, so a lane added later is
+    // answered in the right language without anybody remembering to wire it.
+    const spoken = currentLocale();
+    if (spoken) headers.set(SPOKEN_LOCALE_HEADER, spoken);
     return headers;
   }
 

@@ -1,5 +1,5 @@
 import { francAll } from 'franc';
-import type { Locale } from '@ct/shared';
+import { localeOf, type Locale } from '@ct/shared';
 
 /**
  * What language to answer somebody in, and which model can write it.
@@ -250,6 +250,28 @@ export interface LanguageTurn {
    * transcript. False for the journal, true for the five generated lanes.
    */
   wordless: boolean;
+}
+
+/**
+ * Which locale answers for an account that has not said, for the turns where
+ * nothing written can decide it.
+ *
+ * The column first, always: it is what somebody chose, and a null there means
+ * nobody has ever been asked — see `Profile.locale`. While it is null the
+ * client has been drawing the whole app in the device's language, and it says
+ * so on every request (`SPOKEN_LOCALE_HEADER`), so that is the better answer
+ * than English for a turn with no words in it. Both are read for the prompt and
+ * neither is written back: a guess must not be able to fill in the column that
+ * records their answer.
+ *
+ * `localeOf` closes it out, resolving a null pair to English exactly as
+ * everything else that renders a string does.
+ */
+export function speakingLocale(
+  profile: { locale?: string | null } | null | undefined,
+  spoken: Locale | null = null,
+): Locale {
+  return localeOf({ locale: profile?.locale ?? spoken });
 }
 
 export interface ReplyLanguage {

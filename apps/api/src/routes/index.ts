@@ -348,8 +348,12 @@ export async function registerRoutes(app: FastifyInstance) {
          * when the profile has no preference of its own. Carried as the guess
          * it is — see `ChatRequest.locale` for why it is never stored, and
          * `runTurn` for where the stored answer takes precedence over it.
+         *
+         * The body first and the header behind it: this route asked for the
+         * value by name before every request carried one, and a client that
+         * still sends it is being more specific than its own header, not less.
          */
-        spokenLocale: parsed.data.locale ?? null,
+        spokenLocale: parsed.data.locale ?? request.spokenLocale,
       },
       allowance: allowance.unlimited ? allowance : { ...allowance, used: allowance.used + 1 },
     };
@@ -569,7 +573,7 @@ export async function registerRoutes(app: FastifyInstance) {
         }
 
         try {
-          const turn = await logPhotoOnly(userId, photo);
+          const turn = await logPhotoOnly(userId, photo, request.spokenLocale);
           return {
             ...turn,
             allowance: allowance.unlimited ? allowance : { ...allowance, used: allowance.used + 1 },

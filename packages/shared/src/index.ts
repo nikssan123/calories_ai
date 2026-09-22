@@ -1996,6 +1996,24 @@ export type GoogleExchange = z.infer<typeof GoogleExchange>;
  */
 export const SESSION_TRANSPORT_HEADER = 'x-session-transport';
 
+/**
+ * What language the client is drawing itself in, on every request it makes.
+ *
+ * The same fact `ChatRequest.locale` carries for one route, carried for all of
+ * them — and for the same reason: `users.locale` is null until somebody says
+ * otherwise, and while it is, the app has been following the device. A turn
+ * generated for such an account has nothing to read a language off, so before
+ * this the photo lane, the fridge scanner and the recipe writer all answered a
+ * Bulgarian phone in English.
+ *
+ * A guess, and stored nowhere. The server uses it only to build a prompt, and
+ * only when the column is still null — what somebody actually chose always
+ * wins, and a header must never be able to write itself into the row that
+ * records their answer. `ChatRequest.locale` stays the more specific say for
+ * the one route that has it.
+ */
+export const SPOKEN_LOCALE_HEADER = 'x-app-locale';
+
 export const AuthStatus = z.object({
   authenticated: z.boolean(),
   profile: Profile.nullable(),

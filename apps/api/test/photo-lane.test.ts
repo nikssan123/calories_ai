@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { SPOKEN_LOCALE_HEADER } from '@ct/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { query, queryOne } from '../src/db.ts';
 import { agentCalls, scriptAgent, systemPromptOf, userTurnOf } from './helpers/agent-mock.ts';
@@ -169,6 +170,59 @@ describe('POST /entries/photo', () => {
       const response = await theirs.inject({ method: 'POST', url: '/entries/photo', headers: { cookie: theirCookie }, payload: { photo_base64: PIXEL } });
       expect(response.statusCode).toBe(200);
       expect(userTurnOf(agentCalls.at(-1)!)).toContain('write to this person in Bulgarian');
+    } finally {
+      await theirs.close();
+    }
+  });
+
+  /**
+   * The other half of the same hole: an account nobody has ever asked what
+   * language it reads.
+   *
+   * `users.locale` is null for those, `localeOf` resolves null to English, and
+   * this route had no way to hear otherwise — `/chat` takes the client's guess
+   * in its body and nothing else did. So a Bulgarian phone with a fresh account
+   * was answered in English on every captionless photo. Every request carries
+   * the guess now; see `SPOKEN_LOCALE_HEADER`.
+   */
+  it('takes the language off the header for an account that has never said', async () => {
+    const fresh = await createUser({ email: 'nolocale@example.com', plan: 'plus', locale: null });
+    const { app: theirs, cookie: theirCookie } = await appFor(fresh);
+    try {
+      await scriptPlate();
+      const response = await theirs.inject({
+        method: 'POST',
+        url: '/entries/photo',
+        headers: { cookie: theirCookie, [SPOKEN_LOCALE_HEADER]: 'bg' },
+        payload: { photo_base64: PIXEL },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(userTurnOf(agentCalls.at(-1)!)).toContain('write to this person in Bulgarian');
+
+      // And nothing was stored: a guess about what they are reading must not
+      // write itself into the column that records what they chose.
+      const row = await queryOne<any>('SELECT locale FROM users WHERE id = $1', [fresh.id]);
+      expect(row.locale).toBeNull();
+    } finally {
+      await theirs.close();
+    }
+  });
+
+  it('lets the stored answer beat the header', async () => {
+    // A phone drawn in Bulgarian, an account that chose French. The column is
+    // an answer somebody gave; the header is what the app happens to look like.
+    const chose = await createUser({ email: 'chose@example.com', plan: 'plus', locale: 'fr' });
+    const { app: theirs, cookie: theirCookie } = await appFor(chose);
+    try {
+      await scriptPlate();
+      const response = await theirs.inject({
+        method: 'POST',
+        url: '/entries/photo',
+        headers: { cookie: theirCookie, [SPOKEN_LOCALE_HEADER]: 'bg' },
+        payload: { photo_base64: PIXEL },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(userTurnOf(agentCalls.at(-1)!)).toContain('write to this person in French');
     } finally {
       await theirs.close();
     }

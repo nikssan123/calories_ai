@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { localeOf, matchLocale, type Locale } from '@ct/shared';
+import { setSpokenLocale } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { CATALOGUES, deviceLocale, type MessageKey, type Messages } from '@/messages';
 import { en } from '@/messages/en';
@@ -51,6 +52,7 @@ async function restore(): Promise<void> {
     const stored = matchLocale(await AsyncStorage.getItem(STORAGE_KEY));
     if (stored && stored !== current) {
       current = stored;
+      setSpokenLocale(stored);
       for (const listener of listeners) listener(stored);
     }
   } catch {
@@ -68,6 +70,10 @@ async function restore(): Promise<void> {
  */
 export function setPreferredLocale(locale: Locale): void {
   current = locale;
+  // Every request says what the app is drawing itself in, which answers for an
+  // account whose column is still null — the photo lane and the kitchen have
+  // nothing else to read a language off. See `SPOKEN_LOCALE_HEADER`.
+  setSpokenLocale(locale);
   void AsyncStorage.setItem(STORAGE_KEY, locale).catch(() => {
     // Not being able to remember it is not a reason to refuse to apply it.
   });

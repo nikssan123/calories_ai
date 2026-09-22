@@ -2,7 +2,7 @@ import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
-import { EMAIL_UNVERIFIED, type PlanName } from '@ct/shared';
+import { EMAIL_UNVERIFIED, matchLocale, SPOKEN_LOCALE_HEADER, type Locale, type PlanName } from '@ct/shared';
 import { registerRoutes } from './routes/index.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
 import { registerAdminRoutes } from './routes/admin.ts';
@@ -53,6 +53,17 @@ declare module 'fastify' {
      * requests read `false`, which is the safe way round.
      */
     unmetered: boolean;
+    /**
+     * What language the client says it is drawing itself in, or null when it
+     * did not say. See `SPOKEN_LOCALE_HEADER`.
+     *
+     * A guess about what somebody is reading, never what they chose: it answers
+     * only for an account whose `locale` column is still null, and nothing
+     * stored moves with it. Resolved here rather than per route because every
+     * request carries it and four of them want it — the journal, the photo
+     * lane, the fridge scanner and the recipe writer.
+     */
+    spokenLocale: Locale | null;
   }
 }
 
@@ -180,6 +191,7 @@ export async function buildApp(
   app.decorateRequest('guest', false);
   app.decorateRequest('plan', 'free');
   app.decorateRequest('unmetered', false);
+  app.decorateRequest('spokenLocale', null);
 
   /** Resolve the session on every request; route guards decide what to do with it. */
   app.addHook('onRequest', async (request) => {
@@ -200,6 +212,9 @@ export async function buildApp(
     if (token && request.userId && request.guest) await extendSession(token);
     request.plan = gate?.plan ?? 'free';
     request.unmetered = gate?.unmetered ?? false;
+    // No session needed and none consulted: it is a fact about the client, and
+    // an unrecognised or missing tag is simply null.
+    request.spokenLocale = matchLocale(request.headers[SPOKEN_LOCALE_HEADER] as string | undefined);
   });
 
   // `/photos/` is public because a signed URL carries its own authorisation and

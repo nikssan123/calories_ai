@@ -205,7 +205,7 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
     }
 
     try {
-      return await scanFridgePhoto(request.userId!, scan);
+      return await scanFridgePhoto(request.userId!, scan, request.spokenLocale);
     } catch (error) {
       // A spent per-minute budget is not a failed scan, and the shared funnel
       // already knows how to say so.
@@ -224,7 +224,10 @@ export async function registerKitchenRoutes(app: FastifyInstance) {
     if (authError) return reply.status(503).send({ error: authError });
 
     try {
-      const result = await suggestRecipes(request.userId!, brief(parsed.data));
+      const result = await suggestRecipes(request.userId!, {
+        ...brief(parsed.data),
+        spokenLocale: request.spokenLocale,
+      });
       // The fresh number, so the screen can shut the button behind the run that
       // just spent the last of it rather than on the next page load.
       return {

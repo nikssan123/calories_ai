@@ -1,5 +1,5 @@
-import type { Meal, Recipe, RecipeContext, RecipeOrigin } from '@ct/shared';
-import { localeOf, unitsOf } from '@ct/shared';
+import type { Locale, Meal, Recipe, RecipeContext, RecipeOrigin } from '@ct/shared';
+import { unitsOf } from '@ct/shared';
 import { queryOne } from '../db.ts';
 import { recentUserTexts } from '../services/chat.ts';
 import { mealTemplates } from '../services/history.ts';
@@ -12,7 +12,7 @@ import { getUser, getUserContext } from '../services/user.ts';
 import { inferMeal, localDateFor } from '../time.ts';
 import { MAX_TURNS } from './client.ts';
 import { emptyCollector } from './kitchen.ts';
-import { LANGUAGE_LOOKBACK, replyLanguage } from './language.ts';
+import { LANGUAGE_LOOKBACK, replyLanguage, speakingLocale } from './language.ts';
 import { createProvider, laneFor, unmeteredFor, type AgentRequest } from './providers/index.ts';
 import {
   RECIPES_PER_RUN,
@@ -58,6 +58,11 @@ export interface SuggestOptions {
   job?: RecipeJob;
   /** Overrides "now". Tests and backfills use it. */
   now?: Date;
+  /**
+   * What the client is drawing itself in, for an account with no preference of
+   * its own. A guess, stored nowhere: see `SPOKEN_LOCALE_HEADER`.
+   */
+  spokenLocale?: Locale | null;
 }
 
 export type RecipeJob =
@@ -103,7 +108,9 @@ export async function suggestRecipes(
     recentUserTexts(id, LANGUAGE_LOOKBACK),
   ]);
 
-  const language = replyLanguage(written, localeOf(profile), { wordless: true }).name;
+  const language = replyLanguage(written, speakingLocale(profile, options.spokenLocale ?? null), {
+    wordless: true,
+  }).name;
 
   /*
    * An adaptation needs the recipe it is adapting, and it has to exist before a

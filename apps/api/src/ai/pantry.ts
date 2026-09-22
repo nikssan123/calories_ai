@@ -1,4 +1,4 @@
-import type { PantryScanProposal } from '@ct/shared';
+import type { Locale, PantryScanProposal } from '@ct/shared';
 import { recentUserTexts } from '../services/chat.ts';
 import { listPantry } from '../services/pantry.ts';
 import { savePhoto } from '../services/photos.ts';
@@ -6,7 +6,7 @@ import { recordUsage } from '../services/usage.ts';
 import { getUser, getUserContext } from '../services/user.ts';
 import { MAX_TURNS } from './client.ts';
 import { emptyCollector } from './kitchen.ts';
-import { LANGUAGE_LOOKBACK, replyLanguage } from './language.ts';
+import { LANGUAGE_LOOKBACK, replyLanguage, speakingLocale } from './language.ts';
 import { createProvider, laneFor, type AgentRequest } from './providers/index.ts';
 import { PANTRY_SCAN_PROMPT, languageBrief, unitsBrief } from './prompt.ts';
 import { buildNutritionServer, type ToolContext } from './tools.ts';
@@ -38,12 +38,20 @@ export interface ScanInput {
 export async function scanFridgePhoto(
   userId: string,
   photo: ScanInput,
+  /** See `logPhotoOnly`: the client's guess, for an account with no answer. */
+  spokenLocale: Locale | null = null,
 ): Promise<PantryScanProposal> {
-  const { userId: id, units, locale, ...ctx } = await getUserContext(userId);
+  const { userId: id, units, ...ctx } = await getUserContext(userId);
+  // The row itself, for the lane this account runs on and for the language it
+  // reads — the same second query the review, the nudge and the recipe path
+  // each already make.
+  const profile = await getUser(id);
 
-  const language = replyLanguage(await recentUserTexts(id, LANGUAGE_LOOKBACK), locale, {
-    wordless: true,
-  }).name;
+  const language = replyLanguage(
+    await recentUserTexts(id, LANGUAGE_LOOKBACK),
+    speakingLocale(profile, spokenLocale),
+    { wordless: true },
+  ).name;
 
   // Stored like a meal photo, so the same signed-URL read serves it and a scan
   // that read the fridge wrongly can be looked at afterwards. Already stored
@@ -64,9 +72,6 @@ export async function scanFridgePhoto(
     units,
   };
 
-  // Read for the lane and nothing else, which is the same second query the
-  // review, the nudge and the recipe path each already make.
-  const profile = await getUser(id);
   const provider = createProvider(toolContext, laneFor(profile.email));
   const authError = provider.checkAuth();
   if (authError) throw new Error(authError);

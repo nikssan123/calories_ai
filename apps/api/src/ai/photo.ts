@@ -1,10 +1,10 @@
-import type { ChatResponse } from '@ct/shared';
+import type { ChatResponse, Locale } from '@ct/shared';
 import { insertMessage, recentUserTexts } from '../services/chat.ts';
 import { buildDaySummary } from '../services/summary.ts';
 import { recordUsage } from '../services/usage.ts';
 import { getUser, getUserContext } from '../services/user.ts';
 import { localDateFor } from '../time.ts';
-import { LANGUAGE_LOOKBACK, replyLanguage } from './language.ts';
+import { LANGUAGE_LOOKBACK, replyLanguage, speakingLocale } from './language.ts';
 import { createProvider, laneFor, type AgentRequest } from './providers/index.ts';
 import { languageBrief, PHOTO_ESTIMATION_PROMPT, unitsBrief } from './prompt.ts';
 import { buildNutritionServer, type ToolContext } from './tools.ts';
@@ -46,17 +46,31 @@ export interface PhotoLaneInput {
   photoId: string;
 }
 
-export async function logPhotoOnly(userId: string, photo: PhotoLaneInput): Promise<ChatResponse> {
-  const { userId: id, units, locale, ...ctx } = await getUserContext(userId);
+export async function logPhotoOnly(
+  userId: string,
+  photo: PhotoLaneInput,
+  /**
+   * What the client is drawing itself in, for an account with no preference of
+   * its own. A guess, stored nowhere: see `SPOKEN_LOCALE_HEADER`.
+   */
+  spokenLocale: Locale | null = null,
+): Promise<ChatResponse> {
+  const { userId: id, units, ...ctx } = await getUserContext(userId);
+  // Read before the language rather than after it: the column on this row is
+  // the first half of the answer, and the lane this account runs on is the
+  // second thing it is needed for.
+  const profile = await getUser(id);
   /*
    * Wordless, and the most wordless request the app makes: a plate, one
    * tool, an empty history. Nothing here can be read for a language, so a
-   * reading the detector cannot name has to fall back to the column rather
+   * reading the detector cannot name has to fall back to the account rather
    * than to the model — see `LanguageTurn`.
    */
-  const language = replyLanguage(await recentUserTexts(id, LANGUAGE_LOOKBACK), locale, {
-    wordless: true,
-  }).name;
+  const language = replyLanguage(
+    await recentUserTexts(id, LANGUAGE_LOOKBACK),
+    speakingLocale(profile, spokenLocale),
+    { wordless: true },
+  ).name;
   const now = new Date();
 
   const toolContext: ToolContext = {
@@ -68,7 +82,6 @@ export async function logPhotoOnly(userId: string, photo: PhotoLaneInput): Promi
     units,
   };
 
-  const profile = await getUser(id);
   const provider = createProvider(toolContext, laneFor(profile.email));
   const authError = provider.checkAuth();
   if (authError) throw new Error(authError);

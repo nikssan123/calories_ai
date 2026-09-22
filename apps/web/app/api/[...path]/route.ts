@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { SPOKEN_LOCALE_HEADER } from '@ct/shared';
 
 /**
  * Thin proxy to the API service. It exists so the browser talks to one origin
@@ -20,6 +21,11 @@ async function forward(request: Request, path: string[]) {
   // Pass the caller's session through to the API.
   const cookie = request.headers.get('cookie');
   if (cookie) headers.set('cookie', cookie);
+
+  // And what the page is drawn in, which is the only answer the API has for an
+  // account whose locale column is still null. See `SPOKEN_LOCALE_HEADER`.
+  const spoken = request.headers.get(SPOKEN_LOCALE_HEADER);
+  if (spoken) headers.set(SPOKEN_LOCALE_HEADER, spoken);
 
   const canHaveBody = request.method !== 'GET' && request.method !== 'HEAD';
   const requestBody = canHaveBody ? await request.text() : '';

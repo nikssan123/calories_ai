@@ -1,8 +1,9 @@
 import Constants from 'expo-constants';
 import { fetch as expoFetch } from 'expo/fetch';
 import { ApiError, createApiClient } from '@ct/api-client';
-import { Allowance } from '@ct/shared';
+import { Allowance, type Locale } from '@ct/shared';
 import { currentToken } from '@/lib/session';
+import { deviceLocale } from '@/messages';
 
 /**
  * Where the API lives.
@@ -27,6 +28,22 @@ function resolveBaseUrl(): string {
 export const API_BASE_URL = resolveBaseUrl();
 
 /**
+ * What the app is drawing itself in, for the header every request carries.
+ *
+ * Pushed in by `lib/i18n` rather than read out of it, and that is about module
+ * graphs rather than taste: `lib/i18n` reaches the session through `useAuth`,
+ * which imports this file, so importing it back from here would close a cycle
+ * around the client every screen depends on. Seeded from the device so a
+ * request made before `i18n` has loaded still says something true.
+ */
+let spoken: Locale = deviceLocale();
+
+/** Called by `lib/i18n` whenever the language it is drawing in changes. */
+export function setSpokenLocale(locale: Locale): void {
+  spoken = locale;
+}
+
+/**
  * The same transport-only client the web uses, in its other configuration.
  *
  * `bearer` rather than `cookie`, so signup and login answer with the raw token
@@ -38,6 +55,9 @@ export const api = createApiClient({
   baseUrl: API_BASE_URL,
   sessionTransport: 'bearer',
   token: currentToken,
+  // A function, like `token` above and for the same reason: the client is built
+  // at module load, and somebody can change the language afterwards.
+  locale: () => spoken,
   /*
    * `expo/fetch`, not the global one, and the whole client rather than the one
    * call that needs it.
