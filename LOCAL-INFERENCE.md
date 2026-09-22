@@ -31,8 +31,8 @@ The ratio at the bottom of that table is the one that picks the hardware: **~24,
 tokens read for ~600 written, or 40:1.** This is a prefill-bound workload, not a
 generation-bound one, so prefill throughput is what to shop for and memory bandwidth is
 the second question rather than the first. It is not, on its own, enough to rule out
-the unified-memory options — see Tier 1b, where it turned out to rule out less than
-the first draft of this document claimed.
+the unified-memory options — see Tier 1, where it ruled out a great deal less than the
+first draft of this document claimed.
 
 The other shape worth naming is that the two vision kinds and the long-form kinds are
 not the same problem as the journal. `ai/client.ts` already routes eight turn kinds
@@ -110,10 +110,39 @@ on the same 30 Nutrition5k plates and not argued about.
 
 ## The hardware
 
-Sized against the requirement at the top, not against "how big a model fits". Two
-models have to be resident at once — a text model and a vision model — or every photo
-turn pays a model swap, which on a 30GB weight load is several seconds on a turn the
-user is already watching a spinner through.
+Priced 2026-09-22, the day the new Mac minis and Mac Studios shipped. **Every number in
+the first draft of this section was wrong**, and it is worth saying why rather than
+quietly restating it: that draft priced a 5090 build at ~€3,500 against a Mac Studio at
+~€9,000 and concluded the obvious thing. Both halves have since inverted.
+
+Two models have to be resident at once — a text model and a vision model — or every
+photo turn pays a model swap, which on a 30GB weight load is several seconds on a turn
+the user is already watching a spinner through. That, not parameter count, is what sets
+the memory figure.
+
+### What the market actually costs today
+
+| | Memory | Bandwidth | US price |
+|---|---|---|---|
+| **Mac Studio, M5 Max, 40c GPU, 64GB** | 64GB | 614 GB/s | **$3,199** |
+| Mac Studio, M5 Max, 32c GPU, 36GB | 36GB | 614 GB/s | $2,499 |
+| Mac mini, M5 Pro, 18c/20c, 64GB | 64GB | 307 GB/s | $2,900 |
+| Mac mini, M5 Pro, 15c/16c, 64GB | 64GB | 307 GB/s | $2,699 |
+| Mac mini, M6, 32GB | 32GB | 170 GB/s | ~$1,300 |
+| RTX 5090, card only | 32GB | 1.8 TB/s | $4,300–6,400 |
+| RTX 4090, used, card only | 24GB | ~1 TB/s | ~$2,500–3,000 |
+| RTX 3090, used, card only | 24GB | 936 GB/s | ~$1,400 |
+| RTX PRO 6000 Blackwell, card only | 96GB | 1.8 TB/s | $16,000–20,000 |
+
+A structural GDDR7 shortage — the same AI buildout this product is trying to buy its
+way out of — has taken the 5090 from a $1,999 launch price to three times that, and the
+RTX PRO 6000 from $8,565 to sixteen thousand and up. **Memory is now most of a GPU's
+bill of materials, and the consumer cards have stopped being the cheap way to buy
+VRAM.** Apple's memory pricing is inflated too ($1,000 for the 24GB→64GB step) but by
+much less, which is the whole reason this table reads the way it does.
+
+Add roughly 20% for Bulgarian VAT and check the local Apple store rather than
+converting these figures.
 
 ### Tier 0 — the RTX 4080 you already own
 
@@ -122,111 +151,116 @@ zero, and it is the correct first purchase precisely because it is not one.**
 
 What fits: a 12–14B class text model at 4-bit (~8–9GB) with 6GB left for KV, or a 7–8B
 vision model, comfortably — but not both at once, and not the 30B-A3B MoE class
-everyone recommends (~18.6GB at Q4, which is over the card). Concurrency at 8k context
-per sequence is a dozen or so sequences, which is roughly a thousand times today's
-load.
+(~18.6GB at Q4, which is over the card). Concurrency at 8k context per sequence is a
+dozen or so sequences, roughly a thousand times today's load.
 
 This is not the production box. It is the box that answers, for free and this week,
 the only question that matters: does an open model at this class write clean Bulgarian,
-emit thirty-seven tools' worth of correct `tool_calls`, and read a plate? If the answer
-is no at 14B, the answer at 30B is probably also no for the same reasons, and you have
-spent nothing finding out.
+emit thirty-seven tools' worth of correct `tool_calls`, and read a plate?
 
-### Tier 1 — one RTX 5090, 32GB
+Its one real limitation is that it cannot test the 30B-A3B class at all, and that class
+is the one the Apple tiers below are sized for. So a clean pass at 14B is decisive and a
+failure at 14B is not — which is an argument for renting an hour of a cloud A100 to
+re-run the suites at 30B before spending three thousand dollars on the assumption.
 
-~€2,000–2,800 for the card, ~€3,200–3,800 for a build around it. The recommendation
-if Tier 0 comes back clean.
+### Tier 1 — Mac Studio, M5 Max, 64GB, $3,199
 
-32GB of GDDR7 at ~1.8TB/s runs the 30B-A3B MoE class at Q4 (~18GB) with an 8B vision
-model beside it and real KV headroom, or a 27B dense at Q4 with more room for
-concurrency. Prefill on this card is the part that matters — several thousand tokens a
-second with batching on a model that size, against a peak requirement of ~4,400
-prefill tokens/sec at a thousand users (11 turns/min × 3 calls × ~8k, from `SCALING.md`).
+**The recommendation, and the first draft had it as the thing not to buy.**
 
-**One card is worth more than its specification, because it is one card.** No tensor
-parallel, no NVLink question, one PSU, one thing to fail.
+614 GB/s and forty GPU cores. Two things make it the right shape rather than merely the
+cheap one:
 
-### Tier 2 — 96GB on one board
+- **The M5 generation put a matrix unit — a Neural Accelerator — in every GPU core**,
+  and prefill is what matrix units do. Time-to-first-token on the base M5 measured
+  ~4x the M4's, and the M5 Max is about 2x the M5 Pro again. The 40:1 prefill ratio
+  this document opens with is no longer the objection to Apple silicon it was one
+  generation ago.
+- **An MoE turns the bandwidth question off.** Bandwidth caps decode, decode reads only
+  active parameters, and a 30B-A3B model reads ~3B of them per token. Published M5 Max
+  figures are 100–120 tok/s on a *dense* 8B; a 3B-active MoE should sit comfortably
+  above that. At ~600 output tokens a turn that is a few seconds, not a regression.
 
-An RTX PRO 6000 Blackwell class card, ~€8,500–10,500, ~€11,000–13,000 built. Or two
-5090s for ~€6,500, with the tensor-parallel tax that implies.
+64GB holds the 30B MoE and a 32B-class vision model together with KV headroom. Raise
+the GPU's share of it — macOS reserves about a quarter by default — with
+`sudo sysctl iogpu.wired_limit_mb=57344`.
 
-This is the tier that could hold a 27–32B text model at fp8 *and* a 32B-class vision
-model resident together with room for the long-form kinds, which is the only
-configuration where more than the journal moves off the API. It is also several times
-the annual API bill at any headcount this product has seen, so it is a tier to arrive
-at from Tier 1 running out of room, never to start at.
+The $2,499 36GB base is a real option if the vision model stays at 8B (18GB + 6GB + KV
+fits, barely). The $400 to 64GB buys the freedom to test a large VL model, and the
+sequence this document recommends is one where that test has not happened yet.
 
-### Tier 1b — a Mac mini, M5 Pro class, 64GB
+### Tier 1b — Mac mini, M5 Pro, 64GB, $2,699–2,900
 
-**The first revision of this document dismissed unified memory and that was too
-blunt.** It is recorded rather than deleted because the reasoning was half right and
-the half that was wrong is the interesting half.
+Same architecture, half the bandwidth (307 GB/s) and half the GPU cores. $300–500
+cheaper than the Studio for roughly half the inference throughput, which is the wrong
+side of that trade when the difference is one-tenth of the capex.
 
-The argument was that unified-memory boxes trade compute for capacity, which is the
-wrong trade at 24k in for 600 out. That was a fair description of the M4 generation.
-It is a worse description of the M5 one: the M5 GPU puts a matrix unit — a Neural
-Accelerator — in every core, and prefill is exactly the thing matrix units do. The
-weakness the first draft priced against is the weakness Apple spent that generation
-fixing, so the blanket version of the claim does not survive.
+Worth it only if the box has to be small, silent and on a desk. It is not a bad machine
+here; it is just beaten by its neighbour for $300.
 
-Two things then decide it instead, and they point opposite ways.
+### Tier 2 — CUDA, if concurrency ever demands it
 
-**For it: an MoE turns the bandwidth problem off.** Memory bandwidth caps *decode*, and
-decode reads only the active parameters. A 30B-A3B class model reads ~3B of them per
-token, which on a ~300GB/s part is a comfortable three figures of tokens a second — not
-a compromise, a good result. And 64GB holds that model *and* a vision model resident
-together, which the 16GB 4080 cannot do at all and a 32GB 5090 does only just. On
-capacity per euro this beats Tier 1 outright, at a tenth of the idle power, silently,
-in something the size of a book.
+Three to six thousand dollars for a 5090's 32GB, four thousand-ish for a used 4090's
+24GB, sixteen thousand and up for 96GB on one board. All of them are worse value than
+the Studio *at this product's concurrency*, and all of them are better at a hundred
+simultaneous turns, where CUDA's batching and vLLM's maturity stop being a preference.
 
-**Against it: the cost argument was never really about the model.** It was vLLM's
-automatic prefix caching keeping the 6k prefix resident for free, and vLLM does not run
-on Metal. llama.cpp and MLX both cache prompts, but per slot and by hand, not as a
-radix tree shared across every concurrent account — and a shared prefix across accounts
-is precisely the property being bought. Metal's batching is also much weaker than
-CUDA's: fine at ten concurrent turns, not at a hundred. Vision support in `mlx-vlm` and
-`llama.cpp` is patchier than vLLM's, and `photo_log` is one of the two kinds worth
-moving.
+That is a real crossover and it is a long way from here. Revisit it when the account
+count has three digits and the Mac is the thing that is slow.
 
-So the honest shape is conditional. If the 30B-A3B class passes the language and
-tool-calling suites and the 14B class does not, a 64GB Mac mini is probably the better
-buy than a 5090 at this product's scale — cheaper, silent, and large enough to hold
-both models. If the 14B class passes, Tier 0 already answers it and nothing needs
-buying. Either way the experiment comes first, and the experiment runs on hardware
-already in the building.
+### What not to buy
 
-One caveat that is not about the chip: a Mac mini has no ECC, no out-of-band
-management and no redundant power. At this scale that is an acceptable risk *given* the
-LiteLLM fallback, and an unacceptable one without it.
+**The very large unified-memory boxes.** An M5 Ultra at 256GB or 512GB is sized to hold
+a 200B-plus model. This product has no use for one, and moving 96GB→256GB costs $4,000
+on its own.
 
-### What not to buy, and why
+**Storage upgrades.** 512GB holds macOS and every model this needs several times over.
+Apple wants $800 for 2TB; a Thunderbolt SSD is a tenth of that and nothing here needs
+the internal bus.
 
-**The very large unified-memory boxes — a 512GB Mac Studio, DGX Spark, Strix Halo.**
-The MoE argument above rescues the small end of this category, not the top of it. Those
-configurations are sized to hold a 200B-plus model, this product has no use for one,
-and the money buys capacity rather than the prefill and concurrency that a public API
-in front of many accounts actually consumes.
+## The software, and why the objection I raised is gone
 
-**Datacentre silicon.** An A100 or H100 is priced for people whose alternative is a
-larger API bill than this product will have for years.
+The second draft of this document said the cost case rested on vLLM's shared prefix
+cache, that vLLM does not run on Metal, and that hand-rolling it was the real price of
+an Apple box. **That is no longer true**, and it is the correction that moves the
+recommendation more than any price does.
+
+`vllm-mlx` is an OpenAI-compatible server for Apple silicon with continuous batching and
+content-based prefix caching — reported at 21–87% higher throughput than llama.cpp,
+4.3x aggregate throughput at 16 concurrent requests, time-to-first-token cut up to 5.8x
+on shared prefixes, and 80%+ memory saved when ten or more users share one system
+prompt. There is also an official MLX-backed vLLM Metal plugin.
+
+That last figure is this product's exact shape: one 6k prefix of tool definitions and
+`STABLE_SYSTEM_PROMPT`, identical for every account, which `SCALING.md` §Stage 4 already
+establishes is the thing every turn is paying to re-send. The mechanism the whole cost
+argument depends on exists on this platform now.
+
+Two caveats that have not gone away:
+
+- **Vision on MLX is younger than vision on vLLM.** `photo_log` and `pantry_scan` are
+  the paths to be suspicious of, and the 30-plate suite is how the suspicion gets
+  settled.
+- **Tool-call parsing into OpenAI `tool_calls` must be verified, not assumed.** The
+  hand-rolled loop in `providers/openai.ts` reads `tool_calls` off the response and
+  degrades silently into a chat reply when they are absent. Thirty-seven tools with
+  strict Zod schemas is where a quantised model shows its seams.
 
 ## The break-even
 
-Amortise Tier 1 over three years: €3,500/36 ≈ €97/month, plus power. A 5090 box idles
-around 70W and this product would leave it idle nearly all of the time — call it 50
-kWh/month, ~€8 at Sofia residential rates. **~€105/month all in.**
+$3,199 over three years is $89/month. A Mac Studio at this product's duty cycle is idle
+almost always — call it $2/month of electricity at Sofia rates, against the $8 a 5090
+build would draw doing nothing. **~$91/month, all in.**
 
 Against the text path, which is what it replaces:
 
-- At today's cold-cache $0.041/turn, €105 buys ~2,600 turns — **about 25 active
+- At today's cold-cache $0.041/turn, $91 buys ~2,200 turns — **about 19 active
   accounts** at the ~115 turns/month the one real account runs.
-- At the warm-cache figure scale brings (~$0.012), €105 buys ~8,900 turns — **about 80
+- At the warm-cache figure scale brings (~$0.012), $91 buys ~7,600 turns — **about 66
   active accounts.**
 
-So Tier 1 pays for itself somewhere between 25 and 80 actively logging accounts, and
-the honest version is the upper end, because the volume that justifies the box is the
-same volume that makes the API cheaper. Tier 2 needs roughly four times that.
+So somewhere between 20 and 65 actively logging accounts, and the honest answer is the
+upper end, because the volume that justifies the box is the same volume that warms the
+cache and makes the API cheaper.
 
 The other frame, which is the better one for a product with five accounts: at Plus's
 $9.99 and a COGS of ~$4.10 per hundred messages, the journal runs at roughly a 55%
@@ -252,9 +286,11 @@ Cheapest first, and the first three are worth more than the hardware:
 3. **Shrink the prefix.** The journal sends all 37 tool definitions on every text log.
    A `text_log` does not need `planWeekTool`. Cache write is charged on the whole
    prefix, on every turn, at 78% of the bill.
-4. **Then Tier 0**, as an experiment, on the 4080.
-5. **Then Tier 1**, if and only if Tier 0 passed and the headcount crossed the
-   break-even.
+4. **Then Tier 0**, as an experiment, on the 4080 — and an hour of a rented A100 to
+   re-run the same suites at 30B, because that is the class the purchase would be for
+   and the 4080 cannot hold it.
+5. **Then Tier 1**, if and only if the suites passed and the headcount crossed the
+   break-even. Both conditions, not either.
 
 ## What Tier 0 looks like, concretely
 
