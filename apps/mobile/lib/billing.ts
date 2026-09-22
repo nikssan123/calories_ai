@@ -147,13 +147,23 @@ export async function forgetBilling(): Promise<void> {
 export interface Buyable {
   plan: Exclude<PlanName, 'free'>;
   /**
-   * How often it renews. Both are sold — `plans.ts` prices a month and a year
-   * — so this is a dimension the wall has to offer rather than choose. An
+   * How often it renews. A month and a year are the two the tiers are priced
+   * at, so this is a dimension the wall has to offer rather than choose. An
    * earlier version of this file kept only the longest package per tier, which
    * silently hid every monthly SKU and left the small print claiming annual
    * billing for a plan somebody was about to be charged for monthly.
+   *
+   * A **week** is the third, and it exists for one reason: Apple will not sell
+   * a paid one-week introductory offer on a monthly subscription — the duration
+   * of a paid intro has to be a multiple of the subscription's own period — so
+   * the €1.99 first week that Play sells as an *offer on the monthly base plan*
+   * has to be its own weekly SKU on iOS. It is never on the period toggle: the
+   * tiers are not sold by the week, one product is, and a third segment would
+   * advertise a range that does not exist. It matters here only so that the
+   * small print says the period somebody is actually being charged at, which
+   * App Review reads as closely as anybody (3.1.2).
    */
-  period: 'month' | 'year';
+  period: 'month' | 'year' | 'week';
   /** What to hand back to `purchase()`. */
   pkg: PurchasesPackage;
   /** Localised and tax-inclusive where the store says so: "£69.99". */
@@ -333,7 +343,7 @@ export async function buyables(): Promise<Buyable[]> {
     const annual = pricePerYear !== null && Math.abs(pricePerYear - price) < price * 0.01;
     found.push({
       plan,
-      period: annual ? 'year' : 'month',
+      period: periodOf(pkg.product, annual),
       pkg,
       price: priceString,
       perMonth: pricePerMonthString,
@@ -345,6 +355,24 @@ export async function buyables(): Promise<Buyable[]> {
   // Cheapest tier first, so the wall draws them in the order `PLANS` declares.
   const order = (plan: PlanName) => PLANS.indexOf(plan as never);
   return found.sort((a, b) => order(a.plan) - order(b.plan));
+}
+
+/**
+ * Which period a product renews at.
+ *
+ * `subscriptionPeriod` is the store's own answer, in ISO-8601 — `P1W`, `P1M`,
+ * `P1Y` — and it is asked first because it is a statement rather than an
+ * inference. The annual check stays underneath it, unchanged, for the two cases
+ * that have always relied on it: StoreKit 1 on iOS cannot report the period at
+ * all, and a null there must not silently turn a year into a month.
+ *
+ * Only a week is read off the string. Everything longer keeps falling through
+ * the price comparison exactly as it did, because that is the branch with the
+ * years of evidence behind it, and this is not the change to re-decide it in.
+ */
+function periodOf(product: PurchasesStoreProduct, annual: boolean): Buyable['period'] {
+  if (product.subscriptionPeriod === 'P1W') return 'week';
+  return annual ? 'year' : 'month';
 }
 
 /** Somebody closed the store sheet. Not a failure, and not worth a message. */

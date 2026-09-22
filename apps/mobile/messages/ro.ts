@@ -1122,10 +1122,12 @@ export const ro: Messages = {
   'plans.freeOnEvery': 'Gratuit în orice plan',
   'plans.billedYearly': 'Facturat o dată pe an',
   'plans.billedMonthly': 'Facturat lunar',
+  'plans.billedWeekly': 'Facturat săptămânal',
   'plans.everythingInPlus': 'Tot ce include Plus',
   'plans.yourPlan': 'Planul tău',
   'plans.aYear': 'pe an',
   'plans.aMonth': 'pe lună',
+  'plans.aWeek': 'pe săptămână',
   'plans.worksOutAt': (price: string) => `Adică ${price} pe lună.`,
   'plans.onFree': 'Ai planul Free. Tot ce scrii tu rămâne gratuit — acestea plătesc părțile care gândesc.',
   // „Ești pe Plus” is a calque; „Ai planul Plus” is what a Romanian app says.

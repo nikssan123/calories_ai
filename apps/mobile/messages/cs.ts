@@ -1133,10 +1133,12 @@ export const cs: Messages = {
   'plans.freeOnEvery': 'Zdarma v každém tarifu',
   'plans.billedYearly': 'Účtováno jednou ročně',
   'plans.billedMonthly': 'Účtováno měsíčně',
+  'plans.billedWeekly': 'Účtováno týdně',
   'plans.everythingInPlus': 'Vše z tarifu Plus',
   'plans.yourPlan': 'Tvůj tarif',
   'plans.aYear': 'ročně',
   'plans.aMonth': 'měsíčně',
+  'plans.aWeek': 'týdně',
   'plans.worksOutAt': (price: string) => `Vychází na ${price} měsíčně.`,
   // "co zapíšeš sám" is gendered; "ručně" says the same thing.
   'plans.onFree': 'Máš tarif Free. Všechno, co zapíšeš ručně, zůstává zdarma – tohle platí za části, které přemýšlejí.',

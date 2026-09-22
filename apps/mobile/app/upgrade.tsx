@@ -259,13 +259,26 @@ export default function UpgradeScreen() {
       // A tier configured for only one period still sells. The toggle is hidden
       // in that case (see `periods`), so this is the single option, not a
       // silent substitution of one billing cycle for another.
-      offers?.find((offer) => offer.plan === candidate) ??
+      // ...and never the weekly SKU, which would answer "show me Plus monthly"
+      // with a product that renews every seven days.
+      offers?.find((offer) => offer.plan === candidate && offer.period !== 'week') ??
       null,
     [offers, period],
   );
 
-  /** Which periods the store actually offers, so a toggle with one side is not drawn. */
-  const periods = new Set(offers?.map((offer) => offer.period) ?? []);
+  /*
+   * Which periods the store actually offers, so a toggle with one side is not
+   * drawn — and only ever the two the tiers are priced at.
+   *
+   * A weekly SKU exists on iOS (see `Buyable.period`) and is deliberately not a
+   * third segment: it is one product's introductory way in, not a cycle the
+   * tiers are sold at, and a toggle offering it would advertise a weekly Coach
+   * that nobody can buy. Android never reaches this — Play sells the same first
+   * week as an offer on the monthly base plan, so its products stay monthly.
+   */
+  const periods = new Set(
+    offers?.filter((offer) => offer.period !== 'week').map((offer) => offer.period) ?? [],
+  );
 
   /**
    * What a year saves against twelve of the monthly charge, as a percentage.
@@ -764,13 +777,9 @@ export default function UpgradeScreen() {
               offer.intro.price,
               introDuration(offer.intro, locale),
               offer.price,
-              offer.period === 'year' ? tr('plans.aYear') : tr('plans.aMonth'),
+              periodWord(offer.period, tr),
             )
-          : tr('plans.smallPrint')(
-              (offer?.period ?? period) === 'year'
-                ? tr('plans.billedYearly')
-                : tr('plans.billedMonthly'),
-            )}
+          : tr('plans.smallPrint')(billedWord(offer?.period ?? period, tr))}
       </Text>
 
       {/* Said before the sheet opens, not only after the charge: one line, and
@@ -1129,7 +1138,7 @@ function TierCard({
   price: string | null;
   perMonth: string | null;
   /** What `price` buys, so the sub-line cannot claim the wrong billing cycle. */
-  period: 'month' | 'year' | null;
+  period: 'month' | 'year' | 'week' | null;
   /**
    * The introductory price this person is eligible for, when the store offers
    * one. It takes the headline figure and pushes the renewal price into the
@@ -1186,11 +1195,7 @@ function TierCard({
                   {intro ? intro.price : price}
                 </Text>
                 <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-                  {intro
-                    ? tr('plans.introFor')(introDuration(intro, locale))
-                    : period === 'year'
-                      ? tr('plans.aYear')
-                      : tr('plans.aMonth')}
+                  {intro ? tr('plans.introFor')(introDuration(intro, locale)) : periodWord(period, tr)}
                 </Text>
               </View>
             )
@@ -1202,7 +1207,7 @@ function TierCard({
         {/* What the intro becomes. Never further from the figure than this. */}
         {intro && price && (
           <Text style={[t.footnoteBold, { color: colors.foreground }]}>
-            {tr('plans.introThen')(price, period === 'year' ? tr('plans.aYear') : tr('plans.aMonth'))}
+            {tr('plans.introThen')(price, periodWord(period, tr))}
           </Text>
         )}
 
@@ -1291,6 +1296,26 @@ function Check({ color }: { color: string }) {
       />
     </Svg>
   );
+}
+
+/**
+ * The period, as the words the small print needs.
+ *
+ * Two of them rather than one, because a language does not always get from "a
+ * year" to "billed yearly" by rule — and because App Review reads this line
+ * (3.1.2): the period stated has to be the period charged, which is the whole
+ * reason `Buyable.period` learned about a week at all.
+ */
+function periodWord(period: Buyable['period'] | null, tr: ReturnType<typeof useT>): string {
+  if (period === 'year') return tr('plans.aYear');
+  if (period === 'week') return tr('plans.aWeek');
+  return tr('plans.aMonth');
+}
+
+function billedWord(period: Buyable['period'] | null, tr: ReturnType<typeof useT>): string {
+  if (period === 'year') return tr('plans.billedYearly');
+  if (period === 'week') return tr('plans.billedWeekly');
+  return tr('plans.billedMonthly');
 }
 
 const styles = StyleSheet.create({

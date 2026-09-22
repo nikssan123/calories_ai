@@ -1240,10 +1240,12 @@ export const en = {
   'plans.freeOnEvery': 'Free on every plan',
   'plans.billedYearly': 'Billed once a year',
   'plans.billedMonthly': 'Billed monthly',
+  'plans.billedWeekly': 'Billed every week',
   'plans.everythingInPlus': 'Everything in Plus',
   'plans.yourPlan': 'Your plan',
   'plans.aYear': 'a year',
   'plans.aMonth': 'a month',
+  'plans.aWeek': 'a week',
   /** `price` is the store's own per-month figure, currency and all. */
   'plans.worksOutAt': (price: string) => `Works out at ${price} a month.`,
   'plans.onFree': 'You’re on Free. Everything you type in stays free — these buy the parts that think.',
