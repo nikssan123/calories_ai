@@ -616,3 +616,57 @@ describe('proseLocale', () => {
     expect(proseLocale('Сегодня ты съел два яйца и кусок хлеба с маслом, это примерно 320 ккал.')).toBeNull();
   });
 });
+
+/*
+ * The turns that carry none of their words, which is where an unnamed reading
+ * costs the most rather than the least.
+ *
+ * On 2026-09-22 a `bg` account sent a captionless photo and the photo lane
+ * answered "Logged tomato and feta slices with a side of cubed yellow cheese."
+ * The two turns behind it were nouns in Cyrillic — `readCyrillic` will not
+ * split Bulgarian from Russian on nouns — so the reading came back unnamed and
+ * `replyLanguage` withheld the name on purpose, to leave the sentence to the
+ * model. The photo lane sends no sentence: one plate, one tool, an empty
+ * history, and an English prompt around it.
+ */
+describe('a turn with none of their words in it', () => {
+  // Word for word what user 1c4aa99d had written before the photo.
+  const nouns = ['Крем с маскарпоне и захар', 'Калмари панирани'];
+
+  it('falls back to the stored locale when the reading cannot be named', () => {
+    expect(replyLanguage(nouns, 'bg')).toEqual({ name: null, haiku: false, fromLocale: false });
+    expect(replyLanguage(nouns, 'bg', { wordless: true })).toEqual({
+      name: 'Bulgarian',
+      haiku: false,
+      fromLocale: true,
+    });
+  });
+
+  it('still prefers a confident reading over the column', () => {
+    // The flag only ever answers the unnamed case. Somebody writing Italian to
+    // a Bulgarian-drawn app is owed Italian on their photo too.
+    expect(replyLanguage(['due uova e una fetta di pane con burro'], 'bg', { wordless: true }).name).toBe(
+      'Italian',
+    );
+  });
+
+  it('says nothing for an English account either way', () => {
+    // The unnamed case resolved through an `en` column is still null — English
+    // is what the model writes unprompted, and a line confirming it is tokens
+    // spent on every photo to buy a behaviour that was already there.
+    expect(replyLanguage(nouns, 'en', { wordless: true })).toEqual({
+      name: null,
+      haiku: false,
+      fromLocale: true,
+    });
+  });
+
+  it('changes nothing about a turn that carries a sentence', () => {
+    // The journal's own call is unflagged, and a switch mid-conversation must
+    // still name nothing there: the model is reading the sentence it switched
+    // in, and the column is not.
+    const english = ['two eggs and a slice of toast', 'how much protein have I had?'];
+    const bulgarian = ['две яйца и филия хляб с масло', 'колко калории ми остават днес?'];
+    expect(replyLanguage([...english, ...bulgarian], 'bg').name).toBeNull();
+  });
+});

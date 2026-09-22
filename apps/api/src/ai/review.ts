@@ -58,6 +58,7 @@ export async function generateWeeklyReview(
   const language = replyLanguage(
     await recentUserTexts(id, LANGUAGE_LOOKBACK),
     localeOf(profile),
+    { wordless: true },
   ).name;
 
   const request: AgentRequest = {

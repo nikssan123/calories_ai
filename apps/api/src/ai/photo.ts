@@ -48,7 +48,15 @@ export interface PhotoLaneInput {
 
 export async function logPhotoOnly(userId: string, photo: PhotoLaneInput): Promise<ChatResponse> {
   const { userId: id, units, locale, ...ctx } = await getUserContext(userId);
-  const language = replyLanguage(await recentUserTexts(id, LANGUAGE_LOOKBACK), locale).name;
+  /*
+   * Wordless, and the most wordless request the app makes: a plate, one
+   * tool, an empty history. Nothing here can be read for a language, so a
+   * reading the detector cannot name has to fall back to the column rather
+   * than to the model — see `LanguageTurn`.
+   */
+  const language = replyLanguage(await recentUserTexts(id, LANGUAGE_LOOKBACK), locale, {
+    wordless: true,
+  }).name;
   const now = new Date();
 
   const toolContext: ToolContext = {

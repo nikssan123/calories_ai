@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { query, queryOne } from '../src/db.ts';
-import { agentCalls, scriptAgent, systemPromptOf } from './helpers/agent-mock.ts';
+import { agentCalls, scriptAgent, systemPromptOf, userTurnOf } from './helpers/agent-mock.ts';
 import { appFor, createUser, type TestUser } from './helpers/factories.ts';
 
 /**
@@ -144,6 +144,34 @@ describe('POST /entries/photo', () => {
     expect(response.json().message.content).toBe('Nothing on the plate could be read.');
     expect(response.json().actions).toEqual([]);
     expect(await query('SELECT id FROM food_entries WHERE user_id = $1', [user.id])).toHaveLength(0);
+  });
+
+  /**
+   * The regression from 2026-09-22: a `bg` account sent a captionless photo and
+   * was answered in English.
+   *
+   * The two turns behind it were nouns in Cyrillic, which `readCyrillic` cannot
+   * split from Russian, so the reading came back unnamed — and an unnamed
+   * reading withholds the name deliberately, to leave the sentence to the
+   * model. There is no sentence here: one plate, one tool, an empty history,
+   * and an English prompt around it. The column answers instead.
+   */
+  it('names the language off the column when the journal cannot be read', async () => {
+    const speaker = await createUser({ email: 'bg@example.com', plan: 'plus', locale: 'bg' });
+    const { app: theirs, cookie: theirCookie } = await appFor(speaker);
+    try {
+      // Word for word what the account had written before the photo. All nouns.
+      for (const content of ['Калмари панирани', 'Крем с маскарпоне и захар']) {
+        await query(`INSERT INTO chat_messages (user_id, role, content) VALUES ($1, 'user', $2)`, [speaker.id, content]);
+      }
+
+      await scriptPlate();
+      const response = await theirs.inject({ method: 'POST', url: '/entries/photo', headers: { cookie: theirCookie }, payload: { photo_base64: PIXEL } });
+      expect(response.statusCode).toBe(200);
+      expect(userTurnOf(agentCalls.at(-1)!)).toContain('write to this person in Bulgarian');
+    } finally {
+      await theirs.close();
+    }
   });
 
   it('turns a failed run into a 502 and still counts it', async () => {

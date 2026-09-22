@@ -41,7 +41,9 @@ export async function scanFridgePhoto(
 ): Promise<PantryScanProposal> {
   const { userId: id, units, locale, ...ctx } = await getUserContext(userId);
 
-  const language = replyLanguage(await recentUserTexts(id, LANGUAGE_LOOKBACK), locale).name;
+  const language = replyLanguage(await recentUserTexts(id, LANGUAGE_LOOKBACK), locale, {
+    wordless: true,
+  }).name;
 
   // Stored like a meal photo, so the same signed-URL read serves it and a scan
   // that read the fridge wrongly can be looked at afterwards. Already stored

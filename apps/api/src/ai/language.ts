@@ -220,6 +220,38 @@ const SAMPLE_LIMIT = 600;
  */
 export const LANGUAGE_LOOKBACK = 6;
 
+/**
+ * What the turn being written will put in front of the model.
+ *
+ * Only the unnamed case reads this, and it is the difference between the two
+ * halves of that case being the same bug or opposite ones.
+ *
+ * The journal hands the model the sentence the detector just read — it is the
+ * user turn, and the transcript behind it is replayed — so when the reading
+ * comes back unnamed there is something better than a guess already in the
+ * request, and the standing rule in the stable prompt reads it. Five callers
+ * hand it nothing of the kind: `photo.ts` sends a plate, one tool and an empty
+ * history; `review.ts` a stats blob; `nudge.ts` a pattern; `recipes.ts` a
+ * pantry; `pantry.ts` a photograph of a fridge. What the detector read is the
+ * *journal*, which those requests do not carry, so a name withheld there is not
+ * withheld in favour of anything — every word the model can see is English, and
+ * English is what it writes.
+ *
+ * On 2026-09-22 a Bulgarian account sent a captionless photo through the photo
+ * lane and was answered "Logged tomato and feta slices…". The two turns behind
+ * it were "Калмари панирани" and "Крем с маскарпоне и захар" — Cyrillic, but
+ * nouns only, and `readCyrillic` will not split Bulgarian from Russian on
+ * nouns. Unnamed, so no brief; an empty history, so nothing to read it off;
+ * `locale = 'bg'` on the row the whole time.
+ */
+export interface LanguageTurn {
+  /**
+   * Whether the request carries none of their words — no user sentence and no
+   * transcript. False for the journal, true for the five generated lanes.
+   */
+  wordless: boolean;
+}
+
 export interface ReplyLanguage {
   /**
    * What to tell the model to write in, in English, or null to tell it nothing.
@@ -231,7 +263,8 @@ export interface ReplyLanguage {
    * detector could see but could not name, and that the stored locale could
    * not answer for either, where the stable prompt's standing rule ("reply in
    * the language they wrote to you in") is a better instruction than a guessed
-   * one, because it is reading the same words the model is.
+   * one, because it is reading the same words the model is — which is true
+   * only of a turn that carries those words. See `LanguageTurn`.
    */
   name: string | null;
   /** Whether the cheap model writes this language well enough to be let near it. */
@@ -279,13 +312,20 @@ export interface ReplyLanguage {
  *
  * Which of the two answered is on `fromLocale`.
  *
+ * `turn` says what the request being built will put in front of the model, and
+ * it only ever changes the unnamed case. See `LanguageTurn`.
+ *
  * The two failure directions are not equally bad, so this leans one way on
  * purpose. Escalating a language Haiku could have handled costs about two and a
  * half cents on that turn; failing to escalate one it cannot handle is the bug
  * this exists to fix, and the user reads the result. So every unresolved case
  * ends up escalating.
  */
-export function replyLanguage(samples: string[], locale: Locale): ReplyLanguage {
+export function replyLanguage(
+  samples: string[],
+  locale: Locale,
+  turn: LanguageTurn = { wordless: false },
+): ReplyLanguage {
   const detected = detect(samples);
 
   if (detected.kind === 'named' && detected.confident) {
@@ -296,18 +336,30 @@ export function replyLanguage(samples: string[], locale: Locale): ReplyLanguage 
     };
   }
 
-  // Something is there and it is not a language we can name. Say nothing and
-  // spend the capable model, which is the pair of choices that degrades best:
-  // the model reads their sentence and answers it in kind, and it is a model
-  // that can.
-  //
-  // Deliberately not answered from the locale, unlike the shaky reading below.
-  // This is the case where the two sources are most likely to be about
-  // different things — a sentence in a language nobody has named yet, or
-  // somebody switching mid-conversation, which is `detect`'s veto arriving
-  // here — and naming the app's language over the top of a sentence in another
-  // one is the mistake the whole file exists to undo.
-  if (detected.kind === 'unnamed') return { name: null, haiku: false, fromLocale: false };
+  /*
+   * Something is there and it is not a language we can name. Say nothing and
+   * spend the capable model, which is the pair of choices that degrades best:
+   * the model reads their sentence and answers it in kind, and it is a model
+   * that can.
+   *
+   * Deliberately not answered from the locale, unlike the shaky reading below.
+   * This is the case where the two sources are most likely to be about
+   * different things — a sentence in a language nobody has named yet, or
+   * somebody switching mid-conversation, which is `detect`'s veto arriving
+   * here — and naming the app's language over the top of a sentence in another
+   * one is the mistake the whole file exists to undo.
+   *
+   * All of which rests on there being a sentence, and on a wordless turn there
+   * is not: saying nothing there is not deference to what the model can read,
+   * it is an English prompt with nothing to argue against it. So the locale
+   * answers instead — the same fallback as `none` below, for a case that has
+   * the same amount of evidence in front of the model.
+   */
+  if (detected.kind === 'unnamed') {
+    return turn.wordless
+      ? { name: nameFor(FRANC_CODES[locale]), haiku: false, fromLocale: true }
+      : { name: null, haiku: false, fromLocale: false };
+  }
 
   const fallback = FRANC_CODES[locale];
 

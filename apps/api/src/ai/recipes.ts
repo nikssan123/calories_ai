@@ -103,7 +103,7 @@ export async function suggestRecipes(
     recentUserTexts(id, LANGUAGE_LOOKBACK),
   ]);
 
-  const language = replyLanguage(written, localeOf(profile)).name;
+  const language = replyLanguage(written, localeOf(profile), { wordless: true }).name;
 
   /*
    * An adaptation needs the recipe it is adapting, and it has to exist before a
