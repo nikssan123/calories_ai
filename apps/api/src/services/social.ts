@@ -291,6 +291,11 @@ async function scheduledUsage(): Promise<{ used: number; limit: number | null }>
     {
       org: { organizationId: env.buffer.organizationId },
       posts: {
+        // Required by PostsInput, and dropped by the edit that narrowed the
+        // status filter below — which made every usage read fail as a GraphQL
+        // error, caught by loadQueue, and reported as the same `0 / null` the
+        // unconfigured path returns. Two different faults with one symptom.
+        organizationId: env.buffer.organizationId,
         /*
          * `scheduled` alone, and this is not tidiness.
          *
