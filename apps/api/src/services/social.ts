@@ -291,8 +291,22 @@ async function scheduledUsage(): Promise<{ used: number; limit: number | null }>
     {
       org: { organizationId: env.buffer.organizationId },
       posts: {
-        organizationId: env.buffer.organizationId,
-        filter: { status: ['scheduled', 'needs_approval'] },
+        /*
+         * `scheduled` alone, and this is not tidiness.
+         *
+         * Asking for `['scheduled', 'needs_approval']` returns an empty list —
+         * not an error, and not the scheduled posts either. `needs_approval`
+         * poisons the array: on its own it returns 0, and combined with
+         * `scheduled` it takes the 16 real results down with it, while
+         * `['scheduled', 'draft']` returns 17 quite happily. Buffer's approval
+         * workflow is presumably not on this plan and the backend answers with
+         * nothing rather than saying so.
+         *
+         * The symptom was a panel reporting 0 of 10 scheduled posts while
+         * Buffer held sixteen. Drafts are excluded deliberately — they are not
+         * scheduled and do not count against the ceiling.
+         */
+        filter: { status: ['scheduled'] },
       },
     },
   );

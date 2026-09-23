@@ -515,7 +515,7 @@ export function SocialPanel() {
               <Button
                 className="flex-1"
                 onClick={() => void act('approve')}
-                disabled={busy || !chosen.length || full}
+                disabled={busy || !chosen.length}
               >
                 {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
                 Approve

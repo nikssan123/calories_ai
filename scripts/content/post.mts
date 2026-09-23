@@ -390,7 +390,12 @@ const SLIDESHOWS: Slideshow[] = [
  * An empty or absent set is not an error: page() falls back to the CSS field,
  * which is a plain poster and still a legible slide.
  */
-function stockGrounds(set: string, want: number, seed = ''): (string | undefined)[] {
+function stockGrounds(
+  set: string,
+  want: number,
+  seed = '',
+  used?: Set<string>,
+): (string | undefined)[] {
   const dir = join('content/stock', set)
   const files = existsSync(dir)
     ? readdirSync(dir)
@@ -412,12 +417,34 @@ function stockGrounds(set: string, want: number, seed = ''): (string | undefined
    */
   let offset = 0
   for (const ch of seed) offset = (offset + ch.charCodeAt(0)) % files.length
-  return Array.from({ length: want }, (_, i) => join(dir, files[(offset + i) % files.length]))
+
+  /*
+   * `used` makes the allocation global rather than per-slideshow. The hash
+   * offset alone stops two slideshows *opening* on the same photograph, and
+   * that is not enough: with eight photographs in a set and two slideshows
+   * taking four each, the hash spread them so that one still overlapped —
+   * `meals/8107172.jpg` appeared in both 10-three-ways and 11-four-numbers.
+   * Two posts in a feed sharing a photograph is the §488 tell again.
+   *
+   * So walk forward from the hashed offset and skip anything already taken.
+   * The set is exhausted before a photograph repeats; past that it wraps and
+   * reuse becomes unavoidable, which is a signal to pull more stock rather
+   * than something to paper over.
+   */
+  const chosen: string[] = []
+  for (let step = 0; chosen.length < want && step < files.length * 2; step++) {
+    const file = files[(offset + step) % files.length]!
+    const path = join(dir, file)
+    if (used && used.has(path) && step < files.length) continue
+    used?.add(path)
+    chosen.push(path)
+  }
+  return chosen
 }
 
-function expand(s: Slideshow): Post[] {
+function expand(s: Slideshow, used?: Set<string>): Post[] {
   const n = s.beats.length + 1
-  const grounds = s.grounds ?? stockGrounds(s.stock, n, s.key)
+  const grounds = s.grounds ?? stockGrounds(s.stock, n, s.key, used)
   return [
     { key: `${s.key}-0`, template: 'slide', i: 0, n, claim: s.hook, ground: grounds[0] },
     ...s.beats.map(
@@ -464,7 +491,15 @@ function loadGenerated(): Slideshow[] {
   return shows
 }
 
-const SLIDES: Post[] = [...SLIDESHOWS, ...loadGenerated()].flatMap(expand)
+/*
+ * One shared `used` set across every slideshow, so no photograph grounds two
+ * of them. Built here rather than inside expand() because the constraint is
+ * global: it is about the feed, not about any one post.
+ */
+const groundsTaken = new Set<string>()
+const SLIDES: Post[] = [...SLIDESHOWS, ...loadGenerated()].flatMap((show) =>
+  expand(show, groundsTaken),
+)
 
 /* ── helpers ────────────────────────────────────────────────────────── */
 
@@ -772,11 +807,21 @@ body{position:relative;background:${field};${ground}-webkit-font-smoothing:antia
 .slide{position:absolute;inset:0;padding:120px 92px;display:flex;flex-direction:column;justify-content:flex-start;align-items:center;gap:26px;text-align:center;padding-top:${Math.round(STAGE_H * 0.16)}px}
 .slide.mid{justify-content:center;padding-top:120px}
 .beat{width:100%}
-.cap{display:inline;background:#fff;color:${INK};box-decoration-break:clone;-webkit-box-decoration-break:clone;padding:.1em .26em;border-radius:12px}
-.cap.aside{font-family:'T',sans-serif;font-weight:600;font-size:40px;line-height:1.66}
-.cap.claim{font-family:'D',sans-serif;font-weight:800;letter-spacing:-.022em;font-size:78px;line-height:1.5}
+/* Only the claim gets a pill. Three stacked white blocks per slide covered so
+   much of the photograph that the photograph stopped doing its job — and the
+   photograph is the reason this format works at all. The claim keeps its pill
+   because it is the anchor and has to survive a bright ground; the aside and
+   the reason are set in white with a hard shadow, which is legible over
+   everything in content/stock/ and leaves the image visible. */
+.cap{display:inline;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.cap.claim{background:#fff;color:${INK};padding:.1em .26em;border-radius:12px;font-family:'D',sans-serif;font-weight:800;letter-spacing:-.022em;font-size:78px;line-height:1.5}
 .cap.claim.cover{font-size:94px;line-height:1.46}
-.cap.reason{font-family:'T',sans-serif;font-weight:600;font-size:43px;line-height:1.62}
+/* Two shadows, not one: a tight dark edge for contrast against a busy ground,
+   and a wide soft one so the letterforms hold on a pale one. A single stroke
+   reads as an outline and cheapens the type. */
+.cap.aside,.cap.reason{color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.72),0 0 26px rgba(0,0,0,.55)}
+.cap.aside{font-family:'T',sans-serif;font-weight:700;font-size:40px;line-height:1.5}
+.cap.reason{font-family:'T',sans-serif;font-weight:700;font-size:44px;line-height:1.5}
 .pips{position:absolute;bottom:78px;left:0;width:${W}px;display:flex;justify-content:center;gap:16px}
 .pips b{width:19px;height:19px;border-radius:50%;background:rgba(255,255,255,.55);display:block;box-shadow:0 1px 3px rgba(0,0,0,.28)}
 .pips b.on{background:#fff}
