@@ -1,7 +1,7 @@
 import type { Allowance, Locale, MeterName, PlanName, PlanTier } from '@ct/shared';
 import { meterLocked, TRIAL } from '@ct/shared';
 import { listWords, untilWords } from '@ct/shared/words';
-import type { IntroOffer } from '@/lib/billing';
+import type { IntroPhase } from '@/lib/billing';
 import type { MessageKey, StringKey, useT } from '@/lib/i18n';
 
 /**
@@ -322,8 +322,8 @@ function capitalise(word: string, locale: Locale): string {
 }
 
 /**
- * "1 week", "3 days" — the length of an introductory price, in the reader's
- * language.
+ * "1 week", "3 days" — how long one phase of an introductory price lasts, in
+ * the reader's language.
  *
  * Through `Intl` rather than the catalogue, which is the same bargain the rest
  * of this app strikes with units: a thirteen-language table of every count of
@@ -331,16 +331,85 @@ function capitalise(word: string, locale: Locale): string {
  * Slavic plural categories right without anybody having to think about them.
  * `lib/i18n.ts` explains why full ICU is available here.
  *
+ * **Cycles multiply.** A phase is a period *and* a number of repeats of it, and
+ * the length somebody is buying is the product of the two: a pay-as-you-go
+ * intro of three months arrives from StoreKit as one month over three cycles,
+ * and saying "1 month" there would understate the offer by two thirds. Nothing
+ * we sell today has more than one cycle, which is precisely why this is worth
+ * carrying rather than assuming.
+ *
  * Falls back to the bare pair rather than throwing, because a paywall that
  * renders nothing is worse than one that says "1 week" in English.
  */
-export function introDuration(intro: IntroOffer, locale: string): string {
-  const unit = { DAY: 'day', WEEK: 'week', MONTH: 'month', YEAR: 'year' }[intro.unit];
+export function introDuration(phase: IntroPhase, locale: string): string {
+  const unit = { DAY: 'day', WEEK: 'week', MONTH: 'month', YEAR: 'year' }[phase.unit];
+  const count = phase.count * phase.cycles;
   try {
     return new Intl.NumberFormat(locale, { style: 'unit', unit, unitDisplay: 'long' }).format(
-      intro.count,
+      count,
     );
   } catch {
-    return `${intro.count} ${unit}${intro.count === 1 ? '' : 's'}`;
+    return `${count} ${unit}${count === 1 ? '' : 's'}`;
   }
+}
+
+/**
+ * A phase as the pair `introThen` takes: its figure, and "for 1 month".
+ *
+ * The tail is `introFor`, the fragment the card already puts under the headline
+ * figure, rather than a key of its own. Every catalogue has translated that
+ * fragment and every one of them put the preposition inside it — "за 1 месец",
+ * "für 1 Monat" — so a price in front of it is a phrase in each language
+ * rather than an English shape with the words swapped.
+ */
+function rungOf(phase: IntroPhase, t: T, locale: string): [string, string] {
+  return [phase.price, t('plans.introFor')(introDuration(phase, locale))];
+}
+
+/**
+ * Every charge after the first one, ending with the price it becomes.
+ *
+ * "then €4.99 for 1 month, then €9.99 a month" — the line the card has to carry
+ * the moment an offer has a second phase, as a free trial before a discounted
+ * period does. With one phase, which is what is sold today, it collapses to
+ * exactly what this said before: "then €9.99 a month".
+ *
+ * The renewal arrives as words rather than as a `Buyable['period']` because the
+ * two ways of saying a period are a screen's business — `periodWord` and
+ * `billedWord` in `app/upgrade.tsx` — and threading the choice in here would
+ * put a third copy of that decision in the vocabulary file.
+ */
+export function introLadder(
+  phases: IntroPhase[],
+  price: string,
+  periodWord: string,
+  t: T,
+  locale: string,
+): string {
+  const rungs: [string, string][] = [
+    ...phases.slice(1).map((phase) => rungOf(phase, t, locale)),
+    [price, periodWord],
+  ];
+  // A comma rather than `listWords`: these are steps in a sequence, not a list
+  // of alternatives, and every language's "and" would be wrong between two
+  // charges that happen one after the other.
+  return rungs.map(([figure, tail]) => t('plans.introThen')(figure, tail)).join(', ');
+}
+
+/**
+ * What the first payments are, for the small print: "€0.99 for 1 week, then
+ * €4.99 for 1 month".
+ *
+ * The same rungs as `introLadder` minus the renewal, because the sentence this
+ * feeds says what happens after them in its own words. The first one is stated
+ * rather than introduced — it is the charge being agreed to, and "then" belongs
+ * only to what follows it.
+ */
+export function introSteps(phases: IntroPhase[], t: T, locale: string): string {
+  return phases
+    .map((phase, index) => {
+      const [figure, tail] = rungOf(phase, t, locale);
+      return index === 0 ? `${figure} ${tail}` : t('plans.introThen')(figure, tail);
+    })
+    .join(', ');
 }

@@ -271,6 +271,140 @@ of the twenty-seven tools it is handed. Bringing the per-turn cost down raises
 every ceiling in the product at the same margin. The packs are what somebody
 who runs out on the 22nd can do about it *this month*.
 
+## The way in
+
+**Plus monthly, sold at half price for its first month.** $4.99, then $9.99/mo,
+identical on both stores. Annual is untouched: nothing discounts $99.99, because
+a year at a discount is a year of the discount.
+
+Live on Play since 2026-09-24 as the `first-month` offer on `plus:monthly` —
+173 regions, one phase of `P1M` x 1, targeted at *never had any subscription in
+this app*. The App Store half is an introductory offer that has still to be
+configured by hand.
+
+### The ladder that was planned and cannot exist
+
+This began as $0.99 for the first week *and then* $4.99 for the first month, and
+it is worth writing down why it is not that, because the reasoning that said it
+would work was wrong in a way that reads plausible.
+
+**Apple** cannot chain two discounts, for two independent reasons. A paid intro's
+duration comes off a fixed table, and against a monthly subscription the
+shortest entry is a month — pay-as-you-go is 1–12 months, pay-up-front is 1, 2,
+3 or 6 months or a year, and there is no week. And an introductory offer is once
+per subscription *group*, not per product, so the obvious workaround — a weekly
+SKU carrying the $0.99 — is worse than no week at all: it spends the account's
+one intro and makes the discounted month behind it impossible for exactly the
+people who took the week.
+
+**Play was assumed to be the half that worked**, because an offer there is a
+list of phases and the Console's help page says an offer may have "one or more".
+It does, and the example under it is a free trial followed by a discounted
+month. That example is the whole permission. The API is blunter:
+
+```
+POST …/basePlans/monthly/offers
+400  Only one non-free phase is permited within a subscription offer.
+```
+
+So Play's two phases are *one free and one paid*, and a paid week followed by a
+paid month is refused. Two more rules fell out of the same probing, and both are
+worth keeping:
+
+| shape | outcome |
+|---|---|
+| paid `P1W` x 1 + paid `P1M` x 1 | `Only one non-free phase is permited` |
+| free `P1W` x 1 + paid `P1M` x 1 | accepted |
+| paid `P1W` x 4 | `Phase 0 duration does not match parent billing duration` |
+| paid `P1W` x 1 (single payment) | accepted |
+| paid `P1M` x 1 | accepted |
+
+A phase that *recurs* must use the base plan's own billing period; only a
+single-payment phase may have a duration of its own. So "$0.99 a week for four
+weeks" is not available either — it is four recurrences of a week against a
+monthly base plan.
+
+What remained was a choice between one rung and the other, and the month won on
+the one ground that is not a matter of taste: it is the only shape both stores
+can express, so the paywall says the same sentence on both and there is one
+price to reason about rather than two.
+
+### The weekly offer is still there, and deliberately ignored
+
+`first-week` — €1.99 for one week, 23 EUR regions — predates this and stays
+`ACTIVE`. It is not deleted, because it is a configured price that took work to
+localise and may be wanted again.
+
+It is, however, tagged **`rc-ignore-offer`**, and without that tag the
+`first-month` offer above would never have been seen by anybody. RevenueCat's
+`defaultOption` — the option `purchasePackage` charges when handed a package —
+filters offers tagged `rc-ignore-offer` or `rc-customer-center`, then takes the
+longest free trial, and failing that **the lowest introductory price**. €1.99
+is lower than €4.99, so in those 23 regions the week would have won every time
+and the discounted month would have been dead configuration. The tag is how an
+offer stays in Play without being the one the phone sells.
+
+### The first month is below cost, deliberately
+
+A fully-used Plus month is 90 chat and 8 photo — $3.69 + $1.21, plus $0.10 of
+review and $0.11 of nudge: **$5.11**. At 15% the discounted month nets $4.24, so
+it loses about **$0.87** on somebody who uses what they bought.
+
+That is not a mispricing to be fixed. It is a customer-acquisition subsidy, and
+it exists because of what `ADS.md` already spends: every install the ads produce
+arrives as a guest, and the ask that follows three days of trial was $9.99.
+
+**The grant is not pro-rated to the discount**, and that is a decision rather
+than an oversight. `allowanceFor` rolls 30 days for every `period: 'month'`
+meter, so the discounted month carries the whole 90/8. Teaching `plans.ts` that
+a subscription has a billing period at all is item 5 of §"What is left to build"
+and it is not worth doing for a worst case of one dollar.
+
+### What the phone had to learn anyway
+
+`Buyable.intro` is an **ordered list of phases** rather than one offer. Today's
+offer has a single phase and the list has one entry, so nothing on the paywall
+depends on this — but `product.introPrice` is documented on Play as *the first
+pricing phase whose amount is greater than zero*, and the free-trial-then-paid
+shape in the table above is one `PATCH` away. On that shape a single
+`introPrice` reports one of the two phases and the card's next line, "then $9.99
+a month", lands immediately after it. A wall that names the wrong next charge is
+the one mistake it is never forgiven, so `introOf` reads
+`defaultOption.pricingPhases`, drops the last entry — the base plan, which is
+the price it becomes rather than a discount — and keeps everything before it.
+iOS keeps `introPrice`, because StoreKit genuinely cannot have two.
+
+`introDuration` also learned that a phase's cycles multiply its duration, which
+had been wrong since it was written: a pay-as-you-go intro of three months
+arrives from StoreKit as one month over three cycles, and it was being called
+"1 month".
+
+### Configuring it
+
+The Play half is done and was done over the API — `androidpublisher.v3`,
+`monetization.subscriptions.basePlans.offers`. Three things worth knowing before
+touching it again:
+
+- **The service account can write here.** `play-service-account.json` is refused
+  on production *releases*, which is a different scope; offers create, patch,
+  activate and deactivate fine, and none of it opens a Play edit, so it is safe
+  to run while an upload is in flight.
+- **`regionsVersion.version` must be the current one, and it is `2025/03`.**
+  Older values are rejected outright, and `2025/02` and earlier disagree with
+  this app's own base plans about Bulgaria — they expect BGN where the base plan
+  is priced in EUR.
+- **Per-region prices are the final figures.** Each region's price was set
+  explicitly at half its own monthly price, snapped to the local ending, so the
+  Console's "Set all prices" field never came into it. That field takes a
+  pre-tax number and grosses it up — €2.00 typed there reaches a German buyer as
+  €2.39 — and the API bypasses it entirely.
+
+**App Store Connect** — still to do: an introductory offer on the Plus monthly
+subscription, *pay up front*, 1 month, $4.99. No weekly SKU.
+
+**RevenueCat** — nothing. Play attaches the offer to the base plan the existing
+package already points at.
+
 ## Who the meters do not apply to
 
 **An account whose turns run on the Claude Code subscription is unmetered.** Not a

@@ -36,7 +36,7 @@ import {
   useStoreSubscription,
   type Buyable,
   type Bundle,
-  type IntroOffer,
+  type IntroPhase,
 } from '@/lib/billing';
 import {
   ALWAYS_FREE,
@@ -45,6 +45,8 @@ import {
   TIER_PITCHES,
   tierLines,
   introDuration,
+  introLadder,
+  introSteps,
 } from '@/lib/plan-copy';
 import { haptics } from '@/lib/haptics';
 import { PRIVACY_URL, TERMS_URL } from '@/lib/links';
@@ -560,7 +562,7 @@ export default function UpgradeScreen() {
             price={offerFor(tier.plan)?.price ?? null}
             perMonth={offerFor(tier.plan)?.perMonth ?? null}
             period={offerFor(tier.plan)?.period ?? null}
-            intro={offerFor(tier.plan)?.intro ?? null}
+            intro={offerFor(tier.plan)?.intro ?? []}
             current={tier.plan === plan}
             selected={tier.plan === chosen}
             onPress={() => {
@@ -768,23 +770,7 @@ export default function UpgradeScreen() {
       </View>
 
       <Text style={[t.footnote, styles.smallPrint, { color: colors.mutedForeground }]}>
-        {/*
-          The period of the package actually selected, not the toggle's. They
-          can differ: `offerFor` falls back to a tier's only configured period,
-          so a Coach sold monthly-only under a "Yearly" toggle would otherwise
-          be described here as billed once a year — which is the one sentence on
-          this screen that has to be literally true.
-        */}
-        {offer?.intro
-          ? /* The intro replaces the ordinary sentence rather than joining it:
-               two paragraphs of terms is how the one that matters gets skipped. */
-            tr('plans.smallPrintIntro')(
-              offer.intro.price,
-              introDuration(offer.intro, locale),
-              offer.price,
-              periodWord(offer.period, tr),
-            )
-          : tr('plans.smallPrint')(billedWord(offer?.period ?? period, tr))}
+        {smallPrint(offer, period, tr, locale)}
       </Text>
 
       {/* Said before the sheet opens, not only after the charge: one line, and
@@ -1145,12 +1131,13 @@ function TierCard({
   /** What `price` buys, so the sub-line cannot claim the wrong billing cycle. */
   period: 'month' | 'year' | 'week' | null;
   /**
-   * The introductory price this person is eligible for, when the store offers
-   * one. It takes the headline figure and pushes the renewal price into the
-   * line beneath, which is both the clearer reading and the required one: the
-   * stores want the intro price, its length and what it becomes shown together.
+   * The discounted phases this person is eligible for, in charging order, and
+   * empty when the store offers none. The first one takes the headline figure
+   * and everything after it — including the renewal — goes into the line
+   * beneath, which is both the clearer reading and the required one: the stores
+   * want the price, its length and what it becomes shown together.
    */
-  intro: IntroOffer | null;
+  intro: IntroPhase[];
   current: boolean;
   selected: boolean;
   onPress: () => void;
@@ -1159,6 +1146,9 @@ function TierCard({
   const type = useType();
   const tr = useT();
   const locale = useLocale();
+  // The phase that takes the headline figure. Everything after it, renewal
+  // included, is `introLadder`'s line underneath.
+  const first = intro[0];
 
   return (
     <Pressable onPress={onPress} accessibilityRole="radio" accessibilityState={{ selected }}>
@@ -1197,10 +1187,12 @@ function TierCard({
             price && (
               <View style={styles.price}>
                 <Text style={[type.serifFigure, styles.priceFigure, { color: colors.foreground }]}>
-                  {intro ? intro.price : price}
+                  {first ? first.price : price}
                 </Text>
                 <Text style={[t.footnote, { color: colors.mutedForeground }]}>
-                  {intro ? tr('plans.introFor')(introDuration(intro, locale)) : periodWord(period, tr)}
+                  {first
+                    ? tr('plans.introFor')(introDuration(first, locale))
+                    : periodWord(period, tr)}
                 </Text>
               </View>
             )
@@ -1209,10 +1201,13 @@ function TierCard({
 
         <Text style={[t.footnote, { color: colors.mutedForeground }]}>{pitch}</Text>
 
-        {/* What the intro becomes. Never further from the figure than this. */}
-        {intro && price && (
+        {/* Every charge the headline figure is not. Never further from it than
+            this, and all of them: a trial before a discounted month has two, and
+            naming only the last would put the renewal price immediately after
+            the trial. */}
+        {first && price && (
           <Text style={[t.footnoteBold, { color: colors.foreground }]}>
-            {tr('plans.introThen')(price, periodWord(period, tr))}
+            {introLadder(intro, price, periodWord(period, tr), tr, locale)}
           </Text>
         )}
 
@@ -1300,6 +1295,49 @@ function Check({ color }: { color: string }) {
         fill="none"
       />
     </Svg>
+  );
+}
+
+/**
+ * The terms, in the shape this particular sale has.
+ *
+ * Three sentences rather than one, and they are not variations on each other.
+ * The plain one describes a renewal. A single discounted phase reads best named
+ * — "€4.99 covers your first month" — and says what it becomes. A **ladder**
+ * cannot be said either way: with two charges before the renewal there is no
+ * "first period" to point at, so the steps are listed in order and the renewal
+ * follows them.
+ *
+ * Whichever it is, it replaces the others rather than joining them. Two
+ * paragraphs of terms is how the one that matters gets skipped, and this is the
+ * line App Review reads (3.1.2).
+ *
+ * The period is the selected package's rather than the toggle's. They can
+ * differ: `offerFor` falls back to a tier's only configured period, so a Coach
+ * sold monthly-only under a "Yearly" toggle would otherwise be described here
+ * as billed once a year — which is the one sentence on this screen that has to
+ * be literally true.
+ */
+function smallPrint(
+  offer: Buyable | null | undefined,
+  period: Buyable['period'],
+  tr: ReturnType<typeof useT>,
+  locale: string,
+): string {
+  const first = offer?.intro[0];
+  if (!offer || !first) return tr('plans.smallPrint')(billedWord(offer?.period ?? period, tr));
+  if (offer.intro.length > 1) {
+    return tr('plans.smallPrintLadder')(
+      introSteps(offer.intro, tr, locale),
+      offer.price,
+      periodWord(offer.period, tr),
+    );
+  }
+  return tr('plans.smallPrintIntro')(
+    first.price,
+    introDuration(first, locale),
+    offer.price,
+    periodWord(offer.period, tr),
   );
 }
 

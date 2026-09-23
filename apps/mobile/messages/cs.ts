@@ -1155,6 +1155,8 @@ export const cs: Messages = {
   'plans.introThen': (price: string, period: string) => `pak ${price} ${period}`,
   'plans.smallPrintIntro': (intro: string, duration: string, price: string, period: string) =>
     `${intro} platí ${duration}. Potom je to ${price} ${period} přes obchod a předplatné se obnovuje, dokud ho nezrušíš. Zrušit ho můžeš kdykoli – i během prvního období – ve svém účtu v obchodě.`,
+  'plans.smallPrintLadder': (steps: string, price: string, period: string) =>
+    `Zaplatíš ${steps}. Potom je to ${price} ${period} přes obchod a předplatné se obnovuje, dokud ho nezrušíš. Zrušit ho můžeš kdykoli – i během prvního období – ve svém účtu v obchodě.`,
   'plans.guestNote':
     'Tvůj deník zůstává jen v tomhle telefonu, dokud si neuložíš účet. Můžeš to udělat hned po zaplacení.',
   'plans.smallPrint': (billing: string) =>

@@ -1025,6 +1025,8 @@ export const de: Messages = {
   'plans.introThen': (price, period) => `danach ${price} ${period}`,
   'plans.smallPrintIntro': (intro, duration, price, period) =>
     `${intro} gilt für ${duration}. Danach sind es ${price} ${period} über den Store, und es verlängert sich, bis du es stoppst. Jederzeit kündbar — auch im ersten Zeitraum — über dein Store-Konto.`,
+  'plans.smallPrintLadder': (steps, price, period) =>
+    `Du zahlst ${steps}. Danach sind es ${price} ${period} über den Store, und es verlängert sich, bis du es stoppst. Jederzeit kündbar — auch im ersten Zeitraum — über dein Store-Konto.`,
   'plans.guestNote':
     'Dein Tagebuch liegt nur auf diesem Telefon, solange du kein Konto gespeichert hast. Das kannst du direkt nach der Zahlung tun.',
   'plans.smallPrint': (billing) => `${billing} über den Store, und es verlängert sich, bis du es stoppst. Jederzeit über dein Store-Konto kündbar — was du bezahlt hast, behältst du bis zum Ende der Laufzeit.`,

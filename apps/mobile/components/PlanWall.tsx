@@ -67,6 +67,11 @@ export function PlanWall({
   const save = useSaveAccount();
   const auth = useAuth();
   const introDoor = useIntroWayIn();
+  // Only the first phase: a door is one figure and a length, and a way in that
+  // costs €0.99 for a week and then €4.99 for a month is sold by the €0.99.
+  // What the rest of it becomes is `app/upgrade.tsx`'s sentence, which is
+  // exactly where this button goes.
+  const introWay = introDoor?.intro[0];
   /*
    * A guest's wall offers the account, not a plan: saving it is what starts the
    * free trial, and a guest cannot buy anything yet (GUEST-ACCOUNTS.md). Read
@@ -229,11 +234,11 @@ export function PlanWall({
           beneath them, wearing the outline rather than the fill. The ordering
           still says what it said; it just no longer whispers.
         */}
-        {guest && introDoor && (
+        {guest && introDoor && introWay && (
           <View style={styles.introRow}>
             <Door
               colors={colors}
-              label={tr('guest.tryDoor')(introDoor.intro!.price, introDuration(introDoor.intro!, locale))}
+              label={tr('guest.tryDoor')(introWay.price, introDuration(introWay, locale))}
               onPress={() => router.push({ pathname: '/upgrade', params: { plan: introDoor.plan } })}
             />
           </View>

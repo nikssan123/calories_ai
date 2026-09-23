@@ -1034,6 +1034,8 @@ export const fr: Messages = {
   'plans.introThen': (price, period) => `puis ${price} ${period}`,
   'plans.smallPrintIntro': (intro, duration, price, period) =>
     `${intro} couvre ${duration}. Ensuite c’est ${price} ${period} via le store, et ça se renouvelle jusqu’à ce que tu l’arrêtes. Annule quand tu veux — y compris pendant la première période — depuis ton compte du store.`,
+  'plans.smallPrintLadder': (steps, price, period) =>
+    `Tu paies ${steps}. Ensuite c’est ${price} ${period} via le store, et ça se renouvelle jusqu’à ce que tu l’arrêtes. Annule quand tu veux — y compris pendant la première période — depuis ton compte du store.`,
   'plans.guestNote':
     'Ton journal ne vit que sur ce téléphone tant que tu n’as pas enregistré de compte. Tu pourras le faire juste après le paiement.',
   'plans.smallPrint': (billing) => `${billing} via le store, et ça se renouvelle jusqu’à ce que tu l’arrêtes. Annule quand tu veux depuis ton compte du store — tu gardes ce que tu as payé jusqu’à la fin de la période.`,

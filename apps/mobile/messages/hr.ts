@@ -1154,6 +1154,8 @@ export const hr: Messages = {
   'plans.introThen': (price: string, period: string) => `zatim ${price} ${period}`,
   'plans.smallPrintIntro': (intro: string, duration: string, price: string, period: string) =>
     `${intro} vrijedi ${duration}. Nakon toga je ${price} ${period} putem trgovine, a pretplata se obnavlja dok je ne otkažeš. Otkaži bilo kad — i tijekom prvog razdoblja — u računu trgovine.`,
+  'plans.smallPrintLadder': (steps: string, price: string, period: string) =>
+    `Plaćaš ${steps}. Nakon toga je ${price} ${period} putem trgovine, a pretplata se obnavlja dok je ne otkažeš. Otkaži bilo kad — i tijekom prvog razdoblja — u računu trgovine.`,
   'plans.guestNote':
     'Tvoj dnevnik živi samo na ovom telefonu dok ne spremiš račun. To možeš odmah nakon plaćanja.',
   'plans.smallPrint': (billing: string) =>

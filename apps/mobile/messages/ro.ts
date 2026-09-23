@@ -1144,6 +1144,8 @@ export const ro: Messages = {
   'plans.introThen': (price: string, period: string) => `apoi ${price} ${period}`,
   'plans.smallPrintIntro': (intro: string, duration: string, price: string, period: string) =>
     `${intro} acoperă ${duration}. După aceea este ${price} ${period} prin magazin, iar abonamentul se reînnoiește până îl oprești. Îl poți anula oricând — inclusiv în prima perioadă — din contul de magazin.`,
+  'plans.smallPrintLadder': (steps: string, price: string, period: string) =>
+    `Plătești ${steps}. După aceea este ${price} ${period} prin magazin, iar abonamentul se reînnoiește până îl oprești. Îl poți anula oricând — inclusiv în prima perioadă — din contul de magazin.`,
   'plans.guestNote':
     'Jurnalul tău trăiește doar pe telefonul acesta cât timp nu ți-ai salvat un cont. Poți face asta imediat după plată.',
   'plans.smallPrint': (billing: string) =>

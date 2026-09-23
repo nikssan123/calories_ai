@@ -1266,13 +1266,30 @@ export const en = {
    * honest way to say it. `introFor` sits under the figure, `introThen` under
    * the pitch, and `smallPrintIntro` replaces the ordinary small print.
    *
-   * `duration` comes from `introDuration` in `lib/plan-copy.ts` and is already
+   * `introThen` is used **once per remaining charge** rather than once, because
+   * a Play offer is phases: a trial before a discounted month makes the line
+   * under the pitch "then €4.99 for 1 month, then €9.99 a month". That is also
+   * why it takes a period as words rather than choosing them — the tail is
+   * `aMonth` on the last rung and `introFor` on every other.
+   *
+   * `smallPrintLadder` is `smallPrintIntro`'s sentence with the steps listed.
+   * Two of them rather than one, because a single phase can be stated as a
+   * charge and its length — "€4.99 for 1 month" — where two have to be named in
+   * order before the sentence can say what follows them.
+   *
+   * Neither repeats the duration in the cancellation clause. "During the first 1
+   * month" is what `introDuration` makes of a repeat, and every other catalogue
+   * had already written its way around it with "the first period".
+   *
+   * `duration` and `steps` come from `lib/plan-copy.ts` and are already
    * localised and pluralised by ICU: "1 week", "3 days".
    */
   'plans.introFor': (duration: string) => `for ${duration}`,
   'plans.introThen': (price: string, period: string) => `then ${price} ${period}`,
   'plans.smallPrintIntro': (intro: string, duration: string, price: string, period: string) =>
-    `${intro} covers your first ${duration}. After that it’s ${price} ${period}, charged through the store until you stop it. Cancel any time — including during the first ${duration} — from your store account.`,
+    `${intro} for ${duration}, then ${price} ${period} through the store until you stop it. Cancel any time — including during the first period — from your store account.`,
+  'plans.smallPrintLadder': (steps: string, price: string, period: string) =>
+    `You pay ${steps}. After that it’s ${price} ${period} through the store, and it renews until you stop it. Cancel any time — including during the first period — from your store account.`,
   /** Shown on the paywall to a guest, before the store sheet rather than after. */
   'plans.guestNote':
     'Your meals live on this phone until you save your account. You can do that right after paying.',

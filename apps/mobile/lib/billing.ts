@@ -153,15 +153,20 @@ export interface Buyable {
    * silently hid every monthly SKU and left the small print claiming annual
    * billing for a plan somebody was about to be charged for monthly.
    *
-   * A **week** is the third, and it exists for one reason: Apple will not sell
-   * a paid one-week introductory offer on a monthly subscription — the duration
-   * of a paid intro has to be a multiple of the subscription's own period — so
-   * the €1.99 first week that Play sells as an *offer on the monthly base plan*
-   * has to be its own weekly SKU on iOS. It is never on the period toggle: the
-   * tiers are not sold by the week, one product is, and a third segment would
-   * advertise a range that does not exist. It matters here only so that the
-   * small print says the period somebody is actually being charged at, which
-   * App Review reads as closely as anybody (3.1.2).
+   * A **week** is the third, and no product renews at one on either store, so
+   * this never fires today. It stays because a null here would silently
+   * describe a week as a month, and the period stated has to be the period
+   * charged — App Review reads that line as closely as anybody (3.1.2).
+   *
+   * The history is worth a sentence, because it is why a weekly SKU was
+   * considered and dropped. Apple will not sell a paid one-week introductory
+   * offer on a monthly subscription: a paid intro's duration comes off a fixed
+   * table whose shortest entry against a monthly product is a month. A weekly
+   * product would carry one — and an intro is once per subscription *group*, so
+   * a week bought that way spends the account's only intro and makes any
+   * discounted month behind it impossible. Play sells a week as an offer of its
+   * own (`first-week`, and see SUBSCRIPTIONS.md on why it is ignored), which is
+   * a price on the monthly product rather than a weekly product.
    */
   period: 'month' | 'year' | 'week';
   /** What to hand back to `purchase()`. */
@@ -177,31 +182,48 @@ export interface Buyable {
   /** The raw figure, for comparing a year against twelve months. */
   amount: number;
   /**
-   * The introductory offer this person is actually eligible for, or null.
+   * The discounted phases this person is eligible for, in the order they will
+   * be charged. Empty when there is no offer.
    *
-   * Null covers three different things and deliberately does not distinguish
+   * **A list, and one entry is not the same as one offer.** What is sold today
+   * is a single discounted month, so this does hold one phase — but Play offers
+   * are phases, and one of them may be free: a trial followed by a discounted
+   * month is two, and it is a `PATCH` away rather than a rewrite.
+   * `product.introPrice` cannot describe that pair. On Play it is documented as
+   * *the first pricing phase whose amount is greater than zero*, so it reports
+   * one of the two and the card's next line — "then $9.99 a month" — lands
+   * immediately after it, naming a charge that is not the next one. That is the
+   * one thing a paywall is never forgiven, so every phase is carried and every
+   * phase is drawn. See `introOf`.
+   *
+   * Empty covers three different things and deliberately does not distinguish
    * them, because the wall does the same thing in all three: no offer is
    * configured on this SKU, the store has not said yet, or this account has
    * already used its one. The last is the reason eligibility is checked at all
-   * rather than read straight off `product.introPrice` — on iOS the field is a
-   * property of the *product*, not of the person, so a reinstaller who already
-   * spent their intro week would be shown "€2 for the first week" on the card
-   * and charged the full price by the sheet a tap later. That is the one
-   * mistake a paywall is never forgiven.
+   * rather than read straight off the product — on iOS the field is a property
+   * of the *product*, not of the person, so a reinstaller who already spent
+   * their intro month would be shown "€4.99 for the first month" on the card
+   * and charged the full price by the sheet a tap later.
    */
-  intro: IntroOffer | null;
+  intro: IntroPhase[];
 }
 
-/** An introductory price, in the only terms the wall has to say out loud. */
-export interface IntroOffer {
-  /** Localised and tax-inclusive where the store says so: "€2.00". */
+/** One discounted phase of the way in, in the only terms the wall says aloud. */
+export interface IntroPhase {
+  /** Localised and tax-inclusive where the store says so: "€0.99". */
   price: string;
   /** The raw figure, for picking the cheapest way in. Never displayed. */
   amount: number;
-  /** How long it lasts: `{ unit: 'WEEK', count: 1 }` for a first week. */
+  /** How long one cycle lasts: `{ unit: 'WEEK', count: 1 }` for a first week. */
   unit: 'DAY' | 'WEEK' | 'MONTH' | 'YEAR';
   count: number;
-  /** How many of those periods are discounted. One, for everything we sell. */
+  /**
+   * How many of those cycles are charged at this price. One, for everything we
+   * sell — but it multiplies the duration rather than being decoration, which
+   * is `introDuration`'s job: a pay-as-you-go intro of three months arrives as
+   * one month, three cycles, and saying "for 1 month" would understate it by
+   * two.
+   */
   cycles: number;
 }
 
@@ -266,12 +288,12 @@ function planOf(pkg: PurchasesPackage): Exclude<PlanName, 'free'> | null {
  *
  * Asked of the store rather than inferred, because the answer is about the
  * *account* and not the product: an intro offer is once per store account per
- * subscription group, so the same SKU is €2 for a new customer and full price
- * for somebody who took the week in March.
+ * subscription group, so the same SKU is €4.99 for a new customer and full
+ * price for somebody who took the discounted month in March.
  *
  * `UNKNOWN` is treated as eligible. The two ways to be wrong are not
- * symmetrical — promising €2 to somebody the store will charge €9.99 is a
- * broken promise, while hiding a €2 offer from somebody entitled to it is only
+ * symmetrical — promising €4.99 to somebody the store will charge €9.99 is a
+ * broken promise, while hiding a €4.99 offer from somebody entitled to it is
  * a missed sale — so this would be the wrong default, except that the sheet is
  * still authoritative and `UNKNOWN` is overwhelmingly "StoreKit has not
  * answered yet" rather than "ineligible". On Android the whole question is
@@ -299,19 +321,81 @@ async function introEligibility(packages: PurchasesPackage[]): Promise<Set<strin
   }
 }
 
-/** The store's introductory price for a product, in our own vocabulary. */
-function introOf(product: PurchasesStoreProduct): IntroOffer | null {
+/**
+ * The unit of a period, or null for anything we cannot say out loud.
+ *
+ * Both stores report this as a string and Play's is a string enum, so the
+ * membership test takes a plain `string` rather than importing `PERIOD_UNIT` —
+ * a runtime import into a file that stays loadable on a build with no store at
+ * all. Play's fifth value is `UNKNOWN`, which is exactly what has no sentence.
+ */
+function unitOf(period: string): IntroPhase['unit'] | null {
+  const units: IntroPhase['unit'][] = ['DAY', 'WEEK', 'MONTH', 'YEAR'];
+  return (units as string[]).includes(period) ? (period as IntroPhase['unit']) : null;
+}
+
+/**
+ * The store's discounted phases for a product, in our own vocabulary.
+ *
+ * Two stores, two shapes, and the difference is not cosmetic.
+ *
+ * **Play** hands over the whole payment plan. `defaultOption.pricingPhases` is
+ * every phase in order, ending with the base plan's own infinitely recurring
+ * one, so everything before that last entry is the way in — however many
+ * entries that is. Play allows at most two, and at most one of them may cost
+ * money, so in practice that is a free trial and a discounted period. It is
+ * still read as a list, because reading it as one price is how the second phase
+ * goes undrawn.
+ *
+ * `defaultOption` rather than a hunt through `subscriptionOptions`, and not only
+ * because the SDK has already picked the best one: it is the option
+ * `purchasePackage` will actually charge. Drawing any other would be describing
+ * a payment plan nobody is about to be put on.
+ *
+ * The last entry is dropped by position rather than by `recurrenceMode`, which
+ * is nullable and would need the SDK's enum imported here for a test that
+ * `slice` already answers: Play always ends a payment plan with the price it
+ * becomes, and a product with no offer arrives as that phase alone and
+ * correctly yields nothing.
+ *
+ * **StoreKit** has one introductory offer per subscription and can never have
+ * two, so `introPrice` is the whole answer there and the list has one entry.
+ * `defaultOption` is null on iOS — the SDK documents it as Google Play only —
+ * which is what picks the branch, rather than a `Platform.OS` test that would
+ * be a second place to keep the same fact.
+ */
+function introOf(product: PurchasesStoreProduct): IntroPhase[] {
+  const option = product.defaultOption;
+  if (option) {
+    return option.pricingPhases.slice(0, -1).flatMap((phase) => {
+      const unit = unitOf(phase.billingPeriod.unit);
+      if (!unit) return [];
+      return [
+        {
+          price: phase.price.formatted,
+          amount: phase.price.amountMicros / 1_000_000,
+          unit,
+          count: phase.billingPeriod.value,
+          // Null on Play for a phase that does not repeat — a single payment
+          // covering its whole period, which is one cycle of it.
+          cycles: phase.billingCycleCount ?? 1,
+        },
+      ];
+    });
+  }
   const intro = product.introPrice;
-  if (!intro) return null;
-  const unit = intro.periodUnit;
-  if (unit !== 'DAY' && unit !== 'WEEK' && unit !== 'MONTH' && unit !== 'YEAR') return null;
-  return {
-    price: intro.priceString,
-    amount: intro.price,
-    unit,
-    count: intro.periodNumberOfUnits,
-    cycles: intro.cycles,
-  };
+  if (!intro) return [];
+  const unit = unitOf(intro.periodUnit);
+  if (!unit) return [];
+  return [
+    {
+      price: intro.priceString,
+      amount: intro.price,
+      unit,
+      count: intro.periodNumberOfUnits,
+      cycles: intro.cycles,
+    },
+  ];
 }
 
 export async function buyables(): Promise<Buyable[]> {
@@ -348,7 +432,7 @@ export async function buyables(): Promise<Buyable[]> {
       price: priceString,
       perMonth: pricePerMonthString,
       amount: price,
-      intro: eligible.has(pkg.product.identifier) ? introOf(pkg.product) : null,
+      intro: eligible.has(pkg.product.identifier) ? introOf(pkg.product) : [],
     });
   }
 
@@ -440,8 +524,10 @@ export function useIntroWayIn(): Buyable | null {
     let alive = true;
     void loadOffersOnce().then((offers) => {
       if (!alive) return;
-      const withIntro = offers.filter((offer) => offer.intro !== null);
-      withIntro.sort((a, b) => a.intro!.amount - b.intro!.amount);
+      // The first phase, because it is the figure the door says out loud.
+      const figure = (offer: Buyable) => offer.intro[0]?.amount ?? Infinity;
+      const withIntro = offers.filter((offer) => offer.intro.length > 0);
+      withIntro.sort((a, b) => figure(a) - figure(b));
       setFound(withIntro[0] ?? null);
     });
     return () => {

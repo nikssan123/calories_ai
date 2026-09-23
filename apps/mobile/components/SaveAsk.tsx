@@ -56,6 +56,9 @@ export function SaveAsk({
   const locale = useLocale();
   const router = useRouter();
   const introDoor = useIntroWayIn();
+  // Only the first phase. A door is one figure and a length; what the way in
+  // becomes after it is `app/upgrade.tsx`'s sentence, which is where it goes.
+  const introWay = introDoor?.intro[0];
 
   /*
    * Read off the session rather than trusting the row that built this card.
@@ -141,7 +144,7 @@ export function SaveAsk({
           failure — no offer configured, no store, or this person has already
           used theirs. See `useIntroWayIn`.
         */}
-        {introDoor && (
+        {introDoor && introWay && (
           <PressableChunk
             depth={3}
             radius={999}
@@ -153,7 +156,7 @@ export function SaveAsk({
             ]}
           >
             <Text style={[t.bodySemibold, styles.doorLabel, { color: colors.foreground }]}>
-              {tr('guest.tryDoor')(introDoor.intro!.price, introDuration(introDoor.intro!, locale))}
+              {tr('guest.tryDoor')(introWay.price, introDuration(introWay, locale))}
             </Text>
           </PressableChunk>
         )}

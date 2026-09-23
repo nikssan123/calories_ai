@@ -1026,6 +1026,8 @@ export const es: Messages = {
   'plans.introThen': (price, period) => `luego ${price} ${period}`,
   'plans.smallPrintIntro': (intro, duration, price, period) =>
     `${intro} cubre ${duration}. Después son ${price} ${period} a través de la tienda, y se renueva hasta que lo pares. Cancela cuando quieras — también durante el primer periodo — desde tu cuenta de la tienda.`,
+  'plans.smallPrintLadder': (steps, price, period) =>
+    `Pagas ${steps}. Después son ${price} ${period} a través de la tienda, y se renueva hasta que lo pares. Cancela cuando quieras — también durante el primer periodo — desde tu cuenta de la tienda.`,
   'plans.guestNote':
     'Tu diario vive solo en este teléfono mientras no guardes una cuenta. Puedes hacerlo justo después de pagar.',
   'plans.smallPrint': (billing) => `${billing} a través de la tienda, y se renueva hasta que lo pares. Cancela cuando quieras desde tu cuenta de la tienda — conservas lo que has pagado hasta que acabe el periodo.`,

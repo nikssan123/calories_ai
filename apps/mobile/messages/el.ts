@@ -1126,6 +1126,8 @@ export const el: Messages = {
   'plans.introThen': (price: string, period: string) => `μετά ${price} ${period}`,
   'plans.smallPrintIntro': (intro: string, duration: string, price: string, period: string) =>
     `${intro} ισχύει για ${duration}. Μετά είναι ${price} ${period} μέσω του καταστήματος και ανανεώνεται μέχρι να το σταματήσεις. Ακύρωσε όποτε θέλεις — και μέσα στην πρώτη περίοδο — από τον λογαριασμό σου στο κατάστημα.`,
+  'plans.smallPrintLadder': (steps: string, price: string, period: string) =>
+    `Πληρώνεις ${steps}. Μετά είναι ${price} ${period} μέσω του καταστήματος και ανανεώνεται μέχρι να το σταματήσεις. Ακύρωσε όποτε θέλεις — και μέσα στην πρώτη περίοδο — από τον λογαριασμό σου στο κατάστημα.`,
   'plans.guestNote':
     'Το ημερολόγιό σου μένει μόνο σε αυτό το τηλέφωνο όσο δεν έχεις αποθηκεύσει λογαριασμό. Μπορείς να το κάνεις αμέσως μετά την πληρωμή.',
   'plans.smallPrint': (billing: string) =>

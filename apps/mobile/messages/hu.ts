@@ -1131,6 +1131,8 @@ export const hu: Messages = {
   'plans.introThen': (price: string, period: string) => `utána ${price} ${period}`,
   'plans.smallPrintIntro': (intro: string, duration: string, price: string, period: string) =>
     `${intro} az első időszakra szól: ${duration}. Utána ${price} ${period} az áruházon keresztül, és megújul, amíg le nem mondod. Bármikor lemondhatod – az első időszak alatt is – az áruházfiókodban.`,
+  'plans.smallPrintLadder': (steps: string, price: string, period: string) =>
+    `Ezt fizeted: ${steps}. Utána ${price} ${period} az áruházon keresztül, és megújúl, amíg le nem mondod. Bármikor lemondhatod – az első időszak alatt is – az áruházfiókodban.`,
   'plans.guestNote':
     'A naplód csak ezen a telefonon él, amíg nem mentesz fiókot. Ezt rögtön a fizetés után megteheted.',
   'plans.smallPrint': (billing: string) =>

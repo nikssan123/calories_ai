@@ -1139,6 +1139,8 @@ export const uk: Messages = {
   'plans.introThen': (price: string, period: string) => `потім ${price} ${period}`,
   'plans.smallPrintIntro': (intro: string, duration: string, price: string, period: string) =>
     `${intro} діє ${duration}. Далі це ${price} ${period} через магазин, і підписка поновлюється, доки ти її не скасуєш. Скасувати можна будь-коли — зокрема протягом першого періоду — в акаунті магазину.`,
+  'plans.smallPrintLadder': (steps: string, price: string, period: string) =>
+    `Ти платиш ${steps}. Далі це ${price} ${period} через магазин, і підписка поновлюється, доки ти її не скасуєш. Скасувати можна будь-коли — зокрема протягом першого періоду — в акаунті магазину.`,
   'plans.guestNote':
     'Твій щоденник живе лише в цьому телефоні, доки ти не збережеш акаунт. Це можна зробити одразу після оплати.',
   'plans.smallPrint': (billing: string) =>

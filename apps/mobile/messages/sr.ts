@@ -1164,6 +1164,8 @@ export const sr: Messages = {
   'plans.introThen': (price: string, period: string) => `затим ${price} ${period}`,
   'plans.smallPrintIntro': (intro: string, duration: string, price: string, period: string) =>
     `${intro} важи ${duration}. После тога је ${price} ${period} преко продавнице и обнавља се док не откажеш. Откажи кад год хоћеш — и током првог периода — у налогу продавнице.`,
+  'plans.smallPrintLadder': (steps: string, price: string, period: string) =>
+    `Плаћаш ${steps}. После тога је ${price} ${period} преко продавнице и обнавља се док не откажеш. Откажи кад год хоћеш — и током првог периода — у налогу продавнице.`,
   'plans.guestNote':
     'Твој дневник постоји само на овом телефону док не сачуваш налог. То можеш одмах после плаћања.',
   'plans.smallPrint': (billing: string) =>
