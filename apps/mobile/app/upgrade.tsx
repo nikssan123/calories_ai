@@ -1303,7 +1303,7 @@ function Check({ color }: { color: string }) {
  *
  * Three sentences rather than one, and they are not variations on each other.
  * The plain one describes a renewal. A single discounted phase reads best named
- * — "€4.99 covers your first month" — and says what it becomes. A **ladder**
+ * — "€3.99 covers your first month" — and says what it becomes. A **ladder**
  * cannot be said either way: with two charges before the renewal there is no
  * "first period" to point at, so the steps are listed in order and the renewal
  * follows them.

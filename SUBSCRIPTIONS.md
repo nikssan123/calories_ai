@@ -273,8 +273,11 @@ who runs out on the 22nd can do about it *this month*.
 
 ## The way in
 
-**Plus monthly, sold at half price for its first month.** $4.99, then $9.99/mo,
-identical on both stores. Annual is untouched: nothing discounts $99.99, because
+**Plus monthly, sold at about 40% for its first month.** $3.99, then $9.99/mo,
+identical on both stores. It opened at $4.99 on 2026-09-24 and came down the
+same day; every region is priced at the same share of its own monthly figure,
+so the US, the eurozone and the UK all read 3.99 and the rest follow in their
+own currency. Annual is untouched: nothing discounts $99.99, because
 a year at a discount is a year of the discount.
 
 Live on Play since 2026-09-24 as the `first-month` offer on `plus:monthly` —
@@ -284,7 +287,7 @@ configured by hand.
 
 ### The ladder that was planned and cannot exist
 
-This began as $0.99 for the first week *and then* $4.99 for the first month, and
+This began as $0.99 for the first week *and then* a discounted first month, and
 it is worth writing down why it is not that, because the reasoning that said it
 would work was wrong in a way that reads plausible.
 
@@ -340,15 +343,17 @@ It is, however, tagged **`rc-ignore-offer`**, and without that tag the
 `defaultOption` — the option `purchasePackage` charges when handed a package —
 filters offers tagged `rc-ignore-offer` or `rc-customer-center`, then takes the
 longest free trial, and failing that **the lowest introductory price**. €1.99
-is lower than €4.99, so in those 23 regions the week would have won every time
+is lower than €3.99, so in those 23 regions the week would have won every time
 and the discounted month would have been dead configuration. The tag is how an
 offer stays in Play without being the one the phone sells.
 
 ### The first month is below cost, deliberately
 
 A fully-used Plus month is 90 chat and 8 photo — $3.69 + $1.21, plus $0.10 of
-review and $0.11 of nudge: **$5.11**. At 15% the discounted month nets $4.24, so
-it loses about **$0.87** on somebody who uses what they bought.
+review and $0.11 of nudge: **$5.11**. At 15% the discounted month nets $3.39, so
+it loses about **$1.72** on somebody who uses what they bought — twice what the
+opening $4.99 lost, and the number to watch if conversion does not move with it.
+The subsidy is now roughly a third of a full month's revenue.
 
 That is not a mispricing to be fixed. It is a customer-acquisition subsidy, and
 it exists because of what `ADS.md` already spends: every install the ads produce
@@ -400,7 +405,7 @@ touching it again:
   €2.39 — and the API bypasses it entirely.
 
 **App Store Connect** — still to do: an introductory offer on the Plus monthly
-subscription, *pay up front*, 1 month, $4.99. No weekly SKU.
+subscription, *pay up front*, 1 month, $3.99. No weekly SKU.
 
 **RevenueCat** — nothing. Play attaches the offer to the base plan the existing
 package already points at.

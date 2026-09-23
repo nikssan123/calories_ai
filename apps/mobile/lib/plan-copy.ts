@@ -369,7 +369,7 @@ function rungOf(phase: IntroPhase, t: T, locale: string): [string, string] {
 /**
  * Every charge after the first one, ending with the price it becomes.
  *
- * "then €4.99 for 1 month, then €9.99 a month" — the line the card has to carry
+ * "then €3.99 for 1 month, then €9.99 a month" — the line the card has to carry
  * the moment an offer has a second phase, as a free trial before a discounted
  * period does. With one phase, which is what is sold today, it collapses to
  * exactly what this said before: "then €9.99 a month".
@@ -398,7 +398,7 @@ export function introLadder(
 
 /**
  * What the first payments are, for the small print: "€0.99 for 1 week, then
- * €4.99 for 1 month".
+ * €3.99 for 1 month".
  *
  * The same rungs as `introLadder` minus the renewal, because the sentence this
  * feeds says what happens after them in its own words. The first one is stated

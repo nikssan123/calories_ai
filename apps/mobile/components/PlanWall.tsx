@@ -68,7 +68,7 @@ export function PlanWall({
   const auth = useAuth();
   const introDoor = useIntroWayIn();
   // Only the first phase: a door is one figure and a length, and a way in that
-  // costs €0.99 for a week and then €4.99 for a month is sold by the €0.99.
+  // costs €0.99 for a week and then €3.99 for a month is sold by the €0.99.
   // What the rest of it becomes is `app/upgrade.tsx`'s sentence, which is
   // exactly where this button goes.
   const introWay = introDoor?.intro[0];

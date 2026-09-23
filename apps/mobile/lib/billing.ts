@@ -202,7 +202,7 @@ export interface Buyable {
    * already used its one. The last is the reason eligibility is checked at all
    * rather than read straight off the product — on iOS the field is a property
    * of the *product*, not of the person, so a reinstaller who already spent
-   * their intro month would be shown "€4.99 for the first month" on the card
+   * their intro month would be shown "€3.99 for the first month" on the card
    * and charged the full price by the sheet a tap later.
    */
   intro: IntroPhase[];
@@ -288,12 +288,12 @@ function planOf(pkg: PurchasesPackage): Exclude<PlanName, 'free'> | null {
  *
  * Asked of the store rather than inferred, because the answer is about the
  * *account* and not the product: an intro offer is once per store account per
- * subscription group, so the same SKU is €4.99 for a new customer and full
+ * subscription group, so the same SKU is €3.99 for a new customer and full
  * price for somebody who took the discounted month in March.
  *
  * `UNKNOWN` is treated as eligible. The two ways to be wrong are not
- * symmetrical — promising €4.99 to somebody the store will charge €9.99 is a
- * broken promise, while hiding a €4.99 offer from somebody entitled to it is
+ * symmetrical — promising €3.99 to somebody the store will charge €9.99 is a
+ * broken promise, while hiding a €3.99 offer from somebody entitled to it is
  * a missed sale — so this would be the wrong default, except that the sheet is
  * still authoritative and `UNKNOWN` is overwhelmingly "StoreKit has not
  * answered yet" rather than "ineligible". On Android the whole question is

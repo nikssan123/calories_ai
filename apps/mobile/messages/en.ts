@@ -1268,13 +1268,13 @@ export const en = {
    *
    * `introThen` is used **once per remaining charge** rather than once, because
    * a Play offer is phases: a trial before a discounted month makes the line
-   * under the pitch "then €4.99 for 1 month, then €9.99 a month". That is also
+   * under the pitch "then €3.99 for 1 month, then €9.99 a month". That is also
    * why it takes a period as words rather than choosing them — the tail is
    * `aMonth` on the last rung and `introFor` on every other.
    *
    * `smallPrintLadder` is `smallPrintIntro`'s sentence with the steps listed.
    * Two of them rather than one, because a single phase can be stated as a
-   * charge and its length — "€4.99 for 1 month" — where two have to be named in
+   * charge and its length — "€3.99 for 1 month" — where two have to be named in
    * order before the sentence can say what follows them.
    *
    * Neither repeats the duration in the cancellation clause. "During the first 1
