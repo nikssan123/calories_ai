@@ -570,7 +570,23 @@ export async function decide(groupKey: string, decision: SocialDecision): Promis
   }
 
   if (!env.buffer) throw new Error('Buffer is not configured on this deployment.');
-  if (cover.state === 'posted') throw new Error('Already posted');
+  /*
+   * A clean success is final; a partial one is not.
+   *
+   * SOCIAL.md said "retrying is a second approval for the channels that
+   * missed", and this line made that impossible: two of three channels
+   * succeeding leaves the group `posted`, so the retry for the third was
+   * refused as "Already posted". Approving three channels and being able to
+   * reach only two, for good, is the wrong end state for the one failure mode
+   * Buffer makes most likely — a channel needing reconnection.
+   *
+   * So the block applies only when nothing failed. On a retry the caller is
+   * expected to untick the channels that already went: `buffer_ids` holds post
+   * ids and not channel ids, so nothing here can work out which those were —
+   * which is a real limitation and the reason the panel shows `channelIds` and
+   * the error side by side.
+   */
+  if (cover.state === 'posted' && !cover.error) throw new Error('Already posted');
 
   const caption = decision.caption ?? cover.caption;
   const channels = await listChannels();
