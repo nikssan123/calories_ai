@@ -1,0 +1,22 @@
+{
+  "key": "19-say-it-out-loud",
+  "stock": "meals",
+  "hook": "The test I set myself:<br>log a meal without looking down",
+  "beats": [
+    {
+      "aside": "(sat at a table with other people)",
+      "claim": "Hold the mic. Say the sentence.",
+      "reason": "Describing lunch out loud is the same thing you would say to a friend, so nothing needs translating."
+    },
+    {
+      "aside": "(no fields to tab between)",
+      "claim": "One question, not a form",
+      "reason": "The screen asks what you have eaten today and then gets out of the way until you answer it."
+    },
+    {
+      "aside": "(you can check later, on Today)",
+      "claim": "The numbers show up after",
+      "reason": "Calories, protein, carbs and fat land on their own screen rather than interrupting you mid-meal."
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "key": "18-what-logging-costs",
+  "stock": "counter",
+  "hook": "Logging dinner used to take me<br>longer than eating it. Three reasons:",
+  "beats": [
+    {
+      "aside": "(1 — the ex-database)",
+      "claim": "I was searching for my own food",
+      "reason": "You already know what you ate; typing it into a search box only to hunt for it again is doing the work twice."
+    },
+    {
+      "aside": "(2 — the bit I quietly cut)",
+      "claim": "I was picking a portion size",
+      "reason": "A dropdown of cups and grams turns a description into an admin task, so there is no dropdown."
+    },
+    {
+      "aside": "(3 — the arithmetic)",
+      "claim": "I was adding things up",
+      "reason": "The ring on Today does the sum against a target, which is the one job a screen is actually good at."
+    }
+  ]
+}

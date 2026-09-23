@@ -4,6 +4,11 @@
 //   npx tsx scripts/content/suggest.mts                 # five, to content/slides/
 //   npx tsx scripts/content/suggest.mts --count 8
 //   npx tsx scripts/content/suggest.mts --print         # show them, write nothing
+//   npx tsx scripts/content/suggest.mts --theme 'saying what you ate out loud'
+//
+// A --theme narrows the subject and nothing else: the fact sheet and the
+// prohibitions in ai/slides.ts still bind, because a free-text steer is exactly
+// the opening a model takes to reach past them.
 //
 // The front of the chain:
 //
@@ -32,7 +37,7 @@ import { suggestSlideshows, type SuggestedSlideshow } from '../../apps/api/src/a
 
 /* ── flags ──────────────────────────────────────────────────────────── */
 
-const FLAGS = new Set(['count', 'out', 'print'])
+const FLAGS = new Set(['count', 'out', 'print', 'theme'])
 const BOOL = new Set(['print'])
 const argv = process.argv.slice(2)
 const opts: Record<string, string> = {}
@@ -103,9 +108,11 @@ function nextIndex(): number {
 /* ── run ────────────────────────────────────────────────────────────── */
 
 const avoid = existingHooks()
-console.log(`Asking for ${COUNT}, avoiding ${avoid.length} hook(s) already in play…\n`)
+console.log(
+  `Asking for ${COUNT}${opts.theme ? ` on "${opts.theme}"` : ''}, avoiding ${avoid.length} hook(s) already in play…\n`,
+)
 
-const { slideshows, rejected, model, costUsd } = await suggestSlideshows(COUNT, avoid)
+const { slideshows, rejected, model, costUsd } = await suggestSlideshows(COUNT, avoid, opts.theme)
 
 for (const { key, why } of rejected) {
   console.log(`  rejected  ${key.padEnd(24)} ${why}`)

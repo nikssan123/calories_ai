@@ -78,23 +78,39 @@ const KEEP = opts.keep === 'true'
  * the same amateur tell as one face at one weight in post.mts.
  */
 const SETS: Record<string, string[]> = {
+  /*
+   * Six or seven queries a set, not four. Asking one query for twenty results
+   * walks into its own long tail: `kitchen at night warm lamp light` at depth
+   * twenty returned a bar counter with vinyl records on it, which then grounded
+   * a slideshow about searching a food database. Breadth holds the subject;
+   * depth does not.
+   */
   meals: [
     'hand holding bowl of food',
     'person eating at kitchen table',
     'plate of food on wooden table daylight',
     'homemade lunch overhead phone photo',
+    'person eating salad at home',
+    'dinner plate held in two hands',
+    'bowl of pasta on a table at home',
   ],
   counter: [
     'kitchen counter cooking mess',
     'chopping vegetables on board home kitchen',
     'meal prep containers counter',
     'coffee and breakfast kitchen window light',
+    'hands cooking on a home stove',
+    'leftovers in a container on a counter',
+    'home kitchen worktop with ingredients',
   ],
   market: [
     'supermarket produce aisle',
     'grocery shopping basket vegetables',
     'farmers market vegetable stall',
     'grocery bags on kitchen floor',
+    'person choosing vegetables in a shop',
+    'trolley in a supermarket aisle',
+    'unpacking shopping in a kitchen',
   ],
   /**
    * Evening, and the kitchen after dark. Originally this set also asked for gym
@@ -110,6 +126,9 @@ const SETS: Record<string, string[]> = {
     'person eating late at night kitchen',
     'kitchen at night warm lamp light',
     'person on phone at kitchen table evening',
+    'late night snack kitchen counter',
+    'person standing in a dark kitchen',
+    'dim kitchen with a light over the table',
   ],
 }
 

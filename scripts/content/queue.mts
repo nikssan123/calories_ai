@@ -117,12 +117,39 @@ const CAPTIONS: Record<string, string> = {
     'Today is where you look when you are deciding dinner. The ring, the macros, and the four numbers underneath.',
   '14-four-screens-3':
     'Progress and History are the two nobody demos and the reason people stay. A trend that is not a verdict.',
+
+  '15-fridge-door-maths-0':
+    'The maths everyone does standing at the fridge door. Three steps, none of them accurate.',
+
+  // The chat-and-write batch: one subject, six angles. A carousel has one
+  // caption, so these are written for the cover — the beats are on the slides
+  // and repeating them underneath reads as a transcript.
+  '16-sentence-not-spreadsheet-0':
+    'I deleted the search box. You type what you ate in plain language and the app works out the numbers.',
+  '17-gave-up-in-march-0':
+    'Nobody quits tracking on day one. They quit at the fourteenth near-identical search result for one bowl of soup.',
+  '18-what-logging-costs-0':
+    'Logging dinner used to take me longer than eating it. Three reasons, and all three are gone.',
+  '19-say-it-out-loud-0':
+    'The test I set myself: log a meal without looking down. Hold the mic, say the sentence, carry on eating.',
+  '21-one-question-app-0':
+    'I built the whole thing around one question I got sick of dodging: what have you eaten today?',
 }
 
+/**
+ * Only the cover's caption is ever posted.
+ *
+ * A carousel has one body, and `decide` takes it from slide 0 — the beat rows
+ * keep their own text as notes for whoever is deciding and it reaches no
+ * channel. So a missing caption on a beat slide is not a problem worth
+ * reporting, and counting them made the warning cry wolf: 19 of 44, all of
+ * them harmless.
+ */
 function captionFor(key: string): { text: string; written: boolean } {
   const written = CAPTIONS[key]
   if (written) return { text: written, written: true }
-  return { text: `TODO caption — ${key}`, written: false }
+  const isCover = /-0$/.test(key)
+  return { text: `TODO caption — ${key}`, written: !isCover }
 }
 
 /* ── render ─────────────────────────────────────────────────────────── */

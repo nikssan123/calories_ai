@@ -819,9 +819,14 @@ body{position:relative;background:${field};${ground}-webkit-font-smoothing:antia
 /* Two shadows, not one: a tight dark edge for contrast against a busy ground,
    and a wide soft one so the letterforms hold on a pale one. A single stroke
    reads as an outline and cheapens the type. */
-.cap.aside,.cap.reason{color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.72),0 0 26px rgba(0,0,0,.55)}
-.cap.aside{font-family:'T',sans-serif;font-weight:700;font-size:40px;line-height:1.5}
-.cap.reason{font-family:'T',sans-serif;font-weight:700;font-size:44px;line-height:1.5}
+/* A translucent dark pill, not shadows alone. White type with two shadows is
+   legible over most of content/stock/ and not over a bright one — the orange
+   brick wall in 17-gave-up-in-march had the aside and the reason effectively
+   unreadable. A 58% black pill fixes that on any ground and still lets the
+   photograph through, which a solid white pill does not. */
+.cap.aside,.cap.reason{color:#fff;background:rgba(0,0,0,.58);padding:.1em .3em;border-radius:12px;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.cap.aside{font-family:'T',sans-serif;font-weight:700;font-size:39px;line-height:1.62}
+.cap.reason{font-family:'T',sans-serif;font-weight:700;font-size:43px;line-height:1.6}
 .pips{position:absolute;bottom:78px;left:0;width:${W}px;display:flex;justify-content:center;gap:16px}
 .pips b{width:19px;height:19px;border-radius:50%;background:rgba(255,255,255,.55);display:block;box-shadow:0 1px 3px rgba(0,0,0,.28)}
 .pips b.on{background:#fff}

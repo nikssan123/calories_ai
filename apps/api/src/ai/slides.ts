@@ -168,11 +168,19 @@ export const SuggestedSlideshow = z.object({
 });
 export type SuggestedSlideshow = z.infer<typeof SuggestedSlideshow>;
 
-function taskPrompt(count: number, avoid: string[]): string {
+function taskPrompt(count: number, avoid: string[], theme?: string): string {
   const seen = avoid.length
     ? `\n\nAlready made, so do not repeat the idea or the hook shape:\n${avoid.map((k) => `  * ${k}`).join('\n')}`
     : '';
-  return `Write ${count} slideshows. Vary the register across them — at least one that mentions no feature at all.${seen}`;
+  /*
+   * A theme narrows the subject and nothing else. The fact sheet and the
+   * prohibitions still bind — a theme is not permission to reach past them,
+   * which is the failure a free-text steer invites.
+   */
+  const angle = theme
+    ? `\n\nAll ${count} are on one subject: ${theme}\nStay inside the fact sheet. Approach it from a different direction in each — the friction it removes, what it replaced, what it feels like to use, who gave up on tracking before it. Do not write the same slideshow with the words moved around.`
+    : '\nVary the register across them — at least one that mentions no feature at all.';
+  return `Write ${count} slideshows.${angle}${seen}`;
 }
 
 /**
@@ -230,6 +238,7 @@ export function parseSlideshows(text: string): SuggestedSlideshow[] {
 export async function suggestSlideshows(
   count = 5,
   avoid: string[] = [],
+  theme?: string,
 ): Promise<{
   slideshows: SuggestedSlideshow[];
   rejected: { key: string; why: string }[];
@@ -258,7 +267,7 @@ export async function suggestSlideshows(
     model: MODELS.content_plan,
     staticSystemPrompt: SYSTEM_PROMPT,
     dynamicSystemPrompt: '',
-    text: taskPrompt(count, avoid),
+    text: taskPrompt(count, avoid, theme),
     photo: null,
     tools: [],
     toolNames: [],

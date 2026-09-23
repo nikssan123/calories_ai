@@ -1,0 +1,22 @@
+{
+  "key": "16-sentence-not-spreadsheet",
+  "stock": "meals",
+  "hook": "I deleted the search box.<br>Here is what replaced it:",
+  "beats": [
+    {
+      "aside": "(a sentence. that is the input.)",
+      "claim": "You type what you ate",
+      "reason": "\"chicken burrito bowl with guac\" is already a complete description, so the app treats it as one."
+    },
+    {
+      "aside": "(hands covered in oil, usually)",
+      "claim": "Or you hold the mic and say it",
+      "reason": "Speaking a meal out loud takes about four seconds and needs neither hand free afterwards."
+    },
+    {
+      "aside": "(works on someone else's cooking too)",
+      "claim": "Or you photograph the plate",
+      "reason": "No forms, nothing to search for — the point was to remove the part where you describe food twice."
+    }
+  ]
+}

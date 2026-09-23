@@ -1,0 +1,22 @@
+{
+  "key": "17-gave-up-in-march",
+  "stock": "evening",
+  "hook": "Everyone I know who quit tracking<br>quit at the same moment:",
+  "beats": [
+    {
+      "aside": "(nobody quits on day one)",
+      "claim": "The fourteenth search result",
+      "reason": "Scrolling a list of near-identical entries for one bowl of soup is where the habit dies, not the calories."
+    },
+    {
+      "aside": "(be honest about the slider)",
+      "claim": "The portion field they guessed at anyway",
+      "reason": "If you are inventing the grams, the precision was never real, so I stopped asking for it."
+    },
+    {
+      "aside": "(this is the whole pitch)",
+      "claim": "Nothing to search, nothing to pick",
+      "reason": "Say the meal in plain language and the numbers get worked out on the other side of the screen."
+    }
+  ]
+}

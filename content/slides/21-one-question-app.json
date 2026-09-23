@@ -1,0 +1,22 @@
+{
+  "key": "21-one-question-app",
+  "stock": "market",
+  "hook": "I built the whole thing around<br>one question I got sick of dodging",
+  "beats": [
+    {
+      "aside": "(six months of evenings, mostly deleting)",
+      "claim": "\"What have you eaten today?\"",
+      "reason": "Everything else was cut until the journal screen asked that and offered three ways to answer it."
+    },
+    {
+      "aside": "(typing, speaking, photographing)",
+      "claim": "Three answers, no fields",
+      "reason": "Each one takes a description of a meal — the thing you already have in your head — and nothing else."
+    },
+    {
+      "aside": "(this is where Day So Far ends)",
+      "claim": "Then look at Today, or don't",
+      "reason": "The ring, the macros and the four diet quality numbers sit on one screen, waiting rather than nagging."
+    }
+  ]
+}
