@@ -385,6 +385,7 @@ async function createPost(
   assetUrls: string[],
   altText: string,
   isVideo = false,
+  reminder = false,
 ): Promise<string> {
   const data = await bufferCall<{
     createPost: { __typename: string; post?: { id: string }; message?: string };
@@ -403,10 +404,19 @@ async function createPost(
         // the schedule a person already set up in Buffer. Choosing a time here
         // would mean reimplementing that badly.
         mode: 'addToQueue',
-        // automatic, not notification: a notification post has to be published
-        // by hand from Buffer's phone app, and the point of approving here is
-        // that the decision is already made.
-        schedulingType: 'automatic',
+        /*
+         * automatic publishes it; notification hands it to the phone.
+         *
+         * automatic is still the default, for the reason it always was: the
+         * point of approving here is that the decision is already made, and a
+         * carousel gains nothing from a second pair of hands. `reminder` opts
+         * out per decision, and exists because of a limit in Buffer's API
+         * rather than a preference — there is no field on any per-service
+         * metadata input to attach a track from Instagram's audio library, so
+         * a post that wants a trending sound has to be finished in the native
+         * editor. See `SocialDecision.reminder`.
+         */
+        schedulingType: reminder ? 'notification' : 'automatic',
         text,
         /*
          * Every slide, in carousel order — this is what makes a slideshow one
@@ -695,7 +705,9 @@ export async function decide(groupKey: string, decision: SocialDecision): Promis
     }
     try {
       const text = withHashtags(caption, decision.hashtags ?? [], channel.service);
-      posted.push(await createPost(channel, text, assetUrls, altText, isVideo));
+      posted.push(
+        await createPost(channel, text, assetUrls, altText, isVideo, decision.reminder ?? false),
+      );
     } catch (error) {
       failures.push(`${channel.service}: ${(error as Error).message}`);
     }

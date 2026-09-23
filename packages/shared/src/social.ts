@@ -145,6 +145,28 @@ export const SocialDecision = z.discriminatedUnion('verdict', [
      * `HASHTAG_LIMITS` in `services/social.ts` does the trimming.
      */
     hashtags: z.array(z.string().regex(/^[A-Za-z0-9_]{2,40}$/)).max(12).optional(),
+    /**
+     * Hand it to the phone instead of publishing it.
+     *
+     * Buffer calls this a notification post: at the slot time it pushes to the
+     * Buffer mobile app, and the post is finished in Instagram or TikTok by
+     * hand. That is a worse deal for a carousel, where the decision is already
+     * made, and the only deal available for anything that wants a trending
+     * sound.
+     *
+     * Buffer's API can search the Instagram audio library — `trendingInstagramAudio`
+     * and two siblings — and has no field anywhere to attach a track: every
+     * per-service metadata input was checked, and Instagram's carries
+     * `firstComment`, `geolocation`, `isAiGenerated`, `link`, `shouldShareToFeed`,
+     * `stickerFields` and `type`. So audio baked into an MP4 is the only audio
+     * this pipeline can deliver on its own, and a real meme sound baked in is
+     * muted or pulled by rights detection. Handing the clip to the native
+     * editor is how the track stays licensed.
+     *
+     * Needs the Buffer mobile app installed, and notifications enabled for the
+     * channel in Buffer's own settings — neither is something this can check.
+     */
+    reminder: z.boolean().optional(),
   }),
   z.object({ verdict: z.literal('reject') }),
 ]);

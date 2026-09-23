@@ -5,6 +5,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  BellRing,
   CalendarClock,
   ExternalLink,
   Loader2,
@@ -367,7 +368,7 @@ export function SocialPanel() {
   }, [queue]);
 
   const act = useCallback(
-    async (verdict: 'approve' | 'reject') => {
+    async (verdict: 'approve' | 'reject', reminder = false) => {
       if (!current || busy) return;
       setBusy(true);
       try {
@@ -378,6 +379,7 @@ export function SocialPanel() {
                 channelIds: chosen,
                 caption: caption.trim() === current.caption ? undefined : caption.trim(),
                 hashtags: tags.length ? tags : undefined,
+                reminder: reminder || undefined,
               })
             : await api.admin.decideSocial(current.key, { verdict: 'reject' });
 
@@ -387,7 +389,10 @@ export function SocialPanel() {
           const n = result.bufferIds.length;
           const s = result.slides.length;
           toast.success(
-            `Queued a ${s}-slide carousel to ${n} channel${n === 1 ? '' : 's'}`,
+            reminder
+              ? `${s}-slide carousel set as a reminder on ${n} channel${n === 1 ? '' : 's'} — ` +
+                  `your phone will buzz at the slot time`
+              : `Queued a ${s}-slide carousel to ${n} channel${n === 1 ? '' : 's'}`,
           );
         } else {
           toast.success('Rejected');
@@ -698,6 +703,23 @@ export function SocialPanel() {
               >
                 <X className="size-4" />
                 Reject
+              </Button>
+              {/* Hand it to the phone instead of publishing it.
+                  Buffer's API can search Instagram's audio library and cannot
+                  attach a track from it — no field exists on any per-service
+                  metadata input — so anything that wants a trending sound has
+                  to be finished in the native editor. This is that path.
+                  Needs the Buffer mobile app and notifications enabled for the
+                  channel in Buffer's own settings. */}
+              <Button
+                variant="secondary"
+                className="flex-1"
+                onClick={() => void act('approve', true)}
+                disabled={busy || !chosen.length}
+                title="Buffer notifies your phone at the slot time and you post it in the app, where you can add a trending sound"
+              >
+                <BellRing className="size-4" />
+                Remind me
               </Button>
               <Button
                 className="flex-1"
