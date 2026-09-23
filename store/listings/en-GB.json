@@ -1,7 +1,7 @@
 {
   "language": "en-GB",
   "_note": "The default listing's screenshot captions and seed strings. Its title and descriptions are edited in Play Console and live in PLAY_LISTING.md, so they are not here.",
-  "releaseNotes": "Your first meal now comes with a quiet offer to save the journal, instead of a sign-up form turning up later. And when the free messages run out, nothing is thrown over the conversation: the card lands where the reply would have been, says what saving your account gives you, and leaves typing meals in free either way.",
+  "releaseNotes": "Manage your subscription from Settings whenever the store has one for you — including in the minute after you subscribe, before the app has caught up. Cancelling has always been the store's own page; now there is always a way to reach it from inside the app.",
   "captions": [
     {
       "headline": "Just say\nwhat you ate",
