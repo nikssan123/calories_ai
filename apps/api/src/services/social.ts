@@ -297,20 +297,27 @@ export async function listChannels(): Promise<SocialChannel[]> {
 /**
  * How full Buffer's own queue is, against the plan's ceiling.
  *
- * Worth a request of its own because the ceiling is low and silent: the free
- * plan allows ten scheduled posts, and the eleventh `createPost` comes back as
- * `LimitReachedError` — after the panel has already told somebody their
- * approval worked. Reading it first lets the panel say so instead.
+ * **Per channel, not per account.** Buffer's free plan allows ten scheduled
+ * posts *per channel* — `organization.limits.scheduledPosts` is that
+ * per-channel number, and the first version of this compared it against an
+ * account-wide count. With three channels holding 4, 4 and 5 that reported
+ * "13 / 10" and looked like a breach of a limit nothing had come near; the
+ * real headroom was thirty.
+ *
+ * So `used` is the fullest single channel. That is the number that decides
+ * whether the next approval can go somewhere, because a post is created
+ * against one channel at a time and an approval to three channels is three
+ * separate queues.
  */
 async function scheduledUsage(): Promise<{ used: number; limit: number | null }> {
   if (!env.buffer) return { used: 0, limit: null };
   const data = await bufferCall<{
     account: { organizations: { id: string; limits: { scheduledPosts: number } }[] };
-    posts: { edges: { cursor: string }[] | null };
+    posts: { edges: { node: { channelId: string } }[] | null };
   }>(
     `query Usage($org: OrganizationFilterInput, $posts: PostsInput!) {
        account { organizations(filter: $org) { id limits { scheduledPosts } } }
-       posts(first: 100, input: $posts) { edges { cursor } }
+       posts(first: 100, input: $posts) { edges { node { channelId } } }
      }`,
     {
       org: { organizationId: env.buffer.organizationId },
@@ -339,8 +346,14 @@ async function scheduledUsage(): Promise<{ used: number; limit: number | null }>
       },
     },
   );
+  // The fullest channel, not the total.
+  const perChannel = new Map<string, number>();
+  for (const edge of data.posts.edges ?? []) {
+    const id = edge.node.channelId;
+    perChannel.set(id, (perChannel.get(id) ?? 0) + 1);
+  }
   return {
-    used: data.posts.edges?.length ?? 0,
+    used: perChannel.size ? Math.max(...perChannel.values()) : 0,
     limit: data.account.organizations[0]?.limits.scheduledPosts ?? null,
   };
 }
