@@ -379,11 +379,20 @@ export async function suggestionMemory(
  * chasing the same search, which is two of your own pages competing and each
  * ranking worse for it. The `keyword` column has recorded what each locale
  * chose since the library shipped; this is what makes it useful.
+ *
+ * `exceptTopicId` is the topic being written right now, and leaving it out
+ * matters on a *re*generation: the row about to be replaced is itself in this
+ * table, so without it the writer is told its own query is taken and picks a
+ * different one. A regeneration then quietly changes what the article is for,
+ * which is the opposite of what pressing the button again usually means. On a
+ * first write the topic has no row here and the argument costs nothing.
  */
-export async function claimedKeywords(locale: Locale): Promise<string[]> {
+export async function claimedKeywords(locale: Locale, exceptTopicId?: string): Promise<string[]> {
   const rows = await query<{ keyword: string }>(
-    `SELECT keyword FROM content_posts WHERE locale = $1 AND status <> 'binned'`,
-    [locale],
+    `SELECT keyword FROM content_posts
+      WHERE locale = $1 AND status <> 'binned'
+        AND ($2::uuid IS NULL OR topic_id <> $2)`,
+    [locale, exceptTopicId ?? null],
   );
   return rows.map((r) => r.keyword);
 }

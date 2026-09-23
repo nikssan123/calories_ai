@@ -257,7 +257,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
       const { post, model, costUsd } = await draftPost(
         topic,
         locale,
-        await claimedKeywords(locale),
+        await claimedKeywords(locale, topic.id),
         await linkablePosts(locale),
       );
       const saved = await upsertPost({

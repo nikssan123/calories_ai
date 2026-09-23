@@ -113,7 +113,7 @@ async function run(
           const { post, model, costUsd } = await draftPost(
             topic,
             locale,
-            await claimedKeywords(locale),
+            await claimedKeywords(locale, topicId),
             await linkablePosts(locale),
           );
           await upsertPost({
