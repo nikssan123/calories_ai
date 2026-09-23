@@ -1228,12 +1228,33 @@ export async function recaptionPost(id: string, tags: string[]): Promise<string>
       schedulingType: string | null;
       channelService: string;
       assets: ReadAsset[];
+      metadata: {
+        __typename: string;
+        type?: string;
+        shouldShareToFeed?: boolean;
+        firstComment?: string | null;
+      } | null;
     };
   }>(
+    /*
+     * `metadata` is read for the same reason the assets are: a replace clears
+     * what it is not given, and Instagram rejects a post with no type —
+     * "Instagram posts require a type (post, story, or reel)". Seven of the
+     * eighteen in the first backfill failed exactly there, which is the good
+     * failure: Buffer refused the whole edit rather than half-applying it.
+     *
+     * Read rather than assumed, because `metadataFor` hardcodes `post` and a
+     * video on Instagram is a `reel`. Echoing back what is already set cannot
+     * silently retype a reel into a feed post.
+     */
     `query ForRecaption($input: PostInput!) {
        post(input: $input) {
          text dueAt schedulingType channelService
          assets { type source ... on ImageAsset { image { altText } } }
+         metadata {
+           __typename
+           ... on InstagramPostMetadata { type shouldShareToFeed firstComment }
+         }
        }
      }`,
     { input: { id } },
@@ -1273,6 +1294,24 @@ export async function recaptionPost(id: string, tags: string[]): Promise<string>
     throw new Error(`Cannot recaption a post with a ${asset.type} asset`);
   });
 
+  /*
+   * Instagram's metadata is echoed back from the read; every other service
+   * takes what `createPost` would send, which for TikTok is an empty object
+   * and for the rest is nothing at all.
+   */
+  const metadata =
+    post.channelService === 'instagram' && post.metadata?.type
+      ? {
+          instagram: {
+            type: post.metadata.type,
+            shouldShareToFeed: post.metadata.shouldShareToFeed ?? true,
+            ...(post.metadata.firstComment
+              ? { firstComment: post.metadata.firstComment }
+              : {}),
+          },
+        }
+      : metadataFor(post.channelService);
+
   const data = await bufferCall<{ editPost: { __typename: string; message?: string } }>(
     `mutation Recaption($input: EditPostInput!) {
        editPost(input: $input) { __typename ${ERROR_FIELDS} }
@@ -1285,6 +1324,7 @@ export async function recaptionPost(id: string, tags: string[]): Promise<string>
         dueAt: post.dueAt,
         mode: 'customScheduled',
         schedulingType: post.schedulingType ?? 'automatic',
+        metadata,
       },
     },
   );
