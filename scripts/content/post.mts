@@ -520,8 +520,24 @@ function fig(name: CastName, mood: Mood, prefix: string, prop?: Prop): string {
  * the app icon on a light field or a dark one.
  */
 const ICON = 'store/icon-512.png'
+/**
+ * The mark reads the domain, not the name.
+ *
+ * "Day So Far" is a stock English phrase, so it cannot be searched: a web
+ * search for it returns MyFitnessPal, Cronometer and eight other trackers and
+ * no mention of this app. The Play listing — "Day So Far: Calorie Counter" —
+ * ranks first for `day so far calorie`, but only for somebody who already
+ * knows to type it.
+ *
+ * On TikTok there is no clickable link at all until a thousand followers, and
+ * a caption URL is not tappable on either TikTok or Instagram. The pixels in
+ * the frame are the one channel that is not gated, so they carry the address
+ * rather than the name. The domain IS the brand, so nothing is lost to recall.
+ */
+const MARK = 'daysofar.com'
+
 function mark(pos: string, colour: string): string {
-  return `<div class="mark" style="${pos};color:${colour}"><img src="${url(ICON)}" alt=""><span>Day So Far</span></div>`
+  return `<div class="mark" style="${pos};color:${colour}"><img src="${url(ICON)}" alt=""><span>${MARK}</span></div>`
 }
 
 /**
@@ -616,7 +632,7 @@ function render(p: Post): { field: string; body: string } {
             )
             .join('') +
           `</div>` +
-          `<div class="mark" style="position:static;color:rgba(247,239,230,.5)"><img src="${url(ICON)}" alt=""><span>Day So Far</span></div>` +
+          `<div class="mark" style="position:static;color:rgba(247,239,230,.5)"><img src="${url(ICON)}" alt=""><span>${MARK}</span></div>` +
           `</div>`,
       }
 

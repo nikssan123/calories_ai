@@ -155,6 +155,23 @@ const FONTS = {
 const ICON = 'apps/mobile/assets/icon.png'
 
 /**
+ * The mark reads the domain, not the name.
+ *
+ * "Day So Far" is a stock English phrase, so it cannot be searched: a web
+ * search for it returns MyFitnessPal, Cronometer and eight other trackers and
+ * no mention of this app. The Play listing — "Day So Far: Calorie Counter" —
+ * ranks first for `day so far calorie`, but only for somebody who already
+ * knows to type it.
+ *
+ * On TikTok there is no clickable link at all until a thousand followers, and
+ * a caption URL is not tappable on either TikTok or Instagram. The pixels in
+ * the frame are the one channel that is not gated, so they carry the address
+ * rather than the name. The domain IS the brand, so nothing is lost to recall.
+ */
+const MARK = 'daysofar.com'
+
+
+/**
  * The hook sits in the upper third, not centred.
  *
  * Centred type lands on the subject's face or body, which is the part of the
@@ -162,8 +179,29 @@ const ICON = 'apps/mobile/assets/icon.png'
  * reads second, which is the order the format wants — and it clears the caption
  * and UI furniture both platforms overlay along the bottom.
  */
+/**
+ * Shrink the hook until its longest line fits on one line.
+ *
+ * The <br>s in a hook are the writer's line breaks and they mean something —
+ * the beat falls where the break is. At a fixed 96px a long line wraps anyway
+ * and leaves an orphan: "9pm and i'm doing / archaeology on my own / lunch"
+ * rendered as four lines with `own` alone on the third, which reads as a
+ * mistake because it is one.
+ *
+ * So the size follows the longest line rather than the line count. 0.52em per
+ * character is measured off Baloo ExtraBold at these sizes — close enough that
+ * the result never wraps, and a little conservative on a line of narrow
+ * letters, which costs nothing.
+ */
+function hookSize(hook: string): number {
+  const longest = Math.max(...hook.split('<br>').map((line) => line.trim().length))
+  const room = W - 140
+  return Math.max(58, Math.min(96, Math.floor(room / (longest * 0.52))))
+}
+
 function layerHtml(script: MemeScript): string {
   const sub = script.sub ? `<div class="sub">${script.sub}</div>` : ''
+  const size = hookSize(script.hook)
   return `<!doctype html><meta charset="utf-8"><style>
 @font-face{font-family:'D';src:url('${url(FONTS.display)}') format('truetype');font-weight:800}
 @font-face{font-family:'T';src:url('${url(FONTS.text700)}') format('woff2');font-weight:700}
@@ -174,7 +212,7 @@ body{position:relative;-webkit-font-smoothing:antialiased}
 /* A dark stroke under the glyph plus three shadows at rising blur. Survives a
    white sky and a black doorway without touching the footage. paint-order keeps
    the stroke behind the fill so the letterforms stay their real weight. */
-.hook{font-family:'D',sans-serif;font-weight:800;font-size:96px;line-height:1.14;color:#fff;
+.hook{font-family:'D',sans-serif;font-weight:800;font-size:${size}px;line-height:1.14;color:#fff;
   letter-spacing:-.02em;-webkit-text-stroke:2px rgba(0,0,0,.55);paint-order:stroke fill;
   text-shadow:0 2px 4px rgba(0,0,0,.95),0 6px 24px rgba(0,0,0,.8),0 12px 48px rgba(0,0,0,.6)}
 /* The sub was 44px with a 1px stroke and it vanished — it sits lower in the
@@ -191,7 +229,7 @@ body{position:relative;-webkit-font-smoothing:antialiased}
   text-shadow:0 2px 10px rgba(0,0,0,.85)}
 </style>
 <div class="wrap"><div class="hook">${script.hook}</div>${sub}</div>
-<div class="mark"><img src="${url(ICON)}"><span>Day So Far</span></div>`
+<div class="mark"><img src="${url(ICON)}"><span>${MARK}</span></div>`
 }
 
 /** Same list as post.mts, macOS first — this only ever runs on the Mac. */
