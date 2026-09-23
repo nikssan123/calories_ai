@@ -450,6 +450,30 @@ const HASHTAG_LIMITS: Record<string, number> = {
   facebook: 2,
 };
 
+/**
+ * How many images one post on each service can carry.
+ *
+ * Checked here rather than left to Buffer because Buffer's refusal arrives as
+ * a `RestProxyError` with the platform's own wording, recorded against the row
+ * hours after anybody looked at it. The slideshows in the queue are all four
+ * slides, which is exactly X's ceiling — so the first five-slide carousel would
+ * have posted cleanly to Instagram and TikTok and failed on X alone, which is
+ * the most confusing possible version of this.
+ *
+ * Instagram's real ceiling is 10 and its floor is 2; a single image is an
+ * ordinary post and not a carousel, which Buffer handles either way.
+ */
+const MAX_ASSETS: Record<string, number> = {
+  instagram: 10,
+  tiktok: 35,
+  twitter: 4,
+  facebook: 10,
+  linkedin: 9,
+  threads: 10,
+  bluesky: 4,
+  mastodon: 4,
+};
+
 function withHashtags(caption: string, tags: string[], service: string): string {
   const limit = HASHTAG_LIMITS[service] ?? 3;
   if (!tags.length || limit === 0) return caption;
@@ -567,6 +591,14 @@ export async function decide(groupKey: string, decision: SocialDecision): Promis
   const posted: string[] = [];
   const failures: string[] = [];
   for (const channel of connected) {
+    const ceiling = MAX_ASSETS[channel.service];
+    if (ceiling !== undefined && assetUrls.length > ceiling) {
+      failures.push(
+        `${channel.service}: ${assetUrls.length} slides is more than the ${ceiling} ` +
+          `one post there can carry — split the slideshow or untick this channel`,
+      );
+      continue;
+    }
     try {
       const text = withHashtags(caption, decision.hashtags ?? [], channel.service);
       posted.push(await createPost(channel, text, assetUrls, altText));
