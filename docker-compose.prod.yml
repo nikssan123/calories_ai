@@ -308,6 +308,25 @@ services:
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
       S3_REGION: ${S3_REGION:-auto}
+      # Buffer, for the admin panel's social queue — see SOCIAL.md §4. All three
+      # or none: `bufferEnv` throws on a half-configured set rather than let an
+      # approval create a post whose image Buffer cannot fetch, which is a
+      # failure that would surface days later on Buffer's side where nothing
+      # here is watching.
+      #
+      # Empty is safe in the `${KEY:-}` shape for these, unlike the bare keys
+      # below, because each is read as "absent or falsy means off" and the
+      # half-configured count filters on truthiness.
+      #
+      # PUBLIC_ORIGIN has to be a hostname Buffer's fetcher can reach. It is not
+      # WEB_ORIGINS and not APP_URL: the asset is served by the API, at
+      # /public/social/:id.png.
+      BUFFER_ACCESS_TOKEN: ${BUFFER_ACCESS_TOKEN:-}
+      BUFFER_ORGANIZATION_ID: ${BUFFER_ORGANIZATION_ID:-}
+      BUFFER_PUBLIC_ORIGIN: ${BUFFER_PUBLIC_ORIGIN:-}
+      # Overridable only because it is the one part of the integration not
+      # pinned by introspection; absent means https://graph.buffer.com.
+      BUFFER_API_URL: ${BUFFER_API_URL:-}
 
     volumes:
       # Claude's OAuth token, written once by `claude login`. A named volume so
