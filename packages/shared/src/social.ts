@@ -77,6 +77,12 @@ export const SocialSlide = z.object({
   assetUrl: z.string(),
   width: z.number().int(),
   height: z.number().int(),
+  /**
+   * `image/png` or `video/mp4`, carried so the panel can put carousels and
+   * meme videos on separate tabs. Derivable from the url's extension, and that
+   * is exactly the kind of inference that is right until somebody adds jpeg.
+   */
+  mediaType: z.string(),
 });
 export type SocialSlide = z.infer<typeof SocialSlide>;
 

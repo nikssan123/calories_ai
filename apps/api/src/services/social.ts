@@ -498,6 +498,7 @@ function group(rows: QueueRow[]): SocialGroup[] {
           assetUrl: c.assetUrl,
           width: row.width,
           height: row.height,
+          mediaType: row.media_type,
         };
       }),
       state: cover.state,
@@ -555,6 +556,38 @@ const MAX_ASSETS: Record<string, number> = {
   bluesky: 4,
   mastodon: 4,
 };
+
+/**
+ * The app's own address, appended to every caption.
+ *
+ * Worth being honest about what this achieves per platform, because it is not
+ * the same everywhere:
+ *
+ *  * X linkifies a bare URL, so there it is a real link. It costs about 23
+ *    characters of the 280 whatever its length — t.co rewrites it — which is
+ *    why it goes on its own line rather than inside a sentence.
+ *  * Instagram and TikTok do NOT linkify caption text. There it is readable
+ *    and typeable and nothing more. The clickable link on those two is the one
+ *    in the profile, which no API here can set — it is a field in each app.
+ *
+ * So this is the floor, not the plan. A caption nobody can tap still tells a
+ * reader the name to search for, which is most of the job for an app store.
+ */
+const APP_LINK = 'daysofar.com';
+
+/**
+ * `daysofar.com`, not `https://daysofar.com`.
+ *
+ * Both work in a browser and the bare form reads as words rather than as a
+ * pasted address, which matters on the two platforms where it cannot be tapped
+ * anyway. X still linkifies it.
+ */
+function withLink(caption: string): string {
+  // Idempotent: a caption written with the link already in it — and several in
+  // `queue.mts`'s CAPTIONS mention the app by name — must not get a second one.
+  if (caption.toLowerCase().includes(APP_LINK)) return caption;
+  return `${caption}\n\n${APP_LINK}`;
+}
 
 function withHashtags(caption: string, tags: string[], service: string): string {
   const limit = HASHTAG_LIMITS[service] ?? 3;
@@ -704,7 +737,11 @@ export async function decide(groupKey: string, decision: SocialDecision): Promis
       continue;
     }
     try {
-      const text = withHashtags(caption, decision.hashtags ?? [], channel.service);
+      const text = withHashtags(
+        withLink(caption),
+        decision.hashtags ?? [],
+        channel.service,
+      );
       posted.push(
         await createPost(channel, text, assetUrls, altText, isVideo, decision.reminder ?? false),
       );
@@ -1013,4 +1050,143 @@ export async function bufferQueue(): Promise<SocialBufferQueue> {
     published: (data.published.edges ?? []).map((e) => post(e.node)),
     fetchedAt: new Date().toISOString(),
   };
+}
+
+/* ── the queue, as something you can rearrange ──────────────────────── */
+
+/**
+ * Move a post to the top or the bottom of its channel's queue.
+ *
+ * Buffer's own mutation, and the only reordering it offers — there is no "swap
+ * with the one above". Top and bottom is enough for the job this serves: when
+ * something is topical it goes next, and when it is not it goes last.
+ */
+export async function movePost(id: string, position: 'top' | 'bottom'): Promise<void> {
+  if (!env.buffer) throw new Error('Buffer is not configured on this deployment.');
+  const data = await bufferCall<{
+    movePostInQueue: { __typename: string; message?: string };
+  }>(
+    `mutation Move($input: MovePostInQueueInput!) {
+       movePostInQueue(input: $input) {
+         __typename
+         ... on VoidMutationError { message }
+       }
+     }`,
+    { input: { id, position } },
+  );
+  const payload = data.movePostInQueue;
+  if (payload.__typename !== 'PostActionSuccess') {
+    throw new BufferError(payload.message ?? `Buffer refused the move (${payload.__typename})`);
+  }
+}
+
+/**
+ * Give a post a specific time.
+ *
+ * `editPost` REPLACES the post rather than merging into it. Sending only `id`
+ * and `dueAt` is not a partial update — it clears the text and the assets, and
+ * Buffer then rejects the result it was handed: "Invalid post: Post must have
+ * either text or media., TikTok posts require at least one image or video."
+ * That error is the whole reason this function reads before it writes.
+ *
+ * So: read the post, rebuild its assets as inputs, and send everything back
+ * with the new time. `mode: customScheduled` takes it off the channel's slots,
+ * which is what asking for a specific time means.
+ */
+export async function reschedulePost(id: string, dueAt: string): Promise<void> {
+  if (!env.buffer) throw new Error('Buffer is not configured on this deployment.');
+
+  interface ReadAsset {
+    type: string;
+    source: string;
+    image?: { altText: string } | null;
+  }
+  const current = await bufferCall<{
+    post: {
+      text: string;
+      schedulingType: string | null;
+      assets: ReadAsset[];
+    };
+  }>(
+    `query ForEdit($input: PostInput!) {
+       post(input: $input) {
+         text
+         schedulingType
+         assets { type source ... on ImageAsset { image { altText } } }
+       }
+     }`,
+    { input: { id } },
+  );
+
+  /*
+   * `AssetInput` is `@oneOf`, so each entry carries exactly one member. A
+   * document is not rebuildable from a read — its input needs a title and a
+   * thumbnail this query does not ask for — and nothing this queue makes is
+   * one, so it is refused loudly rather than silently dropped.
+   */
+  const assets = current.post.assets.map((asset) => {
+    if (asset.type === 'video') return { video: { url: asset.source } };
+    if (asset.type === 'image') {
+      return { image: { url: asset.source, metadata: { altText: asset.image?.altText ?? '' } } };
+    }
+    throw new Error(`Cannot reschedule a post with a ${asset.type} asset`);
+  });
+
+  const data = await bufferCall<{
+    editPost: { __typename: string; message?: string };
+  }>(
+    `mutation Retime($input: EditPostInput!) {
+       editPost(input: $input) {
+         __typename
+         ${ERROR_FIELDS}
+       }
+     }`,
+    {
+      input: {
+        id,
+        dueAt,
+        mode: 'customScheduled',
+        // Carried over explicitly: a reminder post must stay a reminder, and
+        // omitting this on a replace would quietly turn it into an automatic
+        // publish at the new time.
+        schedulingType: current.post.schedulingType ?? 'automatic',
+        text: current.post.text,
+        assets,
+      },
+    },
+  );
+  const payload = data.editPost;
+  if (payload.__typename !== 'PostActionSuccess') {
+    throw new BufferError(payload.message ?? `Buffer refused the new time (${payload.__typename})`);
+  }
+}
+
+/**
+ * Delete a post from Buffer, and let our row know.
+ *
+ * The row stays — it is the record that this was made and approved — but its
+ * `buffer_ids` loses the deleted post, so `bufferQueue` stops reporting a post
+ * Buffer no longer has and the group can be approved again if wanted.
+ */
+export async function removePost(id: string): Promise<void> {
+  if (!env.buffer) throw new Error('Buffer is not configured on this deployment.');
+  const data = await bufferCall<{
+    deletePost: { __typename: string; message?: string };
+  }>(
+    `mutation Remove($input: DeletePostInput!) {
+       deletePost(input: $input) {
+         __typename
+         ... on VoidMutationError { message }
+       }
+     }`,
+    { input: { id } },
+  );
+  const payload = data.deletePost;
+  if (payload.__typename !== 'DeletePostSuccess') {
+    throw new BufferError(payload.message ?? `Buffer refused the delete (${payload.__typename})`);
+  }
+  await query(
+    `UPDATE social_queue SET buffer_ids = array_remove(buffer_ids, $1) WHERE $1 = ANY(buffer_ids)`,
+    [id],
+  );
 }

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useEffect } from 'react';
 import { useAuth } from '@/components/AuthGate';
 import { ContentPanel } from '@/components/admin/ContentPanel';
@@ -9,7 +10,6 @@ import { CostPanel } from '@/components/admin/CostPanel';
 import { FunnelPanel } from '@/components/admin/FunnelPanel';
 import { InboxPanel } from '@/components/admin/InboxPanel';
 import { OverviewPanel } from '@/components/admin/OverviewPanel';
-import { SocialPanel } from '@/components/admin/SocialPanel';
 import { SubscriptionsPanel } from '@/components/admin/SubscriptionsPanel';
 import { TablesPanel } from '@/components/admin/TablesPanel';
 import { UsersPanel } from '@/components/admin/UsersPanel';
@@ -30,6 +30,9 @@ const TABS = [
   // Beside Blog because both are content, and apart from it because they share
   // nothing else: that one writes prose in thirteen languages, this one decides
   // whether an image is good enough to post.
+  // A link out rather than a panel: it became its own screen at /admin/social,
+  // because it is the one part of this that is used to do something rather than
+  // to read something.
   { id: 'social', label: 'Social' },
   { id: 'data', label: 'Database' },
   { id: 'instance', label: 'Instance' },
@@ -97,7 +100,19 @@ export default function AdminPage() {
         {tab === 'users' && <UsersPanel />}
         {tab === 'inbox' && <InboxPanel />}
         {tab === 'content' && <ContentPanel />}
-        {tab === 'social' && <SocialPanel />}
+        {tab === 'social' && (
+          <div className="border-hairline rounded-xl border p-8 text-center">
+            <p className="text-footnote text-muted-foreground mb-4">
+              Reviewing, the queue and last week&apos;s numbers moved to their own screen.
+            </p>
+            <Link
+              href="/admin/social"
+              className="bg-primary text-primary-foreground text-footnote inline-flex rounded-full px-5 py-2.5 font-bold"
+            >
+              Open Social
+            </Link>
+          </div>
+        )}
         {tab === 'data' && <TablesPanel />}
         {tab === 'instance' && <OverviewPanel />}
       </div>

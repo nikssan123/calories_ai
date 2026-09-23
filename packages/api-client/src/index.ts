@@ -1281,6 +1281,27 @@ export function createApiClient({
       socialBufferQueue: () => request<SocialBufferQueue>('/admin/social/queue'),
 
       /**
+       * Rearranging Buffer's queue. Three calls, because Buffer treats them as
+       * three operations — and a retime is the expensive one: `editPost`
+       * replaces rather than merges, so the server has to read the post and
+       * send its text and assets back alongside the new time.
+       */
+      moveSocialPost: (id: string, position: 'top' | 'bottom') =>
+        request<{ ok: true }>(`/admin/social/queue/${id}/move`, {
+          method: 'POST',
+          body: JSON.stringify({ position }),
+        }),
+
+      retimeSocialPost: (id: string, dueAt: string) =>
+        request<{ ok: true }>(`/admin/social/queue/${id}/time`, {
+          method: 'POST',
+          body: JSON.stringify({ dueAt }),
+        }),
+
+      removeSocialPost: (id: string) =>
+        request<{ ok: true }>(`/admin/social/queue/${id}`, { method: 'DELETE' }),
+
+      /**
        * A rendered slide, from the panel's file picker.
        *
        * Uploaded from the browser rather than by a script because `/admin/*`

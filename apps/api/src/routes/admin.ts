@@ -57,7 +57,10 @@ import {
   bufferQueue,
   decide,
   loadQueue,
+  movePost,
   postedPerformance,
+  removePost,
+  reschedulePost,
 } from '../services/social.ts';
 import { listSupportEmails, setHandled, unhandledCount } from '../services/support.ts';
 import { getUserContext } from '../services/user.ts';
@@ -377,6 +380,48 @@ export async function registerAdminRoutes(app: FastifyInstance) {
   app.get('/admin/social/queue', async (_request, reply) => {
     try {
       return await bufferQueue();
+    } catch (error) {
+      return reply.status(502).send({ error: (error as Error).message });
+    }
+  });
+
+  /**
+   * Rearranging Buffer's queue: order, time, or gone.
+   *
+   * Three routes rather than one PATCH, because they are three different
+   * Buffer operations with three different failure modes and nothing is
+   * gained by pretending otherwise. All three answer 502 on a Buffer refusal,
+   * so the panel can show what Buffer said instead of a generic failure.
+   */
+  app.post('/admin/social/queue/:id/move', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = z.object({ position: z.enum(['top', 'bottom']) }).safeParse(request.body);
+    if (!body.success) return reply.status(400).send({ error: 'position must be top or bottom' });
+    try {
+      await movePost(id, body.data.position);
+      return { ok: true };
+    } catch (error) {
+      return reply.status(502).send({ error: (error as Error).message });
+    }
+  });
+
+  app.post('/admin/social/queue/:id/time', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = z.object({ dueAt: z.string().datetime() }).safeParse(request.body);
+    if (!body.success) return reply.status(400).send({ error: 'dueAt must be an ISO timestamp' });
+    try {
+      await reschedulePost(id, body.data.dueAt);
+      return { ok: true };
+    } catch (error) {
+      return reply.status(502).send({ error: (error as Error).message });
+    }
+  });
+
+  app.delete('/admin/social/queue/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    try {
+      await removePost(id);
+      return { ok: true };
     } catch (error) {
       return reply.status(502).send({ error: (error as Error).message });
     }

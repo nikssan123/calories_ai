@@ -6,7 +6,6 @@ import {
   ChevronLeft,
   ChevronRight,
   BellRing,
-  CalendarClock,
   ExternalLink,
   Loader2,
   RefreshCw,
@@ -15,15 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type {
-  SocialBufferChannel,
-  SocialBufferPost,
-  SocialBufferQueue,
-  SocialChannel,
-  SocialGroup,
-  SocialPosted,
-  SocialQueue,
-} from '@ct/shared';
+import type { SocialChannel, SocialGroup, SocialQueue } from '@ct/shared';
 import { api } from '@/lib/api';
 import { InsetGroup } from '@/components/InsetGroup';
 import { Button } from '@/components/ui/button';
@@ -70,23 +61,6 @@ const SERVICE_LABELS: Record<string, string> = {
 const serviceLabel = (service: string) => SERVICE_LABELS[service] ?? service;
 
 /**
- * The metrics worth a row's width.
- *
- * Buffer returns whatever each platform exposes, which on some channels is
- * fifteen figures including `postCount` and `freeSubscriptions`. Four is what
- * fits, and these four are the ones that answer whether a hook worked: views
- * for reach, likes and comments for whether it landed, and saves because a
- * save is the strongest signal a slideshow can generate.
- */
-const KEY_METRICS = ['views', 'impressions', 'likes', 'reactions', 'comments', 'saves'];
-
-/** Whole numbers for counts, one decimal and a % for rates. */
-function formatMetric(value: number, unit: string): string {
-  if (unit === 'percentage') return `${value.toFixed(1)}%`;
-  return value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(Math.round(value));
-}
-
-/**
  * Hashtags offered as chips, so the set is a decision rather than typing.
  *
  * Short, and every one is something a person actually searches. The queue this
@@ -113,103 +87,7 @@ const HASHTAG_SUGGESTIONS = [
   'solofounder',
 ];
 
-/**
- * A channel's slots, said the way a person would read them.
- *
- * Seven rows of `mon 19:00` is a table nobody parses; runs of days sharing a
- * time read in one glance — "Mon–Thu 19:00 · Fri–Sun 13:00, 19:00" is the
- * whole schedule, and the asymmetry is the interesting part of it.
- *
- * Monday-first, though Buffer's own preference here is Sunday-first, because
- * the weekend is where the second slot lives and splitting it across the two
- * ends of the row hides exactly what this is for.
- */
-const DAY_ORDER = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
-const DAY_LABELS: Record<string, string> = {
-  mon: 'Mon',
-  tue: 'Tue',
-  wed: 'Wed',
-  thu: 'Thu',
-  fri: 'Fri',
-  sat: 'Sat',
-  sun: 'Sun',
-};
-
-function slotSummary(slots: SocialBufferChannel['slots']): string {
-  const byDay = new Map(slots.map((s) => [s.day, s]));
-  const runs: { from: string; to: string; times: string }[] = [];
-  for (const day of DAY_ORDER) {
-    const slot = byDay.get(day);
-    // A paused day posts nothing, so it breaks a run rather than joining one.
-    const times = slot && !slot.paused ? slot.times.join(', ') : '';
-    const last = runs.at(-1);
-    if (last && last.times === times) last.to = day;
-    else runs.push({ from: day, to: day, times });
-  }
-  return (
-    runs
-      .filter((r) => r.times)
-      .map((r) => {
-        const days =
-          r.from === r.to
-            ? DAY_LABELS[r.from]
-            : `${DAY_LABELS[r.from]}\u2013${DAY_LABELS[r.to]}`;
-        return `${days} ${r.times}`;
-      })
-      .join(' \u00b7 ') || 'no slots'
-  );
-}
-
-/**
- * A due time in the channel's own timezone.
- *
- * `timestamp()` renders UTC, which is right for a support call and wrong here:
- * every one of these slots was set in Sofia time, and 16:00Z reading as 16:00
- * makes a 19:00 post look like it goes out mid-afternoon.
- */
-function inZone(iso: string | null, timeZone: string): string {
-  if (!iso) return 'no time set';
-  try {
-    return new Intl.DateTimeFormat('en-GB', {
-      timeZone,
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    }).format(new Date(iso));
-  } catch {
-    // An unknown timezone from Buffer should degrade, not blank the queue.
-    return timestamp(iso);
-  }
-}
-
-/** Posts sharing a due time, which is what a slot firing on three channels is. */
-function bySlot(posts: SocialBufferPost[]): { at: string | null; posts: SocialBufferPost[] }[] {
-  const groups = new Map<string, SocialBufferPost[]>();
-  for (const post of posts) {
-    const at = post.dueAt ?? 'none';
-    const list = groups.get(at);
-    if (list) list.push(post);
-    else groups.set(at, [post]);
-  }
-  return (
-    [...groups.entries()]
-      .map(([at, list]) => ({ at: at === 'none' ? null : at, posts: list }))
-      // Undated last, whatever order Buffer returned. A draft has no `dueAt`
-      // and Buffer hands it over first, which put an orphan nobody scheduled
-      // at the top of a list whose whole purpose is "what goes out next".
-      .sort((a, b) => {
-        if (a.at === b.at) return 0;
-        if (a.at === null) return 1;
-        if (b.at === null) return -1;
-        return a.at.localeCompare(b.at);
-      })
-  );
-}
-
-export function SocialPanel() {
+export function SocialPanel({ only }: { only?: 'image' | 'video' } = {}) {
   const [queue, setQueue] = useState<SocialQueue | null>(null);
   const [index, setIndex] = useState(0);
   const [caption, setCaption] = useState('');
@@ -220,10 +98,6 @@ export function SocialPanel() {
   /** Which slide of the current carousel is on screen. */
   const [slide, setSlide] = useState(0);
   const [tags, setTags] = useState<string[]>([]);
-  const [posted, setPosted] = useState<SocialPosted[] | null>(null);
-  /** Buffer's side. `null` while loading, and an error string if it refused. */
-  const [buffer, setBuffer] = useState<SocialBufferQueue | null>(null);
-  const [bufferError, setBufferError] = useState<string | null>(null);
 
   const load = useCallback(async (keepPlace = false) => {
     setRefreshing(true);
@@ -242,32 +116,6 @@ export function SocialPanel() {
     void load();
   }, [load]);
 
-  /*
-   * Performance is fetched separately and failures are swallowed: it reaches
-   * Buffer for per-post metrics, and a panel that cannot be used to decide
-   * anything because the numbers are slow is worse than a panel with no
-   * numbers.
-   */
-  useEffect(() => {
-    api.admin
-      .socialPerformance()
-      .then((r) => setPosted(r.posted))
-      .catch(() => setPosted([]));
-  }, []);
-
-  /*
-   * Buffer's queue, on its own request and with its own error kept.
-   *
-   * Swallowing this one the way performance is swallowed would reproduce the
-   * fault it exists to prevent: an unreachable Buffer and an empty Buffer
-   * rendering identically. The message is shown.
-   */
-  useEffect(() => {
-    api.admin
-      .socialBufferQueue()
-      .then(setBuffer)
-      .catch((e: Error) => setBufferError(e.message));
-  }, []);
 
   /**
    * Slides straight off disk, from `content/out/posts/`.
@@ -333,7 +181,17 @@ export function SocialPanel() {
     [load],
   );
 
-  const current: SocialGroup | undefined = queue?.pending[index];
+  /*
+   * The stack this tab is responsible for. Filtered on the cover slide's media
+   * type, so a meme — one video row — and a carousel never share a stack.
+   */
+  const pending: SocialGroup[] = (queue?.pending ?? []).filter((group) => {
+    if (!only) return true;
+    const isVideo = group.slides[0]?.mediaType === 'video/mp4';
+    return only === 'video' ? isVideo : !isVideo;
+  });
+
+  const current: SocialGroup | undefined = pending[index];
 
   /*
    * The caption resets to the candidate's own text whenever the card changes,
@@ -415,14 +273,14 @@ export function SocialPanel() {
               }
             : prev,
         );
-        setIndex((i) => Math.max(0, Math.min(i, (queue?.pending.length ?? 1) - 2)));
+        setIndex((i) => Math.max(0, Math.min(i, pending.length - 2)));
       } catch (e) {
         toast.error((e as Error).message);
       } finally {
         setBusy(false);
       }
     },
-    [current, busy, chosen, caption, tags, queue?.pending.length],
+    [current, busy, chosen, caption, tags, pending.length],
   );
 
   if (!queue) {
@@ -536,7 +394,7 @@ export function SocialPanel() {
             <div className="flex items-baseline justify-between gap-3">
               <code className="text-footnote">{current.key}</code>
               <span className="text-footnote text-muted-foreground">
-                {index + 1} of {queue.pending.length} ·{' '}
+                {index + 1} of {pending.length} ·{' '}
                 {isVideo
                   ? 'video'
                   : `${current.slides.length} slide${current.slides.length === 1 ? '' : 's'}`}{' '}
@@ -731,10 +589,10 @@ export function SocialPanel() {
               </Button>
             </div>
 
-            {queue.pending.length > 1 && (
+            {pending.length > 1 && (
               <button
                 type="button"
-                onClick={() => setIndex((i) => (i + 1) % queue.pending.length)}
+                onClick={() => setIndex((i) => (i + 1) % pending.length)}
                 disabled={busy}
                 className="text-footnote text-muted-foreground hover:text-foreground w-full text-center"
               >
@@ -745,236 +603,6 @@ export function SocialPanel() {
         </InsetGroup>
       )}
 
-      {/* Buffer's queue, read from Buffer.
-          Our own rows cannot answer this. A row turns `posted` the moment
-          Buffer accepts it — days before anybody sees it — and the account
-          also holds posts this pipeline never made. */}
-      {(buffer || bufferError) && (
-        <InsetGroup>
-          <div className="p-4">
-            <div className="mb-1 flex items-center gap-2">
-              <CalendarClock className="text-muted-foreground size-4" />
-              <div className="text-headline">In Buffer</div>
-            </div>
-            {bufferError ? (
-              <p className="text-footnote text-destructive">
-                Buffer would not answer: {bufferError}
-              </p>
-            ) : !buffer ? null : (
-              <>
-                <p className="text-footnote text-muted-foreground mb-3">
-                  What is going out and when, as Buffer holds it. Times are each channel&apos;s own.
-                  Approving here adds to these slots; the slots themselves are set in Buffer.
-                </p>
-
-                <ul className="mb-4 space-y-1">
-                  {buffer.channels.map((ch) => (
-                    <li key={ch.id} className="text-footnote flex flex-wrap items-baseline gap-x-3">
-                      <span className="w-20 shrink-0 font-bold">{serviceLabel(ch.service)}</span>
-                      <span
-                        className={cn(
-                          'w-20 shrink-0',
-                          ch.limit !== null &&
-                            ch.scheduled >= ch.limit &&
-                            'text-destructive font-bold',
-                        )}
-                      >
-                        {ch.scheduled}
-                        {ch.limit !== null && ` / ${ch.limit}`}
-                      </span>
-                      <span className="text-muted-foreground min-w-0 flex-1">
-                        {slotSummary(ch.slots)}
-                      </span>
-                      <span className="text-muted-foreground shrink-0">{ch.timezone}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                {buffer.upcoming.length === 0 ? (
-                  <p className="text-footnote text-muted-foreground">
-                    Nothing scheduled. Approve something above and it lands in the next free slot.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {bySlot(buffer.upcoming).map(({ at, posts }) => (
-                      <div key={at ?? 'unscheduled'} className="border-hairline rounded-lg border p-3">
-                        <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                          <span className="text-footnote font-bold">
-                            {inZone(
-                              at,
-                              buffer.channels.find((c) => c.id === posts[0]?.channelId)?.timezone ??
-                                'UTC',
-                            )}
-                          </span>
-                          <span className="text-footnote text-muted-foreground">
-                            {posts.map((post) => serviceLabel(post.service)).join(' · ')}
-                          </span>
-                        </div>
-                        <div className="text-footnote mt-1 flex flex-wrap items-baseline gap-x-3">
-                          {posts[0]?.sourceKey ? (
-                            <code>{posts[0].sourceKey}</code>
-                          ) : (
-                            /* No key means it was composed in Buffer, not here.
-                               Worth saying: five of this account's sent posts
-                               are old singles, and folding them in silently is
-                               how "what have we published" got answered wrong. */
-                            <span className="text-muted-foreground italic">not from this queue</span>
-                          )}
-                          <span className="text-muted-foreground">
-                            {posts[0]?.assets ?? 0} {posts[0]?.mediaType ?? 'asset'}
-                            {(posts[0]?.assets ?? 0) === 1 ? '' : 's'}
-                          </span>
-                          {posts.some((post) => post.status !== 'scheduled') && (
-                            <span
-                              className={cn(
-                                posts.some((post) => post.status === 'error')
-                                  ? 'text-destructive'
-                                  : 'text-muted-foreground',
-                              )}
-                            >
-                              {[...new Set(posts.map((post) => post.status))].join(', ')}
-                            </span>
-                          )}
-                          {posts.some((post) => post.custom) && (
-                            <span className="text-muted-foreground">custom time</span>
-                          )}
-                        </div>
-                        <p className="text-footnote text-muted-foreground mt-1 line-clamp-2">
-                          {posts[0]?.text}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {buffer.published.length > 0 && (
-                  <>
-                    <div className="text-footnote mt-4 mb-2 font-bold">Already published</div>
-                    <ul className="space-y-1">
-                      {buffer.published.map((post) => (
-                        <li
-                          key={post.id}
-                          className="text-footnote flex flex-wrap items-baseline gap-x-3"
-                        >
-                          <span className="text-muted-foreground w-32 shrink-0">
-                            {inZone(
-                              post.sentAt ?? post.dueAt,
-                              buffer.channels.find((c) => c.id === post.channelId)?.timezone ??
-                                'UTC',
-                            )}
-                          </span>
-                          <span className="w-20 shrink-0 font-bold">
-                            {serviceLabel(post.service)}
-                          </span>
-                          {post.sourceKey ? (
-                            <code className="shrink-0">{post.sourceKey}</code>
-                          ) : (
-                            <span className="text-muted-foreground shrink-0 italic">
-                              not from this queue
-                            </span>
-                          )}
-                          <span className="text-muted-foreground min-w-0 flex-1 truncate">
-                            {post.text.split('\n')[0]}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        </InsetGroup>
-      )}
-
-      {posted && posted.length > 0 && (
-        <InsetGroup>
-          <div className="p-4">
-            <div className="text-headline mb-1">How it did</div>
-            <p className="text-footnote text-muted-foreground mb-3">
-              Buffer&apos;s own figures, per post. It polls the platforms on its own schedule, so a
-              post published in the last hour usually reads zero everywhere — the timestamp says
-              when Buffer last looked.
-            </p>
-            <div className="space-y-3">
-              {posted.map((item) => (
-                <div key={item.key} className="border-hairline rounded-lg border p-3">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <code className="text-footnote">{item.key}</code>
-                    <span className="text-footnote text-muted-foreground">
-                      {item.slides} slides
-                    </span>
-                  </div>
-                  <p className="text-footnote text-muted-foreground mt-1 truncate">
-                    {item.caption}
-                  </p>
-                  <ul className="mt-2 space-y-1">
-                    {item.channels.map((ch) => (
-                      <li key={ch.postId} className="text-footnote flex flex-wrap items-baseline gap-x-3">
-                        <span className="w-20 shrink-0 font-bold">{serviceLabel(ch.service)}</span>
-                        <span
-                          className={cn(
-                            'w-24 shrink-0',
-                            ch.status === 'sent' && 'text-primary',
-                            ch.status === 'error' && 'text-destructive',
-                            ch.status !== 'sent' && ch.status !== 'error' && 'text-muted-foreground',
-                          )}
-                        >
-                          {ch.status}
-                        </span>
-                        {ch.metrics.length ? (
-                          <span className="text-muted-foreground">
-                            {ch.metrics
-                              .filter((m) => KEY_METRICS.includes(m.name))
-                              .map((m) => `${m.name} ${formatMetric(m.value, m.unit)}`)
-                              .join(' · ') || 'no figures yet'}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">
-                            {ch.status === 'sent' ? 'Buffer has not polled yet' : 'not published yet'}
-                          </span>
-                        )}
-                        {ch.error && <span className="text-destructive">{ch.error}</span>}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          </div>
-        </InsetGroup>
-      )}
-
-      {queue.recent.length > 0 && (
-        <InsetGroup>
-          <div className="p-4">
-            <div className="text-headline mb-3">Decided</div>
-            <ul className="space-y-2">
-              {queue.recent.map((item) => (
-                <li key={item.id} className="flex items-baseline gap-3">
-                  <span
-                    className={cn(
-                      'text-footnote w-16 shrink-0 font-bold',
-                      item.state === 'posted' && 'text-primary',
-                      item.state === 'error' && 'text-destructive',
-                      item.state === 'rejected' && 'text-muted-foreground',
-                    )}
-                  >
-                    {item.state}
-                  </span>
-                  <code className="text-footnote shrink-0">{item.sourceKey}</code>
-                  <span className="text-footnote text-muted-foreground min-w-0 flex-1 truncate">
-                    {item.error ?? item.caption}
-                  </span>
-                  <span className="text-footnote text-muted-foreground shrink-0">
-                    {timestamp(item.postedAt ?? item.decidedAt ?? item.createdAt)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </InsetGroup>
-      )}
     </div>
   );
 }
