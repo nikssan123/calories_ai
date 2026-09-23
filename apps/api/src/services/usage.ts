@@ -62,6 +62,16 @@ export interface RecordUsageInput {
    */
   metered?: boolean;
   /**
+   * The person's own words for this turn, for the cost panel to show beside
+   * the price.
+   *
+   * Only passed by the callers that have any. The photo lane's `text` is a
+   * sentence this program wrote, the review's is a template, and filing either
+   * under "what they asked" would make the column a list of our own prompts —
+   * so those pass nothing and the row reads as the unasked-for turn it is.
+   */
+  prompt?: string | null;
+  /**
    * Whether a tool wrote anything into the journal this turn.
    *
    * A different question from `metered` and stored separately, because it is
@@ -596,6 +606,24 @@ export async function turnsInLastWeek(userId: string, kind: TurnKind): Promise<n
   return Number(row?.n ?? 0);
 }
 
+/**
+ * How much of a message the cost ledger keeps.
+ *
+ * Enough to recognise a turn, not enough to be a second copy of the
+ * conversation: a journal message is a line and a recipe import is a pasted
+ * webpage, and the second one would put kilobytes on a row whose purpose is to
+ * hold eight numbers. The panel truncates for the eye; this truncates for the
+ * table, which is the one that matters when the reason to keep the text is a
+ * turn from 90 days ago.
+ */
+const PROMPT_KEPT = 500;
+
+function kept(prompt: string | null | undefined): string | null {
+  const text = prompt?.trim();
+  if (!text) return null;
+  return text.length > PROMPT_KEPT ? `${text.slice(0, PROMPT_KEPT)}…` : text;
+}
+
 export async function recordUsage(input: RecordUsageInput): Promise<void> {
   const { outcome } = input;
   const usage = outcome.usage ?? {
@@ -626,8 +654,8 @@ export async function recordUsage(input: RecordUsageInput): Promise<void> {
          user_id, provider, kind, model,
          input_tokens, output_tokens, cache_read_tokens, cache_write_tokens,
          cost_usd, cost_source, duration_ms, num_turns, ok, error, breakdown,
-         metered, changed_journal
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
+         metered, changed_journal, prompt
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
       [
         input.userId,
         input.provider,
@@ -646,6 +674,7 @@ export async function recordUsage(input: RecordUsageInput): Promise<void> {
         usage.byModel ? JSON.stringify(usage.byModel) : null,
         input.metered ?? true,
         input.changed ?? null,
+        kept(input.prompt),
       ],
     );
   } catch {
@@ -962,6 +991,7 @@ export interface UsageRow {
   num_turns: number;
   ok: boolean;
   error: string | null;
+  prompt: string | null;
 }
 
 /** The raw log, newest first. The panel's "show me the actual turns" view. */
@@ -993,6 +1023,7 @@ export async function recentUsage(limit: number, userId?: string | null): Promis
     num_turns: row.num_turns,
     ok: row.ok,
     error: row.error,
+    prompt: row.prompt ?? null,
   }));
 }
 

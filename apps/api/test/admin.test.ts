@@ -509,6 +509,29 @@ describe('actions', () => {
       expect(Number(rows[0]!.cost_usd)).toBeCloseTo(0.05, 4);
     });
 
+    /**
+     * The words are not part of that history.
+     *
+     * `ai_usage.prompt` is the one thing on a surviving row that the account
+     * wrote rather than the ledger measured, so a deletion that kept the numbers
+     * and the sentence would be a deletion in name only.
+     */
+    it('wipes what the account typed off the cost rows it leaves behind', async () => {
+      await recordUsage({
+        provider: 'anthropic-api',
+        userId: member.id,
+        kind: 'text_log',
+        outcome: { text: '', sessionId: null, numTurns: 1, costUsd: 0.05, costSource: 'reported' },
+        prompt: 'two eggs and a slice of rye',
+      });
+      await deleteAccount(member.id);
+
+      const rows = await query<any>('SELECT prompt, cost_usd FROM ai_usage');
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.prompt).toBeNull();
+      expect(Number(rows[0]!.cost_usd)).toBeCloseTo(0.05, 4);
+    });
+
     /** Photos are files in a volume, so the rows cascading is not enough. */
     it('unlinks the photo files too', async () => {
       const { filePath } = await savePhoto(

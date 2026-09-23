@@ -931,6 +931,15 @@ export async function deleteAccount(userId: string): Promise<DeleteSummary | nul
   ];
   const emails = erased[0]!.length + erased[1]!.length;
 
+  /*
+   * The cost rows outlive the account on purpose — `ai_usage.user_id` is
+   * ON DELETE SET NULL so the viability numbers do not rewrite themselves every
+   * time somebody leaves — but the turn's own words are the person's, not the
+   * ledger's. Cleared here rather than left to the FK, which can only null the
+   * id: the numbers stay, the sentences go.
+   */
+  await query('UPDATE ai_usage SET prompt = NULL WHERE user_id = $1', [userId]);
+
   await query('DELETE FROM users WHERE id = $1', [userId]);
 
   const dir = resolve(env.uploadDir);

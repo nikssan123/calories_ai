@@ -4651,6 +4651,8 @@ export const UsageTurn = z.object({
   num_turns: z.number(),
   ok: z.boolean(),
   error: z.string().nullable(),
+  /** What the person typed, truncated. Null on the turns nobody asked for. */
+  prompt: z.string().nullable(),
 });
 export type UsageTurn = z.infer<typeof UsageTurn>;
 

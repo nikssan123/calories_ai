@@ -262,6 +262,10 @@ export async function suggestRecipes(
     kind: job.kind === 'plan' ? 'meal_plan' : 'recipe',
     outcome,
     provider: provider.id,
+    // The two ways a person's own words reach this run: the text they brought
+    // to be priced, or whatever they typed to steer a suggestion. A plan and an
+    // adapt are a button and a slug, so they carry nothing.
+    prompt: job.kind === 'import' ? job.text : (options.wants ?? null),
   });
   if (outcome.error) throw new Error(outcome.error);
 

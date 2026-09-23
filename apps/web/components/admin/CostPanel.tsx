@@ -199,7 +199,7 @@ export function CostPanel() {
               {report.by_user.map((row) => (
                 <tr key={row.user_id ?? 'deleted'}>
                   <Cell className="font-medium">
-                    {row.email ?? <span className="text-muted-foreground">deleted account</span>}
+                    <Account email={row.email} userId={row.user_id} />
                   </Cell>
                   <Cell className="tnum">{row.turns}</Cell>
                   <Cell className="tnum">{usd(row.cost_usd)}</Cell>
@@ -213,18 +213,29 @@ export function CostPanel() {
 
       <InsetGroup
         title="Recent turns"
-        footer="Newest first, including the ones that failed — a turn that spent tokens and then errored is the most expensive kind."
+        footer="Newest first, including the ones that failed — a turn that spent tokens and then errored is the most expensive kind. The message is the person's own words, so the turns nobody typed a sentence for — a photo with no caption, a weekly review, a nudge — have none; hover a long one for the rest of it. Turns recorded before the column existed have none either."
       >
         <DataTable
-          columns={['When', 'Account', 'Turn', 'Model', 'In', 'Out', 'Cache', 'Cost', 'Took', '']}
+          columns={['When', 'Account', 'Turn', 'Message', 'Model', 'In', 'Out', 'Cache', 'Cost', 'Took', '']}
           className="rounded-none"
           empty="No turns recorded yet."
         >
           {turns.map((turn) => (
             <tr key={turn.id} className={cn(!turn.ok && 'bg-[var(--fat)]/5')}>
               <Cell className="text-muted-foreground">{timestamp(turn.occurred_at)}</Cell>
-              <Cell>{turn.email ?? '—'}</Cell>
+              <Cell>
+                <Account email={turn.email} userId={turn.user_id} />
+              </Cell>
               <Cell>{KIND_LABEL[turn.kind] ?? turn.kind}</Cell>
+              <Cell>
+                {turn.prompt ? (
+                  <span className="block max-w-[22rem] truncate" title={turn.prompt}>
+                    {turn.prompt}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </Cell>
               <Cell className="text-muted-foreground">{turn.model}</Cell>
               <Cell className="tnum">{compactNumber(turn.input_tokens)}</Cell>
               <Cell className="tnum">{compactNumber(turn.output_tokens)}</Cell>
@@ -248,6 +259,26 @@ export function CostPanel() {
         </DataTable>
       </InsetGroup>
     </div>
+  );
+}
+
+/**
+ * Who a turn belongs to.
+ *
+ * Most installs never leave a name — a paid install arrives as a guest and an
+ * email-or-dash column folds all of them into one indistinguishable row, which
+ * is the opposite of what a cost table is for. The id is the only thing that
+ * tells two guests apart, so it stands in for the address; the whole uuid rides
+ * along in the title, because eight characters are enough to read a table and
+ * not enough to query one.
+ */
+function Account({ email, userId }: { email: string | null; userId: string | null }) {
+  if (email) return <>{email}</>;
+  if (!userId) return <span className="text-muted-foreground">deleted account</span>;
+  return (
+    <span className="text-muted-foreground" title={userId}>
+      guest <span className="font-mono text-[12px]">{userId.slice(0, 8)}</span>
+    </span>
   );
 }
 

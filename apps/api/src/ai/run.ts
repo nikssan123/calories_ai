@@ -410,6 +410,10 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
     outcome,
     provider: provider.id,
     metered,
+    // `input.text`, not `promptText`: the row wants the sentence the person
+    // typed, and the prompt it was wrapped in is a day's context and a system
+    // brief that would bury it.
+    prompt: input.text,
     // Only on a turn that got far enough to have a journal fact about it. A
     // failed one has an empty `actions` for the reason it has an empty
     // everything, and recording that as "logged nothing" would let an outage

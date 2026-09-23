@@ -92,6 +92,39 @@ describe('the kinds the table accepts', () => {
   });
 });
 
+/**
+ * The row keeps the sentence, not the prompt around it.
+ *
+ * A price with no subject is the thing the panel could not explain, so the text
+ * is worth a row of its own — but only the person's own words, and only as much
+ * of them as makes a turn recognisable. A recipe import is a pasted webpage, and
+ * a cost ledger that stores the whole of one has become a second copy of the
+ * conversation.
+ */
+describe('the message a turn carries', () => {
+  it('keeps what the person typed', async () => {
+    await record({ userId: user.id, kind: 'text_log', outcome: OUTCOME, prompt: 'two eggs' });
+
+    const [row] = await rows();
+    expect(row.prompt).toBe('two eggs');
+  });
+
+  it('truncates a long one rather than storing the whole paste', async () => {
+    await record({ userId: user.id, kind: 'recipe', outcome: OUTCOME, prompt: 'x'.repeat(2000) });
+
+    const [row] = await rows();
+    expect(row.prompt).toBe(`${'x'.repeat(500)}\u2026`);
+  });
+
+  it('stores nothing for a turn nobody typed a sentence for', async () => {
+    await record({ userId: user.id, kind: 'review', outcome: OUTCOME });
+    await record({ userId: user.id, kind: 'photo_log', outcome: OUTCOME, prompt: '   ' });
+
+    const stored = (await rows()).map((row) => row.prompt);
+    expect(stored).toEqual([null, null]);
+  });
+});
+
 describe('recordUsage', () => {
   it('writes one row per turn with the tokens split by kind', async () => {
     await record({ userId: user.id, kind: 'text_log', outcome: OUTCOME });
