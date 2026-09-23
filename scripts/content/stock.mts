@@ -57,7 +57,16 @@ for (let i = 0; i < argv.length; i++) {
   opts[name] = BOOL.has(name) ? 'true' : argv[++i]
 }
 
-const PER = Number(opts.per ?? 12)
+/*
+ * Twenty-eight a set, up from twelve.
+ *
+ * Ten slideshows take forty-four grounds between them and `meals` alone was
+ * running at sixteen of twenty — enough to allocate without repeating a file,
+ * and not enough for the allocator to have any choice about *which* file. The
+ * slack is what lets MAX_PER_PHOTOGRAPHER and the alt-text rejection throw
+ * things away without the set coming up short.
+ */
+const PER = Number(opts.per ?? 28)
 const OUTDIR = opts.out ?? 'content/stock'
 const DRY = opts.dry === 'true'
 const SHEET = opts.sheet === 'true'
@@ -79,11 +88,20 @@ const KEEP = opts.keep === 'true'
  */
 const SETS: Record<string, string[]> = {
   /*
-   * Six or seven queries a set, not four. Asking one query for twenty results
+   * Ten to twelve queries a set, not four and not seven.
+   *
+   * Two separate failures pushed this up. Asking one query for twenty results
    * walks into its own long tail: `kitchen at night warm lamp light` at depth
    * twenty returned a bar counter with vinyl records on it, which then grounded
-   * a slideshow about searching a food database. Breadth holds the subject;
-   * depth does not.
+   * a slideshow about searching a food database. And at seven queries the
+   * quota worked out at three photographs each, which on Pexels is usually
+   * three frames of one shoot — every file distinct, every picture the same
+   * table. Forty-four slides came out with forty-four different files and a
+   * visible sense of repetition, which is the amateur tell arrived at by a
+   * third route.
+   *
+   * So: breadth holds the subject, depth does not, and MAX_PER_PHOTOGRAPHER
+   * below stops one shoot filling the gap breadth leaves.
    */
   meals: [
     'hand holding bowl of food',
@@ -93,6 +111,11 @@ const SETS: Record<string, string[]> = {
     'person eating salad at home',
     'dinner plate held in two hands',
     'bowl of pasta on a table at home',
+    'sandwich on a plate at a desk',
+    'breakfast eggs on toast home kitchen',
+    'takeaway container on a sofa',
+    'soup bowl held close to camera',
+    'rice and vegetables in a bowl home',
   ],
   counter: [
     'kitchen counter cooking mess',
@@ -102,6 +125,11 @@ const SETS: Record<string, string[]> = {
     'hands cooking on a home stove',
     'leftovers in a container on a counter',
     'home kitchen worktop with ingredients',
+    'dirty dishes in a kitchen sink',
+    'pan on a hob steam kitchen',
+    'kettle and mugs on a worktop',
+    'someone weighing food on a kitchen scale',
+    'open cupboard with jars and packets',
   ],
   market: [
     'supermarket produce aisle',
@@ -111,6 +139,11 @@ const SETS: Record<string, string[]> = {
     'person choosing vegetables in a shop',
     'trolley in a supermarket aisle',
     'unpacking shopping in a kitchen',
+    'reading a food label in a shop',
+    'bread counter in a bakery',
+    'fridge aisle in a supermarket',
+    'weighing loose fruit in a shop',
+    'market stall with crates of produce',
   ],
   /**
    * Evening, and the kitchen after dark. Originally this set also asked for gym
@@ -119,7 +152,7 @@ const SETS: Record<string, string[]> = {
    * ground for a slideshow about standing at the fridge door, because the set
    * was described to it as "evenings, laptops, gym bags". The set was the
    * problem, not the choice. A set has to mean one thing or nothing downstream
-   * can pick it correctly.
+   * can pick it correctly. The additions keep inside that one thing.
    */
   evening: [
     'open fridge at night kitchen',
@@ -129,6 +162,11 @@ const SETS: Record<string, string[]> = {
     'late night snack kitchen counter',
     'person standing in a dark kitchen',
     'dim kitchen with a light over the table',
+    'kitchen window after dark from inside',
+    'person at a table lit by a phone screen',
+    'evening meal on a table lamp light',
+    'cup of tea on a table at night',
+    'hallway light from a kitchen doorway',
   ],
 }
 
@@ -351,6 +389,21 @@ type Credit = {
   url: string
 }
 const credits: Credit[] = []
+/**
+ * At most two photographs from one photographer in a set.
+ *
+ * `seen` below keeps the same *photo* out of two sets, which is not the
+ * constraint that matters. Pexels ranks a shoot together: ask for
+ * `hand holding bowl of food` and the top three results are frequently one
+ * session, one table, one bowl at three angles. Three distinct ids, one
+ * picture, and a carousel grounded on them looks like it repeats — which it
+ * does, to the only judge who counts.
+ *
+ * Two rather than one because a photographer who shoots this subject well is
+ * worth twice, and because at one the quota stops being reachable.
+ */
+const MAX_PER_PHOTOGRAPHER = 2
+
 const seen = new Set<number>()
 
 for (const set of wanted) {
@@ -364,7 +417,10 @@ for (const set of wanted) {
   // Spread the quota across the queries so no single one dominates the set.
   const perQuery = Math.max(1, Math.ceil(PER / queries.length))
   const picked: { photo: Photo; query: string }[] = []
+  /** Per set, not per run: the same shoot in two sets is two different jobs. */
+  const byPhotographer = new Map<string, number>()
   let rejected = 0
+  let sameShoot = 0
 
   for (const query of queries) {
     if (picked.length >= PER) break
@@ -385,7 +441,13 @@ for (const set of wanted) {
     for (const cand of ranked) {
       if (taken >= perQuery || picked.length >= PER) break
       if (seen.has(cand.photo.id)) continue // never the same photo in two sets
+      const who = cand.photo.photographer
+      if ((byPhotographer.get(who) ?? 0) >= MAX_PER_PHOTOGRAPHER) {
+        sameShoot++
+        continue
+      }
       seen.add(cand.photo.id)
+      byPhotographer.set(who, (byPhotographer.get(who) ?? 0) + 1)
       picked.push({ photo: cand.photo, query: cand.query })
       taken++
     }
@@ -431,7 +493,10 @@ for (const set of wanted) {
   }
 
   if (!DRY) {
-    console.log(`${set.padEnd(8)} ${picked.length} kept, ${rejected} rejected on alt -> ${dir}`)
+    console.log(
+      `${set.padEnd(8)} ${picked.length} kept, ${rejected} rejected on alt, ` +
+        `${sameShoot} skipped as a third from one photographer -> ${dir}`,
+    )
     if (SHEET) sheet(set, dir, picked.map((p) => String(p.photo.id)))
   }
 }
