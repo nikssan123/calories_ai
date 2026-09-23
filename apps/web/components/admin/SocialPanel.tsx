@@ -392,7 +392,32 @@ export function SocialPanel({ only }: { only?: 'image' | 'video' } = {}) {
         <InsetGroup>
           <div className="space-y-4 p-4">
             <div className="flex items-baseline justify-between gap-3">
-              <code className="text-footnote">{current.key}</code>
+              <div className="flex items-center gap-1">
+                {/* Browsing used to be forward-only, through a control called
+                    "Skip for now" — so looking at the fourth post meant
+                    passing three and looking at the second again meant going
+                    round. A pair of arrows is the same two lines of state and
+                    lets you compare two posts before deciding either. */}
+                <button
+                  type="button"
+                  aria-label="Previous post"
+                  onClick={() => setIndex((i) => (i - 1 + pending.length) % pending.length)}
+                  disabled={busy || pending.length < 2}
+                  className="text-muted-foreground hover:text-foreground disabled:opacity-30 -ml-1 p-1"
+                >
+                  <ChevronLeft className="size-5" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Next post"
+                  onClick={() => setIndex((i) => (i + 1) % pending.length)}
+                  disabled={busy || pending.length < 2}
+                  className="text-muted-foreground hover:text-foreground disabled:opacity-30 p-1"
+                >
+                  <ChevronRight className="size-5" />
+                </button>
+                <code className="text-footnote ml-1">{current.key}</code>
+              </div>
               <span className="text-footnote text-muted-foreground">
                 {index + 1} of {pending.length} ·{' '}
                 {isVideo
@@ -589,16 +614,6 @@ export function SocialPanel({ only }: { only?: 'image' | 'video' } = {}) {
               </Button>
             </div>
 
-            {pending.length > 1 && (
-              <button
-                type="button"
-                onClick={() => setIndex((i) => (i + 1) % pending.length)}
-                disabled={busy}
-                className="text-footnote text-muted-foreground hover:text-foreground w-full text-center"
-              >
-                Skip for now
-              </button>
-            )}
           </div>
         </InsetGroup>
       )}

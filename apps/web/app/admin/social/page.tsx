@@ -58,53 +58,55 @@ export default function SocialScreen() {
   if (!isAdmin) return null;
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-24 pt-6">
-      <div className="mb-5 flex items-center gap-3">
-        <Link
-          href="/admin"
-          className="text-muted-foreground hover:text-foreground -ml-1 p-1"
-          aria-label="Back to admin"
+    <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-5 pb-8 lg:px-6">
+      <div className="mx-auto w-full max-w-6xl">
+        <div className="mb-5 flex items-center gap-3">
+          <Link
+            href="/admin"
+            className="text-muted-foreground hover:text-foreground -ml-1 p-1"
+            aria-label="Back to admin"
+          >
+            <ArrowLeft className="size-5" />
+          </Link>
+          <h1 className="text-title3 font-bold">Social</h1>
+        </div>
+
+        {/* Sticky, because deciding is a scroll-and-tap loop and losing the tab
+            strip at the bottom of a long queue means scrolling back up to switch. */}
+        <nav
+          className="bg-background/95 supports-[backdrop-filter]:bg-background/70 sticky top-0 z-10 mb-5 flex gap-1 overflow-x-auto rounded-full py-2 backdrop-blur [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          aria-label="Social sections"
         >
-          <ArrowLeft className="size-5" />
-        </Link>
-        <h1 className="text-title3 font-bold">Social</h1>
+          {TABS.map((entry) => {
+            const Icon = entry.icon;
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => setTab(entry.id)}
+                aria-current={tab === entry.id ? 'page' : undefined}
+                className={cn(
+                  'text-footnote flex shrink-0 items-center gap-2 rounded-full px-4 py-2 font-bold transition-colors',
+                  tab === entry.id
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted',
+                )}
+              >
+                <Icon className="size-4" />
+                {entry.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Mounted per tab rather than hidden with CSS: each one reaches Buffer on
+            mount, and keeping all four alive would make every tab switch three
+            requests nobody asked for. */}
+        {tab === 'posts' && <SocialPanel only="image" />}
+        {tab === 'memes' && <SocialPanel only="video" />}
+        {tab === 'queue' && <SocialQueueTab />}
+        {tab === 'published' && <SocialPublishedTab />}
       </div>
-
-      {/* Sticky, because deciding is a scroll-and-tap loop and losing the tab
-          strip at the bottom of a long queue means scrolling back up to switch. */}
-      <nav
-        className="bg-background/95 supports-[backdrop-filter]:bg-background/70 sticky top-0 z-10 -mx-4 mb-5 flex gap-1 overflow-x-auto px-4 py-2 backdrop-blur"
-        aria-label="Social sections"
-      >
-        {TABS.map((entry) => {
-          const Icon = entry.icon;
-          return (
-            <button
-              key={entry.id}
-              type="button"
-              onClick={() => setTab(entry.id)}
-              aria-current={tab === entry.id ? 'page' : undefined}
-              className={cn(
-                'text-footnote flex shrink-0 items-center gap-2 rounded-full px-4 py-2 font-bold transition-colors',
-                tab === entry.id
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted',
-              )}
-            >
-              <Icon className="size-4" />
-              {entry.label}
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* Mounted per tab rather than hidden with CSS: each one reaches Buffer on
-          mount, and keeping all four alive would make every tab switch three
-          requests nobody asked for. */}
-      {tab === 'posts' && <SocialPanel only="image" />}
-      {tab === 'memes' && <SocialPanel only="video" />}
-      {tab === 'queue' && <SocialQueueTab />}
-      {tab === 'published' && <SocialPublishedTab />}
     </div>
   );
 }

@@ -666,15 +666,19 @@ function render(p: Post): { field: string; body: string } {
       ]
         .filter(Boolean)
         .join('')
-      const pips = Array.from(
-        { length: p.n },
-        (_, k) => `<b class="${k === p.i ? 'on' : ''}"></b>`,
-      ).join('')
+      /*
+       * No pagination dots.
+       *
+       * They were drawn here for a reader who could not otherwise tell a
+       * four-slide carousel from a single poster. Instagram and TikTok both
+       * draw their own indicator over a carousel, so ours sat underneath
+       * theirs — two rows of dots saying the same thing, one of them baked
+       * into the image and wrong the moment a slide is removed.
+       */
       return {
         field: FIELDS.warm,
         body:
           `<div class="slide${cover ? ' mid' : ''}">${beats}</div>` +
-          `<div class="pips">${pips}</div>` +
           mark('top:76px;left:86px', 'rgba(255,255,255,.96)'),
       }
     }
@@ -827,9 +831,6 @@ body{position:relative;background:${field};${ground}-webkit-font-smoothing:antia
 .cap.aside,.cap.reason{color:#fff;background:rgba(0,0,0,.58);padding:.1em .3em;border-radius:12px;text-shadow:0 1px 3px rgba(0,0,0,.6)}
 .cap.aside{font-family:'T',sans-serif;font-weight:700;font-size:39px;line-height:1.62}
 .cap.reason{font-family:'T',sans-serif;font-weight:700;font-size:43px;line-height:1.6}
-.pips{position:absolute;bottom:78px;left:0;width:${W}px;display:flex;justify-content:center;gap:16px}
-.pips b{width:19px;height:19px;border-radius:50%;background:rgba(255,255,255,.55);display:block;box-shadow:0 1px 3px rgba(0,0,0,.28)}
-.pips b.on{background:#fff}
 .mark{position:absolute;display:flex;align-items:center;gap:24px;font-family:'T',sans-serif;font-weight:700}
 .mark img{width:62px;height:62px;border-radius:16px;display:block;flex:none}
 .mark span{font-size:28px;letter-spacing:.01em}
