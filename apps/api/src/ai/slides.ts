@@ -37,7 +37,7 @@ import { createProvider, type AgentRequest } from './providers/index.ts';
  * that the rendered slides sit beside — and against PLAY_LISTING.md's rule that
  * nothing is claimed the app cannot do.
  */
-const FACTS = `
+export const FACTS = `
 Day So Far is a calorie and macro tracker. Say what you ate in plain language
 and it works out the numbers. Four screens, and that is the whole app.
 
@@ -65,7 +65,7 @@ TONE — a solo developer who built this over six months of evenings because
  * And what it must not say. Stated as prohibitions rather than left to the fact
  * sheet's silence, because a model filling a gap is the whole problem.
  */
-const FORBIDDEN = `
+export const FORBIDDEN = `
 NEVER mention, imply or allude to:
   * coaches, coaching, sharing logs with anyone, or check-ins. The coach product
     exists and is deliberately not being marketed.
@@ -192,7 +192,7 @@ function taskPrompt(count: number, avoid: string[], theme?: string): string {
  * slideshow costs nothing — the batch simply comes back one short, which is
  * visible, rather than the panel showing a slide nobody can post.
  */
-const TRIPWIRES = [
+export const TRIPWIRES = [
   /\bcoach(es|ing)?\b/i,
   /\bcheck-?in\b/i,
   /\bbarcode\b/i,
