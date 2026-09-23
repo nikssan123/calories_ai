@@ -930,6 +930,7 @@ export async function bufferQueue(): Promise<SocialBufferQueue> {
     sentAt: string | null;
     text: string;
     isCustomScheduled: boolean;
+    schedulingType: string | null;
     assets: { type: string }[] | null;
   }
   interface Chan {
@@ -941,7 +942,8 @@ export async function bufferQueue(): Promise<SocialBufferQueue> {
     postingSchedule: { day: string; paused: boolean; times: string[] }[];
   }
 
-  const POST = `id channelId channelService status dueAt sentAt text isCustomScheduled assets { type }`;
+  const POST =
+    `id channelId channelService status dueAt sentAt text isCustomScheduled schedulingType assets { type }`;
 
   /*
    * Two post queries rather than one, because the sort has to differ: upcoming
@@ -1019,6 +1021,7 @@ export async function bufferQueue(): Promise<SocialBufferQueue> {
     mediaType: node.assets?.[0]?.type ?? null,
     sourceKey: keyByPost.get(node.id) ?? null,
     custom: node.isCustomScheduled,
+    reminder: node.schedulingType === 'notification',
   });
 
   const upcoming = (data.upcoming.edges ?? []).map((e) => post(e.node));

@@ -393,30 +393,35 @@ export function SocialPanel({ only }: { only?: 'image' | 'video' } = {}) {
           <div className="space-y-4 p-4">
             <div className="flex items-baseline justify-between gap-3">
               <div className="flex items-center gap-1">
-                {/* Browsing used to be forward-only, through a control called
-                    "Skip for now" — so looking at the fourth post meant
-                    passing three and looking at the second again meant going
-                    round. A pair of arrows is the same two lines of state and
-                    lets you compare two posts before deciding either. */}
-                <button
-                  type="button"
-                  aria-label="Previous post"
-                  onClick={() => setIndex((i) => (i - 1 + pending.length) % pending.length)}
-                  disabled={busy || pending.length < 2}
-                  className="text-muted-foreground hover:text-foreground disabled:opacity-30 -ml-1 p-1"
-                >
-                  <ChevronLeft className="size-5" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Next post"
-                  onClick={() => setIndex((i) => (i + 1) % pending.length)}
-                  disabled={busy || pending.length < 2}
-                  className="text-muted-foreground hover:text-foreground disabled:opacity-30 p-1"
-                >
-                  <ChevronRight className="size-5" />
-                </button>
-                <code className="text-footnote ml-1">{current.key}</code>
+                {/* Rendered only when there is somewhere to go.
+                    They were disabled instead, which looks identical to broken:
+                    the Posts tab had one pending group, the arrows greyed out
+                    by a rule nothing on screen stated, and the first thing
+                    reported was that they did nothing. A control that cannot
+                    act should not be drawn. */}
+                {pending.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      aria-label="Previous post"
+                      onClick={() => setIndex((i) => (i - 1 + pending.length) % pending.length)}
+                      disabled={busy}
+                      className="text-muted-foreground hover:text-foreground hover:bg-muted -ml-1 rounded-lg p-1.5 disabled:opacity-30"
+                    >
+                      <ChevronLeft className="size-5" />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Next post"
+                      onClick={() => setIndex((i) => (i + 1) % pending.length)}
+                      disabled={busy}
+                      className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg p-1.5 disabled:opacity-30"
+                    >
+                      <ChevronRight className="size-5" />
+                    </button>
+                  </>
+                )}
+                <code className="text-footnote">{current.key}</code>
               </div>
               <span className="text-footnote text-muted-foreground">
                 {index + 1} of {pending.length} ·{' '}

@@ -1,31 +1,34 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
-import type { SocialBufferQueue, SocialPosted } from '@ct/shared';
+import { Film, Images, Loader2 } from 'lucide-react';
+import type { SocialBufferQueue, SocialMetric, SocialPosted } from '@ct/shared';
 import { api } from '@/lib/api';
 import { inZone, serviceLabel } from './labels';
 
 /**
- * What went out, and how it did.
+ * What went out, per platform.
  *
- * Two sources, because neither alone is the truth. Buffer knows what published
- * — including the `content/social/` back catalogue this pipeline never made —
- * and our rows are the only place a post's source key lives, which is what
- * makes a hook comparable against the next one. A row with no key came from
- * Buffer's own composer and is labelled rather than folded in.
+ * Same axis as the Queue tab, for the same reason. An earlier version grouped
+ * by source key and nested the channels inside, which reads as "here is a post
+ * and where it went" — a question nobody asks. The question is what Instagram
+ * published this week and how it did, so the platform is the column.
+ *
+ * Buffer's sent list is the spine rather than our rows, because it is the only
+ * complete answer: the `content/social/` back catalogue published through
+ * Buffer's own composer and appears nowhere in `social_queue`. Our rows supply
+ * the source key and the metrics, joined on the Buffer post id, and a row
+ * without a key is labelled rather than folded in.
  *
  * Seven days. Buffer's free plan forgets analytics past thirty and the useful
- * window is shorter than that anyway: the question here is whether the last
- * week's hooks worked, not what the account has ever done.
+ * window is shorter anyway — the question is whether last week's hooks worked.
  */
 
 /**
  * The metrics worth a row's width.
  *
  * Buffer returns whatever each platform exposes, which on some channels is
- * fifteen figures including `postCount` and `freeSubscriptions`. These are the
- * ones that answer whether a hook worked.
+ * fifteen figures including `postCount` and `freeSubscriptions`.
  */
 const KEY_METRICS = ['views', 'impressions', 'likes', 'reactions', 'comments', 'saves'];
 
@@ -41,8 +44,8 @@ export function SocialPublishedTab() {
   const [buffer, setBuffer] = useState<SocialBufferQueue | null>(null);
 
   useEffect(() => {
-    // Failures are swallowed here on purpose: these are numbers to read after
-    // the fact, and a slow metrics call must not be able to blank the screen.
+    // Swallowed on purpose: these are numbers read after the fact, and a slow
+    // metrics call must not be able to blank the screen.
     api.admin
       .socialPerformance()
       .then((r) => setPosted(r.posted))
@@ -62,95 +65,98 @@ export function SocialPublishedTab() {
     );
   }
 
-  const cutoff = Date.now() - WINDOW_DAYS * 86_400_000;
-  const zoneOf = (channelId: string) =>
-    buffer.channels.find((c) => c.id === channelId)?.timezone ?? 'UTC';
-
-  /** Our own posts that have actually gone out inside the window. */
-  const ours = posted
-    .map((item) => ({
-      item,
-      channels: item.channels.filter(
-        (ch) => ch.sentAt && new Date(ch.sentAt).getTime() >= cutoff,
-      ),
-    }))
-    .filter((row) => row.channels.length)
-    .sort((a, b) => (b.channels[0]!.sentAt ?? '').localeCompare(a.channels[0]!.sentAt ?? ''));
-
-  /** Buffer's sent posts that this queue never made. */
-  const external = buffer.published.filter(
-    (p) => p.sourceKey === null && p.sentAt && new Date(p.sentAt).getTime() >= cutoff,
-  );
-
-  if (!ours.length && !external.length) {
-    return (
-      <div className="border-hairline text-footnote text-muted-foreground rounded-xl border p-8 text-center">
-        Nothing published in the last {WINDOW_DAYS} days.
-      </div>
-    );
+  /** Buffer post id -> the metrics and the slide count our rows know about. */
+  const extra = new Map<string, { metrics: SocialMetric[]; slides: number }>();
+  for (const item of posted) {
+    for (const ch of item.channels) {
+      extra.set(ch.postId, { metrics: ch.metrics, slides: item.slides });
+    }
   }
 
+  const cutoff = Date.now() - WINDOW_DAYS * 86_400_000;
+  const recent = buffer.published.filter(
+    (p) => p.sentAt && new Date(p.sentAt).getTime() >= cutoff,
+  );
+
   return (
-    <div className="space-y-5">
-      {ours.length > 0 && (
-        <div className="space-y-3">
-          {ours.map(({ item, channels }) => (
-            <div key={item.key} className="border-hairline rounded-xl border p-3">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <code className="text-footnote">{item.key}</code>
-                <span className="text-footnote text-muted-foreground">
-                  {item.slides === 1 ? 'video' : `${item.slides} slides`}
-                </span>
-              </div>
-              <p className="text-footnote text-muted-foreground mt-1 line-clamp-2">
-                {item.caption}
+    <div className="grid items-start gap-4 lg:grid-cols-3">
+      {buffer.channels.map((channel) => {
+        const posts = recent
+          .filter((p) => p.channelId === channel.id)
+          .sort((a, b) => (b.sentAt ?? '').localeCompare(a.sentAt ?? ''));
+
+        return (
+          <section key={channel.id} className="border-hairline rounded-xl border">
+            <header className="border-hairline flex items-baseline justify-between border-b px-3 py-2.5">
+              <span className="text-headline">{serviceLabel(channel.service)}</span>
+              <span className="text-footnote text-muted-foreground">
+                {posts.length} in {WINDOW_DAYS}d
+              </span>
+            </header>
+
+            {posts.length === 0 ? (
+              <p className="text-footnote text-muted-foreground p-6 text-center">
+                Nothing published.
               </p>
-              <ul className="mt-2 space-y-1">
-                {channels.map((ch) => {
-                  const shown = ch.metrics.filter((m) => KEY_METRICS.includes(m.name));
+            ) : (
+              <ol className="divide-hairline divide-y">
+                {posts.map((post) => {
+                  const ours = extra.get(post.id);
+                  const shown = (ours?.metrics ?? []).filter((m) => KEY_METRICS.includes(m.name));
+                  const isVideo = post.mediaType === 'video';
                   return (
-                    <li
-                      key={ch.postId}
-                      className="text-footnote flex flex-wrap items-baseline gap-x-3"
-                    >
-                      <span className="w-20 shrink-0 font-bold">{serviceLabel(ch.service)}</span>
-                      <span className="text-muted-foreground w-32 shrink-0">
-                        {inZone(ch.sentAt, 'Europe/Sofia')}
-                      </span>
-                      <span className="text-muted-foreground min-w-0 flex-1">
-                        {shown.length
-                          ? shown
+                    <li key={post.id} className="p-3">
+                      <div className="flex items-center gap-2">
+                        {isVideo ? (
+                          <Film className="text-muted-foreground size-4 shrink-0" />
+                        ) : (
+                          <Images className="text-muted-foreground size-4 shrink-0" />
+                        )}
+                        <span className="text-footnote font-bold">
+                          {inZone(post.sentAt, channel.timezone)}
+                        </span>
+                      </div>
+
+                      <div className="text-footnote mt-1 flex flex-wrap items-center gap-x-2">
+                        {post.sourceKey ? (
+                          <code className="text-[11px]">{post.sourceKey}</code>
+                        ) : (
+                          /* Not from this queue: the old back catalogue went out
+                             through Buffer's composer, and folding it in
+                             silently is how "what have we published" got
+                             answered wrongly once already. */
+                          <span className="text-muted-foreground italic">external</span>
+                        )}
+                      </div>
+
+                      <p className="text-footnote text-muted-foreground mt-1 line-clamp-2">
+                        {post.text.split('\n')[0]}
+                      </p>
+
+                      <p className="text-footnote mt-1.5">
+                        {shown.length ? (
+                          <span className="text-primary">
+                            {shown
                               .map((m) => `${m.name} ${formatMetric(m.value, m.unit)}`)
-                              .join(' · ')
-                          : 'Buffer has not polled yet'}
-                      </span>
+                              .join(' · ')}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">
+                            {/* Buffer's lag is real and surfaced rather than
+                                shown as a row of zeros, which reads as "this
+                                failed" instead of "ask again later". */}
+                            {ours ? 'Buffer has not polled yet' : 'no figures'}
+                          </span>
+                        )}
+                      </p>
                     </li>
                   );
                 })}
-              </ul>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {external.length > 0 && (
-        <div className="border-hairline rounded-xl border p-3">
-          <div className="text-footnote mb-2 font-bold">Not from this queue</div>
-          <ul className="space-y-1">
-            {external.map((post) => (
-              <li key={post.id} className="text-footnote flex flex-wrap items-baseline gap-x-3">
-                <span className="w-20 shrink-0 font-bold">{serviceLabel(post.service)}</span>
-                <span className="text-muted-foreground w-32 shrink-0">
-                  {inZone(post.sentAt, zoneOf(post.channelId))}
-                </span>
-                <span className="text-muted-foreground min-w-0 flex-1 truncate">
-                  {post.text.split('\n')[0]}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+              </ol>
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 }

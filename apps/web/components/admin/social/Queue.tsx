@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ArrowDownToLine,
   ArrowUpToLine,
   BellRing,
   Clock,
+  Film,
+  Images,
   Loader2,
   RefreshCw,
   Trash2,
+  Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { SocialBufferPost, SocialBufferQueue } from '@ct/shared';
@@ -19,45 +21,37 @@ import { cn } from '@/lib/utils';
 import { fromLocalInput, inZone, serviceLabel, toLocalInput } from './labels';
 
 /**
- * Buffer's queue, and the three things you can do to it.
+ * What is scheduled, per platform.
  *
- * Read from Buffer on every load rather than from our rows, because our rows
- * cannot answer this: a row turns `posted` the moment Buffer accepts it, days
- * before it publishes, and the account also holds posts this pipeline never
- * made. A post with no source key came from somewhere else and says so.
+ * The first version grouped by due time and listed the channels firing at it,
+ * on the assumption that a slot holds the same post everywhere. That is true
+ * only while every approval goes to every channel, and it stopped being true
+ * within an hour: three carousels were re-approved to all three channels while
+ * three memes sat on Instagram and TikTok only, so `26 Sep 19:00` held a
+ * carousel on X and a meme on the other two. The UI showed one of them and
+ * named all three channels — not just hard to read, actually wrong.
  *
- * Top / bottom and not drag-to-reorder: Buffer offers `movePostInQueue` with
- * those two positions and nothing else, so a draggable list would be a lie
- * about what can be expressed. When something is topical it goes next, and
- * when it is not it goes last, which is the whole of what this is for.
+ * So the axis is the platform, because that is the axis the question is asked
+ * in: what goes out on TikTok, in what order. Each column is one channel's
+ * queue in time order, and every control acts on the one post it sits under.
+ * Moving a carousel that spans three channels is three taps; that is honest
+ * about what Buffer stores, which is three independent posts.
  */
 
-/** Posts sharing a due time — one slot firing on several channels. */
-function bySlot(posts: SocialBufferPost[]): { at: string | null; posts: SocialBufferPost[] }[] {
-  const groups = new Map<string, SocialBufferPost[]>();
-  for (const post of posts) {
-    const at = post.dueAt ?? 'none';
-    const list = groups.get(at);
-    if (list) list.push(post);
-    else groups.set(at, [post]);
-  }
-  return [...groups.entries()]
-    .map(([at, list]) => ({ at: at === 'none' ? null : at, posts: list }))
-    // Undated last. A draft has no `dueAt` and Buffer returns it first, which
-    // put something nobody scheduled at the top of a list about what goes next.
-    .sort((a, b) => {
-      if (a.at === b.at) return 0;
-      if (a.at === null) return 1;
-      if (b.at === null) return -1;
-      return a.at.localeCompare(b.at);
-    });
+/** Sort a channel's posts: dated first in time order, undated drafts last. */
+function inOrder(posts: SocialBufferPost[]): SocialBufferPost[] {
+  return [...posts].sort((a, b) => {
+    if (a.dueAt === b.dueAt) return 0;
+    if (!a.dueAt) return 1;
+    if (!b.dueAt) return -1;
+    return a.dueAt.localeCompare(b.dueAt);
+  });
 }
 
 export function SocialQueueTab() {
   const [queue, setQueue] = useState<SocialBufferQueue | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  /** Which post has its time picker open, and what is typed in it. */
   const [editing, setEditing] = useState<{ id: string; value: string } | null>(null);
 
   const load = useCallback(async () => {
@@ -106,229 +100,208 @@ export function SocialQueueTab() {
 
   if (!queue) {
     return (
-      <div className="space-y-3">
-        <Skeleton className="h-20 w-full rounded-xl" />
-        <Skeleton className="h-28 w-full rounded-xl" />
-        <Skeleton className="h-28 w-full rounded-xl" />
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Skeleton className="h-64 w-full rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-xl" />
       </div>
     );
   }
 
-  const slots = bySlot(queue.upcoming);
+  /** Which source keys appear on more than one channel, so a row can say so. */
+  const spread = new Map<string, number>();
+  for (const post of queue.upcoming) {
+    if (!post.sourceKey) continue;
+    spread.set(post.sourceKey, (spread.get(post.sourceKey) ?? 0) + 1);
+  }
 
   return (
-    <div className="space-y-5">
-      {/* Depth per channel, against the plan's ceiling. Per channel and not
-          account-wide: counting across three once reported 13 of 10 against
-          thirty posts of real headroom. */}
-      <div className="grid gap-2 sm:grid-cols-3">
-        {queue.channels.map((ch) => {
-          const full = ch.limit !== null && ch.scheduled >= ch.limit;
-          return (
-            <div
-              key={ch.id}
-              className={cn(
-                'border-hairline rounded-xl border p-3',
-                full && 'border-destructive/60',
-              )}
-            >
-              <div className="flex items-baseline justify-between">
-                <span className="text-footnote font-bold">{serviceLabel(ch.service)}</span>
-                <span
-                  className={cn('text-headline', full ? 'text-destructive' : 'text-primary')}
-                >
-                  {ch.scheduled}
-                  {ch.limit !== null && (
-                    <span className="text-muted-foreground text-footnote">/{ch.limit}</span>
-                  )}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+    <div className="grid items-start gap-4 lg:grid-cols-3">
+      {queue.channels.map((channel) => {
+        const posts = inOrder(queue.upcoming.filter((p) => p.channelId === channel.id));
+        const full = channel.limit !== null && channel.scheduled >= channel.limit;
 
-      {slots.length === 0 ? (
-        <div className="border-hairline text-footnote text-muted-foreground rounded-xl border p-8 text-center">
-          Queue is empty.
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {slots.map(({ at, posts }) => {
-            const zone =
-              queue.channels.find((c) => c.id === posts[0]?.channelId)?.timezone ?? 'UTC';
-            const first = posts[0]!;
-            const isVideo = first.mediaType === 'video';
-            return (
-              <div key={at ?? 'undated'} className="border-hairline rounded-xl border p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-footnote font-bold">{inZone(at, zone)}</span>
-                    {posts.some((p) => p.status === 'draft') && (
-                      <span className="text-footnote text-muted-foreground">draft</span>
-                    )}
-                    {posts.some((p) => p.status === 'error') && (
-                      <span className="text-footnote text-destructive">error</span>
-                    )}
-                    {posts.some((p) => p.custom) && (
-                      <Clock className="text-muted-foreground size-3.5" />
-                    )}
-                    {posts.some((p) => p.sourceKey === null) && (
-                      <span className="text-footnote text-muted-foreground italic">external</span>
-                    )}
-                  </div>
-                  <span className="text-footnote text-muted-foreground">
-                    {posts.map((p) => serviceLabel(p.service)).join(' · ')}
-                  </span>
-                </div>
-
-                <div className="text-footnote mt-1 flex items-center gap-2">
-                  {first.sourceKey && <code>{first.sourceKey}</code>}
-                  <span className="text-muted-foreground">
-                    {isVideo ? 'video' : `${first.assets} images`}
-                  </span>
-                </div>
-
-                <p className="text-footnote text-muted-foreground mt-1 line-clamp-2">
-                  {first.text}
-                </p>
-
-                {editing?.id === first.id ? (
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <input
-                      type="datetime-local"
-                      className="border-hairline bg-background text-footnote rounded-lg border px-2 py-1.5"
-                      value={editing.value}
-                      onChange={(e) => setEditing({ id: first.id, value: e.target.value })}
-                    />
-                    <Button
-                      size="sm"
-                      disabled={busy === first.id || !editing.value}
-                      onClick={() =>
-                        void act(
-                          first.id,
-                          () =>
-                            // Every post in the slot, so a carousel on three
-                            // channels moves together rather than splitting.
-                            Promise.all(
-                              posts.map((p) =>
-                                api.admin.retimeSocialPost(
-                                  p.id,
-                                  fromLocalInput(editing.value, zone),
-                                ),
-                              ),
-                            ),
-                          'Time changed',
-                        )
-                      }
-                    >
-                      {busy === first.id ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : (
-                        <Clock className="size-4" />
-                      )}
-                      Set
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
-                      Cancel
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={busy === first.id}
-                      onClick={() =>
-                        void act(
-                          first.id,
-                          () =>
-                            Promise.all(posts.map((p) => api.admin.moveSocialPost(p.id, 'top'))),
-                          'Moved to the front',
-                        )
-                      }
-                    >
-                      <ArrowUpToLine className="size-4" />
-                      Next
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={busy === first.id}
-                      onClick={() =>
-                        void act(
-                          first.id,
-                          () =>
-                            Promise.all(
-                              posts.map((p) => api.admin.moveSocialPost(p.id, 'bottom')),
-                            ),
-                          'Moved to the back',
-                        )
-                      }
-                    >
-                      <ArrowDownToLine className="size-4" />
-                      Last
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={busy === first.id}
-                      onClick={() => setEditing({ id: first.id, value: toLocalInput(at, zone) })}
-                    >
-                      <Clock className="size-4" />
-                      Time
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-destructive"
-                      disabled={busy === first.id}
-                      onClick={() =>
-                        void act(
-                          first.id,
-                          () =>
-                            Promise.all(posts.map((p) => api.admin.removeSocialPost(p.id))),
-                          'Removed from Buffer',
-                        )
-                      }
-                    >
-                      {busy === first.id ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="size-4" />
-                      )}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* When it posts. Readable over Buffer's API, settable only in Buffer. */}
-      <div className="border-hairline rounded-xl border p-3">
-        <div className="text-footnote mb-2 flex items-center gap-2 font-bold">
-          <BellRing className="size-4" />
-          Slots
-        </div>
-        <ul className="space-y-1">
-          {queue.channels.map((ch) => (
-            <li key={ch.id} className="text-footnote flex flex-wrap items-baseline gap-x-3">
-              <span className="w-20 shrink-0 font-bold">{serviceLabel(ch.service)}</span>
-              <span className="text-muted-foreground min-w-0 flex-1">
-                {ch.slots
-                  .filter((s) => !s.paused && s.times.length)
-                  .map((s) => `${s.day} ${s.times.join(', ')}`)
-                  .join('  ·  ') || 'none'}
+        return (
+          <section key={channel.id} className="border-hairline rounded-xl border">
+            <header className="border-hairline flex items-baseline justify-between border-b px-3 py-2.5">
+              <span className="text-headline">{serviceLabel(channel.service)}</span>
+              <span className={cn('text-footnote', full ? 'text-destructive font-bold' : 'text-muted-foreground')}>
+                {channel.scheduled}
+                {channel.limit !== null && ` / ${channel.limit}`}
               </span>
-            </li>
-          ))}
-        </ul>
-        <p className="text-footnote text-muted-foreground mt-2">
-          Set in Buffer — its API has no mutation for these.
-        </p>
-      </div>
+            </header>
+
+            {posts.length === 0 ? (
+              <p className="text-footnote text-muted-foreground p-6 text-center">Nothing queued.</p>
+            ) : (
+              <ol className="divide-hairline divide-y">
+                {posts.map((post) => {
+                  const isVideo = post.mediaType === 'video';
+                  const alsoOn = post.sourceKey ? (spread.get(post.sourceKey) ?? 1) - 1 : 0;
+                  return (
+                    <li key={post.id} className="p-3">
+                      <div className="flex items-center gap-2">
+                        {isVideo ? (
+                          <Film className="text-muted-foreground size-4 shrink-0" />
+                        ) : (
+                          <Images className="text-muted-foreground size-4 shrink-0" />
+                        )}
+                        <span className="text-footnote font-bold">
+                          {inZone(post.dueAt, channel.timezone)}
+                        </span>
+                        {post.custom && <Clock className="text-muted-foreground size-3.5" />}
+                      </div>
+
+                      <div className="text-footnote mt-1 flex flex-wrap items-center gap-x-2">
+                        {/* Reminder or automatic, said plainly: it is the
+                            difference between "this goes out" and "you post
+                            this", and it is invisible otherwise. */}
+                        <span
+                          className={cn(
+                            'inline-flex items-center gap-1',
+                            post.status === 'error' ? 'text-destructive' : 'text-muted-foreground',
+                          )}
+                        >
+                          {post.status === 'draft' ? (
+                            'draft'
+                          ) : post.status === 'error' ? (
+                            'error'
+                          ) : post.reminder ? (
+                            <>
+                              <BellRing className="size-3" />
+                              you post it
+                            </>
+                          ) : (
+                            <>
+                              <Zap className="size-3" />
+                              auto
+                            </>
+                          )}
+                        </span>
+                        {post.sourceKey ? (
+                          <code className="text-[11px]">{post.sourceKey}</code>
+                        ) : (
+                          <span className="text-muted-foreground italic">external</span>
+                        )}
+                        {alsoOn > 0 && (
+                          <span className="text-muted-foreground">+{alsoOn} more</span>
+                        )}
+                      </div>
+
+                      <p className="text-footnote text-muted-foreground mt-1 line-clamp-2">
+                        {post.text.split('\n')[0]}
+                      </p>
+
+                      {editing?.id === post.id ? (
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <input
+                            type="datetime-local"
+                            className="border-hairline bg-background text-footnote min-w-0 flex-1 rounded-lg border px-2 py-1.5"
+                            value={editing.value}
+                            onChange={(e) => setEditing({ id: post.id, value: e.target.value })}
+                          />
+                          <Button
+                            size="sm"
+                            disabled={busy === post.id || !editing.value}
+                            onClick={() =>
+                              void act(
+                                post.id,
+                                () =>
+                                  api.admin.retimeSocialPost(
+                                    post.id,
+                                    fromLocalInput(editing.value, channel.timezone),
+                                  ),
+                                'Time changed',
+                              )
+                            }
+                          >
+                            {busy === post.id ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                              'Set'
+                            )}
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="mt-2 flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title="Move to the front of this channel's queue"
+                            disabled={busy === post.id}
+                            onClick={() =>
+                              void act(
+                                post.id,
+                                () => api.admin.moveSocialPost(post.id, 'top'),
+                                'Moved to the front',
+                              )
+                            }
+                          >
+                            <ArrowUpToLine className="size-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title="Set a specific time"
+                            disabled={busy === post.id}
+                            onClick={() =>
+                              setEditing({
+                                id: post.id,
+                                value: toLocalInput(post.dueAt, channel.timezone),
+                              })
+                            }
+                          >
+                            <Clock className="size-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-destructive ml-auto"
+                            title="Delete from Buffer"
+                            disabled={busy === post.id}
+                            onClick={() =>
+                              void act(
+                                post.id,
+                                () => api.admin.removeSocialPost(post.id),
+                                'Removed from Buffer',
+                              )
+                            }
+                          >
+                            {busy === post.id ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="size-4" />
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+
+            <footer className="border-hairline text-footnote text-muted-foreground border-t px-3 py-2.5">
+              <div className="mb-1 flex items-center gap-1.5">
+                <Zap className="size-3.5" />
+                <span className="font-bold">Slots</span>
+                <span>· {channel.timezone.split('/')[1] ?? channel.timezone}</span>
+              </div>
+              {channel.slots
+                .filter((s) => !s.paused && s.times.length)
+                .map((s) => (
+                  <div key={s.day} className="flex gap-2">
+                    <span className="w-8 shrink-0 capitalize">{s.day}</span>
+                    <span>{s.times.join(', ')}</span>
+                  </div>
+                ))}
+            </footer>
+          </section>
+        );
+      })}
     </div>
   );
 }

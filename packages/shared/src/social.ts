@@ -294,6 +294,16 @@ export const SocialBufferPost = z.object({
    * therefore the one that can land somewhere nobody intended.
    */
   custom: z.boolean(),
+  /**
+   * True when Buffer will notify the phone instead of publishing this itself —
+   * `schedulingType: 'notification'`.
+   *
+   * Carried because it is the difference between "this goes out" and "you post
+   * this", and nothing else in the row implies it. The queue view first tried
+   * to infer it from `custom`, which is a different question entirely and
+   * labelled every automatic post a reminder.
+   */
+  reminder: z.boolean(),
 });
 export type SocialBufferPost = z.infer<typeof SocialBufferPost>;
 
