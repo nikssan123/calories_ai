@@ -52,7 +52,7 @@ import {
 } from '../services/admin.ts';
 import { setPlan, subscriptionReport } from '../services/subscriptions.ts';
 import { readFunnel } from '../services/funnel.ts';
-import { addCandidate, decide, loadQueue } from '../services/social.ts';
+import { addCandidate, decide, loadQueue, postedPerformance } from '../services/social.ts';
 import { listSupportEmails, setHandled, unhandledCount } from '../services/support.ts';
 import { getUserContext } from '../services/user.ts';
 import {
@@ -340,6 +340,21 @@ export async function registerAdminRoutes(app: FastifyInstance) {
    */
 
   app.get('/admin/social', async () => loadQueue());
+
+  /**
+   * What has gone out, and how it did.
+   *
+   * A separate request from the queue because it reaches Buffer for per-post
+   * metrics and the panel should render the stack without waiting on that —
+   * deciding is the job, and measuring is the thing you read afterwards.
+   */
+  app.get('/admin/social/performance', async (_request, reply) => {
+    try {
+      return { posted: await postedPerformance() };
+    } catch (error) {
+      return reply.status(502).send({ error: (error as Error).message });
+    }
+  });
 
   /**
    * A rendered post arriving from `scripts/content/queue.mts`.

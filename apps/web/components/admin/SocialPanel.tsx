@@ -13,7 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { SocialChannel, SocialGroup, SocialQueue } from '@ct/shared';
+import type { SocialChannel, SocialGroup, SocialPosted, SocialQueue } from '@ct/shared';
 import { api } from '@/lib/api';
 import { InsetGroup } from '@/components/InsetGroup';
 import { Button } from '@/components/ui/button';
@@ -60,6 +60,23 @@ const SERVICE_LABELS: Record<string, string> = {
 const serviceLabel = (service: string) => SERVICE_LABELS[service] ?? service;
 
 /**
+ * The metrics worth a row's width.
+ *
+ * Buffer returns whatever each platform exposes, which on some channels is
+ * fifteen figures including `postCount` and `freeSubscriptions`. Four is what
+ * fits, and these four are the ones that answer whether a hook worked: views
+ * for reach, likes and comments for whether it landed, and saves because a
+ * save is the strongest signal a slideshow can generate.
+ */
+const KEY_METRICS = ['views', 'impressions', 'likes', 'reactions', 'comments', 'saves'];
+
+/** Whole numbers for counts, one decimal and a % for rates. */
+function formatMetric(value: number, unit: string): string {
+  if (unit === 'percentage') return `${value.toFixed(1)}%`;
+  return value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(Math.round(value));
+}
+
+/**
  * Hashtags offered as chips, so the set is a decision rather than typing.
  *
  * Short, and every one is something a person actually searches. The queue this
@@ -97,6 +114,7 @@ export function SocialPanel() {
   /** Which slide of the current carousel is on screen. */
   const [slide, setSlide] = useState(0);
   const [tags, setTags] = useState<string[]>([]);
+  const [posted, setPosted] = useState<SocialPosted[] | null>(null);
 
   const load = useCallback(async (keepPlace = false) => {
     setRefreshing(true);
@@ -114,6 +132,19 @@ export function SocialPanel() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /*
+   * Performance is fetched separately and failures are swallowed: it reaches
+   * Buffer for per-post metrics, and a panel that cannot be used to decide
+   * anything because the numbers are slow is worse than a panel with no
+   * numbers.
+   */
+  useEffect(() => {
+    api.admin
+      .socialPerformance()
+      .then((r) => setPosted(r.posted))
+      .catch(() => setPosted([]));
+  }, []);
 
   /**
    * Slides straight off disk, from `content/out/posts/`.
@@ -566,6 +597,64 @@ export function SocialPanel() {
                 Skip for now
               </button>
             )}
+          </div>
+        </InsetGroup>
+      )}
+
+      {posted && posted.length > 0 && (
+        <InsetGroup>
+          <div className="p-4">
+            <div className="text-headline mb-1">How it did</div>
+            <p className="text-footnote text-muted-foreground mb-3">
+              Buffer&apos;s own figures, per post. It polls the platforms on its own schedule, so a
+              post published in the last hour usually reads zero everywhere — the timestamp says
+              when Buffer last looked.
+            </p>
+            <div className="space-y-3">
+              {posted.map((item) => (
+                <div key={item.key} className="border-hairline rounded-lg border p-3">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <code className="text-footnote">{item.key}</code>
+                    <span className="text-footnote text-muted-foreground">
+                      {item.slides} slides
+                    </span>
+                  </div>
+                  <p className="text-footnote text-muted-foreground mt-1 truncate">
+                    {item.caption}
+                  </p>
+                  <ul className="mt-2 space-y-1">
+                    {item.channels.map((ch) => (
+                      <li key={ch.postId} className="text-footnote flex flex-wrap items-baseline gap-x-3">
+                        <span className="w-20 shrink-0 font-bold">{serviceLabel(ch.service)}</span>
+                        <span
+                          className={cn(
+                            'w-24 shrink-0',
+                            ch.status === 'sent' && 'text-primary',
+                            ch.status === 'error' && 'text-destructive',
+                            ch.status !== 'sent' && ch.status !== 'error' && 'text-muted-foreground',
+                          )}
+                        >
+                          {ch.status}
+                        </span>
+                        {ch.metrics.length ? (
+                          <span className="text-muted-foreground">
+                            {ch.metrics
+                              .filter((m) => KEY_METRICS.includes(m.name))
+                              .map((m) => `${m.name} ${formatMetric(m.value, m.unit)}`)
+                              .join(' · ') || 'no figures yet'}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">
+                            {ch.status === 'sent' ? 'Buffer has not polled yet' : 'not published yet'}
+                          </span>
+                        )}
+                        {ch.error && <span className="text-destructive">{ch.error}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
           </div>
         </InsetGroup>
       )}

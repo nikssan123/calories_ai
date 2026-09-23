@@ -105,6 +105,7 @@ import type {
   SocialCandidate,
   SocialDecision,
   SocialGroup,
+  SocialPosted,
   SocialQueue,
   SocialUpload,
   SuggestedTopic,
@@ -1259,6 +1260,13 @@ export function createApiClient({
        * channels an approval sends them to, and how full Buffer's own queue is.
        */
       social: () => request<SocialQueue>('/admin/social'),
+
+      /**
+       * What has gone out and how it did. Separate from `social()` because it
+       * reaches Buffer for per-post metrics, and the queue should render
+       * without waiting on that.
+       */
+      socialPerformance: () => request<{ posted: SocialPosted[] }>('/admin/social/performance'),
 
       /**
        * A rendered slide, from the panel's file picker.

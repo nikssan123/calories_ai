@@ -171,3 +171,46 @@ export const SocialUpload = z.object({
   bytes: z.string().min(1),
 });
 export type SocialUpload = z.infer<typeof SocialUpload>;
+
+/**
+ * How a posted carousel actually did.
+ *
+ * The missing half of this panel. Approving got tidier, and until these numbers
+ * exist nothing about it got more *measurable* — which was the original
+ * complaint about the whole channel, and `CONTENT_ENGINE.md` §7 asked for
+ * exactly this file before any of the tooling existed.
+ *
+ * Metrics come from Buffer rather than from each platform's own API, for the
+ * same reason the posting does: one credential, one shape, and no per-network
+ * auditing. The cost is Buffer's own lag — `metricsUpdatedAt` says when it last
+ * looked, and a post published an hour ago will usually read zero.
+ */
+export const SocialMetric = z.object({
+  /** Buffer's `PostMetricType`: views, likes, comments, reach, saves, shares… */
+  name: z.string(),
+  value: z.number(),
+  unit: z.string(),
+});
+export type SocialMetric = z.infer<typeof SocialMetric>;
+
+export const SocialPosted = z.object({
+  /** The slideshow key — `10-three-ways`. */
+  key: z.string(),
+  caption: z.string(),
+  /** The hook, which is the cover slide's claim and the thing being tested. */
+  slides: z.number().int(),
+  channels: z.array(
+    z.object({
+      postId: z.string(),
+      service: z.string(),
+      /** Buffer's own status: `scheduled`, `sent`, `error`. */
+      status: z.string(),
+      sentAt: z.string().nullable(),
+      dueAt: z.string().nullable(),
+      metrics: z.array(SocialMetric),
+      metricsUpdatedAt: z.string().nullable(),
+      error: z.string().nullable(),
+    }),
+  ),
+});
+export type SocialPosted = z.infer<typeof SocialPosted>;

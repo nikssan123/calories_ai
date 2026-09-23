@@ -6,6 +6,7 @@ import type {
   SocialChannel,
   SocialDecision,
   SocialGroup,
+  SocialPosted,
   SocialQueue,
   SocialState,
   SocialUpload,
@@ -734,4 +735,104 @@ async function loadGroup(groupKey: string): Promise<SocialGroup | null> {
     [groupKey],
   );
   return rows.length ? (group(rows)[0] ?? null) : null;
+}
+
+/* ── how it did ─────────────────────────────────────────────────────── */
+
+/**
+ * Buffer's numbers for everything this queue has posted.
+ *
+ * One request for the posts, matched back to our rows by `buffer_ids`. Not
+ * `aggregatedPostMetrics`, which returns a single total for a date range — the
+ * question worth answering is which *hook* worked, and that needs the figures
+ * kept per post.
+ *
+ * Buffer's lag is real and is surfaced rather than hidden: `metricsUpdatedAt`
+ * is when Buffer last asked the platform, and a post published an hour ago
+ * usually reads zero on every metric. A panel that showed those zeros without
+ * the timestamp would read as "this failed" rather than "ask again later".
+ */
+export async function postedPerformance(): Promise<SocialPosted[]> {
+  const rows = await query<QueueRow>(
+    `SELECT ${COLUMNS} FROM social_queue
+      WHERE state IN ('posted', 'error') AND array_length(buffer_ids, 1) > 0
+      ORDER BY posted_at DESC NULLS LAST`,
+  );
+  if (!rows.length || !env.buffer) return [];
+
+  /*
+   * Only the cover of each group carries the decision, and every row in a
+   * group holds the same `buffer_ids` — see `decide`. So group first and read
+   * the ids once, or a four-slide carousel asks Buffer for the same three
+   * posts four times.
+   */
+  const groups = group(rows);
+  const wanted = new Set<string>();
+  for (const row of rows) for (const id of row.buffer_ids) wanted.add(id);
+
+  interface BufferPostNode {
+    id: string;
+    status: string;
+    channelService: string;
+    sentAt: string | null;
+    dueAt: string | null;
+    metricsUpdatedAt: string | null;
+    metrics: { name: string; type: string; unit: string; value: number }[] | null;
+    error: { message: string } | null;
+  }
+
+  const data = await bufferCall<{
+    posts: { edges: { node: BufferPostNode }[] | null };
+  }>(
+    `query Performance($posts: PostsInput!) {
+       posts(first: 100, input: $posts) {
+         edges { node {
+           id status channelService sentAt dueAt metricsUpdatedAt
+           metrics { name type unit value }
+           error { message }
+         } }
+       }
+     }`,
+    {
+      posts: {
+        organizationId: env.buffer.organizationId,
+        // Everything, because a carousel scheduled for Friday and one sent on
+        // Monday both belong in the same table — the first with no numbers yet.
+        filter: { status: ['scheduled', 'sent', 'error', 'sending'] },
+      },
+    },
+  );
+
+  const byId = new Map<string, BufferPostNode>();
+  for (const edge of data.posts.edges ?? []) byId.set(edge.node.id, edge.node);
+
+  const out: SocialPosted[] = [];
+  for (const g of groups) {
+    const ids = [...new Set(rows.filter((r) => split(r.source_key).key === g.key).flatMap((r) => r.buffer_ids))];
+    out.push({
+      key: g.key,
+      caption: g.caption,
+      slides: g.slides.length,
+      channels: ids.map((postId) => {
+        const node = byId.get(postId);
+        return {
+          postId,
+          service: node?.channelService ?? 'unknown',
+          // A post Buffer no longer knows about was deleted there. Worth
+          // saying so rather than reporting it as an unknown zero.
+          status: node ? node.status : 'deleted in Buffer',
+          sentAt: node?.sentAt ?? null,
+          dueAt: node?.dueAt ?? null,
+          metrics: (node?.metrics ?? []).map((m) => ({
+            name: m.type || m.name,
+            value: m.value,
+            unit: m.unit,
+          })),
+          metricsUpdatedAt: node?.metricsUpdatedAt ?? null,
+          error: node?.error?.message ?? null,
+        };
+      }),
+    });
+  }
+  return out;
 }
