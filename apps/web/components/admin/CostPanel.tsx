@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { CostReport, UsageTurn } from '@ct/shared';
 import { api } from '@/lib/api';
@@ -14,6 +14,16 @@ import { bytes as _bytes, compactNumber, duration, percent, timestamp, usd } fro
 import { cn } from '@/lib/utils';
 
 const WINDOWS = [7, 30, 90] as const;
+
+/**
+ * How many turns the log lists, unfocused and focused.
+ *
+ * Fifty is a glance at the deployment; one account's fifty would be a glance at
+ * the last two days of it. Reading somebody's turns is the thing you do when
+ * their per-user figure looks wrong, and that question is asked of a month.
+ */
+const TURNS_RECENT = 50;
+const TURNS_FOCUSED = 200;
 
 const KIND_LABEL: Record<string, string> = {
   text_log: 'Text log',
@@ -35,24 +45,59 @@ const KIND_LABEL: Record<string, string> = {
 export function CostPanel() {
   const [days, setDays] = useState<number>(30);
   const [report, setReport] = useState<CostReport | null>(null);
-  const [turns, setTurns] = useState<UsageTurn[]>([]);
+  const [turns, setTurns] = useState<UsageTurn[] | null>(null);
+  /** Whose turns the log is showing, or every account's. See `Focus`. */
+  const [focus, setFocus] = useState<Focus | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const [costs, recent] = await Promise.all([api.admin.costs(days), api.admin.turns({ limit: 50 })]);
-        if (cancelled) return;
-        setReport(costs);
-        setTurns(recent.turns);
+        const costs = await api.admin.costs(days);
+        if (!cancelled) setReport(costs);
       } catch (e) {
-        toast.error((e as Error).message);
+        if (!cancelled) toast.error((e as Error).message);
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [days]);
+
+  /*
+   * The log fetches on its own, keyed on the account rather than on the window.
+   *
+   * Two effects rather than one because the two halves of this screen answer
+   * different questions: the report is "what does the deployment cost over 30
+   * days", and the log is "what did this person actually say". Focusing an
+   * account must not re-fetch the report, and moving the window must not throw
+   * away the account you are reading — which one combined effect would do both
+   * of, since it is keyed on everything.
+   *
+   * Deliberately not narrowed by `days`. The route takes a limit and an account
+   * and nothing else, and that is the right shape: somebody arriving here from a
+   * heaviest-user figure wants that account's history, not the slice of it the
+   * button above happens to be on.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    setTurns(null);
+    void (async () => {
+      try {
+        const recent = await api.admin.turns(
+          focus
+            ? { limit: TURNS_FOCUSED, userId: focus.userId }
+            : { limit: TURNS_RECENT },
+        );
+        if (!cancelled) setTurns(recent.turns);
+      } catch (e) {
+        if (!cancelled) toast.error((e as Error).message);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [focus]);
 
   if (!report) {
     return (
@@ -199,7 +244,7 @@ export function CostPanel() {
               {report.by_user.map((row) => (
                 <tr key={row.user_id ?? 'deleted'}>
                   <Cell className="font-medium">
-                    <Account email={row.email} userId={row.user_id} />
+                    <Account email={row.email} userId={row.user_id} onSelect={setFocus} />
                   </Cell>
                   <Cell className="tnum">{row.turns}</Cell>
                   <Cell className="tnum">{usd(row.cost_usd)}</Cell>
@@ -212,19 +257,42 @@ export function CostPanel() {
       )}
 
       <InsetGroup
-        title="Recent turns"
-        footer="Newest first, including the ones that failed — a turn that spent tokens and then errored is the most expensive kind. The message is the person's own words, so the turns nobody typed a sentence for have none: a photo with no caption, a weekly review, a nudge. A failed one has none either — the conversation keeps a message only once the turn has survived, which is also why the older failures could not be recovered from it. Hover a long message for the rest of it."
+        title={focus ? 'Turns for one account' : 'Recent turns'}
+        trailing={
+          focus ? (
+            <button
+              type="button"
+              onClick={() => setFocus(null)}
+              title="Back to every account's turns"
+              className="text-footnote text-muted-foreground hover:text-foreground flex shrink-0 items-center gap-1 font-medium"
+            >
+              <span className="max-w-[14rem] truncate">{focus.label}</span>
+              <X size={13} className="shrink-0" />
+            </button>
+          ) : undefined
+        }
+        footer={
+          focus
+            ? `The last ${TURNS_FOCUSED} turns on this account, newest first, including the ones that failed. Clear the name above to go back to every account.`
+            : "Newest first, including the ones that failed — a turn that spent tokens and then errored is the most expensive kind. Click an account, here or in the table above, to read just that person's turns. The message is their own words, so the turns nobody typed a sentence for have none: a photo with no caption, a weekly review, a nudge. A failed one has none either — the conversation keeps a message only once the turn has survived, which is also why the older failures could not be recovered from it. Hover a long message for the rest of it."
+        }
       >
         <DataTable
           columns={['When', 'Account', 'Turn', 'Message', 'Model', 'In', 'Out', 'Cache', 'Cost', 'Took', '']}
           className="rounded-none"
-          empty="No turns recorded yet."
+          empty={
+            turns === null
+              ? 'Loading…'
+              : focus
+                ? 'No turns on this account.'
+                : 'No turns recorded yet.'
+          }
         >
-          {turns.map((turn) => (
+          {(turns ?? []).map((turn) => (
             <tr key={turn.id} className={cn(!turn.ok && 'bg-[var(--fat)]/5')}>
               <Cell className="text-muted-foreground">{timestamp(turn.occurred_at)}</Cell>
               <Cell>
-                <Account email={turn.email} userId={turn.user_id} />
+                <Account email={turn.email} userId={turn.user_id} onSelect={setFocus} />
               </Cell>
               <Cell>{KIND_LABEL[turn.kind] ?? turn.kind}</Cell>
               <Cell>
@@ -262,8 +330,14 @@ export function CostPanel() {
   );
 }
 
+/** Whose turns the log is narrowed to. The label is only ever drawn, never sent. */
+interface Focus {
+  userId: string;
+  label: string;
+}
+
 /**
- * Who a turn belongs to.
+ * Who a turn belongs to, and the way into their turns.
  *
  * Most installs never leave a name — a paid install arrives as a guest and an
  * email-or-dash column folds all of them into one indistinguishable row, which
@@ -271,14 +345,44 @@ export function CostPanel() {
  * tells two guests apart, so it stands in for the address; the whole uuid rides
  * along in the title, because eight characters are enough to read a table and
  * not enough to query one.
+ *
+ * The name is also the control, rather than a "view" button in a column of its
+ * own: the thing you want to click is the person you are already looking at, and
+ * an account with no id left has nothing to show and so stays plain text.
  */
-function Account({ email, userId }: { email: string | null; userId: string | null }) {
-  if (email) return <>{email}</>;
+function Account({
+  email,
+  userId,
+  onSelect,
+}: {
+  email: string | null;
+  userId: string | null;
+  onSelect: (focus: Focus) => void;
+}) {
   if (!userId) return <span className="text-muted-foreground">deleted account</span>;
-  return (
-    <span className="text-muted-foreground" title={userId}>
+
+  const label = email ?? `guest ${userId.slice(0, 8)}`;
+  // The muted tone belongs to the outer element rather than to a span inside it,
+  // so that the button's hover state can lift a guest's name the way it lifts an
+  // address. Nested, the inner colour wins and the hover does nothing.
+  const body = email ?? (
+    <>
       guest <span className="font-mono text-[12px]">{userId.slice(0, 8)}</span>
-    </span>
+    </>
+  );
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect({ userId, label })}
+      title={`Show this account's turns · ${userId}`}
+      className={cn(
+        'hover:text-foreground text-left underline decoration-dotted underline-offset-2',
+        !email && 'text-muted-foreground',
+      )}
+    >
+      {body}
+    </button>
   );
 }
 
