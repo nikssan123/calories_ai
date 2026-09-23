@@ -1,7 +1,7 @@
 {
   "language": "en-GB",
   "_note": "The default listing's screenshot captions and seed strings. Its title and descriptions are edited in Play Console and live in PLAY_LISTING.md, so they are not here.",
-  "releaseNotes": "Manage your subscription from Settings whenever the store has one for you — including in the minute after you subscribe, before the app has caught up. Cancelling has always been the store's own page; now there is always a way to reach it from inside the app.",
+  "releaseNotes": "The subscription card now names every charge before you agree to one: what you pay first, how long that lasts, and what it becomes after.",
   "captions": [
     {
       "headline": "Just say\nwhat you ate",
