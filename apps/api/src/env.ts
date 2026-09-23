@@ -127,10 +127,20 @@ export interface BufferEnv {
   /** Which Buffer organization the queue posts into. From `account.organizations`. */
   organizationId: string;
   /**
-   * Buffer's GraphQL endpoint, overridable because it is the one part of this
-   * integration not pinned by the schema. Everything else here — `createPost`,
-   * `CreatePostInput`, the `PostActionPayload` union — was read off Buffer's
-   * own introspection on 2026-09-23 and is exact.
+   * Buffer's GraphQL endpoint.
+   *
+   * `api.buffer.com`, confirmed against the live API on 2026-09-23. It was
+   * `graph.buffer.com` first, which is wrong and fails in the one way that is
+   * hardest to see: a 401 whose body reads `Please use api.buffer.com`, which
+   * `loadQueue` swallows by design so a Buffer outage cannot empty the panel.
+   * The symptom is therefore not an error anywhere — it is a channel list that
+   * is quietly always empty, and a panel saying the credentials must be unset
+   * when they are perfectly fine.
+   *
+   * Still overridable, because it is the one part of this integration not
+   * pinned by introspection. Everything else — `createPost`, `CreatePostInput`,
+   * the `PostActionPayload` union — was read off Buffer's own schema and is
+   * exact.
    */
   apiUrl: string;
   /**
@@ -536,7 +546,7 @@ export function bufferEnv(source: NodeJS.ProcessEnv): BufferEnv | null {
   const token = source.BUFFER_ACCESS_TOKEN?.trim();
   const organizationId = source.BUFFER_ORGANIZATION_ID?.trim();
   const publicOrigin = source.BUFFER_PUBLIC_ORIGIN?.trim();
-  const apiUrl = source.BUFFER_API_URL?.trim() || 'https://graph.buffer.com';
+  const apiUrl = source.BUFFER_API_URL?.trim() || 'https://api.buffer.com';
   if (!token || !organizationId || !publicOrigin) {
     const named = [token, organizationId, publicOrigin].filter(Boolean).length;
     if (named > 0) {

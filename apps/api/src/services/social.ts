@@ -135,8 +135,45 @@ async function getAsset(key: string): Promise<Buffer | null> {
 
 /* ── in ─────────────────────────────────────────────────────────────── */
 
+/**
+ * The bytes are an image, and the dimensions are the image's own.
+ *
+ * Both callers already check — the panel reads the PNG header before uploading
+ * and `queue.mts` does the same — and neither is the reason this is here. A
+ * one-off loader run against production on 2026-09-23 read a directory that
+ * macOS `tar` had seeded with AppleDouble `._*` companion files, took the
+ * dimensions from whatever was at those byte offsets, and inserted 24 rows
+ * whose asset was a resource fork. Nothing rejected them, because nothing here
+ * looked.
+ *
+ * Checking the claimed size against the header rather than just trusting it
+ * matters for the same reason the queue records dimensions at all: a 1080x1350
+ * slide reaching TikTok is the mistake this panel exists to catch, and a caller
+ * that can assert its own dimensions can assert its way past that.
+ */
+function pngDimensions(bytes: Buffer): { width: number; height: number } | null {
+  const SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  if (bytes.length < 24) return null;
+  if (!bytes.subarray(0, 8).equals(SIGNATURE)) return null;
+  // IHDR must be the first chunk, so its type sits at 12 and its data at 16.
+  if (bytes.readUInt32BE(12) !== 0x49484452) return null;
+  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+}
+
 export async function addCandidate(upload: SocialUpload): Promise<SocialCandidate> {
   const bytes = Buffer.from(upload.bytes, 'base64');
+
+  if (upload.mediaType === 'image/png') {
+    const real = pngDimensions(bytes);
+    if (!real) throw new Error('Those bytes are not a PNG');
+    if (real.width !== upload.width || real.height !== upload.height) {
+      throw new Error(
+        `Dimensions do not match the image: claimed ${upload.width}x${upload.height}, ` +
+          `the PNG is ${real.width}x${real.height}`,
+      );
+    }
+  }
+
   const key = `social/${randomUUID()}.png`;
   // Bytes first, so a failure leaves an orphaned object rather than a row
   // pointing at nothing — same order and same reasoning as savePhoto.

@@ -87,7 +87,7 @@ All three together or none:
 | `BUFFER_ACCESS_TOKEN` | from <https://publish.buffer.com/settings/api> |
 | `BUFFER_ORGANIZATION_ID` | from `account.organizations` — `6aae4e59f6842c61dbd1f838` |
 | `BUFFER_PUBLIC_ORIGIN` | e.g. `https://api.daysofar.com` |
-| `BUFFER_API_URL` | optional, defaults to `https://graph.buffer.com` |
+| `BUFFER_API_URL` | optional, defaults to `https://api.buffer.com` |
 
 **With them unset the panel still works.** The stack renders, the counts are
 right, and rejecting is fine. Only approving is refused, and the panel says why.
@@ -95,7 +95,9 @@ That is the honest failure for a marketing credential no other install of this
 API should hold.
 
 `BUFFER_API_URL` is overridable because it is the one part of the integration
-not pinned by introspection. Everything else — `createPost(input:
+not pinned by introspection. It is `api.buffer.com`; `graph.buffer.com` answers
+401 with `Please use api.buffer.com`, and because `loadQueue` swallows channel
+errors on purpose that surfaces only as a permanently empty channel list. Everything else — `createPost(input:
 CreatePostInput!): PostActionPayload!`, `AssetInput @oneOf { image }`,
 `ShareMode`, `SchedulingType` — was read off Buffer's own schema on 2026-09-23
 and is exact.
