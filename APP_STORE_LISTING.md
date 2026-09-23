@@ -361,3 +361,77 @@ forcing past.
 button that actually resubmits is `Resubmit to App Review` on that page, and the
 submission is only sent when every item's status flips from *Ready for Review* to
 *Waiting for Review*.
+
+## 11. Third submission, 2026-09-24 — 1.5.9, and the whole thing over the API
+
+1.2.0 build 24 sat in *Waiting for Review* for ten days, from 14 Sep to 24 Sep,
+and was withdrawn rather than waited on. The reason was not the wait:
+
+**Build 24 could not pass the thing Apple said it would test.** The 2.1 letter
+asks explicitly to see registration, and `7aae2ae` — committed the morning
+*after* build 24 was cut — is titled "the sign-up form says why it will not go".
+In build 24 *Create account* stayed grey until the password reached eight
+characters and said nothing about why, and `80d53f3` the next day fixed the same
+silence on *Sign in*. A reviewer typing a six-character password meets a dead
+button. That is 2.1 with no argument to make.
+
+So: withdraw, ship 1.5.9 (build 27, `ca5ad91`), resubmit. **Note that
+withdrawing shows up as `DEVELOPER_REJECTED`** on the version and on every IAP,
+subscription and group version underneath it — that is the API's name for
+*removed from review by the developer*, not a rejection by Apple, and it is the
+state that makes the version editable again.
+
+### The submission went through the API, which §"Submitting IAPs" said it could not
+
+It can. The trick is that **a review submission's items are not the products,
+they are the products' *versions***:
+
+```
+POST /v1/reviewSubmissions                    { app, platform: IOS }
+POST /v1/reviewSubmissionItems                appStoreVersion: <version id>
+POST /v1/reviewSubmissionItems                inAppPurchaseVersion: <id from /v2/inAppPurchases/{id}/versions>
+POST /v1/reviewSubmissionItems                subscriptionVersion: <id from /v1/subscriptions/{id}/versions>
+POST /v1/reviewSubmissionItems                subscriptionGroupVersion: <id from /v1/subscriptionGroups/{id}/versions>
+PATCH /v1/reviewSubmissions/{id}              { submitted: true }
+```
+
+Four dead ends first, all of them worth not walking again:
+
+- `inAppPurchaseV2`, `inAppPurchase` and `subscription` are **not relationships
+  on `reviewSubmissionItems`** — only the `…Version` forms are.
+- `POST /v1/inAppPurchaseSubmissions` and `/v1/subscriptionSubmissions` answer
+  *"has no pending version for submission"* for a product that has never been
+  approved. They are for a change to a live product, not a first submission.
+- **The subscription group version is its own item**, and without it `submitted:
+  true` fails with `SUBSCRIPTION_SUBMISSION_REQUIRES_GROUP_VERSION`: a group with
+  no approved version must be submitted alongside its subscriptions.
+- The weekly SKU was left off deliberately — see SUBSCRIPTIONS.md.
+
+Eleven items went in: the version, five consumables, four subscriptions and the
+group.
+
+### What changed on the listing, and why
+
+- **The description names the introductory price.** "Plus - $3.99 for the first
+  month, then $9.99 per month. Or $99.99 per year", 3,750 of 4,000 characters.
+  §8 exists because 3.1.2 wants price and terms on the product page; an
+  introductory offer that the page does not mention is the same omission again.
+- **The review notes were rewritten, and two sentences in them had gone false.**
+  They said the app opens on Today — `40d98f4` made the Journal the launch route
+  — and that the free plan "does not expire", which stopped being true when
+  `79df6f4` made Free a short run of model calls and then a wall. Notes that
+  contradict the build are a 2.1 finding on their own.
+- **The notes name the five-second pause.** `CLOSE_AFTER_MS` in
+  `app/upgrade.tsx` holds the plan screen's close button back for five seconds,
+  and a reviewer who meets that without warning is looking at a paywall with no
+  way out. It is now the section headed "NOT A BUG".
+- **Review Notes cap at 4,000 characters**, which the first draft overran by
+  725. Worth writing to the limit rather than trimming to it.
+
+### The demo account was three weeks stale
+
+`appreview@daysofar.com` told the reviewer it had "several days of history" and
+its newest meal was from 3 Sep. `scripts/demo-backfill.sql` refills the trailing
+window — ten days of meals, three workouts, a month of weigh-ins and the Journal
+turns that go with the last three days — and is written to be run again, because
+this goes stale every week it waits. Run it before any resubmission.

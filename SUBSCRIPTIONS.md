@@ -282,8 +282,8 @@ a year at a discount is a year of the discount.
 
 Live on Play since 2026-09-24 as the `first-month` offer on `plus:monthly` —
 173 regions, one phase of `P1M` x 1, targeted at *never had any subscription in
-this app*. The App Store half is an introductory offer that has still to be
-configured by hand.
+this app* — and on the App Store the same day as an introductory offer on
+`com.daysofar.app.plus.monthly`, *pay up front*, one month, 175 territories.
 
 ### The ladder that was planned and cannot exist
 
@@ -404,8 +404,26 @@ touching it again:
   pre-tax number and grosses it up — €2.00 typed there reaches a German buyer as
   €2.39 — and the API bypasses it entirely.
 
-**App Store Connect** — still to do: an introductory offer on the Plus monthly
-subscription, *pay up front*, 1 month, $3.99. No weekly SKU.
+**App Store Connect** — done on 2026-09-24, and over the API rather than by
+hand after all. `POST /v1/subscriptionIntroductoryOffers`, one call per
+territory, `duration: ONE_MONTH`, `offerMode: PAY_UP_FRONT`,
+`numberOfPeriods: 1`. Three things worth knowing:
+
+- **A subscription in `WAITING_FOR_REVIEW` accepts offers.** Nothing had to
+  leave review to be priced, and creating them started no submission of its own.
+- **Round the share *down* to a price point, never to the nearest.** 40% of
+  $9.99 is $3.996, whose nearest point is **$4.00** — a cent over the share and
+  an ending no store uses. The largest point at or under the target is $3.99,
+  which is the figure this section names, and the rule holds everywhere: JPY
+  ¥600, INR ₹399, BRL R$23.90, TRY ₺199.99. The realised share lands between
+  0.391 and 0.400 across the 175.
+- **Each territory is priced off its own monthly figure**, not off an
+  equalisation of the dollar, for the same reason Play's were: an equalised
+  $3.99 is not 40% of a market whose monthly is not $9.99.
+
+No weekly SKU. `com.daysofar.app.plus.weekly` stays at `MISSING_METADATA` and
+was deliberately left off the 2026-09-24 submission; nothing may offer it to a
+phone until it has metadata, a review screenshot and an approval of its own.
 
 **RevenueCat** — nothing. Play attaches the offer to the base plan the existing
 package already points at.
