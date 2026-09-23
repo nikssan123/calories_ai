@@ -1,0 +1,22 @@
+{
+  "key": "15-fridge-door-maths",
+  "stock": "evening",
+  "hook": "The maths everyone does<br>standing at the fridge door:",
+  "beats": [
+    {
+      "aside": "(be honest)",
+      "claim": "1. Guessing what lunch cost you",
+      "reason": "You remember the shape of the meal but not the size of it, and the gap is where the day goes."
+    },
+    {
+      "aside": "(this one is optimistic)",
+      "claim": "2. Subtracting it from a number",
+      "reason": "A target you half-remember, against a lunch you half-remember, resolved in about four seconds."
+    },
+    {
+      "aside": "(nobody wins this one)",
+      "claim": "3. Deciding dinner from that",
+      "reason": "Every choice after 7pm rests on arithmetic you did in the dark with the door open."
+    }
+  ]
+}

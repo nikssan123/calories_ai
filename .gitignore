@@ -68,6 +68,10 @@ content/raw/*
 content/gen/*
 content/stock/*
 content/music/*
+# ...except the provenance record §6 asks for. The photographs are a cache that
+# stock.mts can re-pull; knowing which photographer each one came from is the
+# part that cannot be reconstructed, so it is the one payload kept in git.
+!content/stock/licenses.csv
 # The faces ad.mts sets type in (Fraunces, Literata, full Nunito), fetched rather
 # than vendored: they come from @expo-google-fonts/*, and ad.mts says how.
 content/fonts/*

@@ -26,24 +26,54 @@
 #  - No weight-loss or results claims. The clip shows 82.4 kg and -1.8 kg since
 #    start, but that is seeded data on a test account. Putting it in a hook
 #    would be claiming a result nobody achieved.
+#
+# --- Hook grammar ----------------------------------------------------------
+#
+# Rewritten 2026-09-23 against the structure that measurably carries short-form
+# right now. The previous set was eleven taglines: every line resolved itself,
+# so there was no reason to keep watching. A hook is an unfinished sentence.
+#
+# Four things earn a line its place. Most good hooks have three of them:
+#
+#   COUNT      "3 ways", "4 numbers", "4 screens". Tells the viewer how much
+#              they are committing to, which is why they commit.
+#   A WORKING  Not "simple" or "great" — an adjective that promises something
+#   ADJECTIVE  not already known. "in order of laziness" beats "easy".
+#   PAYOFF     What they get for staying.
+#   OPEN END   A colon, or a sentence that stops early. If the line answers
+#              itself, the thumb keeps moving. This is the one that matters.
+#
+# Test for every line: could a viewer screenshot it and have the whole idea?
+# If yes, it is a caption, not a hook. Put the resolution on screen two.
+#
+# Counts must be true. "4 numbers" is fibre, sodium, sat fat and sugar on the
+# Diet Quality card. "4 screens" is the tour. "3 ways" is type, say, photograph
+# — the composer with the mic and camera icons. Do not round a count up to make
+# a hook scan better; the screen has to pay it off.
 
-Six months of evenings to build a calorie tracker
-Just say what you ate. That's the whole thing.
-No forms. Nothing to search for.
-Type it, say it, or photograph it
-Most calorie apps stop at calories
-It tracks fibre, sodium and sugar too
+4 screens. That's the whole app:
+4 numbers I track besides calories:
+The 3 ways to log a meal here, in order of laziness:
+Most calorie apps stop at calories. Mine keeps going:
+The whole logging flow is one sentence long:
+I built a calorie tracker with one rule: no forms
+I deleted every food database from my own app. Here's what replaced it:
+Six months of evenings. Here's what actually shipped:
+What I wanted from a calorie app and could not find, in 3 parts:
+Nobody shows you what a properly tracked day looks like, so:
+The one card I still open this app for:
+Tell me you've never rebuilt lunch from memory at 9pm
 POV: you stopped guessing your macros
-The calorie app I wanted and could not find
-I got tired of tapping through food databases
-What a properly tracked day actually looks like
-Every meal, every macro, one screen
+The ring said 1,656 of 2,050. Here's the rest of the screen:
+Everything my calorie app does that isn't counting calories:
+I made logging a meal take one sentence. Here's the flow:
 
 # --- Parked until a real phone records the barcode basket scan -------------
 # These are the §5 format-1 hooks. They need the camera, so they cannot run
 # over the simulator tour without describing something the viewer cannot see.
+# Rewritten in the grammar above so they are ready the day the footage exists.
 #
-# I scanned my whole grocery haul
-# Every barcode, one basket
-# No typing. No searching. Just scan.
-# Logging a week of food in 40 seconds
+# I scanned my entire grocery haul. Every barcode:
+# Logging a week of food took 40 seconds. Watch:
+# One basket, one scan, and the counter does this:
+# No typing, no searching. Just this:
