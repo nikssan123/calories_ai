@@ -9,12 +9,16 @@ import { CostPanel } from '@/components/admin/CostPanel';
 import { FunnelPanel } from '@/components/admin/FunnelPanel';
 import { InboxPanel } from '@/components/admin/InboxPanel';
 import { OverviewPanel } from '@/components/admin/OverviewPanel';
+import { SubscriptionsPanel } from '@/components/admin/SubscriptionsPanel';
 import { TablesPanel } from '@/components/admin/TablesPanel';
 import { UsersPanel } from '@/components/admin/UsersPanel';
 import { cn } from '@/lib/utils';
 
 const TABS = [
   { id: 'cost', label: 'Cost' },
+  // Beside Cost, because the two are the same question from opposite ends: what
+  // a turn costs to serve against what anybody pays for it.
+  { id: 'billing', label: 'Billing' },
   // Before Accounts: it is the question of how many accounts there should have been.
   { id: 'funnel', label: 'Funnel' },
   { id: 'users', label: 'Accounts' },
@@ -60,7 +64,7 @@ export default function AdminPage() {
           </p>
         </div>
 
-        {/* Seven labels do not divide a phone into seven readable buttons, so on
+        {/* Eight labels do not divide a phone into eight readable buttons, so on
             a narrow screen the strip scrolls sideways at a legible size instead
             of squeezing. From `sm` up there is room to share it out evenly. */}
         <div className="bg-card border-hairline chunk-sm flex gap-1 overflow-x-auto rounded-full border p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -83,6 +87,7 @@ export default function AdminPage() {
         </div>
 
         {tab === 'cost' && <CostPanel />}
+        {tab === 'billing' && <SubscriptionsPanel />}
         {tab === 'funnel' && <FunnelPanel />}
         {tab === 'users' && <UsersPanel />}
         {tab === 'inbox' && <InboxPanel />}

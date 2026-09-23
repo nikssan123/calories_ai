@@ -33,6 +33,7 @@ import {
   purchaseBundle,
   PurchaseCancelled,
   restore,
+  useStoreSubscription,
   type Buyable,
   type Bundle,
   type IntroOffer,
@@ -174,6 +175,10 @@ export default function UpgradeScreen() {
   const { guest } = useAuth();
   const reduced = useReducedMotion();
   const { plan, tiers, allowances, refresh } = useEntitlements();
+  /* The store's own word on whether there is a subscription to manage, which is
+     not the same question as `plan` and matters most where the two differ —
+     see `hasStoreSubscription` in `lib/billing.ts`. */
+  const storeSubscription = useStoreSubscription();
   /*
    * Where a free account is on its trial — see `TRIAL` in `@ct/shared`. The
    * chat meter carries it; photo says the same thing.
@@ -727,7 +732,7 @@ export default function UpgradeScreen() {
             </Text>
           </Pressable>
 
-          {plan !== 'free' && (
+          {(plan !== 'free' || storeSubscription) && (
             <Pressable
               onPress={() => void manageSubscription()}
               accessibilityRole="button"

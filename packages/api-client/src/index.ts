@@ -33,6 +33,9 @@ import type {
   AuthStatus,
   CookRequest,
   CostReport,
+  PlanName,
+  PlanSource,
+  SubscriptionReport,
   ChatRequest,
   ChatResponse,
   ChatStreamEvent,
@@ -1247,6 +1250,25 @@ export function createApiClient({
         }),
 
       costs: (days = 30) => request<CostReport>(`/admin/costs?days=${days}`),
+
+      /** Who is paying, the delivery log, and the state of the webhook. */
+      subscriptions: () => request<SubscriptionReport>('/admin/subscriptions'),
+
+      /**
+       * Move an account's plan by hand — the repair for a purchase the store
+       * took money for and the webhook never delivered. `plan: 'free'` revokes.
+       *
+       * `expiresAt` is any date string the server can parse, and omitting it
+       * means a grant with no end that the expiry sweep never revokes.
+       */
+      setPlan: (
+        id: string,
+        body: { plan: PlanName; expires_at?: string | null; source?: PlanSource },
+      ) =>
+        request<{ ok: true; plan: PlanName; expires_at: string | null }>(
+          `/admin/subscriptions/${id}/plan`,
+          { method: 'POST', body: JSON.stringify(body) },
+        ),
 
       turns: (options: { limit?: number; userId?: string } = {}) => {
         const params = new URLSearchParams();

@@ -55,7 +55,7 @@ import { loadDay, localToday } from '@/lib/day';
 import { BIRTH_DATE_FLOOR } from '@/lib/birth-date';
 import { useOnboarding } from '@/lib/onboarding';
 import { useEntitlements } from '@/lib/entitlements';
-import { billingAvailable, manageSubscription, restore } from '@/lib/billing';
+import { billingAvailable, manageSubscription, restore, useStoreSubscription } from '@/lib/billing';
 import { meterNoun, TIER_NAMES, TIER_PITCHES } from '@/lib/plan-copy';
 import { PRIVACY_URL, SUPPORT_EMAIL, TERMS_URL } from '@/lib/links';
 import { storeListingUrl } from '@/lib/review-prompt';
@@ -918,6 +918,7 @@ function PlanSettings() {
   const { plan, allowances, refresh } = useEntitlements();
   const { guest } = useAuth();
   const save = useSaveAccount();
+  const storeSubscription = useStoreSubscription();
   const [restoring, setRestoring] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
@@ -1010,8 +1011,13 @@ function PlanSettings() {
       {/* Only for somebody who has something to manage. On free it would open a
           store page listing nothing, which reads as a dead end rather than a
           control — and the row is the one somebody goes looking for when they
-          want out, so it has to lead somewhere the first time. */}
-      {billingAvailable && plan !== 'free' && (
+          want out, so it has to lead somewhere the first time.
+
+          The store's own answer counts too, and not as a nicety: a purchase
+          whose entitlement never reached `users.plan` leaves somebody paying,
+          reading `free`, and — on the plan check alone — with no way to cancel
+          from inside the app at all. See `hasStoreSubscription`. */}
+      {billingAvailable && (plan !== 'free' || storeSubscription) && (
         <Pressable
           onPress={() => void manageSubscription()}
           accessibilityRole="button"

@@ -511,6 +511,83 @@ const STORE_SUBSCRIPTIONS =
     : 'https://play.google.com/store/account/subscriptions' +
       `?package=${Constants.expoConfig?.android?.package ?? ''}`;
 
+/**
+ * Whether the *store* has a live subscription for this person, whatever the
+ * server currently says the plan is.
+ *
+ * The two disagree in one situation, and it is the situation where being able
+ * to leave matters most: the money is taken and the entitlement never reached
+ * `users.plan` — a webhook that was never delivered, or one that was delivered
+ * and refused. The account reads `free`, the wall is still up, the paywall
+ * still offers the tier that was just bought, and the control somebody goes
+ * looking for at that point is the way *out*. Gating that control on the
+ * server's answer hides it from the only person who urgently needs it, which
+ * is also the person most likely to charge back rather than write in.
+ *
+ * So the row asks the store instead. `getCustomerInfo` is the store's own
+ * word, cached on the device by the SDK, and it is true through exactly the
+ * outage that makes the server's answer wrong.
+ *
+ * False for anybody who has never bought anything, which is what keeps the row
+ * from being a link to a store page listing nothing — the reason it was gated
+ * in the first place.
+ */
+export async function hasStoreSubscription(): Promise<boolean> {
+  const Purchases = purchases();
+  if (!API_KEY || !Purchases || configuredFor === null) return false;
+  try {
+    const info = await Purchases.getCustomerInfo();
+    // Either half is enough. `activeSubscriptions` is the store's product
+    // list; `entitlements.active` is what a dashboard made of it. A promotional
+    // grant has the second and not the first, and a subscription whose
+    // entitlement mapping is wrong has the first and not the second — both are
+    // somebody with something to manage.
+    return (
+      info.activeSubscriptions.length > 0 || Object.keys(info.entitlements.active).length > 0
+    );
+  } catch {
+    // The store did not answer. Saying "nothing to manage" is the same answer
+    // this returns for everyone who has never bought, and the plan check beside
+    // it still draws the row for anyone the server knows is paying.
+    return false;
+  }
+}
+
+/**
+ * The same question as a hook, for the two screens that draw the row.
+ *
+ * It retries while the SDK is still being configured. `configureBilling` runs
+ * from an effect in the entitlements provider and is a network call on a cold
+ * start, so a screen can easily mount before it has finished — and a single
+ * early ask would answer "nothing to manage" for somebody who has a live
+ * subscription, which is the exact bug this is here to fix.
+ */
+export function useStoreSubscription(): boolean {
+  const [found, setFound] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    let tries = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const ask = async () => {
+      if (!alive) return;
+      if (await hasStoreSubscription()) {
+        if (alive) setFound(true);
+        return;
+      }
+      // Only the not-configured-yet case is worth asking again: a configured
+      // store that says no is a real no.
+      tries += 1;
+      if (configuredFor === null && tries < 6) timer = setTimeout(() => void ask(), 600);
+    };
+    void ask();
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, []);
+  return found;
+}
+
 export async function manageSubscription(): Promise<void> {
   const Purchases = purchases();
   let url: string | null = null;

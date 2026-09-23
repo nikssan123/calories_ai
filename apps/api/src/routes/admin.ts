@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { LOCALES, Locale, PostStatus, localeOf } from '@ct/shared';
+import { LOCALES, Locale, PlanName, PlanSource, PostStatus, localeOf } from '@ct/shared';
 import { draftPost, suggestTopics } from '../ai/content.ts';
 import { startBatch } from '../services/content-runner.ts';
 import {
@@ -41,6 +41,7 @@ import {
   setDisabled,
   signOutEverywhere,
 } from '../services/admin.ts';
+import { setPlan, subscriptionReport } from '../services/subscriptions.ts';
 import { readFunnel } from '../services/funnel.ts';
 import { listSupportEmails, setHandled, unhandledCount } from '../services/support.ts';
 import { getUserContext } from '../services/user.ts';
@@ -352,6 +353,67 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     const user = await getAdminUser((request.params as any).id);
     if (!user) return reply.status(404).send({ error: 'User not found' });
     return user;
+  });
+
+  // ---- Subscriptions --------------------------------------------------------
+
+  /**
+   * Who is paying, what they are paying for, and whether the plumbing that
+   * decides it is working.
+   *
+   * One request, like `/admin/costs`, because the numbers only mean anything
+   * beside each other — see the note on `subscriptionReport`.
+   */
+  app.get('/admin/subscriptions', async () => subscriptionReport());
+
+  /**
+   * Set an account's plan by hand.
+   *
+   * The case this is for is a purchase the store took money for and our server
+   * never heard about: a missed `INITIAL_PURCHASE` is never redelivered, so
+   * somebody has to be able to repair the column. `plan: 'free'` is the revoke,
+   * and it clears the source and the expiry with it.
+   *
+   * `expires_at` is a date or a timestamp — a support fix is usually typed as
+   * "the 23rd", and rejecting that in favour of an ISO instant would mean the
+   * one control nobody can use without a converter. A plan with no expiry is
+   * allowed and means what it says: the sweep never revokes it.
+   */
+  const PlanBody = z.object({
+    plan: PlanName,
+    expires_at: z.string().min(4).nullish(),
+    source: PlanSource.optional(),
+  });
+
+  app.post('/admin/subscriptions/:id/plan', async (request, reply) => {
+    const parsed = PlanBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Send { plan, expires_at?, source? }.' });
+    }
+
+    const id = (request.params as any).id as string;
+    if (!(await getAdminUser(id))) return reply.status(404).send({ error: 'User not found' });
+
+    let expiresAt: string | null = null;
+    if (parsed.data.expires_at) {
+      const when = new Date(parsed.data.expires_at);
+      if (Number.isNaN(when.getTime())) {
+        return reply.status(400).send({ error: 'That expiry is not a date.' });
+      }
+      expiresAt = when.toISOString();
+    }
+
+    const ok = await setPlan(id, {
+      plan: parsed.data.plan,
+      expiresAt,
+      // `manual` by default, and that is the safe default rather than a lazy
+      // one: it is the only source `expirePlans` refuses to sweep, so a grant
+      // typed without an expiry cannot be silently revoked overnight.
+      source: parsed.data.source ?? 'manual',
+      by: request.userId ?? null,
+    });
+    if (!ok) return reply.status(404).send({ error: 'User not found' });
+    return { ok: true, plan: parsed.data.plan, expires_at: expiresAt };
   });
 
   // ---- Read-only: the first-run funnel ----------------------------------------

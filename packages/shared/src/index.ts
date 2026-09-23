@@ -4655,3 +4655,96 @@ export const CostReport = z.object({
   economics: Economics,
 });
 export type CostReport = z.infer<typeof CostReport>;
+
+// ---- Subscriptions, as the admin panel reads them ---------------------------
+//
+// `users.plan` is what the app enforces and `billing_events` is how it got that
+// way, so neither one answers "who is paying us" on its own: the column has no
+// history and the log has no current state. These shapes are the join, and they
+// exist because the alternative is what it was until now — an ssh session and
+// two queries, run by whoever remembers the schema.
+
+/** The five values `users.plan_source` may hold. See migrations 035 and 045. */
+export const PlanSource = z.enum(['manual', 'stripe', 'play', 'app_store', 'coach_seat']);
+export type PlanSource = z.infer<typeof PlanSource>;
+
+/** How often a subscription renews, read off the store's product id. */
+export const BillingPeriod = z.enum(['week', 'month', 'year']);
+export type BillingPeriod = z.infer<typeof BillingPeriod>;
+
+export const AdminSubscription = z.object({
+  user_id: z.string().uuid(),
+  email: z.string().nullable(),
+  plan: PlanName,
+  plan_source: z.string(),
+  plan_expires_at: z.string().nullable(),
+  /**
+   * Paid, and the period already ran out. Every row here is a bug rather than a
+   * customer: `expirePlans` revokes on expiry, so a non-zero count means the
+   * sweep is not running, or the account is `manual` and deliberately exempt.
+   */
+  overdue: z.boolean(),
+  /** The last store event on this account, whatever it was. */
+  last_event: z.string().nullable(),
+  last_event_at: z.string().nullable(),
+  store: z.string().nullable(),
+  /** `SANDBOX` here means the account was entitled by a test purchase. */
+  environment: z.string().nullable(),
+  product_id: z.string().nullable(),
+  /** The store's own order id — what a refund is looked up by, on either store. */
+  transaction_id: z.string().nullable(),
+  country: z.string().nullable(),
+  period: BillingPeriod.nullable(),
+  /** Gross USD on the last charge, as the store reported it. */
+  gross_usd: z.number().nullable(),
+  /** The same charge after the store's commission. */
+  net_usd: z.number().nullable(),
+  /** 1 on a first purchase, and the count of periods paid for after that. */
+  renewals: z.number().nullable(),
+});
+export type AdminSubscription = z.infer<typeof AdminSubscription>;
+
+/** One row of `billing_events`, with the account's address resolved. */
+export const AdminBillingEvent = z.object({
+  id: z.string(),
+  user_id: z.string().nullable(),
+  email: z.string().nullable(),
+  type: z.string(),
+  store: z.string().nullable(),
+  product_id: z.string().nullable(),
+  environment: z.string().nullable(),
+  expires_at: z.string().nullable(),
+  received_at: z.string(),
+});
+export type AdminBillingEvent = z.infer<typeof AdminBillingEvent>;
+
+export const SubscriptionReport = z.object({
+  subscriptions: z.array(AdminSubscription),
+  events: z.array(AdminBillingEvent),
+  totals: z.object({
+    active: z.number(),
+    by_plan: z.array(z.object({ plan: PlanName, count: z.number() })),
+    by_source: z.array(z.object({ source: z.string(), count: z.number() })),
+    /** Active subscriptions whose period ends inside a week — renewals due. */
+    expiring_7d: z.number(),
+    /** Accounts back on free that once had a store event: churn, in accounts. */
+    lapsed: z.number(),
+    overdue: z.number(),
+    mrr_gross_usd: z.number(),
+    mrr_net_usd: z.number(),
+  }),
+  /**
+   * The three facts that decide whether a purchase can reach `users.plan` at
+   * all, reported because getting them wrong is silent on every other surface:
+   * the money is taken, the store says success, and nothing arrives. A webhook
+   * with no secret refuses every delivery; a deployment that refuses sandbox
+   * events cannot be tested against with a licence tester; and a `last_event_at`
+   * from weeks ago on a product that is selling means delivery has stopped.
+   */
+  webhook: z.object({
+    configured: z.boolean(),
+    accepts_sandbox: z.boolean(),
+    last_event_at: z.string().nullable(),
+  }),
+});
+export type SubscriptionReport = z.infer<typeof SubscriptionReport>;
