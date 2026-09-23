@@ -1084,84 +1084,163 @@ export async function movePost(id: string, position: 'top' | 'bottom'): Promise<
 }
 
 /**
- * Give a post a specific time.
+ * Read a post, change one thing, write the whole thing back.
  *
- * `editPost` REPLACES the post rather than merging into it. Sending only `id`
- * and `dueAt` is not a partial update — it clears the text and the assets, and
- * Buffer then rejects the result it was handed: "Invalid post: Post must have
- * either text or media., TikTok posts require at least one image or video."
- * That error is the whole reason this function reads before it writes.
+ * `editPost` REPLACES. That is the single fact this file has now paid for
+ * three times, one field further in each time:
  *
- * So: read the post, rebuild its assets as inputs, and send everything back
- * with the new time. `mode: customScheduled` takes it off the channel's slots,
- * which is what asking for a specific time means.
+ *   1. text only            -> "Post must have either text or media."
+ *   2. text + assets        -> "Instagram posts require a type (post, story,
+ *                              or reel)." — `metadata` was cleared too.
+ *   3. and `schedulingType` would have quietly turned a reminder into an
+ *      automatic publish, which nothing would have reported at all.
+ *
+ * So there is one reader and one writer, and every caller goes through them.
+ * Adding a fourth field that Buffer silently drops now breaks one function
+ * instead of three, and the retime path stops being the one nobody tested on
+ * Instagram.
+ *
+ * `mode: customScheduled` with the post's own `dueAt` is what holds it where
+ * it is. A replace without a mode drops the post out of its slot. The cost is
+ * that a post touched this way no longer follows the channel's slots.
  */
-export async function reschedulePost(id: string, dueAt: string): Promise<void> {
-  if (!env.buffer) throw new Error('Buffer is not configured on this deployment.');
+interface ReplaceableAsset {
+  type: string;
+  source: string;
+  image?: { altText: string } | null;
+}
 
-  interface ReadAsset {
-    type: string;
-    source: string;
-    image?: { altText: string } | null;
-  }
-  const current = await bufferCall<{
-    post: {
-      text: string;
-      schedulingType: string | null;
-      assets: ReadAsset[];
-    };
-  }>(
-    `query ForEdit($input: PostInput!) {
+interface ReplaceablePost {
+  text: string;
+  dueAt: string | null;
+  schedulingType: string | null;
+  channelService: string;
+  assets: ReplaceableAsset[];
+  metadata: {
+    __typename: string;
+    type?: string;
+    shouldShareToFeed?: boolean;
+    firstComment?: string | null;
+  } | null;
+}
+
+async function readPost(id: string): Promise<ReplaceablePost> {
+  const data = await bufferCall<{ post: ReplaceablePost }>(
+    `query ForReplace($input: PostInput!) {
        post(input: $input) {
-         text
-         schedulingType
+         text dueAt schedulingType channelService
          assets { type source ... on ImageAsset { image { altText } } }
+         metadata {
+           __typename
+           ... on InstagramPostMetadata { type shouldShareToFeed firstComment }
+         }
        }
      }`,
     { input: { id } },
   );
+  return data.post;
+}
 
+async function replacePost(
+  id: string,
+  post: ReplaceablePost,
+  change: { text?: string; dueAt?: string },
+): Promise<void> {
   /*
    * `AssetInput` is `@oneOf`, so each entry carries exactly one member. A
-   * document is not rebuildable from a read — its input needs a title and a
+   * document cannot be rebuilt from a read — its input needs a title and a
    * thumbnail this query does not ask for — and nothing this queue makes is
    * one, so it is refused loudly rather than silently dropped.
    */
-  const assets = current.post.assets.map((asset) => {
+  const assets = post.assets.map((asset) => {
     if (asset.type === 'video') return { video: { url: asset.source } };
     if (asset.type === 'image') {
       return { image: { url: asset.source, metadata: { altText: asset.image?.altText ?? '' } } };
     }
-    throw new Error(`Cannot reschedule a post with a ${asset.type} asset`);
+    throw new Error(`Cannot edit a post with a ${asset.type} asset`);
   });
 
-  const data = await bufferCall<{
-    editPost: { __typename: string; message?: string };
-  }>(
-    `mutation Retime($input: EditPostInput!) {
-       editPost(input: $input) {
-         __typename
-         ${ERROR_FIELDS}
-       }
+  /*
+   * Instagram's metadata is echoed back from the read; every other service
+   * takes what `createPost` would send. Read rather than assumed, because
+   * `metadataFor` hardcodes `post` and a video on Instagram is a `reel` —
+   * assuming would silently retype a reel into a feed post.
+   */
+  const metadata =
+    post.channelService === 'instagram' && post.metadata?.type
+      ? {
+          instagram: {
+            type: post.metadata.type,
+            shouldShareToFeed: post.metadata.shouldShareToFeed ?? true,
+            ...(post.metadata.firstComment ? { firstComment: post.metadata.firstComment } : {}),
+          },
+        }
+      : metadataFor(post.channelService);
+
+  const data = await bufferCall<{ editPost: { __typename: string; message?: string } }>(
+    `mutation Replace($input: EditPostInput!) {
+       editPost(input: $input) { __typename ${ERROR_FIELDS} }
      }`,
     {
       input: {
         id,
-        dueAt,
-        mode: 'customScheduled',
-        // Carried over explicitly: a reminder post must stay a reminder, and
-        // omitting this on a replace would quietly turn it into an automatic
-        // publish at the new time.
-        schedulingType: current.post.schedulingType ?? 'automatic',
-        text: current.post.text,
+        text: change.text ?? post.text,
         assets,
+        dueAt: change.dueAt ?? post.dueAt,
+        mode: 'customScheduled',
+        schedulingType: post.schedulingType ?? 'automatic',
+        metadata,
       },
     },
   );
   const payload = data.editPost;
   if (payload.__typename !== 'PostActionSuccess') {
-    throw new BufferError(payload.message ?? `Buffer refused the new time (${payload.__typename})`);
+    throw new BufferError(payload.message ?? `Buffer refused the edit (${payload.__typename})`);
   }
+}
+
+/** Give a post a specific time. See `replacePost` for why it reads first. */
+export async function reschedulePost(id: string, dueAt: string): Promise<void> {
+  if (!env.buffer) throw new Error('Buffer is not configured on this deployment.');
+  await replacePost(id, await readPost(id), { dueAt });
+}
+
+/**
+ * Put the link and the hashtags into a post that already went to Buffer.
+ *
+ * Both were added to `decide` after twenty-seven posts had been approved, so
+ * eighteen of them sat in the queue bare. Idempotent on both counts:
+ * `withLink` returns the caption untouched when the link is already in it, and
+ * a caption that already carries hashtags does not get a second set.
+ *
+ * The link goes ABOVE any trailing hashtag block rather than after it.
+ * `withLink` appends, which is right for a caption ending in prose and wrong
+ * for one ending in four tags — appending there reads as a footnote to the
+ * tags rather than to the post.
+ */
+export async function recaptionPost(id: string, tags: string[]): Promise<string> {
+  if (!env.buffer) throw new Error('Buffer is not configured on this deployment.');
+  const post = await readPost(id);
+
+  const lines = post.text.split('\n');
+  let tail = lines.length;
+  while (
+    tail > 0 &&
+    (lines[tail - 1]!.trim() === '' || /^#\S+( #\S+)*$/.test(lines[tail - 1]!.trim()))
+  ) {
+    tail--;
+  }
+  const body = lines.slice(0, tail).join('\n').trimEnd();
+  const existingTags = lines.slice(tail).join('\n').trim();
+
+  let text = withLink(body);
+  text = existingTags
+    ? `${text}\n\n${existingTags}`
+    : withHashtags(text, tags, post.channelService);
+  if (text === post.text) return text;
+
+  await replacePost(id, post, { text });
+  return text;
 }
 
 /**
@@ -1192,145 +1271,4 @@ export async function removePost(id: string): Promise<void> {
     `UPDATE social_queue SET buffer_ids = array_remove(buffer_ids, $1) WHERE $1 = ANY(buffer_ids)`,
     [id],
   );
-}
-
-/**
- * Put the link and the hashtags into a post that already went to Buffer.
- *
- * Both were added to `decide` after twenty-seven posts had already been
- * approved, so eighteen of them sit in the queue bare: twelve carousels with
- * neither, and six memes with hashtags but no link. This is the backfill.
- *
- * Like `reschedulePost`, it reads before it writes, because `editPost`
- * REPLACES — and for the same reason it has to pin the time. `mode` is not
- * optional on a replace in any useful sense: leaving it out drops the post out
- * of its slot, so the current `dueAt` is sent back with `customScheduled`,
- * which holds it exactly where it already is. The cost is that the post stops
- * following the channel's slots if those ever change, which is the trade this
- * was accepted under.
- *
- * Idempotent on both counts: `withLink` returns the caption untouched if the
- * link is already in it, and a caption that already carries hashtags does not
- * get a second set.
- */
-export async function recaptionPost(id: string, tags: string[]): Promise<string> {
-  if (!env.buffer) throw new Error('Buffer is not configured on this deployment.');
-
-  interface ReadAsset {
-    type: string;
-    source: string;
-    image?: { altText: string } | null;
-  }
-  const current = await bufferCall<{
-    post: {
-      text: string;
-      dueAt: string | null;
-      schedulingType: string | null;
-      channelService: string;
-      assets: ReadAsset[];
-      metadata: {
-        __typename: string;
-        type?: string;
-        shouldShareToFeed?: boolean;
-        firstComment?: string | null;
-      } | null;
-    };
-  }>(
-    /*
-     * `metadata` is read for the same reason the assets are: a replace clears
-     * what it is not given, and Instagram rejects a post with no type —
-     * "Instagram posts require a type (post, story, or reel)". Seven of the
-     * eighteen in the first backfill failed exactly there, which is the good
-     * failure: Buffer refused the whole edit rather than half-applying it.
-     *
-     * Read rather than assumed, because `metadataFor` hardcodes `post` and a
-     * video on Instagram is a `reel`. Echoing back what is already set cannot
-     * silently retype a reel into a feed post.
-     */
-    `query ForRecaption($input: PostInput!) {
-       post(input: $input) {
-         text dueAt schedulingType channelService
-         assets { type source ... on ImageAsset { image { altText } } }
-         metadata {
-           __typename
-           ... on InstagramPostMetadata { type shouldShareToFeed firstComment }
-         }
-       }
-     }`,
-    { input: { id } },
-  );
-  const post = current.post;
-
-  /*
-   * The link goes ABOVE any trailing hashtag block, not after it.
-   *
-   * `withLink` appends, which is right for a caption that ends in prose and
-   * wrong for one that ends in tags — a meme's caption already finishes with
-   * four of them, and appending after would read as a footnote to the tags
-   * rather than to the post. So the tag block is detached, the link inserted,
-   * and the block put back.
-   */
-  const lines = post.text.split('\n');
-  let tail = lines.length;
-  while (tail > 0 && (lines[tail - 1]!.trim() === '' || /^#\S+( #\S+)*$/.test(lines[tail - 1]!.trim()))) {
-    tail--;
-  }
-  const body = lines.slice(0, tail).join('\n').trimEnd();
-  const existingTags = lines.slice(tail).join('\n').trim();
-
-  let text = withLink(body);
-  if (existingTags) {
-    text = `${text}\n\n${existingTags}`;
-  } else {
-    text = withHashtags(text, tags, post.channelService);
-  }
-  if (text === post.text) return text;
-
-  const assets = post.assets.map((asset) => {
-    if (asset.type === 'video') return { video: { url: asset.source } };
-    if (asset.type === 'image') {
-      return { image: { url: asset.source, metadata: { altText: asset.image?.altText ?? '' } } };
-    }
-    throw new Error(`Cannot recaption a post with a ${asset.type} asset`);
-  });
-
-  /*
-   * Instagram's metadata is echoed back from the read; every other service
-   * takes what `createPost` would send, which for TikTok is an empty object
-   * and for the rest is nothing at all.
-   */
-  const metadata =
-    post.channelService === 'instagram' && post.metadata?.type
-      ? {
-          instagram: {
-            type: post.metadata.type,
-            shouldShareToFeed: post.metadata.shouldShareToFeed ?? true,
-            ...(post.metadata.firstComment
-              ? { firstComment: post.metadata.firstComment }
-              : {}),
-          },
-        }
-      : metadataFor(post.channelService);
-
-  const data = await bufferCall<{ editPost: { __typename: string; message?: string } }>(
-    `mutation Recaption($input: EditPostInput!) {
-       editPost(input: $input) { __typename ${ERROR_FIELDS} }
-     }`,
-    {
-      input: {
-        id,
-        text,
-        assets,
-        dueAt: post.dueAt,
-        mode: 'customScheduled',
-        schedulingType: post.schedulingType ?? 'automatic',
-        metadata,
-      },
-    },
-  );
-  const payload = data.editPost;
-  if (payload.__typename !== 'PostActionSuccess') {
-    throw new BufferError(payload.message ?? `Buffer refused the caption (${payload.__typename})`);
-  }
-  return text;
 }
