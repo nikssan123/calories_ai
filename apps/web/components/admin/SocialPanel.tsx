@@ -137,18 +137,33 @@ export function SocialPanel() {
         for (const file of Array.from(files)) {
           const bytes = new Uint8Array(await file.arrayBuffer());
           const view = new DataView(bytes.buffer);
-          if (bytes.length < 24 || view.getUint32(12) !== 0x49484452) {
-            toast.error(`${file.name} is not a PNG`);
-            continue;
+          const isMp4 = /\.mp4$/i.test(file.name);
+
+          /*
+           * A PNG is measured from its header. An MP4's dimensions are behind a
+           * box walk that is not worth doing in a file picker, and it does not
+           * need doing: video.mts stitches slides that are already 1080x1920,
+           * so the shape is known from what made it.
+           */
+          let width = 1080;
+          let height = 1920;
+          if (!isMp4) {
+            if (bytes.length < 24 || view.getUint32(12) !== 0x49484452) {
+              toast.error(`${file.name} is not a PNG`);
+              continue;
+            }
+            width = view.getUint32(16);
+            height = view.getUint32(20);
           }
+
           let binary = '';
           for (const byte of bytes) binary += String.fromCharCode(byte);
           await api.admin.uploadSocial({
-            sourceKey: file.name.replace(/(-(?:post|story|square))?\.png$/i, ''),
+            sourceKey: file.name.replace(/(-(?:post|story|square))?\.(png|mp4)$/i, ''),
             caption: `TODO caption — ${file.name}`,
-            width: view.getUint32(16),
-            height: view.getUint32(20),
-            mediaType: 'image/png',
+            width,
+            height,
+            mediaType: isMp4 ? 'video/mp4' : 'image/png',
             bytes: btoa(binary),
           });
           ok++;
@@ -185,6 +200,8 @@ export function SocialPanel() {
 
   /** The slide on screen, and whether the carousel is self-consistent. */
   const shown = current?.slides[Math.min(slide, (current?.slides.length ?? 1) - 1)];
+  /** A video group is one asset; its url carries the extension. */
+  const isVideo = Boolean(shown?.assetUrl && /\.mp4$/i.test(shown.assetUrl));
   const mixedAspect = useMemo(() => {
     if (!current || current.slides.length < 2) return false;
     const ratio = (s: { width: number; height: number }) => (s.width / s.height).toFixed(3);
@@ -295,7 +312,7 @@ export function SocialPanel() {
               Add slides
               <input
                 type="file"
-                accept="image/png"
+                accept="image/png,video/mp4"
                 multiple
                 className="hidden"
                 onChange={(e) => void upload(e.target.files)}
@@ -361,8 +378,11 @@ export function SocialPanel() {
             <div className="flex items-baseline justify-between gap-3">
               <code className="text-footnote">{current.key}</code>
               <span className="text-footnote text-muted-foreground">
-                {index + 1} of {queue.pending.length} · {current.slides.length} slide
-                {current.slides.length === 1 ? '' : 's'} · {shown?.width}×{shown?.height}
+                {index + 1} of {queue.pending.length} ·{' '}
+                {isVideo
+                  ? 'video'
+                  : `${current.slides.length} slide${current.slides.length === 1 ? '' : 's'}`}{' '}
+                · {shown?.width}×{shown?.height}
               </span>
             </div>
 
@@ -374,13 +394,27 @@ export function SocialPanel() {
                 build of this showed slide 0 and nothing else, which made a
                 four-slide decision a one-slide guess. */}
             <div className="bg-muted/40 border-hairline relative flex justify-center rounded-xl border p-3">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                key={shown?.id}
-                src={shown?.assetUrl}
-                alt={`${current.key} slide ${slide + 1}`}
-                className="max-h-[560px] w-auto rounded-lg"
-              />
+              {isVideo ? (
+                /* Controls and no autoplay: this is a review surface, and a
+                   video that starts talking the moment a card appears is the
+                   opposite of being able to judge it. */
+                <video
+                  key={shown?.id}
+                  src={shown?.assetUrl}
+                  controls
+                  playsInline
+                  preload="metadata"
+                  className="max-h-[560px] w-auto rounded-lg"
+                />
+              ) : (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  key={shown?.id}
+                  src={shown?.assetUrl}
+                  alt={`${current.key} slide ${slide + 1}`}
+                  className="max-h-[560px] w-auto rounded-lg"
+                />
+              )}
               {current.slides.length > 1 && (
                 <>
                   <button

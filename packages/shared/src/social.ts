@@ -161,7 +161,13 @@ export const SocialUpload = z.object({
   caption: z.string().min(1).max(2200),
   width: z.number().int().positive(),
   height: z.number().int().positive(),
-  mediaType: z.enum(['image/png', 'image/jpeg']),
+  /**
+   * `video/mp4` is one post with one asset, never a carousel — see
+   * `scripts/content/video.mts`, which stitches a slideshow's slides into a
+   * single vertical MP4 because a native carousel only reaches existing
+   * followers while a video goes into the recommendation surfaces.
+   */
+  mediaType: z.enum(['image/png', 'image/jpeg', 'video/mp4']),
   bytes: z.string().min(1),
 });
 export type SocialUpload = z.infer<typeof SocialUpload>;

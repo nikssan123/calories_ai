@@ -40,7 +40,10 @@ export async function registerPublicRoutes(app: FastifyInstance) {
    */
   app.get('/public/social/:file', async (request, reply) => {
     const file = (request.params as { file: string }).file;
-    const id = file.replace(/\.png$/i, '');
+    // Any extension this queue serves, not just png — a slideshow stitched
+    // into an MP4 by scripts/content/video.mts is served from here too, and
+    // Buffer decides what it is fetching partly from the URL.
+    const id = file.replace(/\.(png|jpg|mp4)$/i, '');
     if (!/^[0-9a-f-]{36}$/i.test(id)) return reply.status(404).send({ error: 'No such asset' });
 
     const asset = await readCandidateAsset(id);

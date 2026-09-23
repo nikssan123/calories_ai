@@ -70,13 +70,31 @@ const COLUMNS = `
  * production, and a URL baked into a row at upload time would be wrong the
  * first time the hostname changed.
  */
+/**
+ * The file extension an asset is served under, from its media type.
+ *
+ * It has to be in the URL rather than inferred: Buffer decides whether it is
+ * fetching an image or a video partly from the URL, and a `.png` that answers
+ * with an MP4 is the kind of thing that fails at publish time on their side
+ * where nothing here is watching.
+ */
+const EXTENSIONS: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'video/mp4': 'mp4',
+};
+
+export function extensionFor(mediaType: string): string {
+  return EXTENSIONS[mediaType] ?? 'bin';
+}
+
 function candidate(row: QueueRow): SocialCandidate {
   const origin = env.buffer?.publicOrigin ?? '';
   return {
     id: row.id,
     sourceKey: row.source_key,
     caption: row.caption,
-    assetUrl: `${origin}/public/social/${row.id}.png`,
+    assetUrl: `${origin}/public/social/${row.id}.${extensionFor(row.media_type)}`,
     width: row.width,
     height: row.height,
     state: row.state,
@@ -164,6 +182,12 @@ function pngDimensions(bytes: Buffer): { width: number; height: number } | null 
 export async function addCandidate(upload: SocialUpload): Promise<SocialCandidate> {
   const bytes = Buffer.from(upload.bytes, 'base64');
 
+  /*
+   * PNG only. An MP4's dimensions live behind a box walk that is not worth
+   * writing here — `scripts/content/video.mts` reads them off the slides it
+   * stitched, so the numbers on a video row come from the stills that made it
+   * and are correct by construction rather than by assertion.
+   */
   if (upload.mediaType === 'image/png') {
     const real = pngDimensions(bytes);
     if (!real) throw new Error('Those bytes are not a PNG');
@@ -175,7 +199,7 @@ export async function addCandidate(upload: SocialUpload): Promise<SocialCandidat
     }
   }
 
-  const key = `social/${randomUUID()}.png`;
+  const key = `social/${randomUUID()}.${extensionFor(upload.mediaType)}`;
   // Bytes first, so a failure leaves an orphaned object rather than a row
   // pointing at nothing — same order and same reasoning as savePhoto.
   await putAsset(key, upload.mediaType, bytes);
@@ -343,6 +367,7 @@ async function createPost(
   text: string,
   assetUrls: string[],
   altText: string,
+  isVideo = false,
 ): Promise<string> {
   const data = await bufferCall<{
     createPost: { __typename: string; post?: { id: string }; message?: string };
@@ -376,7 +401,18 @@ async function createPost(
          * of that is a decision about accessibility copy, not plumbing, and a
          * caption's first line on every slide is honest rather than wrong.
          */
-        assets: assetUrls.map((url) => ({ image: { url, metadata: { altText } } })),
+        /*
+         * Video is one asset and never a carousel. `AssetInput` is `@oneOf`,
+         * so an entry carries `image` or `video`, never both — and a video
+         * post that also sent an `image` member would be refused by Buffer
+         * with a validation error rather than silently ignoring one.
+         *
+         * No thumbnailUrl: Buffer derives one from the first frame, which for
+         * these is the cover slide, which is exactly the thumbnail wanted.
+         */
+        assets: isVideo
+          ? [{ video: { url: assetUrls[0]!, metadata: { title: altText.slice(0, 90) } } }]
+          : assetUrls.map((url) => ({ image: { url, metadata: { altText } } })),
         metadata: metadataFor(channel.service),
       },
     },
@@ -617,7 +653,12 @@ export async function decide(groupKey: string, decision: SocialDecision): Promis
   const connected = targets.filter((c) => !c.disconnected);
   if (!connected.length) throw new Error('Every channel chosen is disconnected in Buffer');
 
-  // Every slide, cover first. This is the carousel.
+  /*
+   * Every slide, cover first — that is the carousel. A video group is a single
+   * row and therefore a single url, and `createPost` sends it as a `video`
+   * asset instead: one post, one file, no carousel.
+   */
+  const isVideo = cover.media_type === 'video/mp4';
   const assetUrls = ordered.map((row) => candidate(row).assetUrl);
   // The alt text is the caption's first line: written for this post, and better
   // than anything derivable. Instagram requires one.
@@ -626,7 +667,8 @@ export async function decide(groupKey: string, decision: SocialDecision): Promis
   const posted: string[] = [];
   const failures: string[] = [];
   for (const channel of connected) {
-    const ceiling = MAX_ASSETS[channel.service];
+    // A video is one asset, so the carousel ceiling cannot apply to it.
+    const ceiling = isVideo ? undefined : MAX_ASSETS[channel.service];
     if (ceiling !== undefined && assetUrls.length > ceiling) {
       failures.push(
         `${channel.service}: ${assetUrls.length} slides is more than the ${ceiling} ` +
@@ -636,7 +678,7 @@ export async function decide(groupKey: string, decision: SocialDecision): Promis
     }
     try {
       const text = withHashtags(caption, decision.hashtags ?? [], channel.service);
-      posted.push(await createPost(channel, text, assetUrls, altText));
+      posted.push(await createPost(channel, text, assetUrls, altText, isVideo));
     } catch (error) {
       failures.push(`${channel.service}: ${(error as Error).message}`);
     }
