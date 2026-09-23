@@ -357,6 +357,7 @@ export const bg: Messages = {
   'blog.description': 'За калориите, порциите и какво може и какво не може да ти каже една оценка на храна.',
   'blog.empty': 'Тук още няма нищо публикувано.',
   'blog.alsoIn': 'Също на',
+  'blog.updated': 'Обновено',
   'site.recipes': 'Рецепти',
   'site.getTheApp': 'Изтегли приложението',
   'site.howItWorks': 'Как работи',

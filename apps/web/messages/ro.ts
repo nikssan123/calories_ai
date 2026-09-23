@@ -393,6 +393,7 @@ export const ro: Messages = {
   'blog.description': 'Despre calorii, porții și ce îți poate spune — și ce nu — o estimare.',
   'blog.empty': 'Aici nu s-a publicat încă nimic.',
   'blog.alsoIn': 'Și în',
+  'blog.updated': 'Actualizat',
   'site.recipes': 'Rețete',
   'site.getTheApp': 'Descarcă aplicația',
   'site.howItWorks': 'Cum funcționează',

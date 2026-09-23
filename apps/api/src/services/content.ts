@@ -9,6 +9,7 @@ import type {
   TopicWithPosts,
 } from '@ct/shared';
 import { LOCALES } from '@ct/shared';
+import type { PostLink } from '../ai/content.ts';
 import { query, queryOne } from '../db.ts';
 
 /**
@@ -385,6 +386,43 @@ export async function claimedKeywords(locale: Locale): Promise<string[]> {
     [locale],
   );
   return rows.map((r) => r.keyword);
+}
+
+/**
+ * What this language has published, as paths a new article may link.
+ *
+ * The companion to `claimedKeywords`, and the other half of the same idea: that
+ * one asks the writer not to compete with itself, this one asks it to join what
+ * is already there. Of the first 143 posts not one linked to another — an
+ * article can only cite what the prompt hands it, and the prompt handed it nine
+ * static paths.
+ *
+ * Published only, and this locale only. A draft has no URL to give out, and a
+ * cross-language link sends the reader somewhere they cannot read — hreflang is
+ * what carries the same article in another language.
+ *
+ * The path is built here rather than in the prompt because the shape is a
+ * routing fact: English sits at `/blog/<slug>` and every other language at
+ * `/<locale>/blog/<slug>`. `apps/web/lib/blog.ts` is where that asymmetry is
+ * explained, and the two have to agree.
+ *
+ * Newest first, capped: the list rides in the user turn of every draft, so it
+ * costs tokens on all thirteen, and a writer choosing three links does not read
+ * past the first couple of dozen.
+ */
+export async function linkablePosts(locale: Locale, limit = 24): Promise<PostLink[]> {
+  const rows = await query<{ slug: string; title: string }>(
+    `SELECT slug, title
+       FROM content_posts
+      WHERE locale = $1 AND status = 'published'
+      ORDER BY published_at DESC NULLS LAST
+      LIMIT $2`,
+    [locale, limit],
+  );
+  return rows.map((row) => ({
+    path: locale === 'en' ? `/blog/${row.slug}` : `/${locale}/blog/${row.slug}`,
+    title: row.title,
+  }));
 }
 
 // ---- A batch, as a row ------------------------------------------------------

@@ -338,6 +338,7 @@ export const es: Messages = {
   'blog.description': 'Sobre calorías, porciones y lo que una estimación puede y no puede decirte.',
   'blog.empty': 'Todavía no hay nada publicado aquí.',
   'blog.alsoIn': 'También en',
+  'blog.updated': 'Actualizado',
   'site.recipes': 'Recetas',
   'site.getTheApp': 'Descargar la app',
   'site.howItWorks': 'Cómo funciona',

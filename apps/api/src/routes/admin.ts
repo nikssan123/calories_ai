@@ -14,6 +14,7 @@ import { draftPost, suggestTopics } from '../ai/content.ts';
 import { startBatch } from '../services/content-runner.ts';
 import {
   claimedKeywords,
+  linkablePosts,
   createTopic,
   deleteTopic,
   markSuggestion,
@@ -257,6 +258,7 @@ export async function registerAdminRoutes(app: FastifyInstance) {
         topic,
         locale,
         await claimedKeywords(locale),
+        await linkablePosts(locale),
       );
       const saved = await upsertPost({
         topicId: topic.id,

@@ -392,6 +392,7 @@ export const hr: Messages = {
   'blog.description': 'O kalorijama, porcijama i o tome što ti procjena može, a što ne može reći.',
   'blog.empty': 'Ovdje još ništa nije objavljeno.',
   'blog.alsoIn': 'Također na',
+  'blog.updated': 'Ažurirano',
   'site.recipes': 'Recepti',
   'site.getTheApp': 'Preuzmi aplikaciju',
   'site.howItWorks': 'Kako radi',

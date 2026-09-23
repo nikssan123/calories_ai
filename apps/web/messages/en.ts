@@ -467,6 +467,7 @@ export const en = {
   'blog.description': 'Writing about calories, portions and what a food estimate can and cannot tell you.',
   'blog.empty': 'Nothing published here yet.',
   'blog.alsoIn': 'Also in',
+  'blog.updated': 'Updated',
   'site.recipes': 'Recipes',
   'site.getTheApp': 'Get the app',
   'site.howItWorks': 'How it works',

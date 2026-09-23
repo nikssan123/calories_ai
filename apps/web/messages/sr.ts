@@ -390,6 +390,7 @@ export const sr: Messages = {
   'blog.description': 'О калоријама, порцијама и о томе шта процена може, а шта не може да ти каже.',
   'blog.empty': 'Овде још ништа није објављено.',
   'blog.alsoIn': 'Такође на',
+  'blog.updated': 'Ажурирано',
   'site.recipes': 'Рецепти',
   'site.getTheApp': 'Преузми апликацију',
   'site.howItWorks': 'Како ради',

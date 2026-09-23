@@ -4,6 +4,7 @@ import { Logo } from '@/components/Logo';
 import { DocumentScroll } from '@/components/DocumentScroll';
 import { STORE_HREF } from '@/components/landing/StoreLinks';
 import { blogIndexPath } from '@/lib/blog';
+import { SOCIAL_PROFILES } from '@/lib/seo';
 import { messagesFor } from '@/lib/i18n-server';
 
 /**
@@ -118,6 +119,25 @@ export function PublicShell({
               <Link href="/terms" className="hover:text-foreground">
                 {t('auth.terms')}
               </Link>
+            </nav>
+            {/*
+              * The brand's own accounts, which until now appeared nowhere on
+              * the site. They are also the Organization's `sameAs` — the entity
+              * graph may only claim what the page shows, so the list lives in
+              * one place and both read it. `rel="me"` because that is what
+              * these are: the same entity, not a recommendation.
+              */}
+            <nav className="text-footnote text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-2">
+              {SOCIAL_PROFILES.map((profile) => (
+                <a
+                  key={profile.href}
+                  href={profile.href}
+                  rel="me noopener"
+                  className="hover:text-foreground"
+                >
+                  {profile.name}
+                </a>
+              ))}
             </nav>
             <span className="text-footnote text-muted-foreground ml-auto">
               © {new Date().getFullYear()} Day So Far

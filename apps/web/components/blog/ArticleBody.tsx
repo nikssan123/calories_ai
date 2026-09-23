@@ -1,5 +1,7 @@
 import { Fragment, type ReactNode } from 'react';
+import Link from 'next/link';
 import { parseBlocks, type Block, type Inline } from '@ct/shared/markdown';
+import { ORIGIN } from '@/lib/seo';
 
 /**
  * A blog post's markdown, set as a document.
@@ -142,18 +144,46 @@ function InlineView({ node }: { node: Inline }): ReactNode {
       return <s>{inline(node.children)}</s>;
     case 'code':
       return <code className="bg-card rounded px-1 py-0.5 text-[0.9em]">{node.text}</code>;
-    case 'link':
-      return (
-        /*
-         * `nofollow` on everything the model wrote. These links were chosen by
-         * a language model and reviewed by a person for whether the sentence is
-         * true, which is not the same as vouching for the destination — and
-         * outbound links from a page a model wrote are exactly the pattern that
-         * makes a site look like a link farm.
-         */
+    case 'link': {
+      /*
+       * `nofollow` on everything that leaves, and nothing on what stays.
+       *
+       * The reason for the first half is unchanged: these links were chosen by
+       * a language model and reviewed by a person for whether the *sentence* is
+       * true, which is not the same as vouching for the destination, and
+       * outbound links from a page a model wrote are the pattern that makes a
+       * site look like a link farm.
+       *
+       * None of that argument survives contact with a link to this site's own
+       * pages, and the blanket rule was applying it there too — every internal
+       * link the writer is now asked to make would have shipped nofollowed,
+       * which is a site telling a crawler not to trust itself.
+       */
+      const own = ownPath(node.href);
+      return own ? (
+        <Link href={own} className="underline underline-offset-2">
+          {inline(node.children)}
+        </Link>
+      ) : (
         <a href={node.href} rel="nofollow noopener" className="underline underline-offset-2">
           {inline(node.children)}
         </a>
       );
+    }
   }
+}
+
+/**
+ * The path, when a link points back at this site — and null when it leaves.
+ *
+ * Both forms occur in the body text: the writer is given relative paths now,
+ * and thirty-seven posts written before that carry the absolute origin instead.
+ * `//host` is deliberately not one of them: it is protocol-relative and goes
+ * somewhere else.
+ */
+function ownPath(href: string): string | null {
+  if (href.startsWith('//')) return null;
+  if (href.startsWith('/')) return href;
+  if (href === ORIGIN) return '/';
+  return href.startsWith(`${ORIGIN}/`) ? href.slice(ORIGIN.length) : null;
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { OG_IMAGE, withBrand } from '@/lib/seo';
+import { PERSON_ID } from '@/lib/schema';
 import { DocumentSchema } from '@/components/legal/DocumentSchema';
 import { Clause, LegalPage, List, Out, P } from '@/components/legal/LegalPage';
 
@@ -36,6 +37,9 @@ export default function AboutPage() {
         path="/about"
         description={DESCRIPTION}
         updated="2026-09-12"
+        // The page is about the person named in clause 1, and the Person node
+        // in the sitewide graph is where that name lives. See lib/schema.ts.
+        mainEntityId={PERSON_ID}
       />
       <LegalPage
       title="About"

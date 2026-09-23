@@ -391,6 +391,7 @@ export const sk: Messages = {
   'blog.description': 'O kalóriách, porciách a o tom, čo ti odhad môže a čo nemôže povedať.',
   'blog.empty': 'Zatiaľ tu nie je nič zverejnené.',
   'blog.alsoIn': 'Aj v',
+  'blog.updated': 'Aktualizované',
   'site.recipes': 'Recepty',
   'site.getTheApp': 'Stiahnuť aplikáciu',
   'site.howItWorks': 'Ako to funguje',

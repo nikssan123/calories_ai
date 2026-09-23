@@ -780,6 +780,97 @@ compiler happens to flush it.
 
 ---
 
+## What shipped — 2026-09-24
+
+Items 10 (partly), 18's entity graph, and the two content defects item 9 and §"One
+broken outbound link" left in the database. Verified in the running dev server and,
+for the database half, against production.
+
+### The posts link to each other now
+
+**Of the first 143 posts, none linked to another post.** Measured on production —
+`body_md ~ '/blog/'` returned zero — and the cause was one rule: the prompt's `LINKS`
+section allowlisted nine static paths and no article, so thirteen languages of related
+writing sat in thirteen sets of orphans reachable only from an index.
+
+- `ai/content.ts` — `LINKS` rewritten: the writer may link any article path *given to
+  it*, and is told that a path not in the prompt does not exist. That second half is
+  load-bearing; "you may link an article" on its own is an invitation to invent a slug,
+  which is the `daysofar.app` bug wearing a different hat.
+- `services/content.ts` — new `linkablePosts(locale)`: published posts, this locale
+  only, newest 24, each as the path the route actually serves. Wired into both callers
+  (`routes/admin.ts`, `services/content-runner.ts`). Cross-language links are
+  deliberately absent — that is hreflang's job, and a Bulgarian reader does not want a
+  German article.
+- `components/blog/ArticleBody.tsx` — **the renderer was nofollowing every link,
+  internal ones included**, so every link the change above produces would have shipped
+  as a site telling a crawler not to trust itself. Internal links now render as
+  `next/link` with no `rel`; outbound keeps `nofollow noopener`, which is what that
+  comment's link-farm argument was always about.
+- Outbound citations: naming the source in the sentence is now required where a figure
+  is load-bearing, and linking is optional and limited to four host roots that cannot
+  rot. A deep URL composed from the name of a database is the same invention as a
+  guessed slug.
+
+### The site says who publishes it
+
+- `lib/schema.ts` — a `Person` node for the founder, referenced from the Organization
+  as `founder`, and `/about` now declares it as `mainEntity`. No `sameAs` on the person:
+  the brand's accounts belong to the brand, and nothing here knows a verified personal
+  profile.
+- **`Article.author` is still the Organization, on purpose.** A visible human byline on
+  a generated article is the one dishonest thing that page could carry, and this file's
+  rule is that the markup and the page agree. So the byline says *Day So Far*, links to
+  `/about`, and matches what the JSON-LD claims.
+- Blog posts now carry that byline plus a second date, shown only when the article
+  really changed after publication. New `blog.updated` key in all 13 catalogues —
+  single-word labels, and bg, sr and el still want a native read.
+
+### The entity graph is four edges wider
+
+§18 measured the owned citation surface at one edge — the Play listing. The brand's own
+Instagram, TikTok, X and YouTube accounts are now in `Organization.sameAs` **and** in
+the `PublicShell` footer, from one list (`SOCIAL_PROFILES` in `lib/seo.ts`) so the two
+cannot drift. Every URL was fetched before it was written down, and the handles come
+from Buffer's connected channels and `ADS.md` §4 rather than from guessing. The App
+Store listing joins them the day Apple publishes it.
+
+### Two database defects, closed
+
+- **The fat constant.** 24 published posts stated a kilogram of body fat as ~7,000 kcal
+  against `/how-it-works`' 7,700. All 24 corrected in one transaction, and **every
+  figure derived from the wrong constant was recomputed rather than left to contradict
+  it**: bg 9200 → 9900, cs "nine thousand" → "ten thousand", de `0,6 × 7.700 = 4.620`
+  → 220 kcal/day, hu `0,9 × 7700 = 6930` → 330 → 2510, ro 4.620 → 220 → 2.370, sk
+  8 400 → 9 200 and 5 600 → 6 200, uk 10 000 → 11 500 and 5600 → 6200, fr 9 200 → 9 900
+  and 3 500 → 3 850.
+- **Left as they are:** the 12 posts that state the constant as an explicit
+  "7,000–7,700" range. A range that contains the right number does not contradict
+  `/how-it-works`, and collapsing it would mean rewriting prose in languages nobody
+  here can check by ear. Three remaining matches for `7[ .,]?000` are legitimate: a
+  monthly total, a rounding to 7,500 the article explains, and a French range written
+  with "à".
+- **The dead link.** `/es/blog/calorias-de-mantenimiento-reales` now links
+  `[Day So Far](/how-it-works)` instead of the NXDOMAIN `daysofar.app` — an internal
+  path, which the renderer change above makes a followed link rather than a nofollowed
+  one.
+
+Corrected pages appear within the hour: the three `[slug]` routes are `revalidate =
+3600`.
+
+### Still not done, from this pass
+
+- **No Search Console.** Item 31 is untouched and it is still the biggest blind spot:
+  nothing here knows what Google has indexed, so nothing can say which topics deserve
+  the other twelve languages.
+- **The pillar page** (item 23) and `/myfitnesspal-alternative` (item 24). The writer
+  can link articles now; there is still no hub for them to link *to*.
+- **The 143 existing posts have no internal links.** The prompt change only affects
+  what is written next. Retrofitting the back catalogue is a regeneration or an edit
+  pass, not a deploy.
+
+---
+
 # Appendix — the 2026-09-12 audit (superseded)
 
 

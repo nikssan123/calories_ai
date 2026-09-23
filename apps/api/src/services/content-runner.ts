@@ -10,6 +10,7 @@ import {
   finishJob,
   getTopic,
   isCancelled,
+  linkablePosts,
   markJobCurrent,
   markJobDone,
   markJobFailed,
@@ -113,6 +114,7 @@ async function run(
             topic,
             locale,
             await claimedKeywords(locale),
+            await linkablePosts(locale),
           );
           await upsertPost({
             topicId,

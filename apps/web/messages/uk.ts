@@ -383,6 +383,7 @@ export const uk: Messages = {
   'blog.description': 'Про калорії, порції та про те, що оцінка може і чого не може тобі сказати.',
   'blog.empty': 'Тут ще нічого не опубліковано.',
   'blog.alsoIn': 'Також',
+  'blog.updated': 'Оновлено',
   'site.recipes': 'Рецепти',
   'site.getTheApp': 'Завантажити застосунок',
   'site.howItWorks': 'Як це працює',

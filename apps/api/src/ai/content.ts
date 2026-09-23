@@ -94,12 +94,21 @@ article. Use these exactly:
 - A kilogram is 2.2 pounds. A pound of fat is therefore about 3,500 kcal.
 
 LINKS
-- The only site you may link to is daysofar.com. Its paths are /, /how-it-works,
-  /accuracy, /about, /blog, /cook/library, /support, /privacy, /terms. No other
-  domain, and no other path on this one.
-- Do not construct a URL from the product's name. There is no daysofar.app, no
-  .io and no .co.
-- If a sentence wants a source you cannot link, write the sentence without it.
+- On daysofar.com you may link these paths: /, /how-it-works, /accuracy, /about,
+  /blog, /cook/library, /support, /privacy, /terms — and any article path listed
+  under ARTICLES ALREADY IN THIS LANGUAGE. Copy such a path exactly as it is
+  written there.
+- Never construct a URL. There is no daysofar.app, no .io and no .co — and an
+  article's path cannot be worked out from its subject either. A path that is
+  not written in this prompt does not exist.
+- Where a sentence leans on a published nutrition figure, name its source in the
+  sentence: "USDA FoodData Central", not a bare number. Naming it is the
+  requirement; linking it is optional, and only these four may be linked,
+  verbatim and never with a path after them:
+  https://fdc.nal.usda.gov/ , https://www.myplate.gov/ ,
+  https://world.openfoodfacts.org/ , https://ods.od.nih.gov/
+- One or two named sources is right for an article this length. A wall of them
+  is decoration.
 
 FORMAT
 Markdown. No H1 — the page renders the title itself. Start at "##".
@@ -125,9 +134,29 @@ No front matter, no code fences around the whole thing, no images.`;
  * "LINKS" is the same kind of guard for the same kind of failure. One Spanish
  * post linked to `https://daysofar.app`, a domain that does not resolve: the
  * model knew the product's name and invented an address from it.
+ *
+ * It now carries a second job. Of the first 143 posts, **none** linked to
+ * another post — the rule listed nine site paths and no article among them, so
+ * thirteen languages of genuinely related writing sat in thirteen sets of
+ * orphans, reachable only from an index. The fix is not "you may link an
+ * article": a model asked for that invents the slug, which is the bug above
+ * wearing a different hat. It is the list under ARTICLES ALREADY IN THIS
+ * LANGUAGE, which `taskPrompt` fills from what is actually published, plus the
+ * instruction to copy a path rather than write one.
+ *
+ * Outbound is the same shape for the same reason. A named source ("USDA
+ * FoodData Central") is what E-E-A-T actually wants and cannot 404; a deep URL
+ * the model composes from the name of a database is the Spanish post again. So
+ * the naming is required, the linking is optional, and the four permitted links
+ * are host roots that cannot rot.
  */
 
-function taskPrompt(topic: ContentTopic, locale: Locale, claimed: string[]): string {
+function taskPrompt(
+  topic: ContentTopic,
+  locale: Locale,
+  claimed: string[],
+  links: PostLink[],
+): string {
   const language = LOCALE_ENGLISH_NAMES[locale];
   /*
    * The queries this language has already claimed.
@@ -146,7 +175,26 @@ our own articles chasing one search compete with each other and both lose:\n${cl
           .join('\n')}`
       : '';
 
-  return `Write one article in ${language}.${taken}
+  /*
+   * What this language has already published, as paths it may copy.
+   *
+   * The list is the whole mechanism — the LINKS note above says why a model
+   * cannot be trusted to write a path it was not given. Only this locale's
+   * posts, because a Bulgarian article linking a German one sends the reader
+   * somewhere they cannot read, and hreflang already covers the same article in
+   * another language.
+   */
+  const related =
+    links.length > 0
+      ? `\n\nARTICLES ALREADY IN THIS LANGUAGE — link two or three of them from the body,
+where a sentence genuinely refers to what that article covers. Copy the path
+exactly. Skip the ones that do not fit: a forced link is worse than no link, and
+three is a maximum rather than a target:\n${links
+          .map((l) => `- ${l.path} — ${l.title}`)
+          .join('\n')}`
+      : '';
+
+  return `Write one article in ${language}.${taken}${related}
 
 SUBJECT
 ${topic.name}
@@ -178,6 +226,19 @@ Reply with nothing but a single JSON object:
 }`;
 }
 
+/**
+ * One article this locale has already published, as the writer may link it.
+ *
+ * A path and a title, nothing else: the title is what lets the model judge
+ * whether a sentence is really about that article, and the path is the only
+ * thing it is allowed to put in the markdown. Built in `services/content.ts`,
+ * because the en-at-the-root asymmetry is a routing fact and not a prompt one.
+ */
+export interface PostLink {
+  path: string;
+  title: string;
+}
+
 export interface DraftResult {
   post: DraftedPost;
   model: string | null;
@@ -192,6 +253,7 @@ export async function draftPost(
   topic: ContentTopic,
   locale: Locale,
   claimed: string[] = [],
+  links: PostLink[] = [],
 ): Promise<DraftResult> {
   /*
    * A tool context with no user in it.
@@ -226,7 +288,7 @@ export async function draftPost(
     // the language ride in the user turn.
     staticSystemPrompt: SYSTEM_PROMPT,
     dynamicSystemPrompt: '',
-    text: taskPrompt(topic, locale, claimed),
+    text: taskPrompt(topic, locale, claimed, links),
     photo: null,
     tools: NO_TOOLS,
     toolNames: [],

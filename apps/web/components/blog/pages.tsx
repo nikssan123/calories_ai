@@ -182,6 +182,9 @@ export async function blogPostMetadata(locale: Locale, slug: string): Promise<Me
   };
 }
 
+/** A timestamp as the day it names, which is all a reader or a crawler needs. */
+const day = (iso: string) => new Date(iso).toISOString().slice(0, 10);
+
 export async function BlogPost({ locale, slug }: { locale: Locale; slug: string }) {
   const post = await publicPost(locale, slug);
   const t = messagesFor(locale);
@@ -239,14 +242,38 @@ export async function BlogPost({ locale, slug }: { locale: Locale; slug: string 
         </Link>
 
         <h1 className="text-display mt-5 text-balance">{post.title}</h1>
-        {post.published_at && (
-          <time
-            dateTime={post.published_at}
-            className="text-footnote text-muted-foreground mt-3 block"
-          >
-            {new Date(post.published_at).toISOString().slice(0, 10)}
-          </time>
-        )}
+        {/*
+          * The byline, and it says the same thing the JSON-LD above does.
+          *
+          * `Article.author` is the organisation, so the visible credit is the
+          * organisation too, linked to the page that says who that is. Putting a
+          * person's name here instead would read as "a human wrote this", which
+          * is the one claim this page cannot make — and schema.ts's rule is that
+          * structured data and the page agree.
+          *
+          * The second date only appears when the article really was changed
+          * after publication. Both are ISO because a blog in thirteen languages
+          * has thirteen date formats, and a wrong one is worse than a plain one.
+          */}
+        <div className="text-footnote text-muted-foreground mt-3 flex flex-wrap items-center gap-x-2">
+          <Link href="/about" className="underline underline-offset-2">
+            Day So Far
+          </Link>
+          {post.published_at && (
+            <>
+              <span aria-hidden="true">·</span>
+              <time dateTime={post.published_at}>{day(post.published_at)}</time>
+            </>
+          )}
+          {post.published_at && day(post.updated_at) !== day(post.published_at) && (
+            <>
+              <span aria-hidden="true">·</span>
+              <time dateTime={post.updated_at}>
+                {t('blog.updated')} {day(post.updated_at)}
+              </time>
+            </>
+          )}
+        </div>
 
         <div className="mt-10">
           <ArticleBody markdown={post.body_md} />

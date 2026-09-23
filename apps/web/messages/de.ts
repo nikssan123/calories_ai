@@ -351,6 +351,7 @@ export const de: Messages = {
   'blog.description': 'Über Kalorien, Portionen und was eine Schätzung dir sagen kann — und was nicht.',
   'blog.empty': 'Hier ist noch nichts veröffentlicht.',
   'blog.alsoIn': 'Auch auf',
+  'blog.updated': 'Aktualisiert',
   'site.recipes': 'Rezepte',
   'site.getTheApp': 'App holen',
   'site.howItWorks': 'So funktioniert es',

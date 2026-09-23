@@ -345,6 +345,7 @@ export const fr: Messages = {
   'blog.description': 'Sur les calories, les portions et ce qu’une estimation peut — ou ne peut pas — vous dire.',
   'blog.empty': 'Rien n’est encore publié ici.',
   'blog.alsoIn': 'Aussi en',
+  'blog.updated': 'Mis à jour',
   'site.recipes': 'Recettes',
   'site.getTheApp': 'Obtenir l’app',
   'site.howItWorks': 'Comment ça marche',

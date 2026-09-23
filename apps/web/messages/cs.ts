@@ -398,6 +398,7 @@ export const cs: Messages = {
   'blog.description': 'O kaloriích, porcích a o tom, co ti odhad může a co nemůže říct.',
   'blog.empty': 'Zatím tu nic není zveřejněno.',
   'blog.alsoIn': 'Také v',
+  'blog.updated': 'Aktualizováno',
   'site.recipes': 'Recepty',
   'site.getTheApp': 'Stáhnout aplikaci',
   'site.howItWorks': 'Jak to funguje',

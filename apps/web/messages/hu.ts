@@ -387,6 +387,7 @@ export const hu: Messages = {
   'blog.description': 'Kalóriákról, adagokról, és arról, mit tud — és mit nem — megmondani egy becslés.',
   'blog.empty': 'Itt még nincs semmi közzétéve.',
   'blog.alsoIn': 'Más nyelven',
+  'blog.updated': 'Frissítve',
   'site.recipes': 'Receptek',
   'site.getTheApp': 'Töltsd le az appot',
   'site.howItWorks': 'Hogyan működik',

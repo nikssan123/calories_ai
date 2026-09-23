@@ -1,5 +1,5 @@
 import type { PublicLibraryRecipe } from '@ct/shared';
-import { ORIGIN } from '@/lib/seo';
+import { ORIGIN, SOCIAL_PROFILES } from '@/lib/seo';
 
 /**
  * Schema.org JSON-LD, built from data the app already holds.
@@ -26,6 +26,23 @@ export function jsonLd(value: unknown): string {
 const absolute = (path: string) => `${ORIGIN}${path.startsWith('/') ? path : `/${path}`}`;
 
 /**
+ * The one human behind the site, as a node other pages can point at.
+ *
+ * Not an author credit. `/about` has said since 2026-09-12 that Day So Far is
+ * built, run and paid for by one named person, and the privacy policy names the
+ * same person as the data controller — this puts that fact where a crawler
+ * building an entity graph can read it, which is the same job `sameAs` does for
+ * the brand. "Day So Far" competes for its own name with an album and a
+ * reporting term; an organisation with a named founder is a sharper entity than
+ * one without.
+ *
+ * Deliberately no `sameAs` on this node. The brand's profiles belong to the
+ * brand, and nothing in this repo knows a verified personal profile to point at.
+ * An invented one would be the exact failure the file header is about.
+ */
+export const PERSON_ID = `${ORIGIN}/#person`;
+
+/**
  * The site's publisher identity, on every page via the root layout.
  *
  * `@id` so the recipe and application blocks can point at this one node rather
@@ -49,7 +66,26 @@ export function organizationSchema() {
         // No `SearchAction` on the WebSite node below: there is no public,
         // URL-addressable search on this site, and declaring one that resolves
         // to nothing is worse than declaring nothing.
-        sameAs: ['https://play.google.com/store/apps/details?id=com.daysofar.app'],
+        /*
+         * Every place this entity is also named. The Play listing was the only
+         * one for as long as it was the only one that existed; the four
+         * profiles are the brand's own accounts, and they are in the footer too
+         * — see `SOCIAL_PROFILES`. The App Store listing joins the list the day
+         * Apple publishes it, and not before.
+         */
+        sameAs: [
+          'https://play.google.com/store/apps/details?id=com.daysofar.app',
+          ...SOCIAL_PROFILES.map((p) => p.href),
+        ],
+        founder: { '@id': PERSON_ID },
+      },
+      {
+        '@type': 'Person',
+        '@id': PERSON_ID,
+        name: 'Nikolay Lyutov',
+        url: absolute('/about'),
+        description:
+          'Independent developer established in the European Union. Day So Far is built, run and paid for by him alone: no company, no investors, no team.',
       },
       {
         '@type': 'WebSite',
@@ -210,12 +246,20 @@ export function documentSchema({
   path,
   description,
   updated,
+  mainEntityId,
 }: {
   type?: 'WebPage' | 'AboutPage' | 'ContactPage';
   name: string;
   path: string;
   description: string;
   updated: string;
+  /**
+   * The node this page is *about*, where there is one — `/about` is about the
+   * person, and saying so is what connects the Person node to a page a reader
+   * can check it against. Omitted everywhere else: a page whose subject is
+   * itself needs no `mainEntity`.
+   */
+  mainEntityId?: string;
 }) {
   return {
     '@context': 'https://schema.org',
@@ -226,6 +270,7 @@ export function documentSchema({
     description,
     dateModified: updated,
     inLanguage: 'en',
+    ...(mainEntityId ? { mainEntity: { '@id': mainEntityId } } : {}),
     isPartOf: { '@id': `${ORIGIN}/#website` },
     publisher: { '@id': `${ORIGIN}/#organization` },
     breadcrumb: breadcrumbSchema([

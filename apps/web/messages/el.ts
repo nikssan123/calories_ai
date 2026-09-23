@@ -391,6 +391,7 @@ export const el: Messages = {
   'blog.description': 'Για τις θερμίδες, τις μερίδες και το τι μπορεί — και τι δεν μπορεί — να σου πει μια εκτίμηση.',
   'blog.empty': 'Δεν έχει δημοσιευτεί κάτι ακόμη.',
   'blog.alsoIn': 'Επίσης στα',
+  'blog.updated': 'Ενημερώθηκε',
   'site.recipes': 'Συνταγές',
   'site.getTheApp': 'Κατέβασε την εφαρμογή',
   'site.howItWorks': 'Πώς λειτουργεί',
