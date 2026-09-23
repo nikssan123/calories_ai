@@ -52,7 +52,13 @@ import {
 } from '../services/admin.ts';
 import { setPlan, subscriptionReport } from '../services/subscriptions.ts';
 import { readFunnel } from '../services/funnel.ts';
-import { addCandidate, decide, loadQueue, postedPerformance } from '../services/social.ts';
+import {
+  addCandidate,
+  bufferQueue,
+  decide,
+  loadQueue,
+  postedPerformance,
+} from '../services/social.ts';
 import { listSupportEmails, setHandled, unhandledCount } from '../services/support.ts';
 import { getUserContext } from '../services/user.ts';
 import {
@@ -351,6 +357,26 @@ export async function registerAdminRoutes(app: FastifyInstance) {
   app.get('/admin/social/performance', async (_request, reply) => {
     try {
       return { posted: await postedPerformance() };
+    } catch (error) {
+      return reply.status(502).send({ error: (error as Error).message });
+    }
+  });
+
+  /**
+   * Buffer's queue, as Buffer holds it: what is going out, when, and what
+   * already went.
+   *
+   * Not derivable from `/admin/social`, which reads our rows. A row turns
+   * `posted` when Buffer accepts it — days before it publishes — and the
+   * account also holds posts this queue never made. Asking our table what
+   * shipped answers wrongly in both directions.
+   *
+   * 502 rather than an empty queue on failure: an empty Buffer and an
+   * unreachable Buffer must not render the same, which they did once already.
+   */
+  app.get('/admin/social/queue', async (_request, reply) => {
+    try {
+      return await bufferQueue();
     } catch (error) {
       return reply.status(502).send({ error: (error as Error).message });
     }

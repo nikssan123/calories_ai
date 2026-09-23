@@ -105,6 +105,7 @@ import type {
   SocialCandidate,
   SocialDecision,
   SocialGroup,
+  SocialBufferQueue,
   SocialPosted,
   SocialQueue,
   SocialUpload,
@@ -1267,6 +1268,17 @@ export function createApiClient({
        * without waiting on that.
        */
       socialPerformance: () => request<{ posted: SocialPosted[] }>('/admin/social/performance'),
+
+      /**
+       * Buffer's own queue: what is scheduled, when, on which channel, and
+       * what already published — including posts this pipeline never made.
+       *
+       * Separate from `social()` for the same reason as `socialPerformance()`,
+       * and separate from *that* because it answers a different question.
+       * `socialPerformance()` reports on our rows; this reports on Buffer's,
+       * which is the only place that knows what actually went out.
+       */
+      socialBufferQueue: () => request<SocialBufferQueue>('/admin/social/queue'),
 
       /**
        * A rendered slide, from the panel's file picker.

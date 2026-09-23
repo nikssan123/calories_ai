@@ -2,6 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type {
+  SocialBufferChannel,
+  SocialBufferPost,
+  SocialBufferQueue,
   SocialCandidate,
   SocialChannel,
   SocialDecision,
@@ -835,4 +838,167 @@ export async function postedPerformance(): Promise<SocialPosted[]> {
     });
   }
   return out;
+}
+
+/**
+ * Buffer's queue, read from Buffer.
+ *
+ * `postedPerformance` above answers "how did our posts do". This answers a
+ * different question that looked like the same one for long enough to mislead:
+ * *what is actually going out, and when*. The difference matters in both
+ * directions.
+ *
+ * A row in `social_queue` turns `posted` when Buffer accepts it, which is days
+ * before it publishes — so our table calls four carousels posted while all
+ * twelve Buffer posts are still `scheduled`. And the account holds five sent
+ * posts this pipeline never made, the `content/social/` singles pushed through
+ * Buffer's own composer, which no query against our rows can see at all.
+ *
+ * So: ask Buffer for the posts, ask Buffer for the channels, and match our
+ * keys back onto whatever comes out. A post with no `sourceKey` did not come
+ * from here, and the panel says so rather than implying this queue shipped it.
+ *
+ * `fetchedAt` is null when Buffer is unconfigured or unreachable. An empty
+ * queue and an unreachable Buffer render identically otherwise, and the first
+ * time that happened it cost an afternoon — see `listChannels`'s note on
+ * `graph.buffer.com`.
+ */
+export async function bufferQueue(): Promise<SocialBufferQueue> {
+  const empty: SocialBufferQueue = {
+    channels: [],
+    upcoming: [],
+    published: [],
+    fetchedAt: null,
+  };
+  if (!env.buffer) return empty;
+
+  interface Node {
+    id: string;
+    channelId: string;
+    channelService: string;
+    status: string;
+    dueAt: string | null;
+    sentAt: string | null;
+    text: string;
+    isCustomScheduled: boolean;
+    assets: { type: string }[] | null;
+  }
+  interface Chan {
+    id: string;
+    name: string;
+    service: string;
+    timezone: string;
+    postingGoal: { goal: number } | null;
+    postingSchedule: { day: string; paused: boolean; times: string[] }[];
+  }
+
+  const POST = `id channelId channelService status dueAt sentAt text isCustomScheduled assets { type }`;
+
+  /*
+   * Two post queries rather than one, because the sort has to differ: upcoming
+   * reads soonest-first and published reads most-recent-first, and `first` is
+   * applied before anything reaches us. One query sorted one way would page in
+   * the wrong end of the other list.
+   *
+   * `needs_approval` is left out of both. It empties the result array rather
+   * than adding to it — see `scheduledUsage`, where asking for it alongside
+   * `scheduled` took sixteen real posts down to zero.
+   */
+  const data = await bufferCall<{
+    channels: Chan[];
+    account: { organizations: { limits: { scheduledPosts: number } }[] };
+    upcoming: { edges: { node: Node }[] | null };
+    published: { edges: { node: Node }[] | null };
+  }>(
+    `query BufferQueue(
+       $channels: ChannelsInput!
+       $org: OrganizationFilterInput
+       $upcoming: PostsInput!
+       $published: PostsInput!
+     ) {
+       channels(input: $channels) {
+         id name service timezone
+         postingGoal { goal }
+         postingSchedule { day paused times }
+       }
+       account { organizations(filter: $org) { limits { scheduledPosts } } }
+       upcoming: posts(first: 100, input: $upcoming) { edges { node { ${POST} } } }
+       published: posts(first: 30, input: $published) { edges { node { ${POST} } } }
+     }`,
+    {
+      channels: { organizationId: env.buffer.organizationId },
+      org: { organizationId: env.buffer.organizationId },
+      upcoming: {
+        organizationId: env.buffer.organizationId,
+        // Drafts and errors belong here: a draft is something sitting in the
+        // account doing nothing, which is exactly the orphan this view should
+        // surface, and an error is a post that thought it was going out.
+        filter: { status: ['scheduled', 'sending', 'draft', 'error'] },
+        sort: [{ field: 'dueAt', direction: 'asc' }],
+      },
+      published: {
+        organizationId: env.buffer.organizationId,
+        filter: { status: ['sent'] },
+        sort: [{ field: 'dueAt', direction: 'desc' }],
+      },
+    },
+  );
+
+  /*
+   * Our keys, by Buffer id. Every row of a group carries the same `buffer_ids`
+   * — see `decide` — so a four-slide carousel would insert its three ids four
+   * times over; the map makes that harmless and saves grouping first.
+   */
+  const keyed = await query<{ source_key: string; buffer_ids: string[] }>(
+    `SELECT source_key, buffer_ids FROM social_queue WHERE array_length(buffer_ids, 1) > 0`,
+  );
+  const keyByPost = new Map<string, string>();
+  for (const row of keyed) {
+    const { key } = split(row.source_key);
+    for (const id of row.buffer_ids) keyByPost.set(id, key);
+  }
+
+  const post = (node: Node): SocialBufferPost => ({
+    id: node.id,
+    channelId: node.channelId,
+    service: node.channelService,
+    status: node.status,
+    dueAt: node.dueAt,
+    sentAt: node.sentAt,
+    text: node.text,
+    assets: node.assets?.length ?? 0,
+    mediaType: node.assets?.[0]?.type ?? null,
+    sourceKey: keyByPost.get(node.id) ?? null,
+    custom: node.isCustomScheduled,
+  });
+
+  const upcoming = (data.upcoming.edges ?? []).map((e) => post(e.node));
+
+  // Depth is per channel, not per account: the plan's ten is a per-channel
+  // ceiling, and counting across three channels once reported 13 of 10 against
+  // thirty posts of real headroom.
+  const depth = new Map<string, number>();
+  for (const p of upcoming) {
+    if (p.status !== 'scheduled') continue;
+    depth.set(p.channelId, (depth.get(p.channelId) ?? 0) + 1);
+  }
+  const limit = data.account.organizations[0]?.limits.scheduledPosts ?? null;
+
+  const channels: SocialBufferChannel[] = data.channels.map((c) => ({
+    id: c.id,
+    service: c.service,
+    name: c.name,
+    timezone: c.timezone,
+    scheduled: depth.get(c.id) ?? 0,
+    limit,
+    goal: c.postingGoal?.goal ?? null,
+    slots: c.postingSchedule.map((s) => ({ day: s.day, paused: s.paused, times: s.times })),
+  }));
+
+  return {
+    channels,
+    upcoming,
+    published: (data.published.edges ?? []).map((e) => post(e.node)),
+    fetchedAt: new Date().toISOString(),
+  };
 }

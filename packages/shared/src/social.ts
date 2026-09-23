@@ -214,3 +214,88 @@ export const SocialPosted = z.object({
   ),
 });
 export type SocialPosted = z.infer<typeof SocialPosted>;
+
+/**
+ * Buffer's queue, as Buffer holds it.
+ *
+ * Everything above describes *our* rows. This describes Buffer's, and the two
+ * are not the same set — which is the confusion this type exists to end. A row
+ * in `social_queue` reads `state = 'posted'` the moment Buffer accepts it,
+ * days before it reaches anybody, and the account also holds posts this queue
+ * never made: the `content/social/` back catalogue went out through Buffer's
+ * own composer and is invisible here. Asking our table what published gives
+ * the wrong answer twice over.
+ *
+ * So this is read straight from Buffer on every load and stored nowhere. The
+ * source key is matched back through `buffer_ids` where there is one, and its
+ * absence is information worth rendering: a post with no key came from
+ * somewhere else.
+ */
+export const SocialSlot = z.object({
+  /** Buffer's `DayOfWeek`: `mon` … `sun`. */
+  day: z.string(),
+  /** `HH:MM` in the channel's own timezone, which is the channel's, not ours. */
+  times: z.array(z.string()),
+  paused: z.boolean(),
+});
+export type SocialSlot = z.infer<typeof SocialSlot>;
+
+export const SocialBufferPost = z.object({
+  id: z.string(),
+  channelId: z.string(),
+  service: z.string(),
+  /** Buffer's own: `scheduled`, `draft`, `sending`, `sent`, `error`. */
+  status: z.string(),
+  dueAt: z.string().nullable(),
+  sentAt: z.string().nullable(),
+  /** The caption as Buffer holds it — hashtags already appended, per service. */
+  text: z.string(),
+  assets: z.number().int(),
+  /** `image`, `video` or `document`; a carousel is several `image` assets. */
+  mediaType: z.string().nullable(),
+  /**
+   * `10-three-ways` where this came from the panel, and `null` where it did
+   * not. Not decoration: five of the account's sent posts are singles from the
+   * old back catalogue, and a queue view that quietly folded them in with the
+   * carousels would misreport what this pipeline has actually shipped.
+   */
+  sourceKey: z.string().nullable(),
+  /**
+   * Scheduled to an explicit time rather than taken from the channel's slots.
+   * Worth flagging, because such a post ignores the posting schedule and is
+   * therefore the one that can land somewhere nobody intended.
+   */
+  custom: z.boolean(),
+});
+export type SocialBufferPost = z.infer<typeof SocialBufferPost>;
+
+export const SocialBufferChannel = z.object({
+  id: z.string(),
+  service: z.string(),
+  name: z.string(),
+  /** The channel's own timezone, which is what its slot times are in. */
+  timezone: z.string(),
+  /** How many scheduled posts this channel is holding, against the plan's cap. */
+  scheduled: z.number().int(),
+  limit: z.number().int().nullable(),
+  /** Buffer's weekly posting goal, if one is set. */
+  goal: z.number().int().nullable(),
+  /** When it posts. Readable over Buffer's API; settable only in Buffer's UI. */
+  slots: z.array(SocialSlot),
+});
+export type SocialBufferChannel = z.infer<typeof SocialBufferChannel>;
+
+export const SocialBufferQueue = z.object({
+  channels: z.array(SocialBufferChannel),
+  /** Waiting to go out, soonest first. */
+  upcoming: z.array(SocialBufferPost),
+  /** Already out, most recent first. Capped — this is a check, not an archive. */
+  published: z.array(SocialBufferPost),
+  /**
+   * Null where Buffer could not be reached or is unconfigured, so the panel can
+   * say which of the two it is looking at instead of rendering an empty queue
+   * as an empty queue.
+   */
+  fetchedAt: z.string().nullable(),
+});
+export type SocialBufferQueue = z.infer<typeof SocialBufferQueue>;
