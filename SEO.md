@@ -858,6 +858,37 @@ Store listing joins them the day Apple publishes it.
 Corrected pages appear within the hour: the three `[slug]` routes are `revalidate =
 3600`.
 
+### The back catalogue links too — retrofitted 2026-09-24
+
+The prompt change only governs what is written next, so the 130 published posts
+were retrofitted the same day. **Not by regenerating them**, which `upsertPost`
+would have landed as 130 drafts over live text, with a fresh slug and — because
+`claimedKeywords` counts a post's own query as taken — a fresh target query for
+each one. A post that gets a new URL and a new keyword to gain a link has been
+made worse.
+
+Instead, link markup only:
+
+- **134 links across 94 posts.** Anchors were chosen per destination, in each
+  language, from the vocabulary its sibling articles already use — probed against
+  the corpus for real occurrences, then curated: a phrase that hits but reads as
+  the category rather than the subject ("average", "intake", "protocol") was
+  thrown out, and so was every match in the wrong sense (`Tellerrand`,
+  `wasserreich`, "домашната ракия", "legumele variază").
+- **The edit is provably markup-only.** Stripping every link from the new body
+  and from the old one leaves byte-identical text, and the link count rises by
+  exactly the number placed. Nothing was rewritten, retitled or re-slugged, and
+  `status` stayed `published`, so no post went back through review to gain a
+  link it did not need reviewing for.
+- **A ring of "More on this" on the template.** In-body anchors cannot reach
+  everything — a third of the catalogue contains no sentence that refers to
+  another article — so each post also offers the three that follow it in its
+  locale's index order. Newest-three would have pointed every page at the same
+  three; the ring gives every article exactly three out and three in, at any
+  catalogue size, including the ones written tomorrow.
+- Fourteen posts still have no in-body link either way, listed in the session
+  notes; the ring covers them.
+
 ### Still not done, from this pass
 
 - **No Search Console.** Item 31 is untouched and it is still the biggest blind spot:

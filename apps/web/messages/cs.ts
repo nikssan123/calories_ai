@@ -399,6 +399,7 @@ export const cs: Messages = {
   'blog.empty': 'Zatím tu nic není zveřejněno.',
   'blog.alsoIn': 'Také v',
   'blog.updated': 'Aktualizováno',
+  'blog.readNext': 'Další k tématu',
   'site.recipes': 'Recepty',
   'site.getTheApp': 'Stáhnout aplikaci',
   'site.howItWorks': 'Jak to funguje',

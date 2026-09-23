@@ -468,6 +468,7 @@ export const en = {
   'blog.empty': 'Nothing published here yet.',
   'blog.alsoIn': 'Also in',
   'blog.updated': 'Updated',
+  'blog.readNext': 'More on this',
   'site.recipes': 'Recipes',
   'site.getTheApp': 'Get the app',
   'site.howItWorks': 'How it works',

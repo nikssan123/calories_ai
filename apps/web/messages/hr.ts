@@ -393,6 +393,7 @@ export const hr: Messages = {
   'blog.empty': 'Ovdje još ništa nije objavljeno.',
   'blog.alsoIn': 'Također na',
   'blog.updated': 'Ažurirano',
+  'blog.readNext': 'Više o temi',
   'site.recipes': 'Recepti',
   'site.getTheApp': 'Preuzmi aplikaciju',
   'site.howItWorks': 'Kako radi',

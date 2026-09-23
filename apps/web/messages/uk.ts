@@ -384,6 +384,7 @@ export const uk: Messages = {
   'blog.empty': 'Тут ще нічого не опубліковано.',
   'blog.alsoIn': 'Також',
   'blog.updated': 'Оновлено',
+  'blog.readNext': 'Більше за темою',
   'site.recipes': 'Рецепти',
   'site.getTheApp': 'Завантажити застосунок',
   'site.howItWorks': 'Як це працює',

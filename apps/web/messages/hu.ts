@@ -388,6 +388,7 @@ export const hu: Messages = {
   'blog.empty': 'Itt még nincs semmi közzétéve.',
   'blog.alsoIn': 'Más nyelven',
   'blog.updated': 'Frissítve',
+  'blog.readNext': 'Tovább a témában',
   'site.recipes': 'Receptek',
   'site.getTheApp': 'Töltsd le az appot',
   'site.howItWorks': 'Hogyan működik',

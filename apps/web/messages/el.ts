@@ -392,6 +392,7 @@ export const el: Messages = {
   'blog.empty': 'Δεν έχει δημοσιευτεί κάτι ακόμη.',
   'blog.alsoIn': 'Επίσης στα',
   'blog.updated': 'Ενημερώθηκε',
+  'blog.readNext': 'Περισσότερα σχετικά',
   'site.recipes': 'Συνταγές',
   'site.getTheApp': 'Κατέβασε την εφαρμογή',
   'site.howItWorks': 'Πώς λειτουργεί',

@@ -394,6 +394,7 @@ export const ro: Messages = {
   'blog.empty': 'Aici nu s-a publicat încă nimic.',
   'blog.alsoIn': 'Și în',
   'blog.updated': 'Actualizat',
+  'blog.readNext': 'Mai mult pe această temă',
   'site.recipes': 'Rețete',
   'site.getTheApp': 'Descarcă aplicația',
   'site.howItWorks': 'Cum funcționează',

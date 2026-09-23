@@ -358,6 +358,7 @@ export const bg: Messages = {
   'blog.empty': 'Тук още няма нищо публикувано.',
   'blog.alsoIn': 'Също на',
   'blog.updated': 'Обновено',
+  'blog.readNext': 'Още по темата',
   'site.recipes': 'Рецепти',
   'site.getTheApp': 'Изтегли приложението',
   'site.howItWorks': 'Как работи',

@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { notFound } from 'next/navigation';
-import { LOCALE_NAMES, type Locale } from '@ct/shared';
+import { LOCALE_NAMES, type Locale, type PostCard } from '@ct/shared';
 import { publicPost, publicPosts } from '@/lib/public-api';
 import { blogIndexHreflang, blogIndexPath, blogPostPath, hreflangFor } from '@/lib/blog';
 import { breadcrumbSchema, jsonLd } from '@/lib/schema';
@@ -185,8 +185,31 @@ export async function blogPostMetadata(locale: Locale, slug: string): Promise<Me
 /** A timestamp as the day it names, which is all a reader or a crawler needs. */
 const day = (iso: string) => new Date(iso).toISOString().slice(0, 10);
 
+/**
+ * The three articles a reader is offered next, and why these three.
+ *
+ * Not "the newest three", which would point every page at the same three and
+ * leave the rest of the catalogue with nothing pointing at it. The index order
+ * is a ring: each post offers the three that follow it, so every article has
+ * exactly three of these links out and exactly three in, whatever the
+ * catalogue's size.
+ *
+ * It exists because the in-body links cannot cover everything. Those are
+ * retrofitted onto sentences that genuinely refer to another article, and a
+ * third of the catalogue offered no such sentence — a post nothing points at is
+ * reachable only from an index, which is where the first 143 posts sat.
+ */
+function readNext(index: PostCard[], slug: string, count = 3): PostCard[] {
+  const at = index.findIndex((p) => p.slug === slug);
+  if (at < 0 || index.length < 2) return [];
+  return Array.from({ length: Math.min(count, index.length - 1) }, (_, i) => {
+    const card = index[(at + 1 + i) % index.length];
+    return card!;
+  });
+}
+
 export async function BlogPost({ locale, slug }: { locale: Locale; slug: string }) {
-  const post = await publicPost(locale, slug);
+  const [post, index] = await Promise.all([publicPost(locale, slug), publicPosts(locale)]);
   const t = messagesFor(locale);
   // A draft, a binned post and a slug that never existed are all the same thing
   // to a stranger: not here. The API refuses to serve an unpublished post at
@@ -195,6 +218,7 @@ export async function BlogPost({ locale, slug }: { locale: Locale; slug: string 
 
   const path = blogPostPath(locale, slug);
   const others = post.alternates.filter((a) => a.locale !== locale);
+  const next = readNext(index, slug);
 
   return (
     <PublicShell locale={locale}>
@@ -278,6 +302,26 @@ export async function BlogPost({ locale, slug }: { locale: Locale; slug: string 
         <div className="mt-10">
           <ArticleBody markdown={post.body_md} />
         </div>
+
+        {next.length > 0 && (
+          <nav className="mt-14" aria-labelledby="read-next">
+            <h2 id="read-next" className="text-footnote text-muted-foreground font-semibold">
+              {t('blog.readNext')}
+            </h2>
+            <ul className="mt-3 space-y-2">
+              {next.map((card) => (
+                <li key={card.slug}>
+                  <Link
+                    href={blogPostPath(locale, card.slug)}
+                    className="text-body underline underline-offset-2"
+                  >
+                    {card.title}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
 
         {/*
           * The one thing a reader who liked the article might want next, said

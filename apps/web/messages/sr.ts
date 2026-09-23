@@ -391,6 +391,7 @@ export const sr: Messages = {
   'blog.empty': 'Овде још ништа није објављено.',
   'blog.alsoIn': 'Такође на',
   'blog.updated': 'Ажурирано',
+  'blog.readNext': 'Више о теми',
   'site.recipes': 'Рецепти',
   'site.getTheApp': 'Преузми апликацију',
   'site.howItWorks': 'Како ради',

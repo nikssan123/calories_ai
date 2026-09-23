@@ -339,6 +339,7 @@ export const es: Messages = {
   'blog.empty': 'Todavía no hay nada publicado aquí.',
   'blog.alsoIn': 'También en',
   'blog.updated': 'Actualizado',
+  'blog.readNext': 'Más sobre esto',
   'site.recipes': 'Recetas',
   'site.getTheApp': 'Descargar la app',
   'site.howItWorks': 'Cómo funciona',

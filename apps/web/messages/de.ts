@@ -352,6 +352,7 @@ export const de: Messages = {
   'blog.empty': 'Hier ist noch nichts veröffentlicht.',
   'blog.alsoIn': 'Auch auf',
   'blog.updated': 'Aktualisiert',
+  'blog.readNext': 'Mehr dazu',
   'site.recipes': 'Rezepte',
   'site.getTheApp': 'App holen',
   'site.howItWorks': 'So funktioniert es',

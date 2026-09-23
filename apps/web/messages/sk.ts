@@ -392,6 +392,7 @@ export const sk: Messages = {
   'blog.empty': 'Zatiaľ tu nie je nič zverejnené.',
   'blog.alsoIn': 'Aj v',
   'blog.updated': 'Aktualizované',
+  'blog.readNext': 'Ďalšie k téme',
   'site.recipes': 'Recepty',
   'site.getTheApp': 'Stiahnuť aplikáciu',
   'site.howItWorks': 'Ako to funguje',
