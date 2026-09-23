@@ -58,13 +58,55 @@ export const SocialCandidate = z.object({
 export type SocialCandidate = z.infer<typeof SocialCandidate>;
 
 /**
+ * A slideshow, as one decision.
+ *
+ * Slides are stored one row each — `10-three-ways-0` through `-3` — and that is
+ * right, because each is a separate image with its own asset. But a slideshow
+ * is not four posts. It is one carousel that is read by swiping, and the first
+ * build of this posted each slide separately: four Instagram feed posts where
+ * there should have been one, with the format's entire mechanism removed.
+ *
+ * So the row is the unit of storage and the group is the unit of decision. The
+ * group key is the source key with its trailing index removed, and the slides
+ * are ordered by that index — which is also the carousel's order, so the cover
+ * has to be first and `Buffer`'s `assets` array is built straight from it.
+ */
+export const SocialSlide = z.object({
+  id: z.string(),
+  index: z.number().int().nonnegative(),
+  assetUrl: z.string(),
+  width: z.number().int(),
+  height: z.number().int(),
+});
+export type SocialSlide = z.infer<typeof SocialSlide>;
+
+export const SocialGroup = z.object({
+  /** `10-three-ways`, the source key without its trailing `-<index>`. */
+  key: z.string(),
+  /**
+   * The caption for the whole carousel, which is the cover slide's. The other
+   * slides' captions are kept on their rows and are not posted anywhere — a
+   * carousel has one body, and the per-slide lines are notes for whoever is
+   * deciding.
+   */
+  caption: z.string(),
+  slides: z.array(SocialSlide).min(1),
+  state: SocialState,
+  channelIds: z.array(z.string()),
+  bufferIds: z.array(z.string()),
+  error: z.string().nullable(),
+  createdAt: z.string(),
+});
+export type SocialGroup = z.infer<typeof SocialGroup>;
+
+/**
  * What the panel loads in one request: the stack to decide on, the channels to
  * decide for, and the counts — which are the only reason to render a number
  * anywhere in this panel, because the queue's depth is the thing that tells you
  * whether to go and render more.
  */
 export const SocialQueue = z.object({
-  pending: z.array(SocialCandidate),
+  pending: z.array(SocialGroup),
   recent: z.array(SocialCandidate),
   channels: z.array(SocialChannel),
   counts: z.object({
@@ -92,8 +134,17 @@ export const SocialDecision = z.discriminatedUnion('verdict', [
   z.object({
     verdict: z.literal('approve'),
     channelIds: z.array(z.string()).min(1),
-    /** Edited in the panel before approving; the stored caption is replaced. */
+    /** Edited in the panel before approving; the cover row's caption is replaced. */
     caption: z.string().min(1).max(2200).optional(),
+    /**
+     * Hashtags, without the `#`, appended to the caption per service.
+     *
+     * Stored on the decision rather than in the caption because the number that
+     * belongs on a post differs by platform — Instagram and TikTok take a
+     * handful, X has 280 characters to spend and a tag costs the same as words.
+     * `HASHTAG_LIMITS` in `services/social.ts` does the trimming.
+     */
+    hashtags: z.array(z.string().regex(/^[A-Za-z0-9_]{2,40}$/)).max(12).optional(),
   }),
   z.object({ verdict: z.literal('reject') }),
 ]);

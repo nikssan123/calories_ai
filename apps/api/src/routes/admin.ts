@@ -355,18 +355,23 @@ export async function registerAdminRoutes(app: FastifyInstance) {
     return addCandidate(parsed.data);
   });
 
-  app.post('/admin/social/:id/decide', async (request, reply) => {
+  /*
+   * Keyed by the slideshow, not the row: a carousel is one decision. `:key` is
+   * a source key with its trailing index removed — `10-three-ways` — which is
+   * URL-safe by construction because post.mts keys are kebab-case.
+   */
+  app.post('/admin/social/:key/decide', async (request, reply) => {
     const parsed = SocialDecision.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid decision' });
 
-    const id = (request.params as { id: string }).id;
+    const key = (request.params as { key: string }).key;
     try {
-      return await decide(id, parsed.data);
+      return await decide(key, parsed.data);
     } catch (error) {
       /*
        * 409 and not 500. Everything `decide` throws is a state or
        * configuration problem the panel should show verbatim — no such
-       * candidate, already posted, Buffer unconfigured, every channel
+       * slideshow, already posted, Buffer unconfigured, every channel
        * disconnected. A Buffer refusal for an individual channel never gets
        * here: it is recorded on the row and returned as an `error` state, so
        * the panel can show which channels did go.

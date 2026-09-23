@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Check,
+  ChevronLeft,
+  ChevronRight,
   ExternalLink,
   Loader2,
   RefreshCw,
@@ -11,7 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { SocialCandidate, SocialChannel, SocialQueue } from '@ct/shared';
+import type { SocialChannel, SocialGroup, SocialQueue } from '@ct/shared';
 import { api } from '@/lib/api';
 import { InsetGroup } from '@/components/InsetGroup';
 import { Button } from '@/components/ui/button';
@@ -57,6 +59,33 @@ const SERVICE_LABELS: Record<string, string> = {
 
 const serviceLabel = (service: string) => SERVICE_LABELS[service] ?? service;
 
+/**
+ * Hashtags offered as chips, so the set is a decision rather than typing.
+ *
+ * Short, and every one is something a person actually searches. The queue this
+ * replaces carried six per post including `#consistencyoverperfection`, which
+ * is a sentiment, not a query — the reason to keep this list in code and small
+ * is that a free-text field regrows that habit immediately.
+ *
+ * How many of these reach a post is decided server-side per service:
+ * `HASHTAG_LIMITS` in `services/social.ts` gives Instagram five and X two,
+ * because on X a tag costs a clause out of 280 characters.
+ */
+const HASHTAG_SUGGESTIONS = [
+  'calorietracker',
+  'caloriecounting',
+  'macros',
+  'macrotracking',
+  'foodlogging',
+  'foodjournal',
+  'nutrition',
+  'highprotein',
+  'mealprep',
+  'buildinpublic',
+  'indiedev',
+  'solofounder',
+];
+
 export function SocialPanel() {
   const [queue, setQueue] = useState<SocialQueue | null>(null);
   const [index, setIndex] = useState(0);
@@ -65,6 +94,9 @@ export function SocialPanel() {
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
+  /** Which slide of the current carousel is on screen. */
+  const [slide, setSlide] = useState(0);
+  const [tags, setTags] = useState<string[]>([]);
 
   const load = useCallback(async (keepPlace = false) => {
     setRefreshing(true);
@@ -132,7 +164,7 @@ export function SocialPanel() {
     [load],
   );
 
-  const current: SocialCandidate | undefined = queue?.pending[index];
+  const current: SocialGroup | undefined = queue?.pending[index];
 
   /*
    * The caption resets to the candidate's own text whenever the card changes,
@@ -142,13 +174,22 @@ export function SocialPanel() {
    */
   useEffect(() => {
     setCaption(current?.caption ?? '');
-  }, [current?.id, current?.caption]);
+    setSlide(0);
+  }, [current?.key, current?.caption]);
 
   /** Everything connected, ticked, the first time the channels arrive. */
   useEffect(() => {
     if (!queue || chosen.length) return;
     setChosen(queue.channels.filter((c) => !c.disconnected).map((c) => c.id));
   }, [queue, chosen.length]);
+
+  /** The slide on screen, and whether the carousel is self-consistent. */
+  const shown = current?.slides[Math.min(slide, (current?.slides.length ?? 1) - 1)];
+  const mixedAspect = useMemo(() => {
+    if (!current || current.slides.length < 2) return false;
+    const ratio = (s: { width: number; height: number }) => (s.width / s.height).toFixed(3);
+    return new Set(current.slides.map(ratio)).size > 1;
+  }, [current]);
 
   const full = useMemo(() => {
     const { used, limit } = queue?.scheduled ?? { used: 0, limit: null };
@@ -162,18 +203,22 @@ export function SocialPanel() {
       try {
         const result =
           verdict === 'approve'
-            ? await api.admin.decideSocial(current.id, {
+            ? await api.admin.decideSocial(current.key, {
                 verdict: 'approve',
                 channelIds: chosen,
                 caption: caption.trim() === current.caption ? undefined : caption.trim(),
+                hashtags: tags.length ? tags : undefined,
               })
-            : await api.admin.decideSocial(current.id, { verdict: 'reject' });
+            : await api.admin.decideSocial(current.key, { verdict: 'reject' });
 
         if (result.state === 'error') {
           toast.error(result.error ?? 'Buffer refused the post');
         } else if (result.state === 'posted') {
           const n = result.bufferIds.length;
-          toast.success(`Queued to ${n} channel${n === 1 ? '' : 's'}`);
+          const s = result.slides.length;
+          toast.success(
+            `Queued a ${s}-slide carousel to ${n} channel${n === 1 ? '' : 's'}`,
+          );
         } else {
           toast.success('Rejected');
         }
@@ -187,9 +232,11 @@ export function SocialPanel() {
           prev
             ? {
                 ...prev,
-                pending: prev.pending.filter((c) => c.id !== current.id),
-                recent: [result, ...prev.recent].slice(0, 20),
-                counts: { ...prev.counts, pending: Math.max(0, prev.counts.pending - 1) },
+                pending: prev.pending.filter((g) => g.key !== current.key),
+                counts: {
+                  ...prev.counts,
+                  pending: Math.max(0, prev.counts.pending - current.slides.length),
+                },
               }
             : prev,
         );
@@ -200,7 +247,7 @@ export function SocialPanel() {
         setBusy(false);
       }
     },
-    [current, busy, chosen, caption, queue?.pending.length],
+    [current, busy, chosen, caption, tags, queue?.pending.length],
   );
 
   if (!queue) {
@@ -312,23 +359,76 @@ export function SocialPanel() {
         <InsetGroup>
           <div className="space-y-4 p-4">
             <div className="flex items-baseline justify-between gap-3">
-              <code className="text-footnote">{current.sourceKey}</code>
+              <code className="text-footnote">{current.key}</code>
               <span className="text-footnote text-muted-foreground">
-                {index + 1} of {queue.pending.length} · {current.width}×{current.height}
+                {index + 1} of {queue.pending.length} · {current.slides.length} slide
+                {current.slides.length === 1 ? '' : 's'} · {shown?.width}×{shown?.height}
               </span>
             </div>
 
             {/* Judged at a real size. A thumbnail is how a bad post gets
                 approved — the type is the content in this format, and type is
-                the first thing a thumbnail destroys. */}
-            <div className="bg-muted/40 border-hairline flex justify-center rounded-xl border p-3">
+                the first thing a thumbnail destroys.
+
+                The arrows step through the carousel. Without them the first
+                build of this showed slide 0 and nothing else, which made a
+                four-slide decision a one-slide guess. */}
+            <div className="bg-muted/40 border-hairline relative flex justify-center rounded-xl border p-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={current.assetUrl}
-                alt={current.sourceKey}
+                key={shown?.id}
+                src={shown?.assetUrl}
+                alt={`${current.key} slide ${slide + 1}`}
                 className="max-h-[560px] w-auto rounded-lg"
               />
+              {current.slides.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Previous slide"
+                    onClick={() => setSlide((i) => (i - 1 + current.slides.length) % current.slides.length)}
+                    className="bg-card/85 border-hairline absolute top-1/2 left-5 flex size-10 -translate-y-1/2 items-center justify-center rounded-full border shadow-sm"
+                  >
+                    <ChevronLeft className="size-5" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Next slide"
+                    onClick={() => setSlide((i) => (i + 1) % current.slides.length)}
+                    className="bg-card/85 border-hairline absolute top-1/2 right-5 flex size-10 -translate-y-1/2 items-center justify-center rounded-full border shadow-sm"
+                  >
+                    <ChevronRight className="size-5" />
+                  </button>
+                  <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 gap-2">
+                    {current.slides.map((s, i) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        aria-label={`Slide ${i + 1}`}
+                        onClick={() => setSlide(i)}
+                        className={cn(
+                          'size-2.5 rounded-full transition-colors',
+                          i === slide ? 'bg-foreground' : 'bg-foreground/30',
+                        )}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
+
+            {/* One caption for the whole carousel, which is how the platforms
+                model it — a carousel has one body and N images. Any mismatched
+                aspect ratio is worth saying out loud here: Instagram crops a
+                carousel to the first slide's ratio, so one odd slide reframes
+                every other one. */}
+            {mixedAspect && (
+              <div className="text-footnote text-destructive flex items-start gap-2">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+                These slides are not all the same shape. Instagram crops a whole
+                carousel to the first slide&apos;s ratio.
+              </div>
+            )}
 
             <label className="block space-y-1.5">
               <span className="text-footnote text-muted-foreground">Caption</span>
@@ -342,6 +442,45 @@ export function SocialPanel() {
                 {caption.length} characters
               </span>
             </label>
+
+            <div className="space-y-1.5">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-footnote text-muted-foreground">Hashtags</span>
+                <span className="text-footnote text-muted-foreground">
+                  {tags.length
+                    ? `${tags.length} picked — Instagram takes 5, X takes 2`
+                    : 'none'}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {HASHTAG_SUGGESTIONS.map((tag) => {
+                  const on = tags.includes(tag);
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() =>
+                        setTags((prev) =>
+                          prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+                        )
+                      }
+                      className={cn(
+                        'text-footnote rounded-full border px-2.5 py-1 transition-colors',
+                        on
+                          ? 'bg-primary text-primary-foreground border-transparent font-bold'
+                          : 'border-hairline text-muted-foreground hover:text-foreground',
+                      )}
+                    >
+                      #{tag}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Order is the order they were picked, and the server trims from
+                  the end — so the first few ticked are the ones that survive on
+                  X. Worth knowing before wondering why two of five showed up. */}
+            </div>
 
             <div className="space-y-1.5">
               <span className="text-footnote text-muted-foreground">Post to</span>

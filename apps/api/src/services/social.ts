@@ -5,6 +5,7 @@ import type {
   SocialCandidate,
   SocialChannel,
   SocialDecision,
+  SocialGroup,
   SocialQueue,
   SocialState,
   SocialUpload,
@@ -321,7 +322,7 @@ function metadataFor(service: string): Record<string, unknown> | undefined {
 async function createPost(
   channel: SocialChannel,
   text: string,
-  assetUrl: string,
+  assetUrls: string[],
   altText: string,
 ): Promise<string> {
   const data = await bufferCall<{
@@ -346,7 +347,17 @@ async function createPost(
         // that the decision is already made.
         schedulingType: 'automatic',
         text,
-        assets: [{ image: { url: assetUrl, metadata: { altText } } }],
+        /*
+         * Every slide, in carousel order — this is what makes a slideshow one
+         * swipeable post rather than N posts of one image each. `AssetInput` is
+         * `@oneOf`, so each entry carries exactly the `image` member.
+         *
+         * The alt text is shared across the slides. Per-slide alt would be
+         * better and the beats are right there to build it from, but the shape
+         * of that is a decision about accessibility copy, not plumbing, and a
+         * caption's first line on every slide is honest rather than wrong.
+         */
+        assets: assetUrls.map((url) => ({ image: { url, metadata: { altText } } })),
         metadata: metadataFor(channel.service),
       },
     },
@@ -361,10 +372,109 @@ async function createPost(
 
 /* ── out ────────────────────────────────────────────────────────────── */
 
+/**
+ * The group key and the slide's place in it, from the source key.
+ *
+ * `10-three-ways-2` is slide 2 of `10-three-ways`. A key with no trailing index
+ * is its own group of one, which is what a single poster uploaded by hand is.
+ */
+function split(sourceKey: string): { key: string; index: number } {
+  const m = /^(.*)-(\d+)$/.exec(sourceKey);
+  return m ? { key: m[1]!, index: Number(m[2]) } : { key: sourceKey, index: 0 };
+}
+
+/**
+ * Rows into groups, slides in carousel order.
+ *
+ * A group takes its caption, state and Buffer ids from its cover — slide 0 — so
+ * that the group is decided as one thing. That is also why `decide` writes the
+ * same values to every row in the group: the rows are storage, and leaving them
+ * to disagree about whether the carousel went out would make the audit list
+ * lie.
+ */
+function group(rows: QueueRow[]): SocialGroup[] {
+  const byKey = new Map<string, QueueRow[]>();
+  for (const row of rows) {
+    const { key } = split(row.source_key);
+    const bucket = byKey.get(key);
+    if (bucket) bucket.push(row);
+    else byKey.set(key, [row]);
+  }
+
+  const groups: SocialGroup[] = [];
+  for (const [key, bucket] of byKey) {
+    bucket.sort((a, b) => split(a.source_key).index - split(b.source_key).index);
+    const cover = bucket[0]!;
+    groups.push({
+      key,
+      caption: cover.caption,
+      slides: bucket.map((row) => {
+        const c = candidate(row);
+        return {
+          id: row.id,
+          index: split(row.source_key).index,
+          assetUrl: c.assetUrl,
+          width: row.width,
+          height: row.height,
+        };
+      }),
+      state: cover.state,
+      channelIds: cover.channel_ids,
+      bufferIds: cover.buffer_ids,
+      error: cover.error,
+      createdAt: cover.created_at.toISOString(),
+    });
+  }
+  // Oldest group first, by its cover, so the stack is a queue.
+  groups.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return groups;
+}
+
+/**
+ * How many hashtags each service gets.
+ *
+ * Not a style preference. Instagram and TikTok treat tags as topic signals and
+ * a handful of relevant ones helps discovery; X spends 280 characters on
+ * everything, so a tag there costs a clause. The old queue carried six on every
+ * post including `#consistencyoverperfection`, which nobody searches — the
+ * limit is the cheap way to stop that returning.
+ *
+ * Zero means the service gets none at all.
+ */
+const HASHTAG_LIMITS: Record<string, number> = {
+  instagram: 5,
+  tiktok: 4,
+  twitter: 2,
+  youtube: 3,
+  linkedin: 3,
+  facebook: 2,
+};
+
+function withHashtags(caption: string, tags: string[], service: string): string {
+  const limit = HASHTAG_LIMITS[service] ?? 3;
+  if (!tags.length || limit === 0) return caption;
+  // Deduplicated case-insensitively: the panel offers a suggested set and a
+  // free-text field, and "Fibre" beside "fibre" is the obvious way to get two
+  // of the same tag on one post.
+  const seen = new Set<string>();
+  const chosen: string[] = [];
+  for (const tag of tags) {
+    const lower = tag.toLowerCase();
+    if (seen.has(lower)) continue;
+    seen.add(lower);
+    chosen.push(tag);
+    if (chosen.length === limit) break;
+  }
+  return `${caption}\n\n${chosen.map((t) => `#${t}`).join(' ')}`;
+}
+
 export async function loadQueue(): Promise<SocialQueue> {
   const [pending, recent, counts] = await Promise.all([
+    // No LIMIT: a limit here would truncate a carousel mid-group and the panel
+    // would offer a three-slide decision on a four-slide slideshow. The table
+    // holds tens of rows, not millions.
     query<QueueRow>(
-      `SELECT ${COLUMNS} FROM social_queue WHERE state = 'pending' ORDER BY created_at ASC LIMIT 40`,
+      `SELECT ${COLUMNS} FROM social_queue WHERE state = 'pending' ORDER BY created_at ASC`,
     ),
     query<QueueRow>(
       `SELECT ${COLUMNS} FROM social_queue WHERE state <> 'pending'
@@ -389,7 +499,7 @@ export async function loadQueue(): Promise<SocialQueue> {
   ]);
 
   return {
-    pending: pending.map(candidate),
+    pending: group(pending),
     recent: recent.map(candidate),
     channels,
     counts: tally,
@@ -407,26 +517,38 @@ export async function loadQueue(): Promise<SocialQueue> {
  * way `buffer_ids` says exactly which went. Retrying a partial failure is a
  * second approval for the channels that missed, not a repeat of all three.
  */
-export async function decide(id: string, decision: SocialDecision): Promise<SocialCandidate> {
-  const row = await queryOne<QueueRow>(
-    `SELECT ${COLUMNS} FROM social_queue WHERE id = $1`,
-    [id],
+export async function decide(groupKey: string, decision: SocialDecision): Promise<SocialGroup> {
+  /*
+   * Matched by prefix rather than by id, because the decision is about the
+   * carousel. `LIKE key || '-%'` catches the slides and `= key` catches a
+   * single poster that has no index, and the ORDER BY is the carousel's order.
+   */
+  const rows = await query<QueueRow>(
+    `SELECT ${COLUMNS} FROM social_queue
+      WHERE source_key = $1 OR source_key LIKE $1 || '-%'
+      ORDER BY source_key ASC`,
+    [groupKey],
   );
-  if (!row) throw new Error('No such candidate');
+  if (!rows.length) throw new Error('No such slideshow');
+
+  const ordered = [...rows].sort(
+    (a, b) => split(a.source_key).index - split(b.source_key).index,
+  );
+  const ids = ordered.map((r) => r.id);
+  const cover = ordered[0]!;
 
   if (decision.verdict === 'reject') {
-    const updated = await queryOne<QueueRow>(
-      `UPDATE social_queue SET state = 'rejected', decided_at = now()
-       WHERE id = $1 RETURNING ${COLUMNS}`,
-      [id],
+    await query(
+      `UPDATE social_queue SET state = 'rejected', decided_at = now() WHERE id = ANY($1)`,
+      [ids],
     );
-    return candidate(updated!);
+    return (await loadGroup(groupKey))!;
   }
 
   if (!env.buffer) throw new Error('Buffer is not configured on this deployment.');
-  if (row.state === 'posted') throw new Error('Already posted');
+  if (cover.state === 'posted') throw new Error('Already posted');
 
-  const caption = decision.caption ?? row.caption;
+  const caption = decision.caption ?? cover.caption;
   const channels = await listChannels();
   const targets = decision.channelIds
     .map((wanted) => channels.find((c) => c.id === wanted))
@@ -436,34 +558,42 @@ export async function decide(id: string, decision: SocialDecision): Promise<Soci
   const connected = targets.filter((c) => !c.disconnected);
   if (!connected.length) throw new Error('Every channel chosen is disconnected in Buffer');
 
-  const asset = candidate(row).assetUrl;
-  // The alt text is the caption's first line: it is written for this image and
-  // is better than anything derivable, and Instagram requires one.
+  // Every slide, cover first. This is the carousel.
+  const assetUrls = ordered.map((row) => candidate(row).assetUrl);
+  // The alt text is the caption's first line: written for this post, and better
+  // than anything derivable. Instagram requires one.
   const altText = caption.split('\n')[0]!.slice(0, 280);
 
   const posted: string[] = [];
   const failures: string[] = [];
   for (const channel of connected) {
     try {
-      posted.push(await createPost(channel, caption, asset, altText));
+      const text = withHashtags(caption, decision.hashtags ?? [], channel.service);
+      posted.push(await createPost(channel, text, assetUrls, altText));
     } catch (error) {
       failures.push(`${channel.service}: ${(error as Error).message}`);
     }
   }
 
-  const updated = await queryOne<QueueRow>(
+  /*
+   * Written to every row in the group, not just the cover. The rows are
+   * storage; letting them disagree about whether the carousel went out would
+   * make the audit list lie, and a partial retry would have no way to tell
+   * which slides were part of the post that failed.
+   */
+  await query(
     `UPDATE social_queue
-        SET caption = $2,
-            channel_ids = $3,
-            buffer_ids = $4,
-            state = $5,
-            error = $6,
+        SET caption = CASE WHEN id = $2 THEN $3 ELSE caption END,
+            channel_ids = $4,
+            buffer_ids = $5,
+            state = $6,
+            error = $7,
             decided_at = now(),
-            posted_at = CASE WHEN $5 = 'posted' THEN now() ELSE NULL END
-      WHERE id = $1
-      RETURNING ${COLUMNS}`,
+            posted_at = CASE WHEN $6 = 'posted' THEN now() ELSE NULL END
+      WHERE id = ANY($1)`,
     [
-      id,
+      ids,
+      cover.id,
       caption,
       connected.map((c) => c.id),
       posted,
@@ -471,5 +601,15 @@ export async function decide(id: string, decision: SocialDecision): Promise<Soci
       failures.length ? failures.join(' | ') : null,
     ],
   );
-  return candidate(updated!);
+  return (await loadGroup(groupKey))!;
+}
+
+/** One group by key, for returning the result of a decision. */
+async function loadGroup(groupKey: string): Promise<SocialGroup | null> {
+  const rows = await query<QueueRow>(
+    `SELECT ${COLUMNS} FROM social_queue
+      WHERE source_key = $1 OR source_key LIKE $1 || '-%'`,
+    [groupKey],
+  );
+  return rows.length ? (group(rows)[0] ?? null) : null;
 }

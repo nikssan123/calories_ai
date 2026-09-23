@@ -104,6 +104,7 @@ import type {
   PostStatus,
   SocialCandidate,
   SocialDecision,
+  SocialGroup,
   SocialQueue,
   SocialUpload,
   SuggestedTopic,
@@ -1276,11 +1277,12 @@ export function createApiClient({
         }),
 
       /**
-       * Decide on one. Approving calls Buffer and therefore reaches a channel;
-       * a 409 comes back with the reason verbatim, which the panel shows.
+       * Decide on one slideshow — the whole carousel, keyed by its source key
+       * without the trailing slide index. Approving calls Buffer and therefore
+       * reaches a channel; a 409 comes back with the reason verbatim.
        */
-      decideSocial: (id: string, decision: SocialDecision) =>
-        request<SocialCandidate>(`/admin/social/${id}/decide`, {
+      decideSocial: (groupKey: string, decision: SocialDecision) =>
+        request<SocialGroup>(`/admin/social/${groupKey}/decide`, {
           method: 'POST',
           body: JSON.stringify(decision),
         }),
