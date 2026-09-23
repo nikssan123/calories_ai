@@ -102,6 +102,10 @@ import type {
   ContentTopic,
   Locale,
   PostStatus,
+  SocialCandidate,
+  SocialDecision,
+  SocialQueue,
+  SocialUpload,
   SuggestedTopic,
   TopicWithPosts,
 } from '@ct/shared';
@@ -1247,6 +1251,38 @@ export function createApiClient({
         request<ContentPost>(`/admin/content/posts/${id}`, {
           method: 'PATCH',
           body: JSON.stringify(fields),
+        }),
+
+      /**
+       * The social queue: rendered posts waiting for a yes or a no, the Buffer
+       * channels an approval sends them to, and how full Buffer's own queue is.
+       */
+      social: () => request<SocialQueue>('/admin/social'),
+
+      /**
+       * A rendered slide, from the panel's file picker.
+       *
+       * Uploaded from the browser rather than by a script because `/admin/*`
+       * answers only to an admin session, and a CLI has none — the alternative
+       * was `queue.mts` carrying a copied session cookie, which is a credential
+       * in a shell history for no benefit. The bytes are base64 in the body;
+       * a slide is a couple of hundred kilobytes and this is one person
+       * uploading a handful at a time.
+       */
+      uploadSocial: (upload: SocialUpload) =>
+        request<SocialCandidate>('/admin/social', {
+          method: 'POST',
+          body: JSON.stringify(upload),
+        }),
+
+      /**
+       * Decide on one. Approving calls Buffer and therefore reaches a channel;
+       * a 409 comes back with the reason verbatim, which the panel shows.
+       */
+      decideSocial: (id: string, decision: SocialDecision) =>
+        request<SocialCandidate>(`/admin/social/${id}/decide`, {
+          method: 'POST',
+          body: JSON.stringify(decision),
         }),
 
       costs: (days = 30) => request<CostReport>(`/admin/costs?days=${days}`),

@@ -9,6 +9,7 @@ import { CostPanel } from '@/components/admin/CostPanel';
 import { FunnelPanel } from '@/components/admin/FunnelPanel';
 import { InboxPanel } from '@/components/admin/InboxPanel';
 import { OverviewPanel } from '@/components/admin/OverviewPanel';
+import { SocialPanel } from '@/components/admin/SocialPanel';
 import { SubscriptionsPanel } from '@/components/admin/SubscriptionsPanel';
 import { TablesPanel } from '@/components/admin/TablesPanel';
 import { UsersPanel } from '@/components/admin/UsersPanel';
@@ -26,6 +27,10 @@ const TABS = [
   // that arrives is about an account on the tab beside it.
   { id: 'inbox', label: 'Inbox' },
   { id: 'content', label: 'Blog' },
+  // Beside Blog because both are content, and apart from it because they share
+  // nothing else: that one writes prose in thirteen languages, this one decides
+  // whether an image is good enough to post.
+  { id: 'social', label: 'Social' },
   { id: 'data', label: 'Database' },
   { id: 'instance', label: 'Instance' },
 ] as const;
@@ -64,7 +69,7 @@ export default function AdminPage() {
           </p>
         </div>
 
-        {/* Eight labels do not divide a phone into eight readable buttons, so on
+        {/* Nine labels do not divide a phone into nine readable buttons, so on
             a narrow screen the strip scrolls sideways at a legible size instead
             of squeezing. From `sm` up there is room to share it out evenly. */}
         <div className="bg-card border-hairline chunk-sm flex gap-1 overflow-x-auto rounded-full border p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -92,6 +97,7 @@ export default function AdminPage() {
         {tab === 'users' && <UsersPanel />}
         {tab === 'inbox' && <InboxPanel />}
         {tab === 'content' && <ContentPanel />}
+        {tab === 'social' && <SocialPanel />}
         {tab === 'data' && <TablesPanel />}
         {tab === 'instance' && <OverviewPanel />}
       </div>

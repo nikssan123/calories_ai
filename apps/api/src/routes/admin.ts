@@ -1,6 +1,15 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { LOCALES, Locale, PlanName, PlanSource, PostStatus, localeOf } from '@ct/shared';
+import {
+  LOCALES,
+  Locale,
+  PlanName,
+  PlanSource,
+  PostStatus,
+  SocialDecision,
+  SocialUpload,
+  localeOf,
+} from '@ct/shared';
 import { draftPost, suggestTopics } from '../ai/content.ts';
 import { startBatch } from '../services/content-runner.ts';
 import {
@@ -43,6 +52,7 @@ import {
 } from '../services/admin.ts';
 import { setPlan, subscriptionReport } from '../services/subscriptions.ts';
 import { readFunnel } from '../services/funnel.ts';
+import { addCandidate, decide, loadQueue } from '../services/social.ts';
 import { listSupportEmails, setHandled, unhandledCount } from '../services/support.ts';
 import { getUserContext } from '../services/user.ts';
 import {
@@ -322,6 +332,48 @@ export async function registerAdminRoutes(app: FastifyInstance) {
 
   /** The languages, for the panel's picker. */
   app.get('/admin/content/locales', async () => ({ locales: LOCALES }));
+
+  /*
+   * The social queue. Separate from `/admin/content/*` above, which is the
+   * blog: that engine writes prose in thirteen languages and this one decides
+   * whether an image is good enough to post.
+   */
+
+  app.get('/admin/social', async () => loadQueue());
+
+  /**
+   * A rendered post arriving from `scripts/content/queue.mts`.
+   *
+   * Base64 in the body rather than the presigned-PUT dance meal photos use.
+   * That exists to keep megabytes off the event loop when thousands of phones
+   * upload at once; this is one laptop, a few dozen times a week, and a slide
+   * is a couple of hundred kilobytes.
+   */
+  app.post('/admin/social', async (request, reply) => {
+    const parsed = SocialUpload.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid upload' });
+    return addCandidate(parsed.data);
+  });
+
+  app.post('/admin/social/:id/decide', async (request, reply) => {
+    const parsed = SocialDecision.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: 'Invalid decision' });
+
+    const id = (request.params as { id: string }).id;
+    try {
+      return await decide(id, parsed.data);
+    } catch (error) {
+      /*
+       * 409 and not 500. Everything `decide` throws is a state or
+       * configuration problem the panel should show verbatim — no such
+       * candidate, already posted, Buffer unconfigured, every channel
+       * disconnected. A Buffer refusal for an individual channel never gets
+       * here: it is recorded on the row and returned as an `error` state, so
+       * the panel can show which channels did go.
+       */
+      return reply.status(409).send({ error: (error as Error).message });
+    }
+  });
 
   app.get('/admin/tables', async () => ({ tables: await listTables() }));
 

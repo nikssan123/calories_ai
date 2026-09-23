@@ -14,6 +14,14 @@ export * from './units.ts';
 export * from './locale.ts';
 export * from './content.ts';
 
+/**
+ * The social queue — rendered posts waiting for a yes or a no, and the Buffer
+ * channels an approval sends them to. Separate from `content.ts`, which is the
+ * blog: that engine writes prose in thirteen languages, this one decides
+ * whether an image is good enough to post.
+ */
+export * from './social.ts';
+
 /** The language picker's order, second lines and suggestions. */
 export * from './locale-names.ts';
 

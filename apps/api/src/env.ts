@@ -121,6 +121,27 @@ export interface StripeEnv {
   basePriceId: string;
 }
 
+export interface BufferEnv {
+  /** A workspace access token from https://publish.buffer.com/settings/api. */
+  token: string;
+  /** Which Buffer organization the queue posts into. From `account.organizations`. */
+  organizationId: string;
+  /**
+   * Buffer's GraphQL endpoint, overridable because it is the one part of this
+   * integration not pinned by the schema. Everything else here — `createPost`,
+   * `CreatePostInput`, the `PostActionPayload` union — was read off Buffer's
+   * own introspection on 2026-09-23 and is exact.
+   */
+  apiUrl: string;
+  /**
+   * Where Buffer fetches an approved post's image from, e.g.
+   * `https://api.daysofar.com`. It has to be a hostname Buffer can reach: the
+   * asset is pulled when the post publishes, which for a queued post is days
+   * after anybody approved it, so localhost is not a working configuration.
+   */
+  publicOrigin: string;
+}
+
 export interface Env {
   databaseUrl: string;
   port: number;
@@ -187,6 +208,14 @@ export interface Env {
    * the vendor in a variable is how a deployment ends up unable to move.
    */
   storage: StorageEnv | null;
+  /**
+   * Buffer, or null when this deployment does not post to social. Null is the
+   * ordinary case: the social queue is an admin tool for one person, and every
+   * other install of this API has no business holding a marketing credential.
+   * With it unset the panel still shows the queue and still takes rejections —
+   * only approving is refused, which is the honest failure.
+   */
+  buffer: BufferEnv | null;
   email: EmailEnv;
   billing: BillingEnv;
   /**
@@ -419,6 +448,9 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
      * the same hazard.
      */
     storage: isTest ? null : storageEnv(source),
+    // Null under test on the same argument as storage: a test that reached
+    // Buffer would post to the real @daysofarapp accounts.
+    buffer: isTest ? null : bufferEnv(source),
     /**
      * Forced off under test for the reason the API key above is: a developer
      * with a real client in their .env must not have the suite behave
@@ -491,6 +523,34 @@ export function readEnv(source: NodeJS.ProcessEnv = process.env): Env {
  * without a price id is a checkout button that 500s after somebody has typed a
  * card number, which is the worst place to find a missing variable.
  */
+/**
+ * Buffer, all-or-nothing like the rest.
+ *
+ * A token without an organization id cannot address a channel, and a token
+ * without a public origin produces posts whose image Buffer cannot fetch — a
+ * failure that surfaces days later at publish time, on Buffer's side, where
+ * nothing in this repo is watching. Both of those are worse than refusing to
+ * boot, so all four are required together.
+ */
+export function bufferEnv(source: NodeJS.ProcessEnv): BufferEnv | null {
+  const token = source.BUFFER_ACCESS_TOKEN?.trim();
+  const organizationId = source.BUFFER_ORGANIZATION_ID?.trim();
+  const publicOrigin = source.BUFFER_PUBLIC_ORIGIN?.trim();
+  const apiUrl = source.BUFFER_API_URL?.trim() || 'https://graph.buffer.com';
+  if (!token || !organizationId || !publicOrigin) {
+    const named = [token, organizationId, publicOrigin].filter(Boolean).length;
+    if (named > 0) {
+      throw new Error(
+        'Buffer is half-configured: BUFFER_ACCESS_TOKEN, BUFFER_ORGANIZATION_ID and ' +
+          'BUFFER_PUBLIC_ORIGIN are all required together. Unset all three to run the ' +
+          'social queue without posting.',
+      );
+    }
+    return null;
+  }
+  return { token, organizationId, apiUrl, publicOrigin };
+}
+
 export function stripeEnv(source: NodeJS.ProcessEnv): StripeEnv | null {
   const secretKey = source.STRIPE_SECRET_KEY?.trim();
   const webhookSecret = source.STRIPE_WEBHOOK_SECRET?.trim();

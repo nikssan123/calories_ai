@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { Locale } from '@ct/shared';
 import { getPublicLibraryRecipe, listPublicLibrary } from '../services/library.ts';
 import { publicIndex, publicPost, publicSitemap } from '../services/content.ts';
+import { readCandidateAsset } from '../services/social.ts';
 
 /**
  * The read-only, session-less corner of the API.
@@ -24,6 +25,33 @@ import { publicIndex, publicPost, publicSitemap } from '../services/content.ts';
  * own name. Nothing may be added here that reads a session.
  */
 export async function registerPublicRoutes(app: FastifyInstance) {
+  /**
+   * An approved social post's image, for Buffer to fetch when it publishes.
+   *
+   * Public, and deliberately not a presigned read: `storage.ts` signs those for
+   * 300 seconds, and Buffer pulls the asset at publish time — which for a
+   * queued post is days after anybody approved it. A marketing image has no
+   * session in it and no user row behind it, so it satisfies this namespace's
+   * rule rather than bending it.
+   *
+   * Unguessable by its id alone, which is the only access control it needs or
+   * could have: the recipient is Buffer's fetcher, which presents no
+   * credential of ours.
+   */
+  app.get('/public/social/:file', async (request, reply) => {
+    const file = (request.params as { file: string }).file;
+    const id = file.replace(/\.png$/i, '');
+    if (!/^[0-9a-f-]{36}$/i.test(id)) return reply.status(404).send({ error: 'No such asset' });
+
+    const asset = await readCandidateAsset(id);
+    if (!asset) return reply.status(404).send({ error: 'No such asset' });
+    // Immutable: the bytes behind an id never change, a re-render is a new row.
+    return reply
+      .type(asset.mediaType)
+      .header('cache-control', 'public, max-age=31536000, immutable')
+      .send(asset.bytes);
+  });
+
   /** Every recipe as a card, for the library index and the sitemap. */
   app.get('/public/library', async () => ({ recipes: await listPublicLibrary() }));
 
