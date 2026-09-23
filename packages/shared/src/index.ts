@@ -4136,6 +4136,31 @@ export const FunnelPing = z
      * the other three profiles only), which is the direction that matters.
      */
     internal: z.boolean().optional(),
+    /**
+     * The day the step was reached, by the phone's own calendar.
+     *
+     * Carried rather than read off the server's clock at receipt, because a
+     * ping is no longer always sent at the moment it happens: one that fails is
+     * queued and flushed later (`apps/mobile/lib/funnel.ts`), and a flush the
+     * next morning would otherwise credit a screen somebody saw last night to
+     * today — moving the count *and* the cliff, which is the one thing this
+     * table exists to show. It is the same argument the outbox makes for
+     * carrying `localDate` on a queued meal rather than deriving it on arrival.
+     *
+     * A date and never a time. Per-second precision on an anonymous ping would
+     * be the first field here narrow enough to line a row up against a request
+     * log, and the day is already the column the funnel is grouped by — so this
+     * tells the server nothing it was not going to store anyway.
+     *
+     * Optional because a build older than this does not send one, and bounded
+     * rather than trusted: `recordFunnelStep` accepts it only within a couple of
+     * days of the server's own date, so the worst a forged one does is move a
+     * number on this week's chart instead of today's.
+     */
+    day: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
   })
   .refine(
     (ping) => ping.reason === undefined || (REASONED_STEPS as readonly string[]).includes(ping.step),

@@ -22,21 +22,73 @@ import { query, queryOne } from '../db.ts';
  */
 
 /**
- * One more install at this step today.
+ * How far back a ping is allowed to say it happened.
+ *
+ * Two days behind and one ahead. The ahead is not generosity, it is timezones:
+ * the day on the ping is the phone's and the one it lands on is this host's, and
+ * a phone in Auckland is already on tomorrow. The behind is how long a queued
+ * ping is worth flushing — long enough for a night offline and a morning in a
+ * tunnel, short enough that the window a forged ping can reach stays small.
+ *
+ * Anything outside it falls back to today, which is what every build older than
+ * this sends anyway. A ping is never dropped for being late: a count on the
+ * wrong day is a smaller lie than a step that reads as never reached.
+ */
+const DAY_SLACK = { behind: 2, ahead: 1 } as const;
+
+/**
+ * The phone's day, if it sent one this side of `DAY_SLACK`, else null for today.
+ *
+ * `FunnelPing` checks the shape and cannot check the date: `2026-02-30` is four
+ * digits, two and two, and casting it in the statement below would be a 500 on a
+ * route anybody can post to. The round trip catches both that and `2026-13-45`,
+ * because `Date` rolls them over into a day that no longer spells the same.
+ */
+function dayOrNull(day: string | undefined): string | null {
+  if (!day) return null;
+  const parsed = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== day) return null;
+  return day;
+}
+
+/**
+ * One more install at this step, on the day it happened.
  *
  * `reason` is null on all but the two steps that carry one and `locale` is null
  * on anything built before 062, and the key folds nulls together — see the index
  * in 062, which is what `ON CONFLICT` infers. `internal` is defaulted rather than
  * nullable: a ping that does not mention it is a store build, which is the
  * assumption that keeps a real install from being hidden by an older phone.
+ *
+ * The day is clamped in SQL rather than in TypeScript so that both sides of the
+ * comparison come off one clock. `CURRENT_DATE` is the database's date and
+ * `new Date()` is the API process's, and on a host where those two disagree —
+ * a container without TZ, an API restarted across a DST change — a clamp
+ * written here would pass a day the insert then files under a different one.
  */
 export async function recordFunnelStep(ping: FunnelPing): Promise<void> {
   await query(
     `INSERT INTO onboarding_funnel (day, step, platform, app_version, reason, locale, internal, reached)
-     VALUES (CURRENT_DATE, $1, $2, $3, $4, $5, $6, 1)
+     SELECT
+       CASE
+         WHEN sent.day BETWEEN CURRENT_DATE - $7::int AND CURRENT_DATE + $8::int THEN sent.day
+         ELSE CURRENT_DATE
+       END,
+       $1, $2, $3, $4, $5, $6, 1
+     FROM (SELECT COALESCE($9::date, CURRENT_DATE) AS day) sent
      ON CONFLICT (day, step, platform, app_version, reason, locale, internal)
      DO UPDATE SET reached = onboarding_funnel.reached + 1`,
-    [ping.step, ping.platform, ping.app_version, ping.reason ?? null, ping.locale ?? null, ping.internal ?? false],
+    [
+      ping.step,
+      ping.platform,
+      ping.app_version,
+      ping.reason ?? null,
+      ping.locale ?? null,
+      ping.internal ?? false,
+      DAY_SLACK.behind,
+      DAY_SLACK.ahead,
+      dayOrNull(ping.day),
+    ],
   );
 }
 

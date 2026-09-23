@@ -62,6 +62,7 @@ import { ThemePreferenceProvider, useThemePreference } from '@/lib/theme-prefere
 import { paletteFor, ThemeContext, useColors } from '@/theme';
 import { registerForPush } from '@/lib/push';
 import { restoreReminders } from '@/lib/reminders';
+import { watchFunnel } from '@/lib/funnel';
 
 /*
  * Held until the fonts are in and the session has resolved.
@@ -286,6 +287,17 @@ function Gate() {
   useEffect(() => {
     void restoreReminders();
   }, []);
+
+  /*
+   * And send whatever funnel pings are still waiting.
+   *
+   * Unconditional for a stronger reason than the reminders above: the steps
+   * this queue is most likely to be holding belong to an install that has no
+   * account and may never have one, so gating it on a session would drop
+   * precisely the walks the funnel exists to count. It reads no session and is
+   * never handed one — see `lib/funnel.ts`.
+   */
+  useEffect(() => watchFunnel(), []);
 
   /*
    * Where a tap lands.

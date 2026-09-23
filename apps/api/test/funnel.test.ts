@@ -26,6 +26,21 @@ function ping(payload: unknown) {
   return app.inject({ method: 'POST', url: '/funnel', payload: payload as never });
 }
 
+/**
+ * A calendar day relative to the database's own `CURRENT_DATE`, spelled the way
+ * a phone spells it.
+ *
+ * Asked of the database rather than built from `new Date()` because the clamp
+ * in `recordFunnelStep` compares against `CURRENT_DATE`, and a test process on a
+ * different TZ to its Postgres would otherwise be off by one for part of every
+ * day — the kind of failure that arrives at midnight and cannot be reproduced
+ * at noon.
+ */
+async function dbDay(offset: number): Promise<string> {
+  const [row] = await query<{ d: string }>(`SELECT to_char(CURRENT_DATE + $1::int, 'YYYY-MM-DD') AS d`, [offset]);
+  return row!.d;
+}
+
 describe('POST /funnel', () => {
   it('counts a step without a session', async () => {
     const response = await ping({ step: 'welcome', platform: 'android', app_version: '1.2.1' });
@@ -149,6 +164,61 @@ describe('POST /funnel', () => {
     await ping({ step: 'welcome', platform: 'ios', app_version: '1.5.4' });
     const rows = await query<{ reached: number }>(`SELECT reached FROM onboarding_funnel`);
     expect(rows).toEqual([{ reached: 3 }]);
+  });
+
+  /*
+   * A ping is queued on the phone when it fails and flushed later, so the day
+   * it happened is carried rather than read off this clock on arrival — see
+   * `FunnelPing`. Without this a ping held overnight moves both the count and
+   * the cliff.
+   */
+  it('files a late ping on the day it happened', async () => {
+    await ping({ step: 'save_prompt', platform: 'android', app_version: '1.5.6', reason: 'guest_limit', day: await dbDay(-1) });
+    await ping({ step: 'save_prompt', platform: 'android', app_version: '1.5.6', reason: 'guest_limit' });
+
+    const rows = await query<{ ago: number; reached: number }>(
+      `SELECT (CURRENT_DATE - day) AS ago, reached FROM onboarding_funnel ORDER BY day`,
+    );
+    expect(rows).toEqual([
+      { ago: 1, reached: 1 },
+      { ago: 0, reached: 1 },
+    ]);
+  });
+
+  /*
+   * Bounded rather than trusted: the route is public, so a day it will believe
+   * is a day anybody can add to. Outside the window the ping still counts — it
+   * lands on today, which is what every build older than this sends anyway.
+   * Dropping it would turn a stale clock into a step that reads as unreached.
+   */
+  it('files a day outside the window under today rather than believing it', async () => {
+    await ping({ step: 'welcome', platform: 'ios', app_version: '1.5.6', day: await dbDay(-3) });
+    await ping({ step: 'welcome', platform: 'ios', app_version: '1.5.6', day: await dbDay(7) });
+
+    const rows = await query<{ ago: number; reached: number }>(
+      `SELECT (CURRENT_DATE - day) AS ago, reached FROM onboarding_funnel`,
+    );
+    expect(rows).toEqual([{ ago: 0, reached: 2 }]);
+  });
+
+  /*
+   * `2026-02-30` is four digits, two and two, and is not a day. The shape check
+   * in `FunnelPing` cannot see that, and casting it in the insert would be a
+   * 500 on a route anybody can post to.
+   */
+  it('does not fall over on a date that passes the shape check and is not one', async () => {
+    const response = await ping({ step: 'goal', platform: 'ios', app_version: '1.5.6', day: '2026-02-30' });
+    expect(response.statusCode).toBe(204);
+
+    const rows = await query<{ ago: number }>(`SELECT (CURRENT_DATE - day) AS ago FROM onboarding_funnel`);
+    expect(rows).toEqual([{ ago: 0 }]);
+  });
+
+  it('refuses a day that is not shaped like one', async () => {
+    expect((await ping({ step: 'goal', platform: 'ios', app_version: '1.5.6', day: 'yesterday' })).statusCode).toBe(400);
+    expect((await ping({ step: 'goal', platform: 'ios', app_version: '1.5.6', day: '2026-9-3' })).statusCode).toBe(400);
+    const [row] = await query<{ n: number }>(`SELECT count(*)::int AS n FROM onboarding_funnel`);
+    expect(row!.n).toBe(0);
   });
 
   it('refuses a step it does not know, and extra fields do not get through', async () => {
