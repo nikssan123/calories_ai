@@ -213,7 +213,7 @@ export function CostPanel() {
 
       <InsetGroup
         title="Recent turns"
-        footer="Newest first, including the ones that failed — a turn that spent tokens and then errored is the most expensive kind. The message is the person's own words, so the turns nobody typed a sentence for — a photo with no caption, a weekly review, a nudge — have none; hover a long one for the rest of it. Turns recorded before the column existed have none either."
+        footer="Newest first, including the ones that failed — a turn that spent tokens and then errored is the most expensive kind. The message is the person's own words, so the turns nobody typed a sentence for have none: a photo with no caption, a weekly review, a nudge. A failed one has none either — the conversation keeps a message only once the turn has survived, which is also why the older failures could not be recovered from it. Hover a long message for the rest of it."
       >
         <DataTable
           columns={['When', 'Account', 'Turn', 'Message', 'Model', 'In', 'Out', 'Cache', 'Cost', 'Took', '']}
