@@ -1294,6 +1294,7 @@ export const sr: Messages = {
     'Последња испланирана седмица је још ту, а и даље можеш да куваш по сачуваном рецепту.',
   'wall.remaining': (count: number, noun: string) => `Још ${count} ${noun}`,
   'wall.noneLeft': 'Нема више',
+  'wall.trialRemaining': (count: number, noun: string) => `Бесплатна проба · још ${count} ${noun}`,
   // The reader's own voice; «сам» would be gendered.
   'wall.logMyself': 'Упиши ово ручно',
   'wall.loggedByHand': 'Уписано ручно — тај пут је увек отворен и никад се не рачуна.',

@@ -311,9 +311,26 @@ export function spentLine(allowance: Allowance, t: T): string {
  * whole design of this warning is that it appears well before the wall does, so
  * it has time to be a fact rather than an interruption. How early is
  * `showFrom`'s question, not this one's.
+ *
+ * ---- Why the trial says its own name ----------------------------------------
+ *
+ * A count alone answers "how many" and leaves "of what" to be inferred, and on
+ * a trial the inference people make is the wrong one: nine messages reads as
+ * the shape of the product rather than as a few days of it. The word `Free
+ * trial` in front of the number is the difference between a meter and a
+ * countdown, and it is the only place outside the settings screen that says so
+ * — the wall says it too, but the wall arrives after the decision.
+ *
+ * The three stages are three different facts and only one of them is a trial:
+ * a guest is on a grant that saving the account replaces, and a spent or ended
+ * account has no count to give. So this reads `trial` rather than testing
+ * `period === 'ever'`, which is true of the guest's grant as well.
  */
 export function remainingLine(allowance: Allowance, left: number, t: T): string {
-  return t('wall.remaining')(left, meterNoun(allowance.meter, left, t));
+  const noun = meterNoun(allowance.meter, left, t);
+  return allowance.trial === 'trial'
+    ? t('wall.trialRemaining')(left, noun)
+    : t('wall.remaining')(left, noun);
 }
 
 /** Locale-aware, because `toUpperCase()` is not the same map everywhere. */

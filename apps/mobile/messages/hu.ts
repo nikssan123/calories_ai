@@ -1253,6 +1253,7 @@ export const hu: Messages = {
     'A legutóbb megtervezett heted megvan, és mentett receptből továbbra is főzhetsz.',
   'wall.remaining': (count: number, noun: string) => `${count} ${noun} maradt`,
   'wall.noneLeft': 'Nincs több',
+  'wall.trialRemaining': (count: number, noun: string) => `Ingyenes próbaidőszak · ${count} ${noun} maradt`,
   'wall.logMyself': 'Ezt beírom magam',
   'wall.loggedByHand': 'Kézzel rögzítve – ez az út mindig nyitva áll, és sosem fogy a keretből.',
 

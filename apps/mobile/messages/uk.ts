@@ -1272,6 +1272,8 @@ export const uk: Messages = {
     'Останній план на тиждень нікуди не зник, і готувати за збереженим рецептом теж можна.',
   'wall.remaining': (count: number, noun: string) => `Лишилося: ${count} ${noun}`,
   'wall.noneLeft': 'Не залишилось',
+  'wall.trialRemaining': (count: number, noun: string) =>
+    `Безкоштовний пробний період · лишилося ${count} ${noun}`,
   'wall.logMyself': 'Записати це вручну',
   'wall.loggedByHand': 'Записано вручну — цей шлях завжди відкритий і ніколи не зараховується до лімітів.',
 

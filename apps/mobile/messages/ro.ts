@@ -1274,6 +1274,7 @@ export const ro: Messages = {
     'Săptămâna pe care ai planificat-o ultima dată e tot acolo și poți găti în continuare dintr-o rețetă salvată.',
   'wall.remaining': (count: number, noun: string) => `mai ai ${count} ${noun}`,
   'wall.noneLeft': 'Nu mai sunt',
+  'wall.trialRemaining': (count: number, noun: string) => `Probă gratuită · mai ai ${count} ${noun}`,
   // „Notez eu”, not „Notez singur(ă)”, which would agree with the reader.
   'wall.logMyself': 'Notez eu masa asta',
   'wall.loggedByHand': 'Notat manual — varianta asta e mereu la îndemână și nu se contorizează niciodată.',

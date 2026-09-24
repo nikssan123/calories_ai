@@ -1253,6 +1253,8 @@ export const el: Messages = {
     'Η εβδομάδα που οργάνωσες τελευταία είναι ακόμα εκεί, και μπορείς ακόμα να μαγειρεύεις από μια αποθηκευμένη συνταγή.',
   'wall.remaining': (count: number, noun: string) => `${count === 1 ? 'Απομένει' : 'Απομένουν'} ${count} ${noun}`,
   'wall.noneLeft': 'Δεν απομένουν',
+  'wall.trialRemaining': (count: number, noun: string) =>
+    `Δωρεάν δοκιμή · ${count === 1 ? 'απομένει' : 'απομένουν'} ${count} ${noun}`,
   // Not «μόνος μου», which genders the reader.
   'wall.logMyself': 'Θα το γράψω εγώ',
   'wall.loggedByHand': 'Καταγράφηκε με το χέρι — αυτός ο δρόμος είναι πάντα ανοιχτός και δεν μετράει ποτέ στο όριο.',

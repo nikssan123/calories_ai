@@ -1283,6 +1283,8 @@ export const cs: Messages = {
   'wall.remaining': (count: number, noun: string) =>
     `${count >= 2 && count <= 4 ? 'Zbývají' : 'Zbývá'} ${count} ${noun}`,
   'wall.noneLeft': 'Nic nezbývá',
+  'wall.trialRemaining': (count: number, noun: string) =>
+    `Zkušební doba zdarma · ${count >= 2 && count <= 4 ? 'zbývají' : 'zbývá'} ${count} ${noun}`,
   // The reader's own words; "Zapíšu si to sám" is gendered, so the button
   // keeps the infinitive.
   'wall.logMyself': 'Zapsat ručně',

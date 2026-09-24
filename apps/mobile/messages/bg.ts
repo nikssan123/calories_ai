@@ -1129,6 +1129,7 @@ export const bg: Messages = {
   'wall.bodyMealPlan': 'Седмицата, която планира последно, още е там, и още можеш да готвиш от запазена рецепта.',
   'wall.remaining': (count, noun) => `остават ${count} ${noun}`,
   'wall.noneLeft': 'Не остават',
+  'wall.trialRemaining': (count, noun) => `Безплатен пробен период · остават ${count} ${noun}`,
   'wall.logMyself': 'Ще го запиша на ръка',
   'wall.loggedByHand': 'Записано на ръка — това винаги е възможно и никога не се мери.',
   'tier.reviewAndNudge': 'Седмичен преглед и побутване, когато утихнеш',

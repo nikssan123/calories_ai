@@ -1129,6 +1129,7 @@ export const de: Messages = {
   'wall.bodyMealPlan': 'Die Woche, die du zuletzt geplant hast, ist noch da, und du kannst weiter aus einem gemerkten Rezept kochen.',
   'wall.remaining': (count, noun) => `${count} ${noun} übrig`,
   'wall.noneLeft': 'Keine mehr',
+  'wall.trialRemaining': (count, noun) => `Kostenlose Testphase · ${count} ${noun} übrig`,
   'wall.logMyself': 'Das trag ich selbst ein',
   'wall.loggedByHand': 'Von Hand eingetragen — dieser Weg ist immer offen und wird nie gezählt.',
   'tier.reviewAndNudge': 'Ein Wochenrückblick, und ein Anstupser, wenn du still wirst',

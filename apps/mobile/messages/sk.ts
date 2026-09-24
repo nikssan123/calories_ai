@@ -1293,6 +1293,8 @@ export const sk: Messages = {
   'wall.remaining': (count: number, noun: string) =>
     `${w(count, { one: 'Zostáva', few: 'Zostávajú', many: 'Zostáva', other: 'Zostáva' })} ${count} ${noun}`,
   'wall.noneLeft': 'Nič nezostáva',
+  'wall.trialRemaining': (count: number, noun: string) =>
+    `Bezplatné skúšobné obdobie · ${w(count, { one: 'zostáva', few: 'zostávajú', many: 'zostáva', other: 'zostáva' })} ${count} ${noun}`,
   // The reader speaking, in the first-person future, which carries no gender.
   'wall.logMyself': 'Zapíšem to ručne',
   'wall.loggedByHand': 'Zapísané ručne – táto cesta je vždy otvorená a nikdy sa do ničoho neráta.',

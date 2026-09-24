@@ -1434,6 +1434,7 @@ export const en = {
     'The week you last planned is still there, and you can still cook from a saved recipe.',
   'wall.remaining': (count: number, noun: string) => `${count} ${noun} left`,
   'wall.noneLeft': 'None left',
+  'wall.trialRemaining': (count: number, noun: string) => `Free trial · ${count} ${noun} left`,
   'wall.logMyself': 'Log this one myself',
   'wall.loggedByHand': 'Logged by hand — that way is always open, and never counts against anything.',
 

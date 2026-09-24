@@ -1285,6 +1285,7 @@ export const hr: Messages = {
     'Zadnji isplanirani tjedan i dalje je tu, a još uvijek možeš kuhati iz spremljenog recepta.',
   'wall.remaining': (count: number, noun: string) => `Još ${count} ${noun}`,
   'wall.noneLeft': 'Nema više',
+  'wall.trialRemaining': (count: number, noun: string) => `Besplatna proba · još ${count} ${noun}`,
   // "Upisat ću sam/sama" is gendered; «ručno» is not.
   'wall.logMyself': 'Ovo ću upisati ručno',
   'wall.loggedByHand': 'Upisano ručno — taj je put uvijek otvoren i nikad ništa ne troši.',

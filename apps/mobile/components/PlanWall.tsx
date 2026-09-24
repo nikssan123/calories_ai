@@ -445,10 +445,24 @@ export function MeterChip({
   // there is no bill behind it, and counting down from infinity is not a thing.
   if (!allowance || meterLocked(allowance) || allowance.unlimited) return null;
   const left = meterRemaining(allowance);
+  /*
+   * A trial is shown for the whole of itself, and `showFrom` is skipped.
+   *
+   * The threshold exists so a monthly grant is not a permanent advert — it has
+   * a month to be spent and saying so on the first of them is nagging. A trial
+   * is the opposite case on both counts. It is three days rather than a month,
+   * so there is no long quiet middle to protect; and it expires on a clock as
+   * well as on a counter, which means the chip is the only thing between
+   * somebody and a trial that ends with seven messages unspent. On free's nine
+   * `showFrom` returns five, so the first four turns said nothing at all — the
+   * half of the trial where knowing it was a trial would have changed what
+   * somebody did with it.
+   */
+  const onTrial = allowance.trial === 'trial';
   // `allowed` is non-null past `meterLocked`, and the credits a meter may carry
   // are deliberately not in the threshold: they are stock rather than the
   // grant, and the chip is counting down the thing that runs out.
-  if (left > showFrom(allowance.allowed ?? 0)) return null;
+  if (!onTrial && left > showFrom(allowance.allowed ?? 0)) return null;
   /*
    * Zero with bought stock behind it is not "none left", it is the grant
    * running out in front of scans this person paid for — and `meterRemaining`
@@ -468,7 +482,7 @@ export function MeterChip({
         style={({ pressed }) => [styles.chip, { opacity: pressed ? 0.55 : 1 }]}
       >
         <View style={[styles.chipDot, { backgroundColor: colors.primary, experimental_backgroundImage: colors.primaryRamp }]} />
-        <Text style={[t.footnoteSemibold, { color: colors.mutedForeground }]}>
+        <Text style={[t.footnoteSemibold, styles.chipText, { color: colors.mutedForeground }]}>
           {/*
             Zero is a count too, and it used to be the one count this hid.
 
@@ -610,8 +624,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
-  chipRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 },
+  /*
+   * Gutters and a shrink, because the line inside is no longer short.
+   *
+   * "9 messages left" fits anywhere. `Безкоштовний пробний період · лишилося 9
+   * повідомлень` is fifty-one characters, and a centred row with nothing to
+   * shrink lays it out at its full width and lets the ends run off both edges —
+   * the same failure a large OS text size produces on a short string, which is
+   * the one this app has had before. The text wraps to a second line instead.
+   */
+  chipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: 16,
+  },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4, flexShrink: 1 },
   chipDot: { width: 6, height: 6, borderRadius: 999 },
+  /* Wraps rather than pushing the row past the screen. See `chipRow`. */
+  chipText: { flexShrink: 1 },
   chipClose: { padding: 4 },
 });

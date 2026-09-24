@@ -1130,6 +1130,7 @@ export const es: Messages = {
   'wall.bodyMealPlan': 'La semana que planeaste sigue ahí, y todavía puedes cocinar desde una receta guardada.',
   'wall.remaining': (count, noun) => `quedan ${count} ${noun}`,
   'wall.noneLeft': 'No queda ninguno',
+  'wall.trialRemaining': (count, noun) => `Prueba gratis · quedan ${count} ${noun}`,
   'wall.logMyself': 'Lo apunto yo',
   'wall.loggedByHand': 'Apuntado a mano — ese camino siempre está abierto y nunca lleva contador.',
   'tier.reviewAndNudge': 'Un repaso semanal, y un aviso cuando te quedas callado',
