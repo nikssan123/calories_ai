@@ -200,14 +200,41 @@ export async function createAccount(
  * `trial_started_at` is left at its default of null on purpose — the trial is
  * what saving the account earns, and until then the row is metered as a guest.
  */
-export async function createGuest(timezone: string, locale: Locale | null): Promise<string> {
+export async function createGuest(
+  timezone: string,
+  locale: Locale | null,
+  testDevice = false,
+): Promise<string> {
   const row = await queryOne<{ id: string }>(
-    `INSERT INTO users (timezone, locale, guest_since)
-     VALUES (COALESCE(NULLIF($1, ''), 'UTC'), $2, now())
+    `INSERT INTO users (timezone, locale, guest_since, test_device)
+     VALUES (COALESCE(NULLIF($1, ''), 'UTC'), $2, now(), $3)
      RETURNING id`,
-    [timezone, locale],
+    [timezone, locale, testDevice],
   );
   return row!.id;
+}
+
+/**
+ * How long a test device's guest is kept: long enough for the pre-launch
+ * report and a reviewer to finish with it, short enough that it never shows up
+ * in a day's numbers for long.
+ */
+const TEST_DEVICE_GUEST_HOURS = 6;
+
+/**
+ * Deletes the guests Google's robots made (migration 070). Only rows that are
+ * still guests: a reviewer who saved an account with an address is a person
+ * using the app, and that row is theirs to delete.
+ */
+export async function purgeTestDeviceGuests(): Promise<number> {
+  const rows = await query<{ id: string }>(
+    `DELETE FROM users
+      WHERE test_device AND email IS NULL
+        AND created_at < now() - make_interval(hours => $1)
+      RETURNING id`,
+    [TEST_DEVICE_GUEST_HOURS],
+  );
+  return rows.length;
 }
 
 export async function authenticate(email: string, password: string): Promise<string | null> {
@@ -624,7 +651,7 @@ const ACTIVE_USER_COLUMNS = 'id, timezone, day_start_hour, plan, email';
  * before anything reaches an inbox.
  */
 const ACTIVE_USER_WHERE =
-  'is_setup_complete = TRUE AND (email IS NOT NULL OR guest_since IS NOT NULL)';
+  'is_setup_complete = TRUE AND (email IS NOT NULL OR guest_since IS NOT NULL) AND NOT test_device';
 
 /**
  * Accounts the scheduler should consider: anyone who has finished setup and

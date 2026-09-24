@@ -367,7 +367,7 @@ export async function registerAuthRoutes(app: FastifyInstance) {
 
     const locale =
       parsed.data.locale ?? localeFromAcceptLanguage(request.headers['accept-language'] ?? null);
-    const userId = await createGuest(parsed.data.timezone ?? '', locale);
+    const userId = await createGuest(parsed.data.timezone ?? '', locale, parsed.data.test_device ?? false);
     const { token, expiresAt } = await createSession(userId);
     setSessionCookie(reply, token, expiresAt);
     await rememberDevice(userId, request.headers['user-agent'], request.ip);

@@ -8,6 +8,7 @@ import { clearDaySnapshot } from '@/lib/snapshot';
 import { clearStepSync } from '@/lib/steps';
 import { setOwner, watch } from '@/lib/outbox';
 import { cacheProfile, cacheSession, cachedSession, forgetSession, forgetUser } from '@/lib/store';
+import { isTestDevice } from '@/lib/test-device';
 
 /**
  * Who this is, resolved once at the root.
@@ -273,7 +274,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const startGuest = useCallback(
     async (locale: Locale) => {
-      const next = await api.guest({ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, locale });
+      const next = await api.guest({
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        locale,
+        // Google's robots still get a working guest; the server files it as one
+        // (migration 070) and deletes it once they are done.
+        ...(isTestDevice() ? { test_device: true } : {}),
+      });
       await adoptSession(next);
     },
     [adoptSession],

@@ -4,6 +4,7 @@ import { pool } from './db.ts';
 import { startScheduler } from './scheduler.ts';
 import { purgeExpiredSessions } from './services/auth.ts';
 import { purgeExpiredTokens } from './services/tokens.ts';
+import { purgeTestDeviceGuests } from './services/user.ts';
 import { authDescription, AUTH_HELP, hasSubscriptionAuth } from './ai/client.ts';
 import { reconcileAbandonedJobs } from './services/content.ts';
 
@@ -22,9 +23,13 @@ if (abandoned > 0) app.log.warn(`marked ${abandoned} interrupted content batch(e
 
 // Expired rows are harmless but unbounded; clear them out periodically. Spent
 // reset and confirmation links go the same way, on the same schedule.
+// The guests Google's test robots leave behind go on the same schedule (070).
 const purgeTimer = setInterval(() => {
   void purgeExpiredSessions();
   void purgeExpiredTokens();
+  void purgeTestDeviceGuests().then((n) => {
+    if (n > 0) app.log.info(`purged ${n} test-device guest(s)`);
+  });
 }, 6 * 60 * 60 * 1000);
 purgeTimer.unref();
 

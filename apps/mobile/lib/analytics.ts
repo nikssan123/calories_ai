@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { isTestDevice } from '@/lib/test-device';
 
 /**
  * Google Analytics for Firebase, for one job: telling Google Ads which of the
@@ -49,6 +50,8 @@ let firebase: Firebase | null | undefined;
 function load(): Firebase | null {
   if (firebase !== undefined) return firebase;
   if (Platform.OS !== 'android') return (firebase = null);
+  // Google's robots — `lib/test-device.ts`. Nothing for the bidder to learn.
+  if (isTestDevice()) return (firebase = null);
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     firebase = require('@react-native-firebase/analytics') as Firebase;

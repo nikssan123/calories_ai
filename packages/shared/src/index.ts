@@ -2164,6 +2164,13 @@ export type DeleteAccountRequest = z.infer<typeof DeleteAccountRequest>;
 export const GuestRequest = z.object({
   timezone: z.string().max(60).optional(),
   locale: Locale.optional(),
+  /**
+   * Sent by an Android build running on one of Google's test devices — the
+   * pre-launch report and review robots. The row is still made, because the
+   * robot needs a working app, but it is kept out of the scheduler and deleted
+   * a few hours later. See `test_device` in migration 070.
+   */
+  test_device: z.boolean().optional(),
 });
 export type GuestRequest = z.infer<typeof GuestRequest>;
 

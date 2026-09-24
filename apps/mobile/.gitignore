@@ -22,3 +22,5 @@ dist/
 
 expo-env.d.ts
 # @end expo-cli
+# Gradle output of the local Expo modules under modules/.
+/modules/*/android/build/

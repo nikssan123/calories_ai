@@ -8,6 +8,7 @@ import { challengeFor } from '../src/services/google.ts';
 import { absorbGuest } from '../src/services/guest-merge.ts';
 import { issueHandoff } from '../src/services/tokens.ts';
 import { claimWithProvider, signInWithProvider } from '../src/services/identities.ts';
+import { listActiveUsers, purgeTestDeviceGuests } from '../src/services/user.ts';
 import { emailTo, lastEmail, mailbox } from './helpers/email.ts';
 import { anonymousApp, codeFromEmail, createUser } from './helpers/factories.ts';
 
@@ -61,6 +62,37 @@ describe('POST /auth/guest', () => {
       payload: { locale: 'klingon' },
     });
     expect(response.statusCode).toBe(400);
+  });
+});
+
+describe('a guest made by a Google test device', () => {
+  it('is filed as one, kept out of the scheduler, and purged once the robots are done', async () => {
+    const { json: robot } = await startGuest({ timezone: 'America/Los_Angeles', locale: 'en', test_device: true });
+    const { json: person } = await startGuest();
+    await query('UPDATE users SET is_setup_complete = TRUE WHERE id = ANY($1)', [[robot.profile.id, person.profile.id]]);
+
+    const flags = await query<{ id: string; test_device: boolean }>(
+      'SELECT id, test_device FROM users WHERE id = ANY($1)',
+      [[robot.profile.id, person.profile.id]],
+    );
+    expect(Object.fromEntries(flags.map((row) => [row.id, row.test_device]))).toEqual({
+      [robot.profile.id]: true,
+      [person.profile.id]: false,
+    });
+
+    const active = (await listActiveUsers()).map((user) => user.id);
+    expect(active).toContain(person.profile.id);
+    expect(active).not.toContain(robot.profile.id);
+
+    // Fresh rows stay: the robot is still using its session.
+    expect(await purgeTestDeviceGuests()).toBe(0);
+
+    await query("UPDATE users SET created_at = now() - interval '7 hours' WHERE id = ANY($1)", [
+      [robot.profile.id, person.profile.id],
+    ]);
+    expect(await purgeTestDeviceGuests()).toBe(1);
+    expect(await queryOne('SELECT id FROM users WHERE id = $1', [robot.profile.id])).toBeNull();
+    expect(await queryOne('SELECT id FROM users WHERE id = $1', [person.profile.id])).not.toBeNull();
   });
 });
 

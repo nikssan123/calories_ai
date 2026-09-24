@@ -4,6 +4,7 @@ import { AppState, type AppStateStatus, Platform } from 'react-native';
 import type { FunnelPing, FunnelStep, SaveReason } from '@ct/shared';
 import { API_BASE_URL } from '@/lib/api';
 import { deviceLocale } from '@/messages';
+import { isTestDevice } from '@/lib/test-device';
 
 /**
  * Tells the server a new install reached a screen of the first-run walk.
@@ -238,7 +239,7 @@ export function reachedStep(step: FunnelStep, reason?: SaveReason): void {
         app_version: version,
         locale: deviceLocale(),
         day: today(),
-        ...(INTERNAL ? { internal: true } : {}),
+        ...(INTERNAL || isTestDevice() ? { internal: true } : {}),
         ...(reason ? { reason } : {}),
       },
     };
