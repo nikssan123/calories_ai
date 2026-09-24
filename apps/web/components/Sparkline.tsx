@@ -24,6 +24,7 @@ export function Sparkline({
   height = 72,
   tooltip,
   label,
+  bridge = false,
   className,
 }: {
   points: TrendPoint[];
@@ -47,6 +48,19 @@ export function Sparkline({
   tooltip?: (point: TrendPoint, index: number) => React.ReactNode;
   /** Names the chart for screen readers, once `tooltip` makes it focusable. */
   label?: string;
+  /**
+   * Dash across a stretch with no readings instead of leaving a hole in it.
+   *
+   * Opt-in, because it is only honest for a quantity that goes on existing
+   * while nobody is watching. A body weight is a fact of every day between two
+   * weigh-ins; a day with no food logged is not a day of no eating either, but
+   * the chart has no idea which — the weight has two ends to span and a shape
+   * to span them with, and an unlogged Tuesday has nothing.
+   *
+   * The readout still says there was no reading: the bridge is there so the
+   * month reads as one shape, not so a day can be read off it.
+   */
+  bridge?: boolean;
   className?: string;
 }) {
   const t = useT();
@@ -183,6 +197,29 @@ export function Sparkline({
       penDown = true;
     });
 
+    /*
+     * The dotted runs between each pair of readings the trace could not join.
+     *
+     * Only the gaps *between* samples: a window that opens before the first
+     * weigh-in or closes after the last one has nothing on the far side to
+     * reach for, and a dotted line trailing off the edge of the chart would
+     * promise one.
+     */
+    let spans = '';
+    if (bridge) {
+      const read = points.reduce<number[]>((kept, point, i) => {
+        if (point[accessor] !== null) kept.push(i);
+        return kept;
+      }, []);
+      for (let k = 1; k < read.length; k++) {
+        const from = read[k - 1]!;
+        const to = read[k]!;
+        if (to === from + 1) continue;
+        spans += `M${x(from).toFixed(1)},${y(points[from]![accessor]!).toFixed(1)} `;
+        spans += `L${x(to).toFixed(1)},${y(points[to]![accessor]!).toFixed(1)} `;
+      }
+    }
+
     // The point on the trace the readout is talking about. Null on a day the
     // line does not reach — before the first sample there is nothing to mark,
     // and the readout says so in words.
@@ -208,6 +245,17 @@ export function Sparkline({
             className="stroke-border"
             strokeWidth="2"
             strokeLinecap="round"
+          />
+        )}
+        {spans !== '' && (
+          <path
+            d={spans.trim()}
+            fill="none"
+            stroke={stroke}
+            strokeWidth="2.5"
+            strokeDasharray="1 7"
+            strokeLinecap="round"
+            opacity="0.4"
           />
         )}
         <path

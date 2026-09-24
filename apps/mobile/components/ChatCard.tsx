@@ -1244,7 +1244,7 @@ function WeightCard({
           </Text>
         )}
       </View>
-      <Sparkline points={card.series} stroke={colors.foreground} height={44} style={styles.chart} />
+      <Sparkline points={card.series} stroke={colors.foreground} height={44} bridge style={styles.chart} />
 
       {/* Only where the card knows which day it is for. An older row cannot say,
           and guessing would write today's weight over a reading from March. */}

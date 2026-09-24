@@ -36,6 +36,7 @@ export function Sparkline({
   height = 72,
   style,
   readout,
+  bridge = false,
 }: {
   points: TrendPoint[];
   accessor?: 'value' | 'average';
@@ -44,6 +45,20 @@ export function Sparkline({
   variant?: 'line' | 'bars';
   height?: number;
   style?: StyleProp<ViewStyle>;
+  /**
+   * Dash across a stretch with no readings instead of leaving a hole in it.
+   *
+   * Opt-in, because it is only honest for a quantity that goes on existing
+   * while nobody is watching. A body weight is a fact of every day between two
+   * weigh-ins; a day with no food logged is not a day of no eating either, but
+   * the chart has no idea which — the weight has two ends to span and a shape
+   * to span them with, and an unlogged Tuesday has nothing.
+   *
+   * The dashes never touch the glow under the line, which still stops at the
+   * gap, and the readout still says there was no reading: the bridge is there
+   * so the month reads as one shape, not so a day can be read off it.
+   */
+  bridge?: boolean;
   /**
    * Opt in to inspecting a single day. The caller draws the contents, because
    * only it knows what the day *was* — this component has a date and a number
@@ -158,6 +173,7 @@ export function Sparkline({
    * in, and the point stays visible under it.
    */
   const place = marked !== null && y(marked) < height / 2 ? 'bottom' : 'top';
+  const bridged = bridge && variant === 'line' ? spans(points, accessor, x, y) : '';
 
   const body =
     variant === 'bars' ? (
@@ -194,6 +210,20 @@ export function Sparkline({
           a gap in the data stays a gap rather than a ramp across it.
         */}
         <Path d={area(points, accessor, x, y, height)} fill={`url(#${gradient})`} />
+        {bridged !== '' && (
+          <Path
+            d={bridged}
+            fill="none"
+            stroke={stroke}
+            strokeWidth={2.5}
+            // A dash a hair long rather than a zero-length one: with a round
+            // cap both draw a dot, but Android dashes in pre-transform path
+            // units and a sub-pixel interval there can come out as nothing.
+            strokeDasharray="1 7"
+            strokeLinecap="round"
+            opacity={0.4}
+          />
+        )}
         <Path
           d={trace(points, accessor, x, y)}
           fill="none"
@@ -465,6 +495,36 @@ function trace(
     path += `${penDown ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)} `;
     penDown = true;
   });
+
+  return path.trim();
+}
+
+/**
+ * The dotted run between each pair of readings the trace could not join.
+ *
+ * Only the gaps *between* samples: a window that opens before the first weigh-in
+ * or closes after the last one has nothing on the far side to reach for, and a
+ * dotted line trailing off the edge of the chart would promise one.
+ */
+function spans(
+  points: TrendPoint[],
+  accessor: 'value' | 'average',
+  x: (i: number) => number,
+  y: (v: number) => number,
+): string {
+  const read: number[] = [];
+  points.forEach((point, i) => {
+    if (point[accessor] !== null) read.push(i);
+  });
+
+  let path = '';
+  for (let k = 1; k < read.length; k++) {
+    const from = read[k - 1]!;
+    const to = read[k]!;
+    if (to === from + 1) continue;
+    path += `M${x(from).toFixed(1)},${y(points[from]![accessor]!).toFixed(1)} `;
+    path += `L${x(to).toFixed(1)},${y(points[to]![accessor]!).toFixed(1)} `;
+  }
 
   return path.trim();
 }

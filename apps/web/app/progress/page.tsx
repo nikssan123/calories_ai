@@ -182,6 +182,7 @@ export default function ProgressPage() {
                     stroke="var(--foreground)"
                     className="mt-4"
                     label={t('progress.weightChart')}
+                    bridge
                     tooltip={(point) => <WeightReadout point={point} />}
                   />
                 </>

@@ -931,6 +931,7 @@ function WeightCard({
         points={card.series}
         stroke="var(--foreground)"
         height={44}
+        bridge
         className="mt-2 opacity-80"
       />
 

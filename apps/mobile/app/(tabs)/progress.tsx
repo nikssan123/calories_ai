@@ -212,6 +212,7 @@ export default function ProgressScreen() {
                     points={progress.weight.series}
                     stroke={colors.logoRamp}
                     style={styles.chart}
+                    bridge
                     readout={(point) => <WeightReadout point={point} />}
                   />
                 </>
