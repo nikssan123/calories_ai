@@ -141,6 +141,7 @@
           "widgets": [
             {
               "name": "Ring",
+              "previewImage": "./assets/widget-preview-ring.png",
               "label": "Day So Far · ring",
               "description": "Today's ring. Drag it down to the size of an icon, or up to fill the row.",
               "minWidth": "40dp",
@@ -154,6 +155,7 @@
             },
             {
               "name": "Day",
+              "previewImage": "./assets/widget-preview-day.png",
               "label": "Day So Far · day",
               "description": "The day on one line, with a bar. Drag it taller for the ring.",
               "minWidth": "180dp",
@@ -167,6 +169,7 @@
             },
             {
               "name": "Steps",
+              "previewImage": "./assets/widget-preview-steps.png",
               "label": "Day So Far · steps",
               "description": "Today's steps against your usual week. Drag it wider for the day's calories too.",
               "minWidth": "40dp",

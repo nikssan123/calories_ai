@@ -2,7 +2,9 @@ import { FlexWidget, OverlapWidget, SvgWidget, TextWidget } from 'react-native-a
 import { ringSvg } from './ring';
 import { CAST_GAP, LINE_HEIGHT, dayLayout, detailLines, type DayCard, type DayLine } from './layout';
 import { castSvg, companion } from './cast';
-import { DISPLAY, OPEN_JOURNAL, type WidgetPalette } from './theme';
+import { DISPLAY, type WidgetPalette } from './theme';
+import { Shell } from './Shell';
+import { Bar } from './Bar';
 import { Empty } from './Empty';
 import type { WidgetText } from './text';
 import type { DaySnapshot } from '@/lib/snapshot';
@@ -38,28 +40,25 @@ export function DayWidget({
   const remaining = snapshot.target - snapshot.consumed;
   const spoken = `${text.n(Math.abs(remaining))} kcal ${text.today(layout.label)}`;
 
+  const tile = { colors, width, height, spoken };
+
   return layout.shape === 'line' ? (
-    <Line layout={layout} colors={colors} spoken={spoken} over={remaining < 0} snapshot={snapshot} />
+    <Line tile={tile} layout={layout} over={remaining < 0} snapshot={snapshot} />
   ) : (
-    <Card layout={layout} colors={colors} spoken={spoken} snapshot={snapshot} text={text} />
+    <Card tile={tile} layout={layout} snapshot={snapshot} text={text} />
   );
 }
 
-/**
- * The tile every shape is drawn on, at the app's own radius.
- *
- * Tinted with the app's ground rather than its card: a card is white because
- * it sits on cream, and out here there is no cream under it. See `theme.ts`.
- */
-const shell = (colors: WidgetPalette) =>
-  ({
-    height: 'match_parent',
-    width: 'match_parent',
-    backgroundColor: colors.background,
-    borderColor: colors.border,
-    borderWidth: 2,
-    borderRadius: 28,
-  }) as const;
+/** What `<Shell>` needs, which is the same for both shapes. */
+interface Tile {
+  colors: WidgetPalette;
+  width: number;
+  height: number;
+  spoken: string;
+}
+
+/** The app's own corner. See `<Shell>` for the rest of the surface. */
+const RADIUS = 28;
 
 /**
  * One row: the figure, the word, the ratio, and a bar under all three.
@@ -72,26 +71,24 @@ const shell = (colors: WidgetPalette) =>
  * start (CAST.md). See `companion` for who, and `dayLayout` for when.
  */
 function Line({
+  tile,
   layout,
-  colors,
-  spoken,
   over,
   snapshot,
 }: {
+  tile: Tile;
   layout: DayLine;
-  colors: WidgetPalette;
-  spoken: string;
   over: boolean;
   snapshot: DaySnapshot;
 }) {
+  const { colors } = tile;
   const who = layout.cast > 0 ? companion(snapshot) : null;
 
   return (
-    <FlexWidget
-      {...OPEN_JOURNAL}
-      accessibilityLabel={spoken}
+    <Shell
+      {...tile}
+      radius={RADIUS}
       style={{
-        ...shell(colors),
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: layout.paddingHorizontal,
@@ -143,33 +140,16 @@ function Line({
             />
           )}
         </FlexWidget>
-        {/*
-          * The bar is two nested boxes rather than a drawn shape: `RemoteViews`
-          * has no percentage widths, so the fill is measured in dp from the
-          * width the launcher reported.
-          */}
-        <FlexWidget
-          style={{
-            height: layout.bar,
-            width: layout.track,
-            backgroundColor: colors.muted,
-            borderRadius: 999,
-            marginTop: layout.gap,
-          }}
-        >
-          {layout.fill > 0 && (
-            <FlexWidget
-              style={{
-                height: layout.bar,
-                width: layout.fill,
-                backgroundColor: over ? colors.foreground : colors.calories,
-                borderRadius: 999,
-              }}
-            />
-          )}
-        </FlexWidget>
+        <Bar
+          colors={colors}
+          height={layout.bar}
+          track={layout.track}
+          fill={layout.fill}
+          color={over ? colors.foreground : colors.calories}
+          style={{ marginTop: layout.gap }}
+        />
       </FlexWidget>
-    </FlexWidget>
+    </Shell>
   );
 }
 
@@ -182,28 +162,22 @@ function Line({
  * number already being shown four points to its left.
  */
 function Card({
+  tile,
   layout,
-  colors,
-  spoken,
   snapshot,
   text,
 }: {
+  tile: Tile;
   layout: DayCard;
-  colors: WidgetPalette;
-  spoken: string;
   snapshot: DaySnapshot;
   text: WidgetText;
 }) {
+  const { colors } = tile;
   return (
-    <FlexWidget
-      {...OPEN_JOURNAL}
-      accessibilityLabel={spoken}
-      style={{
-        ...shell(colors),
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: layout.padding,
-      }}
+    <Shell
+      {...tile}
+      radius={RADIUS}
+      style={{ flexDirection: 'row', alignItems: 'center', padding: layout.padding }}
     >
       <OverlapWidget style={{ height: layout.box, width: layout.box }}>
         <SvgWidget
@@ -217,6 +191,9 @@ function Card({
             track: colors.track,
             trackOpacity: colors.trackOpacity,
             over: colors.foreground,
+            rimGlint: colors.rimGlint,
+            rimLit: colors.rimLit,
+            rimShade: colors.rimShade,
           })}
           style={{ height: layout.box, width: layout.box }}
         />
@@ -267,6 +244,6 @@ function Card({
           />
         ))}
       </FlexWidget>
-    </FlexWidget>
+    </Shell>
   );
 }

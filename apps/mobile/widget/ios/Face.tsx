@@ -1,4 +1,4 @@
-import { Capsule, Circle, HStack, Spacer, Text, VStack, ZStack } from '@expo/ui/swift-ui';
+import { Capsule, Circle, HStack, Rectangle, Spacer, Text, VStack, ZStack } from '@expo/ui/swift-ui';
 import {
   accessibilityLabel,
   containerBackground,
@@ -61,8 +61,8 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
    * drawn outside the app, and nothing out there can ask the app.
    */
   const PLACEHOLDER = dark
-    ? { background: '#1a1512', foreground: '#f7efe6', mutedForeground: '#a79a8d' }
-    : { background: '#fff6ec', foreground: '#31261e', mutedForeground: '#77685b' };
+    ? { background: '#1a1512', foreground: '#f7efe6', mutedForeground: '#a79a8d', ambient: [] }
+    : { background: '#fff6ec', foreground: '#31261e', mutedForeground: '#77685b', ambient: [] };
   /*
    * The scheme is only knowable here, so both palettes were sent. Same reason
    * the Android handler renders a light and a dark rendition: a widget cannot
@@ -169,9 +169,61 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
       />
     );
 
+    /*
+     * The lit rim — `RingRim` in the app, and `ring.ts` on the other platform.
+     * Two hairlines: the outer edge catches light at twelve and falls into
+     * shade at six, and the inner edge does the reverse, weaker, the way the
+     * underside of something round picks up a little bounce.
+     *
+     * SwiftUI will not stroke a gradient directly, but `strokeBorder` with its
+     * colour omitted takes the view's foreground style, and a foreground style
+     * can be one. What it will not take is a stop list: `linearGradient` here
+     * spaces its colours evenly, where the app's sit at 0, 0.45, 0.6 and 1. At
+     * four colours that puts each transition within a tenth of the band of
+     * where the app puts it, on a hairline a point and a half wide.
+     *
+     * `strokeBorder` insets by half its width, so a hairline whose centre is
+     * meant to land at radius R wants a frame of 2R + its own width.
+     */
+    const hair = Math.max(0.8, Math.min(1.5, stroke * 0.09));
+    /*
+     * `foregroundStyle` after `strokeBorder` and not before it. A stroke with
+     * no colour of its own is drawn in the foreground style it finds around it,
+     * and the modifier list runs inside out: a style set before the stroke is
+     * set on the circle the stroke is hung off rather than on the stroke.
+     */
+    const rim = (frameBox: number, colours: string[]) => (
+      <Circle
+        modifiers={[
+          frame({ width: frameBox, height: frameBox }),
+          opacity(0),
+          strokeBorder({ shape: 'circle', style: { lineWidth: hair } }),
+          foregroundStyle({
+            type: 'linearGradient',
+            colors: colours,
+            startPoint: { x: 0.5, y: 0 },
+            endPoint: { x: 0.5, y: 1 },
+          }),
+        ]}
+      />
+    );
+    /* `#RRGGBBAA`, alpha last — see `at` in `props.ts` for why it is that way
+     * round and not the other. */
+    const weigh = (hex: string, weight: number) =>
+      `${hex}${Math.round(weight * 255).toString(16).padStart(2, '0')}`;
+    const glint = (weight: number) => weigh(paint.rimGlint, weight);
+    const shade = (weight: number) => weigh('#000000', weight);
+
     return (
       <ZStack modifiers={[frame({ width: box, height: box })]}>
         {ring(paint.track, paint.trackOpacity)}
+        {rim(ringBox, [glint(paint.rimLit), glint(0), shade(0), shade(paint.rimShade)])}
+        {rim(ringBox - 2 * stroke + 2 * hair, [
+          shade(paint.rimShade * 0.6),
+          shade(0),
+          glint(0),
+          glint(paint.rimLit * 0.55),
+        ])}
         {arc}
         <VStack spacing={0} modifiers={[frame({ width: box, height: box })]}>
           {props.figure > 0 && (
@@ -206,25 +258,70 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
     );
   };
 
-  /** The bar under the line shape: a track, and however much of it is eaten. */
-  const bar = () => (
-    <ZStack alignment="leading" modifiers={[frame({ width: props.track, height: props.bar })]}>
+  /**
+   * The bar under the line shape: a track, and however much of it is eaten.
+   *
+   * The track is `hairline`, which is what the app fills one with — a whisper
+   * of the ink rather than the opaque beige slab this used to be. The fill
+   * carries the app's gloss over it: a white highlight down its top half, which
+   * is most of what makes a bar in `MacroBars` read as a lit capsule.
+   */
+  const bar = (track: number, fill: number, colour: string) => (
+    <ZStack alignment="leading" modifiers={[frame({ width: track, height: props.bar })]}>
       <Capsule
-        modifiers={[
-          frame({ width: props.track, height: props.bar }),
-          foregroundStyle(paint.muted),
-        ]}
+        modifiers={[frame({ width: track, height: props.bar }), foregroundStyle(paint.hairline)]}
       />
-      {props.fill > 0 && (
-        <Capsule
-          modifiers={[
-            frame({ width: props.fill, height: props.bar }),
-            foregroundStyle(props.over ? paint.foreground : paint.calories),
-          ]}
-        />
+      {fill > 0 && (
+        <ZStack modifiers={[frame({ width: fill, height: props.bar })]}>
+          <Capsule
+            modifiers={[frame({ width: fill, height: props.bar }), foregroundStyle(colour)]}
+          />
+          <Capsule
+            modifiers={[
+              frame({ width: fill, height: props.bar }),
+              foregroundStyle({
+                type: 'linearGradient',
+                colors: [props.glossFrom, props.glossTo],
+                startPoint: { x: 0.5, y: 0 },
+                endPoint: { x: 0.5, y: 1 },
+              }),
+            ]}
+          />
+        </ZStack>
       )}
     </ZStack>
   );
+
+  /**
+   * The light the tile stands in — `Backdrop`, which is behind every screen in
+   * the app and is why none of them is a flat sheet.
+   *
+   * Laid inside the `ZStack` rather than handed to `containerBackground`, which
+   * takes a colour and nothing else. Each one is sized a little larger than the
+   * card so that being a point or two out about the family's rectangle shows as
+   * overflow the system clips rather than as an unwashed sliver down one edge.
+   *
+   * Circular where the app's are ellipses: a SwiftUI radial gradient has one
+   * radius. On the square family the two are within a few points of each other
+   * anyway, and on the wide one a wash that is rounder than it should be is
+   * still light in the corner it belongs in.
+   */
+  const wash = () =>
+    (paint.ambient || []).map((light, index) => (
+      <Rectangle
+        key={`wash${index}`}
+        modifiers={[
+          frame({ width: props.cardWidth + 16, height: props.cardHeight + 16 }),
+          foregroundStyle({
+            type: 'radialGradient',
+            colors: [light.from, light.to],
+            center: { x: light.x, y: light.y },
+            startRadius: 0,
+            endRadius: Math.max(1, light.rx * props.cardWidth),
+          }),
+        ]}
+      />
+    ));
 
   /**
    * The ground every shape sits on.
@@ -249,6 +346,7 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
         accessibilityLabel(props.spoken),
       ]}
     >
+      {wash()}
       {children}
     </ZStack>
   );
@@ -353,7 +451,7 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
             </Text>
           )}
         </HStack>
-        {bar()}
+        {bar(props.track, props.fill, props.over ? paint.foreground : paint.calories)}
       </VStack>,
     );
   }
@@ -395,24 +493,8 @@ function Face(props: FaceProps, environment: WidgetEnvironment) {
           </Text>
         )}
         {props.bar > 0 && (
-          <ZStack
-            alignment="leading"
-            modifiers={[frame({ width: props.track, height: props.bar }), padding({ top: props.gap })]}
-          >
-            <Capsule
-              modifiers={[
-                frame({ width: props.track, height: props.bar }),
-                foregroundStyle(paint.muted),
-              ]}
-            />
-            {props.fill > 0 && (
-              <Capsule
-                modifiers={[
-                  frame({ width: props.fill, height: props.bar }),
-                  foregroundStyle(paint.calories),
-                ]}
-              />
-            )}
+          <ZStack modifiers={[padding({ top: props.gap })]}>
+            {bar(props.track, props.fill, paint.calories)}
           </ZStack>
         )}
         {props.usual > 0 && (

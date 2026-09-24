@@ -1,5 +1,5 @@
 import { LINE_HEIGHT, dayLayout, detailLines, ringLayout, stepsLayout } from '../layout';
-import { DARK, LIGHT, type WidgetPalette } from '../theme';
+import { DARK, GLOSS, LIGHT, type WidgetPalette } from '../theme';
 import { widgetText, type WidgetText } from '../text';
 import type { Locale } from '@ct/shared';
 import type { DaySnapshot } from '@/lib/snapshot';
@@ -45,13 +45,13 @@ import { deviceLocale } from '@/messages';
  * conservative pair for every phone, which cost seven points a side on the dial
  * and left the wide one visibly short of its own card.
  *
- * The four points added back are `layout.ts`'s `BORDER`, which it reserves on
- * every edge for a 2dp outline. Android draws that outline; iOS does not, because
+ * The two points added back are `layout.ts`'s `BORDER`, which it reserves on
+ * every edge for a 1dp outline. Android draws that outline; iOS does not, because
  * the system already clips every widget to its own rounded rectangle. Handing the
- * arithmetic four more points than the widget really has is how it gets those
+ * arithmetic two more points than the widget really has is how it gets those
  * points back without the shared code needing to know which platform it is on.
  */
-const NO_BORDER = 4;
+const NO_BORDER = 2;
 
 /** Screen width → the small and medium widget sizes iOS uses at that width. */
 const WIDGET_SIZES: { screen: number; small: number; medium: number }[] = [
@@ -96,11 +96,51 @@ export interface Paint {
   mutedForeground: string;
   calories: string;
   ramp: string;
-  muted: string;
+  /** The app's outline, and the ground of a bar track. See `WidgetPalette`. */
+  hairline: string;
   burn: string;
   track: string;
   trackOpacity: number;
+  /** The ring's lit rim. */
+  rimGlint: string;
+  rimLit: number;
+  rimShade: number;
+  /** The washes the tile stands in, already two colours apiece. See `PaintWash`. */
+  ambient: PaintWash[];
 }
+
+/**
+ * One ambient wash, with its two ends worked out.
+ *
+ * `Wash` carries a colour and the weight it starts at; a SwiftUI gradient wants
+ * the list of colours it runs through. Doing that here rather than in the face
+ * keeps arithmetic out of a function that is evaluated as a string in a bare
+ * JavaScriptCore context — the standing rule for this file.
+ */
+export interface PaintWash {
+  from: string;
+  to: string;
+  x: number;
+  y: number;
+  rx: number;
+  ry: number;
+}
+
+/**
+ * A flat hex at an alpha, in the one eight-digit order the widget will read.
+ *
+ * `#RRGGBBAA`, alpha last — the web's order. `@expo/ui` documents the SwiftUI
+ * side as taking `#AARRGGBB`, and it does not: every colour on this shape is
+ * parsed by `expo-modules-core`'s `colorFromString`, which pads a six-digit hex
+ * with `FF` and then reads all eight as RGBA. Written the other way round the
+ * tile came out a solid green — `#2123d3b0`, meant as teal at 13%, read as a
+ * blue-grey at 69% — which is the sort of thing only a home screen tells you.
+ *
+ * Nothing else here needs converting. The same parser takes `rgba()` verbatim,
+ * so every entry the palette already writes that way crosses as it stands.
+ */
+const at = (hex: string, alpha: number) =>
+  `${hex}${Math.round(alpha * 255).toString(16).padStart(2, '0')}`;
 
 const paintOf = (palette: WidgetPalette): Paint => ({
   background: palette.background as string,
@@ -108,10 +148,21 @@ const paintOf = (palette: WidgetPalette): Paint => ({
   mutedForeground: palette.mutedForeground as string,
   calories: palette.calories as string,
   ramp: palette.ramp as string,
-  muted: palette.muted as string,
+  hairline: palette.hairline,
   burn: palette.burn as string,
   track: palette.track,
   trackOpacity: palette.trackOpacity,
+  rimGlint: palette.rimGlint,
+  rimLit: palette.rimLit,
+  rimShade: palette.rimShade,
+  ambient: palette.ambient.map((wash) => ({
+    from: at(wash.color, wash.opacity),
+    to: at(wash.color, 0),
+    x: wash.x,
+    y: wash.y,
+    rx: wash.rx,
+    ry: wash.ry,
+  })),
 });
 
 /**
@@ -146,6 +197,19 @@ export interface FaceProps {
   tapToStart: string;
   light: Paint;
   dark: Paint;
+  /**
+   * The rectangle this entry was laid out for.
+   *
+   * Only the washes need it — they are ellipses sized against the tile, and
+   * SwiftUI has no `GeometryReader` here to ask how big the tile turned out.
+   * `familySize` is the same derivation every other measurement on this shape
+   * already came out of.
+   */
+  cardWidth: number;
+  cardHeight: number;
+  /** The highlight along the top of a filled bar. See `GLOSS`. */
+  glossFrom: string;
+  glossTo: string;
 
   padding: number;
   paddingHorizontal: number;
@@ -260,10 +324,18 @@ function arcOf(snapshot: DaySnapshot) {
   };
 }
 
-function commonOf(snapshot: DaySnapshot | null, text: WidgetText) {
+function commonOf(
+  snapshot: DaySnapshot | null,
+  text: WidgetText,
+  card: { width: number; height: number },
+) {
   const remaining = snapshot ? snapshot.target - snapshot.consumed : 0;
   return {
     known: snapshot !== null,
+    cardWidth: card.width,
+    cardHeight: card.height,
+    glossFrom: GLOSS.from,
+    glossTo: GLOSS.to,
     title: 'Day So Far',
     tapToStart: text.tapToStart,
     spoken: snapshot
@@ -298,7 +370,7 @@ export function ringProps(
 
   return {
     ...NOTHING,
-    ...commonOf(snapshot, text),
+    ...commonOf(snapshot, text, { width, height }),
     shape: 'dial',
     padding: layout.padding,
     paddingHorizontal: layout.padding,
@@ -343,7 +415,11 @@ export function dayProps(
     target: snapshot?.target ?? 0,
     text,
   });
-  const common = { ...NOTHING, ...commonOf(snapshot, text), ...(snapshot ? arcOf(snapshot) : {}) };
+  const common = {
+    ...NOTHING,
+    ...commonOf(snapshot, text, { width, height }),
+    ...(snapshot ? arcOf(snapshot) : {}),
+  };
 
   if (layout.shape === 'line') {
     return {
@@ -431,7 +507,7 @@ export function stepsProps(
 
   return {
     ...NOTHING,
-    ...commonOf(snapshot, text),
+    ...commonOf(snapshot, text, { width, height }),
     known: snapshot !== null && snapshot.steps !== null,
     spoken: snapshot?.steps == null ? 'Day So Far' : text.steps(snapshot.steps),
     shape: 'steps',

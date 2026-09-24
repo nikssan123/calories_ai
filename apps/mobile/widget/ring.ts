@@ -15,10 +15,17 @@
  * punched through the widget — behind which is the user's wallpaper. Depth
  * after dark is light, so the ledge has gone.
  *
- * What the app's ring puts there instead is a lit rim, and this does not have
- * one: the iOS face is laid out in SwiftUI (`ios/Face.tsx`) and cannot stroke a
- * gradient, and two home-screen widgets that disagree with each other would be
- * worse than one that is a shade plainer than the screen inside the app.
+ * What the app's ring puts there instead is a lit rim — two hairlines, the
+ * outer one catching light at twelve and falling into shade at six and the
+ * inner one doing the reverse, which is what turns a stroke on a screen into a
+ * torus lit from above. It is here now, and on the iOS face too: that one was
+ * held back because SwiftUI will not stroke a gradient, and it turns out it
+ * will — `strokeBorder` with its colour omitted takes the foreground style, and
+ * a foreground style can be a gradient.
+ *
+ * Under the arc, the way `CalorieRing` draws it. The band the rim lights is the
+ * track — the part of the day still to come — and the arc is opaque paint laid
+ * over it.
  *
  * The ramp across the arc stays, so a full day is visibly a richer green at its
  * end than at its start.
@@ -41,6 +48,10 @@ export interface Ring {
   trackOpacity: number;
   /** Over target turns the arc to ink rather than to red — see `CalorieRing`. */
   over: string;
+  /** The lit rim: a tone and two weights. See `RingRim` and `WidgetPalette`. */
+  rimGlint: string;
+  rimLit: number;
+  rimShade: number;
 }
 
 export function ringSvg({
@@ -53,6 +64,9 @@ export function ringSvg({
   track,
   trackOpacity,
   over,
+  rimGlint,
+  rimLit,
+  rimShade,
 }: Ring): string {
   // `CalorieRing`'s own arithmetic, verbatim — which no longer reserves a drop
   // for the ledge, so the dial is its box less half a stroke either side.
@@ -67,6 +81,26 @@ export function ringSvg({
     `<circle cx="${centre}" cy="${cy}" r="${radius}" fill="none" stroke="${stroke}" stroke-width="${strokeWidth}"${extra} />`;
 
   /*
+   * `RingRim`'s own numbers. The hair is a proportion of the band rather than a
+   * fixed pixel: 1.5 on the app's big dial is the hairline it should be, and on
+   * the one-cell widget's stroke it would be a quarter of the ring.
+   */
+  const hair = Math.max(0.8, Math.min(1.5, strokeWidth * 0.09));
+  const rim = (r: number, id: string) =>
+    `<circle cx="${centre}" cy="${centre}" r="${r}" fill="none" stroke="url(#${id})" stroke-width="${hair}" />`;
+  /*
+   * Vertical in user space and spanning the dial rather than the hairline it is
+   * painted on, so the light stays where light is however much of the arc has
+   * been drawn — which is the whole reason this reads as a solid.
+   */
+  const rimRamp = (id: string, stops: string) =>
+    `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="0" y1="${centre - radius}" x2="0" y2="${centre + radius}">${stops}</linearGradient>`;
+  const glint = (offset: number, opacity: number) =>
+    `<stop offset="${offset}" stop-color="${rimGlint}" stop-opacity="${opacity}" />`;
+  const shade = (offset: number, opacity: number) =>
+    `<stop offset="${offset}" stop-color="#000000" stop-opacity="${opacity}" />`;
+
+  /*
    * Rotated so the arc starts at twelve o'clock. `stroke-linecap="round"` is
    * what gives the two ends their thickness — without it a nearly-empty ring
    * reads as a rendering fault rather than as a day barely begun.
@@ -75,8 +109,13 @@ export function ringSvg({
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`,
     `<defs><linearGradient id="arc" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${size}" y2="${size}">`,
     `<stop offset="0" stop-color="${fill}" /><stop offset="1" stop-color="${ramp}" />`,
-    `</linearGradient></defs>`,
+    `</linearGradient>`,
+    rimRamp('rimOuter', glint(0, rimLit) + glint(0.45, 0) + shade(0.6, 0) + shade(1, rimShade)),
+    rimRamp('rimInner', shade(0, rimShade * 0.6) + shade(0.5, 0) + glint(0.62, 0) + glint(1, rimLit * 0.55)),
+    `</defs>`,
     circle(centre, track, ` stroke-opacity="${trackOpacity}"`),
+    rim(radius + strokeWidth / 2 - hair / 2, 'rimOuter'),
+    rim(radius - strokeWidth / 2 + hair / 2, 'rimInner'),
     dash > 0
       ? circle(
           centre,

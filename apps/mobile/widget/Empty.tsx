@@ -1,8 +1,9 @@
 import { FlexWidget, OverlapWidget, SvgWidget, TextWidget } from 'react-native-android-widget';
 import { ringSvg } from './ring';
-import { ringLayout } from './layout';
+import { BORDER, ringLayout } from './layout';
 import { castSvg, trio } from './cast';
-import { DISPLAY, OPEN_JOURNAL, type WidgetPalette } from './theme';
+import { DISPLAY, type WidgetPalette } from './theme';
+import { Shell } from './Shell';
 import type { WidgetText } from './text';
 
 /**
@@ -44,19 +45,13 @@ export function Empty({
   text: WidgetText;
   dial?: boolean;
 }) {
-  const shell = {
-    ...OPEN_JOURNAL,
-    accessibilityLabel: 'Open Day So Far',
-    style: {
-      height: 'match_parent' as const,
-      width: 'match_parent' as const,
-      justifyContent: 'center' as const,
-      alignItems: 'center' as const,
-      backgroundColor: colors.background,
-      borderColor: colors.border,
-      borderWidth: 2,
-    },
+  const tile = {
+    colors,
+    width,
+    height,
+    spoken: 'Open Day So Far',
   };
+  const centred = { justifyContent: 'center' as const, alignItems: 'center' as const };
 
   const wide = width >= height * 2.2;
 
@@ -69,7 +64,7 @@ export function Empty({
   if (!dial && !wide && Math.min(width, height) < 118) {
     const side = Math.min(width, height);
     return (
-      <FlexWidget {...shell} style={{ ...shell.style, borderRadius: Math.round(side * 0.28), padding: 8 }}>
+      <Shell {...tile} radius={Math.round(side * 0.28)} style={{ ...centred, padding: 8 }}>
         <TextWidget
           text="—"
           allowFontScaling={false}
@@ -85,14 +80,14 @@ export function Empty({
           maxLines={1}
           style={{ fontSize: Math.max(10, Math.round(side * 0.11)), fontWeight: '600', color: colors.mutedForeground }}
         />
-      </FlexWidget>
+      </Shell>
     );
   }
 
   if (dial && !wide && Math.min(width, height) < 118) {
     const { padding, radius, box, stroke } = ringLayout({ width, height, remaining: 0, text });
     return (
-      <FlexWidget {...shell} style={{ ...shell.style, borderRadius: radius, padding }}>
+      <Shell {...tile} radius={radius} style={{ ...centred, padding }}>
         <OverlapWidget style={{ height: box, width: box }}>
           <SvgWidget
             svg={ringSvg({
@@ -105,6 +100,9 @@ export function Empty({
               track: colors.track,
               trackOpacity: colors.trackOpacity,
               over: colors.foreground,
+              rimGlint: colors.rimGlint,
+              rimLit: colors.rimLit,
+              rimShade: colors.rimShade,
             })}
             style={{ height: box, width: box }}
           />
@@ -122,16 +120,16 @@ export function Empty({
             />
           </FlexWidget>
         </OverlapWidget>
-      </FlexWidget>
+      </Shell>
     );
   }
 
   /* Above the two lines of words, which take about forty points between them. */
-  const side = Math.min(64, Math.round(height - 2 * (14 + 2) - 44));
+  const side = Math.min(64, Math.round(height - 2 * (14 + BORDER) - 44));
   const group = side >= 34 ? trio(side, ['idle', 'wave', 'idle']) : null;
 
   return (
-    <FlexWidget {...shell} style={{ ...shell.style, borderRadius: 28, padding: 14 }}>
+    <Shell {...tile} radius={28} style={{ ...centred, padding: 14 }}>
       {group && (
         <SvgWidget
           svg={castSvg({
@@ -156,6 +154,6 @@ export function Empty({
         maxLines={1}
         style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 2 }}
       />
-    </FlexWidget>
+    </Shell>
   );
 }

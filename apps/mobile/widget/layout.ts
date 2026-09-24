@@ -35,8 +35,15 @@ import type { WidgetText } from './text';
  */
 export const LINE_HEIGHT = 1.15;
 
-/** The card's outline, subtracted from every inner measurement. */
-const BORDER = 2;
+/**
+ * The card's outline, subtracted from every inner measurement.
+ *
+ * One point since the glow-up, where it was two. The app stopped drawing
+ * two-point tan borders when it stopped drawing ledges — a surface is now a
+ * hairline outline lit along its top — and the point that gives back is a point
+ * the ring gets to be wider.
+ */
+export const BORDER = 1;
 
 /**
  * Below this the ring stops being a card with a ring in it and becomes a ring

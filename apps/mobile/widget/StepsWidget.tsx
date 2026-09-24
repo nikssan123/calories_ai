@@ -1,6 +1,8 @@
-import { FlexWidget, TextWidget } from 'react-native-android-widget';
+import { TextWidget } from 'react-native-android-widget';
 import { LINE_HEIGHT, stepsLayout } from './layout';
-import { DISPLAY, OPEN_JOURNAL, type WidgetPalette } from './theme';
+import { DISPLAY, type WidgetPalette } from './theme';
+import { Shell } from './Shell';
+import { Bar } from './Bar';
 import { Empty } from './Empty';
 import type { WidgetText } from './text';
 import type { DaySnapshot } from '@/lib/snapshot';
@@ -48,16 +50,13 @@ export function StepsWidget({
   const spoken = text.steps(snapshot.steps);
 
   return (
-    <FlexWidget
-      {...OPEN_JOURNAL}
-      accessibilityLabel={spoken}
+    <Shell
+      colors={colors}
+      width={width}
+      height={height}
+      radius={layout.radius}
+      spoken={spoken}
       style={{
-        height: 'match_parent',
-        width: 'match_parent',
-        backgroundColor: colors.background,
-        borderColor: colors.border,
-        borderWidth: 2,
-        borderRadius: layout.radius,
         justifyContent: 'center',
         paddingHorizontal: layout.padding,
         paddingVertical: layout.padding,
@@ -83,33 +82,16 @@ export function StepsWidget({
         />
       )}
 
-      {/*
-        * The bar, and only when there is a week behind it to measure against.
-        * Two nested boxes rather than a drawn shape, because `RemoteViews` has
-        * no percentage widths — the fill is dp off the width the launcher
-        * reported, the same way the Day widget's is.
-        */}
+      {/* The bar, and only when there is a week behind it to measure against. */}
       {layout.bar > 0 && (
-        <FlexWidget
-          style={{
-            height: layout.bar,
-            width: layout.track,
-            backgroundColor: colors.muted,
-            borderRadius: 999,
-            marginTop: layout.gap,
-          }}
-        >
-          {layout.fill > 0 && (
-            <FlexWidget
-              style={{
-                height: layout.bar,
-                width: layout.fill,
-                backgroundColor: colors.calories,
-                borderRadius: 999,
-              }}
-            />
-          )}
-        </FlexWidget>
+        <Bar
+          colors={colors}
+          height={layout.bar}
+          track={layout.track}
+          fill={layout.fill}
+          color={colors.calories}
+          style={{ marginTop: layout.gap }}
+        />
       )}
 
       {layout.detail > 0 && (
@@ -144,6 +126,6 @@ export function StepsWidget({
           }}
         />
       )}
-    </FlexWidget>
+    </Shell>
   );
 }

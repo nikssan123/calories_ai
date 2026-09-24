@@ -1,7 +1,8 @@
 import { FlexWidget, OverlapWidget, SvgWidget, TextWidget } from 'react-native-android-widget';
 import { ringSvg } from './ring';
 import { LINE_HEIGHT, ringLayout } from './layout';
-import { DISPLAY, OPEN_JOURNAL, type WidgetPalette } from './theme';
+import { DISPLAY, type WidgetPalette } from './theme';
+import { Shell } from './Shell';
 import { Empty } from './Empty';
 import type { WidgetText } from './text';
 import type { DaySnapshot } from '@/lib/snapshot';
@@ -45,22 +46,13 @@ export function RingWidget({
   });
 
   return (
-    <FlexWidget
-      {...OPEN_JOURNAL}
-      accessibilityLabel={`${text.n(Math.abs(remaining))} kcal ${text.today(
-        over ? text.over : text.toGo,
-      )}`}
-      style={{
-        height: 'match_parent',
-        width: 'match_parent',
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: colors.background,
-        borderColor: colors.border,
-        borderWidth: 2,
-        borderRadius: radius,
-        padding,
-      }}
+    <Shell
+      colors={colors}
+      width={width}
+      height={height}
+      radius={radius}
+      spoken={`${text.n(Math.abs(remaining))} kcal ${text.today(over ? text.over : text.toGo)}`}
+      style={{ justifyContent: 'center', alignItems: 'center', padding }}
     >
       <OverlapWidget style={{ height: box, width: box }}>
         <SvgWidget
@@ -74,6 +66,9 @@ export function RingWidget({
             track: colors.track,
             trackOpacity: colors.trackOpacity,
             over: colors.foreground,
+            rimGlint: colors.rimGlint,
+            rimLit: colors.rimLit,
+            rimShade: colors.rimShade,
           })}
           style={{ height: box, width: box }}
         />
@@ -109,6 +104,6 @@ export function RingWidget({
           )}
         </FlexWidget>
       </OverlapWidget>
-    </FlexWidget>
+    </Shell>
   );
 }

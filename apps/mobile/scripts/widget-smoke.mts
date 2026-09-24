@@ -311,9 +311,95 @@ for (const [name, layout] of captured) {
   }
 }
 
+// ---- 5. The palette is still a copy ---------------------------------------
+
+/*
+ * `widget/theme.ts` holds a hand-written copy of the app's palette, because a
+ * widget is drawn in a process with no theme provider. A copy drifts, and this
+ * one did: the glow-up retuned every surface in the app and the tile kept the
+ * two-point tan border, the opaque beige track and the flat cream ground for
+ * months — which is not a bug anything could fail on, only something somebody
+ * eventually notices on their own home screen.
+ *
+ * So the copy is checked here. Every entry that has a twin in `theme/colors.ts`
+ * is compared against it, the ring's track through the same `ringTrack` all
+ * four rings in the app are drawn with, and the ambient washes against the CSS
+ * `colors.ts` writes them as — which is the entry most likely to be got wrong,
+ * since the widget needs the ellipse multiplied through to where the colour
+ * runs out and the app does not.
+ *
+ * What cannot be reached from here is `RingRim`'s two weights: it is a
+ * component, and importing it would pull `react-native-svg` into Node. Its
+ * tone can be checked, and is.
+ */
+const { light, dark, ringTrack, tint } = await import('../theme/colors.ts');
+const { LIGHT, DARK, split } = await import('../widget/theme.ts');
+
+for (const [scheme, palette, colors] of [
+  ['light', LIGHT, light],
+  ['dark', DARK, dark],
+] as const) {
+  const same = (entry: string, widget: unknown, app: unknown) => {
+    if (widget !== app) problems.push(`palette/${scheme}/${entry}: widget has ${widget}, the app has ${app}`);
+  };
+  same('background', palette.background, colors.background);
+  same('foreground', palette.foreground, colors.foreground);
+  same('mutedForeground', palette.mutedForeground, colors.mutedForeground);
+  same('calories', palette.calories, colors.calories);
+  same('ramp', palette.ramp, colors.logoRamp);
+  same('hairline', palette.hairline, colors.hairline);
+  same('glassEdge', palette.glassEdge, colors.glassEdge);
+  same('burn', palette.burn, colors.exerciseText);
+  same('rimGlint', palette.rimGlint, scheme === 'dark' ? colors.logoRamp : '#ffffff');
+  /* The widget splits a colour into a tone and a weight, because neither an SVG
+   * 1.1 renderer nor SwiftUI's widget subset takes `rgba()`. */
+  same('track', tint(palette.track, palette.trackOpacity), ringTrack(colors, scheme));
+
+  /*
+   * `radial-gradient(120% 60% at 0% 0%, rgba(…) 0%, rgba(…) 60%)` — an ellipse
+   * sized against the box, with the colour running out partway along it. The
+   * widget's `Wash` is that already multiplied out.
+   */
+  const written = [
+    ...colors.ambient.matchAll(
+      /radial-gradient\(\s*([\d.]+)%\s+([\d.]+)%\s+at\s+([\d.]+)%\s+([\d.]+)%,\s*(rgba\([^)]*\))\s*0%,\s*rgba\([^)]*\)\s*([\d.]+)%\s*\)/g,
+    ),
+  ].map((found) => {
+    const [, boxWide, boxTall, atX, atY, from, ends] = found as unknown as string[];
+    const reach = Number(ends) / 100;
+    const tone = split(from as never);
+    return {
+      color: tone.color,
+      opacity: tone.opacity,
+      x: Number(atX) / 100,
+      y: Number(atY) / 100,
+      rx: (Number(boxWide) / 100) * reach,
+      ry: (Number(boxTall) / 100) * reach,
+    };
+  });
+
+  if (written.length !== palette.ambient.length) {
+    problems.push(
+      `palette/${scheme}/ambient: the widget has ${palette.ambient.length} washes, the app writes ${written.length}`,
+    );
+  }
+  written.forEach((expected, index) => {
+    const wash = palette.ambient[index];
+    if (!wash) return;
+    for (const key of ['color', 'opacity', 'x', 'y', 'rx', 'ry'] as const) {
+      const ours = wash[key];
+      const theirs = expected[key];
+      const off = typeof ours === 'number' && typeof theirs === 'number' ? Math.abs(ours - theirs) > 1e-6 : ours !== theirs;
+      if (off) problems.push(`palette/${scheme}/ambient[${index}].${key}: widget has ${ours}, the app has ${theirs}`);
+    }
+  });
+}
+
 if (problems.length) {
   console.error(`${problems.length} problem(s):`);
   for (const problem of problems) console.error(`  - ${problem}`);
   process.exit(1);
 }
-console.log(`ok — ${captured.size} layouts, ${cases.length} days plus the propless placeholder, six screen widths, both schemes`);
+console.log(
+  `ok — ${captured.size} layouts, ${cases.length} days plus the propless placeholder, six screen widths, both schemes, and a palette still in step with the app's`,
+);
