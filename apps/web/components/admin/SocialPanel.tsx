@@ -266,6 +266,24 @@ export function SocialPanel({ only }: { only?: 'image' | 'video' } = {}) {
     return limit !== null && used >= limit;
   }, [queue]);
 
+  /*
+   * Why each button might refuse, worked out here rather than left to Buffer.
+   *
+   * Pressing "Remind me" with all three channels ticked and a full queue
+   * produced three failures at once and posted nothing: X cannot take a
+   * notification post at all, and Instagram and TikTok were both at 10 of 10.
+   * Every one of those was knowable before the click.
+   */
+  const noReminders = (queue?.channels ?? []).filter(
+    (c) => chosen.includes(c.id) && !c.supportsReminders,
+  );
+  const blockedByLimit = full
+    ? `Queue is full — ${queue?.scheduled.used} of ${queue?.scheduled.limit} on the fullest channel`
+    : null;
+  const blockedByReminder = noReminders.length
+    ? `${noReminders.map((c) => serviceLabel(c.service)).join(' and ')} cannot take a reminder — untick to continue`
+    : null;
+
   const act = useCallback(
     async (verdict: 'approve' | 'reject', reminder = false) => {
       if (!current || busy) return;
@@ -644,8 +662,12 @@ export function SocialPanel({ only }: { only?: 'image' | 'video' } = {}) {
                 variant="secondary"
                 className="flex-1"
                 onClick={() => void act('approve', true)}
-                disabled={busy || !chosen.length}
-                title="Buffer notifies your phone at the slot time and you post it in the app, where you can add a trending sound"
+                disabled={busy || !chosen.length || Boolean(blockedByLimit || blockedByReminder)}
+                title={
+                  blockedByReminder ??
+                  blockedByLimit ??
+                  'Buffer notifies your phone at the slot time and you post it in the app, where you can add a trending sound'
+                }
               >
                 <BellRing className="size-4" />
                 Remind me
@@ -653,12 +675,21 @@ export function SocialPanel({ only }: { only?: 'image' | 'video' } = {}) {
               <Button
                 className="flex-1"
                 onClick={() => void act('approve')}
-                disabled={busy || !chosen.length}
+                disabled={busy || !chosen.length || Boolean(blockedByLimit)}
+                title={blockedByLimit ?? undefined}
               >
                 {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
                 Approve
               </Button>
             </div>
+
+            {/* Said on screen, not only in a tooltip: a greyed button with no
+                stated reason is the thing that gets reported as broken. */}
+            {(blockedByLimit || blockedByReminder) && (
+              <p className="text-footnote text-muted-foreground text-center">
+                {blockedByReminder ?? blockedByLimit}
+              </p>
+            )}
 
           </div>
         </InsetGroup>

@@ -31,6 +31,21 @@ export const SocialChannel = z.object({
   avatar: z.string().nullable(),
   /** Buffer reports these per channel; a disconnected one cannot be posted to. */
   disconnected: z.boolean(),
+  /**
+   * Whether this channel can take a notification post — the "Remind me" path.
+   *
+   * X cannot. Buffer answers an attempt with "Notification scheduling is not
+   * supported for twitter channels. Use automatic scheduling instead.", and
+   * because `decide` sends every ticked channel, one unsupported channel in the
+   * set is one guaranteed failure in the result.
+   *
+   * Derived from which metadata type Buffer returns: `defaultToReminders`
+   * exists on Instagram, TikTok and YouTube and on nothing else, which is
+   * exactly the set that supports reminders. Read from the API rather than
+   * hardcoded here, so a service Buffer adds support for starts working without
+   * a deploy.
+   */
+  supportsReminders: z.boolean(),
 });
 export type SocialChannel = z.infer<typeof SocialChannel>;
 

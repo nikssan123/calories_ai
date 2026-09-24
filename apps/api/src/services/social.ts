@@ -280,11 +280,24 @@ export async function listChannels(): Promise<SocialChannel[]> {
       service: string;
       avatar: string;
       isDisconnected: boolean;
+      metadata: { defaultToReminders?: boolean } | null;
     }[];
   }>(
+    /*
+     * `defaultToReminders` is asked for on the three metadata types that have
+     * it — Instagram, TikTok, YouTube — and its presence, not its value, is
+     * what says the channel can take a notification post at all. Every other
+     * service's metadata type simply lacks the field, and X answers a reminder
+     * with "Notification scheduling is not supported for twitter channels."
+     */
     `query Channels($input: ChannelsInput!) {
        channels(input: $input) {
          id name displayName service avatar isDisconnected
+         metadata {
+           ... on InstagramMetadata { defaultToReminders }
+           ... on TiktokMetadata { defaultToReminders }
+           ... on YoutubeMetadata { defaultToReminders }
+         }
        }
      }`,
     { input: { organizationId: env.buffer.organizationId } },
@@ -295,6 +308,7 @@ export async function listChannels(): Promise<SocialChannel[]> {
     service: c.service,
     avatar: c.avatar ?? null,
     disconnected: c.isDisconnected,
+    supportsReminders: c.metadata?.defaultToReminders !== undefined,
   }));
 }
 
