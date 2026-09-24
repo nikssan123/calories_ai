@@ -87,6 +87,34 @@ const HASHTAG_SUGGESTIONS = [
   'solofounder',
 ];
 
+/**
+ * An MP4's real dimensions, from the browser's own decoder.
+ *
+ * `loadedmetadata` is enough — it fires before any frame is decoded, so this
+ * costs a parse of the container and not a download of the file. The object
+ * URL is revoked either way; a leaked one holds the whole file in memory for
+ * the life of the page.
+ */
+function videoSize(file: File): Promise<{ width: number; height: number } | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement('video');
+    const done = (value: { width: number; height: number } | null) => {
+      URL.revokeObjectURL(url);
+      resolve(value);
+    };
+    video.preload = 'metadata';
+    video.onloadedmetadata = () =>
+      done(
+        video.videoWidth && video.videoHeight
+          ? { width: video.videoWidth, height: video.videoHeight }
+          : null,
+      );
+    video.onerror = () => done(null);
+    video.src = url;
+  });
+}
+
 export function SocialPanel({ only }: { only?: 'image' | 'video' } = {}) {
   const [queue, setQueue] = useState<SocialQueue | null>(null);
   const [index, setIndex] = useState(0);
@@ -142,14 +170,27 @@ export function SocialPanel({ only }: { only?: 'image' | 'video' } = {}) {
           const isMp4 = /\.mp4$/i.test(file.name);
 
           /*
-           * A PNG is measured from its header. An MP4's dimensions are behind a
-           * box walk that is not worth doing in a file picker, and it does not
-           * need doing: video.mts stitches slides that are already 1080x1920,
-           * so the shape is known from what made it.
+           * A PNG is measured from its header; an MP4 is measured by the
+           * browser, which already has a decoder.
+           *
+           * This used to hardcode 1080x1920 for video, on the grounds that
+           * `memepost.mts` and `video.mts` only ever make that shape — true,
+           * and it stopped being the whole story the moment anything else
+           * could arrive through this picker. An export from CapCut or any
+           * other editor is whatever the editor made it, and a row claiming
+           * 1080x1920 for a 1080x1350 file is precisely the lie this queue
+           * exists to catch. Cheap to just ask.
            */
-          let width = 1080;
-          let height = 1920;
-          if (!isMp4) {
+          let width: number;
+          let height: number;
+          if (isMp4) {
+            const measured = await videoSize(file);
+            if (!measured) {
+              toast.error(`Could not read the dimensions of ${file.name}`);
+              continue;
+            }
+            ({ width, height } = measured);
+          } else {
             if (bytes.length < 24 || view.getUint32(12) !== 0x49484452) {
               toast.error(`${file.name} is not a PNG`);
               continue;
