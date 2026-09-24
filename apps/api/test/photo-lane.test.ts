@@ -237,6 +237,27 @@ describe('POST /entries/photo', () => {
     }
   });
 
+  /**
+   * A scan and then a photo of the same packet, which on 2026-09-24 logged a
+   * wafer twice. The lane has no history, so it is told what went in moments
+   * ago — and told nothing when that was a while back.
+   */
+  it('tells the model what was logged in the last few minutes, and only that', async () => {
+    await scriptPlate();
+    expect((await post({ photo_base64: PIXEL })).statusCode).toBe(200);
+    expect(userTurnOf(agentCalls.at(-1)!)).not.toContain('Already logged');
+
+    await scriptPlate();
+    expect((await post({ photo_base64: PIXEL })).statusCode).toBe(200);
+    expect(userTurnOf(agentCalls.at(-1)!)).toContain('- Oats with kefir and banana (from a photo, just now)');
+    expect(systemPromptOf(agentCalls.at(-1)!)).toContain('already in today');
+
+    await query(`UPDATE food_entries SET created_at = now() - interval '20 minutes' WHERE user_id = $1`, [user.id]);
+    await scriptPlate();
+    expect((await post({ photo_base64: PIXEL })).statusCode).toBe(200);
+    expect(userTurnOf(agentCalls.at(-1)!)).not.toContain('Already logged');
+  });
+
   it('turns a failed run into a 502 and still counts it', async () => {
     scriptAgent({ throws: 'model fell over' });
     const response = await post({ photo_base64: PIXEL });

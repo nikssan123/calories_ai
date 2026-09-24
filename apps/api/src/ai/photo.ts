@@ -1,4 +1,5 @@
 import type { Allowance, ChatResponse, Locale } from '@ct/shared';
+import { query } from '../db.ts';
 import { insertMessage, recentUserTexts } from '../services/chat.ts';
 import { buildDaySummary } from '../services/summary.ts';
 import { journalChanged, recordUsage, spend, spendsGrant } from '../services/usage.ts';
@@ -24,7 +25,9 @@ import { buildNutritionServer, type ToolContext } from './tools.ts';
  * What it gives up is deliberate: no history, so it cannot know that "the
  * usual" means oats; no correction tools, so a wrong reading is fixed with a
  * typed sentence in the journal, which routes through the full turn. A photo
- * with words under it never comes here.
+ * with words under it never comes here. The one thing it is told about the
+ * journal is what went in during the last few minutes — see
+ * `JUST_LOGGED_MINUTES`.
  */
 
 /*
@@ -41,7 +44,39 @@ You are reading one photograph of one meal, and nothing else. There is no conver
 - Leave \`when\` null: the photo was taken now.
 - Then reply with one short sentence naming what you logged. No questions, no advice, no numbers — the card carries the numbers.
 - If there is genuinely no food in the photograph, do not call the tool; say so in one sentence.
+- If the message lists something logged in the last few minutes and the photograph is plainly that same thing — the packet that was just scanned, the plate that was just photographed — do not call the tool; say in one sentence that it is already in today's log. Only when it is unmistakably the same product or plate: a second one of something, or anything you are unsure about, is logged.
 - Whichever sentence you write, write it in the language named below, if one is. That includes the names of the foods: they were not given to you in any language, so they take the reply's.`;
+
+/**
+ * How far back "just logged" reaches.
+ *
+ * On 2026-09-24 a guest scanned a wafer's barcode and, a minute later,
+ * photographed the same packet: the lane has no history, so it logged the
+ * wafer a second time and the day read 28 g of wafer high. Scan, then
+ * photograph to be sure, is a natural thing to do with a new app; a quarter of
+ * an hour covers it without reaching back to lunch.
+ */
+const JUST_LOGGED_MINUTES = 15;
+
+/** What was logged moments ago, so a second picture of it is not a second meal. */
+async function justLoggedBrief(userId: string, now: Date): Promise<string | null> {
+  const rows = await query<{ description: string; source: string; minutes: number }>(
+    `SELECT description, source,
+            floor(extract(epoch FROM ($2::timestamptz - created_at)) / 60)::int AS minutes
+       FROM food_entries
+      WHERE user_id = $1 AND created_at > $2::timestamptz - make_interval(mins => $3)
+      ORDER BY created_at DESC
+      LIMIT 5`,
+    [userId, now.toISOString(), JUST_LOGGED_MINUTES],
+  );
+  if (rows.length === 0) return null;
+  const lines = rows.map((row) => {
+    const how = row.source === 'barcode' ? 'scanned from its barcode' : row.source === 'photo' ? 'from a photo' : 'logged';
+    const when = row.minutes < 1 ? 'just now' : `${row.minutes} min ago`;
+    return `- ${row.description} (${how}, ${when})`;
+  });
+  return ['Already logged in the last few minutes:', ...lines].join('\n');
+}
 
 export interface PhotoLaneInput {
   mediaType: string;
@@ -109,7 +144,9 @@ export async function logPhotoOnly(
     // it is a fraction of that prefix's size, which is the point of the lane.
     staticSystemPrompt: `${PHOTO_ESTIMATION_PROMPT}\n\n---\n\n${PHOTO_LANE_PROMPT}`,
     dynamicSystemPrompt: '',
-    text: ['Log this meal.', languageBrief(language), unitsBrief({ units })].filter(Boolean).join('\n\n'),
+    text: ['Log this meal.', await justLoggedBrief(id, now), languageBrief(language), unitsBrief({ units })]
+      .filter(Boolean)
+      .join('\n\n'),
     photo:
       photo.url !== undefined
         ? { mediaType: photo.mediaType, url: photo.url }
