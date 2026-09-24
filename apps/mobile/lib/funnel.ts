@@ -121,6 +121,42 @@ function loadSent(): Promise<Set<SentKey>> {
   return sent;
 }
 
+/**
+ * The queue is one value in one key, so every read-modify-write on it has to be
+ * the only one running.
+ *
+ * Without this they are not. `reachedStep` reads the queue, appends and writes
+ * it back, and two steps reached in the same tick both read the array *before*
+ * either has written — so the second write lands on top of the first and the
+ * first step is gone. It never comes back either: `held` remembers it as queued
+ * for the rest of the session, which is the whole point of `held` and exactly
+ * wrong once the ping it is holding has been overwritten.
+ *
+ * That is not hypothetical. `start` and `goal` are reached on the same tap —
+ * the welcome button pings one and moves the walk on to the other — and 1.5.9,
+ * the first build with this queue, sent `goal` 10 times and `start` never once,
+ * against every earlier build sending them within one of each other. The queue
+ * was written to stop a ping being lost to a 502 and lost one to itself.
+ *
+ * Only the read-modify-write is serialised. `flush` does its network call
+ * outside the lock, because a queue that blocked every new step for the length
+ * of a request would stall the walk on a slow connection to keep a count
+ * tidy.
+ */
+let queueWork: Promise<unknown> = Promise.resolve();
+
+function onQueue<T>(job: () => Promise<T>): Promise<T> {
+  // Settled either way before the next job starts: a failed write must not take
+  // the queue down with it, and every job here already handles its own storage
+  // errors.
+  const run = queueWork.then(job, job);
+  queueWork = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 async function loadPending(): Promise<Pending[]> {
   try {
     const raw = await AsyncStorage.getItem(PENDING_KEY);
@@ -194,26 +230,29 @@ export function reachedStep(step: FunnelStep, reason?: SaveReason): void {
     if (done.has(key) || held.has(key)) return;
     held.add(key);
 
-    const queue = await loadPending();
-    if (queue.length >= MAX_PENDING) {
+    const pending: Pending = {
+      key,
+      ping: {
+        step,
+        platform,
+        app_version: version,
+        locale: deviceLocale(),
+        day: today(),
+        ...(INTERNAL ? { internal: true } : {}),
+        ...(reason ? { reason } : {}),
+      },
+    };
+
+    const queued = await onQueue(async () => {
+      const queue = await loadPending();
+      if (queue.length >= MAX_PENDING) return false;
+      await persistPending([...queue, pending]);
+      return true;
+    });
+    if (!queued) {
       held.delete(key);
       return;
     }
-    await persistPending([
-      ...queue,
-      {
-        key,
-        ping: {
-          step,
-          platform,
-          app_version: version,
-          locale: deviceLocale(),
-          day: today(),
-          ...(INTERNAL ? { internal: true } : {}),
-          ...(reason ? { reason } : {}),
-        },
-      },
-    ]);
 
     void flush();
   })();
@@ -245,7 +284,7 @@ async function flush(): Promise<void> {
   flushing = true;
   try {
     for (;;) {
-      const queue = await loadPending();
+      const queue = await onQueue(loadPending);
       const next = queue[0];
       if (!next) break;
 
@@ -255,7 +294,7 @@ async function flush(): Promise<void> {
        */
       if (daysOld(next.ping.day) > STALE_AFTER_DAYS) {
         held.delete(next.key);
-        await persistPending((await loadPending()).filter((p) => p.key !== next.key));
+        await onQueue(async () => persistPending((await loadPending()).filter((p) => p.key !== next.key)));
         continue;
       }
 
@@ -302,7 +341,7 @@ async function flush(): Promise<void> {
        * and persisting a copy taken before it arrived would drop it — the one
        * bug in a queue that nobody would ever reproduce on purpose.
        */
-      await persistPending((await loadPending()).filter((p) => p.key !== next.key));
+      await onQueue(async () => persistPending((await loadPending()).filter((p) => p.key !== next.key)));
       held.delete(next.key);
     }
   } finally {
