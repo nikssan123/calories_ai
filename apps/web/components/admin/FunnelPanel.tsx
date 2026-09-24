@@ -38,13 +38,18 @@ const LABEL: Record<FunnelStep, string> = {
   signup_google: 'Tapped Continue with Google',
   account: 'Account created',
   in_app: 'Plan uploaded, in the app',
+  reminder_on: 'Turned the daily reminder on',
   existing: 'Tapped “I already have an account”',
+  signed_in: 'Signed in to an account that existed',
 };
 
 /*
- * The main line, in order. The two sign-up methods are alternatives rather than
- * steps, and "existing" leaves the walk on the first screen, so those three are
- * listed apart instead of being read as drops.
+ * The main line, in order. Everything in `BESIDE` is a count that is not a rung:
+ * the two sign-up methods are alternatives rather than steps, "existing" leaves
+ * the walk on the first screen, "signed_in" is where some of those taps come
+ * out, and "reminder_on" is an offer taken on the plan screen by a subset of
+ * the people who reach it. Read as drops they would each invent a cliff, so
+ * they are listed apart.
  */
 const LINE: FunnelStep[] = [
   'welcome',
@@ -64,7 +69,13 @@ const LINE: FunnelStep[] = [
   'save_prompt',
   'account',
 ];
-const BESIDE: FunnelStep[] = ['signup_email', 'signup_google', 'existing'];
+const BESIDE: FunnelStep[] = [
+  'reminder_on',
+  'signup_email',
+  'signup_google',
+  'existing',
+  'signed_in',
+];
 
 /** The ladder in GUEST-ACCOUNTS.md, in the order it is meant to be climbed. */
 const REASON_LABEL: Record<SaveReason, string> = {
