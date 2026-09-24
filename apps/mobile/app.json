@@ -187,6 +187,7 @@
       "./plugins/with-no-activity-recognition",
       "./plugins/with-widget-font",
       "./plugins/with-androidx-work",
+      "./plugins/with-gradle-memory",
       [
         "expo-widgets",
         {
