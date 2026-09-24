@@ -23,6 +23,7 @@ import { useOnboarding } from '@/lib/onboarding';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { reachedStep } from '@/lib/funnel';
+import { logOnce } from '@/lib/analytics';
 import { signInWithGoogle } from '@/lib/google';
 import { mergeKeptGuest } from '@/lib/guest-merge';
 import { GoogleMark } from '@/components/GoogleMark';
@@ -180,6 +181,7 @@ export default function LoginScreen() {
        * screen with a session.
        */
       reachedStep(status.created ? 'account' : 'signed_in');
+      if (status.created) void logOnce('sign_up');
       // …and the status is re-read, because signup answers before the profile
       // the rest of the app renders from exists.
       await refresh();
@@ -229,6 +231,7 @@ export default function LoginScreen() {
       if (!status) return;
       await adoptSession(status);
       reachedStep(status.created ? 'account' : 'signed_in');
+      if (status.created) void logOnce('sign_up');
       await refresh();
       if (await mergeKeptGuest()) await refresh();
     } catch (e) {

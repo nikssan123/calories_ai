@@ -57,6 +57,7 @@ import { castMemory, holderOf, noteEarned, takeBadge } from '@/lib/cast-memory';
 import { glanceAt, lookAll, useDayPart } from '@/components/cast/life';
 import { castForDraft } from '@/lib/food-cast';
 import { markMomentShown, momentShown } from '@/lib/store';
+import { noteLoggedDay } from '@/lib/analytics';
 import { Serif } from '@/components/Serif';
 import { greetingFor } from '@/lib/greeting';
 import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
@@ -545,6 +546,17 @@ export default function JournalScreen() {
       );
     })();
   }, [loading, guest, profile?.id, day?.food_entries.length]);
+
+  /*
+   * The logging rungs for the ad measurement (`lib/analytics.ts`), off the same
+   * signal as the soft ask above and for the same reason: every road a meal can
+   * take ends in this list. Not gated on `guest` — a meal is a meal whoever
+   * logs it — and `noteLoggedDay` keeps its own once-per-install latch.
+   */
+  useEffect(() => {
+    if (!day || day.food_entries.length === 0) return;
+    void noteLoggedDay(day.local_date);
+  }, [day?.local_date, day?.food_entries.length]);
 
   /*
    * A badge just earned: its holder hops down to the Progress tab, the icon

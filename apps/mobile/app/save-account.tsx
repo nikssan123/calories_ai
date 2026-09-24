@@ -24,6 +24,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { messageOf } from '@/lib/errors';
 import { reachedStep } from '@/lib/funnel';
+import { logOnce } from '@/lib/analytics';
 import { saveWithGoogle } from '@/lib/google';
 import { keepGuestForMerge } from '@/lib/guest-merge';
 import { currentToken } from '@/lib/session';
@@ -106,6 +107,7 @@ export default function SaveAccountScreen() {
    */
   function saved() {
     reachedStep('account', reason);
+    void logOnce('sign_up');
     setStep('done');
   }
 
