@@ -2,15 +2,18 @@ import {
   type BarcodeProduct,
   type BarcodeSource,
   type FoodEntry,
+  type Locale,
   type Meal,
   type UnitSystem,
   formatMass,
   formatServings,
+  pluralWord,
 } from '@ct/shared';
 import { query, queryOne } from '../db.ts';
 import { env } from '../env.ts';
 import { createFoodEntry } from './log.ts';
 import { type DayContext, inferMeal } from '../time.ts';
+import { scanMessages } from './scan-messages.ts';
 
 /**
  * Turning the number under the stripes into nutrition.
@@ -351,14 +354,14 @@ async function remember(code: string, answer: Answer): Promise<void> {
 function toProduct(row: CacheRow): BarcodeProduct {
   return {
     barcode: row.barcode,
-    brand: row.brand,
-    name: row.name ?? '',
+    brand: row.brand === null ? null : decodeEntities(row.brand),
+    name: decodeEntities(row.name ?? ''),
     kcal_100g: row.kcal_100g ?? 0,
     protein_100g: row.protein_100g ?? 0,
     carbs_100g: row.carbs_100g ?? 0,
     fat_100g: row.fat_100g ?? 0,
     serving_g: row.serving_g,
-    serving_desc: row.serving_desc,
+    serving_desc: row.serving_desc === null ? null : decodeEntities(row.serving_desc),
     source: row.source,
     source_url: row.source_url,
   };
@@ -654,9 +657,36 @@ function number(raw: unknown): number | null {
 }
 
 function text(raw: unknown): string | null {
-  const value = typeof raw === 'string' ? raw.trim() : '';
+  const value = typeof raw === 'string' ? decodeEntities(raw).trim() : '';
   return value === '' ? null : value;
 }
+
+/**
+ * HTML entities undone, because Open Food Facts stores some names escaped.
+ *
+ * `ПPЕСТИЖ Gecoate wafel &quot;TROYA&quot; Classic` arrived that way on
+ * 2026-09-24 and was written into a journal line and an entry, where nothing
+ * renders HTML. Also run over cached rows on the way out, since those were
+ * written before this existed and are kept for a season.
+ */
+function decodeEntities(value: string): string {
+  if (!value.includes('&')) return value;
+  return value.replace(/&(#x[0-9a-f]+|#\d+|quot|apos|amp|lt|gt|nbsp);/gi, (match, name: string) => {
+    const lower = name.toLowerCase();
+    if (lower.startsWith('#x')) return String.fromCodePoint(parseInt(lower.slice(2), 16));
+    if (lower.startsWith('#')) return String.fromCodePoint(parseInt(lower.slice(1), 10));
+    return ENTITIES[lower] ?? match;
+  });
+}
+
+const ENTITIES: Record<string, string> = {
+  quot: '"',
+  apos: "'",
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  nbsp: ' ',
+};
 
 function round(value: number): number {
   return Math.round(value * 10) / 10;
@@ -748,6 +778,8 @@ export interface ScanLogOptions {
   ctx: DayContext;
   /** Which system the portion is written back in. The entry stays in grams. */
   units: UnitSystem;
+  /** Which language the portion is written back in. English when absent. */
+  locale?: Locale;
 }
 
 /**
@@ -804,7 +836,7 @@ export async function logScannedProducts(
     return {
       name: describe(scan.product),
       quantity_g: grams,
-      quantity_desc: portionDescription(scan.product, grams, scan.servings, options.units),
+      quantity_desc: portionDescription(scan.product, grams, scan.servings, options.units, options.locale),
       kcal: round(scan.product.kcal_100g * share),
       protein_g: round(scan.product.protein_100g * share),
       carbs_g: round(scan.product.carbs_100g * share),
@@ -867,10 +899,11 @@ function portionDescription(
   grams: number,
   servings: number | undefined,
   units: UnitSystem,
+  locale: Locale = 'en',
 ): string {
-  if (servings === undefined) return portionPhrase(grams, servings, units);
+  if (servings === undefined) return portionPhrase(grams, servings, units, locale);
   const label = product.serving_desc ? ` — ${product.serving_desc}` : '';
-  return `${portionPhrase(grams, servings, units)}${label}`;
+  return `${portionPhrase(grams, servings, units, locale)}${label}`;
 }
 
 /**
@@ -886,13 +919,16 @@ export function portionPhrase(
   grams: number,
   servings: number | undefined,
   units: UnitSystem,
+  locale: Locale = 'en',
 ): string {
   // The weight is written in whatever this person reads, because it is the one
   // number on the card they might argue with — "100 g" of cereal to somebody
   // who owns a pound scale is a figure they have to convert before they can
   // tell whether it is right. The grams are still what was stored.
   if (servings === undefined) return formatMass(grams, units);
-  // Singular for anything up to one, because "¾ servings" is not English.
-  const plural = servings <= 1 ? 'serving' : 'servings';
-  return `${formatServings(servings)} ${plural} (${formatMass(grams, units)})`;
+  // Singular for anything up to one, because "¾ servings" is not English —
+  // and "¾ порции" is not Bulgarian either. Past one, the language's own rule.
+  const forms = scanMessages(locale).servings;
+  const noun = servings <= 1 ? (forms.one ?? forms.other) : pluralWord(servings, forms, locale);
+  return `${formatServings(servings)} ${noun} (${formatMass(grams, units)})`;
 }

@@ -26,6 +26,7 @@ import {
   type Entitlements,
 } from '@ct/shared';
 import { authDescription } from '../ai/client.ts';
+import { speakingLocale } from '../ai/language.ts';
 import { authErrorFor, laneFor } from '../ai/providers/index.ts';
 import { env } from '../env.ts';
 import { generateWeeklyReview } from '../ai/review.ts';
@@ -94,6 +95,7 @@ import {
   setWeeklyReviewEmails,
   updateUser,
 } from '../services/user.ts';
+import { scanMessages } from '../services/scan-messages.ts';
 import { forgetPushToken, registerPushToken } from '../services/push-tokens.ts';
 import { applyEvent, type RevenueCatEvent } from '../services/billing.ts';
 import { limitsFor, tiers } from '../services/plans.ts';
@@ -956,6 +958,7 @@ export async function registerRoutes(app: FastifyInstance) {
         const product = await lookupBarcode((request.params as any).code);
         if (!product) return reply.status(404).send({ error: 'Nobody has catalogued that one yet' });
 
+        const locale = speakingLocale(await getUser(userId), request.spokenLocale);
         const entry = await logScannedProduct(userId, product, {
           grams: parsed.data.grams,
           servings: parsed.data.servings,
@@ -963,6 +966,7 @@ export async function registerRoutes(app: FastifyInstance) {
           eatenAt: parsed.data.eaten_at ? new Date(parsed.data.eaten_at) : undefined,
           ctx,
           units,
+          locale,
         });
 
         /*
@@ -982,11 +986,11 @@ export async function registerRoutes(app: FastifyInstance) {
          * entire point is the amount.
          */
         const day = await buildDaySummary(userId, entry.local_date);
-        const portion = portionPhrase(entry.items[0]?.quantity_g ?? 0, parsed.data.servings, units);
+        const portion = portionPhrase(entry.items[0]?.quantity_g ?? 0, parsed.data.servings, units, locale);
         const message = await insertMessage(
           userId,
           'assistant',
-          `Scanned — ${entry.description}, ${portion}.`,
+          scanMessages(locale).scanned(`${entry.description}, ${portion}`),
           null,
           { kind: 'scan', barcode: product.barcode },
           [
@@ -1048,11 +1052,13 @@ export async function registerRoutes(app: FastifyInstance) {
         scans.push({ product, grams: item.grams, servings: item.servings });
       }
 
+      const locale = speakingLocale(await getUser(userId), request.spokenLocale);
       const entry = await logScannedProducts(userId, scans, {
         meal: parsed.data.meal,
         eatenAt: parsed.data.eaten_at ? new Date(parsed.data.eaten_at) : undefined,
         ctx,
         units,
+        locale,
       });
 
       /*
@@ -1067,12 +1073,12 @@ export async function registerRoutes(app: FastifyInstance) {
       const day = await buildDaySummary(userId, entry.local_date);
       const only = scans.length === 1 ? scans[0]! : null;
       const portion = only
-        ? `, ${portionPhrase(entry.items[0]?.quantity_g ?? 0, only.servings, units)}`
+        ? `, ${portionPhrase(entry.items[0]?.quantity_g ?? 0, only.servings, units, locale)}`
         : '';
       const message = await insertMessage(
         userId,
         'assistant',
-        `Scanned — ${entry.description}${portion}.`,
+        scanMessages(locale).scanned(`${entry.description}${portion}`),
         null,
         { kind: 'scan', barcodes: scans.map((scan) => scan.product.barcode) },
         [

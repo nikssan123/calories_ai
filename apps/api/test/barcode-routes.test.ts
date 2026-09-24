@@ -261,6 +261,26 @@ describe('POST /barcode/:code/log', () => {
     await session.app.close();
   });
 
+  it('writes the scan in the language the account reads', async () => {
+    // No model writes this line, so nothing else was going to translate it: on
+    // 2026-09-24 a Bulgarian guest's scan came back "Scanned — … 1 serving".
+    const bulgarian = await createUser({ email: 'sofia@example.com', locale: 'bg' });
+    const session = await appFor(bulgarian);
+    stubOff(SPREAD);
+
+    const response = await session.app.inject({
+      method: 'POST',
+      url: `/barcode/${CODE}/log`,
+      headers: { cookie: session.cookie },
+      payload: { servings: 2 },
+    } as never);
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json().message.content).toBe('Сканирано — Ferrero Hazelnut spread, 2 порции (30 g).');
+    expect(response.json().entry.items[0]).toMatchObject({ quantity_desc: '2 порции (30 g) — 15 g' });
+    await session.app.close();
+  });
+
   it('refuses servings against a label that never named one', async () => {
     stubOff({ ...SPREAD, product: { ...SPREAD.product, serving_quantity: null, serving_size: '' } });
     const response = await post(`/barcode/${CODE}/log`, { servings: 2 });

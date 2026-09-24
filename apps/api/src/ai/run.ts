@@ -21,7 +21,7 @@ import { hasKitchen } from '../services/plans.ts';
 import { withTurnLock } from '../services/turn-lock.ts';
 import { checkWellbeing } from '../services/wellbeing.ts';
 import { MAX_SESSION_MESSAGES, MAX_TURNS, TEXT_LOG_UNSUPPORTED_LANGUAGE } from './client.ts';
-import { LANGUAGE_LOOKBACK, replyLanguage, type ReplyLanguage } from './language.ts';
+import { LANGUAGE_LOOKBACK, replyLanguage, speakingLocale, type ReplyLanguage } from './language.ts';
 import {
   createProvider,
   laneFor,
@@ -124,6 +124,7 @@ async function runLockedTurn(input: RunTurnInput, emit?: StreamSink): Promise<Ch
     photoId: input.photo?.id ?? null,
     actions,
     units: unitsOf(input.profile),
+    locale: speakingLocale(input.profile, input.spokenLocale ?? null),
     scanned: input.scanned ?? [],
   };
 

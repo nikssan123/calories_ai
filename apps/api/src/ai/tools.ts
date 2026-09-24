@@ -9,6 +9,7 @@ import type {
   EntrySource,
   ExerciseEntry,
   FoodEntry,
+  Locale,
   Meal,
   MealPlan,
   PantryItem,
@@ -114,6 +115,11 @@ export interface ToolContext {
    * Tool *arguments* stay metric whatever this says; see UNITS.md.
    */
   units: UnitSystem;
+  /**
+   * Which language the server's own words go out in — a scanned portion's
+   * "2 servings", which no model writes. English when absent.
+   */
+  locale?: Locale;
   /** Set when the turn included a photo, so logged entries link back to it. */
   photoId: string | null;
   /**
@@ -2727,6 +2733,7 @@ const workoutExercisesField = z
           eatenAt: resolveWhen(args.when ?? undefined, tc.now, tc.ctx),
           ctx: tc.ctx,
           units: tc.units,
+          locale: tc.locale,
         });
       } catch (error) {
         if (error instanceof InvalidPortionError || error instanceof InvalidBarcodeError) {

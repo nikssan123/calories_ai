@@ -153,6 +153,20 @@ describe('lookupBarcode', () => {
     expect(await cacheRow()).toMatchObject({ found: true, kcal_100g: 539 });
   });
 
+  it('undoes the HTML entities Open Food Facts stores some names with', async () => {
+    stubFetch({ body: offProduct({ 'energy-kcal_100g': 539 }, { product_name: 'Wafel &quot;TROYA&quot; Classic' }) });
+
+    expect(await lookupBarcode(CODE)).toMatchObject({ name: 'Wafel "TROYA" Classic' });
+  });
+
+  it('undoes them on a row cached before they were', async () => {
+    stubFetch({ body: offProduct({ 'energy-kcal_100g': 539 }) });
+    await lookupBarcode(CODE);
+    await query('UPDATE barcode_products SET name = $1 WHERE barcode = $2', ['Wafel &quot;TROYA&quot;', CODE]);
+
+    expect(await lookupBarcode(CODE)).toMatchObject({ name: 'Wafel "TROYA"' });
+  });
+
   it('does not refetch a cached hit', async () => {
     const calls = stubFetch({ body: offProduct({ 'energy-kcal_100g': 539 }) });
 
