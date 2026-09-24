@@ -84,6 +84,20 @@ export interface MeasurePart {
   value: string;
   unit: string;
   onChangeText: (next: string) => void;
+  /**
+   * A figure the app put there, not one the reader typed.
+   *
+   * Drawn in the muted ink until it is touched, which is the whole of how a
+   * suggestion is told apart from an answer without a sentence saying so. The
+   * alternative — full-strength ink on a number nobody chose — is a walk that
+   * quietly builds somebody a plan for a body that is not theirs, and the
+   * plan is the one thing on this walk that has to be right.
+   *
+   * It goes the moment a key is pressed, and it does not come back for a
+   * change of units: converting 178 cm into 5'10" is the app carrying an
+   * answer across, not proposing a new one.
+   */
+  provisional?: boolean;
   /** Feet are one digit; a weight in pounds is four including a decimal. */
   maxLength?: number;
   /**
@@ -184,7 +198,9 @@ function Figure({ part, label }: { part: MeasurePart; label: string }) {
         style={[
           styles.figure,
           {
-            color: colors.foreground,
+            /* Muted while it is only a suggestion — but never while it is being
+               edited, where it has to read as the text it now is. */
+            color: part.provisional && !focused ? colors.mutedForeground : colors.foreground,
             /*
              * The border is always two points and only sometimes coloured. One
              * that came and went would move the text baseline the unit beside

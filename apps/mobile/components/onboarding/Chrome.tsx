@@ -145,6 +145,7 @@ export function Step({
   children,
   contentStyle,
   compact = false,
+  scrolls = true,
 }: {
   title: string;
   body?: string;
@@ -153,6 +154,15 @@ export function Step({
   footer?: React.ReactNode;
   children?: React.ReactNode;
   contentStyle?: StyleProp<ViewStyle>;
+  /**
+   * Whether the page itself scrolls. It always can, and on one step it must
+   * not: a step whose control is a wheel puts a vertical scroller inside this
+   * vertical scroller, and Android gives the drag to the outer one — so the
+   * wheel sits still while the page it is on, which has nothing to scroll,
+   * quietly wins every gesture. The steps that fit on a screen lose nothing by
+   * turning it off; see the birthday step in `app/onboarding.tsx`.
+   */
+  scrolls?: boolean;
   /**
    * Give the header's height back to the controls.
    *
@@ -204,6 +214,7 @@ export function Step({
           <ScrollView
             style={styles.flex}
             contentContainerStyle={[styles.scroll, contentStyle]}
+            scrollEnabled={scrolls}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             showsVerticalScrollIndicator={false}

@@ -16,7 +16,6 @@ import {
   predictTdee,
   toBodyWeight,
 } from '@ct/shared';
-import { Glass } from '@/components/Glass';
 import { GlowButton } from '@/components/GlowButton';
 import { LanguagePicker } from '@/components/LanguagePicker';
 import { Trio } from '@/components/cast/Character';
@@ -24,7 +23,9 @@ import { RingObject } from '@/components/RingObject';
 import { Serif } from '@/components/Serif';
 import { Advance, Rail, Step } from '@/components/onboarding/Chrome';
 import { Measure, Segmented, Stepper } from '@/components/onboarding/Inputs';
+import { DateWheel } from '@/components/onboarding/DateWheel';
 import { OptionCard } from '@/components/onboarding/OptionCard';
+import { MeasureAsk } from '@/components/onboarding/MeasureAsk';
 import { PlanReminder, type PlanReminderChoice } from '@/components/onboarding/PlanReminder';
 import { Building, Plan, projectionFor } from '@/components/onboarding/Reveal';
 import { Stage } from '@/components/onboarding/Stage';
@@ -34,6 +35,7 @@ import { useAuth } from '@/lib/auth';
 import { BIRTH_DATE_FLOOR } from '@/lib/birth-date';
 import { setPreferredLocale, useLocale, useT, type StringKey } from '@/lib/i18n';
 import { reachedStep } from '@/lib/funnel';
+import { analyticsAvailable, logOnce, setConsent, storedConsent, type Consent } from '@/lib/analytics';
 import { useOnboarding } from '@/lib/onboarding';
 import { registerForPush } from '@/lib/push';
 import { applyReminders, loadReminders } from '@/lib/reminders';
@@ -111,6 +113,38 @@ const HEIGHT_CM = { min: 100, max: 250 };
  */
 const HEIGHT_M = { min: 1, max: 2.5 };
 const WEIGHT_KG = { min: 30, max: 350 };
+
+/**
+ * What the height and weight boxes arrive holding.
+ *
+ * Two empty boxes and a keyboard is where this walk loses more people than
+ * every other question put together: 78 installs reach that screen and 29 come
+ * out of it with a plan. Driving it on a device says why, and it is not that
+ * the numbers are hard to remember — the keypad opens itself, fills the lower
+ * half of the screen, and leaves the weight box below the fold with a dead
+ * Continue and a line asking for a weight there is nowhere to put.
+ *
+ * Every version of the fix so far has made the empty boxes easier to find
+ * (`10f9274`, `5e05ea7`, `193a202`), and the cliff has not moved. So the boxes
+ * stop being empty. Continue is a tap for anybody happy to be roughly right,
+ * the keypad never opens unless it is asked for, and the screen that was a form
+ * to fill in becomes a figure to correct — which is the same shape as the goal
+ * weight two screens later, and that one loses almost nobody.
+ *
+ * Sex, and nothing else. It is the one thing already answered that moves these
+ * numbers enough to be worth it; a table of medians per country would be more
+ * precise about a figure that exists to be overwritten, and would need
+ * maintaining. The weights are roughly a BMI of 24 at these heights — the
+ * middle of the healthy band, so a plan built on an uncorrected guess is a
+ * sensible plan rather than a startling one.
+ *
+ * Shown in the muted ink until touched (`provisional` on `MeasurePart`), so
+ * nobody mistakes the app's guess for something they told it.
+ */
+const TYPICAL: Record<Sex, { heightCm: number; weightKg: number }> = {
+  female: { heightCm: 165, weightKg: 65 },
+  male: { heightCm: 178, weightKg: 76 },
+};
 const AGE = { min: 13, max: 100 };
 
 /** What the goal weight is allowed to be, either side of where they are. */
@@ -224,6 +258,30 @@ export default function OnboardingScreen() {
     () => seed !== null && seed.goal !== 'maintain' && seed.target_weight_kg === null,
   );
 
+  /*
+   * Whether the figures in the body boxes are this app's suggestion rather than
+   * an answer. See `TYPICAL`. Cleared by the first keystroke in any of them and
+   * never set again, so a reader who empties a box is not handed a guess back.
+   */
+  const [provisional, setProvisional] = useState(false);
+  const seeded = useRef(false);
+  /*
+   * Wraps a box's setter so the first keystroke in any of them retires the
+   * suggestion in all of them — height and weight were proposed together and
+   * correcting one is the reader taking the screen over.
+   *
+   * Deliberately not applied to the unit switch below, which sets the same
+   * state with a converted figure: that is the app carrying an answer across,
+   * not the reader giving one.
+   */
+  const edit = useCallback(
+    (set: (next: string) => void) => (next: string) => {
+      setProvisional(false);
+      set(next);
+    },
+    [],
+  );
+
   /* The body step's boxes, so each can hand the keyboard on to the next. */
   const heightInput = useRef<TextInput>(null);
   const inchesInput = useRef<TextInput>(null);
@@ -235,8 +293,6 @@ export default function OnboardingScreen() {
   const [failed, setFailed] = useState(false);
   /** How many of the loader's three lines are true yet. */
   const [stages, setStages] = useState(0);
-  /* Android's date dialog, open. It opens itself the first time the step shows. */
-  const [picking, setPicking] = useState(birthDate === null);
 
   const heightCm = units === 'imperial' ? imperialHeight(feet, inches) : metricHeight(cm);
   const weightKg = useMemo(() => {
@@ -354,14 +410,43 @@ export default function OnboardingScreen() {
    * OnFocus` would put a whole height under the next digit typed.
    */
   useEffect(() => {
-    if (phase !== 'questions' || teasing || step !== 'body' || bodyTyped) return;
-    const timer = setTimeout(() => heightInput.current?.focus(), FOCUS_AFTER_MS);
-    return () => clearTimeout(timer);
-    // `bodyTyped` is read to decide whether to focus at all, and deliberately
-    // not watched: it flips on the first keystroke, and re-running then would
-    // cancel a timer that has already fired and schedule nothing.
+    if (phase !== 'questions' || teasing || step !== 'body') return;
+    if (seeded.current || bodyTyped) return;
+
+    /*
+     * Sex is question two and this is question four, so it is answered; the
+     * guard is for the walk being resumed in some order this does not know
+     * about. With nothing to suggest, the old behaviour is the right one — put
+     * the caret in the first box and open the keypad, because then there really
+     * is typing to do.
+     */
+    if (sex === null) {
+      seeded.current = true;
+      const timer = setTimeout(() => heightInput.current?.focus(), FOCUS_AFTER_MS);
+      return () => clearTimeout(timer);
+    }
+
+    seeded.current = true;
+    const typical = TYPICAL[sex];
+    const { feet: f, inches: i } = cmToFeetInches(typical.heightCm);
+    setCm(String(typical.heightCm));
+    setFeet(String(f));
+    setInches(String(i));
+    setWeight(String(round1(toBodyWeight(typical.weightKg, units))));
+    setProvisional(true);
+    /*
+     * No focus call, and that is half the fix rather than an omission. The
+     * keypad is what buries the weight box, and a screen whose answer is
+     * already in place has nothing to open it for. It comes up when a box is
+     * tapped, which is when it is wanted.
+     */
+    return;
+    // `bodyTyped` and `units` are read to decide whether to seed and in which
+    // units, and deliberately not watched: `seeded` makes this run once, and
+    // re-running on a keystroke or a unit switch is exactly what must not
+    // happen — the Segmented control carries the values across itself.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, teasing, step]);
+  }, [phase, teasing, step, sex]);
 
   /** What is wrong with this step's answer, or null if nothing is. */
   const blocker = ((): string | null => {
@@ -611,6 +696,43 @@ export default function OnboardingScreen() {
     }
   }, []);
 
+  /*
+   * The measurement question (`MeasureAsk`), between the button that leaves the
+   * plan and the walk actually ending.
+   *
+   * The walk's own ending is parked in a ref and run from the sheet's
+   * `onClosed`, not from the answer: the reminder's OS dialog and the swap to
+   * the tabs both present something, and neither may start while this sheet is
+   * still leaving — see `Sheet`'s note on UIKit refusing a presentation during
+   * a dismissal.
+   *
+   * `onboarding_complete` goes after the answer, so it carries it: a yes is
+   * counted, a no is only ever a cookieless ping. Asked once per install — a
+   * second walk through setup, or a build with nothing to measure with, goes
+   * straight through.
+   */
+  const [measuring, setMeasuring] = useState(false);
+  const afterMeasure = useRef<(() => Promise<void>) | null>(null);
+  const measureFirst = useCallback(async (then: () => Promise<void>) => {
+    if (afterMeasure.current) return;
+    if (analyticsAvailable && (await storedConsent()) === null) {
+      afterMeasure.current = then;
+      setMeasuring(true);
+      return;
+    }
+    void logOnce('onboarding_complete');
+    await then();
+  }, []);
+  const answerMeasure = useCallback((consent: Consent) => {
+    setMeasuring(false);
+    void setConsent(consent).then(() => logOnce('onboarding_complete'));
+  }, []);
+  const measured = useCallback(() => {
+    const then = afterMeasure.current;
+    afterMeasure.current = null;
+    void then?.();
+  }, []);
+
   /**
    * "Start logging", for somebody with no session. Marking the draft finished is
    * the whole action: the provider makes a guest session for it, uploads the
@@ -619,9 +741,11 @@ export default function OnboardingScreen() {
   const savePlan = useCallback(async () => {
     if (!draft) return;
     reachedStep('save');
-    await commitReminder();
-    await saveDraft({ ...draft, completed_at: new Date().toISOString() });
-  }, [draft, saveDraft, commitReminder]);
+    await measureFirst(async () => {
+      await commitReminder();
+      await saveDraft({ ...draft, completed_at: new Date().toISOString() });
+    });
+  }, [draft, saveDraft, commitReminder, measureFirst]);
 
   /*
    * Fired by arriving at the building screen rather than by the button that
@@ -637,7 +761,7 @@ export default function OnboardingScreen() {
     });
   }, [phase, submit]);
 
-  const finish = useCallback(async () => {
+  const end = useCallback(async () => {
     await commitReminder();
     /*
      * The gate reads the server's answer, not ours. Refreshing here is what
@@ -648,6 +772,10 @@ export default function OnboardingScreen() {
      */
     await refreshOnboarding();
   }, [refreshOnboarding, commitReminder]);
+
+  const finish = useCallback(async () => {
+    await measureFirst(end);
+  }, [measureFirst, end]);
 
   const projection =
     targets && goal !== 'maintain' && !targetSkipped
@@ -720,6 +848,7 @@ export default function OnboardingScreen() {
             )
           }
         />
+        <MeasureAsk open={measuring} onAnswer={answerMeasure} onClosed={measured} />
       </View>
     );
   }
@@ -733,6 +862,9 @@ export default function OnboardingScreen() {
         id={current}
         direction={direction}
         compact={typing}
+        /* The birthday wheel is a scroller, and it cannot share a drag with the
+           page underneath it. That step fits on a screen, so nothing is lost. */
+        scrolls={teasing || step !== 'birth'}
         title={teasing ? tr(current === 'teaseJournal' ? 'ob.teaseJournalTitle' : 'ob.teaseDayTitle') : titleFor(step, tr)}
         body={teasing ? tr(current === 'teaseJournal' ? 'ob.teaseJournalBody' : 'ob.teaseDayBody') : bodyFor(step, tr)}
         footer={
@@ -784,30 +916,26 @@ export default function OnboardingScreen() {
         {!teasing && step === 'birth' && (
           <View style={styles.wheel}>
             {/*
-              * Android's picker is a dialog, not a wheel on the page: it opens
-              * once when mounted and, closed, leaves nothing behind to press. So
-              * on Android the answer is drawn as a card that opens it again;
-              * iOS keeps its inline spinner, which is already that card.
+              * Two wheels, because only one platform has one worth using.
+              *
+              * iOS renders `DateTimePicker` inline and it looks like part of the
+              * screen. Android has no inline mode at all — the same component is
+              * always a dialog — so this screen used to be a card whose only job
+              * was to open a Material dialog: different colours, different type,
+              * its own buttons, arriving over the top of the walk on the
+              * question before the one that already loses the most people.
+              * `DateWheel` is the same control drawn in this app's own ink.
               */}
-            {Platform.OS === 'android' && (
-              <Glass strong radius={22} style={styles.dateCard}>
-                <Pressable
-                  onPress={() => setPicking(true)}
-                  accessibilityRole="button"
-                  style={({ pressed }) => [styles.dateCardFace, { opacity: pressed ? 0.6 : 1 }]}
-                >
-                  <Text style={[t.eyebrow, { color: colors.mutedForeground }]}>{tr('setup.birthDate')}</Text>
-                  <Text style={[type.greeting, { color: birthDate ? colors.foreground : colors.mutedForeground }]}>
-                    {birthDate
-                      ? new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric' }).format(
-                          new Date(`${birthDate}T12:00:00Z`),
-                        )
-                      : '—'}
-                  </Text>
-                </Pressable>
-              </Glass>
-            )}
-            {(Platform.OS === 'ios' || picking) && (
+            {Platform.OS === 'android' ? (
+              <DateWheel
+                value={birthDate}
+                min={BIRTH_DATE_FLOOR}
+                max={new Date()}
+                locale={locale}
+                label={tr('setup.birthDate')}
+                onChange={setBirthDate}
+              />
+            ) : (
               <DateTimePicker
                 value={birthDate ? new Date(`${birthDate}T12:00:00Z`) : new Date(1995, 0, 1)}
                 mode="date"
@@ -815,7 +943,6 @@ export default function OnboardingScreen() {
                 minimumDate={BIRTH_DATE_FLOOR}
                 maximumDate={new Date()}
                 onChange={(event, date) => {
-                  setPicking(false);
                   if (event.type === 'dismissed' || !date) return;
                   // Local parts rather than `toISOString`: the picker hands back
                   // local midnight, and in a negative offset that is yesterday in
@@ -878,7 +1005,8 @@ export default function OnboardingScreen() {
                           key: 'ft',
                           value: feet,
                           unit: 'ft',
-                          onChangeText: setFeet,
+                          provisional,
+                          onChangeText: edit(setFeet),
                           maxLength: 1,
                           inputRef: heightInput,
                           returnKeyType: 'next',
@@ -888,7 +1016,8 @@ export default function OnboardingScreen() {
                           key: 'in',
                           value: inches,
                           unit: 'in',
-                          onChangeText: setInches,
+                          provisional,
+                          onChangeText: edit(setInches),
                           maxLength: 4,
                           inputRef: inchesInput,
                           returnKeyType: 'next',
@@ -900,7 +1029,8 @@ export default function OnboardingScreen() {
                           key: 'cm',
                           value: cm,
                           unit: 'cm',
-                          onChangeText: setCm,
+                          provisional,
+                          onChangeText: edit(setCm),
                           maxLength: 5,
                           inputRef: heightInput,
                           returnKeyType: 'next',
@@ -922,7 +1052,8 @@ export default function OnboardingScreen() {
                     key: 'weight',
                     value: weight,
                     unit: bodyWeightUnit(units),
-                    onChangeText: setWeight,
+                    provisional,
+                    onChangeText: edit(setWeight),
                     maxLength: 5,
                     inputRef: weightInput,
                     returnKeyType: 'done',
@@ -1208,8 +1339,6 @@ const styles = StyleSheet.create({
 
   options: { gap: 14 },
   wheel: { gap: 12 },
-  dateCard: { alignSelf: 'stretch' },
-  dateCardFace: { paddingHorizontal: 18, paddingVertical: 16, gap: 4 },
   measures: { gap: 18 },
   target: { paddingTop: 12 },
 
