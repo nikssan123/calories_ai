@@ -1,7 +1,7 @@
 {
   "language": "en-GB",
   "_note": "The default listing's screenshot captions and seed strings. Its title and descriptions are edited in Play Console and live in PLAY_LISTING.md, so they are not here.",
-  "releaseNotes": "The subscription card now names every charge before you agree to one: what you pay first, how long that lasts, and what it becomes after.",
+  "releaseNotes": "A smoother start: height and birthday are quicker to enter, and you can turn on a daily reminder right from your plan. The trial now says how much of it is left, the progress chart joins up the days you didn't weigh in, and the home-screen widget keeps up with the app.",
   "captions": [
     {
       "headline": "Just say\nwhat you ate",
