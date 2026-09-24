@@ -324,7 +324,16 @@ export async function proposeTargets(
   }
 
   const goal = user.goal ?? 'maintain';
-  const ideal = targetKcalFor(estimate.observed_tdee_kcal, goal);
+  /*
+   * The scale is the one instrument that sees somebody cross the underweight
+   * line, and this is the pass that reads it. A deficit set while healthy is
+   * re-aimed to maintenance here, without anybody having to ask — see
+   * `effectiveGoal`.
+   */
+  const ideal = targetKcalFor(estimate.observed_tdee_kcal, goal, {
+    weight_kg: weight?.weight_kg ?? null,
+    height_cm: user.height_cm,
+  });
   const raw = clamp(ideal - current.kcal, -MAX_STEP_KCAL * estimate.quality, MAX_STEP_KCAL * estimate.quality);
 
   /*

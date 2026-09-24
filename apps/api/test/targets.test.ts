@@ -2,11 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { TARGET_INPUTS } from '@ct/shared';
 import {
   ageFrom,
+  bmiFor,
   calculateTargets,
+  effectiveGoal,
   FALLBACK_TARGETS,
   GOAL_TDEE_FACTOR,
+  isUnderweight,
   macrosFor,
   MAX_PROTEIN_ENERGY_SHARE,
+  MIN_GAIN_SURPLUS_KCAL,
+  MIN_HEALTHY_BMI,
   MIN_TARGET_KCAL,
   predictTdee,
   proteinAnchorKg,
@@ -225,6 +230,130 @@ describe('calculateTargets', () => {
   it('treats a missing goal as maintenance', () => {
     expect(calculateTargets({ ...ADULT, goal: null }).kcal).toBe(
       calculateTargets({ ...ADULT, goal: 'maintain' }).kcal,
+    );
+  });
+});
+
+/**
+ * The guard that reads the profile before it believes the goal.
+ *
+ * Both profiles below are real shapes that arrived through the campaigns and
+ * were answered badly — see `MIN_HEALTHY_BMI`. The arithmetic is asserted
+ * against `predictTdee` rather than against figures, because every one of them
+ * moves with the birth date as the years pass.
+ */
+describe('the underweight guard', () => {
+  /** 175 cm and 48 kg: BMI 15.7, and asking to reach 60. */
+  const UNDER = {
+    sex: 'female' as const,
+    birth_date: '1953-04-21',
+    height_cm: 175,
+    weight_kg: 48,
+    activity_level: 'sedentary' as const,
+    goal: 'gain' as const,
+  };
+
+  it('works out BMI, and answers null without both halves of it', () => {
+    expect(bmiFor(48, 175)).toBeCloseTo(15.7, 1);
+    expect(bmiFor(null, 175)).toBeNull();
+    expect(bmiFor(48, null)).toBeNull();
+  });
+
+  /*
+   * A guard that fired on an absence would re-aim the goal of everybody who has
+   * not finished onboarding, which is a larger population than the one it is for.
+   */
+  it('does not fire on a profile that has not been measured', () => {
+    expect(isUnderweight({ weight_kg: null, height_cm: 175 })).toBe(false);
+    expect(isUnderweight({ weight_kg: 48, height_cm: null })).toBe(false);
+    expect(isUnderweight({ weight_kg: 48, height_cm: 175 })).toBe(true);
+  });
+
+  it('draws the line at the WHO threshold and not a gram either side', () => {
+    const metres = UNDER.height_cm / 100;
+    const atTheLine = MIN_HEALTHY_BMI * metres * metres;
+    expect(isUnderweight({ weight_kg: atTheLine + 0.01, height_cm: UNDER.height_cm })).toBe(false);
+    expect(isUnderweight({ weight_kg: atTheLine - 0.01, height_cm: UNDER.height_cm })).toBe(true);
+  });
+
+  it('refuses a deficit to somebody already under it', () => {
+    const losing = { ...UNDER, goal: 'lose' as const };
+    expect(effectiveGoal('lose', losing)).toBe('maintain');
+    expect(calculateTargets(losing).kcal).toBe(calculateTargets({ ...UNDER, goal: 'maintain' }).kcal);
+  });
+
+  /* One kilo either side of the line, with the calorie floor kept well clear. */
+  it('still cuts for a profile just inside the healthy range', () => {
+    const healthy = {
+      ...UNDER,
+      weight_kg: 57,
+      activity_level: 'moderate' as const,
+      goal: 'lose' as const,
+    };
+    expect(isUnderweight(healthy)).toBe(false);
+    expect(calculateTargets(healthy).kcal).toBeCloseTo(
+      predictTdee(healthy)! * GOAL_TDEE_FACTOR.lose,
+      -1,
+    );
+  });
+
+  it('holds at maintenance one kilo the other side of it', () => {
+    const under = {
+      ...UNDER,
+      weight_kg: 56,
+      activity_level: 'moderate' as const,
+      goal: 'lose' as const,
+    };
+    expect(isUnderweight(under)).toBe(true);
+    expect(calculateTargets(under).kcal).toBeCloseTo(predictTdee(under)!, -1);
+  });
+
+  /*
+   * The half that is about the plan being a plan. 12% of this maintenance is
+   * 151 kcal a day, which is the twenty-month figure in `MIN_HEALTHY_BMI`.
+   */
+  it('gives a surplus worth having rather than a share of very little', () => {
+    const tdee = predictTdee(UNDER)!;
+    expect(tdee * (GOAL_TDEE_FACTOR.gain - 1)).toBeLessThan(MIN_GAIN_SURPLUS_KCAL);
+    /* Within half a step of the rounding this target is reported at. */
+    expect(calculateTargets(UNDER).kcal - tdee).toBeGreaterThanOrEqual(MIN_GAIN_SURPLUS_KCAL - 5);
+  });
+
+  it('leaves a healthy gain on the factor, floor or no floor', () => {
+    const gaining = { ...ADULT, goal: 'gain' as const };
+    expect(isUnderweight(gaining)).toBe(false);
+    expect(calculateTargets(gaining).kcal).toBeCloseTo(
+      predictTdee(gaining)! * GOAL_TDEE_FACTOR.gain,
+      -1,
+    );
+  });
+
+  /* A floor, not a replacement: the factor wins where the factor is bigger. */
+  it('keeps the factor when the factor already clears the floor', () => {
+    const tall = {
+      sex: 'male' as const,
+      birth_date: '2000-01-01',
+      height_cm: 195,
+      weight_kg: 70,
+      activity_level: 'very_active' as const,
+      goal: 'gain' as const,
+    };
+    const tdee = predictTdee(tall)!;
+    expect(isUnderweight(tall)).toBe(true);
+    expect(tdee * (GOAL_TDEE_FACTOR.gain - 1)).toBeGreaterThan(MIN_GAIN_SURPLUS_KCAL);
+    expect(calculateTargets(tall).kcal).toBeCloseTo(tdee * GOAL_TDEE_FACTOR.gain, -1);
+  });
+
+  /*
+   * 2.0 g/kg is protein sparing against a deficit. Once the deficit is refused
+   * there is nothing left for it to spare anything against, so the macros are
+   * split for the goal the calories were actually aimed at.
+   */
+  it('splits the macros for the goal the calories were aimed at', () => {
+    const losing = { ...UNDER, goal: 'lose' as const };
+    const targets = calculateTargets(losing);
+    expect(targets.protein_g).toBe(
+      macrosFor(targets.kcal, { ...losing, goal: 'maintain' }).protein_g,
     );
   });
 });

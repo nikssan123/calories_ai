@@ -115,6 +115,47 @@ export const GOAL_TDEE_FACTOR: Record<Goal, number> = {
 export const MIN_TARGET_KCAL = 1200;
 
 /**
+ * The bottom of the healthy BMI range, below which a goal is not taken at face
+ * value.
+ *
+ * `GOAL_TDEE_FACTOR` is a share of maintenance, and a share is the right shape
+ * for almost everybody — it hands the same cut to a 95 kg man and a 60 kg woman
+ * rather than the same number of calories. What a share has no opinion about is
+ * whether there is anything there to take a share *of*, and that is what this
+ * line is for. Two accounts in the first weeks of the campaigns were answered
+ * badly by the factor alone:
+ *
+ * - A woman of 73, 175 cm and 48 kg — BMI 15.7 — asking to reach 60 kg. 1.12
+ *   against a sedentary 1,257 kcal maintenance is a surplus of 151 kcal a day,
+ *   which is 12 kg at something like twenty months. Not wrong, exactly; just
+ *   not a plan.
+ * - An account at BMI 12.5 asking to *lose*, handed 1,360 kcal and a target
+ *   weight of 40 kg. Nothing in the arithmetic declined, because nothing in the
+ *   arithmetic was looking.
+ *
+ * The second is why this exists. A deficit prescribed to somebody already this
+ * far under is the one number this file can produce that does harm, and it is
+ * cheap to refuse: 18.5 is the WHO underweight threshold and the line every
+ * clinical guideline draws in the same place.
+ */
+export const MIN_HEALTHY_BMI = 18.5;
+
+/**
+ * The least a surplus may be, for somebody under `MIN_HEALTHY_BMI`.
+ *
+ * A floor in calories rather than a factor, for the mirror of the reason the
+ * factor exists: 12% of a small maintenance is a small number, and a percentage
+ * shortchanges exactly the people with the least in hand. 400 kcal is the low
+ * end of what refeeding guidance treats as a surplus that builds tissue rather
+ * than one that vanishes into day-to-day variance — and against the 1,257 kcal
+ * maintenance above it turns twenty months into eight.
+ *
+ * A floor and not a replacement: somebody underweight with a large maintenance
+ * keeps 1.12x, whichever of the two is more.
+ */
+export const MIN_GAIN_SURPLUS_KCAL = 400;
+
+/**
  * The most of the day's energy protein may claim.
  *
  * The anchor below is a figure per kilo, and a figure per kilo knows nothing
@@ -192,12 +233,69 @@ export function predictTdee(inputs: TargetInputs): number | null {
   return bmr * ACTIVITY_MULTIPLIER[measuredActivityLevel(activity_level, inputs.measured_steps ?? null)];
 }
 
-/** Maintenance, aimed at a goal, floored and rounded the way a target is. */
-export function targetKcalFor(tdee: number, goal: Goal | null): number {
-  return Math.max(
-    MIN_TARGET_KCAL,
-    Math.round((tdee * GOAL_TDEE_FACTOR[goal ?? 'maintain']) / 10) * 10,
-  );
+/** What the guard reads. `TargetInputs` and `MacroBasis` both satisfy it. */
+export type BmiBasis = Pick<MacroBasis, 'weight_kg' | 'height_cm'>;
+
+/** BMI, or null when either half of it is missing. */
+export function bmiFor(weightKg: number | null, heightCm: number | null): number | null {
+  if (!weightKg || !heightCm) return null;
+  const meters = heightCm / 100;
+  return weightKg / (meters * meters);
+}
+
+/**
+ * Whether this profile sits under the threshold — the one question the guard asks.
+ *
+ * False when either measurement is missing, which is the same answer the rest of
+ * this file gives to an incomplete profile: a guard that fires on an absence
+ * would re-aim the goal of everybody who has not finished onboarding.
+ */
+export function isUnderweight(basis: BmiBasis): boolean {
+  const bmi = bmiFor(basis.weight_kg, basis.height_cm);
+  return bmi !== null && bmi < MIN_HEALTHY_BMI;
+}
+
+/**
+ * The goal the arithmetic actually aims at: the declared one, everywhere except
+ * under the threshold.
+ *
+ * `lose` becomes `maintain` rather than an error, because an error is not an
+ * option any caller here has — each one is part-way through producing a number,
+ * and a profile can cross this line without anybody asking for anything. The
+ * adaptive pass re-aims the same target every week, so somebody who set a
+ * deficit while healthy is eventually re-aimed while they are not, with no
+ * request to refuse and nobody at the keyboard. Maintenance is the answer that
+ * is right in both cases.
+ *
+ * `gain` and `maintain` pass through untouched: neither asks the body for
+ * anything it has not got.
+ */
+export function effectiveGoal(goal: Goal | null, basis: BmiBasis): Goal {
+  const declared = goal ?? 'maintain';
+  return declared === 'lose' && isUnderweight(basis) ? 'maintain' : declared;
+}
+
+/**
+ * Maintenance, aimed at a goal, floored and rounded the way a target is.
+ *
+ * `basis` is what lets the goal be second-guessed — see `MIN_HEALTHY_BMI`. It is
+ * required rather than optional on purpose: every caller has a weight and a
+ * height to hand already, and an optional guard is one that a later call site
+ * forgets to pass, which is the shape of the bug this is here to close.
+ */
+export function targetKcalFor(tdee: number, goal: Goal | null, basis: BmiBasis): number {
+  const aimed = effectiveGoal(goal, basis);
+  const scaled = tdee * GOAL_TDEE_FACTOR[aimed];
+  /*
+   * The surplus floor, and only ever upward. A `gain` that the factor already
+   * puts above it is left where it is, and nothing below the threshold can
+   * reach this branch with a deficit — `effectiveGoal` has already answered.
+   */
+  const kcal =
+    aimed === 'gain' && isUnderweight(basis)
+      ? Math.max(scaled, tdee + MIN_GAIN_SURPLUS_KCAL)
+      : scaled;
+  return Math.max(MIN_TARGET_KCAL, Math.round(kcal / 10) * 10);
 }
 
 /**
@@ -255,10 +353,16 @@ export function calculateTargets(inputs: TargetInputs): Targets {
   const tdee = predictTdee(inputs);
   if (tdee === null) return FALLBACK_TARGETS;
 
-  const kcal = targetKcalFor(tdee, inputs.goal);
+  const kcal = targetKcalFor(tdee, inputs.goal, inputs);
+  /*
+   * Macros follow the goal the calories were aimed at, not the one on the
+   * profile. `macrosFor` asks for 2.0 g/kg on a `lose`, which is protein
+   * sparing against a deficit — and under the threshold there is no longer a
+   * deficit for it to spare anything against.
+   */
   return {
     kcal,
-    ...macrosFor(kcal, inputs),
+    ...macrosFor(kcal, { ...inputs, goal: effectiveGoal(inputs.goal, inputs) }),
     is_custom: false,
     source: 'calculated',
   };

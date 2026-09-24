@@ -66,7 +66,7 @@ export async function rebalanceTargets(dryRun: boolean): Promise<number> {
       // The old flat delta is what the learned maintenance is hiding behind, so
       // that is the one to undo — the new factor was never applied to this row.
       const maintenance = current.kcal - OLD_GOAL_KCAL_DELTA[profile.goal ?? 'maintain'];
-      const kcal = targetKcalFor(maintenance, profile.goal);
+      const kcal = targetKcalFor(maintenance, profile.goal, basis);
       next = { ...current, kcal, ...macrosFor(kcal, basis) };
     } else {
       next = calculateTargets({

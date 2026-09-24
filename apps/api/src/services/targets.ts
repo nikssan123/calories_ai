@@ -17,16 +17,22 @@ import { recentStepAverage } from './metrics.ts';
 export {
   activityFromSteps,
   ageFrom,
+  bmiFor,
   calculateTargets,
+  effectiveGoal,
   FALLBACK_TARGETS,
   GOAL_TDEE_FACTOR,
+  isUnderweight,
   macrosFor,
   MAX_PROTEIN_ENERGY_SHARE,
   measuredActivityLevel,
+  MIN_GAIN_SURPLUS_KCAL,
+  MIN_HEALTHY_BMI,
   MIN_TARGET_KCAL,
   predictTdee,
   proteinAnchorKg,
   targetKcalFor,
+  type BmiBasis,
   type MacroBasis,
   type TargetInputs,
 } from '@ct/shared';
@@ -72,7 +78,7 @@ function regoal(
   heightCm: number | null,
 ): Targets {
   const maintenance = current.kcal / GOAL_TDEE_FACTOR[from ?? 'maintain'];
-  const kcal = targetKcalFor(maintenance, to);
+  const kcal = targetKcalFor(maintenance, to, { weight_kg: weightKg, height_cm: heightCm });
   return {
     kcal,
     ...macrosFor(kcal, { weight_kg: weightKg, height_cm: heightCm, goal: to }),
